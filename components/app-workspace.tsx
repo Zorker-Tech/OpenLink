@@ -47,22 +47,19 @@ function SidebarItem({
   label,
   icon,
   active = false,
-  collapsed,
 }: {
   label: string
   icon: string
   active?: boolean
-  collapsed: boolean
 }) {
   return (
     <button
       aria-current={active ? 'page' : undefined}
-      className={`flex h-8 w-full items-center rounded-md text-sm tracking-[-0.1504px] transition-colors ${collapsed ? 'justify-center px-0' : 'gap-2 px-2'} ${active ? 'bg-[#1f1f1f] text-[#ededed]' : 'text-[#a0a0a0] hover:bg-[#121212] hover:text-[#ededed]'}`}
-      title={collapsed ? label : undefined}
+      className={`flex h-8 w-full items-center gap-2 rounded-md px-2 text-sm tracking-[-0.1504px] transition-colors ${active ? 'bg-[#1f1f1f] text-[#ededed]' : 'text-[#a0a0a0] hover:bg-[#121212] hover:text-[#ededed]'}`}
       type="button"
     >
       <img alt="" className="size-4 shrink-0" src={icon} />
-      {!collapsed && <span className="truncate">{label}</span>}
+      <span className="truncate">{label}</span>
     </button>
   )
 }
@@ -88,63 +85,55 @@ function Sidebar({
     <>
       {mobileOpen && <button aria-label="关闭侧边栏" className="fixed inset-0 z-30 bg-black/70 md:hidden" onClick={onCloseMobile} type="button" />}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex shrink-0 flex-col overflow-hidden border-r bg-black transition-[width,transform,border-color] duration-200 md:relative md:translate-x-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} ${collapsed ? 'w-[280px] border-[#1a1a1a] md:w-0 md:border-transparent' : 'w-[280px] border-[#1a1a1a]'}`}
+        className={`fixed inset-y-0 left-0 z-40 flex w-[280px] shrink-0 flex-col overflow-hidden border-r border-[#1a1a1a] bg-black transition-[transform,margin-left] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] md:relative ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} ${collapsed ? 'md:-ml-[280px] md:translate-x-0 md:pointer-events-none' : 'md:ml-0 md:translate-x-0'}`}
       >
         <div className="flex flex-col gap-3 py-2">
-          <div className={`flex h-8 items-center gap-1 px-2 ${collapsed ? 'md:justify-center' : ''}`}>
-            <button className={`flex h-8 min-w-0 flex-1 items-center rounded-md border border-transparent pl-1.5 hover:bg-[#121212] ${collapsed ? 'md:flex-none md:p-0' : ''}`} type="button">
+          <div className="flex h-8 items-center gap-1 px-2">
+            <button className="flex h-8 min-w-0 flex-1 items-center rounded-md border border-transparent pl-1.5 hover:bg-[#121212]" type="button">
               <UserAvatar avatarUrl={avatarUrl} nickname={nickname} />
-              {!collapsed && (
-                <>
-                  <span className="ml-1.5 min-w-0 flex-1 truncate text-left text-sm font-medium tracking-[-0.1504px] text-[#ededed]">个人</span>
-                  <img alt="" className="mx-1 size-4" src="/openlink/app/scope-switcher.svg" />
-                </>
-              )}
+              <span className="ml-1.5 min-w-0 flex-1 truncate text-left text-sm font-medium tracking-[-0.1504px] text-[#ededed]">个人</span>
+              <img alt="" className="mx-1 size-4" src="/openlink/app/scope-switcher.svg" />
             </button>
-            <button aria-label={collapsed ? '展开侧边栏' : '收起侧边栏'} className={`flex size-8 shrink-0 items-center justify-center rounded-md hover:bg-[#121212] ${collapsed ? 'md:hidden' : ''}`} onClick={onToggle} type="button">
+            <button aria-label="收起侧边栏" className="flex size-8 shrink-0 items-center justify-center rounded-md hover:bg-[#121212]" onClick={onToggle} type="button">
               <img alt="" className="size-4" src="/openlink/app/sidebar-toggle.svg" />
             </button>
           </div>
 
           <div className="px-2">
-            <button className={`flex h-8 w-full items-center rounded-md bg-[#121212] text-sm font-medium tracking-[-0.1504px] text-[#ededed] ${collapsed ? 'justify-center px-0' : 'justify-center pl-7 pr-2'}`} title={collapsed ? '新建聊天' : undefined} type="button">
-              {collapsed ? <span className="text-lg leading-none">＋</span> : <><span className="flex-1">新建聊天</span><img alt="" className="size-4" src="/openlink/app/new-chat-chevron.svg" /></>}
+            <button className="flex h-8 w-full items-center justify-center rounded-md bg-[#121212] pl-7 pr-2 text-sm font-medium tracking-[-0.1504px] text-[#ededed]" type="button">
+              <span className="flex-1">新建聊天</span><img alt="" className="size-4" src="/openlink/app/new-chat-chevron.svg" />
             </button>
           </div>
 
           <nav aria-label="工作区导航" className="flex flex-col gap-0.5 px-2">
-            {primaryNavigation.map((item) => <SidebarItem collapsed={collapsed} key={item.label} {...item} />)}
+            {primaryNavigation.map((item) => <SidebarItem key={item.label} {...item} />)}
           </nav>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-2 pt-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <section>
-            {!collapsed && (
-              <div className="flex h-[30px] items-start justify-between px-2 text-[13px] font-medium tracking-[-0.0762px] text-[#a0a0a0]">
-                <span>收藏</span><img alt="" className="size-4 rotate-90" src="/openlink/app/section-chevron.svg" />
-              </div>
-            )}
-            <SidebarItem collapsed={collapsed} icon="/openlink/app/chat.svg" label="AI Elements 集成" />
+            <div className="flex h-[30px] items-start justify-between px-2 text-[13px] font-medium tracking-[-0.0762px] text-[#a0a0a0]">
+              <span>收藏</span><img alt="" className="size-4 rotate-90" src="/openlink/app/section-chevron.svg" />
+            </div>
+            <SidebarItem icon="/openlink/app/chat.svg" label="AI Elements 集成" />
           </section>
 
           <section className="mt-5">
-            {!collapsed && (
-              <div className="flex h-[30px] items-start justify-between px-2 text-[13px] font-medium tracking-[-0.0762px] text-[#a0a0a0]">
-                <span>最近聊天</span><img alt="" className="size-4 rotate-90" src="/openlink/app/section-chevron.svg" />
-              </div>
-            )}
+            <div className="flex h-[30px] items-start justify-between px-2 text-[13px] font-medium tracking-[-0.0762px] text-[#a0a0a0]">
+              <span>最近聊天</span><img alt="" className="size-4 rotate-90" src="/openlink/app/section-chevron.svg" />
+            </div>
             <div className="flex flex-col gap-1.5">
-              {recentChats.map((chat) => <SidebarItem collapsed={collapsed} icon="/openlink/app/chat.svg" key={chat} label={chat} />)}
+              {recentChats.map((chat) => <SidebarItem icon="/openlink/app/chat.svg" key={chat} label={chat} />)}
             </div>
           </section>
         </div>
 
-        <div className={`flex h-12 shrink-0 items-end gap-1 px-2 pb-3 ${collapsed ? 'md:justify-center' : ''}`}>
-          <button className={`flex h-9 min-w-0 flex-1 items-center rounded-md py-0.5 hover:bg-[#121212] ${collapsed ? 'justify-center px-0' : 'gap-2 px-2.5'}`} title={email} type="button">
+        <div className="flex h-12 shrink-0 items-end gap-1 px-2 pb-3">
+          <button className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 py-0.5 hover:bg-[#121212]" title={email} type="button">
             <UserAvatar avatarUrl={avatarUrl} nickname={nickname} size={20} />
-            {!collapsed && <span className="min-w-0 flex-1 truncate text-left text-sm tracking-[-0.1504px] text-[#ededed]">{email}</span>}
+            <span className="min-w-0 flex-1 truncate text-left text-sm tracking-[-0.1504px] text-[#ededed]">{email}</span>
           </button>
-          {!collapsed && <button className="flex h-9 items-center justify-center rounded-md border border-[#27272a] bg-[#0a0a0a] px-3 text-sm font-medium text-[#ededed]" type="button">$5</button>}
+          <button className="flex h-9 items-center justify-center rounded-md border border-[#27272a] bg-[#0a0a0a] px-3 text-sm font-medium text-[#ededed]" type="button">$5</button>
         </div>
       </aside>
     </>
