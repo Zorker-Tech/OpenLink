@@ -23,7 +23,14 @@ import {
   Users,
 } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/utils/supabase/client'
+
+interface HomeUser {
+  email: string | null
+  name: string | null
+}
 
 const templates = [
   {
@@ -115,7 +122,18 @@ const footerGroups = [
   { title: 'Social', links: ['Twitter', 'LinkedIn'] },
 ] as const
 
-function Header() {
+function Header({ user }: { user: HomeUser | null }) {
+  const router = useRouter()
+  const supabase = useMemo(() => createClient(), [])
+  const [isSigningOut, setIsSigningOut] = useState(false)
+
+  const handleSignOut = async () => {
+    setIsSigningOut(true)
+    await supabase.auth.signOut()
+    router.refresh()
+    setIsSigningOut(false)
+  }
+
   return (
     <header className="fixed inset-x-0 top-0 z-50 flex h-[50px] items-center justify-between border-b border-[#1a1a1a] bg-black px-2">
       <a aria-label="OpenLink home" className="flex h-10 w-9 items-center justify-center rounded-lg" href="#">
@@ -133,14 +151,30 @@ function Header() {
         <a className="nav-link w-[43px] justify-center" href="#faq">FAQ</a>
       </nav>
 
-      <div className="flex items-center gap-2">
-        <a className="flex h-8 items-center rounded-lg border border-[#27272a] bg-[#0a0a0a] px-3 text-sm font-medium text-[#ededed] transition-colors hover:bg-[#171717]" href="/login">
-          登录
-        </a>
-        <a className="flex h-8 items-center rounded-lg border border-[#ededed] bg-[#ededed] px-3 text-sm font-medium text-[#0a0a0a] transition-colors hover:bg-white" href="/register">
-          注册
-        </a>
-      </div>
+      {user ? (
+        <div className="flex items-center gap-2">
+          <span className="hidden max-w-[180px] truncate px-2 text-sm text-[#a0a0a0] sm:block" title={user.email ?? user.name ?? undefined}>
+            {user.name ?? user.email ?? '已登录'}
+          </span>
+          <button
+            className="flex h-8 items-center rounded-lg border border-[#27272a] bg-[#0a0a0a] px-3 text-sm font-medium text-[#ededed] transition-colors hover:bg-[#171717] disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isSigningOut}
+            onClick={handleSignOut}
+            type="button"
+          >
+            {isSigningOut ? '退出中…' : '退出'}
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          <a className="flex h-8 items-center rounded-lg border border-[#27272a] bg-[#0a0a0a] px-3 text-sm font-medium text-[#ededed] transition-colors hover:bg-[#171717]" href="/login">
+            登录
+          </a>
+          <a className="flex h-8 items-center rounded-lg border border-[#ededed] bg-[#ededed] px-3 text-sm font-medium text-[#0a0a0a] transition-colors hover:bg-white" href="/register">
+            注册
+          </a>
+        </div>
+      )}
     </header>
   )
 }
@@ -384,10 +418,10 @@ function Footer() {
   )
 }
 
-export function OpenLinkHome() {
+export function OpenLinkHome({ user }: { user: HomeUser | null }) {
   return (
     <div className="min-h-screen overflow-x-hidden bg-black pt-[50px] text-[#ededed]">
-      <Header />
+      <Header user={user} />
       <main>
         <Hero />
         <TemplatesSection />
