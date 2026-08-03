@@ -20,9 +20,13 @@ const providers = [
   { label: 'GitHub', icon: '/openlink/auth/github.svg', provider: 'github' as const },
 ] as const
 
+function safeNextPath(value: string | null) {
+  return value && value.startsWith('/') && !value.startsWith('//') ? value : '/'
+}
+
 export function AuthPage({ mode }: AuthPageProps) {
   const isRegister = mode === 'register'
-  const alternateHref = isRegister ? '/login' : '/register'
+  const alternateBaseHref = isRegister ? '/login' : '/register'
   const alternateLabel = isRegister ? 'Sign In' : 'Sign Up'
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
@@ -32,9 +36,13 @@ export function AuthPage({ mode }: AuthPageProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
+  const [nextPath, setNextPath] = useState('/')
+  const alternateHref = nextPath === '/' ? alternateBaseHref : `${alternateBaseHref}?next=${encodeURIComponent(nextPath)}`
 
   useEffect(() => {
-    const error = new URLSearchParams(window.location.search).get('error')
+    const params = new URLSearchParams(window.location.search)
+    const error = params.get('error')
+    setNextPath(safeNextPath(params.get('next')))
 
     if (error === 'auth_callback') {
       setErrorMessage('We could not complete sign in. Please try again.')
@@ -61,14 +69,14 @@ export function AuthPage({ mode }: AuthPageProps) {
           email,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback?next=/`,
+            emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`,
           },
         })
 
         if (error) throw error
 
         if (data.session) {
-          router.replace('/')
+          router.replace(nextPath)
           router.refresh()
         } else {
           setStatusMessage('Check your email to confirm your account.')
@@ -76,7 +84,7 @@ export function AuthPage({ mode }: AuthPageProps) {
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
-        router.replace('/')
+        router.replace(nextPath)
         router.refresh()
       }
     } catch (error) {
@@ -95,7 +103,7 @@ export function AuthPage({ mode }: AuthPageProps) {
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: `${window.location.origin}/auth/callback?next=/`,
+          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`,
         },
       })
       if (error) throw error

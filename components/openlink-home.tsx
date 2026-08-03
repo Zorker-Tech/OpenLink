@@ -9,7 +9,6 @@ import {
   PromptInputTextarea,
   PromptInputTools,
 } from '@/components/ai-elements/prompt-input'
-import { Suggestions } from '@/components/ai-elements/suggestion'
 import {
   ArrowRight,
   ChevronDown,
@@ -75,13 +74,6 @@ const templates = [
     views: '2.2K',
     likes: '644',
   },
-] as const
-
-const suggestions = [
-  { label: 'Contact Form', icon: '/openlink/contact.svg' },
-  { label: 'Image Editor', icon: '/openlink/image-editor.svg' },
-  { label: 'Mini Game', icon: '/openlink/game.svg' },
-  { label: 'Finance Calculator', icon: '/openlink/finance.svg' },
 ] as const
 
 const categories = [
@@ -153,9 +145,9 @@ function Header({ user }: { user: HomeUser | null }) {
 
       {user ? (
         <div className="flex items-center gap-2">
-          <span className="hidden max-w-[180px] truncate px-2 text-sm text-[#a0a0a0] sm:block" title={user.email ?? user.name ?? undefined}>
+          <a className="hidden max-w-[180px] truncate rounded-md px-2 py-1 text-sm text-[#a0a0a0] transition-colors hover:bg-[#171717] hover:text-[#ededed] sm:block" href="/app" title={user.email ?? user.name ?? undefined}>
             {user.name ?? user.email ?? '已登录'}
-          </span>
+          </a>
           <button
             className="flex h-8 items-center rounded-lg border border-[#27272a] bg-[#0a0a0a] px-3 text-sm font-medium text-[#ededed] transition-colors hover:bg-[#171717] disabled:cursor-not-allowed disabled:opacity-60"
             disabled={isSigningOut}
@@ -179,14 +171,23 @@ function Header({ user }: { user: HomeUser | null }) {
   )
 }
 
-function PromptComposer() {
+function PromptComposer({ user }: { user: HomeUser | null }) {
+  const router = useRouter()
   const [input, setInput] = useState('')
+
+  const handleSubmit = () => {
+    const prompt = input.trim()
+    if (!prompt) return
+
+    const destination = `/app?prompt=${encodeURIComponent(prompt)}`
+    router.push(user ? destination : `/login?next=${encodeURIComponent(destination)}`)
+  }
 
   return (
     <div className="mx-auto w-full max-w-[690px]">
       <PromptInput
         className="[&>[data-slot=input-group]]:min-h-[108px] [&>[data-slot=input-group]]:rounded-xl [&>[data-slot=input-group]]:border-[#2e2e2e] [&>[data-slot=input-group]]:bg-[#121212] [&>[data-slot=input-group]]:shadow-none [&>[data-slot=input-group]]:focus-within:border-[#454545] [&>[data-slot=input-group]]:focus-within:ring-0"
-        onSubmit={() => setInput('')}
+        onSubmit={handleSubmit}
       >
         <PromptInputBody>
           <PromptInputTextarea
@@ -213,39 +214,17 @@ function PromptComposer() {
           </PromptInputSubmit>
         </PromptInputFooter>
       </PromptInput>
-
-      <Suggestions className="mx-auto mt-4 justify-center gap-2 px-8 sm:px-0">
-        {suggestions.map((item) => (
-          <button
-            className="flex h-8 cursor-pointer items-center gap-1.5 rounded-full border border-white/14 bg-[#121212] px-3 text-sm font-medium whitespace-nowrap text-[#a0a0a0] transition-colors hover:bg-[#1c1c1c] hover:text-[#ededed]"
-            key={item.label}
-            onClick={() => setInput(item.label)}
-            type="button"
-          >
-            <img alt="" className="size-4" src={item.icon} />
-            {item.label}
-          </button>
-        ))}
-        <button
-          aria-label="刷新建议"
-          className="flex size-8 cursor-pointer items-center justify-center rounded-full border border-white/14 bg-[#121212] p-0 transition-colors hover:bg-[#1c1c1c]"
-          onClick={() => setInput('')}
-          type="button"
-        >
-          <img alt="" className="size-4" src="/openlink/refresh.svg" />
-        </button>
-      </Suggestions>
     </div>
   )
 }
 
-function Hero() {
+function Hero({ user }: { user: HomeUser | null }) {
   return (
     <section className="h-[493px] px-6 pt-36">
       <h1 className="mb-4 text-center text-[32px] leading-10 font-semibold tracking-[-0.8737px] text-[#ededed]">
         您想创建什么？
       </h1>
-      <PromptComposer />
+      <PromptComposer user={user} />
     </section>
   )
 }
@@ -423,7 +402,7 @@ export function OpenLinkHome({ user }: { user: HomeUser | null }) {
     <div className="min-h-screen overflow-x-hidden bg-black pt-[50px] text-[#ededed]">
       <Header user={user} />
       <main>
-        <Hero />
+        <Hero user={user} />
         <TemplatesSection />
         <FeaturesSection />
         <BrandStrip />
