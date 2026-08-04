@@ -182,8 +182,61 @@
     --app-prompt-border: #404040;
     --app-foreground: #ededed;
     --app-muted: #a0a0a0;
+    --app-sidebar-width: 280px;
+    --app-drawer-background: #303030;
+    --app-drawer-foreground: #dcdcdc;
+    --app-drawer-muted: #8f8f8f;
+    --app-drawer-border: rgb(255 255 255 / 6%);
+    --app-drawer-divider: rgb(255 255 255 / 12%);
+    --app-drawer-hover: rgb(255 255 255 / 8%);
+    --app-drawer-shadow: rgb(0 0 0 / 20%);
+    --app-theme-track: #131313;
+    --app-theme-active: #303030;
+    --app-theme-hover: rgb(255 255 255 / 8%);
+    --app-submit-background: #ededed;
+    --app-submit-foreground: #0a0a0a;
     background: var(--app-background);
     color: var(--app-foreground);
+  }
+
+  .openlink-app-shell[data-theme='light'] {
+    color-scheme: light;
+    --app-background: #fafafa;
+    --app-surface: #ffffff;
+    --app-active: #ebebeb;
+    --app-border: #f2f2f2;
+    --app-control-border: #e4e4e7;
+    --app-prompt-border: #cfcfcf;
+    --app-foreground: #171717;
+    --app-muted: #666666;
+    --app-sidebar-width: 250px;
+    --app-drawer-background: #ffffff;
+    --app-drawer-foreground: #282828;
+    --app-drawer-muted: #8f8f8f;
+    --app-drawer-border: rgb(0 0 0 / 10%);
+    --app-drawer-divider: rgb(13 13 13 / 10%);
+    --app-drawer-hover: rgb(13 13 13 / 6%);
+    --app-drawer-shadow: rgb(0 0 0 / 10%);
+    --app-theme-track: #f9f9f9;
+    --app-theme-active: #ffffff;
+    --app-theme-hover: rgb(0 0 0 / 5%);
+    --app-submit-background: #171717;
+    --app-submit-foreground: #ffffff;
+    background: var(--app-background);
+  }
+
+  .openlink-app-shell[data-theme='light'] .app-nav-icon {
+    filter: brightness(0);
+    opacity: .6;
+  }
+
+  .openlink-app-shell[data-theme='light'] .app-control-icon {
+    filter: brightness(0);
+    opacity: .65;
+  }
+
+  .openlink-app-shell[data-theme='light'] button[aria-current='page'] .app-nav-icon {
+    opacity: 1;
   }
 
   .nav-link {

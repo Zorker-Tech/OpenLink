@@ -20,7 +20,8 @@ import {
   PromptInputTextarea,
   PromptInputTools,
 } from '@/components/ai-elements/prompt-input'
-import { useState } from 'react'
+import { AccountDrawer, type ThemeMode } from '@/components/account-drawer'
+import { useEffect, useState } from 'react'
 
 interface AppWorkspaceProps {
   workspaceName: string
@@ -72,10 +73,10 @@ function SidebarItem({
   return (
     <button
       aria-current={active ? 'page' : undefined}
-      className={`flex h-8 w-full items-center gap-2 rounded-md px-2 text-sm tracking-[-0.1504px] transition-colors ${active ? 'bg-[#1f1f1f] text-[#ededed]' : 'text-[#a0a0a0] hover:bg-[#121212] hover:text-[#ededed]'}`}
+      className={`flex h-8 w-full items-center gap-2 rounded-md px-2 text-sm tracking-[-0.1504px] transition-colors ${active ? 'bg-[var(--app-active)] text-[var(--app-foreground)]' : 'text-[var(--app-muted)] hover:bg-[var(--app-surface)] hover:text-[var(--app-foreground)]'}`}
       type="button"
     >
-      <img alt="" className="size-4 shrink-0" src={icon} />
+      <img alt="" className="app-nav-icon size-4 shrink-0" src={icon} />
       <span className="truncate">{label}</span>
     </button>
   )
@@ -89,6 +90,8 @@ function Sidebar({
   nickname,
   email,
   avatarUrl,
+  themeMode,
+  onThemeChange,
 }: {
   collapsed: boolean
   mobileOpen: boolean
@@ -97,28 +100,32 @@ function Sidebar({
   nickname: string
   email: string
   avatarUrl: string | null
+  themeMode: ThemeMode
+  onThemeChange: (mode: ThemeMode) => void
 }) {
+  const [accountDrawerOpen, setAccountDrawerOpen] = useState(false)
+
   return (
     <>
       {mobileOpen && <button aria-label="关闭侧边栏" className="fixed inset-0 z-30 bg-black/70 md:hidden" onClick={onCloseMobile} type="button" />}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-[280px] shrink-0 flex-col overflow-hidden border-r border-[#1a1a1a] bg-black transition-[transform,margin-left] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] md:relative ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} ${collapsed ? 'md:-ml-[280px] md:translate-x-0 md:pointer-events-none' : 'md:ml-0 md:translate-x-0'}`}
+        className={`fixed inset-y-0 left-0 z-40 flex w-[var(--app-sidebar-width)] shrink-0 flex-col overflow-visible border-r border-[var(--app-border)] bg-[var(--app-background)] transition-[transform,margin-left] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] md:relative ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} ${collapsed ? 'md:-ml-[var(--app-sidebar-width)] md:translate-x-0 md:pointer-events-none' : 'md:ml-0 md:translate-x-0'}`}
       >
         <div className="flex flex-col gap-3 py-2">
           <div className="flex h-8 items-center gap-1 px-2">
-            <button className="flex h-8 min-w-0 flex-1 items-center rounded-md border border-transparent pl-1.5 hover:bg-[#121212]" type="button">
+            <button className="flex h-8 min-w-0 flex-1 items-center rounded-md border border-transparent pl-1.5 hover:bg-[var(--app-surface)]" type="button">
               <UserAvatar avatarUrl={avatarUrl} nickname={nickname} />
-              <span className="ml-1.5 min-w-0 flex-1 truncate text-left text-sm font-medium tracking-[-0.1504px] text-[#ededed]">个人</span>
-              <img alt="" className="mx-1 size-4" src="/openlink/app/scope-switcher.svg" />
+              <span className="ml-1.5 min-w-0 flex-1 truncate text-left text-sm font-medium tracking-[-0.1504px] text-[var(--app-foreground)]">个人</span>
+              <img alt="" className="app-control-icon mx-1 size-4" src="/openlink/app/scope-switcher.svg" />
             </button>
-            <button aria-label="收起侧边栏" className="flex size-8 shrink-0 items-center justify-center rounded-md hover:bg-[#121212]" onClick={onToggle} type="button">
-              <img alt="" className="size-4" src="/openlink/app/sidebar-toggle.svg" />
+            <button aria-label="收起侧边栏" className="flex size-8 shrink-0 items-center justify-center rounded-md hover:bg-[var(--app-surface)]" onClick={onToggle} type="button">
+              <img alt="" className="app-control-icon size-4" src="/openlink/app/sidebar-toggle.svg" />
             </button>
           </div>
 
           <div className="px-2">
-            <button className="flex h-8 w-full items-center justify-center rounded-md bg-[#121212] pl-7 pr-2 text-sm font-medium tracking-[-0.1504px] text-[#ededed]" type="button">
-              <span className="flex-1">新建聊天</span><img alt="" className="size-4" src="/openlink/app/new-chat-chevron.svg" />
+            <button className="flex h-8 w-full items-center justify-center rounded-md bg-[var(--app-surface)] pl-7 pr-2 text-sm font-medium tracking-[-0.1504px] text-[var(--app-foreground)]" type="button">
+              <span className="flex-1">新建聊天</span><img alt="" className="app-control-icon size-4" src="/openlink/app/new-chat-chevron.svg" />
             </button>
           </div>
 
@@ -129,15 +136,15 @@ function Sidebar({
 
         <div className="min-h-0 flex-1 overflow-y-auto px-2 pt-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <section>
-            <div className="flex h-[30px] items-start justify-between px-2 text-[13px] font-medium tracking-[-0.0762px] text-[#a0a0a0]">
-              <span>收藏</span><img alt="" className="size-4 rotate-90" src="/openlink/app/section-chevron.svg" />
+            <div className="flex h-[30px] items-start justify-between px-2 text-[13px] font-medium tracking-[-0.0762px] text-[var(--app-muted)]">
+              <span>收藏</span><img alt="" className="app-control-icon size-4 rotate-90" src="/openlink/app/section-chevron.svg" />
             </div>
             <SidebarItem icon="/openlink/app/chat.svg" label="AI Elements 集成" />
           </section>
 
           <section className="mt-5">
-            <div className="flex h-[30px] items-start justify-between px-2 text-[13px] font-medium tracking-[-0.0762px] text-[#a0a0a0]">
-              <span>最近聊天</span><img alt="" className="size-4 rotate-90" src="/openlink/app/section-chevron.svg" />
+            <div className="flex h-[30px] items-start justify-between px-2 text-[13px] font-medium tracking-[-0.0762px] text-[var(--app-muted)]">
+              <span>最近聊天</span><img alt="" className="app-control-icon size-4 rotate-90" src="/openlink/app/section-chevron.svg" />
             </div>
             <div className="flex flex-col gap-1.5">
               {recentChats.map((chat) => <SidebarItem icon="/openlink/app/chat.svg" key={chat} label={chat} />)}
@@ -146,11 +153,20 @@ function Sidebar({
         </div>
 
         <div className="flex h-12 shrink-0 items-end gap-1 px-2 pb-3">
-          <button className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 py-0.5 hover:bg-[#121212]" title={email} type="button">
+          {accountDrawerOpen && (
+            <AccountDrawer
+              avatarUrl={avatarUrl}
+              email={email}
+              mode={themeMode}
+              nickname={nickname}
+              onModeChange={onThemeChange}
+            />
+          )}
+          <button aria-expanded={accountDrawerOpen} className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 py-0.5 hover:bg-[var(--app-surface)]" onClick={() => setAccountDrawerOpen((value) => !value)} title={email} type="button">
             <UserAvatar avatarUrl={avatarUrl} nickname={nickname} size={20} />
-            <span className="min-w-0 flex-1 truncate text-left text-sm tracking-[-0.1504px] text-[#ededed]">{email}</span>
+            <span className="min-w-0 flex-1 truncate text-left text-sm tracking-[-0.1504px] text-[var(--app-foreground)]">{email}</span>
           </button>
-          <button className="flex h-9 items-center justify-center rounded-md border border-[#27272a] bg-[#0a0a0a] px-3 text-sm font-medium text-[#ededed]" type="button">$5</button>
+          <button className="flex h-9 items-center justify-center rounded-md border border-[var(--app-control-border)] bg-[var(--app-surface)] px-3 text-sm font-medium text-[var(--app-foreground)]" type="button">$5</button>
         </div>
       </aside>
     </>
@@ -164,13 +180,13 @@ function WorkspacePrompt({ initialPrompt }: { initialPrompt: string }) {
 
   return (
     <PromptInput
-      className="w-full max-w-[690px] [&>[data-slot=input-group]]:h-[108px] [&>[data-slot=input-group]]:min-h-[108px] [&>[data-slot=input-group]]:rounded-xl [&>[data-slot=input-group]]:border-[#404040] [&>[data-slot=input-group]]:bg-[#121212] [&>[data-slot=input-group]]:shadow-none [&>[data-slot=input-group]]:focus-within:border-[#5b5b5b] [&>[data-slot=input-group]]:focus-within:ring-0"
+      className="w-full max-w-[690px] [&>[data-slot=input-group]]:h-[108px] [&>[data-slot=input-group]]:min-h-[108px] [&>[data-slot=input-group]]:rounded-xl [&>[data-slot=input-group]]:border-[var(--app-prompt-border)] [&>[data-slot=input-group]]:bg-[var(--app-surface)] [&>[data-slot=input-group]]:shadow-none [&>[data-slot=input-group]]:focus-within:border-[var(--app-control-border)] [&>[data-slot=input-group]]:focus-within:ring-0"
       onSubmit={() => setInput('')}
     >
       <PromptInputBody>
         <PromptInputTextarea
           aria-label="描述你想创建的内容"
-          className="min-h-[54px]! px-3 pt-3 text-[15px] text-[#ededed] placeholder:text-[#666]"
+          className="min-h-[54px]! px-3 pt-3 text-[15px] text-[var(--app-foreground)] placeholder:text-[var(--app-muted)]"
           onChange={(event) => setInput(event.currentTarget.value)}
           placeholder=""
           value={input}
@@ -178,27 +194,27 @@ function WorkspacePrompt({ initialPrompt }: { initialPrompt: string }) {
       </PromptInputBody>
       <PromptInputFooter className="h-10 px-3 pb-3">
         <PromptInputTools className="gap-0.5">
-          <PromptInputButton aria-label="添加附件" className="size-7 rounded-md p-0 hover:bg-[#202020]" type="button">
+          <PromptInputButton aria-label="添加附件" className="size-7 rounded-md p-0 hover:bg-[var(--app-active)]" type="button">
             <img alt="" className="size-4" src="/openlink/app/plus.svg" />
           </PromptInputButton>
           <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
             <ModelSelectorTrigger
               render={
-                <PromptInputButton className="h-7 max-w-[200px] gap-1 rounded-md px-1.5 text-[13px] font-medium text-[#a0a0a0] hover:bg-[#202020] hover:text-[#ededed]" type="button" />
+                <PromptInputButton className="h-7 max-w-[200px] gap-1 rounded-md px-1.5 text-[13px] font-medium text-[var(--app-muted)] hover:bg-[var(--app-active)] hover:text-[var(--app-foreground)]" type="button" />
               }
             >
               <img alt="" className="size-4" src={selectedModel.icon} />
               <span>{selectedModel.name}</span>
-              <img alt="" className="size-4" src="/openlink/app/prompt-chevron.svg" />
+              <img alt="" className="app-control-icon size-4" src="/openlink/app/prompt-chevron.svg" />
             </ModelSelectorTrigger>
-            <ModelSelectorContent className="w-[320px] border border-[#2e2e2e] bg-[#121212] text-[#ededed]" title="选择模型">
-              <ModelSelectorInput className="border-0 bg-transparent text-[#ededed] placeholder:text-[#666]" placeholder="搜索模型" />
+            <ModelSelectorContent className="w-[320px] border border-[var(--app-control-border)] bg-[var(--app-surface)] text-[var(--app-foreground)]" title="选择模型">
+              <ModelSelectorInput className="border-0 bg-transparent text-[var(--app-foreground)] placeholder:text-[var(--app-muted)]" placeholder="搜索模型" />
               <ModelSelectorList className="max-h-64 p-1">
-                <ModelSelectorEmpty className="text-[#a0a0a0]">没有找到模型</ModelSelectorEmpty>
-                <ModelSelectorGroup heading="模型" className="[&_[cmdk-group-heading]]:text-[#666]">
+                <ModelSelectorEmpty className="text-[var(--app-muted)]">没有找到模型</ModelSelectorEmpty>
+                <ModelSelectorGroup heading="模型" className="[&_[cmdk-group-heading]]:text-[var(--app-muted)]">
                   {models.map((model) => (
                     <ModelSelectorItem
-                      className="h-9 text-[#a0a0a0] data-[selected=true]:bg-[#1f1f1f] data-[selected=true]:text-[#ededed]"
+                      className="h-9 text-[var(--app-muted)] data-[selected=true]:bg-[var(--app-active)] data-[selected=true]:text-[var(--app-foreground)]"
                       key={model.id}
                       onSelect={() => {
                         setSelectedModel(model)
@@ -216,11 +232,11 @@ function WorkspacePrompt({ initialPrompt }: { initialPrompt: string }) {
           </ModelSelector>
         </PromptInputTools>
         <div className="flex items-center gap-1">
-          <PromptInputButton className="h-7 gap-1 rounded-lg px-2 text-[13px] font-medium text-[#a0a0a0] hover:bg-[#202020] hover:text-[#ededed]" type="button">
+          <PromptInputButton className="h-7 gap-1 rounded-lg px-2 text-[13px] font-medium text-[var(--app-muted)] hover:bg-[var(--app-active)] hover:text-[var(--app-foreground)]" type="button">
             <span>Project</span>
-            <img alt="" className="size-3" src="/openlink/app/project-chevron.svg" />
+            <img alt="" className="app-control-icon size-3" src="/openlink/app/project-chevron.svg" />
           </PromptInputButton>
-          <PromptInputSubmit aria-label="发送" className="size-7 rounded-md border border-[#ededed] bg-[#ededed] p-0 hover:bg-white">
+          <PromptInputSubmit aria-label="发送" className="size-7 rounded-md border border-[var(--app-submit-background)] bg-[var(--app-submit-background)] p-0 hover:opacity-90">
             <img alt="" className="size-4" src="/openlink/app/mic.svg" />
           </PromptInputSubmit>
         </div>
@@ -232,16 +248,37 @@ function WorkspacePrompt({ initialPrompt }: { initialPrompt: string }) {
 export function AppWorkspace({ workspaceName, nickname, email, avatarUrl, initialPrompt }: AppWorkspaceProps) {
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [themeMode, setThemeMode] = useState<ThemeMode>('dark')
+  const [systemLight, setSystemLight] = useState(false)
+
+  useEffect(() => {
+    const savedTheme = window.localStorage.getItem('openlink-theme') as ThemeMode | null
+    if (savedTheme === 'system' || savedTheme === 'light' || savedTheme === 'dark') setThemeMode(savedTheme)
+
+    const media = window.matchMedia('(prefers-color-scheme: light)')
+    const updateSystemTheme = () => setSystemLight(media.matches)
+    updateSystemTheme()
+    media.addEventListener('change', updateSystemTheme)
+    return () => media.removeEventListener('change', updateSystemTheme)
+  }, [])
+
+  const handleThemeChange = (mode: ThemeMode) => {
+    setThemeMode(mode)
+    window.localStorage.setItem('openlink-theme', mode)
+  }
+  const activeTheme = themeMode === 'light' || (themeMode === 'system' && systemLight) ? 'light' : 'dark'
 
   return (
-    <div className="openlink-app-shell flex h-dvh min-h-[500px] overflow-hidden bg-black text-[#ededed]">
+    <div className="openlink-app-shell flex h-dvh min-h-[500px] overflow-hidden" data-theme={activeTheme}>
       <Sidebar
         avatarUrl={avatarUrl}
         collapsed={collapsed}
         email={email}
         mobileOpen={mobileOpen}
         nickname={nickname}
+        onThemeChange={handleThemeChange}
         onCloseMobile={() => setMobileOpen(false)}
+        themeMode={themeMode}
         onToggle={() => {
           if (mobileOpen) {
             setMobileOpen(false)
@@ -251,15 +288,15 @@ export function AppWorkspace({ workspaceName, nickname, email, avatarUrl, initia
           }
         }}
       />
-      <main className="relative flex min-w-0 flex-1 items-center justify-center overflow-hidden bg-black px-6">
-        <header className="absolute inset-x-0 top-0 flex h-12 items-center border-b border-[#1a1a1a] px-3 md:border-transparent">
-          <button aria-label="打开侧边栏" className="flex size-8 items-center justify-center rounded-md hover:bg-[#121212] md:hidden" onClick={() => { setCollapsed(false); setMobileOpen(true) }} type="button">
-            <span className="flex w-4 flex-col gap-1"><i className="h-px w-4 bg-[#a0a0a0]" /><i className="h-px w-4 bg-[#a0a0a0]" /><i className="h-px w-4 bg-[#a0a0a0]" /></span>
+      <main className="relative flex min-w-0 flex-1 items-center justify-center overflow-hidden bg-[var(--app-background)] px-6">
+        <header className="absolute inset-x-0 top-0 flex h-12 items-center border-b border-[var(--app-border)] px-3 md:border-transparent">
+          <button aria-label="打开侧边栏" className="flex size-8 items-center justify-center rounded-md hover:bg-[var(--app-surface)] md:hidden" onClick={() => { setCollapsed(false); setMobileOpen(true) }} type="button">
+            <span className="flex w-4 flex-col gap-1"><i className="h-px w-4 bg-[var(--app-muted)]" /><i className="h-px w-4 bg-[var(--app-muted)]" /><i className="h-px w-4 bg-[var(--app-muted)]" /></span>
           </button>
-          <span className="ml-2 truncate text-sm font-medium text-[#ededed] md:hidden">{workspaceName}</span>
+          <span className="ml-2 truncate text-sm font-medium text-[var(--app-foreground)] md:hidden">{workspaceName}</span>
           {collapsed && (
-            <button aria-label="展开侧边栏" className="hidden size-8 items-center justify-center rounded-md hover:bg-[#121212] md:flex" onClick={() => setCollapsed(false)} type="button">
-              <img alt="" className="size-4" src="/openlink/app/sidebar-expand.svg" />
+            <button aria-label="展开侧边栏" className="hidden size-8 items-center justify-center rounded-md hover:bg-[var(--app-surface)] md:flex" onClick={() => setCollapsed(false)} type="button">
+              <img alt="" className="app-control-icon size-4" src="/openlink/app/sidebar-expand.svg" />
             </button>
           )}
         </header>
