@@ -1,6 +1,17 @@
 'use client'
 
 import {
+  ModelSelector,
+  ModelSelectorContent,
+  ModelSelectorEmpty,
+  ModelSelectorGroup,
+  ModelSelectorInput,
+  ModelSelectorItem,
+  ModelSelectorList,
+  ModelSelectorName,
+  ModelSelectorTrigger,
+} from '@/components/ai-elements/model-selector'
+import {
   PromptInput,
   PromptInputBody,
   PromptInputButton,
@@ -29,6 +40,12 @@ const primaryNavigation = [
 ] as const
 
 const recentChats = ['运行网站', 'New radix-nova project', 'Tooltip Provider 错误'] as const
+
+const models = [
+  { id: 'fable-5', name: 'Fable 5', icon: '/openlink/model.svg' },
+  { id: 'fable-4', name: 'Fable 4', icon: '/openlink/model.svg' },
+  { id: 'openlink-fast', name: 'OpenLink Fast', icon: '/openlink/model.svg' },
+] as const
 
 function UserAvatar({ avatarUrl, nickname, size = 22 }: { avatarUrl: string | null; nickname: string; size?: number }) {
   const initial = nickname.trim().charAt(0).toUpperCase() || 'O'
@@ -142,6 +159,8 @@ function Sidebar({
 
 function WorkspacePrompt({ initialPrompt }: { initialPrompt: string }) {
   const [input, setInput] = useState(initialPrompt)
+  const [selectedModel, setSelectedModel] = useState(models[0])
+  const [modelSelectorOpen, setModelSelectorOpen] = useState(false)
 
   return (
     <PromptInput
@@ -162,11 +181,39 @@ function WorkspacePrompt({ initialPrompt }: { initialPrompt: string }) {
           <PromptInputButton aria-label="添加附件" className="size-7 rounded-md p-0 hover:bg-[#202020]" type="button">
             <img alt="" className="size-4" src="/openlink/app/plus.svg" />
           </PromptInputButton>
-          <PromptInputButton className="h-7 max-w-[200px] gap-1 rounded-md px-1.5 text-[13px] font-medium text-[#a0a0a0] hover:bg-[#202020] hover:text-[#ededed]" type="button">
-            <img alt="" className="size-4" src="/openlink/model.svg" />
-            <span>Fable 5</span>
-            <img alt="" className="size-4" src="/openlink/app/prompt-chevron.svg" />
-          </PromptInputButton>
+          <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
+            <ModelSelectorTrigger
+              render={
+                <PromptInputButton className="h-7 max-w-[200px] gap-1 rounded-md px-1.5 text-[13px] font-medium text-[#a0a0a0] hover:bg-[#202020] hover:text-[#ededed]" type="button" />
+              }
+            >
+              <img alt="" className="size-4" src={selectedModel.icon} />
+              <span>{selectedModel.name}</span>
+              <img alt="" className="size-4" src="/openlink/app/prompt-chevron.svg" />
+            </ModelSelectorTrigger>
+            <ModelSelectorContent className="w-[320px] border border-[#2e2e2e] bg-[#121212] text-[#ededed]" title="选择模型">
+              <ModelSelectorInput className="border-0 bg-transparent text-[#ededed] placeholder:text-[#666]" placeholder="搜索模型" />
+              <ModelSelectorList className="max-h-64 p-1">
+                <ModelSelectorEmpty className="text-[#a0a0a0]">没有找到模型</ModelSelectorEmpty>
+                <ModelSelectorGroup heading="模型" className="[&_[cmdk-group-heading]]:text-[#666]">
+                  {models.map((model) => (
+                    <ModelSelectorItem
+                      className="h-9 text-[#a0a0a0] data-[selected=true]:bg-[#1f1f1f] data-[selected=true]:text-[#ededed]"
+                      key={model.id}
+                      onSelect={() => {
+                        setSelectedModel(model)
+                        setModelSelectorOpen(false)
+                      }}
+                      value={model.name}
+                    >
+                      <img alt="" className="size-4" src={model.icon} />
+                      <ModelSelectorName>{model.name}</ModelSelectorName>
+                    </ModelSelectorItem>
+                  ))}
+                </ModelSelectorGroup>
+              </ModelSelectorList>
+            </ModelSelectorContent>
+          </ModelSelector>
         </PromptInputTools>
         <div className="flex items-center gap-1">
           <PromptInputButton className="h-7 gap-1 rounded-lg px-2 text-[13px] font-medium text-[#a0a0a0] hover:bg-[#202020] hover:text-[#ededed]" type="button">
