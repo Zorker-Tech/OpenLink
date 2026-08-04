@@ -65,12 +65,12 @@ export function AccountDrawer({ avatarUrl, email, mode, nickname, onModeChange }
       <div className="px-2.5 pt-2 pb-1.5">
         <p className="truncate text-sm leading-[22px] tracking-[-0.16px] text-[var(--app-drawer-muted)]">{email}</p>
         <div className="pt-1.5">
-          <div aria-label="主题模式" className="flex h-8 w-[98px] items-center rounded-lg bg-[var(--app-theme-track)] p-0.5">
+          <div aria-label="主题模式" className="flex h-8 w-[98px] items-center gap-0.5 rounded-lg bg-[var(--app-theme-track)] p-0.5">
             {themeOptions.map(({ label, mode: optionMode, icon: Icon }) => (
               <button
                 aria-label={label}
                 aria-pressed={mode === optionMode}
-                className={`flex size-7 items-center justify-center rounded-md transition-colors ${mode === optionMode ? 'bg-[var(--app-theme-active)] shadow-[0_1px_4px_var(--app-drawer-shadow)]' : 'hover:bg-[var(--app-theme-hover)]'}`}
+                className={`flex h-7 w-[30px] shrink-0 items-center justify-center rounded-md transition-colors ${mode === optionMode ? 'bg-[var(--app-theme-active)] shadow-[0_1px_4px_var(--app-drawer-shadow)]' : 'hover:bg-[var(--app-theme-hover)]'}`}
                 key={optionMode}
                 onClick={() => onModeChange(optionMode)}
                 type="button"
