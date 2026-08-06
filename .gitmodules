@@ -6,4 +6,4 @@
 	url = https://github.com/opensandbox-group/OpenSandbox.git
 [submodule "services/sandbox-runtime"]
 	path = services/sandbox-runtime
-	url = https://github.com/anthropic-experimental/sandbox-runtime.git
+	url = https://git.haokir/hydite/openlink/sandbox-runtime
