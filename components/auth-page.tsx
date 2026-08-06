@@ -20,8 +20,8 @@ const providers = [
   { label: 'GitHub', icon: '/openlink/auth/github.svg', provider: 'github' as const },
 ] as const
 
-function safeNextPath(value: string | null) {
-  return value && value.startsWith('/') && !value.startsWith('//') ? value : '/'
+function safeNextPath(value: string | null, fallback = '/') {
+  return value && value.startsWith('/') && !value.startsWith('//') ? value : fallback
 }
 
 export function AuthPage({ mode }: AuthPageProps) {
@@ -36,20 +36,20 @@ export function AuthPage({ mode }: AuthPageProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
-  const [nextPath, setNextPath] = useState('/')
+  const [nextPath, setNextPath] = useState(isRegister ? '/app' : '/')
   const alternateHref = nextPath === '/' ? alternateBaseHref : `${alternateBaseHref}?next=${encodeURIComponent(nextPath)}`
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const error = params.get('error')
-    setNextPath(safeNextPath(params.get('next')))
+    setNextPath(safeNextPath(params.get('next'), isRegister ? '/app' : '/'))
 
     if (error === 'auth_callback') {
       setErrorMessage('We could not complete sign in. Please try again.')
     } else if (error === 'auth_confirm') {
       setErrorMessage('This confirmation link is invalid or has expired.')
     }
-  }, [])
+  }, [isRegister])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()

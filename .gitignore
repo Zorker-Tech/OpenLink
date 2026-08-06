@@ -26,3 +26,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local isolated runtimes and generated release artifacts
+/.agent-data/
+/.openlink-runtime/
+/.openlink-releases/

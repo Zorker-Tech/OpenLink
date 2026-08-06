@@ -25,5 +25,10 @@ export default async function AppEntryPage({
     redirect(withPrompt('/app/onboarding', prompt))
   }
 
+  if (entry.needsOrganizationOnboarding) {
+    const path = '/app/onboarding?step=organization'
+    redirect(prompt ? `${path}&prompt=${encodeURIComponent(prompt)}` : path)
+  }
+
   redirect(withPrompt(`/app/${entry.workspace.slug}`, prompt))
 }

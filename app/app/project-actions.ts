@@ -1,0 +1,82 @@
+'use server'
+
+import {
+  createProject,
+  type CreateProjectInput,
+  type ProjectKind,
+  type ProjectSourceType,
+} from '@/lib/projects'
+import { getAccessibleWorkspace } from '@/lib/workspaces'
+import { createClient } from '@/utils/supabase/server'
+import { revalidatePath } from 'next/cache'
+
+export interface CreateProjectActionInput {
+  workspaceSlug: string
+  name: string
+  kind: ProjectKind
+  sourceType: ProjectSourceType
+  sourceUrl?: string
+  description?: string
+}
+
+export type CreateProjectActionResult =
+  | { project: Awaited<ReturnType<typeof createProject>>; error: null }
+  | { project: null; error: string }
+
+function projectErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : ''
+  if (message.includes('INVALID_GITHUB_URL') || message.includes('projects_source_shape_check')) {
+    return '请输入有效的 GitHub 仓库地址。'
+  }
+  if (message.includes('42501') || message.toLowerCase().includes('row-level security')) {
+    return '你没有权限在这个组织工作区创建项目。'
+  }
+  if (message.includes('PROJECT_SLUG_CONFLICT') || message.includes('23505')) {
+    return '无法生成唯一的项目地址，请换一个名称。'
+  }
+  return '暂时无法创建项目，请稍后重试。'
+}
+
+export async function createProjectAction(
+  input: CreateProjectActionInput,
+): Promise<CreateProjectActionResult> {
+  const name = input.name?.trim() ?? ''
+  const workspaceSlug = input.workspaceSlug?.trim() ?? ''
+  const description = input.description?.trim() ?? ''
+  const allowedKinds: ProjectKind[] = ['code', 'research']
+  const allowedSourceTypes: ProjectSourceType[] = ['blank', 'github']
+
+  if (!workspaceSlug || name.length < 1 || name.length > 100) {
+    return { project: null, error: '项目名称需要包含 1–100 个字符。' }
+  }
+  if (!allowedKinds.includes(input.kind) || !allowedSourceTypes.includes(input.sourceType)) {
+    return { project: null, error: '项目类型无效。' }
+  }
+  if (description.length > 2000) {
+    return { project: null, error: '项目描述不能超过 2000 个字符。' }
+  }
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { project: null, error: '登录状态已失效，请重新登录。' }
+
+  const workspace = await getAccessibleWorkspace(supabase, workspaceSlug)
+  if (!workspace) return { project: null, error: '找不到当前工作区。' }
+
+  const projectInput: CreateProjectInput = {
+    name,
+    kind: input.kind,
+    sourceType: input.sourceType,
+    sourceUrl: input.sourceUrl,
+    description,
+  }
+
+  try {
+    const project = await createProject(supabase, user.id, workspace, projectInput)
+    revalidatePath(`/app/${workspace.slug}`)
+    revalidatePath(`/app/${workspace.slug}/projects`)
+    return { project, error: null }
+  } catch (error) {
+    return { project: null, error: projectErrorMessage(error) }
+  }
+}

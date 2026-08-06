@@ -1,0 +1,11 @@
+**
+!packages/pi-runtime/tarballs/
+!packages/pi-runtime/tarballs/**
+!services/agent-worker/package.json
+!services/agent-worker/package-lock.json
+!services/agent-worker/dist/
+!services/agent-worker/dist/**
+!services/agent-rpc-worker/package.json
+!services/agent-rpc-worker/package-lock.json
+!services/agent-rpc-worker/dist/
+!services/agent-rpc-worker/dist/**

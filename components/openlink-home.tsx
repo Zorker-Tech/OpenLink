@@ -1,5 +1,6 @@
 'use client'
 
+import { createChatSessionAction } from '@/app/chat/actions'
 import {
   PromptInput,
   PromptInputBody,
@@ -13,10 +14,7 @@ import {
   ArrowRight,
   ChevronDown,
   ExternalLink,
-  Grid2X2,
   Heart,
-  LayoutDashboard,
-  PanelsTopLeft,
   Rocket,
   Sparkles,
   Users,
@@ -74,13 +72,6 @@ const templates = [
     views: '2.2K',
     likes: '644',
   },
-] as const
-
-const categories = [
-  { label: 'Apps and Games', icon: Sparkles },
-  { label: 'Landing Pages', icon: PanelsTopLeft },
-  { label: 'Components', icon: Grid2X2 },
-  { label: 'Dashboards', icon: LayoutDashboard },
 ] as const
 
 const mobileSites = [
@@ -175,12 +166,18 @@ function PromptComposer({ user }: { user: HomeUser | null }) {
   const router = useRouter()
   const [input, setInput] = useState('')
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const prompt = input.trim()
     if (!prompt) return
 
-    const destination = `/app?prompt=${encodeURIComponent(prompt)}`
-    router.push(user ? destination : `/login?next=${encodeURIComponent(destination)}`)
+    const fallback = `/app?prompt=${encodeURIComponent(prompt)}`
+    if (!user) {
+      router.push(`/login?next=${encodeURIComponent(fallback)}`)
+      return
+    }
+
+    const result = await createChatSessionAction({ prompt })
+    if (result.path) router.push(result.path)
   }
 
   return (
@@ -267,14 +264,9 @@ function TemplatesSection() {
     <section className="mx-auto max-w-[1264px] px-6" id="templates">
       <div className="mb-6 flex items-center justify-between gap-6">
         <h2 className="shrink-0 text-2xl leading-8 font-semibold tracking-[-0.8897px] text-[#ededed]">Start with a template</h2>
-        <div className="hidden w-[706px] items-center gap-2 lg:flex">
-          {categories.map(({ label, icon: Icon }, index) => (
-            <a className={`category-pill ${['w-[160px]', 'w-[145px]', 'w-[133px]', 'w-[128px]'][index]}`} href="#" key={label}><Icon className="size-4" />{label}</a>
-          ))}
-          <a className="flex h-8 w-[108px] items-center justify-center gap-1.5 rounded-lg text-sm font-medium text-[#ededed] hover:bg-[#171717]" href="#">
-            Browse all <ArrowRight className="size-4" />
-          </a>
-        </div>
+        <a className="flex h-8 w-[108px] items-center justify-center gap-1.5 rounded-lg text-sm font-medium text-[#ededed] hover:bg-[#171717] lg:ml-auto" href="#">
+          Browse all <ArrowRight className="size-4" />
+        </a>
       </div>
       <div className="grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
         {templates.map((template) => <TemplateCard key={template.title} template={template} />)}

@@ -27,8 +27,8 @@ export async function saveNickname(
   }
 
   try {
-    const workspace = await confirmNickname(supabase, user, nickname)
-    const target = `/app/${workspace.slug}${prompt ? `?prompt=${encodeURIComponent(prompt)}` : ''}`
+    await confirmNickname(supabase, user, nickname)
+    const target = `/app/onboarding?step=organization${prompt ? `&prompt=${encodeURIComponent(prompt)}` : ''}`
     redirect(target)
   } catch (error) {
     if (error && typeof error === 'object' && 'digest' in error) throw error

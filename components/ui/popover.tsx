@@ -4,6 +4,7 @@ import * as React from "react"
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover"
 
 import { cn } from "@/lib/utils"
+import { useOpenLinkTheme, type OpenLinkThemeAttribute } from "@/components/ui/theme-scope"
 
 function Popover({ ...props }: PopoverPrimitive.Root.Props) {
   return <PopoverPrimitive.Root data-slot="popover" {...props} />
@@ -21,10 +22,13 @@ function PopoverContent({
   sideOffset = 4,
   ...props
 }: PopoverPrimitive.Popup.Props &
+  OpenLinkThemeAttribute &
   Pick<
     PopoverPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset"
   >) {
+  const theme = useOpenLinkTheme(props['data-openlink-theme'])
+
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Positioner
@@ -41,6 +45,7 @@ function PopoverContent({
             className
           )}
           {...props}
+          data-openlink-theme={theme}
         />
       </PopoverPrimitive.Positioner>
     </PopoverPrimitive.Portal>

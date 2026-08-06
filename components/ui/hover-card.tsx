@@ -3,6 +3,7 @@
 import { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card"
 
 import { cn } from "@/lib/utils"
+import { useOpenLinkTheme, type OpenLinkThemeAttribute } from "@/components/ui/theme-scope"
 
 function HoverCard({ ...props }: PreviewCardPrimitive.Root.Props) {
   return <PreviewCardPrimitive.Root data-slot="hover-card" {...props} />
@@ -22,10 +23,13 @@ function HoverCardContent({
   alignOffset = 4,
   ...props
 }: PreviewCardPrimitive.Popup.Props &
+  OpenLinkThemeAttribute &
   Pick<
     PreviewCardPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset"
   >) {
+  const theme = useOpenLinkTheme(props['data-openlink-theme'])
+
   return (
     <PreviewCardPrimitive.Portal data-slot="hover-card-portal">
       <PreviewCardPrimitive.Positioner
@@ -42,6 +46,7 @@ function HoverCardContent({
             className
           )}
           {...props}
+          data-openlink-theme={theme}
         />
       </PreviewCardPrimitive.Positioner>
     </PreviewCardPrimitive.Portal>

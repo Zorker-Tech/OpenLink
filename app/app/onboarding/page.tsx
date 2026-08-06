@@ -4,15 +4,15 @@ import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 
 export const metadata = {
-  title: '创建昵称 — OpenLink',
+  title: '设置工作区 — OpenLink',
 }
 
 export default async function OnboardingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ prompt?: string }>
+  searchParams: Promise<{ prompt?: string; step?: string }>
 }) {
-  const { prompt = '' } = await searchParams
+  const { prompt = '', step: requestedStep } = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -21,9 +21,20 @@ export default async function OnboardingPage({
   const { data: profile } = await supabase
     .schema('openlink')
     .from('profiles')
-    .select('nickname')
+    .select('nickname, nickname_confirmed, organization_onboarding_completed')
     .eq('user_id', user.id)
     .maybeSingle()
+
+  const typedProfile = profile as {
+    nickname?: string
+    nickname_confirmed?: boolean
+    organization_onboarding_completed?: boolean
+  } | null
+  const step = requestedStep === 'organization' || typedProfile?.nickname_confirmed
+    ? 'organization'
+    : 'nickname'
+
+  if (step === 'organization' && typedProfile?.organization_onboarding_completed) redirect('/app')
 
   return (
     <main className="flex min-h-dvh items-center justify-center bg-black px-6 text-[#ededed]">
@@ -33,13 +44,16 @@ export default async function OnboardingPage({
             <img alt="OpenLink" className="h-4 w-8" src="/openlink/logo-wide.svg" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold tracking-[-0.4px]">创建你的昵称</h1>
-            <p className="mt-1 text-sm text-[#a0a0a0]">昵称将成为默认工作区名称。</p>
+            <h1 className="text-xl font-semibold tracking-[-0.4px]">{step === 'nickname' ? '创建你的昵称' : '设置组织工作区'}</h1>
+            <p className="mt-1 text-sm text-[#a0a0a0]">
+              {step === 'nickname' ? '昵称将成为默认个人工作区名称。' : '组织是可选的，你也可以继续使用个人工作区。'}
+            </p>
           </div>
         </div>
         <OnboardingForm
-          defaultNickname={(profile as { nickname?: string } | null)?.nickname ?? getDefaultNickname(user)}
+          defaultNickname={typedProfile?.nickname ?? getDefaultNickname(user)}
           prompt={prompt}
+          step={step}
         />
       </section>
     </main>

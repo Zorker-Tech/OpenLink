@@ -2,13 +2,26 @@
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { OrganizationSetup } from '@/components/organization-setup'
 import { useActionState } from 'react'
 import { saveNickname, type NicknameActionState } from './actions'
 
 const initialState: NicknameActionState = { error: null }
 
-export function OnboardingForm({ defaultNickname, prompt }: { defaultNickname: string; prompt: string }) {
+export function OnboardingForm({
+  defaultNickname,
+  prompt,
+  step,
+}: {
+  defaultNickname: string
+  prompt: string
+  step: 'nickname' | 'organization'
+}) {
   const [state, formAction, isPending] = useActionState(saveNickname, initialState)
+
+  if (step === 'organization') {
+    return <OrganizationSetup prompt={prompt} showSkip />
+  }
 
   return (
     <form action={formAction} className="w-full space-y-4">
@@ -27,7 +40,7 @@ export function OnboardingForm({ defaultNickname, prompt }: { defaultNickname: s
       </label>
       {state.error && <p className="text-sm text-red-400" role="alert">{state.error}</p>}
       <Button className="h-10 w-full rounded-lg bg-[#ededed] text-[#0a0a0a] hover:bg-white" disabled={isPending} type="submit">
-        {isPending ? '正在创建…' : '创建工作区'}
+        {isPending ? '正在保存…' : '继续'}
       </Button>
     </form>
   )

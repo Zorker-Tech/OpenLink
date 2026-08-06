@@ -7,13 +7,16 @@ export interface OpenLinkProfile {
   user_id: string
   nickname: string | null
   nickname_confirmed: boolean
+  organization_onboarding_completed: boolean
 }
 
 export interface OpenLinkWorkspace {
   id: string
-  owner_id: string
+  owner_id: string | null
+  organization_id: string | null
   name: string
   slug: string
+  scope_type: 'personal' | 'organization'
 }
 
 type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>
@@ -38,7 +41,7 @@ export function getAvatarUrl(user: User) {
   return typeof value === 'string' && value ? value : null
 }
 
-function slugifyWorkspaceName(name: string, userId: string) {
+export function slugifyWorkspaceName(name: string, fallbackId: string) {
   const slug = name
     .normalize('NFKD')
     .toLowerCase()
@@ -47,7 +50,7 @@ function slugifyWorkspaceName(name: string, userId: string) {
     .replace(/^-+|-+$/g, '')
     .slice(0, 64)
 
-  return slug || `workspace-${userId.slice(0, 8)}`
+  return slug || `workspace-${fallbackId.slice(0, 8)}`
 }
 
 export async function getOwnedWorkspace(
@@ -58,12 +61,43 @@ export async function getOwnedWorkspace(
   let query = supabase
     .schema('openlink')
     .from('workspaces')
-    .select('id, owner_id, name, slug')
+    .select('id, owner_id, organization_id, name, slug, scope_type')
     .eq('owner_id', userId)
+    .eq('scope_type', 'personal')
 
   if (slug) query = query.eq('slug', slug)
 
   const { data, error } = await query.order('created_at', { ascending: true }).limit(1).maybeSingle()
+  if (error) throw error
+  return data as OpenLinkWorkspace | null
+}
+
+export async function getAccessibleWorkspace(
+  supabase: ServerSupabaseClient,
+  slug: string,
+) {
+  const { data, error } = await supabase
+    .schema('openlink')
+    .from('workspaces')
+    .select('id, owner_id, organization_id, name, slug, scope_type')
+    .eq('slug', slug)
+    .maybeSingle()
+
+  if (error) throw error
+  return data as OpenLinkWorkspace | null
+}
+
+export async function getAccessibleWorkspaceById(
+  supabase: ServerSupabaseClient,
+  id: string,
+) {
+  const { data, error } = await supabase
+    .schema('openlink')
+    .from('workspaces')
+    .select('id, owner_id, organization_id, name, slug, scope_type')
+    .eq('id', id)
+    .maybeSingle()
+
   if (error) throw error
   return data as OpenLinkWorkspace | null
 }
@@ -83,8 +117,14 @@ export async function ensureWorkspace(
     const { data, error } = await supabase
       .schema('openlink')
       .from('workspaces')
-      .insert({ owner_id: user.id, name: nickname, slug })
-      .select('id, owner_id, name, slug')
+      .insert({
+        owner_id: user.id,
+        organization_id: null,
+        scope_type: 'personal',
+        name: nickname,
+        slug,
+      })
+      .select('id, owner_id, organization_id, name, slug, scope_type')
       .single()
 
     if (!error) return data as OpenLinkWorkspace
@@ -101,7 +141,7 @@ export async function resolveAppEntry(supabase: ServerSupabaseClient, user: User
   const { data, error } = await supabase
     .schema('openlink')
     .from('profiles')
-    .select('user_id, nickname, nickname_confirmed')
+    .select('user_id, nickname, nickname_confirmed, organization_onboarding_completed')
     .eq('user_id', user.id)
     .maybeSingle()
 
@@ -119,8 +159,9 @@ export async function resolveAppEntry(supabase: ServerSupabaseClient, user: User
         user_id: user.id,
         nickname,
         nickname_confirmed: Boolean(metadataNickname),
+        organization_onboarding_completed: false,
       })
-      .select('user_id, nickname, nickname_confirmed')
+      .select('user_id, nickname, nickname_confirmed, organization_onboarding_completed')
       .single()
 
     if (insertError) throw insertError
@@ -131,14 +172,25 @@ export async function resolveAppEntry(supabase: ServerSupabaseClient, user: User
     return {
       needsOnboarding: true as const,
       defaultNickname: profile.nickname ?? getDefaultNickname(user),
+      needsOrganizationOnboarding: false as const,
       workspace: null,
     }
   }
 
   const workspace = await ensureWorkspace(supabase, user, profile.nickname)
 
+  if (!profile.organization_onboarding_completed) {
+    return {
+      needsOnboarding: false as const,
+      needsOrganizationOnboarding: true as const,
+      defaultNickname: profile.nickname,
+      workspace,
+    }
+  }
+
   return {
     needsOnboarding: false as const,
+    needsOrganizationOnboarding: false as const,
     defaultNickname: profile.nickname,
     workspace,
   }
@@ -162,4 +214,20 @@ export async function confirmNickname(
 
   if (error) throw error
   return ensureWorkspace(supabase, user, normalizedNickname)
+}
+
+export async function completeOrganizationOnboarding(
+  supabase: ServerSupabaseClient,
+  userId: string,
+) {
+  const { error } = await supabase
+    .schema('openlink')
+    .from('profiles')
+    .update({
+      organization_onboarding_completed: true,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('user_id', userId)
+
+  if (error) throw error
 }

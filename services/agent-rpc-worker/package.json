@@ -1,0 +1,34 @@
+{
+  "name": "@openlink/agent-rpc-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/main.js",
+  "engines": { "node": ">=22.19.0" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@earendil-works/pi-agent-core": "file:../../packages/pi-runtime/tarballs/pi-agent-core.tgz",
+    "@earendil-works/pi-ai": "file:../../packages/pi-runtime/tarballs/pi-ai.tgz",
+    "@earendil-works/pi-client": "file:../../packages/pi-runtime/tarballs/pi-client.tgz",
+    "@earendil-works/pi-coding-agent": "file:../../packages/pi-runtime/tarballs/pi-coding-agent.tgz",
+    "@earendil-works/pi-protocol": "file:../../packages/pi-runtime/tarballs/pi-protocol.tgz",
+    "@earendil-works/pi-tui": "file:../../packages/pi-runtime/tarballs/pi-tui.tgz",
+    "undici": "8.10.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.12.0",
+    "typescript": "5.9.3"
+  },
+  "overrides": {
+    "brace-expansion": "5.0.9",
+    "@earendil-works/pi-agent-core": "$@earendil-works/pi-agent-core",
+    "@earendil-works/pi-ai": "$@earendil-works/pi-ai",
+    "@earendil-works/pi-client": "$@earendil-works/pi-client",
+    "@earendil-works/pi-coding-agent": "$@earendil-works/pi-coding-agent",
+    "@earendil-works/pi-protocol": "$@earendil-works/pi-protocol",
+    "@earendil-works/pi-tui": "$@earendil-works/pi-tui"
+  }
+}

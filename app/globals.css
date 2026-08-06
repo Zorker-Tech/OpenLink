@@ -156,95 +156,182 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
-  }
-  body {
-    @apply bg-background text-foreground;
-    margin: 0;
-    background: #000;
-  }
-
-  html {
+    -ms-overflow-style: none;
     scrollbar-width: none;
   }
 
-  html::-webkit-scrollbar {
+  *::-webkit-scrollbar {
     display: none;
+    width: 0;
+    height: 0;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    margin: 0;
   }
 }
 
 @layer components {
-  .openlink-app-shell {
+  :where(.openlink-app-shell, [data-openlink-theme='dark']) {
+    color-scheme: dark;
     --app-background: #000000;
     --app-surface: #121212;
-    --app-active: #1f1f1f;
-    --app-border: #1a1a1a;
-    --app-control-border: #27272a;
+    --app-elevated: #1c1c1c;
+    --app-active: #292929;
+    --app-selected: #1f1f1f;
+    --app-border: #242424;
+    --app-control-border: #343434;
     --app-prompt-border: #404040;
+    --app-focus-ring: #737373;
     --app-foreground: #ededed;
     --app-muted: #a0a0a0;
-    --app-sidebar-width: 280px;
-    --app-drawer-background: #303030;
-    --app-drawer-foreground: #dcdcdc;
-    --app-drawer-muted: #8f8f8f;
-    --app-drawer-border: rgb(255 255 255 / 6%);
-    --app-drawer-divider: rgb(255 255 255 / 12%);
-    --app-drawer-hover: rgb(255 255 255 / 8%);
-    --app-drawer-shadow: rgb(0 0 0 / 20%);
-    --app-theme-track: #131313;
-    --app-theme-active: #303030;
-    --app-theme-hover: rgb(255 255 255 / 8%);
+    --app-subtle: #737373;
+    --app-hover: rgb(255 255 255 / 7%);
+    --app-shadow: rgb(0 0 0 / 48%);
+    --app-overlay: rgb(0 0 0 / 56%);
+    --app-logo-filter: invert(1);
     --app-submit-background: #ededed;
     --app-submit-foreground: #0a0a0a;
-    background: var(--app-background);
+    --app-user-bubble: #1f1f1f;
+    --app-user-bubble-foreground: #ffffff;
+    --app-status-glass: rgb(29 29 29 / 42%);
+    --app-status-glass-border: rgb(255 255 255 / 6%);
+    --app-status-glass-foreground: rgb(251 251 251 / 50%);
+
+    --background: var(--app-background);
+    --foreground: var(--app-foreground);
+    --card: var(--app-surface);
+    --card-foreground: var(--app-foreground);
+    --popover: var(--app-elevated);
+    --popover-foreground: var(--app-foreground);
+    --primary: var(--app-submit-background);
+    --primary-foreground: var(--app-submit-foreground);
+    --secondary: var(--app-surface);
+    --secondary-foreground: var(--app-foreground);
+    --muted: var(--app-active);
+    --muted-foreground: var(--app-muted);
+    --accent: var(--app-active);
+    --accent-foreground: var(--app-foreground);
+    --border: var(--app-border);
+    --input: var(--app-control-border);
+    --ring: var(--app-focus-ring);
+    --destructive: oklch(0.704 0.191 22.216);
+    --sidebar: var(--app-background);
+    --sidebar-foreground: var(--app-foreground);
+    --sidebar-accent: var(--app-active);
+    --sidebar-accent-foreground: var(--app-foreground);
+    --sidebar-border: var(--app-border);
+    --sidebar-ring: var(--app-focus-ring);
+
+    --app-drawer-background: var(--app-elevated);
+    --app-drawer-foreground: var(--app-foreground);
+    --app-drawer-muted: var(--app-muted);
+    --app-drawer-border: var(--app-border);
+    --app-drawer-divider: rgb(255 255 255 / 10%);
+    --app-drawer-hover: var(--app-hover);
+    --app-drawer-shadow: var(--app-shadow);
+    --app-theme-track: var(--app-surface);
+    --app-theme-active: var(--app-active);
+    --app-theme-hover: var(--app-hover);
+
     color: var(--app-foreground);
   }
 
-  .openlink-app-shell[data-theme='light'] {
+  :where(.openlink-app-shell[data-theme='light'], [data-openlink-theme='light']) {
     color-scheme: light;
     --app-background: #fafafa;
     --app-surface: #ffffff;
+    --app-elevated: #ffffff;
     --app-active: #ebebeb;
-    --app-border: #f2f2f2;
-    --app-control-border: #e4e4e7;
+    --app-selected: #ebebeb;
+    --app-border: #e7e7e7;
+    --app-control-border: #d4d4d8;
     --app-prompt-border: #cfcfcf;
+    --app-focus-ring: #737373;
     --app-foreground: #171717;
     --app-muted: #666666;
-    --app-sidebar-width: 250px;
-    --app-drawer-background: #ffffff;
-    --app-drawer-foreground: #282828;
-    --app-drawer-muted: #8f8f8f;
-    --app-drawer-border: rgb(0 0 0 / 10%);
-    --app-drawer-divider: rgb(13 13 13 / 10%);
-    --app-drawer-hover: rgb(13 13 13 / 6%);
-    --app-drawer-shadow: rgb(0 0 0 / 10%);
-    --app-theme-track: #f9f9f9;
-    --app-theme-active: #ffffff;
-    --app-theme-hover: rgb(0 0 0 / 5%);
+    --app-subtle: #8a8a8a;
+    --app-hover: rgb(13 13 13 / 6%);
+    --app-shadow: rgb(0 0 0 / 14%);
+    --app-overlay: rgb(0 0 0 / 18%);
+    --app-logo-filter: none;
     --app-submit-background: #171717;
     --app-submit-foreground: #ffffff;
+    --app-user-bubble: #ebebeb;
+    --app-user-bubble-foreground: #18181b;
+    --app-status-glass: rgb(255 255 255 / 62%);
+    --app-status-glass-border: rgb(13 13 13 / 8%);
+    --app-status-glass-foreground: rgb(24 24 27 / 58%);
+
+    --background: var(--app-background);
+    --foreground: var(--app-foreground);
+    --card: var(--app-surface);
+    --card-foreground: var(--app-foreground);
+    --popover: var(--app-elevated);
+    --popover-foreground: var(--app-foreground);
+    --primary: var(--app-submit-background);
+    --primary-foreground: var(--app-submit-foreground);
+    --secondary: #f4f4f5;
+    --secondary-foreground: var(--app-foreground);
+    --muted: #f4f4f5;
+    --muted-foreground: var(--app-muted);
+    --accent: var(--app-active);
+    --accent-foreground: var(--app-foreground);
+    --border: var(--app-border);
+    --input: var(--app-control-border);
+    --ring: var(--app-focus-ring);
+    --destructive: oklch(0.577 0.245 27.325);
+    --sidebar: var(--app-background);
+    --sidebar-foreground: var(--app-foreground);
+    --sidebar-accent: var(--app-active);
+    --sidebar-accent-foreground: var(--app-foreground);
+    --sidebar-border: var(--app-border);
+    --sidebar-ring: var(--app-focus-ring);
+
+    --app-drawer-background: var(--app-elevated);
+    --app-drawer-foreground: var(--app-foreground);
+    --app-drawer-muted: var(--app-muted);
+    --app-drawer-border: var(--app-border);
+    --app-drawer-divider: rgb(13 13 13 / 10%);
+    --app-drawer-hover: var(--app-hover);
+    --app-drawer-shadow: var(--app-shadow);
+    --app-theme-track: #f4f4f5;
+    --app-theme-active: #ffffff;
+    --app-theme-hover: var(--app-hover);
+  }
+
+  .openlink-app-shell {
+    --app-sidebar-min-width: 250px;
+    --app-sidebar-max-width: 280px;
     background: var(--app-background);
   }
 
-  .openlink-app-shell[data-theme='light'] .app-nav-icon {
+  :where(.openlink-app-shell[data-theme='light'], [data-openlink-theme='light']) .app-nav-icon {
     filter: brightness(0);
     opacity: .6;
   }
 
-  .openlink-app-shell[data-theme='light'] .app-control-icon {
+  :where(.openlink-app-shell[data-theme='light'], [data-openlink-theme='light']) .app-control-icon {
     filter: brightness(0);
     opacity: .65;
   }
 
-  .openlink-app-shell[data-theme='light'] button[aria-current='page'] .app-nav-icon {
+  :where(.openlink-app-shell[data-theme='light'], [data-openlink-theme='light']) button[aria-current='page'] .app-nav-icon {
     opacity: 1;
+  }
+
+  :where(.openlink-app-shell[data-theme='light'], [data-openlink-theme='light']) .app-submit-icon {
+    filter: invert(1);
+  }
+
+  :where(.openlink-app-shell, [data-openlink-theme]) :is(button, input, textarea, [role='menu'], [role='dialog']) {
+    transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+    transition-duration: 150ms;
   }
 
   .nav-link {
     @apply flex h-7 items-center rounded-md px-2 text-sm font-medium tracking-[-0.1504px] text-[#a0a0a0] transition-colors hover:bg-[#171717] hover:text-[#ededed];
-  }
-
-  .category-pill {
-    @apply flex h-8 items-center gap-1.5 rounded-full border border-white/14 bg-[#121212] px-3 text-sm font-medium tracking-[-0.1504px] text-[#a0a0a0] transition-colors hover:bg-[#1c1c1c] hover:text-[#ededed];
   }
 
   .feature-grid {
@@ -337,4 +424,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .brand-track { animation: none; }
+
+  :where(.openlink-app-shell, [data-openlink-theme]) :is(button, input, textarea, [role='menu'], [role='dialog']) {
+    transition-duration: 0.01ms;
+  }
 }

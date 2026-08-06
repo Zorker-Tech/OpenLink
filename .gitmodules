@@ -1,0 +1,9 @@
+[submodule "services/pi"]
+	path = services/pi
+	url = https://github.com/earendil-works/pi.git
+[submodule "services/opensandbox"]
+	path = services/opensandbox
+	url = https://github.com/opensandbox-group/OpenSandbox.git
+[submodule "services/sandbox-runtime"]
+	path = services/sandbox-runtime
+	url = https://github.com/anthropic-experimental/sandbox-runtime.git
