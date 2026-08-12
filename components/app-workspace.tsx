@@ -65,7 +65,7 @@ const primaryNavigation = [
   { label: '首页', icon: '/openlink/app/home.svg', active: true },
   { label: '项目', icon: '/openlink/app/projects.svg' },
   { label: '库', icon: '/openlink/app/library.svg' },
-  { label: '设计系统', icon: '/openlink/app/design-system.svg' },
+  { label: '知识库', icon: '/openlink/app/design-system.svg' },
   { label: '模板', icon: '/openlink/app/templates.svg' },
 ] as const
 

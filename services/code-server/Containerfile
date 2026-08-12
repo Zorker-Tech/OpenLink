@@ -1,4 +1,4 @@
-# Project-scoped VS Code Web runtime. The source tree is vendored in
+# Project-scoped VS Code Web runtime.  The source tree is vendored in
 # services/code-server so upgrades can be reviewed against the exact upstream
 # revision, while this image installs the matching signed release package to
 # avoid compiling VS Code in every developer's Project VM.
