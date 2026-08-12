@@ -1,0 +1,1652 @@
+// Copyright (C) 2019-2020 Zilliz. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance
+// with the License. You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software distributed under the License
+// is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+// or implied. See the License for the specific language governing permissions and limitations under the License
+
+#include <fmt/core.h>
+#include <folly/FBVector.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <algorithm>
+#include <array>
+#include <cstdint>
+#include <functional>
+#include <iosfwd>
+#include <map>
+#include <memory>
+#include <numeric>
+#include <optional>
+#include <set>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
+#include <vector>
+
+#include "NamedType/named_type_impl.hpp"
+#include "NamedType/underlying_functionalities.hpp"
+#include "bitset/bitset.h"
+#include "bitset/detail/element_vectorized.h"
+#include "cachinglayer/CacheSlot.h"
+#include "cachinglayer/Manager.h"
+#include "cachinglayer/Translator.h"
+#include "common/BitsetView.h"
+#include "common/Chunk.h"
+#include "common/Consts.h"
+#include "common/FieldData.h"
+#include "common/FieldDataInterface.h"
+#include "common/FieldMeta.h"
+#include "common/IndexMeta.h"
+#include "common/OffsetMapping.h"
+#include "common/OpContext.h"
+#include "common/QueryInfo.h"
+#include "common/QueryResult.h"
+#include "common/Schema.h"
+#include "common/Span.h"
+#include "common/Types.h"
+#include "common/protobuf_utils.h"
+#include "expr/ITypeExpr.h"
+#include "filemanager/InputStream.h"
+#include "gtest/gtest.h"
+#include "index/Index.h"
+#include "index/IndexFactory.h"
+#include "index/IndexInfo.h"
+#include "index/Meta.h"
+#include "knowhere/comp/index_param.h"
+#include "knowhere/config.h"
+#include "mmap/ChunkedColumn.h"
+#include "pb/plan.pb.h"
+#include "pb/schema.pb.h"
+#include "plan/PlanNode.h"
+#include "query/ExecPlanNodeVisitor.h"
+#include "query/PlanImpl.h"
+#include "query/SearchOnSealed.h"
+#include "segcore/ChunkedSegmentSealedImpl.h"
+#include "segcore/SegcoreConfig.h"
+#include "segcore/SegmentSealed.h"
+#include "segcore/Types.h"
+#include "segcore/storagev1translator/ChunkTranslator.h"
+#include "storage/FileManager.h"
+#include "storage/RemoteChunkManagerSingleton.h"
+#include "storage/Types.h"
+#include "test_utils/DataGen.h"
+#include "test_utils/cachinglayer_test_utils.h"
+#include "test_utils/storage_test_utils.h"
+
+struct DeferRelease {
+    using functype = std::function<void()>;
+    void
+    AddDefer(const functype& closure) {
+        closures.push_back(closure);
+    }
+
+    ~DeferRelease() {
+        for (auto& closure : closures) {
+            closure();
+        }
+    }
+
+    std::vector<functype> closures;
+};
+
+using namespace milvus;
+
+namespace {
+
+class ScopedRejectRemoteVectorOutput {
+ public:
+    explicit ScopedRejectRemoteVectorOutput(bool enabled)
+        : old_value_(segcore::SegcoreConfig::default_config()
+                         .get_reject_remote_vector_output()) {
+        segcore::SegcoreConfig::default_config()
+            .set_reject_remote_vector_output(enabled);
+    }
+
+    ~ScopedRejectRemoteVectorOutput() {
+        segcore::SegcoreConfig::default_config()
+            .set_reject_remote_vector_output(old_value_);
+    }
+
+ private:
+    bool old_value_;
+};
+
+SearchResult
+MakeSearchResult(std::vector<int64_t> offsets) {
+    SearchResult result;
+    result.seg_offsets_ = std::move(offsets);
+    result.distances_.resize(result.seg_offsets_.size(), 0.0F);
+    return result;
+}
+
+segcore::SegmentSealedUPtr
+CreateColdVectorOutputSegment(const SchemaPtr& schema,
+                              const FieldId& vector_field_id,
+                              int64_t row_count) {
+    auto dataset = segcore::DataGen(schema, row_count);
+    auto cm = milvus::storage::RemoteChunkManagerSingleton::GetInstance()
+                  .GetRemoteChunkManager();
+    auto load_info = PrepareInsertBinlog(
+        kCollectionID, kPartitionID, kSegmentID, dataset, cm);
+    load_info.field_infos.at(vector_field_id.get()).warmup_policy = "disable";
+
+    auto segment = segcore::CreateSealedSegment(schema);
+    segment->LoadFieldData(load_info);
+    return segment;
+}
+
+}  // namespace
+
+TEST(test_chunk_segment, TestSearchOnSealed) {
+    int dim = 16;
+    int chunk_num = 3;
+    int chunk_size = 100;
+
+    DeferRelease defer;
+
+    int total_row_count = chunk_num * chunk_size;
+    int bitset_size = (total_row_count + 7) / 8;
+
+    auto schema = std::make_shared<Schema>();
+    auto fakevec_id = schema->AddDebugField(
+        "fakevec", DataType::VECTOR_FLOAT, dim, knowhere::metric::COSINE);
+
+    auto field_meta = schema->operator[](fakevec_id);
+
+    std::vector<std::unique_ptr<Chunk>> chunks;
+    std::vector<int64_t> num_rows_per_chunk;
+    for (int i = 0; i < chunk_num; i++) {
+        num_rows_per_chunk.push_back(chunk_size);
+        auto dataset = segcore::DataGen(schema, chunk_size);
+        auto data = dataset.get_col<float>(fakevec_id);
+        auto buf_size = 4 * data.size();
+
+        char* buf = new char[buf_size];
+        defer.AddDefer([buf]() { delete[] buf; });
+        memcpy(buf, data.data(), 4 * data.size());
+
+        auto chunk_mmap_guard =
+            std::make_shared<ChunkMmapGuard>(nullptr, 0, "");
+        chunks.emplace_back(std::make_unique<FixedWidthChunk>(
+            chunk_size, dim, buf, buf_size, 4, false, chunk_mmap_guard));
+    }
+
+    auto translator = std::make_unique<TestChunkTranslator>(
+        num_rows_per_chunk, "", std::move(chunks));
+    auto slot =
+        cachinglayer::Manager::GetInstance().CreateCacheSlot<milvus::Chunk>(
+            std::move(translator), nullptr);
+    auto column = std::make_shared<ChunkedColumn>(std::move(slot), field_meta);
+
+    SearchInfo search_info;
+    auto search_conf = knowhere::Json{
+        {knowhere::meta::METRIC_TYPE, knowhere::metric::COSINE},
+    };
+    search_info.search_params_ = search_conf;
+    search_info.field_id_ = fakevec_id;
+    search_info.metric_type_ = knowhere::metric::COSINE;
+    // expect to return all rows
+    search_info.topk_ = total_row_count;
+
+    uint8_t* bitset_data = new uint8_t[bitset_size];
+    defer.AddDefer([bitset_data]() { delete[] bitset_data; });
+    std::fill(bitset_data, bitset_data + bitset_size, 0);
+    BitsetView bv(bitset_data, total_row_count);
+
+    auto query_ds = segcore::DataGen(schema, 1);
+    auto col_query_data = query_ds.get_col<float>(fakevec_id);
+    auto query_data = col_query_data.data();
+    auto index_info = std::map<std::string, std::string>{};
+    SearchResult search_result;
+    milvus::OpContext op_context;
+    query::SearchOnSealedColumn(*schema,
+                                column.get(),
+                                search_info,
+                                index_info,
+                                query_data,
+                                nullptr,
+                                1,
+                                total_row_count,
+                                bv,
+                                &op_context,
+                                search_result);
+
+    std::set<int64_t> offsets;
+    for (auto& offset : search_result.seg_offsets_) {
+        if (offset != -1) {
+            offsets.insert(offset);
+        }
+    }
+    // check all rows are returned
+    ASSERT_EQ(total_row_count, offsets.size());
+    for (int i = 0; i < total_row_count; i++) {
+        ASSERT_TRUE(offsets.find(i) != offsets.end());
+    }
+
+    // test with group by
+    search_info.group_by_field_ids_ = {fakevec_id};
+    std::fill(bitset_data, bitset_data + bitset_size, 0);
+    query::SearchOnSealedColumn(*schema,
+                                column.get(),
+                                search_info,
+                                index_info,
+                                query_data,
+                                nullptr,
+                                1,
+                                total_row_count,
+                                bv,
+                                &op_context,
+                                search_result);
+
+    ASSERT_EQ(1, search_result.vector_iterators_->size());
+
+    auto iter = search_result.vector_iterators_->at(0);
+    // collect all offsets
+    offsets.clear();
+    while (iter->HasNext()) {
+        auto [offset, distance] = iter->Next().value();
+        offsets.insert(offset);
+    }
+
+    ASSERT_EQ(total_row_count, offsets.size());
+    for (int i = 0; i < total_row_count; i++) {
+        ASSERT_TRUE(offsets.find(i) != offsets.end());
+    }
+}
+
+TEST(test_chunk_segment, RejectRemoteVectorOutputFailsWhenVectorCellsAreCold) {
+    constexpr int64_t row_count = 16;
+    constexpr int64_t dim = 4;
+    auto schema = std::make_shared<Schema>();
+    auto pk_id = schema->AddDebugField("pk", DataType::INT64);
+    auto vector_id = schema->AddDebugField(
+        "vec", DataType::VECTOR_FLOAT, dim, knowhere::metric::L2);
+    schema->set_primary_field_id(pk_id);
+
+    auto segment = CreateColdVectorOutputSegment(schema, vector_id, row_count);
+    auto* chunked =
+        dynamic_cast<segcore::ChunkedSegmentSealedImpl*>(segment.get());
+    ASSERT_NE(chunked, nullptr);
+
+    query::Plan plan(schema);
+    plan.target_entries_ = {vector_id};
+    auto result = MakeSearchResult({0, 3, 7});
+
+    ScopedRejectRemoteVectorOutput scoped_config(true);
+
+    try {
+        chunked->TestFillTargetEntry(&plan, result);
+        FAIL() << "expected cold vector output to be rejected";
+    } catch (const SegcoreError& err) {
+        EXPECT_EQ(err.get_error_code(), RetrieveError);
+        EXPECT_NE(std::string(err.what()).find("vector field"),
+                  std::string::npos);
+    }
+}
+
+TEST(test_chunk_segment,
+     RejectRemoteVectorOutputFailsForRetrieveWhenVectorCellsAreCold) {
+    constexpr int64_t row_count = 16;
+    constexpr int64_t dim = 4;
+    auto schema = std::make_shared<Schema>();
+    auto pk_id = schema->AddDebugField("pk", DataType::INT64);
+    auto vector_id = schema->AddDebugField(
+        "vec", DataType::VECTOR_FLOAT, dim, knowhere::metric::L2);
+    schema->set_primary_field_id(pk_id);
+
+    auto segment = CreateColdVectorOutputSegment(schema, vector_id, row_count);
+    auto* chunked =
+        dynamic_cast<segcore::ChunkedSegmentSealedImpl*>(segment.get());
+    ASSERT_NE(chunked, nullptr);
+
+    query::RetrievePlan plan(schema);
+    plan.field_ids_ = {vector_id};
+    const int64_t offsets[] = {0, 3, 7};
+
+    ScopedRejectRemoteVectorOutput scoped_config(true);
+
+    try {
+        auto results = chunked->Retrieve(
+            nullptr,
+            &plan,
+            offsets,
+            static_cast<int64_t>(sizeof(offsets) / sizeof(offsets[0])),
+            folly::CancellationToken());
+        (void)results;
+        FAIL() << "expected cold vector output to be rejected";
+    } catch (const SegcoreError& err) {
+        EXPECT_EQ(err.get_error_code(), RetrieveError);
+        EXPECT_NE(std::string(err.what()).find("vector field"),
+                  std::string::npos);
+    }
+}
+
+TEST(test_chunk_segment,
+     RejectRemoteVectorOutputAllowsScalarAndDisabledConfig) {
+    constexpr int64_t row_count = 16;
+    constexpr int64_t dim = 4;
+    auto schema = std::make_shared<Schema>();
+    auto pk_id = schema->AddDebugField("pk", DataType::INT64);
+    auto scalar_id = schema->AddDebugField("scalar", DataType::INT64);
+    auto vector_id = schema->AddDebugField(
+        "vec", DataType::VECTOR_FLOAT, dim, knowhere::metric::L2);
+    schema->set_primary_field_id(pk_id);
+
+    {
+        auto segment =
+            CreateColdVectorOutputSegment(schema, vector_id, row_count);
+        auto* chunked =
+            dynamic_cast<segcore::ChunkedSegmentSealedImpl*>(segment.get());
+        ASSERT_NE(chunked, nullptr);
+
+        query::Plan scalar_plan(schema);
+        scalar_plan.target_entries_ = {scalar_id};
+        auto scalar_result = MakeSearchResult({1, 2, 5});
+
+        ScopedRejectRemoteVectorOutput scoped_config(true);
+        ASSERT_NO_THROW(
+            chunked->TestFillTargetEntry(&scalar_plan, scalar_result));
+        ASSERT_EQ(scalar_result.output_fields_data_.count(scalar_id), 1);
+    }
+
+    {
+        auto segment =
+            CreateColdVectorOutputSegment(schema, vector_id, row_count);
+        auto* chunked =
+            dynamic_cast<segcore::ChunkedSegmentSealedImpl*>(segment.get());
+        ASSERT_NE(chunked, nullptr);
+
+        query::Plan vector_plan(schema);
+        vector_plan.target_entries_ = {vector_id};
+        auto vector_result = MakeSearchResult({1, 2, 5});
+
+        ScopedRejectRemoteVectorOutput scoped_config(false);
+        ASSERT_NO_THROW(
+            chunked->TestFillTargetEntry(&vector_plan, vector_result));
+        ASSERT_EQ(vector_result.output_fields_data_.count(vector_id), 1);
+    }
+}
+
+TEST(test_chunk_segment, ReopenSkipsFunctionOutputFieldWithoutData) {
+    auto old_schema = std::make_shared<Schema>();
+    old_schema->set_schema_version(1);
+    auto pk = old_schema->AddDebugField("pk", DataType::INT64);
+    old_schema->set_primary_field_id(pk);
+
+    auto segment = segcore::CreateSealedSegment(old_schema);
+
+    constexpr int64_t row_count = 5;
+    std::vector<int64_t> pk_values(row_count);
+    std::iota(pk_values.begin(), pk_values.end(), 0);
+
+    auto field_data =
+        std::make_shared<FieldData<int64_t>>(DataType::INT64, false);
+    field_data->FillFieldData(pk_values.data(), row_count);
+
+    auto cm = milvus::storage::RemoteChunkManagerSingleton::GetInstance()
+                  .GetRemoteChunkManager();
+    auto load_info = PrepareSingleFieldInsertBinlog(
+        kCollectionID, kPartitionID, kSegmentID, pk.get(), {field_data}, cm);
+    segment->LoadFieldData(load_info);
+
+    auto new_schema = std::make_shared<Schema>();
+    new_schema->set_schema_version(2);
+    new_schema->AddField(
+        FieldName("pk"), pk, DataType::INT64, false, std::nullopt);
+    new_schema->set_primary_field_id(pk);
+    auto sparse = FieldId(pk.get() + 1);
+    new_schema->AddField(FieldName("sparse_out"),
+                         sparse,
+                         DataType::VECTOR_SPARSE_U32_F32,
+                         0,
+                         std::nullopt,
+                         false);
+    new_schema->add_function_output_field_id(sparse);
+
+    segment->Reopen(new_schema);
+    EXPECT_FALSE(segment->FieldAccessible(sparse));
+}
+
+// #50783 defense-in-depth: GetFieldIndexMeta must throw (AssertInfo) rather than
+// dereference end() for a missing field; assert() is compiled out under NDEBUG.
+TEST(test_chunk_segment, GetFieldIndexMetaThrowsOnMissingField) {
+    std::map<FieldId, FieldIndexMeta> field_metas;
+    FieldId present(100);
+    field_metas.emplace(
+        present,
+        FieldIndexMeta(
+            present, {{"index_type", "IVF_FLAT"}, {"metric_type", "L2"}}, {}));
+    CollectionIndexMeta meta(1024, std::move(field_metas));
+
+    EXPECT_TRUE(meta.HasField(present));
+    EXPECT_NO_THROW(meta.GetFieldIndexMeta(present));
+    EXPECT_FALSE(meta.HasField(FieldId(present.get() + 1)));
+    EXPECT_THROW(meta.GetFieldIndexMeta(FieldId(present.get() + 1)),
+                 SegcoreError);
+}
+
+TEST(test_chunk_segment, MissingStructArrayOffsetsReturnsEmptyForOldRows) {
+    auto old_schema = std::make_shared<Schema>();
+    old_schema->set_schema_version(1);
+    auto pk = old_schema->AddDebugField("pk", DataType::INT64);
+    old_schema->set_primary_field_id(pk);
+
+    auto segment = segcore::CreateSealedSegment(old_schema);
+
+    constexpr int64_t row_count = 5;
+    std::vector<int64_t> pk_values(row_count);
+    std::iota(pk_values.begin(), pk_values.end(), 0);
+
+    auto field_data =
+        std::make_shared<FieldData<int64_t>>(DataType::INT64, false);
+    field_data->FillFieldData(pk_values.data(), row_count);
+
+    auto cm = milvus::storage::RemoteChunkManagerSingleton::GetInstance()
+                  .GetRemoteChunkManager();
+    auto load_info = PrepareSingleFieldInsertBinlog(
+        kCollectionID, kPartitionID, kSegmentID, pk.get(), {field_data}, cm);
+    segment->LoadFieldData(load_info);
+
+    auto new_schema = std::make_shared<Schema>();
+    new_schema->set_schema_version(2);
+    new_schema->AddField(
+        FieldName("pk"), pk, DataType::INT64, false, std::nullopt);
+    new_schema->set_primary_field_id(pk);
+    auto label = FieldId(pk.get() + 1);
+    new_schema->AddField(FieldName("chunks[label]"),
+                         label,
+                         DataType::ARRAY,
+                         DataType::VARCHAR,
+                         true);
+    segment->Reopen(new_schema);
+
+    auto offsets = segment->GetArrayOffsets(label);
+    ASSERT_NE(offsets, nullptr);
+    EXPECT_EQ(offsets->GetRowCount(), row_count);
+    EXPECT_EQ(offsets->GetTotalElementCount(), 0);
+    for (int64_t i = 0; i <= row_count; ++i) {
+        auto [start, end] = offsets->ElementIDRangeOfRow(i);
+        EXPECT_EQ(start, 0);
+        EXPECT_EQ(end, 0);
+    }
+}
+
+TEST(test_chunk_segment, SearchOnSealedColumnBruteForceUsesOriginalTopk) {
+    int dim = 16;
+    int chunk_num = 2;
+    int chunk_size = 64;
+
+    DeferRelease defer;
+
+    int total_row_count = chunk_num * chunk_size;
+    int bitset_size = (total_row_count + 7) / 8;
+
+    auto schema = std::make_shared<Schema>();
+    auto fakevec_id = schema->AddDebugField(
+        "fakevec", DataType::VECTOR_FLOAT, dim, knowhere::metric::L2);
+    auto field_meta = schema->operator[](fakevec_id);
+
+    std::vector<std::unique_ptr<Chunk>> chunks;
+    std::vector<int64_t> num_rows_per_chunk;
+    for (int i = 0; i < chunk_num; i++) {
+        num_rows_per_chunk.push_back(chunk_size);
+        auto dataset = segcore::DataGen(schema, chunk_size);
+        auto data = dataset.get_col<float>(fakevec_id);
+        auto buf_size = static_cast<int>(sizeof(float) * data.size());
+
+        char* buf = new char[buf_size];
+        defer.AddDefer([buf]() { delete[] buf; });
+        memcpy(buf, data.data(), buf_size);
+
+        auto chunk_mmap_guard =
+            std::make_shared<ChunkMmapGuard>(nullptr, 0, "");
+        chunks.emplace_back(
+            std::make_unique<FixedWidthChunk>(chunk_size,
+                                              dim,
+                                              buf,
+                                              buf_size,
+                                              sizeof(float),
+                                              false,
+                                              chunk_mmap_guard));
+    }
+
+    auto translator = std::make_unique<TestChunkTranslator>(
+        num_rows_per_chunk, "", std::move(chunks));
+    auto slot =
+        cachinglayer::Manager::GetInstance().CreateCacheSlot<milvus::Chunk>(
+            std::move(translator), nullptr);
+    auto column = std::make_shared<ChunkedColumn>(std::move(slot), field_meta);
+
+    SearchInfo search_info;
+    search_info.search_params_ = knowhere::Json{
+        {knowhere::meta::METRIC_TYPE, knowhere::metric::L2},
+    };
+    search_info.field_id_ = fakevec_id;
+    search_info.metric_type_ = knowhere::metric::L2;
+    search_info.topk_ = 5;
+    search_info.global_refine_enable_ = true;
+    search_info.search_topk_ratio_ = 3.0;
+    search_info.refine_topk_ratio_ = 2.0;
+
+    uint8_t* bitset_data = new uint8_t[bitset_size];
+    defer.AddDefer([bitset_data]() { delete[] bitset_data; });
+    std::fill(bitset_data, bitset_data + bitset_size, 0);
+    BitsetView bv(bitset_data, total_row_count);
+
+    auto query_ds = segcore::DataGen(schema, 1);
+    auto col_query_data = query_ds.get_col<float>(fakevec_id);
+    auto query_data = col_query_data.data();
+    auto index_info = std::map<std::string, std::string>{};
+    SearchResult search_result;
+    milvus::OpContext op_context;
+    query::SearchOnSealedColumn(*schema,
+                                column.get(),
+                                search_info,
+                                index_info,
+                                query_data,
+                                nullptr,
+                                1,
+                                total_row_count,
+                                bv,
+                                &op_context,
+                                search_result);
+
+    ASSERT_EQ(search_result.unity_topK_, search_info.topk_);
+    ASSERT_EQ(search_result.seg_offsets_.size(), search_info.topk_);
+    ASSERT_EQ(search_result.distances_.size(), search_info.topk_);
+}
+
+TEST(test_chunk_segment,
+     SearchOnSealedColumnNullableVectorArrayUsesLogicalRowOffsets) {
+    constexpr int64_t dim = 2;
+    constexpr int64_t row_count = 6;
+    constexpr int64_t vector_count = 3;
+
+    auto schema = std::make_shared<Schema>();
+    auto vec_id =
+        schema->AddDebugVectorArrayField("profile[embedding]",
+                                         DataType::VECTOR_FLOAT,
+                                         dim,
+                                         knowhere::metric::MAX_SIM_COSINE,
+                                         true);
+    auto field_meta = schema->operator[](vec_id);
+
+    const auto bitmap_bytes = (row_count + 7) / 8;
+    const auto header_bytes = sizeof(uint32_t) * (row_count * 2 + 1);
+    const auto payload_offset =
+        static_cast<uint32_t>(bitmap_bytes + header_bytes);
+    const auto vector_bytes = static_cast<uint32_t>(dim * sizeof(float));
+    const std::array<float, vector_count * dim> payload{
+        1.0F, 0.0F, 0.0F, 1.0F, -1.0F, 0.0F};
+    std::vector<char> buffer(bitmap_bytes + header_bytes +
+                                 payload.size() * sizeof(float) +
+                                 MMAP_ARRAY_PADDING,
+                             0);
+
+    // Logical rows: [NULL, [], [A], [B], [], [C]].
+    buffer[0] = 0b00111110;
+    const std::array<uint32_t, row_count * 2 + 1> header{
+        payload_offset,
+        0,
+        payload_offset,
+        0,
+        payload_offset,
+        1,
+        payload_offset + vector_bytes,
+        1,
+        payload_offset + 2 * vector_bytes,
+        0,
+        payload_offset + 2 * vector_bytes,
+        1,
+        payload_offset + 3 * vector_bytes};
+    memcpy(buffer.data() + bitmap_bytes,
+           header.data(),
+           header.size() * sizeof(uint32_t));
+    memcpy(buffer.data() + payload_offset,
+           payload.data(),
+           payload.size() * sizeof(float));
+
+    std::vector<std::unique_ptr<Chunk>> chunks;
+    auto chunk_mmap_guard = std::make_shared<ChunkMmapGuard>(nullptr, 0, "");
+    chunks.emplace_back(
+        std::make_unique<VectorArrayChunk>(dim,
+                                           row_count,
+                                           buffer.data(),
+                                           buffer.size(),
+                                           DataType::VECTOR_FLOAT,
+                                           chunk_mmap_guard,
+                                           true));
+    auto translator = std::make_unique<TestChunkTranslator>(
+        std::vector<int64_t>{row_count}, "", std::move(chunks));
+    auto slot =
+        cachinglayer::Manager::GetInstance().CreateCacheSlot<milvus::Chunk>(
+            std::move(translator), nullptr);
+    auto column = MakeChunkedColumnBase(
+        DataType::VECTOR_ARRAY, std::move(slot), field_meta);
+    ASSERT_FALSE(column->GetOffsetMapping().IsEnabled());
+    auto offsets_pw = column->VectorArrayOffsets(nullptr, 0);
+    const std::array<size_t, row_count + 1> expected_offsets{
+        0, 0, 0, 1, 2, 2, 3};
+    for (int64_t i = 0; i <= row_count; ++i) {
+        ASSERT_EQ(offsets_pw.get()[i], expected_offsets[i]);
+    }
+
+    SearchInfo search_info;
+    search_info.search_params_ = knowhere::Json{
+        {knowhere::meta::METRIC_TYPE, knowhere::metric::MAX_SIM_COSINE}};
+    search_info.field_id_ = vec_id;
+    search_info.metric_type_ = knowhere::metric::MAX_SIM_COSINE;
+    search_info.topk_ = 3;
+
+    const std::array<float, dim> query{1.0F, 0.0F};
+    const std::array<size_t, 2> query_offsets{0, 1};
+    const std::map<std::string, std::string> index_info;
+    milvus::OpContext op_context;
+
+    auto run_search = [&](const BitsetView& bitset) {
+        SearchResult result;
+        query::SearchOnSealedColumn(*schema,
+                                    column.get(),
+                                    search_info,
+                                    index_info,
+                                    query.data(),
+                                    query_offsets.data(),
+                                    1,
+                                    row_count,
+                                    bitset,
+                                    &op_context,
+                                    result);
+        return result;
+    };
+
+    auto result = run_search(BitsetView{});
+    ASSERT_EQ(result.seg_offsets_.size(), 3);
+    ASSERT_EQ(result.distances_.size(), 3);
+    EXPECT_EQ(result.seg_offsets_[0], 2);
+    EXPECT_EQ(result.seg_offsets_[1], 3);
+    EXPECT_EQ(result.seg_offsets_[2], 5);
+    EXPECT_FLOAT_EQ(result.distances_[0], 1.0F);
+    EXPECT_FLOAT_EQ(result.distances_[1], 0.0F);
+    EXPECT_FLOAT_EQ(result.distances_[2], -1.0F);
+
+    // Bitsets are also in logical row space for sealed raw VECTOR_ARRAY.
+    std::array<uint8_t, 1> filtered_bits{1U << 3};
+    auto filtered_result =
+        run_search(BitsetView(filtered_bits.data(), row_count));
+    ASSERT_EQ(filtered_result.seg_offsets_.size(), 3);
+    EXPECT_EQ(filtered_result.seg_offsets_[0], 2);
+    EXPECT_EQ(filtered_result.seg_offsets_[1], 5);
+    EXPECT_EQ(filtered_result.seg_offsets_[2], INVALID_SEG_OFFSET);
+    EXPECT_FLOAT_EQ(filtered_result.distances_[0], 1.0F);
+    EXPECT_FLOAT_EQ(filtered_result.distances_[1], -1.0F);
+    EXPECT_FALSE(column->GetOffsetMapping().IsEnabled());
+}
+
+// Test search on nullable vector field with all null vectors
+// This test verifies that SearchOnSealedColumn returns empty results
+// instead of crashing when all vectors are null
+TEST(test_chunk_segment, TestSearchOnSealedWithAllNullVectors) {
+    int dim = 16;
+    int chunk_num = 2;
+    int chunk_size = 100;
+
+    DeferRelease defer;
+
+    int total_row_count = chunk_num * chunk_size;
+    int bitset_size = (total_row_count + 7) / 8;
+
+    auto schema = std::make_shared<Schema>();
+    // Create nullable vector field
+    auto fakevec_id = schema->AddDebugField(
+        "fakevec", DataType::VECTOR_FLOAT, dim, knowhere::metric::COSINE, true);
+
+    auto field_meta = schema->operator[](fakevec_id);
+    ASSERT_TRUE(field_meta.is_nullable());
+
+    std::vector<std::unique_ptr<Chunk>> chunks;
+    std::vector<int64_t> num_rows_per_chunk;
+
+    for (int i = 0; i < chunk_num; i++) {
+        num_rows_per_chunk.push_back(chunk_size);
+
+        // Calculate buffer size: null_bitmap + vector_data
+        int null_bitmap_bytes = (chunk_size + 7) / 8;
+        int vector_data_size = chunk_size * dim * sizeof(float);
+        int buf_size = null_bitmap_bytes + vector_data_size;
+
+        char* buf = new char[buf_size];
+        defer.AddDefer([buf]() { delete[] buf; });
+
+        // Set null bitmap to all zeros (all vectors are null)
+        std::fill(buf, buf + null_bitmap_bytes, 0);
+
+        // Fill vector data with zeros (doesn't matter since all are null)
+        std::fill(buf + null_bitmap_bytes, buf + buf_size, 0);
+
+        auto chunk_mmap_guard =
+            std::make_shared<ChunkMmapGuard>(nullptr, 0, "");
+        chunks.emplace_back(
+            std::make_unique<FixedWidthChunk>(chunk_size,
+                                              dim,
+                                              buf,
+                                              buf_size,
+                                              sizeof(float),
+                                              true,
+                                              chunk_mmap_guard));
+    }
+
+    auto translator = std::make_unique<TestChunkTranslator>(
+        num_rows_per_chunk, "", std::move(chunks));
+    auto slot =
+        cachinglayer::Manager::GetInstance().CreateCacheSlot<milvus::Chunk>(
+            std::move(translator), nullptr);
+    auto column = std::make_shared<ChunkedColumn>(std::move(slot), field_meta);
+
+    // Build valid row ids to initialize offset_mapping for nullable vectors
+    column->BuildValidRowIds(nullptr);
+
+    // Verify offset_mapping is enabled and valid count is 0
+    const auto& offset_mapping = column->GetOffsetMapping();
+    ASSERT_TRUE(offset_mapping.IsEnabled());
+    ASSERT_EQ(offset_mapping.GetValidCount(), 0);
+
+    SearchInfo search_info;
+    auto search_conf = knowhere::Json{
+        {knowhere::meta::METRIC_TYPE, knowhere::metric::COSINE},
+    };
+    search_info.search_params_ = search_conf;
+    search_info.field_id_ = fakevec_id;
+    search_info.metric_type_ = knowhere::metric::COSINE;
+    search_info.topk_ = 10;
+
+    uint8_t* bitset_data = new uint8_t[bitset_size];
+    defer.AddDefer([bitset_data]() { delete[] bitset_data; });
+    std::fill(bitset_data, bitset_data + bitset_size, 0);
+    BitsetView bv(bitset_data, total_row_count);
+
+    // Generate query vector
+    std::vector<float> query_data(dim);
+    for (int i = 0; i < dim; i++) {
+        query_data[i] = static_cast<float>(i) / dim;
+    }
+    auto index_info = std::map<std::string, std::string>{};
+    SearchResult search_result;
+    milvus::OpContext op_context;
+
+    // This should NOT crash and should return empty results
+    query::SearchOnSealedColumn(*schema,
+                                column.get(),
+                                search_info,
+                                index_info,
+                                query_data.data(),
+                                nullptr,
+                                1,
+                                total_row_count,
+                                bv,
+                                &op_context,
+                                search_result);
+
+    // Verify that all offsets are -1 (invalid) since no valid vectors exist
+    ASSERT_EQ(search_result.seg_offsets_.size(), search_info.topk_);
+    for (auto& offset : search_result.seg_offsets_) {
+        ASSERT_EQ(offset, INVALID_SEG_OFFSET);
+    }
+    ASSERT_EQ(search_result.total_nq_, 1);
+    ASSERT_EQ(search_result.unity_topK_, search_info.topk_);
+}
+
+// Test search iterator on nullable vector field with all null vectors
+TEST(test_chunk_segment, TestSearchIteratorOnSealedWithAllNullVectors) {
+    int dim = 16;
+    int chunk_num = 2;
+    int chunk_size = 100;
+
+    DeferRelease defer;
+
+    int total_row_count = chunk_num * chunk_size;
+    int bitset_size = (total_row_count + 7) / 8;
+
+    auto schema = std::make_shared<Schema>();
+    auto fakevec_id = schema->AddDebugField(
+        "fakevec", DataType::VECTOR_FLOAT, dim, knowhere::metric::L2, true);
+
+    auto field_meta = schema->operator[](fakevec_id);
+
+    std::vector<std::unique_ptr<Chunk>> chunks;
+    std::vector<int64_t> num_rows_per_chunk;
+
+    for (int i = 0; i < chunk_num; i++) {
+        num_rows_per_chunk.push_back(chunk_size);
+
+        int null_bitmap_bytes = (chunk_size + 7) / 8;
+        int vector_data_size = chunk_size * dim * sizeof(float);
+        int buf_size = null_bitmap_bytes + vector_data_size;
+
+        char* buf = new char[buf_size];
+        defer.AddDefer([buf]() { delete[] buf; });
+
+        // All vectors are null
+        std::fill(buf, buf + null_bitmap_bytes, 0);
+        std::fill(buf + null_bitmap_bytes, buf + buf_size, 0);
+
+        auto chunk_mmap_guard =
+            std::make_shared<ChunkMmapGuard>(nullptr, 0, "");
+        chunks.emplace_back(
+            std::make_unique<FixedWidthChunk>(chunk_size,
+                                              dim,
+                                              buf,
+                                              buf_size,
+                                              sizeof(float),
+                                              true,
+                                              chunk_mmap_guard));
+    }
+
+    auto translator = std::make_unique<TestChunkTranslator>(
+        num_rows_per_chunk, "", std::move(chunks));
+    auto slot =
+        cachinglayer::Manager::GetInstance().CreateCacheSlot<milvus::Chunk>(
+            std::move(translator), nullptr);
+    auto column = std::make_shared<ChunkedColumn>(std::move(slot), field_meta);
+
+    // Build valid row ids to initialize offset_mapping for nullable vectors
+    column->BuildValidRowIds(nullptr);
+
+    SearchInfo search_info;
+    auto search_conf = knowhere::Json{
+        {knowhere::meta::METRIC_TYPE, knowhere::metric::L2},
+    };
+    search_info.search_params_ = search_conf;
+    search_info.field_id_ = fakevec_id;
+    search_info.metric_type_ = knowhere::metric::L2;
+    search_info.topk_ = 10;
+    // Enable iterator_v2
+    search_info.iterator_v2_info_ = SearchIteratorV2Info{"", 10};
+
+    uint8_t* bitset_data = new uint8_t[bitset_size];
+    defer.AddDefer([bitset_data]() { delete[] bitset_data; });
+    std::fill(bitset_data, bitset_data + bitset_size, 0);
+    BitsetView bv(bitset_data, total_row_count);
+
+    std::vector<float> query_data(dim);
+    for (int i = 0; i < dim; i++) {
+        query_data[i] = static_cast<float>(i) / dim;
+    }
+    auto index_info = std::map<std::string, std::string>{};
+    SearchResult search_result;
+    milvus::OpContext op_context;
+
+    // This should NOT crash - search iterator with all null vectors
+    query::SearchOnSealedColumn(*schema,
+                                column.get(),
+                                search_info,
+                                index_info,
+                                query_data.data(),
+                                nullptr,
+                                1,
+                                total_row_count,
+                                bv,
+                                &op_context,
+                                search_result);
+
+    // Verify empty results
+    ASSERT_EQ(search_result.seg_offsets_.size(), search_info.topk_);
+    for (auto& offset : search_result.seg_offsets_) {
+        ASSERT_EQ(offset, INVALID_SEG_OFFSET);
+    }
+}
+
+// Test search iterator on nullable vector field with partial null vectors.
+// This test verifies:
+// 1. CachedSearchIterator uses valid_count_per_chunk (not total row count)
+//    as chunk_size, preventing out-of-bounds reads
+// 2. TransformOffset is applied after NextBatch, converting physical offsets
+//    (valid-only) back to logical offsets (including nulls)
+TEST(test_chunk_segment, TestSearchIteratorOnSealedWithPartialNullVectors) {
+    int dim = 16;
+    int chunk_num = 2;
+    int chunk_rows = 100;      // logical rows per chunk
+    int valid_per_chunk = 50;  // even rows valid, odd null
+
+    DeferRelease defer;
+
+    int total_row_count = chunk_num * chunk_rows;
+    int total_valid = chunk_num * valid_per_chunk;
+    int bitset_size = (total_row_count + 7) / 8;
+
+    auto schema = std::make_shared<Schema>();
+    auto fakevec_id = schema->AddDebugField(
+        "fakevec", DataType::VECTOR_FLOAT, dim, knowhere::metric::L2, true);
+
+    auto field_meta = schema->operator[](fakevec_id);
+    ASSERT_TRUE(field_meta.is_nullable());
+
+    // Generate base vectors for valid rows only
+    auto base_schema = std::make_shared<Schema>();
+    base_schema->AddDebugField(
+        "fakevec", DataType::VECTOR_FLOAT, dim, knowhere::metric::L2);
+    auto base_dataset = segcore::DataGen(base_schema, total_valid);
+    auto base_data = base_dataset.get_col<float>(
+        base_schema->get_field_id(FieldName("fakevec")));
+
+    std::vector<std::unique_ptr<Chunk>> chunks;
+    std::vector<int64_t> num_rows_per_chunk;
+    // Track which logical rows are valid for verification
+    std::vector<bool> valid_rows(total_row_count, false);
+
+    for (int i = 0; i < chunk_num; i++) {
+        num_rows_per_chunk.push_back(chunk_rows);
+
+        int null_bitmap_bytes = (chunk_rows + 7) / 8;
+        // Data section: only valid vectors stored contiguously
+        // (matching NullableVectorChunkWriter behavior)
+        int vector_data_size = valid_per_chunk * dim * sizeof(float);
+        int buf_size = null_bitmap_bytes + vector_data_size;
+
+        char* buf = new char[buf_size];
+        defer.AddDefer([buf]() { delete[] buf; });
+
+        // Set null bitmap: even rows valid, odd rows null (50% null)
+        std::fill(buf, buf + null_bitmap_bytes, 0);
+        for (int j = 0; j < chunk_rows; j++) {
+            if (j % 2 == 0) {
+                // Set bit to 1 (valid)
+                buf[j >> 3] |= (1 << (j & 0x07));
+                valid_rows[i * chunk_rows + j] = true;
+            }
+        }
+
+        // Copy valid vectors contiguously into data section
+        memcpy(buf + null_bitmap_bytes,
+               base_data.data() + i * valid_per_chunk * dim,
+               vector_data_size);
+
+        auto chunk_mmap_guard =
+            std::make_shared<ChunkMmapGuard>(nullptr, 0, "");
+        chunks.emplace_back(
+            std::make_unique<FixedWidthChunk>(chunk_rows,
+                                              dim,
+                                              buf,
+                                              buf_size,
+                                              sizeof(float),
+                                              true,
+                                              chunk_mmap_guard));
+    }
+
+    auto translator = std::make_unique<TestChunkTranslator>(
+        num_rows_per_chunk, "", std::move(chunks));
+    auto slot =
+        cachinglayer::Manager::GetInstance().CreateCacheSlot<milvus::Chunk>(
+            std::move(translator), nullptr);
+    auto column = std::make_shared<ChunkedColumn>(std::move(slot), field_meta);
+
+    // Build valid row ids to initialize offset_mapping
+    column->BuildValidRowIds(nullptr);
+
+    const auto& offset_mapping = column->GetOffsetMapping();
+    ASSERT_TRUE(offset_mapping.IsEnabled());
+    // 50% valid: 50 per chunk * 2 chunks = 100
+    ASSERT_EQ(offset_mapping.GetValidCount(), total_valid);
+
+    for (int i = 0; i < chunk_num; i++) {
+        ASSERT_EQ(column->GetValidCountInChunk(i), valid_per_chunk);
+    }
+
+    SearchInfo search_info;
+    auto search_conf = knowhere::Json{
+        {knowhere::meta::METRIC_TYPE, knowhere::metric::L2},
+    };
+    search_info.search_params_ = search_conf;
+    search_info.field_id_ = fakevec_id;
+    search_info.metric_type_ = knowhere::metric::L2;
+    search_info.topk_ = 10;
+    // Enable iterator_v2 to exercise CachedSearchIterator path
+    search_info.iterator_v2_info_ = SearchIteratorV2Info{"", 10};
+
+    uint8_t* bitset_data = new uint8_t[bitset_size];
+    defer.AddDefer([bitset_data]() { delete[] bitset_data; });
+    std::fill(bitset_data, bitset_data + bitset_size, 0);
+    BitsetView bv(bitset_data, total_row_count);
+
+    // Use a valid vector as query
+    std::vector<float> query_data(base_data.begin(), base_data.begin() + dim);
+    auto index_info = std::map<std::string, std::string>{};
+    SearchResult search_result;
+    milvus::OpContext op_context;
+
+    // This exercises both fixes:
+    // Fix 1: CachedSearchIterator uses valid_count_per_chunk as chunk_size
+    // Fix 2: TransformOffset converts physical -> logical offsets
+    query::SearchOnSealedColumn(*schema,
+                                column.get(),
+                                search_info,
+                                index_info,
+                                query_data.data(),
+                                nullptr,
+                                1,
+                                total_row_count,
+                                bv,
+                                &op_context,
+                                search_result);
+
+    ASSERT_EQ(search_result.seg_offsets_.size(), search_info.topk_);
+    ASSERT_EQ(search_result.distances_.size(), search_info.topk_);
+
+    // Verify returned offsets are logical offsets (in [0, total_row_count))
+    // and correspond to valid (non-null) rows
+    int valid_count = 0;
+    for (auto& offset : search_result.seg_offsets_) {
+        if (offset == INVALID_SEG_OFFSET) {
+            continue;
+        }
+        valid_count++;
+        // Offset must be a logical offset in valid range
+        ASSERT_GE(offset, 0);
+        ASSERT_LT(offset, total_row_count);
+        // Offset must refer to a valid (non-null) row
+        ASSERT_TRUE(valid_rows[offset])
+            << "offset " << offset << " should be a valid (non-null) row";
+    }
+    // We should get some valid results
+    ASSERT_GT(valid_count, 0);
+
+    // Test brute force (non-iterator) path for comparison
+    SearchInfo search_info_bf = search_info;
+    search_info_bf.iterator_v2_info_ = std::nullopt;
+    SearchResult bf_result;
+    query::SearchOnSealedColumn(*schema,
+                                column.get(),
+                                search_info_bf,
+                                index_info,
+                                query_data.data(),
+                                nullptr,
+                                1,
+                                total_row_count,
+                                bv,
+                                &op_context,
+                                bf_result);
+
+    // Both paths should return the same offsets (same ordering)
+    ASSERT_EQ(search_result.seg_offsets_.size(), bf_result.seg_offsets_.size());
+    for (size_t i = 0; i < search_result.seg_offsets_.size(); i++) {
+        EXPECT_EQ(search_result.seg_offsets_[i], bf_result.seg_offsets_[i])
+            << "Mismatch at index " << i;
+    }
+}
+
+class TestChunkSegment : public testing::TestWithParam<bool> {
+ protected:
+    void
+    SetUp() override {
+        bool pk_is_string = GetParam();
+        auto schema = segcore::GenChunkedSegmentTestSchema(pk_is_string);
+        segment = segcore::CreateSealedSegment(
+            schema,
+            nullptr,
+            -1,
+            segcore::SegcoreConfig::default_config(),
+            true);
+        test_data_count = 10000;
+
+        std::vector<FieldId> field_ids = {
+            schema->get_field_id(FieldName("int64")),
+            schema->get_field_id(FieldName("pk")),
+            TimestampFieldID,
+            schema->get_field_id(FieldName("string1")),
+            schema->get_field_id(FieldName("string2"))};
+        fields = {{"int64", schema->get_field_id(FieldName("int64"))},
+                  {"pk", schema->get_field_id(FieldName("pk"))},
+                  {"ts", TimestampFieldID},
+                  {"string1", schema->get_field_id(FieldName("string1"))},
+                  {"string2", schema->get_field_id(FieldName("string2"))}};
+
+        int start_id = 0;
+        chunk_num = 2;
+
+        std::vector<std::string> str_data;
+        for (int i = 0; i < test_data_count * chunk_num; i++) {
+            str_data.push_back("test" + std::to_string(i));
+        }
+        std::sort(str_data.begin(), str_data.end());
+
+        auto cm = milvus::storage::RemoteChunkManagerSingleton::GetInstance()
+                      .GetRemoteChunkManager();
+
+        std::unordered_map<FieldId, std::vector<FieldDataPtr>> field_data_map;
+
+        // generate data
+        for (int chunk_id = 0; chunk_id < chunk_num;
+             chunk_id++, start_id += test_data_count) {
+            std::vector<int64_t> test_data(test_data_count);
+            std::iota(test_data.begin(), test_data.end(), start_id);
+
+            for (int i = 0; i < field_ids.size(); i++) {
+                // if i < 3, this is system field, thus must be int64.
+                // other fields include a pk field and 2 string fields. pk field is string if pk_is_string is true.
+                auto datatype =
+                    i < 3 && (field_ids[i] !=
+                                  schema->get_field_id(FieldName("pk")) ||
+                              !pk_is_string)
+                        ? DataType::INT64
+                        : DataType::VARCHAR;
+                FieldDataPtr field_data{nullptr};
+
+                if (datatype == DataType::INT64) {
+                    field_data =
+                        std::make_shared<FieldData<int64_t>>(datatype, false);
+                    field_data->FillFieldData(test_data.data(),
+                                              test_data_count);
+                } else {
+                    field_data = std::make_shared<FieldData<std::string>>(
+                        datatype, false);
+                    field_data->FillFieldData(str_data.data() + start_id,
+                                              test_data_count);
+                }
+                auto fid = field_ids[i];
+                field_data_map[fid].push_back(field_data);
+            }
+        }
+        for (auto& [fid, field_datas] : field_data_map) {
+            auto load_info = PrepareSingleFieldInsertBinlog(kCollectionID,
+                                                            kPartitionID,
+                                                            kSegmentID,
+                                                            fid.get(),
+                                                            field_datas,
+                                                            cm);
+            segment->LoadFieldData(load_info);
+        }
+    }
+
+    segcore::SegmentSealedUPtr segment;
+    int chunk_num;
+    int test_data_count;
+    std::unordered_map<std::string, FieldId> fields;
+};
+
+INSTANTIATE_TEST_SUITE_P(TestChunkSegment, TestChunkSegment, testing::Bool());
+
+TEST_P(TestChunkSegment, TestSkipNextTermExpr) {
+    bool pk_is_string = GetParam();
+    // only need to test int64 case
+    if (pk_is_string) {
+        return;
+    }
+
+    // test segment with 2 chunks and expr is: int64 >= 10000 and pk in (10001, 10002, 10003, 10004, 10005)
+    proto::plan::GenericValue v1;
+    v1.set_int64_val(10000);
+    auto first_expr = std::make_shared<expr::UnaryRangeFilterExpr>(
+        expr::ColumnInfo(fields.at("int64"), DataType::INT64),
+        proto::plan::OpType::GreaterEqual,
+        v1);
+
+    std::vector<proto::plan::GenericValue> v2;
+    for (int i = 1; i <= 5; ++i) {
+        proto::plan::GenericValue v;
+        v.set_int64_val(i + 10000);
+        v2.push_back(v);
+    }
+    auto second_expr = std::make_shared<expr::TermFilterExpr>(
+        expr::ColumnInfo(fields.at("pk"), DataType::INT64), v2);
+    auto and_expr = std::make_shared<expr::LogicalBinaryExpr>(
+        expr::LogicalBinaryExpr::OpType::And, first_expr, second_expr);
+    auto plan =
+        std::make_shared<plan::FilterBitsNode>(DEFAULT_PLANNODE_ID, and_expr);
+    auto final = query::ExecuteQueryExpr(
+        plan, segment.get(), chunk_num * test_data_count, MAX_TIMESTAMP);
+    ASSERT_EQ(5, final.count());
+    for (int i = 10001; i <= 10005; ++i) {
+        ASSERT_EQ(true, final[i]) << "i: " << i;
+    }
+}
+
+TEST_P(TestChunkSegment, TestTermExpr) {
+    bool pk_is_string = GetParam();
+    // query int64 expr
+    std::vector<proto::plan::GenericValue> filter_data;
+    for (int i = 1; i <= 10; ++i) {
+        proto::plan::GenericValue v;
+        v.set_int64_val(i);
+        filter_data.push_back(v);
+    }
+    auto term_filter_expr = std::make_shared<expr::TermFilterExpr>(
+        expr::ColumnInfo(fields.at("int64"), DataType::INT64), filter_data);
+    BitsetType final;
+    auto plan = std::make_shared<plan::FilterBitsNode>(DEFAULT_PLANNODE_ID,
+                                                       term_filter_expr);
+    final = query::ExecuteQueryExpr(
+        plan, segment.get(), chunk_num * test_data_count, MAX_TIMESTAMP);
+    ASSERT_EQ(10, final.count());
+
+    std::vector<proto::plan::GenericValue> filter_str_data;
+    for (int i = 1; i <= 10; ++i) {
+        proto::plan::GenericValue v;
+        v.set_string_val("test" + std::to_string(i));
+        filter_str_data.push_back(v);
+    }
+    // query pk expr
+    auto pk_term_filter_expr = std::make_shared<expr::TermFilterExpr>(
+        expr::ColumnInfo(fields.at("pk"),
+                         pk_is_string ? DataType::VARCHAR : DataType::INT64),
+        pk_is_string ? filter_str_data : filter_data);
+    plan = std::make_shared<plan::FilterBitsNode>(DEFAULT_PLANNODE_ID,
+                                                  pk_term_filter_expr);
+    final = query::ExecuteQueryExpr(
+        plan, segment.get(), chunk_num * test_data_count, MAX_TIMESTAMP);
+    ASSERT_EQ(10, final.count());
+
+    // query pk in second chunk
+    std::vector<proto::plan::GenericValue> filter_data2;
+    proto::plan::GenericValue v;
+    if (pk_is_string) {
+        v.set_string_val("test" + std::to_string(test_data_count + 1));
+    } else {
+        v.set_int64_val(test_data_count + 1);
+    }
+    filter_data2.push_back(v);
+
+    pk_term_filter_expr = std::make_shared<expr::TermFilterExpr>(
+        expr::ColumnInfo(fields.at("pk"),
+                         pk_is_string ? DataType::VARCHAR : DataType::INT64),
+        filter_data2);
+    plan = std::make_shared<plan::FilterBitsNode>(DEFAULT_PLANNODE_ID,
+                                                  pk_term_filter_expr);
+    final = query::ExecuteQueryExpr(
+        plan, segment.get(), chunk_num * test_data_count, MAX_TIMESTAMP);
+    ASSERT_EQ(1, final.count());
+}
+
+TEST_P(TestChunkSegment, TestCompareExpr) {
+    srand(time(NULL));
+    bool pk_is_string = GetParam();
+    DataType pk_data_type = pk_is_string ? DataType::VARCHAR : DataType::INT64;
+    auto expr = std::make_shared<expr::CompareExpr>(
+        pk_is_string ? fields.at("string1") : fields.at("int64"),
+        fields.at("pk"),
+        pk_data_type,
+        pk_data_type,
+        proto::plan::OpType::Equal);
+    auto plan =
+        std::make_shared<plan::FilterBitsNode>(DEFAULT_PLANNODE_ID, expr);
+    BitsetType final = query::ExecuteQueryExpr(
+        plan, segment.get(), chunk_num * test_data_count, MAX_TIMESTAMP);
+    ASSERT_EQ(chunk_num * test_data_count, final.count());
+
+    expr = std::make_shared<expr::CompareExpr>(fields.at("string1"),
+                                               fields.at("string2"),
+                                               DataType::VARCHAR,
+                                               DataType::VARCHAR,
+                                               proto::plan::OpType::Equal);
+    plan = std::make_shared<plan::FilterBitsNode>(DEFAULT_PLANNODE_ID, expr);
+    final = query::ExecuteQueryExpr(
+        plan, segment.get(), chunk_num * test_data_count, MAX_TIMESTAMP);
+    ASSERT_EQ(chunk_num * test_data_count, final.count());
+
+    // test with inverted index
+    auto fid = fields.at("int64");
+    auto file_manager_ctx = storage::FileManagerContext();
+    file_manager_ctx.fieldDataMeta.field_schema.set_data_type(
+        milvus::proto::schema::Int64);
+    file_manager_ctx.fieldDataMeta.field_schema.set_fieldid(fid.get());
+    file_manager_ctx.fieldDataMeta.field_id = fid.get();
+    milvus::storage::IndexMeta index_meta;
+    index_meta.field_id = fid.get();
+    index_meta.build_id = rand();
+    index_meta.index_version = rand();
+    file_manager_ctx.indexMeta = index_meta;
+    index::CreateIndexInfo create_index_info;
+    create_index_info.field_type = DataType::INT64;
+    create_index_info.index_type = index::INVERTED_INDEX_TYPE;
+    auto index = index::IndexFactory::GetInstance().CreateScalarIndex(
+        create_index_info, file_manager_ctx);
+    std::vector<int64_t> data(test_data_count * chunk_num);
+    for (int i = 0; i < chunk_num; i++) {
+        auto pw = segment->chunk_data<int64_t>(nullptr, fid, i);
+        auto d = pw.get();
+        std::copy(d.data(),
+                  d.data() + test_data_count,
+                  data.begin() + i * test_data_count);
+    }
+
+    index->BuildWithRawDataForUT(data.size(), data.data());
+    segcore::LoadIndexInfo load_index_info;
+    load_index_info.index_params = GenIndexParams(index.get());
+    load_index_info.cache_index =
+        CreateTestCacheIndex("test", std::move(index));
+    load_index_info.field_id = fid.get();
+    segment->LoadIndex(load_index_info);
+
+    expr = std::make_shared<expr::CompareExpr>(
+        pk_is_string ? fields.at("string1") : fields.at("int64"),
+        fields.at("pk"),
+        pk_data_type,
+        pk_data_type,
+        proto::plan::OpType::Equal);
+    plan = std::make_shared<plan::FilterBitsNode>(DEFAULT_PLANNODE_ID, expr);
+    final = query::ExecuteQueryExpr(
+        plan, segment.get(), chunk_num * test_data_count, MAX_TIMESTAMP);
+    ASSERT_EQ(chunk_num * test_data_count, final.count());
+}
+
+TEST_P(TestChunkSegment, TestPkRange) {
+    using namespace milvus::segcore;
+    bool pk_is_string = GetParam();
+    auto segment_impl = dynamic_cast<ChunkedSegmentSealedImpl*>(segment.get());
+    ASSERT_NE(segment_impl, nullptr);
+
+    // Test cases for sorted PK
+    BitsetType bitset_sorted(chunk_num * test_data_count);
+    BitsetTypeView bitset_sorted_view(bitset_sorted);
+
+    // Test Equal operation
+    if (pk_is_string) {
+        segment_impl->pk_range(nullptr,
+                               proto::plan::OpType::Equal,
+                               PkType("test1"),
+                               bitset_sorted_view);
+        EXPECT_EQ(1, bitset_sorted_view.count());
+    } else {
+        segment_impl->pk_range(
+            nullptr, proto::plan::OpType::Equal, PkType(1), bitset_sorted_view);
+        EXPECT_EQ(1, bitset_sorted_view.count());
+    }
+
+    // Test LessEqual operation
+    bitset_sorted.reset();
+    if (pk_is_string) {
+        segment_impl->pk_range(nullptr,
+                               proto::plan::OpType::LessEqual,
+                               PkType("test100"),
+                               bitset_sorted_view);
+        // only 'test0', 'test1', 'test10' are less than 'test100'
+        EXPECT_EQ(bitset_sorted_view.count(), 4);
+    } else {
+        segment_impl->pk_range(nullptr,
+                               proto::plan::OpType::LessEqual,
+                               PkType(100),
+                               bitset_sorted_view);
+        EXPECT_EQ(bitset_sorted_view.count(), 101);
+    }
+
+    bitset_sorted.reset();
+    if (pk_is_string) {
+        segment_impl->pk_range(nullptr,
+                               proto::plan::OpType::Equal,
+                               PkType(std::string("non_existent_pk")),
+                               bitset_sorted_view);
+        EXPECT_EQ(0, bitset_sorted_view.count());
+    } else {
+        segment_impl->pk_range(nullptr,
+                               proto::plan::OpType::Equal,
+                               PkType(int64_t(999999)),
+                               bitset_sorted_view);
+        EXPECT_EQ(0, bitset_sorted_view.count());
+    }
+}
+
+TEST(TestTTLFieldFilter, TestMaskWithTTLField) {
+    using namespace milvus::segcore;
+
+    auto schema = std::make_shared<Schema>();
+    auto pk_fid = schema->AddDebugField("pk", DataType::INT64, false);
+    schema->AddField(FieldName("ts"),
+                     TimestampFieldID,
+                     DataType::INT64,
+                     false,
+                     std::nullopt);
+    auto ttl_fid =
+        schema->AddDebugField("ttl_field", DataType::TIMESTAMPTZ, false);
+    schema->set_primary_field_id(pk_fid);
+    schema->set_ttl_field_id(ttl_fid);
+
+    auto segment = CreateSealedSegment(
+        schema, nullptr, -1, SegcoreConfig::default_config(), true);
+
+    int test_data_count = 100;
+    auto cm = milvus::storage::RemoteChunkManagerSingleton::GetInstance()
+                  .GetRemoteChunkManager();
+
+    std::vector<int64_t> pk_data(test_data_count);
+    std::iota(pk_data.begin(), pk_data.end(), 0);
+
+    uint64_t base_ts = 1000000000ULL << 18;
+    std::vector<int64_t> ts_data(test_data_count);
+    for (int i = 0; i < test_data_count; i++) {
+        ts_data[i] = static_cast<int64_t>(base_ts + i);
+    }
+
+    uint64_t base_physical_us = (base_ts >> 18) * 1000;
+    std::vector<int64_t> ttl_data(test_data_count);
+    for (int i = 0; i < test_data_count; i++) {
+        if (i < test_data_count / 2) {
+            ttl_data[i] = static_cast<int64_t>(base_physical_us - 10);
+        } else {
+            ttl_data[i] = static_cast<int64_t>(base_physical_us + 10);
+        }
+    }
+
+    {
+        auto field_data =
+            std::make_shared<FieldData<int64_t>>(DataType::INT64, false);
+        field_data->FillFieldData(pk_data.data(), test_data_count);
+        std::vector<FieldDataPtr> field_datas = {field_data};
+        auto load_info = PrepareSingleFieldInsertBinlog(kCollectionID,
+                                                        kPartitionID,
+                                                        kSegmentID,
+                                                        pk_fid.get(),
+                                                        field_datas,
+                                                        cm);
+        segment->LoadFieldData(load_info);
+    }
+
+    {
+        auto field_data =
+            std::make_shared<FieldData<int64_t>>(DataType::INT64, false);
+        field_data->FillFieldData(ts_data.data(), test_data_count);
+        std::vector<FieldDataPtr> field_datas = {field_data};
+        auto load_info = PrepareSingleFieldInsertBinlog(kCollectionID,
+                                                        kPartitionID,
+                                                        kSegmentID,
+                                                        TimestampFieldID.get(),
+                                                        field_datas,
+                                                        cm);
+        segment->LoadFieldData(load_info);
+    }
+
+    {
+        auto field_data =
+            std::make_shared<FieldData<int64_t>>(DataType::TIMESTAMPTZ, false);
+        field_data->FillFieldData(ttl_data.data(), test_data_count);
+        std::vector<FieldDataPtr> field_datas = {field_data};
+        auto load_info = PrepareSingleFieldInsertBinlog(kCollectionID,
+                                                        kPartitionID,
+                                                        kSegmentID,
+                                                        ttl_fid.get(),
+                                                        field_datas,
+                                                        cm);
+        segment->LoadFieldData(load_info);
+    }
+
+    // Test TTL field filtering using CompileExpressions pathway
+    Timestamp query_ts = base_ts + test_data_count;
+    int64_t active_count = segment->get_active_count(query_ts);
+
+    // Create an expression list with AlwaysTrueExpr - CompileExpressions will
+    // automatically add TTL field filtering expression
+    auto always_true_expr = std::make_shared<expr::AlwaysTrueExpr>();
+    auto plan = std::make_shared<plan::FilterBitsNode>(DEFAULT_PLANNODE_ID,
+                                                       always_true_expr);
+
+    // Execute query expression - this will trigger CompileExpressions which
+    // automatically adds TTL field filtering expression
+    BitsetType bitset =
+        query::ExecuteQueryExpr(plan, segment.get(), active_count, query_ts);
+
+    // Note: ExecuteQueryExpr already flips the bitset, so bitset[i] = true
+    // means the row matches (not expired), bitset[i] = false means expired
+    BitsetTypeView bitset_view(bitset);
+
+    // Verify results:
+    // After ExecuteQueryExpr, bitset[i] = true means row matches (not expired)
+    // bitset[i] = false means row is filtered out (expired)
+    // - i < test_data_count / 2: expired (TTL < current time), should be expired (bitset_view[i] = false)
+    // - i >= test_data_count / 2: not expired, should NOT be expired (bitset_view[i] = true)
+    int expired_count = 0;
+    for (int i = 0; i < test_data_count; i++) {
+        if (!bitset_view[i]) {
+            expired_count++;
+        }
+    }
+
+    EXPECT_EQ(expired_count, test_data_count / 2);
+    for (int i = 0; i < test_data_count / 2; i++) {
+        EXPECT_FALSE(bitset_view[i]) << "Row " << i << " should be expired";
+    }
+    for (int i = test_data_count / 2; i < test_data_count; i++) {
+        EXPECT_TRUE(bitset_view[i]) << "Row " << i << " should not be expired";
+    }
+}
+
+TEST(TestTTLFieldFilter, TestMaskWithNullableTTLField) {
+    using namespace milvus::segcore;
+
+    auto schema = std::make_shared<Schema>();
+    auto pk_fid = schema->AddDebugField("pk", DataType::INT64, false);
+    schema->AddField(FieldName("ts"),
+                     TimestampFieldID,
+                     DataType::INT64,
+                     false,
+                     std::nullopt);
+    auto ttl_fid =
+        schema->AddDebugField("ttl_field", DataType::TIMESTAMPTZ, true);
+    schema->set_primary_field_id(pk_fid);
+    schema->set_ttl_field_id(ttl_fid);
+
+    auto segment = CreateSealedSegment(
+        schema, nullptr, -1, SegcoreConfig::default_config(), true);
+
+    int test_data_count = 100;
+    auto cm = milvus::storage::RemoteChunkManagerSingleton::GetInstance()
+                  .GetRemoteChunkManager();
+
+    std::vector<int64_t> pk_data(test_data_count);
+    std::iota(pk_data.begin(), pk_data.end(), 0);
+
+    uint64_t base_ts = 1000000000ULL << 18;
+    std::vector<int64_t> ts_data(test_data_count);
+    for (int i = 0; i < test_data_count; i++) {
+        ts_data[i] = static_cast<int64_t>(base_ts + i);
+    }
+
+    uint64_t base_physical_us = (base_ts >> 18) * 1000;
+    std::vector<int64_t> ttl_data(test_data_count);
+    // Arrow validity bitmap uses 1 bit per value (LSB-first within each byte).
+    std::vector<uint8_t> valid_data((test_data_count + 7) / 8, 0);
+    for (int i = 0; i < test_data_count; i++) {
+        const size_t byte_idx = static_cast<size_t>(i) >> 3;
+        const uint8_t bit_mask = static_cast<uint8_t>(1u << (i & 7));
+        if (i % 4 == 0) {
+            ttl_data[i] = 0;
+            valid_data[byte_idx] &= static_cast<uint8_t>(~bit_mask);
+        } else if (i % 4 == 1) {
+            ttl_data[i] = static_cast<int64_t>(base_physical_us - 10);
+            valid_data[byte_idx] |= bit_mask;
+        } else {
+            ttl_data[i] = static_cast<int64_t>(base_physical_us + 10);
+            valid_data[byte_idx] |= bit_mask;
+        }
+    }
+
+    {
+        auto field_data =
+            std::make_shared<FieldData<int64_t>>(DataType::INT64, false);
+        field_data->FillFieldData(pk_data.data(), test_data_count);
+        std::vector<FieldDataPtr> field_datas = {field_data};
+        auto load_info = PrepareSingleFieldInsertBinlog(kCollectionID,
+                                                        kPartitionID,
+                                                        kSegmentID,
+                                                        pk_fid.get(),
+                                                        field_datas,
+                                                        cm);
+        segment->LoadFieldData(load_info);
+    }
+
+    {
+        auto field_data =
+            std::make_shared<FieldData<int64_t>>(DataType::INT64, false);
+        field_data->FillFieldData(ts_data.data(), test_data_count);
+        std::vector<FieldDataPtr> field_datas = {field_data};
+        auto load_info = PrepareSingleFieldInsertBinlog(kCollectionID,
+                                                        kPartitionID,
+                                                        kSegmentID,
+                                                        TimestampFieldID.get(),
+                                                        field_datas,
+                                                        cm);
+        segment->LoadFieldData(load_info);
+    }
+
+    {
+        auto field_data =
+            std::make_shared<FieldData<int64_t>>(DataType::TIMESTAMPTZ, true);
+        field_data->FillFieldData(
+            ttl_data.data(), valid_data.data(), test_data_count, 0);
+        std::vector<FieldDataPtr> field_datas = {field_data};
+        auto load_info = PrepareSingleFieldInsertBinlog(kCollectionID,
+                                                        kPartitionID,
+                                                        kSegmentID,
+                                                        ttl_fid.get(),
+                                                        field_datas,
+                                                        cm);
+        segment->LoadFieldData(load_info);
+    }
+
+    // Test TTL field filtering using CompileExpressions pathway
+    Timestamp query_ts = base_ts + test_data_count;
+    int64_t active_count = segment->get_active_count(query_ts);
+
+    // Create an expression list with AlwaysTrueExpr - CompileExpressions will
+    // automatically add TTL field filtering expression
+    auto always_true_expr = std::make_shared<expr::AlwaysTrueExpr>();
+    auto plan = std::make_shared<plan::FilterBitsNode>(DEFAULT_PLANNODE_ID,
+                                                       always_true_expr);
+
+    // Execute query expression - this will trigger CompileExpressions which
+    // automatically adds TTL field filtering expression
+    BitsetType bitset =
+        query::ExecuteQueryExpr(plan, segment.get(), active_count, query_ts);
+
+    // Note: ExecuteQueryExpr already flips the bitset, so bitset[i] = true
+    // means the row matches (not expired), bitset[i] = false means expired
+    BitsetTypeView bitset_view(bitset);
+
+    // Verify results:
+    // After ExecuteQueryExpr, bitset[i] = true means row matches (not expired)
+    // bitset[i] = false means row is filtered out (expired)
+    // - i % 4 == 0: null, should NOT be expired (bitset_view[i] = true)
+    // - i % 4 == 1: expired (TTL < current time), should be expired (bitset_view[i] = false)
+    // - i % 4 == 2 or 3: not expired, should NOT be expired (bitset_view[i] = true)
+    int expired_count = 0;
+    for (int i = 0; i < test_data_count; i++) {
+        if (i % 4 == 0) {
+            // Null value should not be expired (should match)
+            EXPECT_TRUE(bitset_view[i])
+                << "Row " << i << " (null) should not be expired";
+        } else if (i % 4 == 1) {
+            // Should be expired (should be filtered out)
+            EXPECT_FALSE(bitset_view[i]) << "Row " << i << " should be expired";
+            expired_count++;
+        } else {
+            // Should not be expired (should match)
+            EXPECT_TRUE(bitset_view[i])
+                << "Row " << i << " should not be expired";
+        }
+    }
+
+    EXPECT_EQ(expired_count, test_data_count / 4);
+}

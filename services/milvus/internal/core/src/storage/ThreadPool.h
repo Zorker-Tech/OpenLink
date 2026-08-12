@@ -1,0 +1,298 @@
+// Licensed to the LF AI & Data foundation under one
+// or more contributor license agreements. See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership. The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License. You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#pragma once
+
+#include <stddef.h>
+#include <stdint.h>
+#include <algorithm>
+#include <atomic>
+#include <cassert>
+#include <chrono>
+#include <cmath>
+#include <condition_variable>
+#include <functional>
+#include <future>
+#include <list>
+#include <memory>
+#include <mutex>
+#include <ostream>
+#include <string>
+#include <thread>
+#include <utility>
+
+#include <prometheus/counter.h>
+#include <prometheus/gauge.h>
+#include <prometheus/histogram.h>
+
+#include "SafeQueue.h"
+#include "glog/logging.h"
+#include "log/Log.h"
+
+namespace milvus {
+
+const int DEFAULT_CPU_NUM = 1;
+
+const int64_t DEFAULT_HIGH_PRIORITY_THREAD_CORE_COEFFICIENT = 10;
+const int64_t DEFAULT_MIDDLE_PRIORITY_THREAD_CORE_COEFFICIENT = 5;
+const int64_t DEFAULT_LOW_PRIORITY_THREAD_CORE_COEFFICIENT = 1;
+
+const int DEFAULT_THREAD_POOL_MAX_THREADS_SIZE = 16;
+
+extern std::atomic<float> HIGH_PRIORITY_THREAD_CORE_COEFFICIENT;
+extern std::atomic<float> MIDDLE_PRIORITY_THREAD_CORE_COEFFICIENT;
+extern std::atomic<float> LOW_PRIORITY_THREAD_CORE_COEFFICIENT;
+
+extern int CPU_NUM;
+extern std::atomic<int> THREAD_POOL_MAX_THREADS_SIZE;
+
+void
+SetHighPriorityThreadCoreCoefficient(const float coefficient);
+
+void
+SetMiddlePriorityThreadCoreCoefficient(const float coefficient);
+
+void
+SetLowPriorityThreadCoreCoefficient(const float coefficient);
+
+void
+InitCpuNum(const int core);
+
+void
+SetThreadPoolMaxThreadsSize(const int size);
+
+inline int
+ClampThreadPoolMaxThreads(int size) {
+    size = std::max(1, size);
+    auto max_limit = THREAD_POOL_MAX_THREADS_SIZE.load();
+    if (max_limit > 0 && size > max_limit) {
+        size = max_limit;
+    }
+    return size;
+}
+
+inline int
+ComputeThreadPoolMaxThreads(float thread_core_coefficient) {
+    return ClampThreadPoolMaxThreads(
+        static_cast<int>(std::round(CPU_NUM * thread_core_coefficient)));
+}
+
+class ThreadPool {
+ public:
+    explicit ThreadPool(const float thread_core_coefficient, std::string name)
+        : shutdown_(false), name_(std::move(name)) {
+        idle_threads_size_ = 0;
+        current_threads_size_ = 0;
+        min_threads_size_ = 1;
+        max_threads_size_.store(
+            ComputeThreadPoolMaxThreads(thread_core_coefficient));
+        LOG_INFO("Init thread pool:{}", name_)
+            << " with min worker num:" << min_threads_size_
+            << " and max worker num:" << max_threads_size_.load();
+        Init();
+    }
+
+    ~ThreadPool() {
+        ShutDown();
+    }
+
+    ThreadPool(const ThreadPool&) = delete;
+    ThreadPool(ThreadPool&&) = delete;
+    ThreadPool&
+    operator=(const ThreadPool&) = delete;
+    ThreadPool&
+    operator=(ThreadPool&&) = delete;
+
+    void
+    Init();
+
+    void
+    ShutDown();
+
+    size_t
+    GetThreadNum() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return current_threads_size_;
+    }
+
+    size_t
+    GetMaxThreadNum() {
+        return max_threads_size_.load();
+    }
+
+    template <typename F, typename... Args>
+    auto
+    Submit(F&& f, Args&&... args) -> std::future<decltype(f(args...))> {
+        std::function<decltype(f(args...))()> func =
+            std::bind(std::forward<F>(f), std::forward<Args>(args)...);
+        auto task_ptr =
+            std::make_shared<std::packaged_task<decltype(f(args...))()>>(func);
+
+        auto enqueue_time = std::chrono::steady_clock::now();
+        auto* queue_metric = metric_queue_duration_;
+        auto* execute_metric = metric_execute_duration_;
+        std::function<void()> wrap_func = [task_ptr,
+                                           enqueue_time,
+                                           queue_metric,
+                                           execute_metric]() {
+            auto execute_start = std::chrono::steady_clock::now();
+            if (queue_metric) {
+                queue_metric->Observe(
+                    std::chrono::duration<double>(execute_start - enqueue_time)
+                        .count());
+            }
+            auto observe_execute = [&]() {
+                if (execute_metric) {
+                    execute_metric->Observe(
+                        std::chrono::duration<double>(
+                            std::chrono::steady_clock::now() - execute_start)
+                            .count());
+                }
+            };
+            try {
+                (*task_ptr)();
+            } catch (...) {
+                observe_execute();
+                throw;
+            }
+            observe_execute();
+        };
+
+        auto future = task_ptr->get_future();
+
+        std::unique_lock<std::mutex> lock(mutex_);
+        work_queue_.enqueue(std::move(wrap_func));
+
+        if (idle_threads_size_ > 0) {
+            condition_lock_.notify_one();
+        }
+        if (work_queue_.size() > static_cast<size_t>(idle_threads_size_) &&
+            current_threads_size_ < max_threads_size_.load()) {
+            // Dynamic increase thread number
+            try {
+                if (worker_spawn_hook_for_test_) {
+                    worker_spawn_hook_for_test_();
+                }
+                threads_.emplace_back(&ThreadPool::Worker, this);
+                current_threads_size_++;
+            } catch (const std::exception& e) {
+                LOG_WARN(
+                    "Failed to expand thread pool {}: {}", name_, e.what());
+            } catch (...) {
+                LOG_WARN("Failed to expand thread pool {}", name_);
+            }
+        }
+        lock.unlock();
+
+        try {
+            if (metric_submitted_) {
+                metric_submitted_->Increment();
+            }
+            if (metric_queue_depth_) {
+                metric_queue_depth_->Set(work_queue_.size());
+            }
+        } catch (const std::exception& e) {
+            LOG_WARN("Failed to update thread pool {} submit metrics: {}",
+                     name_,
+                     e.what());
+        } catch (...) {
+            LOG_WARN("Failed to update thread pool {} submit metrics", name_);
+        }
+
+        return future;
+    }
+
+    void
+    Worker();
+
+    void
+    FinishThreads();
+
+    void
+    Resize(int new_size) {
+        //no need to hold mutex here as we don't require
+        //max_threads_size to take effect instantly, just guaranteed atomic
+        new_size = ClampThreadPoolMaxThreads(new_size);
+        max_threads_size_.store(new_size);
+        if (metric_capacity_) {
+            metric_capacity_->Set(new_size);
+        }
+    }
+
+    void
+    SetMetrics(prometheus::Gauge* capacity,
+               prometheus::Gauge* active,
+               prometheus::Gauge* idle,
+               prometheus::Gauge* queue_depth,
+               prometheus::Counter* submitted,
+               prometheus::Counter* completed,
+               prometheus::Histogram* queue_duration,
+               prometheus::Histogram* execute_duration) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        metric_capacity_ = capacity;
+        metric_active_ = active;
+        metric_idle_ = idle;
+        metric_queue_depth_ = queue_depth;
+        metric_submitted_ = submitted;
+        metric_completed_ = completed;
+        metric_queue_duration_ = queue_duration;
+        metric_execute_duration_ = execute_duration;
+        if (metric_capacity_) {
+            metric_capacity_->Set(max_threads_size_.load());
+        }
+        if (metric_active_) {
+            metric_active_->Set(current_threads_size_ - idle_threads_size_);
+        }
+        if (metric_idle_) {
+            metric_idle_->Set(idle_threads_size_);
+        }
+        if (metric_queue_depth_) {
+            metric_queue_depth_->Set(work_queue_.size());
+        }
+    }
+
+ public:
+    int min_threads_size_;
+    int idle_threads_size_;
+    int current_threads_size_;
+    std::atomic<int> max_threads_size_;
+    bool shutdown_;
+    static constexpr size_t WAIT_SECONDS = 2;
+    SafeQueue<std::function<void()>> work_queue_;
+    std::list<std::thread> threads_;
+    SafeQueue<std::thread::id> need_finish_threads_;
+    std::mutex mutex_;
+    std::condition_variable condition_lock_;
+    std::string name_;
+
+    // Prometheus metrics (set via SetMetrics, nullptr if not wired)
+    prometheus::Gauge* metric_capacity_{nullptr};
+    prometheus::Gauge* metric_active_{nullptr};
+    prometheus::Gauge* metric_idle_{nullptr};
+    prometheus::Gauge* metric_queue_depth_{nullptr};
+    prometheus::Counter* metric_submitted_{nullptr};
+    prometheus::Counter* metric_completed_{nullptr};
+    prometheus::Histogram* metric_queue_duration_{nullptr};
+    prometheus::Histogram* metric_execute_duration_{nullptr};
+
+ private:
+    friend class ThreadPoolTest_WorkerSpawnFailureDoesNotFailQueuedTask_Test;
+
+    // Deterministic test seam for worker-spawn failure coverage.
+    std::function<void()> worker_spawn_hook_for_test_;
+};
+
+}  // namespace milvus

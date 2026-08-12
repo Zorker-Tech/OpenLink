@@ -1,0 +1,388 @@
+package planparserv2
+
+import (
+	"github.com/milvus-io/milvus-proto/go-api/v3/schemapb"
+	"github.com/milvus-io/milvus/pkg/v3/proto/planpb"
+	"github.com/milvus-io/milvus/pkg/v3/util/merr"
+	"github.com/milvus-io/milvus/pkg/v3/util/typeutil"
+)
+
+func FillExpressionValue(expr *planpb.Expr, templateValues map[string]*planpb.GenericValue) error {
+	if !expr.GetIsTemplate() {
+		return nil
+	}
+
+	switch e := expr.GetExpr().(type) {
+	case *planpb.Expr_TermExpr:
+		return FillTermExpressionValue(e.TermExpr, templateValues)
+	case *planpb.Expr_UnaryExpr:
+		return FillExpressionValue(e.UnaryExpr.GetChild(), templateValues)
+	case *planpb.Expr_BinaryExpr:
+		if err := FillExpressionValue(e.BinaryExpr.GetLeft(), templateValues); err != nil {
+			return err
+		}
+		if err := FillExpressionValue(e.BinaryExpr.GetRight(), templateValues); err != nil {
+			return err
+		}
+		switch e.BinaryExpr.GetOp() {
+		case planpb.BinaryExpr_LogicalOr:
+			if hasBoolValue(e.BinaryExpr.GetLeft(), true) || hasBoolValue(e.BinaryExpr.GetRight(), true) {
+				*expr = *alwaysTrueExpr()
+			}
+		case planpb.BinaryExpr_LogicalAnd:
+			if hasBoolValue(e.BinaryExpr.GetLeft(), false) || hasBoolValue(e.BinaryExpr.GetRight(), false) {
+				*expr = *alwaysFalseExpr()
+			}
+		}
+		return nil
+	case *planpb.Expr_UnaryRangeExpr:
+		return FillUnaryRangeExpressionValue(e.UnaryRangeExpr, templateValues)
+	case *planpb.Expr_BinaryRangeExpr:
+		return FillBinaryRangeExpressionValue(e.BinaryRangeExpr, templateValues)
+	case *planpb.Expr_BinaryArithOpEvalRangeExpr:
+		return FillBinaryArithOpEvalRangeExpressionValue(e.BinaryArithOpEvalRangeExpr, templateValues)
+	case *planpb.Expr_BinaryArithExpr:
+		if err := FillExpressionValue(e.BinaryArithExpr.GetLeft(), templateValues); err != nil {
+			return err
+		}
+		return FillExpressionValue(e.BinaryArithExpr.GetRight(), templateValues)
+	case *planpb.Expr_JsonContainsExpr:
+		return FillJSONContainsExpressionValue(e.JsonContainsExpr, templateValues)
+	case *planpb.Expr_RandomSampleExpr:
+		return FillExpressionValue(expr.GetExpr().(*planpb.Expr_RandomSampleExpr).RandomSampleExpr.GetPredicate(), templateValues)
+	case *planpb.Expr_GisfunctionFilterExpr:
+		return FillGISFunctionFilterExpressionValue(e.GisfunctionFilterExpr, templateValues)
+	case *planpb.Expr_ElementFilterExpr:
+		if err := FillExpressionValue(e.ElementFilterExpr.GetElementExpr(), templateValues); err != nil {
+			return err
+		}
+		if e.ElementFilterExpr.GetPredicate() != nil {
+			return FillExpressionValue(e.ElementFilterExpr.GetPredicate(), templateValues)
+		}
+		return nil
+	case *planpb.Expr_MatchExpr:
+		return FillExpressionValue(e.MatchExpr.GetPredicate(), templateValues)
+	case *planpb.Expr_CallExpr:
+		// Only a deferred bloom_match call carries IsTemplate today; once the
+		// template value is known, its client-built blob is validated and the
+		// call is materialized into a BloomFilterExpr here.
+		if e.CallExpr.GetFunctionName() == BloomMatchFunctionName {
+			return FillBloomMatchExpressionValue(expr, e.CallExpr, templateValues)
+		}
+		return merr.WrapErrQueryPlanMsg("this expression no need to fill placeholder with expr type: %T", e)
+	default:
+		return merr.WrapErrQueryPlanMsg("this expression no need to fill placeholder with expr type: %T", e)
+	}
+}
+
+func hasBoolValue(expr *planpb.Expr, target bool) bool {
+	value := expr.GetValueExpr().GetValue()
+	return IsBool(value) && value.GetBoolVal() == target
+}
+
+func FillTermExpressionValue(expr *planpb.TermExpr, templateValues map[string]*planpb.GenericValue) error {
+	value, ok := templateValues[expr.GetTemplateVariableName()]
+	if !ok && expr.GetValues() == nil {
+		return merr.WrapErrQueryPlanMsg("the value of expression template variable name {%s} is not found", expr.GetTemplateVariableName())
+	}
+
+	if value == nil || value.GetArrayVal() == nil {
+		return merr.WrapErrQueryPlanMsg("the value of term expression template variable {%s} is not array", expr.GetTemplateVariableName())
+	}
+	dataType := expr.GetColumnInfo().GetDataType()
+	if typeutil.IsArrayType(dataType) {
+		// Use element type if accessing array element
+		if len(expr.GetColumnInfo().GetNestedPath()) != 0 || expr.GetColumnInfo().GetIsElementLevel() {
+			dataType = expr.GetColumnInfo().GetElementType()
+		}
+	}
+
+	array := value.GetArrayVal().GetArray()
+	values := make([]*planpb.GenericValue, len(array))
+	for i, e := range array {
+		castedValue, err := castValue(dataType, e)
+		if err != nil {
+			return err
+		}
+		values[i] = castedValue
+	}
+	expr.Values = values
+
+	return nil
+}
+
+func isLikeMatchOp(op planpb.OpType) bool {
+	switch op {
+	case planpb.OpType_Match, planpb.OpType_PrefixMatch, planpb.OpType_PostfixMatch, planpb.OpType_InnerMatch:
+		return true
+	default:
+		return false
+	}
+}
+
+func isRegexMatchOp(op planpb.OpType) bool {
+	return op == planpb.OpType_RegexMatch
+}
+
+func FillUnaryRangeExpressionValue(expr *planpb.UnaryRangeExpr, templateValues map[string]*planpb.GenericValue) error {
+	value, ok := templateValues[expr.GetTemplateVariableName()]
+	if !ok {
+		return merr.WrapErrQueryPlanMsg("the value of expression template variable name {%s} is not found", expr.GetTemplateVariableName())
+	}
+	if value == nil {
+		return merr.WrapErrQueryPlanMsg("the value of expression template variable {%s} is nil", expr.GetTemplateVariableName())
+	}
+
+	if isLikeMatchOp(expr.GetOp()) {
+		if !IsString(value) {
+			return merr.WrapErrQueryPlanMsg("the value of like expression template variable {%s} is not string", expr.GetTemplateVariableName())
+		}
+		op, operand, err := translatePatternMatch(value.GetStringVal())
+		if err != nil {
+			return err
+		}
+		expr.Op = op
+		expr.Value = NewString(operand)
+		return nil
+	}
+
+	if isRegexMatchOp(expr.GetOp()) {
+		if !IsString(value) {
+			return merr.WrapErrQueryPlanMsg("the value of regex expression template variable {%s} is not string", expr.GetTemplateVariableName())
+		}
+		op, operand, err := validateAndOptimizeRegexPattern(value.GetStringVal())
+		if err != nil {
+			return err
+		}
+		expr.Op = op
+		expr.Value = NewString(operand)
+		return nil
+	}
+
+	dataType := expr.GetColumnInfo().GetDataType()
+	if typeutil.IsArrayType(dataType) {
+		// Use element type if accessing array element
+		if len(expr.GetColumnInfo().GetNestedPath()) != 0 || expr.GetColumnInfo().GetIsElementLevel() {
+			dataType = expr.GetColumnInfo().GetElementType()
+		}
+	}
+
+	castedValue, err := castValue(dataType, value)
+	if err != nil {
+		return err
+	}
+	expr.Value = castedValue
+	return nil
+}
+
+func FillGISFunctionFilterExpressionValue(expr *planpb.GISFunctionFilterExpr, templateValues map[string]*planpb.GenericValue) error {
+	templateVariableName := expr.GetWktString()
+	value, ok := templateValues[templateVariableName]
+	if !ok {
+		return merr.WrapErrQueryPlanMsg("the value of expression template variable name {%s} is not found", templateVariableName)
+	}
+	if value == nil || !IsString(value) {
+		return merr.WrapErrQueryPlanMsg("the value of GIS WKT template variable {%s} is not string", templateVariableName)
+	}
+
+	wktString := value.GetStringVal()
+	if expr.GetOp() == planpb.GISFunctionFilterExpr_DWithin {
+		if err := checkValidPoint(wktString); err != nil {
+			return err
+		}
+	} else {
+		if err := checkValidWKT(wktString); err != nil {
+			return err
+		}
+	}
+	expr.WktString = wktString
+	return nil
+}
+
+func FillBinaryRangeExpressionValue(expr *planpb.BinaryRangeExpr, templateValues map[string]*planpb.GenericValue) error {
+	var ok bool
+	dataType := expr.GetColumnInfo().GetDataType()
+	// Use element type if accessing array element
+	if typeutil.IsArrayType(dataType) && (len(expr.GetColumnInfo().GetNestedPath()) != 0 || expr.GetColumnInfo().GetIsElementLevel()) {
+		dataType = expr.GetColumnInfo().GetElementType()
+	}
+	lowerValue := expr.GetLowerValue()
+	if lowerValue == nil || expr.GetLowerTemplateVariableName() != "" {
+		lowerValue, ok = templateValues[expr.GetLowerTemplateVariableName()]
+		if !ok {
+			return merr.WrapErrQueryPlanMsg("the lower value of expression template variable name {%s} is not found", expr.GetLowerTemplateVariableName())
+		}
+		castedLowerValue, err := castValue(dataType, lowerValue)
+		if err != nil {
+			return err
+		}
+		expr.LowerValue = castedLowerValue
+		lowerValue = castedLowerValue
+	}
+
+	upperValue := expr.GetUpperValue()
+	if upperValue == nil || expr.GetUpperTemplateVariableName() != "" {
+		upperValue, ok = templateValues[expr.GetUpperTemplateVariableName()]
+		if !ok {
+			return merr.WrapErrQueryPlanMsg("the upper value of expression template variable name {%s} is not found", expr.GetUpperTemplateVariableName())
+		}
+
+		castedUpperValue, err := castValue(dataType, upperValue)
+		if err != nil {
+			return err
+		}
+		expr.UpperValue = castedUpperValue
+		upperValue = castedUpperValue
+	}
+
+	return validateBinaryRangeBounds(lowerValue, upperValue, expr.GetLowerInclusive(), expr.GetUpperInclusive())
+}
+
+func FillBinaryArithOpEvalRangeExpressionValue(expr *planpb.BinaryArithOpEvalRangeExpr, templateValues map[string]*planpb.GenericValue) error {
+	var dataType schemapb.DataType
+	var err error
+	var ok bool
+
+	if expr.ArithOp == planpb.ArithOpType_ArrayLength {
+		dataType = schemapb.DataType_Int64
+	} else {
+		operand := expr.GetRightOperand()
+		if operand == nil || expr.GetOperandTemplateVariableName() != "" {
+			operand, ok = templateValues[expr.GetOperandTemplateVariableName()]
+			if !ok {
+				return merr.WrapErrQueryPlanMsg("the right operand value of expression template variable name {%s} is not found", expr.GetOperandTemplateVariableName())
+			}
+		}
+
+		operandExpr := toValueExpr(operand)
+		lDataType, rDataType := expr.GetColumnInfo().GetDataType(), operandExpr.dataType
+		if typeutil.IsArrayType(expr.GetColumnInfo().GetDataType()) {
+			lDataType = expr.GetColumnInfo().GetElementType()
+		}
+
+		if err = checkValidModArith(expr.GetArithOp(), expr.GetColumnInfo().GetDataType(), expr.GetColumnInfo().GetElementType(),
+			rDataType, schemapb.DataType_None); err != nil {
+			return err
+		}
+
+		if operand.GetArrayVal() != nil {
+			return merr.WrapErrQueryPlanMsg("can not comparisons array directly")
+		}
+
+		dataType, err = getTargetType(lDataType, rDataType)
+		if err != nil {
+			return err
+		}
+
+		castedOperand, err := castValue(dataType, operand)
+		if err != nil {
+			return err
+		}
+
+		// Validate divisor for division/modulo operations
+		if expr.ArithOp == planpb.ArithOpType_Div || expr.ArithOp == planpb.ArithOpType_Mod {
+			if (IsInteger(castedOperand) && castedOperand.GetInt64Val() == 0) ||
+				(IsFloating(castedOperand) && castedOperand.GetFloatVal() == 0) {
+				return merr.WrapErrQueryPlanMsg("division or modulus by zero")
+			}
+		}
+
+		// Validate the shift amount for shift operations. A templated amount
+		// skips the plan-time [0, 64) guard in combineBinaryArithExpr (its value
+		// is unknown at parse time), so it must be re-checked here once filled.
+		// A negative or >= 64 amount is undefined behavior in the C++ executor.
+		if expr.ArithOp == planpb.ArithOpType_Shl || expr.ArithOp == planpb.ArithOpType_Shr {
+			if !IsInteger(castedOperand) || castedOperand.GetInt64Val() < 0 || castedOperand.GetInt64Val() >= 64 {
+				return merr.WrapErrQueryPlanMsg("shift amount must be in range [0, 64), got %s", castedOperand.String())
+			}
+		}
+
+		expr.RightOperand = castedOperand
+	}
+
+	value := expr.GetValue()
+	if expr.GetValue() == nil || expr.GetValueTemplateVariableName() != "" {
+		value, ok = templateValues[expr.GetValueTemplateVariableName()]
+		if !ok {
+			return merr.WrapErrQueryPlanMsg("the value of expression template variable name {%s} is not found", expr.GetValueTemplateVariableName())
+		}
+	}
+	castedValue, err := castValue(dataType, value)
+	if err != nil {
+		return err
+	}
+	expr.Value = castedValue
+
+	return nil
+}
+
+func FillJSONContainsExpressionValue(expr *planpb.JSONContainsExpr, templateValues map[string]*planpb.GenericValue) error {
+	if expr.GetElements() != nil && expr.GetTemplateVariableName() == "" {
+		return nil
+	}
+	value, ok := templateValues[expr.GetTemplateVariableName()]
+	if !ok {
+		return merr.WrapErrQueryPlanMsg("the value of expression template variable name {%s} is not found", expr.GetTemplateVariableName())
+	}
+	if err := checkContainsElement(toColumnExpr(expr.GetColumnInfo()), expr.GetOp(), value); err != nil {
+		return err
+	}
+	dataType := expr.GetColumnInfo().GetDataType()
+	if typeutil.IsArrayType(dataType) {
+		dataType = expr.GetColumnInfo().GetElementType()
+	}
+	if expr.GetOp() == planpb.JSONContainsExpr_Contains {
+		castedValue, err := castValue(dataType, value)
+		if err != nil {
+			return err
+		}
+		expr.Elements = append(expr.Elements, castedValue)
+	} else {
+		for _, e := range value.GetArrayVal().GetArray() {
+			castedValue, err := castValue(dataType, e)
+			if err != nil {
+				return err
+			}
+			expr.Elements = append(expr.Elements, castedValue)
+		}
+	}
+	expr.ElementsSameType = jsonContainsElementsSameType(expr.GetElements())
+	return nil
+}
+
+func jsonContainsElementsSameType(elements []*planpb.GenericValue) bool {
+	if len(elements) == 0 {
+		return true
+	}
+
+	elementType := genericValueDataType(elements[0])
+	if elementType == schemapb.DataType_None {
+		return false
+	}
+	for _, element := range elements[1:] {
+		if genericValueDataType(element) != elementType {
+			return false
+		}
+	}
+	return true
+}
+
+func genericValueDataType(value *planpb.GenericValue) schemapb.DataType {
+	if value == nil {
+		return schemapb.DataType_None
+	}
+	switch value.GetVal().(type) {
+	case *planpb.GenericValue_BoolVal:
+		return schemapb.DataType_Bool
+	case *planpb.GenericValue_Int64Val:
+		return schemapb.DataType_Int64
+	case *planpb.GenericValue_FloatVal:
+		return schemapb.DataType_Double
+	case *planpb.GenericValue_StringVal:
+		return schemapb.DataType_VarChar
+	case *planpb.GenericValue_ArrayVal:
+		return schemapb.DataType_Array
+	default:
+		return schemapb.DataType_None
+	}
+}

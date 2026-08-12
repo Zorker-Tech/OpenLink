@@ -1,0 +1,298 @@
+// Licensed to the LF AI & Data foundation under one
+// or more contributor license agreements. See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership. The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License. You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include <atomic>
+#include <chrono>
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <optional>
+
+#include "Scorer.h"
+#include "Utils.h"
+#include "bitset/bitset.h"
+#include "common/Types.h"
+#include "log/Log.h"
+#include "pb/schema.pb.h"
+#include "rescores/Murmur3.h"
+#include "segcore/SegmentInterface.h"
+
+namespace milvus::rescores {
+
+namespace {
+
+// The out-of-bounds skip below fires once per batch_score call, i.e. once
+// per offset chunk, and its usual cause (text index lagging the vector
+// index) is expected and transient -- so during sustained lag an unthrottled
+// warning would repeat once per chunk x segment x query. Allow at most one
+// warning per interval process-wide, but never lose counts: calls whose
+// warning is suppressed fold their count into the next emitted one, so a
+// sustained systemic desync shows up as a large accumulated total rather
+// than one stray line.
+//
+// Returns the total count to report (this call's plus everything suppressed
+// since the last emitted warning), or 0 if this call's warning is
+// suppressed.
+int64_t
+AccumulateOutOfBoundsForLog(int64_t out_of_bounds) {
+    constexpr int64_t kLogIntervalUs = 10'000'000;  // 10s
+    static std::atomic<int64_t> last_log_us{0};
+    static std::atomic<int64_t> suppressed_count{0};
+    auto now_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                      std::chrono::steady_clock::now().time_since_epoch())
+                      .count();
+    auto last = last_log_us.load(std::memory_order_relaxed);
+    if (now_us - last >= kLogIntervalUs &&
+        last_log_us.compare_exchange_strong(
+            last, now_us, std::memory_order_relaxed)) {
+        return out_of_bounds +
+               suppressed_count.exchange(0, std::memory_order_relaxed);
+    }
+    suppressed_count.fetch_add(out_of_bounds, std::memory_order_relaxed);
+    return 0;
+}
+
+}  // namespace
+
+void
+WeightScorer::batch_score(milvus::OpContext* op_ctx,
+                          const segcore::SegmentInternalInterface* segment,
+                          const proto::plan::FunctionMode& mode,
+                          const FixedVector<int32_t>& offsets,
+                          const TargetBitmapView& bitmap,
+                          std::vector<std::optional<float>>& boost_scores) {
+    Assert(bitmap.size() == offsets.size());
+    for (auto i = 0; i < offsets.size(); i++) {
+        if (bitmap[i] > 0) {
+            set_score(boost_scores[i], mode);
+        }
+    }
+}
+
+void
+WeightScorer::batch_score(milvus::OpContext* op_ctx,
+                          const segcore::SegmentInternalInterface* segment,
+                          const proto::plan::FunctionMode& mode,
+                          const FixedVector<int32_t>& offsets,
+                          const TargetBitmap& bitmap,
+                          std::vector<std::optional<float>>& boost_scores) {
+    auto bitmap_size = bitmap.size();
+    size_t out_of_bounds = 0;
+    for (auto i = 0; i < offsets.size(); i++) {
+        auto offset = offsets[i];
+        // Bounds check: offset must be within bitmap size.
+        // Race condition: text index may lag behind vector index,
+        // causing offsets to reference rows not yet in text index.
+        if (offset >= 0 && static_cast<size_t>(offset) < bitmap_size) {
+            if (bitmap[offset] > 0) {
+                set_score(boost_scores[i], mode);
+            }
+        } else {
+            // Out of bounds: treat as "no match" (don't apply boost), but
+            // count it -- a silent skip here once masked a short filter
+            // bitset, so make any bitmap/offset desync observable.
+            ++out_of_bounds;
+        }
+    }
+    if (out_of_bounds > 0) {
+        auto total = AccumulateOutOfBoundsForLog(out_of_bounds);
+        if (total > 0) {
+            LOG_WARN(
+                "WeightScorer::batch_score skipped {} offsets outside the "
+                "filter bitmap since the last report ({} of {} in this call, "
+                "bitmap size {}, segment {})",
+                total,
+                out_of_bounds,
+                offsets.size(),
+                bitmap_size,
+                segment != nullptr ? segment->get_segment_id() : -1);
+        }
+    }
+};
+
+void
+WeightScorer::batch_score(milvus::OpContext* op_ctx,
+                          const segcore::SegmentInternalInterface* segment,
+                          const proto::plan::FunctionMode& mode,
+                          const FixedVector<int32_t>& offsets,
+                          std::vector<std::optional<float>>& boost_scores) {
+    for (auto i = 0; i < offsets.size(); i++) {
+        set_score(boost_scores[i], mode);
+    }
+};
+
+void
+WeightScorer::set_score(std::optional<float>& score,
+                        const proto::plan::FunctionMode& mode) {
+    if (!score.has_value()) {
+        score = std::make_optional(weight_);
+    } else {
+        score = std::make_optional(
+            function_score_merge(score.value(), weight_, mode));
+    }
+}
+
+void
+RandomScorer::batch_score(milvus::OpContext* op_ctx,
+                          const segcore::SegmentInternalInterface* segment,
+                          const proto::plan::FunctionMode& mode,
+                          const FixedVector<int32_t>& offsets,
+                          const TargetBitmapView& bitmap,
+                          std::vector<std::optional<float>>& boost_scores) {
+    Assert(bitmap.size() == offsets.size());
+    FixedVector<int64_t> target_offsets;
+    FixedVector<int> idx;
+    target_offsets.reserve(offsets.size());
+    idx.reserve(offsets.size());
+
+    for (auto i = 0; i < offsets.size(); i++) {
+        if (bitmap[i] > 0) {
+            target_offsets.push_back(static_cast<int64_t>(offsets[i]));
+            idx.push_back(i);
+        }
+    }
+
+    // skip if empty
+    if (target_offsets.empty()) {
+        return;
+    }
+
+    random_score(op_ctx, segment, mode, target_offsets, &idx, boost_scores);
+}
+
+void
+RandomScorer::batch_score(milvus::OpContext* op_ctx,
+                          const segcore::SegmentInternalInterface* segment,
+                          const proto::plan::FunctionMode& mode,
+                          const FixedVector<int32_t>& offsets,
+                          const TargetBitmap& bitmap,
+                          std::vector<std::optional<float>>& boost_scores) {
+    FixedVector<int64_t> target_offsets;
+    FixedVector<int> idx;
+    target_offsets.reserve(offsets.size());
+    idx.reserve(offsets.size());
+
+    auto bitmap_size = bitmap.size();
+    size_t out_of_bounds = 0;
+    for (auto i = 0; i < offsets.size(); i++) {
+        auto offset = offsets[i];
+        // Bounds check: offset must be within bitmap size.
+        // Race condition: text index may lag behind vector index,
+        // causing offsets to reference rows not yet in text index.
+        if (offset >= 0 && static_cast<size_t>(offset) < bitmap_size) {
+            if (bitmap[offset] > 0) {
+                target_offsets.push_back(static_cast<int64_t>(offset));
+                idx.push_back(i);
+            }
+        } else {
+            // Out of bounds: treat as "no match" (don't apply boost), but
+            // count it -- a silent skip here once masked a short filter
+            // bitset, so make any bitmap/offset desync observable.
+            ++out_of_bounds;
+        }
+    }
+    if (out_of_bounds > 0) {
+        auto total = AccumulateOutOfBoundsForLog(out_of_bounds);
+        if (total > 0) {
+            LOG_WARN(
+                "RandomScorer::batch_score skipped {} offsets outside the "
+                "filter bitmap since the last report ({} of {} in this call, "
+                "bitmap size {}, segment {})",
+                total,
+                out_of_bounds,
+                offsets.size(),
+                bitmap_size,
+                segment != nullptr ? segment->get_segment_id() : -1);
+        }
+    }
+
+    // skip if empty
+    if (target_offsets.empty()) {
+        return;
+    }
+
+    random_score(op_ctx, segment, mode, target_offsets, &idx, boost_scores);
+}
+
+void
+RandomScorer::batch_score(milvus::OpContext* op_ctx,
+                          const segcore::SegmentInternalInterface* segment,
+                          const proto::plan::FunctionMode& mode,
+                          const FixedVector<int32_t>& offsets,
+                          std::vector<std::optional<float>>& boost_scores) {
+    FixedVector<int64_t> target_offsets;
+    target_offsets.reserve(offsets.size());
+
+    for (int offset : offsets) {
+        target_offsets.push_back(static_cast<int64_t>(offset));
+    }
+
+    random_score(op_ctx, segment, mode, target_offsets, nullptr, boost_scores);
+}
+
+void
+RandomScorer::random_score(milvus::OpContext* op_ctx,
+                           const segcore::SegmentInternalInterface* segment,
+                           const proto::plan::FunctionMode& mode,
+                           const FixedVector<int64_t>& target_offsets,
+                           const FixedVector<int>* idx,
+                           std::vector<std::optional<float>>& boost_scores) {
+    if (field_.get() != -1) {
+        auto array = segment->bulk_subscript(
+            op_ctx, field_, target_offsets.data(), target_offsets.size());
+        AssertInfo(array->has_scalars(), "seed field must be scalar");
+        AssertInfo(array->scalars().has_long_data(),
+                   "now only support int64 field as seed");
+        // TODO: Support varchar and int32 field as random field.
+
+        const auto& data = array->scalars().long_data();
+        for (int i = 0; i < data.data_size(); i++) {
+            auto a = data.data()[i];
+            auto random_score =
+                hash_to_double(MurmurHash3_x64_64_Special(a, seed_));
+            if (idx == nullptr) {
+                set_score(random_score, boost_scores[i], mode);
+            } else {
+                set_score(random_score, boost_scores[idx->at(i)], mode);
+            }
+        }
+    } else {
+        // if not set field, use offset and seed to hash.
+        const auto segment_id = segment->get_segment_id();
+        for (int i = 0; i < target_offsets.size(); i++) {
+            double random_score = hash_to_double(MurmurHash3_x64_64_Special(
+                target_offsets[i] + segment_id, seed_));
+            if (idx == nullptr) {
+                set_score(random_score, boost_scores[i], mode);
+            } else {
+                set_score(random_score, boost_scores[idx->at(i)], mode);
+            }
+        }
+    }
+}
+
+void
+RandomScorer::set_score(float random_value,
+                        std::optional<float>& score,
+                        const proto::plan::FunctionMode& mode) {
+    if (!score.has_value()) {
+        score = std::make_optional(random_value * weight_);
+    } else {
+        score = std::make_optional(function_score_merge(
+            score.value(), (random_value * weight_), mode));
+    }
+}
+}  // namespace milvus::rescores

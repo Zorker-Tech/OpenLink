@@ -1,0 +1,380 @@
+// Licensed to the LF AI & Data foundation under one
+// or more contributor license agreements. See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership. The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License. You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include "IterativeFilterNode.h"
+
+#include <string.h>
+#include <algorithm>
+#include <chrono>
+#include <cstdint>
+#include <functional>
+#include <iosfwd>
+#include <optional>
+#include <ratio>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
+#include <vector>
+
+#include "bitset/bitset.h"
+#include "bitset/detail/element_vectorized.h"
+#include "common/ArrayOffsets.h"
+#include "common/Consts.h"
+#include "common/EasyAssert.h"
+#include "common/QueryResult.h"
+#include "common/Tracer.h"
+#include "common/Types.h"
+#include "common/Utils.h"
+#include "exec/QueryContext.h"
+#include "exec/expression/EvalCtx.h"
+#include "expr/ITypeExpr.h"
+#include "fmt/core.h"
+#include "folly/FBVector.h"
+#include "knowhere/comp/index_param.h"
+#include "monitor/Monitor.h"
+#include "plan/PlanNode.h"
+#include "prometheus/histogram.h"
+#include "exec/operator/Utils.h"
+
+namespace milvus {
+namespace exec {
+PhyIterativeFilterNode::PhyIterativeFilterNode(
+    int32_t operator_id,
+    DriverContext* driverctx,
+    const std::shared_ptr<const plan::IterativeFilterNode>& filter)
+    : Operator(driverctx,
+               filter->output_type(),
+               operator_id,
+               filter->id(),
+               "PhyIterativeFilterNode") {
+    ExecContext* exec_context = operator_context_->get_exec_context();
+    query_context_ = exec_context->get_query_context();
+    std::vector<expr::TypedExprPtr> filters;
+    filters.emplace_back(filter->filter());
+    // This operator reads only the data bits of the predicate output, so
+    // UNKNOWN rows are excluded exactly like FALSE — a null-rejecting
+    // consumer.
+    exprs_ = std::make_unique<ExprSet>(
+        filters, exec_context, /*null_rejecting=*/true);
+    const auto& exprs = exprs_->exprs();
+    for (const auto& expr : exprs) {
+        is_native_supported_ =
+            (is_native_supported_ && (expr->SupportOffsetInput()));
+    }
+    need_process_rows_ = query_context_->get_active_count();
+    num_processed_rows_ = 0;
+}
+
+void
+PhyIterativeFilterNode::AddInput(RowVectorPtr& input) {
+    input_ = std::move(input);
+}
+
+bool
+PhyIterativeFilterNode::IsFinished() {
+    return is_finished_;
+}
+
+RowVectorPtr
+PhyIterativeFilterNode::GetOutput() {
+    milvus::exec::checkCancellation(query_context_);
+
+    if (is_finished_ || !no_more_input_) {
+        return nullptr;
+    }
+
+    tracer::AutoSpan span(
+        "PhyIterativeFilterNode::Execute", tracer::GetRootSpan(), true);
+
+    DeferLambda([&]() { is_finished_ = true; });
+
+    if (input_ == nullptr) {
+        return nullptr;
+    }
+
+    std::chrono::high_resolution_clock::time_point scalar_start =
+        std::chrono::high_resolution_clock::now();
+
+    milvus::SearchResult search_result = query_context_->get_search_result();
+    int64_t nq = search_result.total_nq_;
+    int64_t unity_topk = search_result.unity_topK_;
+    knowhere::MetricType metric_type = query_context_->get_metric_type();
+    bool large_is_better = PositivelyRelated(metric_type);
+    TargetBitmap bitset;
+    // get bitset of whole segment first
+    if (!is_native_supported_) {
+        EvalCtx eval_ctx(operator_context_->get_exec_context());
+        // Rows are included below on the data bit alone; the helper folds
+        // UNKNOWN into FALSE (data &= valid), which is what makes this
+        // operator a null-rejecting consumer by construction.
+        bitset = EvalExprSetOverAllBatches(
+            *exprs_, eval_ctx, need_process_rows_, "PhyIterativeFilterNode");
+        num_processed_rows_ = need_process_rows_;
+    }
+    if (search_result.vector_iterators_.has_value()) {
+        AssertInfo(search_result.vector_iterators_.value().size() ==
+                       search_result.total_nq_,
+                   "Vector Iterators' count must be equal to total_nq_, Check "
+                   "your code");
+
+        bool element_level = search_result.element_level_;
+        auto array_offsets = query_context_->get_array_offsets();
+
+        // For element-level, we need array_offsets to convert element_id → doc_id
+        if (element_level) {
+            AssertInfo(
+                array_offsets != nullptr,
+                "Array offsets required for element-level iterative filter");
+        }
+
+        int nq_index = 0;
+
+        search_result.seg_offsets_.resize(nq * unity_topk, INVALID_SEG_OFFSET);
+        search_result.distances_.resize(nq * unity_topk);
+        if (element_level) {
+            search_result.element_indices_.resize(nq * unity_topk, -1);
+        }
+
+        // Reuse memory allocation across batches and nqs
+        FixedVector<int32_t> offsets;
+        FixedVector<float> distances;
+        FixedVector<int32_t> doc_offsets;
+        // For element-level: cache resolved (doc_id, elem_idx) pairs to avoid
+        // repeated element-to-row lookups.
+        std::vector<std::pair<int32_t, int32_t>> element_to_doc_mapping;
+        std::unordered_map<int64_t, bool> doc_eval_cache;
+        std::unordered_set<int64_t> unique_doc_ids;
+        // Cached element range of the last resolved row: element ids from
+        // one row arrive in clusters even though iterator output is
+        // distance-ordered, so ids inside the cached range resolve without
+        // the virtual binary-search lookup and anything else falls back to
+        // the per-element lookup (correctness never depends on ordering).
+        // A resolved row's range is immutable, so the cache stays valid
+        // across batches and nqs.
+        int32_t cached_doc_id = 0;
+        int32_t cached_first_elem = 0;
+        int32_t cached_last_elem = 0;  // empty: first lookup always misses
+
+        for (auto& iterator : search_result.vector_iterators_.value()) {
+            EvalCtx eval_ctx(operator_context_->get_exec_context());
+            int64_t topk = 0;
+            while (iterator->HasNext() && topk < unity_topk) {
+                offsets.clear();
+                distances.clear();
+                // remain unfilled size as iterator batch size
+                int64_t batch_size = unity_topk - topk;
+                offsets.reserve(batch_size);
+                distances.reserve(batch_size);
+                while (iterator->HasNext()) {
+                    auto offset_dis_pair = iterator->Next();
+                    AssertInfo(
+                        offset_dis_pair.has_value(),
+                        "Wrong state! iterator cannot return valid result "
+                        "whereas it still"
+                        "tells hasNext, terminate operation");
+                    auto offset = offset_dis_pair.value().first;
+                    auto dis = offset_dis_pair.value().second;
+                    offsets.emplace_back(offset);
+                    distances.emplace_back(dis);
+                    if (offsets.size() == batch_size) {
+                        break;
+                    }
+                }
+
+                // Clear but retain capacity
+                doc_offsets.clear();
+                element_to_doc_mapping.clear();
+                doc_eval_cache.clear();
+                unique_doc_ids.clear();
+
+                // eval_offsets points to the offset vector used for
+                // expression evaluation — either the deduplicated
+                // doc_offsets (element-level) or the raw offsets
+                // (non-element-level, avoids a copy).
+                FixedVector<int32_t>* eval_offsets;
+                if (element_level) {
+                    // 1. Convert element_ids to doc_ids and do filter on those doc_ids
+                    // 2. element_ids with doc_ids that pass the filter are what we interested in
+                    // Cache both doc_id and elem_idx so later stages can reuse
+                    // the resolved mapping.
+                    element_to_doc_mapping.reserve(offsets.size());
+
+                    for (auto element_id : offsets) {
+                        int32_t doc_id;
+                        int32_t elem_idx;
+                        if (element_id >= cached_first_elem &&
+                            element_id < cached_last_elem) {
+                            doc_id = cached_doc_id;
+                            elem_idx = element_id - cached_first_elem;
+                        } else {
+                            const auto row =
+                                array_offsets->ElementIDToRowInfo(element_id);
+                            doc_id = row.row_id;
+                            elem_idx = row.element_index;
+                            cached_doc_id = row.row_id;
+                            cached_first_elem = row.row_element_start;
+                            cached_last_elem = row.row_element_end;
+                        }
+                        element_to_doc_mapping.push_back({doc_id, elem_idx});
+                    }
+
+                    // The deduplicated doc offsets feed only the native
+                    // offset-input Eval below; the non-native fallback
+                    // indexes the segment-wide bitset by doc id directly
+                    // and never reads eval_offsets.
+                    if (is_native_supported_) {
+                        for (const auto& [doc_id, elem_idx] :
+                             element_to_doc_mapping) {
+                            unique_doc_ids.insert(doc_id);
+                        }
+                        doc_offsets.reserve(unique_doc_ids.size());
+                        for (auto doc_id : unique_doc_ids) {
+                            doc_offsets.emplace_back(
+                                static_cast<int32_t>(doc_id));
+                        }
+                    }
+                    eval_offsets = &doc_offsets;
+                } else {
+                    eval_offsets = &offsets;
+                }
+
+                if (is_native_supported_) {
+                    eval_ctx.set_offset_input(eval_offsets);
+                    std::vector<VectorPtr> results;
+                    exprs_->Eval(0, 1, true, eval_ctx, results);
+                    AssertInfo(
+                        results.size() == 1 && results[0] != nullptr,
+                        "PhyIterativeFilterNode result size should be size "
+                        "one and not "
+                        "be nullptr");
+
+                    auto col_vec =
+                        std::dynamic_pointer_cast<ColumnVector>(results[0]);
+                    auto col_vec_size = col_vec->size();
+                    TargetBitmapView bitsetview(col_vec->GetRawData(),
+                                                col_vec_size);
+                    // Fold UNKNOWN into FALSE explicitly (data &= valid):
+                    // rows are included below on the data bit alone.
+                    TargetBitmapView validview(col_vec->GetValidRawData(),
+                                               col_vec_size);
+                    bitsetview.inplace_and(validview, col_vec_size);
+
+                    if (element_level) {
+                        Assert(bitsetview.size() == doc_offsets.size());
+                        for (size_t i = 0; i < doc_offsets.size(); ++i) {
+                            doc_eval_cache[doc_offsets[i]] =
+                                (bitsetview[i] > 0);
+                        }
+
+                        for (size_t i = 0; i < offsets.size(); ++i) {
+                            auto [doc_id, elem_idx] = element_to_doc_mapping[i];
+                            if (doc_eval_cache[doc_id]) {
+                                topk_binsert(search_result,
+                                             nq_index * unity_topk,
+                                             topk,
+                                             large_is_better,
+                                             distances[i],
+                                             doc_id,
+                                             elem_idx);
+                                if (topk == unity_topk) {
+                                    break;
+                                }
+                            }
+                        }
+                    } else {
+                        Assert(bitsetview.size() <= batch_size);
+                        Assert(bitsetview.size() == offsets.size());
+                        for (auto i = 0; i < offsets.size(); ++i) {
+                            if (bitsetview[i]) {
+                                topk_binsert(search_result,
+                                             nq_index * unity_topk,
+                                             topk,
+                                             large_is_better,
+                                             distances[i],
+                                             offsets[i],
+                                             std::nullopt);
+                                if (topk == unity_topk) {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                } else if (element_level) {
+                    // element_level_ is a property of the placeholder, not of
+                    // the filter expression, so an element-level search whose
+                    // filter cannot consume offset input (text match, GIS)
+                    // legitimately reaches this fallback. The segment-wide
+                    // bitset is indexed by doc offset and already holds the
+                    // verdict for every doc, so no doc_eval_cache is needed --
+                    // map each element back to its doc and test that bit.
+                    for (size_t i = 0; i < offsets.size(); ++i) {
+                        auto [doc_id, elem_idx] = element_to_doc_mapping[i];
+                        if (bitset[doc_id] > 0) {
+                            topk_binsert(search_result,
+                                         nq_index * unity_topk,
+                                         topk,
+                                         large_is_better,
+                                         distances[i],
+                                         doc_id,
+                                         elem_idx);
+                            if (topk == unity_topk) {
+                                break;
+                            }
+                        }
+                    }
+                } else {
+                    for (auto i = 0; i < offsets.size(); ++i) {
+                        if (bitset[offsets[i]] > 0) {
+                            topk_binsert(search_result,
+                                         nq_index * unity_topk,
+                                         topk,
+                                         large_is_better,
+                                         distances[i],
+                                         offsets[i],
+                                         std::nullopt);
+                            if (topk == unity_topk) {
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (topk == unity_topk) {
+                    break;
+                }
+            }
+            nq_index++;
+        }
+    }
+    query_context_->set_search_result(std::move(search_result));
+    std::chrono::high_resolution_clock::time_point scalar_end =
+        std::chrono::high_resolution_clock::now();
+    double scalar_cost =
+        std::chrono::duration<double, std::micro>(scalar_end - scalar_start)
+            .count();
+    milvus::monitor::internal_core_search_latency_iterative_filter.Observe(
+        scalar_cost / 1000);
+
+    if (!is_native_supported_) {
+        tracer::AddEvent(fmt::format("total_processed: {}, matched: {}",
+                                     need_process_rows_,
+                                     need_process_rows_ - bitset.count()));
+    }
+
+    return input_;
+}
+
+}  // namespace exec
+}  // namespace milvus
