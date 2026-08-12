@@ -24,7 +24,8 @@ services/
 ├── opensandbox/         # remote sandbox platform (subtree-imported source)
 ├── pi/                  # independent agent runtime (subtree-imported source)
 ├── sandbox-runtime/     # desktop OS sandbox (subtree-imported source)
-└── code-server/         # project-scoped VS Code web runtime source
+├── code-server/         # project-scoped VS Code web runtime source
+└── milvus/              # vector database source for the Knowledge system
 ```
 
 The upstream repositories are deliberately not root workspace packages. Each
@@ -35,6 +36,19 @@ integration boundaries.
 Its current implementation validates policies, storage paths, Pi RPC frames,
 and remote bootstrap plans while keeping privileged adapters dependency
 injected.
+
+## Milvus
+
+`services/milvus` is the official Milvus source imported into this monorepo
+with `git subtree`. It keeps its own Go/C++ build files, Helm charts, Docker
+assets, and test suites; it is not part of the root pnpm workspace and is not
+compiled into the Next.js application. The exact upstream source revision is
+recorded in `services/source-revisions.json`.
+
+The Knowledge system may later build and supervise Milvus Standalone locally or
+use the same vendored charts and release assets for an SSH-managed Distributed
+deployment. That lifecycle integration is intentionally separate from this
+source import.
 
 ## Pi agent
 
