@@ -1,0 +1,12 @@
+# OpenLink builds the OpenSandbox component images through a remote Podman
+# Machine. Keep the build context to the component sources each Dockerfile can
+# actually COPY; otherwise the complete upstream repository (including docs,
+# SDKs and git metadata) is streamed across the VM API for every image build.
+**
+!components/
+!components/internal/
+!components/internal/**
+!components/execd/
+!components/execd/**
+!components/egress/
+!components/egress/**
