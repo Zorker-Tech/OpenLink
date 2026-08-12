@@ -19,11 +19,13 @@ change later.
 
 ## Decision
 
-Track each upstream repository as a Git submodule under `services/`:
+Vendor each upstream repository into `services/` with `git subtree`, preserving
+its complete history while keeping it outside the root package workspace:
 
 - `services/pi` — agent runtime and CLI/RPC/SDK.
 - `services/opensandbox` — remote sandbox platform.
 - `services/sandbox-runtime` — local desktop OS sandbox.
+- `services/code-server` — project-scoped VS Code web runtime.
 
 Keep each upstream workspace, lockfile, scripts, and runtime requirements inside
 its directory. Exclude `services/**` from the OpenLink TypeScript project so the
@@ -40,9 +42,10 @@ such as RPC/JSONL or an internal transport.
 services/
 ├── README.md
 ├── agent-host/             # OpenLink-owned adapter/supervisor contracts
-├── pi/                     # pinned agent runtime submodule
-├── opensandbox/            # pinned remote sandbox submodule
-└── sandbox-runtime/        # pinned desktop sandbox submodule
+├── pi/                     # subtree-imported agent runtime source
+├── opensandbox/            # subtree-imported remote sandbox source
+├── sandbox-runtime/        # subtree-imported desktop sandbox source
+└── code-server/            # vendored VS Code web runtime source
 ```
 
 ## Alternatives considered
@@ -60,13 +63,15 @@ services/
 ### Positive
 
 - Each runtime can evolve its language/runtime and dependencies independently.
-- The parent repository records an exact upstream commit.
+- `services/source-revisions.json` records the exact upstream source revision
+  represented by each imported service.
 - OpenLink's browser bundle and pnpm lockfile remain unaffected.
 - Security boundaries can be designed at the service process boundary.
 
 ### Trade-offs
 
-- Cloning requires `git submodule update --init --recursive`.
+- Cloning the root repository checks out the service sources directly; no
+  nested repository initialization or network access is required.
 - Each runtime must be installed and built separately in deployments.
 - Production process supervision, credential brokering, and transport adapters
   are still required before exposing execution to untrusted user prompts.

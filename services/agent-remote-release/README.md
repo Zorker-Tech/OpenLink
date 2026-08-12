@@ -5,14 +5,14 @@ runtime. The SSH target is only a Linux/KVM host; the bundle is installed into
 the Project VM created on that host. The release builder produces a checksummed
 archive containing:
 
-- the OpenSandbox server, execd, and egress images pinned to the checked-out
-  OpenSandbox submodule;
+- the OpenSandbox server, execd, and egress images built from the vendored
+  OpenSandbox source;
 - the OpenLink Pi CLI RPC Worker image;
 - the Podman engine built from `services/linux` for the target Linux
   architecture;
 - the Project VM helper used to create and control QEMU guests.
 
-`release.json` records both upstream submodule commits, the bundle checksum,
+`release.json` records both upstream source revisions, the bundle checksum,
 the SHA-256 digest of the pinned Pi runtime manifest used by the RPC image, and
 the digest of the repository-built Podman engine.
 

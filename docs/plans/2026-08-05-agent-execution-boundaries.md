@@ -6,8 +6,8 @@
 local sandbox-runtime or a remote OpenSandbox environment without coupling the
 Next.js app to privileged execution.
 
-**Architecture:** Keep Pi, OpenSandbox, and sandbox-runtime as pinned Git
-submodules under `services/`. Add an OpenLink-owned `services/agent-host`
+**Architecture:** Keep Pi, OpenSandbox, and sandbox-runtime as vendored source
+trees under `services/` using `git subtree`. Add an OpenLink-owned `services/agent-host`
 package containing backend-neutral contracts, strict policy validation, Pi RPC
 command construction, local and remote provisioning interfaces, and storage
 layout helpers. The service remains a separate Node process and is excluded from
@@ -19,20 +19,20 @@ the host process.
 
 ---
 
-### Task 1: Add pinned upstream submodules
+### Task 1: Import upstream service history into the monorepo
 
 **Files:**
-- Create: `services/opensandbox` (Git submodule)
-- Create: `services/sandbox-runtime` (Git submodule)
+- Create: `services/opensandbox` (subtree-imported source)
+- Create: `services/sandbox-runtime` (subtree-imported source)
 - Modify: `.gitmodules`
 
 **Steps:**
 
-1. Add each repository as a submodule at a reviewed commit.
+1. Import each repository with `git subtree` at a reviewed source revision.
 2. Record the commit and license in the service documentation.
 3. Do not install dependencies or run lifecycle scripts during the vendoring
    step.
-4. Verify `git submodule status` and the submodule worktrees.
+4. Verify there are no gitlink entries or nested `.gitmodules` files.
 
 ### Task 2: Create the independent agent-host package
 

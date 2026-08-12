@@ -49,10 +49,10 @@ artifacts remain on the execution node unless a deliberate export is requested.
 
 ## Components
 
-- `services/pi`: pinned upstream Pi source and its own npm workspace.
-- `services/opensandbox`: pinned upstream OpenSandbox source. The remote target
+- `services/pi`: vendored upstream Pi source and its own npm workspace.
+- `services/opensandbox`: vendored upstream OpenSandbox source. The remote target
   runs its server/control plane; the host service uses its SDK/API.
-- `services/sandbox-runtime`: pinned local OS sandbox source. The desktop host
+- `services/sandbox-runtime`: vendored local OS sandbox source. The desktop host
   wraps Pi's child process with `SandboxManager.wrapWithSandboxArgv()`.
 - `services/agent-host`: OpenLink-owned contracts, policy compiler, backend
   selection, Pi RPC runner, SSH bootstrap plan, and storage layout.

@@ -21,9 +21,10 @@ services/
 ├── agent-worker/        # Pi Node.js SDK worker used by web and desktop
 ├── agent-rpc-worker/    # Pi CLI RPC gateway used by remote OpenSandbox
 ├── browser-host/        # browser sessions, preview proxy, Chromium/CDP runtime
-├── opensandbox/         # remote sandbox platform (submodule)
-├── pi/                  # independent agent runtime (submodule)
-└── sandbox-runtime/     # desktop OS sandbox (submodule)
+├── opensandbox/         # remote sandbox platform (subtree-imported source)
+├── pi/                  # independent agent runtime (subtree-imported source)
+├── sandbox-runtime/     # desktop OS sandbox (subtree-imported source)
+└── code-server/         # project-scoped VS Code web runtime source
 ```
 
 The upstream repositories are deliberately not root workspace packages. Each
@@ -37,7 +38,7 @@ injected.
 
 ## Pi agent
 
-`services/pi` is a pinned upstream submodule for
+`services/pi` is upstream source imported into the root monorepo for
 [`earendil-works/pi`](https://github.com/earendil-works/pi). It is intentionally
 kept independent from the OpenLink application and its Supabase/Vercel AI
 service code.
@@ -47,10 +48,9 @@ requires Node `>=22.19.0`. The root lifecycle installs and packages it through
 `scripts/sync-pi-runtime.mjs`; Pi remains isolated from the Next.js dependency
 graph even though its lifecycle is automatic.
 
-The current checkout is pinned by the parent repository's submodule entry. The
-OpenLink adapter and process-supervision contracts live in `services/agent-host`
-rather than modifying the upstream source or importing Pi into the Next.js
-bundle.
+The imported source revision is recorded in `services/source-revisions.json`.
+The OpenLink adapter and process-supervision contracts live in
+`services/agent-host` rather than importing Pi into the Next.js bundle.
 
 Pi's upstream runtime exposes local shell and filesystem tools and does not
 provide a built-in permission boundary. The service wrapper must add an explicit
@@ -59,7 +59,7 @@ user input.
 
 ## OpenSandbox
 
-`services/opensandbox` pins
+`services/opensandbox` vendors
 [`opensandbox-group/OpenSandbox`](https://github.com/opensandbox-group/OpenSandbox)
 for web and remote execution. Each Project VM runs its own OpenSandbox control
 plane against the Podman compatibility socket supplied by the Podman engine
@@ -69,7 +69,7 @@ control plane is never exposed directly to the public network.
 
 ## Anthropic sandbox-runtime
 
-`services/sandbox-runtime` pins
+`services/sandbox-runtime` vendors
 [`anthropic-experimental/sandbox-runtime`](https://github.com/anthropic-experimental/sandbox-runtime)
 for desktop execution. Its Node library wraps the Pi Node.js SDK worker with OS
 filesystem and network restrictions (`sandbox-exec` on macOS, bubblewrap on

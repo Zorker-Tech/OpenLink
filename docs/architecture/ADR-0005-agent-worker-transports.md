@@ -20,9 +20,9 @@ Use one OpenLink Agent API with three explicit transports:
 
 Agent Host owns authentication, concurrency, streaming, lifecycle, and cleanup. OpenSandbox owns workload, filesystem, resource, egress, and Credential Vault isolation. SSH owns target authentication and transport only.
 
-Both Workers consume Pi packages built from the pinned `services/pi` submodule.
+Both Workers consume Pi packages built from the vendored `services/pi` source.
 `scripts/sync-pi-runtime.mjs` invokes Pi's upstream release pipeline, records the
-submodule commit and SHA-256 digests, and supplies the resulting tarballs to
+declared upstream source revision and SHA-256 digests, and supplies the resulting tarballs to
 local and remote Docker builds. The remote release manifest binds the RPC image
 to that Pi commit and runtime-manifest digest. Registry copies of Pi are not
 used at runtime.
@@ -44,7 +44,8 @@ used at runtime.
 
 ### Neutral
 
-- Pi, OpenSandbox, and sandbox-runtime remain pinned submodules.
+- Pi, OpenSandbox, and sandbox-runtime remain vendored service trees in the
+  root monorepo; their upstream source revisions are recorded explicitly.
 - Pi runtime archives are generated build artifacts and must be synchronized
   before Worker installation or image construction.
 

@@ -37,7 +37,7 @@ backend-neutral contract and two adapters:
 
 The service owns policy compilation, path containment, credential redaction,
 Pi JSONL limits, lifecycle state, and cleanup. Upstream repositories remain
-pinned Git submodules and are never imported by the browser bundle.
+vendored service sources and are never imported by the browser bundle.
 
 Session metadata is centralized in OpenLink/Supabase. Workspace files, Pi
 session JSONL, logs, and artifacts remain on the execution node by default.

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "services": {
+    "pi": {
+      "path": "services/pi",
+      "upstream": "https://git.haokir/hydite/openlink/pi",
+      "sourceCommit": "a79b22622a4def33465a7a16b6c7040c394b76f0"
+    },
+    "opensandbox": {
+      "path": "services/opensandbox",
+      "upstream": "https://git.haokir/hydite/openlink/opensandbox",
+      "sourceCommit": "f2d110800b90c4f1160a420b5210cf658205d4b7"
+    },
+    "sandbox-runtime": {
+      "path": "services/sandbox-runtime",
+      "upstream": "https://git.haokir/hydite/openlink/sandbox-runtime",
+      "sourceCommit": "4d1a5f1bbec01ddf6f591dae9b3437cc04e56c82"
+    },
+    "code-server": {
+      "path": "services/code-server",
+      "upstream": "https://github.com/coder/code-server.git",
+      "sourceCommit": "313bf0359b4d391ba18f1fa131aad8a583bc2919"
+    }
+  }
+}

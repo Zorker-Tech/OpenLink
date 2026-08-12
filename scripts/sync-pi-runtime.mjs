@@ -4,6 +4,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, write
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { sourceRevision } from './lib/monorepo-sources.mjs'
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const piRoot = join(root, 'services/pi')
@@ -49,7 +50,9 @@ function readJson(path) {
 function currentIdentity() {
   const packageJson = readJson(join(piRoot, 'packages/coding-agent/package.json'))
   return {
-    commit: command('git', ['rev-parse', 'HEAD'], { cwd: piRoot, capture: true }).trim(),
+    // The service is vendored into the root repository. Its upstream identity
+    // is recorded explicitly instead of reading the root monorepo HEAD.
+    commit: sourceRevision('pi'),
     version: packageJson.version,
   }
 }

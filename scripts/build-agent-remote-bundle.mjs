@@ -7,6 +7,7 @@ import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { ensurePodmanBuilder, stopPodmanBuilder } from './lib/podman-builder.mjs'
 import { configureBundledPodmanRuntime } from './lib/bundled-podman-runtime.mjs'
+import { sourceRevision } from './lib/monorepo-sources.mjs'
 
 const run = promisify(execFile)
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
@@ -95,8 +96,8 @@ try {
   const remoteArchive = `${remoteRoot}/releases/${releaseId}/bundle.tar.gz`
   const checksum = join(releaseDirectory, 'bundle.sha256')
   await writeFile(checksum, `${digest}  ${remoteArchive}\n`, { mode: 0o644 })
-  const opensandboxCommit = (await run('git', ['-C', 'services/opensandbox', 'rev-parse', 'HEAD'], { cwd: root })).stdout.trim()
-  const piCommit = (await run('git', ['-C', 'services/pi', 'rev-parse', 'HEAD'], { cwd: root })).stdout.trim()
+  const opensandboxCommit = sourceRevision('opensandbox')
+  const piCommit = sourceRevision('pi')
   const podmanSha256 = createHash('sha256').update(await readFile(join(toolchainDirectory, 'podman'))).digest('hex')
   const piRuntimeManifestSha256 = createHash('sha256')
     .update(await readFile(join(root, 'packages/pi-runtime/manifest.json')))
