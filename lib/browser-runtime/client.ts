@@ -27,12 +27,15 @@ export class BrowserConnection {
   private closed = false
   private reconnectAttempt = 0
   private reconnectTimer?: number
+  private heartbeatTimer?: number
   private sequence = 0
   private statusListeners = new Set<(status: BrowserConnectionStatus) => void>()
   private eventListeners = new Set<(event: BrowserEventEnvelope) => void>()
   private latestScreencasts = new Map<string, BrowserEventEnvelope>()
   private stateListeners = new Set<(state: BrowserSessionState) => void>()
   private errorListeners = new Set<(message: string) => void>()
+  private sessionLostListeners = new Set<(reason: string) => void>()
+  private sessionLostNotified = false
   private _state: BrowserSessionState
 
   constructor(readonly descriptor: BrowserSessionConnectionDescriptor) {
@@ -52,11 +55,20 @@ export class BrowserConnection {
       this.reconnectAttempt = 0
       this.emitStatus('connected')
       socket.send(JSON.stringify({ type: 'subscribe', afterSequence: this.sequence }))
+      if (this.heartbeatTimer !== undefined) window.clearInterval(this.heartbeatTimer)
+      this.heartbeatTimer = window.setInterval(() => {
+        if (socket.readyState !== WebSocket.OPEN) return
+        socket.send(JSON.stringify({ type: 'ping', nonce: `${Date.now()}-${Math.random().toString(36).slice(2)}` }))
+      }, 15_000)
     })
     socket.addEventListener('message', (event) => this.handleMessage(event.data))
     socket.addEventListener('error', () => this.emitError('Browser connection encountered a transport error'))
     socket.addEventListener('close', (event) => {
       if (this.socket === socket) this.socket = undefined
+      if (this.heartbeatTimer !== undefined) {
+        window.clearInterval(this.heartbeatTimer)
+        this.heartbeatTimer = undefined
+      }
       if (this.closed || event.code === 1000) {
         this.emitStatus('closed')
         return
@@ -68,6 +80,8 @@ export class BrowserConnection {
   close(): void {
     this.closed = true
     if (this.reconnectTimer) window.clearTimeout(this.reconnectTimer)
+    if (this.heartbeatTimer !== undefined) window.clearInterval(this.heartbeatTimer)
+    this.heartbeatTimer = undefined
     this.socket?.close(1000, 'Client closed')
     this.socket = undefined
     this.emitStatus('closed')
@@ -115,6 +129,11 @@ export class BrowserConnection {
     return () => this.errorListeners.delete(listener)
   }
 
+  onSessionLost(listener: (reason: string) => void): () => void {
+    this.sessionLostListeners.add(listener)
+    return () => this.sessionLostListeners.delete(listener)
+  }
+
   private send(message: unknown): void {
     if (this.socket?.readyState !== WebSocket.OPEN) throw new Error('Browser connection is not ready')
     this.socket.send(JSON.stringify(message))
@@ -131,10 +150,24 @@ export class BrowserConnection {
     }
     if (message.type === 'error') {
       this.emitError(message.error.message)
+      if (message.error.code === 'SESSION_NOT_FOUND' || message.error.code === 'TOKEN_EXPIRED') {
+        this.emitSessionLost(message.error.message)
+      }
       return
     }
     if (message.type !== 'event') return
-    if (message.payload.sessionId !== this._state.id || message.payload.sequence <= this.sequence) return
+    if (message.payload.sessionId !== this._state.id) return
+    // The server may replay the latest screencast after the snapshot. Its
+    // sequence is older than the snapshot cursor by design, but the frame is
+    // still the authoritative current visual state and must be delivered to a
+    // surface that mounted after Chromium emitted it.
+    if (message.payload.event.type === 'page.screencast') {
+      this.sequence = Math.max(this.sequence, message.payload.sequence)
+      this.latestScreencasts.set(message.payload.event.pageId, message.payload)
+      for (const listener of this.eventListeners) listener(message.payload)
+      return
+    }
+    if (message.payload.sequence <= this.sequence) return
     this.sequence = message.payload.sequence
     if (message.payload.event.type === 'session.state') this.updateState(message.payload.event.state)
     if (message.payload.event.type === 'page.state') {
@@ -147,15 +180,21 @@ export class BrowserConnection {
       this.latestScreencasts.delete(pageId)
       this.updateState({ ...this._state, pages: this._state.pages.filter((page) => page.id !== pageId) })
     }
-    if (message.payload.event.type === 'page.screencast') {
-      this.latestScreencasts.set(message.payload.event.pageId, message.payload)
-    }
     for (const listener of this.eventListeners) listener(message.payload)
   }
 
   private updateState(state: BrowserSessionState): void {
     this._state = state
     for (const listener of this.stateListeners) listener(state)
+    if (state.status === 'closed' || state.status === 'failed') {
+      this.emitSessionLost(state.error?.message || `Browser session ${state.status}`)
+    }
+  }
+
+  private emitSessionLost(reason: string): void {
+    if (this.sessionLostNotified) return
+    this.sessionLostNotified = true
+    for (const listener of this.sessionLostListeners) listener(reason)
   }
 
   private scheduleReconnect(): void {
@@ -163,6 +202,7 @@ export class BrowserConnection {
     if (this.reconnectAttempt >= 8) {
       this.emitStatus('failed')
       this.emitError('Browser connection could not be restored')
+      this.emitSessionLost('Browser connection could not be restored')
       return
     }
     this.reconnectAttempt += 1

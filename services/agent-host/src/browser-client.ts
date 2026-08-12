@@ -11,6 +11,11 @@ export interface BrowserHostClientOptions {
 export interface BrowserAgentSession {
   state: BrowserSessionState
   controlToken: string
+  connection: {
+    eventsUrl: string
+    previewUrl?: string
+    bridgeNonce?: string
+  }
 }
 
 export class BrowserHostClient {
@@ -38,31 +43,60 @@ export class BrowserHostClient {
     allowLoopback?: boolean
     allowPrivateNetworks?: boolean
   }): Promise<BrowserAgentSession> {
+    return this.createSession({
+      ownerId: input.ownerId,
+      workspaceId: input.workspaceId,
+      projectId: input.projectId,
+      surface: 'chromium-stream',
+      viewport: input.viewport,
+      chromium: {
+        initialUrl: input.initialUrl ?? 'about:blank',
+        headless: true,
+        networkPolicy: {
+          allowedDomains: input.allowedDomains ?? [],
+          deniedDomains: input.deniedDomains ?? [],
+          allowLoopback: input.allowLoopback ?? false,
+          allowPrivateNetworks: input.allowPrivateNetworks ?? false,
+        },
+      },
+    })
+  }
+
+  async createSession(input: {
+    ownerId: string
+    workspaceId: string
+    projectId: string
+    profileKey?: string
+    surface: 'native-preview' | 'chromium-stream'
+    viewport?: BrowserSessionState['viewport']
+    preview?: Record<string, unknown>
+    chromium?: Record<string, unknown>
+  }): Promise<BrowserAgentSession> {
     const response = await this.serviceRequest('/v1/browser/sessions', {
       method: 'POST',
       body: JSON.stringify({
         ownerId: input.ownerId,
         workspaceId: input.workspaceId,
         projectId: input.projectId,
-        surface: 'chromium-stream',
+        ...(input.profileKey ? { profileKey: input.profileKey } : {}),
+        surface: input.surface,
         viewport: input.viewport,
-        chromium: {
-          initialUrl: input.initialUrl ?? 'about:blank',
-          headless: true,
-          networkPolicy: {
-            allowedDomains: input.allowedDomains ?? [],
-            deniedDomains: input.deniedDomains ?? [],
-            allowLoopback: input.allowLoopback ?? false,
-            allowPrivateNetworks: input.allowPrivateNetworks ?? false,
-          },
-        },
+        ...(input.surface === 'native-preview' ? { preview: input.preview } : { chromium: input.chromium }),
       }),
     })
-    const payload = await response.json() as { session?: BrowserSessionState; connection?: { controlToken?: string }; error?: { message?: string } }
-    if (!response.ok || !payload.session || !payload.connection?.controlToken) {
+    const payload = await response.json() as { session?: BrowserSessionState; connection?: { eventsUrl?: string; previewUrl?: string; bridgeNonce?: string; controlToken?: string }; error?: { message?: string } }
+    if (!response.ok || !payload.session || !payload.connection?.controlToken || !payload.connection.eventsUrl) {
       throw new AgentHostError('BROWSER_SESSION_FAILED', payload.error?.message ?? `Browser Host returned ${response.status}`)
     }
-    return { state: payload.session, controlToken: payload.connection.controlToken }
+    return {
+      state: payload.session,
+      controlToken: payload.connection.controlToken,
+      connection: {
+        eventsUrl: payload.connection.eventsUrl,
+        previewUrl: payload.connection.previewUrl,
+        bridgeNonce: payload.connection.bridgeNonce,
+      },
+    }
   }
 
   async perform(session: BrowserAgentSession, action: BrowserAction): Promise<BrowserActionResult> {
@@ -85,6 +119,14 @@ export class BrowserHostClient {
   async close(sessionId: string): Promise<void> {
     const response = await this.serviceRequest(`/v1/browser/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' })
     if (!response.ok && response.status !== 404) throw new AgentHostError('BROWSER_SESSION_FAILED', `Browser Host returned ${response.status}`)
+  }
+
+  async get(sessionId: string): Promise<BrowserSessionState | null> {
+    const response = await this.serviceRequest(`/v1/browser/sessions/${encodeURIComponent(sessionId)}`, { method: 'GET' })
+    if (response.status === 404) return null
+    const payload = await response.json() as { session?: BrowserSessionState; error?: { message?: string } }
+    if (!response.ok || !payload.session) throw new AgentHostError('BROWSER_SESSION_FAILED', payload.error?.message ?? `Browser Host returned ${response.status}`)
+    return payload.session
   }
 
   private serviceRequest(path: string, init: RequestInit): Promise<Response> {

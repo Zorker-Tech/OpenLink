@@ -11,12 +11,14 @@ import {
   Activity,
   ArrowLeft,
   Blocks,
+  BookOpen,
   Bot,
   CreditCard,
   KeyRound,
   Settings2,
   SlidersHorizontal,
   Users,
+  Zap,
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -45,6 +47,8 @@ const sections = [
     title: '工作区',
     items: [
       { href: null, label: '通用', icon: Settings2 },
+      { href: null, label: 'Memories', icon: BookOpen },
+      { href: '/settings/skills', label: 'Skills', icon: Zap },
       { href: null, label: '集成', icon: Blocks },
       { href: null, label: '账单', icon: CreditCard },
       { href: null, label: '成员', icon: Users },
@@ -123,13 +127,14 @@ export function SettingsShell({ activeWorkspace, avatarUrl, children, email, nic
   ), [activeWorkspace, avatarUrl, email, nickname, organizations, pathname, personalWorkspace, themeMode])
 
   const providerSettings = pathname.startsWith('/settings/ai-providers')
+  const skillSettings = pathname.startsWith('/settings/skills')
 
   return (
     <OpenLinkThemeProvider theme={theme}>
       <div className="openlink-app-shell flex h-dvh min-h-[520px] overflow-hidden bg-[var(--app-background)]" data-theme={theme}>
         <AppSidebarFrame collapsed={collapsed} mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)}>{navigation}</AppSidebarFrame>
         <main className="relative min-w-0 flex-1 overflow-hidden">
-          <button aria-label="打开设置导航" className={`absolute left-3 top-[10px] z-30 flex size-8 items-center justify-center rounded-md border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-muted)] shadow-sm transition-[left,opacity,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${collapsed ? `${providerSettings ? 'md:left-[286px]' : 'md:left-3'} md:translate-x-0 md:opacity-100` : 'md:pointer-events-none md:translate-x-[-8px] md:opacity-0'}`} onClick={() => { if (window.innerWidth >= 768) setCollapsed(false); else setMobileOpen(true) }} type="button"><img alt="" className="app-control-icon size-4 rotate-180" src="/openlink/app/sidebar-toggle.svg" /></button>
+          <button aria-label="打开设置导航" className={`absolute left-3 top-[10px] z-30 flex size-8 items-center justify-center rounded-md border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-muted)] shadow-sm transition-[left,opacity,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${collapsed ? `${skillSettings ? 'md:left-[294px]' : providerSettings ? 'md:left-[286px]' : 'md:left-3'} md:translate-x-0 md:opacity-100` : 'md:pointer-events-none md:translate-x-[-8px] md:opacity-0'}`} onClick={() => { if (window.innerWidth >= 768) setCollapsed(false); else setMobileOpen(true) }} type="button"><img alt="" className="app-control-icon size-4 rotate-180" src="/openlink/app/sidebar-toggle.svg" /></button>
           {children}
         </main>
         <OrganizationDialog onOpenChange={setOrganizationDialogOpen} open={organizationDialogOpen} />

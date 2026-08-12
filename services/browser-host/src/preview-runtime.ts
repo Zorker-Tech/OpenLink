@@ -11,6 +11,8 @@ import { SshLocalForward, type SshLocalForwardSpec } from './ssh-tunnel.js'
 
 export interface NativePreviewRuntimeOptions {
   targetUrl?: string
+  /** Trusted internal upstream headers (for the OpenSandbox Project proxy). */
+  targetHeaders?: Record<string, string>
   sshForward?: SshLocalForwardSpec
   publicBaseUrl: string
   parentOrigins: string[]
@@ -29,8 +31,8 @@ function assertLoopbackTarget(raw: string): URL {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     throw new BrowserHostError('INVALID_PREVIEW_TARGET', 'Preview target must use HTTP or HTTPS', 400)
   }
-  if (!['127.0.0.1', 'localhost', '::1', '[::1]'].includes(url.hostname)) {
-    throw new BrowserHostError('INVALID_PREVIEW_TARGET', 'Preview target must be bound to loopback', 400)
+  if (!['127.0.0.1', 'localhost', '::1', '[::1]', 'host.containers.internal'].includes(url.hostname)) {
+    throw new BrowserHostError('INVALID_PREVIEW_TARGET', 'Preview target must be a Project-local runtime', 400)
   }
   if (url.username || url.password) throw new BrowserHostError('INVALID_PREVIEW_TARGET', 'Preview target credentials are not allowed in the URL', 400)
   return url
@@ -51,6 +53,10 @@ export class NativePreviewRuntime implements BrowserRuntimeSession {
   get target(): URL {
     if (!this._target) throw new BrowserHostError('PREVIEW_NOT_READY', 'Preview target is not ready', 409, true)
     return this._target
+  }
+
+  get targetHeaders(): Record<string, string> {
+    return this.options.targetHeaders ?? {}
   }
 
   get sessionId(): string {

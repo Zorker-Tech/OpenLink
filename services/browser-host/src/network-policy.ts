@@ -38,15 +38,58 @@ function isPrivateIpv4(address: string): boolean {
 
 function isPrivateIpv6(address: string): boolean {
   const normalized = address.toLowerCase().split('%')[0]
-  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(normalized)
-  if (mapped) return isPrivateIpv4(mapped[1])
-  return normalized === '::1' || normalized === '::' || normalized.startsWith('fc') || normalized.startsWith('fd')
-    || normalized.startsWith('fe8') || normalized.startsWith('fe9') || normalized.startsWith('fea') || normalized.startsWith('feb')
-    || normalized.startsWith('ff') || normalized.startsWith('2001:db8:')
+  const hextets = parseIpv6(normalized)
+  if (!hextets) return true
+  const first = hextets[0]!
+  const unspecified = hextets.every((part) => part === 0)
+  const loopback = hextets.slice(0, 7).every((part) => part === 0) && hextets[7] === 1
+  const mapped = hextets.slice(0, 5).every((part) => part === 0) && hextets[5] === 0xffff
+  const ipv4Compatible = hextets.slice(0, 6).every((part) => part === 0)
+  return mapped
+    ? isPrivateIpv4([
+        (hextets[6]! >>> 8) & 0xff,
+        hextets[6]! & 0xff,
+        (hextets[7]! >>> 8) & 0xff,
+        hextets[7]! & 0xff,
+      ].join('.'))
+    : unspecified || loopback || ipv4Compatible
+      || (first & 0xfe00) === 0xfc00
+      || (first & 0xffc0) === 0xfe80
+      || (first & 0xff00) === 0xff00
+      || (first === 0x2001 && hextets[1] === 0x0db8)
 }
 
 function isLoopbackAddress(address: string): boolean {
-  return address === '::1' || address.startsWith('127.')
+  if (address.startsWith('127.')) return true
+  const hextets = parseIpv6(address.toLowerCase().split('%')[0])
+  if (!hextets) return false
+  if (hextets.slice(0, 7).every((part) => part === 0) && hextets[7] === 1) return true
+  return hextets.slice(0, 5).every((part) => part === 0)
+    && hextets[5] === 0xffff
+    && ((hextets[6]! >>> 8) & 0xff) === 127
+}
+
+function parseIpv6(value: string): number[] | null {
+  if (value.includes('.')) {
+    const lastColon = value.lastIndexOf(':')
+    if (lastColon < 0) return null
+    const parts = value.slice(lastColon + 1).split('.').map(Number)
+    if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return null
+    value = `${value.slice(0, lastColon)}:${((parts[0]! << 8) | parts[1]!).toString(16)}:${((parts[2]! << 8) | parts[3]!).toString(16)}`
+  }
+  const halves = value.split('::')
+  if (halves.length > 2) return null
+  const left = halves[0] ? halves[0].split(':') : []
+  const right = halves.length === 2 && halves[1] ? halves[1].split(':') : []
+  if ([...left, ...right].some((part) => !/^[0-9a-f]{1,4}$/.test(part))) return null
+  if (halves.length === 1 && left.length !== 8) return null
+  if (halves.length === 2 && left.length + right.length >= 8) return null
+  const missing = 8 - left.length - right.length
+  return [
+    ...left.map((part) => Number.parseInt(part, 16)),
+    ...Array.from({ length: missing }, () => 0),
+    ...right.map((part) => Number.parseInt(part, 16)),
+  ]
 }
 
 export class BrowserNetworkGuard {
@@ -64,7 +107,11 @@ export class BrowserNetworkGuard {
     if (!['http:', 'https:', 'ws:', 'wss:'].includes(url.protocol)) {
       throw new BrowserHostError('NETWORK_SCHEME_DENIED', `Browser URL scheme is not allowed: ${url.protocol}`, 403)
     }
-    const hostname = url.hostname.toLowerCase().replace(/\.$/, '')
+    // Node's URL parser keeps brackets on IPv6 literals in `hostname`.
+    // Remove them before IP classification; otherwise a literal such as
+    // [::ffff:127.0.0.1] is treated as a DNS name and can bypass the SSRF
+    // policy (or simply fail with a misleading DNS error).
+    const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '')
     if (this.policy.deniedDomains.some((pattern) => matchDomain(hostname, pattern))) {
       throw new BrowserHostError('NETWORK_DOMAIN_DENIED', `Browser domain is denied: ${hostname}`, 403)
     }

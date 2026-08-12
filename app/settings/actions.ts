@@ -6,6 +6,8 @@ import {
   saveAiProviderConfiguration,
 } from '@/lib/ai-provider-configurations.server'
 import { getAiProvider } from '@/lib/ai-providers'
+import { ensureDraftProject } from '@/lib/projects'
+import { getOwnedWorkspace } from '@/lib/workspaces'
 import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
@@ -121,6 +123,12 @@ export async function checkAiProviderConfigurationAction(providerId: string, mod
     const { supabase, user } = await authenticatedClient()
     const runtimeConfiguration = await resolveAgentProviderRuntimeConfiguration(supabase, user.id, parsed.data)
     if (!runtimeConfiguration) return { ok: false as const, error: 'PROVIDER_NOT_ENABLED' }
+    // Provider checks are real agent workloads too. Route them through the
+    // user's durable Draft project so they provision inside that project's VM
+    // instead of falling back to the old process-global OpenSandbox.
+    const workspace = await getOwnedWorkspace(supabase, user.id)
+    if (!workspace) return { ok: false as const, error: 'CHAT_WORKSPACE_NOT_FOUND' }
+    const draft = await ensureDraftProject(supabase, user.id, workspace)
     const baseUrl = process.env.OPENLINK_AGENT_HOST_URL?.replace(/\/$/, '')
     const token = process.env.OPENLINK_AGENT_API_TOKEN
     if (!baseUrl || !token) return { ok: false as const, error: 'AGENT_HOST_NOT_CONFIGURED' }
@@ -130,6 +138,7 @@ export async function checkAiProviderConfigurationAction(providerId: string, mod
       body: JSON.stringify({
         userId: user.id,
         workspaceId: 'provider-settings',
+        projectId: draft.id,
         runtimeConfiguration,
       }),
       cache: 'no-store',

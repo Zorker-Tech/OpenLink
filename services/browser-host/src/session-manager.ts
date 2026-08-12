@@ -38,6 +38,11 @@ export interface CreateManagedSessionInput {
   projectId: string
   surface: BrowserSurfaceKind
   viewport?: BrowserSessionState['viewport']
+  /**
+   * A runtime-owned resource identity. Chromium uses this for its persistent
+   * profile directory, which must never be launched by two processes at once.
+   */
+  reuseKey?: string
   runtimeFactory: BrowserRuntimeFactory
 }
 
@@ -46,8 +51,11 @@ interface ManagedSession {
   runtime: BrowserRuntimeSession
   sequence: number
   events: BrowserEventEnvelope[]
+  latestScreencasts: Map<string, BrowserEventEnvelope>
   emitter: EventEmitter
   cleanupTimer: NodeJS.Timeout
+  closePromise?: Promise<void>
+  reuseKey?: string
 }
 
 const MAX_REPLAY_EVENTS = 512
@@ -62,6 +70,10 @@ function nowIso(now: () => number): string {
 
 export class BrowserSessionManager {
   private readonly sessions = new Map<string, ManagedSession>()
+  /** Serializes create/close operations for a persistent runtime resource. */
+  private readonly resourceLocks = new Map<string, Promise<void>>()
+  /** Reservations close the maxSessions race while runtime.start() awaits. */
+  private creating = 0
 
   constructor(
     private readonly options: {
@@ -77,10 +89,28 @@ export class BrowserSessionManager {
   }
 
   async create(input: CreateManagedSessionInput): Promise<BrowserSessionState> {
-    if (this.sessions.size >= this.options.maxSessions) {
+    if (!input.reuseKey) return this.createUnlocked(input)
+    return this.withResourceLock(input.reuseKey, async () => {
+      // A duplicate create can be caused by an events-socket reconnect while
+      // the previous view is still alive. Returning the existing session is
+      // safe (new capability tokens are issued by BrowserHostServer) and,
+      // crucially, avoids a second launchPersistentContext(profilePath).
+      const existing = [...this.sessions.values()].find((candidate) =>
+        candidate.reuseKey === input.reuseKey
+        && candidate.state.surface === input.surface
+        && (candidate.state.status === 'starting' || candidate.state.status === 'ready'),
+      )
+      if (existing) return existing.state
+      return this.createUnlocked(input)
+    })
+  }
+
+  private async createUnlocked(input: CreateManagedSessionInput): Promise<BrowserSessionState> {
+    if (!input.ownerId || !input.workspaceId) throw new BrowserHostError('INVALID_SESSION', 'ownerId and workspaceId are required', 400)
+    if (this.sessions.size + this.creating >= this.options.maxSessions) {
       throw new BrowserHostError('SESSION_LIMIT_REACHED', 'Browser session limit reached', 429, true)
     }
-    if (!input.ownerId || !input.workspaceId) throw new BrowserHostError('INVALID_SESSION', 'ownerId and workspaceId are required', 400)
+    this.creating += 1
 
     const id = createSessionId()
     const createdAt = nowIso(this.now)
@@ -126,14 +156,22 @@ export class BrowserSessionManager {
       },
       getState: () => this.require(id).state,
     }
-    const runtime = input.runtimeFactory(context)
+    let runtime: BrowserRuntimeSession
+    try {
+      runtime = input.runtimeFactory(context)
+    } catch (error) {
+      this.creating -= 1
+      throw error
+    }
     managed = {
       state,
       runtime,
       sequence: 0,
       events: [],
+      latestScreencasts: new Map(),
       emitter,
-      cleanupTimer: setTimeout(() => void this.close(id), this.options.sessionTtlMs),
+      cleanupTimer: setTimeout(() => { void this.close(id).catch(() => undefined) }, this.options.sessionTtlMs),
+      reuseKey: input.reuseKey,
     }
     managed.cleanupTimer.unref()
     this.sessions.set(id, managed)
@@ -157,8 +195,24 @@ export class BrowserSessionManager {
         error: errorPayload,
       }
       this.emit(id, { type: 'runtime.error', error: errorPayload })
-      await runtime.close().catch(() => undefined)
+      try {
+        await runtime.close()
+        clearTimeout(managed.cleanupTimer)
+        managed.emitter.removeAllListeners()
+        this.sessions.delete(id)
+      } catch (cleanupError) {
+        // Startup failures can happen after Chromium/SSH has allocated
+        // resources. Retain the failed entry and let the normal close/reaper
+        // path retry cleanup instead of releasing the capacity slot while the
+        // runtime is still alive.
+        managed.closePromise = undefined
+        managed.cleanupTimer = setTimeout(() => { void this.close(id).catch(() => undefined) }, this.options.sessionTtlMs)
+        managed.cleanupTimer.unref()
+        console.error(`OpenLink browser startup cleanup failed for ${id}: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`)
+      }
       throw failure
+    } finally {
+      this.creating -= 1
     }
   }
 
@@ -175,9 +229,36 @@ export class BrowserSessionManager {
       .map((session) => session.state)
   }
 
+  /**
+   * Keep a session alive while an authenticated events socket is open. The
+   * timer remains idle-cleanup based: once the client disconnects and stops
+   * sending pings, the normal TTL closes the browser and releases Chromium.
+   */
+  touch(sessionId: string): void {
+    const session = this.require(sessionId)
+    if (session.state.status !== 'ready') throw new BrowserHostError('SESSION_NOT_READY', 'Browser session is not ready', 409, true)
+    clearTimeout(session.cleanupTimer)
+    session.state = {
+      ...session.state,
+      expiresAt: new Date(this.now() + this.options.sessionTtlMs).toISOString(),
+      updatedAt: nowIso(this.now),
+    }
+    session.cleanupTimer = setTimeout(() => { void this.close(sessionId).catch(() => undefined) }, this.options.sessionTtlMs)
+    session.cleanupTimer.unref()
+    // The Agent Host gateway tracks the Browser Host expiry from session.state
+    // events. Emit the refreshed lease so a long-lived WebSocket heartbeat
+    // cannot keep Chromium alive while the gateway binding expires at the
+    // original TTL and loses the agent capability on reconnect.
+    this.emit(sessionId, { type: 'session.state', state: session.state })
+  }
+
   async perform(envelope: BrowserActionEnvelope): Promise<BrowserActionResult> {
     const session = this.require(envelope.sessionId)
     if (session.state.status !== 'ready') throw new BrowserHostError('SESSION_NOT_READY', 'Browser session is not ready', 409, true)
+    // Agent actions are also activity. Without touching the session here, a
+    // long-running automation with no human WebSocket pings can expire at the
+    // fixed browser TTL while Chromium is still actively being controlled.
+    this.touch(envelope.sessionId)
 
     if (envelope.action.type === 'control.acquire') {
       if (envelope.action.owner !== envelope.actor) throw new BrowserHostError('CONTROL_ACTOR_MISMATCH', 'Control owner must match the action actor', 403)
@@ -222,6 +303,11 @@ export class BrowserSessionManager {
     return this.require(sessionId).events.filter((event) => event.sequence > afterSequence)
   }
 
+  latestScreencasts(sessionId: string): BrowserEventEnvelope[] {
+    return [...this.require(sessionId).latestScreencasts.values()]
+      .sort((left, right) => left.sequence - right.sequence)
+  }
+
   resolveBridgeResult(sessionId: string, commandId: string, result: BrowserActionResult): void {
     const runtime = this.require(sessionId).runtime
     if (!runtime.resolveBridgeResult) throw new BrowserHostError('BRIDGE_NOT_AVAILABLE', 'Session does not accept bridge results', 409)
@@ -231,6 +317,26 @@ export class BrowserSessionManager {
   async close(sessionId: string): Promise<void> {
     const session = this.sessions.get(sessionId)
     if (!session) return
+    if (session.closePromise) return session.closePromise
+    const closePromise = session.reuseKey
+      ? this.withResourceLock(session.reuseKey, () => this.closeManaged(sessionId, session))
+      : this.closeManaged(sessionId, session)
+    const trackedPromise = closePromise.catch((error) => {
+      // Keep a failed close in the manager so the caller/reaper can retry the
+      // actual runtime cleanup. Deleting it here would make the API look
+      // complete while Chromium/SSH resources could still be alive.
+      if (this.sessions.get(sessionId) === session) {
+        session.closePromise = undefined
+        session.cleanupTimer = setTimeout(() => { void this.close(sessionId).catch(() => undefined) }, this.options.sessionTtlMs)
+        session.cleanupTimer.unref()
+      }
+      throw error
+    })
+    session.closePromise = trackedPromise
+    return trackedPromise
+  }
+
+  private async closeManaged(sessionId: string, session: ManagedSession): Promise<void> {
     clearTimeout(session.cleanupTimer)
     session.state = { ...session.state, status: 'closing', updatedAt: nowIso(this.now) }
     this.emit(sessionId, { type: 'session.state', state: session.state })
@@ -238,14 +344,38 @@ export class BrowserSessionManager {
       await session.runtime.close()
       session.state = { ...session.state, status: 'closed', updatedAt: nowIso(this.now) }
       this.emit(sessionId, { type: 'session.state', state: session.state })
-    } finally {
       session.emitter.removeAllListeners()
       this.sessions.delete(sessionId)
+    } catch (error) {
+      const failure = toBrowserHostError(error)
+      const errorPayload = { code: failure.code, message: failure.message, recoverable: failure.recoverable }
+      session.state = { ...session.state, status: 'failed', updatedAt: nowIso(this.now), error: errorPayload }
+      this.emit(sessionId, { type: 'runtime.error', error: errorPayload })
+      throw failure
+    }
+  }
+
+  private async withResourceLock<T>(key: string, operation: () => Promise<T>): Promise<T> {
+    const previous = this.resourceLocks.get(key) ?? Promise.resolve()
+    let release!: () => void
+    const current = new Promise<void>((resolveRelease) => { release = resolveRelease })
+    const queued = previous.then(() => current)
+    this.resourceLocks.set(key, queued)
+    try {
+      await previous
+      return await operation()
+    } finally {
+      release()
+      if (this.resourceLocks.get(key) === queued) this.resourceLocks.delete(key)
     }
   }
 
   async closeAll(): Promise<void> {
-    await Promise.all([...this.sessions.keys()].map((id) => this.close(id)))
+    const results = await Promise.allSettled([...this.sessions.keys()].map((id) => this.close(id)))
+    const failures = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+    if (failures.length) {
+      throw new AggregateError(failures.map((failure) => failure.reason), 'One or more Browser sessions failed to close')
+    }
   }
 
   private require(sessionId: string): ManagedSession {
@@ -264,6 +394,8 @@ export class BrowserSessionManager {
       event,
     }
     session.events.push(envelope)
+    if (event.type === 'page.screencast') session.latestScreencasts.set(event.pageId, envelope)
+    if (event.type === 'page.closed') session.latestScreencasts.delete(event.pageId)
     if (session.events.length > MAX_REPLAY_EVENTS) session.events.splice(0, session.events.length - MAX_REPLAY_EVENTS)
     session.emitter.emit('event', envelope)
     return envelope

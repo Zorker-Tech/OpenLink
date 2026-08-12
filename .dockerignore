@@ -9,3 +9,12 @@
 !services/agent-rpc-worker/package-lock.json
 !services/agent-rpc-worker/dist/
 !services/agent-rpc-worker/dist/**
+!services/agent-browser-extension/
+!services/agent-browser-extension/openlink-browser.ts
+!services/browser-host/package.json
+!services/browser-host/package-lock.json
+!services/browser-host/dist/
+!services/browser-host/dist/**
+!packages/browser-protocol/package.json
+!packages/browser-protocol/dist/
+!packages/browser-protocol/dist/**

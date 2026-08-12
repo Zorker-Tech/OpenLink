@@ -6,7 +6,11 @@ export interface AgentFileChange {
   path: string
   additions?: number
   deletions?: number
+  /** A bounded Git patch captured inside the Project VM. */
+  patch?: string
 }
+
+export type AgentFileEditOperation = 'write' | 'edit'
 
 interface AgentEventBase {
   version: typeof AGENT_EVENT_VERSION
@@ -40,7 +44,11 @@ export type OpenLinkAgentEvent =
   | ScopedAgentEvent<{ type: 'command.started'; commandId: string; command: string }>
   | ScopedAgentEvent<{ type: 'command.output'; commandId: string; output: string }>
   | ScopedAgentEvent<{ type: 'command.completed'; commandId: string; output?: string; exitCode?: number }>
-  | ScopedAgentEvent<{ type: 'file.changed'; changeId: string; label: string; additions?: number; deletions?: number; files?: Array<string | AgentFileChange> }>
+  | ScopedAgentEvent<{ type: 'file.editing.started'; editId: string; path: string; operation: AgentFileEditOperation; language?: string; content?: string }>
+  | ScopedAgentEvent<{ type: 'file.editing.updated'; editId: string; path: string; operation: AgentFileEditOperation; language?: string; content?: string }>
+  | ScopedAgentEvent<{ type: 'file.editing.completed'; editId: string; path: string; operation: AgentFileEditOperation; language?: string; content?: string }>
+  | ScopedAgentEvent<{ type: 'file.editing.failed'; editId: string; path: string; operation: AgentFileEditOperation; language?: string; error: string; content?: string }>
+  | ScopedAgentEvent<{ type: 'file.changed'; changeId: string; label: string; additions?: number; deletions?: number; files?: Array<string | AgentFileChange>; /** Full working-tree snapshot rather than tool-argument inference. */ snapshot?: boolean; baseCommit?: string }>
   | (AgentEventBase & { type: 'task.updated'; taskId: string; label: string; status: 'pending' | 'active' | 'completed' | 'failed'; detail?: string })
   | (AgentEventBase & { type: 'status.updated'; statusId: string; label: string; status: 'active' | 'completed' | 'failed'; detail?: string })
   | (AgentEventBase & { type: 'confirmation.requested'; confirmationId: string; title: string; message?: string; options?: string[]; inputKind?: 'confirm' | 'select' | 'input' | 'editor' })

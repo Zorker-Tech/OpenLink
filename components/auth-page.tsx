@@ -13,6 +13,7 @@ type OAuthProvider = 'google' | 'github'
 
 interface AuthPageProps {
   mode: AuthMode
+  localRuntime?: boolean
 }
 
 const providers = [
@@ -24,8 +25,9 @@ function safeNextPath(value: string | null, fallback = '/') {
   return value && value.startsWith('/') && !value.startsWith('//') ? value : fallback
 }
 
-export function AuthPage({ mode }: AuthPageProps) {
+export function AuthPage({ mode, localRuntime = false }: AuthPageProps) {
   const isRegister = mode === 'register'
+  const isLocalRuntime = localRuntime
   const alternateBaseHref = isRegister ? '/login' : '/register'
   const alternateLabel = isRegister ? 'Sign In' : 'Sign Up'
   const router = useRouter()
@@ -48,8 +50,28 @@ export function AuthPage({ mode }: AuthPageProps) {
       setErrorMessage('We could not complete sign in. Please try again.')
     } else if (error === 'auth_confirm') {
       setErrorMessage('This confirmation link is invalid or has expired.')
+    } else if (params.get('sso')) {
+      setStatusMessage('No active Zorker session was found. Sign in below to continue.')
     }
   }, [isRegister])
+
+  const shareSessionThenContinue = () => {
+    if (isLocalRuntime) {
+      router.replace(nextPath)
+      router.refresh()
+      return
+    }
+    const zorkerOrigin = process.env.NEXT_PUBLIC_ZORKER_APP_URL
+    if (!zorkerOrigin) {
+      router.replace(nextPath)
+      router.refresh()
+      return
+    }
+
+    const receiver = new URL('/auth/sso/receive', zorkerOrigin)
+    receiver.searchParams.set('continue_to', new URL(nextPath, window.location.origin).toString())
+    window.location.assign(receiver.toString())
+  }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -69,23 +91,21 @@ export function AuthPage({ mode }: AuthPageProps) {
           email,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`,
+            emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}${isLocalRuntime ? '' : '&share=1'}`,
           },
         })
 
         if (error) throw error
 
         if (data.session) {
-          router.replace(nextPath)
-          router.refresh()
+          shareSessionThenContinue()
         } else {
           setStatusMessage('Check your email to confirm your account.')
         }
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
-        router.replace(nextPath)
-        router.refresh()
+        shareSessionThenContinue()
       }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Unable to authenticate. Please try again.')
@@ -103,7 +123,7 @@ export function AuthPage({ mode }: AuthPageProps) {
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`,
+          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}${isLocalRuntime ? '' : '&share=1'}`,
         },
       })
       if (error) throw error
@@ -144,7 +164,7 @@ export function AuthPage({ mode }: AuthPageProps) {
         </div>
 
         <div className="flex w-80 flex-col items-start gap-4">
-          <form className="flex w-full flex-col gap-3" onSubmit={handleSubmit}>
+          <form className="flex w-full flex-col gap-3" method="post" onSubmit={handleSubmit}>
             <Input
               aria-label="Email address"
               autoComplete="email"

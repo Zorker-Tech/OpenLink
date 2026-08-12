@@ -22,11 +22,13 @@ interface CreateSessionBody {
   ownerId: string
   workspaceId: string
   projectId: string
+  profileKey?: string
   surface: 'native-preview' | 'chromium-stream'
   viewport?: unknown
   preview?: Omit<NativePreviewRuntimeOptions, 'publicBaseUrl' | 'parentOrigins'>
   chromium?: {
     initialUrl?: string
+    initialRequestHeaders?: Record<string, string>
     headless?: boolean
     preserveProfile?: boolean
     networkPolicy?: {
@@ -74,6 +76,7 @@ function isCreateSessionBody(value: unknown): value is CreateSessionBody {
   return typeof body.ownerId === 'string' && body.ownerId.length > 0 && body.ownerId.length <= 256
     && typeof body.workspaceId === 'string' && body.workspaceId.length > 0 && body.workspaceId.length <= 256
     && typeof body.projectId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.projectId)
+    && (body.profileKey === undefined || /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(body.profileKey))
     && (body.surface === 'native-preview' || body.surface === 'chromium-stream')
 }
 
@@ -122,12 +125,21 @@ export class BrowserHostServer {
 
   async close(): Promise<void> {
     for (const client of this.webSockets.clients) client.terminate()
-    await this.manager.closeAll()
-    this.previews.clear()
-    this.previewProxy.close()
-    this.server.closeIdleConnections()
-    this.server.closeAllConnections()
-    await new Promise<void>((resolve) => this.server.close(() => resolve()))
+    let failure: unknown
+    try {
+      await this.manager.closeAll()
+    } catch (error) {
+      failure = error
+    } finally {
+      // A runtime may reject during close, but its preview tunnel and HTTP
+      // listener still must be dismantled before the process exits.
+      this.previews.clear()
+      this.previewProxy.close()
+      this.server.closeIdleConnections()
+      this.server.closeAllConnections()
+      await new Promise<void>((resolve) => this.server.close(() => resolve()))
+    }
+    if (failure) throw failure
   }
 
   private async handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
@@ -178,6 +190,22 @@ export class BrowserHostServer {
         return
       }
 
+      const capabilityMatch = /^\/v1\/browser\/sessions\/([^/]+)\/capability$/.exec(url.pathname)
+      if (capabilityMatch && request.method === 'POST') {
+        const sessionId = decodeURIComponent(capabilityMatch[1])
+        const header = request.headers.authorization
+        if (!header?.startsWith('Bearer ')) throw new BrowserHostError('AUTH_REQUIRED', 'Browser capability authorization is required', 401)
+        const claims = this.tokens.verify(header.slice('Bearer '.length), 'control', sessionId)
+        if (!claims.actors.includes('agent')) throw new BrowserHostError('ACTOR_DENIED', 'Only the agent capability can refresh itself', 403)
+        this.manager.get(sessionId, claims.ownerId)
+        this.manager.touch(sessionId)
+        const state = this.manager.get(sessionId, claims.ownerId)
+        const ttlMs = Math.max(60_000, Date.parse(state.expiresAt) - Date.now())
+        const controlToken = this.tokens.issue({ sessionId, ownerId: claims.ownerId, scopes: ['control'], actors: ['agent'], ttlMs })
+        json(response, 200, { controlToken, expiresAt: state.expiresAt })
+        return
+      }
+
       assertServiceAuthorization(request.headers.authorization, this.config.apiToken)
       if (request.method === 'POST' && url.pathname === '/v1/browser/sessions') {
         await this.createSession(await readJson(request), response)
@@ -195,8 +223,16 @@ export class BrowserHostServer {
       }
       if (sessionMatch && request.method === 'DELETE') {
         const id = decodeURIComponent(sessionMatch[1])
-        await this.manager.close(id)
-        this.previews.delete(id)
+        let closed = false
+        try {
+          await this.manager.close(id)
+          closed = true
+        } finally {
+          // Native preview creates its tunnel before the runtime starts. A
+          // close failure keeps the manager entry for retry, so retain its
+          // preview mapping until the runtime has actually closed.
+          if (closed) this.previews.delete(id)
+        }
         response.writeHead(204)
         response.end()
         return
@@ -215,39 +251,56 @@ export class BrowserHostServer {
     if (raw.viewport !== undefined && !viewport) throw new BrowserHostError('INVALID_VIEWPORT', 'Viewport is invalid', 400)
 
     let previewRuntime: NativePreviewRuntime | undefined
-    const state = await this.manager.create({
-      ownerId: raw.ownerId,
-      workspaceId: raw.workspaceId,
-      projectId: raw.projectId,
-      surface: raw.surface,
-      viewport,
-      runtimeFactory: (context) => {
-        if (raw.surface === 'native-preview') {
-          if (!raw.preview) throw new BrowserHostError('INVALID_PREVIEW_TARGET', 'Preview configuration is required', 400)
-          previewRuntime = new NativePreviewRuntime(context, {
-            ...raw.preview,
-            publicBaseUrl: this.config.publicBaseUrl,
-            parentOrigins: this.config.allowedParentOrigins,
+    let state: Awaited<ReturnType<BrowserSessionManager['create']>>
+    try {
+      state = await this.manager.create({
+        ownerId: raw.ownerId,
+        workspaceId: raw.workspaceId,
+        projectId: raw.projectId,
+        surface: raw.surface,
+        viewport,
+        // Chromium's persistent profile is derived from this same identity.
+        // Keep lifecycle operations serialized at the Browser Host boundary
+        // so UI reconnects cannot concurrently launch that profile.
+        reuseKey: raw.surface === 'chromium-stream' && raw.profileKey
+          ? `${raw.ownerId}\u0000${raw.workspaceId}\u0000${raw.projectId}\u0000${raw.profileKey}`
+          : undefined,
+        runtimeFactory: (context) => {
+          if (raw.surface === 'native-preview') {
+            if (!raw.preview) throw new BrowserHostError('INVALID_PREVIEW_TARGET', 'Preview configuration is required', 400)
+            previewRuntime = new NativePreviewRuntime(context, {
+              ...raw.preview,
+              publicBaseUrl: this.config.publicBaseUrl,
+              parentOrigins: this.config.allowedParentOrigins,
+            })
+            this.previews.set(context.sessionId, previewRuntime)
+            return previewRuntime
+          }
+          if (!this.config.chromeExecutable) throw new BrowserHostError('CHROMIUM_NOT_CONFIGURED', 'OPENLINK_CHROME_EXECUTABLE is required for Chromium sessions', 503)
+          return new ChromiumRuntime(context, {
+            executablePath: this.config.chromeExecutable,
+            storageRoot: this.config.storageRoot,
+            profileKey: raw.profileKey,
+            initialUrl: raw.chromium?.initialUrl,
+            initialRequestHeaders: raw.chromium?.initialRequestHeaders,
+            headless: raw.chromium?.headless ?? true,
+            preserveProfile: raw.chromium?.preserveProfile,
+            networkPolicy: {
+              allowedDomains: raw.chromium?.networkPolicy?.allowedDomains ?? [],
+              deniedDomains: raw.chromium?.networkPolicy?.deniedDomains ?? [],
+              allowLoopback: raw.chromium?.networkPolicy?.allowLoopback ?? false,
+              allowPrivateNetworks: raw.chromium?.networkPolicy?.allowPrivateNetworks ?? false,
+            },
           })
-          this.previews.set(context.sessionId, previewRuntime)
-          return previewRuntime
-        }
-        if (!this.config.chromeExecutable) throw new BrowserHostError('CHROMIUM_NOT_CONFIGURED', 'OPENLINK_CHROME_EXECUTABLE is required for Chromium sessions', 503)
-        return new ChromiumRuntime(context, {
-          executablePath: this.config.chromeExecutable,
-          storageRoot: this.config.storageRoot,
-          initialUrl: raw.chromium?.initialUrl,
-          headless: raw.chromium?.headless ?? true,
-          preserveProfile: raw.chromium?.preserveProfile,
-          networkPolicy: {
-            allowedDomains: raw.chromium?.networkPolicy?.allowedDomains ?? [],
-            deniedDomains: raw.chromium?.networkPolicy?.deniedDomains ?? [],
-            allowLoopback: raw.chromium?.networkPolicy?.allowLoopback ?? false,
-            allowPrivateNetworks: raw.chromium?.networkPolicy?.allowPrivateNetworks ?? false,
-          },
-        })
-      },
-    })
+        },
+      })
+    } catch (error) {
+      // NativePreviewRuntime is registered before BrowserSessionManager starts
+      // it. If startup fails, the manager removes its session but this map
+      // would otherwise retain the failed runtime and its tunnel forever.
+      if (previewRuntime) this.previews.delete(previewRuntime.sessionId)
+      throw error
+    }
 
     const capabilityTtl = Math.max(60_000, Date.parse(state.expiresAt) - Date.now())
     const eventsToken = this.tokens.issue({ sessionId: state.id, ownerId: state.ownerId, scopes: ['events', 'control'], actors: ['human'], ttlMs: capabilityTtl })
@@ -320,6 +373,11 @@ export class BrowserHostServer {
     const state = this.manager.get(sessionId, ownerId)
     const replay = this.manager.replay(sessionId)
     send({ type: 'snapshot', payload: state, sequence: replay.at(-1)?.sequence ?? 0 })
+    // A Chromium screencast frame can be emitted while the browser session is
+    // being created, before the UI has opened its WebSocket. Replay the latest
+    // frame for every page explicitly; the state snapshot's sequence cursor
+    // intentionally does not include these frame payloads.
+    for (const event of this.manager.latestScreencasts(sessionId)) send({ type: 'event', payload: event })
     const unsubscribe = this.manager.subscribe(sessionId, (event) => send({ type: 'event', payload: event }), replay.at(-1)?.sequence ?? 0)
     socket.on('message', (data, isBinary) => {
       const now = Date.now()
@@ -347,12 +405,28 @@ export class BrowserHostServer {
         return
       }
       if (message.type === 'ping') {
-        send({ type: 'pong', nonce: message.nonce })
+        try {
+          this.manager.touch(sessionId)
+          send({ type: 'pong', nonce: message.nonce })
+        } catch {
+          send({ type: 'error', error: { code: 'SESSION_NOT_FOUND', message: 'Browser session is no longer available', recoverable: true } })
+          socket.close(1008, 'Session is no longer available')
+        }
       } else if (message.type === 'subscribe') {
-        for (const event of this.manager.replay(sessionId, message.afterSequence ?? 0)) send({ type: 'event', payload: event })
+        try {
+          for (const event of this.manager.replay(sessionId, message.afterSequence ?? 0)) send({ type: 'event', payload: event })
+        } catch {
+          send({ type: 'error', error: { code: 'SESSION_NOT_FOUND', message: 'Browser session is no longer available', recoverable: true } })
+          socket.close(1008, 'Session is no longer available')
+        }
       } else if (message.type === 'bridge.result') {
         if (message.result.sessionId !== sessionId) return
-        this.manager.resolveBridgeResult(sessionId, message.commandId, message.result)
+        try {
+          this.manager.resolveBridgeResult(sessionId, message.commandId, message.result)
+        } catch {
+          send({ type: 'error', error: { code: 'SESSION_NOT_FOUND', message: 'Browser session is no longer available', recoverable: true } })
+          socket.close(1008, 'Session is no longer available')
+        }
       } else {
         if (message.payload.sessionId !== sessionId) return
         if (!allowedActors.includes(message.payload.actor)) {

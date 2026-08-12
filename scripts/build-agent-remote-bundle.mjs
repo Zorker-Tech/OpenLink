@@ -2,12 +2,15 @@ import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { basename, join, resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
+import { ensurePodmanBuilder, stopPodmanBuilder } from './lib/podman-builder.mjs'
+import { configureBundledPodmanRuntime } from './lib/bundled-podman-runtime.mjs'
 
 const run = promisify(execFile)
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
+await configureBundledPodmanRuntime(root)
 
 function argumentsFrom(argv) {
   const values = new Map()
@@ -44,48 +47,57 @@ const outputRoot = resolve(args.get('output') || join(root, '.openlink-releases'
 const releaseDirectory = join(outputRoot, releaseId)
 const staging = await mkdtemp(join(tmpdir(), 'openlink-agent-release-'))
 const imagesDirectory = join(staging, 'images')
-const configDirectory = join(staging, 'config')
+const toolchainDirectory = join(staging, 'toolchain')
+const podmanCachePath = join(root, '.openlink-runtime', 'toolchain', 'linux', platform.slice('linux/'.length), 'podman')
+const hostPodman = process.env.OPENLINK_PODMAN_COMMAND || join(root, '.openlink-runtime', 'toolchain', 'bin', 'podman')
 
 const serverImage = `openlink/opensandbox-server:${releaseId}`
 const execdImage = `openlink/opensandbox-execd:${releaseId}`
 const egressImage = `openlink/opensandbox-egress:${releaseId}`
 const rpcImage = `openlink/agent-rpc-worker:${releaseId}`
+const agentWorkerImage = `openlink/agent-worker:${releaseId}`
+const browserHostImage = `openlink/browser-host:${releaseId}`
+const codeServerImage = `openlink/code-server:${releaseId}`
+const baseImageUrl = 'https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img'
+const baseImageSha256 = '0533b0655c32e68b31d792ecd6ccfca95abdbc536c4446874fe0513bd4140ffe'
 
+let builder
 try {
   await command(process.execPath, ['scripts/sync-pi-runtime.mjs', '--check'])
   await mkdir(imagesDirectory, { recursive: true })
-  await mkdir(configDirectory, { recursive: true })
+  await mkdir(toolchainDirectory, { recursive: true })
   await mkdir(releaseDirectory, { recursive: true })
 
-  await command('docker', ['buildx', 'build', '--platform', platform, '--load', '-t', serverImage, 'services/opensandbox/server'])
-  await command('docker', ['buildx', 'build', '--platform', platform, '--load', '-f', 'services/opensandbox/components/execd/Dockerfile', '-t', execdImage, 'services/opensandbox'])
-  await command('docker', ['buildx', 'build', '--platform', platform, '--load', '-f', 'services/opensandbox/components/egress/Dockerfile', '-t', egressImage, 'services/opensandbox'])
-  await command('docker', ['buildx', 'build', '--platform', platform, '--load', '-f', 'services/agent-rpc-worker/Dockerfile', '-t', rpcImage, '.'])
-  await command('docker', ['save', '-o', join(imagesDirectory, 'openlink-agent-images.tar'), serverImage, execdImage, egressImage, rpcImage])
+  await command(process.execPath, ['scripts/build-podman-linux.mjs', '--platform', platform, '--output', podmanCachePath])
+  await cp(podmanCachePath, join(toolchainDirectory, 'podman'))
+  await run('chmod', ['755', join(toolchainDirectory, 'podman')])
 
-  await cp(join(root, 'services/agent-remote-release/compose.yaml'), join(staging, 'compose.yaml'))
-  const template = await readFile(join(root, 'services/agent-remote-release/opensandbox.toml.template'), 'utf8')
-  const config = template
-    .replaceAll('__REMOTE_ROOT__', remoteRoot)
-    .replaceAll('__EXECD_IMAGE__', execdImage)
-    .replaceAll('__EGRESS_IMAGE__', egressImage)
-  await writeFile(join(configDirectory, 'opensandbox.toml'), config, { mode: 0o644 })
-  await writeFile(join(staging, 'runtime.env.example'), [
-    `OPENLINK_REMOTE_ROOT=${remoteRoot}`,
-    `OPENLINK_OPENSANDBOX_SERVER_IMAGE=${serverImage}`,
-    'OPENLINK_OPENSANDBOX_BIND_PORT=43122',
-    'OPENSANDBOX_SERVER_API_KEY=replace-at-deploy-time',
-    '',
-  ].join('\n'), { mode: 0o600 })
+  builder = await ensurePodmanBuilder(hostPodman, { cwd: root })
+  const { connectionArgs } = builder
+  await command(hostPodman, [...connectionArgs, 'build', '--platform', platform, '-t', serverImage, 'services/opensandbox/server'])
+  await command(hostPodman, [...connectionArgs, 'build', '--platform', platform, '-f', 'services/opensandbox/components/execd/Dockerfile', '-t', execdImage, 'services/opensandbox'])
+  await command(hostPodman, [...connectionArgs, 'build', '--platform', platform, '-f', 'services/opensandbox/components/egress/Dockerfile', '-t', egressImage, 'services/opensandbox'])
+  await command(hostPodman, [...connectionArgs, 'build', '--platform', platform, '-f', 'services/agent-rpc-worker/Dockerfile', '-t', rpcImage, '.'])
+  await command(hostPodman, [...connectionArgs, 'build', '--platform', platform, '-f', 'services/agent-worker/Dockerfile', '-t', agentWorkerImage, '.'])
+  await command(hostPodman, [...connectionArgs, 'build', '--platform', platform, '-f', 'services/browser-host/Containerfile', '-t', browserHostImage, '.'])
+  await command(hostPodman, [...connectionArgs, 'build', '--platform', platform, '-f', 'services/code-server/Containerfile', '-t', codeServerImage, 'services/code-server'])
+  await command(hostPodman, [...connectionArgs, 'save', '-o', join(imagesDirectory, 'openlink-agent-images.tar'), serverImage, execdImage, egressImage, rpcImage, agentWorkerImage, browserHostImage, codeServerImage])
+
+  await cp(join(root, 'services/agent-remote-release/project-vm.sh'), join(staging, 'project-vm.sh'))
+  await run('chmod', ['700', join(staging, 'project-vm.sh')])
 
   const archive = join(releaseDirectory, 'openlink-agent-bundle.tar.gz')
   await command('tar', ['-czf', archive, '-C', staging, '.'])
   const digest = createHash('sha256').update(await readFile(archive)).digest('hex')
-  const remoteArchive = `${remoteRoot}/releases/${releaseId}/${basename(archive)}`
+  // The SSH bootstrap uploads the archive as `bundle.tar.gz`; keep the
+  // manifest path aligned with that transport name so `sha256sum -c` verifies
+  // the exact file that will be extracted on the target.
+  const remoteArchive = `${remoteRoot}/releases/${releaseId}/bundle.tar.gz`
   const checksum = join(releaseDirectory, 'bundle.sha256')
   await writeFile(checksum, `${digest}  ${remoteArchive}\n`, { mode: 0o644 })
   const opensandboxCommit = (await run('git', ['-C', 'services/opensandbox', 'rev-parse', 'HEAD'], { cwd: root })).stdout.trim()
   const piCommit = (await run('git', ['-C', 'services/pi', 'rev-parse', 'HEAD'], { cwd: root })).stdout.trim()
+  const podmanSha256 = createHash('sha256').update(await readFile(join(toolchainDirectory, 'podman'))).digest('hex')
   const piRuntimeManifestSha256 = createHash('sha256')
     .update(await readFile(join(root, 'packages/pi-runtime/manifest.json')))
     .digest('hex')
@@ -97,9 +109,12 @@ try {
     opensandboxCommit,
     piCommit,
     piRuntimeManifestSha256,
-    images: { serverImage, execdImage, egressImage, rpcImage },
+    podman: { path: 'toolchain/podman', sha256: podmanSha256 },
+    images: { serverImage, execdImage, egressImage, rpcImage, agentWorkerImage, browserHostImage, codeServerImage },
+    projectVmBaseImage: { url: baseImageUrl, sha256: baseImageSha256 },
   }, null, 2) + '\n')
   process.stdout.write(`${JSON.stringify({ releaseId, archive, checksum, bundleSha256: digest }, null, 2)}\n`)
 } finally {
+  if (builder) await stopPodmanBuilder(hostPodman, builder.machineName, { cwd: root })
   await rm(staging, { recursive: true, force: true })
 }

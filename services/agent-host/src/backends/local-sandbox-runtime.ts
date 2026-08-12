@@ -2,6 +2,7 @@ import type { AgentLaunchSpec, AgentProcess, ProvisionedEnvironment, SandboxBack
 import { AgentHostError } from '../errors.js'
 import { compileSandboxPolicy } from '../policy.js'
 import { buildPiRpcCommand, type CommandSpec } from '../pi-rpc.js'
+import type { ProjectRuntimeDescriptor } from '../project-runtime.js'
 
 export interface SandboxRuntimeAdapter {
   initialize(config: unknown): Promise<void>
@@ -66,7 +67,7 @@ export class LocalSandboxRuntimeBackend implements SandboxBackend {
     private readonly spawnProcess?: AgentProcessFactory,
   ) {}
 
-  async provision(spec: AgentLaunchSpec): Promise<ProvisionedEnvironment> {
+  async provision(spec: AgentLaunchSpec, _projectRuntime?: ProjectRuntimeDescriptor): Promise<ProvisionedEnvironment> {
     const compiled = compileSandboxPolicy(spec.workspaceRoot, spec.storageRoot, spec.policy)
     await this.sandboxRuntime.initialize(compiled)
     return {

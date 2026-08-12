@@ -415,6 +415,7 @@ export type PromptInputActionAddAttachmentsProps = ComponentProps<
 };
 
 export const PromptInputActionAddAttachments = ({
+  children,
   label = "Add photos or files",
   ...props
 }: PromptInputActionAddAttachmentsProps) => {
@@ -430,7 +431,11 @@ export const PromptInputActionAddAttachments = ({
 
   return (
     <DropdownMenuItem {...props} onSelect={handleSelect}>
-      <ImageIcon className="mr-2 size-4" /> {label}
+      {children ?? (
+        <>
+          <ImageIcon className="mr-2 size-4" /> {label}
+        </>
+      )}
     </DropdownMenuItem>
   );
 };

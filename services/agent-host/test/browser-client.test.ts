@@ -15,7 +15,7 @@ test('browser client creates a scoped session and performs agent actions', async
           controlOwner: null, pages: [], viewport: { width: 1280, height: 800, deviceScaleFactor: 1 },
           capabilities: { nativeDom: false, screencast: true, componentInspection: true, downloads: true, uploads: true, dialogs: true, devtools: true },
         },
-        connection: { controlToken: 'scoped-control-token' },
+        connection: { eventsUrl: 'ws://127.0.0.1:43120/v1/browser/sessions/browser-1/events?token=test', controlToken: 'scoped-control-token' },
       }, { status: 201 })
     }
     return Response.json({ result: { version: 1, actionId: 'action-1', sessionId: 'browser-1', ok: true, snapshot: '{}' } })

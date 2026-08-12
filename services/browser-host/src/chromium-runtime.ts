@@ -1,6 +1,6 @@
-import { mkdir, rm } from 'node:fs/promises'
+import { mkdir, readlink, rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import {
   BROWSER_PROTOCOL_VERSION,
   type BrowserActionEnvelope,
@@ -22,6 +22,9 @@ export interface ChromiumRuntimeOptions {
   headless?: boolean
   networkPolicy: BrowserNetworkPolicy
   preserveProfile?: boolean
+  profileKey?: string
+  /** Headers injected only for the trusted initial Project-preview origin. */
+  initialRequestHeaders?: Record<string, string>
 }
 
 interface TrackedPage {
@@ -62,6 +65,21 @@ function asText(value: unknown): string | undefined {
   return undefined
 }
 
+function isProcessSingletonFailure(error: unknown): boolean {
+  return /ProcessSingleton|SingletonLock|profile directory.*in use/i.test(error instanceof Error ? error.message : String(error))
+}
+
+function processAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    // EPERM means the process exists but belongs to another UID; it is still
+    // an active Chromium lock and must not be removed.
+    return (error as NodeJS.ErrnoException).code === 'EPERM'
+  }
+}
+
 export class ChromiumRuntime implements BrowserRuntimeSession {
   readonly surface = 'chromium-stream' as const
   private context?: BrowserContext
@@ -70,6 +88,7 @@ export class ChromiumRuntime implements BrowserRuntimeSession {
   private readonly tracking = new WeakMap<Page, Promise<void>>()
   private readonly network: BrowserNetworkGuard
   private readonly egressProxy: BrowserEgressProxy
+  private readonly initialRequestOrigin?: string
   private profilePath: string
   private closed = false
 
@@ -80,14 +99,21 @@ export class ChromiumRuntime implements BrowserRuntimeSession {
     if (!options.executablePath) throw new BrowserHostError('CHROMIUM_NOT_CONFIGURED', 'Chromium executable path is required', 503)
     this.network = new BrowserNetworkGuard(options.networkPolicy)
     this.egressProxy = new BrowserEgressProxy(this.network)
-    this.profilePath = join(options.storageRoot, 'profiles', runtimeContext.ownerId, runtimeContext.sessionId)
+    const stableProfileKey = options.profileKey || runtimeContext.sessionId
+    const profileId = createHash('sha256')
+      .update(`${runtimeContext.ownerId}\0${runtimeContext.workspaceId}\0${runtimeContext.projectId}\0${stableProfileKey}`)
+      .digest('hex')
+    this.profilePath = join(options.storageRoot, 'profiles', profileId)
+    this.initialRequestOrigin = options.initialUrl && options.initialRequestHeaders
+      ? new URL(options.initialUrl).origin
+      : undefined
   }
 
   async start(): Promise<void> {
     await mkdir(this.profilePath, { recursive: true, mode: 0o700 })
     await this.egressProxy.start()
     const viewport = this.runtimeContext.getState().viewport
-    this.context = await chromium.launchPersistentContext(this.profilePath, {
+    const launch = () => chromium.launchPersistentContext(this.profilePath, {
       executablePath: this.options.executablePath,
       headless: this.options.headless ?? true,
       viewport: { width: viewport.width, height: viewport.height },
@@ -98,10 +124,30 @@ export class ChromiumRuntime implements BrowserRuntimeSession {
       proxy: { server: this.egressProxy.url, bypass: '<-loopback>' },
       args: ['--disable-background-networking', '--disable-component-update', '--disable-sync', '--no-first-run'],
     })
+    try {
+      this.context = await launch()
+    } catch (error) {
+      // A Browser Host crash can leave Chromium's three ProcessSingleton
+      // marker files behind. Never delete an active profile lock: the session
+      // manager provides normal mutual exclusion and this recovery only
+      // removes a lock whose owning PID is demonstrably gone. Retry once so a
+      // corrupt/stale marker is repaired without turning a transient launch
+      // failure into an infinite restart loop.
+      if (!isProcessSingletonFailure(error) || !await this.removeStaleProfileLock()) throw error
+      this.context = await launch()
+    }
     await this.context.route('**/*', async (route) => {
       try {
         await this.network.assertUrl(route.request().url())
-        await route.continue()
+        const requestUrl = new URL(route.request().url())
+        // The OpenSandbox API key belongs only on the Project VM's internal
+        // preview-proxy origin. Never use Playwright's context-wide headers:
+        // those would leak it if the user later navigated elsewhere.
+        if (this.initialRequestOrigin && requestUrl.origin === this.initialRequestOrigin) {
+          await route.continue({ headers: { ...route.request().headers(), ...this.options.initialRequestHeaders } })
+        } else {
+          await route.continue()
+        }
       } catch {
         await route.abort('blockedbyclient')
       }
@@ -116,6 +162,28 @@ export class ChromiumRuntime implements BrowserRuntimeSession {
       await first.goto(this.options.initialUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 })
     }
     await this.refreshState(this.pageIds.get(first))
+  }
+
+  private async removeStaleProfileLock(): Promise<boolean> {
+    const lock = join(this.profilePath, 'SingletonLock')
+    let target: string
+    try {
+      target = await readlink(lock)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
+      return false
+    }
+    // Chromium creates a symlink named like "<hostname>-<pid>". Its exact
+    // hostname portion is intentionally ignored; only a numeric terminal PID
+    // is safe to inspect. Unknown lock formats are treated as active.
+    const pid = Number(/(?:^|[-/])(\d+)$/.exec(target)?.[1])
+    if (!Number.isSafeInteger(pid) || pid <= 1 || processAlive(pid)) return false
+    await Promise.all([
+      rm(lock, { force: true }),
+      rm(join(this.profilePath, 'SingletonCookie'), { force: true }),
+      rm(join(this.profilePath, 'SingletonSocket'), { force: true }),
+    ])
+    return true
   }
 
   async perform(envelope: BrowserActionEnvelope): Promise<BrowserActionResult> {

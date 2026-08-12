@@ -52,11 +52,18 @@ used at runtime.
 
 - OpenSandbox unavailable: fail before issuing a worker capability.
 - Worker readiness timeout: kill the sandbox/process.
-- SSH tunnel loss: abort streams; sandbox TTL performs eventual cleanup.
+- SSH tunnel loss: abort streams; Agent Host owns eventual cleanup through its
+  session reaper while OpenSandbox workloads use explicit lifetimes.
 - Invalid RPC JSONL: terminate the RPC worker and never forward partial JSON.
 - Credential or egress denial: surface the error without weakening policy.
 - Host parent proxy unavailable during desktop TLS credential injection: fail the request; never expose the real model credential to the Worker.
-- Client disconnect: abort the current prompt and retain/reap by idle TTL.
+- Client disconnect: abort the current prompt and retain/reap by idle TTL. If
+  an older or externally expired workload handle is encountered, the next
+  prompt rebuilds it from the Cloud Pi session snapshot before streaming.
+- An open chat page refreshes a lease for an existing runtime without
+  provisioning a sandbox. Browser Host WebSocket pings refresh the browser
+  session lease; closing the page stops both heartbeats and lets idle cleanup
+  reclaim resources.
 
 ## Alternatives considered
 

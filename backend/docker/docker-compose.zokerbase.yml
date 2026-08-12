@@ -1,0 +1,58 @@
+# ZOKERBASE is OpenLink's product-owned distribution of the self-hosted
+# Supabase-compatible stack.  The services retain their upstream-compatible
+# environment contract, but the runtime never refers to upstream image names.
+#
+# This file is deliberately an overlay instead of a fork of docker-compose.yml:
+# upstream topology updates remain reviewable, while the published ZOKERBASE
+# images and product-facing container names stay stable.
+name: zokerbase
+
+services:
+  studio:
+    container_name: zokerbase-studio
+    image: zokerbase/studio:2026.08.10
+  kong:
+    container_name: zokerbase-gateway
+    image: zokerbase/gateway:2026.08.10
+  auth:
+    container_name: zokerbase-auth
+    image: zokerbase/auth:2026.08.10
+    environment:
+      GOTRUE_JWT_KEYS: ${JWT_KEYS:-[]}
+  rest:
+    container_name: zokerbase-rest
+    image: zokerbase/rest:2026.08.10
+  realtime:
+    container_name: realtime-dev.zokerbase-realtime
+    image: zokerbase/realtime:2026.08.10
+    environment:
+      API_JWT_JWKS: ${JWT_JWKS:-{"keys":[]}}
+  storage:
+    container_name: zokerbase-storage
+    image: zokerbase/storage:2026.08.10
+    environment:
+      JWT_JWKS: ${JWT_JWKS:-{"keys":[]}}
+  imgproxy:
+    container_name: zokerbase-imgproxy
+    image: zokerbase/imgproxy:2026.08.10
+  meta:
+    container_name: zokerbase-meta
+    image: zokerbase/postgres-meta:2026.08.10
+  functions:
+    container_name: zokerbase-functions
+    image: zokerbase/edge-runtime:2026.08.10
+    environment:
+      SUPABASE_JWKS: ${JWT_JWKS:-{"keys":[]}}
+  db:
+    container_name: zokerbase-db
+    image: zokerbase/postgres:2026.08.10
+  supavisor:
+    container_name: zokerbase-pooler
+    image: zokerbase/supavisor:2026.08.10
+
+volumes:
+  # Created by the one-time legacy adoption step before Compose starts. It
+  # holds the existing pgsodium key and must not be re-created on each launch.
+  db-config:
+    external: true
+    name: zokerbase_db-config

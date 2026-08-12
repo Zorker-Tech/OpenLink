@@ -18,6 +18,8 @@ function normalizeAddress(value: string): string {
 }
 
 export interface BrowserWorkbenchUiState {
+  /** Private id used by the authenticated Chat API to bind Pi browser tools. */
+  browserSessionId?: string
   address: string
   canGoBack: boolean
   canGoForward: boolean
@@ -65,7 +67,12 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
     const previous = connectionRef.current
     connectionRef.current = null
     previous?.close()
-    if (previous) void deleteBrowserSession(chatSessionId, previous.state.id).catch(() => undefined)
+    // Chromium sessions use a durable profile keyed by the chat session.
+    // Wait for the old Browser Host runtime to release that profile before
+    // creating the replacement surface; launching two persistent contexts
+    // against the same profile races Chromium's lock file and makes switching
+    // between Preview/Realtime intermittently fail with a black canvas.
+    if (previous) await deleteBrowserSession(chatSessionId, previous.state.id).catch(() => undefined)
     try {
       const descriptor = await createBrowserSession({
         chatSessionId,
@@ -73,7 +80,7 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
         initialUrl: nextSurface === 'chromium-stream' ? normalizeAddress(initialUrl || address || 'about:blank') : undefined,
         viewport: viewportMode === 'mobile'
           ? { width: 391, height: 835, deviceScaleFactor: 1 }
-          : { width: Math.max(1024, window.innerWidth - 390), height: Math.max(600, window.innerHeight - 50), deviceScaleFactor: window.devicePixelRatio || 1 },
+          : { width: Math.max(240, window.innerWidth - 390), height: Math.max(240, window.innerHeight - 50), deviceScaleFactor: Math.min(4, Math.max(0.5, window.devicePixelRatio || 1)) },
       })
       if (version !== requestVersion.current) {
         void deleteBrowserSession(chatSessionId, descriptor.session.id)
@@ -91,6 +98,16 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
         if (page) setAddress(page.url)
       })
       next.onError(setError)
+      next.onSessionLost((reason) => {
+        if (version !== requestVersion.current) return
+        setError(`${reason}，正在重新创建浏览器会话`)
+        const currentAddress = next.state.pages.find((page) => page.active)?.url || initialUrl || address
+        // Browser Host sessions are intentionally ephemeral. If the host
+        // reaper, a VM restart, or a token expiry removes one while this tab is
+        // still mounted, create a replacement instead of leaving the canvas in
+        // a reconnect loop against a dead session id.
+        void openSession(nextSurface, currentAddress)
+      })
       next.onEvent((envelope) => {
         if (envelope.event.type !== 'action.result') return
         const result: BrowserActionResult = envelope.event.result
@@ -107,8 +124,13 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
     }
   }, [address, chatSessionId, viewportMode])
 
+  const openSessionRef = useRef(openSession)
   useEffect(() => {
-    void openSession('native-preview')
+    openSessionRef.current = openSession
+  }, [openSession])
+
+  useEffect(() => {
+    void openSessionRef.current('native-preview')
     return () => {
       requestVersion.current += 1
       const current = connectionRef.current
@@ -122,7 +144,7 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
     if (!connection || connection.state.surface !== 'chromium-stream') return
     const viewport = viewportMode === 'mobile'
       ? { width: 391, height: 835, deviceScaleFactor: 1 }
-      : { width: Math.max(1024, window.innerWidth - 390), height: Math.max(600, window.innerHeight - 50), deviceScaleFactor: Math.min(4, Math.max(0.5, window.devicePixelRatio || 1)) }
+      : { width: Math.max(240, window.innerWidth - 390), height: Math.max(240, window.innerHeight - 50), deviceScaleFactor: Math.min(4, Math.max(0.5, window.devicePixelRatio || 1)) }
     try { connection.sendAction({ type: 'viewport.set', viewport }) } catch {}
   }, [connection, viewportMode])
 
@@ -180,6 +202,7 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
 
   useEffect(() => {
     onStateChange?.({
+      browserSessionId: connection?.state.id,
       address,
       canGoBack: Boolean(activePage?.canGoBack),
       canGoForward: Boolean(activePage?.canGoForward),
@@ -198,7 +221,7 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
           <NativePreviewSurface connection={connection} inspectMode={inspectMode} onElementSelected={setSelectedElement} />
         )}
         {connection && sessionState?.status === 'ready' && surface === 'chromium-stream' && (
-          <ChromiumStreamSurface connection={connection} inspectMode={inspectMode} selectedElement={inspectMode ? selectedElement : null} />
+          <ChromiumStreamSurface connection={connection} inspectMode={inspectMode} selectedElement={inspectMode ? selectedElement : null} viewportMode={viewportMode} />
         )}
         {sessionInitializing ? (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-[var(--app-background)]/88 text-sm text-[var(--app-muted)] backdrop-blur-sm">

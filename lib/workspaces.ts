@@ -164,8 +164,27 @@ export async function resolveAppEntry(supabase: ServerSupabaseClient, user: User
       .select('user_id, nickname, nickname_confirmed, organization_onboarding_completed')
       .single()
 
-    if (insertError) throw insertError
-    profile = inserted as OpenLinkProfile
+    if (insertError) {
+      // React Server Components can resolve the same entry route concurrently
+      // (for example, a navigation request racing a router prefetch). Both
+      // requests may observe a missing profile before either insert commits.
+      // The primary key is the user id, so the losing insert must reuse the
+      // profile created by the winning request instead of turning a harmless
+      // bootstrap race into a 500 page.
+      if (insertError.code !== '23505') throw insertError
+
+      const { data: racedProfile, error: racedProfileError } = await supabase
+        .schema('openlink')
+        .from('profiles')
+        .select('user_id, nickname, nickname_confirmed, organization_onboarding_completed')
+        .eq('user_id', user.id)
+        .single()
+
+      if (racedProfileError) throw racedProfileError
+      profile = racedProfile as OpenLinkProfile
+    } else {
+      profile = inserted as OpenLinkProfile
+    }
   }
 
   if (!profile.nickname_confirmed || !profile.nickname) {

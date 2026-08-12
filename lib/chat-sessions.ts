@@ -171,17 +171,20 @@ export async function createChatSession(
 
   if (!workspace) throw new Error('CHAT_WORKSPACE_NOT_FOUND')
 
-  let projectId = options.projectId?.trim() || null
-  if (!projectId) {
-    const draft = await ensureDraftProject(supabase, userId, workspace)
-    projectId = draft.id
+  let project = null
+  const requestedProjectId = options.projectId?.trim() || null
+  if (!requestedProjectId) {
+    project = await ensureDraftProject(supabase, userId, workspace)
+  } else {
+    project = await getProject(supabase, requestedProjectId)
   }
-  if (projectId) {
-    const project = await getProject(supabase, projectId)
-    if (!project || project.workspace_id !== workspace.id) {
-      throw new Error('CHAT_PROJECT_NOT_FOUND')
-    }
+  if (!project || project.workspace_id !== workspace.id) {
+    throw new Error('CHAT_PROJECT_NOT_FOUND')
   }
+  if (project.status !== 'active' || project.runtime_status !== 'ready') {
+    throw new Error('PROJECT_RUNTIME_NOT_READY')
+  }
+  const projectId = project.id
 
   const initialPrompt = options.prompt?.trim().slice(0, 10000) ?? ''
   const title = deriveChatSessionTitle(initialPrompt)

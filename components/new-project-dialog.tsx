@@ -10,14 +10,18 @@ import {
 } from '@/components/ui/feature-dialog'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import type { ProjectKind, ProjectSourceType, ProjectSummary } from '@/lib/projects'
+import type { ProjectDiskMode, ProjectExecutionMode, ProjectKind, ProjectSourceType, ProjectSummary } from '@/lib/projects'
 import {
   ArrowLeft,
   BookOpenText,
   CirclePlus,
   Code2,
   GitBranch,
+  HardDrive,
+  Layers3,
   Loader2,
+  MonitorCog,
+  Network,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useState, useTransition } from 'react'
@@ -80,6 +84,8 @@ export function NewProjectDialog({
   const router = useRouter()
   const [mode, setMode] = useState<ProjectCreationMode | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [diskMode, setDiskMode] = useState<ProjectDiskMode>('thin')
+  const [executionMode, setExecutionMode] = useState<ProjectExecutionMode>('local')
   const [isPending, startTransition] = useTransition()
 
   const handleOpenChange = (nextOpen: boolean) => {
@@ -88,6 +94,8 @@ export function NewProjectDialog({
     if (!nextOpen) {
       setMode(null)
       setError(null)
+      setDiskMode('thin')
+      setExecutionMode('local')
     }
   }
 
@@ -113,6 +121,8 @@ export function NewProjectDialog({
                     onClick={() => {
                       setMode(optionMode)
                       setError(null)
+                      setDiskMode('thin')
+                      setExecutionMode('local')
                     }}
                     type="button"
                   >
@@ -170,6 +180,16 @@ export function NewProjectDialog({
                   sourceType,
                   sourceUrl,
                   description,
+                  diskMode,
+                  executionMode,
+                  sshTarget: executionMode === 'ssh' ? {
+                    host: String(formData.get('sshHost') ?? ''),
+                    port: Number(formData.get('sshPort') ?? 22),
+                    user: String(formData.get('sshUser') ?? ''),
+                    remoteRoot: String(formData.get('sshRemoteRoot') ?? ''),
+                    privateKey: String(formData.get('sshPrivateKey') ?? ''),
+                    knownHosts: String(formData.get('sshKnownHosts') ?? ''),
+                  } : undefined,
                 })
                 if (result.error) {
                   setError(result.error)
@@ -207,6 +227,86 @@ export function NewProjectDialog({
                   required
                 />
               </label>
+
+              <fieldset className="space-y-2">
+                <legend className="text-sm font-medium text-[var(--app-foreground)]">执行环境</legend>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <button
+                    aria-pressed={executionMode === 'local'}
+                    className={`flex min-h-[72px] items-start gap-3 rounded-lg border px-3 py-3 text-left transition-colors ${executionMode === 'local' ? 'border-[var(--app-focus-ring)] bg-[var(--app-surface)]' : 'border-[var(--app-control-border)] bg-[var(--app-background)] hover:bg-[var(--app-surface)]'}`}
+                    onClick={() => setExecutionMode('local')}
+                    type="button"
+                  >
+                    <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md border border-[var(--app-control-border)] bg-[var(--app-background)] text-[var(--app-muted)]"><MonitorCog aria-hidden className="size-3.5" /></span>
+                    <span><span className="block text-sm font-medium text-[var(--app-foreground)]">本地</span><span className="mt-1 block text-xs leading-4 text-[var(--app-muted)]">在本机的 Project VM 中初始化与运行。</span></span>
+                  </button>
+                  <button
+                    aria-pressed={executionMode === 'ssh'}
+                    className={`flex min-h-[72px] items-start gap-3 rounded-lg border px-3 py-3 text-left transition-colors ${executionMode === 'ssh' ? 'border-[var(--app-focus-ring)] bg-[var(--app-surface)]' : 'border-[var(--app-control-border)] bg-[var(--app-background)] hover:bg-[var(--app-surface)]'}`}
+                    onClick={() => setExecutionMode('ssh')}
+                    type="button"
+                  >
+                    <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md border border-[var(--app-control-border)] bg-[var(--app-background)] text-[var(--app-muted)]"><Network aria-hidden className="size-3.5" /></span>
+                    <span><span className="block text-sm font-medium text-[var(--app-foreground)]">远程 SSH</span><span className="mt-1 block text-xs leading-4 text-[var(--app-muted)]">在目标 Linux 主机内创建该项目专属 VM。</span></span>
+                  </button>
+                </div>
+              </fieldset>
+
+              {executionMode === 'ssh' && (
+                <fieldset className="space-y-3 rounded-lg border border-[var(--app-control-border)] bg-[var(--app-surface)] p-3">
+                  <div>
+                    <p className="text-sm font-medium text-[var(--app-foreground)]">SSH 连接</p>
+                    <p className="mt-1 text-xs leading-4 text-[var(--app-muted)]">目标将永久绑定到此项目。私钥会以 AES-256-GCM 加密保存，且连接必须匹配你提供的主机密钥。</p>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_104px]">
+                    <label className="block space-y-1.5"><span className="text-xs font-medium text-[var(--app-muted)]">主机</span><Input name="sshHost" placeholder="192.168.1.20 或 server.example.com" required /></label>
+                    <label className="block space-y-1.5"><span className="text-xs font-medium text-[var(--app-muted)]">端口</span><Input defaultValue="22" max="65535" min="1" name="sshPort" required type="number" /></label>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <label className="block space-y-1.5"><span className="text-xs font-medium text-[var(--app-muted)]">用户</span><Input name="sshUser" placeholder="ubuntu" required /></label>
+                    <label className="block space-y-1.5"><span className="text-xs font-medium text-[var(--app-muted)]">远程根目录</span><Input defaultValue="/opt/openlink" name="sshRemoteRoot" required /></label>
+                  </div>
+                  <label className="block space-y-1.5"><span className="text-xs font-medium text-[var(--app-muted)]">私钥</span><Textarea className="min-h-[112px] resize-y font-mono text-xs" name="sshPrivateKey" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" required /></label>
+                  <label className="block space-y-1.5"><span className="text-xs font-medium text-[var(--app-muted)]">主机密钥（known_hosts）</span><Textarea className="min-h-[66px] resize-y font-mono text-xs" name="sshKnownHosts" placeholder="server.example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI…" required /></label>
+                </fieldset>
+              )}
+
+              <fieldset className="space-y-2">
+                <legend className="text-sm font-medium text-[var(--app-foreground)]">Disk allocation</legend>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <button
+                    aria-pressed={diskMode === 'thin'}
+                    className={`flex min-h-[74px] items-start gap-3 rounded-lg border px-3 py-3 text-left transition-colors ${diskMode === 'thin' ? 'border-[var(--app-focus-ring)] bg-[var(--app-surface)]' : 'border-[var(--app-control-border)] bg-[var(--app-background)] hover:bg-[var(--app-surface)]'}`}
+                    onClick={() => setDiskMode('thin')}
+                    type="button"
+                  >
+                    <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md border border-[var(--app-control-border)] bg-[var(--app-background)] text-[var(--app-muted)]">
+                      <Layers3 aria-hidden className="size-3.5" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="flex items-center gap-2 text-sm font-medium text-[var(--app-foreground)]">
+                        Sparse
+                        <span className="rounded-full bg-[var(--app-control-background)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--app-muted)]">Recommended</span>
+                      </span>
+                      <span className="mt-1 block text-xs leading-4 text-[var(--app-muted)]">64 GB capacity. Host usage grows with project data.</span>
+                    </span>
+                  </button>
+                  <button
+                    aria-pressed={diskMode === 'thick'}
+                    className={`flex min-h-[74px] items-start gap-3 rounded-lg border px-3 py-3 text-left transition-colors ${diskMode === 'thick' ? 'border-[var(--app-focus-ring)] bg-[var(--app-surface)]' : 'border-[var(--app-control-border)] bg-[var(--app-background)] hover:bg-[var(--app-surface)]'}`}
+                    onClick={() => setDiskMode('thick')}
+                    type="button"
+                  >
+                    <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md border border-[var(--app-control-border)] bg-[var(--app-background)] text-[var(--app-muted)]">
+                      <HardDrive aria-hidden className="size-3.5" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="text-sm font-medium text-[var(--app-foreground)]">Fully allocated</span>
+                      <span className="mt-1 block text-xs leading-4 text-[var(--app-muted)]">Reserves the full 64 GB on the host immediately.</span>
+                    </span>
+                  </button>
+                </div>
+              </fieldset>
 
               {mode === 'github' && (
                 <label className="block space-y-2">
@@ -248,7 +348,7 @@ export function NewProjectDialog({
                   type="submit"
                 >
                   {isPending && <Loader2 className="size-4 animate-spin" />}
-                  Create
+                  {isPending ? '创建中…' : 'Create'}
                 </button>
               </div>
             </FeatureDialogBody>

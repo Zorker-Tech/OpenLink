@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
 import { mkdtemp, rm } from 'node:fs/promises'
+import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import { startPromptHttpServer, type PromptRuntimeBackend } from '../src/prompt-http-server.js'
+import type { ProjectRuntimeManager } from '../src/project-runtime.js'
 
 test('prompt server authenticates, streams NDJSON, and enforces runtime capacity', async () => {
   const storageRoot = await mkdtemp(join(tmpdir(), 'openlink-prompt-server-test-'))
@@ -34,14 +36,18 @@ test('prompt server authenticates, streams NDJSON, and enforces runtime capacity
     const denied = await fetch(`${endpoint}/v1/agent/sessions/one/events`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: 'user', workspaceId: 'workspace', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c', message: 'hello' }),
+      body: JSON.stringify({ userId: 'user', workspaceId: 'workspace', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c', message: 'hello', runtimeConfiguration: {
+        providerId: 'deepseek', modelId: 'deepseek-v4-flash', apiKey: 'test-key', baseUrl: 'https://api.deepseek.com', revision: 'test-revision',
+      } }),
     })
     assert.equal(denied.status, 403)
 
     const accepted = await fetch(`${endpoint}/v1/agent/sessions/one/events`, {
       method: 'POST',
       headers: { Authorization: 'Bearer test-token-which-is-long-enough', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: 'user', workspaceId: 'workspace', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c', message: 'hello' }),
+      body: JSON.stringify({ userId: 'user', workspaceId: 'workspace', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c', message: 'hello', runtimeConfiguration: {
+        providerId: 'deepseek', modelId: 'deepseek-v4-flash', apiKey: 'test-key', baseUrl: 'https://api.deepseek.com', revision: 'test-revision',
+      } }),
     })
     assert.equal(accepted.status, 200)
     assert.equal(accepted.headers.get('x-openlink-agent-transport'), 'test-runtime')
@@ -50,7 +56,9 @@ test('prompt server authenticates, streams NDJSON, and enforces runtime capacity
     const capacity = await fetch(`${endpoint}/v1/agent/sessions/two/events`, {
       method: 'POST',
       headers: { Authorization: 'Bearer test-token-which-is-long-enough', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: 'user', workspaceId: 'workspace', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c', message: 'hello' }),
+      body: JSON.stringify({ userId: 'user', workspaceId: 'workspace', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c', message: 'hello', runtimeConfiguration: {
+        providerId: 'deepseek', modelId: 'deepseek-v4-flash', apiKey: 'test-key', baseUrl: 'https://api.deepseek.com', revision: 'test-revision',
+      } }),
     })
     assert.equal(capacity.status, 409)
   } finally {
@@ -60,6 +68,333 @@ test('prompt server authenticates, streams NDJSON, and enforces runtime capacity
     await rm(storageRoot, { recursive: true, force: true })
   }
   assert.equal(closes, 1)
+})
+
+test('code-server session creation is authenticated and bound to the requested Project runtime', async () => {
+  const storageRoot = await mkdtemp(join(tmpdir(), 'openlink-code-server-route-test-'))
+  const upstream = createServer((_request, response) => {
+    response.writeHead(200, { 'Content-Type': 'text/html' })
+    response.end('<title>VS Code</title>')
+  })
+  await new Promise<void>((resolveListen, rejectListen) => {
+    upstream.once('error', rejectListen)
+    upstream.listen(0, '127.0.0.1', () => {
+      upstream.removeListener('error', rejectListen)
+      resolveListen()
+    })
+  })
+  const upstreamAddress = upstream.address() as AddressInfo
+  const projectId = '2c51ca26-3cd0-4cb4-896d-2061de06098c'
+  let ensuredProject: string | undefined
+  const projectRuntimeManager = {
+    ensure: async (id: string) => {
+      ensuredProject = id
+      return { codeServerEndpoint: `http://127.0.0.1:${upstreamAddress.port}` }
+    },
+  } as unknown as ProjectRuntimeManager
+  const backend: PromptRuntimeBackend = {
+    createSession: async () => ({ prompt: async () => new Response(''), cleanup: async () => {} }),
+    close: async () => {},
+  }
+  const runtime = await startPromptHttpServer({
+    host: '127.0.0.1', port: 0, apiToken: 'test-token-which-is-long-enough', storageRoot,
+    transport: 'test-runtime', sessionIdleTtlMs: 60_000,
+    projectRuntimeManager,
+    browserGatewayPublicUrl: 'http://127.0.0.1:0',
+    browserGatewayAllowedOrigins: ['http://localhost:3002'],
+  }, backend)
+  const address = runtime.server.address() as AddressInfo
+  const endpoint = `http://127.0.0.1:${address.port}`
+  try {
+    const denied = await fetch(`${endpoint}/v1/projects/${projectId}/code-server/sessions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ownerId: 'user', workspaceId: 'workspace' }),
+    })
+    assert.equal(denied.status, 403)
+
+    const created = await fetch(`${endpoint}/v1/projects/${projectId}/code-server/sessions`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer test-token-which-is-long-enough', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ownerId: 'user', workspaceId: 'workspace' }),
+    })
+    assert.equal(created.status, 201)
+    assert.equal(ensuredProject, projectId)
+    const payload = await created.json() as { session?: { url?: string } }
+    assert.match(payload.session?.url || '', /^http:\/\/127\.0\.0\.1:0\/v1\/code-server\/gateway/)
+  } finally {
+    runtime.server.close()
+    await once(runtime.server, 'close')
+    await runtime.shutdown()
+    await new Promise<void>((resolveClose) => upstream.close(() => resolveClose()))
+    await rm(storageRoot, { recursive: true, force: true })
+  }
+})
+
+test('rejects private IPv4 and IPv4-mapped IPv6 provider endpoints', async () => {
+  const storageRoot = await mkdtemp(join(tmpdir(), 'openlink-prompt-provider-endpoint-test-'))
+  let creations = 0
+  const backend: PromptRuntimeBackend = {
+    createSession: async () => {
+      creations += 1
+      return { prompt: async () => new Response(''), cleanup: async () => {} }
+    },
+    close: async () => {},
+  }
+  const runtime = await startPromptHttpServer({
+    host: '127.0.0.1',
+    port: 0,
+    apiToken: 'test-token-which-is-long-enough',
+    storageRoot,
+    transport: 'test-runtime',
+    sessionIdleTtlMs: 60_000,
+  }, backend)
+  const address = runtime.server.address() as AddressInfo
+  const request = (baseUrl: string) => fetch(`http://127.0.0.1:${address.port}/v1/agent/sessions/private/events`, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer test-token-which-is-long-enough', 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      userId: 'user',
+      workspaceId: 'workspace',
+      projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c',
+      message: 'hello',
+      runtimeConfiguration: {
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        apiKey: 'test-key',
+        baseUrl,
+        revision: 'test-revision',
+      },
+    }),
+  })
+  try {
+    assert.equal((await request('https://127.0.0.1')).status, 400)
+    assert.equal((await request('https://[::ffff:127.0.0.1]')).status, 400)
+    assert.equal((await request('https://[0:0:0:0:0:ffff:127.0.0.1]')).status, 400)
+    assert.equal(creations, 0)
+  } finally {
+    runtime.server.close()
+    await once(runtime.server, 'close')
+    await runtime.shutdown()
+    await rm(storageRoot, { recursive: true, force: true })
+  }
+})
+
+test('agent lease refresh touches existing runtimes without provisioning a sandbox', async () => {
+  const storageRoot = await mkdtemp(join(tmpdir(), 'openlink-prompt-lease-test-'))
+  let creations = 0
+  const backend: PromptRuntimeBackend = {
+    createSession: async () => {
+      creations += 1
+      return {
+        prompt: async () => new Response(`${JSON.stringify({ type: 'agent_settled' })}\n`),
+        cleanup: async () => {},
+      }
+    },
+    close: async () => {},
+  }
+  const runtime = await startPromptHttpServer({
+    host: '127.0.0.1', port: 0, apiToken: 'test-token-which-is-long-enough', storageRoot,
+    transport: 'test-runtime', sessionIdleTtlMs: 60_000,
+  }, backend)
+  const address = runtime.server.address() as AddressInfo
+  try {
+    const lease = await fetch(`http://127.0.0.1:${address.port}/v1/agent/sessions/leaseable/lease`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer test-token-which-is-long-enough', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: 'user', workspaceId: 'workspace', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c', sessionId: 'leaseable' }),
+    })
+    assert.equal(lease.status, 200)
+    assert.deepEqual(await lease.json(), { ok: true, active: 0 })
+    assert.equal(creations, 0)
+  } finally {
+    runtime.server.close()
+    await once(runtime.server, 'close')
+    await runtime.shutdown()
+    await rm(storageRoot, { recursive: true, force: true })
+  }
+})
+
+test('agent lease warms one Worker before the first prompt and reuses it', async () => {
+  const storageRoot = await mkdtemp(join(tmpdir(), 'openlink-prompt-warmup-test-'))
+  let creations = 0
+  let resumes = 0
+  const backend: PromptRuntimeBackend = {
+    createSession: async () => {
+      creations += 1
+      let paused = false
+      return {
+        pause: async () => { paused = true },
+        resume: async () => { paused = false; resumes += 1 },
+        prompt: async () => new Response(`${JSON.stringify({ type: 'agent_settled', paused })}\n`, { headers: { 'Content-Type': 'application/x-ndjson' } }),
+        cleanup: async () => {},
+      }
+    },
+    close: async () => {},
+  }
+  const runtime = await startPromptHttpServer({
+    host: '127.0.0.1', port: 0, apiToken: 'test-token-which-is-long-enough', storageRoot,
+    transport: 'test-runtime', sessionIdleTtlMs: 60_000,
+  }, backend)
+  const address = runtime.server.address() as AddressInfo
+  const endpoint = `http://127.0.0.1:${address.port}`
+  const warmup = () => fetch(`${endpoint}/v1/agent/sessions/warmable/lease`, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer test-token-which-is-long-enough', 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      userId: 'user', workspaceId: 'workspace', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c', sessionId: 'warmable',
+      runtimeConfiguration: { providerId: 'deepseek', modelId: 'deepseek-v4-flash', apiKey: 'test-key', baseUrl: 'https://api.deepseek.com', revision: 'test-revision' },
+    }),
+  })
+  try {
+    const first = await warmup()
+    assert.equal(first.status, 200)
+    assert.deepEqual(await first.json(), { ok: true, active: 1, ready: true, paused: false })
+    const second = await warmup()
+    assert.equal(second.status, 200)
+    assert.equal(creations, 1)
+    const prompt = await fetch(`${endpoint}/v1/agent/sessions/warmable/events`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer test-token-which-is-long-enough', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: 'user', workspaceId: 'workspace', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c', message: 'hello',
+        runtimeConfiguration: { providerId: 'deepseek', modelId: 'deepseek-v4-flash', apiKey: 'test-key', baseUrl: 'https://api.deepseek.com', revision: 'test-revision' },
+      }),
+    })
+    assert.equal(prompt.status, 200)
+    assert.equal(resumes, 0)
+  } finally {
+    runtime.server.close()
+    await once(runtime.server, 'close')
+    await runtime.shutdown()
+    await rm(storageRoot, { recursive: true, force: true })
+  }
+})
+
+test('agent cancellation aborts the active worker without deleting the reusable session', async () => {
+  const storageRoot = await mkdtemp(join(tmpdir(), 'openlink-prompt-cancel-test-'))
+  let promptAborted = false
+  const backend: PromptRuntimeBackend = {
+    createSession: async () => ({
+      prompt: async (_message, signal) => new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          signal?.addEventListener('abort', () => {
+            promptAborted = true
+            controller.enqueue(new TextEncoder().encode(`${JSON.stringify({ type: 'agent_settled' })}\n`))
+            controller.close()
+          }, { once: true })
+        },
+      }), { headers: { 'Content-Type': 'application/x-ndjson' } }),
+      cleanup: async () => {},
+    }),
+    close: async () => {},
+  }
+  const runtime = await startPromptHttpServer({
+    host: '127.0.0.1', port: 0, apiToken: 'test-token-which-is-long-enough', storageRoot,
+    transport: 'test-runtime', sessionIdleTtlMs: 60_000,
+  }, backend)
+  const address = runtime.server.address() as AddressInfo
+  const endpoint = `http://127.0.0.1:${address.port}`
+  const body = {
+    userId: 'user',
+    workspaceId: 'workspace',
+    projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c',
+    sessionId: 'cancelable',
+    message: 'hello',
+    runtimeConfiguration: {
+      providerId: 'deepseek', modelId: 'deepseek-v4-flash', apiKey: 'test-key', baseUrl: 'https://api.deepseek.com', revision: 'test-revision',
+    },
+  }
+  const headers = { Authorization: 'Bearer test-token-which-is-long-enough', 'Content-Type': 'application/json' }
+  try {
+    const prompt = await fetch(`${endpoint}/v1/agent/sessions/${body.sessionId}/events`, {
+      method: 'POST', headers: { ...headers, 'X-OpenLink-Drain-On-Close': '1' }, body: JSON.stringify(body),
+    })
+    assert.equal(prompt.status, 200)
+    const cancel = await fetch(`${endpoint}/v1/agent/sessions/${body.sessionId}/cancel`, {
+      method: 'POST', headers, body: JSON.stringify(body),
+    })
+    assert.equal(cancel.status, 202)
+    assert.deepEqual(await cancel.json(), { ok: true, active: true })
+    assert.match(await prompt.text(), /agent_settled/)
+    assert.equal(promptAborted, true)
+  } finally {
+    runtime.server.close()
+    await once(runtime.server, 'close')
+    await runtime.shutdown()
+    await rm(storageRoot, { recursive: true, force: true })
+  }
+})
+
+test('extension UI responses are authorized, routed to the active runtime, and streamed back', async () => {
+  const storageRoot = await mkdtemp(join(tmpdir(), 'openlink-prompt-extension-ui-test-'))
+  let receivedUiResponse: { id: string; confirmed?: boolean; cancelled?: true; value?: string } | undefined
+  let firstFrame!: () => void
+  const firstFrameSeen = new Promise<void>((resolveFrame) => { firstFrame = resolveFrame })
+  let closeStream!: (response: { id: string; confirmed?: boolean; cancelled?: true; value?: string }) => void
+  const backend: PromptRuntimeBackend = {
+    createSession: async () => ({
+      prompt: async (_message, signal) => new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(`${JSON.stringify({ type: 'extension_ui_request', id: 'confirm-1', method: 'confirm', title: 'Confirm', message: 'Continue?' })}\n`))
+          firstFrame()
+          closeStream = (response) => {
+            controller.enqueue(new TextEncoder().encode(`${JSON.stringify({ type: 'openlink_confirmation_resolved', ...response })}\n`))
+            controller.enqueue(new TextEncoder().encode(`${JSON.stringify({ type: 'agent_settled' })}\n`))
+            controller.close()
+          }
+          signal?.addEventListener('abort', () => controller.close(), { once: true })
+        },
+      }), { headers: { 'Content-Type': 'application/x-ndjson' } }),
+      resolveExtensionUi: async (response) => {
+        receivedUiResponse = response
+        closeStream(response)
+      },
+      cleanup: async () => {},
+    }),
+    close: async () => {},
+  }
+  const runtime = await startPromptHttpServer({
+    host: '127.0.0.1', port: 0, apiToken: 'test-token-which-is-long-enough', storageRoot,
+    transport: 'test-runtime', sessionIdleTtlMs: 60_000,
+  }, backend)
+  const address = runtime.server.address() as AddressInfo
+  const endpoint = `http://127.0.0.1:${address.port}`
+  const body = {
+    userId: 'user', workspaceId: 'workspace', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c',
+    message: 'hello',
+    runtimeConfiguration: { providerId: 'deepseek', modelId: 'deepseek-v4-flash', apiKey: 'test-key', baseUrl: 'https://api.deepseek.com', revision: 'test-revision' },
+  }
+  const headers = { Authorization: 'Bearer test-token-which-is-long-enough', 'Content-Type': 'application/json' }
+  try {
+    const prompt = await fetch(`${endpoint}/v1/agent/sessions/extension/events`, {
+      method: 'POST', headers, body: JSON.stringify(body),
+    })
+    assert.equal(prompt.status, 200)
+    const reader = prompt.body!.getReader()
+    const first = await reader.read()
+    assert.match(new TextDecoder().decode(first.value), /extension_ui_request/)
+    await firstFrameSeen
+
+    const denied = await fetch(`${endpoint}/v1/agent/sessions/extension/extension-ui-response`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: 'user', workspaceId: 'workspace', projectId: body.projectId, id: 'confirm-1', confirmed: true }),
+    })
+    assert.equal(denied.status, 403)
+    const resolved = await fetch(`${endpoint}/v1/agent/sessions/extension/extension-ui-response`, {
+      method: 'POST', headers, body: JSON.stringify({ userId: 'user', workspaceId: 'workspace', projectId: body.projectId, id: 'confirm-1', confirmed: true }),
+    })
+    assert.equal(resolved.status, 202)
+    assert.deepEqual(await resolved.json(), { ok: true })
+    const rest = await reader.read()
+    const streamed = new TextDecoder().decode(rest.value)
+    assert.match(streamed, /openlink_confirmation_resolved/)
+    assert.match(streamed, /agent_settled/)
+    assert.deepEqual(receivedUiResponse, { id: 'confirm-1', confirmed: true })
+    await reader.cancel()
+  } finally {
+    runtime.server.close()
+    await once(runtime.server, 'close')
+    await runtime.shutdown()
+    await rm(storageRoot, { recursive: true, force: true })
+  }
 })
 
 test('prompt server forwards the selected provider and Pi-native Cloud session snapshot', async () => {
@@ -111,6 +446,314 @@ test('prompt server forwards the selected provider and Pi-native Cloud session s
     assert.equal(captured?.[3]?.modelId, 'deepseek-v4-flash')
     assert.equal(captured?.[4]?.header.id, 'pi-session')
     assert.equal(captured?.[4]?.entries.length, 1)
+  } finally {
+    runtime.server.close()
+    await once(runtime.server, 'close')
+    await runtime.shutdown()
+    await rm(storageRoot, { recursive: true, force: true })
+  }
+})
+
+test('replaces an idle runtime before enforcing global capacity during model switching', async () => {
+  const storageRoot = await mkdtemp(join(tmpdir(), 'openlink-prompt-model-switch-test-'))
+  const createdModels: string[] = []
+  let cleanups = 0
+  const backend: PromptRuntimeBackend = {
+    createSession: async (...parameters) => {
+      createdModels.push(parameters[3].modelId)
+      return {
+        prompt: async () => new Response(`${JSON.stringify({ type: 'agent_settled', model: parameters[3].modelId })}\n`, { headers: { 'Content-Type': 'application/x-ndjson' } }),
+        cleanup: async () => { cleanups += 1 },
+      }
+    },
+    close: async () => {},
+  }
+  const runtime = await startPromptHttpServer({
+    host: '127.0.0.1',
+    port: 0,
+    apiToken: 'test-token-which-is-long-enough',
+    storageRoot,
+    transport: 'test-runtime',
+    sessionIdleTtlMs: 60_000,
+    maxSessions: 1,
+  }, backend)
+  const address = runtime.server.address() as AddressInfo
+  const request = (modelId: string, revision: string) => fetch(`http://127.0.0.1:${address.port}/v1/agent/sessions/switchable/events`, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer test-token-which-is-long-enough', 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      userId: 'user',
+      workspaceId: 'workspace',
+      projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c',
+      message: 'continue',
+      runtimeConfiguration: { providerId: 'deepseek', modelId, apiKey: 'test-key', baseUrl: 'https://api.deepseek.com', revision },
+    }),
+  })
+  try {
+    assert.equal((await request('deepseek-v3', 'revision-1')).status, 200)
+    const switched = await request('deepseek-v4-flash', 'revision-2')
+    assert.equal(switched.status, 200)
+    assert.deepEqual(createdModels, ['deepseek-v3', 'deepseek-v4-flash'])
+    assert.equal(cleanups, 1)
+  } finally {
+    runtime.server.close()
+    await once(runtime.server, 'close')
+    await runtime.shutdown()
+    await rm(storageRoot, { recursive: true, force: true })
+  }
+  assert.equal(cleanups, 2)
+})
+
+test('recreates an expired OpenSandbox workload from the Cloud session snapshot', async () => {
+  const storageRoot = await mkdtemp(join(tmpdir(), 'openlink-prompt-sandbox-recovery-test-'))
+  let creations = 0
+  let cleanups = 0
+  const backend: PromptRuntimeBackend = {
+    createSession: async () => {
+      creations += 1
+      const attempt = creations
+      return {
+        prompt: async () => attempt === 1
+          ? new Response(JSON.stringify({ code: 'DOCKER::SANDBOX_NOT_FOUND', message: 'expired sandbox' }), { status: 404 })
+          : new Response(`${JSON.stringify({ type: 'agent_settled', attempt })}\n`, { headers: { 'Content-Type': 'application/x-ndjson' } }),
+        cleanup: async () => { cleanups += 1 },
+      }
+    },
+    close: async () => {},
+  }
+  const runtime = await startPromptHttpServer({
+    host: '127.0.0.1',
+    port: 0,
+    apiToken: 'test-token-which-is-long-enough',
+    storageRoot,
+    transport: 'test-runtime',
+    sessionIdleTtlMs: 60_000,
+  }, backend)
+  const address = runtime.server.address() as AddressInfo
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/v1/agent/sessions/recoverable/events`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer test-token-which-is-long-enough', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: 'user',
+        workspaceId: 'workspace',
+        projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c',
+        message: 'continue',
+        runtimeConfiguration: {
+          providerId: 'deepseek',
+          modelId: 'deepseek-v4-flash',
+          apiKey: 'test-key',
+          baseUrl: 'https://api.deepseek.com',
+          revision: 'test-revision',
+        },
+      }),
+    })
+    assert.equal(response.status, 200)
+    assert.deepEqual(JSON.parse((await response.text()).trim()), { type: 'agent_settled', attempt: 2 })
+    assert.equal(creations, 2)
+    assert.equal(cleanups, 1)
+  } finally {
+    runtime.server.close()
+    await once(runtime.server, 'close')
+    await runtime.shutdown()
+    await rm(storageRoot, { recursive: true, force: true })
+  }
+  assert.equal(cleanups, 2)
+})
+
+test('fails closed when an expired workload cannot be cleaned up', async () => {
+  const storageRoot = await mkdtemp(join(tmpdir(), 'openlink-prompt-sandbox-cleanup-failure-test-'))
+  let creations = 0
+  let cleanups = 0
+  const backend: PromptRuntimeBackend = {
+    createSession: async () => {
+      creations += 1
+      return {
+        prompt: async () => new Response(JSON.stringify({ code: 'DOCKER::SANDBOX_NOT_FOUND', message: 'expired sandbox' }), { status: 404 }),
+        cleanup: async () => {
+          cleanups += 1
+          throw new Error('sandbox delete failed')
+        },
+      }
+    },
+    close: async () => {},
+  }
+  const runtime = await startPromptHttpServer({
+    host: '127.0.0.1',
+    port: 0,
+    apiToken: 'test-token-which-is-long-enough',
+    storageRoot,
+    transport: 'test-runtime',
+    sessionIdleTtlMs: 60_000,
+  }, backend)
+  const address = runtime.server.address() as AddressInfo
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/v1/agent/sessions/unrecoverable/events`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer test-token-which-is-long-enough', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: 'user',
+        workspaceId: 'workspace',
+        projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c',
+        message: 'continue',
+        runtimeConfiguration: {
+          providerId: 'deepseek',
+          modelId: 'deepseek-v4-flash',
+          apiKey: 'test-key',
+          baseUrl: 'https://api.deepseek.com',
+          revision: 'test-revision',
+        },
+      }),
+    })
+    assert.equal(response.status, 400)
+    assert.equal((await response.json() as { error?: { code?: string } }).error?.code, 'PROVISIONING_FAILED')
+    // No replacement workload is created while the old one is still
+    // unconfirmed.  The entry remains a capacity barrier until cleanup is
+    // retried or the host is shut down.
+    assert.equal(creations, 1)
+    assert.equal(cleanups, 1)
+  } finally {
+    runtime.server.close()
+    await once(runtime.server, 'close')
+    await runtime.shutdown()
+    await rm(storageRoot, { recursive: true, force: true })
+  }
+  assert.equal(cleanups, 2)
+})
+
+test('reserves Agent Host capacity while different sessions are provisioning concurrently', async () => {
+  const storageRoot = await mkdtemp(join(tmpdir(), 'openlink-prompt-capacity-race-test-'))
+  let releaseCreate!: () => void
+  const createGate = new Promise<void>((resolve) => { releaseCreate = resolve })
+  let firstStartedResolve!: () => void
+  const firstStarted = new Promise<void>((resolve) => { firstStartedResolve = resolve })
+  const backend: PromptRuntimeBackend = {
+    createSession: async (_userId, _workspaceId, sessionId) => {
+      if (sessionId === 'first') {
+        firstStartedResolve()
+        await createGate
+      }
+      return {
+        prompt: async () => new Response(`${JSON.stringify({ type: 'agent_settled', sessionId })}\n`, { headers: { 'Content-Type': 'application/x-ndjson' } }),
+        cleanup: async () => {},
+      }
+    },
+    close: async () => {},
+  }
+  const runtime = await startPromptHttpServer({
+    host: '127.0.0.1', port: 0, apiToken: 'test-token-which-is-long-enough', storageRoot,
+    transport: 'test-runtime', sessionIdleTtlMs: 60_000, maxSessions: 1,
+  }, backend)
+  const address = runtime.server.address() as AddressInfo
+  const request = (sessionId: string) => fetch(`http://127.0.0.1:${address.port}/v1/agent/sessions/${sessionId}/events`, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer test-token-which-is-long-enough', 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      userId: 'user', workspaceId: 'workspace', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c', message: 'continue',
+      runtimeConfiguration: { providerId: 'deepseek', modelId: 'deepseek-v4-flash', apiKey: 'test-key', baseUrl: 'https://api.deepseek.com', revision: 'test-revision' },
+    }),
+  })
+  try {
+    const first = request('first')
+    await firstStarted
+    const second = await request('second')
+    assert.equal(second.status, 409)
+    releaseCreate()
+    assert.equal((await first).status, 200)
+  } finally {
+    releaseCreate()
+    runtime.server.close()
+    await once(runtime.server, 'close')
+    await runtime.shutdown()
+    await rm(storageRoot, { recursive: true, force: true })
+  }
+})
+
+test('cleans a stale Project VM workload before creating a runtime after Agent Host restart', async () => {
+  const storageRoot = await mkdtemp(join(tmpdir(), 'openlink-prompt-restart-cleanup-test-'))
+  let creates = 0
+  let staleCleanups = 0
+  const backend: PromptRuntimeBackend = {
+    cleanupSession: async (userId, workspaceId, sessionId, projectId) => {
+      assert.equal(userId, 'user')
+      assert.equal(workspaceId, 'workspace')
+      assert.equal(sessionId, 'restartable')
+      assert.equal(projectId, '2c51ca26-3cd0-4cb4-896d-2061de06098c')
+      staleCleanups += 1
+    },
+    createSession: async () => {
+      creates += 1
+      return {
+        prompt: async () => new Response(`${JSON.stringify({ type: 'agent_settled' })}\n`, { headers: { 'Content-Type': 'application/x-ndjson' } }),
+        cleanup: async () => {},
+      }
+    },
+    close: async () => {},
+  }
+  const runtime = await startPromptHttpServer({
+    host: '127.0.0.1', port: 0, apiToken: 'test-token-which-is-long-enough', storageRoot,
+    transport: 'test-runtime', sessionIdleTtlMs: 60_000,
+  }, backend)
+  const address = runtime.server.address() as AddressInfo
+  const request = () => fetch(`http://127.0.0.1:${address.port}/v1/agent/sessions/restartable/events`, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer test-token-which-is-long-enough', 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      userId: 'user', workspaceId: 'workspace', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c', message: 'continue',
+      runtimeConfiguration: { providerId: 'deepseek', modelId: 'deepseek-v4-flash', apiKey: 'test-key', baseUrl: 'https://api.deepseek.com', revision: 'restart-test' },
+    }),
+  })
+  try {
+    assert.equal((await request()).status, 200)
+    assert.equal((await request()).status, 200)
+    assert.equal(creates, 1)
+    // Cleanup is only needed when the in-memory runtime is first materialised;
+    // subsequent turns reuse the same workload.
+    assert.equal(staleCleanups, 1)
+  } finally {
+    runtime.server.close()
+    await once(runtime.server, 'close')
+    await runtime.shutdown()
+    await rm(storageRoot, { recursive: true, force: true })
+  }
+})
+
+test('discovers the authenticated Project preview target without exposing it to the public gateway', async () => {
+  const storageRoot = await mkdtemp(join(tmpdir(), 'openlink-preview-discovery-test-'))
+  const projectId = '2c51ca26-3cd0-4cb4-896d-2061de06098c'
+  const projectRuntimeManager = {
+    discoverPreviewTarget: async (id: string) => {
+      assert.equal(id, projectId)
+      return {
+        url: 'http://host.containers.internal:51000/v1/sandboxes/sandbox-1/proxy/5173/',
+        headers: { 'OPEN-SANDBOX-API-KEY': 'project-private-key' },
+        port: 5173,
+        sandboxId: 'sandbox-1',
+      }
+    },
+  } as unknown as ProjectRuntimeManager
+  const backend: PromptRuntimeBackend = {
+    createSession: async () => ({ prompt: async () => new Response(''), cleanup: async () => {} }),
+    close: async () => {},
+  }
+  const runtime = await startPromptHttpServer({
+    host: '127.0.0.1', port: 0, apiToken: 'test-token-which-is-long-enough', storageRoot,
+    transport: 'test-runtime', sessionIdleTtlMs: 60_000, projectRuntimeManager,
+  }, backend)
+  const address = runtime.server.address() as AddressInfo
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/v1/projects/${projectId}/preview-target`, {
+      headers: { Authorization: 'Bearer test-token-which-is-long-enough' },
+    })
+    assert.equal(response.status, 200)
+    assert.deepEqual(await response.json(), {
+      target: {
+        url: 'http://host.containers.internal:51000/v1/sandboxes/sandbox-1/proxy/5173/',
+        headers: { 'OPEN-SANDBOX-API-KEY': 'project-private-key' },
+        port: 5173,
+        sandboxId: 'sandbox-1',
+      },
+    })
   } finally {
     runtime.server.close()
     await once(runtime.server, 'close')

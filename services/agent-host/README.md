@@ -27,7 +27,8 @@ Browser integration:
 
 - `browser-client.ts` provisions isolated Browser Host sessions and performs
   actions with a session-scoped control capability.
-- `pi-extensions/openlink-browser.ts` registers Pi browser tools for open,
+- `services/agent-browser-extension/openlink-browser.ts` is copied into each
+  immutable worker image and registers Pi browser tools for open,
   read, navigate, click, type, hover, drag, keyboard, scroll, screenshot, and
   dialog behavior.
 - `AgentLaunchSpec.browser` adds the extension and scoped Browser Host
@@ -35,6 +36,10 @@ Browser integration:
 - `BrowserEnabledAgentOrchestrator` provisions Browser Host and Agent Host as
   one lifecycle, binds the agent-only capability into Pi, and always cleans up
   both runtimes together.
+- `browser-gateway.ts` publishes session-scoped preview and WebSocket URLs for
+  remote Web UIs. Project VM loopback URLs and Browser Host service tokens are
+  never returned to the browser; an HTTPS reverse proxy must forward the
+  gateway paths in remote deployments.
 
 No backend performs work as an import side effect. Web startup explicitly starts
 OpenSandbox; remote setup executes a checksum-verified bootstrap plan and opens
@@ -56,9 +61,13 @@ server-side URL and token.
 
 ## Project VM mode
 
-Project VM mode is explicit and never reports a fake ready state. Install the
-Podman CLI built from/pinned against `services/linux`, then start the web Agent
-Host with:
+Project VM mode is explicit and never reports a fake ready state. OpenLink's
+image-production pipeline publishes a bootable, local Project VM disk. The
+runtime only copies that disk when it creates a Project VM; it does not pull a
+machine OS, build an OCI image, or run `bootc switch` during service startup.
+The startup supervisor builds the Podman CLI from `services/linux` and uses it
+to create the local Linux Project VM; no system Podman installation is
+required. Start the web Agent Host with:
 
 ```bash
 OPENLINK_PROJECT_VM_MODE=podman-machine \
@@ -66,12 +75,14 @@ OPENLINK_PROJECT_VM_STATE_ROOT=/var/lib/openlink/project-vms \
 npm start
 ```
 
-The first session for a project runs `podman machine init/start`, prepares a
-project workspace, and bootstraps Git, Node/npm, pnpm, Python and build tools.
-If Podman is missing or the VM bootstrap fails, the request returns a retryable
-provisioning error and the runtime remains non-ready. The default local
-development profile keeps this mode disabled until the project VM image and
-per-project OpenSandbox/Browser Host endpoints are deployed.
+The first session for a project runs `podman machine init/start` from the
+published local disk, prepares a project workspace, enables the guest Podman
+socket, and makes the complete Git/Node/npm/pnpm/Python/build toolchain
+available to Session images. Image production is explicit and separate:
+`OPENLINK_BUILD_ARTIFACTS=1` runs the build pipeline and writes the OCI source
+and bootable disk under `.openlink-runtime/project-vm-base/`. If the engine,
+VM, socket, images, or service bootstrap fails, the request returns a retryable
+provisioning error and no shared-host runtime is used.
 
 ## Remote release
 
@@ -84,10 +95,11 @@ node scripts/build-agent-remote-bundle.mjs \
   --platform linux/amd64
 ```
 
-The SSH user must own the chosen remote root and be allowed to use Docker.
-OpenSandbox binds only to remote `127.0.0.1:43122`; Agent Host accesses it over
-the managed SSH tunnel. The OpenSandbox API key is uploaded separately in a
-mode-0600 environment file and is never stored in the release archive.
+The SSH user must own the chosen remote root and have passwordless sudo for
+QEMU/KVM and guest provisioning. The release contains the Podman engine built
+from `services/linux`; OpenSandbox, Browser Host, Pi workers, and Session
+sandboxes run inside the selected Project VM through direct Podman commands.
+Docker Compose is not used by the remote Project=VM profile.
 
 ## Local development
 

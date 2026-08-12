@@ -44,7 +44,15 @@ test('native preview is authenticated, proxied, bridge-injected, and action-rela
     body: JSON.stringify({ ownerId: 'user-1', workspaceId: 'workspace-1', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c', surface: 'native-preview', preview: { targetUrl: `http://127.0.0.1:${upstreamAddress.port}` } }),
   })
   assert.equal(createResponse.status, 201)
-  const created = await createResponse.json() as { session: { id: string }; connection: { previewUrl: string; eventsUrl: string } }
+  const created = await createResponse.json() as { session: { id: string }; connection: { previewUrl: string; eventsUrl: string; controlToken: string } }
+
+  const refreshed = await fetch(`${config.publicBaseUrl}/v1/browser/sessions/${encodeURIComponent(created.session.id)}/capability`, {
+    method: 'POST', headers: { Authorization: `Bearer ${created.connection.controlToken}` },
+  })
+  assert.equal(refreshed.status, 200)
+  const refreshedPayload = await refreshed.json() as { controlToken?: string; expiresAt?: string }
+  assert.ok(refreshedPayload.controlToken)
+  assert.ok(refreshedPayload.expiresAt)
 
   const bootstrap = await fetch(created.connection.previewUrl, { redirect: 'manual' })
   assert.equal(bootstrap.status, 302)

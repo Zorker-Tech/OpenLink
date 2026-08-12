@@ -25,6 +25,8 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useId,
+  useLayoutEffect,
   useMemo,
   useState,
 } from "react";
@@ -324,16 +326,54 @@ export type MessageResponseProps = ComponentProps<typeof Streamdown>;
 const streamdownPlugins = { cjk, code, math, mermaid };
 
 export const MessageResponse = memo(
-  ({ className, ...props }: MessageResponseProps) => (
-    <Streamdown
-      className={cn(
-        "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
-        className
-      )}
-      plugins={streamdownPlugins}
-      {...props}
-    />
-  ),
+  ({ className, ...props }: MessageResponseProps) => {
+    const responseId = useId().replace(/:/g, "");
+
+    // Streamdown intentionally renders a document-style card around tables.
+    // Chat messages already provide the grouping, so flatten that wrapper
+    // without adding another DOM container around the response itself.
+    useLayoutEffect(() => {
+      const root = document.querySelector<HTMLElement>(`[data-openlink-message-response="${responseId}"]`);
+      if (!root) return;
+      const flattenTables = () => {
+        for (const wrapper of root.querySelectorAll<HTMLElement>('[data-streamdown="table-wrapper"]')) {
+          Object.assign(wrapper.style, {
+            margin: "0",
+            gap: "0",
+            border: "0",
+            borderRadius: "0",
+            background: "transparent",
+            padding: "0",
+          });
+          const tableContainer = wrapper.lastElementChild;
+          if (tableContainer instanceof HTMLElement) {
+            Object.assign(tableContainer.style, { border: "0", borderRadius: "0", background: "transparent" });
+          }
+        }
+      };
+      flattenTables();
+      const observer = new MutationObserver(flattenTables);
+      observer.observe(root, { childList: true, subtree: true });
+      return () => observer.disconnect();
+    }, [responseId, props.children]);
+
+    return (
+      <Streamdown
+        className={cn(
+          "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+          className
+        )}
+        data-openlink-message-response={responseId}
+        // Streamdown's built-in link safety dialog is rendered alongside the
+        // link. Inside Markdown paragraphs that produces invalid nested block
+        // elements and hydration failures. Links remain sanitized and open
+        // with rel=noreferrer through Streamdown's normal anchor renderer.
+        linkSafety={{ enabled: false }}
+        plugins={streamdownPlugins}
+        {...props}
+      />
+    );
+  },
   (prevProps, nextProps) =>
     prevProps.children === nextProps.children &&
     nextProps.isAnimating === prevProps.isAnimating

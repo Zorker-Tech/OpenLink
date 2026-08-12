@@ -112,7 +112,7 @@ function Header({ user }: { user: HomeUser | null }) {
 
   const handleSignOut = async () => {
     setIsSigningOut(true)
-    await supabase.auth.signOut()
+    await supabase.auth.signOut({ scope: 'local' })
     router.refresh()
     setIsSigningOut(false)
   }

@@ -18,15 +18,18 @@ import {
   PromptInputSubmit,
   PromptInputTextarea,
 } from '@/components/ai-elements/prompt-input'
+import { PromptAddMenu } from '@/components/prompt-add-menu'
 import {
   BrowserWorkbench,
   type BrowserWorkbenchHandle,
   type BrowserWorkbenchUiState,
 } from '@/components/browser/browser-workbench'
+import { CodeServerWorkbench } from '@/components/code-server/code-server-workbench'
 import { Sidebar } from '@/components/app-workspace'
 import type { ThemeMode } from '@/components/account-drawer'
 import { ChatConfirmationDock, type ComposerConfirmationRequest } from '@/components/chat-confirmation-dock'
 import { ChatTimeline, type ActiveFlowStatus } from '@/components/chat-timeline'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { OpenLinkThemeProvider } from '@/components/ui/theme-scope'
 import type { ActiveWorkspaceSummary, PersonalWorkspaceSummary } from '@/components/workspace-switcher'
@@ -55,6 +58,14 @@ import {
 } from 'lucide-react'
 import type { PanelImperativeHandle } from 'react-resizable-panels'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+
+interface GitVersionOption {
+  ref: string
+  shortRef: string
+  message: string
+  timestamp: string
+  current: boolean
+}
 
 interface ChatWorkspaceProps {
   activeWorkspace: ActiveWorkspaceSummary
@@ -100,24 +111,40 @@ function mergeAgentEvents(
   incoming: OpenLinkAgentEvent[],
   optimisticUser?: OptimisticUserMessage,
 ) {
-  let next = current
+  if (!incoming.length) return current
+
+  // Stream frames arrive in animation-frame batches. The old implementation
+  // called `some()` and copied the whole array once per frame, which made a
+  // long token/tool stream quadratic and was the source of the delayed chat
+  // rendering seen after sending a message. Build one id set and one mutable
+  // draft, then publish a single immutable array at the end.
+  const next = current.slice()
+  const ids = new Set(current.map((event) => event.id))
   let optimisticResolved = false
+  let changed = false
 
   for (const event of incoming) {
     if (event.type === 'message.user' && optimisticUser && !optimisticResolved) {
       const optimisticIndex = next.findIndex((candidate) => candidate.id === optimisticUser.id)
       if (optimisticIndex >= 0) {
-        next = next.slice()
         next[optimisticIndex] = event
+        ids.delete(optimisticUser.id)
+        ids.add(event.id)
         optimisticResolved = true
+        changed = true
         continue
       }
     }
-    if (next.some((candidate) => candidate.id === event.id)) continue
-    next = [...next, event]
+    if (ids.has(event.id)) continue
+    next.push(event)
+    ids.add(event.id)
+    changed = true
   }
 
-  return next
+  // Streams may replay an already-persisted event after a reconnect. Returning
+  // the original state lets React bail out instead of scheduling a new render
+  // for every replay frame.
+  return changed ? next : current
 }
 
 function ToolbarButton({ label, children, className = '', ...props }: { label: string; children: React.ReactNode; className?: string } & React.ComponentProps<'button'>) {
@@ -136,11 +163,18 @@ function ChatTopbar({
   onOpenSidebar,
   onToggleChat,
   onToggleSidebar,
-  onTogglePreview,
+  onSelectBrowserSurface,
+  onSelectCode,
+  onToggleDeviceView,
   onSessionTitleChange,
-  previewMode,
+  workspaceView,
   renameRequestVersion,
   sessionTitle,
+  gitVersions = [],
+  selectedGitRef,
+  gitVersionsLoading = false,
+  gitVersionError,
+  onSelectGitVersion,
 }: {
   browserState: BrowserWorkbenchUiState
   browserWorkbenchRef: React.RefObject<BrowserWorkbenchHandle | null>
@@ -149,11 +183,18 @@ function ChatTopbar({
   onOpenSidebar: () => void
   onToggleChat: () => void
   onToggleSidebar: () => void
-  onTogglePreview: () => void
+  onSelectBrowserSurface: (surface: 'native-preview' | 'chromium-stream') => void
+  onSelectCode: () => void
+  onToggleDeviceView: () => void
   onSessionTitleChange: (title: string) => Promise<boolean>
-  previewMode: 'mobile' | 'browser'
+  workspaceView: 'mobile' | 'browser' | 'code'
   renameRequestVersion: number
   sessionTitle: string
+  gitVersions: GitVersionOption[]
+  selectedGitRef: string | null
+  gitVersionsLoading: boolean
+  gitVersionError: string | null
+  onSelectGitVersion: (ref: string | null) => void
 }) {
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState(sessionTitle)
@@ -241,16 +282,16 @@ function ChatTopbar({
             <ToolbarButton aria-pressed={chatCollapsed} className={chatCollapsed ? 'bg-[var(--app-active)] text-[var(--app-foreground)]' : ''} label="评论" onClick={onToggleChat}><MessageCircle className="size-4" /></ToolbarButton>
           </div>
           <div className="flex h-[29px] w-[114px] shrink-0 items-center rounded-md border border-[var(--app-control-border)] bg-[var(--app-surface)] p-px">
-            <ToolbarButton aria-pressed={browserState.surface === 'native-preview'} className={`-ml-px mr-px size-[26px] ${browserState.surface === 'native-preview' ? 'bg-[var(--app-background)] text-[var(--app-foreground)]' : ''}`} label="预览" onClick={() => browserWorkbenchRef.current?.setSurface('native-preview')}><Eye className="size-4" /></ToolbarButton>
-            <ToolbarButton aria-pressed={browserState.surface === 'chromium-stream'} className={browserState.surface === 'chromium-stream' ? 'bg-[var(--app-background)] text-[var(--app-foreground)]' : ''} label="实时" onClick={() => browserWorkbenchRef.current?.setSurface('chromium-stream')}><Send className="size-4" /></ToolbarButton>
-            <ToolbarButton label="代码"><Code2 className="size-4" /></ToolbarButton>
+            <ToolbarButton aria-pressed={workspaceView !== 'code' && browserState.surface === 'native-preview'} className={`-ml-px mr-px size-[26px] ${workspaceView !== 'code' && browserState.surface === 'native-preview' ? 'bg-[var(--app-background)] text-[var(--app-foreground)]' : ''}`} label="预览" onClick={() => onSelectBrowserSurface('native-preview')}><Eye className="size-4" /></ToolbarButton>
+            <ToolbarButton aria-pressed={workspaceView !== 'code' && browserState.surface === 'chromium-stream'} className={workspaceView !== 'code' && browserState.surface === 'chromium-stream' ? 'bg-[var(--app-background)] text-[var(--app-foreground)]' : ''} label="实时" onClick={() => onSelectBrowserSurface('chromium-stream')}><Send className="size-4" /></ToolbarButton>
+            <ToolbarButton aria-pressed={workspaceView === 'code'} className={workspaceView === 'code' ? 'bg-[var(--app-background)] text-[var(--app-foreground)]' : ''} label="代码" onClick={onSelectCode}><Code2 className="size-4" /></ToolbarButton>
             <ToolbarButton label="数据"><Database className="size-4" /></ToolbarButton>
           </div>
           <div className="flex min-w-[150px] flex-1 items-center justify-center">
-            <form className="relative -left-[3px] flex h-7 w-full max-w-[500px] items-center rounded-md border border-[var(--app-control-border)] px-0.5" onSubmit={(event) => { event.preventDefault(); browserWorkbenchRef.current?.navigate(addressDraft) }}>
+            <form className={`relative -left-[3px] flex h-7 w-full max-w-[500px] items-center rounded-md border border-[var(--app-control-border)] px-0.5 ${workspaceView === 'code' ? 'pointer-events-none opacity-0' : ''}`} onSubmit={(event) => { event.preventDefault(); browserWorkbenchRef.current?.navigate(addressDraft) }}>
               <ToolbarButton className="size-6!" disabled={!browserState.canGoBack} label="后退" onClick={() => browserWorkbenchRef.current?.back()}><ArrowLeft className="size-4" /></ToolbarButton>
               <ToolbarButton className="size-6!" disabled={!browserState.canGoForward} label="前进" onClick={() => browserWorkbenchRef.current?.forward()}><ArrowRight className="size-4" /></ToolbarButton>
-              <ToolbarButton aria-pressed={previewMode === 'mobile'} className="size-6! hover:bg-transparent!" label="设备" onClick={onTogglePreview}><img alt="" className="app-control-icon size-4" src="/openlink/app/phone.svg" /></ToolbarButton>
+              <ToolbarButton aria-pressed={workspaceView === 'mobile'} className="size-6! hover:bg-transparent!" disabled={workspaceView === 'code'} label="设备" onClick={onToggleDeviceView}><img alt="" className="app-control-icon size-4" src="/openlink/app/phone.svg" /></ToolbarButton>
               <input
                 aria-label="浏览器地址"
                 className="h-6 min-w-0 flex-1 bg-transparent px-1 text-[12px] tracking-[-0.0762px] text-[var(--app-muted)] outline-none focus:text-[var(--app-foreground)]"
@@ -267,7 +308,31 @@ function ChatTopbar({
               <ToolbarButton className="size-6!" label="更多预览选项"><ChevronDown className="size-4" /></ToolbarButton>
             </form>
           </div>
-          <button className="flex h-7 w-[76px] shrink-0 items-center justify-center gap-1 rounded-md text-sm font-medium tracking-[-0.1504px] text-[var(--app-muted)] hover:bg-[var(--app-active)] hover:text-[var(--app-foreground)]" type="button">Latest <ChevronDown className="size-4" /></button>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={<button aria-label="切换预览版本" className="flex h-7 w-[96px] shrink-0 items-center justify-center gap-1 rounded-md text-sm font-medium tracking-[-0.1504px] text-[var(--app-muted)] hover:bg-[var(--app-active)] hover:text-[var(--app-foreground)]" type="button" />}
+            >
+              <span className="max-w-[70px] truncate">{selectedGitRef ? `@${gitVersions.find((version) => version.ref === selectedGitRef)?.shortRef ?? selectedGitRef.slice(0, 8)}` : 'Latest'}</span>
+              <ChevronDown className="size-4" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-[280px] rounded-xl border border-[var(--app-border)] bg-[var(--app-elevated)] p-1.5 text-[var(--app-foreground)] shadow-[0_12px_36px_var(--app-shadow)] ring-0">
+              <DropdownMenuItem className="h-9 cursor-pointer gap-2 rounded-md px-2.5 text-sm focus:bg-[var(--app-hover)]" disabled={!selectedGitRef} onClick={() => onSelectGitVersion(null)}>
+                <span className="min-w-0 flex-1 truncate">Latest</span>
+                {!selectedGitRef && <span className="text-[11px] text-[var(--app-muted)]">当前</span>}
+              </DropdownMenuItem>
+              {gitVersionsLoading && <div className="px-2.5 py-2 text-xs text-[var(--app-muted)]">正在读取 Git 版本…</div>}
+              {!gitVersionsLoading && gitVersions.length === 0 && <div className="px-2.5 py-2 text-xs text-[var(--app-muted)]">暂无可切换的 Git 版本</div>}
+              {!gitVersionsLoading && gitVersions.map((version) => (
+                <DropdownMenuItem className="h-auto min-h-9 cursor-pointer gap-2 rounded-md px-2.5 py-1.5 text-sm focus:bg-[var(--app-hover)]" key={version.ref} onClick={() => onSelectGitVersion(version.ref)}>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{version.message}</span>
+                    <span className="block text-[11px] text-[var(--app-muted)]">@{version.shortRef}{version.current ? ' · 当前提交' : ''}</span>
+                  </span>
+                </DropdownMenuItem>
+              ))}
+              {gitVersionError && <div className="px-2.5 py-2 text-xs text-red-400">{gitVersionError}</div>}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -321,7 +386,7 @@ function ChatComposer({
 
   const actionButtons = (
     <>
-      <PromptInputButton aria-label="添加附件" className="size-7 shrink-0 rounded-md p-0 transition-[color,background-color,border-color,opacity] active:translate-y-0! hover:bg-[var(--app-active)]" type="button"><Plus className="size-4" /></PromptInputButton>
+      <PromptAddMenu variant="session" />
       <PromptInputButton aria-label="添加评论" className="size-7 shrink-0 rounded-md p-0 transition-[color,background-color,border-color,opacity] active:translate-y-0! hover:bg-[var(--app-active)]" type="button"><MessageCircle className="size-3.5" /></PromptInputButton>
       <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
         <ModelSelectorTrigger render={<PromptInputButton aria-label={`选择模型，当前 ${selectedModel?.name ?? '未配置'}`} className="h-7 w-12 shrink-0 gap-1 rounded-md px-1.5 text-[var(--app-muted)] transition-[color,background-color,border-color,opacity] active:translate-y-0! hover:bg-[var(--app-active)] hover:text-[var(--app-foreground)] aria-expanded:bg-transparent! aria-expanded:text-[var(--app-muted)]!" type="button" />}>
@@ -365,7 +430,7 @@ function ChatComposer({
       </div>
       <div className={expanded ? 'flex w-full shrink-0 items-end justify-between gap-1' : 'flex shrink-0 items-center gap-0.5'}>
         <div className={expanded ? 'flex min-w-0 flex-1 items-center gap-0.5' : 'contents'}>{actionButtons}</div>
-        <PromptInputSubmit aria-label="发送" className="size-7 shrink-0 rounded-md border border-[var(--app-submit-background)] bg-[var(--app-submit-background)] p-0 transition-[color,background-color,border-color,opacity] active:translate-y-0! hover:opacity-90" disabled={status === 'streaming' || !selectedModel}><img alt="" className="app-submit-icon size-4" src="/openlink/app/mic.svg" /></PromptInputSubmit>
+        <PromptInputSubmit aria-label="发送" className="size-7 shrink-0 rounded-md border border-[var(--app-submit-background)] bg-[var(--app-submit-background)] p-0 text-[var(--app-submit-foreground)] transition-[color,background-color,border-color,opacity] active:translate-y-0! hover:opacity-90" disabled={status === 'streaming' || !selectedModel}><Send aria-hidden className="size-3.5" /></PromptInputSubmit>
       </div>
     </PromptInput>
   )
@@ -373,22 +438,23 @@ function ChatComposer({
 
 function PreviewCanvas({
   browserWorkbenchRef,
-  mode,
+  view,
   onBrowserStateChange,
   sessionId,
 }: {
   browserWorkbenchRef: React.RefObject<BrowserWorkbenchHandle | null>
-  mode: 'mobile' | 'browser'
+  view: 'mobile' | 'browser' | 'code'
   onBrowserStateChange: (state: BrowserWorkbenchUiState) => void
   sessionId: string
 }) {
-  const browserMode = mode === 'browser'
+  if (view === 'code') return <CodeServerWorkbench chatSessionId={sessionId} />
+  const browserMode = view === 'browser'
 
   return (
     <main aria-label="预览画布" className={`relative size-full min-w-0 overflow-hidden ${browserMode ? 'bg-[#eee]' : 'bg-[#0a0a0a]'}`}>
       <div className={browserMode ? 'size-full' : 'flex size-full items-center justify-center px-4 py-[46px]'}>
         <div className={browserMode ? 'size-full' : 'h-full max-h-[835px] w-[391px] max-w-full overflow-hidden rounded-xl border border-[#292929] bg-[#eee] shadow-[0_8px_16px_-4px_rgb(0_0_0_/_4%),0_24px_32px_-8px_rgb(0_0_0_/_6%)]'}>
-          <BrowserWorkbench chatSessionId={sessionId} onStateChange={onBrowserStateChange} ref={browserWorkbenchRef} viewportMode={mode} />
+          <BrowserWorkbench chatSessionId={sessionId} onStateChange={onBrowserStateChange} ref={browserWorkbenchRef} viewportMode={view} />
         </div>
       </div>
     </main>
@@ -417,8 +483,11 @@ export function ChatWorkspace({
   const [themeMode, setThemeMode] = useState<ThemeMode>('dark')
   const [systemLight, setSystemLight] = useState(false)
   const [chatPanelCollapsed, setChatPanelCollapsed] = useState(false)
-  const [previewMode, setPreviewMode] = useState<'mobile' | 'browser'>('mobile')
+  // The browser canvas is the primary workspace. The device control is an
+  // explicit opt-in for the constrained mobile viewport.
+  const [workspaceView, setWorkspaceView] = useState<'mobile' | 'browser' | 'code'>('browser')
   const [browserState, setBrowserState] = useState<BrowserWorkbenchUiState>({
+    browserSessionId: undefined,
     address: '',
     canGoBack: false,
     canGoForward: false,
@@ -434,14 +503,48 @@ export function ChatWorkspace({
   const [agentStreamStatus, setAgentStreamStatus] = useState<'idle' | 'streaming'>('idle')
   const streamQueueRef = useRef<OpenLinkAgentEvent[]>([])
   const streamFrameRef = useRef<number | null>(null)
+  const activeRequestAbortRef = useRef<AbortController | null>(null)
   const pendingOptimisticUserRef = useRef<OptimisticUserMessage | null>(null)
+  const nextClientSequenceRef = useRef(initialEvents.reduce((maximum, event) => Math.max(maximum, event.sequence), -1) + 1)
   const autoStartHandledRef = useRef(false)
   const chatPanelRef = useRef<PanelImperativeHandle | null>(null)
   const browserWorkbenchRef = useRef<BrowserWorkbenchHandle | null>(null)
   const pendingConfirmations = useMemo(() => pendingConfirmationRequests(agentEvents), [agentEvents])
+  const [gitVersions, setGitVersions] = useState<GitVersionOption[]>([])
+  const [selectedGitRef, setSelectedGitRef] = useState<string | null>(null)
+  const [gitVersionsLoading, setGitVersionsLoading] = useState(true)
+  const [gitVersionError, setGitVersionError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    setGitVersionsLoading(true)
+    void fetch(`/api/chat/${encodeURIComponent(sessionId)}/git`, { signal: controller.signal, cache: 'no-store' })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => null) as { versions?: unknown; error?: { message?: unknown } } | null
+        if (!response.ok) throw new Error(typeof payload?.error?.message === 'string' ? payload.error.message : 'Git 版本读取失败')
+        const versions = Array.isArray(payload?.versions) ? payload.versions.filter((value): value is GitVersionOption => {
+          if (!value || typeof value !== 'object') return false
+          const item = value as Record<string, unknown>
+          return typeof item.ref === 'string' && typeof item.shortRef === 'string' && typeof item.message === 'string' && typeof item.timestamp === 'string' && typeof item.current === 'boolean'
+        }) : []
+        setGitVersions(versions)
+        setGitVersionError(null)
+      })
+      .catch((error) => {
+        if (error instanceof Error && error.name === 'AbortError') return
+        setGitVersionError(error instanceof Error ? error.message : 'Git 版本读取失败')
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setGitVersionsLoading(false)
+      })
+    return () => controller.abort()
+  }, [sessionId])
 
   const appendAgentEvents = useCallback((incoming: OpenLinkAgentEvent[]) => {
     if (!incoming.length) return
+    for (const event of incoming) {
+      nextClientSequenceRef.current = Math.max(nextClientSequenceRef.current, event.sequence + 1)
+    }
     const optimisticUser = incoming.some((event) => event.type === 'message.user')
       ? pendingOptimisticUserRef.current ?? undefined
       : undefined
@@ -456,21 +559,58 @@ export function ChatWorkspace({
   }, [appendAgentEvents])
 
   const enqueueStreamEvent = useCallback((event: OpenLinkAgentEvent) => {
+    nextClientSequenceRef.current = Math.max(nextClientSequenceRef.current, event.sequence + 1)
     streamQueueRef.current.push(event)
     if (streamFrameRef.current !== null) return
     streamFrameRef.current = window.requestAnimationFrame(flushStreamQueue)
   }, [flushStreamQueue])
 
   useEffect(() => () => {
+    // Navigating away must cancel the upstream fetch as well as the local
+    // animation queue. Without this, Next keeps the Agent Host request alive
+    // until Pi finishes, holding the Cloud session lease and its sandbox even
+    // though the chat page is gone.
+    activeRequestAbortRef.current?.abort()
+    activeRequestAbortRef.current = null
     if (streamFrameRef.current !== null) window.cancelAnimationFrame(streamFrameRef.current)
     streamFrameRef.current = null
     streamQueueRef.current = []
   }, [])
 
+  useEffect(() => {
+    // Browser Host binding is part of the Worker capability identity. Wait
+    // until that binding is either connected or definitively unavailable so
+    // opening a chat warms exactly the Worker that the first prompt will use,
+    // instead of creating a no-browser Worker and immediately replacing it.
+    if (browserState.status === 'connecting' || browserState.status === 'reconnecting') return
+    let disposed = false
+    const refreshLease = () => {
+      void fetch(`/api/chat/${encodeURIComponent(sessionId)}/lease`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...(autoStartModel ? { model: autoStartModel } : {}),
+          ...(browserState.browserSessionId ? { browserSessionId: browserState.browserSessionId } : {}),
+        }),
+        cache: 'no-store',
+      }).then((response) => {
+        if (!response.ok && !disposed) console.warn(`OpenLink agent lease refresh failed (${response.status})`)
+      }).catch(() => {
+        // Lease refresh is best-effort. The next prompt can still rebuild the
+        // sandbox from the durable PG Pi snapshot if the Agent Host is down.
+      })
+    }
+    refreshLease()
+    const timer = window.setInterval(refreshLease, 5 * 60_000)
+    return () => {
+      disposed = true
+      window.clearInterval(timer)
+    }
+  }, [autoStartModel, browserState.browserSessionId, browserState.status, sessionId])
+
   const submitAgentMessage = useCallback(async (message: string, model: ConfiguredModelOption | null) => {
     if (agentStreamStatus === 'streaming') return
     setAgentStreamStatus('streaming')
-    const startSequence = (agentEvents.at(-1)?.sequence ?? -1) + 1
     const optimisticUser: OptimisticUserMessage = {
       id: `${sessionId}:optimistic-user:${Date.now()}`,
       text: message,
@@ -478,10 +618,10 @@ export function ChatWorkspace({
     appendAgentEvents([{
       version: 1,
       id: optimisticUser.id,
-      sequence: startSequence,
+      sequence: nextClientSequenceRef.current++,
       sessionId,
       timestamp: new Date().toISOString(),
-      source: agentEvents.at(-1)?.source ?? 'pi',
+      source: 'pi',
       type: 'message.user',
       messageId: optimisticUser.id,
       text: message,
@@ -490,11 +630,18 @@ export function ChatWorkspace({
     // remains reserved for the server's canonical message.user event.
     pendingOptimisticUserRef.current = optimisticUser
 
+    const requestAbortController = new AbortController()
+    activeRequestAbortRef.current = requestAbortController
     try {
       const response = await fetch(`/api/chat/${encodeURIComponent(sessionId)}/events`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, startSequence, ...(model ? { model: { providerId: model.providerId, modelId: model.modelId } } : {}) }),
+        signal: requestAbortController.signal,
+        body: JSON.stringify({
+          message,
+          ...(model ? { model: { providerId: model.providerId, modelId: model.modelId } } : {}),
+          ...(workspaceView !== 'code' && browserState.browserSessionId ? { browserSessionId: browserState.browserSessionId } : {}),
+        }),
       })
       if (!response.ok) {
         const failure = await response.json().catch(() => null) as { error?: string; detail?: string } | null
@@ -523,8 +670,10 @@ export function ChatWorkspace({
         }
         if (done) break
       }
+      if (buffer.trim()) throw new Error('Agent stream ended with an incomplete event')
     } catch (error) {
-      const sequence = (agentEvents.at(-1)?.sequence ?? -1) + 1
+      if (requestAbortController.signal.aborted || (error instanceof Error && error.name === 'AbortError')) return
+      const sequence = nextClientSequenceRef.current++
       appendAgentEvents([{
           version: 1,
           id: `${sessionId}:client-error:${sequence}`,
@@ -538,6 +687,7 @@ export function ChatWorkspace({
           recoverable: true,
         }])
     } finally {
+      if (activeRequestAbortRef.current === requestAbortController) activeRequestAbortRef.current = null
       if (streamFrameRef.current !== null) {
         window.cancelAnimationFrame(streamFrameRef.current)
         streamFrameRef.current = null
@@ -545,34 +695,37 @@ export function ChatWorkspace({
       appendAgentEvents(streamQueueRef.current.splice(0))
       setAgentStreamStatus('idle')
     }
-  }, [agentEvents, agentStreamStatus, appendAgentEvents, enqueueStreamEvent, sessionId])
+  }, [agentStreamStatus, appendAgentEvents, browserState.browserSessionId, enqueueStreamEvent, sessionId, workspaceView])
 
   useEffect(() => {
     if (!autoStart || autoStartHandledRef.current || !initialPrompt.trim()) return
+    // An auto-start prompt must not outrun BrowserWorkbench provisioning. If
+    // it did, Pi would be created without the scoped browser extension and a
+    // browser-capable task would silently lose its tools. A failed browser
+    // runtime is still allowed to proceed as a normal coding task.
+    if (!browserState.browserSessionId && browserState.status !== 'failed') return
     autoStartHandledRef.current = true
     window.history.replaceState(window.history.state, '', window.location.pathname)
     const selectedModel = configuredModels.find((model) => (
       model.providerId === autoStartModel?.providerId && model.modelId === autoStartModel.modelId
     )) ?? null
     void submitAgentMessage(initialPrompt, selectedModel)
-  }, [autoStart, autoStartModel, configuredModels, initialPrompt, submitAgentMessage])
+  }, [autoStart, autoStartModel, browserState.browserSessionId, browserState.status, configuredModels, initialPrompt, submitAgentMessage])
 
-  const resolveConfirmation = useCallback((confirmationId: string, approved: boolean, value?: string) => {
-    setAgentEvents((current) => {
-      const sequence = (current.at(-1)?.sequence ?? -1) + 1
-      return [...current, {
-        version: 1,
-        id: `${sessionId}:confirmation:${sequence}`,
-        sequence,
-        sessionId,
-        timestamp: new Date().toISOString(),
-        source: current.at(-1)?.source ?? 'demo',
-        type: 'confirmation.resolved',
-        confirmationId,
-        approved,
-        value,
-      }]
+  const resolveConfirmation = useCallback(async (confirmationId: string, approved: boolean, value?: string) => {
+    const response = await fetch(`/api/chat/${encodeURIComponent(sessionId)}/extension-ui-response`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: confirmationId,
+        ...(value !== undefined ? { value } : { approved }),
+      }),
+      cache: 'no-store',
     })
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null) as { error?: unknown } | null
+      throw new Error(typeof payload?.error === 'string' ? payload.error : '确认请求失败，请重试')
+    }
   }, [sessionId])
 
   const updateSessionTitle = useCallback(async (title: string) => {
@@ -586,6 +739,31 @@ export function ChatWorkspace({
     setCurrentSessionTitle(result.title)
     return true
   }, [currentSessionTitle, sessionId])
+
+  const selectGitVersion = useCallback(async (ref: string | null) => {
+    const previous = selectedGitRef
+    setGitVersionError(null)
+    if (!ref && !previous) {
+      browserWorkbenchRef.current?.reload()
+      return
+    }
+    setSelectedGitRef(ref)
+    try {
+      const response = await fetch(`/api/chat/${encodeURIComponent(sessionId)}/git`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ref: ref ?? 'latest' }),
+        cache: 'no-store',
+      })
+      const payload = await response.json().catch(() => null) as { version?: GitVersionOption; error?: { message?: unknown } } | null
+      if (!response.ok) throw new Error(typeof payload?.error?.message === 'string' ? payload.error.message : 'Git 版本切换失败')
+      if (payload?.version) setGitVersions((current) => current.map((version) => ({ ...version, current: version.ref === payload.version!.ref })))
+      browserWorkbenchRef.current?.reload()
+    } catch (error) {
+      setSelectedGitRef(previous)
+      setGitVersionError(error instanceof Error ? error.message : 'Git 版本切换失败')
+    }
+  }, [selectedGitRef, sessionId])
 
   const toggleChatPanel = () => {
     if (chatPanelCollapsed) {
@@ -636,7 +814,7 @@ export function ChatWorkspace({
           themeMode={themeMode}
         />
         <div className="flex min-w-0 flex-1 flex-col bg-[var(--app-background)]">
-          <ChatTopbar browserState={browserState} browserWorkbenchRef={browserWorkbenchRef} collapsed={collapsed} chatCollapsed={chatPanelCollapsed} onOpenSidebar={() => { setCollapsed(false); setMobileOpen(true) }} onSessionTitleChange={updateSessionTitle} onToggleChat={toggleChatPanel} onTogglePreview={() => setPreviewMode((mode) => mode === 'mobile' ? 'browser' : 'mobile')} onToggleSidebar={() => setCollapsed(false)} previewMode={previewMode} renameRequestVersion={renameRequestVersion} sessionTitle={currentSessionTitle} />
+          <ChatTopbar browserState={browserState} browserWorkbenchRef={browserWorkbenchRef} collapsed={collapsed} chatCollapsed={chatPanelCollapsed} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onOpenSidebar={() => { setCollapsed(false); setMobileOpen(true) }} onSelectBrowserSurface={(surface) => { setWorkspaceView('browser'); browserWorkbenchRef.current?.setSurface(surface) }} onSelectCode={() => setWorkspaceView('code')} onSelectGitVersion={selectGitVersion} onSessionTitleChange={updateSessionTitle} onToggleChat={toggleChatPanel} onToggleDeviceView={() => setWorkspaceView((view) => view === 'mobile' ? 'browser' : 'mobile')} onToggleSidebar={() => setCollapsed(false)} renameRequestVersion={renameRequestVersion} selectedGitRef={selectedGitRef} sessionTitle={currentSessionTitle} workspaceView={workspaceView} />
           <div className="hidden min-h-0 flex-1 xl:flex">
             <ResizablePanelGroup className="min-h-0" id="chat-workspace-panels" orientation="horizontal">
               <ResizablePanel
@@ -660,7 +838,7 @@ export function ChatWorkspace({
               </ResizablePanel>
               <ResizableHandle aria-label="调整聊天视图宽度" className="z-20 bg-[var(--app-border)]" id="chat-resize-handle" withHandle />
               <ResizablePanel className="min-w-0" groupResizeBehavior="preserve-relative-size" id="preview-panel" minSize="0px">
-                <PreviewCanvas browserWorkbenchRef={browserWorkbenchRef} mode={previewMode} onBrowserStateChange={setBrowserState} sessionId={sessionId} />
+                <PreviewCanvas browserWorkbenchRef={browserWorkbenchRef} onBrowserStateChange={setBrowserState} sessionId={sessionId} view={workspaceView} />
               </ResizablePanel>
             </ResizablePanelGroup>
           </div>

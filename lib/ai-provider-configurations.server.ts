@@ -126,7 +126,7 @@ export async function saveAiProviderConfiguration(
       api_key_tag: null,
       api_key_hint: null,
     })
-  } else if (!existing?.encrypted_api_key && definition.authMode !== 'oauth' && input.enabled) {
+  } else if (!existing?.encrypted_api_key && definition.authMode === 'api-key' && input.enabled) {
     throw new Error('PROVIDER_API_KEY_REQUIRED')
   }
 
@@ -189,7 +189,18 @@ export async function resolveAgentProviderRuntimeConfiguration(
   if (!modelId || !row.enabled_model_ids.includes(modelId)) throw new Error('MODEL_NOT_ENABLED')
   const models = await getAiProviderModels(row.provider_id)
   if (models.length && !models.some((model) => model.id === modelId)) throw new Error('UNKNOWN_PROVIDER_MODEL')
+  const modelBaseUrl = models.find((model) => model.id === modelId)?.baseUrl
+  const baseUrl = row.base_url || modelBaseUrl || definition.baseUrl || ''
   if (!row.encrypted_api_key || !row.api_key_iv || !row.api_key_tag) {
+    if (definition.authMode === 'ambient') {
+      return {
+        providerId: row.provider_id,
+        modelId,
+        apiKey: '',
+        baseUrl,
+        revision: row.updated_at,
+      }
+    }
     throw new Error('PROVIDER_API_KEY_REQUIRED')
   }
   let apiKey: string
@@ -210,7 +221,7 @@ export async function resolveAgentProviderRuntimeConfiguration(
     providerId: row.provider_id,
     modelId,
     apiKey,
-    baseUrl: row.base_url || definition.baseUrl || '',
+    baseUrl,
     revision: row.updated_at,
   }
 }

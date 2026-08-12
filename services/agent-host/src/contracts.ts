@@ -1,4 +1,5 @@
 import type { CommandSpec } from './pi-rpc.js'
+import type { ProjectRuntimeDescriptor } from './project-runtime.js'
 
 export type RuntimeKind = 'local-sandbox-runtime' | 'remote-opensandbox'
 
@@ -32,6 +33,7 @@ export interface AgentPolicy {
 export interface AgentProviderRuntimeConfiguration {
   providerId: string
   modelId: string
+  /** Empty only for providers that use ambient credentials (AWS/GCP). */
   apiKey: string
   baseUrl: string
   revision: string
@@ -41,6 +43,14 @@ export interface AgentProviderRuntimeConfiguration {
 export interface AgentNativeSessionSnapshot {
   header: Record<string, unknown>
   entries: Array<Record<string, unknown>>
+}
+
+/** Response to a Pi extension UI request while a prompt is active. */
+export interface AgentExtensionUiResponse {
+  id: string
+  confirmed?: boolean
+  value?: string
+  cancelled?: true
 }
 
 export interface AgentLaunchSpec {
@@ -90,5 +100,5 @@ export interface ProvisionedEnvironment {
 
 export interface SandboxBackend {
   readonly runtime: RuntimeKind
-  provision(spec: AgentLaunchSpec): Promise<ProvisionedEnvironment>
+  provision(spec: AgentLaunchSpec, projectRuntime?: ProjectRuntimeDescriptor): Promise<ProvisionedEnvironment>
 }

@@ -4,6 +4,8 @@ import {
   createProject,
   type CreateProjectInput,
   type ProjectKind,
+  type ProjectDiskMode,
+  type ProjectExecutionMode,
   type ProjectSourceType,
 } from '@/lib/projects'
 import { getAccessibleWorkspace } from '@/lib/workspaces'
@@ -17,6 +19,16 @@ export interface CreateProjectActionInput {
   sourceType: ProjectSourceType
   sourceUrl?: string
   description?: string
+  diskMode: ProjectDiskMode
+  executionMode: ProjectExecutionMode
+  sshTarget?: {
+    host: string
+    port: number
+    user: string
+    remoteRoot: string
+    privateKey: string
+    knownHosts: string
+  }
 }
 
 export type CreateProjectActionResult =
@@ -34,6 +46,9 @@ function projectErrorMessage(error: unknown) {
   if (message.includes('PROJECT_SLUG_CONFLICT') || message.includes('23505')) {
     return '无法生成唯一的项目地址，请换一个名称。'
   }
+  if (message.includes('INVALID_SSH_TARGET')) {
+    return '请填写有效的 SSH 主机、用户、绝对工作目录和私钥。'
+  }
   return '暂时无法创建项目，请稍后重试。'
 }
 
@@ -45,11 +60,13 @@ export async function createProjectAction(
   const description = input.description?.trim() ?? ''
   const allowedKinds: ProjectKind[] = ['code', 'research']
   const allowedSourceTypes: ProjectSourceType[] = ['blank', 'github']
+  const allowedDiskModes: ProjectDiskMode[] = ['thin', 'thick']
+  const allowedExecutionModes: ProjectExecutionMode[] = ['local', 'ssh']
 
   if (!workspaceSlug || name.length < 1 || name.length > 100) {
     return { project: null, error: '项目名称需要包含 1–100 个字符。' }
   }
-  if (!allowedKinds.includes(input.kind) || !allowedSourceTypes.includes(input.sourceType)) {
+  if (!allowedKinds.includes(input.kind) || !allowedSourceTypes.includes(input.sourceType) || !allowedDiskModes.includes(input.diskMode) || !allowedExecutionModes.includes(input.executionMode)) {
     return { project: null, error: '项目类型无效。' }
   }
   if (description.length > 2000) {
@@ -69,6 +86,9 @@ export async function createProjectAction(
     sourceType: input.sourceType,
     sourceUrl: input.sourceUrl,
     description,
+    diskMode: input.diskMode,
+    executionMode: input.executionMode,
+    sshTarget: input.sshTarget,
   }
 
   try {

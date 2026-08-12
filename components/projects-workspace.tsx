@@ -11,6 +11,7 @@ import {
   BookOpenText,
   Code2,
   GitBranch,
+  LoaderCircle,
   MoreHorizontal,
   Plus,
   Search,
@@ -41,16 +42,25 @@ function relativeProjectTime(value: string) {
 function ProjectCard({ project, workspaceSlug }: { project: ProjectSummary; workspaceSlug: string }) {
   const router = useRouter()
   const Icon = project.kind === 'research' ? BookOpenText : Code2
+  const ready = project.status === 'active' && project.runtime_status === 'ready'
+  const failed = project.runtime_status === 'error'
 
   return (
     <article className="group min-w-0">
       <button
         aria-label={`选择项目 ${project.name}`}
-        className="flex aspect-[340/181] w-full items-center justify-center rounded-md border border-[var(--app-control-border)] bg-[var(--app-elevated)] text-[var(--app-subtle)] hover:border-[var(--app-focus-ring)] hover:bg-[var(--app-surface)] hover:text-[var(--app-muted)]"
+        className="relative flex aspect-[340/181] w-full items-center justify-center rounded-md border border-[var(--app-control-border)] bg-[var(--app-elevated)] text-[var(--app-subtle)] enabled:hover:border-[var(--app-focus-ring)] enabled:hover:bg-[var(--app-surface)] enabled:hover:text-[var(--app-muted)] disabled:cursor-wait"
+        disabled={!ready}
         onClick={() => router.push(`/app/${workspaceSlug}?project=${project.id}`)}
         type="button"
       >
         <Icon className="size-9 opacity-35 transition-opacity group-hover:opacity-70" strokeWidth={1.5} />
+        {!ready && (
+          <span className="absolute bottom-3 left-3 flex h-6 items-center gap-1.5 rounded-full border border-[var(--app-control-border)] bg-[var(--app-background)]/90 px-2 text-[11px] text-[var(--app-muted)] backdrop-blur">
+            <LoaderCircle className="size-3 animate-spin" />
+            {failed ? '初始化重试中' : '等待初始化'}
+          </span>
+        )}
       </button>
       <div className="mt-2 grid grid-cols-[32px_minmax(0,1fr)_28px] grid-rows-[20px_16px] gap-x-3 gap-y-1">
         <span className="row-span-2 flex size-8 items-center justify-center self-center rounded-full border border-[var(--app-control-border)] bg-[var(--app-background)] text-[var(--app-foreground)]">
@@ -60,6 +70,7 @@ function ProjectCard({ project, workspaceSlug }: { project: ProjectSummary; work
         </span>
         <button
           className="min-w-0 truncate text-left text-sm font-medium leading-5 tracking-[-0.1504px] text-[var(--app-foreground)] hover:underline"
+          disabled={!ready}
           onClick={() => router.push(`/app/${workspaceSlug}?project=${project.id}`)}
           type="button"
         >
@@ -68,7 +79,10 @@ function ProjectCard({ project, workspaceSlug }: { project: ProjectSummary; work
         <button aria-label={`${project.name} 更多操作`} className="row-span-2 flex size-7 items-center justify-center self-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-surface)] hover:text-[var(--app-foreground)]" type="button">
           <MoreHorizontal className="size-4" />
         </button>
-        <span className="text-[13px] leading-4 tracking-[-0.0762px] text-[var(--app-muted)]">{relativeProjectTime(project.updated_at)}</span>
+        <span className="flex items-center gap-1.5 text-[13px] leading-4 tracking-[-0.0762px] text-[var(--app-muted)]">
+          <i className={`size-1.5 rounded-full ${ready ? 'bg-emerald-500' : failed ? 'bg-amber-500' : 'bg-[var(--app-subtle)]'}`} />
+          {ready ? `活动 · ${relativeProjectTime(project.updated_at)}` : failed ? '等待 · 正在重试' : '等待 · VM 初始化中'}
+        </span>
       </div>
     </article>
   )
@@ -84,12 +98,19 @@ export function ProjectsWorkspace({
   avatarUrl,
   canManageProjects,
 }: ProjectsWorkspaceProps) {
+  const router = useRouter()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [themeMode, setThemeMode] = useState<ThemeMode>('dark')
   const [systemLight, setSystemLight] = useState(false)
   const [search, setSearch] = useState('')
   const [newProjectOpen, setNewProjectOpen] = useState(false)
+
+  useEffect(() => {
+    if (!projects.some((project) => project.status === 'waiting' || project.runtime_status !== 'ready')) return
+    const refresh = window.setInterval(() => router.refresh(), 2_500)
+    return () => window.clearInterval(refresh)
+  }, [projects, router])
 
   useEffect(() => {
     const savedTheme = window.localStorage.getItem('openlink-theme') as ThemeMode | null

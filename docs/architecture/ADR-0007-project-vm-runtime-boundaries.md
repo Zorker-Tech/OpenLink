@@ -58,8 +58,9 @@ inside that VM. The VM must contain the toolchain image used by those sandboxes
 
 - A project consumes VM resources even when no session is active unless an
   idle-stop policy is configured.
-- Podman must be installed and available to the Agent Host for local VM mode;
-  remote deployment must provide the same driver over the SSH target.
+- The repository's `services/linux` Podman source must be built for the host
+  and target architecture before the VM can start; the user does not install
+  a system Podman package manually.
 - The VM image/toolchain must be versioned and rebuilt when development tools
   change.
 
@@ -69,6 +70,9 @@ inside that VM. The VM must contain the toolchain image used by those sandboxes
   disks store working files and runtime logs.
 - Browser Host remains protocol-compatible; only its project runtime endpoint
   selection changes.
+- A runtime descriptor is health-checked before reuse. If its VM service
+  endpoint disappeared outside Agent Host, the descriptor and host forwards are
+  evicted and the project runtime is reconciled before the request continues.
 
 ## Alternatives considered
 
@@ -84,8 +88,9 @@ would make the VM/toolchain lifecycle depend on an individual session workload.
 
 ### Keep the current shared OpenSandbox host
 
-Rejected as the final architecture. It is retained only as an explicit
-development configuration until a Podman project VM is provisioned.
+Rejected. The shared host OpenSandbox control plane is not used by the Project
+VM profile; provisioning fails if the Project VM and its in-VM control plane
+are not ready.
 
 ## Failure handling
 
@@ -94,4 +99,3 @@ development configuration until a Podman project VM is provisioned.
 - Session creation cannot proceed without a ready project runtime in VM mode.
 - VM stop/restart does not delete the project workspace or Cloud Pi session
   records; a subsequent session rehydrates the VM endpoint.
-

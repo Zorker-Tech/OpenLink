@@ -6,24 +6,70 @@ import { resolve } from 'node:path'
 import { AgentHostError } from '../errors.js'
 import { compileSandboxPolicy } from '../policy.js'
 import { createSessionStorageLayout, ensureSessionStorage } from '../storage.js'
-import type { AgentNativeSessionSnapshot, AgentPolicy, AgentProviderRuntimeConfiguration } from '../contracts.js'
+import type { AgentExtensionUiResponse, AgentNativeSessionSnapshot, AgentPolicy, AgentProviderRuntimeConfiguration } from '../contracts.js'
 import type { SandboxRuntimeAdapter } from './local-sandbox-runtime.js'
+import type { ProjectRuntimeDescriptor } from '../project-runtime.js'
+import type { BrowserAgentSession } from '../browser-client.js'
+import { browserAgentBinding, browserHostNetworkTarget } from '../browser-binding.js'
+import { ambientProviderEnvironment, providerNetworkTargets } from '../provider-environment.js'
 
 export interface DesktopNodeSdkConfig {
   nodeExecutable?: string
   workerEntrypoint: string
+  /** Local filesystem path to the browser Pi extension used by desktop workers. */
+  browserExtensionPath?: string
   workspaceRoot: string
   storageRoot: string
-  model?: string
-  geminiApiKey?: string
-  geminiBaseUrl?: string
   policy: AgentPolicy
 }
 
 export interface DesktopNodeSdkSession {
   readonly pid: number
   prompt(message: string, signal?: AbortSignal): Promise<Response>
+  resolveExtensionUi(response: AgentExtensionUiResponse): Promise<void>
   cleanup(): Promise<void>
+}
+
+/**
+ * sandbox-runtime's public SandboxManager is deliberately process-global: it
+ * owns one proxy, one credential sentinel registry and (on Windows) one ACL
+ * session.  Treat it as a leased resource instead of allowing two desktop
+ * sessions to reconfigure/reset it concurrently.
+ */
+class SandboxManagerLease {
+  private active = false
+  private operation: Promise<void> = Promise.resolve()
+
+  async acquire(): Promise<() => Promise<void>> {
+    if (this.active) {
+      throw new AgentHostError(
+        'SESSION_BUSY',
+        'The desktop sandbox-runtime process already owns an active agent session',
+        { retryable: true },
+      )
+    }
+    let releaseOperation!: () => void
+    const previous = this.operation
+    const current = new Promise<void>((resolveOperation) => { releaseOperation = resolveOperation })
+    this.operation = previous.then(() => current)
+    await previous
+    if (this.active) {
+      releaseOperation()
+      throw new AgentHostError(
+        'SESSION_BUSY',
+        'The desktop sandbox-runtime process already owns an active agent session',
+        { retryable: true },
+      )
+    }
+    this.active = true
+    let released = false
+    return async () => {
+      if (released) return
+      released = true
+      this.active = false
+      releaseOperation()
+    }
+  }
 }
 
 function quote(value: string): string {
@@ -61,12 +107,23 @@ async function waitForWorker(baseUrl: string, child: ChildProcess): Promise<void
 
 /** Desktop-only transport: sandbox-runtime contains the Node SDK Worker process. */
 export class DesktopSandboxRuntimeNodeBackend {
+  private readonly sandboxLease = new SandboxManagerLease()
+
   constructor(
     private readonly sandboxRuntime: SandboxRuntimeAdapter,
     private readonly config: DesktopNodeSdkConfig,
   ) {}
 
-  async createSession(userId: string, workspaceId: string, sessionId: string, runtimeConfiguration?: AgentProviderRuntimeConfiguration, nativeSession?: AgentNativeSessionSnapshot, _projectId?: string): Promise<DesktopNodeSdkSession> {
+  async createSession(userId: string, workspaceId: string, sessionId: string, runtimeConfiguration: AgentProviderRuntimeConfiguration, nativeSession?: AgentNativeSessionSnapshot, _projectId?: string, _projectRuntime?: ProjectRuntimeDescriptor, browserSession?: BrowserAgentSession): Promise<DesktopNodeSdkSession> {
+    const releaseSandbox = await this.sandboxLease.acquire()
+    let sandboxReleased = false
+    const releaseSandboxOnce = async () => {
+      if (sandboxReleased) return
+      sandboxReleased = true
+      await releaseSandbox()
+    }
+    let sessionReady = false
+    try {
     const layout = createSessionStorageLayout(this.config.storageRoot, userId, workspaceId, sessionId)
     await ensureSessionStorage(layout)
     await mkdir(resolve(layout.root, 'worker'), { recursive: true, mode: 0o700 })
@@ -79,29 +136,39 @@ export class DesktopSandboxRuntimeNodeBackend {
     }
     const port = await availablePort()
     const token = randomBytes(32).toString('base64url')
-    const providerId = runtimeConfiguration?.providerId ?? (this.config.geminiApiKey ? 'google' : undefined)
-    const providerApiKey = runtimeConfiguration?.apiKey ?? this.config.geminiApiKey
-    const providerBaseUrl = runtimeConfiguration?.baseUrl ?? this.config.geminiBaseUrl ?? 'https://generativelanguage.googleapis.com/v1beta'
-    const providerHost = new URL(providerBaseUrl).hostname
-    const model = runtimeConfiguration ? `${runtimeConfiguration.providerId}/${runtimeConfiguration.modelId}` : this.config.model
-    const effectivePolicy = { ...this.config.policy, allowedDomains: [...new Set([providerHost, ...this.config.policy.allowedDomains])] }
+    const providerId = runtimeConfiguration.providerId
+    const providerApiKey = runtimeConfiguration.apiKey
+    const providerBaseUrl = runtimeConfiguration.baseUrl
+    const providerHosts = providerNetworkTargets(providerId, providerBaseUrl)
+    const model = `${runtimeConfiguration.providerId}/${runtimeConfiguration.modelId}`
+    const browser = browserSession
+      ? browserAgentBinding(browserSession, this.config.browserExtensionPath || resolve(process.cwd(), '../agent-browser-extension/openlink-browser.ts'))
+      : undefined
+    const browserHost = browser ? browserHostNetworkTarget(browser.hostUrl) : undefined
+    const effectivePolicy = {
+      ...this.config.policy,
+      // Browser actions are issued by the Pi extension through Browser Host.
+      // Include its origin in the sandbox policy or desktop agents would have
+      // browser UI but no network permission to use it.
+      allowedDomains: [...new Set([...providerHosts, ...(browserHost ? [browserHost] : []), ...this.config.policy.allowedDomains])],
+    }
     const compiledPolicy = compileSandboxPolicy(this.config.workspaceRoot, layout.root, effectivePolicy)
     const policy = {
       ...compiledPolicy,
       network: {
         ...compiledPolicy.network,
         allowLocalBinding: true,
-        ...(providerApiKey ? { tlsTerminate: {} } : {}),
+        tlsTerminate: {},
       },
-      ...(providerApiKey ? {
-        credentials: {
-          envVars: [{ name: 'OPENLINK_PROVIDER_API_KEY', mode: 'mask', injectHosts: [providerHost] }],
-        },
-      } : {}),
+      credentials: {
+        envVars: providerApiKey
+          ? [{ name: 'OPENLINK_PROVIDER_API_KEY', mode: 'mask', injectHosts: providerHosts }]
+          : [],
+      },
     }
     const command = `${quote(resolve(this.config.nodeExecutable || process.execPath))} ${quote(resolve(this.config.workerEntrypoint))}`
     const previousProviderApiKey = process.env.OPENLINK_PROVIDER_API_KEY
-    if (providerApiKey) process.env.OPENLINK_PROVIDER_API_KEY = providerApiKey
+    process.env.OPENLINK_PROVIDER_API_KEY = providerApiKey
     let wrapped: Awaited<ReturnType<SandboxRuntimeAdapter['wrapWithSandboxArgv']>>
     try {
       await this.sandboxRuntime.initialize(policy)
@@ -120,9 +187,19 @@ export class DesktopSandboxRuntimeNodeBackend {
       OPENLINK_AGENT_SESSION_ROOT: layout.root,
       ...(nativeSession ? { OPENLINK_AGENT_SESSION_FILE: nativeSessionFile } : {}),
       NODE_USE_ENV_PROXY: '1',
-      ...(model ? { OPENLINK_AGENT_MODEL: model } : {}),
-      ...(providerId ? { OPENLINK_PROVIDER_ID: providerId } : {}),
-      ...(providerBaseUrl ? { OPENLINK_PROVIDER_BASE_URL: providerBaseUrl } : {}),
+      OPENLINK_AGENT_MODEL: model,
+      OPENLINK_PROVIDER_ID: providerId,
+      OPENLINK_PROVIDER_BASE_URL: providerBaseUrl,
+      // Ambient credentials are explicitly scoped to the selected provider.
+      // They are not part of the generic inherited environment and therefore
+      // cannot expose Supabase/SSH credentials to the desktop worker.
+      ...ambientProviderEnvironment(providerId),
+      ...(browser ? {
+        OPENLINK_BROWSER_HOST_URL: browser.hostUrl,
+        OPENLINK_BROWSER_SESSION_ID: browser.sessionId,
+        OPENLINK_BROWSER_CONTROL_TOKEN: browser.controlToken,
+        OPENLINK_BROWSER_EXTENSION_PATH: browser.extensionPath,
+      } : {}),
     }
     const child = spawn(wrapped.argv[0]!, wrapped.argv.slice(1), {
       cwd: this.config.workspaceRoot,
@@ -138,29 +215,80 @@ export class DesktopSandboxRuntimeNodeBackend {
       await waitForWorker(baseUrl, child)
     } catch (error) {
       child.kill('SIGTERM')
-      await this.sandboxRuntime.reset()
+      try {
+        await this.sandboxRuntime.reset()
+      } finally {
+        // A failed provision has no session object through which the caller
+        // could retry cleanup, so always release the lease after best-effort
+        // reset. The next desktop request will reinitialize the manager.
+        await releaseSandboxOnce()
+      }
       throw new AgentHostError('PROVISIONING_FAILED', `${error instanceof Error ? error.message : String(error)}${stderr ? `: ${stderr}` : ''}`)
     }
+    sessionReady = true
     let cleaned = false
+    let cleanupPromise: Promise<void> | undefined
     return {
       pid: child.pid!,
-      prompt: (message, signal) => fetch(`${baseUrl}/v1/events`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message }),
-        signal,
-      }),
+      prompt: async (message, signal) => {
+        const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+        const cancelWorker = () => {
+          void fetch(`${baseUrl}/v1/cancel`, {
+            method: 'POST',
+            headers,
+            signal: AbortSignal.timeout(2_000),
+          }).catch(() => undefined)
+        }
+        const response = await fetch(`${baseUrl}/v1/events`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ message }),
+        })
+        if (signal) {
+          if (signal.aborted) cancelWorker()
+          else signal.addEventListener('abort', cancelWorker, { once: true })
+        }
+        return response
+      },
+      resolveExtensionUi: async (response) => {
+        const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+        const result = await fetch(`${baseUrl}/v1/extension-ui-response`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(response),
+          signal: AbortSignal.timeout(5_000),
+        })
+        if (!result.ok) {
+          throw new AgentHostError(
+            'EXTENSION_UI_REQUEST_NOT_FOUND',
+            `Desktop Agent Worker rejected extension UI response (${result.status})`,
+            { retryable: true },
+          )
+        }
+      },
       cleanup: async () => {
         if (cleaned) return
-        cleaned = true
-        if (child.exitCode === null) child.kill('SIGTERM')
-        await Promise.race([
-          new Promise<void>((resolveExit) => child.once('exit', () => resolveExit())),
-          new Promise<void>((resolveTimeout) => setTimeout(resolveTimeout, 5_000)),
-        ])
-        if (child.exitCode === null) child.kill('SIGKILL')
-        await this.sandboxRuntime.reset()
+        if (cleanupPromise) return cleanupPromise
+        cleanupPromise = (async () => {
+          if (child.exitCode === null) child.kill('SIGTERM')
+          await Promise.race([
+            new Promise<void>((resolveExit) => child.once('exit', () => resolveExit())),
+            new Promise<void>((resolveTimeout) => setTimeout(resolveTimeout, 5_000)),
+          ])
+          if (child.exitCode === null) child.kill('SIGKILL')
+          await this.sandboxRuntime.reset()
+          await releaseSandboxOnce()
+          cleaned = true
+        })().catch((error) => {
+          cleanupPromise = undefined
+          throw error
+        })
+        return cleanupPromise
       },
+    }
+    } catch (error) {
+      if (!sessionReady) await releaseSandboxOnce().catch(() => undefined)
+      throw error
     }
   }
 }

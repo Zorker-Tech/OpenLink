@@ -10,19 +10,30 @@ interface FrameMetrics {
   height: number
 }
 
-function mappedPoint(container: HTMLElement, frame: FrameMetrics, clientX: number, clientY: number) {
+function mappedPoint(container: HTMLElement, frame: FrameMetrics, clientX: number, clientY: number, fit: 'fill' | 'contain') {
   const rect = container.getBoundingClientRect()
-  const scale = Math.min(rect.width / frame.width, rect.height / frame.height)
-  const displayedWidth = frame.width * scale
-  const displayedHeight = frame.height * scale
-  const left = rect.left + (rect.width - displayedWidth) / 2
-  const top = rect.top + (rect.height - displayedHeight) / 2
+  if (fit === 'contain') {
+    const scale = Math.min(rect.width / frame.width, rect.height / frame.height)
+    const displayedWidth = frame.width * scale
+    const displayedHeight = frame.height * scale
+    const left = rect.left + (rect.width - displayedWidth) / 2
+    const top = rect.top + (rect.height - displayedHeight) / 2
+    return {
+      x: Math.max(0, Math.min(frame.width, (clientX - left) / scale)),
+      y: Math.max(0, Math.min(frame.height, (clientY - top) / scale)),
+      scale,
+      left: left - rect.left,
+      top: top - rect.top,
+    }
+  }
+  const scaleX = rect.width / frame.width
+  const scaleY = rect.height / frame.height
   return {
-    x: Math.max(0, Math.min(frame.width, (clientX - left) / scale)),
-    y: Math.max(0, Math.min(frame.height, (clientY - top) / scale)),
-    scale,
-    left: left - rect.left,
-    top: top - rect.top,
+    x: Math.max(0, Math.min(frame.width, (clientX - rect.left) / scaleX)),
+    y: Math.max(0, Math.min(frame.height, (clientY - rect.top) / scaleY)),
+    scale: Math.min(scaleX, scaleY),
+    left: 0,
+    top: 0,
   }
 }
 
@@ -30,10 +41,12 @@ export function ChromiumStreamSurface({
   connection,
   inspectMode,
   selectedElement,
+  viewportMode,
 }: {
   connection: BrowserConnection
   inspectMode: boolean
   selectedElement: ElementReference | null
+  viewportMode: 'mobile' | 'browser'
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const imageRef = useRef<HTMLImageElement | null>(null)
@@ -42,6 +55,7 @@ export function ChromiumStreamSurface({
   const [frame, setFrame] = useState<FrameMetrics>({ width: connection.state.viewport.width, height: connection.state.viewport.height })
   const [layoutVersion, setLayoutVersion] = useState(0)
   const activePageId = connection.state.activePageId
+  const fit = viewportMode === 'browser' ? 'fill' : 'contain'
 
   // A connected Chromium session can take a moment to produce its first
   // screencast frame. Reset on a new connection/page so that the realtime
@@ -63,15 +77,66 @@ export function ChromiumStreamSurface({
   useEffect(() => {
     const element = containerRef.current
     if (!element) return
-    const observer = new ResizeObserver(() => setLayoutVersion((value) => value + 1))
+    let resizeFrame: number | undefined
+    let retryTimer: number | undefined
+    let lastViewport = ''
+    const syncViewport = () => {
+      resizeFrame = undefined
+      setLayoutVersion((value) => value + 1)
+
+      // A stream frame must use the same aspect ratio as the canvas. The
+      // previous implementation used the browser window size (with a 1024px
+      // minimum), which is often wider than the resizable preview panel and
+      // made `object-contain` leave large black bars above and below the page.
+      // Keep the remote Chromium viewport tied to the actual canvas instead.
+      if (viewportMode !== 'browser') return
+      const rect = element.getBoundingClientRect()
+      const width = Math.max(240, Math.min(7680, Math.round(rect.width)))
+      const height = Math.max(240, Math.min(4320, Math.round(rect.height)))
+      const deviceScaleFactor = Math.min(4, Math.max(0.5, window.devicePixelRatio || 1))
+      const key = `${width}:${height}:${deviceScaleFactor}`
+      if (key === lastViewport) return
+      const current = connection.state.viewport
+      if (current.width === width && current.height === height && current.deviceScaleFactor === deviceScaleFactor) {
+        lastViewport = key
+        return
+      }
+      try {
+        connection.sendAction({ type: 'viewport.set', viewport: { width, height, deviceScaleFactor } })
+        lastViewport = key
+      } catch {
+        // The socket may still be connecting. Retry until the connection is
+        // ready so the first frame cannot retain the old aspect ratio.
+        if (retryTimer === undefined) retryTimer = window.setTimeout(() => {
+          retryTimer = undefined
+          scheduleViewportSync()
+        }, 250)
+      }
+    }
+    const scheduleViewportSync = () => {
+      if (resizeFrame !== undefined) return
+      resizeFrame = window.requestAnimationFrame(syncViewport)
+    }
+    const removeStatusListener = connection.onStatus((status) => {
+      if (status === 'connected' || status === 'reconnecting') scheduleViewportSync()
+    })
+    const removeStateListener = connection.onState(() => scheduleViewportSync())
+    const observer = new ResizeObserver(scheduleViewportSync)
     observer.observe(element)
-    return () => observer.disconnect()
-  }, [])
+    scheduleViewportSync()
+    return () => {
+      observer.disconnect()
+      removeStatusListener()
+      removeStateListener()
+      if (resizeFrame !== undefined) window.cancelAnimationFrame(resizeFrame)
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer)
+    }
+  }, [connection, viewportMode])
 
   const point = useCallback((clientX: number, clientY: number) => {
     if (!containerRef.current) return null
-    return mappedPoint(containerRef.current, frame, clientX, clientY)
-  }, [frame])
+    return mappedPoint(containerRef.current, frame, clientX, clientY, fit)
+  }, [fit, frame])
 
   const send = useCallback((action: Parameters<BrowserConnection['sendAction']>[0]) => {
     try { connection.sendAction(action) } catch {}
@@ -81,14 +146,24 @@ export function ChromiumStreamSurface({
     const container = containerRef.current
     if (!selectedElement || !container) return undefined
     const rect = container.getBoundingClientRect()
-    const scale = Math.min(rect.width / frame.width, rect.height / frame.height)
-    const left = (rect.width - frame.width * scale) / 2
-    const top = (rect.height - frame.height * scale) / 2
+    if (fit === 'contain') {
+      const scale = Math.min(rect.width / frame.width, rect.height / frame.height)
+      const left = (rect.width - frame.width * scale) / 2
+      const top = (rect.height - frame.height * scale) / 2
+      return {
+        left: left + selectedElement.bounds.x * scale,
+        top: top + selectedElement.bounds.y * scale,
+        width: selectedElement.bounds.width * scale,
+        height: selectedElement.bounds.height * scale,
+      }
+    }
+    const scaleX = rect.width / frame.width
+    const scaleY = rect.height / frame.height
     return {
-      left: left + selectedElement.bounds.x * scale,
-      top: top + selectedElement.bounds.y * scale,
-      width: selectedElement.bounds.width * scale,
-      height: selectedElement.bounds.height * scale,
+      left: selectedElement.bounds.x * scaleX,
+      top: selectedElement.bounds.y * scaleY,
+      width: selectedElement.bounds.width * scaleX,
+      height: selectedElement.bounds.height * scaleY,
     }
   })()
   void layoutVersion
@@ -125,7 +200,7 @@ export function ChromiumStreamSurface({
       ref={containerRef}
       role="application"
     >
-      <img alt="远程 Chromium 页面" className="pointer-events-none size-full select-none object-contain" draggable={false} ref={imageRef} />
+      <img alt="远程 Chromium 页面" className={`pointer-events-none size-full select-none ${fit === 'fill' ? 'object-fill' : 'object-contain'}`} draggable={false} ref={imageRef} />
       {!hasFrame && (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-[#111] text-sm text-white/70">
           <ThinkingOrb aria-label="正在初始化实时浏览器" size={64} state="shaping" theme="dark" />

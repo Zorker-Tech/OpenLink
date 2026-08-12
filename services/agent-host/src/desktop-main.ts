@@ -20,6 +20,15 @@ function list(value: string | undefined): string[] {
   return value?.split(',').map((item) => item.trim()).filter(Boolean) ?? []
 }
 
+function origins(value: string | undefined): string[] {
+  const result = value?.split(',').map((item) => item.trim()).filter(Boolean) ?? ['http://localhost:3000']
+  for (const origin of result) {
+    const url = new URL(origin)
+    if (url.origin !== origin || !['http:', 'https:'].includes(url.protocol)) throw new Error('Desktop Browser gateway origin is invalid')
+  }
+  return result
+}
+
 const env = process.env
 const host = env.OPENLINK_DESKTOP_AGENT_HOST || '127.0.0.1'
 const port = integer(env.OPENLINK_DESKTOP_AGENT_PORT, 43123, 1, 65_535)
@@ -27,18 +36,20 @@ const apiToken = required(env, 'OPENLINK_DESKTOP_AGENT_API_TOKEN')
 const workspaceRoot = resolve(env.OPENLINK_AGENT_WORKSPACE_ROOT || process.cwd())
 const storageRoot = resolve(env.OPENLINK_DESKTOP_AGENT_STORAGE_ROOT || '.agent-data/desktop')
 const sessionIdleTtlMs = integer(env.OPENLINK_AGENT_SESSION_IDLE_TTL_MS, 30 * 60_000, 60_000, 24 * 60 * 60_000)
-const geminiBaseUrl = env.GOOGLE_GEMINI_BASE_URL
-const geminiHost = geminiBaseUrl ? new URL(geminiBaseUrl).hostname : 'generativelanguage.googleapis.com'
+// sandbox-runtime's SandboxManager is process-global (proxy, credential
+// sentinel registry and filesystem session). A desktop host process can
+// therefore own exactly one active agent session; additional sessions must be
+// handled by another desktop host process rather than sharing/resetting the
+// same manager.
+const maxSessions = integer(env.OPENLINK_AGENT_MAX_SESSIONS, 1, 1, 1)
 const backend = new DesktopSandboxRuntimeNodeBackend(SandboxManager, {
   nodeExecutable: env.OPENLINK_NODE_EXECUTABLE || process.execPath,
   workerEntrypoint: resolve(env.OPENLINK_AGENT_WORKER_ENTRYPOINT || '../agent-worker/dist/main.js'),
+  browserExtensionPath: resolve(env.OPENLINK_AGENT_BROWSER_EXTENSION_PATH || '../agent-browser-extension/openlink-browser.ts'),
   workspaceRoot,
   storageRoot,
-  model: env.OPENLINK_AGENT_MODEL || env.GEMINI_MODEL,
-  geminiApiKey: env.GEMINI_API_KEY,
-  geminiBaseUrl,
   policy: {
-    allowedDomains: [...new Set([geminiHost, ...list(env.OPENLINK_AGENT_ALLOWED_DOMAINS)])],
+    allowedDomains: list(env.OPENLINK_AGENT_ALLOWED_DOMAINS),
     deniedDomains: list(env.OPENLINK_AGENT_DENIED_DOMAINS),
     allowWrite: [],
     denyWrite: [],
@@ -53,11 +64,18 @@ const runtime = await startPromptHttpServer({
   storageRoot,
   transport: 'sandbox-runtime-node-sdk',
   sessionIdleTtlMs,
-  // SandboxManager is process-global. A desktop shell starts one supervisor
-  // per active agent session; this standalone host intentionally enforces it.
-  maxSessions: 1,
+  // SandboxManager is process-global; the backend and host both enforce one
+  // active session so provider credentials and proxy state cannot cross turns.
+  maxSessions,
+  browserGatewayPublicUrl: env.OPENLINK_DESKTOP_AGENT_PUBLIC_URL?.trim() || `http://${host}:${port}`,
+  browserGatewayAllowedOrigins: origins(env.OPENLINK_BROWSER_GATEWAY_ALLOWED_ORIGINS || env.OPENLINK_BROWSER_ALLOWED_ORIGINS),
+  browserGatewayUpstreamOrigin: env.OPENLINK_BROWSER_GATEWAY_UPSTREAM_ORIGIN?.trim() || 'http://localhost:3000',
 }, {
-  createSession: (userId, workspaceId, sessionId, runtimeConfiguration, nativeSession) => backend.createSession(userId, workspaceId, sessionId, runtimeConfiguration, nativeSession),
+  // Do not discard the browser capability when the desktop transport is used.
+  // This keeps the desktop Node SDK path behaviorally identical to Web
+  // OpenSandbox and the remote SSH/RPC path.
+  createSession: (userId, workspaceId, sessionId, runtimeConfiguration, nativeSession, projectId, projectRuntime, browser) =>
+    backend.createSession(userId, workspaceId, sessionId, runtimeConfiguration, nativeSession, projectId, projectRuntime, browser),
   close: () => SandboxManager.reset(),
 })
 

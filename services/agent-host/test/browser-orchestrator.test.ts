@@ -29,7 +29,7 @@ test('browser-enabled orchestration binds a scoped session into Pi and cleans up
   const agents = { provision: async (launchSpec: AgentLaunchSpec) => { provisioned = launchSpec; return environment } }
   const browsers = {
     runtimeUrl: 'http://127.0.0.1:43120',
-    createChromiumSession: async () => ({ state: { id: 'browser-1' }, controlToken: 'agent-token' }),
+    createChromiumSession: async () => ({ state: { id: 'browser-1' }, controlToken: 'agent-token', connection: { eventsUrl: 'ws://127.0.0.1:43120/events' } }),
     close: async (id: string) => { assert.equal(id, 'browser-1'); browserCleaned = true },
   } as unknown as BrowserHostClient
   const orchestrator = new BrowserEnabledAgentOrchestrator(agents, browsers)

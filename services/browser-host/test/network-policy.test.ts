@@ -5,6 +5,8 @@ import { BrowserNetworkGuard } from '../src/network-policy.js'
 test('network guard denies loopback unless explicitly enabled', async () => {
   const denied = new BrowserNetworkGuard({ allowedDomains: [], deniedDomains: [], allowLoopback: false, allowPrivateNetworks: false })
   await assert.rejects(() => denied.assertUrl('http://127.0.0.1:3000'), /Loopback access is denied/)
+  await assert.rejects(() => denied.assertUrl('http://[::ffff:127.0.0.1]:3000'), /Loopback access is denied/)
+  await assert.rejects(() => denied.assertUrl('http://[0:0:0:0:0:ffff:192.168.1.10]:3000'), /Private network access is denied/)
   const allowed = new BrowserNetworkGuard({ allowedDomains: ['127.0.0.1'], deniedDomains: [], allowLoopback: true, allowPrivateNetworks: false })
   assert.equal((await allowed.assertUrl('http://127.0.0.1:3000')).hostname, '127.0.0.1')
 })

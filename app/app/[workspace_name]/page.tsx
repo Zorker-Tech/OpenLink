@@ -1,7 +1,7 @@
 import { AppWorkspace } from '@/components/app-workspace'
 import { listConfiguredModels } from '@/lib/ai-provider-configurations.server'
 import { listOrganizations } from '@/lib/organizations'
-import { listProjects } from '@/lib/projects'
+import { ensureDraftProject, listProjects } from '@/lib/projects'
 import { listChatSessions } from '@/lib/chat-sessions'
 import { getAccessibleWorkspace, getAvatarUrl, getOwnedWorkspace } from '@/lib/workspaces'
 import { createClient } from '@/utils/supabase/server'
@@ -35,8 +35,9 @@ export default async function WorkspacePage({
   ])
   if (!workspace || !personalWorkspace) redirect('/app')
 
-  const [projects, { data: profile }, configuredModels, chatSessions] = await Promise.all([
+  const [projects, defaultProject, { data: profile }, configuredModels, chatSessions] = await Promise.all([
     listProjects(supabase, workspace.id),
+    ensureDraftProject(supabase, user.id, workspace),
     supabase
       .schema('openlink')
       .from('profiles')
@@ -59,6 +60,7 @@ export default async function WorkspacePage({
       }}
       avatarUrl={getAvatarUrl(user)}
       configuredModels={configuredModels}
+      defaultProject={defaultProject}
       chatSessions={chatSessions}
       email={user.email ?? nickname}
       initialProjectId={projects.some((project) => project.id === projectId) ? projectId : undefined}

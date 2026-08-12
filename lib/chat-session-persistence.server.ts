@@ -7,6 +7,15 @@ import { createClient } from '@/utils/supabase/server'
 type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>
 type UnknownRecord = Record<string, unknown>
 
+// Reserve a range once per HTTP stream. The adapter can then assign
+// monotonically increasing event sequences without a read-max/write race when
+// two browser tabs retry or submit at the same time. Gaps are intentional and
+// are harmless because reads order by sequence and event ids remain unique.
+// A stream gets a private block so event persistence never performs a database
+// round-trip per token. Keep the block large enough for a long tool-heavy turn;
+// the database function caps reservations at one million.
+const EVENT_SEQUENCE_RESERVATION_SIZE = 1_000_000
+
 const asRecord = (value: unknown): UnknownRecord | null => value && typeof value === 'object' ? value as UnknownRecord : null
 
 export interface PiSessionDelta {
@@ -22,12 +31,15 @@ export function parsePiSessionDelta(frame: unknown): PiSessionDelta | null {
     throw new Error('INVALID_PI_SESSION_HEADER')
   }
   if (!Array.isArray(value.entries) || value.entries.length > 10_000) throw new Error('INVALID_PI_SESSION_ENTRIES')
+  const entryIds = new Set<string>()
   const entries = value.entries.map((candidate) => {
     const entry = asRecord(candidate)
     if (!entry || typeof entry.id !== 'string' || typeof entry.type !== 'string' || typeof entry.timestamp !== 'string') {
       throw new Error('INVALID_PI_SESSION_ENTRY')
     }
     if (entry.parentId !== null && typeof entry.parentId !== 'string') throw new Error('INVALID_PI_SESSION_ENTRY')
+    if (entryIds.has(entry.id as string)) throw new Error('INVALID_PI_SESSION_ENTRY')
+    entryIds.add(entry.id as string)
     return entry
   })
   return { header, entries }
@@ -40,15 +52,15 @@ export async function nextChatEventSequence(
 ) {
   const { data, error } = await supabase
     .schema('openlink')
-    .from('chat_session_events')
-    .select('sequence')
-    .eq('session_id', sessionId)
-    .eq('user_id', userId)
-    .order('sequence', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+    .rpc('reserve_chat_event_sequences', {
+      p_session_id: sessionId,
+      p_user_id: userId,
+      p_count: EVENT_SEQUENCE_RESERVATION_SIZE,
+    })
   if (error) throw error
-  return data ? Number((data as { sequence: number }).sequence) + 1 : 0
+  const sequence = Number(data)
+  if (!Number.isSafeInteger(sequence) || sequence < 0) throw new Error('INVALID_CHAT_EVENT_SEQUENCE')
+  return sequence
 }
 
 export async function persistChatEvents(
@@ -61,7 +73,7 @@ export async function persistChatEvents(
   const { error } = await supabase
     .schema('openlink')
     .from('chat_session_events')
-    .insert(events.map((event) => ({
+    .upsert(events.map((event) => ({
       session_id: sessionId,
       user_id: userId,
       sequence: event.sequence,
@@ -69,7 +81,7 @@ export async function persistChatEvents(
       event_type: event.type,
       occurred_at: event.timestamp,
       payload: event,
-    })))
+    })), { onConflict: 'session_id,event_id', ignoreDuplicates: true })
   if (error) throw error
 }
 
@@ -94,18 +106,18 @@ export async function persistPiSessionDelta(
   if (headerError) throw headerError
   if (!delta.entries.length) return
 
+  // Pi's parent-linked session is an ordered JSONL log. Appending by reading
+  // MAX(entry_order) in the application is racy across Agent Host instances
+  // (a lease can expire or a second deployment can be serving the same user).
+  // The database function locks the session row and assigns ordinals while it
+  // de-duplicates entry ids, so a retry cannot fork or truncate the native log.
   const { error: entriesError } = await supabase
     .schema('openlink')
-    .from('chat_session_pi_entries')
-    .upsert(delta.entries.map((entry) => ({
-      session_id: sessionId,
-      user_id: userId,
-      entry_id: entry.id as string,
-      parent_id: typeof entry.parentId === 'string' ? entry.parentId : null,
-      entry_type: entry.type as string,
-      entry_timestamp: entry.timestamp as string,
-      entry,
-    })), { onConflict: 'session_id,entry_id', ignoreDuplicates: true })
+    .rpc('append_chat_session_pi_entries', {
+      p_session_id: sessionId,
+      p_user_id: userId,
+      p_entries: delta.entries,
+    })
   if (entriesError) throw entriesError
 }
 
@@ -145,31 +157,38 @@ export async function loadPiSessionSnapshot(
   userId: string,
   sessionId: string,
 ): Promise<PiSessionDelta | null> {
-  const [{ data: session, error: sessionError }, { data: entries, error: entriesError }] = await Promise.all([
-    supabase
-      .schema('openlink')
-      .from('chat_session_pi_sessions')
-      .select('header')
-      .eq('session_id', sessionId)
-      .eq('user_id', userId)
-      .maybeSingle(),
-    supabase
+  const { data: session, error: sessionError } = await supabase
+    .schema('openlink')
+    .from('chat_session_pi_sessions')
+    .select('header')
+    .eq('session_id', sessionId)
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (sessionError) throw sessionError
+  if (!session) return null
+
+  // PostgREST caps responses (commonly at 1,000 rows), so a single limit(50k)
+  // silently truncated long Pi sessions. Page until the final short response.
+  const pageSize = 1_000
+  const entries: Array<{ entry: unknown }> = []
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
       .schema('openlink')
       .from('chat_session_pi_entries')
       .select('entry')
       .eq('session_id', sessionId)
       .eq('user_id', userId)
-      .order('entry_timestamp', { ascending: true })
-      .order('created_at', { ascending: true })
-      .limit(50_000),
-  ])
-  if (sessionError) throw sessionError
-  if (entriesError) throw entriesError
-  if (!session) return null
+      .order('entry_order', { ascending: true })
+      .range(offset, offset + pageSize - 1)
+    if (error) throw error
+    entries.push(...((data ?? []) as Array<{ entry: unknown }>))
+    if ((data ?? []).length < pageSize) break
+  }
+
   const header = asRecord((session as { header: unknown }).header)
   if (!header) throw new Error('INVALID_PI_SESSION_HEADER')
   return {
     header,
-    entries: (entries ?? []).map((row) => asRecord((row as { entry: unknown }).entry)).filter((entry): entry is UnknownRecord => Boolean(entry)),
+    entries: entries.map((row) => asRecord(row.entry)).filter((entry): entry is UnknownRecord => Boolean(entry)),
   }
 }

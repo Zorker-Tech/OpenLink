@@ -31,6 +31,7 @@ export function ProviderConfigurationForm({ configuration, models, provider }: P
   const [pending, startTransition] = useTransition()
   const [checking, startChecking] = useTransition()
   const oauthOnly = provider.authMode === 'oauth'
+  const ambientCredentials = provider.authMode === 'ambient'
   const dynamicCatalog = models.length === 0
 
   const visibleModels = useMemo(() => {
@@ -100,7 +101,7 @@ export function ProviderConfigurationForm({ configuration, models, provider }: P
           </div>
         ) : (
           <div className="mt-3 divide-y divide-[var(--app-border)]">
-            <ConfigRow description={`请填写你的 ${provider.apiKeyLabel}`} label="API Key">
+            <ConfigRow description={ambientCredentials ? '使用 Agent Host 所在环境的 AWS/GCP 凭证链，不会把密钥写入项目配置。' : `请填写你的 ${provider.apiKeyLabel}`} label={ambientCredentials ? '环境凭证' : 'API Key'}>
               <div className="relative w-full max-w-[348px]">
                 <input autoComplete="new-password" className="h-9 w-full rounded-md border border-[var(--app-control-border)] bg-[var(--app-surface)] px-3 pr-10 font-mono text-sm outline-none focus:border-[var(--app-focus-ring)]" data-1p-ignore="true" data-form-type="other" data-lpignore="true" name={`openlink-${provider.id}-api-credential`} onChange={(event) => setApiKey(event.target.value)} placeholder={configuration?.apiKeyHint ?? `输入 ${provider.apiKeyLabel}`} spellCheck={false} type={showApiKey ? 'text' : 'password'} value={apiKey} />
                 <button aria-label={showApiKey ? '隐藏密钥' : '显示密钥'} className="absolute right-1 top-1 flex size-7 items-center justify-center rounded text-[var(--app-muted)] hover:bg-[var(--app-hover)]" onClick={() => setShowApiKey((value) => !value)} type="button">{showApiKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}</button>

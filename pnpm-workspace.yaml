@@ -1,3 +1,6 @@
 allowBuilds:
-  msw: set this to true or false
-  sharp: set this to true or false
+  # Sharp is required by Next.js image processing during production builds.
+  sharp: true
+  # MSW is only used as a JavaScript test/mock library; it has no runtime
+  # native artifact that OpenLink needs to execute.
+  msw: false

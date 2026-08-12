@@ -4,8 +4,8 @@ import { createClient } from '@/utils/supabase/server'
 export const runtime = 'nodejs'
 
 function hostConfig() {
-  const baseUrl = process.env.OPENLINK_BROWSER_HOST_URL?.replace(/\/$/, '')
-  const apiToken = process.env.OPENLINK_BROWSER_API_TOKEN
+  const baseUrl = process.env.OPENLINK_AGENT_HOST_URL?.replace(/\/$/, '')
+  const apiToken = process.env.OPENLINK_AGENT_API_TOKEN
   if (!baseUrl || !apiToken) return null
   return { baseUrl, apiToken }
 }
@@ -25,6 +25,28 @@ function isConfiguredLocalPreviewUrl(raw: string) {
   } catch {
     return false
   }
+}
+
+type ProjectPreviewTarget = {
+  url: string
+  headers?: Record<string, string>
+  port?: number
+}
+
+async function discoverProjectPreviewTarget(config: { baseUrl: string; apiToken: string }, projectId: string): Promise<ProjectPreviewTarget | null> {
+  const response = await fetch(`${config.baseUrl}/v1/projects/${encodeURIComponent(projectId)}/preview-target`, {
+    headers: { Authorization: `Bearer ${config.apiToken}` },
+    cache: 'no-store',
+  })
+  if (!response.ok) throw new Error(`Project preview discovery failed (${response.status})`)
+  const payload = await response.json() as { target?: unknown }
+  if (!payload.target || typeof payload.target !== 'object') return null
+  const target = payload.target as Partial<ProjectPreviewTarget>
+  if (typeof target.url !== 'string') return null
+  const headers = target.headers && typeof target.headers === 'object'
+    ? Object.fromEntries(Object.entries(target.headers).filter(([key, value]) => typeof key === 'string' && typeof value === 'string'))
+    : undefined
+  return { url: target.url, ...(headers ? { headers } : {}), ...(typeof target.port === 'number' ? { port: target.port } : {}) }
 }
 
 export async function POST(request: Request) {
@@ -51,21 +73,38 @@ export async function POST(request: Request) {
     ownerId: user.id,
     workspaceId: chat.workspace_id,
     projectId: chat.project_id,
+    // Browser Host sessions are intentionally ephemeral, but a Chromium
+    // profile must remain stable when the UI reconnects or switches surface.
+    // Keep the key private to the Agent Host/Browser Host boundary.
+    profileKey: chatSessionId,
     surface: body.surface,
     viewport: body.viewport,
   }
+  let discoveredPreview: ProjectPreviewTarget | null = null
+  try {
+    discoveredPreview = await discoverProjectPreviewTarget(config, chat.project_id)
+  } catch (error) {
+    return Response.json({ error: { code: 'PREVIEW_DISCOVERY_FAILED', message: error instanceof Error ? error.message : 'Project preview discovery failed', recoverable: true } }, { status: 503 })
+  }
   if (body.surface === 'native-preview') {
-    const targetUrl = process.env.OPENLINK_PREVIEW_TARGET_URL
-    if (!targetUrl) return Response.json({ error: { code: 'PREVIEW_NOT_ATTACHED', message: 'This project does not have an attached preview runtime yet', recoverable: true } }, { status: 409 })
+    const targetUrl = discoveredPreview?.url || process.env.OPENLINK_PREVIEW_TARGET_URL
+    if (!targetUrl) return Response.json({ error: { code: 'PREVIEW_NOT_ATTACHED', message: '未检测到运行中的 Web 服务。请先在项目环境中启动开发服务器。', recoverable: true } }, { status: 409 })
     requestBody.preview = {
       targetUrl,
+      ...(discoveredPreview?.headers ? { targetHeaders: discoveredPreview.headers } : {}),
       pathMode: process.env.OPENLINK_PREVIEW_PATH_MODE === 'preserve-session-prefix' ? 'preserve-session-prefix' : 'strip-session-prefix',
     }
   } else {
-    const initialUrl = typeof body.initialUrl === 'string' ? body.initialUrl.trim().slice(0, 8192) : 'about:blank'
+    const initialUrl = discoveredPreview?.url || (typeof body.initialUrl === 'string' ? body.initialUrl.trim().slice(0, 8192) : 'about:blank')
     requestBody.chromium = {
       initialUrl,
+      ...(discoveredPreview?.headers ? { initialRequestHeaders: discoveredPreview.headers } : {}),
       headless: true,
+      // The browser session is recreated when the chat panel switches surface
+      // or the WebSocket reconnects. Keep its project-local Chromium profile
+      // so cookies, localStorage, and open-page state survive that lifecycle;
+      // the Project VM owns and deletes the profile tree with the project.
+      preserveProfile: true,
       networkPolicy: {
         allowedDomains: (process.env.OPENLINK_BROWSER_ALLOWED_DOMAINS || '').split(',').map((value) => value.trim()).filter(Boolean),
         deniedDomains: (process.env.OPENLINK_BROWSER_DENIED_DOMAINS || '').split(',').map((value) => value.trim()).filter(Boolean),
@@ -73,12 +112,14 @@ export async function POST(request: Request) {
         // permit Chromium to reach only that loopback origin without opening
         // arbitrary localhost access by default.
         allowLoopback: process.env.OPENLINK_BROWSER_ALLOW_LOOPBACK === 'true' || isConfiguredLocalPreviewUrl(initialUrl),
-        allowPrivateNetworks: process.env.OPENLINK_BROWSER_ALLOW_PRIVATE_NETWORKS === 'true',
+        // The only automatic private target is the Project VM's own
+        // OpenSandbox proxy, returned by authenticated Agent Host discovery.
+        allowPrivateNetworks: process.env.OPENLINK_BROWSER_ALLOW_PRIVATE_NETWORKS === 'true' || Boolean(discoveredPreview),
       },
     }
   }
 
-  const response = await fetch(`${config.baseUrl}/v1/browser/sessions`, {
+  const response = await fetch(`${config.baseUrl}/v1/projects/${encodeURIComponent(chat.project_id)}/browser/sessions`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${config.apiToken}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(requestBody),

@@ -127,6 +127,7 @@ export class NativePreviewProxy {
     request.url = this.upstreamPath(runtime, url)
     request.headers.host = runtime.target.host
     request.headers.origin = runtime.target.origin
+    for (const [name, value] of Object.entries(runtime.targetHeaders)) request.headers[name.toLowerCase()] = value
     const upstreamCookies = [...parseCookies(request.headers.cookie).entries()]
       .filter(([name]) => name !== cookieName(runtime.sessionId))
       .map(([name, value]) => `${name}=${encodeURIComponent(value)}`)
@@ -146,6 +147,7 @@ export class NativePreviewProxy {
     headers.host = target.host
     headers['accept-encoding'] = 'identity'
     if (headers.origin) headers.origin = target.origin
+    Object.assign(headers, runtime.targetHeaders)
     delete headers['proxy-authorization']
     delete headers['proxy-connection']
     const upstreamCookies = [...parseCookies(request.headers.cookie).entries()]

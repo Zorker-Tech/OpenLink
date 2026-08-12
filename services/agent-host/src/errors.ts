@@ -13,9 +13,14 @@ export type AgentHostErrorCode =
   | 'AUTH_DENIED'
   | 'INVALID_BODY'
   | 'SESSION_BUSY'
+  | 'EXTENSION_UI_UNAVAILABLE'
+  | 'EXTENSION_UI_REQUEST_NOT_FOUND'
   | 'AGENT_TIMEOUT'
   | 'REQUEST_ABORTED'
   | 'PI_PROMPT_FAILED'
+  | 'GIT_WORKTREE_DIRTY'
+  | 'GIT_REF_INVALID'
+  | 'GIT_CHECKOUT_FAILED'
 
 export class AgentHostError extends Error {
   readonly code: AgentHostErrorCode

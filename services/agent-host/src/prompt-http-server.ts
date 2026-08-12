@@ -2,17 +2,32 @@ import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { createServer, type IncomingMessage, type Server } from 'node:http'
 import { mkdir } from 'node:fs/promises'
 import { isIP } from 'node:net'
-import type { AgentNativeSessionSnapshot, AgentProviderRuntimeConfiguration } from './contracts.js'
+import type { AgentExtensionUiResponse, AgentNativeSessionSnapshot, AgentProviderRuntimeConfiguration } from './contracts.js'
 import { AgentHostError } from './errors.js'
 import { isProjectId, type ProjectVmManager } from './project-vm.js'
+import type { ProjectRuntimeDescriptor } from './project-runtime.js'
+import type { ProjectRuntimeController } from './project-runtime-router.js'
+import { BrowserHostClient, type BrowserAgentSession } from './browser-client.js'
+import { BrowserGateway } from './browser-gateway.js'
+import { CodeServerGateway } from './code-server-gateway.js'
 
 export interface PromptRuntimeSession {
   prompt(message: string, signal?: AbortSignal): Promise<Response>
+  /** Pause an idle Worker while retaining its sandbox state for fast resume. */
+  pause?(): Promise<void>
+  /** Resume a paused Worker before serving a prompt or lease warmup. */
+  resume?(): Promise<void>
+  /** Apply an approved outbound-network grant to this live sandbox. */
+  networkAccess?(hosts: string[], mode: 'temporary' | 'persistent', durationSeconds?: number): Promise<void>
+  /** Resolve a pending Pi extension UI request (confirm/select/input/editor). */
+  resolveExtensionUi?(response: AgentExtensionUiResponse): Promise<void>
   cleanup(): Promise<void>
 }
 
 export interface PromptRuntimeBackend {
-  createSession(userId: string, workspaceId: string, sessionId: string, runtimeConfiguration?: AgentProviderRuntimeConfiguration, nativeSession?: AgentNativeSessionSnapshot, projectId?: string): Promise<PromptRuntimeSession>
+  createSession(userId: string, workspaceId: string, sessionId: string, runtimeConfiguration: AgentProviderRuntimeConfiguration, nativeSession?: AgentNativeSessionSnapshot, projectId?: string, projectRuntime?: ProjectRuntimeDescriptor, browser?: BrowserAgentSession): Promise<PromptRuntimeSession>
+  /** Remove a durable Project VM workload left by a previous Agent Host process. */
+  cleanupSession?(userId: string, workspaceId: string, sessionId: string, projectId?: string, projectRuntime?: ProjectRuntimeDescriptor): Promise<void>
   close(): Promise<void>
 }
 
@@ -25,6 +40,12 @@ export interface PromptHttpServerConfig {
   sessionIdleTtlMs: number
   maxSessions?: number
   projectVmManager?: ProjectVmManager
+  projectRuntimeManager?: ProjectRuntimeController
+  requireProjectRuntime?: boolean
+  /** Public URL used by browser clients; must not be a Project VM loopback URL. */
+  browserGatewayPublicUrl?: string
+  browserGatewayAllowedOrigins?: string[]
+  browserGatewayUpstreamOrigin?: string
 }
 
 interface PromptBody {
@@ -32,14 +53,43 @@ interface PromptBody {
   workspaceId: string
   projectId?: string
   message: string
-  runtimeConfiguration?: AgentProviderRuntimeConfiguration
+  runtimeConfiguration: AgentProviderRuntimeConfiguration
   nativeSession?: AgentNativeSessionSnapshot
+  browserSessionId?: string
+}
+
+interface PreparedSessionRequest {
+  userId: string
+  workspaceId: string
+  sessionId: string
+  projectId: string
+  runtimeConfiguration: AgentProviderRuntimeConfiguration
+  nativeSession?: AgentNativeSessionSnapshot
+  browser?: BrowserAgentSession
+  projectRuntime?: ProjectRuntimeDescriptor
+  baseKey: string
+  key: string
+}
+
+interface NetworkAccessBody {
+  userId: string
+  workspaceId: string
+  hosts: string[]
+  mode: 'temporary' | 'persistent'
+  durationSeconds?: number
 }
 
 interface SessionEntry {
   runtime: PromptRuntimeSession
   lastUsedAt: number
   busy: boolean
+  recovering?: boolean
+  paused?: boolean
+}
+
+function isMissingSandboxFailure(error: unknown): boolean {
+  if (!(error instanceof AgentHostError)) return false
+  return /(?:DOCKER::)?SANDBOX_NOT_FOUND|sandbox\s+(?:was\s+)?not found/i.test(error.message)
 }
 
 function authorized(request: IncomingMessage, token: string): boolean {
@@ -77,11 +127,36 @@ function parsePromptBody(value: unknown): PromptBody {
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(workspaceId)) throw new AgentHostError('INVALID_BODY', 'workspaceId is invalid')
   if (projectId !== undefined && !isProjectId(projectId)) throw new AgentHostError('INVALID_BODY', 'projectId is invalid')
   if (!message || message.length > 10_000) throw new AgentHostError('INVALID_BODY', 'message is invalid')
-  const runtimeConfiguration = body.runtimeConfiguration === undefined
-    ? undefined
-    : parseRuntimeConfiguration(body.runtimeConfiguration)
+  const runtimeConfiguration = parseRuntimeConfiguration(body.runtimeConfiguration)
   const nativeSession = body.nativeSession === undefined ? undefined : parseNativeSession(body.nativeSession)
-  return { userId, workspaceId, projectId, message, runtimeConfiguration, nativeSession }
+  const browserSessionId = body.browserSessionId === undefined
+    ? undefined
+    : typeof body.browserSessionId === 'string' && /^[A-Za-z0-9_-]{8,128}$/.test(body.browserSessionId)
+      ? body.browserSessionId
+      : ''
+  if (body.browserSessionId !== undefined && !browserSessionId) throw new AgentHostError('INVALID_BODY', 'browserSessionId is invalid')
+  return { userId, workspaceId, projectId, message, runtimeConfiguration, nativeSession, browserSessionId }
+}
+
+function parseNetworkAccessBody(value: unknown): NetworkAccessBody {
+  if (!value || typeof value !== 'object') throw new AgentHostError('INVALID_BODY', 'Network access request is invalid')
+  const body = value as Record<string, unknown>
+  const userId = typeof body.userId === 'string' ? body.userId : ''
+  const workspaceId = typeof body.workspaceId === 'string' ? body.workspaceId : ''
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(userId)) throw new AgentHostError('INVALID_BODY', 'userId is invalid')
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(workspaceId)) throw new AgentHostError('INVALID_BODY', 'workspaceId is invalid')
+  if (!Array.isArray(body.hosts) || body.hosts.length === 0 || body.hosts.length > 32) throw new AgentHostError('INVALID_BODY', 'hosts must contain 1-32 domains')
+  const hosts = body.hosts.map((value) => typeof value === 'string' ? value.trim().toLowerCase() : '')
+  if (hosts.some((host) => !/^(?:\*\.)?[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$/.test(host) || host.includes('..'))) {
+    throw new AgentHostError('INVALID_BODY', 'hosts contains an invalid domain')
+  }
+  const mode = body.mode === 'persistent' || body.mode === 'temporary' ? body.mode : ''
+  if (!mode) throw new AgentHostError('INVALID_BODY', 'mode must be temporary or persistent')
+  const durationSeconds = body.durationSeconds === undefined ? 900 : Number(body.durationSeconds)
+  if (mode === 'temporary' && (!Number.isSafeInteger(durationSeconds) || durationSeconds < 1 || durationSeconds > 3_600)) {
+    throw new AgentHostError('INVALID_BODY', 'temporary network access duration must be 1-3600 seconds')
+  }
+  return { userId, workspaceId, hosts: [...new Set(hosts)], mode, ...(mode === 'temporary' ? { durationSeconds } : {}) }
 }
 
 function parseNativeSession(value: unknown): AgentNativeSessionSnapshot {
@@ -110,7 +185,7 @@ function parseRuntimeConfiguration(value: unknown): AgentProviderRuntimeConfigur
   const revision = typeof input.revision === 'string' ? input.revision : ''
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(providerId) || providerId.length > 96) throw new AgentHostError('INVALID_BODY', 'providerId is invalid')
   if (!/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/.test(modelId)) throw new AgentHostError('INVALID_BODY', 'modelId is invalid')
-  if (!apiKey || apiKey.length > 8_192 || /[\r\n\u0000]/.test(apiKey)) throw new AgentHostError('INVALID_BODY', 'provider credential is invalid')
+  if (apiKey.length > 8_192 || /[\r\n\u0000]/.test(apiKey)) throw new AgentHostError('INVALID_BODY', 'provider credential is invalid')
   let endpoint: URL
   try { endpoint = new URL(baseUrl) } catch { throw new AgentHostError('INVALID_BODY', 'provider baseUrl is invalid') }
   const allowInsecureEndpoint = process.env.OPENLINK_ALLOW_INSECURE_PROVIDER_ENDPOINTS === '1'
@@ -125,14 +200,83 @@ function parseRuntimeConfiguration(value: unknown): AgentProviderRuntimeConfigur
 }
 
 function isUnsafeLiteralIp(hostname: string): boolean {
-  if (hostname === '::' || hostname === '::1') return true
-  const lower = hostname.toLowerCase()
-  if (lower.startsWith('fc') || lower.startsWith('fd') || lower.startsWith('fe8') || lower.startsWith('fe9') || lower.startsWith('fea') || lower.startsWith('feb')) return true
-  if (lower.startsWith('::ffff:')) return isUnsafeLiteralIp(lower.slice(7))
-  const parts = hostname.split('.').map(Number)
-  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return false
-  const [a, b] = parts
-  return a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || a >= 224
+  const value = hostname.toLowerCase().replace(/^\[|\]$/g, '')
+  const ipv4 = parseIpv4(value)
+  if (ipv4) return isUnsafeIpv4(ipv4)
+  if (isIP(value) !== 6) return false
+
+  // URL normalisation turns IPv4-mapped IPv6 literals into hexadecimal form
+  // (for example ::ffff:127.0.0.1 becomes ::ffff:7f00:1). Parse the address
+  // instead of relying on string prefixes so equivalent spellings cannot
+  // bypass the private/loopback checks.
+  const hextets = parseIpv6(value)
+  if (!hextets) return true
+  const first = hextets[0]!
+  const isUnspecified = hextets.every((part) => part === 0)
+  const isLoopback = isUnspecified === false && hextets.slice(0, 7).every((part) => part === 0) && hextets[7] === 1
+  const isUniqueLocal = (first & 0xfe00) === 0xfc00
+  const isLinkLocal = (first & 0xffc0) === 0xfe80
+  const isMulticast = (first & 0xff00) === 0xff00
+  const mapped = hextets.slice(0, 5).every((part) => part === 0) && hextets[5] === 0xffff
+  if (mapped) {
+    return isUnsafeIpv4([
+      (hextets[6]! >>> 8) & 0xff,
+      hextets[6]! & 0xff,
+      (hextets[7]! >>> 8) & 0xff,
+      hextets[7]! & 0xff,
+    ])
+  }
+
+  // Reject unspecified, loopback, ULA, link-local and multicast addresses.
+  // Also reject IPv4-compatible literals (::/96) conservatively: they are
+  // deprecated and can otherwise encode a private IPv4 endpoint in an IPv6
+  // spelling that is easy to miss during review.
+  const ipv4Compatible = hextets.slice(0, 6).every((part) => part === 0)
+  return isUnspecified || isLoopback || isUniqueLocal || isLinkLocal || isMulticast || ipv4Compatible
+}
+
+function parseIpv4(value: string): [number, number, number, number] | null {
+  const parts = value.split('.')
+  if (parts.length !== 4 || parts.some((part) => !/^\d{1,3}$/.test(part))) return null
+  const parsed = parts.map(Number)
+  if (parsed.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return null
+  return parsed as [number, number, number, number]
+}
+
+function isUnsafeIpv4([a, b]: [number, number, number, number]): boolean {
+  return a === 0
+    || a === 10
+    || a === 127
+    || (a === 100 && b >= 64 && b <= 127)
+    || (a === 169 && b === 254)
+    || (a === 172 && b >= 16 && b <= 31)
+    || (a === 192 && b === 0)
+    || (a === 192 && b === 168)
+    || (a === 198 && (b === 18 || b === 19))
+    || a >= 224
+}
+
+function parseIpv6(value: string): number[] | null {
+  if (value.includes('.')) {
+    const lastColon = value.lastIndexOf(':')
+    if (lastColon < 0) return null
+    const mapped = parseIpv4(value.slice(lastColon + 1))
+    if (!mapped) return null
+    value = `${value.slice(0, lastColon)}:${((mapped[0]! << 8) | mapped[1]!).toString(16)}:${((mapped[2]! << 8) | mapped[3]!).toString(16)}`
+  }
+  const halves = value.split('::')
+  if (halves.length > 2) return null
+  const left = halves[0] ? halves[0].split(':') : []
+  const right = halves.length === 2 && halves[1] ? halves[1].split(':') : []
+  if ([...left, ...right].some((part) => !/^[0-9a-f]{1,4}$/.test(part))) return null
+  if (halves.length === 1 && left.length !== 8) return null
+  if (halves.length === 2 && left.length + right.length >= 8) return null
+  const missing = 8 - left.length - right.length
+  return [
+    ...left.map((part) => Number.parseInt(part, 16)),
+    ...Array.from({ length: missing }, () => 0),
+    ...right.map((part) => Number.parseInt(part, 16)),
+  ]
 }
 
 function parseProviderCheckBody(value: unknown) {
@@ -140,14 +284,160 @@ function parseProviderCheckBody(value: unknown) {
   const body = value as Record<string, unknown>
   const userId = typeof body.userId === 'string' ? body.userId : ''
   const workspaceId = typeof body.workspaceId === 'string' ? body.workspaceId : ''
+  const projectId = typeof body.projectId === 'string' ? body.projectId : ''
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(userId)) throw new AgentHostError('INVALID_BODY', 'userId is invalid')
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(workspaceId)) throw new AgentHostError('INVALID_BODY', 'workspaceId is invalid')
-  return { userId, workspaceId, runtimeConfiguration: parseRuntimeConfiguration(body.runtimeConfiguration) }
+  if (!isProjectId(projectId)) throw new AgentHostError('INVALID_BODY', 'projectId is invalid')
+  return { userId, workspaceId, projectId, runtimeConfiguration: parseRuntimeConfiguration(body.runtimeConfiguration) }
+}
+
+function safeIdentity(value: unknown, label: string): string {
+  const result = typeof value === 'string' ? value : ''
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(result)) throw new AgentHostError('INVALID_BODY', `${label} is invalid`)
+  return result
+}
+
+function parseBrowserSessionBody(value: unknown) {
+  if (!value || typeof value !== 'object') throw new AgentHostError('INVALID_BODY', 'Browser session body is invalid')
+  const body = value as Record<string, unknown>
+  const ownerId = safeIdentity(body.ownerId, 'ownerId')
+  const workspaceId = safeIdentity(body.workspaceId, 'workspaceId')
+  const profileKey = body.profileKey === undefined ? undefined : safeIdentity(body.profileKey, 'profileKey')
+  const surface = body.surface === 'native-preview' || body.surface === 'chromium-stream' ? body.surface : null
+  if (!surface) throw new AgentHostError('INVALID_BODY', 'Browser surface is invalid')
+  if (body.viewport !== undefined && (!body.viewport || typeof body.viewport !== 'object')) throw new AgentHostError('INVALID_BODY', 'Browser viewport is invalid')
+  if (surface === 'native-preview' && (!body.preview || typeof body.preview !== 'object')) throw new AgentHostError('INVALID_BODY', 'Preview configuration is required')
+  if (surface === 'chromium-stream' && body.chromium !== undefined && (!body.chromium || typeof body.chromium !== 'object')) throw new AgentHostError('INVALID_BODY', 'Chromium configuration is invalid')
+  return {
+    ownerId,
+    workspaceId,
+    profileKey,
+    surface: surface as 'native-preview' | 'chromium-stream',
+    viewport: body.viewport,
+    preview: body.preview,
+    chromium: body.chromium,
+  }
+}
+
+function parseBrowserDeleteBody(value: unknown) {
+  if (!value || typeof value !== 'object') throw new AgentHostError('INVALID_BODY', 'Browser delete body is invalid')
+  const body = value as Record<string, unknown>
+  return {
+    ownerId: safeIdentity(body.ownerId, 'ownerId'),
+    workspaceId: safeIdentity(body.workspaceId, 'workspaceId'),
+  }
+}
+
+function parseCodeServerSessionBody(value: unknown) {
+  if (!value || typeof value !== 'object') throw new AgentHostError('INVALID_BODY', 'Code-server session body is invalid')
+  const body = value as Record<string, unknown>
+  return {
+    ownerId: safeIdentity(body.ownerId, 'ownerId'),
+    workspaceId: safeIdentity(body.workspaceId, 'workspaceId'),
+  }
+}
+
+function parseGitCheckoutBody(value: unknown): { ref: string } {
+  if (!value || typeof value !== 'object') throw new AgentHostError('INVALID_BODY', 'Git checkout body is invalid')
+  const body = value as Record<string, unknown>
+  const ref = typeof body.ref === 'string'
+    ? body.ref.trim()
+    : ''
+  if (ref !== 'latest' && !/^[0-9a-f]{7,40}$/i.test(ref)) throw new AgentHostError('GIT_REF_INVALID', 'Git version reference is invalid')
+  return { ref }
+}
+
+function parseLeaseBody(value: unknown) {
+  if (!value || typeof value !== 'object') throw new AgentHostError('INVALID_BODY', 'Lease body is invalid')
+  const body = value as Record<string, unknown>
+  const userId = safeIdentity(body.userId, 'userId')
+  const workspaceId = safeIdentity(body.workspaceId, 'workspaceId')
+  const sessionId = safeIdentity(body.sessionId, 'sessionId')
+  const projectId = typeof body.projectId === 'string' ? body.projectId : ''
+  if (!isProjectId(projectId)) throw new AgentHostError('INVALID_BODY', 'projectId is invalid')
+  const runtimeConfiguration = body.runtimeConfiguration === undefined
+    ? undefined
+    : parseRuntimeConfiguration(body.runtimeConfiguration)
+  const nativeSession = body.nativeSession === undefined ? undefined : parseNativeSession(body.nativeSession)
+  const browserSessionId = body.browserSessionId === undefined
+    ? undefined
+    : typeof body.browserSessionId === 'string' && /^[A-Za-z0-9_-]{8,128}$/.test(body.browserSessionId)
+      ? body.browserSessionId
+      : ''
+  if (body.browserSessionId !== undefined && !browserSessionId) throw new AgentHostError('INVALID_BODY', 'browserSessionId is invalid')
+  return { userId, workspaceId, sessionId, projectId, runtimeConfiguration, nativeSession, browserSessionId }
+}
+
+function parseExtensionUiResponse(value: unknown): AgentExtensionUiResponse {
+  if (!value || typeof value !== 'object') throw new AgentHostError('INVALID_BODY', 'Extension UI response is invalid')
+  const body = value as Record<string, unknown>
+  const id = typeof body.id === 'string' ? body.id : ''
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/.test(id)) throw new AgentHostError('INVALID_BODY', 'Extension UI response id is invalid')
+  const confirmed = body.confirmed
+  const valueText = body.value
+  const cancelled = body.cancelled
+  if (confirmed !== undefined && typeof confirmed !== 'boolean') throw new AgentHostError('INVALID_BODY', 'Extension UI confirmation is invalid')
+  if (valueText !== undefined && (typeof valueText !== 'string' || valueText.length > 100_000)) throw new AgentHostError('INVALID_BODY', 'Extension UI value is invalid')
+  if (cancelled !== undefined && cancelled !== true) throw new AgentHostError('INVALID_BODY', 'Extension UI cancellation is invalid')
+  if (cancelled === true && (confirmed !== undefined || valueText !== undefined)) throw new AgentHostError('INVALID_BODY', 'Extension UI response is ambiguous')
+  if (confirmed === undefined && valueText === undefined && cancelled !== true) throw new AgentHostError('INVALID_BODY', 'Extension UI response has no value')
+  if (confirmed !== undefined && valueText !== undefined) throw new AgentHostError('INVALID_BODY', 'Extension UI response is ambiguous')
+  return {
+    id,
+    ...(confirmed !== undefined ? { confirmed } : {}),
+    ...(valueText !== undefined ? { value: valueText } : {}),
+    ...(cancelled === true ? { cancelled: true } : {}),
+  }
 }
 
 function json(response: import('node:http').ServerResponse, status: number, payload: unknown): void {
   response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' })
   response.end(JSON.stringify(payload))
+}
+
+function providerCheckFailureDetail(output: string, credential: string): string | null {
+  // Pi's NDJSON stream carries provider failures on the terminal assistant
+  // message. Preserve a bounded, credential-scrubbed diagnostic so the
+  // settings UI can distinguish a bad key/model from a provider-side issue
+  // such as exhausted billing. Do not pass arbitrary stream payloads through
+  // unchanged: some providers echo request headers in their error bodies.
+  let detail: string | null = null
+  for (const line of output.split('\n')) {
+    if (!line.trim()) continue
+    try {
+      const frame = JSON.parse(line) as Record<string, unknown>
+      const message = frame.message
+      if (!message || typeof message !== 'object') continue
+      const errorMessage = (message as Record<string, unknown>).errorMessage
+      if (typeof errorMessage === 'string' && errorMessage.trim()) detail = errorMessage.trim()
+    } catch {
+      // A malformed diagnostic frame is not a reason to expose raw output.
+    }
+  }
+  return detail
+    ? (credential ? detail.replaceAll(credential, '[redacted]') : detail).replace(/[\r\n\u0000]/g, ' ').slice(0, 500)
+    : null
+}
+
+function writeResponseChunk(response: import('node:http').ServerResponse, chunk: Uint8Array): Promise<void> {
+  if (response.destroyed || response.writableEnded) return Promise.reject(new Error('REQUEST_ABORTED'))
+  if (response.write(chunk)) return Promise.resolve()
+  return new Promise<void>((resolve, reject) => {
+    const onDrain = () => {
+      cleanup()
+      resolve()
+    }
+    const onClose = () => {
+      cleanup()
+      reject(new Error('REQUEST_ABORTED'))
+    }
+    const cleanup = () => {
+      response.off('drain', onDrain)
+      response.off('close', onClose)
+    }
+    response.once('drain', onDrain)
+    response.once('close', onClose)
+  })
 }
 
 async function pipeResponse(
@@ -165,12 +455,17 @@ async function pipeResponse(
     'X-Accel-Buffering': 'no',
     'X-OpenLink-Agent-Transport': transport,
   })
+  // Force the status and streaming headers onto the socket before waiting for
+  // the first Pi frame. Without this, Node may coalesce headers with the
+  // first token and a slow/thinking worker looks like a stalled request to the
+  // BFF and browser.
+  response.flushHeaders?.()
   const reader = upstream.body.getReader()
   try {
     while (true) {
       const { done, value } = await reader.read()
       if (done) break
-      response.write(value)
+      await writeResponseChunk(response, value)
     }
     response.end()
   } finally {
@@ -184,6 +479,146 @@ export async function startPromptHttpServer(
 ): Promise<{ server: Server; shutdown(): Promise<void> }> {
   await mkdir(config.storageRoot, { recursive: true, mode: 0o700 })
   const sessions = new Map<string, SessionEntry>()
+  const browserGateway = new BrowserGateway({
+    publicBaseUrl: config.browserGatewayPublicUrl ?? `http://${config.host}:${config.port}`,
+    allowedOrigins: config.browserGatewayAllowedOrigins ?? ['http://localhost:3000'],
+    upstreamOrigin: config.browserGatewayUpstreamOrigin,
+  })
+  const codeServerGateway = new CodeServerGateway({
+    publicBaseUrl: config.browserGatewayPublicUrl ?? `http://${config.host}:${config.port}`,
+    allowedOrigins: config.browserGatewayAllowedOrigins ?? ['http://localhost:3000'],
+  })
+  // Runtime creation/model switching is serialized per Cloud session. Without
+  // this lock two tabs can both observe a missing entry, create two sandboxes,
+  // and then race while deleting each other's runtime.
+  const sessionCreationLocks = new Map<string, Promise<void>>()
+  // The web BFF can cancel a disconnected client while still draining the
+  // worker response. Keeping the controller separately from SessionEntry
+  // means cancellation is safe even when a model/browser identity is being
+  // replaced under the same durable chat session.
+  const activePromptControllers = new Map<string, AbortController>()
+  // Per-session locks do not serialize creation for different sessions. Keep
+  // a reservation count while backend.createSession is awaiting OpenSandbox
+  // so maxSessions cannot be exceeded by concurrent provisioning requests.
+  let creatingSessions = 0
+  // Cleanup work can outlive the HTTP request that triggered it (for example
+  // the idle reaper). Keep it visible to shutdown so the OpenSandbox transport
+  // is never closed while a DELETE is still in flight.
+  const cleanupOperations = new Set<Promise<void>>()
+  const trackCleanup = (operation: Promise<void>): Promise<void> => {
+    let tracked!: Promise<void>
+    tracked = operation.finally(() => cleanupOperations.delete(tracked))
+    cleanupOperations.add(tracked)
+    return tracked
+  }
+
+  async function withSessionCreationLock<T>(baseKey: string, operation: () => Promise<T>): Promise<T> {
+    const previous = sessionCreationLocks.get(baseKey) ?? Promise.resolve()
+    let release!: () => void
+    const current = new Promise<void>((resolve) => { release = resolve })
+    const queued = previous.then(() => current)
+    sessionCreationLocks.set(baseKey, queued)
+    try {
+      await previous
+      return await operation()
+    } finally {
+      release()
+      if (sessionCreationLocks.get(baseKey) === queued) sessionCreationLocks.delete(baseKey)
+    }
+  }
+
+  async function prepareSessionRequest(input: {
+    userId: string
+    workspaceId: string
+    sessionId: string
+    projectId: string
+    runtimeConfiguration: AgentProviderRuntimeConfiguration
+    nativeSession?: AgentNativeSessionSnapshot
+    browserSessionId?: string
+  }): Promise<PreparedSessionRequest> {
+    // Resolve and authorize the browser binding before provisioning a Project
+    // VM or session storage. A stale/foreign browser id must not cause a
+    // resource-creating side effect.
+    const browser = input.browserSessionId
+      ? browserGateway.getAgentSession(input.browserSessionId, {
+          ownerId: input.userId,
+          workspaceId: input.workspaceId,
+          projectId: input.projectId,
+        })
+      : undefined
+    let projectRuntime: ProjectRuntimeDescriptor | undefined
+    if (config.projectRuntimeManager) {
+      projectRuntime = await config.projectRuntimeManager.ensure(input.projectId)
+    } else if (config.projectVmManager) {
+      await config.projectVmManager.ensure(input.projectId)
+    }
+    if (config.requireProjectRuntime && !projectRuntime) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project runtime manager is required')
+    if (config.projectRuntimeManager) {
+      await config.projectRuntimeManager.prepareSessionStorage(input.projectId, input.userId, input.workspaceId, input.sessionId)
+      await config.projectRuntimeManager.ensureProjectGitRepository(input.projectId)
+    }
+    const baseKey = `${input.userId}:${input.workspaceId}:${input.sessionId}`
+    // A Pi worker receives the Browser Host capability only at provisioning
+    // time. Treat the browser capability as part of the runtime identity so a
+    // recreated browser session gets a worker bound to the new capability.
+    const browserIdentity = input.browserSessionId ?? 'none'
+    const runtimeIdentity = `${input.runtimeConfiguration.providerId}/${input.runtimeConfiguration.modelId}@${input.runtimeConfiguration.revision}:browser=${browserIdentity}`
+    return {
+      ...input,
+      browser,
+      projectRuntime,
+      baseKey,
+      key: `${baseKey}:${runtimeIdentity}`,
+    }
+  }
+
+  async function createEntry(request: PreparedSessionRequest): Promise<{ entry: SessionEntry; created: boolean }> {
+    return withSessionCreationLock(request.baseKey, async () => {
+      // Re-check after waiting for another request that may have created the
+      // same provider/model/browser runtime while this request was queued.
+      const existingForKey = sessions.get(request.key)
+      if (existingForKey) return { entry: existingForKey, created: false }
+
+      // A model/provider/browser switch replaces the old runtime before global
+      // capacity is evaluated. With maxSessions=1 the old ordering incorrectly
+      // returned SESSION_BUSY even though the session was safely replaceable.
+      for (const [existingKey, existing] of sessions) {
+        if (!existingKey.startsWith(`${request.baseKey}:`)) continue
+        if (existing.busy || existing.recovering) throw new AgentHostError('SESSION_BUSY', 'Agent session is changing model while a prompt is active', { retryable: true })
+        await existing.runtime.cleanup()
+        if (sessions.get(existingKey) === existing) sessions.delete(existingKey)
+      }
+      if (config.maxSessions !== undefined && sessions.size + creatingSessions >= config.maxSessions) {
+        throw new AgentHostError('SESSION_BUSY', 'This runtime has reached its concurrent session limit', { retryable: true })
+      }
+      creatingSessions += 1
+      try {
+        // The in-memory session map is intentionally not persisted. Reclaim
+        // only this exact workload left by a previous Agent Host process
+        // before materialising its replacement.
+        await backend.cleanupSession?.(request.userId, request.workspaceId, request.sessionId, request.projectId, request.projectRuntime)
+        const entry: SessionEntry = {
+          runtime: await backend.createSession(
+            request.userId,
+            request.workspaceId,
+            request.sessionId,
+            request.runtimeConfiguration,
+            request.nativeSession,
+            request.projectId,
+            request.projectRuntime,
+            request.browser,
+          ),
+          lastUsedAt: Date.now(),
+          busy: false,
+          paused: false,
+        }
+        sessions.set(request.key, entry)
+        return { entry, created: true }
+      } finally {
+        creatingSessions -= 1
+      }
+    })
+  }
 
   async function handlePrompt(
     request: IncomingMessage,
@@ -193,37 +628,367 @@ export async function startPromptHttpServer(
     if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(sessionId)) throw new AgentHostError('INVALID_SESSION', 'sessionId is invalid')
     const body = parsePromptBody(await readJson(request))
     if (!body.projectId) throw new AgentHostError('INVALID_BODY', 'projectId is required for agent sessions')
-    if (config.projectVmManager) await config.projectVmManager.ensure(body.projectId)
-    const baseKey = `${body.userId}:${body.workspaceId}:${sessionId}`
-    const runtimeIdentity = body.runtimeConfiguration
-      ? `${body.runtimeConfiguration.providerId}/${body.runtimeConfiguration.modelId}@${body.runtimeConfiguration.revision}`
-      : 'host-default'
-    const key = `${baseKey}:${runtimeIdentity}`
-    let entry = sessions.get(key)
-    if (!entry) {
-      if (config.maxSessions !== undefined && sessions.size >= config.maxSessions) {
-        throw new AgentHostError('SESSION_BUSY', 'This runtime has reached its concurrent session limit', { retryable: true })
-      }
-      for (const [existingKey, existing] of sessions) {
-        if (!existingKey.startsWith(`${baseKey}:`)) continue
-        if (existing.busy) throw new AgentHostError('SESSION_BUSY', 'Agent session is changing model while a prompt is active', { retryable: true })
-        sessions.delete(existingKey)
-        await existing.runtime.cleanup()
-      }
-      entry = { runtime: await backend.createSession(body.userId, body.workspaceId, sessionId, body.runtimeConfiguration, body.nativeSession, body.projectId), lastUsedAt: Date.now(), busy: false }
-      sessions.set(key, entry)
-    }
-    if (entry.busy) throw new AgentHostError('SESSION_BUSY', 'Agent session is already processing a prompt', { retryable: true })
-    entry.busy = true
-    entry.lastUsedAt = Date.now()
+    const prepared = await prepareSessionRequest({
+      userId: body.userId,
+      workspaceId: body.workspaceId,
+      sessionId,
+      projectId: body.projectId,
+      runtimeConfiguration: body.runtimeConfiguration,
+      nativeSession: body.nativeSession,
+      browserSessionId: body.browserSessionId,
+    })
+    let createdEntryByRequest = false
     const abortController = new AbortController()
-    response.once('close', () => { if (!response.writableEnded) abortController.abort() })
-    try {
-      await pipeResponse(await entry.runtime.prompt(body.message, abortController.signal), response, config.transport)
-    } finally {
-      entry.busy = false
+    // Normal direct Agent Host clients are canceled when their HTTP response
+    // closes. The web BFF sets this opt-in header because it has a separate
+    // /cancel request and must drain the worker's final native-session delta
+    // into Postgres after the browser tab disappears.
+    const drainOnClose = request.headers['x-openlink-drain-on-close'] === '1'
+    let closeAbortTimer: NodeJS.Timeout | undefined
+    response.once('close', () => {
+      if (response.writableEnded) return
+      if (!drainOnClose) {
+        abortController.abort()
+        return
+      }
+      // If the BFF disconnects before Agent Host has materialised the active
+      // controller, its explicit /cancel request can race provisioning. Keep
+      // a short safety timer so a lost cancel request cannot strand a worker,
+      // while still leaving enough time for the normal final JSONL flush.
+      closeAbortTimer = setTimeout(() => {
+        closeAbortTimer = undefined
+        abortController.abort()
+      }, 5_000)
+      closeAbortTimer.unref()
+    })
+    const runPrompt = async (entry: SessionEntry): Promise<void> => {
+      if (entry.busy || entry.recovering) throw new AgentHostError('SESSION_BUSY', 'Agent session is already processing a prompt', { retryable: true })
+      if (entry.paused) {
+        await entry.runtime.resume?.()
+        entry.paused = false
+      }
+      entry.busy = true
       entry.lastUsedAt = Date.now()
+      try {
+        await pipeResponse(await entry.runtime.prompt(body.message, abortController.signal), response, config.transport)
+      } finally {
+        if (closeAbortTimer) {
+          clearTimeout(closeAbortTimer)
+          closeAbortTimer = undefined
+        }
+        entry.busy = false
+        entry.lastUsedAt = Date.now()
+      }
     }
+
+    let entry = sessions.get(prepared.key)
+    if (!entry) {
+      const created = await createEntry(prepared)
+      entry = created.entry
+      createdEntryByRequest = created.created
+    }
+    // A client may disconnect while Project VM/session provisioning is still
+    // in flight. Do not start a prompt against a request that can no longer
+    // consume the stream, and release an entry created solely for that
+    // abandoned request instead of waiting for the idle reaper.
+    if (abortController.signal.aborted) {
+      if (createdEntryByRequest && sessions.get(prepared.key) === entry) {
+        // Keep a failed cleanup in the session map as a capacity barrier. A
+        // request can disconnect after OpenSandbox has allocated a workload;
+        // deleting the entry before DELETE succeeds would make that workload
+        // permanently invisible to the reaper.
+        entry.recovering = true
+        try {
+          await trackCleanup(entry.runtime.cleanup())
+          if (sessions.get(prepared.key) === entry) sessions.delete(prepared.key)
+        } catch (cleanupError) {
+          entry.recovering = false
+          entry.lastUsedAt = Date.now()
+          console.error(`OpenLink aborted Agent session cleanup failed for ${prepared.key}: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`)
+        }
+      }
+      throw new AgentHostError('REQUEST_ABORTED', 'Agent request was aborted', { retryable: true })
+    }
+    const activeControllerKey = prepared.baseKey
+    if (activePromptControllers.has(activeControllerKey)) {
+      throw new AgentHostError('SESSION_BUSY', 'Agent session is already processing a prompt', { retryable: true })
+    }
+    activePromptControllers.set(activeControllerKey, abortController)
+    try {
+      await runPrompt(entry)
+    } catch (error) {
+      // OpenSandbox may expire a workload independently of this process (for
+      // example after an Agent Host restart or an older TTL configuration).
+      // The Cloud Pi JSONL snapshot is the source of truth, so rebuild the
+      // workload once when the first request reaches a missing sandbox. Only
+      // retry before headers are sent; a mid-stream failure must not duplicate
+      // assistant/tool output.
+      if (!isMissingSandboxFailure(error) || response.headersSent) throw error
+      entry.recovering = true
+      // A missing workload is recoverable only after its old handle has been
+      // disposed.  Ignoring a failed DELETE here used to create a replacement
+      // sandbox while the old one remained allocated, so every recovery retry
+      // leaked one workload.  Keep the entry as a capacity barrier and fail
+      // closed when cleanup cannot be confirmed.
+      try {
+        await entry.runtime.cleanup()
+      } catch (cleanupError) {
+        entry.recovering = false
+        entry.lastUsedAt = Date.now()
+        throw new AgentHostError(
+          'PROVISIONING_FAILED',
+          `Expired Agent session cleanup failed: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
+          { retryable: true },
+        )
+      }
+      if (sessions.get(prepared.key) === entry) sessions.delete(prepared.key)
+      entry = (await createEntry(prepared)).entry
+      await runPrompt(entry)
+    } finally {
+      if (activePromptControllers.get(activeControllerKey) === abortController) activePromptControllers.delete(activeControllerKey)
+    }
+  }
+
+  async function handleBrowserCreate(
+    request: IncomingMessage,
+    response: import('node:http').ServerResponse,
+    projectId: string,
+  ): Promise<void> {
+    if (!config.projectRuntimeManager) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project runtime manager is required')
+    const body = parseBrowserSessionBody(await readJson(request))
+    const runtime = await config.projectRuntimeManager.ensure(projectId)
+    const browser = new BrowserHostClient({ baseUrl: runtime.browserHostEndpoint, serviceToken: runtime.browserApiToken })
+    const session = await browser.createSession({
+      ownerId: body.ownerId,
+      workspaceId: body.workspaceId,
+      projectId,
+      profileKey: body.profileKey,
+      surface: body.surface,
+      viewport: body.viewport as never,
+      preview: body.preview as Record<string, unknown> | undefined,
+      chromium: body.chromium as Record<string, unknown> | undefined,
+    })
+    let publicSession
+    try {
+      publicSession = browserGateway.register(session)
+    } catch (error) {
+      await browser.close(session.state.id).catch(() => undefined)
+      throw error
+    }
+    json(response, 201, {
+      version: 1,
+      session: publicSession.state,
+      connection: publicSession.connection,
+    })
+  }
+
+  async function handleProjectPreviewTarget(
+    response: import('node:http').ServerResponse,
+    projectId: string,
+  ): Promise<void> {
+    if (!config.projectRuntimeManager) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project runtime manager is required')
+    const target = await config.projectRuntimeManager.discoverPreviewTarget(projectId)
+    if (!target) {
+      json(response, 200, { target: null })
+      return
+    }
+    json(response, 200, {
+      target: {
+        url: target.url,
+        headers: target.headers,
+        port: target.port,
+        sandboxId: target.sandboxId,
+      },
+    })
+  }
+
+  async function handleProjectGitVersions(
+    response: import('node:http').ServerResponse,
+    projectId: string,
+  ): Promise<void> {
+    if (!config.projectRuntimeManager) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project runtime manager is required')
+    json(response, 200, { versions: await config.projectRuntimeManager.listGitVersions(projectId) })
+  }
+
+  async function handleProjectGitCheckout(
+    request: IncomingMessage,
+    response: import('node:http').ServerResponse,
+    projectId: string,
+  ): Promise<void> {
+    if (!config.projectRuntimeManager) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project runtime manager is required')
+    const { ref } = parseGitCheckoutBody(await readJson(request))
+    json(response, 200, { version: await config.projectRuntimeManager.checkoutGitVersion(projectId, ref) })
+  }
+
+  async function handleBrowserDelete(
+    request: IncomingMessage,
+    response: import('node:http').ServerResponse,
+    projectId: string,
+    browserSessionId: string,
+  ): Promise<void> {
+    if (!config.projectRuntimeManager) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project runtime manager is required')
+    if (!/^[A-Za-z0-9_-]{8,128}$/.test(browserSessionId)) throw new AgentHostError('INVALID_BODY', 'browserSessionId is invalid')
+    const identity = parseBrowserDeleteBody(await readJson(request))
+    // Deleting a browser session must never provision a stopped Project VM.
+    // A missing active descriptor means the Browser Host is already gone (or
+    // the Agent Host restarted), so the public operation is idempotently done.
+    let runtime = config.projectRuntimeManager.getActive(projectId)
+    // Agent Host restarts clear the in-memory descriptor and public gateway
+    // binding, but Browser Host sessions can still be alive inside the durable
+    // Project VM. Rehydrate that Project only when a ready runtime record is
+    // present; an arbitrary stale browser id must not boot a new VM.
+    if (!runtime && await config.projectRuntimeManager.hasPersistedRuntime(projectId)) {
+      runtime = await config.projectRuntimeManager.ensure(projectId)
+    }
+    if (runtime) {
+      const browser = new BrowserHostClient({ baseUrl: runtime.browserHostEndpoint, serviceToken: runtime.browserApiToken })
+      const bound = (() => {
+        try {
+          return browserGateway.getAgentSession(browserSessionId, { ...identity, projectId })
+        } catch {
+          return null
+        }
+      })()
+      if (!bound) {
+        const state = await browser.get(browserSessionId)
+        if (!state || state.ownerId !== identity.ownerId || state.workspaceId !== identity.workspaceId || state.projectId !== projectId) {
+          throw new AgentHostError('BROWSER_SESSION_FAILED', 'Browser session does not belong to this project')
+        }
+      }
+      // Browser Host retains a failed close for retry. Only remove the public
+      // gateway binding after close has actually succeeded, otherwise a live
+      // Chromium/tunnel session becomes unreachable and leaks until restart.
+      await browser.close(browserSessionId)
+      browserGateway.unregister(browserSessionId)
+    } else {
+      browserGateway.unregister(browserSessionId)
+    }
+    response.writeHead(204)
+    response.end()
+  }
+
+  async function handleCodeServerCreate(
+    request: IncomingMessage,
+    response: import('node:http').ServerResponse,
+    projectId: string,
+  ): Promise<void> {
+    if (!config.projectRuntimeManager) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project runtime manager is required')
+    const body = parseCodeServerSessionBody(await readJson(request))
+    const runtime = await config.projectRuntimeManager.ensure(projectId)
+    const session = codeServerGateway.create({
+      ownerId: body.ownerId,
+      workspaceId: body.workspaceId,
+      projectId,
+      upstream: runtime.codeServerEndpoint,
+    })
+    json(response, 201, { version: 1, session })
+  }
+
+  async function handleAgentLease(
+    request: IncomingMessage,
+    response: import('node:http').ServerResponse,
+    pathSessionId: string,
+  ): Promise<void> {
+    const body = parseLeaseBody(await readJson(request))
+    if (body.sessionId !== pathSessionId) throw new AgentHostError('INVALID_BODY', 'Lease session does not match the route')
+    const baseKey = `${body.userId}:${body.workspaceId}:${body.sessionId}`
+    // A lease with a runtime configuration is the chat-page warmup request.
+    // It materialises the Worker before the first prompt so the prompt path
+    // only has to resume an already prepared runtime. Requests without the
+    // configuration remain lightweight legacy heartbeats.
+    if (body.runtimeConfiguration) {
+      const prepared = await prepareSessionRequest({
+        userId: body.userId,
+        workspaceId: body.workspaceId,
+        sessionId: body.sessionId,
+        projectId: body.projectId,
+        runtimeConfiguration: body.runtimeConfiguration,
+        nativeSession: body.nativeSession,
+        browserSessionId: body.browserSessionId,
+      })
+      const { entry } = await createEntry(prepared)
+      if (entry.paused) {
+        await entry.runtime.resume?.()
+        entry.paused = false
+      }
+      entry.lastUsedAt = Date.now()
+      return json(response, 200, { ok: true, active: 1, ready: true, paused: false })
+    }
+    let active = 0
+    const now = Date.now()
+    for (const [key, entry] of sessions) {
+      if (!key.startsWith(`${baseKey}:`)) continue
+      if (entry.paused) {
+        await entry.runtime.resume?.()
+        entry.paused = false
+      }
+      entry.lastUsedAt = now
+      active += 1
+    }
+    json(response, 200, { ok: true, active })
+  }
+
+  async function handleAgentCancel(
+    request: IncomingMessage,
+    response: import('node:http').ServerResponse,
+    pathSessionId: string,
+  ): Promise<void> {
+    const body = parseLeaseBody(await readJson(request))
+    if (body.sessionId !== pathSessionId) throw new AgentHostError('INVALID_BODY', 'Cancel session does not match the route')
+    const baseKey = `${body.userId}:${body.workspaceId}:${body.sessionId}`
+    const controller = activePromptControllers.get(baseKey)
+    if (controller) controller.abort()
+    let active = false
+    for (const [key, entry] of sessions) {
+      if (!key.startsWith(`${baseKey}:`)) continue
+      entry.lastUsedAt = Date.now()
+      active = active || entry.busy
+    }
+    json(response, 202, { ok: true, active })
+  }
+
+  async function handleExtensionUiResponse(
+    request: IncomingMessage,
+    response: import('node:http').ServerResponse,
+    pathSessionId: string,
+  ): Promise<void> {
+    const raw = await readJson(request)
+    if (!raw || typeof raw !== 'object') throw new AgentHostError('INVALID_BODY', 'Extension UI response body is invalid')
+    const payload = raw as Record<string, unknown>
+    const body = parseLeaseBody({ ...payload, sessionId: pathSessionId })
+    const uiResponse = parseExtensionUiResponse(payload)
+    const baseKey = `${body.userId}:${body.workspaceId}:${body.sessionId}`
+    const activeEntry = [...sessions.entries()].find(([key, entry]) => key.startsWith(`${baseKey}:`) && entry.busy && entry.runtime.resolveExtensionUi)
+    if (!activeEntry?.[1].runtime.resolveExtensionUi) {
+      throw new AgentHostError('EXTENSION_UI_UNAVAILABLE', 'No active extension UI request is waiting for this session', { retryable: true })
+    }
+    await activeEntry[1].runtime.resolveExtensionUi(uiResponse)
+    activeEntry[1].lastUsedAt = Date.now()
+    json(response, 202, { ok: true })
+  }
+
+  async function handleNetworkAccess(
+    request: IncomingMessage,
+    response: import('node:http').ServerResponse,
+    pathSessionId: string,
+  ): Promise<void> {
+    const body = parseNetworkAccessBody(await readJson(request))
+    const baseKey = `${body.userId}:${body.workspaceId}:${pathSessionId}`
+    const activeEntry = [...sessions.entries()].find(([key, entry]) => key.startsWith(`${baseKey}:`) && entry.runtime.networkAccess)
+    if (!activeEntry?.[1].runtime.networkAccess) {
+      throw new AgentHostError('INVALID_SESSION', 'No active Agent session is available for network access', { retryable: true })
+    }
+    await activeEntry[1].runtime.networkAccess(body.hosts, body.mode, body.durationSeconds)
+    activeEntry[1].lastUsedAt = Date.now()
+    json(response, 202, { ok: true, hosts: body.hosts, mode: body.mode, durationSeconds: body.durationSeconds ?? null })
+  }
+
+  async function handleBrowserGatewayPreview(
+    request: IncomingMessage,
+    response: import('node:http').ServerResponse,
+    browserSessionId: string,
+  ): Promise<void> {
+    await browserGateway.handleHttp(request, response, browserSessionId)
   }
 
   const server = createServer((request, response) => {
@@ -233,22 +998,131 @@ export async function startPromptHttpServer(
         json(response, 200, { ok: true, runtime: config.transport, sessions: sessions.size })
         return
       }
+      const browserGatewayPreview = /^\/v1\/browser\/gateway\/sessions\/([^/]+)\/preview(?:\/|$)/.exec(url.pathname)
+      if (browserGatewayPreview) {
+        await handleBrowserGatewayPreview(request, response, decodeURIComponent(browserGatewayPreview[1]!))
+        return
+      }
+      const codeServerGatewayRequest = /^\/v1\/code-server\/gateway\/sessions\/([^/]+)(?:\/|$)/.exec(url.pathname)
+      if (codeServerGatewayRequest) {
+        await codeServerGateway.handleHttp(request, response, decodeURIComponent(codeServerGatewayRequest[1]!))
+        return
+      }
       if (!authorized(request, config.apiToken)) throw new AgentHostError('AUTH_DENIED', 'Agent Host authorization is invalid')
       if (request.method === 'POST' && url.pathname === '/v1/providers/check') {
+        if (config.maxSessions !== undefined && sessions.size + creatingSessions >= config.maxSessions) {
+          throw new AgentHostError('SESSION_BUSY', 'This runtime has reached its concurrent session limit', { retryable: true })
+        }
+        creatingSessions += 1
+        try {
         const body = parseProviderCheckBody(await readJson(request))
         const sessionId = `provider-check-${randomBytes(8).toString('hex')}`
-        const runtime = await backend.createSession(body.userId, body.workspaceId, sessionId, body.runtimeConfiguration)
+        let projectRuntime: ProjectRuntimeDescriptor | undefined
+        if (config.projectRuntimeManager) {
+          projectRuntime = await config.projectRuntimeManager.ensure(body.projectId)
+          await config.projectRuntimeManager.prepareSessionStorage(body.projectId, body.userId, body.workspaceId, sessionId)
+        } else if (config.requireProjectRuntime) {
+          throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project runtime manager is required')
+        }
+        const runtime = await backend.createSession(body.userId, body.workspaceId, sessionId, body.runtimeConfiguration, undefined, body.projectId, projectRuntime)
         try {
           const upstream = await runtime.prompt('Reply with exactly the word OK.', AbortSignal.timeout(90_000))
           if (!upstream.ok || !upstream.body) throw new AgentHostError('PI_PROMPT_FAILED', 'Provider check request failed')
           const output = await upstream.text()
           if (/"type"\s*:\s*"extension_error"/.test(output) || /"stopReason"\s*:\s*"error"/.test(output)) {
-            throw new AgentHostError('PI_PROMPT_FAILED', 'The model provider rejected the connectivity check')
+            const detail = providerCheckFailureDetail(output, body.runtimeConfiguration.apiKey)
+            throw new AgentHostError('PI_PROMPT_FAILED', detail ? `The model provider rejected the connectivity check: ${detail}` : 'The model provider rejected the connectivity check')
           }
           json(response, 200, { ok: true, providerId: body.runtimeConfiguration.providerId, modelId: body.runtimeConfiguration.modelId })
         } finally {
-          await runtime.cleanup()
+          try {
+            await trackCleanup(runtime.cleanup())
+          } catch (cleanupError) {
+            // Keep a failed provider-check cleanup in the normal reaper path;
+            // returning a successful connectivity check must not strand its
+            // temporary sandbox outside the session map.
+            const cleanupKey = `provider-check:${sessionId}`
+            sessions.set(cleanupKey, {
+              runtime,
+              lastUsedAt: Date.now() - config.sessionIdleTtlMs - 1,
+              busy: false,
+            })
+            console.error(`OpenLink provider-check cleanup failed for ${sessionId}: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`)
+          }
         }
+        return
+        } finally {
+          creatingSessions -= 1
+        }
+      }
+      const leaseMatch = /^\/v1\/agent\/sessions\/([^/]+)\/lease$/.exec(url.pathname)
+      if (request.method === 'POST' && leaseMatch) {
+        const sessionId = decodeURIComponent(leaseMatch[1]!)
+        if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(sessionId)) throw new AgentHostError('INVALID_SESSION', 'sessionId is invalid')
+        await handleAgentLease(request, response, sessionId)
+        return
+      }
+      const cancelMatch = /^\/v1\/agent\/sessions\/([^/]+)\/cancel$/.exec(url.pathname)
+      if (request.method === 'POST' && cancelMatch) {
+        const sessionId = decodeURIComponent(cancelMatch[1]!)
+        if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(sessionId)) throw new AgentHostError('INVALID_SESSION', 'sessionId is invalid')
+        await handleAgentCancel(request, response, sessionId)
+        return
+      }
+      const extensionUiResponseMatch = /^\/v1\/agent\/sessions\/([^/]+)\/extension-ui-response$/.exec(url.pathname)
+      if (request.method === 'POST' && extensionUiResponseMatch) {
+        const sessionId = decodeURIComponent(extensionUiResponseMatch[1]!)
+        if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(sessionId)) throw new AgentHostError('INVALID_SESSION', 'sessionId is invalid')
+        await handleExtensionUiResponse(request, response, sessionId)
+        return
+      }
+      const networkAccessMatch = /^\/v1\/agent\/sessions\/([^/]+)\/network-access$/.exec(url.pathname)
+      if (request.method === 'POST' && networkAccessMatch) {
+        const sessionId = decodeURIComponent(networkAccessMatch[1]!)
+        if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(sessionId)) throw new AgentHostError('INVALID_SESSION', 'sessionId is invalid')
+        await handleNetworkAccess(request, response, sessionId)
+        return
+      }
+      const projectBrowserCreate = /^\/v1\/projects\/([^/]+)\/browser\/sessions$/.exec(url.pathname)
+      if (request.method === 'POST' && projectBrowserCreate) {
+        const projectId = decodeURIComponent(projectBrowserCreate[1]!)
+        if (!isProjectId(projectId)) throw new AgentHostError('INVALID_BODY', 'projectId is invalid')
+        await handleBrowserCreate(request, response, projectId)
+        return
+      }
+      const projectPreviewTarget = /^\/v1\/projects\/([^/]+)\/preview-target$/.exec(url.pathname)
+      if (request.method === 'GET' && projectPreviewTarget) {
+        const projectId = decodeURIComponent(projectPreviewTarget[1]!)
+        if (!isProjectId(projectId)) throw new AgentHostError('INVALID_BODY', 'projectId is invalid')
+        await handleProjectPreviewTarget(response, projectId)
+        return
+      }
+      const projectGitVersions = /^\/v1\/projects\/([^/]+)\/git\/versions$/.exec(url.pathname)
+      if (request.method === 'GET' && projectGitVersions) {
+        const projectId = decodeURIComponent(projectGitVersions[1]!)
+        if (!isProjectId(projectId)) throw new AgentHostError('INVALID_BODY', 'projectId is invalid')
+        await handleProjectGitVersions(response, projectId)
+        return
+      }
+      const projectGitCheckout = /^\/v1\/projects\/([^/]+)\/git\/checkout$/.exec(url.pathname)
+      if (request.method === 'POST' && projectGitCheckout) {
+        const projectId = decodeURIComponent(projectGitCheckout[1]!)
+        if (!isProjectId(projectId)) throw new AgentHostError('INVALID_BODY', 'projectId is invalid')
+        await handleProjectGitCheckout(request, response, projectId)
+        return
+      }
+      const projectBrowserDelete = /^\/v1\/projects\/([^/]+)\/browser\/sessions\/([^/]+)$/.exec(url.pathname)
+      if (request.method === 'DELETE' && projectBrowserDelete) {
+        const projectId = decodeURIComponent(projectBrowserDelete[1]!)
+        if (!isProjectId(projectId)) throw new AgentHostError('INVALID_BODY', 'projectId is invalid')
+        await handleBrowserDelete(request, response, projectId, decodeURIComponent(projectBrowserDelete[2]!))
+        return
+      }
+      const projectCodeServerCreate = /^\/v1\/projects\/([^/]+)\/code-server\/sessions$/.exec(url.pathname)
+      if (request.method === 'POST' && projectCodeServerCreate) {
+        const projectId = decodeURIComponent(projectCodeServerCreate[1]!)
+        if (!isProjectId(projectId)) throw new AgentHostError('INVALID_BODY', 'projectId is invalid')
+        await handleCodeServerCreate(request, response, projectId)
         return
       }
       const match = /^\/v1\/agent\/sessions\/([^/]+)\/events$/.exec(url.pathname)
@@ -269,21 +1143,56 @@ export async function startPromptHttpServer(
       json(response, status, { error: { code: failure.code, message: failure.message, retryable: failure.retryable } })
     })
   })
+  server.on('upgrade', (request, socket, head) => {
+    if (!codeServerGateway.handleUpgrade(request, socket, head)) browserGateway.handleUpgrade(request, socket, head)
+  })
 
   const reaper = setInterval(() => {
     const cutoff = Date.now() - config.sessionIdleTtlMs
     for (const [key, entry] of sessions) {
-      if (entry.busy || entry.lastUsedAt >= cutoff) continue
-      sessions.delete(key)
-      void entry.runtime.cleanup()
+      if (entry.busy || entry.recovering || entry.paused || entry.lastUsedAt >= cutoff) continue
+      entry.recovering = true
+      if (entry.runtime.pause) {
+        // Keep the sandbox snapshot and session handle in memory. Pausing
+        // releases the Worker execution resources without stopping the
+        // Project VM, and resume can reconnect to it on the next lease.
+        void trackCleanup(entry.runtime.pause()).then(() => {
+          entry.recovering = false
+          entry.paused = true
+        }).catch((error) => {
+          entry.recovering = false
+          entry.lastUsedAt = Date.now()
+          console.error(`OpenLink idle Agent session pause failed for ${key}: ${error instanceof Error ? error.message : String(error)}`)
+        })
+      } else {
+        // Backends without pause support retain the old destructive cleanup
+        // behavior; the local OpenSandbox backend implements pause/resume.
+        void trackCleanup(entry.runtime.cleanup()).then(() => {
+          if (sessions.get(key) === entry) sessions.delete(key)
+        }).catch((error) => {
+          entry.recovering = false
+          entry.lastUsedAt = Date.now()
+          console.error(`OpenLink idle Agent session cleanup failed for ${key}: ${error instanceof Error ? error.message : String(error)}`)
+        })
+      }
     }
   }, 60_000)
   reaper.unref()
 
   const shutdown = async (): Promise<void> => {
     clearInterval(reaper)
-    await Promise.allSettled([...sessions.values()].map((entry) => entry.runtime.cleanup()))
+    await Promise.allSettled([...cleanupOperations])
+    // Do not close the OpenSandbox transport while a model-switch/create lock
+    // is still provisioning a workload for an in-flight request.
+    await Promise.allSettled([...sessionCreationLocks.values()])
+    await Promise.allSettled([...sessions.values()].map((entry) => {
+      entry.recovering = true
+      return trackCleanup(entry.runtime.cleanup())
+    }))
+    await Promise.allSettled([...cleanupOperations])
     sessions.clear()
+    codeServerGateway.close()
+    browserGateway.close()
     await backend.close()
   }
 

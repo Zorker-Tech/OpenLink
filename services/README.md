@@ -1,8 +1,17 @@
 # OpenLink services
 
-OpenLink services are independently deployable runtimes. They keep their own
-package manager, lockfile, Node runtime, build pipeline, and release cadence;
-they are not part of the Next.js application workspace.
+OpenLink services are subordinate runtimes of the OpenLink product. They keep
+their own package manager, lockfile, Node runtime, and build boundary so that a
+service cannot accidentally leak dependencies into the Next.js bundle, but
+their installation, build, startup, health supervision, and shutdown are owned
+by the OpenLink root lifecycle.
+
+Run `pnpm dev` for development or `pnpm start` for production from the
+repository root. The supervisor builds the Podman toolchain from
+`services/linux`, syncs Pi, installs stale or missing service dependencies,
+builds the service artifacts and Project VM images, and starts the Browser
+Host, Web Agent Host, Desktop Agent Host, and web application. Users do not
+enter individual service directories to install or start product services.
 
 ## Service layout
 
@@ -17,9 +26,10 @@ services/
 └── sandbox-runtime/     # desktop OS sandbox (submodule)
 ```
 
-The three upstream repositories are deliberately not root workspace packages.
-Each keeps its own build system, lockfile, runtime requirements, and release
-cadence. `services/agent-host` and `services/browser-host` are the OpenLink-owned
+The upstream repositories are deliberately not root workspace packages. Each
+keeps its own build system, lockfile, runtime requirements, and release cadence,
+while the root supervisor is the only supported product lifecycle entry point.
+`services/agent-host` and `services/browser-host` are the OpenLink-owned
 integration boundaries.
 Its current implementation validates policies, storage paths, Pi RPC frames,
 and remote bootstrap plans while keeping privileged adapters dependency
@@ -33,14 +43,9 @@ kept independent from the OpenLink application and its Supabase/Vercel AI
 service code.
 
 The upstream repository is a Node monorepo with its own npm workspaces and
-requires Node `>=22.19.0`. Run Pi-specific installation and build commands
-from `services/pi`, never from the OpenLink root:
-
-```bash
-cd services/pi
-npm install --ignore-scripts
-npm run build
-```
+requires Node `>=22.19.0`. The root lifecycle installs and packages it through
+`scripts/sync-pi-runtime.mjs`; Pi remains isolated from the Next.js dependency
+graph even though its lifecycle is automatic.
 
 The current checkout is pinned by the parent repository's submodule entry. The
 OpenLink adapter and process-supervision contracts live in `services/agent-host`
@@ -56,11 +61,11 @@ user input.
 
 `services/opensandbox` pins
 [`opensandbox-group/OpenSandbox`](https://github.com/opensandbox-group/OpenSandbox)
-for remote execution. Its server owns sandbox lifecycle and typically uses a
-Docker runtime; the target host must provide Docker/Kubernetes prerequisites.
-OpenLink should bind the control plane to target loopback and reach it through an
-authenticated SSH tunnel. Do not expose a Docker-socket-backed server directly
-to the public network.
+for web and remote execution. Each Project VM runs its own OpenSandbox control
+plane against the Podman compatibility socket supplied by the Podman engine
+built from `services/linux`; each Session is a separate sandbox in that VM.
+Remote Project VMs are reached through authenticated SSH transport and the
+control plane is never exposed directly to the public network.
 
 ## Anthropic sandbox-runtime
 
@@ -70,9 +75,10 @@ for desktop execution. Its Node library wraps the Pi Node.js SDK worker with OS
 filesystem and network restrictions (`sandbox-exec` on macOS, bubblewrap on
 Linux, and the Windows sandbox helper where supported).
 
-None of the upstream repositories are installed or executed by the Next.js app.
-Build and run each service from its own directory with the runtime and package
-manager required by that repository.
+The Next.js process does not import or execute upstream service code directly.
+The root supervisor owns their processes and communicates over authenticated
+service contracts, preserving both the dependency boundary and a single
+OpenLink lifecycle.
 
 ## Browser Host
 

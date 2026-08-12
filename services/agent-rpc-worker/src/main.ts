@@ -16,6 +16,17 @@ interface Config {
   model?: string
   providerId?: string
   providerBaseUrl?: string
+  browserHostUrl?: string
+  browserSessionId?: string
+  browserControlToken?: string
+  browserExtensionPath?: string
+}
+
+interface AgentExtensionUiResponse {
+  id: string
+  confirmed?: boolean
+  value?: string
+  cancelled?: true
 }
 
 function required(key: string): string {
@@ -38,6 +49,10 @@ function loadConfig(): Config {
     model: process.env.OPENLINK_AGENT_MODEL || process.env.GEMINI_MODEL,
     providerId: process.env.OPENLINK_PROVIDER_ID || (process.env.GEMINI_API_KEY ? 'google' : undefined),
     providerBaseUrl: process.env.OPENLINK_PROVIDER_BASE_URL || process.env.GOOGLE_GEMINI_BASE_URL,
+    browserHostUrl: process.env.OPENLINK_BROWSER_HOST_URL,
+    browserSessionId: process.env.OPENLINK_BROWSER_SESSION_ID,
+    browserControlToken: process.env.OPENLINK_BROWSER_CONTROL_TOKEN,
+    browserExtensionPath: process.env.OPENLINK_BROWSER_EXTENSION_PATH,
   }
 }
 
@@ -69,36 +84,89 @@ async function readMessage(request: IncomingMessage): Promise<string> {
   return message
 }
 
+async function readExtensionUiResponse(request: IncomingMessage): Promise<AgentExtensionUiResponse> {
+  const chunks: Buffer[] = []
+  let size = 0
+  for await (const chunk of request) {
+    const value = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+    size += value.length
+    if (size > 32 * 1024) throw new Error('Request body is too large')
+    chunks.push(value)
+  }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(Buffer.concat(chunks).toString('utf8'))
+  } catch {
+    throw new Error('Extension UI response is invalid JSON')
+  }
+  if (!parsed || typeof parsed !== 'object') throw new Error('Extension UI response is invalid')
+  const body = parsed as Record<string, unknown>
+  const id = typeof body.id === 'string' ? body.id : ''
+  const confirmed = body.confirmed
+  const value = body.value
+  const cancelled = body.cancelled
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/.test(id)) throw new Error('Extension UI response id is invalid')
+  if (confirmed !== undefined && typeof confirmed !== 'boolean') throw new Error('Extension UI confirmation is invalid')
+  if (value !== undefined && (typeof value !== 'string' || value.length > 100_000)) throw new Error('Extension UI value is invalid')
+  if (cancelled !== undefined && cancelled !== true) throw new Error('Extension UI cancellation is invalid')
+  if (cancelled === true && (confirmed !== undefined || value !== undefined)) throw new Error('Extension UI response is ambiguous')
+  if (confirmed === undefined && value === undefined && cancelled !== true) throw new Error('Extension UI response has no value')
+  if (confirmed !== undefined && value !== undefined) throw new Error('Extension UI response is ambiguous')
+  return {
+    id,
+    ...(confirmed !== undefined ? { confirmed } : {}),
+    ...(value !== undefined ? { value } : {}),
+    ...(cancelled === true ? { cancelled: true } : {}),
+  }
+}
+
 class RpcRuntime {
   private child?: ChildProcessWithoutNullStreams
   private stdoutBuffer = ''
   private stderr = ''
-  private active?: { id: string; response: ServerResponse; previousEntryCount: number; finish: (error?: Error) => void }
+  private active?: { id: string; response: ServerResponse; previousEntryCount: number; finish: (error?: Error) => void; cancelTimer?: NodeJS.Timeout }
   private starting?: Promise<void>
+  private promptInFlight = false
+  private cancelRequested = false
 
   constructor(private readonly config: Config) {}
 
   async prompt(message: string, response: ServerResponse): Promise<void> {
-    if (this.active) throw new Error('Agent is already processing a prompt')
-    await this.start()
-    const id = crypto.randomUUID()
-    const previousEntryCount = (await this.readNativeSession())?.entries.length ?? 0
-    await new Promise<void>((resolvePrompt, rejectPrompt) => {
-      const timeout = setTimeout(() => finish(new Error('Pi RPC prompt timed out')), 15 * 60_000)
-      const finish = (error?: Error) => {
-        clearTimeout(timeout)
-        if (this.active?.id === id) this.active = undefined
-        if (error) rejectPrompt(error)
-        else resolvePrompt()
-      }
-      this.active = { id, response, previousEntryCount, finish }
-      response.once('close', () => {
-        if (!response.writableEnded && this.active?.id === id) {
-          void this.write({ type: 'abort' }).finally(() => finish(new Error('Request aborted')))
+    if (this.active || this.promptInFlight) throw new Error('Agent is already processing a prompt')
+    this.promptInFlight = true
+    try {
+      await this.start()
+      const id = crypto.randomUUID()
+      const previousEntryCount = (await this.readNativeSession())?.entries.length ?? 0
+      await new Promise<void>((resolvePrompt, rejectPrompt) => {
+        const timeout = setTimeout(() => finish(new Error('Pi RPC prompt timed out')), 15 * 60_000)
+        const finish = (error?: Error) => {
+          clearTimeout(timeout)
+          if (this.active?.cancelTimer) clearTimeout(this.active.cancelTimer)
+          if (this.active?.id === id) this.active = undefined
+          if (error) rejectPrompt(error)
+          else resolvePrompt()
+        }
+        this.active = { id, response, previousEntryCount, finish }
+        response.once('close', () => {
+          if (!response.writableEnded && this.active?.id === id) {
+            // Keep the Pi RPC process alive long enough to consume its abort
+            // acknowledgement and flush the native JSONL file. Finishing the
+            // request immediately here used to drop the final session delta
+            // whenever an Agent Host/client disconnected mid-turn.
+            void this.cancel()
+          }
+        })
+        if (this.cancelRequested) {
+          void this.cancel().catch(finish)
+        } else {
+          void this.write({ id, type: 'prompt', message }).catch(finish)
         }
       })
-      void this.write({ id, type: 'prompt', message }).catch(finish)
-    })
+    } finally {
+      this.promptInFlight = false
+      this.cancelRequested = false
+    }
   }
 
   async stop(): Promise<void> {
@@ -111,6 +179,44 @@ class RpcRuntime {
       new Promise<void>((resolveTimeout) => setTimeout(resolveTimeout, 5_000)),
     ])
     if (child.exitCode === null) child.kill('SIGKILL')
+  }
+
+  async cancel(): Promise<boolean> {
+    const active = this.active
+    if (!active) {
+      if (!this.promptInFlight) return false
+      this.cancelRequested = true
+      return true
+    }
+    this.cancelRequested = true
+    try {
+      await this.write({ type: 'abort' })
+    } catch (error) {
+      active.finish(error instanceof Error ? error : new Error(String(error)))
+      return true
+    }
+    // Pi normally emits agent_settled after abort. Some provider/worker
+    // failures settle without that frame, so force a bounded native-session
+    // flush and terminal error rather than leaving the HTTP request busy.
+    active.cancelTimer = setTimeout(() => {
+      if (this.active?.id !== active.id) return
+      void this.emitNativeSessionDelta(active)
+        .then(() => active.finish(new Error('Request canceled')))
+        .catch(active.finish)
+    }, 5_000)
+    active.cancelTimer.unref()
+    return true
+  }
+
+  async resolveExtensionUi(response: AgentExtensionUiResponse): Promise<void> {
+    const active = this.active
+    if (!active || active.response.writableEnded || active.response.destroyed) {
+      throw new Error('No active extension UI request is waiting for a response')
+    }
+    await this.write({ type: 'extension_ui_response', ...response })
+    if (!active.response.writableEnded && !active.response.destroyed) {
+      active.response.write(`${JSON.stringify({ type: 'openlink_confirmation_resolved', ...response })}\n`)
+    }
   }
 
   private async start(): Promise<void> {
@@ -129,7 +235,7 @@ class RpcRuntime {
         providers: {
           [this.config.providerId]: {
             baseUrl: this.config.providerBaseUrl,
-            apiKey: '$OPENLINK_PROVIDER_API_KEY',
+            ...(process.env.OPENLINK_PROVIDER_API_KEY ? { apiKey: '$OPENLINK_PROVIDER_API_KEY' } : {}),
           },
         },
       }), { mode: 0o600 })
@@ -139,6 +245,11 @@ class RpcRuntime {
       ? [rpcEntry, '--session', this.config.sessionFile, '--session-dir', piSessions, '--no-approve']
       : [rpcEntry, '--session-dir', piSessions, '--session-id', this.config.sessionId, '--no-approve']
     if (this.config.model) args.push('--model', this.config.model)
+    const browserValues = [this.config.browserHostUrl, this.config.browserSessionId, this.config.browserControlToken, this.config.browserExtensionPath]
+    if (browserValues.some(Boolean) && browserValues.some((value) => !value)) {
+      throw new Error('OpenLink browser capability configuration is incomplete')
+    }
+    if (this.config.browserExtensionPath) args.push('--extension', this.config.browserExtensionPath)
     const child = spawn(process.execPath, args, {
       cwd: this.config.workspaceRoot,
       env: { ...process.env, PI_CODING_AGENT_DIR: configDir },
@@ -233,6 +344,19 @@ const server = createServer((request, response) => {
       response.writeHead(403, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: 'AUTH_DENIED' }))
       return
     }
+    if (request.method === 'POST' && url.pathname === '/v1/cancel') {
+      const active = await runtime.cancel()
+      response.writeHead(202, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
+      response.end(JSON.stringify({ ok: true, active }))
+      return
+    }
+    if (request.method === 'POST' && url.pathname === '/v1/extension-ui-response') {
+      const uiResponse = await readExtensionUiResponse(request)
+      await runtime.resolveExtensionUi(uiResponse)
+      response.writeHead(202, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
+      response.end(JSON.stringify({ ok: true }))
+      return
+    }
     if (request.method !== 'POST' || url.pathname !== '/v1/events') {
       response.writeHead(404).end()
       return
@@ -244,6 +368,7 @@ const server = createServer((request, response) => {
       'X-Accel-Buffering': 'no',
       'X-OpenLink-Agent-Worker': 'pi-cli-rpc',
     })
+    response.flushHeaders?.()
     await runtime.prompt(message, response)
     response.end()
   })().catch((error) => {

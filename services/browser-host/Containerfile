@@ -1,0 +1,28 @@
+FROM node:24-bookworm-slim
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    NODE_ENV=production \
+    PLAYWRIGHT_BROWSERS_PATH=0
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+       ca-certificates \
+       chromium \
+       fonts-noto-cjk \
+       fonts-noto-color-emoji \
+       git \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt/openlink/browser-host
+
+COPY packages/browser-protocol/package.json /opt/openlink/packages/browser-protocol/
+COPY packages/browser-protocol/dist /opt/openlink/packages/browser-protocol/dist
+COPY services/browser-host/package.json services/browser-host/package-lock.json ./
+RUN npm ci --omit=dev --ignore-scripts=false \
+  && rm -f node_modules/@openlink/browser-protocol \
+  && ln -s /opt/openlink/packages/browser-protocol node_modules/@openlink/browser-protocol
+
+COPY services/browser-host/dist ./dist
+
+EXPOSE 43120
+ENTRYPOINT ["node", "dist/src/main.js"]

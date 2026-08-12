@@ -12,6 +12,7 @@ COPY services/agent-rpc-worker/package.json services/agent-rpc-worker/package-lo
 WORKDIR /opt/openlink/agent-rpc-worker
 RUN npm ci --omit=dev --ignore-scripts=false
 COPY services/agent-rpc-worker/dist ./dist
+COPY services/agent-browser-extension/openlink-browser.ts ./extensions/openlink-browser.ts
 
 ENV NODE_ENV=production
 EXPOSE 43131

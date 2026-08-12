@@ -58,24 +58,38 @@ export class BrowserEnabledAgentOrchestrator {
     try {
       agent = await this.agents.provision(boundSpec)
     } catch (error) {
-      await this.browsers.close(browser.state.id).catch(() => undefined)
+      try {
+        await this.browsers.close(browser.state.id)
+      } catch (cleanupError) {
+        console.error(`OpenLink browser cleanup failed after Agent Host provisioning error: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`)
+      }
       throw error
     }
 
     let cleaned = false
+    let cleanupPromise: Promise<void> | undefined
     return {
       agent,
       browser,
       launchPi: (launchSpec = boundSpec) => agent.launchPi({ ...launchSpec, browser: boundSpec.browser }),
       cleanup: async () => {
         if (cleaned) return
-        cleaned = true
-        const [agentResult, browserResult] = await Promise.allSettled([
-          agent.cleanup(),
-          this.browsers.close(browser.state.id),
-        ])
-        if (agentResult.status === 'rejected') throw agentResult.reason
-        if (browserResult.status === 'rejected') throw browserResult.reason
+        if (cleanupPromise) return cleanupPromise
+        cleanupPromise = (async () => {
+          const [agentResult, browserResult] = await Promise.allSettled([
+            agent.cleanup(),
+            this.browsers.close(browser.state.id),
+          ])
+          const failures = [agentResult, browserResult]
+            .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+            .map((result) => result.reason)
+          if (failures.length) throw new AggregateError(failures, 'OpenLink browser-enabled environment cleanup failed')
+          cleaned = true
+        })().catch((error) => {
+          cleanupPromise = undefined
+          throw error
+        })
+        return cleanupPromise
       },
     }
   }
