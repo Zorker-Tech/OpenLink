@@ -18,4 +18,3 @@ export function sourceRevision(service) {
   }
   return entry.sourceCommit
 }
-
