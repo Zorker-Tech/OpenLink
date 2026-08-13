@@ -22,7 +22,13 @@
     "runtime:validate-linux-project-vm": "npm --prefix services/agent-host run build && node scripts/validate-remote-project-vm.mjs",
     "runtime:zokerbase": "node scripts/zokerbase.mjs start",
     "runtime:zokerbase:stop": "node scripts/zokerbase.mjs stop",
-    "runtime:zokerbase:images": "node scripts/build-zokerbase-images.mjs"
+    "runtime:zokerbase:images": "node scripts/build-zokerbase-images.mjs",
+    "runtime:zero": "node scripts/zero.mjs start",
+    "runtime:zero:stop": "node scripts/zero.mjs stop",
+    "runtime:zero:status": "node scripts/zero.mjs status",
+    "runtime:zero:images": "node scripts/build-zero-images.mjs",
+    "knowledge:check": "npm --prefix services/knowledge-service run check",
+    "knowledge:test": "npm --prefix services/knowledge-service test"
   },
   "dependencies": {
     "@ai-sdk/react": "^4.0.54",

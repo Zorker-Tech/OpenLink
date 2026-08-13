@@ -21,9 +21,9 @@
       "upstream": "https://github.com/coder/code-server.git",
       "sourceCommit": "313bf0359b4d391ba18f1fa131aad8a583bc2919"
     },
-    "milvus": {
-      "path": "services/milvus",
-      "upstream": "https://github.com/milvus-io/milvus.git",
+    "zero": {
+      "path": "services/zero",
+      "upstream": "vendored://zokerbase-zero",
       "sourceCommit": "3bbb90088899bd25e06d9eb7b0b77ee89803e090"
     }
   }

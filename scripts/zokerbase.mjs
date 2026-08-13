@@ -365,7 +365,15 @@ async function applyMigrations() {
     alter table supabase_migrations.schema_migrations add column if not exists statements text[];
     alter table supabase_migrations.schema_migrations add column if not exists name text;
   `)
-  const migrationRoot = resolve(root, 'supabase/migrations')
+  // ZOKERBASE owns the local migration namespace. Keep the legacy Supabase
+  // path as a compatibility fallback for older checkouts, but prefer the
+  // product-owned directory when it is present so a renamed distribution can
+  // still bootstrap after a clean restart.
+  const zokerbaseMigrationRoot = resolve(root, 'zorkerbase/migrations')
+  const legacyMigrationRoot = resolve(root, 'supabase/migrations')
+  const migrationRoot = await pathExists(zokerbaseMigrationRoot)
+    ? zokerbaseMigrationRoot
+    : legacyMigrationRoot
   const files = (await readdir(migrationRoot)).filter((file) => /^\d+_.+\.sql$/.test(file)).sort()
   for (const file of files) {
     const [version, ...nameParts] = file.replace(/\.sql$/, '').split('_')

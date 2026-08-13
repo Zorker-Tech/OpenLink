@@ -25,7 +25,8 @@ services/
 ├── pi/                  # independent agent runtime (subtree-imported source)
 ├── sandbox-runtime/     # desktop OS sandbox (subtree-imported source)
 ├── code-server/         # project-scoped VS Code web runtime source
-└── milvus/              # vector database source for the Knowledge system
+├── zero/                # Zero vector runtime source for the Knowledge system
+└── knowledge-service/   # OpenLink-owned metadata/vector gateway
 ```
 
 The upstream repositories are deliberately not root workspace packages. Each
@@ -37,18 +38,30 @@ Its current implementation validates policies, storage paths, Pi RPC frames,
 and remote bootstrap plans while keeping privileged adapters dependency
 injected.
 
-## Milvus
+## Zero
 
-`services/milvus` is the official Milvus source imported into this monorepo
-with `git subtree`. It keeps its own Go/C++ build files, Helm charts, Docker
-assets, and test suites; it is not part of the root pnpm workspace and is not
-compiled into the Next.js application. The exact upstream source revision is
-recorded in `services/source-revisions.json`.
+`services/zero` is the vendored vector runtime source imported into this
+monorepo with `git subtree`. The OpenLink-facing runtime, images, containers,
+environment variables, health response, and Knowledge Service protocol are
+branded Zero. The vendored source retains its upstream implementation and
+wire-compatible REST v2 handlers; it is not part of the root pnpm workspace and
+is not compiled into the Next.js application. The exact upstream source
+revision is recorded in `services/source-revisions.json`.
 
-The Knowledge system may later build and supervise Milvus Standalone locally or
-use the same vendored charts and release assets for an SSH-managed Distributed
-deployment. That lifecycle integration is intentionally separate from this
-source import.
+The Knowledge system builds and supervises Zero Standalone locally through the
+root lifecycle. `services/knowledge-service` is the only runtime boundary for
+knowledge operations: it authenticates an internal bearer token, checks
+workspace membership through ZOKERBASE service-role access, stores documents,
+chunks, and jobs in PostgreSQL, and uses the Zero vector protocol for the
+projection. Project VMs and browser clients never receive Zero credentials or
+connect directly to the Zero vector endpoint.
+
+The local stack uses only product-owned `zokerbase/zero`,
+`zokerbase/zero-etcd`, and `zokerbase/zero-minio` images. Build and archive them
+once with `pnpm runtime:zero:images`; ordinary startup fails with an actionable
+message when the local images are absent instead of pulling an upstream image.
+Distributed deployment is a separate queued workflow that creates a new
+cluster, migrates and validates vectors, then cuts the API over.
 
 ## Pi agent
 

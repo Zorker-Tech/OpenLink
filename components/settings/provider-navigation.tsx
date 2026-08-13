@@ -1,20 +1,23 @@
 'use client'
 
 import { ProviderLogo } from '@/components/settings/provider-logo'
-import type { AiProviderConfigurationSummary } from '@/lib/ai-provider-types'
+import type { AiProviderConfigurationSummary, EmbeddingProviderConfigurationSummary } from '@/lib/ai-provider-types'
 import { AI_PROVIDERS } from '@/lib/ai-providers'
-import { ChevronDown, Search, WalletCards, X } from 'lucide-react'
+import { EMBEDDING_PROVIDERS } from '@/lib/embedding-providers'
+import { ChevronDown, Search, Sparkles, WalletCards, X } from 'lucide-react'
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
 
-export function ProviderNavigation({ configurations, currentProviderId }: { configurations: AiProviderConfigurationSummary[]; currentProviderId?: string }) {
+export function ProviderNavigation({ configurations, currentProviderId, embeddingConfigurations = [], mode = 'chat' }: { configurations: AiProviderConfigurationSummary[]; currentProviderId?: string; embeddingConfigurations?: EmbeddingProviderConfigurationSummary[]; mode?: 'chat' | 'embedding' }) {
   const [query, setQuery] = useState('')
   const [expanded, setExpanded] = useState({ disabled: true, enabled: true })
-  const configurationMap = useMemo(() => new Map(configurations.map((item) => [item.providerId, item])), [configurations])
+  const definitions = mode === 'embedding' ? EMBEDDING_PROVIDERS : AI_PROVIDERS
+  const activeConfigurations = mode === 'embedding' ? embeddingConfigurations : configurations
+  const configurationMap = useMemo(() => new Map(activeConfigurations.map((item) => [item.providerId, item])), [activeConfigurations])
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase()
-    return term ? AI_PROVIDERS.filter((item) => `${item.name} ${item.id}`.toLowerCase().includes(term)) : AI_PROVIDERS
-  }, [query])
+    return term ? definitions.filter((item) => `${item.name} ${item.id}`.toLowerCase().includes(term)) : definitions
+  }, [definitions, query])
   const enabled = filtered.filter((item) => configurationMap.get(item.id)?.enabled)
   const disabled = filtered.filter((item) => !configurationMap.get(item.id)?.enabled)
 
@@ -39,10 +42,15 @@ export function ProviderNavigation({ configurations, currentProviderId }: { conf
         </div>
       </div>
 
+      <div className="flex gap-1 border-b border-[var(--app-border)] px-2 py-2">
+        <Link className={`flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md text-xs font-medium ${mode === 'chat' ? 'bg-[var(--app-selected)] text-[var(--app-foreground)]' : 'text-[var(--app-muted)] hover:bg-[var(--app-hover)]'}`} href="/settings/ai-providers"><WalletCards className="size-3.5" />普通</Link>
+        <Link className={`flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md text-xs font-medium ${mode === 'embedding' ? 'bg-[var(--app-selected)] text-[var(--app-foreground)]' : 'text-[var(--app-muted)] hover:bg-[var(--app-hover)]'}`} href="/settings/ai-providers/embeddings"><Sparkles className="size-3.5" />向量</Link>
+      </div>
+
       <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-8 pt-2">
-        <Link className={`flex h-9 items-center gap-2 rounded-md px-2 text-sm ${!currentProviderId ? 'bg-[var(--app-selected)] text-[var(--app-foreground)]' : 'text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]'}`} href="/settings/ai-providers">
+        <Link className={`flex h-9 items-center gap-2 rounded-md px-2 text-sm ${!currentProviderId ? 'bg-[var(--app-selected)] text-[var(--app-foreground)]' : 'text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]'}`} href={mode === 'embedding' ? '/settings/ai-providers/embeddings' : '/settings/ai-providers'}>
           <span className="flex size-[22px] shrink-0 items-center justify-center"><WalletCards className="size-[18px]" strokeWidth={1.7} /></span>
-          <span>全部</span>
+          <span>{mode === 'embedding' ? '全部向量模型' : '全部'}</span>
         </Link>
 
         {enabled.length > 0 && (
@@ -52,6 +60,7 @@ export function ProviderNavigation({ configurations, currentProviderId }: { conf
             expanded={expanded.enabled || Boolean(query)}
             label="已启用"
             providers={enabled}
+            mode={mode}
             onExpandedChange={() => setExpanded((value) => ({ ...value, enabled: !value.enabled }))}
           />
         )}
@@ -61,6 +70,7 @@ export function ProviderNavigation({ configurations, currentProviderId }: { conf
           expanded={expanded.disabled || Boolean(query)}
           label="未启用"
           providers={disabled}
+          mode={mode}
           onExpandedChange={() => setExpanded((value) => ({ ...value, disabled: !value.disabled }))}
         />
       </div>
@@ -68,13 +78,14 @@ export function ProviderNavigation({ configurations, currentProviderId }: { conf
   )
 }
 
-function ProviderGroup({ configurations, currentProviderId, expanded, label, onExpandedChange, providers }: {
-  configurations: Map<string, AiProviderConfigurationSummary>
+function ProviderGroup({ configurations, currentProviderId, expanded, label, mode, onExpandedChange, providers }: {
+  configurations: Map<string, AiProviderConfigurationSummary | EmbeddingProviderConfigurationSummary>
   currentProviderId?: string
   expanded: boolean
   label: string
   onExpandedChange: () => void
-  providers: readonly (typeof AI_PROVIDERS)[number][]
+  providers: ReadonlyArray<{ id: string; name: string; logo: string }>
+  mode: 'chat' | 'embedding'
 }) {
   if (!providers.length) return null
 
@@ -91,7 +102,7 @@ function ProviderGroup({ configurations, currentProviderId, expanded, label, onE
               const active = currentProviderId === provider.id
               const configuration = configurations.get(provider.id)
               return (
-                <Link className={`flex h-9 items-center gap-2 rounded-md px-2 text-sm ${active ? 'bg-[var(--app-selected)] text-[var(--app-foreground)]' : 'text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]'}`} href={`/settings/ai-providers/${provider.id}`} key={provider.id}>
+                <Link className={`flex h-9 items-center gap-2 rounded-md px-2 text-sm ${active ? 'bg-[var(--app-selected)] text-[var(--app-foreground)]' : 'text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]'}`} href={mode === 'embedding' ? `/settings/ai-providers/embeddings/${provider.id}` : `/settings/ai-providers/${provider.id}`} key={provider.id}>
                   <ProviderLogo provider={provider} size={22} />
                   <span className="min-w-0 flex-1 truncate">{provider.name}</span>
                   {configuration?.enabled && <span aria-label="已启用" className="mr-1 size-1.5 rounded-full bg-emerald-500" />}

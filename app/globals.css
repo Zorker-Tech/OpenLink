@@ -156,240 +156,87 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
-    -ms-overflow-style: none;
-    scrollbar-width: none;
   }
-
-  *::-webkit-scrollbar {
-    display: none;
-    width: 0;
-    height: 0;
-  }
-
   body {
     @apply bg-background text-foreground;
     margin: 0;
+    background: #000;
+  }
+
+  html {
+    scrollbar-width: none;
+  }
+
+  html::-webkit-scrollbar {
+    display: none;
   }
 }
 
 @layer components {
-  .chat-message-markdown :not(pre) > code {
-    border: 1px solid var(--app-control-border);
-    border-radius: 12px;
-    background: var(--app-active);
-    color: var(--app-foreground);
-    padding: 1px 5px;
-  }
-
-  /* Streamdown wraps Markdown tables in a card for standalone documents.
-   * Chat messages already provide the visual grouping, so keep the table
-   * itself but remove that extra outer container treatment. */
-  .chat-message-markdown [data-streamdown='table-wrapper'] {
-    margin: 0;
-    gap: 0;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-    padding: 0;
-  }
-
-  .chat-message-markdown [data-streamdown='table-wrapper'] > div:last-child {
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-  }
-
-  :where(.openlink-app-shell, [data-openlink-theme='dark']) {
-    color-scheme: dark;
+  .openlink-app-shell {
     --app-background: #000000;
     --app-surface: #121212;
-    --app-elevated: #1c1c1c;
-    --app-active: #292929;
-    --app-selected: #1f1f1f;
-    --app-border: #242424;
-    --app-control-border: #343434;
+    --app-active: #1f1f1f;
+    --app-border: #1a1a1a;
+    --app-control-border: #27272a;
     --app-prompt-border: #404040;
-    --app-focus-ring: #737373;
     --app-foreground: #ededed;
     --app-muted: #a0a0a0;
-    --app-subtle: #737373;
-    --app-hover: rgb(255 255 255 / 7%);
-    --app-shadow: rgb(0 0 0 / 48%);
-    --app-overlay: rgb(0 0 0 / 56%);
-    --app-logo-filter: invert(1);
+    --app-sidebar-width: 280px;
+    --app-drawer-background: #303030;
+    --app-drawer-foreground: #dcdcdc;
+    --app-drawer-muted: #8f8f8f;
+    --app-drawer-border: rgb(255 255 255 / 6%);
+    --app-drawer-divider: rgb(255 255 255 / 12%);
+    --app-drawer-hover: rgb(255 255 255 / 8%);
+    --app-drawer-shadow: rgb(0 0 0 / 20%);
+    --app-theme-track: #131313;
+    --app-theme-active: #303030;
+    --app-theme-hover: rgb(255 255 255 / 8%);
     --app-submit-background: #ededed;
     --app-submit-foreground: #0a0a0a;
-    --app-user-bubble: #1f1f1f;
-    --app-user-bubble-foreground: #ffffff;
-    --app-status-glass: rgb(29 29 29 / 42%);
-    --app-status-glass-border: rgb(255 255 255 / 6%);
-    --app-status-glass-foreground: rgb(251 251 251 / 50%);
-
-    --background: var(--app-background);
-    --foreground: var(--app-foreground);
-    --card: var(--app-surface);
-    --card-foreground: var(--app-foreground);
-    --popover: var(--app-elevated);
-    --popover-foreground: var(--app-foreground);
-    --primary: var(--app-submit-background);
-    --primary-foreground: var(--app-submit-foreground);
-    --secondary: var(--app-surface);
-    --secondary-foreground: var(--app-foreground);
-    --muted: var(--app-active);
-    --muted-foreground: var(--app-muted);
-    --accent: var(--app-active);
-    --accent-foreground: var(--app-foreground);
-    --border: var(--app-border);
-    --input: var(--app-control-border);
-    --ring: var(--app-focus-ring);
-    --destructive: oklch(0.704 0.191 22.216);
-    --sidebar: var(--app-background);
-    --sidebar-foreground: var(--app-foreground);
-    --sidebar-accent: var(--app-active);
-    --sidebar-accent-foreground: var(--app-foreground);
-    --sidebar-border: var(--app-border);
-    --sidebar-ring: var(--app-focus-ring);
-
-    --app-drawer-background: var(--app-elevated);
-    --app-drawer-foreground: var(--app-foreground);
-    --app-drawer-muted: var(--app-muted);
-    --app-drawer-border: var(--app-border);
-    --app-drawer-divider: rgb(255 255 255 / 10%);
-    --app-drawer-hover: var(--app-hover);
-    --app-drawer-shadow: var(--app-shadow);
-    --app-theme-track: var(--app-surface);
-    --app-theme-active: var(--app-active);
-    --app-theme-hover: var(--app-hover);
-    --app-home-composer-background: #1f1f1f;
-    --app-home-composer-border: rgb(255 255 255 / 8%);
-    --app-home-composer-border-focus: rgb(255 255 255 / 18%);
-    --app-home-composer-foreground: rgb(255 255 255 / 90%);
-    --app-home-composer-placeholder: rgb(255 255 255 / 50%);
-    --app-home-composer-muted: rgb(255 255 255 / 55%);
-    --app-home-composer-hover: rgb(255 255 255 / 6%);
-    --app-home-submit-background: #f9f9f9;
-    --app-home-submit-foreground: #0a0a0a;
-    --app-home-submit-border: rgb(0 0 0 / 4%);
-    --app-home-mode-track: rgb(255 255 255 / 3%);
-    --app-home-mode-muted: rgb(255 255 255 / 45%);
-    --app-home-mode-active: rgb(255 255 255 / 5%);
-    --app-home-mode-border: rgb(255 255 255 / 4%);
-    --app-home-mode-foreground: rgb(255 255 255 / 90%);
-    --app-home-mode-shadow: rgb(0 0 0 / 20%);
-    --app-project-selector-foreground: rgb(255 255 255 / 90%);
-    --app-project-selector-hover: rgb(255 255 255 / 6%);
-
+    background: var(--app-background);
     color: var(--app-foreground);
   }
 
-  :where(.openlink-app-shell[data-theme='light'], [data-openlink-theme='light']) {
+  .openlink-app-shell[data-theme='light'] {
     color-scheme: light;
     --app-background: #fafafa;
     --app-surface: #ffffff;
-    --app-elevated: #ffffff;
     --app-active: #ebebeb;
-    --app-selected: #ebebeb;
-    --app-border: #e7e7e7;
-    --app-control-border: #d4d4d8;
+    --app-border: #f2f2f2;
+    --app-control-border: #e4e4e7;
     --app-prompt-border: #cfcfcf;
-    --app-focus-ring: #737373;
     --app-foreground: #171717;
     --app-muted: #666666;
-    --app-subtle: #8a8a8a;
-    --app-hover: rgb(13 13 13 / 6%);
-    --app-shadow: rgb(0 0 0 / 14%);
-    --app-overlay: rgb(0 0 0 / 18%);
-    --app-logo-filter: none;
+    --app-sidebar-width: 250px;
+    --app-drawer-background: #ffffff;
+    --app-drawer-foreground: #282828;
+    --app-drawer-muted: #8f8f8f;
+    --app-drawer-border: rgb(0 0 0 / 10%);
+    --app-drawer-divider: rgb(13 13 13 / 10%);
+    --app-drawer-hover: rgb(13 13 13 / 6%);
+    --app-drawer-shadow: rgb(0 0 0 / 10%);
+    --app-theme-track: #f9f9f9;
+    --app-theme-active: #ffffff;
+    --app-theme-hover: rgb(0 0 0 / 5%);
     --app-submit-background: #171717;
     --app-submit-foreground: #ffffff;
-    --app-user-bubble: #ebebeb;
-    --app-user-bubble-foreground: #18181b;
-    --app-status-glass: rgb(255 255 255 / 62%);
-    --app-status-glass-border: rgb(13 13 13 / 8%);
-    --app-status-glass-foreground: rgb(24 24 27 / 58%);
-
-    --background: var(--app-background);
-    --foreground: var(--app-foreground);
-    --card: var(--app-surface);
-    --card-foreground: var(--app-foreground);
-    --popover: var(--app-elevated);
-    --popover-foreground: var(--app-foreground);
-    --primary: var(--app-submit-background);
-    --primary-foreground: var(--app-submit-foreground);
-    --secondary: #f4f4f5;
-    --secondary-foreground: var(--app-foreground);
-    --muted: #f4f4f5;
-    --muted-foreground: var(--app-muted);
-    --accent: var(--app-active);
-    --accent-foreground: var(--app-foreground);
-    --border: var(--app-border);
-    --input: var(--app-control-border);
-    --ring: var(--app-focus-ring);
-    --destructive: oklch(0.577 0.245 27.325);
-    --sidebar: var(--app-background);
-    --sidebar-foreground: var(--app-foreground);
-    --sidebar-accent: var(--app-active);
-    --sidebar-accent-foreground: var(--app-foreground);
-    --sidebar-border: var(--app-border);
-    --sidebar-ring: var(--app-focus-ring);
-
-    --app-drawer-background: var(--app-elevated);
-    --app-drawer-foreground: var(--app-foreground);
-    --app-drawer-muted: var(--app-muted);
-    --app-drawer-border: var(--app-border);
-    --app-drawer-divider: rgb(13 13 13 / 10%);
-    --app-drawer-hover: var(--app-hover);
-    --app-drawer-shadow: var(--app-shadow);
-    --app-theme-track: #f4f4f5;
-    --app-theme-active: #ffffff;
-    --app-theme-hover: var(--app-hover);
-    --app-home-composer-background: #ffffff;
-    --app-home-composer-border: #d9d9dd;
-    --app-home-composer-border-focus: #a3a3a8;
-    --app-home-composer-foreground: #18181b;
-    --app-home-composer-placeholder: #777780;
-    --app-home-composer-muted: #5c5c66;
-    --app-home-composer-hover: rgb(24 24 27 / 6%);
-    --app-home-submit-background: #171717;
-    --app-home-submit-foreground: #ffffff;
-    --app-home-submit-border: rgb(0 0 0 / 8%);
-    --app-home-mode-track: #f1f1f2;
-    --app-home-mode-muted: #73737b;
-    --app-home-mode-active: #ffffff;
-    --app-home-mode-border: #dedee2;
-    --app-home-mode-foreground: #202024;
-    --app-home-mode-shadow: rgb(0 0 0 / 8%);
-    --app-project-selector-foreground: #242429;
-    --app-project-selector-hover: rgb(24 24 27 / 6%);
-  }
-
-  .openlink-app-shell {
-    --app-sidebar-min-width: 250px;
-    --app-sidebar-max-width: 280px;
     background: var(--app-background);
   }
 
-  :where(.openlink-app-shell[data-theme='light'], [data-openlink-theme='light']) .app-nav-icon {
+  .openlink-app-shell[data-theme='light'] .app-nav-icon {
     filter: brightness(0);
     opacity: .6;
   }
 
-  :where(.openlink-app-shell[data-theme='light'], [data-openlink-theme='light']) .app-control-icon {
+  .openlink-app-shell[data-theme='light'] .app-control-icon {
     filter: brightness(0);
     opacity: .65;
   }
 
-  :where(.openlink-app-shell[data-theme='light'], [data-openlink-theme='light']) button[aria-current='page'] .app-nav-icon {
+  .openlink-app-shell[data-theme='light'] button[aria-current='page'] .app-nav-icon {
     opacity: 1;
-  }
-
-  :where(.openlink-app-shell[data-theme='light'], [data-openlink-theme='light']) .app-submit-icon {
-    filter: invert(1);
-  }
-
-  :where(.openlink-app-shell, [data-openlink-theme]) :is(button, input, textarea, [role='menu'], [role='dialog']) {
-    transition-property: color, background-color, border-color, box-shadow, opacity, transform;
-    transition-duration: 150ms;
   }
 
   .nav-link {
@@ -486,25 +333,4 @@
 
 @media (prefers-reduced-motion: reduce) {
   .brand-track { animation: none; }
-
-  :where(.openlink-app-shell, [data-openlink-theme]) :is(button, input, textarea, [role='menu'], [role='dialog']) {
-    transition-duration: 0.01ms;
-  }
-}
-
-/* Streamdown's built-in table card is useful in documents but too heavy for
- * inline chat output. Keep the table and controls, without the outer card. */
-.chat-message-markdown [data-streamdown='table-wrapper'] {
-  margin: 0 !important;
-  gap: 0 !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  padding: 0 !important;
-}
-
-.chat-message-markdown [data-streamdown='table-wrapper'] > div:last-child {
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
 }

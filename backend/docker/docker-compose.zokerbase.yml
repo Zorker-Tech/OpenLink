@@ -11,6 +11,19 @@ services:
   studio:
     container_name: zokerbase-studio
     image: zokerbase/studio:2026.08.10
+    # The Studio image listens on IPv4 (0.0.0.0). On some Docker Desktop
+    # versions Node resolves `localhost` to ::1 first, making the upstream
+    # healthcheck hang even though the endpoint is ready.
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:3000/api/platform/profile').then((r) => {if (r.status !== 200) throw new Error(r.status)})\""
+        ]
+      timeout: 10s
+      interval: 5s
+      retries: 3
+      start_period: 20s
   kong:
     container_name: zokerbase-gateway
     image: zokerbase/gateway:2026.08.10

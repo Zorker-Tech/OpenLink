@@ -5,6 +5,8 @@ import {
   resolveAgentProviderRuntimeConfiguration,
   saveAiProviderConfiguration,
 } from '@/lib/ai-provider-configurations.server'
+import { getEmbeddingProvider } from '@/lib/embedding-providers'
+import { saveEmbeddingProviderConfiguration } from '@/lib/embedding-provider-configurations.server'
 import { getAiProvider } from '@/lib/ai-providers'
 import { ensureDraftProject } from '@/lib/projects'
 import { getOwnedWorkspace } from '@/lib/workspaces'
@@ -29,6 +31,18 @@ const providerSchema = z.object({
   }, 'INVALID_BASE_URL'),
   defaultModelId: z.string().min(1).max(256),
   enabledModelIds: z.array(z.string().min(1).max(256)).max(256),
+  apiKey: z.string().trim().max(8192).optional(),
+  clearApiKey: z.boolean().optional(),
+})
+
+const embeddingProviderSchema = z.object({
+  providerId: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  enabled: z.boolean(),
+  isDefault: z.boolean(),
+  baseUrl: providerSchema.shape.baseUrl,
+  protocol: z.enum(['openai', 'ollama', 'tei']),
+  defaultModelId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/),
+  vectorDimension: z.number().int().min(2).max(32_768),
   apiKey: z.string().trim().max(8192).optional(),
   clearApiKey: z.boolean().optional(),
 })
@@ -81,6 +95,24 @@ export async function saveAiProviderConfigurationAction(input: unknown) {
     return { ok: true as const, configuration }
   } catch (error) {
     return { ok: false as const, error: error instanceof Error ? error.message : 'PROVIDER_SAVE_FAILED' }
+  }
+}
+
+export async function saveEmbeddingProviderConfigurationAction(input: unknown) {
+  const parsed = embeddingProviderSchema.safeParse(input)
+  if (!parsed.success || !getEmbeddingProvider(parsed.data?.providerId ?? '')) return { ok: false as const, error: 'INVALID_EMBEDDING_CONFIGURATION' }
+  try {
+    const { supabase, user } = await authenticatedClient()
+    const configuration = await saveEmbeddingProviderConfiguration(supabase, user.id, {
+      ...parsed.data,
+      baseUrl: parsed.data.baseUrl || null,
+      apiKey: parsed.data.apiKey || undefined,
+    })
+    revalidatePath('/settings/ai-providers')
+    revalidatePath(`/settings/ai-providers/embeddings/${configuration.providerId}`)
+    return { ok: true as const, configuration }
+  } catch (error) {
+    return { ok: false as const, error: error instanceof Error ? error.message : 'EMBEDDING_PROVIDER_SAVE_FAILED' }
   }
 }
 

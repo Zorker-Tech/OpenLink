@@ -158,6 +158,7 @@ export function Sidebar({
   onNewChat,
   onRenameActiveChat,
   projects,
+  secondaryPanel,
 }: {
   collapsed: boolean
   mobileOpen: boolean
@@ -179,6 +180,8 @@ export function Sidebar({
   onNewChat?: () => void
   onRenameActiveChat?: () => void
   projects?: ProjectSummary[]
+  /** Replaces the primary workspace navigation inside this same sidebar. */
+  secondaryPanel?: React.ReactNode
 }) {
   const router = useRouter()
   const [organizationDialogOpen, setOrganizationDialogOpen] = useState(false)
@@ -224,6 +227,7 @@ export function Sidebar({
   return (
     <>
       <AppSidebarFrame collapsed={collapsed} mobileOpen={mobileOpen} onCloseMobile={onCloseMobile}>
+        {secondaryPanel ? secondaryPanel : <>
         <div className="flex flex-col gap-3 py-2">
           <AppSidebarWorkspaceHeader activeWorkspace={activeWorkspace} onAddOrganization={() => setOrganizationDialogOpen(true)} onToggle={onToggle} organizations={organizations} personalWorkspace={personalWorkspace} />
 
@@ -243,13 +247,16 @@ export function Sidebar({
                   ? () => router.push(`/app/${activeWorkspace.slug}`)
                   : item.label === '项目'
                     ? () => router.push(`/app/${activeWorkspace.slug}/projects`)
+                    : item.label === '知识库'
+                      ? () => router.push(`/app/${activeWorkspace.slug}/knowledge`)
                     : undefined}
               />
             ))}
           </nav>
         </div>
+        </>}
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-2 pt-[13px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {!secondaryPanel && <div className="min-h-0 flex-1 overflow-y-auto px-2 pt-[13px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <section>
             <button
               aria-controls="sidebar-recent-chats-content"
@@ -313,7 +320,7 @@ export function Sidebar({
               <button className="flex h-12 w-full items-center justify-center rounded-lg border border-dashed border-[var(--app-control-border)] text-xs text-[var(--app-subtle)] hover:bg-[var(--app-surface)]" onClick={() => router.push(`/app/${activeWorkspace.slug}/projects`)} type="button">暂无项目</button>
             )}
           </section>}
-        </div>
+        </div>}
 
         <AppSidebarAccountFooter activeWorkspace={activeWorkspace} avatarUrl={avatarUrl} email={email} nickname={nickname} onOpenOrganization={() => setOrganizationDialogOpen(true)} onThemeChange={onThemeChange} organizations={organizations} themeMode={themeMode} />
 

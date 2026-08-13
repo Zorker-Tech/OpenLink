@@ -1,6 +1,5 @@
 'use client'
 
-import { createChatSessionAction } from '@/app/chat/actions'
 import {
   PromptInput,
   PromptInputBody,
@@ -112,7 +111,7 @@ function Header({ user }: { user: HomeUser | null }) {
 
   const handleSignOut = async () => {
     setIsSigningOut(true)
-    await supabase.auth.signOut({ scope: 'local' })
+    await supabase.auth.signOut()
     router.refresh()
     setIsSigningOut(false)
   }
@@ -166,18 +165,12 @@ function PromptComposer({ user }: { user: HomeUser | null }) {
   const router = useRouter()
   const [input, setInput] = useState('')
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     const prompt = input.trim()
     if (!prompt) return
 
-    const fallback = `/app?prompt=${encodeURIComponent(prompt)}`
-    if (!user) {
-      router.push(`/login?next=${encodeURIComponent(fallback)}`)
-      return
-    }
-
-    const result = await createChatSessionAction({ prompt })
-    if (result.path) router.push(result.path)
+    const destination = `/app?prompt=${encodeURIComponent(prompt)}`
+    router.push(user ? destination : `/login?next=${encodeURIComponent(destination)}`)
   }
 
   return (

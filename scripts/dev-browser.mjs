@@ -5,6 +5,7 @@ import { constants } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ensureZokerbase } from './zokerbase.mjs'
+import { ensureZero, stopZero } from './zero.mjs'
 
 const root = new URL('../', import.meta.url)
 const browserHostDirectory = new URL('../services/browser-host/', import.meta.url)
@@ -12,6 +13,7 @@ const agentHostDirectory = new URL('../services/agent-host/', import.meta.url)
 const agentWorkerDirectory = new URL('../services/agent-worker/', import.meta.url)
 const agentRpcWorkerDirectory = new URL('../services/agent-rpc-worker/', import.meta.url)
 const sandboxRuntimeDirectory = new URL('../services/sandbox-runtime/', import.meta.url)
+const knowledgeServiceDirectory = new URL('../services/knowledge-service/', import.meta.url)
 const providerSecretPath = fileURLToPath(new URL('../.openlink-runtime/provider-secret.key', import.meta.url))
 const podmanCommand = fileURLToPath(new URL('../.openlink-runtime/toolchain/bin/podman', import.meta.url))
 const podmanHelperBinariesDir = fileURLToPath(new URL('../.openlink-runtime/toolchain/bin/', import.meta.url))
@@ -31,9 +33,11 @@ const tokenSecret = process.env.OPENLINK_BROWSER_TOKEN_SECRET || randomBytes(48)
 const agentApiToken = process.env.OPENLINK_AGENT_API_TOKEN || randomBytes(48).toString('base64url')
 const desktopAgentApiToken = process.env.OPENLINK_DESKTOP_AGENT_API_TOKEN || randomBytes(48).toString('base64url')
 const openSandboxApiToken = process.env.OPEN_SANDBOX_API_KEY || randomBytes(48).toString('base64url')
+const knowledgeApiToken = process.env.OPENLINK_KNOWLEDGE_INTERNAL_TOKEN || randomBytes(48).toString('base64url')
 const hostUrl = process.env.OPENLINK_BROWSER_HOST_URL || 'http://127.0.0.1:43120'
 const agentHostUrl = process.env.OPENLINK_AGENT_HOST_URL || 'http://127.0.0.1:43121'
 const desktopAgentHostUrl = process.env.OPENLINK_DESKTOP_AGENT_HOST_URL || 'http://127.0.0.1:43123'
+const knowledgeServiceUrl = process.env.OPENLINK_KNOWLEDGE_SERVICE_URL || 'http://127.0.0.1:43124'
 
 function localPublicAgentGatewayUrl() {
   // The Agent Host may bind to 127.0.0.1 while the browser reaches OpenLink
@@ -258,6 +262,17 @@ async function waitForHealth(url, child, name, path = '/healthz') {
   throw new Error(`${name} did not become healthy within 120 seconds`)
 }
 
+async function ensureSandboxRuntimeReady() {
+  await ensureNpmDependencies('sandbox-runtime', sandboxRuntimeDirectory)
+  const distEntry = fileURLToPath(new URL('../services/sandbox-runtime/dist/index.js', import.meta.url))
+  try {
+    await access(distEntry, constants.R_OK)
+  } catch {
+    const build = run('npm', ['run', 'build'], { cwd: sandboxRuntimeDirectory })
+    await waitForExit(build, 'Sandbox Runtime build')
+  }
+}
+
 if (Number(process.versions.node.split('.')[0]) < 22) {
   const candidates = [
     process.env.OPENLINK_NODE_EXECUTABLE,
@@ -282,6 +297,9 @@ if (Number(process.versions.node.split('.')[0]) < 22) {
 const providerSecret = await persistentProviderSecret()
 await ensurePodmanConfig()
 const localZokerbase = runtimeMode === 'local' ? await ensureZokerbase() : null
+let localZero = null
+const knowledgeServiceEnabled = runtimeMode === 'local'
+  || Boolean(process.env.OPENLINK_ZERO_URL && (process.env.OPENLINK_KNOWLEDGE_ZOKERBASE_SERVICE_KEY || process.env.OPENLINK_SUPABASE_SERVICE_ROLE_KEY))
 
 const chromeExecutable = await executable([
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -292,7 +310,20 @@ const chromeExecutable = await executable([
   '/usr/bin/chromium-browser',
 ])
 
+// Agent Host's desktop entrypoint imports this repository-owned runtime via
+// a local package link. Keep the link usable during ordinary development
+// starts as well as artifact builds; otherwise a missing ignored `dist/`
+// directory aborts the supervisor before Next.js can start.
+await ensureSandboxRuntimeReady()
+
 if (process.env.OPENLINK_BUILD_ARTIFACTS === '1') {
+  if (runtimeMode === 'local') {
+    const zeroImageBuild = run(process.execPath, ['scripts/build-zero-images.mjs'], {
+      cwd: root,
+      env: { ...process.env, OPENLINK_ZERO_ALLOW_UPSTREAM_ACQUISITION: process.env.OPENLINK_ZERO_ALLOW_UPSTREAM_ACQUISITION || '0' },
+    })
+    await waitForExit(zeroImageBuild, 'Zero image artifact build')
+  }
   const podmanBuild = run(process.execPath, ['scripts/ensure-podman-toolchain.mjs'], { cwd: root })
   await waitForExit(podmanBuild, 'Podman toolchain build')
 
@@ -301,12 +332,12 @@ if (process.env.OPENLINK_BUILD_ARTIFACTS === '1') {
   const piSync = run(process.execPath, ['scripts/sync-pi-runtime.mjs'], { cwd: root })
   await waitForExit(piSync, 'Pi runtime sync')
 
-  await ensureNpmDependencies('sandbox-runtime', sandboxRuntimeDirectory)
   await ensureNpmDependencies('browser-host', browserHostDirectory)
   await ensureNpmDependencies('agent-host', agentHostDirectory)
   const piRuntimeManifest = new URL('../packages/pi-runtime/manifest.json', import.meta.url)
   await ensureNpmDependencies('agent-worker', agentWorkerDirectory, [piRuntimeManifest])
   await ensureNpmDependencies('agent-rpc-worker', agentRpcWorkerDirectory, [piRuntimeManifest])
+  await ensureNpmDependencies('knowledge-service', knowledgeServiceDirectory)
 
   const build = run('npm', ['run', 'build'], { cwd: browserHostDirectory })
   await waitForExit(build, 'Browser Host build')
@@ -318,6 +349,8 @@ if (process.env.OPENLINK_BUILD_ARTIFACTS === '1') {
   await waitForExit(workerBuild, 'Agent Worker build')
   const rpcWorkerBuild = run('npm', ['run', 'build'], { cwd: agentRpcWorkerDirectory })
   await waitForExit(rpcWorkerBuild, 'Agent RPC Worker build')
+  const knowledgeBuild = run('npm', ['run', 'build'], { cwd: knowledgeServiceDirectory })
+  await waitForExit(knowledgeBuild, 'Knowledge Service build')
   const projectVmBaseBuild = run(process.execPath, ['scripts/build-project-vm-base.mjs'], {
     cwd: root,
     env: {
@@ -366,12 +399,26 @@ if (process.env.OPENLINK_BUILD_ARTIFACTS === '1') {
   }
 }
 
+if (runtimeMode === 'local') localZero = await ensureZero()
+
+if (knowledgeServiceEnabled) {
+  if (process.env.OPENLINK_BUILD_ARTIFACTS !== '1') await ensureNpmDependencies('knowledge-service', knowledgeServiceDirectory)
+  const knowledgeBuild = run('npm', ['run', 'build'], { cwd: knowledgeServiceDirectory })
+  await waitForExit(knowledgeBuild, 'Knowledge Service build')
+}
+
 projectVmBase = await loadProjectVmBase()
 
 const shared = {
   ...process.env,
   OPENLINK_RUNTIME_MODE: runtimeMode,
   NEXT_PUBLIC_OPENLINK_RUNTIME_MODE: runtimeMode,
+  OPENLINK_KNOWLEDGE_SERVICE_URL: knowledgeServiceUrl,
+  OPENLINK_KNOWLEDGE_INTERNAL_TOKEN: knowledgeApiToken,
+  ...(localZero ? {
+    OPENLINK_ZERO_URL: localZero.url,
+    OPENLINK_ZERO_HEALTH_URL: localZero.healthUrl,
+  } : {}),
   ...(localZokerbase ? {
     OPENLINK_LOCAL_ZOKERBASE_URL: localZokerbase.url,
     OPENLINK_LOCAL_ZOKERBASE_PUBLISHABLE_KEY: localZokerbase.publishableKey,
@@ -386,6 +433,8 @@ const shared = {
     // Cloud URL, JWT material, or client keys into this process.
     NEXT_PUBLIC_SUPABASE_URL: localZokerbase.url,
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: localZokerbase.publishableKey,
+    OPENLINK_KNOWLEDGE_ZOKERBASE_URL: localZokerbase.url,
+    OPENLINK_KNOWLEDGE_ZOKERBASE_SERVICE_KEY: localZokerbase.secretKey,
   } : {}),
   OPENLINK_BROWSER_API_TOKEN: apiToken,
   OPENLINK_BROWSER_TOKEN_SECRET: tokenSecret,
@@ -468,6 +517,10 @@ const shared = {
 
 const browserHost = run(process.execPath, ['dist/src/main.js'], { cwd: browserHostDirectory, env: shared })
 await waitForHealth(hostUrl, browserHost, 'Browser Host')
+const knowledgeService = knowledgeServiceEnabled
+  ? run(process.execPath, ['dist/src/main.js'], { cwd: knowledgeServiceDirectory, env: shared })
+  : null
+if (knowledgeService) await waitForHealth(knowledgeServiceUrl, knowledgeService, 'Knowledge Service')
 const agentHost = run(process.execPath, ['dist/src/main.js'], { cwd: agentHostDirectory, env: shared })
 await waitForHealth(agentHostUrl, agentHost, 'Agent Host')
 const desktopAgentHost = run(process.execPath, ['dist/src/desktop-main.js'], { cwd: agentHostDirectory, env: shared })
@@ -495,7 +548,9 @@ async function shutdown(signal) {
   await stop(next, signal, 15_000).catch(() => undefined)
   await stop(desktopAgentHost, signal, 30_000).catch(() => undefined)
   await stop(agentHost, signal, 120_000).catch(() => undefined)
+  if (knowledgeService) await stop(knowledgeService, signal, 30_000).catch(() => undefined)
   await stop(browserHost, signal, 30_000).catch(() => undefined)
+  if (runtimeMode === 'local') await stopZero().catch(() => undefined)
 }
 
 process.once('SIGINT', () => { void shutdown('SIGINT').finally(() => process.exit(0)) })
@@ -510,5 +565,8 @@ desktopAgentHost.once('exit', (code) => {
   if (!shuttingDown) void shutdown('SIGTERM').finally(() => process.exit(code ?? 1))
 })
 browserHost.once('exit', (code) => {
+  if (!shuttingDown) void shutdown('SIGTERM').finally(() => process.exit(code ?? 1))
+})
+knowledgeService?.once('exit', (code) => {
   if (!shuttingDown) void shutdown('SIGTERM').finally(() => process.exit(code ?? 1))
 })

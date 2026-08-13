@@ -39,3 +39,28 @@ export interface AgentProviderRuntimeConfiguration {
   baseUrl: string
   revision: string
 }
+
+export type EmbeddingProtocol = 'openai' | 'ollama' | 'tei'
+
+export interface EmbeddingProviderConfigurationSummary {
+  providerId: string
+  enabled: boolean
+  isDefault: boolean
+  baseUrl: string | null
+  protocol: EmbeddingProtocol
+  defaultModelId: string
+  vectorDimension: number
+  apiKeyHint: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface EmbeddingProviderRuntimeConfiguration {
+  providerId: string
+  modelId: string
+  baseUrl: string
+  protocol: EmbeddingProtocol
+  vectorDimension: number
+  apiKey: string
+  revision: string
+}

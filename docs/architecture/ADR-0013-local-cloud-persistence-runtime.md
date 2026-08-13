@@ -31,7 +31,7 @@ reference or pull upstream image names.
 Introduce a server-only `OPENLINK_RUNTIME_MODE=local|cloud` switch. Cloud uses
 the configured deployment. Local defaults to a self-contained ZOKERBASE stack,
 generates all secrets and API keys once with the upstream-supported generators,
-and applies the exact same `supabase/migrations` files before Next.js and Agent
+and applies the exact same `zorkerbase/migrations` files before Next.js and Agent
 Host start. Both modes use Supabase-compatible clients, PostgREST RPCs and RLS.
 
 Local ZOKERBASE Auth is the local identity issuer. Local and Cloud are
@@ -70,4 +70,4 @@ refresh tokens, and sessions are not copied between modes.
 
 - [Supabase self-hosting with Docker](https://supabase.com/docs/guides/self-hosting/docker)
 - Vendored upstream metadata: `backend/UPSTREAM.md`
-- Existing Cloud schema: `supabase/migrations/`
+- Shared application schema: `zorkerbase/migrations/`
