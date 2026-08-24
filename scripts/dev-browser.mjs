@@ -65,7 +65,11 @@ function localPublicAgentGatewayUrl() {
 const agentGatewayPublicUrl = localPublicAgentGatewayUrl()
 // `localhost` and `127.0.0.1` are different schemeful sites. Both are first-
 // class Local URLs, so accept both for Browser and code-server iframe gateways.
-const localAllowedOrigins = process.env.OPENLINK_BROWSER_ALLOWED_ORIGINS || 'http://localhost:3000,http://127.0.0.1:3000'
+// The web port is whatever this supervisor actually launches Next on (PORT),
+// so the browser/code-server gateway frame-ancestors allowlist must follow
+// it instead of a hardcoded historical default.
+const webPort = String(Number(process.env.PORT || 3000))
+const localAllowedOrigins = process.env.OPENLINK_BROWSER_ALLOWED_ORIGINS || `http://localhost:${webPort},http://127.0.0.1:${webPort}`
 
 function lifecycleMode(argv) {
   const modeIndex = argv.indexOf('--mode')
