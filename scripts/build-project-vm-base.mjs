@@ -6,6 +6,7 @@ import { basename, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { configureBundledPodmanRuntime } from './lib/bundled-podman-runtime.mjs'
 import { ensurePodmanBuilder, run, stopPodmanBuilder } from './lib/podman-builder.mjs'
+import { hashConfigurationTree, readProjectSupabaseLock } from './lib/project-supabase-lock.mjs'
 
 const root = resolve(fileURLToPath(new URL('../', import.meta.url)))
 await configureBundledPodmanRuntime(root)
@@ -15,11 +16,24 @@ const containerfile = resolve(root, 'services/agent-host/project-vm-base.Contain
 const outputDirectory = resolve(root, '.openlink-runtime/project-vm-base')
 const archive = resolve(outputDirectory, 'openlink-project-vm-base.oci.tar')
 const manifestPath = resolve(outputDirectory, 'manifest.json')
+const projectSupabaseLockPath = resolve(root, 'services/project-supabase/runtime.lock.json')
+const projectSupabaseConfiguration = resolve(root, '.openlink-runtime/project-supabase/configuration')
+const projectSupabaseSeedScript = resolve(root, 'services/agent-host/project-vm-seed-supabase.sh')
+const projectSupabaseController = resolve(root, 'services/agent-host/project-supabase-runtime.mjs')
+const projectSupabaseBundleVerifier = resolve(root, 'scripts/lib/project-supabase-bundle.mjs')
+const projectSupabaseReleaseTrust = resolve(root, 'services/project-supabase/release-trust.json')
+const projectSupabaseRuntimeSpec = resolve(root, '.openlink-runtime/project-supabase/runtime.spec.json')
 // Keep the bootable OS aligned with the bundled Podman client.  The generic
 // 6.0 manifest has intermittently stalled on Quay; 6.2 is the current
 // machine-os release and is still a multi-arch manifest selected by Podman.
 const baseImage = process.env.OPENLINK_MACHINE_OS_IMAGE || 'quay.io/podman/machine-os:6.2'
+// A release builder can work from a previously attested local OCI archive
+// when registry access is unavailable. The override is deliberately the
+// selected platform manifest (not a floating tag) and is accepted only when
+// the local cache marker binds that digest to the requested base-image tag.
+const baseImagePlatformDigestOverride = process.env.OPENLINK_MACHINE_OS_PLATFORM_DIGEST
 const ociCacheDirectory = resolve(root, '.openlink-runtime/oci-cache')
+const artifactOptions = { cwd: root, timeout: 60 * 60 * 1000 }
 
 function shellQuote(value) {
   return `'${value.replaceAll("'", "'\\\"'\\\"'")}'`
@@ -153,6 +167,26 @@ async function ensureMachineOsArchive(image) {
   const matched = image.match(/^([^/]+)\/(.+):([^:@]+)$/)
   if (!matched) throw new Error(`OPENLINK_MACHINE_OS_IMAGE must be registry/repository:tag, received ${image}`)
   const [, registry, repository, tag] = matched
+  const architecture = process.arch === 'arm64' ? 'arm64' : process.arch
+  if (baseImagePlatformDigestOverride) {
+    if (!/^sha256:[a-f0-9]{64}$/.test(baseImagePlatformDigestOverride)) {
+      throw new Error('OPENLINK_MACHINE_OS_PLATFORM_DIGEST must be a sha256 platform manifest digest')
+    }
+    const digest = baseImagePlatformDigestOverride.slice('sha256:'.length)
+    const layout = resolve(ociCacheDirectory, `${registry.replaceAll('.', '_')}-${repository.replaceAll('/', '_')}-${digest}`)
+    const archivePath = `${layout}.oci.tar`
+    const completeMarker = resolve(layout, '.complete.json')
+    let marker
+    try { marker = JSON.parse(await readFile(completeMarker, 'utf8')) } catch {}
+    if (marker?.digest !== baseImagePlatformDigestOverride || marker?.image !== image || !(await validArchive(archivePath))) {
+      throw new Error(`OPENLINK_MACHINE_OS_PLATFORM_DIGEST requires a complete attested local OCI archive for ${image}`)
+    }
+    return {
+      archivePath,
+      imageReference: `oci-archive:${archivePath}:openlink-machine-os`,
+      platform: { os: 'linux', architecture, digest: baseImagePlatformDigestOverride },
+    }
+  }
   const scope = `repository:${repository}:pull`
   const tokenResponse = await runCurl([
     '--fail', '--location', '--silent', '--show-error',
@@ -166,7 +200,6 @@ async function ensureMachineOsArchive(image) {
     token,
     'application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json',
   )
-  const architecture = process.arch === 'arm64' ? 'arm64' : process.arch
   const descriptor = index.manifests?.find((candidate) => candidate.platform?.os === 'linux' && candidate.platform?.architecture === architecture)
   if (!descriptor?.digest || typeof descriptor.size !== 'number') {
     throw new Error(`Registry image ${image} has no linux/${architecture} manifest`)
@@ -190,7 +223,11 @@ async function ensureMachineOsArchive(image) {
     const marker = JSON.parse(await readFile(completeMarker, 'utf8'))
     complete = marker.digest === descriptor.digest && await validArchive(archivePath)
   } catch {}
-  if (complete) return { archivePath, imageReference: `oci-archive:${archivePath}:openlink-machine-os` }
+  if (complete) return {
+    archivePath,
+    imageReference: `oci-archive:${archivePath}:openlink-machine-os`,
+    platform: { os: 'linux', architecture, digest: descriptor.digest },
+  }
 
   const blobs = [manifest.config, ...manifest.layers]
   await mkdir(resolve(layout, 'blobs/sha256'), { recursive: true, mode: 0o700 })
@@ -224,17 +261,35 @@ async function ensureMachineOsArchive(image) {
   if (!(await validArchive(temporaryArchivePath))) throw new Error(`OCI cache archive for ${image} is invalid`)
   await rename(temporaryArchivePath, archivePath)
   await writeFile(completeMarker, `${JSON.stringify({ digest: descriptor.digest, image, bytes: (await stat(archivePath)).size })}\n`, { mode: 0o600 })
-  return { archivePath, imageReference: `oci-archive:${archivePath}:openlink-machine-os` }
+  return {
+    archivePath,
+    imageReference: `oci-archive:${archivePath}:openlink-machine-os`,
+    platform: { os: 'linux', architecture, digest: descriptor.digest },
+  }
 }
+
+const projectSupabaseLock = await readProjectSupabaseLock(projectSupabaseLockPath)
+const observedProjectSupabaseConfigurationHash = await hashConfigurationTree(projectSupabaseConfiguration)
+if (observedProjectSupabaseConfigurationHash !== projectSupabaseLock.configuration.treeSha256) {
+  throw new Error('Project Supabase configuration must be synchronized and match the reviewed lock before building the Project VM base')
+}
+const projectSupabaseLockSha256 = createHash('sha256').update(await readFile(projectSupabaseLockPath)).digest('hex')
+const projectSupabaseSeedSha256 = createHash('sha256').update(await readFile(projectSupabaseSeedScript)).digest('hex')
+const projectSupabaseControllerSha256 = createHash('sha256').update(await readFile(projectSupabaseController)).digest('hex')
+const projectSupabaseBundleVerifierSha256 = createHash('sha256').update(await readFile(projectSupabaseBundleVerifier)).digest('hex')
+const projectSupabaseReleaseTrustSha256 = createHash('sha256').update(await readFile(projectSupabaseReleaseTrust)).digest('hex')
+const projectSupabaseRuntimeSpecSha256 = createHash('sha256').update(await readFile(projectSupabaseRuntimeSpec)).digest('hex')
+if (projectSupabaseRuntimeSpecSha256 !== projectSupabaseLock.configuration.runtimeSpecSha256) throw new Error('Project Supabase runtime spec does not match the reviewed lock')
+const machineOs = await ensureMachineOsArchive(baseImage)
 
 const fingerprint = createHash('sha256')
   .update(await readFile(containerfile))
-  .update(JSON.stringify({ schemaVersion: 1, baseImage, packages: ['bash-completion', 'ca-certificates', 'cmake', 'curl', 'diffutils', 'fd-find', 'findutils', 'git', 'gzip', 'jq', 'make', 'nodejs', 'npm', 'openssh-clients', 'pnpm', 'procps-ng', 'python3', 'python3-devel', 'python3-pip', 'ripgrep', 'tar', 'unzip', 'wget', 'which', 'xz', 'zip', 'gcc', 'gcc-c++'] }))
+  .update(JSON.stringify({ schemaVersion: 2, baseImage, baseImagePlatform: machineOs.platform, packages: ['bash-completion', 'ca-certificates', 'cmake', 'curl', 'diffutils', 'fd-find', 'findutils', 'git', 'gzip', 'jq', 'make', 'nodejs', 'npm', 'openssh-clients', 'pnpm', 'procps-ng', 'python3', 'python3-devel', 'python3-pip', 'ripgrep', 'tar', 'unzip', 'wget', 'which', 'xz', 'zip', 'gcc', 'gcc-c++'], projectSupabaseLockSha256, projectSupabaseSeedSha256, projectSupabaseControllerSha256, projectSupabaseBundleVerifierSha256, projectSupabaseReleaseTrustSha256, projectSupabaseRuntimeSpecSha256, projectSupabaseConfigurationHash: observedProjectSupabaseConfigurationHash }))
   .digest('hex')
 
 let previous
 try { previous = JSON.parse(await readFile(manifestPath, 'utf8')) } catch {}
-if (previous?.schemaVersion === 1 && previous.fingerprint === fingerprint && await validArchive(archive)) {
+if (previous?.schemaVersion === 2 && previous.fingerprint === fingerprint && await validArchive(archive)) {
   process.stdout.write(`${JSON.stringify({ archive, fingerprint, reused: true, bytes: (await stat(archive)).size })}\n`)
   process.exit(0)
 }
@@ -252,13 +307,20 @@ let builder
 
 try {
   await cp(containerfile, resolve(context, 'Containerfile'))
-  await writeFile(resolve(context, 'project-vm-base.json'), `${JSON.stringify({ schemaVersion: 1, fingerprint, baseImage, builtFor: 'OpenLink Project VM' })}\n`, { mode: 0o600 })
-  const machineOs = await ensureMachineOsArchive(baseImage)
+  await mkdir(resolve(context, 'project-supabase'), { recursive: true, mode: 0o700 })
+  await cp(projectSupabaseLockPath, resolve(context, 'project-supabase/runtime.lock.json'))
+  await cp(projectSupabaseReleaseTrust, resolve(context, 'project-supabase/release-trust.json'))
+  await cp(projectSupabaseConfiguration, resolve(context, 'project-supabase/configuration'), { recursive: true, preserveTimestamps: true })
+  await cp(projectSupabaseRuntimeSpec, resolve(context, 'project-supabase/runtime.spec.json'))
+  await cp(projectSupabaseSeedScript, resolve(context, 'project-vm-seed-supabase.sh'))
+  await cp(projectSupabaseController, resolve(context, 'project-supabase-runtime.mjs'))
+  await cp(projectSupabaseBundleVerifier, resolve(context, 'project-supabase-bundle.mjs'))
+  await writeFile(resolve(context, 'project-vm-base.json'), `${JSON.stringify({ schemaVersion: 2, fingerprint, baseImage, baseImagePlatform: machineOs.platform, builtFor: 'OpenLink Project VM', projectSupabase: { release: projectSupabaseLock.release.tag, commit: projectSupabaseLock.release.commit, configurationTreeSha256: projectSupabaseLock.configuration.treeSha256, lockSha256: projectSupabaseLockSha256 } })}\n`, { mode: 0o600 })
 
-  builder = await ensurePodmanBuilder(podman, { cwd: root })
-  await run(podman, ['machine', 'ssh', builder.machineName, `mkdir -p ${shellQuote(guestRoot)}`], { cwd: root })
-  await run(podman, ['machine', 'cp', context, `${builder.machineName}:${guestContext}`], { cwd: root })
-  await run(podman, ['machine', 'cp', machineOs.archivePath, `${builder.machineName}:${guestMachineOsArchive}`], { cwd: root })
+  builder = await ensurePodmanBuilder(podman, artifactOptions)
+  await run(podman, ['machine', 'ssh', builder.machineName, `mkdir -p ${shellQuote(guestRoot)}`], artifactOptions)
+  await run(podman, ['machine', 'cp', context, `${builder.machineName}:${guestContext}`], artifactOptions)
+  await run(podman, ['machine', 'cp', machineOs.archivePath, `${builder.machineName}:${guestMachineOsArchive}`], artifactOptions)
   const tag = `openlink/project-vm-base:${fingerprint.slice(0, 20)}`
   // Import the verified OCI archive into the Builder VM, tag it with the
   // Containerfile reference, then forbid network pulls during the build.
@@ -278,15 +340,27 @@ try {
     .map(shellQuote)
     .join(' ')
   const environment = guestBuildEnvironment().map(([key, value]) => shellQuote(`${key}=${value}`)).join(' ')
-  await run(podman, ['machine', 'ssh', builder.machineName, `env ${environment} ${pull} && ${retag} && ${build} && ${save}`], { cwd: root })
+  await run(podman, ['machine', 'ssh', builder.machineName, `env ${environment} ${pull} && ${retag} && ${build} && ${save}`], artifactOptions)
   await rm(temporaryArchive, { force: true })
-  await run(podman, ['machine', 'cp', `${builder.machineName}:${guestArchive}`, temporaryArchive], { cwd: root })
+  await run(podman, ['machine', 'cp', `${builder.machineName}:${guestArchive}`, temporaryArchive], artifactOptions)
   if (!(await validArchive(temporaryArchive))) throw new Error('Project VM base build produced an invalid OCI archive')
   await rename(temporaryArchive, archive)
   await writeFile(manifestPath, `${JSON.stringify({
-    schemaVersion: 1,
+    schemaVersion: 2,
     fingerprint,
     baseImage,
+    baseImagePlatform: machineOs.platform,
+    projectSupabase: {
+      release: projectSupabaseLock.release.tag,
+      commit: projectSupabaseLock.release.commit,
+      configurationTreeSha256: projectSupabaseLock.configuration.treeSha256,
+      lockSha256: projectSupabaseLockSha256,
+      seedScriptSha256: projectSupabaseSeedSha256,
+      controllerSha256: projectSupabaseControllerSha256,
+      bundleVerifierSha256: projectSupabaseBundleVerifierSha256,
+      releaseTrustSha256: projectSupabaseReleaseTrustSha256,
+      runtimeSpecSha256: projectSupabaseRuntimeSpecSha256,
+    },
     archive: basename(archive),
     bytes: (await stat(archive)).size,
     builtAt: new Date().toISOString(),
@@ -296,7 +370,7 @@ try {
   await rm(context, { recursive: true, force: true })
   await rm(temporaryArchive, { force: true })
   if (builder) {
-    await run(podman, ['machine', 'ssh', builder.machineName, `rm -rf ${shellQuote(guestRoot)}`], { cwd: root }).catch(() => {})
-    await stopPodmanBuilder(podman, builder.machineName, { cwd: root })
+    await run(podman, ['machine', 'ssh', builder.machineName, `rm -rf ${shellQuote(guestRoot)}`], artifactOptions).catch(() => {})
+    await stopPodmanBuilder(podman, builder.machineName, artifactOptions)
   }
 }

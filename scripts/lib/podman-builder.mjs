@@ -5,7 +5,7 @@ import { join } from 'node:path'
 export function run(command, args, options = {}) {
   return new Promise((resolveRun, rejectRun) => {
     const { input, ...spawnOptions } = options
-    const child = spawn(command, args, { stdio: input === undefined ? 'inherit' : ['pipe', 'inherit', 'inherit'], shell: false, ...spawnOptions })
+    const child = spawn(command, args, { stdio: input === undefined ? 'inherit' : ['pipe', 'inherit', 'inherit'], shell: false, timeout: 2 * 60 * 1000, killSignal: 'SIGTERM', ...spawnOptions })
     if (input !== undefined) child.stdin.end(input)
     child.once('error', rejectRun)
     child.once('exit', (code, signal) => {
@@ -17,7 +17,7 @@ export function run(command, args, options = {}) {
 
 export function runCapture(command, args, options = {}) {
   return new Promise((resolveRun, rejectRun) => {
-    const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'], shell: false, ...options })
+    const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'], shell: false, timeout: 2 * 60 * 1000, killSignal: 'SIGTERM', ...options })
     let stdout = ''
     let stderr = ''
     child.stdout.on('data', (chunk) => { stdout += chunk })
@@ -62,7 +62,7 @@ export async function ensurePodmanBuilder(podman, options = {}) {
   const machineName = process.env.OPENLINK_BUILD_MACHINE || 'openlink-image-builder'
   let machineWasRunning = false
   try {
-    const machines = JSON.parse((await runCapture(podman, ['machine', 'list', '--format', 'json'], options)).stdout)
+    const machines = JSON.parse((await runCapture(podman, ['machine', 'list', '--format', 'json'], { ...options, timeout: 30_000 })).stdout)
     const active = Array.isArray(machines) ? machines.filter((machine) => machine?.Name !== machineName && (machine?.Running || machine?.Starting)) : []
     if (active.length) {
       if (process.env.OPENLINK_STOP_ACTIVE_MACHINES !== '1') {
@@ -75,7 +75,7 @@ export async function ensurePodmanBuilder(podman, options = {}) {
   } catch (error) {
     if (error instanceof Error && /Cannot start dedicated image builder/.test(error.message)) throw error
   }
-  const inspect = async () => runCapture(podman, ['machine', 'inspect', machineName], options)
+  const inspect = async () => runCapture(podman, ['machine', 'inspect', machineName], { ...options, timeout: 30_000 })
   await inspect().catch(async () => {
     const image = await cachedMachineImage()
     const imageArgs = image ? ['--image', image] : []
