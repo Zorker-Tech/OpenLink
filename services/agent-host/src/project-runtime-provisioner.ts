@@ -15,6 +15,8 @@ export interface ProjectRuntimeProvisioningQueue {
   renew(projectId: string, workerId: string, leaseMs: number): Promise<boolean>
   complete(projectId: string, workerId: string): Promise<void>
   fail(projectId: string, workerId: string, retryAt: Date): Promise<void>
+  /** Records a terminal failure so the row is never re-claimed automatically. */
+  terminalFail(projectId: string, workerId: string, message: string): Promise<void>
 }
 
 export interface ProjectRuntimeProvisionerOptions {
@@ -24,6 +26,12 @@ export interface ProjectRuntimeProvisionerOptions {
   pollIntervalMs?: number
   leaseMs?: number
   retryBaseMs?: number
+  /** Exponential backoff ceiling in milliseconds. */
+  retryMaxMs?: number
+  /** Random jitter fraction applied to each backoff step (0 disables jitter). */
+  jitterFactor?: number
+  /** Maximum automatic attempts before the row enters a terminal error state. */
+  maxAttempts?: number
 }
 
 /** Reconciles durable Project runtime desired state without blocking web UI. */
@@ -34,6 +42,10 @@ export class ProjectRuntimeProvisioner {
   private readonly pollIntervalMs: number
   private readonly leaseMs: number
   private readonly retryBaseMs: number
+  private readonly retryMaxMs: number
+  private readonly maxExponent: number
+  private readonly jitterFactor: number
+  private readonly maxAttempts: number
   private timer?: NodeJS.Timeout
   private active?: Promise<boolean>
   private closing = false
@@ -45,6 +57,11 @@ export class ProjectRuntimeProvisioner {
     this.pollIntervalMs = Math.max(250, options.pollIntervalMs ?? 2_000)
     this.leaseMs = Math.max(10_000, options.leaseMs ?? 5 * 60_000)
     this.retryBaseMs = Math.max(1_000, options.retryBaseMs ?? 5_000)
+    this.retryMaxMs = Math.max(this.retryBaseMs, options.retryMaxMs ?? 5 * 60_000)
+    // Largest exponent whose backoff stays at or under the ceiling.
+    this.maxExponent = Math.max(0, Math.ceil(Math.log2(this.retryMaxMs / this.retryBaseMs)))
+    this.jitterFactor = Math.max(0, Math.min(1, options.jitterFactor ?? 0.25))
+    this.maxAttempts = Math.max(1, options.maxAttempts ?? 50)
   }
 
   start(): void {
@@ -75,10 +92,21 @@ export class ProjectRuntimeProvisioner {
       if (!leaseLost) await this.queue.complete(claim.projectId, this.workerId)
       return true
     } catch (error) {
-      const exponent = Math.min(6, Math.max(0, claim.attempt - 1))
-      const retryAt = new Date(Date.now() + this.retryBaseMs * 2 ** exponent)
+      const message = safeError(error)
+      if (claim.attempt >= this.maxAttempts) {
+        // Exhausted: record a terminal error so the row is excluded from the
+        // claim filter and cannot be retried automatically. A human must reset
+        // the runtime (or its lease) to attempt again.
+        if (!leaseLost) await this.queue.terminalFail(claim.projectId, this.workerId, message)
+        console.error(`OpenLink Project runtime provisioning exhausted after ${claim.attempt} attempts for ${claim.projectId}: ${message}`)
+        return true
+      }
+      const exponent = Math.min(this.maxExponent, Math.max(0, claim.attempt - 1))
+      const baseDelay = this.retryBaseMs * 2 ** exponent
+      const jittered = baseDelay + Math.round((Math.random() * 2 - 1) * this.jitterFactor * baseDelay)
+      const retryAt = new Date(Date.now() + Math.min(this.retryMaxMs, Math.max(0, jittered)))
       if (!leaseLost) await this.queue.fail(claim.projectId, this.workerId, retryAt)
-      console.error(`OpenLink eager Project runtime provisioning failed for ${claim.projectId}: ${safeError(error)}`)
+      console.error(`OpenLink eager Project runtime provisioning failed for ${claim.projectId}: ${message}`)
       return true
     } finally {
       clearInterval(heartbeat)
@@ -205,19 +233,31 @@ export class SupabaseProjectRuntimeProvisioningQueue implements ProjectRuntimePr
     await this.release(projectId, workerId, retryAt)
   }
 
-  private async release(projectId: string, workerId: string, retryAt: Date | null): Promise<void> {
+  async terminalFail(projectId: string, workerId: string, message: string): Promise<void> {
+    await this.release(projectId, workerId, null, message, true)
+  }
+
+  private async release(projectId: string, workerId: string, retryAt: Date | null, lastError?: string, terminal = false): Promise<void> {
+    const now = new Date()
+    const patch: Record<string, unknown> = {
+      provisioning_claimed_by: null,
+      provisioning_lease_expires_at: null,
+      // A terminal failure parks the row a year out so the claim filter
+      // (`provisioning_next_attempt_at.lte.now`) never selects it again;
+      // operators can reset it explicitly to attempt a manual recovery.
+      provisioning_next_attempt_at: terminal
+        ? new Date(now.getTime() + 365 * 24 * 60 * 60 * 1_000).toISOString()
+        : retryAt?.toISOString() ?? null,
+      updated_at: now.toISOString(),
+    }
+    if (lastError !== undefined) patch.last_error = lastError.slice(0, 2_000)
     const params = new URLSearchParams({
       project_id: `eq.${projectId}`,
       provisioning_claimed_by: `eq.${workerId}`,
     })
     await this.request(`?${params.toString()}`, {
       method: 'PATCH',
-      body: JSON.stringify({
-        provisioning_claimed_by: null,
-        provisioning_lease_expires_at: null,
-        provisioning_next_attempt_at: retryAt?.toISOString() ?? null,
-        updated_at: new Date().toISOString(),
-      }),
+      body: JSON.stringify(patch),
     })
   }
 
