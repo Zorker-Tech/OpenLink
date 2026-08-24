@@ -10,6 +10,7 @@ import type { ProjectRuntimeController } from './project-runtime-router.js'
 import { BrowserHostClient, type BrowserAgentSession } from './browser-client.js'
 import { BrowserGateway } from './browser-gateway.js'
 import { CodeServerGateway } from './code-server-gateway.js'
+import { handleSupabaseMcpRequest } from './supabase-mcp.js'
 
 export interface PromptRuntimeSession {
   prompt(message: string, signal?: AbortSignal): Promise<Response>
@@ -1088,6 +1089,23 @@ export async function startPromptHttpServer(
       const codeServerGatewayRequest = /^\/v1\/code-server\/gateway\/sessions\/([^/]+)(?:\/|$)/.exec(url.pathname)
       if (codeServerGatewayRequest) {
         await codeServerGateway.handleHttp(request, response, decodeURIComponent(codeServerGatewayRequest[1]!))
+        return
+      }
+      // The MCP endpoint performs its own authorization: it accepts either the
+      // internal Bearer token or a project-scoped capability minted for the
+      // in-VM agent session, so it must run before the global Bearer guard.
+      const supabaseMcpRequest = /^\/v1\/projects\/([^/]+)\/supabase\/mcp$/.exec(url.pathname)
+      if (supabaseMcpRequest && request.method === 'POST') {
+        const projectId = decodeURIComponent(supabaseMcpRequest[1]!)
+        if (!isProjectId(projectId)) throw new AgentHostError('AUTH_DENIED', 'Agent Host authorization is invalid')
+        if (!config.projectRuntimeManager?.manageSupabase) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project Supabase management is not configured')
+        await handleSupabaseMcpRequest({
+          request,
+          response,
+          projectId,
+          apiToken: config.apiToken,
+          manage: (operation, extra) => config.projectRuntimeManager!.manageSupabase!(projectId, { operation, ...extra }),
+        })
         return
       }
       if (!authorized(request, config.apiToken)) throw new AgentHostError('AUTH_DENIED', 'Agent Host authorization is invalid')

@@ -18,6 +18,7 @@ RUN npm ci --omit=dev --ignore-scripts=false
 
 COPY services/agent-worker/dist ./dist
 COPY services/agent-browser-extension/openlink-browser.ts ./extensions/openlink-browser.ts
+COPY services/agent-supabase-extension/openlink-supabase.ts ./extensions/openlink-supabase.ts
 
 ENV NODE_ENV=production
 EXPOSE 43130

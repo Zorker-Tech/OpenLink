@@ -10,6 +10,7 @@ import {
 } from '@earendil-works/pi-coding-agent'
 import { randomUUID, timingSafeEqual } from 'node:crypto'
 import { execFile } from 'node:child_process'
+import { access } from 'node:fs/promises'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { mkdir, readFile } from 'node:fs/promises'
 import { relative, resolve } from 'node:path'
@@ -65,6 +66,7 @@ interface WorkerConfig {
   browserSessionId?: string
   browserControlToken?: string
   browserExtensionPath?: string
+  supabaseExtensionPath?: string
 }
 
 interface AgentExtensionUiResponse {
@@ -103,6 +105,7 @@ function config(): WorkerConfig {
     browserSessionId: process.env.OPENLINK_BROWSER_SESSION_ID,
     browserControlToken: process.env.OPENLINK_BROWSER_CONTROL_TOKEN,
     browserExtensionPath: process.env.OPENLINK_BROWSER_EXTENSION_PATH,
+    supabaseExtensionPath: process.env.OPENLINK_SUPABASE_EXTENSION_PATH,
   }
 }
 
@@ -604,7 +607,10 @@ class SdkAgentRuntime {
       cwd: this.worker.workspaceRoot,
       agentDir: this.worker.sessionRoot,
       noExtensions: true,
-      additionalExtensionPaths: this.worker.browserExtensionPath ? [this.worker.browserExtensionPath] : [],
+      additionalExtensionPaths: await availableExtensionPaths([
+        this.worker.browserExtensionPath,
+        this.worker.supabaseExtensionPath,
+      ]),
     })
     await resourceLoader.reload()
     const { session } = await createAgentSession({
@@ -621,6 +627,23 @@ class SdkAgentRuntime {
 }
 
 const worker = config()
+
+/** Extension paths may reference files that only exist after an image
+ * rebuild (for example the Supabase MCP bridge). Skip missing paths instead
+ * of failing the whole worker session. */
+async function availableExtensionPaths(paths: Array<string | undefined>): Promise<string[]> {
+  const resolved: string[] = []
+  for (const path of paths) {
+    if (!path) continue
+    try {
+      await access(path)
+      resolved.push(path)
+    } catch {
+      console.error(`OpenLink worker extension skipped (not found): ${path}`)
+    }
+  }
+  return resolved
+}
 const runtime = new SdkAgentRuntime(worker)
 const server = createServer((request, response) => {
   void (async () => {

@@ -18,6 +18,12 @@ export interface DesktopNodeSdkConfig {
   workerEntrypoint: string
   /** Local filesystem path to the browser Pi extension used by desktop workers. */
   browserExtensionPath?: string
+  /** Project-scoped Supabase MCP capability injected into desktop workers. */
+  supabaseMcp?: {
+    extensionPath: string
+    urlFor: (projectId: string) => string
+    tokenFor: (projectId: string) => string
+  }
   workspaceRoot: string
   storageRoot: string
   policy: AgentPolicy
@@ -114,7 +120,7 @@ export class DesktopSandboxRuntimeNodeBackend {
     private readonly config: DesktopNodeSdkConfig,
   ) {}
 
-  async createSession(userId: string, workspaceId: string, sessionId: string, runtimeConfiguration: AgentProviderRuntimeConfiguration, nativeSession?: AgentNativeSessionSnapshot, _projectId?: string, _projectRuntime?: ProjectRuntimeDescriptor, browserSession?: BrowserAgentSession): Promise<DesktopNodeSdkSession> {
+  async createSession(userId: string, workspaceId: string, sessionId: string, runtimeConfiguration: AgentProviderRuntimeConfiguration, nativeSession?: AgentNativeSessionSnapshot, projectId?: string, _projectRuntime?: ProjectRuntimeDescriptor, browserSession?: BrowserAgentSession): Promise<DesktopNodeSdkSession> {
     const releaseSandbox = await this.sandboxLease.acquire()
     let sandboxReleased = false
     const releaseSandboxOnce = async () => {
@@ -199,6 +205,11 @@ export class DesktopSandboxRuntimeNodeBackend {
         OPENLINK_BROWSER_SESSION_ID: browser.sessionId,
         OPENLINK_BROWSER_CONTROL_TOKEN: browser.controlToken,
         OPENLINK_BROWSER_EXTENSION_PATH: browser.extensionPath,
+      } : {}),
+      ...(projectId && this.config.supabaseMcp ? {
+        OPENLINK_SUPABASE_EXTENSION_PATH: this.config.supabaseMcp.extensionPath,
+        OPENLINK_SUPABASE_MCP_URL: this.config.supabaseMcp.urlFor(projectId),
+        OPENLINK_SUPABASE_MCP_TOKEN: this.config.supabaseMcp.tokenFor(projectId),
       } : {}),
     }
     const child = spawn(wrapped.argv[0]!, wrapped.argv.slice(1), {

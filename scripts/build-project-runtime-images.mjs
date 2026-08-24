@@ -30,6 +30,7 @@ const specs = [
       'services/agent-worker/package-lock.json',
       'services/agent-worker/dist',
       'services/agent-browser-extension/openlink-browser.ts',
+      'services/agent-supabase-extension/openlink-supabase.ts',
       'packages/pi-runtime/manifest.json',
       'packages/pi-runtime/tarballs',
     ],
@@ -39,6 +40,7 @@ const specs = [
       'services/agent-worker/package-lock.json',
       'services/agent-worker/dist',
       'services/agent-browser-extension/openlink-browser.ts',
+      'services/agent-supabase-extension/openlink-supabase.ts',
     ],
   },
   {
@@ -51,6 +53,7 @@ const specs = [
       'services/agent-rpc-worker/package-lock.json',
       'services/agent-rpc-worker/dist',
       'services/agent-browser-extension/openlink-browser.ts',
+      'services/agent-supabase-extension/openlink-supabase.ts',
       'packages/pi-runtime/manifest.json',
       'packages/pi-runtime/tarballs',
     ],
@@ -60,6 +63,7 @@ const specs = [
       'services/agent-rpc-worker/package-lock.json',
       'services/agent-rpc-worker/dist',
       'services/agent-browser-extension/openlink-browser.ts',
+      'services/agent-supabase-extension/openlink-supabase.ts',
     ],
   },
   {

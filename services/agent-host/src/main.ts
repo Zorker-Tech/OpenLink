@@ -6,6 +6,7 @@ import { startPromptHttpServer } from './prompt-http-server.js'
 import { createSupabaseProjectRuntimeStatusWriter } from './project-runtime-status.js'
 import { createSupabaseProjectRuntimeProvisioningQueue, createSupabaseSshProjectRuntimeProvisioningQueue, ProjectRuntimeProvisioner } from './project-runtime-provisioner.js'
 import { ProjectRuntimeRouter, RemoteProjectRuntimeFactory, SupabaseProjectExecutionTargetProvider } from './project-runtime-router.js'
+import { mintSupabaseMcpToken } from './supabase-mcp.js'
 
 function required(env: NodeJS.ProcessEnv, key: string): string {
   const value = env[key]?.trim()
@@ -144,6 +145,11 @@ const backend = new LocalOpenSandboxBackend({
   sessionTtlSeconds: null,
   networkDefaultAction: networkDefaultAction(env.OPENLINK_AGENT_NETWORK_DEFAULT_ACTION),
   allowUnsafeRootlessCredentials: env.OPENLINK_ALLOW_UNSAFE_ROOTLESS_PROVIDER_CREDENTIALS === '1',
+  supabaseMcp: {
+    extensionPath: '/opt/openlink/agent-worker/extensions/openlink-supabase.ts',
+    urlFor: (projectId) => `http://127.0.0.1:${port}/v1/projects/${projectId}/supabase/mcp`,
+    tokenFor: (projectId) => mintSupabaseMcpToken(apiToken, projectId),
+  },
 })
 const runtime = await startPromptHttpServer({
   host,

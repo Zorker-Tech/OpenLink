@@ -2,6 +2,7 @@ import { SandboxManager } from '@anthropic-ai/sandbox-runtime'
 import { resolve } from 'node:path'
 import { DesktopSandboxRuntimeNodeBackend } from './backends/local-sandbox-runtime-sdk.js'
 import { startPromptHttpServer } from './prompt-http-server.js'
+import { mintSupabaseMcpToken } from './supabase-mcp.js'
 
 function required(env: NodeJS.ProcessEnv, key: string): string {
   const value = env[key]?.trim()
@@ -46,6 +47,11 @@ const backend = new DesktopSandboxRuntimeNodeBackend(SandboxManager, {
   nodeExecutable: env.OPENLINK_NODE_EXECUTABLE || process.execPath,
   workerEntrypoint: resolve(env.OPENLINK_AGENT_WORKER_ENTRYPOINT || '../agent-worker/dist/main.js'),
   browserExtensionPath: resolve(env.OPENLINK_AGENT_BROWSER_EXTENSION_PATH || '../agent-browser-extension/openlink-browser.ts'),
+  supabaseMcp: {
+    extensionPath: resolve(env.OPENLINK_AGENT_SUPABASE_EXTENSION_PATH || '../agent-supabase-extension/openlink-supabase.ts'),
+    urlFor: (projectId) => `http://127.0.0.1:${port}/v1/projects/${projectId}/supabase/mcp`,
+    tokenFor: (projectId) => mintSupabaseMcpToken(apiToken, projectId),
+  },
   workspaceRoot,
   storageRoot,
   policy: {
