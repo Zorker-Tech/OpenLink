@@ -3,6 +3,7 @@ import type { OpenLinkAgentEvent } from '@/lib/agent-runtime/events'
 import { randomBytes } from 'node:crypto'
 import { resolveAgentProviderRuntimeConfiguration } from '@/lib/ai-provider-configurations.server'
 import {
+  findFirstPersistedUserMessage,
   nextChatEventSequence,
   loadPiSessionSnapshot,
   parsePiSessionDelta,
@@ -17,6 +18,16 @@ export const runtime = 'nodejs'
 const encoder = new TextEncoder()
 const CHAT_SESSION_LEASE_TTL_SECONDS = 1_800
 const CHAT_SESSION_LEASE_HEARTBEAT_MS = 60_000
+
+function singleEventResponse(event: OpenLinkAgentEvent) {
+  return new Response(`${JSON.stringify(event)}\n`, {
+    headers: {
+      'Cache-Control': 'no-cache, no-transform',
+      'Content-Type': 'application/x-ndjson; charset=utf-8',
+      'X-OpenLink-Idempotent-Replay': '1',
+    },
+  })
+}
 
 function agentHostConfig() {
   const baseUrl = process.env.OPENLINK_AGENT_HOST_URL?.replace(/\/$/, '')
@@ -40,21 +51,50 @@ export async function POST(
   const session = await getChatSession(supabase, user.id, sessionId)
   if (!session) return Response.json({ error: 'SESSION_NOT_FOUND' }, { status: 404 })
 
-  let body: { message?: unknown; startSequence?: unknown; model?: unknown; browserSessionId?: unknown }
+  let body: { message?: unknown; startSequence?: unknown; model?: unknown; browserSessionId?: unknown; requestKind?: unknown }
   try {
-    body = await request.json() as { message?: unknown; startSequence?: unknown; model?: unknown }
+    body = await request.json() as {
+      message?: unknown
+      startSequence?: unknown
+      model?: unknown
+      browserSessionId?: unknown
+      requestKind?: unknown
+    }
   } catch {
     return Response.json({ error: 'INVALID_BODY' }, { status: 400 })
   }
 
   const message = typeof body.message === 'string' ? body.message.trim().slice(0, 10_000) : ''
   if (!message) return Response.json({ error: 'MESSAGE_REQUIRED' }, { status: 400 })
+  const requestKind = body.requestKind === undefined || body.requestKind === 'message'
+    ? 'message'
+    : body.requestKind === 'initial-prompt'
+      ? 'initial-prompt'
+      : null
+  if (!requestKind) return Response.json({ error: 'INVALID_REQUEST_KIND' }, { status: 400 })
+  if (requestKind === 'initial-prompt' && message !== session.initial_prompt.trim().slice(0, 10_000)) {
+    return Response.json({ error: 'INITIAL_PROMPT_MISMATCH' }, { status: 400 })
+  }
   const browserSessionId = body.browserSessionId === undefined
     ? undefined
     : typeof body.browserSessionId === 'string' && /^[A-Za-z0-9_-]{8,128}$/.test(body.browserSessionId)
       ? body.browserSessionId
       : null
   if (body.browserSessionId !== undefined && !browserSessionId) return Response.json({ error: 'INVALID_BROWSER_SESSION' }, { status: 400 })
+
+  // `?run=1` is a one-shot instruction attached to the newly-created chat
+  // URL. A browser remount or frontend restart can replay that URL after the
+  // first turn is already durable. Return the canonical user event instead of
+  // invoking Agent Host again. The lease-protected check below closes the race
+  // between this fast path and another request persisting the first turn.
+  if (requestKind === 'initial-prompt') {
+    try {
+      const persisted = await findFirstPersistedUserMessage(supabase, user.id, sessionId)
+      if (persisted) return singleEventResponse(persisted)
+    } catch {
+      return Response.json({ error: 'SESSION_EVENTS_READ_FAILED' }, { status: 500 })
+    }
+  }
   let requestedModel: { providerId: string; modelId: string } | null = session.provider_id && session.model_id
     ? { providerId: session.provider_id, modelId: session.model_id }
     : null
@@ -106,6 +146,19 @@ export async function POST(
         p_holder_id: leaseHolder,
       })
     if (error) console.error('OpenLink chat session lease release failed', error)
+  }
+
+  if (requestKind === 'initial-prompt') {
+    try {
+      const persisted = await findFirstPersistedUserMessage(supabase, user.id, sessionId)
+      if (persisted) {
+        await releaseLease()
+        return singleEventResponse(persisted)
+      }
+    } catch {
+      await releaseLease()
+      return Response.json({ error: 'SESSION_EVENTS_READ_FAILED' }, { status: 500 })
+    }
   }
 
   const { error: touchError } = await supabase

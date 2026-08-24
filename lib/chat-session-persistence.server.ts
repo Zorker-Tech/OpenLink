@@ -85,6 +85,26 @@ export async function persistChatEvents(
   if (error) throw error
 }
 
+export async function findFirstPersistedUserMessage(
+  supabase: ServerSupabaseClient,
+  userId: string,
+  sessionId: string,
+): Promise<OpenLinkAgentEvent | null> {
+  const { data, error } = await supabase
+    .schema('openlink')
+    .from('chat_session_events')
+    .select('payload')
+    .eq('session_id', sessionId)
+    .eq('user_id', userId)
+    .eq('event_type', 'message.user')
+    .order('sequence', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  const payload = (data as { payload?: unknown } | null)?.payload
+  return isOpenLinkAgentEvent(payload) && payload.type === 'message.user' ? payload : null
+}
+
 export async function persistPiSessionDelta(
   supabase: ServerSupabaseClient,
   userId: string,
