@@ -1,7 +1,9 @@
 import { execFile as execFileCallback, spawn } from 'node:child_process'
-import { access, mkdir, open, readFile, rm, statfs, writeFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { access, chmod, lstat, mkdir, mkdtemp, open, readFile, rename, rm, statfs, writeFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:net'
-import { dirname, resolve } from 'node:path'
+import { tmpdir } from 'node:os'
+import { basename, dirname, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { AgentHostError } from './errors.js'
 
@@ -129,13 +131,14 @@ interface DirectAppleHvState {
   createdAt: string
 }
 
-async function runCommand(command: string, args: string[]): Promise<ProjectVmCommandResult> {
+async function runCommand(command: string, args: string[], timeout?: number): Promise<ProjectVmCommandResult> {
   try {
     const result = await execFile(command, args, {
       shell: false,
       windowsHide: true,
       maxBuffer: 8 * 1024 * 1024,
       encoding: 'utf8',
+      ...(timeout === undefined ? {} : { timeout, killSignal: 'SIGTERM' as const }),
     })
     return { stdout: result.stdout, stderr: result.stderr }
   } catch (error) {
@@ -208,6 +211,7 @@ function shellQuote(value: string): string {
 // address. Each Project owns a separate gvproxy network, so reusing it across
 // independent processes does not create a layer-2 collision.
 const APPLEHV_MAC_ADDRESS = '5a:94:ef:e4:0c:ee'
+const APPLEHV_GRACEFUL_SHUTDOWN_TIMEOUT_MS = 60_000
 
 async function closeServer(server: Server | undefined): Promise<void> {
   if (!server?.listening) return
@@ -249,6 +253,166 @@ async function waitForProcessExit(pid: number, timeoutMs = 5_000): Promise<void>
 
 const THICK_DISK_SAFETY_BYTES = 2 * 1024 * 1024 * 1024
 const DISK_COPY_BUFFER_BYTES = 16 * 1024 * 1024
+const PODMAN_INIT_PLACEHOLDER_BYTES = 4_096
+const PODMAN_EXPANDED_PLACEHOLDER_MAX_ALLOCATION_BYTES = 512 * 1024 * 1024
+const THIN_DISK_MATERIALIZATION_RATIO = 0.9
+const THIN_DISK_ALLOCATION_TOLERANCE_BYTES = 512 * 1024 * 1024
+
+function diskAllocatedBytes(stats: { blocks: number }): number {
+  const allocated = Number(stats.blocks) * 512
+  if (!Number.isSafeInteger(allocated) || allocated < 0) {
+    throw new AgentHostError('PROVISIONING_FAILED', 'Host filesystem did not expose valid Project VM disk allocation metadata', { retryable: true })
+  }
+  return allocated
+}
+
+async function validatePodmanDiskPlaceholder(path: string, expandedLogicalBytes?: number): Promise<void> {
+  const stats = await lstat(path).catch((error) => {
+    throw new AgentHostError(
+      'PROVISIONING_FAILED',
+      `Podman Project VM disk placeholder is unavailable at ${path}: ${error instanceof Error ? error.message : String(error)}`,
+      { retryable: true },
+    )
+  })
+  if (!stats.isFile() || stats.isSymbolicLink()) {
+    throw new AgentHostError('PROVISIONING_FAILED', `Podman Project VM disk placeholder is not a regular file: ${path}`, { retryable: true })
+  }
+  const allowedLogicalSizes = new Set([PODMAN_INIT_PLACEHOLDER_BYTES])
+  if (expandedLogicalBytes !== undefined) allowedLogicalSizes.add(expandedLogicalBytes)
+  if (!allowedLogicalSizes.has(stats.size)) {
+    throw new AgentHostError(
+      'PROVISIONING_FAILED',
+      `Podman Project VM disk placeholder has unexpected logical size ${stats.size}; expected ${[...allowedLogicalSizes].join(' or ')}`,
+      { retryable: true },
+    )
+  }
+  if ((stats.mode & 0o022) !== 0) {
+    throw new AgentHostError('PROVISIONING_FAILED', `Podman Project VM disk placeholder is group/world writable: ${path}`, { retryable: true })
+  }
+  const allocated = diskAllocatedBytes(stats)
+  if (allocated > PODMAN_EXPANDED_PLACEHOLDER_MAX_ALLOCATION_BYTES) {
+    throw new AgentHostError(
+      'PROVISIONING_FAILED',
+      `Podman Project VM disk placeholder materialized unexpectedly (${allocated}/${stats.size} allocated bytes)`,
+      { retryable: true },
+    )
+  }
+}
+
+/**
+ * Publish a native CoW clone over Podman's tiny initialization disk.
+ *
+ * Thin mode is deliberately fail-closed: unsupported filesystems, sparse-hole
+ * materialization and partial clones never become bootable Project VM disks.
+ */
+export async function cloneThinProjectVmDisk(source: string, destination: string): Promise<void> {
+  const sourcePath = resolve(source)
+  const destinationPath = resolve(destination)
+  if (sourcePath === destinationPath) {
+    throw new AgentHostError('PROVISIONING_FAILED', 'Project VM Golden Disk and destination must be different files', { retryable: false })
+  }
+  if (process.platform !== 'darwin' && process.platform !== 'linux') {
+    throw new AgentHostError('BACKEND_NOT_CONFIGURED', `Thin Project VM disks are not supported on ${process.platform}`)
+  }
+
+  const sourceStats = await lstat(sourcePath).catch((error) => {
+    throw new AgentHostError(
+      'PROVISIONING_FAILED',
+      `Project VM Golden Disk is unavailable at ${sourcePath}: ${error instanceof Error ? error.message : String(error)}`,
+      { retryable: true },
+    )
+  })
+  if (!sourceStats.isFile() || sourceStats.isSymbolicLink()) {
+    throw new AgentHostError('PROVISIONING_FAILED', `Project VM Golden Disk is not a regular file: ${sourcePath}`, { retryable: false })
+  }
+  if (sourceStats.size <= 0) {
+    throw new AgentHostError('PROVISIONING_FAILED', 'Project VM Golden Disk is empty', { retryable: false })
+  }
+
+  await validatePodmanDiskPlaceholder(destinationPath, sourceStats.size)
+  const destinationStats = await lstat(destinationPath)
+  if (sourceStats.dev !== destinationStats.dev) {
+    throw new AgentHostError(
+      'PROVISIONING_FAILED',
+      'Thin Project VM Golden Disk and Podman data root must be on the same copy-on-write filesystem',
+      { retryable: true },
+    )
+  }
+  if (sourceStats.dev === destinationStats.dev && sourceStats.ino === destinationStats.ino) {
+    throw new AgentHostError('PROVISIONING_FAILED', 'Project VM Golden Disk and destination resolve to the same file', { retryable: false })
+  }
+
+  const sourceAllocated = diskAllocatedBytes(sourceStats)
+  if (sourceAllocated >= sourceStats.size * THIN_DISK_MATERIALIZATION_RATIO) {
+    throw new AgentHostError(
+      'PROVISIONING_FAILED',
+      `Project VM Golden Disk is not thin (${sourceAllocated}/${sourceStats.size} allocated bytes)`,
+      { retryable: false },
+    )
+  }
+
+  const staging = resolve(dirname(destinationPath), `.${basename(destinationPath)}.clone-${process.pid}-${randomUUID()}.tmp`)
+  let published = false
+  try {
+    const args = process.platform === 'darwin'
+      ? ['-c', sourcePath, staging]
+      : ['--reflink=always', '--sparse=always', sourcePath, staging]
+    await runCommand('/bin/cp', args)
+    await chmod(staging, 0o600)
+
+    const stagingStats = await lstat(staging)
+    if (!stagingStats.isFile() || stagingStats.isSymbolicLink()) {
+      throw new AgentHostError('PROVISIONING_FAILED', 'Native Project VM clone did not produce a regular staging file', { retryable: true })
+    }
+    if (stagingStats.size !== sourceStats.size) {
+      throw new AgentHostError(
+        'PROVISIONING_FAILED',
+        `Native Project VM clone has unexpected logical size ${stagingStats.size}; expected ${sourceStats.size}`,
+        { retryable: true },
+      )
+    }
+    const stagingAllocated = diskAllocatedBytes(stagingStats)
+    const allocationTolerance = Math.max(THIN_DISK_ALLOCATION_TOLERANCE_BYTES, Math.ceil(sourceAllocated * 0.1))
+    if (stagingAllocated >= stagingStats.size * THIN_DISK_MATERIALIZATION_RATIO
+      || stagingAllocated > sourceAllocated + allocationTolerance) {
+      throw new AgentHostError(
+        'PROVISIONING_FAILED',
+        `Native Project VM clone materialized unexpectedly (${stagingAllocated}/${stagingStats.size} allocated bytes; source ${sourceAllocated})`,
+        { retryable: true },
+      )
+    }
+
+    const stagingHandle = await open(staging, 'r+')
+    try {
+      await stagingHandle.sync()
+    } finally {
+      await stagingHandle.close()
+    }
+    await rename(staging, destinationPath)
+    published = true
+
+    // The file fsync above protects clone contents. Syncing the directory also
+    // protects the atomic name replacement where the host filesystem permits
+    // directory fsync; providers which reject it still retain atomic rename.
+    const parentHandle = await open(dirname(destinationPath), 'r').catch(() => undefined)
+    if (parentHandle) {
+      try {
+        await parentHandle.sync().catch(() => undefined)
+      } finally {
+        await parentHandle.close().catch(() => undefined)
+      }
+    }
+  } catch (error) {
+    if (error instanceof AgentHostError) throw error
+    throw new AgentHostError(
+      'PROVISIONING_FAILED',
+      `Project VM base disk must support native copy-on-write cloning: ${error instanceof Error ? error.message : String(error)}`,
+      { retryable: true },
+    )
+  } finally {
+    if (!published) await rm(staging, { force: true }).catch(() => undefined)
+  }
+}
 
 async function materializeIndependentDisk(source: string, destination: string): Promise<void> {
   const input = await open(source, 'r')
@@ -322,24 +486,7 @@ export class PodmanMachineDriver implements ProjectVmMachineDriver {
     this.bootstrapEnabled = options.bootstrap ?? true
     this.rootfulPodman = options.rootfulPodman ?? false
     this.projectBaseDisk = options.projectBaseDisk
-    this.cloneDisk = options.cloneDisk ?? (async (source, destination) => {
-      try {
-        // Node's copyFile(FICLONE_FORCE) returns ENOSYS on some APFS volumes
-        // even though clonefile(2) is supported. BSD `cp -c` is the native
-        // clonefile path; GNU cp uses an explicit reflink and never silently
-        // falls back to a byte copy.
-        const args = process.platform === 'darwin'
-          ? ['-c', '-f', source, destination]
-          : ['--reflink=always', '--sparse=always', '--force', source, destination]
-        await runCommand('/bin/cp', args)
-      } catch (error) {
-        throw new AgentHostError(
-          'PROVISIONING_FAILED',
-          `Project VM base disk must support copy-on-write cloning: ${error instanceof Error ? error.message : String(error)}`,
-          { retryable: true },
-        )
-      }
-    })
+    this.cloneDisk = options.cloneDisk ?? cloneThinProjectVmDisk
     this.materializeDisk = options.materializeDisk ?? materializeIndependentDisk
     this.resolveMachineDiskPath = options.machineDiskPath ?? ((name) => {
       const dataRoot = process.env.XDG_DATA_HOME?.trim()
@@ -386,11 +533,11 @@ export class PodmanMachineDriver implements ProjectVmMachineDriver {
         // machine config/Ignition against a tiny local placeholder, then
         // replace its target disk with an APFS copy-on-write clone of the
         // immutable OpenLink base before the first boot.
-        const placeholder = `${this.projectBaseDisk}.podman-init-placeholder.raw`
-        await writeFile(placeholder, Buffer.alloc(4_096), { flag: 'wx', mode: 0o600 }).catch((error: NodeJS.ErrnoException) => {
-          if (error.code !== 'EEXIST') throw error
-        })
+        const placeholderRoot = await mkdtemp(resolve(tmpdir(), 'openlink-podman-init-'))
+        const placeholder = resolve(placeholderRoot, 'placeholder.raw')
         try {
+          await writeFile(placeholder, Buffer.alloc(PODMAN_INIT_PLACEHOLDER_BYTES), { flag: 'wx', mode: 0o600 })
+          await validatePodmanDiskPlaceholder(placeholder)
           await this.run(this.command, [
             'machine', 'init', '--image', placeholder,
             ...(this.rootfulPodman ? ['--rootful'] : []),
@@ -403,17 +550,15 @@ export class PodmanMachineDriver implements ProjectVmMachineDriver {
           const inspectedDestination = machineDiskPath(created.stdout)
           const destination = inspectedDestination ?? this.resolveMachineDiskPath(name)
           if (!destination) throw new AgentHostError('PROVISIONING_FAILED', `Podman machine ${name} did not expose its disk path`, { retryable: true })
-          if (!inspectedDestination) {
-            await access(destination).catch(() => {
-              throw new AgentHostError('PROVISIONING_FAILED', `Podman machine ${name} disk does not exist at ${destination}`, { retryable: true })
-            })
-          }
+          await validatePodmanDiskPlaceholder(destination, spec.diskGb * 1024 * 1024 * 1024)
           if (spec.diskMode === 'thin') await this.cloneDisk(this.projectBaseDisk, destination)
           else await this.materializeDisk(this.projectBaseDisk, destination)
           await this.startMachine(name)
         } catch (error) {
           await this.run(this.command, ['machine', 'rm', '--force', name]).catch(() => undefined)
           throw error
+        } finally {
+          await rm(placeholderRoot, { recursive: true, force: true }).catch(() => undefined)
         }
       } else {
         await this.run(this.command, [
@@ -526,6 +671,29 @@ export class PodmanMachineDriver implements ProjectVmMachineDriver {
       return
     }
     await this.run(this.command, ['machine', 'cp', sourcePath, `${name}:${destinationPath}`])
+  }
+
+  private async removeIgnitionFirstbootKarg(name: string): Promise<void> {
+    // A Project VM is a Golden Disk clone, so `bootc install` bakes
+    // `ignition.firstboot` into the BLS entries so the first boot provisions
+    // the unique machine identity. Fedora CoreOS normally consumes that karg
+    // after the first boot, but on a cloned disk the durable bootloader
+    // still carries it, which makes the second boot re-run Ignition without
+    // an injected config and stall sshd. Remove the karg once first-boot SSH
+    // is proven so subsequent power cycles boot the already-provisioned OS.
+    await this.runInMachine(name, 'bash', ['-lc', [
+      'set -e',
+      'if command -v grubby >/dev/null 2>&1; then',
+      '  grubby --remove-args=ignition.firstboot --update-kernel=ALL',
+      'else',
+      '  mount -o remount,rw /boot || true',
+      '  for entry in /boot/loader/entries/*.conf; do',
+      '    [ -e "$entry" ] || continue',
+      "    sed -i -E 's/(^|[[:space:]])ignition\\.firstboot([[:space:]]|$)/\\1\\2/g' \"$entry\"",
+      '  done',
+      '  mount -o remount,ro /boot || true',
+      'fi',
+    ].join('\n')])
   }
 
   async stopMachine(name: string): Promise<void> {
@@ -705,12 +873,13 @@ export class PodmanMachineDriver implements ProjectVmMachineDriver {
       }
       const firstBootMarker = resolve(stateDirectory, 'first-boot-complete')
       const hasDirectBootMarker = await access(firstBootMarker).then(() => true).catch(() => false)
+      const isFirstBoot = !hasDirectBootMarker && !appleHvMachineHasBooted(config)
       // Podman may have booted this Project VM before the runtime was upgraded
       // to direct AppleHV process management. In that case the per-driver
       // marker does not exist, but replaying Ignition against an already
       // provisioned Fedora CoreOS disk is incorrect. LastUp is Podman's
       // durable first-boot authority; the zero Go timestamp means never booted.
-      if (!hasDirectBootMarker && !appleHvMachineHasBooted(config)) {
+      if (isFirstBoot) {
         const ignition = resolve(this.appleHvConfigRoot(), `${name}.ign`)
         if (await access(ignition).then(() => true).catch(() => false)) vfkitArgs.push('--ignition', ignition)
       }
@@ -720,6 +889,7 @@ export class PodmanMachineDriver implements ProjectVmMachineDriver {
       vfkit.unref()
       await writeFile(statePath, `${JSON.stringify({ machineName: name, vfkitPid: vfkit.pid, gvproxyPid: gvproxy.pid, createdAt: new Date().toISOString() } satisfies DirectAppleHvState)}\n`, { mode: 0o600 })
       await this.waitForAppleHvSsh(config, vfkit.pid)
+      if (isFirstBoot) await this.removeIgnitionFirstbootKarg(name)
       await closeServer(readyServer)
       readyServer = undefined
       await writeFile(firstBootMarker, `${new Date().toISOString()}\n`, { mode: 0o600 })
@@ -752,11 +922,33 @@ export class PodmanMachineDriver implements ProjectVmMachineDriver {
     const statePath = resolve(this.appleHvStateDirectory(name), 'processes.json')
     const state = await readFile(statePath, 'utf8').then((value) => JSON.parse(value) as DirectAppleHvState).catch(() => undefined)
     if (!state) return
-    for (const pid of [state.vfkitPid, state.gvproxyPid]) {
-      if (!processIsRunning(pid)) continue
-      process.kill(pid, 'SIGTERM')
-      await waitForProcessExit(pid)
-      if (processIsRunning(pid)) process.kill(pid, 'SIGKILL')
+
+    // A direct vfkit SIGTERM is equivalent to pulling power from the guest.
+    // Besides forcing PostgreSQL crash recovery, it can leave /boot journal
+    // state unreadable to firmware/GRUB on the next launch. Ask systemd to
+    // stop containers and unmount filesystems first; SSH normally disconnects
+    // as shutdown begins, so command failure here is expected. A bounded hard
+    // stop remains necessary for a wedged or never-booted guest.
+    if (processIsRunning(state.vfkitPid)) {
+      const config = await this.appleHvMachineConfig(name).catch(() => undefined)
+      if (config) {
+        await runCommand('/usr/bin/ssh', [
+          ...this.appleHvSshOptions(config),
+          `${this.appleHvRemoteUsername(config)}@127.0.0.1`,
+          this.rootfulPodman ? 'systemctl poweroff' : 'sudo -n systemctl poweroff',
+        ], 10_000).catch(() => undefined)
+        await waitForProcessExit(state.vfkitPid, APPLEHV_GRACEFUL_SHUTDOWN_TIMEOUT_MS)
+      }
+      if (processIsRunning(state.vfkitPid)) {
+        process.kill(state.vfkitPid, 'SIGTERM')
+        await waitForProcessExit(state.vfkitPid)
+        if (processIsRunning(state.vfkitPid)) process.kill(state.vfkitPid, 'SIGKILL')
+      }
+    }
+    if (processIsRunning(state.gvproxyPid)) {
+      process.kill(state.gvproxyPid, 'SIGTERM')
+      await waitForProcessExit(state.gvproxyPid)
+      if (processIsRunning(state.gvproxyPid)) process.kill(state.gvproxyPid, 'SIGKILL')
     }
     await rm(statePath, { force: true })
   }
@@ -850,9 +1042,10 @@ export class ProjectVmManager {
     const projectStateRoot = resolve(this.stateRoot, 'projects', projectId)
     const descriptorPath = resolve(projectStateRoot, 'runtime.json')
     const machineSpec = { ...this.machineSpec, ...overrides }
+    let persisted: Record<string, unknown> | undefined
     await mkdir(projectStateRoot, { recursive: true, mode: 0o700 })
     try {
-      const persisted = JSON.parse(await readFile(descriptorPath, 'utf8')) as Record<string, unknown>
+      persisted = JSON.parse(await readFile(descriptorPath, 'utf8')) as Record<string, unknown>
       const persistedMode = persisted.diskMode === 'thick' ? 'thick' : 'thin'
       if (persistedMode !== machineSpec.diskMode) {
         throw new AgentHostError(
@@ -880,7 +1073,15 @@ export class ProjectVmManager {
       diskMode: machineSpec.diskMode,
       status: 'ready',
     }
-    await writeFile(resolve(this.stateRoot, 'projects', projectId, 'runtime.json'), `${JSON.stringify(descriptor)}\n`, { mode: 0o600 })
+    // ProjectRuntimeManager owns additional durable data in this descriptor
+    // (service ports, public endpoints, and the browser-safe Supabase
+    // descriptor).  Reattaching a VM after an Agent Host restart must not
+    // erase that state before the higher-level manager can validate it.
+    await writeFile(resolve(this.stateRoot, 'projects', projectId, 'runtime.json'), `${JSON.stringify({
+      ...persisted,
+      ...descriptor,
+      status: 'ready',
+    })}\n`, { mode: 0o600 })
     return descriptor
   }
 

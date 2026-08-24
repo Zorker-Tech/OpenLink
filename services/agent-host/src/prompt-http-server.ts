@@ -5,7 +5,7 @@ import { isIP } from 'node:net'
 import type { AgentExtensionUiResponse, AgentNativeSessionSnapshot, AgentProviderRuntimeConfiguration } from './contracts.js'
 import { AgentHostError } from './errors.js'
 import { isProjectId, type ProjectVmManager } from './project-vm.js'
-import type { ProjectRuntimeDescriptor } from './project-runtime.js'
+import type { ProjectRuntimeDescriptor, ProjectSupabaseManagementRequest, ProjectSupabaseStudioProxyRequest } from './project-runtime.js'
 import type { ProjectRuntimeController } from './project-runtime-router.js'
 import { BrowserHostClient, type BrowserAgentSession } from './browser-client.js'
 import { BrowserGateway } from './browser-gateway.js'
@@ -77,6 +77,43 @@ interface NetworkAccessBody {
   hosts: string[]
   mode: 'temporary' | 'persistent'
   durationSeconds?: number
+}
+
+function parseProjectSupabaseManagementBody(value: unknown): ProjectSupabaseManagementRequest {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new AgentHostError('INVALID_BODY', 'management body is invalid')
+  const body = value as Record<string, unknown>
+  const operations = new Set<ProjectSupabaseManagementRequest['operation']>(['tables', 'database', 'query', 'auth-users', 'storage-buckets', 'functions', 'realtime', 'services', 'logs'])
+  if (typeof body.operation !== 'string' || !operations.has(body.operation as ProjectSupabaseManagementRequest['operation'])) throw new AgentHostError('INVALID_BODY', 'management operation is invalid')
+  if (body.query !== undefined && (typeof body.query !== 'string' || body.query.length > 12_000)) throw new AgentHostError('INVALID_BODY', 'management query is invalid')
+  if (body.service !== undefined && (typeof body.service !== 'string' || !/^[a-z0-9-]{1,63}$/.test(body.service))) throw new AgentHostError('INVALID_BODY', 'management service is invalid')
+  return {
+    operation: body.operation as ProjectSupabaseManagementRequest['operation'],
+    ...(body.query !== undefined ? { query: body.query } : {}),
+    ...(body.service !== undefined ? { service: body.service } : {}),
+  }
+}
+
+function parseProjectSupabaseStudioProxyBody(value: unknown): ProjectSupabaseStudioProxyRequest {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new AgentHostError('INVALID_BODY', 'Studio proxy body is invalid')
+  const body = value as Record<string, unknown>
+  const methods = new Set<ProjectSupabaseStudioProxyRequest['method']>(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'])
+  if (typeof body.method !== 'string' || !methods.has(body.method as ProjectSupabaseStudioProxyRequest['method'])) throw new AgentHostError('INVALID_BODY', 'Studio proxy method is invalid')
+  if (typeof body.path !== 'string' || !body.path.startsWith('/') || body.path.length > 12_000 || /[\u0000-\u001f\\]/.test(body.path)) throw new AgentHostError('INVALID_BODY', 'Studio proxy path is invalid')
+  if (body.bodyBase64 !== undefined && (typeof body.bodyBase64 !== 'string' || body.bodyBase64.length > 5_600_000 || !/^[A-Za-z0-9_-]*$/.test(body.bodyBase64))) throw new AgentHostError('INVALID_BODY', 'Studio proxy body is invalid')
+  const headers: Record<string, string> = {}
+  if (body.headers !== undefined) {
+    if (!body.headers || typeof body.headers !== 'object' || Array.isArray(body.headers)) throw new AgentHostError('INVALID_BODY', 'Studio proxy headers are invalid')
+    for (const [name, candidate] of Object.entries(body.headers)) {
+      if (!/^[a-z][a-z0-9-]{0,63}$/i.test(name) || typeof candidate !== 'string' || candidate.length > 4_096 || /[\r\n\u0000]/.test(candidate)) throw new AgentHostError('INVALID_BODY', 'Studio proxy header is invalid')
+      headers[name.toLowerCase()] = candidate
+    }
+  }
+  return {
+    method: body.method as ProjectSupabaseStudioProxyRequest['method'],
+    path: body.path,
+    ...(Object.keys(headers).length ? { headers } : {}),
+    ...(body.bodyBase64 ? { bodyBase64: body.bodyBase64 } : {}),
+  }
 }
 
 interface SessionEntry {
@@ -541,10 +578,10 @@ export async function startPromptHttpServer(
     // resource-creating side effect.
     const browser = input.browserSessionId
       ? browserGateway.getAgentSession(input.browserSessionId, {
-          ownerId: input.userId,
-          workspaceId: input.workspaceId,
-          projectId: input.projectId,
-        })
+        ownerId: input.userId,
+        workspaceId: input.workspaceId,
+        projectId: input.projectId,
+      })
       : undefined
     let projectRuntime: ProjectRuntimeDescriptor | undefined
     if (config.projectRuntimeManager) {
@@ -756,7 +793,7 @@ export async function startPromptHttpServer(
   ): Promise<void> {
     if (!config.projectRuntimeManager) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project runtime manager is required')
     const body = parseBrowserSessionBody(await readJson(request))
-    const runtime = await config.projectRuntimeManager.ensure(projectId)
+    const runtime = await config.projectRuntimeManager.ensure(projectId, 'thin')
     const browser = new BrowserHostClient({ baseUrl: runtime.browserHostEndpoint, serviceToken: runtime.browserApiToken })
     const session = await browser.createSession({
       ownerId: body.ownerId,
@@ -800,6 +837,51 @@ export async function startPromptHttpServer(
         sandboxId: target.sandboxId,
       },
     })
+  }
+
+  // Exposes only the safe, publishable Project Supabase connection material
+  // (gateway URL + publishable/anon key + revision). The service-role key and
+  // database password are never stored on the descriptor, so this endpoint
+  // cannot leak administrative credentials to the browser or the Agent.
+  async function handleProjectSupabase(
+    response: import('node:http').ServerResponse,
+    projectId: string,
+  ): Promise<void> {
+    if (!config.projectRuntimeManager) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project runtime manager is required')
+    const supabase = config.projectRuntimeManager.describeSupabase
+      ? await config.projectRuntimeManager.describeSupabase(projectId)
+      : (await config.projectRuntimeManager.ensure(projectId, 'thin')).supabase
+    if (!supabase) {
+      json(response, 200, { supabase: null })
+      return
+    }
+    json(response, 200, {
+      supabase: {
+        url: supabase.url,
+        publishableKey: supabase.publishableKey,
+        anonKey: supabase.anonKey,
+        revision: supabase.revision,
+      },
+    })
+  }
+
+  async function handleProjectSupabaseManagement(
+    request: IncomingMessage,
+    response: import('node:http').ServerResponse,
+    projectId: string,
+  ): Promise<void> {
+    if (!config.projectRuntimeManager?.manageSupabase) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project Supabase management is not configured')
+    const body = parseProjectSupabaseManagementBody(await readJson(request))
+    json(response, 200, await config.projectRuntimeManager.manageSupabase(projectId, body))
+  }
+
+  async function handleProjectSupabaseStudioProxy(
+    request: IncomingMessage,
+    response: import('node:http').ServerResponse,
+    projectId: string,
+  ): Promise<void> {
+    if (!config.projectRuntimeManager?.proxySupabaseStudio) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project Supabase Studio proxy is not configured')
+    json(response, 200, await config.projectRuntimeManager.proxySupabaseStudio(projectId, parseProjectSupabaseStudioProxyBody(await readJson(request))))
   }
 
   async function handleProjectGitVersions(
@@ -1015,42 +1097,42 @@ export async function startPromptHttpServer(
         }
         creatingSessions += 1
         try {
-        const body = parseProviderCheckBody(await readJson(request))
-        const sessionId = `provider-check-${randomBytes(8).toString('hex')}`
-        let projectRuntime: ProjectRuntimeDescriptor | undefined
-        if (config.projectRuntimeManager) {
-          projectRuntime = await config.projectRuntimeManager.ensure(body.projectId)
-          await config.projectRuntimeManager.prepareSessionStorage(body.projectId, body.userId, body.workspaceId, sessionId)
-        } else if (config.requireProjectRuntime) {
-          throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project runtime manager is required')
-        }
-        const runtime = await backend.createSession(body.userId, body.workspaceId, sessionId, body.runtimeConfiguration, undefined, body.projectId, projectRuntime)
-        try {
-          const upstream = await runtime.prompt('Reply with exactly the word OK.', AbortSignal.timeout(90_000))
-          if (!upstream.ok || !upstream.body) throw new AgentHostError('PI_PROMPT_FAILED', 'Provider check request failed')
-          const output = await upstream.text()
-          if (/"type"\s*:\s*"extension_error"/.test(output) || /"stopReason"\s*:\s*"error"/.test(output)) {
-            const detail = providerCheckFailureDetail(output, body.runtimeConfiguration.apiKey)
-            throw new AgentHostError('PI_PROMPT_FAILED', detail ? `The model provider rejected the connectivity check: ${detail}` : 'The model provider rejected the connectivity check')
+          const body = parseProviderCheckBody(await readJson(request))
+          const sessionId = `provider-check-${randomBytes(8).toString('hex')}`
+          let projectRuntime: ProjectRuntimeDescriptor | undefined
+          if (config.projectRuntimeManager) {
+            projectRuntime = await config.projectRuntimeManager.ensure(body.projectId)
+            await config.projectRuntimeManager.prepareSessionStorage(body.projectId, body.userId, body.workspaceId, sessionId)
+          } else if (config.requireProjectRuntime) {
+            throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project runtime manager is required')
           }
-          json(response, 200, { ok: true, providerId: body.runtimeConfiguration.providerId, modelId: body.runtimeConfiguration.modelId })
-        } finally {
+          const runtime = await backend.createSession(body.userId, body.workspaceId, sessionId, body.runtimeConfiguration, undefined, body.projectId, projectRuntime)
           try {
-            await trackCleanup(runtime.cleanup())
-          } catch (cleanupError) {
-            // Keep a failed provider-check cleanup in the normal reaper path;
-            // returning a successful connectivity check must not strand its
-            // temporary sandbox outside the session map.
-            const cleanupKey = `provider-check:${sessionId}`
-            sessions.set(cleanupKey, {
-              runtime,
-              lastUsedAt: Date.now() - config.sessionIdleTtlMs - 1,
-              busy: false,
-            })
-            console.error(`OpenLink provider-check cleanup failed for ${sessionId}: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`)
+            const upstream = await runtime.prompt('Reply with exactly the word OK.', AbortSignal.timeout(90_000))
+            if (!upstream.ok || !upstream.body) throw new AgentHostError('PI_PROMPT_FAILED', 'Provider check request failed')
+            const output = await upstream.text()
+            if (/"type"\s*:\s*"extension_error"/.test(output) || /"stopReason"\s*:\s*"error"/.test(output)) {
+              const detail = providerCheckFailureDetail(output, body.runtimeConfiguration.apiKey)
+              throw new AgentHostError('PI_PROMPT_FAILED', detail ? `The model provider rejected the connectivity check: ${detail}` : 'The model provider rejected the connectivity check')
+            }
+            json(response, 200, { ok: true, providerId: body.runtimeConfiguration.providerId, modelId: body.runtimeConfiguration.modelId })
+          } finally {
+            try {
+              await trackCleanup(runtime.cleanup())
+            } catch (cleanupError) {
+              // Keep a failed provider-check cleanup in the normal reaper path;
+              // returning a successful connectivity check must not strand its
+              // temporary sandbox outside the session map.
+              const cleanupKey = `provider-check:${sessionId}`
+              sessions.set(cleanupKey, {
+                runtime,
+                lastUsedAt: Date.now() - config.sessionIdleTtlMs - 1,
+                busy: false,
+              })
+              console.error(`OpenLink provider-check cleanup failed for ${sessionId}: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`)
+            }
           }
-        }
-        return
+          return
         } finally {
           creatingSessions -= 1
         }
@@ -1095,6 +1177,27 @@ export async function startPromptHttpServer(
         const projectId = decodeURIComponent(projectPreviewTarget[1]!)
         if (!isProjectId(projectId)) throw new AgentHostError('INVALID_BODY', 'projectId is invalid')
         await handleProjectPreviewTarget(response, projectId)
+        return
+      }
+      const projectSupabase = /^\/v1\/projects\/([^/]+)\/supabase$/.exec(url.pathname)
+      if (request.method === 'GET' && projectSupabase) {
+        const projectId = decodeURIComponent(projectSupabase[1]!)
+        if (!isProjectId(projectId)) throw new AgentHostError('INVALID_BODY', 'projectId is invalid')
+        await handleProjectSupabase(response, projectId)
+        return
+      }
+      const projectSupabaseManagement = /^\/v1\/projects\/([^/]+)\/supabase\/management$/.exec(url.pathname)
+      if (request.method === 'POST' && projectSupabaseManagement) {
+        const projectId = decodeURIComponent(projectSupabaseManagement[1]!)
+        if (!isProjectId(projectId)) throw new AgentHostError('INVALID_BODY', 'projectId is invalid')
+        await handleProjectSupabaseManagement(request, response, projectId)
+        return
+      }
+      const projectSupabaseStudioProxy = /^\/v1\/projects\/([^/]+)\/supabase\/studio-proxy$/.exec(url.pathname)
+      if (request.method === 'POST' && projectSupabaseStudioProxy) {
+        const projectId = decodeURIComponent(projectSupabaseStudioProxy[1]!)
+        if (!isProjectId(projectId)) throw new AgentHostError('INVALID_BODY', 'projectId is invalid')
+        await handleProjectSupabaseStudioProxy(request, response, projectId)
         return
       }
       const projectGitVersions = /^\/v1\/projects\/([^/]+)\/git\/versions$/.exec(url.pathname)

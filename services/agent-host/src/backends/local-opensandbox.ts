@@ -80,14 +80,14 @@ export class LocalOpenSandboxBackend {
   async cleanupSession(userId: string, workspaceId: string, sessionId: string, projectId?: string, projectRuntime?: ProjectRuntimeDescriptor): Promise<void> {
     const connection = projectRuntime
       ? (() => {
-          const endpoint = new URL(projectRuntime.opensandboxEndpoint)
-          return {
-            domain: endpoint.host,
-            protocol: endpoint.protocol === 'https:' ? 'https' as const : 'http' as const,
-            apiKey: projectRuntime.opensandboxApiKey,
-            useServerProxy: true,
-          }
-        })()
+        const endpoint = new URL(projectRuntime.opensandboxEndpoint)
+        return {
+          domain: endpoint.host,
+          protocol: endpoint.protocol === 'https:' ? 'https' as const : 'http' as const,
+          apiKey: projectRuntime.opensandboxApiKey,
+          useServerProxy: true,
+        }
+      })()
       : { domain: this.config.domain, protocol: 'http' as const, apiKey: this.config.apiKey }
     await cleanupOpenSandboxSessionWorkloads(connection, {
       'openlink.user_id': userId,
@@ -138,18 +138,18 @@ export class LocalOpenSandboxBackend {
     }
     const connection = projectRuntime
       ? (() => {
-          const endpoint = new URL(projectRuntime.opensandboxEndpoint)
-          return new ConnectionConfig({
-            domain: endpoint.host,
-            protocol: endpoint.protocol === 'https:' ? 'https' : 'http',
-            apiKey: projectRuntime.opensandboxApiKey,
-            requestTimeoutSeconds: 120,
-            // Session sandbox ports live inside the Project VM. Route worker
-            // calls through the in-VM OpenSandbox control plane instead of
-            // trying to reach 127.0.0.1 on the host process.
-            useServerProxy: true,
-          })
-        })()
+        const endpoint = new URL(projectRuntime.opensandboxEndpoint)
+        return new ConnectionConfig({
+          domain: endpoint.host,
+          protocol: endpoint.protocol === 'https:' ? 'https' : 'http',
+          apiKey: projectRuntime.opensandboxApiKey,
+          requestTimeoutSeconds: 120,
+          // Session sandbox ports live inside the Project VM. Route worker
+          // calls through the in-VM OpenSandbox control plane instead of
+          // trying to reach 127.0.0.1 on the host process.
+          useServerProxy: true,
+        })
+      })()
       : this.connection
     const sandbox = await Sandbox.create({
       connectionConfig: connection,
@@ -173,6 +173,17 @@ export class LocalOpenSandboxBackend {
           OPENLINK_BROWSER_SESSION_ID: browser.sessionId,
           OPENLINK_BROWSER_CONTROL_TOKEN: browser.controlToken,
           OPENLINK_BROWSER_EXTENSION_PATH: browser.extensionPath,
+        } : {}),
+        // Project-local Supabase backend: publishable connection material only.
+        // The service-role key / DB password stay inside the Project VM and are
+        // absent from the descriptor, so they cannot be injected here.
+        ...(projectRuntime?.supabase ? {
+          SUPABASE_URL: projectRuntime.supabase.url,
+          SUPABASE_PUBLISHABLE_KEY: projectRuntime.supabase.publishableKey,
+          SUPABASE_ANON_KEY: projectRuntime.supabase.anonKey,
+          NEXT_PUBLIC_SUPABASE_URL: projectRuntime.supabase.url,
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: projectRuntime.supabase.anonKey,
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: projectRuntime.supabase.publishableKey,
         } : {}),
       },
       metadata: {

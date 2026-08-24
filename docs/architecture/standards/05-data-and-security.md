@@ -24,6 +24,7 @@ before every operation.
 | chat events and Pi session entries | ZOKERBASE PostgreSQL | Ordered and append-safe |
 | provider configuration | ZOKERBASE PostgreSQL | Secrets encrypted; summaries may be client-visible |
 | project files and Git history | Project VM `/workspace` | Durable per project |
+| generated application identities/data/objects | Project VM Supabase | Independent per Project; never OpenLink control-plane state |
 | browser profiles/downloads | Browser Host runtime storage | Isolated per session/user |
 | knowledge source, chunks, jobs | ZOKERBASE PostgreSQL | Auditable source of truth |
 | vector entities/indexes | Zero | Rebuildable projection |
@@ -40,6 +41,21 @@ be returned in list/detail APIs. At minimum this includes:
 - Zero credentials;
 - SSH private keys and known-host policy;
 - browser/session capability signing keys.
+- Project VM Supabase database passwords, service/secret keys, JWT signing
+  keys, dashboard credentials, pooler and encryption keys.
+
+Project VM Supabase secrets are generated in the guest after cloning. They are
+root-owned mode `0600`, are absent from the Golden Image and control-plane
+rows, and are never returned to a browser or Agent response. Browser-safe
+project integration may expose only the project gateway URL, publishable key,
+legacy anon key and observed release. Direct PostgreSQL/Supavisor credentials
+and service/secret keys require a separately authorized server capability.
+
+Local mode may render upstream Supabase Studio only through the dedicated
+`studio.localhost` BFF virtual host defined by ADR-0018. Its capability is
+short-lived and project/session scoped; it is not a Supabase credential. The
+VM controller injects Studio's Basic credential inside the guest. Cloud mode
+must not expose this upstream administrative surface or Project VM ports.
 
 Provider and SSH private material is encrypted with AES-256-GCM using the
 OpenLink provider-secret boundary. Encryption binds ciphertext to its owner and

@@ -5,6 +5,21 @@ import test from 'node:test'
 import { PodmanProjectRuntimeServiceDriver, ProjectRuntimeManager, type ProjectRuntimeServiceInput } from '../src/project-runtime.js'
 import { ProjectVmManager, type ProjectVmCommandResult, type ProjectVmMachineDriver, type ProjectVmPortForward } from '../src/project-vm.js'
 
+const projectSupabaseResult = (command: string, args: string[]): ProjectVmCommandResult | undefined => {
+  if (command !== 'sudo' || args[0] !== '-n' || args[1] !== '/var/lib/openlink/project-supabase-runtime') return undefined
+  const action = args[2]
+  const option = (name: string) => args[args.indexOf(name) + 1]
+  if (action === 'ensure') return { stdout: JSON.stringify({ projectId: option('--project-id'), url: `http://127.0.0.1:${option('--gateway-port')}`, publishableKey: 'sb_publishable_test_12345678', anonKey: 'header.payload.signature', revision: 'self-hosted/v0.8.0' }), stderr: '' }
+  if (action === 'status') return { stdout: JSON.stringify({ projectId: option('--project-id'), status: 'ready', observedRevision: 'self-hosted/v0.8.0', gatewayPort: Number(option('--gateway-port')), databasePort: Number(option('--database-port')), poolerPort: Number(option('--pooler-port')) }), stderr: '' }
+  if (action === 'public') return { stdout: JSON.stringify({ projectId: option('--project-id'), url: `http://127.0.0.1:${option('--gateway-port')}`, publishableKey: 'sb_publishable_test_12345678', anonKey: 'header.payload.signature', revision: 'self-hosted/v0.8.0' }), stderr: '' }
+  if (action === 'manage') return { stdout: JSON.stringify({ operation: option('--operation'), tables: [{ schema: 'public', name: 'tasks', kind: 'BASE TABLE' }] }), stderr: '' }
+  if (action === 'studio-proxy') return { stdout: JSON.stringify({ status: 200, headers: { 'content-type': 'text/html; charset=utf-8' }, bodyBase64: Buffer.from(`<main>${option('--path')}</main>`).toString('base64url') }), stderr: '' }
+  if (action === 'stop') return { stdout: JSON.stringify({ stopped: true }), stderr: '' }
+  throw new Error(`unexpected Project Supabase controller action ${action}`)
+}
+
+const projectSupabaseRunInMachine = async (_machine: string, command: string, args: string[] = []): Promise<ProjectVmCommandResult> => projectSupabaseResult(command, args) ?? { stdout: '', stderr: '' }
+
 test('recreates failed Project VM service containers instead of restarting stale state', async () => {
   const calls: Array<{ command: string; args: string[] }> = []
   const stale = new Set([
@@ -46,7 +61,7 @@ test('recreates failed Project VM service containers instead of restarting stale
     machineName: 'olp-test',
     workspacePath: '/home/core/openlink/projects/test/workspace',
     sessionStorageRoot: '/home/core/openlink/projects/test/workspace/.openlink/sessions',
-    ports: { opensandbox: 51000, browserHost: 52000, codeServer: 53000 },
+    ports: { opensandbox: 51000, browserHost: 52000, codeServer: 53000, supabaseGateway: 54000, supabaseDatabase: 55000, supabasePooler: 56000 },
     opensandboxApiKey: 'sandbox-key',
     browserApiToken: 'browser-token',
     browserTokenSecret: 'browser-secret',
@@ -91,7 +106,7 @@ test('allocates durable non-colliding Project VM service ports', async () => {
   const machineDriver: ProjectVmMachineDriver = {
     ensureMachine: async () => undefined,
     bootstrapToolchain: async () => undefined,
-    runInMachine: async () => ({ stdout: '', stderr: '' }),
+    runInMachine: projectSupabaseRunInMachine,
     stopMachine: async () => undefined,
     removeMachine: async () => undefined,
   }
@@ -141,13 +156,52 @@ test('allocates durable non-colliding Project VM service ports', async () => {
   }
 })
 
+test('synchronizes the Project Supabase controller from the supervisor workspace root', async () => {
+  const stateRoot = await mkdtemp(join('/tmp', 'openlink-project-runtime-controller-'))
+  const originalWorkspaceRoot = process.env.OPENLINK_AGENT_WORKSPACE_ROOT
+  const copied: string[] = []
+  const machineDriver: ProjectVmMachineDriver = {
+    ensureMachine: async () => undefined,
+    bootstrapToolchain: async () => undefined,
+    copyToMachine: async (_machine, source) => { copied.push(source) },
+    runInMachine: projectSupabaseRunInMachine,
+    stopMachine: async () => undefined,
+    removeMachine: async () => undefined,
+  }
+  const vmManager = new ProjectVmManager({ stateRoot, machineDriver, machinePrefix: 'olp', guestWorkspaceRoot: `${stateRoot}/guest` })
+  const runtime = new ProjectRuntimeManager({
+    stateRoot,
+    vmManager,
+    machineDriver,
+    serviceDriver: { supportsEgress: true, ensureServices: async () => undefined, stopServices: async () => undefined, removeServices: async () => undefined },
+    opensandboxImage: 'openlink/opensandbox-server:dev',
+    browserHostImage: 'openlink/browser-host:dev',
+    execdImage: 'openlink/opensandbox-execd:dev',
+    egressImage: 'openlink/opensandbox-egress:dev',
+    agentWorkerImage: 'openlink/agent-worker:dev',
+  })
+  process.env.OPENLINK_AGENT_WORKSPACE_ROOT = '/tmp/openlink-supervisor-root'
+  try {
+    await runtime.ensure('2c51ca26-3cd0-4cb4-896d-2061de06098c', 'thin')
+    assert.deepEqual(copied, [
+      '/tmp/openlink-supervisor-root/services/agent-host/project-supabase-runtime.mjs',
+      '/tmp/openlink-supervisor-root/scripts/lib/project-supabase-bundle.mjs',
+    ])
+  } finally {
+    if (originalWorkspaceRoot === undefined) delete process.env.OPENLINK_AGENT_WORKSPACE_ROOT
+    else process.env.OPENLINK_AGENT_WORKSPACE_ROOT = originalWorkspaceRoot
+    await runtime.close()
+    await rm(stateRoot, { recursive: true, force: true })
+  }
+})
+
 test('preserves resident Project VMs across an Agent Host restart and restores them on startup', async () => {
   const stateRoot = await mkdtemp(join('/tmp', 'openlink-project-runtime-resident-'))
   const machineCalls: string[] = []
   const machineDriver: ProjectVmMachineDriver = {
     ensureMachine: async (name) => { machineCalls.push(`ensure:${name}`) },
     bootstrapToolchain: async () => undefined,
-    runInMachine: async () => ({ stdout: '', stderr: '' }),
+    runInMachine: projectSupabaseRunInMachine,
     forwardPort: async (_machine, remotePort) => ({ localPort: remotePort, close: async () => undefined }),
     stopMachine: async (name) => { machineCalls.push(`stop:${name}`) },
     removeMachine: async () => undefined,
@@ -188,6 +242,44 @@ test('preserves resident Project VMs across an Agent Host restart and restores t
   }
 })
 
+test('serves Project Supabase management from a ready persisted VM without re-provisioning project services', async () => {
+  const stateRoot = await mkdtemp(join('/tmp', 'openlink-project-runtime-management-'))
+  let serviceEnsures = 0
+  const machineDriver: ProjectVmMachineDriver = {
+    ensureMachine: async () => undefined,
+    bootstrapToolchain: async () => undefined,
+    runInMachine: projectSupabaseRunInMachine,
+    forwardPort: async (_machine, remotePort) => ({ localPort: remotePort, close: async () => undefined }),
+    stopMachine: async () => undefined,
+    removeMachine: async () => undefined,
+  }
+  const vmManager = new ProjectVmManager({ stateRoot, machinePrefix: 'olp', machineDriver, guestWorkspaceRoot: `${stateRoot}/guest` })
+  const options = {
+    stateRoot, vmManager, machineDriver,
+    serviceDriver: { supportsEgress: true, ensureServices: async () => { serviceEnsures += 1 }, stopServices: async () => undefined, removeServices: async () => undefined },
+    opensandboxImage: 'openlink/opensandbox-server:dev', browserHostImage: 'openlink/browser-host:dev', execdImage: 'openlink/opensandbox-execd:dev', egressImage: 'openlink/opensandbox-egress:dev', agentWorkerImage: 'openlink/agent-worker:dev',
+  }
+  const projectId = '2c51ca26-3cd0-4cb4-896d-2061de06098c'
+  try {
+    const first = new ProjectRuntimeManager(options)
+    await first.ensure(projectId, 'thin')
+    await first.close({ stopRuntimes: false })
+    const second = new ProjectRuntimeManager(options)
+    const descriptor = await second.describeSupabase(projectId)
+    const result = await second.manageSupabase(projectId, { operation: 'tables' })
+    const studio = await second.proxySupabaseStudio(projectId, { method: 'GET', path: '/projects/default/editor' })
+    assert.equal(serviceEnsures, 1)
+    assert.equal(descriptor?.revision, 'self-hosted/v0.8.0')
+    assert.deepEqual(result.tables, [{ schema: 'public', name: 'tasks', kind: 'BASE TABLE' }])
+    assert.equal(studio.status, 200)
+    assert.equal(studio.headers['content-type'], 'text/html; charset=utf-8')
+    assert.equal(Buffer.from(studio.bodyBase64, 'base64url').toString('utf8'), '<main>/projects/default/editor</main>')
+    await second.close()
+  } finally {
+    await rm(stateRoot, { recursive: true, force: true })
+  }
+})
+
 test('initializes a Project workspace Git baseline exactly once before agent use', async () => {
   const stateRoot = await mkdtemp(join('/tmp', 'openlink-project-runtime-git-'))
   const calls: Array<{ machine: string; command: string; args: string[] }> = []
@@ -196,7 +288,7 @@ test('initializes a Project workspace Git baseline exactly once before agent use
     bootstrapToolchain: async () => undefined,
     runInMachine: async (machine, command, args = []) => {
       calls.push({ machine, command, args })
-      return { stdout: '', stderr: '' }
+      return projectSupabaseResult(command, args) ?? { stdout: '', stderr: '' }
     },
     forwardPort: async (_machine, remotePort) => ({ localPort: remotePort, close: async () => undefined }),
     stopMachine: async () => undefined,
@@ -240,6 +332,7 @@ test('does not leak an active runtime when service shutdown fails', async () => 
   const machineDriver: ProjectVmMachineDriver = {
     ensureMachine: async () => undefined,
     bootstrapToolchain: async () => undefined,
+    runInMachine: projectSupabaseRunInMachine,
     stopMachine: async (name) => { stopped.push(name) },
     removeMachine: async () => undefined,
   }

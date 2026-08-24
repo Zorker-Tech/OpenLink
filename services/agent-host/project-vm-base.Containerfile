@@ -10,6 +10,24 @@ FROM ${OPENLINK_MACHINE_OS_IMAGE}
 COPY project-vm-base.json /usr/lib/openlink/project-vm-base.json
 RUN chmod 0644 /usr/lib/openlink/project-vm-base.json
 
+# Project Supabase is independent from the OpenLink control-plane backend. The
+# exact upstream self-hosted configuration and reviewed lock are immutable OS
+# inputs; project data and secrets are created only after a Project VM exists.
+COPY project-supabase/runtime.lock.json /usr/lib/openlink/project-supabase/runtime.lock.json
+COPY project-supabase/runtime.spec.json /usr/lib/openlink/project-supabase/runtime.spec.json
+COPY project-supabase/release-trust.json /usr/lib/openlink/project-supabase/release-trust.json
+COPY project-supabase/configuration /usr/lib/openlink/project-supabase/configuration
+COPY project-vm-seed-supabase.sh /usr/libexec/openlink/project-vm-seed-supabase
+COPY project-supabase-runtime.mjs /usr/libexec/openlink/project-supabase-runtime
+COPY project-supabase-bundle.mjs /usr/libexec/openlink/project-supabase-bundle.mjs
+RUN chmod 0644 /usr/lib/openlink/project-supabase/runtime.lock.json \
+    && chmod 0644 /usr/lib/openlink/project-supabase/runtime.spec.json \
+    && chmod 0644 /usr/lib/openlink/project-supabase/release-trust.json \
+    && chmod -R a=rX /usr/lib/openlink/project-supabase/configuration \
+    && chmod 0755 /usr/libexec/openlink/project-vm-seed-supabase \
+    && chmod 0755 /usr/libexec/openlink/project-supabase-runtime \
+    && chmod 0644 /usr/libexec/openlink/project-supabase-bundle.mjs
+
 # Project VMs are developer environments. These packages are deliberately in
 # the immutable deployment so a new session never mutates its Project VM
 # before executing work. `ostree container commit` is required for a bootable
@@ -20,6 +38,7 @@ RUN dnf install -y \
       cmake \
       curl \
       diffutils \
+      e2fsprogs \
       fd-find \
       findutils \
       git \

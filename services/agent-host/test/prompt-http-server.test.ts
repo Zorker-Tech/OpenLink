@@ -19,7 +19,7 @@ test('prompt server authenticates, streams NDJSON, and enforces runtime capacity
       }),
       cleanup: async () => { closes += 1 },
     }),
-    close: async () => {},
+    close: async () => { },
   }
   const runtime = await startPromptHttpServer({
     host: '127.0.0.1',
@@ -36,18 +36,22 @@ test('prompt server authenticates, streams NDJSON, and enforces runtime capacity
     const denied = await fetch(`${endpoint}/v1/agent/sessions/one/events`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: 'user', workspaceId: 'workspace', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c', message: 'hello', runtimeConfiguration: {
-        providerId: 'deepseek', modelId: 'deepseek-v4-flash', apiKey: 'test-key', baseUrl: 'https://api.deepseek.com', revision: 'test-revision',
-      } }),
+      body: JSON.stringify({
+        userId: 'user', workspaceId: 'workspace', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c', message: 'hello', runtimeConfiguration: {
+          providerId: 'deepseek', modelId: 'deepseek-v4-flash', apiKey: 'test-key', baseUrl: 'https://api.deepseek.com', revision: 'test-revision',
+        }
+      }),
     })
     assert.equal(denied.status, 403)
 
     const accepted = await fetch(`${endpoint}/v1/agent/sessions/one/events`, {
       method: 'POST',
       headers: { Authorization: 'Bearer test-token-which-is-long-enough', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: 'user', workspaceId: 'workspace', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c', message: 'hello', runtimeConfiguration: {
-        providerId: 'deepseek', modelId: 'deepseek-v4-flash', apiKey: 'test-key', baseUrl: 'https://api.deepseek.com', revision: 'test-revision',
-      } }),
+      body: JSON.stringify({
+        userId: 'user', workspaceId: 'workspace', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c', message: 'hello', runtimeConfiguration: {
+          providerId: 'deepseek', modelId: 'deepseek-v4-flash', apiKey: 'test-key', baseUrl: 'https://api.deepseek.com', revision: 'test-revision',
+        }
+      }),
     })
     assert.equal(accepted.status, 200)
     assert.equal(accepted.headers.get('x-openlink-agent-transport'), 'test-runtime')
@@ -56,9 +60,11 @@ test('prompt server authenticates, streams NDJSON, and enforces runtime capacity
     const capacity = await fetch(`${endpoint}/v1/agent/sessions/two/events`, {
       method: 'POST',
       headers: { Authorization: 'Bearer test-token-which-is-long-enough', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: 'user', workspaceId: 'workspace', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c', message: 'hello', runtimeConfiguration: {
-        providerId: 'deepseek', modelId: 'deepseek-v4-flash', apiKey: 'test-key', baseUrl: 'https://api.deepseek.com', revision: 'test-revision',
-      } }),
+      body: JSON.stringify({
+        userId: 'user', workspaceId: 'workspace', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c', message: 'hello', runtimeConfiguration: {
+          providerId: 'deepseek', modelId: 'deepseek-v4-flash', apiKey: 'test-key', baseUrl: 'https://api.deepseek.com', revision: 'test-revision',
+        }
+      }),
     })
     assert.equal(capacity.status, 409)
   } finally {
@@ -93,8 +99,8 @@ test('code-server session creation is authenticated and bound to the requested P
     },
   } as unknown as ProjectRuntimeManager
   const backend: PromptRuntimeBackend = {
-    createSession: async () => ({ prompt: async () => new Response(''), cleanup: async () => {} }),
-    close: async () => {},
+    createSession: async () => ({ prompt: async () => new Response(''), cleanup: async () => { } }),
+    close: async () => { },
   }
   const runtime = await startPromptHttpServer({
     host: '127.0.0.1', port: 0, apiToken: 'test-token-which-is-long-enough', storageRoot,
@@ -135,9 +141,9 @@ test('rejects private IPv4 and IPv4-mapped IPv6 provider endpoints', async () =>
   const backend: PromptRuntimeBackend = {
     createSession: async () => {
       creations += 1
-      return { prompt: async () => new Response(''), cleanup: async () => {} }
+      return { prompt: async () => new Response(''), cleanup: async () => { } }
     },
-    close: async () => {},
+    close: async () => { },
   }
   const runtime = await startPromptHttpServer({
     host: '127.0.0.1',
@@ -186,10 +192,10 @@ test('agent lease refresh touches existing runtimes without provisioning a sandb
       creations += 1
       return {
         prompt: async () => new Response(`${JSON.stringify({ type: 'agent_settled' })}\n`),
-        cleanup: async () => {},
+        cleanup: async () => { },
       }
     },
-    close: async () => {},
+    close: async () => { },
   }
   const runtime = await startPromptHttpServer({
     host: '127.0.0.1', port: 0, apiToken: 'test-token-which-is-long-enough', storageRoot,
@@ -225,10 +231,10 @@ test('agent lease warms one Worker before the first prompt and reuses it', async
         pause: async () => { paused = true },
         resume: async () => { paused = false; resumes += 1 },
         prompt: async () => new Response(`${JSON.stringify({ type: 'agent_settled', paused })}\n`, { headers: { 'Content-Type': 'application/x-ndjson' } }),
-        cleanup: async () => {},
+        cleanup: async () => { },
       }
     },
-    close: async () => {},
+    close: async () => { },
   }
   const runtime = await startPromptHttpServer({
     host: '127.0.0.1', port: 0, apiToken: 'test-token-which-is-long-enough', storageRoot,
@@ -283,9 +289,9 @@ test('agent cancellation aborts the active worker without deleting the reusable 
           }, { once: true })
         },
       }), { headers: { 'Content-Type': 'application/x-ndjson' } }),
-      cleanup: async () => {},
+      cleanup: async () => { },
     }),
-    close: async () => {},
+    close: async () => { },
   }
   const runtime = await startPromptHttpServer({
     host: '127.0.0.1', port: 0, apiToken: 'test-token-which-is-long-enough', storageRoot,
@@ -348,9 +354,9 @@ test('extension UI responses are authorized, routed to the active runtime, and s
         receivedUiResponse = response
         closeStream(response)
       },
-      cleanup: async () => {},
+      cleanup: async () => { },
     }),
-    close: async () => {},
+    close: async () => { },
   }
   const runtime = await startPromptHttpServer({
     host: '127.0.0.1', port: 0, apiToken: 'test-token-which-is-long-enough', storageRoot,
@@ -405,10 +411,10 @@ test('prompt server forwards the selected provider and Pi-native Cloud session s
       captured = parameters
       return {
         prompt: async () => new Response(`${JSON.stringify({ type: 'agent_settled' })}\n`),
-        cleanup: async () => {},
+        cleanup: async () => { },
       }
     },
-    close: async () => {},
+    close: async () => { },
   }
   const runtime = await startPromptHttpServer({
     host: '127.0.0.1',
@@ -466,7 +472,7 @@ test('replaces an idle runtime before enforcing global capacity during model swi
         cleanup: async () => { cleanups += 1 },
       }
     },
-    close: async () => {},
+    close: async () => { },
   }
   const runtime = await startPromptHttpServer({
     host: '127.0.0.1',
@@ -519,7 +525,7 @@ test('recreates an expired OpenSandbox workload from the Cloud session snapshot'
         cleanup: async () => { cleanups += 1 },
       }
     },
-    close: async () => {},
+    close: async () => { },
   }
   const runtime = await startPromptHttpServer({
     host: '127.0.0.1',
@@ -576,7 +582,7 @@ test('fails closed when an expired workload cannot be cleaned up', async () => {
         },
       }
     },
-    close: async () => {},
+    close: async () => { },
   }
   const runtime = await startPromptHttpServer({
     host: '127.0.0.1',
@@ -635,10 +641,10 @@ test('reserves Agent Host capacity while different sessions are provisioning con
       }
       return {
         prompt: async () => new Response(`${JSON.stringify({ type: 'agent_settled', sessionId })}\n`, { headers: { 'Content-Type': 'application/x-ndjson' } }),
-        cleanup: async () => {},
+        cleanup: async () => { },
       }
     },
-    close: async () => {},
+    close: async () => { },
   }
   const runtime = await startPromptHttpServer({
     host: '127.0.0.1', port: 0, apiToken: 'test-token-which-is-long-enough', storageRoot,
@@ -685,10 +691,10 @@ test('cleans a stale Project VM workload before creating a runtime after Agent H
       creates += 1
       return {
         prompt: async () => new Response(`${JSON.stringify({ type: 'agent_settled' })}\n`, { headers: { 'Content-Type': 'application/x-ndjson' } }),
-        cleanup: async () => {},
+        cleanup: async () => { },
       }
     },
-    close: async () => {},
+    close: async () => { },
   }
   const runtime = await startPromptHttpServer({
     host: '127.0.0.1', port: 0, apiToken: 'test-token-which-is-long-enough', storageRoot,
@@ -733,8 +739,8 @@ test('discovers the authenticated Project preview target without exposing it to 
     },
   } as unknown as ProjectRuntimeManager
   const backend: PromptRuntimeBackend = {
-    createSession: async () => ({ prompt: async () => new Response(''), cleanup: async () => {} }),
-    close: async () => {},
+    createSession: async () => ({ prompt: async () => new Response(''), cleanup: async () => { } }),
+    close: async () => { },
   }
   const runtime = await startPromptHttpServer({
     host: '127.0.0.1', port: 0, apiToken: 'test-token-which-is-long-enough', storageRoot,
@@ -754,6 +760,172 @@ test('discovers the authenticated Project preview target without exposing it to 
         sandboxId: 'sandbox-1',
       },
     })
+  } finally {
+    runtime.server.close()
+    await once(runtime.server, 'close')
+    await runtime.shutdown()
+    await rm(storageRoot, { recursive: true, force: true })
+  }
+})
+
+test('exposes only the safe Project Supabase connection material to authenticated callers', async () => {
+  const storageRoot = await mkdtemp(join(tmpdir(), 'openlink-supabase-route-test-'))
+  const projectId = '2c51ca26-3cd0-4cb4-896d-2061de06098c'
+  let ensuredProject: string | undefined
+  const projectRuntimeManager = {
+    ensure: async (id: string) => {
+      ensuredProject = id
+      return {
+        supabase: {
+          url: 'http://host.containers.internal:51200',
+          publishableKey: 'sb_publishable_test-publishable-key',
+          anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhbm9uIn0.signature',
+          revision: '2026.0.0',
+        },
+      }
+    },
+  } as unknown as ProjectRuntimeManager
+  const backend: PromptRuntimeBackend = {
+    createSession: async () => ({ prompt: async () => new Response(''), cleanup: async () => { } }),
+    close: async () => { },
+  }
+  const runtime = await startPromptHttpServer({
+    host: '127.0.0.1', port: 0, apiToken: 'test-token-which-is-long-enough', storageRoot,
+    transport: 'test-runtime', sessionIdleTtlMs: 60_000, projectRuntimeManager,
+  }, backend)
+  const address = runtime.server.address() as AddressInfo
+  const endpoint = `http://127.0.0.1:${address.port}`
+  try {
+    const denied = await fetch(`${endpoint}/v1/projects/${projectId}/supabase`)
+    assert.equal(denied.status, 403)
+
+    const ok = await fetch(`${endpoint}/v1/projects/${projectId}/supabase`, {
+      headers: { Authorization: 'Bearer test-token-which-is-long-enough' },
+    })
+    assert.equal(ok.status, 200)
+    assert.equal(ensuredProject, projectId)
+    const payload = await ok.json() as { supabase?: Record<string, unknown> }
+    assert.deepEqual(payload.supabase, {
+      url: 'http://host.containers.internal:51200',
+      publishableKey: 'sb_publishable_test-publishable-key',
+      anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhbm9uIn0.signature',
+      revision: '2026.0.0',
+    })
+    // The safe boundary must hold: no service-role key or DB password may ever
+    // be exposed through this surface, regardless of what the runtime holds.
+    const keys = Object.keys(payload.supabase ?? {})
+    assert.ok(!keys.includes('serviceRoleKey'))
+    assert.ok(!keys.includes('serviceRole'))
+    assert.ok(!keys.includes('databasePassword'))
+    assert.ok(!keys.includes('password'))
+  } finally {
+    runtime.server.close()
+    await once(runtime.server, 'close')
+    await runtime.shutdown()
+    await rm(storageRoot, { recursive: true, force: true })
+  }
+})
+
+test('forwards authenticated Project Supabase management operations without exposing credentials', async () => {
+  const storageRoot = await mkdtemp(join(tmpdir(), 'openlink-supabase-management-route-test-'))
+  const projectId = '2c51ca26-3cd0-4cb4-896d-2061de06098c'
+  let received: unknown
+  const projectRuntimeManager = {
+    manageSupabase: async (_id: string, request: unknown) => { received = request; return { operation: 'tables', tables: [{ schema: 'public', name: 'profiles', kind: 'BASE TABLE' }] } },
+  } as unknown as ProjectRuntimeManager
+  const backend: PromptRuntimeBackend = {
+    createSession: async () => ({ prompt: async () => new Response(''), cleanup: async () => { } }),
+    close: async () => { },
+  }
+  const runtime = await startPromptHttpServer({
+    host: '127.0.0.1', port: 0, apiToken: 'test-token-which-is-long-enough', storageRoot,
+    transport: 'test-runtime', sessionIdleTtlMs: 60_000, projectRuntimeManager,
+  }, backend)
+  const address = runtime.server.address() as AddressInfo
+  const endpoint = `http://127.0.0.1:${address.port}`
+  try {
+    const denied = await fetch(`${endpoint}/v1/projects/${projectId}/supabase/management`, { method: 'POST', body: JSON.stringify({ operation: 'tables' }) })
+    assert.equal(denied.status, 403)
+    const invalid = await fetch(`${endpoint}/v1/projects/${projectId}/supabase/management`, {
+      method: 'POST', headers: { Authorization: 'Bearer test-token-which-is-long-enough', 'Content-Type': 'application/json' }, body: JSON.stringify({ operation: 'not-an-operation' }),
+    })
+    assert.equal(invalid.status, 400)
+    const ok = await fetch(`${endpoint}/v1/projects/${projectId}/supabase/management`, {
+      method: 'POST', headers: { Authorization: 'Bearer test-token-which-is-long-enough', 'Content-Type': 'application/json' }, body: JSON.stringify({ operation: 'tables' }),
+    })
+    assert.equal(ok.status, 200)
+    assert.deepEqual(await ok.json(), { operation: 'tables', tables: [{ schema: 'public', name: 'profiles', kind: 'BASE TABLE' }] })
+    assert.deepEqual(received, { operation: 'tables' })
+  } finally {
+    runtime.server.close()
+    await once(runtime.server, 'close')
+    await runtime.shutdown()
+    await rm(storageRoot, { recursive: true, force: true })
+  }
+})
+
+test('forwards an authenticated, bounded Studio proxy request without dashboard credentials', async () => {
+  const storageRoot = await mkdtemp(join(tmpdir(), 'openlink-supabase-studio-proxy-test-'))
+  const projectId = '2c51ca26-3cd0-4cb4-896d-2061de06098c'
+  let received: unknown
+  const projectRuntimeManager = {
+    proxySupabaseStudio: async (_id: string, request: unknown) => {
+      received = request
+      return { status: 200, headers: { 'content-type': 'text/html' }, bodyBase64: Buffer.from('<main>Studio</main>').toString('base64url') }
+    },
+  } as unknown as ProjectRuntimeManager
+  const backend: PromptRuntimeBackend = {
+    createSession: async () => ({ prompt: async () => new Response(''), cleanup: async () => { } }),
+    close: async () => { },
+  }
+  const runtime = await startPromptHttpServer({
+    host: '127.0.0.1', port: 0, apiToken: 'test-token-which-is-long-enough', storageRoot,
+    transport: 'test-runtime', sessionIdleTtlMs: 60_000, projectRuntimeManager,
+  }, backend)
+  const address = runtime.server.address() as AddressInfo
+  const endpoint = `http://127.0.0.1:${address.port}`
+  try {
+    const denied = await fetch(`${endpoint}/v1/projects/${projectId}/supabase/studio-proxy`, { method: 'POST', body: JSON.stringify({ method: 'GET', path: '/' }) })
+    assert.equal(denied.status, 403)
+    const invalid = await fetch(`${endpoint}/v1/projects/${projectId}/supabase/studio-proxy`, {
+      method: 'POST', headers: { Authorization: 'Bearer test-token-which-is-long-enough', 'Content-Type': 'application/json' }, body: JSON.stringify({ method: 'GET', path: 'https://example.com/' }),
+    })
+    assert.equal(invalid.status, 400)
+    const ok = await fetch(`${endpoint}/v1/projects/${projectId}/supabase/studio-proxy`, {
+      method: 'POST', headers: { Authorization: 'Bearer test-token-which-is-long-enough', 'Content-Type': 'application/json' }, body: JSON.stringify({ method: 'GET', path: '/projects/default/editor', headers: { accept: 'text/html' } }),
+    })
+    assert.equal(ok.status, 200)
+    assert.deepEqual(await ok.json(), { status: 200, headers: { 'content-type': 'text/html' }, bodyBase64: Buffer.from('<main>Studio</main>').toString('base64url') })
+    assert.deepEqual(received, { method: 'GET', path: '/projects/default/editor', headers: { accept: 'text/html' } })
+  } finally {
+    runtime.server.close()
+    await once(runtime.server, 'close')
+    await runtime.shutdown()
+    await rm(storageRoot, { recursive: true, force: true })
+  }
+})
+
+test('reports a null Project Supabase backend when the runtime has none provisioned', async () => {
+  const storageRoot = await mkdtemp(join(tmpdir(), 'openlink-supabase-null-test-'))
+  const projectId = '2c51ca26-3cd0-4cb4-896d-2061de06098c'
+  const projectRuntimeManager = {
+    ensure: async () => ({}),
+  } as unknown as ProjectRuntimeManager
+  const backend: PromptRuntimeBackend = {
+    createSession: async () => ({ prompt: async () => new Response(''), cleanup: async () => { } }),
+    close: async () => { },
+  }
+  const runtime = await startPromptHttpServer({
+    host: '127.0.0.1', port: 0, apiToken: 'test-token-which-is-long-enough', storageRoot,
+    transport: 'test-runtime', sessionIdleTtlMs: 60_000, projectRuntimeManager,
+  }, backend)
+  const address = runtime.server.address() as AddressInfo
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/v1/projects/${projectId}/supabase`, {
+      headers: { Authorization: 'Bearer test-token-which-is-long-enough' },
+    })
+    assert.equal(response.status, 200)
+    assert.deepEqual(await response.json(), { supabase: null })
   } finally {
     runtime.server.close()
     await once(runtime.server, 'close')

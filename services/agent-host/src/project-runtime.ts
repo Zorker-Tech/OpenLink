@@ -12,6 +12,28 @@ export interface ProjectRuntimeServicePorts {
   browserHost: number
   /** Project-local code-server. It is published only to the VM loopback. */
   codeServer: number
+  /** Project-local Supabase API gateway, published only to VM loopback. */
+  supabaseGateway: number
+  /** Project-local Supavisor session and transaction endpoints. */
+  supabaseDatabase: number
+  supabasePooler: number
+}
+
+export interface ProjectSupabaseStudioProxyRequest {
+  method: 'GET' | 'HEAD' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS'
+  /** Gateway-relative URL, including an optional query string. */
+  path: string
+  /** Allow-listed browser request headers. */
+  headers?: Record<string, string>
+  /** URL-safe base64 request body, capped by the VM controller. */
+  bodyBase64?: string
+}
+
+export interface ProjectSupabaseStudioProxyResponse {
+  status: number
+  headers: Record<string, string>
+  /** URL-safe base64 response body. No credential material is included. */
+  bodyBase64: string
 }
 
 export interface ProjectRuntimeDescriptor extends ProjectVmDescriptor {
@@ -29,6 +51,13 @@ export interface ProjectRuntimeDescriptor extends ProjectVmDescriptor {
   agentWorkerImage: string
   agentRpcWorkerImage: string
   codeServerImage: string
+  /** Safe application-backend connection material; no administrative keys. */
+  supabase: {
+    url: string
+    publishableKey: string
+    anonKey: string
+    revision: string
+  }
   /** Whether session sandboxes can use the OpenSandbox egress sidecar. */
   egressMode: 'sidecar' | 'disabled'
 }
@@ -47,6 +76,12 @@ export interface ProjectGitVersion {
   message: string
   timestamp: string
   current: boolean
+}
+
+export type ProjectSupabaseManagementRequest = {
+  operation: 'tables' | 'database' | 'query' | 'auth-users' | 'storage-buckets' | 'functions' | 'realtime' | 'services' | 'logs'
+  query?: string
+  service?: string
 }
 
 export interface ProjectRuntimeServiceInput {
@@ -101,6 +136,9 @@ export interface ProjectRuntimeManagerOptions {
   opensandboxPortOffset?: number
   browserPortOffset?: number
   codeServerPortOffset?: number
+  supabaseGatewayPortOffset?: number
+  supabaseDatabasePortOffset?: number
+  supabasePoolerPortOffset?: number
   publicHost?: string
   browserAllowedOrigins?: string
   statusWriter?: ProjectRuntimeStatusWriter
@@ -127,6 +165,9 @@ interface PersistedProjectPorts {
   opensandbox: number
   browserHost: number
   codeServer?: number
+  supabaseGateway?: number
+  supabaseDatabase?: number
+  supabasePooler?: number
   allocatedAt: string
 }
 
@@ -173,6 +214,9 @@ export class ProjectRuntimeManager {
   private readonly opensandboxPortOffset: number
   private readonly browserPortOffset: number
   private readonly codeServerPortOffset: number
+  private readonly supabaseGatewayPortOffset: number
+  private readonly supabaseDatabasePortOffset: number
+  private readonly supabasePoolerPortOffset: number
   private readonly publicHost: string
   private readonly browserAllowedOrigins: string
   private readonly statusWriter?: ProjectRuntimeStatusWriter
@@ -213,7 +257,11 @@ export class ProjectRuntimeManager {
     this.opensandboxPortOffset = options.opensandboxPortOffset ?? 0
     this.browserPortOffset = options.browserPortOffset ?? 1_000
     this.codeServerPortOffset = options.codeServerPortOffset ?? 2_000
-    if (!Number.isSafeInteger(this.opensandboxPortOffset) || !Number.isSafeInteger(this.browserPortOffset) || !Number.isSafeInteger(this.codeServerPortOffset) || this.opensandboxPortOffset < 0 || this.browserPortOffset < 0 || this.codeServerPortOffset < 0) {
+    this.supabaseGatewayPortOffset = options.supabaseGatewayPortOffset ?? 3_000
+    this.supabaseDatabasePortOffset = options.supabaseDatabasePortOffset ?? 4_000
+    this.supabasePoolerPortOffset = options.supabasePoolerPortOffset ?? 5_000
+    const offsets = [this.opensandboxPortOffset, this.browserPortOffset, this.codeServerPortOffset, this.supabaseGatewayPortOffset, this.supabaseDatabasePortOffset, this.supabasePoolerPortOffset]
+    if (offsets.some((offset) => !Number.isSafeInteger(offset) || offset < 0) || new Set(offsets).size !== offsets.length) {
       throw new AgentHostError('INVALID_BODY', 'Project runtime port offsets are invalid')
     }
     this.publicHost = options.publicHost ?? '127.0.0.1'
@@ -277,6 +325,200 @@ export class ProjectRuntimeManager {
     return this.active.get(projectId)
   }
 
+  async manageSupabase(projectId: string, request: ProjectSupabaseManagementRequest): Promise<Record<string, unknown>> {
+    if (!isProjectId(projectId)) throw new AgentHostError('INVALID_BODY', 'projectId is invalid')
+    const runner = this.machineDriver.runInMachine?.bind(this.machineDriver)
+    if (!runner) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project VM driver cannot manage Project Supabase')
+    // Management reads must remain available while the non-interactive
+    // restore sweep is reconciling OpenSandbox/Browser services. In
+    // particular, an Agent Host restart must not make a healthy Project
+    // Supabase instance wait behind image imports for unrelated project
+    // services. Verify the VM-local Supabase state first, then fall back to
+    // the complete runtime provisioning path only when it is not ready.
+    let target = await this.readReadySupabaseManagementTarget(projectId, runner)
+    if (!target) {
+      let descriptor: ProjectRuntimeDescriptor
+      try {
+        descriptor = await this.ensure(projectId)
+      } catch (error) {
+        if (error instanceof AgentHostError && /disk mode is required/i.test(error.message)) descriptor = await this.ensure(projectId, 'thin')
+        else throw error
+      }
+      target = {
+        machineName: descriptor.machineName,
+        workspacePath: descriptor.workspacePath,
+        servicePorts: descriptor.servicePorts,
+      }
+    }
+    const args = [
+      '-n', '/var/lib/openlink/project-supabase-runtime', 'manage',
+      '--project-id', projectId,
+      '--workspace', target.workspacePath,
+      '--state-root', '/var/lib/openlink/project-supabase',
+      '--gateway-port', String(target.servicePorts.supabaseGateway),
+      '--database-port', String(target.servicePorts.supabaseDatabase),
+      '--pooler-port', String(target.servicePorts.supabasePooler),
+      '--operation', request.operation,
+      ...(request.query ? ['--query', request.query] : []),
+      ...(request.service ? ['--service', request.service] : []),
+    ]
+    let result
+    try {
+      result = await runner(target.machineName, 'sudo', args)
+    } catch (error) {
+      throw new AgentHostError('PROJECT_BACKEND_UNAVAILABLE', `Project Supabase management failed: ${error instanceof Error ? error.message : String(error)}`, { retryable: true })
+    }
+    try {
+      const value = JSON.parse(result.stdout) as unknown
+      if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('result is not an object')
+      return value as Record<string, unknown>
+    } catch {
+      throw new AgentHostError('PROJECT_BACKEND_UNAVAILABLE', 'Project Supabase management returned invalid JSON', { retryable: true })
+    }
+  }
+
+  /**
+   * Proxies one Studio HTTP request through the Project VM controller. The
+   * controller injects the dashboard Basic credential inside the guest, so
+   * neither the browser nor Agent Host ever receives that credential.
+   */
+  async proxySupabaseStudio(projectId: string, request: ProjectSupabaseStudioProxyRequest): Promise<ProjectSupabaseStudioProxyResponse> {
+    if (!isProjectId(projectId)) throw new AgentHostError('INVALID_BODY', 'projectId is invalid')
+    const runner = this.machineDriver.runInMachine?.bind(this.machineDriver)
+    if (!runner) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project VM driver cannot proxy Project Supabase Studio')
+    let target = await this.readReadySupabaseManagementTarget(projectId, runner)
+    if (!target) {
+      let descriptor: ProjectRuntimeDescriptor
+      try {
+        descriptor = await this.ensure(projectId)
+      } catch (error) {
+        if (error instanceof AgentHostError && /disk mode is required/i.test(error.message)) descriptor = await this.ensure(projectId, 'thin')
+        else throw error
+      }
+      target = {
+        machineName: descriptor.machineName,
+        workspacePath: descriptor.workspacePath,
+        servicePorts: descriptor.servicePorts,
+      }
+    }
+    const args = [
+      '-n', '/var/lib/openlink/project-supabase-runtime', 'studio-proxy',
+      '--project-id', projectId,
+      '--workspace', target.workspacePath,
+      '--state-root', '/var/lib/openlink/project-supabase',
+      '--gateway-port', String(target.servicePorts.supabaseGateway),
+      '--database-port', String(target.servicePorts.supabaseDatabase),
+      '--pooler-port', String(target.servicePorts.supabasePooler),
+      '--method', request.method,
+      '--path', request.path,
+      ...(request.headers && Object.keys(request.headers).length ? ['--headers-base64', Buffer.from(JSON.stringify(request.headers)).toString('base64url')] : []),
+      ...(request.bodyBase64 ? ['--body-base64', request.bodyBase64] : []),
+    ]
+    let result
+    try {
+      result = await runner(target.machineName, 'sudo', args)
+    } catch (error) {
+      throw new AgentHostError('PROJECT_BACKEND_UNAVAILABLE', `Project Supabase Studio proxy failed: ${error instanceof Error ? error.message : String(error)}`, { retryable: true })
+    }
+    try {
+      const value = JSON.parse(result.stdout) as Partial<ProjectSupabaseStudioProxyResponse>
+      const status = value.status
+      if (typeof status !== 'number' || !Number.isInteger(status) || status < 100 || status > 599
+        || !value.headers || typeof value.headers !== 'object' || Array.isArray(value.headers)
+        || typeof value.bodyBase64 !== 'string' || !/^[A-Za-z0-9_-]*$/.test(value.bodyBase64)) {
+        throw new Error('invalid response')
+      }
+      const headers: Record<string, string> = {}
+      for (const [name, candidate] of Object.entries(value.headers)) {
+        if (!/^[a-z][a-z0-9-]{0,63}$/i.test(name) || typeof candidate !== 'string' || candidate.length > 8_192 || /[\r\n\u0000]/.test(candidate)) throw new Error('invalid response header')
+        headers[name.toLowerCase()] = candidate
+      }
+      return { status, headers, bodyBase64: value.bodyBase64 }
+    } catch {
+      throw new AgentHostError('PROJECT_BACKEND_UNAVAILABLE', 'Project Supabase Studio proxy returned invalid JSON', { retryable: true })
+    }
+  }
+
+  /**
+   * Returns the browser-safe Project Supabase descriptor. This deliberately
+   * shares the management fast path so a healthy backend is not held behind
+   * a restore sweep for unrelated project services after an Agent Host
+   * restart.
+   */
+  async describeSupabase(projectId: string): Promise<ProjectRuntimeDescriptor['supabase'] | null> {
+    if (!isProjectId(projectId)) throw new AgentHostError('INVALID_BODY', 'projectId is invalid')
+    const runner = this.machineDriver.runInMachine?.bind(this.machineDriver)
+    if (!runner) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project VM driver cannot describe Project Supabase')
+    let target = await this.readReadySupabaseManagementTarget(projectId, runner)
+    if (!target) {
+      let descriptor: ProjectRuntimeDescriptor
+      try {
+        descriptor = await this.ensure(projectId)
+      } catch (error) {
+        if (error instanceof AgentHostError && /disk mode is required/i.test(error.message)) descriptor = await this.ensure(projectId, 'thin')
+        else throw error
+      }
+      return descriptor.supabase ?? null
+    }
+    try {
+      const result = await runner(target.machineName, 'sudo', [
+        '-n', '/var/lib/openlink/project-supabase-runtime', 'public',
+        '--project-id', projectId,
+        '--workspace', target.workspacePath,
+        '--state-root', '/var/lib/openlink/project-supabase',
+        '--gateway-port', String(target.servicePorts.supabaseGateway),
+        '--database-port', String(target.servicePorts.supabaseDatabase),
+        '--pooler-port', String(target.servicePorts.supabasePooler),
+      ])
+      const value = JSON.parse(result.stdout) as Record<string, unknown>
+      if (value.projectId !== projectId
+        || value.url !== `http://127.0.0.1:${target.servicePorts.supabaseGateway}`
+        || typeof value.publishableKey !== 'string' || !value.publishableKey.startsWith('sb_publishable_')
+        || typeof value.anonKey !== 'string' || value.anonKey.split('.').length !== 3
+        || typeof value.revision !== 'string') {
+        throw new Error('Project Supabase public descriptor failed validation')
+      }
+      return value as ProjectRuntimeDescriptor['supabase']
+    } catch (error) {
+      throw new AgentHostError('PROJECT_BACKEND_UNAVAILABLE', `Project Supabase descriptor failed: ${error instanceof Error ? error.message : String(error)}`, { retryable: true })
+    }
+  }
+
+  private async readReadySupabaseManagementTarget(
+    projectId: string,
+    runner: NonNullable<ProjectVmMachineDriver['runInMachine']>,
+  ): Promise<Pick<ProjectRuntimeDescriptor, 'machineName' | 'workspacePath' | 'servicePorts'> | undefined> {
+    let persisted: Record<string, unknown>
+    try {
+      persisted = JSON.parse(await readFile(resolve(this.stateRoot, 'projects', projectId, 'runtime.json'), 'utf8')) as Record<string, unknown>
+    } catch {
+      return undefined
+    }
+    if (persisted.projectId !== projectId || persisted.status !== 'ready'
+      || typeof persisted.machineName !== 'string' || typeof persisted.workspacePath !== 'string') return undefined
+    const servicePorts = await this.readPersistedProjectPorts(projectId)
+    if (!servicePorts) return undefined
+    try {
+      const result = await runner(persisted.machineName, 'sudo', [
+        '-n', '/var/lib/openlink/project-supabase-runtime', 'status',
+        '--project-id', projectId,
+        '--workspace', persisted.workspacePath,
+        '--state-root', '/var/lib/openlink/project-supabase',
+        '--gateway-port', String(servicePorts.supabaseGateway),
+        '--database-port', String(servicePorts.supabaseDatabase),
+        '--pooler-port', String(servicePorts.supabasePooler),
+      ])
+      const state = JSON.parse(result.stdout) as Record<string, unknown>
+      if (state.projectId !== projectId || state.status !== 'ready'
+        || state.gatewayPort !== servicePorts.supabaseGateway
+        || state.databasePort !== servicePorts.supabaseDatabase
+        || state.poolerPort !== servicePorts.supabasePooler) return undefined
+      return { machineName: persisted.machineName, workspacePath: persisted.workspacePath, servicePorts }
+    } catch {
+      return undefined
+    }
+  }
+
   /**
    * Check whether this host has a durable Project runtime record without
    * starting the VM. Cleanup APIs use this to distinguish an old browser or
@@ -329,10 +571,12 @@ export class ProjectRuntimeManager {
       } catch {
         continue
       }
-      // `deleting` is an explicit terminal cleanup state. All other durable
-      // runtime states represent a Project that must be brought back to a
-      // usable, resident VM when the application starts.
-      if (status === 'deleting') continue
+      // Only a runtime which was successfully ready when the supervisor
+      // stopped is eligible for automatic reattachment. `stopped` is an
+      // explicit terminal state and `error` needs an explicit retry; eagerly
+      // replaying either at startup can consume the host with stale VM image
+      // imports and disrupt unrelated interactive projects.
+      if (status !== 'ready') continue
       try {
         await this.ensure(projectId)
       } catch (error) {
@@ -352,9 +596,14 @@ export class ProjectRuntimeManager {
       let failure: unknown
       let machineStopped = false
       try {
-        await this.serviceDriver.stopServices(this.serviceInput(descriptor))
+        await this.stopProjectSupabase(descriptor.machineName, projectId, descriptor.workspacePath, descriptor.servicePorts)
       } catch (error) {
         failure = error
+      }
+      try {
+        await this.serviceDriver.stopServices(this.serviceInput(descriptor))
+      } catch (error) {
+        failure ??= error
       }
       try {
         await this.vmManager.stop(projectId)
@@ -690,6 +939,18 @@ export class ProjectRuntimeManager {
       if (!response.ok) throw new Error(`${endpoint}${path} returned HTTP ${response.status}`)
       if (response.body) await response.body.cancel().catch(() => undefined)
     }
+    const runner = this.machineDriver.runInMachine?.bind(this.machineDriver)
+    if (!runner) throw new Error('Project VM driver cannot verify Project Supabase')
+    const result = await runner(descriptor.machineName, 'sudo', [
+      '-n', '/var/lib/openlink/project-supabase-runtime', 'status',
+      '--project-id', descriptor.projectId,
+      '--workspace', descriptor.workspacePath,
+      '--gateway-port', String(descriptor.servicePorts.supabaseGateway),
+      '--database-port', String(descriptor.servicePorts.supabaseDatabase),
+      '--pooler-port', String(descriptor.servicePorts.supabasePooler),
+    ])
+    const state = JSON.parse(result.stdout) as Record<string, unknown>
+    if (state.status !== 'ready' || state.observedRevision !== descriptor.supabase.revision || state.projectId !== descriptor.projectId) throw new Error('Project Supabase is not ready')
   }
 
   private async resolveDiskMode(projectId: string, requested?: ProjectVmDiskMode): Promise<ProjectVmDiskMode> {
@@ -725,7 +986,7 @@ export class ProjectRuntimeManager {
     try {
       vm = await this.vmManager.ensure(projectId, {
         diskMode,
-        servicePorts: [ports.opensandbox, ports.browserHost, ports.codeServer],
+        servicePorts: [ports.opensandbox, ports.browserHost, ports.codeServer, ports.supabaseGateway, ports.supabaseDatabase, ports.supabasePooler],
         sshPort: this.vmSshPort(ports),
       })
       // A previous stop/rebuild may have retained a tunnel whose close failed.
@@ -790,6 +1051,7 @@ export class ProjectRuntimeManager {
         // Podman drivers always take the guest-path branch above.
         await mkdir(input.sessionStorageRoot, { recursive: true, mode: 0o700 })
       }
+      const supabase = await this.ensureProjectSupabase(vm.machineName, projectId, vm.workspacePath, ports)
       await this.serviceDriver.ensureServices(input)
       const forwards: ProjectVmPortForward[] = []
       if (this.machineDriver.forwardPort) {
@@ -828,6 +1090,7 @@ export class ProjectRuntimeManager {
         agentWorkerImage: input.agentWorkerImage,
         agentRpcWorkerImage: input.agentRpcWorkerImage,
         codeServerImage: input.codeServerImage,
+        supabase,
         egressMode: this.serviceDriver.supportsEgress === false ? 'disabled' : 'sidecar',
       }
       await this.persistDescriptorState(descriptor, 'ready')
@@ -925,6 +1188,72 @@ export class ProjectRuntimeManager {
     return port(ports.browserHost + 101, 'Project VM SSH port')
   }
 
+  private async ensureProjectSupabase(machineName: string, projectId: string, workspacePath: string, ports: ProjectRuntimeServicePorts): Promise<ProjectRuntimeDescriptor['supabase']> {
+    const runner = this.machineDriver.runInMachine?.bind(this.machineDriver)
+    if (!runner) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project VM driver cannot initialize Project Supabase')
+    // The Golden Disk's OCI image may contain an older version of the Project
+    // Supabase runtime controller.  Sync the working-tree controller and
+    // bundle verifier into the VM's writable /var/lib/openlink so the latest
+    // fixes (interpolate, proxy clearing, SELinux, ANON_KEY, etc.) are always
+    // applied without requiring a full OCI image rebuild.
+    if (this.machineDriver.copyToMachine) {
+      // Agent Host is launched with its own package directory as cwd.  Use
+      // the repository root supplied by the lifecycle supervisor so this
+      // update never resolves to the non-existent
+      // `services/agent-host/services/agent-host/...` path.
+      const workspaceRoot = resolve(process.env.OPENLINK_AGENT_WORKSPACE_ROOT?.trim() || process.cwd())
+      const controllerSrc = resolve(workspaceRoot, 'services/agent-host/project-supabase-runtime.mjs')
+      const bundleSrc = resolve(workspaceRoot, 'scripts/lib/project-supabase-bundle.mjs')
+      try {
+        await this.machineDriver.copyToMachine(machineName, controllerSrc, '/tmp/project-supabase-runtime.mjs')
+        await this.machineDriver.copyToMachine(machineName, bundleSrc, '/tmp/project-supabase-bundle.mjs')
+        await runner(machineName, 'sudo', ['-n', 'sh', '-c', 'mkdir -p /var/lib/openlink && cp /tmp/project-supabase-runtime.mjs /var/lib/openlink/project-supabase-runtime && cp /tmp/project-supabase-bundle.mjs /var/lib/openlink/project-supabase-bundle.mjs && chmod 0755 /var/lib/openlink/project-supabase-runtime'])
+      } catch (error) {
+        throw new AgentHostError(
+          'PROVISIONING_FAILED',
+          `Unable to synchronize the Project Supabase runtime controller: ${error instanceof Error ? error.message : String(error)}`,
+          { retryable: true },
+        )
+      }
+    }
+    const result = await runner(machineName, 'sudo', [
+      '-n', '/var/lib/openlink/project-supabase-runtime', 'ensure',
+      '--project-id', projectId,
+      '--workspace', workspacePath,
+      '--gateway-port', String(ports.supabaseGateway),
+      '--database-port', String(ports.supabaseDatabase),
+      '--pooler-port', String(ports.supabasePooler),
+    ])
+    let value: unknown
+    try { value = JSON.parse(result.stdout) } catch { throw new AgentHostError('PROVISIONING_FAILED', 'Project Supabase controller returned invalid JSON', { retryable: true }) }
+    if (!value || typeof value !== 'object') throw new AgentHostError('PROVISIONING_FAILED', 'Project Supabase controller returned an invalid descriptor', { retryable: true })
+    const descriptor = value as Record<string, unknown>
+    if (descriptor.projectId !== projectId
+      || typeof descriptor.url !== 'string'
+      || descriptor.url !== `http://127.0.0.1:${ports.supabaseGateway}`
+      || typeof descriptor.publishableKey !== 'string'
+      || !descriptor.publishableKey.startsWith('sb_publishable_')
+      || typeof descriptor.anonKey !== 'string'
+      || descriptor.anonKey.split('.').length !== 3
+      || typeof descriptor.revision !== 'string') {
+      throw new AgentHostError('PROVISIONING_FAILED', 'Project Supabase controller descriptor failed validation', { retryable: true })
+    }
+    return descriptor as ProjectRuntimeDescriptor['supabase']
+  }
+
+  private async stopProjectSupabase(machineName: string, projectId: string, workspacePath: string, ports: ProjectRuntimeServicePorts): Promise<void> {
+    const runner = this.machineDriver.runInMachine?.bind(this.machineDriver)
+    if (!runner) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project VM driver cannot stop Project Supabase')
+    await runner(machineName, 'sudo', [
+      '-n', '/var/lib/openlink/project-supabase-runtime', 'stop',
+      '--project-id', projectId,
+      '--workspace', workspacePath,
+      '--gateway-port', String(ports.supabaseGateway),
+      '--database-port', String(ports.supabaseDatabase),
+      '--pooler-port', String(ports.supabasePooler),
+    ])
+  }
+
   private async closeForwards(projectId: string): Promise<void> {
     const forwards = this.forwards.get(projectId) ?? []
     if (!forwards.length) {
@@ -970,6 +1299,7 @@ export class ProjectRuntimeManager {
       agentWorkerImage: descriptor.agentWorkerImage,
       agentRpcWorkerImage: descriptor.agentRpcWorkerImage,
       codeServerImage: descriptor.codeServerImage,
+      supabase: descriptor.supabase,
       egressMode: descriptor.egressMode,
       ...(error ? { lastError: error instanceof Error ? error.message : String(error) } : {}),
     })}\n`, { mode: 0o600 })
@@ -1005,7 +1335,7 @@ export class ProjectRuntimeManager {
       }
 
       const used = await this.readUsedProjectPorts(projectId)
-      const maxStart = 65_000 - Math.max(this.opensandboxPortOffset, this.browserPortOffset + 101, this.codeServerPortOffset)
+      const maxStart = 65_000 - Math.max(this.opensandboxPortOffset, this.browserPortOffset + 101, this.codeServerPortOffset, this.supabaseGatewayPortOffset, this.supabaseDatabasePortOffset, this.supabasePoolerPortOffset)
       const capacity = maxStart - this.projectPortBase + 1
       if (capacity < 1) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project runtime port range is exhausted')
       const initial = hashProject(projectId) % capacity
@@ -1013,10 +1343,14 @@ export class ProjectRuntimeManager {
         const openSandbox = this.projectPortBase + ((initial + offset) % capacity) + this.opensandboxPortOffset
         const browserHost = openSandbox - this.opensandboxPortOffset + this.browserPortOffset
         const codeServer = openSandbox - this.opensandboxPortOffset + this.codeServerPortOffset
+        const supabaseGateway = openSandbox - this.opensandboxPortOffset + this.supabaseGatewayPortOffset
+        const supabaseDatabase = openSandbox - this.opensandboxPortOffset + this.supabaseDatabasePortOffset
+        const supabasePooler = openSandbox - this.opensandboxPortOffset + this.supabasePoolerPortOffset
         const sshPort = browserHost + 101
-        const candidates = [openSandbox, browserHost, codeServer, sshPort]
+        const candidates = [openSandbox, browserHost, codeServer, supabaseGateway, supabaseDatabase, supabasePooler, sshPort]
         if (candidates.some((candidate) => !Number.isSafeInteger(candidate) || candidate < 1_024 || candidate > 65_000 || used.has(candidate))) continue
-        const allocation: ProjectRuntimeServicePorts = { opensandbox: openSandbox, browserHost, codeServer }
+        if (new Set(candidates).size !== candidates.length) continue
+        const allocation: ProjectRuntimeServicePorts = { opensandbox: openSandbox, browserHost, codeServer, supabaseGateway, supabaseDatabase, supabasePooler }
         await this.persistProjectPorts(projectId, allocation)
         this.portAllocations.set(projectId, allocation)
         return allocation
@@ -1039,9 +1373,12 @@ export class ProjectRuntimeManager {
         // deterministic third port during the upgrade; their existing
         // OpenSandbox, Browser Host, and SSH mappings remain unchanged.
         : opensandbox - this.opensandboxPortOffset + this.codeServerPortOffset
-      if (this.isValidPortSet(opensandbox, browserHost, codeServer)) {
-        const ports = { opensandbox, browserHost, codeServer }
-        if (value.codeServer !== codeServer) await this.persistProjectPorts(projectId, ports)
+      const supabaseGateway = typeof value.supabaseGateway === 'number' ? value.supabaseGateway : opensandbox - this.opensandboxPortOffset + this.supabaseGatewayPortOffset
+      const supabaseDatabase = typeof value.supabaseDatabase === 'number' ? value.supabaseDatabase : opensandbox - this.opensandboxPortOffset + this.supabaseDatabasePortOffset
+      const supabasePooler = typeof value.supabasePooler === 'number' ? value.supabasePooler : opensandbox - this.opensandboxPortOffset + this.supabasePoolerPortOffset
+      if (this.isValidPortSet(opensandbox, browserHost, codeServer, supabaseGateway, supabaseDatabase, supabasePooler)) {
+        const ports = { opensandbox, browserHost, codeServer, supabaseGateway, supabaseDatabase, supabasePooler }
+        if (value.codeServer !== codeServer || value.supabaseGateway !== supabaseGateway || value.supabaseDatabase !== supabaseDatabase || value.supabasePooler !== supabasePooler) await this.persistProjectPorts(projectId, ports)
         return ports
       }
     } catch {}
@@ -1058,6 +1395,9 @@ export class ProjectRuntimeManager {
         used.add(allocation.opensandbox)
         used.add(allocation.browserHost)
         used.add(allocation.codeServer)
+        used.add(allocation.supabaseGateway)
+        used.add(allocation.supabaseDatabase)
+        used.add(allocation.supabasePooler)
         used.add(allocation.browserHost + 101)
         continue
       }
@@ -1077,20 +1417,11 @@ export class ProjectRuntimeManager {
     return used
   }
 
-  private isValidPortSet(opensandbox: unknown, browserHost: unknown, codeServer: unknown): boolean {
-    if (typeof opensandbox !== 'number' || typeof browserHost !== 'number' || typeof codeServer !== 'number') return false
-    return Number.isSafeInteger(opensandbox)
-      && Number.isSafeInteger(browserHost)
-      && opensandbox >= 1_024
-      && browserHost >= 1_024
-      && codeServer >= 1_024
-      && opensandbox <= 65_000
-      && browserHost <= 65_000
-      && codeServer <= 65_000
-      && opensandbox !== browserHost
-      && opensandbox !== codeServer
-      && browserHost !== codeServer
-      && browserHost + 101 <= 65_000
+  private isValidPortSet(opensandbox: unknown, browserHost: unknown, codeServer: unknown, supabaseGateway: unknown, supabaseDatabase: unknown, supabasePooler: unknown): boolean {
+    const values = [opensandbox, browserHost, codeServer, supabaseGateway, supabaseDatabase, supabasePooler]
+    if (values.some((value) => typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1_024 || value > 65_000)) return false
+    return new Set([...values, (browserHost as number) + 101]).size === values.length + 1
+      && (browserHost as number) + 101 <= 65_000
   }
 
   private async persistProjectPorts(projectId: string, ports: ProjectRuntimeServicePorts): Promise<void> {

@@ -232,6 +232,12 @@ async function ensureNpmDependencies(name, directory, extraInputs = []) {
   const install = run('npm', [
     'ci',
     '--ignore-scripts',
+    // Dependency installation is a startup prerequisite, while npm's audit
+    // and funding lookups are release/maintenance concerns. Keeping them out
+    // of the runtime path prevents a slow registry advisory request from
+    // blocking every local service behind Knowledge Service initialization.
+    '--no-audit',
+    '--no-fund',
     '--fetch-retries=5',
     '--fetch-retry-factor=2',
     '--fetch-retry-mintimeout=20000',
@@ -351,6 +357,10 @@ if (process.env.OPENLINK_BUILD_ARTIFACTS === '1') {
   await waitForExit(rpcWorkerBuild, 'Agent RPC Worker build')
   const knowledgeBuild = run('npm', ['run', 'build'], { cwd: knowledgeServiceDirectory })
   await waitForExit(knowledgeBuild, 'Knowledge Service build')
+  const projectSupabaseSync = run(process.execPath, ['scripts/sync-project-supabase.mjs'], { cwd: root, env: process.env })
+  await waitForExit(projectSupabaseSync, 'Project Supabase release sync')
+  const projectSupabaseImages = run(process.execPath, ['scripts/build-project-supabase-images.mjs'], { cwd: root, env: process.env })
+  await waitForExit(projectSupabaseImages, 'Project Supabase image artifacts')
   const projectVmBaseBuild = run(process.execPath, ['scripts/build-project-vm-base.mjs'], {
     cwd: root,
     env: {

@@ -78,14 +78,14 @@ export class RemoteOpenSandboxRpcBackend {
   async cleanupSession(userId: string, workspaceId: string, sessionId: string, projectId?: string, projectRuntime?: ProjectRuntimeDescriptor): Promise<void> {
     const connection = projectRuntime
       ? (() => {
-          const endpoint = new URL(projectRuntime.opensandboxEndpoint)
-          return {
-            domain: endpoint.host,
-            protocol: endpoint.protocol === 'https:' ? 'https' as const : 'http' as const,
-            apiKey: projectRuntime.opensandboxApiKey,
-            useServerProxy: true,
-          }
-        })()
+        const endpoint = new URL(projectRuntime.opensandboxEndpoint)
+        return {
+          domain: endpoint.host,
+          protocol: endpoint.protocol === 'https:' ? 'https' as const : 'http' as const,
+          apiKey: projectRuntime.opensandboxApiKey,
+          useServerProxy: true,
+        }
+      })()
       : { domain: this.config.domain, protocol: 'http' as const, apiKey: this.config.apiKey, useServerProxy: true }
     await cleanupOpenSandboxSessionWorkloads(connection, {
       'openlink.user_id': userId,
@@ -119,15 +119,15 @@ export class RemoteOpenSandboxRpcBackend {
       : (this.config.storageRoot + '/' + scopedProject + '/' + scopedUser + '/' + scopedWorkspace + '/' + scopedSession)
     const connection = projectRuntime
       ? (() => {
-          const endpoint = new URL(projectRuntime.opensandboxEndpoint)
-          return new ConnectionConfig({
-            domain: endpoint.host,
-            protocol: endpoint.protocol === 'https:' ? 'https' : 'http',
-            apiKey: projectRuntime.opensandboxApiKey,
-            requestTimeoutSeconds: 120,
-            useServerProxy: true,
-          })
-        })()
+        const endpoint = new URL(projectRuntime.opensandboxEndpoint)
+        return new ConnectionConfig({
+          domain: endpoint.host,
+          protocol: endpoint.protocol === 'https:' ? 'https' : 'http',
+          apiKey: projectRuntime.opensandboxApiKey,
+          requestTimeoutSeconds: 120,
+          useServerProxy: true,
+        })
+      })()
       : this.connection
     const sandbox = await Sandbox.create({
       connectionConfig: connection,
@@ -153,6 +153,19 @@ export class RemoteOpenSandboxRpcBackend {
           OPENLINK_BROWSER_CONTROL_TOKEN: browser.controlToken,
           OPENLINK_BROWSER_EXTENSION_PATH: browser.extensionPath,
         } : {}),
+        // Project-local Supabase backend: inject only the safe, publishable
+        // connection material so the generated app and the Agent worker can
+        // reach Auth/REST/Realtime/Storage. Service-role keys and the DB
+        // password never leave the Project VM and are not placed on the
+        // descriptor, so they cannot leak through this env block.
+        ...(projectRuntime?.supabase ? {
+          SUPABASE_URL: projectRuntime.supabase.url,
+          SUPABASE_PUBLISHABLE_KEY: projectRuntime.supabase.publishableKey,
+          SUPABASE_ANON_KEY: projectRuntime.supabase.anonKey,
+          NEXT_PUBLIC_SUPABASE_URL: projectRuntime.supabase.url,
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: projectRuntime.supabase.anonKey,
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: projectRuntime.supabase.publishableKey,
+        } : {}),
       },
       metadata: {
         'openlink.user_id': scopedUser,
@@ -167,11 +180,11 @@ export class RemoteOpenSandboxRpcBackend {
       // only for this explicit extension and keeps the control plane private
       // behind the SSH tunnel.
       extensions: { 'bootstrap.execd.isolation': 'enable' },
-        networkPolicy: {
-          defaultAction: this.config.networkDefaultAction ?? 'deny',
-          egress: [...providerHosts, browserHost]
-            .filter((target): target is string => Boolean(target))
-            .map((target) => ({ action: 'allow' as const, target })),
+      networkPolicy: {
+        defaultAction: this.config.networkDefaultAction ?? 'deny',
+        egress: [...providerHosts, browserHost]
+          .filter((target): target is string => Boolean(target))
+          .map((target) => ({ action: 'allow' as const, target })),
       },
       credentialProxy: { enabled: true },
       volumes: [
@@ -202,13 +215,13 @@ export class RemoteOpenSandboxRpcBackend {
         }])
       }
       if (providerApiKey) await sandbox.credentialVault.create({
-          credentials: [{ name: 'provider-api-key', source: { type: 'inline', value: providerApiKey } }],
-          bindings: [{
-            name: 'provider-api',
-            match: { schemes: [providerUrl.protocol === 'http:' ? 'http' : 'https'], hosts: providerHosts },
-            auth: { type: 'passthrough', substitutions: [{ credential: 'provider-api-key', placeholder: vaultPlaceholder, in: ['header'] }] },
-          }],
-        })
+        credentials: [{ name: 'provider-api-key', source: { type: 'inline', value: providerApiKey } }],
+        bindings: [{
+          name: 'provider-api',
+          match: { schemes: [providerUrl.protocol === 'http:' ? 'http' : 'https'], hosts: providerHosts },
+          auth: { type: 'passthrough', substitutions: [{ credential: 'provider-api-key', placeholder: vaultPlaceholder, in: ['header'] }] },
+        }],
+      })
       let activeSandbox: Sandbox = sandbox
       let endpoint = await activeSandbox.getEndpoint(43131)
       let baseUrl = endpointUrl(connection, endpoint)

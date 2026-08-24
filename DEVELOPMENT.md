@@ -37,10 +37,38 @@ pnpm runtime:vm-image
 pnpm runtime:images
 pnpm runtime:zokerbase:images
 pnpm runtime:zero:images
+pnpm runtime:project-supabase:sync
+pnpm runtime:project-supabase:images
+pnpm runtime:project-supabase:test
 ```
 
 Ordinary startup must consume those local product artifacts without pulling
 upstream images.
+
+Project Supabase release production is intentionally separate from ZOKERBASE:
+
+```bash
+# Review/update services/project-supabase/runtime.lock.json only during a
+# deliberate upstream release change, then acquire this host architecture.
+pnpm runtime:project-supabase:sync
+pnpm runtime:project-supabase:images
+
+# A release operator key is generated once and kept outside source control.
+pnpm runtime:project-supabase:keygen
+OPENLINK_PROJECT_SUPABASE_SIGNING_KEY_FILE=/absolute/private.pem \
+  pnpm runtime:project-supabase:upgrade-bundle
+
+# The complete image path: bootc OCI -> never-booted raw disk -> target
+# rootful Podman graphroot seeding -> fresh clone validation.
+pnpm runtime:vm-image
+pnpm runtime:project-supabase:validate-vm
+```
+
+Do not run `keygen` to replace a production key implicitly: it refuses to
+overwrite an existing private key. Add/retire trusted public keys through a
+reviewed `services/project-supabase/release-trust.json` change and retain old
+keys for the supported upgrade window. Generated archives, private keys,
+Golden Disks and bundles remain under ignored runtime/release directories.
 
 ## Editing rules
 

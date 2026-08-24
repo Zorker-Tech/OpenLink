@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { AgentHostError } from './errors.js'
-import { PodmanProjectRuntimeServiceDriver, ProjectRuntimeManager, type ProjectGitVersion, type ProjectPreviewTarget, type ProjectRuntimeCloseOptions, type ProjectRuntimeDescriptor } from './project-runtime.js'
+import { PodmanProjectRuntimeServiceDriver, ProjectRuntimeManager, type ProjectGitVersion, type ProjectPreviewTarget, type ProjectRuntimeCloseOptions, type ProjectRuntimeDescriptor, type ProjectSupabaseManagementRequest, type ProjectSupabaseStudioProxyRequest, type ProjectSupabaseStudioProxyResponse } from './project-runtime.js'
 import type { ProjectRuntimeStatusWriter } from './project-runtime-status.js'
 import { ProjectVmManager } from './project-vm.js'
 import { RemoteQemuProjectVmDriver } from './remote-project-vm.js'
@@ -11,6 +11,9 @@ import { buildRemoteProjectVmBootstrapPlan, SshTransport, type SshTarget } from 
 
 export interface ProjectRuntimeController {
   ensure(projectId: string, requestedDiskMode?: 'thin' | 'thick'): Promise<ProjectRuntimeDescriptor>
+  describeSupabase?(projectId: string): Promise<ProjectRuntimeDescriptor['supabase'] | null>
+  manageSupabase?(projectId: string, request: ProjectSupabaseManagementRequest): Promise<Record<string, unknown>>
+  proxySupabaseStudio?(projectId: string, request: ProjectSupabaseStudioProxyRequest): Promise<ProjectSupabaseStudioProxyResponse>
   prepareSessionStorage(projectId: string, userId: string, workspaceId: string, sessionId: string): Promise<string>
   ensureProjectGitRepository(projectId: string): Promise<void>
   listGitVersions(projectId: string): Promise<ProjectGitVersion[]>
@@ -262,6 +265,18 @@ export class ProjectRuntimeRouter implements ProjectRuntimeController {
 
   async prepareSessionStorage(projectIdValue: string, userId: string, workspaceId: string, sessionId: string) {
     return (await this.manager(projectIdValue)).prepareSessionStorage(projectIdValue, userId, workspaceId, sessionId)
+  }
+
+  async manageSupabase(projectIdValue: string, request: ProjectSupabaseManagementRequest) {
+    return (await this.manager(projectIdValue)).manageSupabase(projectIdValue, request)
+  }
+
+  async describeSupabase(projectIdValue: string) {
+    return (await this.manager(projectIdValue)).describeSupabase(projectIdValue)
+  }
+
+  async proxySupabaseStudio(projectIdValue: string, request: ProjectSupabaseStudioProxyRequest) {
+    return (await this.manager(projectIdValue)).proxySupabaseStudio(projectIdValue, request)
   }
 
   async ensureProjectGitRepository(projectIdValue: string) {

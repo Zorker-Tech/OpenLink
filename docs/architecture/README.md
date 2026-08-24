@@ -39,6 +39,12 @@ The current ADR set covers these areas:
 - Local/Cloud persistence isolation;
 - eager project provisioning and session Worker lifecycle;
 - the ZOKERBASE/Zero Knowledge architecture.
+- the independent upstream Supabase runtime preloaded into every Project VM
+  Golden Image ([ADR-0016](./ADR-0016-project-supabase-runtime.md)).
+- verified native clone instantiation for thin Project VM disks
+  ([ADR-0017](./ADR-0017-project-vm-disk-instantiation.md)).
+- the Local-only, scoped virtual-host proxy for a Project VM's upstream
+  Supabase Studio ([ADR-0018](./ADR-0018-local-project-studio-proxy.md)).
 
 New decisions use the format below and the next unused ADR number:
 

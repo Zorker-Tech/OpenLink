@@ -70,11 +70,25 @@ not invented in design documents.
   Cloud data access.
 - Ordinary startup does not require an upstream image registry when all product
   artifacts are installed.
+- A new Project VM starts its complete Supabase backend while registry DNS and
+  registry egress are unavailable. Missing or mismatched local service images
+  are terminal Golden Image defects, never a pull/retry fallback.
 - Product releases include or can restore all pinned ZOKERBASE, Zero, Project
   VM, Browser, code-server, OpenSandbox, Podman, and Pi artifacts required by
   the declared platform.
 - Logical Project VM disk capacity is thin/sparse where supported and does not
   imply immediate allocation of the full capacity on the host.
+- The Project VM Golden Disk uses ext4 for its dedicated `/boot` filesystem
+  and XFS for root/data. The boot filesystem choice is release-validated
+  across a same-disk guest power cycle before publication.
+- Thin Project VM creation uses a mandatory native CoW clone and verifies the
+  resulting logical size and host allocation before first boot. A clone
+  failure or materialized sparse hole is a provisioning failure, not a reason
+  to continue with an unbounded byte copy.
+- Project Supabase releases lock the annotated upstream self-hosted tag, peeled
+  commit, full configuration/runtime hashes and both amd64/arm64 image manifest
+  digests. Upgrade bundles are Ed25519-signed, file-manifested, architecture
+  specific and imported without runtime network pulls.
 
 ## Maintainability
 

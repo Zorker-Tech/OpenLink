@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "keys": [
+    {
+      "keyId": "74c990f553ad1dfbe3f8f4b1aa3f31af00796e1570d6a2b56de8799731c5a037",
+      "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAaIwZhJ5kO1NLGyOJPEEOQwcmXSeECBktMeE0qXsK0eM=\n-----END PUBLIC KEY-----\n",
+      "status": "active"
+    }
+  ]
+}

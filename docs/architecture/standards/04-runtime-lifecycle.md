@@ -72,6 +72,16 @@ A Project VM is durable per project. The published local base image is produced
 once and then copied/instantiated; ordinary runtime startup does not pull a
 machine OS or rebuild the base image.
 
+Thin local Project VM disks are instantiated by Agent Host through a verified
+native copy-on-write clone of the immutable Golden Disk. Podman owns machine
+configuration, Ignition, SSH identity and provider metadata, but must not copy
+the real Golden Disk through its custom-image path. The VM remains stopped
+until a staged clone has passed logical-size and host-allocation checks and has
+atomically replaced Podman's placeholder disk. Unsupported CoW filesystems
+fail thin provisioning explicitly; they never trigger an implicit thick copy.
+The Golden Disk keeps its GRUB-readable `/boot` on ext4 and its root/data on
+XFS so the same VM disk remains bootable across local AppleHV power cycles.
+
 The Project VM owns:
 
 - `/workspace` and its Git repository;
@@ -79,6 +89,25 @@ The Project VM owns:
 - code-server;
 - project Browser Host/runtime services;
 - per-session sandbox workloads.
+
+It also owns one independent `ProjectSupabaseRuntime` for application data:
+
+- the complete reviewed upstream Supabase self-hosted default stack runs as
+  rootful Podman containers inside the Project VM;
+- the Golden Disk already contains every locked service image in
+  `/var/lib/containers/storage`; first boot verifies and starts those images
+  and never pulls/imports them;
+- secrets, PostgreSQL, Storage, Functions, configuration and observed state
+  are unique to that Project VM and survive Agent Worker and VM restarts;
+- readiness requires every enabled Supabase service, not only PostgreSQL or a
+  running process;
+- explicit upgrades are serialized, signed, architecture-locked, capacity
+  checked, backed up and either committed after full health or rolled back to
+  the retained old image/data set.
+
+ZOKERBASE is not an input, compatibility fork, data source, secret source or
+upgrade authority for `ProjectSupabaseRuntime`. It remains the OpenLink control
+plane while this runtime is the generated application's backend.
 
 While the application is running, inactivity may suspend/pause a VM only when
 the selected runtime supports fast state-preserving resume. Session cleanup
