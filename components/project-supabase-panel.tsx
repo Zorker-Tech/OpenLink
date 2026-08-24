@@ -14,7 +14,6 @@ import {
   ChevronRight,
   Code2,
   Database,
-  ExternalLink,
   Files,
   Gauge,
   KeyRound,
@@ -33,7 +32,7 @@ import {
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
-type DataSection = 'overview' | 'table-editor' | 'sql-editor' | 'database' | 'auth' | 'storage' | 'functions' | 'realtime' | 'api' | 'studio' | 'logs' | 'settings'
+type DataSection = 'overview' | 'table-editor' | 'sql-editor' | 'database' | 'auth' | 'storage' | 'functions' | 'realtime' | 'api' | 'logs' | 'settings'
 
 interface ProjectSupabaseDescriptor {
   url: string
@@ -71,8 +70,6 @@ interface ProjectSupabasePanelProps {
   userId: string
   /** Render inside the chat workspace without taking over the application shell. */
   embedded?: boolean
-  /** Local mode can expose the upstream Studio through a scoped BFF proxy. */
-  localRuntime: boolean
 }
 
 const navigation: Array<{ id: DataSection; label: string; icon: React.ComponentType<{ className?: string }> }> = [
@@ -85,7 +82,6 @@ const navigation: Array<{ id: DataSection; label: string; icon: React.ComponentT
   { id: 'functions', label: 'Edge Functions', icon: Code2 },
   { id: 'realtime', label: 'Realtime', icon: Radio },
   { id: 'api', label: 'API 文档', icon: Braces },
-  { id: 'studio', label: 'Supabase Studio', icon: Database },
   { id: 'logs', label: '日志', icon: ScrollText },
   { id: 'settings', label: '项目设置', icon: Settings2 },
 ]
@@ -100,7 +96,6 @@ const sectionCopy: Record<DataSection, { eyebrow: string; title: string; descrip
   functions: { eyebrow: 'EDGE RUNTIME', title: 'Edge Functions', description: '读取 Project VM 工作区内真实 Edge Functions 目录和入口。部署操作将在发布流水线接入后开放。' },
   realtime: { eyebrow: 'STREAMING', title: 'Realtime', description: '管理数据库变更、广播和 Presence 实时通道。' },
   api: { eyebrow: 'PROJECT API', title: 'API 文档', description: '项目 API 连接信息、SDK 配置与 OpenAPI/GraphQL 接口。' },
-  studio: { eyebrow: 'LOCAL ADVANCED', title: 'Supabase Studio', description: 'Local 模式下通过 OpenLink 的受控代理嵌入上游 Studio；默认数据面板仍由 OpenLink 原生实现。' },
   logs: { eyebrow: 'OBSERVABILITY', title: '日志', description: '按服务、请求和时间范围检索项目后端日志。' },
   settings: { eyebrow: 'RUNTIME', title: '项目设置', description: '查看当前后端 release、运行时版本和升级状态。' },
 }
@@ -137,11 +132,7 @@ export function ProjectSupabasePanel(props: ProjectSupabasePanelProps) {
   const [managementError, setManagementError] = useState<string | null>(null)
   const [query, setQuery] = useState('select table_schema, table_name from information_schema.tables where table_schema = \'public\' order by table_name')
   const [queryResult, setQueryResult] = useState<ManagementResult | null>(null)
-  const [studioUrl, setStudioUrl] = useState<string | null>(null)
-  const [studioLoading, setStudioLoading] = useState(false)
-  const [studioError, setStudioError] = useState<string | null>(null)
   const content = sectionCopy[section]
-  const visibleNavigation = useMemo(() => navigation.filter((item) => props.localRuntime || item.id !== 'studio'), [props.localRuntime])
 
   const activeTheme = themeMode === 'light' || (themeMode === 'system' && systemLight) ? 'light' : 'dark'
   const descriptorLabel = useMemo(() => descriptor?.revision.replace(/^self-hosted\//, '') ?? '正在连接', [descriptor])
@@ -223,36 +214,6 @@ export function ProjectSupabasePanel(props: ProjectSupabasePanelProps) {
     if (result) setQueryResult(result)
   }
 
-  const openStudio = useCallback(async () => {
-    if (!props.localRuntime || studioLoading) return
-    setStudioLoading(true)
-    setStudioError(null)
-    try {
-      const response = await fetch(`/api/chat/${encodeURIComponent(props.sessionId)}/supabase/studio-session`, {
-        method: 'POST',
-        cache: 'no-store',
-      })
-      const payload = await response.json().catch(() => null) as { iframeUrl?: unknown; error?: { code?: unknown } } | null
-      if (!response.ok || typeof payload?.iframeUrl !== 'string' || !payload.iframeUrl.startsWith('http://studio.localhost')) {
-        throw new Error(typeof payload?.error?.code === 'string' ? payload.error.code : 'LOCAL_STUDIO_UNAVAILABLE')
-      }
-      setStudioUrl(payload.iframeUrl)
-    } catch (reason) {
-      setStudioError(reason instanceof Error ? reason.message : 'LOCAL_STUDIO_UNAVAILABLE')
-    } finally {
-      setStudioLoading(false)
-    }
-  }, [props.localRuntime, props.sessionId, studioLoading])
-
-  const showStudio = useCallback(() => {
-    setSection('studio')
-    void openStudio()
-  }, [openStudio])
-
-  useEffect(() => {
-    if (section === 'studio' && !studioUrl && !studioLoading && !studioError) void openStudio()
-  }, [openStudio, section, studioError, studioLoading, studioUrl])
-
   return (
     <OpenLinkThemeProvider theme={activeTheme}>
       <div className={`openlink-app-shell flex ${props.embedded ? 'h-full min-h-0' : 'h-dvh min-h-[520px]'} overflow-hidden bg-[var(--app-background)] text-[var(--app-foreground)]`} data-theme={activeTheme}>
@@ -286,7 +247,6 @@ export function ProjectSupabasePanel(props: ProjectSupabasePanelProps) {
             <span className="ml-1 hidden items-center gap-1.5 rounded-full bg-[var(--app-active)] px-2 py-1 text-[11px] font-medium text-[var(--app-muted)] sm:flex"><StatusDot ready={Boolean(descriptor)} />{loading ? '连接中' : descriptor ? '后端就绪' : '后端不可用'}</span>
             <div className="ml-auto flex items-center gap-2">
               <span className="hidden rounded-md border border-[var(--app-control-border)] bg-[var(--app-surface)] px-2 py-1 font-mono text-[11px] text-[var(--app-muted)] md:block">{descriptorLabel}</span>
-              {props.localRuntime && <button aria-label="打开 Supabase Studio" className="flex h-8 items-center gap-1.5 rounded-md border border-[var(--app-control-border)] bg-[var(--app-surface)] px-2.5 text-xs font-medium text-[var(--app-foreground)] hover:bg-[var(--app-hover)]" onClick={showStudio} type="button"><ExternalLink className="size-3.5" />Studio</button>}
               <button className="flex h-8 items-center gap-1.5 rounded-md border border-[var(--app-control-border)] bg-[var(--app-surface)] px-2.5 text-xs font-medium text-[var(--app-foreground)] hover:bg-[var(--app-hover)]" onClick={() => setSection('settings')} type="button"><Settings2 className="size-3.5" />运行时</button>
             </div>
           </header>}
@@ -297,7 +257,7 @@ export function ProjectSupabasePanel(props: ProjectSupabasePanelProps) {
                 <div className="flex items-center gap-2"><span className="flex size-7 items-center justify-center rounded-lg bg-[var(--app-active)] text-[var(--app-foreground)]"><Database className="size-4" /></span><div className="min-w-0"><p className="truncate text-sm font-semibold">{props.projectName}</p><p className="mt-0.5 text-[11px] text-[var(--app-subtle-foreground)]">Project backend</p></div></div>
               </div>
               <nav aria-label="项目数据导航" className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2">
-                {visibleNavigation.map((item, index) => {
+                {navigation.map((item, index) => {
                   const Icon = item.icon
                   const selected = item.id === section
                   const split = index === 4 || index === 8
@@ -323,7 +283,7 @@ export function ProjectSupabasePanel(props: ProjectSupabasePanelProps) {
                     <article className="rounded-xl border border-[var(--app-control-border)] bg-[var(--app-surface)] p-5 shadow-[0_1px_2px_var(--app-shadow)]"><div className="flex items-start justify-between gap-4"><div><h2 className="text-sm font-semibold">项目 API</h2><p className="mt-1 text-sm leading-5 text-[var(--app-muted)]">供项目应用连接 Auth、REST、Realtime、Storage 和 Functions 的受控入口。</p></div><Link2 className="size-4 text-[var(--app-muted)]" /></div>{loading ? <div className="mt-5 flex items-center gap-2 text-sm text-[var(--app-muted)]"><Loader2 className="size-4 animate-spin" />正在获取连接状态…</div> : descriptor ? <dl className="mt-5 divide-y divide-[var(--app-border)] rounded-lg border border-[var(--app-border)] bg-[var(--app-background)] text-sm"><div className="flex items-center justify-between gap-4 px-3 py-2.5"><dt className="text-[var(--app-muted)]">Gateway</dt><dd className="truncate font-mono text-xs text-[var(--app-foreground)]">{descriptor.url}</dd></div><div className="flex items-center justify-between gap-4 px-3 py-2.5"><dt className="text-[var(--app-muted)]">Publishable key</dt><dd className="font-mono text-xs text-[var(--app-foreground)]">{maskKey(descriptor.publishableKey)}</dd></div><div className="flex items-center justify-between gap-4 px-3 py-2.5"><dt className="text-[var(--app-muted)]">Release</dt><dd className="font-mono text-xs text-[var(--app-foreground)]">{descriptor.revision}</dd></div></dl> : <p className="mt-5 rounded-lg border border-[var(--app-danger)] bg-[var(--app-background)] px-3 py-2.5 text-sm text-[var(--app-danger)]">{error === 'PROJECT_BACKEND_UNAVAILABLE' ? '项目后端暂不可用，请稍后重试。' : '无法读取项目后端状态。'}</p>}</article>
                     <article className="rounded-xl border border-[var(--app-control-border)] bg-[var(--app-surface)] p-5 shadow-[0_1px_2px_var(--app-shadow)]"><h2 className="text-sm font-semibold">安全边界</h2><ul className="mt-4 space-y-3 text-sm leading-5 text-[var(--app-muted)]"><li className="flex gap-2"><KeyRound className="mt-0.5 size-3.5 shrink-0 text-[var(--app-success)]" />浏览器只接收 publishable 连接材料</li><li className="flex gap-2"><LockKeyhole className="mt-0.5 size-3.5 shrink-0 text-[var(--app-success)]" />管理密钥和数据库密码不离开 VM</li><li className="flex gap-2"><ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-[var(--app-success)]" />项目间数据和运行时完全隔离</li></ul></article>
                   </section>
-                  <section className="mt-6"><h2 className="text-sm font-semibold">后端能力</h2><div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{visibleNavigation.slice(1, 10).map((item) => { const Icon = item.icon; return <button className="group flex min-h-24 items-start gap-3 rounded-xl border border-[var(--app-control-border)] bg-[var(--app-surface)] p-4 text-left transition-colors hover:bg-[var(--app-hover)]" key={item.id} onClick={() => setSection(item.id)} type="button"><span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[var(--app-active)] text-[var(--app-foreground)] group-hover:bg-[var(--app-selected)]"><Icon className="size-4" /></span><span><strong className="block text-sm font-medium">{item.label}</strong><span className="mt-1 block text-xs leading-5 text-[var(--app-muted)]">{item.id === 'studio' ? 'Local 高级控制台' : 'OpenLink 项目级控制入口'}</span></span></button> })}</div></section>
+                  <section className="mt-6"><h2 className="text-sm font-semibold">后端能力</h2><div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{navigation.slice(1, 10).map((item) => { const Icon = item.icon; return <button className="group flex min-h-24 items-start gap-3 rounded-xl border border-[var(--app-control-border)] bg-[var(--app-surface)] p-4 text-left transition-colors hover:bg-[var(--app-hover)]" key={item.id} onClick={() => setSection(item.id)} type="button"><span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[var(--app-active)] text-[var(--app-foreground)] group-hover:bg-[var(--app-selected)]"><Icon className="size-4" /></span><span><strong className="block text-sm font-medium">{item.label}</strong><span className="mt-1 block text-xs leading-5 text-[var(--app-muted)]">OpenLink 项目级控制入口</span></span></button> })}</div></section>
                 </>}
 
                 {section === 'table-editor' && <section className="mt-6 rounded-xl border border-[var(--app-control-border)] bg-[var(--app-surface)] p-5">
@@ -334,7 +294,7 @@ export function ProjectSupabasePanel(props: ProjectSupabasePanelProps) {
                 </section>}
 
                 {section === 'database' && <section className="mt-6 grid gap-4 lg:grid-cols-2">
-                  <article className="rounded-xl border border-[var(--app-control-border)] bg-[var(--app-surface)] p-5"><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-sm font-semibold">PostgreSQL 实例</h2>{props.localRuntime && <button className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium ${theme('action')}`} onClick={showStudio} type="button"><ExternalLink className="size-3.5" />打开 Supabase Studio</button>}</div>{managementLoading ? <p className="mt-4 text-sm text-[var(--app-muted)]">正在读取数据库状态…</p> : managementError ? <p className="mt-4 text-sm text-[var(--app-danger)]">{managementError}</p> : <dl className="mt-4 space-y-3 text-sm"><div className="flex justify-between gap-4"><dt className="text-[var(--app-muted)]">版本</dt><dd className="font-mono text-xs">{management?.database?.version ?? '未知'}</dd></div><div className="flex justify-between gap-4"><dt className="text-[var(--app-muted)]">数据库大小</dt><dd>{management?.database?.size ?? '未知'}</dd></div><div className="flex justify-between gap-4"><dt className="text-[var(--app-muted)]">活动连接</dt><dd>{management?.database?.connections ?? '未知'}</dd></div></dl>}</article>
+                  <article className="rounded-xl border border-[var(--app-control-border)] bg-[var(--app-surface)] p-5"><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-sm font-semibold">PostgreSQL 实例</h2></div>{managementLoading ? <p className="mt-4 text-sm text-[var(--app-muted)]">正在读取数据库状态…</p> : managementError ? <p className="mt-4 text-sm text-[var(--app-danger)]">{managementError}</p> : <dl className="mt-4 space-y-3 text-sm"><div className="flex justify-between gap-4"><dt className="text-[var(--app-muted)]">版本</dt><dd className="font-mono text-xs">{management?.database?.version ?? '未知'}</dd></div><div className="flex justify-between gap-4"><dt className="text-[var(--app-muted)]">数据库大小</dt><dd>{management?.database?.size ?? '未知'}</dd></div><div className="flex justify-between gap-4"><dt className="text-[var(--app-muted)]">活动连接</dt><dd>{management?.database?.connections ?? '未知'}</dd></div></dl>}</article>
                   <article className="rounded-xl border border-[var(--app-control-border)] bg-[var(--app-surface)] p-5"><h2 className="text-sm font-semibold">运行时版本</h2><p className="mt-3 font-mono text-xs text-[var(--app-muted)]">{descriptor?.revision ?? '等待 Project VM'}</p><p className="mt-2 text-xs leading-5 text-[var(--app-muted)]">该信息来自 VM 内 Supabase runtime 控制器。</p></article>
                 </section>}
 
@@ -352,12 +312,6 @@ export function ProjectSupabasePanel(props: ProjectSupabasePanelProps) {
 
                 {section === 'api' && descriptor && <section className="mt-6 rounded-xl border border-[var(--app-control-border)] bg-[var(--app-surface)] p-5"><div className="flex items-start gap-3"><Braces className="mt-0.5 size-5" /><div><h2 className="text-sm font-semibold">应用连接配置</h2><p className="mt-1 text-sm leading-6 text-[var(--app-muted)]">将以下公开材料注入项目应用；不要把 service-role key 或数据库密码写入客户端。</p></div></div><pre className="mt-5 overflow-x-auto rounded-lg border border-[var(--app-border)] bg-[var(--app-background)] p-4 text-xs leading-6 text-[var(--app-foreground)]">{`SUPABASE_URL=${descriptor.url}\nSUPABASE_PUBLISHABLE_KEY=${maskKey(descriptor.publishableKey)}\nNEXT_PUBLIC_SUPABASE_URL=${descriptor.url}`}</pre></section>}
                 {section === 'api' && !descriptor && <p className="mt-6 rounded-lg border border-[var(--app-danger)] bg-[var(--app-background)] p-4 text-sm text-[var(--app-danger)]">Project VM 连接材料暂不可用。</p>}
-                {section === 'studio' && props.localRuntime && <section className="mt-6 overflow-hidden rounded-xl border border-[var(--app-control-border)] bg-[var(--app-surface)] shadow-[0_1px_2px_var(--app-shadow)]">
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--app-border)] px-5 py-3"><div><h2 className="text-sm font-semibold">上游 Supabase Studio</h2><p className="mt-1 text-xs text-[var(--app-muted)]">仅限 Local。所有请求经 OpenLink BFF 与 VM 控制器转发，Studio 密码不会离开 VM。</p></div><button className={`rounded-md px-3 py-1.5 text-xs font-medium ${theme('action')}`} disabled={studioLoading} onClick={() => { void openStudio() }} type="button">{studioLoading ? '正在连接…' : studioUrl ? '重新连接' : '加载 Studio'}</button></div>
-                  {studioError && <p className="m-5 rounded-lg border border-[var(--app-danger)] bg-[var(--app-background)] p-3 text-sm text-[var(--app-danger)]">{studioError === 'LOCAL_STUDIO_REQUIRES_LOCALHOST' ? '请通过 http://localhost 打开 OpenLink 后使用 Local Studio。' : '无法连接 Project VM 中的 Supabase Studio。'}</p>}
-                  {studioLoading && !studioUrl && <div className="flex h-[620px] items-center justify-center gap-2 text-sm text-[var(--app-muted)]"><Loader2 className="size-4 animate-spin" />正在建立受控 Studio 会话…</div>}
-                  {studioUrl && <iframe className="h-[min(760px,calc(100vh-190px))] min-h-[620px] w-full border-0 bg-white" referrerPolicy="no-referrer" src={studioUrl} title="Project Supabase Studio" />}
-                </section>}
                 {section === 'settings' && <section className="mt-6 rounded-xl border border-[var(--app-control-border)] bg-[var(--app-surface)] p-5"><h2 className="text-sm font-semibold">Project Supabase runtime</h2><dl className="mt-5 space-y-3 text-sm"><div className="flex justify-between gap-4"><dt className="text-[var(--app-muted)]">Revision</dt><dd className="font-mono text-xs">{descriptor?.revision ?? '正在连接'}</dd></div><div className="flex justify-between gap-4"><dt className="text-[var(--app-muted)]">Gateway</dt><dd className="font-mono text-xs">{descriptor?.url ?? '正在连接'}</dd></div></dl><p className="mt-5 text-xs leading-5 text-[var(--app-muted)]">升级仍由受签名 bundle 和 VM 内升级控制器执行；此页面不直接暴露容器管理权限。</p></section>}
               </div>
             </section>

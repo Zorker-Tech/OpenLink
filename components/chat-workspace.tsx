@@ -26,6 +26,7 @@ import {
 } from '@/components/browser/browser-workbench'
 import { CodeServerWorkbench } from '@/components/code-server/code-server-workbench'
 import { ProjectSupabasePanel } from '@/components/project-supabase-panel'
+import { ProjectSupabaseStudioFrame } from '@/components/project-supabase-studio-frame'
 import { Sidebar } from '@/components/app-workspace'
 import type { ThemeMode } from '@/components/account-drawer'
 import { ChatConfirmationDock, type ComposerConfirmationRequest } from '@/components/chat-confirmation-dock'
@@ -173,6 +174,9 @@ function ChatTopbar({
   onSelectBrowserSurface,
   onSelectCode,
   onSelectData,
+  dataSurface,
+  onToggleDataSurface,
+  localRuntime,
   onToggleDeviceView,
   onSessionTitleChange,
   workspaceView,
@@ -194,6 +198,9 @@ function ChatTopbar({
   onSelectBrowserSurface: (surface: 'native-preview' | 'chromium-stream') => void
   onSelectCode: () => void
   onSelectData: () => void
+  dataSurface: 'panel' | 'studio'
+  onToggleDataSurface: () => void
+  localRuntime: boolean
   onToggleDeviceView: () => void
   onSessionTitleChange: (title: string) => Promise<boolean>
   workspaceView: 'mobile' | 'browser' | 'code' | 'data'
@@ -296,6 +303,7 @@ function ChatTopbar({
             <ToolbarButton aria-pressed={workspaceView === 'code'} className={workspaceView === 'code' ? 'bg-[var(--app-background)] text-[var(--app-foreground)]' : ''} label="代码" onClick={onSelectCode}><Code2 className="size-4" /></ToolbarButton>
             <ToolbarButton aria-pressed={workspaceView === 'data'} className={workspaceView === 'data' ? 'bg-[var(--app-background)] text-[var(--app-foreground)]' : ''} label="数据" onClick={onSelectData}><Database className="size-4" /></ToolbarButton>
           </div>
+          {workspaceView === 'data' && localRuntime && <button aria-pressed={dataSurface === 'studio'} className={`flex h-[26px] shrink-0 items-center gap-1 rounded-full border border-[var(--app-control-border)] px-2.5 text-xs font-medium transition-colors ${dataSurface === 'studio' ? 'bg-[var(--app-active)] text-[var(--app-foreground)]' : 'bg-[var(--app-surface)] text-[var(--app-muted)] hover:text-[var(--app-foreground)]'}`} onClick={onToggleDataSurface} type="button"><ExternalLink className="size-3" />Studio</button>}
           <div className="flex min-w-[150px] flex-1 items-center justify-center">
             <form className={`relative -left-[3px] flex h-7 w-full max-w-[500px] items-center rounded-md border border-[var(--app-control-border)] px-0.5 ${workspaceView === 'code' || workspaceView === 'data' ? 'pointer-events-none opacity-0' : ''}`} onSubmit={(event) => { event.preventDefault(); browserWorkbenchRef.current?.navigate(addressDraft) }}>
               <ToolbarButton className="size-6!" disabled={!browserState.canGoBack} label="后退" onClick={() => browserWorkbenchRef.current?.back()}><ArrowLeft className="size-4" /></ToolbarButton>
@@ -452,16 +460,21 @@ function PreviewCanvas({
   sessionId,
   projectName,
   panelProps,
+  dataSurface,
 }: {
   browserWorkbenchRef: React.RefObject<BrowserWorkbenchHandle | null>
   view: 'mobile' | 'browser' | 'code' | 'data'
   onBrowserStateChange: (state: BrowserWorkbenchUiState) => void
   sessionId: string
   projectName: string
-  panelProps: Pick<ChatWorkspaceProps, 'activeWorkspace' | 'avatarUrl' | 'chatSessions' | 'email' | 'nickname' | 'organizations' | 'personalWorkspace' | 'projectId' | 'userId' | 'localRuntime'>
+  dataSurface: 'panel' | 'studio'
+  panelProps: Pick<ChatWorkspaceProps, 'activeWorkspace' | 'avatarUrl' | 'chatSessions' | 'email' | 'nickname' | 'organizations' | 'personalWorkspace' | 'projectId' | 'userId'>
 }) {
   if (view === 'code') return <CodeServerWorkbench chatSessionId={sessionId} />
-  if (view === 'data') return <ProjectSupabasePanel {...panelProps} projectName={projectName} sessionId={sessionId} embedded />
+  if (view === 'data') {
+    if (dataSurface === 'studio') return <ProjectSupabaseStudioFrame sessionId={sessionId} />
+    return <ProjectSupabasePanel {...panelProps} projectName={projectName} sessionId={sessionId} embedded />
+  }
   const browserMode = view === 'browser'
 
   return (
@@ -504,6 +517,9 @@ export function ChatWorkspace({
   // The browser canvas is the primary workspace. The device control is an
   // explicit opt-in for the constrained mobile viewport.
   const [workspaceView, setWorkspaceView] = useState<'mobile' | 'browser' | 'code' | 'data'>('browser')
+  // The data region hosts either the native project panel or a full-area
+  // upstream Supabase Studio session; Local mode exposes the toggle capsule.
+  const [dataSurface, setDataSurface] = useState<'panel' | 'studio'>('panel')
   const [browserState, setBrowserState] = useState<BrowserWorkbenchUiState>({
     browserSessionId: undefined,
     address: '',
@@ -863,7 +879,7 @@ export function ChatWorkspace({
           themeMode={themeMode}
         />
         <div className="flex min-w-0 flex-1 flex-col bg-[var(--app-background)]">
-          <ChatTopbar browserState={browserState} browserWorkbenchRef={browserWorkbenchRef} collapsed={collapsed} chatCollapsed={chatPanelCollapsed} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onOpenSidebar={() => { setCollapsed(false); setMobileOpen(true) }} onSelectBrowserSurface={(surface) => { setWorkspaceView('browser'); browserWorkbenchRef.current?.setSurface(surface) }} onSelectCode={() => setWorkspaceView('code')} onSelectData={() => setWorkspaceView('data')} onSelectGitVersion={selectGitVersion} onSessionTitleChange={updateSessionTitle} onToggleChat={toggleChatPanel} onToggleDeviceView={() => setWorkspaceView((view) => view === 'mobile' || view === 'data' ? 'browser' : 'mobile')} onToggleSidebar={() => setCollapsed(false)} renameRequestVersion={renameRequestVersion} selectedGitRef={selectedGitRef} sessionTitle={currentSessionTitle} workspaceView={workspaceView} />
+          <ChatTopbar browserState={browserState} browserWorkbenchRef={browserWorkbenchRef} collapsed={collapsed} chatCollapsed={chatPanelCollapsed} dataSurface={dataSurface} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} localRuntime={localRuntime} onOpenSidebar={() => { setCollapsed(false); setMobileOpen(true) }} onSelectBrowserSurface={(surface) => { setWorkspaceView('browser'); browserWorkbenchRef.current?.setSurface(surface) }} onSelectCode={() => setWorkspaceView('code')} onToggleDataSurface={() => setDataSurface((surface) => surface === 'studio' ? 'panel' : 'studio')} onSelectData={() => setWorkspaceView('data')} onSelectGitVersion={selectGitVersion} onSessionTitleChange={updateSessionTitle} onToggleChat={toggleChatPanel} onToggleDeviceView={() => setWorkspaceView((view) => view === 'mobile' || view === 'data' ? 'browser' : 'mobile')} onToggleSidebar={() => setCollapsed(false)} renameRequestVersion={renameRequestVersion} selectedGitRef={selectedGitRef} sessionTitle={currentSessionTitle} workspaceView={workspaceView} />
           <div className="hidden min-h-0 flex-1 xl:flex">
             <ResizablePanelGroup className="min-h-0" id="chat-workspace-panels" orientation="horizontal">
               <ResizablePanel
@@ -887,7 +903,7 @@ export function ChatWorkspace({
               </ResizablePanel>
               <ResizableHandle aria-label="调整聊天视图宽度" className="z-20 bg-[var(--app-border)]" id="chat-resize-handle" withHandle />
               <ResizablePanel className="min-w-0" groupResizeBehavior="preserve-relative-size" id="preview-panel" minSize="0px">
-                <PreviewCanvas browserWorkbenchRef={browserWorkbenchRef} onBrowserStateChange={setBrowserState} panelProps={{ activeWorkspace, avatarUrl, chatSessions, email, nickname, organizations, personalWorkspace, projectId, userId, localRuntime }} projectName={projectName} sessionId={sessionId} view={workspaceView} />
+                <PreviewCanvas browserWorkbenchRef={browserWorkbenchRef} dataSurface={dataSurface} onBrowserStateChange={setBrowserState} panelProps={{ activeWorkspace, avatarUrl, chatSessions, email, nickname, organizations, personalWorkspace, projectId, userId }} projectName={projectName} sessionId={sessionId} view={workspaceView} />
               </ResizablePanel>
             </ResizablePanelGroup>
           </div>

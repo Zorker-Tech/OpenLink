@@ -4,7 +4,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 
 const COOKIE_NAME = 'openlink_local_studio'
 const TICKET_VERSION = 1
-const MAX_AGE_SECONDS = 15 * 60
+export const LOCAL_STUDIO_COOKIE_MAX_AGE_SECONDS = 15 * 60
 
 export interface LocalStudioSession {
   version: number
@@ -32,10 +32,17 @@ export function localStudioCookieName(): string {
   return COOKIE_NAME
 }
 
+/**
+ * Chromium does not send `Domain=localhost` cookies to `studio.localhost`, so
+ * the first Studio navigation carries the capability in the query string and
+ * the internal route upgrades it to a host-only cookie on the Studio origin.
+ */
+export const LOCAL_STUDIO_TICKET_PARAM = 'openlink-studio-ticket'
+
 export function createLocalStudioSession(input: Omit<LocalStudioSession, 'version' | 'expiresAt'>): { value: string; maxAge: number } {
-  const expiresAt = Math.floor(Date.now() / 1000) + MAX_AGE_SECONDS
+  const expiresAt = Math.floor(Date.now() / 1000) + LOCAL_STUDIO_COOKIE_MAX_AGE_SECONDS
   const payload = Buffer.from(JSON.stringify({ version: TICKET_VERSION, ...input, expiresAt }), 'utf8').toString('base64url')
-  return { value: `${payload}.${signature(payload)}`, maxAge: MAX_AGE_SECONDS }
+  return { value: `${payload}.${signature(payload)}`, maxAge: LOCAL_STUDIO_COOKIE_MAX_AGE_SECONDS }
 }
 
 export function verifyLocalStudioSession(value: string | undefined): LocalStudioSession | null {
@@ -59,9 +66,10 @@ export function verifyLocalStudioSession(value: string | undefined): LocalStudio
   return valueObject as LocalStudioSession
 }
 
-export function localStudioOrigin(request: Request): string | null {
-  const host = request.headers.get('host') ?? new URL(request.url).host
-  const [hostname, port] = host.toLowerCase().split(':', 2)
-  if (hostname !== 'localhost') return null
-  return `http://studio.localhost${port ? `:${port}` : ''}`
+export function localStudioOrigin(_request: Request): string | null {
+  // Studio is served on a second port of the SAME `localhost` host so its
+  // SameSite cookie flows into the iframe (same host => same site; ports are
+  // not part of the site). `studio.localhost` would be a different site and
+  // would never receive the cookie.
+  return process.env.OPENLINK_STUDIO_ORIGIN || 'http://localhost:3002'
 }

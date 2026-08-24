@@ -10,11 +10,12 @@ function requestHostname(request: NextRequest): string {
 }
 
 export async function proxy(request: NextRequest) {
-  // Supabase Studio is hard-wired to serve from `/`. In Local mode it is
-  // therefore given a dedicated virtual host, still handled by this same BFF
-  // process. Do not run the normal ZOKERBASE session refresh on that host:
-  // Studio receives only its short-lived, project-scoped proxy capability.
-  if (requestHostname(request) === 'studio.localhost') {
+  // Supabase Studio is hard-wired to serve from `/`. It is therefore given its
+  // own origin (a second port on the same `localhost` host, tagged here) so its
+  // root-relative `_next/*` assets stay isolated from the application. Do not
+  // run the normal ZOKERBASE session refresh on that origin: Studio receives
+  // only its short-lived, project-scoped proxy capability.
+  if (request.headers.get('x-openlink-internal-studio') === '1' || requestHostname(request) === 'studio.localhost') {
     const target = request.nextUrl.clone()
     const originalPath = `${request.nextUrl.pathname}${request.nextUrl.search}`
     target.pathname = '/openlink-internal-studio'

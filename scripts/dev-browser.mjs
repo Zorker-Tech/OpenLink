@@ -474,6 +474,8 @@ const shared = {
   OPENLINK_AGENT_PORT: new URL(agentHostUrl).port || '43121',
   OPENLINK_DESKTOP_AGENT_HOST: '127.0.0.1',
   OPENLINK_DESKTOP_AGENT_PORT: new URL(desktopAgentHostUrl).port || '43123',
+  OPENLINK_STUDIO_ORIGIN: process.env.OPENLINK_STUDIO_ORIGIN || 'http://localhost:3002',
+  OPENLINK_STUDIO_PORT: String(Number(process.env.OPENLINK_STUDIO_PORT || 3002)),
   OPENLINK_NODE_EXECUTABLE: process.execPath,
   OPENLINK_AGENT_WORKSPACE_ROOT: fileURLToPath(root),
   OPENLINK_AGENT_STORAGE_ROOT: fileURLToPath(new URL('../.agent-data/', import.meta.url)),
@@ -536,6 +538,10 @@ await waitForHealth(agentHostUrl, agentHost, 'Agent Host')
 const desktopAgentHost = run(process.execPath, ['dist/src/desktop-main.js'], { cwd: agentHostDirectory, env: shared })
 await waitForHealth(desktopAgentHostUrl, desktopAgentHost, 'Desktop Agent Host')
 const next = run('pnpm', [mode === 'production' ? 'start:web' : 'dev:web'], { cwd: root, env: shared })
+// Studio is served on a second port of the same `localhost` host so its
+// SameSite cookie flows into the embedding iframe (same host => same site,
+// ports are not part of the site). See scripts/studio-origin-proxy.mjs.
+const studioOrigin = run(process.execPath, ['scripts/studio-origin-proxy.mjs'], { cwd: root, env: { ...shared, OPENLINK_WEB_PORT: '3001' } })
 
 let shuttingDown = false
 async function stop(child, signal, timeoutMs = 10_000) {
@@ -556,6 +562,7 @@ async function shutdown(signal) {
   // it can make those DELETEs fail. The previous 10-second parallel shutdown
   // also routinely SIGKILLed a host while a VM was still being stopped.
   await stop(next, signal, 15_000).catch(() => undefined)
+  await stop(studioOrigin, signal, 5_000).catch(() => undefined)
   await stop(desktopAgentHost, signal, 30_000).catch(() => undefined)
   await stop(agentHost, signal, 120_000).catch(() => undefined)
   if (knowledgeService) await stop(knowledgeService, signal, 30_000).catch(() => undefined)

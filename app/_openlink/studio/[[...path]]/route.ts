@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer'
 import { cookies } from 'next/headers'
-import { localStudioCookieName, verifyLocalStudioSession } from '@/lib/local-studio-proxy.server'
+import { localStudioCookieName, LOCAL_STUDIO_COOKIE_MAX_AGE_SECONDS, LOCAL_STUDIO_TICKET_PARAM, verifyLocalStudioSession } from '@/lib/local-studio-proxy.server'
 import { isLocalRuntime } from '@/lib/runtime-mode.server'
 
 export const runtime = 'nodejs'
@@ -17,6 +17,7 @@ function agentHostConfig() {
 }
 
 function isStudioHost(request: Request): boolean {
+  if (request.headers.get('x-openlink-internal-studio') === '1') return true
   return (request.headers.get('host') ?? new URL(request.url).host).split(':', 1)[0]?.toLowerCase() === 'studio.localhost'
 }
 
@@ -32,10 +33,24 @@ function selectedHeaders(request: Request): Record<string, string> {
 async function handler(request: Request): Promise<Response> {
   if (!isLocalRuntime() || !isStudioHost(request)) return new Response('Not found', { status: 404 })
   if (!METHODS.has(request.method)) return new Response('Method not allowed', { status: 405 })
-  const session = verifyLocalStudioSession((await cookies()).get(localStudioCookieName())?.value)
+  const rawPath = request.headers.get('x-openlink-studio-path')
+  if (!rawPath || !rawPath.startsWith('/') || rawPath.length > 12_000 || /[\u0000-\u001f\\]/.test(rawPath)) return new Response('Invalid Studio path', { status: 400 })
+  // Chromium does not deliver `Domain=localhost` cookies on `studio.localhost`,
+  // so the first navigation carries the capability as a ticket query parameter.
+  // It is validated, stripped from the upstream path, and upgraded to a
+  // host-only cookie on this origin for every subsequent request.
+  const requested = new URL(rawPath, 'http://studio.localhost')
+  const ticket = requested.searchParams.get(LOCAL_STUDIO_TICKET_PARAM)
+  requested.searchParams.delete(LOCAL_STUDIO_TICKET_PARAM)
+  const path = `${requested.pathname}${requested.search}`
+  let session = verifyLocalStudioSession((await cookies()).get(localStudioCookieName())?.value)
+  let upgradedTicket: string | null = null
+  if (!session && ticket) {
+    session = verifyLocalStudioSession(ticket)
+    if (session) upgradedTicket = ticket
+  }
   if (!session) return new Response('Local Studio session expired. Return to OpenLink and open Studio again.', { status: 401, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' } })
-  const path = request.headers.get('x-openlink-studio-path')
-  if (!path || !path.startsWith('/') || path.length > 12_000 || /[\u0000-\u001f\\]/.test(path)) return new Response('Invalid Studio path', { status: 400 })
+  if (path.length > 12_000) return new Response('Invalid Studio path', { status: 400 })
   const host = agentHostConfig()
   if (!host) return new Response('Project backend is unavailable', { status: 503 })
   const bytes = request.method === 'GET' || request.method === 'HEAD' ? undefined : Buffer.from(await request.arrayBuffer())
@@ -65,6 +80,22 @@ async function handler(request: Request): Promise<Response> {
   for (const [name, value] of Object.entries(payload.headers as Record<string, unknown>)) {
     const normalized = name.toLowerCase()
     if (RESPONSE_HEADERS.has(normalized) && typeof value === 'string' && value.length <= 8_192 && !/[\r\n\u0000]/.test(value)) headers.set(name, value)
+  }
+  // No Domain attribute: the cookie is scoped to the `studio.localhost` host
+  // itself, which Chromium reliably stores and resends on this origin.
+  if (upgradedTicket) {
+    headers.append('Set-Cookie', `${localStudioCookieName()}=${upgradedTicket}; Max-Age=${LOCAL_STUDIO_COOKIE_MAX_AGE_SECONDS}; Path=/; HttpOnly; SameSite=Strict`)
+    // Chromium does not apply Set-Cookie from a 3xx response before following
+    // the redirect inside an iframe, so the first hop returns a bootstrap page
+    // instead: the cookie lands with this 200, then the browser navigates on.
+    const status = Number(payload.status)
+    const location = headers.get('location')
+    if (status >= 300 && status < 400 && location) {
+      const safeLocation = location.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character] ?? character)
+      const bootstrapHeaders = new Headers(headers)
+      bootstrapHeaders.set('Content-Type', 'text/html; charset=utf-8')
+      return new Response(`<!DOCTYPE html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=${safeLocation}">`, { status: 200, headers: bootstrapHeaders })
+    }
   }
   return new Response(request.method === 'HEAD' ? null : Buffer.from(payload.bodyBase64, 'base64url'), { status: payload.status, headers })
 }

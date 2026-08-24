@@ -1,7 +1,6 @@
 import { ProjectSupabasePanel } from '@/components/project-supabase-panel'
 import { getChatSession, isChatSessionId, listChatSessions } from '@/lib/chat-sessions'
 import { getProject } from '@/lib/projects'
-import { isLocalRuntime } from '@/lib/runtime-mode.server'
 import { listOrganizations } from '@/lib/organizations'
 import { getAccessibleWorkspaceById, getAvatarUrl, getOwnedWorkspace } from '@/lib/workspaces'
 import { createClient } from '@/utils/supabase/server'
@@ -46,6 +45,5 @@ export default async function ProjectDataPage({
     projectName={project.name}
     sessionId={session.id}
     userId={user.id}
-    localRuntime={isLocalRuntime()}
   />
 }
