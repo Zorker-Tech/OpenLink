@@ -4,7 +4,7 @@
 /node_modules
 
 # next.js
-/.next/
+/.next
 /out/
 
 # production
@@ -31,3 +31,8 @@ next-env.d.ts
 /.agent-data/
 /.openlink-runtime/
 /.openlink-releases/
+
+# next.js build outputs and local tool session data
+/.next
+/.next.*
+/.zcode/
