@@ -25,6 +25,7 @@ import {
   type BrowserWorkbenchUiState,
 } from '@/components/browser/browser-workbench'
 import { CodeServerWorkbench } from '@/components/code-server/code-server-workbench'
+import { ProjectSupabasePanel } from '@/components/project-supabase-panel'
 import { Sidebar } from '@/components/app-workspace'
 import type { ThemeMode } from '@/components/account-drawer'
 import { ChatConfirmationDock, type ComposerConfirmationRequest } from '@/components/chat-confirmation-dock'
@@ -37,6 +38,8 @@ import { isOpenLinkAgentEvent, type OpenLinkAgentEvent } from '@/lib/agent-runti
 import type { OrganizationSummary } from '@/lib/organizations'
 import type { ConfiguredModelOption } from '@/lib/ai-provider-types'
 import type { ChatSessionSummary } from '@/lib/chat-session-types'
+import { hasPersistedUserMessage } from '@/lib/chat-auto-start'
+import { theme } from '@/lib/theme'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft,
@@ -82,6 +85,10 @@ interface ChatWorkspaceProps {
   initialPrompt: string
   sessionId: string
   sessionTitle: string
+  projectName: string
+  projectId: string
+  userId: string
+  localRuntime: boolean
 }
 
 function pendingConfirmationRequests(events: OpenLinkAgentEvent[]) {
@@ -165,6 +172,7 @@ function ChatTopbar({
   onToggleSidebar,
   onSelectBrowserSurface,
   onSelectCode,
+  onSelectData,
   onToggleDeviceView,
   onSessionTitleChange,
   workspaceView,
@@ -185,9 +193,10 @@ function ChatTopbar({
   onToggleSidebar: () => void
   onSelectBrowserSurface: (surface: 'native-preview' | 'chromium-stream') => void
   onSelectCode: () => void
+  onSelectData: () => void
   onToggleDeviceView: () => void
   onSessionTitleChange: (title: string) => Promise<boolean>
-  workspaceView: 'mobile' | 'browser' | 'code'
+  workspaceView: 'mobile' | 'browser' | 'code' | 'data'
   renameRequestVersion: number
   sessionTitle: string
   gitVersions: GitVersionOption[]
@@ -282,16 +291,16 @@ function ChatTopbar({
             <ToolbarButton aria-pressed={chatCollapsed} className={chatCollapsed ? 'bg-[var(--app-active)] text-[var(--app-foreground)]' : ''} label="评论" onClick={onToggleChat}><MessageCircle className="size-4" /></ToolbarButton>
           </div>
           <div className="flex h-[29px] w-[114px] shrink-0 items-center rounded-md border border-[var(--app-control-border)] bg-[var(--app-surface)] p-px">
-            <ToolbarButton aria-pressed={workspaceView !== 'code' && browserState.surface === 'native-preview'} className={`-ml-px mr-px size-[26px] ${workspaceView !== 'code' && browserState.surface === 'native-preview' ? 'bg-[var(--app-background)] text-[var(--app-foreground)]' : ''}`} label="预览" onClick={() => onSelectBrowserSurface('native-preview')}><Eye className="size-4" /></ToolbarButton>
-            <ToolbarButton aria-pressed={workspaceView !== 'code' && browserState.surface === 'chromium-stream'} className={workspaceView !== 'code' && browserState.surface === 'chromium-stream' ? 'bg-[var(--app-background)] text-[var(--app-foreground)]' : ''} label="实时" onClick={() => onSelectBrowserSurface('chromium-stream')}><Send className="size-4" /></ToolbarButton>
+            <ToolbarButton aria-pressed={workspaceView === 'browser' && browserState.surface === 'native-preview'} className={`-ml-px mr-px size-[26px] ${workspaceView === 'browser' && browserState.surface === 'native-preview' ? 'bg-[var(--app-background)] text-[var(--app-foreground)]' : ''}`} label="预览" onClick={() => onSelectBrowserSurface('native-preview')}><Eye className="size-4" /></ToolbarButton>
+            <ToolbarButton aria-pressed={workspaceView === 'browser' && browserState.surface === 'chromium-stream'} className={workspaceView === 'browser' && browserState.surface === 'chromium-stream' ? 'bg-[var(--app-background)] text-[var(--app-foreground)]' : ''} label="实时" onClick={() => onSelectBrowserSurface('chromium-stream')}><Send className="size-4" /></ToolbarButton>
             <ToolbarButton aria-pressed={workspaceView === 'code'} className={workspaceView === 'code' ? 'bg-[var(--app-background)] text-[var(--app-foreground)]' : ''} label="代码" onClick={onSelectCode}><Code2 className="size-4" /></ToolbarButton>
-            <ToolbarButton label="数据"><Database className="size-4" /></ToolbarButton>
+            <ToolbarButton aria-pressed={workspaceView === 'data'} className={workspaceView === 'data' ? 'bg-[var(--app-background)] text-[var(--app-foreground)]' : ''} label="数据" onClick={onSelectData}><Database className="size-4" /></ToolbarButton>
           </div>
           <div className="flex min-w-[150px] flex-1 items-center justify-center">
-            <form className={`relative -left-[3px] flex h-7 w-full max-w-[500px] items-center rounded-md border border-[var(--app-control-border)] px-0.5 ${workspaceView === 'code' ? 'pointer-events-none opacity-0' : ''}`} onSubmit={(event) => { event.preventDefault(); browserWorkbenchRef.current?.navigate(addressDraft) }}>
+            <form className={`relative -left-[3px] flex h-7 w-full max-w-[500px] items-center rounded-md border border-[var(--app-control-border)] px-0.5 ${workspaceView === 'code' || workspaceView === 'data' ? 'pointer-events-none opacity-0' : ''}`} onSubmit={(event) => { event.preventDefault(); browserWorkbenchRef.current?.navigate(addressDraft) }}>
               <ToolbarButton className="size-6!" disabled={!browserState.canGoBack} label="后退" onClick={() => browserWorkbenchRef.current?.back()}><ArrowLeft className="size-4" /></ToolbarButton>
               <ToolbarButton className="size-6!" disabled={!browserState.canGoForward} label="前进" onClick={() => browserWorkbenchRef.current?.forward()}><ArrowRight className="size-4" /></ToolbarButton>
-              <ToolbarButton aria-pressed={workspaceView === 'mobile'} className="size-6! hover:bg-transparent!" disabled={workspaceView === 'code'} label="设备" onClick={onToggleDeviceView}><img alt="" className="app-control-icon size-4" src="/openlink/app/phone.svg" /></ToolbarButton>
+              <ToolbarButton aria-pressed={workspaceView === 'mobile'} className="size-6! hover:bg-transparent!" disabled={workspaceView === 'code' || workspaceView === 'data'} label="设备" onClick={onToggleDeviceView}><img alt="" className="app-control-icon size-4" src="/openlink/app/phone.svg" /></ToolbarButton>
               <input
                 aria-label="浏览器地址"
                 className="h-6 min-w-0 flex-1 bg-transparent px-1 text-[12px] tracking-[-0.0762px] text-[var(--app-muted)] outline-none focus:text-[var(--app-foreground)]"
@@ -330,7 +339,7 @@ function ChatTopbar({
                   </span>
                 </DropdownMenuItem>
               ))}
-              {gitVersionError && <div className="px-2.5 py-2 text-xs text-red-400">{gitVersionError}</div>}
+              {gitVersionError && <div className="px-2.5 py-2 text-xs text-[var(--app-danger)]">{gitVersionError}</div>}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -339,7 +348,7 @@ function ChatTopbar({
       <div className="flex w-[150px] shrink-0 items-center gap-1.5 pr-3">
         <ToolbarButton className="border border-[var(--app-control-border)] bg-[var(--app-surface)]" label="更多"><MoreHorizontal className="size-4" /></ToolbarButton>
         <ToolbarButton className="border border-[var(--app-control-border)] bg-[var(--app-surface)]" label="分享"><Share2 className="size-4" /></ToolbarButton>
-        <button className="relative flex h-7 w-[70px] items-center justify-center gap-1.5 rounded-md border border-[var(--app-submit-background)] bg-[var(--app-submit-background)] text-sm font-medium tracking-[-0.1504px] text-[var(--app-submit-foreground)] after:absolute after:-right-1 after:-top-1 after:size-3 after:rounded-full after:border-[1.5px] after:border-[var(--app-background)] after:bg-[#0070f3] hover:opacity-90" type="button"><Globe2 className="size-4" />发布</button>
+        <button className={`relative flex h-7 w-[70px] items-center justify-center gap-1.5 rounded-md border border-[var(--app-submit-background)] text-sm font-medium tracking-[-0.1504px] after:absolute after:-right-1 after:-top-1 after:size-3 after:rounded-full after:border-[1.5px] after:border-[var(--app-background)] after:bg-[var(--app-brand)] hover:opacity-90 ${theme('action')}`} type="button"><Globe2 className="size-4" />发布</button>
       </div>
     </header>
   )
@@ -408,7 +417,7 @@ function ChatComposer({
 
   return (
     <PromptInput
-      className={`w-full [&>[data-slot=input-group]]:rounded-xl [&>[data-slot=input-group]]:bg-[var(--app-surface)] [&>[data-slot=input-group]]:shadow-none [&>[data-slot=input-group]]:transition-[padding,border-color] [&>[data-slot=input-group]]:duration-200 [&>[data-slot=input-group]]:focus-within:ring-0 ${expanded ? '[&>[data-slot=input-group]]:h-auto [&>[data-slot=input-group]]:max-h-[384px] [&>[data-slot=input-group]]:min-h-[108px] [&>[data-slot=input-group]]:flex-col [&>[data-slot=input-group]]:items-stretch [&>[data-slot=input-group]]:gap-0 [&>[data-slot=input-group]]:border-[#454545] [&>[data-slot=input-group]]:p-3' : '[&>[data-slot=input-group]]:h-[42px] [&>[data-slot=input-group]]:min-h-[42px] [&>[data-slot=input-group]]:gap-1 [&>[data-slot=input-group]]:border-[#2e2e2e] [&>[data-slot=input-group]]:p-1.5'}`}
+      className={`w-full [&>[data-slot=input-group]]:rounded-xl [&>[data-slot=input-group]]:bg-[var(--app-surface)] [&>[data-slot=input-group]]:shadow-none [&>[data-slot=input-group]]:transition-[padding,border-color] [&>[data-slot=input-group]]:duration-200 [&>[data-slot=input-group]]:focus-within:ring-0 ${expanded ? '[&>[data-slot=input-group]]:h-auto [&>[data-slot=input-group]]:max-h-[384px] [&>[data-slot=input-group]]:min-h-[108px] [&>[data-slot=input-group]]:flex-col [&>[data-slot=input-group]]:items-stretch [&>[data-slot=input-group]]:gap-0 [&>[data-slot=input-group]]:border-[var(--app-focus-ring)] [&>[data-slot=input-group]]:p-3' : '[&>[data-slot=input-group]]:h-[42px] [&>[data-slot=input-group]]:min-h-[42px] [&>[data-slot=input-group]]:gap-1 [&>[data-slot=input-group]]:border-[var(--app-control-border)] [&>[data-slot=input-group]]:p-1.5'}`}
       onSubmit={({ text }) => {
         if (!text.trim()) return
         void onSubmit(text.trim(), selectedModel)
@@ -441,19 +450,24 @@ function PreviewCanvas({
   view,
   onBrowserStateChange,
   sessionId,
+  projectName,
+  panelProps,
 }: {
   browserWorkbenchRef: React.RefObject<BrowserWorkbenchHandle | null>
-  view: 'mobile' | 'browser' | 'code'
+  view: 'mobile' | 'browser' | 'code' | 'data'
   onBrowserStateChange: (state: BrowserWorkbenchUiState) => void
   sessionId: string
+  projectName: string
+  panelProps: Pick<ChatWorkspaceProps, 'activeWorkspace' | 'avatarUrl' | 'chatSessions' | 'email' | 'nickname' | 'organizations' | 'personalWorkspace' | 'projectId' | 'userId' | 'localRuntime'>
 }) {
   if (view === 'code') return <CodeServerWorkbench chatSessionId={sessionId} />
+  if (view === 'data') return <ProjectSupabasePanel {...panelProps} projectName={projectName} sessionId={sessionId} embedded />
   const browserMode = view === 'browser'
 
   return (
-    <main aria-label="预览画布" className={`relative size-full min-w-0 overflow-hidden ${browserMode ? 'bg-[#eee]' : 'bg-[#0a0a0a]'}`}>
+    <main aria-label="预览画布" className={`relative size-full min-w-0 overflow-hidden ${browserMode ? theme('surface') : theme('editor')}`}>
       <div className={browserMode ? 'size-full' : 'flex size-full items-center justify-center px-4 py-[46px]'}>
-        <div className={browserMode ? 'size-full' : 'h-full max-h-[835px] w-[391px] max-w-full overflow-hidden rounded-xl border border-[#292929] bg-[#eee] shadow-[0_8px_16px_-4px_rgb(0_0_0_/_4%),0_24px_32px_-8px_rgb(0_0_0_/_6%)]'}>
+        <div className={browserMode ? 'size-full' : `h-full max-h-[835px] w-[391px] max-w-full overflow-hidden rounded-xl border shadow-[0_8px_16px_-4px_var(--app-shadow),0_24px_32px_-8px_var(--app-shadow)] ${theme('surface', 'border')}`}>
           <BrowserWorkbench chatSessionId={sessionId} onStateChange={onBrowserStateChange} ref={browserWorkbenchRef} viewportMode={view} />
         </div>
       </div>
@@ -476,6 +490,10 @@ export function ChatWorkspace({
   initialPrompt,
   sessionId,
   sessionTitle,
+  projectName,
+  projectId,
+  userId,
+  localRuntime,
 }: ChatWorkspaceProps) {
   const router = useRouter()
   const [collapsed, setCollapsed] = useState(false)
@@ -485,7 +503,7 @@ export function ChatWorkspace({
   const [chatPanelCollapsed, setChatPanelCollapsed] = useState(false)
   // The browser canvas is the primary workspace. The device control is an
   // explicit opt-in for the constrained mobile viewport.
-  const [workspaceView, setWorkspaceView] = useState<'mobile' | 'browser' | 'code'>('browser')
+  const [workspaceView, setWorkspaceView] = useState<'mobile' | 'browser' | 'code' | 'data'>('browser')
   const [browserState, setBrowserState] = useState<BrowserWorkbenchUiState>({
     browserSessionId: undefined,
     address: '',
@@ -608,7 +626,11 @@ export function ChatWorkspace({
     }
   }, [autoStartModel, browserState.browserSessionId, browserState.status, sessionId])
 
-  const submitAgentMessage = useCallback(async (message: string, model: ConfiguredModelOption | null) => {
+  const submitAgentMessage = useCallback(async (
+    message: string,
+    model: ConfiguredModelOption | null,
+    options?: { initialPrompt?: boolean },
+  ) => {
     if (agentStreamStatus === 'streaming') return
     setAgentStreamStatus('streaming')
     const optimisticUser: OptimisticUserMessage = {
@@ -639,12 +661,24 @@ export function ChatWorkspace({
         signal: requestAbortController.signal,
         body: JSON.stringify({
           message,
+          ...(options?.initialPrompt ? { requestKind: 'initial-prompt' } : {}),
           ...(model ? { model: { providerId: model.providerId, modelId: model.modelId } } : {}),
-          ...(workspaceView !== 'code' && browserState.browserSessionId ? { browserSessionId: browserState.browserSessionId } : {}),
+          ...((workspaceView === 'browser' || workspaceView === 'mobile') && browserState.browserSessionId ? { browserSessionId: browserState.browserSessionId } : {}),
         }),
       })
       if (!response.ok) {
         const failure = await response.json().catch(() => null) as { error?: string; detail?: string } | null
+        if (options?.initialPrompt && response.status === 409 && failure?.error === 'SESSION_BUSY') {
+          // Another mount/tab won the one-shot initial prompt race. Remove this
+          // mount's optimistic copy; the winner's durable event is loaded by
+          // the refresh and must remain the only user turn.
+          if (pendingOptimisticUserRef.current?.id === optimisticUser.id) {
+            pendingOptimisticUserRef.current = null
+          }
+          setAgentEvents((current) => current.filter((event) => event.id !== optimisticUser.id))
+          router.refresh()
+          return
+        }
         const reason = failure?.detail || failure?.error || `Agent stream failed (${response.status})`
         throw new Error(reason === 'PROVIDER_CREDENTIAL_REKEY_REQUIRED'
           ? '服务商密钥无法解密，请前往设置重新保存 API Key'
@@ -695,22 +729,31 @@ export function ChatWorkspace({
       appendAgentEvents(streamQueueRef.current.splice(0))
       setAgentStreamStatus('idle')
     }
-  }, [agentStreamStatus, appendAgentEvents, browserState.browserSessionId, enqueueStreamEvent, sessionId, workspaceView])
+  }, [agentStreamStatus, appendAgentEvents, browserState.browserSessionId, enqueueStreamEvent, router, sessionId, workspaceView])
 
   useEffect(() => {
     if (!autoStart || autoStartHandledRef.current || !initialPrompt.trim()) return
+    if (hasPersistedUserMessage(agentEvents)) {
+      autoStartHandledRef.current = true
+      const url = new URL(window.location.href)
+      url.searchParams.delete('run')
+      window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+      return
+    }
     // An auto-start prompt must not outrun BrowserWorkbench provisioning. If
     // it did, Pi would be created without the scoped browser extension and a
     // browser-capable task would silently lose its tools. A failed browser
     // runtime is still allowed to proceed as a normal coding task.
     if (!browserState.browserSessionId && browserState.status !== 'failed') return
     autoStartHandledRef.current = true
-    window.history.replaceState(window.history.state, '', window.location.pathname)
+    const url = new URL(window.location.href)
+    url.searchParams.delete('run')
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
     const selectedModel = configuredModels.find((model) => (
       model.providerId === autoStartModel?.providerId && model.modelId === autoStartModel.modelId
     )) ?? null
-    void submitAgentMessage(initialPrompt, selectedModel)
-  }, [autoStart, autoStartModel, browserState.browserSessionId, browserState.status, configuredModels, initialPrompt, submitAgentMessage])
+    void submitAgentMessage(initialPrompt, selectedModel, { initialPrompt: true })
+  }, [agentEvents, autoStart, autoStartModel, browserState.browserSessionId, browserState.status, configuredModels, initialPrompt, submitAgentMessage])
 
   const resolveConfirmation = useCallback(async (confirmationId: string, approved: boolean, value?: string) => {
     const response = await fetch(`/api/chat/${encodeURIComponent(sessionId)}/extension-ui-response`, {
@@ -788,6 +831,12 @@ export function ChatWorkspace({
 
   const activeTheme = themeMode === 'light' || (themeMode === 'system' && systemLight) ? 'light' : 'dark'
 
+  useEffect(() => {
+    const root = document.documentElement
+    if (activeTheme === 'dark') root.classList.add('dark')
+    else root.classList.remove('dark')
+  }, [activeTheme])
+
   return (
     <OpenLinkThemeProvider theme={activeTheme}>
       <div className="openlink-app-shell flex h-dvh min-h-[500px] overflow-hidden" data-theme={activeTheme}>
@@ -814,7 +863,7 @@ export function ChatWorkspace({
           themeMode={themeMode}
         />
         <div className="flex min-w-0 flex-1 flex-col bg-[var(--app-background)]">
-          <ChatTopbar browserState={browserState} browserWorkbenchRef={browserWorkbenchRef} collapsed={collapsed} chatCollapsed={chatPanelCollapsed} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onOpenSidebar={() => { setCollapsed(false); setMobileOpen(true) }} onSelectBrowserSurface={(surface) => { setWorkspaceView('browser'); browserWorkbenchRef.current?.setSurface(surface) }} onSelectCode={() => setWorkspaceView('code')} onSelectGitVersion={selectGitVersion} onSessionTitleChange={updateSessionTitle} onToggleChat={toggleChatPanel} onToggleDeviceView={() => setWorkspaceView((view) => view === 'mobile' ? 'browser' : 'mobile')} onToggleSidebar={() => setCollapsed(false)} renameRequestVersion={renameRequestVersion} selectedGitRef={selectedGitRef} sessionTitle={currentSessionTitle} workspaceView={workspaceView} />
+          <ChatTopbar browserState={browserState} browserWorkbenchRef={browserWorkbenchRef} collapsed={collapsed} chatCollapsed={chatPanelCollapsed} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onOpenSidebar={() => { setCollapsed(false); setMobileOpen(true) }} onSelectBrowserSurface={(surface) => { setWorkspaceView('browser'); browserWorkbenchRef.current?.setSurface(surface) }} onSelectCode={() => setWorkspaceView('code')} onSelectData={() => setWorkspaceView('data')} onSelectGitVersion={selectGitVersion} onSessionTitleChange={updateSessionTitle} onToggleChat={toggleChatPanel} onToggleDeviceView={() => setWorkspaceView((view) => view === 'mobile' || view === 'data' ? 'browser' : 'mobile')} onToggleSidebar={() => setCollapsed(false)} renameRequestVersion={renameRequestVersion} selectedGitRef={selectedGitRef} sessionTitle={currentSessionTitle} workspaceView={workspaceView} />
           <div className="hidden min-h-0 flex-1 xl:flex">
             <ResizablePanelGroup className="min-h-0" id="chat-workspace-panels" orientation="horizontal">
               <ResizablePanel
@@ -838,7 +887,7 @@ export function ChatWorkspace({
               </ResizablePanel>
               <ResizableHandle aria-label="调整聊天视图宽度" className="z-20 bg-[var(--app-border)]" id="chat-resize-handle" withHandle />
               <ResizablePanel className="min-w-0" groupResizeBehavior="preserve-relative-size" id="preview-panel" minSize="0px">
-                <PreviewCanvas browserWorkbenchRef={browserWorkbenchRef} onBrowserStateChange={setBrowserState} sessionId={sessionId} view={workspaceView} />
+                <PreviewCanvas browserWorkbenchRef={browserWorkbenchRef} onBrowserStateChange={setBrowserState} panelProps={{ activeWorkspace, avatarUrl, chatSessions, email, nickname, organizations, personalWorkspace, projectId, userId, localRuntime }} projectName={projectName} sessionId={sessionId} view={workspaceView} />
               </ResizablePanel>
             </ResizablePanelGroup>
           </div>

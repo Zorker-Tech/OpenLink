@@ -2,8 +2,11 @@ import { ChatWorkspace } from '@/components/chat-workspace'
 import { listConfiguredModels } from '@/lib/ai-provider-configurations.server'
 import { listPersistedChatEvents } from '@/lib/chat-session-persistence.server'
 import { listOrganizations } from '@/lib/organizations'
+import { getProject } from '@/lib/projects'
 import { getChatSession, isChatSessionId, listChatSessions } from '@/lib/chat-sessions'
+import { isLocalRuntime } from '@/lib/runtime-mode.server'
 import { getAccessibleWorkspaceById, getAvatarUrl, getOwnedWorkspace } from '@/lib/workspaces'
+import { shouldAutoStartInitialPrompt } from '@/lib/chat-auto-start'
 import { createClient } from '@/utils/supabase/server'
 import type { Metadata } from 'next'
 import { notFound, redirect } from 'next/navigation'
@@ -32,7 +35,7 @@ export default async function ChatSessionPage({
   const session = await getChatSession(supabase, user.id, sessionId)
   if (!session) notFound()
 
-  const [workspace, personalWorkspace, organizations, profile, configuredModels, chatSessions, initialEvents] = await Promise.all([
+  const [workspace, personalWorkspace, organizations, profile, configuredModels, chatSessions, project, initialEvents] = await Promise.all([
     getAccessibleWorkspaceById(supabase, session.workspace_id),
     getOwnedWorkspace(supabase, user.id),
     listOrganizations(supabase, user.id),
@@ -44,10 +47,11 @@ export default async function ChatSessionPage({
       .maybeSingle(),
     listConfiguredModels(supabase, user.id),
     listChatSessions(supabase, user.id, session.workspace_id),
+    getProject(supabase, session.project_id),
     listPersistedChatEvents(supabase, user.id, session.id),
   ])
 
-  if (!workspace || !personalWorkspace) notFound()
+  if (!workspace || !personalWorkspace || !project) notFound()
 
   const nickname = (profile.data as { nickname?: string } | null)?.nickname ?? workspace.name
 
@@ -63,15 +67,19 @@ export default async function ChatSessionPage({
       configuredModels={configuredModels}
       chatSessions={chatSessions}
       email={user.email ?? nickname}
-      autoStart={query.run === '1'}
+      autoStart={shouldAutoStartInitialPrompt(query.run, session.initial_prompt, initialEvents)}
       autoStartModel={session.provider_id && session.model_id ? { providerId: session.provider_id, modelId: session.model_id } : null}
       initialEvents={initialEvents}
       initialPrompt={session.initial_prompt}
       nickname={nickname}
       organizations={organizations}
       personalWorkspace={{ name: personalWorkspace.name, slug: personalWorkspace.slug }}
+      projectId={project.id}
+      projectName={project.name}
       sessionId={session.id}
       sessionTitle={session.title}
+      userId={user.id}
+      localRuntime={isLocalRuntime()}
     />
   )
 }
