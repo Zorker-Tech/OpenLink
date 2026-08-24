@@ -216,7 +216,7 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
 
   return (
     <section className="flex size-full min-h-0 flex-col bg-[var(--app-background)] text-[var(--app-foreground)]">
-      <div className="relative min-h-0 flex-1 overflow-hidden bg-[#eee]">
+      <div className="relative min-h-0 flex-1 overflow-hidden bg-[var(--app-editor-background)]">
         {connection && sessionState?.status === 'ready' && surface === 'native-preview' && (
           <NativePreviewSurface connection={connection} inspectMode={inspectMode} onElementSelected={setSelectedElement} />
         )}
@@ -239,7 +239,7 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
             </div>
           </div>
         ) : null}
-        {error && connection ? <div className="absolute bottom-3 left-1/2 z-30 max-w-[70%] -translate-x-1/2 rounded-full border border-red-500/25 bg-red-950/85 px-3 py-1.5 text-xs text-red-100 shadow-lg backdrop-blur">{error}</div> : null}
+        {error && connection ? <div className="absolute bottom-3 left-1/2 z-30 max-w-[70%] -translate-x-1/2 rounded-full border border-[var(--app-danger)] bg-[var(--app-danger-surface)] px-3 py-1.5 text-xs text-[var(--app-danger)] shadow-lg backdrop-blur">{error}</div> : null}
       </div>
     </section>
   )

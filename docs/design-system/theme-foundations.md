@@ -2,6 +2,10 @@
 
 OpenLink uses one semantic color system for light and dark modes. Components must describe their role (`background`, `popover`, `muted`, `border`, `primary`) instead of selecting a literal light or dark color.
 
+For application-specific chrome, import `theme()` from `@/lib/theme` and compose
+semantic roles such as `theme('surface', 'border')`. The function only emits
+classes backed by this token contract; it must never accept a literal color.
+
 ## Architecture
 
 The chosen approach is a scoped semantic theme that is explicitly propagated to every portal surface.
@@ -26,21 +30,25 @@ This avoids two rejected approaches:
 | Surface | `--card` | `--app-surface` | Sidebar controls, prompt and inline panels |
 | Raised surface | `--popover` | `--app-elevated` | Menus, dialogs, selectors and drawers |
 | Selected surface | `--accent` | `--app-active` | Current navigation, selected menu item |
+| Subtle surface | `--muted` | `--app-subtle-surface` | Passive fills and disabled backgrounds |
 | Primary text | `--foreground` | `--app-foreground` | Titles, values and active icons |
-| Secondary text | `--muted-foreground` | `--app-muted` | Labels, descriptions and placeholders |
+| Secondary text | `--muted-foreground` | `--app-muted` / `--app-subtle` | Labels, descriptions and placeholders |
 | Divider | `--border` | `--app-border` | Structural separators |
 | Control border | `--input` | `--app-control-border` | Inputs and interactive surface borders |
 | Focus | `--ring` | `--app-focus-ring` | Keyboard focus rings only |
 | Primary action | `--primary` | `--app-submit-background` | Submit and confirmation actions |
 | On primary | `--primary-foreground` | `--app-submit-foreground` | Text/icon on a primary action |
-| Danger | `--destructive` | — | Errors and destructive actions |
+| Danger | `--destructive` | `--app-danger` / `--app-danger-surface` | Errors and destructive actions |
+| Success | — | `--app-success` / `--app-success-surface` | Completed and healthy states |
+| Warning | — | `--app-warning` / `--app-warning-surface` | Pending and degraded states |
+| Information | — | `--app-info` / `--app-info-surface` | Informational and technical status |
 
 ## Component rules
 
 1. Do not use `bg-white`, `bg-black`, `text-white`, `text-black`, or new hex colors for theme-dependent component chrome.
-2. Brand assets and status colors may use fixed colors when the color itself carries identity or meaning.
+2. Brand assets and status colors may use fixed colors when the color itself carries identity or meaning. Interactive brand, danger, inspector, and overlay colors use the named `--app-*` token instead of an inline literal.
 3. Menus, dialogs, command palettes, tooltips, popovers, hover cards, and selectors rendered through a shared primitive must inherit `data-openlink-theme` from `OpenLinkThemeProvider`. A product component must not implement its own portal theme logic.
-4. Components use `bg-popover text-popover-foreground border-border` for raised surfaces.
+4. Shared primitives use `bg-popover text-popover-foreground border-border`; product components compose the equivalent `theme('elevated', 'softBorder')` roles.
 5. Hover and selected states use `bg-accent text-accent-foreground`; muted content uses `text-muted-foreground`.
 6. Primary buttons use `bg-primary text-primary-foreground`; secondary actions use `bg-secondary text-secondary-foreground` or `variant="ghost"`.
 7. Inputs use `border-input bg-background text-foreground placeholder:text-muted-foreground` and `focus-visible:ring-ring`.
@@ -48,6 +56,7 @@ This avoids two rejected approaches:
 9. Overlay stacking follows: navigation `z-40`, menus/dialog backdrops `z-50`, popup content `z-50` within its isolated layer. Raised surfaces must always be opaque.
 10. Every shared component change is reviewed in both light and dark modes, including hover, focus, disabled, selected, error, and open states.
 11. Theme switching is visual only. Theme selectors may change color, shadow, icon treatment, and other visual tokens, but must never change width, height, spacing, typography metrics, responsive breakpoints, or component placement.
+12. `--app-subtle` and `--app-subtle-foreground` are text colors. Backgrounds must use `--app-subtle-surface`; mixing those roles is a contrast regression.
 
 ## Geometry and interaction
 

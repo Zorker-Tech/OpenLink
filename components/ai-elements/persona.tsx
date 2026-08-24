@@ -92,6 +92,10 @@ const sources = {
 
 const getCurrentTheme = (): "light" | "dark" => {
   if (typeof window !== "undefined") {
+    const shell = document.querySelector(".openlink-app-shell[data-theme]");
+    if (shell) {
+      return shell.getAttribute("data-theme") === "light" ? "light" : "dark";
+    }
     if (document.documentElement.classList.contains("dark")) {
       return "dark";
     }

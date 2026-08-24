@@ -16,6 +16,8 @@ import {
 import { createClient } from '@/utils/supabase/client'
 import type { ActiveWorkspaceSummary } from '@/components/workspace-switcher'
 import type { OrganizationSummary } from '@/lib/organizations'
+import { theme } from '@/lib/theme'
+import { useOpenLinkTheme } from '@/components/ui/theme-scope'
 import { useRouter } from 'next/navigation'
 import { useMemo, useState } from 'react'
 
@@ -49,7 +51,7 @@ const menuItems = [
 
 function AccountAvatar({ avatarUrl, nickname }: { avatarUrl: string | null; nickname: string }) {
   return (
-    <span className="flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-xs font-semibold text-foreground">
+    <span className={`flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-full text-xs font-semibold ${theme('subtleSurface')}`}>
       {avatarUrl ? <img alt="" className="size-full object-cover" src={avatarUrl} /> : nickname.trim().charAt(0).toUpperCase() || 'O'}
     </span>
   )
@@ -66,6 +68,7 @@ export function AccountDrawer({
   organizations,
 }: AccountDrawerProps) {
   const router = useRouter()
+  const activeTheme = useOpenLinkTheme()
   const supabase = useMemo(() => createClient(), [])
   const [isSigningOut, setIsSigningOut] = useState(false)
   const featuredOrganization = organizations.find((organization) => organization.id === activeWorkspace.organizationId) ?? organizations[0]
@@ -78,16 +81,20 @@ export function AccountDrawer({
   }
 
   return (
-    <section aria-label="账户菜单" className="absolute bottom-[52px] left-2 z-50 w-[250px] overflow-hidden rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-[0_12px_32px_var(--app-shadow)]">
+    <section
+      aria-label="账户菜单"
+      className={`absolute bottom-[52px] left-2 z-50 w-[250px] overflow-hidden rounded-xl border p-1 shadow-[0_12px_32px_var(--app-shadow)] ${theme('elevated', 'softBorder')}`}
+      data-openlink-theme={activeTheme}
+    >
       <div className="px-2.5 pt-2 pb-1.5">
-        <p className="truncate text-sm leading-[22px] tracking-[-0.16px] text-muted-foreground">{email}</p>
+        <p className={`truncate text-sm leading-[22px] tracking-[-0.16px] ${theme('muted')}`}>{email}</p>
         <div className="pt-1.5">
-          <div aria-label="主题模式" className="flex h-8 w-[98px] items-center gap-0.5 rounded-lg bg-muted p-0.5">
+          <div aria-label="主题模式" className={`flex h-8 w-[98px] items-center gap-0.5 rounded-lg p-0.5 ${theme('subtleSurface')}`}>
             {themeOptions.map(({ label, mode: optionMode, icon: Icon }) => (
               <button
                 aria-label={label}
                 aria-pressed={mode === optionMode}
-                className={`flex h-7 w-[30px] shrink-0 items-center justify-center rounded-md transition-colors ${mode === optionMode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'}`}
+                className={`flex h-7 w-[30px] shrink-0 items-center justify-center rounded-md transition-colors ${mode === optionMode ? `${theme('surface')} shadow-sm` : `${theme('muted', 'hover')} hover:text-[var(--app-foreground)]`}`}
                 key={optionMode}
                 onClick={() => onModeChange(optionMode)}
                 type="button"
@@ -99,30 +106,30 @@ export function AccountDrawer({
         </div>
       </div>
 
-      <div className="my-1 h-px bg-border" />
+      <div className={`my-1 h-px ${theme('divider')}`} />
 
       <button
-        className="flex min-h-[58px] w-full items-center gap-2 rounded-lg px-1.5 pt-2.5 pb-1.5 text-left transition-colors hover:bg-accent hover:text-accent-foreground"
+        className={`flex min-h-[58px] w-full items-center gap-2 rounded-lg px-1.5 pt-2.5 pb-1.5 text-left transition-colors ${theme('hover')}`}
         onClick={() => featuredOrganization ? router.push(`/app/${featuredOrganization.workspaceSlug}`) : onOpenOrganization()}
         type="button"
       >
-        {featuredOrganization ? <AccountAvatar avatarUrl={null} nickname={featuredOrganization.name} /> : <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted"><Building2 className="size-3.5" /></span>}
+        {featuredOrganization ? <AccountAvatar avatarUrl={null} nickname={featuredOrganization.name} /> : <span className={`flex size-6 shrink-0 items-center justify-center rounded-full ${theme('subtleSurface')}`}><Building2 className="size-3.5" /></span>}
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm leading-[22px]">{featuredOrganization?.name ?? '添加组织'}</span>
-          <span className="block text-xs leading-[18px] text-muted-foreground">
+          <span className={`block text-xs leading-[18px] ${theme('muted')}`}>
             {featuredOrganization ? ({ owner: '所有者', admin: '管理员', member: '成员' } as const)[featuredOrganization.role] : '创建或加入组织'}
           </span>
         </span>
-        <ChevronRight className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.8} />
+        <ChevronRight className={`size-4 shrink-0 ${theme('muted')}`} strokeWidth={1.8} />
       </button>
 
-      <div className="my-1 h-px bg-border" />
+      <div className={`my-1 h-px ${theme('divider')}`} />
 
       <nav aria-label="账户设置" className="py-1">
         {menuItems.map(({ label, icon: Icon, divider, href }) => (
           <div key={label}>
-            {divider && <div className="my-1 h-px bg-border" />}
-            <button className="flex h-10 w-full items-center gap-2 rounded-lg px-2.5 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground" onClick={() => { if (href) router.push(href) }} type="button">
+            {divider && <div className={`my-1 h-px ${theme('divider')}`} />}
+            <button className={`flex h-10 w-full items-center gap-2 rounded-lg px-2.5 text-left text-sm transition-colors ${theme('hover')}`} onClick={() => { if (href) router.push(href) }} type="button">
               <Icon className="size-5 shrink-0" strokeWidth={1.8} />
               <span>{label}</span>
             </button>
@@ -130,8 +137,8 @@ export function AccountDrawer({
         ))}
       </nav>
 
-      <div className="my-1 h-px bg-border" />
-      <button className="flex h-10 w-full items-center gap-2 rounded-lg px-2.5 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground disabled:opacity-50" disabled={isSigningOut} onClick={handleSignOut} type="button">
+      <div className={`my-1 h-px ${theme('divider')}`} />
+      <button className={`flex h-10 w-full items-center gap-2 rounded-lg px-2.5 text-left text-sm transition-colors disabled:opacity-50 ${theme('hover')}`} disabled={isSigningOut} onClick={handleSignOut} type="button">
         <LogOut className="size-5 shrink-0" strokeWidth={1.8} />
         <span>{isSigningOut ? '退出中…' : '退出登录'}</span>
       </button>

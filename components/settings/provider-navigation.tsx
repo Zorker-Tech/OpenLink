@@ -105,7 +105,7 @@ function ProviderGroup({ configurations, currentProviderId, expanded, label, mod
                 <Link className={`flex h-9 items-center gap-2 rounded-md px-2 text-sm ${active ? 'bg-[var(--app-selected)] text-[var(--app-foreground)]' : 'text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]'}`} href={mode === 'embedding' ? `/settings/ai-providers/embeddings/${provider.id}` : `/settings/ai-providers/${provider.id}`} key={provider.id}>
                   <ProviderLogo provider={provider} size={22} />
                   <span className="min-w-0 flex-1 truncate">{provider.name}</span>
-                  {configuration?.enabled && <span aria-label="已启用" className="mr-1 size-1.5 rounded-full bg-emerald-500" />}
+                  {configuration?.enabled && <span aria-label="已启用" className="mr-1 size-1.5 rounded-full bg-[var(--app-success)]" />}
                 </Link>
               )
             })}

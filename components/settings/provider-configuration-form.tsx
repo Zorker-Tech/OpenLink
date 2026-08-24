@@ -95,9 +95,9 @@ export function ProviderConfigurationForm({ configuration, models, provider }: P
         </div>
 
         {oauthOnly ? (
-          <div className="mt-6 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm leading-5 text-amber-200">
+          <div className="mt-6 rounded-lg border border-[var(--app-warning)] bg-[var(--app-warning-surface)] p-4 text-sm leading-5 text-[var(--app-warning)]">
             <div className="font-medium">此服务商使用 Pi OAuth</div>
-            <p className="mt-1 text-amber-200/75">OpenAI Codex 需要 ChatGPT 订阅授权与令牌刷新，不能安全地当作普通 API Key 保存。本页面已纳入 Provider 目录；启用操作将在 Agent Host OAuth 回调流程接入后开放。</p>
+            <p className="mt-1 opacity-80">OpenAI Codex 需要 ChatGPT 订阅授权与令牌刷新，不能安全地当作普通 API Key 保存。本页面已纳入 Provider 目录；启用操作将在 Agent Host OAuth 回调流程接入后开放。</p>
           </div>
         ) : (
           <div className="mt-3 divide-y divide-[var(--app-border)]">
@@ -161,7 +161,7 @@ export function ProviderConfigurationForm({ configuration, models, provider }: P
         </section>
 
         <div className="sticky bottom-0 mt-6 flex items-center justify-end gap-3 border-t border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-background)_92%,transparent)] py-4 backdrop-blur-xl">
-          {status && <span className={`mr-auto text-sm ${status.kind === 'success' ? 'text-emerald-500' : 'text-red-400'}`}>{status.message}</span>}
+          {status && <span className={`mr-auto text-sm ${status.kind === 'success' ? 'text-[var(--app-success)]' : 'text-[var(--app-danger)]'}`}>{status.message}</span>}
           <button className="flex h-9 items-center gap-2 rounded-md bg-[var(--app-submit-background)] px-4 text-sm font-medium text-[var(--app-submit-foreground)] disabled:opacity-50" disabled={pending || !defaultModelId} onClick={save} type="button">{pending && <Loader2 className="size-4 animate-spin" />}保存配置</button>
         </div>
       </div>
@@ -171,7 +171,7 @@ export function ProviderConfigurationForm({ configuration, models, provider }: P
 
 function Toggle({ checked, disabled, label, onChange, size = 'default' }: { checked: boolean; disabled?: boolean; label: string; onChange: (checked: boolean) => void; size?: 'small' | 'default' }) {
   const small = size === 'small'
-  return <button aria-label={label} aria-pressed={checked} className={`relative shrink-0 rounded-full transition-colors ${small ? 'h-4 w-7' : 'h-[22px] w-11'} ${checked ? 'bg-[#1677ff]' : 'bg-[var(--app-active)]'} disabled:cursor-not-allowed disabled:opacity-40`} disabled={disabled} onClick={() => onChange(!checked)} type="button"><span className={`absolute left-0 rounded-full bg-[var(--app-background)] shadow-[0_1px_1px_rgba(0,0,0,.08),0_3px_8px_rgba(0,30,80,.16)] transition-transform ${small ? `top-0.5 size-3 ${checked ? 'translate-x-3.5' : 'translate-x-0.5'}` : `top-0.5 size-[18px] ${checked ? 'translate-x-6' : 'translate-x-0.5'}`}`} /></button>
+  return <button aria-label={label} aria-pressed={checked} className={`relative shrink-0 rounded-full transition-colors ${small ? 'h-4 w-7' : 'h-[22px] w-11'} ${checked ? 'bg-[var(--app-brand)]' : 'bg-[var(--app-active)]'} disabled:cursor-not-allowed disabled:opacity-40`} disabled={disabled} onClick={() => onChange(!checked)} type="button"><span className={`absolute left-0 rounded-full bg-[var(--app-surface)] shadow-[0_1px_1px_var(--app-shadow),0_3px_8px_var(--app-shadow)] transition-transform ${small ? `top-0.5 size-3 ${checked ? 'translate-x-3.5' : 'translate-x-0.5'}` : `top-0.5 size-[18px] ${checked ? 'translate-x-6' : 'translate-x-0.5'}`}`} /></button>
 }
 
 function ConfigRow({ children, description, label }: { children: React.ReactNode; description: string; label: string }) {

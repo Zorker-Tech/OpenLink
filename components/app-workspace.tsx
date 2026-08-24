@@ -277,7 +277,7 @@ export function Sidebar({
                       <button
                         aria-controls={`sidebar-project-chats-${group.projectId}`}
                         aria-expanded={groupOpen}
-                        className="flex h-6 w-full items-center gap-1 rounded-md px-2 text-[12px] font-medium tracking-[-0.05px] text-[var(--app-subtle)] outline-none hover:bg-[var(--app-surface)] hover:text-[var(--app-muted)] focus-visible:ring-2 focus-visible:ring-[var(--app-control-border)]"
+                        className="flex h-6 w-full items-center gap-1 rounded-md px-2 text-[12px] font-medium tracking-[-0.05px] text-[var(--app-subtle-foreground)] outline-none hover:bg-[var(--app-surface)] hover:text-[var(--app-muted)] focus-visible:ring-2 focus-visible:ring-[var(--app-control-border)]"
                         onClick={() => setCollapsedChatGroups((current) => ({ ...current, [group.projectId]: groupOpen }))}
                         type="button"
                       >
@@ -295,7 +295,7 @@ export function Sidebar({
                     </section>
                   )
                 })}
-                {!chatSessions.length && <p className="px-2 py-1 text-xs text-[var(--app-subtle)]">暂无聊天</p>}
+                {!chatSessions.length && <p className="px-2 py-1 text-xs text-[var(--app-subtle-foreground)]">暂无聊天</p>}
               </div>
             </div>
           </section>
@@ -317,7 +317,7 @@ export function Sidebar({
                 ))}
               </div>
             ) : (
-              <button className="flex h-12 w-full items-center justify-center rounded-lg border border-dashed border-[var(--app-control-border)] text-xs text-[var(--app-subtle)] hover:bg-[var(--app-surface)]" onClick={() => router.push(`/app/${activeWorkspace.slug}/projects`)} type="button">暂无项目</button>
+              <button className="flex h-12 w-full items-center justify-center rounded-lg border border-dashed border-[var(--app-control-border)] text-xs text-[var(--app-subtle-foreground)] hover:bg-[var(--app-surface)]" onClick={() => router.push(`/app/${activeWorkspace.slug}/projects`)} type="button">暂无项目</button>
             )}
           </section>}
         </div>}
@@ -370,13 +370,13 @@ function WorkspacePrompt({
     <div className="flex w-full max-w-[700px] flex-col">
       <div className="flex h-[22px] items-center justify-between px-4">
         <span className="text-sm font-bold tracking-[-0.2px] text-[var(--app-foreground)]">Zorker</span>
-        <div aria-label="运行环境" className="flex items-center gap-px rounded-full bg-[var(--app-home-mode-track)] p-px text-[13px]">
-          <button aria-disabled className="rounded-full px-3 py-1 text-[var(--app-home-mode-muted)]" disabled title="Cloud 即将推出" type="button">Cloud</button>
-          <span aria-current="true" className="rounded-full border border-[var(--app-home-mode-border)] bg-[var(--app-home-mode-active)] px-3 py-1 text-[var(--app-home-mode-foreground)] shadow-[0_1px_2px_var(--app-home-mode-shadow)]">Local</span>
+        <div aria-label="运行环境" className="flex items-center gap-px rounded-full bg-[var(--app-subtle-surface)] p-px text-[13px]">
+          <button aria-disabled className="rounded-full px-3 py-1 text-[var(--app-muted)]" disabled title="Cloud 即将推出" type="button">Cloud</button>
+          <span aria-current="true" className="rounded-full border border-[var(--app-control-border)] bg-[var(--app-surface)] px-3 py-1 text-[var(--app-foreground)] shadow-[0_1px_2px_var(--app-shadow)]">Local</span>
         </div>
       </div>
     <PromptInput
-      className="mt-3 w-full max-w-[700px] [&>[data-slot=input-group]]:h-[122px] [&>[data-slot=input-group]]:min-h-[122px] [&>[data-slot=input-group]]:rounded-[20px] [&>[data-slot=input-group]]:border-[var(--app-home-composer-border)] [&>[data-slot=input-group]]:bg-[var(--app-home-composer-background)] [&>[data-slot=input-group]]:shadow-none [&>[data-slot=input-group]]:focus-within:border-[var(--app-home-composer-border-focus)] [&>[data-slot=input-group]]:focus-within:ring-0"
+      className="mt-3 w-full max-w-[700px] [&>[data-slot=input-group]]:h-[122px] [&>[data-slot=input-group]]:min-h-[122px] [&>[data-slot=input-group]]:rounded-[20px] [&>[data-slot=input-group]]:border-[var(--app-control-border)] [&>[data-slot=input-group]]:bg-[var(--app-surface)] [&>[data-slot=input-group]]:shadow-none [&>[data-slot=input-group]]:focus-within:border-[var(--app-focus-ring)] [&>[data-slot=input-group]]:focus-within:ring-0"
       onSubmit={async ({ text }) => {
         const prompt = text.trim()
         if (!prompt) return
@@ -398,7 +398,7 @@ function WorkspacePrompt({
       <PromptInputBody>
         <PromptInputTextarea
           aria-label="描述你想创建的内容"
-          className="min-h-[64px]! px-4 pt-4 text-[14px] leading-5 text-[var(--app-home-composer-foreground)] placeholder:text-[var(--app-home-composer-placeholder)]"
+          className="min-h-[64px]! px-4 pt-4 text-[14px] leading-5 text-[var(--app-foreground)] placeholder:text-[var(--app-subtle-foreground)]"
           onChange={(event) => setInput(event.currentTarget.value)}
           disabled={!runtimeReady}
           placeholder={runtimeReady ? '描述你想构建的内容，或向 OpenLink 提问' : '项目环境正在初始化…'}
@@ -411,7 +411,7 @@ function WorkspacePrompt({
           <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
             <ModelSelectorTrigger
               render={
-                <PromptInputButton className="h-7 max-w-[220px] gap-1 rounded-full px-2 text-[13px] font-medium text-[var(--app-home-composer-muted)] hover:bg-[var(--app-home-composer-hover)] hover:text-[var(--app-home-composer-foreground)]" type="button" />
+                <PromptInputButton className="h-7 max-w-[220px] gap-1 rounded-full px-2 text-[13px] font-medium text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]" type="button" />
               }
             >
               {selectedModel && <ModelSelectorLogo className="size-4" provider={selectedModel.logo} />}
@@ -436,7 +436,7 @@ function WorkspacePrompt({
                       >
                         <ModelSelectorLogo className="size-4" provider={model.logo} />
                         <ModelSelectorName>{model.name}</ModelSelectorName>
-                        {model.isDefault && <span className="text-[11px] text-[var(--app-subtle)]">默认</span>}
+                        {model.isDefault && <span className="text-[11px] text-[var(--app-subtle-foreground)]">默认</span>}
                       </ModelSelectorItem>
                     ))}
                   </ModelSelectorGroup>
@@ -459,7 +459,7 @@ function WorkspacePrompt({
           </ModelSelector>
         </PromptInputTools>
         <div className="flex items-center gap-1">
-          <PromptInputSubmit aria-label="发送" className="size-7 rounded-full border border-[var(--app-home-submit-border)] bg-[var(--app-home-submit-background)] p-0 text-[var(--app-home-submit-foreground)] hover:opacity-90 disabled:cursor-wait disabled:opacity-40" disabled={!runtimeReady}>
+          <PromptInputSubmit aria-label="发送" className="size-7 rounded-full border border-[var(--app-submit-background)] bg-[var(--app-submit-background)] p-0 text-[var(--app-submit-foreground)] hover:bg-[var(--app-submit-hover)] disabled:cursor-wait disabled:opacity-40" disabled={!runtimeReady}>
             <Send aria-hidden className="size-3.5" />
           </PromptInputSubmit>
         </div>
@@ -469,7 +469,7 @@ function WorkspacePrompt({
         <ModelSelector onOpenChange={setProjectSelectorOpen} open={projectSelectorOpen}>
           <ModelSelectorTrigger
             render={
-              <button aria-label={`选择项目，当前 ${selectedProject?.name ?? '默认 Draft 项目'}`} className="-ml-1.5 flex h-5 items-center gap-1 rounded-md px-1.5 text-xs text-[var(--app-project-selector-foreground)] hover:bg-[var(--app-project-selector-hover)]" type="button" />
+              <button aria-label={`选择项目，当前 ${selectedProject?.name ?? '默认 Draft 项目'}`} className="-ml-1.5 flex h-5 items-center gap-1 rounded-md px-1.5 text-xs text-[var(--app-muted)] hover:bg-[var(--app-hover)]" type="button" />
             }
           >
             {selectedProject?.kind === 'research' ? <BookOpenText className="size-4" /> : <Code2 className="size-4" />}
@@ -507,7 +507,7 @@ function WorkspacePrompt({
                       >
                         <Icon className="size-4" />
                         <ModelSelectorName>{project.name}</ModelSelectorName>
-                        <span className="text-xs text-[var(--app-subtle)]">{ready ? (project.kind === 'research' ? '研究' : '代码') : '等待初始化'}</span>
+                        <span className="text-xs text-[var(--app-subtle-foreground)]">{ready ? (project.kind === 'research' ? '研究' : '代码') : '等待初始化'}</span>
                       </ModelSelectorItem>
                     )
                   })}
@@ -529,8 +529,8 @@ function WorkspacePrompt({
           </ModelSelectorContent>
         </ModelSelector>
       </div>
-      {!runtimeReady && <p className="px-1 text-xs text-[var(--app-muted)]">{runtimeProject.name} 正在初始化 VM，项目进入活动状态后才能创建对话。</p>}
-      {submitError && <p className="px-1 text-xs text-destructive" role="alert">{submitError}</p>}
+      {!runtimeReady && <p className="px-4 text-xs text-[var(--app-muted)]">{runtimeProject.name} 正在初始化 VM，项目进入活动状态后才能创建对话。</p>}
+      {submitError && <p className="px-4 text-xs text-destructive" role="alert">{submitError}</p>}
     </div>
   )
 }
@@ -580,6 +580,12 @@ export function AppWorkspace({
     window.localStorage.setItem('openlink-theme', mode)
   }
   const activeTheme = themeMode === 'light' || (themeMode === 'system' && systemLight) ? 'light' : 'dark'
+
+  useEffect(() => {
+    const root = document.documentElement
+    if (activeTheme === 'dark') root.classList.add('dark')
+    else root.classList.remove('dark')
+  }, [activeTheme])
 
   return (
     <OpenLinkThemeProvider theme={activeTheme}>

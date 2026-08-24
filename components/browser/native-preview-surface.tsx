@@ -9,6 +9,7 @@ import {
   type InspectorBridgeEvent,
 } from '@/packages/browser-protocol/src/index'
 import { BrowserConnection } from '@/lib/browser-runtime/client'
+import { theme } from '@/lib/theme'
 import { useEffect, useMemo, useRef } from 'react'
 
 export function NativePreviewSurface({
@@ -80,12 +81,12 @@ export function NativePreviewSurface({
     if (!inspectMode) onElementSelected(null)
   }, [inspectMode, nonce])
 
-  if (!iframeUrl) return <div className="flex size-full items-center justify-center text-sm text-[var(--app-muted)]">预览地址尚未就绪</div>
+  if (!iframeUrl) return <div className={`flex size-full items-center justify-center text-sm ${theme('canvas', 'muted')}`}>预览地址尚未就绪</div>
 
   return (
     <iframe
       allow="clipboard-read; clipboard-write; fullscreen"
-      className="size-full border-0 bg-white"
+      className={`size-full border-0 ${theme('surface')}`}
       ref={iframeRef}
       sandbox={sandbox}
       src={iframeUrl}

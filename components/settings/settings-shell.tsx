@@ -85,6 +85,13 @@ export function SettingsShell({ activeWorkspace, avatarUrl, children, email, nic
   }, [])
 
   const theme = themeMode === 'light' || (themeMode === 'system' && systemLight) ? 'light' : 'dark'
+
+  useEffect(() => {
+    const root = document.documentElement
+    if (theme === 'dark') root.classList.add('dark')
+    else root.classList.remove('dark')
+  }, [theme])
+
   const navigation = useMemo(() => (
     <>
       <div className="flex flex-col gap-3 py-2">

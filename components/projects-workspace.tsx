@@ -49,7 +49,7 @@ function ProjectCard({ project, workspaceSlug }: { project: ProjectSummary; work
     <article className="group min-w-0">
       <button
         aria-label={`选择项目 ${project.name}`}
-        className="relative flex aspect-[340/181] w-full items-center justify-center rounded-md border border-[var(--app-control-border)] bg-[var(--app-elevated)] text-[var(--app-subtle)] enabled:hover:border-[var(--app-focus-ring)] enabled:hover:bg-[var(--app-surface)] enabled:hover:text-[var(--app-muted)] disabled:cursor-wait"
+        className="relative flex aspect-[340/181] w-full items-center justify-center rounded-md border border-[var(--app-control-border)] bg-[var(--app-elevated)] text-[var(--app-subtle-foreground)] enabled:hover:border-[var(--app-focus-ring)] enabled:hover:bg-[var(--app-surface)] enabled:hover:text-[var(--app-muted)] disabled:cursor-wait"
         disabled={!ready}
         onClick={() => router.push(`/app/${workspaceSlug}?project=${project.id}`)}
         type="button"
@@ -80,7 +80,7 @@ function ProjectCard({ project, workspaceSlug }: { project: ProjectSummary; work
           <MoreHorizontal className="size-4" />
         </button>
         <span className="flex items-center gap-1.5 text-[13px] leading-4 tracking-[-0.0762px] text-[var(--app-muted)]">
-          <i className={`size-1.5 rounded-full ${ready ? 'bg-emerald-500' : failed ? 'bg-amber-500' : 'bg-[var(--app-subtle)]'}`} />
+          <i className={`size-1.5 rounded-full ${ready ? 'bg-[var(--app-success)]' : failed ? 'bg-[var(--app-warning)]' : 'bg-[var(--app-subtle-surface)]'}`} />
           {ready ? `活动 · ${relativeProjectTime(project.updated_at)}` : failed ? '等待 · 正在重试' : '等待 · VM 初始化中'}
         </span>
       </div>
@@ -123,6 +123,13 @@ export function ProjectsWorkspace({
   }, [])
 
   const activeTheme = themeMode === 'light' || (themeMode === 'system' && systemLight) ? 'light' : 'dark'
+
+  useEffect(() => {
+    const root = document.documentElement
+    if (activeTheme === 'dark') root.classList.add('dark')
+    else root.classList.remove('dark')
+  }, [activeTheme])
+
   const filteredProjects = useMemo(() => {
     const query = search.trim().toLocaleLowerCase()
     if (!query) return projects
@@ -185,7 +192,7 @@ export function ProjectsWorkspace({
                 <span className="flex h-[30px] w-8 shrink-0 items-center justify-center text-[var(--app-muted)]"><Search className="size-4" /></span>
                 <input
                   aria-label="搜索项目"
-                  className="h-5 min-w-0 flex-1 bg-transparent text-sm tracking-[-0.1504px] text-[var(--app-foreground)] outline-none placeholder:text-[var(--app-subtle)]"
+                  className="h-5 min-w-0 flex-1 bg-transparent text-sm tracking-[-0.1504px] text-[var(--app-foreground)] outline-none placeholder:text-[var(--app-subtle-foreground)]"
                   onChange={(event) => setSearch(event.currentTarget.value)}
                   placeholder="Search projects..."
                   type="search"

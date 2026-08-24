@@ -76,7 +76,7 @@ export function ChatCodePreview({ path, content, language = 'plaintext', classNa
     <div className={`relative min-w-0 overflow-hidden rounded-md border border-[var(--app-control-border)] bg-[var(--app-surface)] ${className}`} data-code-preview={path}>
       <div className="flex h-6 items-center justify-between border-b border-[var(--app-control-border)] px-2 text-[11px] text-[var(--app-muted)]">
         <span className="min-w-0 truncate font-mono">{path}</span>
-        {streaming ? <span className="shrink-0 text-[var(--app-subtle)]">正在编辑</span> : null}
+        {streaming ? <span className="shrink-0 text-[var(--app-subtle-foreground)]">正在编辑</span> : null}
       </div>
       <div className="h-[220px] w-full" ref={hostRef} />
     </div>

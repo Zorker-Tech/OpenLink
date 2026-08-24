@@ -694,7 +694,7 @@ function TaskExecutionRow({ execution }: { execution: TaskExecution }) {
         >
           <span className={`flex shrink-0 items-center justify-center ${execution.state === 'active' ? 'size-5' : 'size-4'}`}><ExecutionIcon execution={execution} /></span>
           <span className="min-w-0 truncate">{input.displayValue}</span>
-          {input.range && <span className="shrink-0 text-[var(--app-subtle)]">{input.range}</span>}
+          {input.range && <span className="shrink-0 text-[var(--app-subtle-foreground)]">{input.range}</span>}
         </button>
       </div>
       {expandable && open ? (
@@ -742,7 +742,7 @@ function StatusItem({ item }: { item: Extract<TimelineItem, { kind: 'status' }> 
   return (
     <div className="flex h-7 items-center gap-2 text-[13px] leading-[21px] tracking-[-0.0762px] text-[var(--app-muted)]">
       <ThinkingOrb aria-label={`${item.label}${item.state === 'active' ? '中' : item.state === 'failed' ? '失败' : '已完成'}`} className="shrink-0" paused={item.state !== 'active'} size={20} state="working" />
-      <div className="min-w-0 leading-[21px]"><p>{item.label}</p>{item.detail ? <p className="text-[12px] text-[var(--app-subtle)]">{item.detail}</p> : null}</div>
+      <div className="min-w-0 leading-[21px]"><p>{item.label}</p>{item.detail ? <p className="text-[12px] text-[var(--app-subtle-foreground)]">{item.detail}</p> : null}</div>
     </div>
   )
 }
@@ -763,9 +763,9 @@ function ChangeItem({ item }: { item: Extract<TimelineItem, { kind: 'change' }> 
         </button>
         {(item.additions !== undefined || item.deletions !== undefined) && (
           <button aria-label="查看差异" className="flex h-6 shrink-0 items-center rounded border border-[var(--app-control-border)] px-2 text-xs font-medium hover:bg-[var(--app-hover)]" type="button">
-            <span className="text-[#45a758]">+{item.additions ?? 0}</span>
+            <span className="text-[var(--app-success)]">+{item.additions ?? 0}</span>
             <span className="px-0.5 text-[var(--app-muted)]">/</span>
-            <span className="text-[#da3036]">-{item.deletions ?? 0}</span>
+            <span className="text-[var(--app-danger)]">-{item.deletions ?? 0}</span>
           </button>
         )}
         <button aria-label={open ? '收起 Git 变更' : '展开 Git 变更'} className="flex size-6 items-center justify-center rounded text-[var(--app-muted)] hover:bg-[var(--app-active)] hover:text-[var(--app-foreground)]" onClick={() => setOpen((value) => !value)} type="button"><RotateCcw className="size-3.5" /></button>
@@ -779,13 +779,13 @@ function ChangeItem({ item }: { item: Extract<TimelineItem, { kind: 'change' }> 
             const directory = segments.slice(0, -1).join('/')
             return (
               <button aria-pressed={selected?.path === change.path} className={`flex h-7 w-full min-w-0 items-center gap-2 rounded px-0.5 text-left transition-colors hover:bg-[var(--app-hover)] ${selected?.path === change.path ? 'bg-[var(--app-active)]' : ''}`} key={change.path} onClick={() => setSelectedPath(change.path)} type="button">
-                <Atom className="size-4 shrink-0 text-[#00a6c7]" />
+                <Atom className="size-4 shrink-0 text-[var(--app-info)]" />
                 <span className="shrink-0 text-[13px] text-[var(--app-foreground)]">{name}</span>
                 <span className="min-w-0 flex-1 truncate text-[13px] text-[var(--app-muted)]">{directory}</span>
                 {(change.additions !== undefined || change.deletions !== undefined) && (
                   <span className="flex shrink-0 items-center gap-0.5 text-[12px]">
-                    <span className="text-[#45a758]">+{change.additions ?? 0}</span>
-                    {change.deletions ? <span className="text-[#da3036]">/-{change.deletions}</span> : null}
+                    <span className="text-[var(--app-success)]">+{change.additions ?? 0}</span>
+                    {change.deletions ? <span className="text-[var(--app-danger)]">/-{change.deletions}</span> : null}
                   </span>
                 )}
               </button>
@@ -814,7 +814,7 @@ function ConfirmationResultItem({ item }: { item: Extract<TimelineItem, { kind: 
       <div className="flex h-6 min-w-0 max-w-[200px] items-center gap-1.5 overflow-hidden rounded-md border border-[var(--app-control-border)] bg-[var(--app-active)] pl-1 pr-1.5">
         <span className="flex size-4 shrink-0 items-center justify-center">
           {approved
-            ? <CircleCheck className="size-[14px] text-[#45a758]" />
+            ? <CircleCheck className="size-[14px] text-[var(--app-success)]" />
             : <CircleAlert className="size-[14px] text-[var(--destructive)]" />}
         </span>
         <span className="min-w-0 truncate text-[var(--app-foreground)]">{item.title}</span>
@@ -846,7 +846,7 @@ function TimelineMessageItem({ item }: { item: Extract<TimelineItem, { kind: 'me
   return (
     <Message className={item.role === 'user' ? 'mb-4 max-w-[95%]' : 'max-w-full'} from={item.role}>
       <MessageContent className={item.role === 'user'
-        ? `relative isolate min-h-0 overflow-hidden border border-[var(--app-user-bubble)] bg-[var(--app-user-bubble)]! text-[13px] text-[var(--app-user-bubble-foreground)]! before:hidden after:hidden ${compactUserMessage ? 'rounded-lg! px-2.5! py-px! leading-5' : 'rounded-2xl! px-3! py-1.5! leading-[21.125px]'}`
+        ? `relative isolate min-h-0 overflow-hidden border border-[var(--app-control-border)] bg-[var(--app-active)]! text-[13px] text-[var(--app-foreground)]! before:hidden after:hidden ${compactUserMessage ? 'rounded-lg! px-2.5! py-px! leading-5' : 'rounded-2xl! px-3! py-1.5! leading-[21.125px]'}`
         : 'w-full gap-0 overflow-visible text-[13px] leading-[21.125px]'}>
         {item.role === 'assistant'
           ? <MessageResponse className="chat-message-markdown text-[13px] leading-[21.125px] [&_li]:my-1 [&_p]:my-0">{item.text}</MessageResponse>
@@ -926,7 +926,7 @@ function WorkFlowGroup({
   }
 
   return (
-    <section className={`flex w-full flex-col text-[13px] tracking-[-0.0762px] text-[var(--app-subtle)] ${round.state === 'worked' ? 'border-b border-[var(--app-border)]' : ''}`} id={checkpoint ? `checkpoint-${checkpoint.id}` : undefined}>
+    <section className={`flex w-full flex-col text-[13px] tracking-[-0.0762px] text-[var(--app-subtle-foreground)] ${round.state === 'worked' ? 'border-b border-[var(--app-border)]' : ''}`} id={checkpoint ? `checkpoint-${checkpoint.id}` : undefined}>
       <div className={`flex min-h-9 w-full items-center gap-2 border-[var(--app-border)] ${round.state === 'working' && open ? 'border-b' : ''}`}>
         <button aria-expanded={open} className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md text-left outline-none hover:text-[var(--app-foreground)] focus-visible:ring-0" onClick={() => setOpen((value) => !value)} type="button">
           <ThinkingOrb aria-label={flow.label} className="shrink-0" paused={round.state === 'worked'} size={20} state={flow.state} />

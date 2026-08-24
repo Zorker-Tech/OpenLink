@@ -73,7 +73,7 @@ export function PromptAddMenu({ variant, className }: PromptAddMenuProps) {
             className={cn(
               'size-7 shrink-0 rounded-md p-0 transition-[color,background-color,border-color,opacity] active:translate-y-0!',
               isHome
-                ? 'text-[var(--app-home-composer-muted)] hover:bg-[var(--app-home-composer-hover)]'
+                ? 'text-[var(--app-muted)] hover:bg-[var(--app-hover)]'
                 : 'text-[var(--app-muted)] hover:bg-[var(--app-active)] hover:text-[var(--app-foreground)]',
               className,
             )}
@@ -142,10 +142,10 @@ export function PromptAddMenu({ variant, className }: PromptAddMenuProps) {
             aria-hidden
             className={cn(
               'relative h-[18px] w-8 shrink-0 rounded-full transition-colors',
-              generateImages ? 'bg-blue-500' : 'bg-[var(--app-border)]',
+              generateImages ? 'bg-[var(--app-brand)]' : 'bg-[var(--app-active)]',
             )}
           >
-            <span className={cn('absolute top-0.5 size-3.5 rounded-full bg-white shadow-sm transition-transform', generateImages ? 'translate-x-4' : 'translate-x-0.5')} />
+            <span className={cn('absolute top-0.5 size-3.5 rounded-full bg-[var(--app-surface)] shadow-sm transition-transform', generateImages ? 'translate-x-4' : 'translate-x-0.5')} />
           </span>
         </DropdownMenuItem>
 

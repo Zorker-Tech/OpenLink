@@ -149,10 +149,10 @@ export function NewProjectDialog({
                         <ProjectKindIcon className="size-3.5" kind={project.kind} />
                       </span>
                       <span className="min-w-0 flex-1 truncate text-sm text-[var(--app-foreground)]">{project.name}</span>
-                      <span className="text-xs text-[var(--app-subtle)]">{project.kind === 'research' ? 'Research' : 'Code'}</span>
+                      <span className="text-xs text-[var(--app-subtle-foreground)]">{project.kind === 'research' ? 'Research' : 'Code'}</span>
                     </button>
                   )) : (
-                    <div className="flex min-h-[176px] items-center justify-center rounded-lg border border-dashed border-[var(--app-control-border)] text-sm text-[var(--app-subtle)]">
+                    <div className="flex min-h-[176px] items-center justify-center rounded-lg border border-dashed border-[var(--app-control-border)] text-sm text-[var(--app-subtle-foreground)]">
                       No projects yet
                     </div>
                   )}
@@ -220,7 +220,7 @@ export function NewProjectDialog({
                 <span className="text-sm font-medium text-[var(--app-foreground)]">Project name</span>
                 <Input
                   autoFocus
-                  className="h-9 rounded-md border-[var(--app-control-border)] bg-[var(--app-surface)] text-[var(--app-foreground)] placeholder:text-[var(--app-subtle)] focus-visible:ring-1 focus-visible:ring-[var(--app-focus-ring)]"
+                  className="h-9 rounded-md border-[var(--app-control-border)] bg-[var(--app-surface)] text-[var(--app-foreground)] placeholder:text-[var(--app-subtle-foreground)] focus-visible:ring-1 focus-visible:ring-[var(--app-focus-ring)]"
                   maxLength={100}
                   name="name"
                   placeholder={mode === 'research' ? 'Research topic' : 'my-project'}
@@ -286,7 +286,7 @@ export function NewProjectDialog({
                     <span className="min-w-0">
                       <span className="flex items-center gap-2 text-sm font-medium text-[var(--app-foreground)]">
                         Sparse
-                        <span className="rounded-full bg-[var(--app-control-background)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--app-muted)]">Recommended</span>
+                        <span className="rounded-full bg-[var(--app-subtle-surface)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--app-muted)]">Recommended</span>
                       </span>
                       <span className="mt-1 block text-xs leading-4 text-[var(--app-muted)]">64 GB capacity. Host usage grows with project data.</span>
                     </span>
@@ -312,7 +312,7 @@ export function NewProjectDialog({
                 <label className="block space-y-2">
                   <span className="text-sm font-medium text-[var(--app-foreground)]">GitHub repository</span>
                   <Input
-                    className="h-9 rounded-md border-[var(--app-control-border)] bg-[var(--app-surface)] text-[var(--app-foreground)] placeholder:text-[var(--app-subtle)] focus-visible:ring-1 focus-visible:ring-[var(--app-focus-ring)]"
+                  className="h-9 rounded-md border-[var(--app-control-border)] bg-[var(--app-surface)] text-[var(--app-foreground)] placeholder:text-[var(--app-subtle-foreground)] focus-visible:ring-1 focus-visible:ring-[var(--app-focus-ring)]"
                     name="sourceUrl"
                     placeholder="https://github.com/owner/repository"
                     required
@@ -322,9 +322,9 @@ export function NewProjectDialog({
               )}
 
               <label className="block space-y-2">
-                <span className="text-sm font-medium text-[var(--app-foreground)]">Description <span className="font-normal text-[var(--app-subtle)]">Optional</span></span>
+                <span className="text-sm font-medium text-[var(--app-foreground)]">Description <span className="font-normal text-[var(--app-subtle-foreground)]">Optional</span></span>
                 <Textarea
-                  className="min-h-[82px] resize-none rounded-md border-[var(--app-control-border)] bg-[var(--app-surface)] text-[var(--app-foreground)] placeholder:text-[var(--app-subtle)] focus-visible:ring-1 focus-visible:ring-[var(--app-focus-ring)]"
+                  className="min-h-[82px] resize-none rounded-md border-[var(--app-control-border)] bg-[var(--app-surface)] text-[var(--app-foreground)] placeholder:text-[var(--app-subtle-foreground)] focus-visible:ring-1 focus-visible:ring-[var(--app-focus-ring)]"
                   maxLength={2000}
                   name="description"
                   placeholder={mode === 'research' ? 'What question are you investigating?' : 'What are you building?'}

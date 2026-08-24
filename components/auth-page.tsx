@@ -25,6 +25,19 @@ function safeNextPath(value: string | null, fallback = '/') {
   return value && value.startsWith('/') && !value.startsWith('//') ? value : fallback
 }
 
+function authenticationErrorMessage(error: unknown, fallback: string) {
+  const message = error instanceof Error
+    ? error.message.trim()
+    : typeof error === 'string'
+      ? error.trim()
+      : ''
+
+  // Some transport failures from the local auth stack surface as an Error whose
+  // message is a serialized empty object. That is not useful to a person and
+  // must never be rendered as the login error.
+  return message && message !== '{}' && message !== '[object Object]' ? message : fallback
+}
+
 export function AuthPage({ mode, localRuntime = false }: AuthPageProps) {
   const isRegister = mode === 'register'
   const isLocalRuntime = localRuntime
@@ -108,7 +121,12 @@ export function AuthPage({ mode, localRuntime = false }: AuthPageProps) {
         shareSessionThenContinue()
       }
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Unable to authenticate. Please try again.')
+      setErrorMessage(authenticationErrorMessage(
+        error,
+        isLocalRuntime
+          ? 'Local authentication is temporarily unavailable. Check Docker Desktop, then try again.'
+          : 'Unable to authenticate. Please try again.',
+      ))
     } finally {
       setIsSubmitting(false)
     }
@@ -120,29 +138,32 @@ export function AuthPage({ mode, localRuntime = false }: AuthPageProps) {
     setIsSubmitting(true)
 
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
           redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}${isLocalRuntime ? '' : '&share=1'}`,
         },
       })
       if (error) throw error
+      if (!data.url) throw new Error('OAuth provider did not return a redirect URL.')
+      window.location.assign(data.url)
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Unable to continue with OAuth.')
+      setErrorMessage(authenticationErrorMessage(error, 'Unable to continue with OAuth.'))
+    } finally {
       setIsSubmitting(false)
     }
   }
 
-  const inputClassName = 'h-10 rounded-lg border-white/14 bg-[#0a0a0a]! px-3 text-base! text-[#ededed] shadow-none placeholder:text-white/50 focus-visible:border-white/50 focus-visible:ring-4 focus-visible:ring-white/24'
+  const inputClassName = 'h-10 rounded-lg border-input bg-background px-3 text-base! text-foreground shadow-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/25'
 
   return (
-    <div className="flex min-h-[100svh] flex-col overflow-hidden bg-black text-[#ededed]">
+    <div className="flex min-h-[100svh] flex-col overflow-hidden bg-background text-foreground">
       <header className="flex min-h-16 shrink-0 items-center px-6">
         <Link aria-label="OpenLink home" className="flex h-8 items-center" href="/">
           <img alt="OpenLink" className="h-[15px] w-8" src="/openlink/auth/header-logo.svg" />
         </Link>
         <nav className="ml-auto flex items-center pl-8">
-          <Link className="flex h-8 items-center rounded-md px-3 text-sm font-medium text-[#ededed] transition-colors hover:bg-[#171717]" href={alternateHref}>
+          <Link className="flex h-8 items-center rounded-md px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted" href={alternateHref}>
             {alternateLabel}
           </Link>
         </nav>
@@ -150,13 +171,13 @@ export function AuthPage({ mode, localRuntime = false }: AuthPageProps) {
 
       <main className="flex min-h-0 flex-1 flex-col items-center justify-center gap-6 pb-8">
         <div className="flex flex-col items-center justify-center gap-4">
-          <div className="flex size-20 items-center justify-center overflow-hidden rounded-full border border-white/14 bg-[#171717]">
+          <div className="flex size-20 items-center justify-center overflow-hidden rounded-full border border-border bg-muted">
             <img alt="OpenLink" className="h-[25px] w-[53px]" src="/openlink/auth/app-logo.svg" />
           </div>
           <div className="flex flex-col items-center justify-center gap-2 text-center">
-            <h1 className="text-[32px] leading-10 font-semibold tracking-[-0.96px] text-[#ededed]">Open Link</h1>
+            <h1 className="text-[32px] leading-10 font-semibold tracking-[-0.96px] text-foreground">Open Link</h1>
             {isRegister && (
-              <p className="w-80 text-base leading-6 text-[#ededed]">
+              <p className="w-80 text-base leading-6 text-foreground">
                 <span className="whitespace-nowrap">We suggest using the email address you use</span><br />at work or school
               </p>
             )}
@@ -203,46 +224,54 @@ export function AuthPage({ mode, localRuntime = false }: AuthPageProps) {
                 value={confirmPassword}
               />
             )}
-            <Button className="h-10 w-full rounded-lg border-[#ededed] bg-[#ededed] px-3.5 text-base font-medium text-[#0a0a0a] hover:bg-white" disabled={isSubmitting} type="submit">
+            <Button className="h-10 w-full rounded-lg" disabled={isSubmitting} type="submit">
               {isSubmitting ? 'Please wait…' : 'Continue with Email'}
             </Button>
           </form>
 
           {(errorMessage || statusMessage) && (
-            <p className={`w-full text-center text-sm leading-5 ${errorMessage ? 'text-red-400' : 'text-[#a0a0a0]'}`} role={errorMessage ? 'alert' : 'status'}>
+            <p className={`w-full text-center text-sm leading-5 ${errorMessage ? 'text-destructive' : 'text-muted-foreground'}`} role={errorMessage ? 'alert' : 'status'}>
               {errorMessage || statusMessage}
             </p>
           )}
 
-          <div className="h-px w-full border-t border-white/14" />
+          {isLocalRuntime ? (
+            <p className="w-full text-center text-sm leading-5 text-muted-foreground">
+              Local development uses email and password.
+            </p>
+          ) : (
+            <>
+              <div className="h-px w-full border-t border-border" />
 
-          <div className="flex w-full flex-col gap-4">
-            {providers.map((provider, index) => (
-              <div className="relative w-full" key={provider.label}>
-                <Button className="h-10 w-full rounded-lg bg-[#0a0a0a] px-3.5 text-base font-medium text-[#ededed] hover:bg-[#171717]" disabled={isSubmitting} onClick={() => handleOAuth(provider.provider)} type="button" variant="ghost">
-                  <img alt="" className="size-5" src={provider.icon} />
-                  Continue with {provider.label}
-                </Button>
-                {index === 0 && (
-                  <span className="absolute -top-2 -right-2 flex h-5 items-center rounded-full bg-[#005be7] px-2 text-[11px] leading-5 font-medium tracking-[0.2px] text-white">
-                    Last Used
-                  </span>
-                )}
+              <div className="flex w-full flex-col gap-4">
+                {providers.map((provider, index) => (
+                  <div className="relative w-full" key={provider.label}>
+                    <Button className="h-10 w-full rounded-lg px-3.5 text-base font-medium" disabled={isSubmitting} onClick={() => handleOAuth(provider.provider)} type="button" variant="outline">
+                      <img alt="" className="size-5" src={provider.icon} />
+                      Continue with {provider.label}
+                    </Button>
+                    {index === 0 && (
+                      <span className="absolute -top-2 -right-2 flex h-5 items-center rounded-full bg-primary px-2 text-[11px] leading-5 font-medium tracking-[0.2px] text-primary-foreground">
+                        Last Used
+                      </span>
+                    )}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </>
+          )}
         </div>
 
-        <p className="text-center text-base leading-6 text-[#ededed]">
+        <p className="text-center text-base leading-6 text-foreground">
           {isRegister ? 'Already have an account? ' : "Don't have an account? "}
-          <Link className="text-[#47a8ff] hover:underline" href={alternateHref}>{alternateLabel}</Link>
+          <Link className="text-primary hover:underline" href={alternateHref}>{alternateLabel}</Link>
         </p>
       </main>
 
-      <footer className="shrink-0 px-4 text-center text-xs leading-4 text-[#a1a1a1]">
+      <footer className="shrink-0 px-4 text-center text-xs leading-4 text-muted-foreground">
         By proceeding, you agree to creating an Open Link account subject to our{' '}
-        <a className="text-white hover:underline" href="#terms">Terms of Service</a>{' '}and{' '}
-        <a className="text-white hover:underline" href="#privacy">Privacy Policy</a>.
+        <a className="text-foreground hover:underline" href="#terms">Terms of Service</a>{' '}and{' '}
+        <a className="text-foreground hover:underline" href="#privacy">Privacy Policy</a>.
       </footer>
     </div>
   )

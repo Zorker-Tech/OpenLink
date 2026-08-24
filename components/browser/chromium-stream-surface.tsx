@@ -2,6 +2,7 @@
 
 import type { ElementReference } from '@/packages/browser-protocol/src/index'
 import { ThinkingOrb } from '@/components/thinking/src'
+import { theme } from '@/lib/theme'
 import { BrowserConnection } from '@/lib/browser-runtime/client'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -172,7 +173,7 @@ export function ChromiumStreamSurface({
   return (
     <div
       aria-label="远程 Chromium 实时交互画布"
-      className="relative size-full overflow-hidden bg-[#111] outline-none"
+      className={`relative size-full overflow-hidden outline-none ${theme('editor')}`}
       onContextMenu={(event) => event.preventDefault()}
       onPointerDown={(event) => {
         const mapped = point(event.clientX, event.clientY)
@@ -202,14 +203,14 @@ export function ChromiumStreamSurface({
     >
       <img alt="远程 Chromium 页面" className={`pointer-events-none size-full select-none ${fit === 'fill' ? 'object-fill' : 'object-contain'}`} draggable={false} ref={imageRef} />
       {!hasFrame && (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-[#111] text-sm text-white/70">
-          <ThinkingOrb aria-label="正在初始化实时浏览器" size={64} state="shaping" theme="dark" />
+        <div className={`absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 text-sm ${theme('editor', 'muted')}`}>
+          <ThinkingOrb aria-label="正在初始化实时浏览器" size={64} state="shaping" />
           <span>正在初始化实时浏览器</span>
         </div>
       )}
       {overlayStyle && (
-        <div className="pointer-events-none absolute z-20 border-2 border-[#6d5dfc] bg-[#6d5dfc]/10" style={overlayStyle}>
-          <span className="absolute bottom-full left-[-2px] max-w-64 truncate rounded-t bg-[#6d5dfc] px-1.5 py-0.5 text-[10px] leading-4 text-white">
+        <div className={`pointer-events-none absolute z-20 border-2 ${theme('inspector')}`} style={overlayStyle}>
+          <span className={`absolute bottom-full left-[-2px] max-w-64 truncate rounded-t px-1.5 py-0.5 text-[10px] leading-4 ${theme('inspectorLabel')}`}>
             {selectedLabel}
           </span>
         </div>

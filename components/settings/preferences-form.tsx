@@ -42,7 +42,7 @@ export function PreferencesForm({ initial }: { initial: UserPreferences }) {
         <textarea className="mt-4 min-h-[120px] w-full resize-y rounded-lg border border-[var(--app-control-border)] bg-[var(--app-surface)] p-3 text-sm leading-5 outline-none focus:border-[var(--app-focus-ring)]" maxLength={12000} onChange={(event) => setValue((current) => ({ ...current, customInstructions: event.target.value }))} placeholder="例如：默认使用中文回答，修改代码前先说明影响范围。" value={value.customInstructions} />
       </div>
       <div className="mt-4 flex items-center justify-end gap-3">
-        {status && <span className={`text-sm ${status === '已保存' ? 'text-emerald-500' : 'text-red-400'}`}>{status === '已保存' && <Check className="mr-1 inline size-4" />}{status}</span>}
+        {status && <span className={`text-sm ${status === '已保存' ? 'text-[var(--app-success)]' : 'text-[var(--app-danger)]'}`}>{status === '已保存' && <Check className="mr-1 inline size-4" />}{status}</span>}
         <button className="flex h-9 items-center gap-2 rounded-md bg-[var(--app-submit-background)] px-4 text-sm font-medium text-[var(--app-submit-foreground)] disabled:opacity-50" disabled={pending} onClick={save} type="button">{pending && <Loader2 className="size-4 animate-spin" />}Save</button>
       </div>
     </div>

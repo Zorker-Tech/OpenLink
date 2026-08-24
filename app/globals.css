@@ -1,6 +1,15 @@
-@import 'tailwindcss';
+@import 'tailwindcss' source(none);
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
+
+/* OpenLink is a large monorepo. Keep Tailwind's candidate scanner constrained
+   to the Web/BFF graph instead of traversing vendored services and generated
+   runtime artifacts during every cold compilation. */
+@source './';
+@source '../components';
+@source '../lib';
+@source '../utils';
+@source '../packages';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -79,6 +88,44 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  /* App aliases make standalone shared surfaces theme-aware as well. */
+  --app-background: var(--background);
+  --app-surface: var(--card);
+  --app-elevated: var(--popover);
+  --app-active: var(--accent);
+  --app-border: var(--border);
+  --app-control-border: var(--input);
+  --app-prompt-border: var(--input);
+  --app-foreground: var(--foreground);
+  --app-muted: var(--muted-foreground);
+  --app-subtle: var(--muted-foreground);
+  --app-subtle-foreground: var(--muted-foreground);
+  --app-subtle-surface: var(--muted);
+  --app-hover: var(--accent);
+  --app-selected: var(--accent);
+  --app-focus-ring: var(--ring);
+  --app-submit-background: var(--primary);
+  --app-submit-foreground: var(--primary-foreground);
+  --app-submit-hover: color-mix(in oklab, var(--primary) 88%, var(--foreground));
+  --app-editor-background: var(--card);
+  --app-danger: var(--destructive);
+  --app-danger-surface: color-mix(in oklab, var(--destructive) 12%, var(--background));
+  --app-inspector: oklch(0.59 0.2 280);
+  --app-inspector-surface: oklch(0.59 0.2 280 / 12%);
+  --app-inspector-foreground: oklch(0.99 0 0);
+  --app-brand: oklch(0.58 0.2 260);
+  --app-logo-filter: none;
+  --app-overlay: rgb(0 0 0 / 42%);
+  --app-shadow: rgb(0 0 0 / 12%);
+  --app-success: #067647;
+  --app-success-surface: rgb(6 118 71 / 10%);
+  --app-warning: #b54708;
+  --app-warning-surface: rgb(181 71 8 / 10%);
+  --app-info: #175cd3;
+  --app-info-surface: rgb(23 92 211 / 10%);
+  --scrollbar-thumb: rgb(82 82 91 / 48%);
+  --scrollbar-thumb-hover: rgb(63 63 70 / 72%);
+  --scrollbar-track: transparent;
 }
 
 .dark {
@@ -114,6 +161,15 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  --app-shadow: rgb(0 0 0 / 34%);
+  --app-success: #75e0a7;
+  --app-success-surface: rgb(117 224 167 / 12%);
+  --app-warning: #fec84b;
+  --app-warning-surface: rgb(254 200 75 / 12%);
+  --app-info: #84adff;
+  --app-info-surface: rgb(132 173 255 / 12%);
+  --scrollbar-thumb: rgb(161 161 170 / 38%);
+  --scrollbar-thumb-hover: rgb(212 212 216 / 62%);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -160,20 +216,48 @@
   body {
     @apply bg-background text-foreground;
     margin: 0;
-    background: #000;
   }
 
   html {
-    scrollbar-width: none;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
   }
 
-  html::-webkit-scrollbar {
-    display: none;
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  }
+
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+  }
+
+  *::-webkit-scrollbar-thumb {
+    min-height: 36px;
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background: var(--scrollbar-thumb);
+    background-clip: content-box;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+    background-clip: content-box;
+  }
+
+  *::-webkit-scrollbar-corner {
+    background: transparent;
   }
 }
 
 @layer components {
-  .openlink-app-shell {
+  .openlink-app-shell,
+  [data-openlink-theme] {
     --app-background: #000000;
     --app-surface: #121212;
     --app-active: #1f1f1f;
@@ -182,24 +266,58 @@
     --app-prompt-border: #404040;
     --app-foreground: #ededed;
     --app-muted: #a0a0a0;
-    --app-sidebar-width: 280px;
-    --app-drawer-background: #303030;
-    --app-drawer-foreground: #dcdcdc;
-    --app-drawer-muted: #8f8f8f;
-    --app-drawer-border: rgb(255 255 255 / 6%);
-    --app-drawer-divider: rgb(255 255 255 / 12%);
-    --app-drawer-hover: rgb(255 255 255 / 8%);
-    --app-drawer-shadow: rgb(0 0 0 / 20%);
-    --app-theme-track: #131313;
-    --app-theme-active: #303030;
-    --app-theme-hover: rgb(255 255 255 / 8%);
     --app-submit-background: #ededed;
     --app-submit-foreground: #0a0a0a;
+    --app-shadow: rgba(0, 0, 0, 0.28);
+    --app-elevated: #1a1a1a;
+    --app-subtle: #a0a0a0;
+    --app-status-glass: rgba(18, 18, 18, 0.72);
+    --app-status-glass-border: rgba(255, 255, 255, 0.08);
+    --app-status-glass-foreground: #ededed;
+    --app-hover: rgba(255, 255, 255, 0.06);
+    --app-selected: rgba(255, 255, 255, 0.1);
+    --app-focus-ring: rgba(255, 255, 255, 0.16);
+    --app-subtle-foreground: #a0a0a0;
+    --app-subtle-surface: #161616;
+    --app-submit-hover: #ffffff;
+    --app-editor-background: #1e1e1e;
+    --app-danger: #ff9c9c;
+    --app-danger-surface: rgb(255 156 156 / 12%);
+    --app-inspector: #6d5dfc;
+    --app-inspector-surface: rgb(109 93 252 / 10%);
+    --app-inspector-foreground: #ffffff;
+    --app-brand: #3b82f6;
+    --app-overlay: rgb(0 0 0 / 58%);
+    --app-success: #75e0a7;
+    --app-success-surface: rgb(117 224 167 / 12%);
+    --app-warning: #fec84b;
+    --app-warning-surface: rgb(254 200 75 / 12%);
+    --app-info: #84adff;
+    --app-info-surface: rgb(132 173 255 / 12%);
+    /* Shared primitives use the standard semantic contract. */
+    --background: var(--app-background);
+    --foreground: var(--app-foreground);
+    --card: var(--app-surface);
+    --card-foreground: var(--app-foreground);
+    --popover: var(--app-elevated);
+    --popover-foreground: var(--app-foreground);
+    --secondary: var(--app-active);
+    --secondary-foreground: var(--app-foreground);
+    --muted: var(--app-subtle-surface);
+    --muted-foreground: var(--app-muted);
+    --accent: var(--app-selected);
+    --accent-foreground: var(--app-foreground);
+    --border: var(--app-border);
+    --input: var(--app-control-border);
+    --ring: var(--app-focus-ring);
+    --primary: var(--app-submit-background);
+    --primary-foreground: var(--app-submit-foreground);
     background: var(--app-background);
     color: var(--app-foreground);
   }
 
-  .openlink-app-shell[data-theme='light'] {
+  .openlink-app-shell[data-theme='light'],
+  [data-openlink-theme='light'] {
     color-scheme: light;
     --app-background: #fafafa;
     --app-surface: #ffffff;
@@ -209,38 +327,63 @@
     --app-prompt-border: #cfcfcf;
     --app-foreground: #171717;
     --app-muted: #666666;
-    --app-sidebar-width: 250px;
-    --app-drawer-background: #ffffff;
-    --app-drawer-foreground: #282828;
-    --app-drawer-muted: #8f8f8f;
-    --app-drawer-border: rgb(0 0 0 / 10%);
-    --app-drawer-divider: rgb(13 13 13 / 10%);
-    --app-drawer-hover: rgb(13 13 13 / 6%);
-    --app-drawer-shadow: rgb(0 0 0 / 10%);
-    --app-theme-track: #f9f9f9;
-    --app-theme-active: #ffffff;
-    --app-theme-hover: rgb(0 0 0 / 5%);
     --app-submit-background: #171717;
     --app-submit-foreground: #ffffff;
+    --app-shadow: rgba(0, 0, 0, 0.12);
+    --app-elevated: #ffffff;
+    --app-subtle: #666666;
+    --app-status-glass: rgba(255, 255, 255, 0.72);
+    --app-status-glass-border: rgba(0, 0, 0, 0.08);
+    --app-status-glass-foreground: #171717;
+    --app-hover: rgba(0, 0, 0, 0.04);
+    --app-selected: rgba(0, 0, 0, 0.07);
+    --app-focus-ring: rgba(0, 0, 0, 0.12);
+    --app-subtle-foreground: #666666;
+    --app-subtle-surface: #f4f4f4;
+    --app-submit-hover: #303030;
+    --app-editor-background: #f4f4f5;
+    --app-danger: #b42318;
+    --app-danger-surface: rgb(180 35 24 / 10%);
+    --app-inspector: #5346d8;
+    --app-inspector-surface: rgb(83 70 216 / 12%);
+    --app-inspector-foreground: #ffffff;
+    --app-brand: #2563eb;
+    --app-overlay: rgb(15 23 42 / 34%);
+    --app-success: #067647;
+    --app-success-surface: rgb(6 118 71 / 10%);
+    --app-warning: #b54708;
+    --app-warning-surface: rgb(181 71 8 / 10%);
+    --app-info: #175cd3;
+    --app-info-surface: rgb(23 92 211 / 10%);
     background: var(--app-background);
   }
 
-  .openlink-app-shell[data-theme='light'] .app-nav-icon {
+  .openlink-app-shell[data-theme='light'] .app-nav-icon,
+  [data-openlink-theme='light'] .app-nav-icon {
     filter: brightness(0);
     opacity: .6;
   }
 
-  .openlink-app-shell[data-theme='light'] .app-control-icon {
+  .openlink-app-shell[data-theme='light'] .app-control-icon,
+  [data-openlink-theme='light'] .app-control-icon {
     filter: brightness(0);
     opacity: .65;
   }
 
-  .openlink-app-shell[data-theme='light'] button[aria-current='page'] .app-nav-icon {
+  .openlink-app-shell[data-theme='light'] button[aria-current='page'] .app-nav-icon,
+  [data-openlink-theme='light'] button[aria-current='page'] .app-nav-icon {
     opacity: 1;
   }
 
+
   .nav-link {
-    @apply flex h-7 items-center rounded-md px-2 text-sm font-medium tracking-[-0.1504px] text-[#a0a0a0] transition-colors hover:bg-[#171717] hover:text-[#ededed];
+    @apply flex h-7 items-center rounded-md px-2 text-sm font-medium tracking-[-0.1504px] transition-colors;
+    color: var(--app-muted);
+  }
+
+  .nav-link:hover {
+    background: var(--app-hover);
+    color: var(--app-foreground);
   }
 
   .feature-grid {
@@ -251,8 +394,10 @@
   }
 
   .visual-orb {
-    @apply flex size-[88px] items-center justify-center rounded-full bg-[#0a0a0a] text-[#ededed];
-    filter: drop-shadow(0 4px 12px rgb(255 255 255 / 10%));
+    @apply flex size-[88px] items-center justify-center rounded-full;
+    background: var(--app-elevated);
+    color: var(--app-foreground);
+    filter: drop-shadow(0 4px 12px var(--app-shadow));
   }
 
   .app-cloud {
@@ -260,20 +405,27 @@
   }
 
   .app-cloud span {
-    @apply flex h-12 items-center justify-center rounded-full border border-[#1f1f1f] bg-[#0a0a0a] text-xs text-[#a0a0a0];
+    @apply flex h-12 items-center justify-center rounded-full border text-xs;
+    border-color: var(--app-border);
+    background: var(--app-elevated);
+    color: var(--app-muted);
   }
 
   .design-window {
-    @apply relative mx-8 mb-8 flex-1 overflow-hidden rounded-lg border border-[#252525] bg-[#0d0d0d] p-4;
+    @apply relative mx-8 mb-8 flex-1 overflow-hidden rounded-lg border p-4;
+    border-color: var(--app-control-border);
+    background: var(--app-elevated);
   }
 
   .design-window > span {
-    @apply mr-1.5 inline-block size-2 rounded-full bg-[#444];
+    @apply mr-1.5 inline-block size-2 rounded-full;
+    background: var(--app-muted);
   }
 
   .design-window > div {
-    @apply absolute inset-x-5 top-12 bottom-5 rounded border border-[#262626];
-    background: linear-gradient(135deg, #171717, #080808);
+    @apply absolute inset-x-5 top-12 bottom-5 rounded border;
+    border-color: var(--app-control-border);
+    background: linear-gradient(135deg, var(--app-active), var(--app-background));
   }
 
   .mini-template-grid {
@@ -281,19 +433,23 @@
   }
 
   .mini-template-grid img {
-    @apply min-h-0 size-full rounded-md border border-white/10 object-cover;
+    @apply min-h-0 size-full rounded-md border object-cover;
+    border-color: var(--app-control-border);
   }
 
   .type-specimen {
-    @apply mx-8 mb-8 flex flex-1 flex-col justify-center rounded-lg border border-[#242424] px-8;
+    @apply mx-8 mb-8 flex flex-1 flex-col justify-center rounded-lg border px-8;
+    border-color: var(--app-control-border);
   }
 
   .type-specimen span {
-    @apply mb-5 text-7xl font-semibold tracking-[-5px] text-[#ededed];
+    @apply mb-5 text-7xl font-semibold tracking-[-5px];
+    color: var(--app-foreground);
   }
 
   .type-specimen i {
-    @apply mb-3 block h-2 rounded-full bg-[#1f1f1f];
+    @apply mb-3 block h-2 rounded-full;
+    background: var(--app-active);
   }
 
   .type-specimen i:nth-child(3) { width: 72%; }
