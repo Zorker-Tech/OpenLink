@@ -27,19 +27,19 @@ export function OnboardingForm({
     <form action={formAction} className="w-full space-y-4">
       <input name="prompt" type="hidden" value={prompt} />
       <label className="block space-y-2">
-        <span className="text-sm font-medium text-[#ededed]">昵称</span>
+        <span className="text-sm font-medium text-foreground">昵称</span>
         <Input
           autoComplete="nickname"
           autoFocus
-          className="h-10 rounded-lg border-white/14 bg-[#0a0a0a]! px-3 text-base! text-[#ededed] shadow-none focus-visible:border-white/50 focus-visible:ring-4 focus-visible:ring-white/20"
+          className="h-10 rounded-lg border-input bg-background px-3 text-base! text-foreground shadow-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/25"
           defaultValue={defaultNickname}
           maxLength={64}
           name="nickname"
           required
         />
       </label>
-      {state.error && <p className="text-sm text-red-400" role="alert">{state.error}</p>}
-      <Button className="h-10 w-full rounded-lg bg-[#ededed] text-[#0a0a0a] hover:bg-white" disabled={isPending} type="submit">
+      {state.error && <p className="text-sm text-destructive" role="alert">{state.error}</p>}
+      <Button className="h-10 w-full rounded-lg" disabled={isPending} type="submit">
         {isPending ? '正在保存…' : '继续'}
       </Button>
     </form>
