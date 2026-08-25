@@ -734,8 +734,8 @@ function TaskGroupItem({ item }: { item: Extract<TimelineItem, { kind: 'task' }>
     <Task className="w-full" onOpenChange={setOpen} open={open}>
       <TaskTrigger className="w-full" title={title}>
         <div className="flex h-7 w-full items-center gap-2 overflow-hidden rounded-md text-left text-[13px] leading-[21.125px] tracking-[-0.0762px] text-[var(--app-muted)] transition-colors hover:text-[var(--app-foreground)]">
-          <span className="min-w-0 flex-1 truncate">{title}</span>
           <StatusGlyph doneIcon={BadgeCheckIcon} label={title} orbState={orbState} running={item.state === 'active'} />
+          <span className="min-w-0 flex-1 truncate">{title}</span>
           <ChevronDown className={`size-[13px] shrink-0 transition-transform ${open ? '' : '-rotate-90'}`} />
         </div>
       </TaskTrigger>
@@ -753,8 +753,8 @@ function TaskGroupItem({ item }: { item: Extract<TimelineItem, { kind: 'task' }>
 function StatusItem({ item }: { item: Extract<TimelineItem, { kind: 'status' }> }) {
   return (
     <div className="flex h-7 items-center gap-2 text-[13px] leading-[21px] tracking-[-0.0762px] text-[var(--app-muted)]">
-      <div className="min-w-0 leading-[21px]"><p>{item.label}</p>{item.detail ? <p className="text-[12px] text-[var(--app-subtle-foreground)]">{item.detail}</p> : null}</div>
       <StatusGlyph doneIcon={BadgeCheckIcon} label={`${item.label}${item.state === 'active' ? '中' : item.state === 'failed' ? '失败' : '已完成'}`} running={item.state === 'active'} />
+      <div className="min-w-0 leading-[21px]"><p>{item.label}</p>{item.detail ? <p className="text-[12px] text-[var(--app-subtle-foreground)]">{item.detail}</p> : null}</div>
     </div>
   )
 }
@@ -875,8 +875,8 @@ function TimelineItemView({ item }: { item: TimelineItem }) {
     return (
       <Reasoning className="mb-0!" defaultOpen={false} duration={item.durationMs ? Math.max(1, Math.round(item.durationMs / 1000)) : undefined} isStreaming={item.streaming}>
         <ReasoningTrigger className="h-7 gap-2 text-[13px] leading-[21px] tracking-[-0.0762px]" getThinkingMessage={(streaming) => streaming ? <span>Thinking…</span> : <span>Thought for a moment</span>}>
-          <span>{item.streaming ? 'Thinking…' : 'Thought for a moment'}</span>
           <StatusGlyph doneIcon={AiBrain02Icon} label={item.streaming ? '正在思考' : '思考已完成'} orbState="solving" running={item.streaming} />
+          <span>{item.streaming ? 'Thinking…' : 'Thought for a moment'}</span>
         </ReasoningTrigger>
         {item.text && <ReasoningContent className="relative mt-2 pl-7 text-[12px] leading-5 before:absolute before:inset-y-0 before:left-[9.5px] before:w-px before:bg-gradient-to-b before:from-[var(--app-border)] before:to-transparent">{item.text}</ReasoningContent>}
       </Reasoning>
@@ -941,8 +941,8 @@ function WorkFlowGroup({
     <section className={`flex w-full flex-col text-[13px] tracking-[-0.0762px] text-[var(--app-subtle-foreground)] ${round.state === 'worked' ? 'border-b border-[var(--app-border)]' : ''}`} id={checkpoint ? `checkpoint-${checkpoint.id}` : undefined}>
       <div className={`flex min-h-9 w-full items-center gap-2 border-[var(--app-border)] ${round.state === 'working' && open ? 'border-b' : ''}`}>
         <button aria-expanded={open} className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md text-left outline-none hover:text-[var(--app-foreground)] focus-visible:ring-0" onClick={() => setOpen((value) => !value)} type="button">
-          <span className="truncate text-[14px] font-medium">{label}</span>
           <StatusGlyph doneIcon={BadgeCheckIcon} label={flow.label} orbState={flow.state} running={round.state === 'working'} />
+          <span className="truncate text-[14px] font-medium">{label}</span>
           <ChevronDown className={`size-[13px] shrink-0 transition-transform ${open ? '' : '-rotate-90'}`} />
         </button>
         {checkpoint ? <span className="hidden shrink-0 items-center gap-1 sm:flex"><Clock3 className="size-[13px]" />{open ? formatClockTime(checkpoint.timestamp) : formatRelativeTime(checkpoint.timestamp)}</span> : null}
