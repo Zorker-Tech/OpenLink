@@ -414,6 +414,7 @@ function ChatComposer({
 
   const actionButtons = (
     <>
+      <SupabaseAccessModePicker value={accessMode} onChange={onAccessModeChange} />
       <PromptAddMenu variant="session" />
       <PromptInputButton aria-label="添加评论" className="size-7 shrink-0 rounded-md p-0 transition-[color,background-color,border-color,opacity] active:translate-y-0! hover:bg-[var(--app-active)]" type="button"><MessageCircle className="size-3.5" /></PromptInputButton>
       <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
@@ -436,7 +437,6 @@ function ChatComposer({
 
   return (
     <div className="flex w-full flex-col gap-1.5">
-      <SupabaseAccessModePicker value={accessMode} onChange={onAccessModeChange} className="self-start" />
     <PromptInput
       className={`w-full [&>[data-slot=input-group]]:rounded-xl [&>[data-slot=input-group]]:bg-[var(--app-surface)] [&>[data-slot=input-group]]:shadow-none [&>[data-slot=input-group]]:transition-[padding,border-color] [&>[data-slot=input-group]]:duration-200 [&>[data-slot=input-group]]:focus-within:ring-0 ${expanded ? '[&>[data-slot=input-group]]:h-auto [&>[data-slot=input-group]]:max-h-[384px] [&>[data-slot=input-group]]:min-h-[108px] [&>[data-slot=input-group]]:flex-col [&>[data-slot=input-group]]:items-stretch [&>[data-slot=input-group]]:gap-0 [&>[data-slot=input-group]]:border-[var(--app-focus-ring)] [&>[data-slot=input-group]]:p-3' : '[&>[data-slot=input-group]]:h-[42px] [&>[data-slot=input-group]]:min-h-[42px] [&>[data-slot=input-group]]:gap-1 [&>[data-slot=input-group]]:border-[var(--app-control-border)] [&>[data-slot=input-group]]:p-1.5'}`}
       onSubmit={({ text }) => {
