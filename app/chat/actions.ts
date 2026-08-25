@@ -1,6 +1,6 @@
 'use server'
 
-import { createChatSession, updateChatSessionSupabaseAccessMode, updateChatSessionTitle, type AccessMode } from '@/lib/chat-sessions'
+import { createChatSession, updateChatSessionAccessMode, updateChatSessionTitle, type AccessMode } from '@/lib/chat-sessions'
 import { resolveAppEntry } from '@/lib/workspaces'
 import { createClient } from '@/utils/supabase/server'
 import { getChatSession } from '@/lib/chat-sessions'
@@ -11,7 +11,7 @@ export interface CreateChatSessionInput {
   projectId?: string | null
   providerId?: string
   modelId?: string
-  supabaseAccessMode?: AccessMode
+  accessMode?: AccessMode
 }
 
 export type CreateChatSessionResult =
@@ -48,7 +48,7 @@ export async function createChatSessionAction(
       projectId: input.projectId,
       providerId: input.providerId,
       modelId: input.modelId,
-      supabaseAccessMode: input.supabaseAccessMode,
+      accessMode: input.accessMode,
     })
     const query = new URLSearchParams()
     if (prompt) query.set('run', '1')
@@ -91,7 +91,7 @@ export type UpdateChatSessionAccessModeResult =
   | { mode: AccessMode; error: null }
   | { mode: null; error: string }
 
-export async function updateChatSessionSupabaseAccessModeAction(input: {
+export async function updateChatSessionAccessModeAction(input: {
   sessionId: string
   mode: AccessMode
 }): Promise<UpdateChatSessionAccessModeResult> {
@@ -100,7 +100,7 @@ export async function updateChatSessionSupabaseAccessModeAction(input: {
   if (!user) return { mode: null, error: 'AUTH_REQUIRED' }
 
   try {
-    const mode = await updateChatSessionSupabaseAccessMode(supabase, user.id, input.sessionId, input.mode)
+    const mode = await updateChatSessionAccessMode(supabase, user.id, input.sessionId, input.mode)
     return { mode, error: null }
   } catch (error) {
     return {
@@ -116,14 +116,14 @@ function agentHostConfig() {
   return baseUrl && apiToken ? { baseUrl, apiToken } : null
 }
 
-export interface PendingSupabaseWrite {
+export interface PendingAccessWrite {
   id: string
   operation: string
   sql: string
   createdAt: string
 }
 
-export async function listPendingSupabaseWritesAction(sessionId: string): Promise<{ confirmations: PendingSupabaseWrite[]; error: string | null }> {
+export async function listPendingAccessWritesAction(sessionId: string): Promise<{ confirmations: PendingAccessWrite[]; error: string | null }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { confirmations: [], error: 'AUTH_REQUIRED' }
@@ -139,13 +139,13 @@ export async function listPendingSupabaseWritesAction(sessionId: string): Promis
     })
     if (!response.ok) return { confirmations: [], error: `LIST_FAILED_${response.status}` }
     const payload = await response.json() as { confirmations?: unknown }
-    return { confirmations: Array.isArray(payload.confirmations) ? payload.confirmations as PendingSupabaseWrite[] : [], error: null }
+    return { confirmations: Array.isArray(payload.confirmations) ? payload.confirmations as PendingAccessWrite[] : [], error: null }
   } catch (error) {
     return { confirmations: [], error: error instanceof Error ? error.message : 'LIST_FAILED' }
   }
 }
 
-export async function approveSupabaseWriteAction(sessionId: string, confirmationId: string): Promise<{ ok: boolean; error: string | null }> {
+export async function approveAccessWriteAction(sessionId: string, confirmationId: string): Promise<{ ok: boolean; error: string | null }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { ok: false, error: 'AUTH_REQUIRED' }

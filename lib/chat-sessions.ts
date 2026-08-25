@@ -27,7 +27,7 @@ export interface ChatSession {
   model_id: string | null
   title: string
   initial_prompt: string
-  supabase_access_mode: AccessMode
+  access_mode: AccessMode
   created_at: string
   updated_at: string
 }
@@ -126,7 +126,7 @@ export async function getChatSession(
   const { data, error } = await supabase
     .schema('openlink')
     .from('chat_sessions')
-    .select('id, user_id, workspace_id, project_id, provider_id, model_id, title, initial_prompt, supabase_access_mode, created_at, updated_at')
+    .select('id, user_id, workspace_id, project_id, provider_id, model_id, title, initial_prompt, access_mode, created_at, updated_at')
     .eq('id', sessionId)
     .eq('user_id', userId)
     .maybeSingle()
@@ -159,7 +159,7 @@ export async function updateChatSessionTitle(
   return (data as { title: string }).title
 }
 
-export async function updateChatSessionSupabaseAccessMode(
+export async function updateChatSessionAccessMode(
   supabase: ServerSupabaseClient,
   userId: string,
   sessionId: string,
@@ -171,15 +171,15 @@ export async function updateChatSessionSupabaseAccessMode(
   const { data, error } = await supabase
     .schema('openlink')
     .from('chat_sessions')
-    .update({ supabase_access_mode: mode, updated_at: new Date().toISOString() })
+    .update({ access_mode: mode, updated_at: new Date().toISOString() })
     .eq('id', sessionId)
     .eq('user_id', userId)
-    .select('supabase_access_mode')
+    .select('access_mode')
     .maybeSingle()
 
   if (error) throw error
   if (!data) throw new Error('CHAT_SESSION_NOT_FOUND')
-  return (data as { supabase_access_mode: AccessMode }).supabase_access_mode
+  return (data as { access_mode: AccessMode }).access_mode
 }
 
 export async function createChatSession(
@@ -191,7 +191,7 @@ export async function createChatSession(
     projectId?: string | null
     providerId?: string
     modelId?: string
-    supabaseAccessMode?: AccessMode
+    accessMode?: AccessMode
   },
 ) {
   const workspace = options.workspaceSlug
@@ -237,9 +237,9 @@ export async function createChatSession(
         model_id: selectedModel.modelId,
         title,
         initial_prompt: initialPrompt,
-        supabase_access_mode: options.supabaseAccessMode ?? DEFAULT_ACCESS_MODE,
+        access_mode: options.accessMode ?? DEFAULT_ACCESS_MODE,
       })
-      .select('id, user_id, workspace_id, project_id, provider_id, model_id, title, initial_prompt, supabase_access_mode, created_at, updated_at')
+      .select('id, user_id, workspace_id, project_id, provider_id, model_id, title, initial_prompt, access_mode, created_at, updated_at')
       .single()
 
     if (!error) return { session: data as ChatSession, workspace: workspace as OpenLinkWorkspace }

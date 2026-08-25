@@ -42,10 +42,10 @@ import type { ChatSessionSummary } from '@/lib/chat-session-types'
 import { hasPersistedUserMessage } from '@/lib/chat-auto-start'
 import { theme } from '@/lib/theme'
 import { useRouter } from 'next/navigation'
-import { updateChatSessionSupabaseAccessModeAction } from '@/app/chat/actions'
+import { updateChatSessionAccessModeAction } from '@/app/chat/actions'
 import type { AccessMode } from '@/lib/chat-sessions'
 import { AccessModePicker } from '@/components/access-mode-picker'
-import { SupabasePendingWritesBanner } from '@/components/supabase-pending-writes-banner'
+import { AccessWritesBanner } from '@/components/access-writes-banner'
 import {
   ArrowLeft,
   ArrowRight,
@@ -913,8 +913,8 @@ export function ChatWorkspace({
                   <ChatTimeline events={agentEvents} isStreaming={agentStreamStatus === 'streaming'} onFlowStatusChange={setActiveChatFlow} />
                   <div className="px-2 pb-2">
                     <ChatConfirmationDock onResolve={resolveConfirmation} requests={pendingConfirmations} />
-                    <SupabasePendingWritesBanner sessionId={sessionId} />
-                <ChatComposer accessMode={accessMode} initialModel={autoStartModel} models={configuredModels} onAccessModeChange={(mode) => { setAccessMode(mode); void updateChatSessionSupabaseAccessModeAction({ sessionId, mode }) }} onSubmit={submitAgentMessage} sessionId={sessionId} status={agentStreamStatus} />
+                    <AccessWritesBanner sessionId={sessionId} />
+                <ChatComposer accessMode={accessMode} initialModel={autoStartModel} models={configuredModels} onAccessModeChange={(mode) => { setAccessMode(mode); void updateChatSessionAccessModeAction({ sessionId, mode }) }} onSubmit={submitAgentMessage} sessionId={sessionId} status={agentStreamStatus} />
                   </div>
                 </section>
               </ResizablePanel>
@@ -929,7 +929,7 @@ export function ChatWorkspace({
               <ChatTimeline events={agentEvents} isStreaming={agentStreamStatus === 'streaming'} onFlowStatusChange={setActiveChatFlow} />
               <div className="px-2 pb-2">
                 <ChatConfirmationDock onResolve={resolveConfirmation} requests={pendingConfirmations} />
-                <ChatComposer accessMode={accessMode} initialModel={autoStartModel} models={configuredModels} onAccessModeChange={(mode) => { setAccessMode(mode); void updateChatSessionSupabaseAccessModeAction({ sessionId, mode }) }} onSubmit={submitAgentMessage} sessionId={sessionId} status={agentStreamStatus} />
+                <ChatComposer accessMode={accessMode} initialModel={autoStartModel} models={configuredModels} onAccessModeChange={(mode) => { setAccessMode(mode); void updateChatSessionAccessModeAction({ sessionId, mode }) }} onSubmit={submitAgentMessage} sessionId={sessionId} status={agentStreamStatus} />
               </div>
             </section>
           </div>

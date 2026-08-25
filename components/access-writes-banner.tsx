@@ -1,18 +1,18 @@
 'use client'
 
-import { approveSupabaseWriteAction, listPendingSupabaseWritesAction, type PendingSupabaseWrite } from '@/app/chat/actions'
+import { approveAccessWriteAction, listPendingAccessWritesAction, type PendingAccessWrite } from '@/app/chat/actions'
 import { Check, Loader2, ShieldQuestion, X } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 
-export function SupabasePendingWritesBanner({ sessionId }: { sessionId: string }) {
-  const [items, setItems] = useState<PendingSupabaseWrite[]>([])
+export function AccessWritesBanner({ sessionId }: { sessionId: string }) {
+  const [items, setItems] = useState<PendingAccessWrite[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [approving, setApproving] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     setLoading(true)
-    const result = await listPendingSupabaseWritesAction(sessionId)
+    const result = await listPendingAccessWritesAction(sessionId)
     setItems(result.confirmations)
     setError(result.error)
     setLoading(false)
@@ -43,7 +43,7 @@ export function SupabasePendingWritesBanner({ sessionId }: { sessionId: string }
               disabled={approving === item.id}
               onClick={async () => {
                 setApproving(item.id)
-                await approveSupabaseWriteAction(sessionId, item.id)
+                await approveAccessWriteAction(sessionId, item.id)
                 setApproving(null)
                 await refresh()
               }}

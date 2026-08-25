@@ -10,27 +10,27 @@ import {
   CommandShortcut,
 } from "@/components/ui/command";
 import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import type { ComponentProps, ReactNode } from "react";
 
-export type ModelSelectorProps = ComponentProps<typeof Dialog>;
+export type ModelSelectorProps = ComponentProps<typeof DropdownMenu>;
 
 export const ModelSelector = (props: ModelSelectorProps) => (
-  <Dialog {...props} />
+  <DropdownMenu {...props} />
 );
 
-export type ModelSelectorTriggerProps = ComponentProps<typeof DialogTrigger>;
+export type ModelSelectorTriggerProps = ComponentProps<typeof DropdownMenuTrigger>;
 
 export const ModelSelectorTrigger = (props: ModelSelectorTriggerProps) => (
-  <DialogTrigger {...props} />
+  <DropdownMenuTrigger {...props} />
 );
 
-export type ModelSelectorContentProps = ComponentProps<typeof DialogContent> & {
+export type ModelSelectorContentProps = ComponentProps<typeof DropdownMenuContent> & {
   title?: ReactNode;
 };
 
@@ -40,19 +40,19 @@ export const ModelSelectorContent = ({
   title = "Model Selector",
   ...props
 }: ModelSelectorContentProps) => (
-  <DialogContent
+  <DropdownMenuContent
     aria-describedby={undefined}
     className={cn(
-      "border border-border! bg-popover p-0 text-popover-foreground shadow-xl outline-none!",
+      "z-50 rounded-xl border border-[var(--app-border)] bg-[var(--app-elevated)] p-1 text-[var(--app-foreground)] shadow-[0_12px_36px_var(--app-shadow)]",
       className
     )}
     {...props}
   >
-    <DialogTitle className="sr-only">{title}</DialogTitle>
+    <DropdownMenuLabel className="sr-only">{title}</DropdownMenuLabel>
     <Command className="**:data-[slot=command-input-wrapper]:h-auto">
       {children}
     </Command>
-  </DialogContent>
+  </DropdownMenuContent>
 );
 
 export type ModelSelectorDialogProps = ComponentProps<typeof CommandDialog>;

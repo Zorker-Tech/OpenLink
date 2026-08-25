@@ -1,6 +1,6 @@
 import { normalizeAccessMode, type AccessMode } from './access-firewall.js'
 
-export interface SupabaseAccessResolver {
+export interface AccessResolver {
   resolveAccessMode(sessionId: string): Promise<AccessMode>
 }
 
@@ -13,7 +13,7 @@ function normalizeUrl(url: string): string {
  * control plane. The Agent Host uses the result to gate MCP operations, so the
  * agent cannot self-report a privilege it was not granted.
  */
-export class SupabasePostgrestAccessResolver implements SupabaseAccessResolver {
+export class SupabasePostgrestAccessResolver implements AccessResolver {
   private readonly baseUrl: string
   private readonly serviceRoleKey: string
   private readonly fetchImpl: typeof globalThis.fetch
@@ -28,7 +28,7 @@ export class SupabasePostgrestAccessResolver implements SupabaseAccessResolver {
 
   async resolveAccessMode(sessionId: string): Promise<AccessMode> {
     const params = new URLSearchParams({
-      select: 'supabase_access_mode',
+      select: 'access_mode',
       id: `eq.${sessionId}`,
       limit: '1',
     })
@@ -43,12 +43,12 @@ export class SupabasePostgrestAccessResolver implements SupabaseAccessResolver {
       signal: AbortSignal.timeout(this.timeoutMs),
     })
     if (!response.ok) throw new Error(`Supabase access mode lookup failed (${response.status})`)
-    const rows = await response.json() as Array<{ supabase_access_mode?: unknown }>
-    return normalizeAccessMode(rows[0]?.supabase_access_mode)
+    const rows = await response.json() as Array<{ access_mode?: unknown }>
+    return normalizeAccessMode(rows[0]?.access_mode)
   }
 }
 
-export function createSupabaseAccessModeResolver(env: NodeJS.ProcessEnv = process.env): SupabaseAccessResolver | undefined {
+export function createAccessModeResolver(env: NodeJS.ProcessEnv = process.env): AccessResolver | undefined {
   const url = env.OPENLINK_SUPABASE_URL?.trim() || env.NEXT_PUBLIC_SUPABASE_URL?.trim()
   const serviceRoleKey = env.OPENLINK_SUPABASE_SERVICE_ROLE_KEY?.trim()
   if (!url || !serviceRoleKey) return undefined

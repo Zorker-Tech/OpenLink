@@ -7,7 +7,7 @@ import { createSupabaseProjectRuntimeStatusWriter } from './project-runtime-stat
 import { createSupabaseProjectRuntimeProvisioningQueue, createSupabaseSshProjectRuntimeProvisioningQueue, ProjectRuntimeProvisioner } from './project-runtime-provisioner.js'
 import { ProjectRuntimeRouter, RemoteProjectRuntimeFactory, SupabaseProjectExecutionTargetProvider } from './project-runtime-router.js'
 import { mintSupabaseMcpToken } from './supabase-mcp.js'
-import { createSupabaseAccessModeResolver } from './supabase-access-resolver.js'
+import { createAccessModeResolver } from './access-mode-resolver.js'
 
 function required(env: NodeJS.ProcessEnv, key: string): string {
   const value = env[key]?.trim()
@@ -51,7 +51,7 @@ function networkDefaultAction(value: string | undefined): 'allow' | 'deny' {
 }
 
 const env = process.env
-const supabaseAccessResolver = createSupabaseAccessModeResolver(env)
+const supabaseAccessResolver = createAccessModeResolver(env)
 if (env.OPENLINK_PODMAN_HELPER_BINARIES_DIR) {
   // Podman machine uses gvproxy/vfkit outside the engine binary. Keep the
   // helper lookup scoped to the bundled toolchain instead of requiring a

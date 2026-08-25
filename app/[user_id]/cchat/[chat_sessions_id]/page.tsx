@@ -77,7 +77,7 @@ export default async function ChatSessionPage({
       projectId={project.id}
       projectName={project.name}
       sessionId={session.id}
-      initialAccessMode={session.supabase_access_mode}
+      initialAccessMode={session.access_mode}
       sessionTitle={session.title}
       userId={user.id}
       localRuntime={isLocalRuntime()}

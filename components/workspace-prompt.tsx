@@ -123,7 +123,7 @@ export function WorkspacePrompt({
           projectId: selectedProject?.id ?? null,
           providerId: selectedModel?.providerId,
           modelId: selectedModel?.modelId,
-          supabaseAccessMode: accessMode,
+          accessMode: accessMode,
         })
         if (onUnauthenticated && 'error' in result && result.error === 'AUTH_REQUIRED') {
           onUnauthenticated()

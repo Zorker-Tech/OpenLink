@@ -1,8 +1,8 @@
 'use client'
 
 import type { AccessMode } from '@/lib/chat-sessions'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Hand, ShieldCheck, Unlock } from 'lucide-react'
-import { useState } from 'react'
 
 const OPTIONS: Array<{ value: AccessMode; label: string; description: string; icon: typeof ShieldCheck }> = [
   { value: 'restricted', label: '受控', description: '仅只读操作，走防护墙', icon: ShieldCheck },
@@ -15,9 +15,9 @@ function currentOption(value: AccessMode) {
 }
 
 /**
- * Bare-icon Supabase access-mode control for the left of the composer. Renders
- * only the current mode's SVG icon; opens a selection drawer upward with the
- * full option names.
+ * Bare-icon access-mode control for the left of the composer. Uses the shared
+ * DropdownMenu (anchored + portaled to body) so the drawer is never clipped by
+ * the composer's overflow, and opens upward with the full option names.
  */
 export function AccessModePicker({
   value,
@@ -26,53 +26,47 @@ export function AccessModePicker({
   value: AccessMode
   onChange: (mode: AccessMode) => void
 }) {
-  const [open, setOpen] = useState(false)
   const active = currentOption(value)
   const ActiveIcon = active.icon
 
   return (
-    <span className="relative inline-flex shrink-0">
-      <button
-        aria-expanded={open}
-        aria-haspopup="menu"
-        aria-label={`Supabase 访问模式：${active.label}（${active.description}）`}
-        className="flex size-6 items-center justify-center rounded-md text-[var(--app-muted)] transition-colors hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]"
-        onClick={() => setOpen((current) => !current)}
-        title={`${active.label}：${active.description}`}
-        type="button"
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <button
+            aria-label={`访问模式：${active.label}（${active.description}）`}
+            className="flex size-6 items-center justify-center rounded-md text-[var(--app-muted)] transition-colors hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]"
+            title={`${active.label}：${active.description}`}
+            type="button"
+          />
+        }
       >
         <ActiveIcon className="size-3.5" />
-      </button>
-      {open && (
-        <div
-          className="absolute bottom-[calc(100%+6px)] left-0 z-30 w-[190px] rounded-lg border border-[var(--app-border)] bg-[var(--app-elevated)] p-1 shadow-[0_10px_28px_var(--app-shadow)]"
-          role="menu"
-        >
-          {OPTIONS.map((option) => {
-            const Icon = option.icon
-            const selected = option.value === value
-            return (
-              <button
-                aria-pressed={selected}
-                className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left ${selected ? 'bg-[var(--app-active)] text-[var(--app-foreground)]' : 'text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]'}`}
-                key={option.value}
-                onClick={() => {
-                  onChange(option.value)
-                  setOpen(false)
-                }}
-                role="menuitem"
-                type="button"
-              >
-                <Icon className="size-3.5 shrink-0" />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[12px] font-medium">{option.label}</span>
-                  <span className="block truncate text-[10px] text-[var(--app-subtle-foreground)]">{option.description}</span>
-                </span>
-              </button>
-            )
-          })}
-        </div>
-      )}
-    </span>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        className="w-[190px] rounded-lg border border-[var(--app-border)] bg-[var(--app-elevated)] p-1 text-[var(--app-foreground)] shadow-[0_10px_28px_var(--app-shadow)]"
+        side="top"
+      >
+        {OPTIONS.map((option) => {
+          const Icon = option.icon
+          const selected = option.value === value
+          return (
+            <DropdownMenuItem
+              aria-pressed={selected}
+              className={`h-9 cursor-pointer gap-2 rounded-md px-2 text-left ${selected ? 'bg-[var(--app-active)] text-[var(--app-foreground)]' : 'text-[var(--app-muted)] focus:bg-[var(--app-hover)] focus:text-[var(--app-foreground)]'}`}
+              key={option.value}
+              onSelect={() => onChange(option.value)}
+            >
+              <Icon className="size-3.5 shrink-0" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[12px] font-medium">{option.label}</span>
+                <span className="block truncate text-[10px] text-[var(--app-subtle-foreground)]">{option.description}</span>
+              </span>
+            </DropdownMenuItem>
+          )
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
