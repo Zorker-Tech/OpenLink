@@ -12,7 +12,6 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
@@ -48,7 +47,7 @@ export const ModelSelectorContent = ({
     )}
     {...props}
   >
-    <DropdownMenuLabel className="sr-only">{title}</DropdownMenuLabel>
+    <span className="sr-only">{title}</span>
     <Command className="**:data-[slot=command-input-wrapper]:h-auto">
       {children}
     </Command>
