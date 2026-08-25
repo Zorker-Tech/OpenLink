@@ -1,14 +1,7 @@
 'use client'
 
-import {
-  PromptInput,
-  PromptInputBody,
-  PromptInputButton,
-  PromptInputFooter,
-  PromptInputSubmit,
-  PromptInputTextarea,
-  PromptInputTools,
-} from '@/components/ai-elements/prompt-input'
+import { PromptComposer } from '@/components/prompt-composer'
+import type { ComposerContext } from '@/lib/composer-context'
 import {
   ArrowRight,
   ChevronDown,
@@ -162,60 +155,13 @@ function Header({ user }: { user: HomeUser | null }) {
   )
 }
 
-function PromptComposer({ user }: { user: HomeUser | null }) {
-  const router = useRouter()
-  const [input, setInput] = useState('')
-
-  const handleSubmit = () => {
-    const prompt = input.trim()
-    if (!prompt) return
-
-    const destination = `/app?prompt=${encodeURIComponent(prompt)}`
-    router.push(user ? destination : `/login?next=${encodeURIComponent(destination)}`)
-  }
-
-  return (
-    <div className="mx-auto w-full max-w-[690px]">
-      <PromptInput
-        className="[&>[data-slot=input-group]]:min-h-[108px] [&>[data-slot=input-group]]:rounded-xl [&>[data-slot=input-group]]:border-[var(--app-control-border)] [&>[data-slot=input-group]]:bg-[var(--app-surface)] [&>[data-slot=input-group]]:shadow-none [&>[data-slot=input-group]]:focus-within:border-[var(--app-focus-ring)] [&>[data-slot=input-group]]:focus-within:ring-0"
-        onSubmit={handleSubmit}
-      >
-        <PromptInputBody>
-          <PromptInputTextarea
-            aria-label="描述您想创建的内容"
-            className="min-h-[54px]! px-3 pt-3 text-[15px] text-[var(--app-foreground)] placeholder:text-[var(--app-subtle-foreground)]"
-            onChange={(event) => setInput(event.currentTarget.value)}
-            placeholder=""
-            value={input}
-          />
-        </PromptInputBody>
-        <PromptInputFooter className="h-10 px-3 pb-3">
-          <PromptInputTools>
-            <PromptInputButton className="h-7 max-w-[200px] gap-1 rounded-md px-1.5 text-[13px] font-medium text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]">
-              <img alt="" className="size-4" src="/openlink/model.svg" />
-              <span>Fable 5</span>
-              <ChevronDown className="size-4" />
-            </PromptInputButton>
-          </PromptInputTools>
-          <PromptInputSubmit
-            aria-label="开始语音输入"
-            className="size-7 rounded-md border border-[var(--app-submit-background)] bg-[var(--app-submit-background)] p-0 text-[var(--app-submit-foreground)] hover:bg-[var(--app-submit-hover)]"
-          >
-            <img alt="" className="size-4" src="/openlink/mic.svg" />
-          </PromptInputSubmit>
-        </PromptInputFooter>
-      </PromptInput>
-    </div>
-  )
-}
-
-function Hero({ user }: { user: HomeUser | null }) {
+function Hero({ user, composerContext }: { user: HomeUser | null; composerContext: ComposerContext | null }) {
   return (
     <section className="h-[493px] px-6 pt-36">
       <h1 className="mb-4 text-center text-[32px] leading-10 font-semibold tracking-[-0.8737px] text-[var(--app-foreground)]">
         您想创建什么？
       </h1>
-      <PromptComposer user={user} />
+      <PromptComposer user={user} composerContext={composerContext} />
     </section>
   )
 }
@@ -383,12 +329,12 @@ function Footer() {
   )
 }
 
-export function OpenLinkHome({ user }: { user: HomeUser | null }) {
+export function OpenLinkHome({ user, composerContext }: { user: HomeUser | null; composerContext: ComposerContext | null }) {
   return (
     <div className={`min-h-screen overflow-x-hidden pt-[50px] ${theme('canvas')}`}>
       <Header user={user} />
       <main>
-        <Hero user={user} />
+        <Hero user={user} composerContext={composerContext} />
         <TemplatesSection />
         <FeaturesSection />
         <BrandStrip />
