@@ -979,11 +979,13 @@ function WorkFlowGroup({
           </DropdownMenuContent>
         </DropdownMenu> : null}
       </div>
-      {open && (
-        <div className="flex flex-col gap-2 pb-2 pt-2">
+      <div
+        className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out ${open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}
+      >
+        <div className="flex min-h-0 flex-col gap-2 overflow-hidden pb-2 pt-2">
           {children}
         </div>
-      )}
+      </div>
     </section>
   )
 }
