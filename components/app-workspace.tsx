@@ -105,10 +105,10 @@ function SidebarItem({
   return (
     <div className={`flex h-8 w-full items-center rounded-md text-sm tracking-[-0.1504px] transition-colors ${active ? 'bg-[var(--app-selected,var(--app-active))] text-[var(--app-foreground)]' : 'text-[var(--app-muted)] hover:bg-[var(--app-surface)] hover:text-[var(--app-foreground)]'}`}>
       <button aria-current={active ? 'page' : undefined} className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md pl-2 text-inherit" onClick={onClick} type="button">
+        <span className="min-w-0 flex-1 truncate text-left">{label}</span>
         {chatRuntime
           ? <ThinkingOrb aria-label={chatRuntime.state} className="shrink-0" size={20} speed={chatRuntime.speed} state={chatRuntime.state} />
           : <img alt="" className="app-nav-icon size-4 shrink-0" src={icon} />}
-        <span className="min-w-0 flex-1 truncate text-left">{label}</span>
       </button>
       {chatMenu ? <SidebarChatMenu {...chatMenu} /> : <span className="w-2 shrink-0" />}
     </div>
