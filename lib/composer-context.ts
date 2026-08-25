@@ -3,6 +3,7 @@ import { ensureDraftProject, listProjects } from '@/lib/projects'
 import type { ConfiguredModelOption } from '@/lib/ai-provider-types'
 import { listConfiguredModels } from '@/lib/ai-provider-configurations.server'
 import { getAccessibleWorkspace, getOwnedWorkspace } from '@/lib/workspaces'
+import { listOrganizations } from '@/lib/organizations'
 import { createClient } from '@/utils/supabase/server'
 
 type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>
