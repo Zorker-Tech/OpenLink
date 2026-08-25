@@ -32,8 +32,9 @@ import {
   RefreshCw,
   RotateCcw,
 } from 'lucide-react'
+import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react'
 import { AiBrain02Icon, BadgeCheckIcon, BookOpen01Icon, Edit01Icon, SquareTerminalIcon } from '@hugeicons/core-free-icons'
-import type { ComponentType, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { useEffect, useId, useMemo, useState } from 'react'
 import { useStickToBottomContext } from 'use-stick-to-bottom'
 
@@ -652,15 +653,14 @@ function executionInput(execution: TaskExecution) {
   return { displayValue, primary, range, title: [primary, range, execution.error ?? execution.output].filter(Boolean).join(' · ') }
 }
 
-function StatusGlyph({ running, label, doneIcon, size = 20, orbState = 'working' }: { running: boolean; label: string; doneIcon?: ComponentType<{ className?: string }>; size?: number; orbState?: OrbState }) {
+function StatusGlyph({ running, label, doneIcon, size = 20, orbState = 'working' }: { running: boolean; label: string; doneIcon?: IconSvgElement; size?: number; orbState?: OrbState }) {
   // Running tasks keep the animated orb; settled tasks switch to a static
   // HugeIcon SVG that corresponds to the task type.
   if (running) return <ThinkingOrb aria-label={label} className="shrink-0" size={size} state={orbState} />
-  const Icon = doneIcon ?? BadgeCheckIcon
-  return <Icon className="size-4 shrink-0 text-[var(--app-subtle-foreground)]" />
+  return <HugeiconsIcon className="size-4 shrink-0 text-[var(--app-subtle-foreground)]" icon={doneIcon ?? BadgeCheckIcon} />
 }
 
-function executionDoneIcon(execution: TaskExecution): ComponentType<{ className?: string }> {
+function executionDoneIcon(execution: TaskExecution): IconSvgElement {
   if (execution.kind === 'command') return SquareTerminalIcon
   if (execution.kind === 'file') return Edit01Icon
   const name = execution.label.toLowerCase()
