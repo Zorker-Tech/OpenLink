@@ -184,6 +184,7 @@ export class LocalOpenSandboxBackend {
           OPENLINK_SUPABASE_EXTENSION_PATH: this.config.supabaseMcp.extensionPath,
           OPENLINK_SUPABASE_MCP_URL: this.config.supabaseMcp.urlFor(projectId),
           OPENLINK_SUPABASE_MCP_TOKEN: this.config.supabaseMcp.tokenFor(projectId),
+          OPENLINK_SUPABASE_MCP_SESSION_ID: sessionId,
         } : {}),
         // Project-local Supabase backend: publishable connection material only.
         // The service-role key / DB password stay inside the Project VM and are

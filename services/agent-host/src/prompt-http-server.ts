@@ -10,7 +10,7 @@ import type { ProjectRuntimeController } from './project-runtime-router.js'
 import { BrowserHostClient, type BrowserAgentSession } from './browser-client.js'
 import { BrowserGateway } from './browser-gateway.js'
 import { CodeServerGateway } from './code-server-gateway.js'
-import { handleSupabaseMcpRequest } from './supabase-mcp.js'
+import { approveSupabaseMcpConfirmation, handleSupabaseMcpRequest, listPendingSupabaseMcpConfirmations } from './supabase-mcp.js'
 
 export interface PromptRuntimeSession {
   prompt(message: string, signal?: AbortSignal): Promise<Response>
@@ -43,6 +43,8 @@ export interface PromptHttpServerConfig {
   projectVmManager?: ProjectVmManager
   projectRuntimeManager?: ProjectRuntimeController
   requireProjectRuntime?: boolean
+  /** Resolves a chat session's authoritative Supabase access mode. */
+  resolveSupabaseAccessMode?: (sessionId: string) => Promise<import('./access-firewall.js').AccessMode>
   /** Public URL used by browser clients; must not be a Project VM loopback URL. */
   browserGatewayPublicUrl?: string
   browserGatewayAllowedOrigins?: string[]
@@ -136,6 +138,11 @@ function authorized(request: IncomingMessage, token: string): boolean {
   const supplied = Buffer.from(header.slice(7))
   const expected = Buffer.from(token)
   return supplied.length === expected.length && timingSafeEqual(supplied, expected)
+}
+
+function requestHeader(request: IncomingMessage, name: string): string | undefined {
+  const value = request.headers[name.toLowerCase()]
+  return Array.isArray(value) ? value[0] : value
 }
 
 async function readJson(request: IncomingMessage): Promise<unknown> {
@@ -1105,10 +1112,30 @@ export async function startPromptHttpServer(
           projectId,
           apiToken: config.apiToken,
           manage: (operation, extra) => config.projectRuntimeManager!.manageSupabase!(projectId, { operation, ...extra }),
+          resolveAccessMode: async (sessionId) => {
+            if (!config.resolveSupabaseAccessMode) return 'restricted'
+            return config.resolveSupabaseAccessMode(sessionId)
+          },
         })
         return
       }
+      // Session Supabase write-confirmation approval (internal Bearer only) and listing.
       if (!authorized(request, config.apiToken)) throw new AgentHostError('AUTH_DENIED', 'Agent Host authorization is invalid')
+      // Session Supabase write-confirmation approval/listing (internal Bearer).
+      const confirmationApprove = /^\/v1\/projects\/([^/]+)\/supabase\/mcp\/confirmations\/([^/]+)\/approve$/.exec(url.pathname)
+      if (confirmationApprove && request.method === 'POST') {
+        const body = await readJson(request).catch(() => ({})) as { userId?: unknown }
+        const approver = typeof body.userId === 'string' ? body.userId : 'system'
+        const approved = approveSupabaseMcpConfirmation(decodeURIComponent(confirmationApprove[2]!), approver)
+        json(response, approved ? 202 : 404, approved ? { ok: true } : { error: { code: 'CONFIRMATION_NOT_FOUND' } })
+        return
+      }
+      const confirmationList = /^\/v1\/projects\/([^/]+)\/supabase\/mcp\/confirmations$/.exec(url.pathname)
+      if (confirmationList && request.method === 'GET') {
+        const sessionId = requestHeader(request, 'x-openlink-session-id') ?? ''
+        json(response, 200, { confirmations: listPendingSupabaseMcpConfirmations(sessionId) })
+        return
+      }
       if (request.method === 'POST' && url.pathname === '/v1/providers/check') {
         if (config.maxSessions !== undefined && sessions.size + creatingSessions >= config.maxSessions) {
           throw new AgentHostError('SESSION_BUSY', 'This runtime has reached its concurrent session limit', { retryable: true })

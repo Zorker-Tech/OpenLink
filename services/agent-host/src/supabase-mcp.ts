@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { createFirewallConfirmation, evaluateSqlFirewall, isFirewallConfirmationLive, normalizeAccessMode, type AccessMode, type FirewallConfirmation } from './access-firewall.js'
 
 export type ProjectSupabaseManagementOperation =
   | 'tables'
@@ -25,6 +26,7 @@ interface JsonRpcRequest {
 const MCP_PROTOCOL_VERSION = '2025-06-18'
 const SUPPORTED_PROTOCOL_VERSIONS = new Set(['2025-06-18', '2025-03-26', '2024-11-05'])
 const CAPABILITY_TTL_MS = 24 * 60 * 60 * 1_000
+const CONFIRMATION_TTL_MS = 10 * 60 * 1_000
 
 interface McpToolDefinition {
   name: string
@@ -38,7 +40,7 @@ interface McpToolDefinition {
 const TOOLS: McpToolDefinition[] = [
   { name: 'supabase_list_tables', description: 'List every table visible in the project PostgreSQL (information_schema), including auth.* and storage.* schemas.', inputSchema: { type: 'object', properties: {}, additionalProperties: false }, operation: 'tables' },
   { name: 'supabase_database_info', description: 'Read PostgreSQL version, database size and active connection count for the project backend.', inputSchema: { type: 'object', properties: {}, additionalProperties: false }, operation: 'database' },
-  { name: 'supabase_execute_sql', description: 'Run a single READ-ONLY SQL statement (SELECT) against the project PostgreSQL. INSERT/UPDATE/DELETE/DDL and multi-statements are rejected by the server.', inputSchema: { type: 'object', properties: { query: { type: 'string', description: 'Single read-only SQL statement' } }, required: ['query'], additionalProperties: false }, operation: 'query', argument: 'query' },
+  { name: 'supabase_execute_sql', description: 'Run a SQL statement against the project PostgreSQL. In controlled mode only single read-only statements are allowed; in ask mode writes require user confirmation; in open mode writes are unrestricted.', inputSchema: { type: 'object', properties: { query: { type: 'string', description: 'SQL statement to execute' }, confirmationId: { type: 'string', description: 'Confirmation id returned for a pending write in ask mode' } }, required: ['query'], additionalProperties: false }, operation: 'query', argument: 'query' },
   { name: 'supabase_list_auth_users', description: 'List Auth (GoTrue) users with sanitized profiles.', inputSchema: { type: 'object', properties: {}, additionalProperties: false }, operation: 'auth-users' },
   { name: 'supabase_list_storage_buckets', description: 'List Storage buckets and their visibility.', inputSchema: { type: 'object', properties: {}, additionalProperties: false }, operation: 'storage-buckets' },
   { name: 'supabase_list_edge_functions', description: 'List Edge Functions present in the project workspace.', inputSchema: { type: 'object', properties: {}, additionalProperties: false }, operation: 'functions' },
@@ -76,23 +78,70 @@ function bearer(request: IncomingMessage): string | undefined {
   return raw?.startsWith('Bearer ') ? raw.slice('Bearer '.length).trim() : undefined
 }
 
+function headerValue(request: IncomingMessage, name: string): string | undefined {
+  const value = request.headers[name.toLowerCase()]
+  return Array.isArray(value) ? value[0] : value
+}
+
+interface PendingConfirmation extends FirewallConfirmation {
+  approved: boolean
+  approvedBy?: string
+}
+
+// Pending write confirmations for the 'ask' tier. Process-local by design: the
+// approval is issued by the Agent Host's internal endpoint (user-authenticated
+// via the web BFF), and each approval is single-use.
+const pendingConfirmations = new Map<string, PendingConfirmation>()
+
+function createPendingConfirmation(input: { projectId: string; sessionId: string; mode: AccessMode; operation: string; sql: string }): PendingConfirmation {
+  const confirmation = createFirewallConfirmation({ ...input, ttlMs: CONFIRMATION_TTL_MS })
+  const record: PendingConfirmation = { ...confirmation, approved: false }
+  pendingConfirmations.set(confirmation.id, record)
+  return record
+}
+
+export function approveSupabaseMcpConfirmation(confirmationId: string, approver: string): boolean {
+  const record = pendingConfirmations.get(confirmationId)
+  if (!record || !isFirewallConfirmationLive(record)) return false
+  record.approved = true
+  record.approvedBy = approver
+  return true
+}
+
+export function listPendingSupabaseMcpConfirmations(sessionId: string): Array<{ id: string; operation: string; sql: string; createdAt: string }> {
+  return [...pendingConfirmations.values()]
+    .filter((record) => record.sessionId === sessionId && !record.approved && isFirewallConfirmationLive(record))
+    .map((record) => ({ id: record.id, operation: record.operation, sql: record.sql, createdAt: record.createdAt }))
+}
+
+function consumeApprovedConfirmation(confirmationId: string, projectId: string, sessionId: string, sql: string): boolean {
+  const record = pendingConfirmations.get(confirmationId)
+  if (!record || !isFirewallConfirmationLive(record)) return false
+  if (!record.approved || record.projectId !== projectId || record.sessionId !== sessionId || record.sql !== sql) return false
+  pendingConfirmations.delete(confirmationId)
+  return true
+}
+
 export interface SupabaseMcpRequestOptions {
   request: IncomingMessage
   response: ServerResponse
   projectId: string
   apiToken: string
   /** Executes one management operation through the Project VM controller. */
-  manage: (operation: ProjectSupabaseManagementOperation, extra: { query?: string; service?: string }) => Promise<Record<string, unknown>>
+  manage: (operation: ProjectSupabaseManagementOperation, extra: { query?: string; service?: string; mode?: AccessMode }) => Promise<Record<string, unknown>>
+  /** Resolves the authoritative session access mode from the control plane. */
+  resolveAccessMode: (sessionId: string) => Promise<AccessMode>
 }
 
 /**
  * Streamable-HTTP MCP endpoint (JSON responses, no SSE stream) exposing the
- * read-only Project Supabase management operations as MCP tools. Requests are
- * authorized either by the internal Agent Host Bearer token or by a project
- * scoped capability minted for the in-VM agent session.
+ * project Supabase management operations as MCP tools. Requests are authorized
+ * either by the internal Agent Host Bearer token or by a project-scoped
+ * capability; the session access mode is resolved authoritatively from the
+ * control plane so the agent cannot self-report a higher privilege.
  */
 export async function handleSupabaseMcpRequest(options: SupabaseMcpRequestOptions): Promise<void> {
-  const { request, response, projectId, apiToken, manage } = options
+  const { request, response, projectId, apiToken, manage, resolveAccessMode } = options
   const internal = bearer(request) === apiToken
   const capabilityValid = verifySupabaseMcpToken(apiToken, bearer(request), projectId)
   if (!internal && !capabilityValid) {
@@ -108,6 +157,9 @@ export async function handleSupabaseMcpRequest(options: SupabaseMcpRequestOption
 
   let body: JsonRpcRequest
   try {
+    // Read the body before any other await so the request stream's data/end
+    // events are observed; otherwise an await on the access-mode lookup could
+    // let a fast client's stream finish before we attach listeners.
     const raw = await readBody(request)
     body = JSON.parse(raw) as JsonRpcRequest
   } catch {
@@ -115,6 +167,9 @@ export async function handleSupabaseMcpRequest(options: SupabaseMcpRequestOption
     response.end(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }))
     return
   }
+
+  const sessionId = headerValue(request, 'x-openlink-session-id') ?? ''
+  const mode = normalizeAccessMode(sessionId ? await resolveAccessMode(sessionId) : 'restricted')
   const id = body.id ?? null
   const isNotification = body.id === undefined
   const method = typeof body.method === 'string' ? body.method : ''
@@ -145,7 +200,7 @@ export async function handleSupabaseMcpRequest(options: SupabaseMcpRequestOption
           protocolVersion,
           capabilities: { tools: { listChanged: false } },
           serverInfo: { name: 'openlink-project-supabase', version: '1.0.0' },
-          instructions: 'Read-only management tools for the Supabase backend running inside this project VM. SQL is limited to single read-only statements; secrets never leave the VM.',
+          instructions: `Management tools for the Supabase backend running inside this project VM. Access mode: ${mode}. Restricted mode is read-only; ask mode requires confirmation for writes; open mode is unrestricted.`,
         })
         return
       }
@@ -185,7 +240,31 @@ export async function handleSupabaseMcpRequest(options: SupabaseMcpRequestOption
           }
           if (typeof service === 'string') extra.service = service.slice(0, 64)
         }
-        const result = await manage(tool.operation, extra)
+
+        if (tool.operation === 'query') {
+          const evaluation = evaluateSqlFirewall(mode, extra.query ?? '')
+          if (evaluation.decision === 'deny') {
+            replyError(-32000, evaluation.reason)
+            return
+          }
+          if (evaluation.decision === 'require-confirmation') {
+            const confirmationId = typeof args.confirmationId === 'string' && args.confirmationId ? args.confirmationId : ''
+            if (confirmationId && consumeApprovedConfirmation(confirmationId, projectId, sessionId, extra.query ?? '')) {
+              const result = await manage(tool.operation, { ...extra, mode })
+              reply({ content: [{ type: 'text', text: JSON.stringify(result) }], isError: false })
+              return
+            }
+            const pending = createPendingConfirmation({ projectId, sessionId, mode, operation: 'query', sql: extra.query ?? '' })
+            reply({ content: [{ type: 'text', text: JSON.stringify({ error: 'confirmation_required', confirmationId: pending.id, reason: evaluation.reason }) }], isError: false })
+            return
+          }
+          const result = await manage(tool.operation, { ...extra, mode })
+          reply({ content: [{ type: 'text', text: JSON.stringify(result) }], isError: false })
+          return
+        }
+
+        // All non-query operations are read-only and allowed in every mode.
+        const result = await manage(tool.operation, { ...extra, mode })
         reply({ content: [{ type: 'text', text: JSON.stringify(result) }], isError: false })
         return
       }

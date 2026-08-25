@@ -389,8 +389,14 @@ test('extension UI responses are authorized, routed to the active runtime, and s
     })
     assert.equal(resolved.status, 202)
     assert.deepEqual(await resolved.json(), { ok: true })
-    const rest = await reader.read()
-    const streamed = new TextDecoder().decode(rest.value)
+    // The two trailing events can arrive in separate chunks under load; drain
+    // the stream until both are observed instead of assuming a single read.
+    let streamed = ''
+    while (!/agent_settled/.test(streamed)) {
+      const chunk = await reader.read()
+      if (chunk.done) break
+      streamed += new TextDecoder().decode(chunk.value)
+    }
     assert.match(streamed, /openlink_confirmation_resolved/)
     assert.match(streamed, /agent_settled/)
     assert.deepEqual(receivedUiResponse, { id: 'confirm-1', confirmed: true })

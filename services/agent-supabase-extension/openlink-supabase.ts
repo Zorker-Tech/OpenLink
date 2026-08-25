@@ -23,9 +23,15 @@ function required(name: string): string {
 }
 
 async function mcpCall(url: string, token: string, body: Record<string, unknown>, signal?: AbortSignal): Promise<Record<string, unknown>> {
+  const sessionId = process.env.OPENLINK_SUPABASE_MCP_SESSION_ID?.trim()
   const response = await fetch(url, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      ...(sessionId ? { 'x-openlink-session-id': sessionId } : {}),
+    },
     body: JSON.stringify({ jsonrpc: '2.0', id: crypto.randomUUID(), ...body }),
     signal,
   })

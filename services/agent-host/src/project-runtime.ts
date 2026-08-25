@@ -82,6 +82,8 @@ export type ProjectSupabaseManagementRequest = {
   operation: 'tables' | 'database' | 'query' | 'auth-users' | 'storage-buckets' | 'functions' | 'realtime' | 'services' | 'logs'
   query?: string
   service?: string
+  /** Session-selected access mode (restricted | ask | open). Defaults to restricted. */
+  mode?: 'restricted' | 'ask' | 'open'
 }
 
 export interface ProjectRuntimeServiceInput {
@@ -361,6 +363,7 @@ export class ProjectRuntimeManager {
       '--operation', request.operation,
       ...(request.query ? ['--query', request.query] : []),
       ...(request.service ? ['--service', request.service] : []),
+      '--mode', request.mode ?? 'restricted',
     ]
     let result
     try {

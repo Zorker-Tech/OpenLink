@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createHash, createHmac, generateKeyPairSync, randomBytes, randomUUID, sign } from 'node:crypto'
 import { execFileSync, spawn } from 'node:child_process'
-import { chmod, cp, lstat, mkdir, open, readFile, readdir, rename, rm, stat, statfs, writeFile } from 'node:fs/promises'
+import { appendFile, chmod, cp, lstat, mkdir, open, readFile, readdir, rename, rm, stat, statfs, writeFile } from 'node:fs/promises'
 import { basename, dirname, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
@@ -598,6 +598,36 @@ function managementQuery(value) {
   return query
 }
 
+const ACCESS_MODES = ['restricted', 'ask', 'open']
+
+function normalizeAccessMode(value) {
+  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : 'restricted'
+  return ACCESS_MODES.includes(normalized) ? normalized : 'restricted'
+}
+
+function writeQuery(value) {
+  if (typeof value !== 'string') fail('management query is required')
+  const query = value.trim()
+  if (!query || query.length > 12_000) fail('management query is invalid')
+  return query
+}
+
+async function appendFirewallAudit(options, record) {
+  try {
+    const line = JSON.stringify({
+      timestamp: new Date().toISOString(),
+      projectId: options.projectId,
+      mode: record.mode,
+      operation: record.operation,
+      sql: (record.query || '').slice(0, 500),
+      decision: record.decision,
+    })
+    await appendFile(resolve(options.stateRoot, 'firewall-audit.jsonl'), line + '\n', 'utf8')
+  } catch {
+    // Auditing is best-effort; never block management on a write failure.
+  }
+}
+
 function databaseQuery(sql) {
   return podman([
     'exec', containerName('db'), 'psql',
@@ -627,7 +657,19 @@ async function manageRuntime(options) {
     return { operation: 'database', database: JSON.parse(value || '{}') }
   }
   if (options.operation === 'query') {
-    const query = managementQuery(options.query)
+    const mode = normalizeAccessMode(options.mode)
+    if (mode === 'restricted') {
+      const query = managementQuery(options.query)
+      await appendFirewallAudit(options, { mode, operation: 'query', query, decision: 'allow' })
+      return { operation: 'query', query, csv: databaseQuery(query) }
+    }
+    // 'ask' restricts to a single statement (confirmation happens at the MCP
+    // layer); 'open' is full access with no statement/write restrictions.
+    const query = mode === 'open'
+      ? (typeof options.query === 'string' ? options.query.trim() : '')
+      : writeQuery(options.query)
+    if (!query) fail('management query is required')
+    await appendFirewallAudit(options, { mode, operation: 'query', query, decision: 'allow' })
     return { operation: 'query', query, csv: databaseQuery(query) }
   }
   if (options.operation === 'auth-users') {
@@ -970,6 +1012,7 @@ export function parseOptions(argv) {
     operation: values.operation,
     query: values.query,
     service: values.service,
+    mode: normalizeAccessMode(values.mode),
     method: values.method,
     path: values.path,
     headersBase64: values['headers-base64'],

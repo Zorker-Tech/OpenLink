@@ -7,6 +7,7 @@ import { createSupabaseProjectRuntimeStatusWriter } from './project-runtime-stat
 import { createSupabaseProjectRuntimeProvisioningQueue, createSupabaseSshProjectRuntimeProvisioningQueue, ProjectRuntimeProvisioner } from './project-runtime-provisioner.js'
 import { ProjectRuntimeRouter, RemoteProjectRuntimeFactory, SupabaseProjectExecutionTargetProvider } from './project-runtime-router.js'
 import { mintSupabaseMcpToken } from './supabase-mcp.js'
+import { createSupabaseAccessModeResolver } from './supabase-access-resolver.js'
 
 function required(env: NodeJS.ProcessEnv, key: string): string {
   const value = env[key]?.trim()
@@ -50,6 +51,7 @@ function networkDefaultAction(value: string | undefined): 'allow' | 'deny' {
 }
 
 const env = process.env
+const supabaseAccessResolver = createSupabaseAccessModeResolver(env)
 if (env.OPENLINK_PODMAN_HELPER_BINARIES_DIR) {
   // Podman machine uses gvproxy/vfkit outside the engine binary. Keep the
   // helper lookup scoped to the bundled toolchain instead of requiring a
@@ -161,6 +163,7 @@ const runtime = await startPromptHttpServer({
   maxSessions,
   projectVmManager,
   projectRuntimeManager: sshRuntimeRouter,
+  resolveSupabaseAccessMode: (sessionId) => supabaseAccessResolver?.resolveAccessMode(sessionId) ?? Promise.resolve('restricted'),
   requireProjectRuntime: true,
   browserGatewayPublicUrl,
   browserGatewayAllowedOrigins: origins(env.OPENLINK_BROWSER_GATEWAY_ALLOWED_ORIGINS || env.OPENLINK_BROWSER_ALLOWED_ORIGINS),

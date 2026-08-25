@@ -45,6 +45,7 @@ test('initialize and tools/list speak MCP JSON-RPC', async () => {
   await handleSupabaseMcpRequest({
     request: init.request, response: init.response, projectId, apiToken: secret,
     manage: async (operation) => { calls.push({ operation }); return {} },
+    resolveAccessMode: async () => 'restricted',
   })
   const initialized = JSON.parse((await init.done).body)
   assert.equal(initialized.result.serverInfo.name, 'openlink-project-supabase')
@@ -54,6 +55,7 @@ test('initialize and tools/list speak MCP JSON-RPC', async () => {
   await handleSupabaseMcpRequest({
     request: list.request, response: list.response, projectId, apiToken: secret,
     manage: async () => ({}),
+    resolveAccessMode: async () => 'restricted',
   })
   const tools = JSON.parse((await list.done).body).result.tools
   assert.ok(Array.isArray(tools) && tools.length >= 9, 'must advertise the management tools')
@@ -72,6 +74,7 @@ test('tools/call executes the management operation with capability auth', async 
       seen.push({ operation, query: extra.query })
       return { query: 'ok' }
     },
+    resolveAccessMode: async () => 'restricted',
   })
   const payload = JSON.parse((await call.done).body)
   assert.deepEqual(seen, [{ operation: 'query', query: 'select 1' }])
@@ -83,6 +86,7 @@ test('tools/call executes the management operation with capability auth', async 
   await handleSupabaseMcpRequest({
     request: foreign.request, response: foreign.response, projectId, apiToken: secret,
     manage: async () => ({}),
+    resolveAccessMode: async () => 'restricted',
   })
   assert.equal((await foreign.done).status, 403)
 })
@@ -92,19 +96,43 @@ test('unknown tools are rejected; statements forward to the VM controller', asyn
   await handleSupabaseMcpRequest({
     request: unknown.request, response: unknown.response, projectId, apiToken: secret,
     manage: async () => ({}),
+    resolveAccessMode: async () => 'restricted',
   })
   assert.equal(JSON.parse((await unknown.done).body).error.code, -32602)
 
-  // The MCP layer is a transparent bridge: the statement reaches the VM
-  // controller unchanged, which remains the read-only enforcement point.
+  // Restricted mode denies writes at the firewall before touching the VM.
   const write = stubPair({ jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'supabase_execute_sql', arguments: { query: 'delete from t' } } }, { authorization: `Bearer ${secret}` })
-  const seen: Array<{ operation: string; query?: string }> = []
+  let executed = false
   await handleSupabaseMcpRequest({
     request: write.request, response: write.response, projectId, apiToken: secret,
-    manage: async (operation, extra) => {
-      seen.push({ operation, query: extra.query })
-      return { error: 'read-only' }
-    },
+    manage: async () => { executed = true; return {} },
+    resolveAccessMode: async () => 'restricted',
   })
-  assert.deepEqual(seen, [{ operation: 'query', query: 'delete from t' }])
+  const denied = JSON.parse((await write.done).body)
+  assert.equal(denied.error?.code, -32000, 'writes must be denied in restricted mode')
+  assert.equal(executed, false, 'must never reach the VM controller')
+
+  // Open mode executes the write directly.
+  const writeOpen = stubPair({ jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'supabase_execute_sql', arguments: { query: 'create table t (id int)' } } }, { authorization: `Bearer ${secret}`, 'x-openlink-session-id': 'open-session' })
+  let openExecuted = false
+  await handleSupabaseMcpRequest({
+    request: writeOpen.request, response: writeOpen.response, projectId, apiToken: secret,
+    manage: async (operation, extra) => { openExecuted = true; return { operation, mode: extra.mode } },
+    resolveAccessMode: async () => 'open',
+  })
+  assert.equal(openExecuted, true, 'open mode must allow writes')
+  assert.equal(JSON.parse((await writeOpen.done).body).result.isError ?? false, false)
+
+  // Ask mode returns a pending confirmation and does not execute.
+  const ask = stubPair({ jsonrpc: '2.0', id: 6, method: 'tools/call', params: { name: 'supabase_execute_sql', arguments: { query: 'drop table auth.users' } } }, { authorization: `Bearer ${secret}` })
+  ask.request.headers = { authorization: `Bearer ${secret}`, 'x-openlink-session-id': 'ask-session' }
+  let askExecuted = false
+  await handleSupabaseMcpRequest({
+    request: ask.request, response: ask.response, projectId, apiToken: secret,
+    manage: async () => { askExecuted = true; return {} },
+    resolveAccessMode: async () => 'ask',
+  })
+  const askBody = JSON.parse((await ask.done).body)
+  assert.equal(askExecuted, false)
+  assert.match(JSON.stringify(askBody), /confirmation_required/)
 })

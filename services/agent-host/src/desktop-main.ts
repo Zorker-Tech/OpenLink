@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import { DesktopSandboxRuntimeNodeBackend } from './backends/local-sandbox-runtime-sdk.js'
 import { startPromptHttpServer } from './prompt-http-server.js'
 import { mintSupabaseMcpToken } from './supabase-mcp.js'
+import { createSupabaseAccessModeResolver } from './supabase-access-resolver.js'
 
 function required(env: NodeJS.ProcessEnv, key: string): string {
   const value = env[key]?.trim()
@@ -31,6 +32,7 @@ function origins(value: string | undefined): string[] {
 }
 
 const env = process.env
+const supabaseAccessResolver = createSupabaseAccessModeResolver(env)
 const host = env.OPENLINK_DESKTOP_AGENT_HOST || '127.0.0.1'
 const port = integer(env.OPENLINK_DESKTOP_AGENT_PORT, 43123, 1, 65_535)
 const apiToken = required(env, 'OPENLINK_DESKTOP_AGENT_API_TOKEN')
@@ -76,6 +78,7 @@ const runtime = await startPromptHttpServer({
   browserGatewayPublicUrl: env.OPENLINK_DESKTOP_AGENT_PUBLIC_URL?.trim() || `http://${host}:${port}`,
   browserGatewayAllowedOrigins: origins(env.OPENLINK_BROWSER_GATEWAY_ALLOWED_ORIGINS || env.OPENLINK_BROWSER_ALLOWED_ORIGINS),
   browserGatewayUpstreamOrigin: env.OPENLINK_BROWSER_GATEWAY_UPSTREAM_ORIGIN?.trim() || 'http://localhost:3000',
+  resolveSupabaseAccessMode: (sessionId) => supabaseAccessResolver?.resolveAccessMode(sessionId) ?? Promise.resolve('restricted'),
 }, {
   // Do not discard the browser capability when the desktop transport is used.
   // This keeps the desktop Node SDK path behaviorally identical to Web

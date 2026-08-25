@@ -210,6 +210,7 @@ export class DesktopSandboxRuntimeNodeBackend {
         OPENLINK_SUPABASE_EXTENSION_PATH: this.config.supabaseMcp.extensionPath,
         OPENLINK_SUPABASE_MCP_URL: this.config.supabaseMcp.urlFor(projectId),
         OPENLINK_SUPABASE_MCP_TOKEN: this.config.supabaseMcp.tokenFor(projectId),
+        OPENLINK_SUPABASE_MCP_SESSION_ID: sessionId,
       } : {}),
     }
     const child = spawn(wrapped.argv[0]!, wrapped.argv.slice(1), {
