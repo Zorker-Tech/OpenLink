@@ -14,6 +14,10 @@ const CHAT_SESSION_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvw
 const CHAT_SESSION_ALPHABET_SIZE = CHAT_SESSION_ALPHABET.length
 const RANDOM_BYTE_LIMIT = 256 - (256 % CHAT_SESSION_ALPHABET_SIZE)
 
+export type SupabaseAccessMode = 'restricted' | 'ask' | 'open'
+export const SUPABASE_ACCESS_MODES: readonly SupabaseAccessMode[] = ['restricted', 'ask', 'open']
+export const DEFAULT_SUPABASE_ACCESS_MODE: SupabaseAccessMode = 'restricted'
+
 export interface ChatSession {
   id: string
   user_id: string
@@ -23,6 +27,7 @@ export interface ChatSession {
   model_id: string | null
   title: string
   initial_prompt: string
+  supabase_access_mode: SupabaseAccessMode
   created_at: string
   updated_at: string
 }
@@ -121,7 +126,7 @@ export async function getChatSession(
   const { data, error } = await supabase
     .schema('openlink')
     .from('chat_sessions')
-    .select('id, user_id, workspace_id, project_id, provider_id, model_id, title, initial_prompt, created_at, updated_at')
+    .select('id, user_id, workspace_id, project_id, provider_id, model_id, title, initial_prompt, supabase_access_mode, created_at, updated_at')
     .eq('id', sessionId)
     .eq('user_id', userId)
     .maybeSingle()
@@ -154,6 +159,29 @@ export async function updateChatSessionTitle(
   return (data as { title: string }).title
 }
 
+export async function updateChatSessionSupabaseAccessMode(
+  supabase: ServerSupabaseClient,
+  userId: string,
+  sessionId: string,
+  mode: SupabaseAccessMode,
+): Promise<SupabaseAccessMode> {
+  if (!isChatSessionId(sessionId)) throw new Error('CHAT_SESSION_NOT_FOUND')
+  if (!SUPABASE_ACCESS_MODES.includes(mode)) throw new Error('CHAT_SESSION_ACCESS_MODE_INVALID')
+
+  const { data, error } = await supabase
+    .schema('openlink')
+    .from('chat_sessions')
+    .update({ supabase_access_mode: mode, updated_at: new Date().toISOString() })
+    .eq('id', sessionId)
+    .eq('user_id', userId)
+    .select('supabase_access_mode')
+    .maybeSingle()
+
+  if (error) throw error
+  if (!data) throw new Error('CHAT_SESSION_NOT_FOUND')
+  return (data as { supabase_access_mode: SupabaseAccessMode }).supabase_access_mode
+}
+
 export async function createChatSession(
   supabase: ServerSupabaseClient,
   userId: string,
@@ -163,6 +191,7 @@ export async function createChatSession(
     projectId?: string | null
     providerId?: string
     modelId?: string
+    supabaseAccessMode?: SupabaseAccessMode
   },
 ) {
   const workspace = options.workspaceSlug
@@ -208,8 +237,9 @@ export async function createChatSession(
         model_id: selectedModel.modelId,
         title,
         initial_prompt: initialPrompt,
+        supabase_access_mode: options.supabaseAccessMode ?? DEFAULT_SUPABASE_ACCESS_MODE,
       })
-      .select('id, user_id, workspace_id, project_id, provider_id, model_id, title, initial_prompt, created_at, updated_at')
+      .select('id, user_id, workspace_id, project_id, provider_id, model_id, title, initial_prompt, supabase_access_mode, created_at, updated_at')
       .single()
 
     if (!error) return { session: data as ChatSession, workspace: workspace as OpenLinkWorkspace }

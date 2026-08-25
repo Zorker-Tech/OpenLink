@@ -1,8 +1,9 @@
 'use server'
 
-import { createChatSession, updateChatSessionTitle } from '@/lib/chat-sessions'
+import { createChatSession, updateChatSessionSupabaseAccessMode, updateChatSessionTitle, type SupabaseAccessMode } from '@/lib/chat-sessions'
 import { resolveAppEntry } from '@/lib/workspaces'
 import { createClient } from '@/utils/supabase/server'
+import { getChatSession } from '@/lib/chat-sessions'
 
 export interface CreateChatSessionInput {
   prompt?: string
@@ -10,6 +11,7 @@ export interface CreateChatSessionInput {
   projectId?: string | null
   providerId?: string
   modelId?: string
+  supabaseAccessMode?: SupabaseAccessMode
 }
 
 export type CreateChatSessionResult =
@@ -46,6 +48,7 @@ export async function createChatSessionAction(
       projectId: input.projectId,
       providerId: input.providerId,
       modelId: input.modelId,
+      supabaseAccessMode: input.supabaseAccessMode,
     })
     const query = new URLSearchParams()
     if (prompt) query.set('run', '1')
@@ -81,5 +84,85 @@ export async function updateChatSessionTitleAction(input: {
       title: null,
       error: error instanceof Error ? error.message : 'CHAT_SESSION_UPDATE_FAILED',
     }
+  }
+}
+
+export type UpdateChatSessionAccessModeResult =
+  | { mode: SupabaseAccessMode; error: null }
+  | { mode: null; error: string }
+
+export async function updateChatSessionSupabaseAccessModeAction(input: {
+  sessionId: string
+  mode: SupabaseAccessMode
+}): Promise<UpdateChatSessionAccessModeResult> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { mode: null, error: 'AUTH_REQUIRED' }
+
+  try {
+    const mode = await updateChatSessionSupabaseAccessMode(supabase, user.id, input.sessionId, input.mode)
+    return { mode, error: null }
+  } catch (error) {
+    return {
+      mode: null,
+      error: error instanceof Error ? error.message : 'CHAT_SESSION_ACCESS_MODE_UPDATE_FAILED',
+    }
+  }
+}
+
+function agentHostConfig() {
+  const baseUrl = process.env.OPENLINK_AGENT_HOST_URL?.replace(/\/$/, '')
+  const apiToken = process.env.OPENLINK_AGENT_API_TOKEN
+  return baseUrl && apiToken ? { baseUrl, apiToken } : null
+}
+
+export interface PendingSupabaseWrite {
+  id: string
+  operation: string
+  sql: string
+  createdAt: string
+}
+
+export async function listPendingSupabaseWritesAction(sessionId: string): Promise<{ confirmations: PendingSupabaseWrite[]; error: string | null }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { confirmations: [], error: 'AUTH_REQUIRED' }
+  const host = agentHostConfig()
+  if (!host) return { confirmations: [], error: 'AGENT_HOST_NOT_CONFIGURED' }
+  const session = await getChatSession(supabase, user.id, sessionId)
+  if (!session) return { confirmations: [], error: 'SESSION_NOT_FOUND' }
+  try {
+    const response = await fetch(`${host.baseUrl}/v1/projects/${encodeURIComponent(session.project_id)}/supabase/mcp/confirmations`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${host.apiToken}`, Accept: 'application/json', 'x-openlink-session-id': sessionId },
+      cache: 'no-store',
+    })
+    if (!response.ok) return { confirmations: [], error: `LIST_FAILED_${response.status}` }
+    const payload = await response.json() as { confirmations?: unknown }
+    return { confirmations: Array.isArray(payload.confirmations) ? payload.confirmations as PendingSupabaseWrite[] : [], error: null }
+  } catch (error) {
+    return { confirmations: [], error: error instanceof Error ? error.message : 'LIST_FAILED' }
+  }
+}
+
+export async function approveSupabaseWriteAction(sessionId: string, confirmationId: string): Promise<{ ok: boolean; error: string | null }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: 'AUTH_REQUIRED' }
+  const host = agentHostConfig()
+  if (!host) return { ok: false, error: 'AGENT_HOST_NOT_CONFIGURED' }
+  const session = await getChatSession(supabase, user.id, sessionId)
+  if (!session) return { ok: false, error: 'SESSION_NOT_FOUND' }
+  try {
+    const response = await fetch(`${host.baseUrl}/v1/projects/${encodeURIComponent(session.project_id)}/supabase/mcp/confirmations/${encodeURIComponent(confirmationId)}/approve`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${host.apiToken}`, 'Content-Type': 'application/json', 'x-openlink-session-id': sessionId },
+      body: JSON.stringify({ userId: user.id }),
+      cache: 'no-store',
+    })
+    if (!response.ok) return { ok: false, error: `APPROVE_FAILED_${response.status}` }
+    return { ok: true, error: null }
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'APPROVE_FAILED' }
   }
 }
