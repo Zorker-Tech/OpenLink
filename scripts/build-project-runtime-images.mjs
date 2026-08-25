@@ -250,9 +250,11 @@ async function buildInDedicatedMachine(builder, spec, context) {
     await run(podman, ['machine', 'ssh', builder.machineName, `mkdir -p ${shellQuote(guestRoot)}`], { cwd: root })
     await run(podman, ['machine', 'cp', context.path, `${builder.machineName}:${guestContext}`], { cwd: root })
     await run(podman, ['machine', 'cp', resolve(root, spec.dockerfile), `${builder.machineName}:${guestDockerfile}`], { cwd: root })
-    await run(podman, ['machine', 'ssh', builder.machineName, command], { cwd: root })
+    // A cold image build (base image pull + dependency install) routinely
+    // exceeds podman-builder's 2-minute default spawn timeout.
+    await run(podman, ['machine', 'ssh', builder.machineName, command], { cwd: root, timeout: 60 * 60 * 1000 })
     await rm(archive, { force: true })
-    await run(podman, ['machine', 'cp', `${builder.machineName}:${guestArchive}`, archive], { cwd: root })
+    await run(podman, ['machine', 'cp', `${builder.machineName}:${guestArchive}`, archive], { cwd: root, timeout: 15 * 60 * 1000 })
     await rename(archive, spec.archive)
   } finally {
     await rm(archive, { force: true })
