@@ -1,16 +1,16 @@
 'use client'
 
-import type { SupabaseAccessMode } from '@/lib/chat-sessions'
+import type { AccessMode } from '@/lib/chat-sessions'
 import { Hand, ShieldCheck, Unlock } from 'lucide-react'
 import { useState } from 'react'
 
-const OPTIONS: Array<{ value: SupabaseAccessMode; label: string; description: string; icon: typeof ShieldCheck }> = [
+const OPTIONS: Array<{ value: AccessMode; label: string; description: string; icon: typeof ShieldCheck }> = [
   { value: 'restricted', label: '受控', description: '仅只读操作，走防护墙', icon: ShieldCheck },
   { value: 'ask', label: '询问', description: '写操作需用户确认', icon: Hand },
   { value: 'open', label: '开放', description: '完全访问，不做限制', icon: Unlock },
 ]
 
-function currentOption(value: SupabaseAccessMode) {
+function currentOption(value: AccessMode) {
   return OPTIONS.find((option) => option.value === value) ?? OPTIONS[0]!
 }
 
@@ -19,12 +19,12 @@ function currentOption(value: SupabaseAccessMode) {
  * only the current mode's SVG icon; opens a selection drawer upward with the
  * full option names.
  */
-export function SupabaseAccessModePicker({
+export function AccessModePicker({
   value,
   onChange,
 }: {
-  value: SupabaseAccessMode
-  onChange: (mode: SupabaseAccessMode) => void
+  value: AccessMode
+  onChange: (mode: AccessMode) => void
 }) {
   const [open, setOpen] = useState(false)
   const active = currentOption(value)

@@ -43,8 +43,8 @@ import { hasPersistedUserMessage } from '@/lib/chat-auto-start'
 import { theme } from '@/lib/theme'
 import { useRouter } from 'next/navigation'
 import { updateChatSessionSupabaseAccessModeAction } from '@/app/chat/actions'
-import type { SupabaseAccessMode } from '@/lib/chat-sessions'
-import { SupabaseAccessModePicker } from '@/components/supabase-access-mode-picker'
+import type { AccessMode } from '@/lib/chat-sessions'
+import { AccessModePicker } from '@/components/access-mode-picker'
 import { SupabasePendingWritesBanner } from '@/components/supabase-pending-writes-banner'
 import {
   ArrowLeft,
@@ -94,7 +94,7 @@ interface ChatWorkspaceProps {
   projectId: string
   userId: string
   localRuntime: boolean
-  initialAccessMode?: SupabaseAccessMode
+  initialAccessMode?: AccessMode
 }
 
 function pendingConfirmationRequests(events: OpenLinkAgentEvent[]) {
@@ -381,8 +381,8 @@ function ChatComposer({
   onSubmit: (message: string, model: ConfiguredModelOption | null) => Promise<void> | void
   status: 'idle' | 'streaming'
   sessionId: string
-  accessMode: SupabaseAccessMode
-  onAccessModeChange: (mode: SupabaseAccessMode) => void
+  accessMode: AccessMode
+  onAccessModeChange: (mode: AccessMode) => void
 }) {
   const [input, setInput] = useState('')
   const [expanded, setExpanded] = useState(false)
@@ -415,7 +415,7 @@ function ChatComposer({
   const actionButtons = (
     <>
       <PromptAddMenu variant="session" />
-      <SupabaseAccessModePicker value={accessMode} onChange={onAccessModeChange} />
+      <AccessModePicker value={accessMode} onChange={onAccessModeChange} />
       <PromptInputButton aria-label="添加评论" className="size-7 shrink-0 rounded-md p-0 transition-[color,background-color,border-color,opacity] active:translate-y-0! hover:bg-[var(--app-active)]" type="button"><MessageCircle className="size-3.5" /></PromptInputButton>
       <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
         <ModelSelectorTrigger render={<PromptInputButton aria-label={`选择模型，当前 ${selectedModel?.name ?? '未配置'}`} className="h-7 w-12 shrink-0 gap-1 rounded-md px-1.5 text-[var(--app-muted)] transition-[color,background-color,border-color,opacity] active:translate-y-0! hover:bg-[var(--app-active)] hover:text-[var(--app-foreground)] aria-expanded:bg-transparent! aria-expanded:text-[var(--app-muted)]!" type="button" />}>
@@ -529,7 +529,7 @@ export function ChatWorkspace({
   const [themeMode, setThemeMode] = useState<ThemeMode>('dark')
   const [systemLight, setSystemLight] = useState(false)
   const [chatPanelCollapsed, setChatPanelCollapsed] = useState(false)
-  const [supabaseAccessMode, setSupabaseAccessMode] = useState<SupabaseAccessMode>(initialAccessMode)
+  const [accessMode, setAccessMode] = useState<AccessMode>(initialAccessMode)
   // The browser canvas is the primary workspace. The device control is an
   // explicit opt-in for the constrained mobile viewport.
   const [workspaceView, setWorkspaceView] = useState<'mobile' | 'browser' | 'code' | 'data'>('browser')
@@ -914,7 +914,7 @@ export function ChatWorkspace({
                   <div className="px-2 pb-2">
                     <ChatConfirmationDock onResolve={resolveConfirmation} requests={pendingConfirmations} />
                     <SupabasePendingWritesBanner sessionId={sessionId} />
-                <ChatComposer accessMode={supabaseAccessMode} initialModel={autoStartModel} models={configuredModels} onAccessModeChange={(mode) => { setSupabaseAccessMode(mode); void updateChatSessionSupabaseAccessModeAction({ sessionId, mode }) }} onSubmit={submitAgentMessage} sessionId={sessionId} status={agentStreamStatus} />
+                <ChatComposer accessMode={accessMode} initialModel={autoStartModel} models={configuredModels} onAccessModeChange={(mode) => { setAccessMode(mode); void updateChatSessionSupabaseAccessModeAction({ sessionId, mode }) }} onSubmit={submitAgentMessage} sessionId={sessionId} status={agentStreamStatus} />
                   </div>
                 </section>
               </ResizablePanel>
@@ -929,7 +929,7 @@ export function ChatWorkspace({
               <ChatTimeline events={agentEvents} isStreaming={agentStreamStatus === 'streaming'} onFlowStatusChange={setActiveChatFlow} />
               <div className="px-2 pb-2">
                 <ChatConfirmationDock onResolve={resolveConfirmation} requests={pendingConfirmations} />
-                <ChatComposer accessMode={supabaseAccessMode} initialModel={autoStartModel} models={configuredModels} onAccessModeChange={(mode) => { setSupabaseAccessMode(mode); void updateChatSessionSupabaseAccessModeAction({ sessionId, mode }) }} onSubmit={submitAgentMessage} sessionId={sessionId} status={agentStreamStatus} />
+                <ChatComposer accessMode={accessMode} initialModel={autoStartModel} models={configuredModels} onAccessModeChange={(mode) => { setAccessMode(mode); void updateChatSessionSupabaseAccessModeAction({ sessionId, mode }) }} onSubmit={submitAgentMessage} sessionId={sessionId} status={agentStreamStatus} />
               </div>
             </section>
           </div>

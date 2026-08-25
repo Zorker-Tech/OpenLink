@@ -27,8 +27,8 @@ import type { ConfiguredModelOption } from '@/lib/ai-provider-types'
 import type { ProjectSummary } from '@/lib/projects'
 import type { ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import { SupabaseAccessModePicker } from '@/components/supabase-access-mode-picker'
-import type { SupabaseAccessMode } from '@/lib/chat-sessions'
+import { AccessModePicker } from '@/components/access-mode-picker'
+import type { AccessMode } from '@/lib/chat-sessions'
 import { useState } from 'react'
 import { BookOpenText, Code2, Plus, Send } from 'lucide-react'
 
@@ -94,7 +94,7 @@ export function WorkspacePrompt({
     selectableProjects.find((project) => project.id === initialProjectId) ?? null,
   )
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const [accessMode, setAccessMode] = useState<SupabaseAccessMode>('restricted')
+  const [accessMode, setAccessMode] = useState<AccessMode>('restricted')
   const runtimeProject = selectedProject ?? defaultProject
   const runtimeReady = runtimeProject.status === 'active' && runtimeProject.runtime_status === 'ready'
 
@@ -145,7 +145,7 @@ export function WorkspacePrompt({
       <PromptInputFooter className="h-10 px-3 pb-3">
         <PromptInputTools className="gap-0.5">
           <PromptAddMenu variant="home" />
-          <SupabaseAccessModePicker value={accessMode} onChange={setAccessMode} />
+          <AccessModePicker value={accessMode} onChange={setAccessMode} />
           <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
             <ModelSelectorTrigger
               render={

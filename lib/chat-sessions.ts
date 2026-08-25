@@ -14,9 +14,9 @@ const CHAT_SESSION_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvw
 const CHAT_SESSION_ALPHABET_SIZE = CHAT_SESSION_ALPHABET.length
 const RANDOM_BYTE_LIMIT = 256 - (256 % CHAT_SESSION_ALPHABET_SIZE)
 
-export type SupabaseAccessMode = 'restricted' | 'ask' | 'open'
-export const SUPABASE_ACCESS_MODES: readonly SupabaseAccessMode[] = ['restricted', 'ask', 'open']
-export const DEFAULT_SUPABASE_ACCESS_MODE: SupabaseAccessMode = 'restricted'
+export type AccessMode = 'restricted' | 'ask' | 'open'
+export const ACCESS_MODES: readonly AccessMode[] = ['restricted', 'ask', 'open']
+export const DEFAULT_ACCESS_MODE: AccessMode = 'restricted'
 
 export interface ChatSession {
   id: string
@@ -27,7 +27,7 @@ export interface ChatSession {
   model_id: string | null
   title: string
   initial_prompt: string
-  supabase_access_mode: SupabaseAccessMode
+  supabase_access_mode: AccessMode
   created_at: string
   updated_at: string
 }
@@ -163,10 +163,10 @@ export async function updateChatSessionSupabaseAccessMode(
   supabase: ServerSupabaseClient,
   userId: string,
   sessionId: string,
-  mode: SupabaseAccessMode,
-): Promise<SupabaseAccessMode> {
+  mode: AccessMode,
+): Promise<AccessMode> {
   if (!isChatSessionId(sessionId)) throw new Error('CHAT_SESSION_NOT_FOUND')
-  if (!SUPABASE_ACCESS_MODES.includes(mode)) throw new Error('CHAT_SESSION_ACCESS_MODE_INVALID')
+  if (!ACCESS_MODES.includes(mode)) throw new Error('CHAT_SESSION_ACCESS_MODE_INVALID')
 
   const { data, error } = await supabase
     .schema('openlink')
@@ -179,7 +179,7 @@ export async function updateChatSessionSupabaseAccessMode(
 
   if (error) throw error
   if (!data) throw new Error('CHAT_SESSION_NOT_FOUND')
-  return (data as { supabase_access_mode: SupabaseAccessMode }).supabase_access_mode
+  return (data as { supabase_access_mode: AccessMode }).supabase_access_mode
 }
 
 export async function createChatSession(
@@ -191,7 +191,7 @@ export async function createChatSession(
     projectId?: string | null
     providerId?: string
     modelId?: string
-    supabaseAccessMode?: SupabaseAccessMode
+    supabaseAccessMode?: AccessMode
   },
 ) {
   const workspace = options.workspaceSlug
@@ -237,7 +237,7 @@ export async function createChatSession(
         model_id: selectedModel.modelId,
         title,
         initial_prompt: initialPrompt,
-        supabase_access_mode: options.supabaseAccessMode ?? DEFAULT_SUPABASE_ACCESS_MODE,
+        supabase_access_mode: options.supabaseAccessMode ?? DEFAULT_ACCESS_MODE,
       })
       .select('id, user_id, workspace_id, project_id, provider_id, model_id, title, initial_prompt, supabase_access_mode, created_at, updated_at')
       .single()

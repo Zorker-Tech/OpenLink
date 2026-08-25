@@ -1,6 +1,6 @@
 'use server'
 
-import { createChatSession, updateChatSessionSupabaseAccessMode, updateChatSessionTitle, type SupabaseAccessMode } from '@/lib/chat-sessions'
+import { createChatSession, updateChatSessionSupabaseAccessMode, updateChatSessionTitle, type AccessMode } from '@/lib/chat-sessions'
 import { resolveAppEntry } from '@/lib/workspaces'
 import { createClient } from '@/utils/supabase/server'
 import { getChatSession } from '@/lib/chat-sessions'
@@ -11,7 +11,7 @@ export interface CreateChatSessionInput {
   projectId?: string | null
   providerId?: string
   modelId?: string
-  supabaseAccessMode?: SupabaseAccessMode
+  supabaseAccessMode?: AccessMode
 }
 
 export type CreateChatSessionResult =
@@ -88,12 +88,12 @@ export async function updateChatSessionTitleAction(input: {
 }
 
 export type UpdateChatSessionAccessModeResult =
-  | { mode: SupabaseAccessMode; error: null }
+  | { mode: AccessMode; error: null }
   | { mode: null; error: string }
 
 export async function updateChatSessionSupabaseAccessModeAction(input: {
   sessionId: string
-  mode: SupabaseAccessMode
+  mode: AccessMode
 }): Promise<UpdateChatSessionAccessModeResult> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
