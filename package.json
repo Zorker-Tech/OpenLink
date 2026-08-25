@@ -40,6 +40,8 @@
   "dependencies": {
     "@ai-sdk/react": "^4.0.54",
     "@base-ui/react": "^1.5.0",
+    "@hugeicons/core-free-icons": "^4.3.0",
+    "@hugeicons/react": "^1.1.10",
     "@lobehub/icons": "5.11.0",
     "@radix-ui/react-use-controllable-state": "^1.2.6",
     "@rive-app/react-webgl2": "^4.30.0",
