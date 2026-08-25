@@ -849,7 +849,7 @@ function TimelineMessageItem({ item }: { item: Extract<TimelineItem, { kind: 'me
         ? `relative isolate min-h-0 overflow-hidden border border-[var(--app-control-border)] bg-[var(--app-active)]! text-[13px] text-[var(--app-foreground)]! before:hidden after:hidden ${compactUserMessage ? 'rounded-lg! px-2.5! py-px! leading-5' : 'rounded-2xl! px-3! py-1.5! leading-[21.125px]'}`
         : 'w-full gap-0 overflow-visible text-[13px] leading-[21.125px]'}>
         {item.role === 'assistant'
-          ? <MessageResponse className="chat-message-markdown text-[13px] leading-[21.125px] [&_li]:my-1 [&_p]:my-0">{item.text}</MessageResponse>
+          ? <MessageResponse className="chat-message-markdown text-[13px] leading-[21.125px] [&_li]:my-1 [&_p]:my-0 [&_ul]:list-outside [&_ul]:pl-[1.5em] [&_ul]:my-1 [&_ol]:list-outside [&_ol]:pl-[1.5em] [&_ol]:my-1 [&_li>p]:inline">{item.text}</MessageResponse>
           : <p className="whitespace-pre-wrap break-words">{item.text}</p>}
         {item.streaming && <span className="inline-block h-3 w-1 animate-pulse bg-[var(--app-foreground)]" />}
       </MessageContent>
