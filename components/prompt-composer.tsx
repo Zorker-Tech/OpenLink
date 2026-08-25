@@ -1,13 +1,11 @@
 'use client'
 
 import { WorkspacePrompt } from '@/components/workspace-prompt'
-import { SpeechInput } from '@/components/ai-elements/speech-input'
 import {
   PromptInput,
   PromptInputBody,
   PromptInputTextarea,
   PromptInputFooter,
-  PromptInputTools,
   PromptInputSubmit,
 } from '@/components/ai-elements/prompt-input'
 import { useRouter } from 'next/navigation'
@@ -62,15 +60,6 @@ export function PromptComposer({ user, composerContext }: PromptComposerProps) {
             />
           </PromptInputBody>
           <PromptInputFooter className="h-10 px-3 pb-3">
-            <PromptInputTools className="gap-0.5">
-              <SpeechInput
-                aria-label="开始语音输入"
-                className="size-7 rounded-full border border-[var(--app-control-border)] text-[var(--app-muted)] hover:text-[var(--app-foreground)]"
-                lang="zh-CN"
-                onTranscriptionChange={(text) => setInput(text)}
-                type="button"
-              />
-            </PromptInputTools>
             <PromptInputSubmit aria-label="发送" className="size-7 rounded-full border border-[var(--app-submit-background)] bg-[var(--app-submit-background)] p-0 text-[var(--app-submit-foreground)] hover:bg-[var(--app-submit-hover)]">
               <Send aria-hidden className="size-3.5" />
             </PromptInputSubmit>
@@ -103,17 +92,6 @@ export function PromptComposer({ user, composerContext }: PromptComposerProps) {
         defaultProject={workspace.defaultProject}
         initialPrompt=""
         projects={workspace.projects}
-        renderExtraTools={
-          <SpeechInput
-            aria-label="开始语音输入"
-            className="size-7 rounded-full border border-[var(--app-control-border)] text-[var(--app-muted)] hover:text-[var(--app-foreground)]"
-            lang="zh-CN"
-            onTranscriptionChange={setInput}
-            type="button"
-          />
-        }
-        value={input}
-        onValueChange={setInput}
         onUnauthenticated={() => router.push('/login?next=/app')}
         workspaceSlug={workspace.slug}
       />
