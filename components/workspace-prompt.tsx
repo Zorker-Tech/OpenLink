@@ -144,8 +144,8 @@ export function WorkspacePrompt({
       </PromptInputBody>
       <PromptInputFooter className="h-10 px-3 pb-3">
         <PromptInputTools className="gap-0.5">
-          <SupabaseAccessModePicker value={accessMode} onChange={setAccessMode} />
           <PromptAddMenu variant="home" />
+          <SupabaseAccessModePicker value={accessMode} onChange={setAccessMode} />
           <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
             <ModelSelectorTrigger
               render={
