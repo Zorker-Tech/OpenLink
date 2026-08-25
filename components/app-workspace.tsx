@@ -103,14 +103,18 @@ function SidebarItem({
   onClick?: () => void
 }) {
   return (
-    <div className={`flex h-8 w-full items-center rounded-md text-sm tracking-[-0.1504px] transition-colors ${active ? 'bg-[var(--app-selected,var(--app-active))] text-[var(--app-foreground)]' : 'text-[var(--app-muted)] hover:bg-[var(--app-surface)] hover:text-[var(--app-foreground)]'}`}>
-      <button aria-current={active ? 'page' : undefined} className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md pl-2 text-inherit" onClick={onClick} type="button">
+    <div className={`group relative flex h-8 w-full items-center rounded-md text-sm tracking-[-0.1504px] transition-colors ${active ? 'bg-[var(--app-selected,var(--app-active))] text-[var(--app-foreground)]' : 'text-[var(--app-muted)] hover:bg-[var(--app-surface)] hover:text-[var(--app-foreground)]'}`}>
+      <button aria-current={active ? 'page' : undefined} className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md pl-2 pr-2 text-inherit" onClick={onClick} type="button">
         <span className="min-w-0 flex-1 truncate text-left">{label}</span>
         {chatRuntime
           ? <ThinkingOrb aria-label={chatRuntime.state} className="shrink-0" size={20} speed={chatRuntime.speed} state={chatRuntime.state} />
           : <img alt="" className="app-nav-icon size-4 shrink-0" src={icon} />}
       </button>
-      {chatMenu ? <SidebarChatMenu {...chatMenu} /> : <span className="w-2 shrink-0" />}
+      {chatMenu ? (
+        <div className="pointer-events-none absolute right-1 top-1/2 flex -translate-y-1/2 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
+          <SidebarChatMenu {...chatMenu} />
+        </div>
+      ) : null}
     </div>
   )
 }
