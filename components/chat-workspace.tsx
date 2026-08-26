@@ -363,10 +363,10 @@ function ChatTopbar({
                         </div>
                       </ContextContentHeader>
                     )}
-                  <ContextInputUsage />
-                  <ContextOutputUsage />
-                  <ContextCacheUsage />
-                  <ContextReasoningUsage />
+                  <ContextInputUsage className="px-3 py-2.5" />
+                  <ContextOutputUsage className="px-3 py-2.5" />
+                  <ContextCacheUsage className="px-3 py-2.5" />
+                  <ContextReasoningUsage className="px-3 py-2.5" />
                 </ContextContent>
               </ContextContainer>
             </span>
