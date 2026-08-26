@@ -69,28 +69,48 @@ import ZhipuText from '@lobehub/icons/es/Zhipu/components/Text'
 import type { ComponentType, CSSProperties, ReactNode } from 'react'
 
 export function HyditeMono({ size = 24, style, className }: { size?: number | string; style?: CSSProperties; className?: string }) {
+  const numericSize = typeof size === 'number' ? size : 24
   return (
-    <img
-      alt="Hydite"
-      className={className}
-      height={size}
-      src="/openlink/providers/hydite.svg"
-      style={style}
-      width={size}
-    />
+    <span
+      className={`inline-flex shrink-0 items-center justify-center ${className ?? ''}`}
+      style={{
+        height: size,
+        width: size,
+        ...style,
+      }}
+    >
+      <img
+        alt="Hydite"
+        className="size-full object-contain"
+        height={numericSize}
+        src="/openlink/providers/hydite.svg"
+        width={numericSize}
+      />
+    </span>
   )
 }
 
 export function VtslxText({ size = 24, style, className }: { size?: number | string; style?: CSSProperties; className?: string }) {
+  const numericSize = typeof size === 'number' ? size : 24
+  // Wordmark artwork is ~8:1 (w:h). Render at the scaled text height and let
+  // the aspect ratio flow naturally so the mark is no longer dwarfed by the
+  // surrounding SVG padding.
+  const textHeight = Math.round(numericSize * 0.72)
   return (
-    <img
-      alt="Vtslx AO"
-      className={className}
-      height={size}
-      src="/openlink/providers/vtslxao.svg"
-      style={style}
-      width={typeof size === 'number' ? size * 3 : size}
-    />
+    <span
+      className={`inline-flex shrink-0 items-center ${className ?? ''}`}
+      style={{
+        height: textHeight,
+        ...style,
+      }}
+    >
+      <img
+        alt="Vtslx AO"
+        className="h-full w-auto object-contain"
+        height={textHeight}
+        src="/openlink/providers/vtslxao.svg"
+      />
+    </span>
   )
 }
 
