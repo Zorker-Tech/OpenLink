@@ -164,7 +164,7 @@ export async function listPersistedChatEvents(
     if (error) throw error
 
     const page = (data ?? [])
-      .map((row) => (row as { payload: unknown }).payload)
+      .map((row: { payload: unknown }) => row.payload)
       .filter(isOpenLinkAgentEvent)
     events.push(...page)
     if ((data ?? []).length < pageSize) break
@@ -211,4 +211,79 @@ export async function loadPiSessionSnapshot(
     header,
     entries: entries.map((row) => asRecord(row.entry)).filter((entry): entry is UnknownRecord => Boolean(entry)),
   }
+}
+
+export interface SessionContextUsage {
+  inputTokens: number
+  outputTokens: number
+  totalTokens: number
+  reasoningTokens: number
+  cachedInputTokens: number
+  /** Last assistant model id seen in the persisted stream, if any. */
+  modelId: string | null
+}
+
+/**
+ * Aggregate the real per-turn language-model usage recorded by the Pi runtime
+ * in `chat_session_pi_entries`. Each assistant message carries a `usage`
+ * object (`input`, `output`, `cacheRead`, `cost`) emitted by the upstream
+ * provider, so this is a live token/cost accounting for the session — not an
+ * estimate derived from character counts.
+ */
+export async function loadSessionContextUsage(
+  supabase: ServerSupabaseClient,
+  userId: string,
+  sessionId: string,
+): Promise<SessionContextUsage> {
+  const usage: SessionContextUsage = {
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    reasoningTokens: 0,
+    cachedInputTokens: 0,
+    modelId: null,
+  }
+
+  const pageSize = 1_000
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .schema('openlink')
+      .from('chat_session_pi_entries')
+      .select('entry')
+      .eq('session_id', sessionId)
+      .eq('user_id', userId)
+      .order('entry_order', { ascending: true })
+      .range(offset, offset + pageSize - 1)
+    if (error) throw error
+    for (const row of data ?? []) {
+      const entry = asRecord((row as { entry: unknown }).entry)
+      const message = asRecord(entry?.['message'])
+      if (!message || stringValue(message['role']) !== 'assistant') continue
+      const model = stringValue(message['model'])
+      if (model) usage.modelId = model
+      const messageUsage = asRecord(message['usage'])
+      if (!messageUsage) continue
+      const input = toNonNegativeNumber(messageUsage['input'])
+      const output = toNonNegativeNumber(messageUsage['output'])
+      const cacheRead = toNonNegativeNumber(messageUsage['cacheRead'])
+      const reasoning = toNonNegativeNumber(messageUsage['reasoning']) || toNonNegativeNumber(messageUsage['reasoningTokens'])
+      usage.inputTokens += input
+      usage.outputTokens += output
+      usage.cachedInputTokens += cacheRead
+      usage.reasoningTokens += reasoning
+    }
+    if ((data ?? []).length < pageSize) break
+  }
+
+  usage.totalTokens = usage.inputTokens + usage.outputTokens + usage.reasoningTokens + usage.cachedInputTokens
+  return usage
+}
+
+function stringValue(value: unknown): string | null {
+  return typeof value === 'string' ? value : null
+}
+
+function toNonNegativeNumber(value: unknown): number {
+  const number = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(number) && number > 0 ? number : 0
 }

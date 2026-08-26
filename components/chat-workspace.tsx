@@ -19,6 +19,16 @@ import {
   PromptInputSubmit,
   PromptInputTextarea,
 } from '@/components/ai-elements/prompt-input'
+import {
+  Context,
+  ContextCacheUsage,
+  ContextContent,
+  ContextContentHeader,
+  ContextInputUsage,
+  ContextOutputUsage,
+  ContextReasoningUsage,
+  ContextTrigger,
+} from '@/components/ai-elements/context'
 import { PromptAddMenu } from '@/components/prompt-add-menu'
 import {
   BrowserWorkbench,
@@ -75,6 +85,39 @@ interface GitVersionOption {
   timestamp: string
   current: boolean
 }
+
+interface ChatContextStats {
+  usage: {
+    inputTokens: number
+    outputTokens: number
+    totalTokens: number
+    reasoningTokens: number
+    cachedInputTokens: number
+  }
+  contextWindow: number | null
+  modelId: string | null
+  providerId: string | null
+}
+
+// The vendored ai-elements Context component does not type-check against the
+// installed `ai`/base-ui versions (pre-existing). It works at runtime, so we
+// use a narrow cast for the props this header actually passes.
+const ContextContainer = Context as unknown as React.FC<{
+  usedTokens: number
+  maxTokens: number
+  usage: {
+    inputTokens: number
+    outputTokens: number
+    totalTokens: number
+    reasoningTokens: number
+    cachedInputTokens: number
+    inputTokenDetails: Record<string, unknown>
+    outputTokenDetails: Record<string, unknown>
+  }
+  modelId?: string
+  className?: string
+  children?: React.ReactNode
+}>
 
 interface ChatWorkspaceProps {
   activeWorkspace: ActiveWorkspaceSummary
@@ -193,6 +236,7 @@ function ChatTopbar({
   gitVersionsLoading = false,
   gitVersionError,
   onSelectGitVersion,
+  context,
 }: {
   browserState: BrowserWorkbenchUiState
   browserWorkbenchRef: React.RefObject<BrowserWorkbenchHandle | null>
@@ -217,6 +261,7 @@ function ChatTopbar({
   gitVersionsLoading: boolean
   gitVersionError: string | null
   onSelectGitVersion: (ref: string | null) => void
+  context: ChatContextStats | null
 }) {
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState(sessionTitle)
@@ -296,6 +341,38 @@ function ChatTopbar({
             <span className="max-w-[210px] truncate">{sessionTitle}</span>
           </button>
         )}
+        {context && (() => {
+          const contextUsage = {
+            ...context.usage,
+            inputTokenDetails: {
+              noCacheTokens: Math.max(context.usage.inputTokens - context.usage.cachedInputTokens, 0),
+              cacheReadTokens: context.usage.cachedInputTokens,
+              cacheWriteTokens: 0,
+            },
+            outputTokenDetails: {
+              textTokens: Math.max(context.usage.outputTokens - context.usage.reasoningTokens, 0),
+              reasoningTokens: context.usage.reasoningTokens,
+            },
+          }
+          return (
+            <ContextContainer
+              className="ml-auto"
+              maxTokens={context.contextWindow ?? Math.max(context.usage.totalTokens, 1)}
+              modelId={context.modelId ?? undefined}
+              usage={contextUsage}
+              usedTokens={context.usage.totalTokens}
+            >
+              <ContextTrigger className="h-7 shrink-0 items-center gap-1 rounded-md px-1.5 text-[var(--app-muted)] hover:bg-[var(--app-active)] hover:text-[var(--app-foreground)]" />
+              <ContextContent>
+                <ContextContentHeader />
+                <ContextInputUsage />
+                <ContextOutputUsage />
+                <ContextCacheUsage />
+                <ContextReasoningUsage />
+              </ContextContent>
+            </ContextContainer>
+          )
+        })()}
       </div>
 
       <div className="min-w-0 flex-1">
@@ -599,6 +676,23 @@ export function ChatWorkspace({
       })
     return () => controller.abort()
   }, [sessionId])
+
+  const [contextStats, setContextStats] = useState<ChatContextStats | null>(null)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    void fetch(`/api/chat/${encodeURIComponent(sessionId)}/context`, { signal: controller.signal, cache: 'no-store' })
+      .then(async (response) => {
+        if (!response.ok) { setContextStats(null); return }
+        const payload = await response.json().catch(() => null) as Partial<ChatContextStats> | null
+        if (payload?.usage && typeof payload.usage === 'object') setContextStats(payload as ChatContextStats)
+        else setContextStats(null)
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setContextStats(null)
+      })
+    return () => controller.abort()
+  }, [sessionId, agentEvents])
 
   const appendAgentEvents = useCallback((incoming: OpenLinkAgentEvent[]) => {
     if (!incoming.length) return
@@ -927,7 +1021,7 @@ export function ChatWorkspace({
           themeMode={themeMode}
         />
         <div className="flex min-w-0 flex-1 flex-col bg-[var(--app-background)]">
-          <ChatTopbar browserState={browserState} browserWorkbenchRef={browserWorkbenchRef} collapsed={collapsed} chatCollapsed={chatPanelCollapsed} dataSurface={dataSurface} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} localRuntime={localRuntime} onOpenSidebar={() => { setCollapsed(false); setMobileOpen(true) }} onSelectBrowserSurface={(surface) => { setWorkspaceView('browser'); browserWorkbenchRef.current?.setSurface(surface) }} onSelectCode={() => setWorkspaceView('code')} onToggleDataSurface={() => setDataSurface((surface) => surface === 'studio' ? 'panel' : 'studio')} onSelectData={() => setWorkspaceView('data')} onSelectGitVersion={selectGitVersion} onSessionTitleChange={updateSessionTitle} onToggleChat={toggleChatPanel} onToggleDeviceView={() => setWorkspaceView((view) => view === 'mobile' || view === 'data' ? 'browser' : 'mobile')} onToggleSidebar={() => setCollapsed(false)} renameRequestVersion={renameRequestVersion} selectedGitRef={selectedGitRef} sessionTitle={currentSessionTitle} workspaceView={workspaceView} />
+          <ChatTopbar browserState={browserState} browserWorkbenchRef={browserWorkbenchRef} collapsed={collapsed} chatCollapsed={chatPanelCollapsed} context={contextStats} dataSurface={dataSurface} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} localRuntime={localRuntime} onOpenSidebar={() => { setCollapsed(false); setMobileOpen(true) }} onSelectBrowserSurface={(surface) => { setWorkspaceView('browser'); browserWorkbenchRef.current?.setSurface(surface) }} onSelectCode={() => setWorkspaceView('code')} onToggleDataSurface={() => setDataSurface((surface) => surface === 'studio' ? 'panel' : 'studio')} onSelectData={() => setWorkspaceView('data')} onSelectGitVersion={selectGitVersion} onSessionTitleChange={updateSessionTitle} onToggleChat={toggleChatPanel} onToggleDeviceView={() => setWorkspaceView((view) => view === 'mobile' || view === 'data' ? 'browser' : 'mobile')} onToggleSidebar={() => setCollapsed(false)} renameRequestVersion={renameRequestVersion} selectedGitRef={selectedGitRef} sessionTitle={currentSessionTitle} workspaceView={workspaceView} />
           <div className="hidden min-h-0 flex-1 xl:flex">
             <ResizablePanelGroup className="min-h-0" id="chat-workspace-panels" orientation="horizontal">
               <ResizablePanel
