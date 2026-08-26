@@ -9,6 +9,7 @@ import {
   ModelSelectorInput,
   ModelSelectorItem,
   ModelSelectorList,
+  ModelSelectorLogo,
   ModelSelectorName,
   ModelSelectorTrigger,
 } from '@/components/ai-elements/model-selector'
@@ -387,9 +388,19 @@ function ChatComposer({
   const [input, setInput] = useState('')
   const [expanded, setExpanded] = useState(false)
   const availableModels = models
-  const [selectedModelId, setSelectedModelId] = useState(() => availableModels.find((model) => (
-    model.providerId === initialModel?.providerId && model.modelId === initialModel.modelId
-  ))?.id ?? availableModels.find((model) => model.isDefault)?.id ?? availableModels[0]?.id ?? '')
+  const [selectedModelId, setSelectedModelId] = useState(() => {
+    // Prefer the session's stored model so a chat reopens on the model it was
+    // created with. Match by provider+model, then fall back to a modelId-only
+    // match (for catalog mismatches), then the default, then the first entry.
+    const exact = availableModels.find((model) => (
+      model.providerId === initialModel?.providerId && model.modelId === initialModel.modelId
+    ))
+    if (exact) return exact.id
+    const byModelId = initialModel?.modelId
+      ? availableModels.find((model) => model.modelId === initialModel.modelId)
+      : undefined
+    return byModelId?.id ?? availableModels.find((model) => model.isDefault)?.id ?? availableModels[0]?.id ?? ''
+  })
   const selectedModel = availableModels.find((model) => model.id === selectedModelId) ?? availableModels[0] ?? null
   const [modelSelectorOpen, setModelSelectorOpen] = useState(false)
 
@@ -419,7 +430,7 @@ function ChatComposer({
       <PromptInputButton aria-label="添加评论" className="size-7 shrink-0 rounded-md p-0 transition-[color,background-color,border-color,opacity] active:translate-y-0! hover:bg-[var(--app-active)]" type="button"><MessageCircle className="size-3.5" /></PromptInputButton>
       <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
         <ModelSelectorTrigger render={<PromptInputButton aria-label={`选择模型，当前 ${selectedModel?.name ?? '未配置'}`} className="h-7 w-12 shrink-0 gap-1 rounded-md px-1.5 text-[var(--app-muted)] transition-[color,background-color,border-color,opacity] active:translate-y-0! hover:bg-[var(--app-active)] hover:text-[var(--app-foreground)] aria-expanded:bg-transparent! aria-expanded:text-[var(--app-muted)]!" type="button" />}>
-          <img alt="" className="size-4" src={selectedModel ? `https://models.dev/logos/${selectedModel.logo}.svg` : '/openlink/model.svg'} />
+          {selectedModel ? <ModelSelectorLogo className="size-4" provider={selectedModel.logo} /> : <img alt="" className="size-4" src="/openlink/model.svg" />}
           <ChevronDown className="size-4" />
         </ModelSelectorTrigger>
         <ModelSelectorContent className="w-[280px]" title="选择模型">
@@ -427,7 +438,7 @@ function ChatComposer({
           <ModelSelectorList className="max-h-56 p-1">
             <ModelSelectorEmpty className="text-muted-foreground">没有找到模型</ModelSelectorEmpty>
             <ModelSelectorGroup heading="模型">
-              {availableModels.map((model) => <ModelSelectorItem className="h-9 text-muted-foreground data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground" key={model.id} onSelect={() => { setSelectedModelId(model.id); setModelSelectorOpen(false) }} value={`${model.name} ${model.providerName}`}><img alt="" className="size-4" src={model.providerId ? `https://models.dev/logos/${model.logo}.svg` : '/openlink/model.svg'} /><ModelSelectorName>{model.name}</ModelSelectorName><span className="ml-auto text-[11px] text-muted-foreground">{model.providerName}</span></ModelSelectorItem>)}
+              {availableModels.map((model) => <ModelSelectorItem className="h-9 text-muted-foreground data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground" key={model.id} onSelect={() => { setSelectedModelId(model.id); setModelSelectorOpen(false) }} value={`${model.name} ${model.providerName}`}><ModelSelectorLogo className="size-4" provider={model.logo} /><ModelSelectorName>{model.name}</ModelSelectorName><span className="ml-auto text-[11px] text-muted-foreground">{model.providerName}</span></ModelSelectorItem>)}
             </ModelSelectorGroup>
           </ModelSelectorList>
         </ModelSelectorContent>
@@ -783,7 +794,7 @@ export function ChatWorkspace({
     window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
     const selectedModel = configuredModels.find((model) => (
       model.providerId === autoStartModel?.providerId && model.modelId === autoStartModel.modelId
-    )) ?? null
+    )) ?? configuredModels.find((model) => model.modelId === autoStartModel?.modelId) ?? null
     void submitAgentMessage(initialPrompt, selectedModel, { initialPrompt: true })
   }, [agentEvents, autoStart, autoStartModel, browserState.browserSessionId, browserState.status, configuredModels, initialPrompt, submitAgentMessage])
 
