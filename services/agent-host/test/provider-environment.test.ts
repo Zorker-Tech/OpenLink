@@ -29,4 +29,5 @@ test('ambient environment rejects unsafe values and maps Vertex URL templates to
   })
   assert.deepEqual(providerNetworkTargets('google-vertex', 'https://{location}-aiplatform.googleapis.com'), ['*.aiplatform.googleapis.com'])
   assert.deepEqual(providerNetworkTargets('deepseek', 'https://api.deepseek.com'), ['api.deepseek.com'])
+  assert.deepEqual(providerNetworkTargets('hydite-vtslx-ao', 'https://api.hydite.com'), ['api.hydite.com'])
 })

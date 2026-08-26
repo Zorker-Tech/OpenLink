@@ -68,6 +68,32 @@ import ZhipuMono from '@lobehub/icons/es/Zhipu/components/Mono'
 import ZhipuText from '@lobehub/icons/es/Zhipu/components/Text'
 import type { ComponentType, CSSProperties, ReactNode } from 'react'
 
+export function HyditeMono({ size = 24, style, className }: { size?: number | string; style?: CSSProperties; className?: string }) {
+  return (
+    <img
+      alt="Hydite"
+      className={className}
+      height={size}
+      src="/openlink/providers/hydite.svg"
+      style={style}
+      width={size}
+    />
+  )
+}
+
+export function VtslxText({ size = 24, style, className }: { size?: number | string; style?: CSSProperties; className?: string }) {
+  return (
+    <img
+      alt="Vtslx AO"
+      className={className}
+      height={size}
+      src="/openlink/providers/vtslxao.svg"
+      style={style}
+      width={typeof size === 'number' ? size * 3 : size}
+    />
+  )
+}
+
 type ProviderIdentity = Pick<AiProviderDefinition, 'id' | 'name' | 'logo'>
 type SvgIcon = ComponentType<{ size?: number | string; style?: CSSProperties }>
 type IconFamily = { Mono: SvgIcon; Text?: SvgIcon }
@@ -96,6 +122,7 @@ const iconFamilies: Record<string, IconFamily> = {
   openrouter: { Mono: OpenRouterMono, Text: OpenRouterText },
   qwen: { Mono: QwenMono, Text: QwenText },
   together: { Mono: TogetherMono, Text: TogetherText },
+  hydite: { Mono: HyditeMono, Text: VtslxText },
   vercel: { Mono: VercelMono, Text: VercelText },
   vertexai: { Mono: VertexAIMono, Text: VertexAIText },
   xai: { Mono: XAIMono, Text: XAIText },
@@ -165,6 +192,8 @@ function getCombinedBrand(provider: ProviderIdentity, size: number): ReactNode {
     case 'qwen-token-plan':
     case 'qwen-token-plan-cn':
       return <><BrandUnit family={{ Mono: AlibabaCloudMono, Text: AlibabaCloudText }} size={size} /><BrandDivider /><BrandUnit family={{ Mono: QwenMono, Text: QwenText }} size={size * 0.9} /></>
+    case 'hydite-vtslx-ao':
+      return <><BrandUnit family={{ Mono: HyditeMono, Text: VtslxText }} size={size} /></>
     default:
       return null
   }

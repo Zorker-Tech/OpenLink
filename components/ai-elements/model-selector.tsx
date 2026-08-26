@@ -176,16 +176,22 @@ export const ModelSelectorLogo = ({
   provider,
   className,
   ...props
-}: ModelSelectorLogoProps) => (
-  <img
-    {...props}
-    alt={`${provider} logo`}
-    className={cn("size-3 [filter:var(--app-logo-filter,none)]", className)}
-    height={12}
-    src={`https://models.dev/logos/${provider}.svg`}
-    width={12}
-  />
-);
+}: ModelSelectorLogoProps) => {
+  const src = provider === "hydite" || provider === "hydite-vtslx-ao"
+    ? "/openlink/providers/hydite.svg"
+    : `https://models.dev/logos/${provider}.svg`;
+
+  return (
+    <img
+      {...props}
+      alt={`${provider} logo`}
+      className={cn("size-3 [filter:var(--app-logo-filter,none)]", className)}
+      height={12}
+      src={src}
+      width={12}
+    />
+  );
+};
 
 export type ModelSelectorLogoGroupProps = ComponentProps<"div">;
 

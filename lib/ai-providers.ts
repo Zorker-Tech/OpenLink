@@ -45,6 +45,7 @@ export const AI_PROVIDERS = [
   provider('google-vertex', 'Google Vertex AI', '通过 Google Cloud Vertex AI 使用托管模型。', null, { category: 'cloud', authMode: 'ambient', logo: 'vertexai' }),
   provider('groq', 'Groq', 'Groq LPU 提供极低延迟的开源模型推理。', 'https://api.groq.com/openai/v1'),
   provider('huggingface', 'Hugging Face', '通过 Hugging Face Inference Router 访问开放模型。', 'https://router.huggingface.co/v1', { category: 'cloud', logo: 'huggingface', apiKeyLabel: 'Hugging Face Token' }),
+  provider('hydite-vtslx-ao', 'Hydite Vtslx AO', 'Hydite 智能模型与加速推理服务。', 'https://api.hydite.com', { category: 'global', logo: 'hydite' }),
   provider('kimi-coding', 'Kimi For Coding', 'Moonshot Kimi 编码订阅计划。', 'https://api.kimi.com/coding', { category: 'subscription', logo: 'kimi', apiKeyLabel: 'Kimi Subscription Key' }),
   provider('minimax', 'MiniMax', 'MiniMax 全球站的长上下文与编码模型。', 'https://api.minimax.io/anthropic', { logo: 'minimax' }),
   provider('minimax-cn', 'MiniMax CN', 'MiniMax 中国站模型服务。', 'https://api.minimaxi.com/anthropic', { category: 'china', logo: 'minimax' }),
