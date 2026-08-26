@@ -1,6 +1,6 @@
 'use client'
 
-import { updateChatSessionTitleAction } from '@/app/chat/actions'
+import { deleteChatSessionAction, updateChatSessionTitleAction } from '@/app/chat/actions'
 import {
   ModelSelector,
   ModelSelectorContent,
@@ -815,6 +815,27 @@ export function ChatWorkspace({
     return true
   }, [currentSessionTitle, sessionId])
 
+  const [deletingSession, setDeletingSession] = useState(false)
+
+  const deleteActiveChat = useCallback(async () => {
+    if (deletingSession) return
+    if (!window.confirm('确定要删除这个会话吗？删除后不可恢复。')) return
+    setDeletingSession(true)
+    try {
+      const result = await deleteChatSessionAction(sessionId)
+      if (!result.ok) {
+        console.error('OpenLink session delete failed:', result.error)
+        return
+      }
+      // Navigate to the workspace home after removing the active session so the
+      // sidebar and route no longer reference a deleted record.
+      router.replace(`/app/${activeWorkspace.slug}`)
+      router.refresh()
+    } finally {
+      setDeletingSession(false)
+    }
+  }, [activeWorkspace.slug, deletingSession, router, sessionId])
+
   const selectGitVersion = useCallback(async (ref: string | null) => {
     const previous = selectedGitRef
     setGitVersionError(null)
@@ -886,6 +907,7 @@ export function ChatWorkspace({
           onCloseMobile={() => setMobileOpen(false)}
           onNewChat={() => router.push(`/app/${activeWorkspace.slug}`)}
           onRenameActiveChat={() => setRenameRequestVersion((value) => value + 1)}
+          onDeleteActiveChat={() => { void deleteActiveChat() }}
           onThemeChange={(mode) => { setThemeMode(mode); window.localStorage.setItem('openlink-theme', mode) }}
           onToggle={() => {
             if (mobileOpen) { setMobileOpen(false); setCollapsed(true) } else setCollapsed((value) => !value)

@@ -1,6 +1,6 @@
 'use server'
 
-import { createChatSession, updateChatSessionAccessMode, updateChatSessionTitle, type AccessMode } from '@/lib/chat-sessions'
+import { createChatSession, deleteChatSession, updateChatSessionAccessMode, updateChatSessionTitle, type AccessMode } from '@/lib/chat-sessions'
 import { resolveAppEntry } from '@/lib/workspaces'
 import { createClient } from '@/utils/supabase/server'
 import { getChatSession } from '@/lib/chat-sessions'
@@ -164,5 +164,25 @@ export async function approveAccessWriteAction(sessionId: string, confirmationId
     return { ok: true, error: null }
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'APPROVE_FAILED' }
+  }
+}
+
+export type DeleteChatSessionResult =
+  | { ok: true; error: null }
+  | { ok: false; error: string }
+
+export async function deleteChatSessionAction(sessionId: string): Promise<DeleteChatSessionResult> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: 'AUTH_REQUIRED' }
+
+  try {
+    await deleteChatSession(supabase, user.id, sessionId)
+    return { ok: true, error: null }
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'CHAT_SESSION_DELETE_FAILED',
+    }
   }
 }

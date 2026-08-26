@@ -18,7 +18,7 @@ import type { OrganizationSummary } from '@/lib/organizations'
 import type { ProjectSummary } from '@/lib/projects'
 import type { ConfiguredModelOption } from '@/lib/ai-provider-types'
 import type { ChatSessionSummary } from '@/lib/chat-session-types'
-import { MoreHorizontal, Pencil, Plus, Share2 } from 'lucide-react'
+import { MoreHorizontal, Pencil, Plus, Share2, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 
@@ -50,6 +50,7 @@ const primaryNavigation = [
 interface SidebarChatMenuProps {
   onRename?: () => void
   onShare: () => void
+  onDelete?: () => void
 }
 
 export interface SidebarChatRuntime {
@@ -59,7 +60,7 @@ export interface SidebarChatRuntime {
 
 const IDLE_CHAT_RUNTIME: SidebarChatRuntime = { speed: 0.25, state: 'solving' }
 
-function SidebarChatMenu({ onRename, onShare }: SidebarChatMenuProps) {
+function SidebarChatMenu({ onRename, onShare, onDelete }: SidebarChatMenuProps) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -81,6 +82,14 @@ function SidebarChatMenu({ onRename, onShare }: SidebarChatMenuProps) {
         <DropdownMenuItem className="h-9 cursor-pointer gap-2.5 rounded-md px-2.5 text-sm focus:bg-[var(--app-hover)]" disabled={!onRename} onClick={onRename}>
           <Pencil className="size-4 text-[var(--app-muted)]" />
           <span>重命名</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="h-9 cursor-pointer gap-2.5 rounded-md px-2.5 text-sm text-[var(--app-danger)] focus:bg-[var(--app-danger)]/10 focus:text-[var(--app-danger)]"
+          disabled={!onDelete}
+          onClick={onDelete}
+        >
+          <Trash2 className="size-4 text-[var(--app-danger)]" />
+          <span>删除会话</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -139,6 +148,7 @@ export function Sidebar({
   chatSessions = [],
   onNewChat,
   onRenameActiveChat,
+  onDeleteActiveChat,
   projects,
   secondaryPanel,
 }: {
@@ -161,6 +171,7 @@ export function Sidebar({
   chatSessions?: ChatSessionSummary[]
   onNewChat?: () => void
   onRenameActiveChat?: () => void
+  onDeleteActiveChat?: () => void
   projects?: ProjectSummary[]
   /** Replaces the primary workspace navigation inside this same sidebar. */
   secondaryPanel?: React.ReactNode
@@ -203,6 +214,7 @@ export function Sidebar({
     ? {
         onRename: onRenameActiveChat,
         onShare: () => { void navigator.clipboard.writeText(window.location.href) },
+        onDelete: onDeleteActiveChat,
       }
     : undefined
 

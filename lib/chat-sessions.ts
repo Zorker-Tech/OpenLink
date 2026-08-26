@@ -159,6 +159,25 @@ export async function updateChatSessionTitle(
   return (data as { title: string }).title
 }
 
+export async function deleteChatSession(
+  supabase: ServerSupabaseClient,
+  userId: string,
+  sessionId: string,
+): Promise<void> {
+  if (!isChatSessionId(sessionId)) throw new Error('CHAT_SESSION_NOT_FOUND')
+
+  // Child records (events, pi entries, leases, event counters) reference this
+  // row with ON DELETE CASCADE, so a single owner-scoped delete is sufficient.
+  const { error } = await supabase
+    .schema('openlink')
+    .from('chat_sessions')
+    .delete()
+    .eq('id', sessionId)
+    .eq('user_id', userId)
+
+  if (error) throw error
+}
+
 export async function updateChatSessionAccessMode(
   supabase: ServerSupabaseClient,
   userId: string,
