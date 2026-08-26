@@ -3,7 +3,7 @@ import 'server-only'
 import { getAiProvider, isAiProviderId } from '@/lib/ai-providers'
 import { getAiProviderModels } from '@/lib/ai-provider-models.server'
 import { modelLogoSlug } from '@/lib/model-logos'
-import type { AgentProviderRuntimeConfiguration, AiProviderConfigurationSummary, ConfiguredModelOption } from '@/lib/ai-provider-types'
+import type { AgentProviderRuntimeConfiguration, AiProviderConfigurationSummary, ConfiguredModelOption, ProviderModelParams } from '@/lib/ai-provider-types'
 import { decryptProviderSecret, encryptProviderSecret, providerSecretHint } from '@/lib/provider-secrets.server'
 import { createClient } from '@/utils/supabase/server'
 
@@ -17,6 +17,7 @@ interface ProviderConfigurationRow {
   base_url: string | null
   default_model_id: string | null
   enabled_model_ids: string[]
+  model_params: Record<string, ProviderModelParams> | null
   encrypted_api_key: string | null
   api_key_iv: string | null
   api_key_tag: string | null
@@ -26,9 +27,9 @@ interface ProviderConfigurationRow {
   updated_at: string
 }
 
-export type { AgentProviderRuntimeConfiguration, AiProviderConfigurationSummary, ConfiguredModelOption } from '@/lib/ai-provider-types'
+export type { AgentProviderRuntimeConfiguration, AiProviderConfigurationSummary, ConfiguredModelOption, ProviderModelParams } from '@/lib/ai-provider-types'
 
-const selectColumns = 'user_id, provider_id, enabled, is_default, base_url, default_model_id, enabled_model_ids, encrypted_api_key, api_key_iv, api_key_tag, api_key_hint, encryption_version, created_at, updated_at'
+const selectColumns = 'user_id, provider_id, enabled, is_default, base_url, default_model_id, enabled_model_ids, model_params, encrypted_api_key, api_key_iv, api_key_tag, api_key_hint, encryption_version, created_at, updated_at'
 
 function summary(row: ProviderConfigurationRow): AiProviderConfigurationSummary {
   return {
@@ -38,6 +39,7 @@ function summary(row: ProviderConfigurationRow): AiProviderConfigurationSummary 
     baseUrl: row.base_url,
     defaultModelId: row.default_model_id,
     enabledModelIds: row.enabled_model_ids ?? [],
+    modelParams: row.model_params ?? {},
     apiKeyHint: row.api_key_hint,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -79,6 +81,7 @@ export interface SaveAiProviderConfigurationInput {
   baseUrl: string | null
   defaultModelId: string
   enabledModelIds: string[]
+  modelParams?: Record<string, ProviderModelParams>
   apiKey?: string
   clearApiKey?: boolean
 }
@@ -95,6 +98,13 @@ export async function saveAiProviderConfiguration(
   const validDynamicModel = (modelId: string) => /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/.test(modelId)
   if (models.length ? !modelIds.has(input.defaultModelId) : !validDynamicModel(input.defaultModelId)) throw new Error('UNKNOWN_PROVIDER_MODEL')
   if (input.enabledModelIds.some((modelId) => models.length ? !modelIds.has(modelId) : !validDynamicModel(modelId))) throw new Error('UNKNOWN_PROVIDER_MODEL')
+  if (input.modelParams !== undefined) {
+    for (const [modelId, params] of Object.entries(input.modelParams)) {
+      if (!validDynamicModel(modelId)) throw new Error('UNKNOWN_PROVIDER_MODEL')
+      if (!params) continue
+      if (!Number.isFinite(params.contextWindow) || !Number.isFinite(params.maxTokens)) throw new Error('MODEL_PARAMS_INVALID')
+    }
+  }
 
   const existing = await getProviderRow(supabase, userId, input.providerId)
   const catalogBaseUrl = models.find((model) => model.baseUrl && !model.baseUrl.includes('{'))?.baseUrl
@@ -108,6 +118,7 @@ export async function saveAiProviderConfiguration(
     base_url: effectiveBaseUrl,
     default_model_id: input.defaultModelId,
     enabled_model_ids: [...new Set([input.defaultModelId, ...input.enabledModelIds])],
+    model_params: input.modelParams ?? existing?.model_params ?? {},
     updated_at: new Date().toISOString(),
   }
 
@@ -161,6 +172,26 @@ async function getProviderRow(supabase: ServerSupabaseClient, userId: string, pr
     .maybeSingle()
   if (error) throw error
   return data as ProviderConfigurationRow | null
+}
+
+/** Return the decrypted stored API key for a provider, or null when absent. */
+export async function getStoredProviderApiKey(
+  supabase: ServerSupabaseClient,
+  userId: string,
+  providerId: string,
+): Promise<string | null> {
+  const row = await getProviderRow(supabase, userId, providerId)
+  if (!row?.encrypted_api_key || !row.api_key_iv || !row.api_key_tag) return null
+  try {
+    return decryptProviderSecret({
+      ciphertext: row.encrypted_api_key,
+      iv: row.api_key_iv,
+      tag: row.api_key_tag,
+      version: row.encryption_version as 1,
+    }, userId, providerId)
+  } catch {
+    return null
+  }
 }
 
 export async function resolveAgentProviderRuntimeConfiguration(
@@ -264,25 +295,40 @@ export async function listConfiguredModels(supabase: ServerSupabaseClient, userI
   const enabled = configurations.filter((configuration) => configuration.enabled)
   const groups = await Promise.all(enabled.map(async (configuration) => {
     const definition = getAiProvider(configuration.providerId)
-    const models = await getAiProviderModels(configuration.providerId)
+    const catalog = await getAiProviderModels(configuration.providerId)
     const enabledIds = new Set(configuration.enabledModelIds)
-    const availableModels = models.length
-      ? models
-      : configuration.enabledModelIds.map((id) => ({ id, name: id }))
-    return availableModels
-      .filter((model) => enabledIds.has(model.id))
-      .map((model) => ({
-        id: `${configuration.providerId}/${model.id}`,
-        providerId: configuration.providerId,
-        providerName: definition?.name ?? configuration.providerId,
-        modelId: model.id,
-        name: model.name,
-        // Model logos are matched by model name so the composer shows the
-        // model's own brand (e.g. a deepseek model keeps the DeepSeek mark)
-        // instead of the provider logo. Fall back to the provider slug.
-        logo: modelLogoSlug(model.name) ?? definition?.logo ?? configuration.providerId,
-        isDefault: configuration.isDefault && configuration.defaultModelId === model.id,
-      }))
+    const storedParams = configuration.modelParams ?? {}
+
+    // Build the merged set of model ids: catalog ids plus any hand-added /
+    // fetched ids present in model params. Persisted params override catalog
+    // metadata so edits survive reloads.
+    const catalogById = new Map(catalog.map((model) => [model.id, model]))
+    const knownIds = new Set<string>([...catalogById.keys(), ...Object.keys(storedParams)])
+    // A dynamic provider (no catalog) exposes exactly the enabled ids; carry
+    // any enabled id that is not yet in knownIds so it still appears.
+    if (!catalog.length) {
+      for (const id of enabledIds) knownIds.add(id)
+    }
+
+    return [...knownIds]
+      .filter((modelId) => enabledIds.has(modelId))
+      .map((modelId) => {
+        const catalogModel = catalogById.get(modelId)
+        const overrides = storedParams[modelId]
+        const name = overrides?.name || catalogModel?.name || modelId
+        return {
+          id: `${configuration.providerId}/${modelId}`,
+          providerId: configuration.providerId,
+          providerName: definition?.name ?? configuration.providerId,
+          modelId,
+          name,
+          // Model logos are matched by model name so the composer shows the
+          // model's own brand (e.g. a deepseek model keeps the DeepSeek mark)
+          // instead of the provider logo. Fall back to the provider slug.
+          logo: modelLogoSlug(name) ?? definition?.logo ?? configuration.providerId,
+          isDefault: configuration.isDefault && configuration.defaultModelId === modelId,
+        }
+      })
   }))
   return groups.flat().sort((left, right) => Number(right.isDefault) - Number(left.isDefault) || left.name.localeCompare(right.name))
 }

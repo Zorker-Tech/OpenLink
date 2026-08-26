@@ -1,11 +1,11 @@
 'use client'
 
-import { checkAiProviderConfigurationAction, saveAiProviderConfigurationAction } from '@/app/settings/actions'
+import { checkAiProviderConfigurationAction, fetchProviderModelsAction, saveAiProviderConfigurationAction } from '@/app/settings/actions'
 import { ProviderBrand, ProviderLogo } from '@/components/settings/provider-logo'
 import { AppSelect } from '@/components/ui/app-select'
-import type { AiProviderConfigurationSummary, AiProviderModel } from '@/lib/ai-provider-types'
+import type { AiProviderConfigurationSummary, AiProviderModel, ProviderModelParams } from '@/lib/ai-provider-types'
 import type { AiProviderDefinition } from '@/lib/ai-providers'
-import { Check, CircleHelp, Eye, EyeOff, Loader2, LockKeyhole, RefreshCw, Search, ShieldCheck } from 'lucide-react'
+import { CircleHelp, Eye, EyeOff, Loader2, LockKeyhole, Pencil, Plus, RefreshCw, Save, Search, ShieldCheck, Trash2, X } from 'lucide-react'
 import { useMemo, useState, useTransition } from 'react'
 
 interface ProviderConfigurationFormProps {
@@ -14,8 +14,63 @@ interface ProviderConfigurationFormProps {
   provider: AiProviderDefinition
 }
 
+interface ModelRecord {
+  id: string
+  name: string
+  reasoning: boolean
+  input: string[]
+  contextWindow: number
+  maxTokens: number
+  cost: { input: number; output: number; cacheRead?: number; cacheWrite?: number }
+}
+
+function catalogRecord(model: AiProviderModel): ModelRecord {
+  return {
+    id: model.id,
+    name: model.name,
+    reasoning: Boolean(model.reasoning),
+    input: Array.isArray(model.input) && model.input.length ? model.input : ['text'],
+    contextWindow: model.contextWindow,
+    maxTokens: model.maxTokens,
+    cost: model.cost,
+  }
+}
+
+function paramRecord(id: string, params: ProviderModelParams): ModelRecord {
+  return {
+    id,
+    name: params.name || id,
+    reasoning: Boolean(params.reasoning),
+    input: Array.isArray(params.input) && params.input.length ? params.input : ['text'],
+    contextWindow: params.contextWindow,
+    maxTokens: params.maxTokens,
+    cost: params.cost,
+  }
+}
+
+function toParams(record: ModelRecord | undefined, modelId: string): ProviderModelParams {
+  const fallback: ProviderModelParams = {
+    name: modelId,
+    reasoning: false,
+    input: ['text'],
+    contextWindow: 128_000,
+    maxTokens: 8_192,
+    cost: { input: 0, output: 0 },
+  }
+  if (!record) return fallback
+  return {
+    name: record.name,
+    reasoning: record.reasoning,
+    input: record.input,
+    contextWindow: record.contextWindow,
+    maxTokens: record.maxTokens,
+    cost: record.cost,
+  }
+}
+
+
 export function ProviderConfigurationForm({ configuration, models, provider }: ProviderConfigurationFormProps) {
-  const initialModel = configuration?.defaultModelId && models.some((model) => model.id === configuration.defaultModelId)
+  const initialModel = configuration?.defaultModelId && (models.some((model) => model.id === configuration.defaultModelId) || !models.length)
     ? configuration.defaultModelId
     : models[0]?.id ?? ''
   const [enabled, setEnabled] = useState(configuration?.enabled ?? false)
@@ -30,14 +85,41 @@ export function ProviderConfigurationForm({ configuration, models, provider }: P
   const [status, setStatus] = useState<{ kind: 'success' | 'error'; message: string } | null>(null)
   const [pending, startTransition] = useTransition()
   const [checking, startChecking] = useTransition()
+  const [fetching, startFetching] = useTransition()
+  const [modelParams, setModelParams] = useState<Record<string, ProviderModelParams>>(() => ({ ...(configuration?.modelParams ?? {}) }))
+  const [editingModelId, setEditingModelId] = useState<string | null>(null)
+  const [editingDraft, setEditingDraft] = useState<ModelRecord | null>(null)
   const oauthOnly = provider.authMode === 'oauth'
   const ambientCredentials = provider.authMode === 'ambient'
   const dynamicCatalog = models.length === 0
 
+  // Unified model list: catalog models overlaid with persisted params and any
+  // models fetched from upstream, so every model shows its parameters.
+  const modelRecords = useMemo(() => {
+    const ids = new Set<string>([...models.map((model) => model.id), ...Object.keys(modelParams)])
+    return [...ids].map((modelId) => {
+      const catalog = models.find((model) => model.id === modelId)
+      const record = catalog ? catalogRecord(catalog) : paramRecord(modelId, modelParams[modelId])
+      const params = modelParams[modelId]
+      if (params) {
+        return {
+          ...record,
+          name: params.name || record.name,
+          reasoning: Boolean(params.reasoning),
+          input: params.input?.length ? params.input : record.input,
+          contextWindow: params.contextWindow,
+          maxTokens: params.maxTokens,
+          cost: params.cost,
+        }
+      }
+      return record
+    })
+  }, [models, modelParams])
+
   const visibleModels = useMemo(() => {
     const query = modelQuery.trim().toLowerCase()
-    return query ? models.filter((model) => `${model.name} ${model.id}`.toLowerCase().includes(query)) : models
-  }, [modelQuery, models])
+    return query ? modelRecords.filter((model) => `${model.name} ${model.id}`.toLowerCase().includes(query)) : modelRecords
+  }, [modelQuery, modelRecords])
 
   const save = () => startTransition(async () => {
     setStatus(null)
@@ -48,6 +130,7 @@ export function ProviderConfigurationForm({ configuration, models, provider }: P
       baseUrl,
       defaultModelId,
       enabledModelIds: [...enabledModels],
+      modelParams,
       apiKey: apiKey || undefined,
     })
     if (!result.ok) { setStatus({ kind: 'error', message: translateError(result.error) }); return }
@@ -64,6 +147,7 @@ export function ProviderConfigurationForm({ configuration, models, provider }: P
       baseUrl,
       defaultModelId,
       enabledModelIds: [...enabledModels],
+      modelParams,
       apiKey: apiKey || undefined,
     })
     if (!saved.ok) { setStatus({ kind: 'error', message: translateError(saved.error) }); return }
@@ -82,6 +166,70 @@ export function ProviderConfigurationForm({ configuration, models, provider }: P
       return next
     })
   }
+
+  const addCustomModel = (rawId: string) => {
+    const id = rawId.trim()
+    if (!id) return
+    setModelParams((current) => ({ ...current, [id]: toParams(undefined, id) }))
+    setEnabledModels((current) => new Set(current).add(id))
+    setDefaultModelId((current) => current || id)
+    setCustomModelId('')
+  }
+
+  const removeModel = (modelId: string) => {
+    setModelParams((current) => {
+      const next = { ...current }
+      delete next[modelId]
+      return next
+    })
+    setEnabledModels((current) => {
+      const next = new Set(current)
+      next.delete(modelId)
+      return next
+    })
+    if (defaultModelId === modelId) {
+      const remaining = modelRecords.find((model) => model.id !== modelId)
+      setDefaultModelId(remaining?.id ?? '')
+    }
+  }
+
+  const startEdit = (modelId: string) => {
+    const record = modelRecords.find((model) => model.id === modelId)
+    setEditingModelId(modelId)
+    setEditingDraft(record ? { ...record, cost: { ...record.cost } } : null)
+  }
+
+  const cancelEdit = () => {
+    setEditingModelId(null)
+    setEditingDraft(null)
+  }
+
+  const saveEdit = () => {
+    if (!editingModelId || !editingDraft) return
+    setModelParams((current) => ({ ...current, [editingModelId]: toParams(editingDraft, editingModelId) }))
+    setEditingModelId(null)
+    setEditingDraft(null)
+  }
+
+  const fetchModels = () => startFetching(async () => {
+    setStatus(null)
+    if (!baseUrl.trim()) { setStatus({ kind: 'error', message: '请先填写 API 代理地址' }); return }
+    const result = await fetchProviderModelsAction({ providerId: provider.id, baseUrl, apiKey: apiKey || undefined })
+    if (!result.ok || !result.models) { setStatus({ kind: 'error', message: translateError(result.error) }); return }
+    const upserted = { ...modelParams }
+    const enabled = new Set(enabledModels)
+    for (const model of result.models) {
+      upserted[model.id] = { ...toParams(undefined, model.id), ...model }
+      enabled.add(model.id)
+    }
+    setModelParams(upserted)
+    setEnabledModels(enabled)
+    if (!defaultModelId) {
+      const first = result.models[0]
+      if (first) setDefaultModelId(first.id)
+    }
+    setStatus({ kind: 'success', message: `已从上游获取 ${result.models.length} 个模型，请在下方启用并编辑参数` })
+  })
 
   return (
     <main className="h-full min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6">
@@ -116,7 +264,7 @@ export function ProviderConfigurationForm({ configuration, models, provider }: P
             <ConfigRow description="通过隔离运行时向当前模型发送最小请求。" label="连通性检查">
               <div className="flex w-full max-w-[348px] gap-2">
                 {dynamicCatalog
-                  ? <input className="h-9 min-w-0 flex-1 rounded-md border border-[var(--app-control-border)] bg-[var(--app-surface)] px-3 text-sm outline-none" onChange={(event) => { setDefaultModelId(event.target.value); setEnabledModels(new Set(event.target.value ? [event.target.value] : [])) }} placeholder="provider/model-id" value={defaultModelId} />
+                  ? <input className="h-9 min-w-0 flex-1 rounded-md border border-[var(--app-control-border)] bg-[var(--app-surface)] px-3 text-sm outline-none" onChange={(event) => { const value = event.target.value; setDefaultModelId(value); if (value) setEnabledModels((current) => new Set(current).add(value)) }} placeholder="provider/model-id" value={defaultModelId} />
                   : <AppSelect ariaLabel="连接检查模型" className="min-w-0 flex-1" contentClassName="max-w-[520px]" onValueChange={(modelId) => { setDefaultModelId(modelId); setEnabledModels((current) => new Set(current).add(modelId)) }} options={models.map((model) => ({ description: model.id, icon: <ProviderLogo provider={provider} size={20} />, label: model.name, value: model.id }))} value={defaultModelId} />}
                 <button className="flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-[var(--app-control-border)] bg-[var(--app-surface)] px-3 text-sm font-medium hover:bg-[var(--app-hover)] disabled:opacity-50" disabled={checking || !defaultModelId} onClick={check} type="button">{checking ? <Loader2 className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />}检查</button>
               </div>
@@ -131,29 +279,57 @@ export function ProviderConfigurationForm({ configuration, models, provider }: P
           <div className="flex flex-wrap items-center gap-3">
             <h2 className="mr-auto text-lg font-semibold">模型列表</h2>
             <div className="flex h-8 w-56 items-center rounded-md border border-[var(--app-control-border)] bg-[var(--app-surface)] px-2"><Search className="size-3.5 text-[var(--app-muted)]" /><input className="min-w-0 flex-1 bg-transparent px-2 text-sm outline-none" onChange={(event) => setModelQuery(event.target.value)} placeholder="搜索模型…" value={modelQuery} /></div>
-            <button className="flex h-8 items-center gap-1.5 rounded-md border border-[var(--app-control-border)] px-2.5 text-xs text-[var(--app-muted)]"><RefreshCw className="size-3.5" />Pi 目录</button>
+            <button className="flex h-8 items-center gap-1.5 rounded-md border border-[var(--app-control-border)] px-2.5 text-xs text-[var(--app-muted)] disabled:opacity-50" disabled={fetching || (!baseUrl.trim() && !configuration?.baseUrl)} onClick={fetchModels} type="button">{fetching ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}获取模型</button>
           </div>
+          {fetching && <p className="mt-2 text-xs text-[var(--app-subtle)]">正在从上游获取模型与参数…</p>}
           <div className="mt-4 space-y-1">
             {dynamicCatalog && !oauthOnly && (
               <div className="flex min-h-[62px] items-center gap-2 rounded-lg px-3 py-3 hover:bg-[var(--app-hover)]">
-                <input className="h-9 min-w-0 flex-1 rounded-md border border-[var(--app-control-border)] bg-[var(--app-surface)] px-3 font-mono text-sm outline-none" onChange={(event) => setCustomModelId(event.target.value)} placeholder="输入动态网关中的模型 ID" value={customModelId} />
-                <button className="h-9 rounded-md border border-[var(--app-control-border)] px-3 text-sm hover:bg-[var(--app-hover)]" onClick={() => { const id = customModelId.trim(); if (!id) return; setDefaultModelId(id); setEnabledModels(new Set([id])); setCustomModelId('') }} type="button">添加</button>
+                <input className="h-9 min-w-0 flex-1 rounded-md border border-[var(--app-control-border)] bg-[var(--app-surface)] px-3 font-mono text-sm outline-none" onChange={(event) => setCustomModelId(event.target.value)} placeholder="输入动态网关中的模型 ID" onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addCustomModel(customModelId) } }} value={customModelId} />
+                <button className="flex h-9 items-center gap-1.5 rounded-md border border-[var(--app-control-border)] px-3 text-sm hover:bg-[var(--app-hover)]" onClick={() => addCustomModel(customModelId)} type="button"><Plus className="size-4" />添加</button>
               </div>
             )}
-            {dynamicCatalog && defaultModelId && (
-              <div className="flex min-h-[62px] items-center gap-3 rounded-lg px-3 py-3 hover:bg-[var(--app-hover)]">
-                <span className="flex size-5 items-center justify-center rounded border border-[var(--app-submit-background)] bg-[var(--app-submit-background)] text-[var(--app-submit-foreground)]"><Check className="size-3.5" /></span>
-                <div className="min-w-0 flex-1"><div className="truncate text-sm font-medium">{defaultModelId}</div><div className="mt-1 text-[11px] text-[var(--app-subtle)]">动态 Provider 模型 · 默认</div></div>
-              </div>
-            )}
+            {visibleModels.length === 0 && !dynamicCatalog && <p className="px-2 py-1 text-xs text-[var(--app-subtle)]">暂无模型，点击「获取模型」从上游拉取。</p>}
             {visibleModels.map((model) => {
               const selected = enabledModels.has(model.id)
               const defaultModel = defaultModelId === model.id
+              const isEditing = editingModelId === model.id
+              if (isEditing && editingDraft) {
+                return (
+                  <div className="flex min-h-[64px] flex-col gap-3 rounded-lg border border-[var(--app-focus-ring)] bg-[var(--app-surface)] px-3 py-3" key={model.id}>
+                    <div className="flex items-center gap-2">
+                      <ProviderLogo provider={provider} size={24} />
+                      <span className="truncate text-sm font-medium">{model.id}</span>
+                      <span className="ml-auto rounded-full bg-[var(--app-active)] px-2 py-0.5 text-[10px] text-[var(--app-subtle)]">编辑参数</span>
+                    </div>
+                    <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
+                      <label className="flex flex-col gap-1"><span className="text-[var(--app-subtle)]">显示名称</span><input className="h-8 rounded-md border border-[var(--app-control-border)] bg-[var(--app-surface)] px-2 text-sm outline-none focus:border-[var(--app-focus-ring)]" onChange={(event) => setEditingDraft((draft) => draft ? { ...draft, name: event.target.value } : draft)} value={editingDraft.name} /></label>
+                      <label className="flex flex-col gap-1"><span className="text-[var(--app-subtle)]">上下文窗口 (tokens)</span><input className="h-8 rounded-md border border-[var(--app-control-border)] bg-[var(--app-surface)] px-2 font-mono text-sm outline-none focus:border-[var(--app-focus-ring)]" onChange={(event) => setEditingDraft((draft) => draft ? { ...draft, contextWindow: Number(event.target.value) || 0 } : draft)} type="number" value={editingDraft.contextWindow} /></label>
+                      <label className="flex flex-col gap-1"><span className="text-[var(--app-subtle)]">最大输出 (tokens)</span><input className="h-8 rounded-md border border-[var(--app-control-border)] bg-[var(--app-surface)] px-2 font-mono text-sm outline-none focus:border-[var(--app-focus-ring)]" onChange={(event) => setEditingDraft((draft) => draft ? { ...draft, maxTokens: Number(event.target.value) || 0 } : draft)} type="number" value={editingDraft.maxTokens} /></label>
+                      <label className="flex flex-col gap-1"><span className="text-[var(--app-subtle)]">输入成本 ($/M)</span><input className="h-8 rounded-md border border-[var(--app-control-border)] bg-[var(--app-surface)] px-2 font-mono text-sm outline-none focus:border-[var(--app-focus-ring)]" onChange={(event) => setEditingDraft((draft) => draft ? { ...draft, cost: { ...draft.cost, input: Number(event.target.value) || 0 } } : draft)} step="0.01" type="number" value={editingDraft.cost.input} /></label>
+                      <label className="flex flex-col gap-1"><span className="text-[var(--app-subtle)]">输出成本 ($/M)</span><input className="h-8 rounded-md border border-[var(--app-control-border)] bg-[var(--app-surface)] px-2 font-mono text-sm outline-none focus:border-[var(--app-focus-ring)]" onChange={(event) => setEditingDraft((draft) => draft ? { ...draft, cost: { ...draft.cost, output: Number(event.target.value) || 0 } } : draft)} step="0.01" type="number" value={editingDraft.cost.output} /></label>
+                      <label className="flex items-end gap-2 pb-1"><span className="text-[var(--app-subtle)]">推理</span><button aria-pressed={editingDraft.reasoning} className="relative h-[22px] w-11 rounded-full bg-[var(--app-active)] transition-colors disabled:cursor-not-allowed disabled:opacity-40" onClick={() => setEditingDraft((draft) => draft ? { ...draft, reasoning: !draft.reasoning } : draft)} type="button"><span className={`absolute left-0 top-0.5 size-[18px] rounded-full bg-[var(--app-surface)] shadow-[0_1px_1px_var(--app-shadow),0_3px_8px_var(--app-shadow)] transition-transform ${editingDraft.reasoning ? 'translate-x-6' : 'translate-x-0.5'}`} /></button></label>
+                      <label className="flex items-end gap-2 pb-1"><span className="text-[var(--app-subtle)]">多模态</span><button aria-pressed={editingDraft.input.includes('image')} className="relative h-[22px] w-11 rounded-full bg-[var(--app-active)] transition-colors" onClick={() => setEditingDraft((draft) => draft ? { ...draft, input: draft.input.includes('image') ? ['text'] : ['text', 'image'] } : draft)} type="button"><span className={`absolute left-0 top-0.5 size-[18px] rounded-full bg-[var(--app-surface)] shadow-[0_1px_1px_var(--app-shadow),0_3px_8px_var(--app-shadow)] transition-transform ${editingDraft.input.includes('image') ? 'translate-x-6' : 'translate-x-0.5'}`} /></button></label>
+                    </div>
+                    <div className="flex items-center justify-end gap-2">
+                      <button className="flex h-8 items-center gap-1.5 rounded-md border border-[var(--app-control-border)] px-3 text-sm hover:bg-[var(--app-hover)]" onClick={cancelEdit} type="button"><X className="size-4" />取消</button>
+                      <button className="flex h-8 items-center gap-1.5 rounded-md bg-[var(--app-submit-background)] px-3 text-sm font-medium text-[var(--app-submit-foreground)] hover:bg-[var(--app-submit-hover)]" onClick={saveEdit} type="button"><Save className="size-4" />保存</button>
+                    </div>
+                  </div>
+                )
+              }
               return (
                 <div className="group flex min-h-[64px] items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-[var(--app-hover)]" key={model.id}>
                   <ProviderLogo provider={provider} size={32} />
-                  <div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className="truncate text-sm font-medium">{model.name}</span><button className={`rounded-md px-1.5 py-0.5 font-mono text-[10px] ${defaultModel ? 'bg-[var(--app-active)] text-[var(--app-foreground)]' : 'bg-[var(--app-surface)] text-[var(--app-subtle)]'}`} disabled={oauthOnly || !selected} onClick={() => { setDefaultModelId(model.id); setEnabledModels((current) => new Set(current).add(model.id)) }} type="button">{defaultModel ? '默认' : model.id}</button>{model.reasoning && <span className="rounded-full bg-[var(--app-active)] px-2 py-0.5 text-[10px] text-[var(--app-muted)]">Reasoning</span>}</div><div className="mt-1 truncate text-xs text-[var(--app-subtle)]">{model.id} · {formatTokens(model.contextWindow)} context · 输入 ${model.cost.input}/M · 输出 ${model.cost.output}/M</div></div>
-                  <Toggle checked={selected} disabled={oauthOnly} label={`${selected ? '停用' : '启用'} ${model.name}`} onChange={() => toggleModel(model.id)} size="small" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2"><span className="truncate text-sm font-medium">{model.name}</span><button className={`rounded-md px-1.5 py-0.5 font-mono text-[10px] ${defaultModel ? 'bg-[var(--app-active)] text-[var(--app-foreground)]' : 'bg-[var(--app-surface)] text-[var(--app-subtle)]'}`} disabled={oauthOnly || !selected} onClick={() => { setDefaultModelId(model.id); setEnabledModels((current) => new Set(current).add(model.id)) }} type="button">{defaultModel ? '默认' : model.id}</button>{model.reasoning && <span className="rounded-full bg-[var(--app-active)] px-2 py-0.5 text-[10px] text-[var(--app-muted)]">Reasoning</span>}</div>
+                    <div className="mt-1 truncate text-xs text-[var(--app-subtle)]">{model.id} · {formatTokens(model.contextWindow)} context · 输出上限 {formatTokens(model.maxTokens)} · 输入 ${model.cost.input}/M · 输出 ${model.cost.output}/M</div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button aria-label={`编辑 ${model.name}`} className="flex size-7 items-center justify-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]" onClick={() => startEdit(model.id)} type="button"><Pencil className="size-4" /></button>
+                    <button aria-label={`删除 ${model.name}`} className="flex size-7 items-center justify-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-danger)]" onClick={() => removeModel(model.id)} type="button"><Trash2 className="size-4" /></button>
+                    <Toggle checked={selected} disabled={oauthOnly} label={`${selected ? '停用' : '启用'} ${model.name}`} onChange={() => toggleModel(model.id)} size="small" />
+                  </div>
                 </div>
               )
             })}
@@ -182,7 +358,10 @@ function translateError(error: string) {
   if (error === 'PROVIDER_API_KEY_REQUIRED') return '启用此服务商前需要填写 API Key。'
   if (error === 'PROVIDER_CREDENTIAL_REKEY_REQUIRED') return '已保存的密钥无法解密，请重新输入 API Key 并保存。'
   if (error === 'MODEL_NOT_ENABLED') return '当前模型尚未启用。'
+  if (error === 'MODEL_PARAMS_INVALID') return '模型参数无效，请检查上下文窗口与最大输出限制。'
   if (error === 'AGENT_HOST_NOT_CONFIGURED') return 'Agent Host 尚未启动。'
+  if (error === 'FETCH_MODELS_EMPTY') return '上游未返回任何模型，请检查 Base URL 或 API Key。'
+  if (error.startsWith('FETCH_MODELS_FAILED_')) return '无法从上游获取模型，请检查 API 代理地址与 API Key。'
   if (error.includes('fetch failed')) return '无法连接 Agent Host 或模型服务。'
   return error
 }

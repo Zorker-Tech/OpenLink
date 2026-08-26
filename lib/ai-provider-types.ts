@@ -5,6 +5,7 @@ export interface AiProviderConfigurationSummary {
   baseUrl: string | null
   defaultModelId: string | null
   enabledModelIds: string[]
+  modelParams?: Record<string, ProviderModelParams>
   apiKeyHint: string | null
   createdAt: string
   updatedAt: string
@@ -30,6 +31,16 @@ export interface ConfiguredModelOption {
   name: string
   logo: string
   isDefault: boolean
+}
+
+/** Editable per-model metadata stored in `ai_provider_configurations.model_params`. */
+export interface ProviderModelParams {
+  name: string
+  reasoning: boolean
+  input: string[]
+  contextWindow: number
+  maxTokens: number
+  cost: { input: number; output: number; cacheRead?: number; cacheWrite?: number }
 }
 
 export interface AgentProviderRuntimeConfiguration {
