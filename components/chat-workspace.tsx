@@ -318,6 +318,60 @@ function ChatTopbar({
           <PanelLeft className="size-4" />
         </button>
         {collapsed && <button aria-label="展开侧边栏" className="hidden size-7 items-center justify-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-active)] md:flex" onClick={onToggleSidebar} type="button"><PanelLeft className="size-4" /></button>}
+        {context && (() => {
+          const contextUsage = {
+            ...context.usage,
+            inputTokenDetails: {
+              noCacheTokens: Math.max(context.usage.inputTokens - context.usage.cachedInputTokens, 0),
+              cacheReadTokens: context.usage.cachedInputTokens,
+              cacheWriteTokens: 0,
+            },
+            outputTokenDetails: {
+              textTokens: Math.max(context.usage.outputTokens - context.usage.reasoningTokens, 0),
+              reasoningTokens: context.usage.reasoningTokens,
+            },
+          }
+          const contextWindow = context.contextWindow
+          const usedCompact = new Intl.NumberFormat('en-US', { notation: 'compact' }).format(context.usage.totalTokens)
+          return (
+            <span className="mr-1 flex shrink-0">
+              <ContextContainer
+                maxTokens={contextWindow ?? Math.max(context.usage.totalTokens, 1)}
+                modelId={context.modelId ?? undefined}
+                usage={contextUsage}
+                usedTokens={context.usage.totalTokens}
+              >
+                {contextWindow
+                  ? (
+                    <ContextTrigger className="h-7 shrink-0 gap-1.5 rounded-md px-1.5 text-xs text-[var(--app-muted)] hover:bg-[var(--app-active)] hover:text-[var(--app-foreground)]" />
+                  )
+                  : (
+                    <ContextTrigger>
+                      <span className="flex h-7 shrink-0 items-center rounded-md px-1.5 text-xs font-medium tabular-nums text-[var(--app-muted)] hover:bg-[var(--app-active)] hover:text-[var(--app-foreground)]" title="上下文窗口未知，仅显示已用 tokens">
+                        {usedCompact}
+                      </span>
+                    </ContextTrigger>
+                  )}
+                <ContextContent>
+                  {contextWindow
+                    ? <ContextContentHeader />
+                    : (
+                      <ContextContentHeader>
+                        <div className="flex items-center justify-between gap-3 text-xs">
+                          <p className="font-medium tabular-nums">{usedCompact} tokens</p>
+                          <p className="text-[var(--app-subtle)]">上下文上限未知</p>
+                        </div>
+                      </ContextContentHeader>
+                    )}
+                  <ContextInputUsage />
+                  <ContextOutputUsage />
+                  <ContextCacheUsage />
+                  <ContextReasoningUsage />
+                </ContextContent>
+              </ContextContainer>
+            </span>
+          )
+        })()}
         {editingTitle ? (
           <input
             aria-label="编辑项目名称"
@@ -341,38 +395,6 @@ function ChatTopbar({
             <span className="max-w-[210px] truncate">{sessionTitle}</span>
           </button>
         )}
-        {context && (() => {
-          const contextUsage = {
-            ...context.usage,
-            inputTokenDetails: {
-              noCacheTokens: Math.max(context.usage.inputTokens - context.usage.cachedInputTokens, 0),
-              cacheReadTokens: context.usage.cachedInputTokens,
-              cacheWriteTokens: 0,
-            },
-            outputTokenDetails: {
-              textTokens: Math.max(context.usage.outputTokens - context.usage.reasoningTokens, 0),
-              reasoningTokens: context.usage.reasoningTokens,
-            },
-          }
-          return (
-            <ContextContainer
-              className="ml-auto"
-              maxTokens={context.contextWindow ?? Math.max(context.usage.totalTokens, 1)}
-              modelId={context.modelId ?? undefined}
-              usage={contextUsage}
-              usedTokens={context.usage.totalTokens}
-            >
-              <ContextTrigger className="h-7 shrink-0 items-center gap-1 rounded-md px-1.5 text-[var(--app-muted)] hover:bg-[var(--app-active)] hover:text-[var(--app-foreground)]" />
-              <ContextContent>
-                <ContextContentHeader />
-                <ContextInputUsage />
-                <ContextOutputUsage />
-                <ContextCacheUsage />
-                <ContextReasoningUsage />
-              </ContextContent>
-            </ContextContainer>
-          )
-        })()}
       </div>
 
       <div className="min-w-0 flex-1">
