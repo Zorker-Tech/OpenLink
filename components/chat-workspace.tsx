@@ -425,9 +425,7 @@ function ChatComposer({
 
   const actionButtons = (
     <>
-      <PromptAddMenu variant="session" />
       <AccessModePicker value={accessMode} onChange={onAccessModeChange} />
-      <PromptInputButton aria-label="添加评论" className="size-7 shrink-0 rounded-md p-0 transition-[color,background-color,border-color,opacity] active:translate-y-0! hover:bg-[var(--app-active)]" type="button"><MessageCircle className="size-3.5" /></PromptInputButton>
       <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
         <ModelSelectorTrigger render={<PromptInputButton aria-label={`选择模型，当前 ${selectedModel?.name ?? '未配置'}`} className="h-7 w-12 shrink-0 gap-1 rounded-md px-1.5 text-[var(--app-muted)] transition-[color,background-color,border-color,opacity] active:translate-y-0! hover:bg-[var(--app-active)] hover:text-[var(--app-foreground)] aria-expanded:bg-transparent! aria-expanded:text-[var(--app-muted)]!" type="button" />}>
           {selectedModel ? <ModelSelectorLogo className="size-4" provider={selectedModel.logo} /> : <img alt="" className="size-4" src="/openlink/model.svg" />}
@@ -458,6 +456,7 @@ function ChatComposer({
       }}
     >
       <div className={expanded ? 'flex min-h-[54px] max-h-[330px] w-full flex-col overflow-y-auto overscroll-contain pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden' : 'contents'}>
+        <PromptAddMenu className={expanded ? 'ml-1' : ''} variant="session" />
         <PromptInputTextarea
           aria-label="描述你想创建的内容"
           className={expanded
