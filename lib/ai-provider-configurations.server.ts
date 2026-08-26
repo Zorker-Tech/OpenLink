@@ -3,7 +3,7 @@ import 'server-only'
 import { getAiProvider, isAiProviderId } from '@/lib/ai-providers'
 import { getAiProviderModels } from '@/lib/ai-provider-models.server'
 import { modelLogoSlug } from '@/lib/model-logos'
-import type { AgentProviderRuntimeConfiguration, AiProviderConfigurationSummary, ConfiguredModelOption, ProviderModelParams } from '@/lib/ai-provider-types'
+import type { AgentProviderRuntimeConfiguration, AiProviderConfigurationSummary, AiProviderModel, ConfiguredModelOption, ProviderModelParams } from '@/lib/ai-provider-types'
 import { decryptProviderSecret, encryptProviderSecret, providerSecretHint } from '@/lib/provider-secrets.server'
 import { createClient } from '@/utils/supabase/server'
 
@@ -86,6 +86,54 @@ export interface SaveAiProviderConfigurationInput {
   clearApiKey?: boolean
 }
 
+function defaultModelParams(modelId: string): ProviderModelParams {
+  return {
+    name: modelId,
+    reasoning: false,
+    input: ['text'],
+    // Conservative, editable defaults for models without catalog metadata.
+    // The settings UI exposes every field so users can correct them.
+    contextWindow: 128_000,
+    maxTokens: 8_192,
+    cost: { input: 0, output: 0 },
+  }
+}
+
+/**
+ * Merge stored model params with the incoming edit. Every enabled model must
+ * end up with a params entry so consumers (context-window resolution, the
+ * model editor) never see a parameterless model: entries survive from the
+ * incoming payload, then stored values, then documented defaults.
+ */
+function mergeModelParams(
+  incoming: Record<string, ProviderModelParams> | undefined,
+  stored: Record<string, ProviderModelParams> | null | undefined,
+  catalog: AiProviderModel[],
+  enabledModelIds: string[],
+): Record<string, ProviderModelParams> {
+  const merged: Record<string, ProviderModelParams> = {}
+  for (const model of catalog) {
+    merged[model.id] = {
+      name: model.name,
+      reasoning: Boolean(model.reasoning),
+      input: Array.isArray(model.input) && model.input.length ? model.input : ['text'],
+      contextWindow: model.contextWindow,
+      maxTokens: model.maxTokens,
+      cost: model.cost,
+    }
+  }
+  for (const [modelId, params] of Object.entries(stored ?? {})) {
+    if (params) merged[modelId] = params
+  }
+  for (const [modelId, params] of Object.entries(incoming ?? {})) {
+    if (params) merged[modelId] = params
+  }
+  for (const modelId of enabledModelIds) {
+    if (!merged[modelId]) merged[modelId] = defaultModelParams(modelId)
+  }
+  return merged
+}
+
 export async function saveAiProviderConfiguration(
   supabase: ServerSupabaseClient,
   userId: string,
@@ -110,6 +158,7 @@ export async function saveAiProviderConfiguration(
   const catalogBaseUrl = models.find((model) => model.baseUrl && !model.baseUrl.includes('{'))?.baseUrl
   const effectiveBaseUrl = input.baseUrl || definition.baseUrl || catalogBaseUrl || null
   if (input.enabled && !effectiveBaseUrl) throw new Error('PROVIDER_BASE_URL_REQUIRED')
+  const enabledModelIds = [...new Set([input.defaultModelId, ...input.enabledModelIds])]
   const payload: Record<string, unknown> = {
     user_id: userId,
     provider_id: input.providerId,
@@ -117,8 +166,8 @@ export async function saveAiProviderConfiguration(
     is_default: input.enabled && input.isDefault,
     base_url: effectiveBaseUrl,
     default_model_id: input.defaultModelId,
-    enabled_model_ids: [...new Set([input.defaultModelId, ...input.enabledModelIds])],
-    model_params: input.modelParams ?? existing?.model_params ?? {},
+    enabled_model_ids: enabledModelIds,
+    model_params: mergeModelParams(input.modelParams, existing?.model_params, models, enabledModelIds),
     updated_at: new Date().toISOString(),
   }
 
