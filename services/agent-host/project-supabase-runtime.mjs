@@ -201,9 +201,19 @@ function podman(args, options = {}) {
     return execFileSync('podman', args, { encoding: 'utf8', stdio: options.capture ? ['ignore', 'pipe', 'pipe'] : ['ignore', 'pipe', 'pipe'], maxBuffer: 16 * 1024 * 1024 }).trim()
   } catch (error) {
     const status = typeof error?.status === 'number' ? error.status : 'unknown'
-    // `podman create` argv contains project secrets. Never surface the child
-    // process's generated error message, command, stdout or stderr here.
-    fail(`Podman ${args[0] || 'operation'} failed with status ${status}`)
+    // `podman create` argv contains project secrets. Preserve only the
+    // runtime's stderr (never argv/stdout), redact all caller-provided secret
+    // values, and cap it so provisioning failures are actionable without
+    // turning the controller into a secret or log exfiltration path.
+    const raw = typeof error?.stderr === 'string'
+      ? error.stderr
+      : Buffer.isBuffer(error?.stderr) ? error.stderr.toString('utf8') : ''
+    let detail = raw
+    for (const secret of options.redactValues ?? []) {
+      if (typeof secret === 'string' && secret.length >= 8) detail = detail.replaceAll(secret, '[REDACTED]')
+    }
+    detail = detail.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 2_000)
+    fail(`Podman ${args[0] || 'operation'} failed with status ${status}${detail ? `: ${detail}` : ''}`)
   }
 }
 
@@ -819,7 +829,12 @@ async function ensureRuntime(options) {
     if (existing && (labels['io.openlink.project-supabase.config'] !== desiredHash || labels['io.openlink.project-supabase.revision'] !== lock.release.tag || existing.ImageName !== service.image)) {
       podman(['rm', '--force', containerName(name)])
     }
-    if (!inspectContainer(containerName(name))) podman(serviceCreateArgs(name, service, environment, { ...options, release: lock.release.tag, configHash: desiredHash }))
+    if (!inspectContainer(containerName(name))) {
+      podman(
+        serviceCreateArgs(name, service, environment, { ...options, release: lock.release.tag, configHash: desiredHash }),
+        { redactValues: Object.values(secrets) },
+      )
+    }
   }
   for (const name of order) {
     const current = inspectContainer(containerName(name))
