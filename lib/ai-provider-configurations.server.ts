@@ -2,6 +2,7 @@ import 'server-only'
 
 import { getAiProvider, isAiProviderId } from '@/lib/ai-providers'
 import { getAiProviderModels } from '@/lib/ai-provider-models.server'
+import { modelLogoSlug } from '@/lib/model-logos'
 import type { AgentProviderRuntimeConfiguration, AiProviderConfigurationSummary, ConfiguredModelOption } from '@/lib/ai-provider-types'
 import { decryptProviderSecret, encryptProviderSecret, providerSecretHint } from '@/lib/provider-secrets.server'
 import { createClient } from '@/utils/supabase/server'
@@ -276,7 +277,10 @@ export async function listConfiguredModels(supabase: ServerSupabaseClient, userI
         providerName: definition?.name ?? configuration.providerId,
         modelId: model.id,
         name: model.name,
-        logo: definition?.logo ?? configuration.providerId,
+        // Model logos are matched by model name so the composer shows the
+        // model's own brand (e.g. a deepseek model keeps the DeepSeek mark)
+        // instead of the provider logo. Fall back to the provider slug.
+        logo: modelLogoSlug(model.name) ?? definition?.logo ?? configuration.providerId,
         isDefault: configuration.isDefault && configuration.defaultModelId === model.id,
       }))
   }))
