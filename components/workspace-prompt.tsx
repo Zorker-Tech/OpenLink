@@ -149,7 +149,7 @@ export function WorkspacePrompt({
           <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
             <ModelSelectorTrigger
               render={
-                <PromptInputButton className="h-7 max-w-[220px] gap-1 rounded-full px-2 text-[13px] font-medium text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]" type="button" />
+                <PromptInputButton className="-ml-0.5 h-7 max-w-[220px] gap-1 rounded-full px-2 text-[13px] font-medium text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]" type="button" />
               }
             >
               {selectedModel && <ModelSelectorLogo className="size-4" provider={selectedModel.logo} />}
