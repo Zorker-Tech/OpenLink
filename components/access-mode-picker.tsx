@@ -35,7 +35,7 @@ export function AccessModePicker({
         render={
           <button
             aria-label={`访问模式：${active.label}（${active.description}）`}
-            className="flex size-6 items-center justify-center rounded-md text-[var(--app-muted)] transition-colors hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]"
+            className="flex size-7 items-center justify-center rounded-md text-[var(--app-muted)] transition-colors hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]"
             title={`${active.label}：${active.description}`}
             type="button"
           />
