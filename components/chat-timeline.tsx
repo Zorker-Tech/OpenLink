@@ -653,11 +653,19 @@ function executionInput(execution: TaskExecution) {
   return { displayValue, primary, range, title: [primary, range, execution.error ?? execution.output].filter(Boolean).join(' · ') }
 }
 
-function StatusGlyph({ running, label, doneIcon, size = 20, orbState = 'working' }: { running: boolean; label: string; doneIcon?: IconSvgElement; size?: number; orbState?: OrbState }) {
+function StatusGlyph({ running, label, doneIcon, orbState = 'working' }: { running: boolean; label: string; doneIcon?: IconSvgElement; orbState?: OrbState }) {
   // Running tasks keep the animated orb; settled tasks switch to a static
-  // HugeIcon SVG that corresponds to the task type.
-  if (running) return <ThinkingOrb aria-label={label} className="shrink-0" size={size} state={orbState} />
-  return <HugeiconsIcon className="size-4 shrink-0 text-[var(--app-subtle-foreground)]" icon={doneIcon ?? BadgeCheckIcon} />
+  // HugeIcon SVG that corresponds to the task type. Both states share one
+  // fixed 20px footprint (orb is 20px, icon 16px centered inside it) so the
+  // icon column — and the title's first letter after it — never shifts
+  // vertically or horizontally when a task settles.
+  return (
+    <span aria-label={label} className="flex size-5 shrink-0 items-center justify-center">
+      {running
+        ? <ThinkingOrb className="shrink-0" size={20} state={orbState} />
+        : <HugeiconsIcon className="size-4 shrink-0 text-[var(--app-subtle-foreground)]" icon={doneIcon ?? BadgeCheckIcon} />}
+    </span>
+  )
 }
 
 function executionDoneIcon(execution: TaskExecution): IconSvgElement {
@@ -893,7 +901,9 @@ function TimelineItemView({ item }: { item: TimelineItem }) {
 function StreamingThinkingItem() {
   return (
     <div className="flex h-7 items-center gap-2 text-[13px] leading-[21px] text-[var(--app-muted)]" data-streaming-thinking>
-      <ThinkingOrb aria-label="正在思考" className="shrink-0" size={20} state="solving" />
+      <span className="flex size-5 shrink-0 items-center justify-center">
+        <ThinkingOrb aria-label="正在思考" className="shrink-0" size={20} state="solving" />
+      </span>
       <span>Thinking…</span>
     </div>
   )
