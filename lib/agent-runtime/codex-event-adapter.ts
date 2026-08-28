@@ -45,17 +45,17 @@ function languageForPath(path: string): string {
  * into OpenLink's canonical `OpenLinkAgentEvent` sequence.
  */
 export class CodexEventAdapter {
+  private readonly sessionId: string
+  private readonly clock: () => string
   private nextSequence: number
   private currentTurnId: string | null = null
   private readonly commandItemMap = new Map<string, { command: string; commandId: string }>()
   private readonly reasoningItemMap = new Map<string, string>()
   private readonly fileChangeItemMap = new Map<string, { path: string; operation: 'write' | 'edit' }>()
 
-  constructor(
-    private readonly sessionId: string,
-    private readonly clock: () => string = () => new Date().toISOString(),
-    startSequence = 0,
-  ) {
+  constructor(sessionId: string, clock: () => string = () => new Date().toISOString(), startSequence = 0) {
+    this.sessionId = sessionId
+    this.clock = clock
     this.nextSequence = startSequence
   }
 
