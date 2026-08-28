@@ -9,6 +9,10 @@ RUN apt-get update \
   && corepack prepare pnpm@10.12.4 --activate \
   && rm -rf /var/lib/apt/lists/*
 
+# Codex CLI ships the `codex app-server` binary the OpenLink Codex runtime
+# speaks to. The npm package resolves the native binary for the target arch.
+RUN npm install -g @openai/codex@latest && codex --version
+
 WORKDIR /opt
 
 COPY packages/pi-runtime/tarballs ./packages/pi-runtime/tarballs

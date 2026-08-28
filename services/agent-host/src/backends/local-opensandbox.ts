@@ -11,6 +11,7 @@ import { createSessionStorageLayout, ensureSessionStorage, type SessionStorageLa
 import { disposeOpenSandbox } from './sandbox-cleanup.js'
 import { cleanupOpenSandboxSessionWorkloads } from './opensandbox-recovery.js'
 import { ambientProviderEnvironment, providerNetworkTargets } from '../provider-environment.js'
+import type { PromptRuntimeAgentOptions } from '../prompt-http-server.js'
 
 export interface LocalOpenSandboxConfig {
   domain: string
@@ -103,7 +104,7 @@ export class LocalOpenSandboxBackend {
     })
   }
 
-  async createSession(userId: string, workspaceId: string, sessionId: string, runtimeConfiguration: AgentProviderRuntimeConfiguration, nativeSession?: AgentNativeSessionSnapshot, projectId?: string, projectRuntime?: ProjectRuntimeDescriptor, browserSession?: BrowserAgentSession): Promise<OpenSandboxPromptSession> {
+  async createSession(userId: string, workspaceId: string, sessionId: string, runtimeConfiguration: AgentProviderRuntimeConfiguration, nativeSession?: AgentNativeSessionSnapshot, projectId?: string, projectRuntime?: ProjectRuntimeDescriptor, browserSession?: BrowserAgentSession, agentOptions?: PromptRuntimeAgentOptions): Promise<OpenSandboxPromptSession> {
     const layout = createSessionStorageLayout(projectRuntime?.sessionStorageRoot ?? this.config.storageRoot, userId, workspaceId, sessionId)
     // A project runtime path is visible to the Linux VM's Podman daemon, not
     // to this Agent Host process. The OpenSandbox bind mount creates the
@@ -172,6 +173,8 @@ export class LocalOpenSandboxBackend {
         OPENLINK_AGENT_MODEL: model,
         OPENLINK_PROVIDER_ID: providerId,
         OPENLINK_PROVIDER_BASE_URL: providerBaseUrl,
+        OPENLINK_AGENT_KIND: agentOptions?.agent === 'codex' ? 'codex' : 'pi',
+        ...(agentOptions?.accessMode ? { OPENLINK_AGENT_ACCESS_MODE: agentOptions.accessMode } : {}),
         ...ambientProviderEnvironment(providerId),
         ...(providerApiKey ? { OPENLINK_PROVIDER_API_KEY: egressEnabled ? vaultPlaceholder : providerApiKey } : {}),
         ...(browser ? {

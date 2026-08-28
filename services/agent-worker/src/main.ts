@@ -16,6 +16,7 @@ import { mkdir, readFile } from 'node:fs/promises'
 import { relative, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { EnvHttpProxyAgent, install, setGlobalDispatcher } from 'undici'
+import { CodexAppServerRuntime } from './codex-runtime.js'
 
 const execFileAsync = promisify(execFile)
 const GIT_PATCH_LIMIT_PER_FILE = 24 * 1024
@@ -67,6 +68,10 @@ interface WorkerConfig {
   browserControlToken?: string
   browserExtensionPath?: string
   supabaseExtensionPath?: string
+  agent: 'pi' | 'codex'
+  codexBin: string
+  codexHome: string
+  accessMode: 'restricted' | 'ask' | 'open'
 }
 
 interface AgentExtensionUiResponse {
@@ -90,6 +95,9 @@ function required(key: string): string {
 function config(): WorkerConfig {
   const port = Number(process.env.OPENLINK_AGENT_WORKER_PORT || 43130)
   if (!Number.isSafeInteger(port) || port < 1 || port > 65_535) throw new Error('OPENLINK_AGENT_WORKER_PORT is invalid')
+  const accessMode = process.env.OPENLINK_AGENT_ACCESS_MODE === 'open' || process.env.OPENLINK_AGENT_ACCESS_MODE === 'ask'
+    ? process.env.OPENLINK_AGENT_ACCESS_MODE as 'open' | 'ask'
+    : 'restricted'
   return {
     host: process.env.OPENLINK_AGENT_WORKER_HOST || '0.0.0.0',
     port,
@@ -106,6 +114,10 @@ function config(): WorkerConfig {
     browserControlToken: process.env.OPENLINK_BROWSER_CONTROL_TOKEN,
     browserExtensionPath: process.env.OPENLINK_BROWSER_EXTENSION_PATH,
     supabaseExtensionPath: process.env.OPENLINK_SUPABASE_EXTENSION_PATH,
+    agent: process.env.OPENLINK_AGENT_KIND === 'codex' ? 'codex' : 'pi',
+    codexBin: process.env.OPENLINK_CODEX_BIN || 'codex',
+    codexHome: resolve(process.env.OPENLINK_CODEX_HOME || '/openlink/session/codex-home'),
+    accessMode,
   }
 }
 
@@ -644,13 +656,25 @@ async function availableExtensionPaths(paths: Array<string | undefined>): Promis
   }
   return resolved
 }
-const runtime = new SdkAgentRuntime(worker)
+const runtime = worker.agent === 'codex'
+  ? new CodexAppServerRuntime({
+    workspaceRoot: worker.workspaceRoot,
+    sessionRoot: worker.sessionRoot,
+    codexHome: worker.codexHome,
+    codexBin: worker.codexBin,
+    model: worker.model,
+    accessMode: worker.accessMode,
+    apiKey: worker.providerApiKey,
+    supabaseMcpUrl: process.env.OPENLINK_SUPABASE_MCP_URL,
+    supabaseMcpToken: process.env.OPENLINK_SUPABASE_MCP_TOKEN,
+  })
+  : new SdkAgentRuntime(worker)
 const server = createServer((request, response) => {
   void (async () => {
     const url = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`)
     if (request.method === 'GET' && url.pathname === '/healthz') {
       response.writeHead(200, { 'Content-Type': 'application/json' })
-      response.end(JSON.stringify({ ok: true, runtime: 'pi-node-sdk' }))
+      response.end(JSON.stringify({ ok: true, runtime: worker.agent === 'codex' ? 'codex-app-server' : 'pi-node-sdk' }))
       return
     }
     if (!authorized(request, worker.token)) {
@@ -666,7 +690,11 @@ const server = createServer((request, response) => {
     }
     if (request.method === 'POST' && url.pathname === '/v1/extension-ui-response') {
       const uiResponse = await readExtensionUiResponse(request)
-      await runtime.resolveExtensionUi(uiResponse)
+      if (worker.agent === 'codex') {
+        await (runtime as CodexAppServerRuntime).resolveApproval(uiResponse.id, uiResponse.confirmed === true)
+      } else {
+        await (runtime as SdkAgentRuntime).resolveExtensionUi(uiResponse)
+      }
       response.writeHead(202, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
       response.end(JSON.stringify({ ok: true }))
       return
@@ -680,7 +708,7 @@ const server = createServer((request, response) => {
       'Content-Type': 'application/x-ndjson; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
       'X-Accel-Buffering': 'no',
-      'X-OpenLink-Agent-Worker': 'pi-node-sdk',
+      'X-OpenLink-Agent-Worker': worker.agent === 'codex' ? 'codex-app-server' : 'pi-node-sdk',
     })
     response.flushHeaders?.()
     const abortController = new AbortController()

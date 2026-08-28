@@ -3,7 +3,7 @@ import 'server-only'
 import { randomBytes } from 'node:crypto'
 import { resolveConfiguredModelSelection } from '@/lib/ai-provider-configurations.server'
 import { ensureDraftProject, getProject } from '@/lib/projects'
-import type { ChatSessionSummary } from '@/lib/chat-session-types'
+import type { AgentKind, ChatSessionSummary } from '@/lib/chat-session-types'
 import { getAccessibleWorkspace, getOwnedWorkspace, type OpenLinkWorkspace } from '@/lib/workspaces'
 import { createClient } from '@/utils/supabase/server'
 
@@ -18,6 +18,9 @@ export type AccessMode = 'restricted' | 'ask' | 'open'
 export const ACCESS_MODES: readonly AccessMode[] = ['restricted', 'ask', 'open']
 export const DEFAULT_ACCESS_MODE: AccessMode = 'restricted'
 
+export const AGENT_KINDS: readonly AgentKind[] = ['codex', 'pi']
+export const DEFAULT_AGENT_KIND: AgentKind = 'codex'
+
 export interface ChatSession {
   id: string
   user_id: string
@@ -25,6 +28,7 @@ export interface ChatSession {
   project_id: string
   provider_id: string | null
   model_id: string | null
+  agent: AgentKind
   title: string
   initial_prompt: string
   access_mode: AccessMode
@@ -69,7 +73,7 @@ export async function listChatSessions(
   const { data, error } = await supabase
     .schema('openlink')
     .from('chat_sessions')
-    .select('id, user_id, project_id, title, initial_prompt, updated_at')
+    .select('id, user_id, project_id, title, initial_prompt, agent, updated_at')
     .eq('user_id', userId)
     .eq('workspace_id', workspaceId)
     .order('updated_at', { ascending: false })
@@ -82,6 +86,7 @@ export async function listChatSessions(
     project_id: string
     title: string
     initial_prompt: string
+    agent?: AgentKind
     updated_at: string
   }>
   const projectIds = [...new Set(sessions.map((session) => session.project_id).filter(Boolean))]
@@ -112,6 +117,7 @@ export async function listChatSessions(
       projectId: session.project_id || 'draft',
       projectName: project?.name ?? 'Draft',
       projectIsDefault: project?.is_default ?? true,
+      agent: session.agent ?? 'codex',
     }
   })
 }
@@ -126,7 +132,7 @@ export async function getChatSession(
   const { data, error } = await supabase
     .schema('openlink')
     .from('chat_sessions')
-    .select('id, user_id, workspace_id, project_id, provider_id, model_id, title, initial_prompt, access_mode, created_at, updated_at')
+    .select('id, user_id, workspace_id, project_id, provider_id, model_id, agent, title, initial_prompt, access_mode, created_at, updated_at')
     .eq('id', sessionId)
     .eq('user_id', userId)
     .maybeSingle()
@@ -211,6 +217,7 @@ export async function createChatSession(
     providerId?: string
     modelId?: string
     accessMode?: AccessMode
+    agent?: AgentKind
   },
 ) {
   const workspace = options.workspaceSlug
@@ -242,6 +249,12 @@ export async function createChatSession(
   const selectedModel = await resolveConfiguredModelSelection(supabase, userId, requestedModel)
   if (!selectedModel) throw new Error('MODEL_CONFIGURATION_REQUIRED')
 
+  const effectiveAgent = options.agent && AGENT_KINDS.includes(options.agent)
+    ? options.agent
+    : project.default_agent && AGENT_KINDS.includes(project.default_agent as AgentKind)
+      ? (project.default_agent as AgentKind)
+      : DEFAULT_AGENT_KIND
+
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const id = generateChatSessionId()
     const { data, error } = await supabase
@@ -254,11 +267,12 @@ export async function createChatSession(
         project_id: projectId,
         provider_id: selectedModel.providerId,
         model_id: selectedModel.modelId,
+        agent: effectiveAgent,
         title,
         initial_prompt: initialPrompt,
         access_mode: options.accessMode ?? DEFAULT_ACCESS_MODE,
       })
-      .select('id, user_id, workspace_id, project_id, provider_id, model_id, title, initial_prompt, access_mode, created_at, updated_at')
+      .select('id, user_id, workspace_id, project_id, provider_id, model_id, agent, title, initial_prompt, access_mode, created_at, updated_at')
       .single()
 
     if (!error) return { session: data as ChatSession, workspace: workspace as OpenLinkWorkspace }

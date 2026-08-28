@@ -28,7 +28,9 @@ import type { ProjectSummary } from '@/lib/projects'
 import type { ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { AccessModePicker } from '@/components/access-mode-picker'
+import { AgentKindPicker } from '@/components/agent-kind-picker'
 import type { AccessMode } from '@/lib/chat-sessions'
+import type { AgentKind } from '@/lib/chat-session-types'
 import { useState } from 'react'
 import { BookOpenText, Code2, Plus, Send } from 'lucide-react'
 
@@ -95,6 +97,7 @@ export function WorkspacePrompt({
   )
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [accessMode, setAccessMode] = useState<AccessMode>('restricted')
+  const [agentKind, setAgentKind] = useState<AgentKind>('codex')
   const runtimeProject = selectedProject ?? defaultProject
   const runtimeReady = runtimeProject.status === 'active' && runtimeProject.runtime_status === 'ready'
 
@@ -102,9 +105,12 @@ export function WorkspacePrompt({
     <div className="flex w-full max-w-[700px] flex-col">
       <div className="flex h-[22px] items-center justify-between px-4">
         <span className="text-sm font-bold tracking-[-0.2px] text-[var(--app-foreground)]">Zorker</span>
-        <div aria-label="运行环境" className="flex items-center gap-px rounded-full bg-[var(--app-subtle-surface)] p-px text-[13px]">
-          <button aria-disabled className="rounded-full px-3 py-1 text-[var(--app-muted)]" disabled title="Cloud 即将推出" type="button">Cloud</button>
-          <span aria-current="true" className="rounded-full border border-[var(--app-control-border)] bg-[var(--app-surface)] px-3 py-1 text-[var(--app-foreground)] shadow-[0_1px_2px_var(--app-shadow)]">Local</span>
+        <div className="flex items-center gap-2">
+          <AgentKindPicker value={agentKind} onChange={setAgentKind} />
+          <div aria-label="运行环境" className="flex items-center gap-px rounded-full bg-[var(--app-subtle-surface)] p-px text-[13px]">
+            <button aria-disabled className="rounded-full px-3 py-1 text-[var(--app-muted)]" disabled title="Cloud 即将推出" type="button">Cloud</button>
+            <span aria-current="true" className="rounded-full border border-[var(--app-control-border)] bg-[var(--app-surface)] px-3 py-1 text-[var(--app-foreground)] shadow-[0_1px_2px_var(--app-shadow)]">Local</span>
+          </div>
         </div>
       </div>
     <PromptInput
@@ -124,6 +130,7 @@ export function WorkspacePrompt({
           providerId: selectedModel?.providerId,
           modelId: selectedModel?.modelId,
           accessMode: accessMode,
+          agent: agentKind,
         })
         if (onUnauthenticated && 'error' in result && result.error === 'AUTH_REQUIRED') {
           onUnauthenticated()
