@@ -1,3 +1,5 @@
+export type AgentKind = 'codex' | 'pi'
+
 export interface ChatSessionSummary {
   id: string
   userId: string
@@ -6,4 +8,5 @@ export interface ChatSessionSummary {
   projectId: string
   projectName: string
   projectIsDefault: boolean
+  agent?: AgentKind
 }

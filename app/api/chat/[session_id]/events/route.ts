@@ -1,4 +1,5 @@
 import { PiEventAdapter } from '@/lib/agent-runtime/pi-event-adapter'
+import { CodexEventAdapter } from '@/lib/agent-runtime/codex-event-adapter'
 import type { OpenLinkAgentEvent } from '@/lib/agent-runtime/events'
 import { randomBytes } from 'node:crypto'
 import { resolveAgentProviderRuntimeConfiguration } from '@/lib/ai-provider-configurations.server'
@@ -176,12 +177,17 @@ export async function POST(
     return Response.json({ error: 'SESSION_UPDATE_FAILED' }, { status: 500 })
   }
 
+  // Codex persists its own rollout inside the VM ($CODEX_HOME/sessions), so it
+  // does not take a Pi-native snapshot from Postgres. Pi sessions restore from
+  // the durable pi-entries table.
   let nativeSession
-  try {
-    nativeSession = await loadPiSessionSnapshot(supabase, user.id, sessionId)
-  } catch {
-    await releaseLease()
-    return Response.json({ error: 'PI_SESSION_READ_FAILED' }, { status: 500 })
+  if ((session.agent ?? 'codex') !== 'codex') {
+    try {
+      nativeSession = await loadPiSessionSnapshot(supabase, user.id, sessionId)
+    } catch {
+      await releaseLease()
+      return Response.json({ error: 'PI_SESSION_READ_FAILED' }, { status: 500 })
+    }
   }
 
   // Reserve the stream's sequence range only after body/model/session
@@ -205,7 +211,7 @@ export async function POST(
     sequence: startSequence,
     sessionId,
     timestamp: new Date().toISOString(),
-    source: 'pi',
+    source: (session.agent ?? 'codex') === 'codex' ? 'codex' : 'pi',
     type: 'message.user',
     messageId: `${sessionId}:user:${startSequence}`,
     text: message,
@@ -286,6 +292,8 @@ export async function POST(
         projectId: session.project_id,
         message,
         runtimeConfiguration,
+        agent: session.agent ?? 'codex',
+        accessMode: session.access_mode,
         ...(browserSessionId ? { browserSessionId } : {}),
         ...(nativeSession ? { nativeSession } : {}),
       }),
@@ -323,8 +331,12 @@ export async function POST(
   upstreamReady = true
   if (clientDisconnected) scheduleClientDrain()
 
-  // Leave the first reserved sequence to the canonical user event above.
-  const adapter = new PiEventAdapter(sessionId, () => new Date().toISOString(), startSequence + 1)
+  // Leave the first reserved sequence to the canonical user event above. The
+  // adapter follows the session's agent kind: Codex workers speak app-server
+  // JSON-RPC, Pi workers speak their native event stream.
+  const isCodexSession = (session.agent ?? 'codex') === 'codex'
+  const adapter = new CodexEventAdapter(sessionId, () => new Date().toISOString(), startSequence + 1)
+  const piAdapter = isCodexSession ? null : new PiEventAdapter(sessionId, () => new Date().toISOString(), startSequence + 1)
   let activeReader: ReadableStreamDefaultReader<Uint8Array> | null = null
   let leaseHeartbeat: ReturnType<typeof setInterval> | null = null
   let leaseRenewalFailure: Error | null = null
@@ -427,14 +439,14 @@ export async function POST(
         while (true) {
           const { done, value } = await reader.read()
           buffer += decoder.decode(value, { stream: !done })
-          if (buffer.length > 1024 * 1024) throw new Error('Pi RPC frame exceeds the configured limit')
+          if (buffer.length > 1024 * 1024) throw new Error('Agent RPC frame exceeds the configured limit')
           let newline = buffer.indexOf('\n')
           while (newline >= 0) {
             const line = buffer.slice(0, newline)
             buffer = buffer.slice(newline + 1)
             if (line) {
               const frame = JSON.parse(line) as unknown
-              const piSessionDelta = parsePiSessionDelta(frame)
+              const piSessionDelta = piAdapter ? parsePiSessionDelta(frame) : null
               if (piSessionDelta) {
                 queuePersistence(() => persistPiSessionDelta(supabase, user.id, sessionId, piSessionDelta))
               } else {
@@ -453,8 +465,8 @@ export async function POST(
           }
           if (done) break
         }
-        if (buffer.trim()) throw new Error('Pi RPC stream ended mid-frame')
-        if (!pendingCompletedEvents.length && !errorEventSeen) {
+        if (buffer.trim()) throw new Error('Agent RPC stream ended mid-frame')
+        if (!pendingCompletedEvents.length && !errorEventSeen && !isCodexSession) {
           emitSyntheticError(clientDisconnected
             ? 'Agent request was canceled before the worker reported a terminal state'
             : 'Agent worker ended before reporting a terminal state')
@@ -462,7 +474,7 @@ export async function POST(
         queueChatEvents(pendingCompletedEvents)
         flushChatEvents()
         // The completion event is the durable boundary. Drain the final
-        // Pi-native snapshot and all chat events before exposing it to the UI.
+        // native snapshot and all chat events before exposing it to the UI.
         await persistenceQueue
         for (const event of pendingCompletedEvents) controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`))
         controller.close()

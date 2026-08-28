@@ -1,6 +1,7 @@
 'use server'
 
 import { createChatSession, deleteChatSession, updateChatSessionAccessMode, updateChatSessionTitle, type AccessMode } from '@/lib/chat-sessions'
+import type { AgentKind } from '@/lib/chat-session-types'
 import { resolveAppEntry } from '@/lib/workspaces'
 import { createClient } from '@/utils/supabase/server'
 import { getChatSession } from '@/lib/chat-sessions'
@@ -12,6 +13,7 @@ export interface CreateChatSessionInput {
   providerId?: string
   modelId?: string
   accessMode?: AccessMode
+  agent?: AgentKind
 }
 
 export type CreateChatSessionResult =
@@ -49,6 +51,7 @@ export async function createChatSessionAction(
       providerId: input.providerId,
       modelId: input.modelId,
       accessMode: input.accessMode,
+      agent: input.agent,
     })
     const query = new URLSearchParams()
     if (prompt) query.set('run', '1')

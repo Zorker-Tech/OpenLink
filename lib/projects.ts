@@ -3,6 +3,7 @@ import 'server-only'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { encryptProjectSshPrivateKey } from '@/lib/project-ssh-secrets.server'
 import { slugifyWorkspaceName, type OpenLinkWorkspace } from '@/lib/workspaces'
+import type { AgentKind } from '@/lib/chat-session-types'
 import { createClient } from '@/utils/supabase/server'
 
 export type ProjectKind = 'code' | 'research'
@@ -36,6 +37,7 @@ export interface ProjectSummary {
   runtime_status: ProjectRuntimeStatus | null
   runtime_error: string | null
   is_default: boolean
+  default_agent?: AgentKind
   disk_mode: ProjectDiskMode
   execution_mode: ProjectExecutionMode
   ssh_host: string | null
@@ -56,6 +58,7 @@ export interface CreateProjectInput {
   description?: string
   diskMode: ProjectDiskMode
   executionMode: ProjectExecutionMode
+  defaultAgent?: AgentKind
   sshTarget?: ProjectSshTarget
 }
 
@@ -64,7 +67,7 @@ type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>
 // disk-mode governance adds a composite FK in addition to the canonical
 // project_id relationship. Name the one-to-one FK explicitly so PostgREST
 // never has to guess which embedding path represents runtime projection.
-const PROJECT_SELECT = 'id, workspace_id, created_by, name, slug, kind, source_type, source_url, description, status, is_default, disk_mode, execution_mode, ssh_host, ssh_port, ssh_user, ssh_remote_root, ssh_known_hosts, ssh_private_key_hint, created_at, updated_at, project_runtimes:project_runtimes!project_runtimes_project_id_fkey(status, last_error)'
+const PROJECT_SELECT = 'id, workspace_id, created_by, name, slug, kind, source_type, source_url, description, status, is_default, default_agent, disk_mode, execution_mode, ssh_host, ssh_port, ssh_user, ssh_remote_root, ssh_known_hosts, ssh_private_key_hint, created_at, updated_at, project_runtimes:project_runtimes!project_runtimes_project_id_fkey(status, last_error)'
 
 function projectSummary(row: Record<string, unknown>): ProjectSummary {
   const relation = row.project_runtimes
@@ -105,9 +108,10 @@ export async function ensureDraftProject(
       source_type: 'blank',
       source_url: null,
       description: '默认项目：未指定项目的聊天会话在此运行。',
-      is_default: true,
-      disk_mode: 'thin',
-      execution_mode: 'local',
+        is_default: true,
+        default_agent: 'codex',
+        disk_mode: 'thin',
+        execution_mode: 'local',
     })
     .select(PROJECT_SELECT)
     .maybeSingle()
@@ -247,8 +251,9 @@ export async function createProject(
         source_url: sourceUrl,
         description: input.description?.trim() ?? '',
         status: 'waiting',
-       is_default: false,
-       disk_mode: input.diskMode,
+        is_default: false,
+        default_agent: input.defaultAgent ?? 'codex',
+        disk_mode: input.diskMode,
         execution_mode: input.executionMode,
         ...(sshTarget && encryptedSshKey ? {
           ssh_host: sshTarget.host,

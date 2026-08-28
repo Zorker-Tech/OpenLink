@@ -25,8 +25,13 @@ export interface PromptRuntimeSession {
   cleanup(): Promise<void>
 }
 
+export interface PromptRuntimeAgentOptions {
+  agent?: 'pi' | 'codex'
+  accessMode?: 'restricted' | 'ask' | 'open'
+}
+
 export interface PromptRuntimeBackend {
-  createSession(userId: string, workspaceId: string, sessionId: string, runtimeConfiguration: AgentProviderRuntimeConfiguration, nativeSession?: AgentNativeSessionSnapshot, projectId?: string, projectRuntime?: ProjectRuntimeDescriptor, browser?: BrowserAgentSession): Promise<PromptRuntimeSession>
+  createSession(userId: string, workspaceId: string, sessionId: string, runtimeConfiguration: AgentProviderRuntimeConfiguration, nativeSession?: AgentNativeSessionSnapshot, projectId?: string, projectRuntime?: ProjectRuntimeDescriptor, browser?: BrowserAgentSession, agentOptions?: PromptRuntimeAgentOptions): Promise<PromptRuntimeSession>
   /** Remove a durable Project VM workload left by a previous Agent Host process. */
   cleanupSession?(userId: string, workspaceId: string, sessionId: string, projectId?: string, projectRuntime?: ProjectRuntimeDescriptor): Promise<void>
   close(): Promise<void>
@@ -59,6 +64,10 @@ interface PromptBody {
   runtimeConfiguration: AgentProviderRuntimeConfiguration
   nativeSession?: AgentNativeSessionSnapshot
   browserSessionId?: string
+  /** Session-bound agent kind; selects the worker runtime. */
+  agent?: 'pi' | 'codex'
+  /** Session access mode; maps to codex sandbox/approval flags. */
+  accessMode?: 'restricted' | 'ask' | 'open'
 }
 
 interface PreparedSessionRequest {
@@ -70,6 +79,8 @@ interface PreparedSessionRequest {
   nativeSession?: AgentNativeSessionSnapshot
   browser?: BrowserAgentSession
   projectRuntime?: ProjectRuntimeDescriptor
+  agent?: 'pi' | 'codex'
+  accessMode?: 'restricted' | 'ask' | 'open'
   baseKey: string
   key: string
 }
@@ -180,7 +191,11 @@ function parsePromptBody(value: unknown): PromptBody {
       ? body.browserSessionId
       : ''
   if (body.browserSessionId !== undefined && !browserSessionId) throw new AgentHostError('INVALID_BODY', 'browserSessionId is invalid')
-  return { userId, workspaceId, projectId, message, runtimeConfiguration, nativeSession, browserSessionId }
+  const agent = body.agent === 'codex' || body.agent === 'pi' ? body.agent : undefined
+  const accessMode = body.accessMode === 'restricted' || body.accessMode === 'ask' || body.accessMode === 'open'
+    ? body.accessMode
+    : undefined
+  return { userId, workspaceId, projectId, message, runtimeConfiguration, nativeSession, browserSessionId, agent, accessMode }
 }
 
 function parseNetworkAccessBody(value: unknown): NetworkAccessBody {
@@ -580,6 +595,8 @@ export async function startPromptHttpServer(
     runtimeConfiguration: AgentProviderRuntimeConfiguration
     nativeSession?: AgentNativeSessionSnapshot
     browserSessionId?: string
+    agent?: 'pi' | 'codex'
+    accessMode?: 'restricted' | 'ask' | 'open'
   }): Promise<PreparedSessionRequest> {
     // Resolve and authorize the browser binding before provisioning a Project
     // VM or session storage. A stale/foreign browser id must not cause a
@@ -607,7 +624,7 @@ export async function startPromptHttpServer(
     // time. Treat the browser capability as part of the runtime identity so a
     // recreated browser session gets a worker bound to the new capability.
     const browserIdentity = input.browserSessionId ?? 'none'
-    const runtimeIdentity = `${input.runtimeConfiguration.providerId}/${input.runtimeConfiguration.modelId}@${input.runtimeConfiguration.revision}:browser=${browserIdentity}`
+    const runtimeIdentity = `${input.runtimeConfiguration.providerId}/${input.runtimeConfiguration.modelId}@${input.runtimeConfiguration.revision}:browser=${browserIdentity}:agent=${input.agent ?? 'pi'}`
     return {
       ...input,
       browser,
@@ -652,6 +669,7 @@ export async function startPromptHttpServer(
             request.projectId,
             request.projectRuntime,
             request.browser,
+            { agent: request.agent, accessMode: request.accessMode },
           ),
           lastUsedAt: Date.now(),
           busy: false,
@@ -681,6 +699,8 @@ export async function startPromptHttpServer(
       runtimeConfiguration: body.runtimeConfiguration,
       nativeSession: body.nativeSession,
       browserSessionId: body.browserSessionId,
+      agent: body.agent,
+      accessMode: body.accessMode,
     })
     let createdEntryByRequest = false
     const abortController = new AbortController()

@@ -1,6 +1,6 @@
 export const AGENT_EVENT_VERSION = 1 as const
 
-export type AgentEventSource = 'pi' | 'demo'
+export type AgentEventSource = 'pi' | 'codex' | 'demo'
 
 export interface AgentFileChange {
   path: string

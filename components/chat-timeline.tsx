@@ -71,7 +71,7 @@ type ChangeTimelineItem = Extract<TimelineItem, { kind: 'change' }>
 interface TimelineState {
   items: TimelineItem[]
   status: 'idle' | 'running' | 'settled' | 'error'
-  source: 'pi' | 'demo'
+  source: 'pi' | 'codex' | 'demo'
   /** The canonical user message is the durable boundary of an agent turn. */
   activeRoundId?: string
   activeExecutionTaskId?: string
