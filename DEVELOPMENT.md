@@ -142,11 +142,12 @@ Golden Disks and bundles remain under ignored runtime/release directories.
   Container Registry (or Generic Package Registry). Do not commit image
   archives to Git/LFS, and do not copy mutable container storage, database
   volumes, Podman machine state, or VM raw disks into the repository.
-- After authenticating Docker to the internal registry, publish the locally
-  built container set with `pnpm runtime:images:publish`. Set
-  `OPENLINK_IMAGE_REGISTRY` when the GitLab registry uses a different project
-  path. The Project VM OCI base is distributed separately because it is an
-  OCI layout archive rather than a runnable container image.
+- Publish the locally built container set to the internal GitLab Generic
+  Package Registry with `OPENLINK_PACKAGE_TOKEN="$GITLAB_TOKEN" pnpm
+  runtime:images:publish`. Set `OPENLINK_IMAGE_PACKAGE_URL` and
+  `OPENLINK_IMAGE_PACKAGE_VERSION` for another project/version. The Project VM
+  OCI base is uploaded as an OCI layout archive and is not a runnable registry
+  container image.
 - Never print secret values during diagnostics. Redact tokens, keys, cookies,
   database URLs, and authorization headers.
 - `NEXT_PUBLIC_*` is public by definition.
