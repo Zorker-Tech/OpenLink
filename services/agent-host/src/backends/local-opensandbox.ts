@@ -43,6 +43,7 @@ export interface OpenSandboxPromptSession {
   prompt(message: string, signal?: AbortSignal): Promise<Response>
   resolveExtensionUi(response: AgentExtensionUiResponse): Promise<void>
   networkAccess(hosts: string[], mode: 'temporary' | 'persistent', durationSeconds?: number): Promise<void>
+  resources(): Promise<unknown>
   cleanup(): Promise<void>
 }
 
@@ -365,6 +366,19 @@ export class LocalOpenSandboxBackend {
             }, (durationSeconds ?? 900) * 1_000)
             networkTimers.add(timer)
           }
+        },
+        resources: async () => {
+          await ensureRunning()
+          const result = await fetch(`${baseUrl}/v1/resources`, {
+            headers: {
+              ...endpoint.headers,
+              'X-OpenLink-Agent-Worker-Token': workerToken,
+              Authorization: `Bearer ${workerToken}`,
+            },
+            signal: AbortSignal.timeout(5_000),
+          })
+          if (!result.ok) throw new AgentHostError('INVALID_SESSION', `Agent Worker could not read runtime resources (${result.status})`, { retryable: true })
+          return result.json()
         },
         cleanup: async () => {
           if (cleaned) return

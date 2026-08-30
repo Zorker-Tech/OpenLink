@@ -71,10 +71,12 @@ export async function POST(
   if (!runtimeConfiguration) return Response.json({ error: 'MODEL_CONFIGURATION_REQUIRED' }, { status: 400 })
 
   let nativeSession
-  try {
-    nativeSession = await loadPiSessionSnapshot(supabase, user.id, sessionId)
-  } catch {
-    return Response.json({ error: 'PI_SESSION_READ_FAILED' }, { status: 500 })
+  if ((session.agent ?? 'codex') !== 'codex') {
+    try {
+      nativeSession = await loadPiSessionSnapshot(supabase, user.id, sessionId)
+    } catch {
+      return Response.json({ error: 'PI_SESSION_READ_FAILED' }, { status: 500 })
+    }
   }
 
   const response = await fetch(`${config.baseUrl}/v1/agent/sessions/${encodeURIComponent(sessionId)}/lease`, {
@@ -86,11 +88,16 @@ export async function POST(
       projectId: session.project_id,
       sessionId,
       runtimeConfiguration,
+      agent: session.agent ?? 'codex',
+      accessMode: session.access_mode,
       ...(nativeSession ? { nativeSession } : {}),
       ...(browserSessionId ? { browserSessionId } : {}),
     }),
     cache: 'no-store',
-    signal: AbortSignal.timeout(5_000),
+    // A mode switch intentionally replaces the session Worker because Codex
+    // applies its sandbox/approval policy at process start. Project VM-backed
+    // workers can take longer than the old five-second UI keepalive budget.
+    signal: AbortSignal.timeout(90_000),
   })
   return new Response(response.body, { status: response.status, headers: { 'Content-Type': 'application/json' } })
 }

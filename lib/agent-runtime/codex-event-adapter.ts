@@ -9,6 +9,19 @@ function stringValue(value: unknown): string {
   return typeof value === 'string' ? value : ''
 }
 
+function textValue(value: unknown): string {
+  if (typeof value === 'string') return value
+  if (!Array.isArray(value)) return ''
+  return value.map((part) => {
+    if (typeof part === 'string') return part
+    return stringValue(asRecord(part)?.text)
+  }).filter(Boolean).join('\n')
+}
+
+function itemTypeIs(itemType: string, camelCase: string, snakeCase: string): boolean {
+  return itemType === camelCase || itemType === snakeCase
+}
+
 function languageForPath(path: string): string {
   const extension = path.split('.').at(-1)?.toLowerCase() ?? ''
   const languages: Record<string, string> = {
@@ -49,6 +62,7 @@ export class CodexEventAdapter {
   private readonly clock: () => string
   private nextSequence: number
   private currentTurnId: string | null = null
+  private sessionStarted = false
   private readonly commandItemMap = new Map<string, { command: string; commandId: string }>()
   private readonly reasoningItemMap = new Map<string, string>()
   private readonly fileChangeItemMap = new Map<string, { path: string; operation: 'write' | 'edit' }>()
@@ -111,36 +125,53 @@ export class CodexEventAdapter {
       })]
     }
 
+    if (message.type === 'extension_ui_request' && typeof message.id === 'string') {
+      const inputKind = message.method === 'select' || message.method === 'input' || message.method === 'editor'
+        ? message.method
+        : 'confirm'
+      return [this.make({
+        type: 'confirmation.requested',
+        confirmationId: message.id,
+        title: stringValue(message.title) || '执行确认',
+        message: stringValue(message.message) || undefined,
+        options: Array.isArray(message.options) ? message.options.filter((option): option is string => typeof option === 'string') : undefined,
+        inputKind,
+      })]
+    }
+
     // 2. Handle standard JSON-RPC notifications and methods from codex app-server
     const method = stringValue(message.method)
     const params = asRecord(message.params) ?? {}
 
     switch (method) {
       case 'thread/started':
+        this.sessionStarted = true
         return [this.make({ type: 'session.started' })]
 
       case 'turn/started': {
         const turn = asRecord(params.turn)
         this.currentTurnId = stringValue(turn?.id) || stringValue(params.turnId) || `${this.sessionId}:turn:${Date.now()}`
-        return [this.make({
-          type: 'status.updated',
-          statusId: `${this.sessionId}:status:${Date.now()}`,
-          label: 'Working',
-          status: 'active',
-        })]
+        if (!this.sessionStarted) {
+          this.sessionStarted = true
+          return [this.make({ type: 'session.started' })]
+        }
+        return []
       }
 
       case 'turn/completed': {
         const turn = asRecord(params.turn)
         const durationMs = typeof turn?.durationMs === 'number' ? turn.durationMs : undefined
+        const turnStatus = stringValue(turn?.status)
+        const turnError = asRecord(turn?.error)
+        const failed = turnStatus === 'failed' || turnStatus === 'interrupted'
         this.currentTurnId = null
         return [
-          this.make({
-            type: 'status.updated',
-            statusId: `${this.sessionId}:status:${Date.now()}`,
-            label: 'Worked',
-            status: 'completed',
-          }),
+          ...(failed ? [this.make({
+            type: 'error',
+            errorId: `${this.sessionId}:error:${Date.now()}`,
+            message: stringValue(turnError?.message) || (turnStatus === 'interrupted' ? 'Codex turn was interrupted' : 'Codex turn failed'),
+            recoverable: true,
+          })] : []),
           this.make({
             type: 'session.completed',
             durationMs,
@@ -149,6 +180,21 @@ export class CodexEventAdapter {
       }
 
       case 'turn/failed':
+      {
+        const err = asRecord(params.error)
+        const messageText = stringValue(err?.message) || stringValue(params.message) || 'Codex encountered an error'
+        this.currentTurnId = null
+        return [
+          this.make({
+            type: 'error',
+            errorId: `${this.sessionId}:error:${Date.now()}`,
+            message: messageText,
+            recoverable: true,
+          }),
+          this.make({ type: 'session.completed' }),
+        ]
+      }
+
       case 'error': {
         const err = asRecord(params.error)
         const messageText = stringValue(err?.message) || stringValue(params.message) || 'Codex encountered an error'
@@ -222,7 +268,7 @@ export class CodexEventAdapter {
           })]
         }
 
-        if (itemType === 'command_execution') {
+        if (itemTypeIs(itemType, 'commandExecution', 'command_execution')) {
           const command = stringValue(item.command)
           this.commandItemMap.set(itemId, { command, commandId: itemId })
           return [this.make({
@@ -232,7 +278,7 @@ export class CodexEventAdapter {
           })]
         }
 
-        if (itemType === 'file_change') {
+        if (itemTypeIs(itemType, 'fileChange', 'file_change')) {
           const changes = Array.isArray(item.changes) ? item.changes : []
           const first = asRecord(changes[0])
           const path = stringValue(first?.path) || 'file'
@@ -247,7 +293,7 @@ export class CodexEventAdapter {
           })]
         }
 
-        if (itemType === 'mcp_tool_call') {
+        if (itemTypeIs(itemType, 'mcpToolCall', 'mcp_tool_call')) {
           const tool = stringValue(item.tool)
           const server = stringValue(item.server)
           return [this.make({
@@ -268,7 +314,7 @@ export class CodexEventAdapter {
         const itemType = stringValue(item.type)
         const itemId = stringValue(item.id) || `${this.sessionId}:item:${Date.now()}`
 
-        if (itemType === 'agent_message') {
+        if (itemTypeIs(itemType, 'agentMessage', 'agent_message')) {
           const text = stringValue(item.text)
           return [this.make({
             type: 'message.completed',
@@ -278,7 +324,7 @@ export class CodexEventAdapter {
         }
 
         if (itemType === 'reasoning' || itemType === 'plan') {
-          const text = stringValue(item.text)
+          const text = stringValue(item.text) || [textValue(item.summary), textValue(item.content)].filter(Boolean).join('\n')
           this.reasoningItemMap.delete(itemId)
           return [this.make({
             type: 'reasoning.completed',
@@ -288,7 +334,7 @@ export class CodexEventAdapter {
           })]
         }
 
-        if (itemType === 'command_execution') {
+        if (itemTypeIs(itemType, 'commandExecution', 'command_execution')) {
           const output = stringValue(item.aggregatedOutput) || stringValue(item.aggregated_output)
           const exitCode = typeof item.exitCode === 'number' ? item.exitCode : (typeof item.exit_code === 'number' ? item.exit_code : 0)
           this.commandItemMap.delete(itemId)
@@ -300,7 +346,7 @@ export class CodexEventAdapter {
           })]
         }
 
-        if (itemType === 'file_change') {
+        if (itemTypeIs(itemType, 'fileChange', 'file_change')) {
           const meta = this.fileChangeItemMap.get(itemId)
           const path = meta?.path || 'file'
           const operation = meta?.operation || 'edit'
@@ -324,7 +370,7 @@ export class CodexEventAdapter {
           })]
         }
 
-        if (itemType === 'mcp_tool_call') {
+        if (itemTypeIs(itemType, 'mcpToolCall', 'mcp_tool_call')) {
           const status = stringValue(item.status)
           if (status === 'failed') {
             const err = asRecord(item.error)
@@ -348,8 +394,10 @@ export class CodexEventAdapter {
       // User Approval request from codex app-server
       case 'execCommandApproval':
       case 'applyPatchApproval':
+      case 'item/commandExecution/requestApproval':
+      case 'item/fileChange/requestApproval':
       case 'item/execApproval/request': {
-        const id = stringValue(params.approvalId) || stringValue(params.callId) || `${this.sessionId}:approval:${Date.now()}`
+        const id = stringValue(params.approvalId) || stringValue(params.callId) || stringValue(params.itemId) || `${this.sessionId}:approval:${Date.now()}`
         const reason = stringValue(params.reason) || 'Codex requests user approval to execute operation'
         const command = Array.isArray(params.command) ? params.command.join(' ') : stringValue(params.command)
         return [this.make({

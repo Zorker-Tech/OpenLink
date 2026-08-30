@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Add authenticated, persisted 11-character chat sessions at `/{user_id}/cchat/{chat_sessions_id}` and render the Figma chat workspace.
+**Goal:** Add authenticated, persisted 11-character chat sessions at `/{user_id}/chat/{chat_sessions_id}` and render the Figma chat workspace.
 
 **Architecture:** A server action creates a row in `openlink.chat_sessions` and returns the canonical route. The dynamic server page validates the current Supabase user and session ownership before rendering a client chat shell that reuses OpenLink sidebar, theme, PromptInput, and ModelSelector components.
 
@@ -36,7 +36,7 @@
 ### Task 3: Add the dynamic route
 
 **Files:**
-- Create: `app/[user_id]/cchat/[chat_sessions_id]/page.tsx`
+- Create: `app/[user_id]/chat/[chat_sessions_id]/page.tsx`
 
 **Steps:**
 1. Authenticate with `supabase.auth.getUser()`.

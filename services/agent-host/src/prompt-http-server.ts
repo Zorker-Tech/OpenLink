@@ -22,6 +22,8 @@ export interface PromptRuntimeSession {
   networkAccess?(hosts: string[], mode: 'temporary' | 'persistent', durationSeconds?: number): Promise<void>
   /** Resolve a pending Pi extension UI request (confirm/select/input/editor). */
   resolveExtensionUi?(response: AgentExtensionUiResponse): Promise<void>
+  /** Read display-safe capabilities from the already provisioned worker. */
+  resources?(): Promise<unknown>
   cleanup(): Promise<void>
 }
 
@@ -191,8 +193,8 @@ function parsePromptBody(value: unknown): PromptBody {
       ? body.browserSessionId
       : ''
   if (body.browserSessionId !== undefined && !browserSessionId) throw new AgentHostError('INVALID_BODY', 'browserSessionId is invalid')
-  const agent = body.agent === 'codex' || body.agent === 'pi' ? body.agent : undefined
-  const accessMode = body.accessMode === 'restricted' || body.accessMode === 'ask' || body.accessMode === 'open'
+  const agent: 'pi' | 'codex' | undefined = body.agent === 'codex' || body.agent === 'pi' ? body.agent : undefined
+  const accessMode: 'restricted' | 'ask' | 'open' | undefined = body.accessMode === 'restricted' || body.accessMode === 'ask' || body.accessMode === 'open'
     ? body.accessMode
     : undefined
   return { userId, workspaceId, projectId, message, runtimeConfiguration, nativeSession, browserSessionId, agent, accessMode }
@@ -425,7 +427,13 @@ function parseLeaseBody(value: unknown) {
       ? body.browserSessionId
       : ''
   if (body.browserSessionId !== undefined && !browserSessionId) throw new AgentHostError('INVALID_BODY', 'browserSessionId is invalid')
-  return { userId, workspaceId, sessionId, projectId, runtimeConfiguration, nativeSession, browserSessionId }
+  const agent: 'pi' | 'codex' | undefined = body.agent === 'codex' || body.agent === 'pi' ? body.agent : undefined
+  if (body.agent !== undefined && !agent) throw new AgentHostError('INVALID_BODY', 'agent is invalid')
+  const accessMode: 'restricted' | 'ask' | 'open' | undefined = body.accessMode === 'restricted' || body.accessMode === 'ask' || body.accessMode === 'open'
+    ? body.accessMode
+    : undefined
+  if (body.accessMode !== undefined && !accessMode) throw new AgentHostError('INVALID_BODY', 'accessMode is invalid')
+  return { userId, workspaceId, sessionId, projectId, runtimeConfiguration, nativeSession, browserSessionId, agent, accessMode }
 }
 
 function parseExtensionUiResponse(value: unknown): AgentExtensionUiResponse {
@@ -624,7 +632,10 @@ export async function startPromptHttpServer(
     // time. Treat the browser capability as part of the runtime identity so a
     // recreated browser session gets a worker bound to the new capability.
     const browserIdentity = input.browserSessionId ?? 'none'
-    const runtimeIdentity = `${input.runtimeConfiguration.providerId}/${input.runtimeConfiguration.modelId}@${input.runtimeConfiguration.revision}:browser=${browserIdentity}:agent=${input.agent ?? 'pi'}`
+    // Permissions configure Codex's process-level sandbox and approval mode.
+    // Include them in the runtime identity so a user-visible mode change
+    // recreates the worker with the new policy rather than only updating DB.
+    const runtimeIdentity = `${input.runtimeConfiguration.providerId}/${input.runtimeConfiguration.modelId}@${input.runtimeConfiguration.revision}:browser=${browserIdentity}:agent=${input.agent ?? 'pi'}:access=${input.accessMode ?? 'restricted'}`
     return {
       ...input,
       browser,
@@ -1015,6 +1026,8 @@ export async function startPromptHttpServer(
         runtimeConfiguration: body.runtimeConfiguration,
         nativeSession: body.nativeSession,
         browserSessionId: body.browserSessionId,
+        agent: body.agent,
+        accessMode: body.accessMode,
       })
       const { entry } = await createEntry(prepared)
       if (entry.paused) {
@@ -1036,6 +1049,25 @@ export async function startPromptHttpServer(
       active += 1
     }
     json(response, 200, { ok: true, active })
+  }
+
+  async function handleRuntimeResources(
+    request: IncomingMessage,
+    response: import('node:http').ServerResponse,
+    pathSessionId: string,
+  ): Promise<void> {
+    const body = parseLeaseBody(await readJson(request))
+    if (body.sessionId !== pathSessionId) throw new AgentHostError('INVALID_BODY', 'Runtime resource session does not match the route')
+    const baseKey = `${body.userId}:${body.workspaceId}:${body.sessionId}`
+    const entry = [...sessions.entries()].find(([key]) => key.startsWith(`${baseKey}:`))?.[1]
+    if (!entry) throw new AgentHostError('INVALID_SESSION', 'Agent runtime is not ready', { retryable: true })
+    if (entry.paused) {
+      await entry.runtime.resume?.()
+      entry.paused = false
+    }
+    if (!entry.runtime.resources) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'This Agent backend does not expose runtime resources', { retryable: true })
+    entry.lastUsedAt = Date.now()
+    json(response, 200, await entry.runtime.resources())
   }
 
   async function handleAgentCancel(
@@ -1207,6 +1239,13 @@ export async function startPromptHttpServer(
         const sessionId = decodeURIComponent(leaseMatch[1]!)
         if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(sessionId)) throw new AgentHostError('INVALID_SESSION', 'sessionId is invalid')
         await handleAgentLease(request, response, sessionId)
+        return
+      }
+      const resourcesMatch = /^\/v1\/agent\/sessions\/([^/]+)\/resources$/.exec(url.pathname)
+      if (request.method === 'POST' && resourcesMatch) {
+        const sessionId = decodeURIComponent(resourcesMatch[1]!)
+        if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(sessionId)) throw new AgentHostError('INVALID_SESSION', 'sessionId is invalid')
+        await handleRuntimeResources(request, response, sessionId)
         return
       }
       const cancelMatch = /^\/v1\/agent\/sessions\/([^/]+)\/cancel$/.exec(url.pathname)

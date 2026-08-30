@@ -148,6 +148,8 @@ export interface CodexRuntimeConfig {
   codexHome: string
   codexBin: string
   model?: string
+  providerId?: string
+  providerBaseUrl?: string
   /** 'restricted' -> read-only sandbox, 'ask' -> workspace-write + approvals, 'open' -> danger-full-access */
   accessMode: 'restricted' | 'ask' | 'open'
   apiKey?: string
@@ -156,7 +158,7 @@ export interface CodexRuntimeConfig {
 }
 
 interface PendingCodexApproval {
-  resolve(decision: 'approved' | 'denied'): void
+  resolve(approved: boolean): void
 }
 
 interface PendingCodexRequest {
@@ -194,6 +196,20 @@ export class CodexAppServerRuntime {
     return true
   }
 
+  async resources() {
+    return {
+      agent: 'codex' as const,
+      source: 'Codex App Server',
+      accessMode: this.config.accessMode,
+      imageGeneration: false,
+      // This is the same per-thread configuration passed to thread/start;
+      // only expose display-safe identifiers, never URLs or bearer tokens.
+      mcpServers: this.config.supabaseMcpUrl && this.config.supabaseMcpToken
+        ? [{ id: 'openlink_supabase', name: 'OpenLink Supabase' }]
+        : [],
+    }
+  }
+
   cancel(): boolean {
     if (!this.busy) return false
     this.cancelRequested = true
@@ -205,7 +221,7 @@ export class CodexAppServerRuntime {
     const pending = this.pendingApprovals.get(approvalId)
     if (!pending) throw new Error('No active codex approval request matches this response')
     this.pendingApprovals.delete(approvalId)
-    pending.resolve(approved ? 'approved' : 'denied')
+    pending.resolve(approved)
   }
 
   async start(): Promise<void> {
@@ -218,6 +234,7 @@ export class CodexAppServerRuntime {
         ...process.env,
         CODEX_HOME: this.config.codexHome,
         ...(this.config.apiKey ? { OPENAI_API_KEY: this.config.apiKey } : {}),
+        ...(this.config.apiKey ? { OPENLINK_PROVIDER_API_KEY: this.config.apiKey } : {}),
         RUST_LOG: 'error',
       },
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -283,12 +300,21 @@ export class CodexAppServerRuntime {
     }
     // Server->client requests (approvals) resolve through the pending map.
     const method = stringValue(record.method)
-    if (method === 'execCommandApproval' || method === 'applyPatchApproval') {
+    if (
+      method === 'execCommandApproval'
+      || method === 'applyPatchApproval'
+      || method === 'item/commandExecution/requestApproval'
+      || method === 'item/fileChange/requestApproval'
+    ) {
       const params = asRecord(record.params) ?? {}
-      const approvalKind = method === 'execCommandApproval' ? 'exec' : 'patch'
+      const modernApproval = method.startsWith('item/')
+      const approvalKind = method === 'execCommandApproval' || method === 'item/commandExecution/requestApproval' ? 'exec' : 'patch'
       const approvalId = `${approvalKind}:${stringValue(String(record.id))}`
       this.pendingApprovals.set(approvalId, {
-        resolve: (decision) => {
+        resolve: (approved) => {
+          const decision = modernApproval
+            ? approved ? 'accept' : 'decline'
+            : approved ? 'approved' : 'denied'
           this.respond(String(record.id), { decision })
         },
       })
@@ -347,18 +373,51 @@ export class CodexAppServerRuntime {
     this.pendingApprovals.clear()
   }
 
-  private sandboxPolicyFor(): Record<string, unknown> {
-    if (this.config.accessMode === 'open') {
-      return { mode: 'danger-full-access' }
-    }
-    if (this.config.accessMode === 'restricted') {
-      return { mode: 'read-only' }
-    }
-    return { mode: 'workspace-write', network_access: false }
+  private sandboxPolicyFor(): 'read-only' | 'workspace-write' | 'danger-full-access' {
+    if (this.config.accessMode === 'open') return 'danger-full-access'
+    if (this.config.accessMode === 'restricted') return 'read-only'
+    return 'workspace-write'
   }
 
   private approvalPolicyFor(): string {
     return this.config.accessMode === 'ask' ? 'on-request' : 'never'
+  }
+
+  private providerKey(): string {
+    if (!this.config.providerId || this.config.providerId === 'openai') return 'openai'
+    return `openlink_${this.config.providerId.replace(/[^A-Za-z0-9_-]/g, '_')}`
+  }
+
+  private modelName(): string | undefined {
+    const model = this.config.model
+    const prefix = this.config.providerId ? `${this.config.providerId}/` : ''
+    return model && prefix && model.startsWith(prefix) ? model.slice(prefix.length) : model
+  }
+
+  private threadConfig(): Record<string, unknown> | undefined {
+    const config: Record<string, unknown> = {}
+    const providerKey = this.providerKey()
+    if (providerKey !== 'openai' && this.config.providerBaseUrl) {
+      config.model_provider = providerKey
+      config.model_providers = {
+        [providerKey]: {
+          name: this.config.providerId || providerKey,
+          base_url: this.config.providerBaseUrl,
+          env_key: 'OPENLINK_PROVIDER_API_KEY',
+          wire_api: 'responses',
+          requires_openai_auth: false,
+        },
+      }
+    }
+    if (this.config.supabaseMcpUrl && this.config.supabaseMcpToken) {
+      config.mcp_servers = {
+        openlink_supabase: {
+          url: this.config.supabaseMcpUrl,
+          bearer_token_env_var: 'OPENLINK_SUPABASE_MCP_TOKEN',
+        },
+      }
+    }
+    return Object.keys(config).length ? config : undefined
   }
 
   private async ensureThread(): Promise<string> {
@@ -367,17 +426,9 @@ export class CodexAppServerRuntime {
       cwd: this.config.workspaceRoot,
       sandbox: this.sandboxPolicyFor(),
       approvalPolicy: this.approvalPolicyFor(),
-      ...(this.config.model ? { model: this.config.model } : {}),
-      ...(this.config.supabaseMcpUrl && this.config.supabaseMcpToken ? {
-        config: {
-          mcp_servers: {
-            openlink_supabase: {
-              url: this.config.supabaseMcpUrl,
-              bearer_token_env_var: 'OPENLINK_SUPABASE_MCP_TOKEN',
-            },
-          },
-        },
-      } : {}),
+      ...(this.modelName() ? { model: this.modelName() } : {}),
+      modelProvider: this.providerKey(),
+      ...(this.threadConfig() ? { config: this.threadConfig() } : {}),
     }) as Record<string, unknown> | undefined
     const thread = asRecord(result?.thread)
     const id = stringValue(thread?.id)
@@ -387,84 +438,13 @@ export class CodexAppServerRuntime {
   }
 
   private onNotification(method: string, params: Record<string, unknown>): void {
-    const turnId = stringValue(params.turnId) || stringValue(params.turn_id)
-    void turnId
-
-    switch (method) {
-      case 'turn/started':
-        this.emitToUi({ type: 'turn_started', threadId: stringValue(params.threadId) })
-        return
-      case 'turn/completed':
-        this.emitToUi({ type: 'turn_completed', usage: asRecord(params.usage) })
-        return
-      case 'turn/failed': {
-        const error = asRecord(params.error)
-        this.emitToUi({ type: 'extension_error', error: stringValue(error?.message) || 'Codex turn failed' })
-        return
-      }
-      case 'item/started':
-      case 'item/completed': {
-        const item = asRecord(params.item)
-        if (!item) return
-        const itemType = stringValue(item.type)
-        const itemId = stringValue(item.id)
-        const completed = method === 'item/completed'
-
-        if (itemType === 'reasoning') {
-          const text = [item.summary, item.content].flat().filter(stringValue).join('\n')
-          this.emitToUi(completed
-            ? { type: 'codex_item', item: 'reasoning', phase: completed ? 'completed' : 'editing', id: itemId, text }
-            : { type: 'codex_item', item: 'reasoning', phase: 'editing', id: itemId, text })
-          return
-        }
-        if (itemType === 'agent_message' && completed) {
-          this.emitToUi({ type: 'codex_item', item: 'agent_message', phase: 'completed', id: itemId, text: stringValue(item.text) })
-          return
-        }
-        if (itemType === 'command_execution') {
-          if (completed) {
-            this.emitToUi({ type: 'codex_item', item: 'command_execution', phase: 'completed', id: itemId, command: stringValue(item.command), output: stringValue(item.aggregatedOutput), exitCode: item.exitCode })
-          }
-          void filePathFromCommandItem(item)
-          void this.maybeGitSnapshot(itemId)
-          return
-        }
-        if (itemType === 'file_change' && completed) {
-          void this.maybeGitSnapshot(itemId)
-          return
-        }
-        if (itemType === 'mcp_tool_call' && completed) {
-          this.emitToUi({ type: 'codex_item', item: 'mcp_tool_call', phase: 'completed', id: itemId, server: stringValue(item.server), tool: stringValue(item.tool), result: item.result, error: item.error })
-          return
-        }
-        if (itemType === 'error') {
-          this.emitToUi({ type: 'extension_error', error: stringValue(item.message) || 'Codex reported an error item' })
-        }
-        return
-      }
-      case 'item/agentMessage/delta': {
-        const delta = stringValue(params.delta)
-        if (delta) this.emitToUi({ type: 'codex_delta', item: 'agent_message', id: stringValue(params.itemId), delta })
-        return
-      }
-      case 'item/reasoning/textDelta':
-      case 'item/reasoning/summaryTextDelta': {
-        const delta = stringValue(params.delta)
-        if (delta) this.emitToUi({ type: 'codex_delta', item: 'reasoning', id: stringValue(params.itemId), delta })
-        return
-      }
-      case 'item/commandExecution/outputDelta': {
-        const delta = stringValue(params.delta)
-        if (delta) this.emitToUi({ type: 'codex_delta', item: 'command_execution', id: stringValue(params.itemId), delta })
-        return
-      }
-      case 'error': {
-        const error = asRecord(params.error)
-        this.emitToUi({ type: 'extension_error', error: stringValue(error?.message) || 'Codex reported an error' })
-        return
-      }
-      default:
-        return
+    this.emitToUi({ method, params })
+    if (method !== 'item/completed') return
+    const item = asRecord(params.item)
+    if (!item) return
+    const itemType = stringValue(item.type)
+    if (itemType === 'commandExecution' || itemType === 'command_execution' || itemType === 'fileChange' || itemType === 'file_change') {
+      void this.maybeGitSnapshot(stringValue(item.id))
     }
   }
 
@@ -498,7 +478,7 @@ export class CodexAppServerRuntime {
           threadId,
           input: [{ type: 'text', text: message }],
         })
-        await completion
+        await completion.promise
       } catch (error) {
         canceled = signal.aborted || this.cancelRequested
         if (!canceled) throw error
@@ -507,6 +487,7 @@ export class CodexAppServerRuntime {
           response.write(`${JSON.stringify({ type: 'extension_error', error: 'Agent request was canceled' })}\n`)
         }
         this.cancelRequested = false
+        completion.cancel()
         signal.removeEventListener('abort', abort)
         if (this.activeAbort === abort) this.activeAbort = undefined
         this.cancelPendingApprovals()
@@ -520,8 +501,9 @@ export class CodexAppServerRuntime {
     }
   }
 
-  private waitForTurnCompletion(signal: AbortSignal): Promise<void> {
-    return new Promise((resolveValue, rejectValue) => {
+  private waitForTurnCompletion(signal: AbortSignal): { promise: Promise<void>; cancel(): void } {
+    let cleanup = () => { }
+    const promise = new Promise<void>((resolveValue, rejectValue) => {
       const onFrame = (method: string, frameParams: Record<string, unknown>) => {
         if (method === 'turn/completed' || method === 'turn/failed') {
           cleanup()
@@ -540,7 +522,7 @@ export class CodexAppServerRuntime {
         onFrame(method, params)
         originalOnFrame(method, params)
       }
-      const cleanup = () => {
+      cleanup = () => {
         this.onNotification = originalOnFrame
         signal.removeEventListener('abort', onAbort)
       }
@@ -550,6 +532,7 @@ export class CodexAppServerRuntime {
       }
       signal.addEventListener('abort', onAbort, { once: true })
     })
+    return { promise, cancel: cleanup }
   }
 }
 

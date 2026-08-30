@@ -50,12 +50,12 @@ import { isOpenLinkAgentEvent, type OpenLinkAgentEvent } from '@/lib/agent-runti
 import type { OrganizationSummary } from '@/lib/organizations'
 import type { ConfiguredModelOption } from '@/lib/ai-provider-types'
 import type { ChatSessionSummary } from '@/lib/chat-session-types'
+import type { CodexComposerResources, ComposerResources, RuntimeComposerResources } from '@/lib/composer-resources'
 import { hasPersistedUserMessage } from '@/lib/chat-auto-start'
 import { theme } from '@/lib/theme'
 import { useRouter } from 'next/navigation'
 import { updateChatSessionAccessModeAction } from '@/app/chat/actions'
 import type { AccessMode } from '@/lib/chat-sessions'
-import { AccessModePicker } from '@/components/access-mode-picker'
 import { AccessWritesBanner } from '@/components/access-writes-banner'
 import {
   ArrowLeft,
@@ -139,6 +139,7 @@ interface ChatWorkspaceProps {
   userId: string
   localRuntime: boolean
   initialAccessMode?: AccessMode
+  composerResources: ComposerResources
 }
 
 function pendingConfirmationRequests(events: OpenLinkAgentEvent[]) {
@@ -475,6 +476,10 @@ function ChatComposer({
   sessionId,
   accessMode,
   onAccessModeChange,
+  composerResources,
+  runtimeResources,
+  codexResources,
+  onInstallPlugin,
 }: {
   initialModel: { providerId: string; modelId: string } | null
   models: ConfiguredModelOption[]
@@ -483,6 +488,10 @@ function ChatComposer({
   sessionId: string
   accessMode: AccessMode
   onAccessModeChange: (mode: AccessMode) => void
+  composerResources: ComposerResources
+  runtimeResources: RuntimeComposerResources | null
+  codexResources: CodexComposerResources | null
+  onInstallPlugin: (pluginId: string) => Promise<void>
 }) {
   const [input, setInput] = useState('')
   const [expanded, setExpanded] = useState(false)
@@ -524,7 +533,6 @@ function ChatComposer({
 
   const actionButtons = (
     <>
-      <AccessModePicker value={accessMode} onChange={onAccessModeChange} />
       <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
         <ModelSelectorTrigger render={<PromptInputButton aria-label={`选择模型，当前 ${selectedModel?.name ?? '未配置'}`} className="h-7 w-12 shrink-0 gap-1 rounded-md px-1.5 text-[var(--app-muted)] transition-[color,background-color,border-color,opacity] active:translate-y-0! hover:bg-[var(--app-active)] hover:text-[var(--app-foreground)] aria-expanded:bg-transparent! aria-expanded:text-[var(--app-muted)]!" type="button" />}>
           {selectedModel ? <ModelSelectorLogo className="size-4" provider={selectedModel.logo} /> : <img alt="" className="size-4" src="/openlink/model.svg" />}
@@ -555,7 +563,19 @@ function ChatComposer({
       }}
     >
       <div className={expanded ? 'flex min-h-[54px] max-h-[330px] w-full flex-col overflow-y-auto overscroll-contain pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden' : 'contents'}>
-        <PromptAddMenu className={expanded ? 'ml-1' : ''} variant="session" />
+        <PromptAddMenu
+          accessMode={accessMode}
+          agent={composerResources.agent}
+          className={expanded ? 'ml-1' : ''}
+          customInstructions={composerResources.customInstructions}
+          codexResources={codexResources}
+          onAccessModeChange={onAccessModeChange}
+          onInstallPlugin={onInstallPlugin}
+          onInsertText={(text) => setInput((current) => current ? `${current}\n\n${text}` : text)}
+          runtimeResources={runtimeResources}
+          skills={composerResources.skills}
+          variant="session"
+        />
         <PromptInputTextarea
           aria-label="描述你想创建的内容"
           className={expanded
@@ -631,6 +651,7 @@ export function ChatWorkspace({
   userId,
   localRuntime,
   initialAccessMode = 'restricted',
+  composerResources,
 }: ChatWorkspaceProps) {
   const router = useRouter()
   const [collapsed, setCollapsed] = useState(false)
@@ -673,6 +694,70 @@ export function ChatWorkspace({
   const [selectedGitRef, setSelectedGitRef] = useState<string | null>(null)
   const [gitVersionsLoading, setGitVersionsLoading] = useState(true)
   const [gitVersionError, setGitVersionError] = useState<string | null>(null)
+  const [runtimeResources, setRuntimeResources] = useState<RuntimeComposerResources | null>(null)
+  const [codexResources, setCodexResources] = useState<CodexComposerResources | null>(null)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    void fetch(`/api/chat/${encodeURIComponent(sessionId)}/runtime-resources`, { cache: 'no-store', signal: controller.signal })
+      .then(async (response) => response.ok ? response.json() as Promise<RuntimeComposerResources> : null)
+      .then((resources) => { if (!controller.signal.aborted) setRuntimeResources(resources) })
+      .catch(() => { if (!controller.signal.aborted) setRuntimeResources(null) })
+    return () => controller.abort()
+  }, [sessionId])
+
+  const refreshCodexResources = useCallback(async () => {
+    if (composerResources.agent !== 'codex') {
+      setCodexResources(null)
+      return
+    }
+    const response = await fetch(`/api/chat/${encodeURIComponent(sessionId)}/codex/resources`, { cache: 'no-store' })
+    if (!response.ok) {
+      setCodexResources(null)
+      return
+    }
+    const payload = await response.json() as CodexComposerResources
+    setCodexResources(payload)
+  }, [composerResources.agent, sessionId])
+
+  useEffect(() => {
+    void refreshCodexResources().catch(() => setCodexResources(null))
+  }, [refreshCodexResources])
+
+  const installCodexPlugin = useCallback(async (pluginId: string) => {
+    const response = await fetch(`/api/chat/${encodeURIComponent(sessionId)}/codex/plugins/${encodeURIComponent(pluginId)}/install`, { method: 'POST' })
+    const payload = await response.json().catch(() => null) as CodexComposerResources | { error?: string } | null
+    if (!response.ok) throw new Error(payload && 'error' in payload && typeof payload.error === 'string' ? payload.error : '插件安装失败')
+    setCodexResources(payload as CodexComposerResources)
+  }, [sessionId])
+
+  const changeAccessMode = useCallback(async (mode: AccessMode) => {
+    if (mode === accessMode) return
+    const result = await updateChatSessionAccessModeAction({ sessionId, mode })
+    if (!result.mode) {
+      console.warn(`OpenLink access mode update failed: ${result.error ?? 'unknown error'}`)
+      return
+    }
+    setAccessMode(result.mode)
+    // Access mode is part of the Agent Host runtime identity. Re-leasing right
+    // away tears down the old worker and starts one with Codex's corresponding
+    // sandbox/approval policy instead of merely changing a stored preference.
+    const response = await fetch(`/api/chat/${encodeURIComponent(sessionId)}/lease`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...(autoStartModel ? { model: autoStartModel } : {}),
+        ...(browserState.browserSessionId ? { browserSessionId: browserState.browserSessionId } : {}),
+      }),
+      cache: 'no-store',
+    })
+    if (!response.ok) {
+      console.warn(`OpenLink access runtime refresh failed (${response.status})`)
+      return
+    }
+    const resources = await fetch(`/api/chat/${encodeURIComponent(sessionId)}/runtime-resources`, { cache: 'no-store' })
+    if (resources.ok) setRuntimeResources(await resources.json() as RuntimeComposerResources)
+  }, [accessMode, autoStartModel, browserState.browserSessionId, sessionId])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -770,7 +855,14 @@ export function ChatWorkspace({
         }),
         cache: 'no-store',
       }).then((response) => {
-        if (!response.ok && !disposed) console.warn(`OpenLink agent lease refresh failed (${response.status})`)
+        if (!response.ok && !disposed) {
+          console.warn(`OpenLink agent lease refresh failed (${response.status})`)
+          return
+        }
+        void fetch(`/api/chat/${encodeURIComponent(sessionId)}/runtime-resources`, { cache: 'no-store' })
+          .then(async (resources) => resources.ok ? resources.json() as Promise<RuntimeComposerResources> : null)
+          .then((resources) => { if (!disposed) setRuntimeResources(resources) })
+          .catch(() => undefined)
       }).catch(() => {
         // Lease refresh is best-effort. The next prompt can still rebuild the
         // sandbox from the durable PG Pi snapshot if the Agent Host is down.
@@ -1062,7 +1154,7 @@ export function ChatWorkspace({
                   <div className="px-2 pb-2">
                     <ChatConfirmationDock onResolve={resolveConfirmation} requests={pendingConfirmations} />
                     <AccessWritesBanner sessionId={sessionId} />
-                <ChatComposer accessMode={accessMode} initialModel={autoStartModel} models={configuredModels} onAccessModeChange={(mode) => { setAccessMode(mode); void updateChatSessionAccessModeAction({ sessionId, mode }) }} onSubmit={submitAgentMessage} sessionId={sessionId} status={agentStreamStatus} />
+                <ChatComposer accessMode={accessMode} codexResources={codexResources} composerResources={composerResources} initialModel={autoStartModel} models={configuredModels} onAccessModeChange={(mode) => { void changeAccessMode(mode) }} onInstallPlugin={installCodexPlugin} onSubmit={submitAgentMessage} runtimeResources={runtimeResources} sessionId={sessionId} status={agentStreamStatus} />
                   </div>
                 </section>
               </ResizablePanel>
@@ -1077,7 +1169,7 @@ export function ChatWorkspace({
               <ChatTimeline events={agentEvents} isStreaming={agentStreamStatus === 'streaming'} onFlowStatusChange={setActiveChatFlow} />
               <div className="px-2 pb-2">
                 <ChatConfirmationDock onResolve={resolveConfirmation} requests={pendingConfirmations} />
-                <ChatComposer accessMode={accessMode} initialModel={autoStartModel} models={configuredModels} onAccessModeChange={(mode) => { setAccessMode(mode); void updateChatSessionAccessModeAction({ sessionId, mode }) }} onSubmit={submitAgentMessage} sessionId={sessionId} status={agentStreamStatus} />
+                <ChatComposer accessMode={accessMode} codexResources={codexResources} composerResources={composerResources} initialModel={autoStartModel} models={configuredModels} onAccessModeChange={(mode) => { void changeAccessMode(mode) }} onInstallPlugin={installCodexPlugin} onSubmit={submitAgentMessage} runtimeResources={runtimeResources} sessionId={sessionId} status={agentStreamStatus} />
               </div>
             </section>
           </div>

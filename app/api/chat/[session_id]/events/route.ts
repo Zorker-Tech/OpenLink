@@ -335,8 +335,10 @@ export async function POST(
   // adapter follows the session's agent kind: Codex workers speak app-server
   // JSON-RPC, Pi workers speak their native event stream.
   const isCodexSession = (session.agent ?? 'codex') === 'codex'
-  const adapter = new CodexEventAdapter(sessionId, () => new Date().toISOString(), startSequence + 1)
   const piAdapter = isCodexSession ? null : new PiEventAdapter(sessionId, () => new Date().toISOString(), startSequence + 1)
+  const adapter = isCodexSession
+    ? new CodexEventAdapter(sessionId, () => new Date().toISOString(), startSequence + 1)
+    : piAdapter
   let activeReader: ReadableStreamDefaultReader<Uint8Array> | null = null
   let leaseHeartbeat: ReturnType<typeof setInterval> | null = null
   let leaseRenewalFailure: Error | null = null

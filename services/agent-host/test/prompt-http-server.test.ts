@@ -275,6 +275,85 @@ test('agent lease warms one Worker before the first prompt and reuses it', async
   }
 })
 
+test('codex lease warmup preserves agent identity and access mode for the first prompt', async () => {
+  const storageRoot = await mkdtemp(join(tmpdir(), 'openlink-codex-warmup-test-'))
+  const creations: Array<{ agent?: 'pi' | 'codex'; accessMode?: 'restricted' | 'ask' | 'open'; nativeSessionPresent: boolean }> = []
+  const backend: PromptRuntimeBackend = {
+    createSession: async (_userId, _workspaceId, _sessionId, _runtime, nativeSession, _projectId, _projectRuntime, _browser, options) => {
+      creations.push({ agent: options?.agent, accessMode: options?.accessMode, nativeSessionPresent: nativeSession !== undefined })
+      return {
+        prompt: async () => new Response(`${JSON.stringify({ type: 'turn_completed' })}\n`),
+        cleanup: async () => { },
+      }
+    },
+    close: async () => { },
+  }
+  const runtime = await startPromptHttpServer({
+    host: '127.0.0.1', port: 0, apiToken: 'test-token-which-is-long-enough', storageRoot,
+    transport: 'test-runtime', sessionIdleTtlMs: 60_000,
+  }, backend)
+  const address = runtime.server.address() as AddressInfo
+  const endpoint = `http://127.0.0.1:${address.port}`
+  const runtimeConfiguration = {
+    providerId: 'openai', modelId: 'gpt-5.6-terra', apiKey: 'test-key', baseUrl: 'https://api.openai.com/v1', revision: 'test-revision',
+  }
+  try {
+    const warmup = await fetch(`${endpoint}/v1/agent/sessions/codex-warmable/lease`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer test-token-which-is-long-enough', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: 'user', workspaceId: 'workspace', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c', sessionId: 'codex-warmable',
+        runtimeConfiguration, agent: 'codex', accessMode: 'restricted',
+      }),
+    })
+    assert.equal(warmup.status, 200)
+    const prompt = await fetch(`${endpoint}/v1/agent/sessions/codex-warmable/events`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer test-token-which-is-long-enough', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: 'user', workspaceId: 'workspace', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c', message: 'hello',
+        runtimeConfiguration, agent: 'codex', accessMode: 'restricted',
+      }),
+    })
+    assert.equal(prompt.status, 200)
+    assert.deepEqual(creations, [{ agent: 'codex', accessMode: 'restricted', nativeSessionPresent: false }])
+  } finally {
+    runtime.server.close()
+    await once(runtime.server, 'close')
+    await runtime.shutdown()
+    await rm(storageRoot, { recursive: true, force: true })
+  }
+})
+
+test('runtime resources are read from the already leased worker', async () => {
+  const storageRoot = await mkdtemp(join(tmpdir(), 'openlink-runtime-resources-test-'))
+  const backend: PromptRuntimeBackend = {
+    createSession: async () => ({
+      prompt: async () => new Response(''),
+      resources: async () => ({ agent: 'codex', source: 'Codex App Server', accessMode: 'ask', imageGeneration: false, mcpServers: [{ id: 'openlink_supabase', name: 'OpenLink Supabase' }] }),
+      cleanup: async () => { },
+    }),
+    close: async () => { },
+  }
+  const runtime = await startPromptHttpServer({ host: '127.0.0.1', port: 0, apiToken: 'test-token-which-is-long-enough', storageRoot, transport: 'test-runtime', sessionIdleTtlMs: 60_000 }, backend)
+  const address = runtime.server.address() as AddressInfo
+  const endpoint = `http://127.0.0.1:${address.port}`
+  const body = { userId: 'user', workspaceId: 'workspace', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c', sessionId: 'resourceable', runtimeConfiguration: { providerId: 'openai', modelId: 'gpt-5.6-terra', apiKey: 'test-key', baseUrl: 'https://api.openai.com/v1', revision: 'test-revision' }, agent: 'codex', accessMode: 'ask' }
+  try {
+    const headers = { Authorization: 'Bearer test-token-which-is-long-enough', 'Content-Type': 'application/json' }
+    const lease = await fetch(`${endpoint}/v1/agent/sessions/resourceable/lease`, { method: 'POST', headers, body: JSON.stringify(body) })
+    assert.equal(lease.status, 200)
+    const resources = await fetch(`${endpoint}/v1/agent/sessions/resourceable/resources`, { method: 'POST', headers, body: JSON.stringify(body) })
+    assert.equal(resources.status, 200)
+    assert.deepEqual(await resources.json(), { agent: 'codex', source: 'Codex App Server', accessMode: 'ask', imageGeneration: false, mcpServers: [{ id: 'openlink_supabase', name: 'OpenLink Supabase' }] })
+  } finally {
+    runtime.server.close()
+    await once(runtime.server, 'close')
+    await runtime.shutdown()
+    await rm(storageRoot, { recursive: true, force: true })
+  }
+})
+
 test('agent cancellation aborts the active worker without deleting the reusable session', async () => {
   const storageRoot = await mkdtemp(join(tmpdir(), 'openlink-prompt-cancel-test-'))
   let promptAborted = false

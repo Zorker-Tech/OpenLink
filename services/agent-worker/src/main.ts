@@ -365,6 +365,26 @@ class SdkAgentRuntime {
 
   constructor(private readonly worker: WorkerConfig) {}
 
+  async resources() {
+    const extensions = await availableExtensionPaths([
+      this.worker.browserExtensionPath,
+      this.worker.supabaseExtensionPath,
+    ])
+    return {
+      agent: 'pi' as const,
+      source: 'Pi Resource Loader',
+      accessMode: this.worker.accessMode,
+      // Pi's Resource Loader has no image-generation extension in this
+      // worker image. Keep this explicit so the composer never advertises a
+      // local-only toggle as a usable capability.
+      imageGeneration: false,
+      extensions: extensions.map((path) => path.split('/').pop() || path),
+      mcpServers: this.worker.supabaseExtensionPath && extensions.includes(this.worker.supabaseExtensionPath)
+        ? [{ id: 'openlink_supabase', name: 'OpenLink Supabase' }]
+        : [],
+    }
+  }
+
   async prompt(message: string, response: ServerResponse, signal: AbortSignal): Promise<void> {
     if (this.busy) throw new Error('Agent is already processing a prompt')
     this.busy = true
@@ -663,6 +683,8 @@ const runtime = worker.agent === 'codex'
     codexHome: worker.codexHome,
     codexBin: worker.codexBin,
     model: worker.model,
+    providerId: worker.providerId,
+    providerBaseUrl: worker.providerBaseUrl,
     accessMode: worker.accessMode,
     apiKey: worker.providerApiKey,
     supabaseMcpUrl: process.env.OPENLINK_SUPABASE_MCP_URL,
@@ -697,6 +719,11 @@ const server = createServer((request, response) => {
       }
       response.writeHead(202, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
       response.end(JSON.stringify({ ok: true }))
+      return
+    }
+    if (request.method === 'GET' && url.pathname === '/v1/resources') {
+      response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
+      response.end(JSON.stringify(await runtime.resources()))
       return
     }
     if (request.method !== 'POST' || url.pathname !== '/v1/events') {
