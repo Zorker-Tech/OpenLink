@@ -138,6 +138,10 @@ Golden Disks and bundles remain under ignored runtime/release directories.
 
 - Never edit or commit `.openlink-runtime/`, `.openlink-releases/`, `.agent-data/`,
   `.next/`, service `dist/`, generated disks, or local secrets as source.
+- Portable, immutable Docker/OCI images are published to the internal GitLab
+  Container Registry (or Generic Package Registry). Do not commit image
+  archives to Git/LFS, and do not copy mutable container storage, database
+  volumes, Podman machine state, or VM raw disks into the repository.
 - Never print secret values during diagnostics. Redact tokens, keys, cookies,
   database URLs, and authorization headers.
 - `NEXT_PUBLIC_*` is public by definition.
