@@ -34,6 +34,7 @@
     "runtime:zero:stop": "node scripts/zero.mjs stop",
     "runtime:zero:status": "node scripts/zero.mjs status",
     "runtime:zero:images": "node scripts/build-zero-images.mjs",
+    "runtime:images:publish": "node scripts/publish-runtime-images.mjs",
     "knowledge:check": "npm --prefix services/knowledge-service run check",
     "knowledge:test": "npm --prefix services/knowledge-service test"
   },
