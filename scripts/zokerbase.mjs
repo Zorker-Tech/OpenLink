@@ -345,6 +345,25 @@ async function waitForContainerHealth(containerName, timeoutMs = 180_000) {
   throw new Error(`${containerName} did not become healthy within ${timeoutMs / 1000} seconds`)
 }
 
+async function composeUpWaitWithRetry(attempts = 6, delayMs = 5_000) {
+  let lastError
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      await compose(['up', '--detach', '--wait', '--pull', 'never'], { inherit: true })
+      return
+    } catch (error) {
+      lastError = error
+      if (attempt === attempts) throw error
+      // `docker compose --wait` can report a dependent service unhealthy while
+      // its HTTP endpoint is still inside its start_period. Retry the same
+      // idempotent operation instead of making `npm run dev` fail permanently.
+      process.stderr.write(`ZOKERBASE services are still becoming healthy; retrying (${attempt}/${attempts - 1})...\n`)
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, delayMs))
+    }
+  }
+  throw lastError
+}
+
 async function psql(sql, { tuplesOnly = false } = {}) {
   // The ZOKERBASE Postgres image deliberately keeps the `postgres` role
   // non-superuser; `supabase_admin` owns the managed schemas and is the
@@ -413,7 +432,7 @@ export async function ensureZokerbase() {
   // Restart the small REST container after the bootstrap schema exists so its
   // readiness probe is evaluated from a clean connection.
   await compose(['restart', 'rest'], { inherit: true })
-  await compose(['up', '--detach', '--wait', '--pull', 'never'], { inherit: true })
+  await composeUpWaitWithRetry()
   const url = `http://127.0.0.1:${apiPort}`
   const publishableKey = env.get('SUPABASE_PUBLISHABLE_KEY') || env.get('ANON_KEY')
   const secretKey = env.get('SUPABASE_SECRET_KEY') || env.get('SERVICE_ROLE_KEY')

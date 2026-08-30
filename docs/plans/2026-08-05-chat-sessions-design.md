@@ -2,7 +2,7 @@
 
 ## Scope
 
-Implement the route `/{user_id}/cchat/{chat_sessions_id}` and the OpenLink chat workspace shown by Figma node `3:10307`. The session identifier is exactly 11 ASCII letters/digits and is generated server-side. URL parameters are routing data only; Supabase Auth and RLS remain the authority for access.
+Implement the route `/{user_id}/chat/{chat_sessions_id}` and the OpenLink chat workspace shown by Figma node `3:10307`. The session identifier is exactly 11 ASCII letters/digits and is generated server-side. URL parameters are routing data only; Supabase Auth and RLS remain the authority for access.
 
 ## Design direction
 

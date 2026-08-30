@@ -282,7 +282,7 @@ export function Sidebar({
                         <div className="flex min-w-0 flex-col gap-1.5 overflow-hidden pl-4">
                           {group.chats.map((chat) => {
                             const active = activeChatId === chat.id
-                            return <SidebarItem active={active} chatMenu={active ? activeChatMenu : undefined} chatRuntime={active ? activeChatRuntime ?? IDLE_CHAT_RUNTIME : IDLE_CHAT_RUNTIME} icon="/openlink/app/chat.svg" key={chat.id} label={active && activeChatLabel ? activeChatLabel : chat.title} onClick={() => router.push(`/${chat.userId}/cchat/${chat.id}`)} />
+                            return <SidebarItem active={active} chatMenu={active ? activeChatMenu : undefined} chatRuntime={active ? activeChatRuntime ?? IDLE_CHAT_RUNTIME : IDLE_CHAT_RUNTIME} icon="/openlink/app/chat.svg" key={chat.id} label={active && activeChatLabel ? activeChatLabel : chat.title} onClick={() => router.push(`/${chat.userId}/chat/${chat.id}`)} />
                           })}
                         </div>
                       </div>

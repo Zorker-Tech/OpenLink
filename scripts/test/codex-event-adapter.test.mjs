@@ -27,13 +27,12 @@ test('a full turn streams deltas, completes messages, commands and status', () =
     ...a.adapt({ method: 'turn/completed', params: { turnId: 'u1' } }),
   ]
   assert.deepEqual(kinds(all), [
-    'status.updated',
+    'session.started',
     'message.delta',
     'message.delta',
     'message.completed',
     'command.started',
     'command.completed',
-    'status.updated',
     'session.completed',
   ])
   assert.equal(all[1].delta, 'Hello')
@@ -41,7 +40,20 @@ test('a full turn streams deltas, completes messages, commands and status', () =
   assert.equal(all[3].text, 'Hello world')
   assert.equal(all[4].command, 'ls')
   assert.equal(all[5].exitCode, 0)
-  assert.equal(all[7].type, 'session.completed')
+  assert.equal(all[6].type, 'session.completed')
+})
+
+test('current app-server camelCase items map to canonical events', () => {
+  const a = adapter()
+  const all = [
+    ...a.adapt({ method: 'item/completed', params: { item: { type: 'agentMessage', id: 'm1', text: 'Hello from Codex' } } }),
+    ...a.adapt({ method: 'item/started', params: { item: { type: 'commandExecution', id: 'c1', command: 'pwd' } } }),
+    ...a.adapt({ method: 'item/completed', params: { item: { type: 'commandExecution', id: 'c1', aggregatedOutput: '/workspace', exitCode: 0 } } }),
+    ...a.adapt({ method: 'item/started', params: { item: { type: 'fileChange', id: 'f1', changes: [{ path: 'src/a.ts', kind: 'update' }] } } }),
+    ...a.adapt({ method: 'item/completed', params: { item: { type: 'fileChange', id: 'f1', status: 'completed' } } }),
+  ]
+  assert.deepEqual(kinds(all), ['message.completed', 'command.started', 'command.completed', 'file.editing.started', 'file.editing.completed'])
+  assert.equal(all[0].text, 'Hello from Codex')
 })
 
 test('reasoning deltas map to reasoning events', () => {
@@ -56,6 +68,14 @@ test('reasoning deltas map to reasoning events', () => {
   assert.equal(all[2].text, 'hmm')
 })
 
+test('current reasoning arrays are preserved on completion', () => {
+  const events = adapter().adapt({
+    method: 'item/completed',
+    params: { item: { type: 'reasoning', id: 'r1', summary: ['first'], content: ['second'] } },
+  })
+  assert.equal(events[0].text, 'first\nsecond')
+})
+
 test('approval requests surface as confirmation.requested', () => {
   const events = adapter().adapt({
     method: 'execCommandApproval',
@@ -63,6 +83,23 @@ test('approval requests surface as confirmation.requested', () => {
   })
   assert.deepEqual(kinds(events), ['confirmation.requested'])
   assert.match(events[0].message, /rm -rf node_modules/)
+})
+
+test('worker approval passthrough surfaces as confirmation.requested', () => {
+  const events = adapter().adapt({
+    type: 'extension_ui_request', id: 'exec:42', method: 'confirm', title: '执行确认', message: '是否执行 pwd',
+  })
+  assert.deepEqual(kinds(events), ['confirmation.requested'])
+  assert.equal(events[0].confirmationId, 'exec:42')
+})
+
+test('failed current turns emit an error and still terminate the session', () => {
+  const events = adapter().adapt({
+    method: 'turn/completed',
+    params: { turn: { id: 't1', status: 'failed', error: { message: 'provider rejected request' } } },
+  })
+  assert.deepEqual(kinds(events), ['error', 'session.completed'])
+  assert.equal(events[0].message, 'provider rejected request')
 })
 
 test('worker passthrough frames map: git snapshot, file preview, extension error', () => {

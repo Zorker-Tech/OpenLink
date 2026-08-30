@@ -56,7 +56,7 @@ export async function createChatSessionAction(
     const query = new URLSearchParams()
     if (prompt) query.set('run', '1')
     const suffix = query.size ? `?${query.toString()}` : ''
-    return { id: session.id, path: `/${user.id}/cchat/${session.id}${suffix}`, fallback: false }
+    return { id: session.id, path: `/${user.id}/chat/${session.id}${suffix}`, fallback: false }
   } catch (error) {
     return {
       id: null,
