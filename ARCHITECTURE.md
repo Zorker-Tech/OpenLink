@@ -52,6 +52,8 @@ Browser
   `code-server`, `linux`, `zero`, plus the sparse `backend/` snapshot.
 - Authoritative schema: `zorkerbase/migrations/`.
 - Lifecycle and artifact production: `scripts/`.
+- Portable release images: GitLab Container Registry (or Generic Package
+  Registry); manifests and publication metadata remain in Git.
 - Generated state: `.openlink-runtime/`, `.openlink-releases/`, `.agent-data/`,
   `.next/`; never edit or commit it as product source.
 

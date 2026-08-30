@@ -12,6 +12,7 @@
 | `zorkerbase/migrations/` | Authoritative application schema history | Append-only migrations; Local and Cloud-compatible schema contract |
 | `scripts/` | Root lifecycle and artifact production | Idempotent, non-interactive, explicit build/start distinction |
 | `docs/architecture/` | Architecture decisions and standards | Update with architectural changes |
+| GitLab Container/Generic Package Registry | Portable Docker/OCI release images | Publish immutable image tags/digests outside Git; keep source/build metadata in Git; never include mutable runtime state |
 | `.openlink-runtime/`, `.openlink-releases/`, `.agent-data/`, `.next/` | Generated/runtime state | Never source-controlled; never treated as source of release code |
 
 ## Dependency rules
@@ -57,6 +58,8 @@ source:
 
 - `.openlink-runtime/**` local state and secrets;
 - `.openlink-releases/**` packaged releases;
+- mutable container storage, database volumes, Podman machine state, VM raw
+  disks, and image tar archives;
 - `.next/**`, service `dist/**`, and dependency directories;
 - Project VM disks and OCI archives;
 - generated Pi tarballs and manifests, except their checked-in source metadata
