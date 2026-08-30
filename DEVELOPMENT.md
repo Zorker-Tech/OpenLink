@@ -148,6 +148,12 @@ Golden Disks and bundles remain under ignored runtime/release directories.
   `OPENLINK_IMAGE_PACKAGE_VERSION` for another project/version. The Project VM
   OCI base is uploaded as an OCI layout archive and is not a runnable registry
   container image.
+- The cross-platform dependency contract is published as the
+  `openlink-dependencies` Generic Package. It contains lockfiles, manifests,
+  and product-owned Pi runtime tarballs, but intentionally excludes
+  `node_modules` and host-specific native binaries. On Windows, download that
+  package if an offline dependency mirror is needed, then run the normal
+  frozen-lockfile install for the Windows architecture.
 - Never print secret values during diagnostics. Redact tokens, keys, cookies,
   database URLs, and authorization headers.
 - `NEXT_PUBLIC_*` is public by definition.
