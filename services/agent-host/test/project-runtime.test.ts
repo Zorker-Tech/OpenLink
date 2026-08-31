@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import test from 'node:test'
 import { PodmanProjectRuntimeServiceDriver, ProjectRuntimeManager, type ProjectRuntimeServiceInput } from '../src/project-runtime.js'
 import { ProjectVmManager, type ProjectVmCommandResult, type ProjectVmMachineDriver, type ProjectVmPortForward } from '../src/project-vm.js'
@@ -110,7 +110,7 @@ test('allocates durable non-colliding Project VM service ports', async () => {
     stopMachine: async () => undefined,
     removeMachine: async () => undefined,
   }
-  const vmManager = new ProjectVmManager({ stateRoot, machineDriver, machinePrefix: 'olp', guestWorkspaceRoot: `${stateRoot}/guest` })
+  const vmManager = new ProjectVmManager({ stateRoot, machineDriver, machinePrefix: 'olp', guestWorkspaceRoot: '/var/lib/openlink/test-projects' })
   const serviceDriver = {
     supportsEgress: true,
     ensureServices: async (input: ProjectRuntimeServiceInput) => { allocations.push({ projectId: input.projectId, ports: input.ports }) },
@@ -168,7 +168,7 @@ test('synchronizes the Project Supabase controller from the supervisor workspace
     stopMachine: async () => undefined,
     removeMachine: async () => undefined,
   }
-  const vmManager = new ProjectVmManager({ stateRoot, machineDriver, machinePrefix: 'olp', guestWorkspaceRoot: `${stateRoot}/guest` })
+  const vmManager = new ProjectVmManager({ stateRoot, machineDriver, machinePrefix: 'olp', guestWorkspaceRoot: '/var/lib/openlink/test-projects' })
   const runtime = new ProjectRuntimeManager({
     stateRoot,
     vmManager,
@@ -180,12 +180,12 @@ test('synchronizes the Project Supabase controller from the supervisor workspace
     egressImage: 'openlink/opensandbox-egress:dev',
     agentWorkerImage: 'openlink/agent-worker:dev',
   })
-  process.env.OPENLINK_AGENT_WORKSPACE_ROOT = '/tmp/openlink-supervisor-root'
+  process.env.OPENLINK_AGENT_WORKSPACE_ROOT = resolve('/tmp/openlink-supervisor-root')
   try {
     await runtime.ensure('2c51ca26-3cd0-4cb4-896d-2061de06098c', 'thin')
     assert.deepEqual(copied, [
-      '/tmp/openlink-supervisor-root/services/agent-host/project-supabase-runtime.mjs',
-      '/tmp/openlink-supervisor-root/scripts/lib/project-supabase-bundle.mjs',
+      resolve('/tmp/openlink-supervisor-root/services/agent-host/project-supabase-runtime.mjs'),
+      resolve('/tmp/openlink-supervisor-root/scripts/lib/project-supabase-bundle.mjs'),
     ])
   } finally {
     if (originalWorkspaceRoot === undefined) delete process.env.OPENLINK_AGENT_WORKSPACE_ROOT
@@ -206,7 +206,7 @@ test('preserves resident Project VMs across an Agent Host restart and restores t
     stopMachine: async (name) => { machineCalls.push(`stop:${name}`) },
     removeMachine: async () => undefined,
   }
-  const vmManager = new ProjectVmManager({ stateRoot, machineDriver, machinePrefix: 'olp', guestWorkspaceRoot: `${stateRoot}/guest` })
+  const vmManager = new ProjectVmManager({ stateRoot, machineDriver, machinePrefix: 'olp', guestWorkspaceRoot: '/var/lib/openlink/test-projects' })
   const serviceDriver = {
     supportsEgress: true,
     ensureServices: async () => undefined,
@@ -253,7 +253,7 @@ test('serves Project Supabase management from a ready persisted VM without re-pr
     stopMachine: async () => undefined,
     removeMachine: async () => undefined,
   }
-  const vmManager = new ProjectVmManager({ stateRoot, machinePrefix: 'olp', machineDriver, guestWorkspaceRoot: `${stateRoot}/guest` })
+  const vmManager = new ProjectVmManager({ stateRoot, machinePrefix: 'olp', machineDriver, guestWorkspaceRoot: '/var/lib/openlink/test-projects' })
   const options = {
     stateRoot, vmManager, machineDriver,
     serviceDriver: { supportsEgress: true, ensureServices: async () => { serviceEnsures += 1 }, stopServices: async () => undefined, removeServices: async () => undefined },
@@ -294,7 +294,7 @@ test('initializes a Project workspace Git baseline exactly once before agent use
     stopMachine: async () => undefined,
     removeMachine: async () => undefined,
   }
-  const vmManager = new ProjectVmManager({ stateRoot, machineDriver, machinePrefix: 'olp', guestWorkspaceRoot: `${stateRoot}/guest` })
+  const vmManager = new ProjectVmManager({ stateRoot, machineDriver, machinePrefix: 'olp', guestWorkspaceRoot: '/var/lib/openlink/test-projects' })
   const runtime = new ProjectRuntimeManager({
     stateRoot,
     vmManager,
@@ -336,7 +336,7 @@ test('does not leak an active runtime when service shutdown fails', async () => 
     stopMachine: async (name) => { stopped.push(name) },
     removeMachine: async () => undefined,
   }
-  const vmManager = new ProjectVmManager({ stateRoot, machineDriver, machinePrefix: 'olp', guestWorkspaceRoot: `${stateRoot}/guest` })
+  const vmManager = new ProjectVmManager({ stateRoot, machineDriver, machinePrefix: 'olp', guestWorkspaceRoot: '/var/lib/openlink/test-projects' })
   const serviceDriver = {
     supportsEgress: true,
     ensureServices: async () => undefined,
@@ -386,7 +386,7 @@ test('cleans a Project VM when session storage preparation fails', async () => {
     stopMachine: async (name) => { stopped.push(name) },
     removeMachine: async () => undefined,
   }
-  const vmManager = new ProjectVmManager({ stateRoot, machineDriver, machinePrefix: 'olp', guestWorkspaceRoot: `${stateRoot}/guest` })
+  const vmManager = new ProjectVmManager({ stateRoot, machineDriver, machinePrefix: 'olp', guestWorkspaceRoot: '/var/lib/openlink/test-projects' })
   let serviceEnsures = 0
   const serviceDriver = {
     supportsEgress: true,

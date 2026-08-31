@@ -7,9 +7,12 @@ import { fileURLToPath } from 'node:url'
 import { configureBundledPodmanRuntime } from './lib/bundled-podman-runtime.mjs'
 import { ensurePodmanBuilder, run, stopPodmanBuilder } from './lib/podman-builder.mjs'
 import { hashConfigurationTree, readProjectSupabaseLock } from './lib/project-supabase-lock.mjs'
+import { nodeArchitecture } from './lib/project-supabase-images.mjs'
+import { assertWindowsRuntimeDirectoryHyperVAccess } from './lib/windows-security.mjs'
 
 const root = resolve(fileURLToPath(new URL('../', import.meta.url)))
 await configureBundledPodmanRuntime(root)
+await assertWindowsRuntimeDirectoryHyperVAccess(resolve(root, '.openlink-runtime'))
 
 const podman = process.env.OPENLINK_PODMAN_COMMAND || resolve(root, '.openlink-runtime/toolchain/bin/podman')
 const containerfile = resolve(root, 'services/agent-host/project-vm-base.Containerfile')
@@ -167,7 +170,7 @@ async function ensureMachineOsArchive(image) {
   const matched = image.match(/^([^/]+)\/(.+):([^:@]+)$/)
   if (!matched) throw new Error(`OPENLINK_MACHINE_OS_IMAGE must be registry/repository:tag, received ${image}`)
   const [, registry, repository, tag] = matched
-  const architecture = process.arch === 'arm64' ? 'arm64' : process.arch
+  const architecture = nodeArchitecture()
   if (baseImagePlatformDigestOverride) {
     if (!/^sha256:[a-f0-9]{64}$/.test(baseImagePlatformDigestOverride)) {
       throw new Error('OPENLINK_MACHINE_OS_PLATFORM_DIGEST must be a sha256 platform manifest digest')
@@ -284,7 +287,7 @@ const machineOs = await ensureMachineOsArchive(baseImage)
 
 const fingerprint = createHash('sha256')
   .update(await readFile(containerfile))
-  .update(JSON.stringify({ schemaVersion: 2, baseImage, baseImagePlatform: machineOs.platform, packages: ['bash-completion', 'ca-certificates', 'cmake', 'curl', 'diffutils', 'fd-find', 'findutils', 'git', 'gzip', 'jq', 'make', 'nodejs', 'npm', 'openssh-clients', 'pnpm', 'procps-ng', 'python3', 'python3-devel', 'python3-pip', 'ripgrep', 'tar', 'unzip', 'wget', 'which', 'xz', 'zip', 'gcc', 'gcc-c++'], projectSupabaseLockSha256, projectSupabaseSeedSha256, projectSupabaseControllerSha256, projectSupabaseBundleVerifierSha256, projectSupabaseReleaseTrustSha256, projectSupabaseRuntimeSpecSha256, projectSupabaseConfigurationHash: observedProjectSupabaseConfigurationHash }))
+  .update(JSON.stringify({ schemaVersion: 2, baseImage, baseImagePlatform: machineOs.platform, packages: ['bash-completion', 'ca-certificates', 'cmake', 'curl', 'diffutils', 'fd-find', 'findutils', 'git', 'gzip', 'jq', 'make', 'nodejs', 'npm', 'openssh-clients', 'pnpm', 'procps-ng', 'python3', 'python3-devel', 'python3-pip', 'qemu-img', 'ripgrep', 'tar', 'unzip', 'wget', 'which', 'xz', 'zip', 'gcc', 'gcc-c++'], projectSupabaseLockSha256, projectSupabaseSeedSha256, projectSupabaseControllerSha256, projectSupabaseBundleVerifierSha256, projectSupabaseReleaseTrustSha256, projectSupabaseRuntimeSpecSha256, projectSupabaseConfigurationHash: observedProjectSupabaseConfigurationHash }))
   .digest('hex')
 
 let previous

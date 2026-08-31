@@ -1,11 +1,15 @@
 import { spawn } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
-import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ensureZokerbase } from './zokerbase.mjs'
 import { ensureZero, stopZero } from './zero.mjs'
+import { bundledToolchainPaths, packageManagerCommand, prependPath, resolveHostPlatform, resolveUserStateRoot } from './lib/host-platform.mjs'
+import { assertProjectVmArtifactManifest, projectVmArtifactContract } from './lib/project-vm-artifact.mjs'
+import { hardenUserOnlySecret } from './lib/windows-security.mjs'
+import { assertWindowsHyperVHostReady } from './lib/windows-hyperv.mjs'
 
 const root = new URL('../', import.meta.url)
 const browserHostDirectory = new URL('../services/browser-host/', import.meta.url)
@@ -13,10 +17,16 @@ const agentHostDirectory = new URL('../services/agent-host/', import.meta.url)
 const agentWorkerDirectory = new URL('../services/agent-worker/', import.meta.url)
 const agentRpcWorkerDirectory = new URL('../services/agent-rpc-worker/', import.meta.url)
 const sandboxRuntimeDirectory = new URL('../services/sandbox-runtime/', import.meta.url)
+const browserProtocolDirectory = new URL('../packages/browser-protocol/', import.meta.url)
 const knowledgeServiceDirectory = new URL('../services/knowledge-service/', import.meta.url)
-const providerSecretPath = fileURLToPath(new URL('../.openlink-runtime/provider-secret.key', import.meta.url))
-const podmanCommand = fileURLToPath(new URL('../.openlink-runtime/toolchain/bin/podman', import.meta.url))
-const podmanHelperBinariesDir = fileURLToPath(new URL('../.openlink-runtime/toolchain/bin/', import.meta.url))
+const rootPath = fileURLToPath(root)
+const hostPlatform = resolveHostPlatform()
+const projectVmArtifact = projectVmArtifactContract({ host: hostPlatform })
+const toolchain = bundledToolchainPaths(rootPath)
+const legacyProviderSecretPath = fileURLToPath(new URL('../.openlink-runtime/provider-secret.key', import.meta.url))
+const providerSecretPath = resolve(resolveUserStateRoot(rootPath, { host: hostPlatform }), 'provider-secret.key')
+const podmanCommand = toolchain.podman
+const podmanHelperBinariesDir = toolchain.bin
 const podmanConfigRoot = fileURLToPath(new URL('../.openlink-runtime/podman-config/', import.meta.url))
 // Podman defaults its machine disks to the macOS system volume under $HOME.
 // OpenLink's repository can live on a separate data volume, so keep every
@@ -24,6 +34,13 @@ const podmanConfigRoot = fileURLToPath(new URL('../.openlink-runtime/podman-conf
 // also makes a Project VM genuinely owned by OpenLink rather than by a
 // developer's global Podman installation.
 const podmanDataRoot = fileURLToPath(new URL('../.openlink-runtime/podman-data/', import.meta.url))
+const podmanContainersRoot = resolve(podmanConfigRoot, 'containers')
+const podmanContainersConfig = resolve(podmanContainersRoot, 'containers.conf')
+const podmanPolicy = resolve(podmanContainersRoot, 'policy.json')
+const podmanConnections = resolve(podmanConfigRoot, 'podman-connections.json')
+process.env.CONTAINERS_CONF ||= podmanContainersConfig
+process.env.CONTAINERS_POLICY ||= podmanPolicy
+process.env.PODMAN_CONNECTIONS_CONF ||= podmanConnections
 const projectVmStateRoot = fileURLToPath(new URL('../.openlink-runtime/project-vms', import.meta.url))
 const projectImageRoot = fileURLToPath(new URL('../.openlink-runtime/images/', import.meta.url))
 const projectVmBaseRoot = fileURLToPath(new URL('../.openlink-runtime/project-vm-base/', import.meta.url))
@@ -92,6 +109,7 @@ async function loadProjectVmBase() {
   } catch {
     throw new Error('OpenLink Project VM image manifest is missing. Run `OPENLINK_BUILD_ARTIFACTS=1 pnpm start` during image production.')
   }
+  assertProjectVmArtifactManifest(manifest, projectVmArtifact)
   const disk = typeof manifest.disk === 'string' && manifest.disk.trim() ? manifest.disk.trim() : ''
   if (!disk || typeof manifest.fingerprint !== 'string' || !manifest.fingerprint) {
     throw new Error('OpenLink Project VM image manifest does not contain a bootable local disk image')
@@ -106,10 +124,39 @@ async function loadProjectVmBase() {
 }
 
 async function persistentProviderSecret() {
+  const readProtectedSecret = async () => {
+    await hardenUserOnlySecret(providerSecretPath)
+    return (await readFile(providerSecretPath, 'utf8')).trim()
+  }
+  // Windows releases before the native per-user state boundary stored this
+  // credential beside Hyper-V disks. Migrate it without rotating the key:
+  // write with exclusive creation, harden and verify the destination, then
+  // remove the legacy copy only after byte-for-byte persistence is proven.
+  if (hostPlatform.platform === 'win32') {
+    try {
+      await access(providerSecretPath, constants.F_OK)
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error
+      try {
+        const legacy = await readFile(legacyProviderSecretPath, 'utf8')
+        await mkdir(dirname(providerSecretPath), { recursive: true, mode: 0o700 })
+        await writeFile(providerSecretPath, legacy, { mode: 0o600, flag: 'wx' }).catch(async (writeError) => {
+          if (writeError?.code !== 'EEXIST') throw writeError
+        })
+        await hardenUserOnlySecret(providerSecretPath)
+        if (await readFile(providerSecretPath, 'utf8') !== legacy) {
+          throw new Error('Windows provider secret migration did not preserve the existing credential')
+        }
+        await rm(legacyProviderSecretPath)
+      } catch (migrationError) {
+        if (migrationError?.code !== 'ENOENT') throw migrationError
+      }
+    }
+  }
   if (process.env.OPENLINK_PROVIDER_SECRET_KEY) {
     try {
       const existing = (await readFile(providerSecretPath, 'utf8')).trim()
-      if (existing) return existing
+      if (existing) return readProtectedSecret()
     } catch (error) {
       if (error?.code !== 'ENOENT') throw error
     }
@@ -117,11 +164,11 @@ async function persistentProviderSecret() {
     await writeFile(providerSecretPath, `${process.env.OPENLINK_PROVIDER_SECRET_KEY}\n`, { mode: 0o600, flag: 'wx' }).catch(async (error) => {
       if (error?.code !== 'EEXIST') throw error
     })
-    return (await readFile(providerSecretPath, 'utf8')).trim()
+    return readProtectedSecret()
   }
   try {
     const existing = (await readFile(providerSecretPath, 'utf8')).trim()
-    if (existing) return existing
+    if (existing) return readProtectedSecret()
   } catch (error) {
     if (error?.code !== 'ENOENT') throw error
   }
@@ -130,7 +177,7 @@ async function persistentProviderSecret() {
   await writeFile(providerSecretPath, `${secret}\n`, { mode: 0o600, flag: 'wx' }).catch(async (error) => {
     if (error?.code !== 'EEXIST') throw error
   })
-  return (await readFile(providerSecretPath, 'utf8')).trim()
+  return readProtectedSecret()
 }
 
 function enforceIsolatedMachineVolumes(contents) {
@@ -176,7 +223,7 @@ async function ensurePodmanConfig() {
     else throw error
   }
   const configPath = `${containersDirectory}/containers.conf`
-  const helperConfig = `[engine]\nhelper_binaries_dir = ["${podmanHelperBinariesDir}"]\n`
+  const helperConfig = `[engine]\nhelper_binaries_dir = ["${podmanHelperBinariesDir.replaceAll('\\', '/')}"]\n`
   try {
     let existing = await readFile(configPath, 'utf8')
     let next = existing
@@ -201,7 +248,7 @@ async function executable(candidates) {
 }
 
 function run(command, args, options = {}) {
-  return spawn(command, args, { shell: false, stdio: 'inherit', ...options })
+  return spawn(packageManagerCommand(command), args, { shell: false, stdio: 'inherit', windowsHide: true, ...options })
 }
 
 async function waitForExit(child, label) {
@@ -233,7 +280,7 @@ async function ensureNpmDependencies(name, directory, extraInputs = []) {
   // registry connection must not leave a half-installed service that looks
   // current on the next startup, so use npm's deterministic lockfile install
   // with bounded transport retries and write the marker only after success.
-  const install = run('npm', [
+  const install = run(packageManagerCommand('npm'), [
     'ci',
     '--ignore-scripts',
     // Dependency installation is a startup prerequisite, while npm's audit
@@ -274,19 +321,29 @@ async function waitForHealth(url, child, name, path = '/healthz') {
 
 async function ensureSandboxRuntimeReady() {
   await ensureNpmDependencies('sandbox-runtime', sandboxRuntimeDirectory)
-  const distEntry = fileURLToPath(new URL('../services/sandbox-runtime/dist/index.js', import.meta.url))
-  try {
-    await access(distEntry, constants.R_OK)
-  } catch {
-    const build = run('npm', ['run', 'build'], { cwd: sandboxRuntimeDirectory })
-    await waitForExit(build, 'Sandbox Runtime build')
-  }
+  const build = run(packageManagerCommand('npm'), ['run', 'build'], { cwd: sandboxRuntimeDirectory })
+  await waitForExit(build, 'Sandbox Runtime build')
+}
+
+async function ensureHostServicesReady() {
+  // File dependencies are packed by npm at install time. Build the exact
+  // repository-owned packages first so a clean Windows or macOS checkout
+  // never installs a link whose published `files` set lacks dist output.
+  const protocolBuild = run(packageManagerCommand('npm'), ['run', 'build'], { cwd: browserProtocolDirectory })
+  await waitForExit(protocolBuild, 'Browser Protocol build')
+  await ensureSandboxRuntimeReady()
+  await ensureNpmDependencies('browser-host', browserHostDirectory)
+  await ensureNpmDependencies('agent-host', agentHostDirectory)
+  const browserBuild = run(packageManagerCommand('npm'), ['run', 'build'], { cwd: browserHostDirectory })
+  await waitForExit(browserBuild, 'Browser Host build')
+  const agentBuild = run(packageManagerCommand('npm'), ['run', 'build'], { cwd: agentHostDirectory })
+  await waitForExit(agentBuild, 'Agent Host build')
 }
 
 if (Number(process.versions.node.split('.')[0]) < 22) {
   const candidates = [
     process.env.OPENLINK_NODE_EXECUTABLE,
-    `${process.env.HOME}/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node`,
+    process.env.HOME ? `${process.env.HOME}/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node` : undefined,
     '/opt/homebrew/bin/node',
   ].filter(Boolean)
   let replacement
@@ -300,31 +357,45 @@ if (Number(process.versions.node.split('.')[0]) < 22) {
   if (!replacement) throw new Error('Local Agent development requires Node 22.19 or newer. Set OPENLINK_NODE_EXECUTABLE.')
   const child = run(replacement, [fileURLToPath(import.meta.url), ...process.argv.slice(2)], {
     cwd: root,
-    env: { ...process.env, PATH: `${dirname(replacement)}:${process.env.PATH || ''}` },
+    env: { ...process.env, PATH: prependPath(dirname(replacement)) },
   })
   process.exit(await new Promise((resolveExit) => child.once('exit', (code) => resolveExit(code ?? 1))))
 }
-const providerSecret = await persistentProviderSecret()
+const podmanBuild = run(process.execPath, ['scripts/ensure-podman-toolchain.mjs'], { cwd: root })
+await waitForExit(podmanBuild, 'Podman toolchain build')
 await ensurePodmanConfig()
+if (hostPlatform.platform === 'win32') {
+  await assertWindowsHyperVHostReady(podmanCommand, {
+    commandOptions: {
+      env: {
+        ...process.env,
+        XDG_CONFIG_HOME: podmanConfigRoot,
+        XDG_DATA_HOME: podmanDataRoot,
+        CONTAINERS_MACHINE_PROVIDER: hostPlatform.provider,
+        CONTAINERS_HELPER_BINARY_DIR: podmanHelperBinariesDir,
+        CONTAINERS_CONF: podmanContainersConfig,
+        CONTAINERS_POLICY: podmanPolicy,
+        PODMAN_CONNECTIONS_CONF: podmanConnections,
+        PATH: prependPath(podmanHelperBinariesDir),
+      },
+    },
+  })
+}
+const providerSecret = await persistentProviderSecret()
 const localZokerbase = runtimeMode === 'local' ? await ensureZokerbase() : null
 let localZero = null
 const knowledgeServiceEnabled = runtimeMode === 'local'
   || Boolean(process.env.OPENLINK_ZERO_URL && (process.env.OPENLINK_KNOWLEDGE_ZOKERBASE_SERVICE_KEY || process.env.OPENLINK_SUPABASE_SERVICE_ROLE_KEY))
 
 const chromeExecutable = await executable([
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
-  '/Applications/Chromium.app/Contents/MacOS/Chromium',
-  '/usr/bin/google-chrome',
-  '/usr/bin/chromium',
-  '/usr/bin/chromium-browser',
+  ...hostPlatform.chromiumCandidates,
 ])
 
 // Agent Host's desktop entrypoint imports this repository-owned runtime via
 // a local package link. Keep the link usable during ordinary development
 // starts as well as artifact builds; otherwise a missing ignored `dist/`
 // directory aborts the supervisor before Next.js can start.
-await ensureSandboxRuntimeReady()
+await ensureHostServicesReady()
 
 if (process.env.OPENLINK_BUILD_ARTIFACTS === '1') {
   if (runtimeMode === 'local') {
@@ -334,32 +405,21 @@ if (process.env.OPENLINK_BUILD_ARTIFACTS === '1') {
     })
     await waitForExit(zeroImageBuild, 'Zero image artifact build')
   }
-  const podmanBuild = run(process.execPath, ['scripts/ensure-podman-toolchain.mjs'], { cwd: root })
-  await waitForExit(podmanBuild, 'Podman toolchain build')
-
   await ensureNpmDependencies('pi', new URL('../services/pi/', import.meta.url))
 
   const piSync = run(process.execPath, ['scripts/sync-pi-runtime.mjs'], { cwd: root })
   await waitForExit(piSync, 'Pi runtime sync')
 
-  await ensureNpmDependencies('browser-host', browserHostDirectory)
-  await ensureNpmDependencies('agent-host', agentHostDirectory)
   const piRuntimeManifest = new URL('../packages/pi-runtime/manifest.json', import.meta.url)
   await ensureNpmDependencies('agent-worker', agentWorkerDirectory, [piRuntimeManifest])
   await ensureNpmDependencies('agent-rpc-worker', agentRpcWorkerDirectory, [piRuntimeManifest])
   await ensureNpmDependencies('knowledge-service', knowledgeServiceDirectory)
 
-  const build = run('npm', ['run', 'build'], { cwd: browserHostDirectory })
-  await waitForExit(build, 'Browser Host build')
-  const sandboxRuntimeBuild = run('npm', ['run', 'build'], { cwd: sandboxRuntimeDirectory })
-  await waitForExit(sandboxRuntimeBuild, 'Sandbox Runtime build')
-  const agentBuild = run('npm', ['run', 'build'], { cwd: agentHostDirectory })
-  await waitForExit(agentBuild, 'Agent Host build')
-  const workerBuild = run('npm', ['run', 'build'], { cwd: agentWorkerDirectory })
+  const workerBuild = run(packageManagerCommand('npm'), ['run', 'build'], { cwd: agentWorkerDirectory })
   await waitForExit(workerBuild, 'Agent Worker build')
-  const rpcWorkerBuild = run('npm', ['run', 'build'], { cwd: agentRpcWorkerDirectory })
+  const rpcWorkerBuild = run(packageManagerCommand('npm'), ['run', 'build'], { cwd: agentRpcWorkerDirectory })
   await waitForExit(rpcWorkerBuild, 'Agent RPC Worker build')
-  const knowledgeBuild = run('npm', ['run', 'build'], { cwd: knowledgeServiceDirectory })
+  const knowledgeBuild = run(packageManagerCommand('npm'), ['run', 'build'], { cwd: knowledgeServiceDirectory })
   await waitForExit(knowledgeBuild, 'Knowledge Service build')
   const projectSupabaseSync = run(process.execPath, ['scripts/sync-project-supabase.mjs'], { cwd: root, env: process.env })
   await waitForExit(projectSupabaseSync, 'Project Supabase release sync')
@@ -374,8 +434,8 @@ if (process.env.OPENLINK_BUILD_ARTIFACTS === '1') {
       XDG_DATA_HOME: podmanDataRoot,
       CONTAINERS_HELPER_BINARY_DIR: podmanHelperBinariesDir,
       OPENLINK_STOP_ACTIVE_MACHINES: '1',
-      CONTAINERS_MACHINE_PROVIDER: process.env.CONTAINERS_MACHINE_PROVIDER || 'applehv',
-      PATH: `${podmanHelperBinariesDir}:${process.env.PATH || ''}`,
+      CONTAINERS_MACHINE_PROVIDER: process.env.CONTAINERS_MACHINE_PROVIDER || hostPlatform.provider,
+      PATH: prependPath(podmanHelperBinariesDir),
     },
   })
   await waitForExit(projectVmBaseBuild, 'Project VM base image build')
@@ -387,8 +447,8 @@ if (process.env.OPENLINK_BUILD_ARTIFACTS === '1') {
       XDG_CONFIG_HOME: podmanConfigRoot,
       XDG_DATA_HOME: podmanDataRoot,
       CONTAINERS_HELPER_BINARY_DIR: podmanHelperBinariesDir,
-      CONTAINERS_MACHINE_PROVIDER: process.env.CONTAINERS_MACHINE_PROVIDER || 'applehv',
-      PATH: `${podmanHelperBinariesDir}:${process.env.PATH || ''}`,
+      CONTAINERS_MACHINE_PROVIDER: process.env.CONTAINERS_MACHINE_PROVIDER || hostPlatform.provider,
+      PATH: prependPath(podmanHelperBinariesDir),
     },
   })
   await waitForExit(projectVmDiskBuild, 'Project VM disk image build')
@@ -401,8 +461,8 @@ if (process.env.OPENLINK_BUILD_ARTIFACTS === '1') {
       XDG_DATA_HOME: podmanDataRoot,
       CONTAINERS_HELPER_BINARY_DIR: podmanHelperBinariesDir,
       OPENLINK_STOP_ACTIVE_MACHINES: '1',
-      CONTAINERS_MACHINE_PROVIDER: process.env.CONTAINERS_MACHINE_PROVIDER || 'applehv',
-      PATH: `${podmanHelperBinariesDir}:${process.env.PATH || ''}`,
+      CONTAINERS_MACHINE_PROVIDER: process.env.CONTAINERS_MACHINE_PROVIDER || hostPlatform.provider,
+      PATH: prependPath(podmanHelperBinariesDir),
     },
   })
   await waitForExit(projectImagesBuild, 'Project runtime image build')
@@ -417,7 +477,7 @@ if (runtimeMode === 'local') localZero = await ensureZero()
 
 if (knowledgeServiceEnabled) {
   if (process.env.OPENLINK_BUILD_ARTIFACTS !== '1') await ensureNpmDependencies('knowledge-service', knowledgeServiceDirectory)
-  const knowledgeBuild = run('npm', ['run', 'build'], { cwd: knowledgeServiceDirectory })
+  const knowledgeBuild = run(packageManagerCommand('npm'), ['run', 'build'], { cwd: knowledgeServiceDirectory })
   await waitForExit(knowledgeBuild, 'Knowledge Service build')
 }
 
@@ -493,11 +553,14 @@ const shared = {
   OPENLINK_PODMAN_COMMAND: podmanCommand,
   OPENLINK_PODMAN_HELPER_BINARIES_DIR: podmanHelperBinariesDir,
   CONTAINERS_HELPER_BINARY_DIR: podmanHelperBinariesDir,
+  CONTAINERS_CONF: podmanContainersConfig,
+  CONTAINERS_POLICY: podmanPolicy,
+  PODMAN_CONNECTIONS_CONF: podmanConnections,
   XDG_CONFIG_HOME: podmanConfigRoot,
   XDG_DATA_HOME: podmanDataRoot,
   // AppleHV uses the bundled vfkit + gvproxy artifacts and does not require
   // a system krunkit/libkrun installation on macOS.
-  CONTAINERS_MACHINE_PROVIDER: process.env.CONTAINERS_MACHINE_PROVIDER || 'applehv',
+  CONTAINERS_MACHINE_PROVIDER: process.env.CONTAINERS_MACHINE_PROVIDER || hostPlatform.provider,
   OPENLINK_PROJECT_VM_STATE_ROOT: projectVmStateRoot,
   OPENLINK_PROJECT_VM_BASE_DISK: projectVmBase.diskPath,
   OPENLINK_PROJECT_VM_BOOTSTRAP: '1',

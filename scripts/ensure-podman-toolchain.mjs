@@ -1,17 +1,31 @@
-import { access, chmod, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { access, chmod, cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFile as execFileCallback, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { promisify } from 'node:util'
+import { bundledToolchainPaths, prependPath, resolveHostPlatform } from './lib/host-platform.mjs'
 
 const root = resolve(fileURLToPath(new URL('../', import.meta.url)))
 const source = resolve(root, 'services/linux')
 const output = resolve(root, '.openlink-runtime/toolchain/bin')
+const hostPlatform = resolveHostPlatform()
+const toolchain = bundledToolchainPaths(root)
 const host = `${process.platform}-${process.arch}`
 const manifestPath = resolve(root, '.openlink-runtime/toolchain/manifest.json')
 const execFile = promisify(execFileCallback)
+// Windows Hyper-V is a product-critical native provider. Use the current
+// signed upstream stable release instead of compiling an unreleased Podman
+// development branch with the host's Go toolchain. This isolates Windows from
+// source-head regressions while macOS continues to use its established native
+// source-build path.
+const WINDOWS_PODMAN_RELEASE = Object.freeze({
+  version: '6.0.2',
+  installer: 'podman-installer-windows-amd64.msi',
+  sha256: 'c094059880f033656092f5fb4306457e42aa068ee32137162299817c5f79396f',
+  url: 'https://github.com/podman-container-tools/podman/releases/download/v6.0.2/podman-installer-windows-amd64.msi',
+})
 
 function downloadBytes(url, timeoutSeconds) {
   return new Promise((resolveDownload, rejectDownload) => {
@@ -67,12 +81,99 @@ async function commandOutput(command, args, options = {}) {
 }
 
 async function sourceFingerprint() {
-  const [head, diff, status] = await Promise.all([
-    commandOutput('git', ['-C', source, 'rev-parse', 'HEAD']),
-    commandOutput('git', ['-C', source, 'diff', '--no-ext-diff', 'HEAD']),
-    commandOutput('git', ['-C', source, 'status', '--porcelain=v1', '--untracked-files=all']),
+  const [tree, diff, status] = await Promise.all([
+    commandOutput('git', ['-C', root, 'rev-parse', 'HEAD:services/linux']),
+    commandOutput('git', ['-C', root, 'diff', '--no-ext-diff', 'HEAD', '--', 'services/linux']),
+    commandOutput('git', ['-C', root, 'status', '--porcelain=v1', '--untracked-files=all', '--', 'services/linux']),
   ])
-  return createHash('sha256').update(JSON.stringify({ head: head.trim(), diff, status })).digest('hex')
+  return createHash('sha256').update(JSON.stringify({ tree: tree.trim(), diff, status })).digest('hex')
+}
+
+function goArchitecture() {
+  if (process.arch === 'arm64') return 'arm64'
+  if (process.arch === 'x64') return 'amd64'
+  throw new Error(`OpenLink cannot build Podman for ${host}`)
+}
+
+async function buildWindowsRemote(go, outputPath) {
+  const commit = (await commandOutput('git', ['-C', root, 'rev-parse', 'HEAD:services/linux'])).trim()
+  const buildInfo = String(Math.floor(Date.now() / 1000))
+  const ldflags = [
+    `-X go.podman.io/podman/v6/libpod/define.gitCommit=${commit}`,
+    `-X go.podman.io/podman/v6/libpod/define.buildInfo=${buildInfo}`,
+    '-X go.podman.io/podman/v6/libpod/config._installPrefix=/usr/local',
+    '-X go.podman.io/podman/v6/libpod/config._etcDir=/etc',
+    '-X go.podman.io/podman/v6/pkg/systemd/quadlet._binDir=/usr/local/bin',
+    '-X go.podman.io/common/pkg/config.additionalHelperBinariesDir=',
+  ].join(' ')
+  const env = {
+    ...process.env,
+    CGO_ENABLED: '0',
+    GOOS: 'windows',
+    GOARCH: goArchitecture(),
+    GOFLAGS: '-mod=vendor',
+  }
+  await run(go, [
+    'build', '-trimpath',
+    '-tags', 'remote exclude_graphdriver_btrfs containers_image_openpgp',
+    '-ldflags', ldflags,
+    '-o', outputPath,
+    './cmd/podman',
+  ], { cwd: source, env })
+}
+
+async function ensureWindowsStableRelease() {
+  if (process.arch !== 'x64') throw new Error(`OpenLink's pinned Windows Podman release does not support ${process.arch}`)
+  const toolchainRoot = resolve(root, '.openlink-runtime', 'toolchain')
+  const downloadDirectory = resolve(toolchainRoot, 'downloads')
+  const installerPath = resolve(downloadDirectory, WINDOWS_PODMAN_RELEASE.installer)
+  await mkdir(downloadDirectory, { recursive: true, mode: 0o700 })
+  let validInstaller = false
+  try {
+    const checksum = createHash('sha256').update(await readFile(installerPath)).digest('hex')
+    validInstaller = checksum === WINDOWS_PODMAN_RELEASE.sha256
+  } catch {}
+  if (!validInstaller) await downloadVerified(WINDOWS_PODMAN_RELEASE.url, installerPath, WINDOWS_PODMAN_RELEASE.sha256)
+
+  const extractionRoot = await mkdtemp(resolve(toolchainRoot, `podman-${WINDOWS_PODMAN_RELEASE.version}-`))
+  try {
+    await run('msiexec.exe', ['/a', installerPath, '/qn', `TARGETDIR=${extractionRoot}`])
+    const releaseBin = resolve(extractionRoot, 'PFiles64', 'Podman')
+    for (const [sourceName, destination] of [
+      ['podman.exe', toolchain.podman],
+      ['gvproxy.exe', toolchain.gvproxy],
+      ['win-sshproxy.exe', toolchain.winSshProxy],
+    ]) {
+      const sourcePath = resolve(releaseBin, sourceName)
+      if (!(await executable(sourcePath))) throw new Error(`Pinned Podman ${WINDOWS_PODMAN_RELEASE.version} installer is missing ${sourceName}`)
+      await cp(sourcePath, destination, { force: true })
+      await chmod(destination, 0o755)
+    }
+  } finally {
+    await rm(extractionRoot, { recursive: true, force: true })
+  }
+}
+
+async function ensureWindowsHelpers(go) {
+  if (process.platform !== 'win32') return
+  const required = [toolchain.gvproxy, toolchain.winSshProxy]
+  if ((await Promise.all(required.map(executable))).every(Boolean)) return
+  const helperEnv = {
+    ...process.env,
+    CGO_ENABLED: '0',
+    GOOS: 'windows',
+    GOARCH: goArchitecture(),
+    GOBIN: output,
+    GOPATH: resolve(root, '.openlink-runtime', 'toolchain', 'go-work'),
+    GOMODCACHE: resolve(root, '.openlink-runtime', 'toolchain', 'go-mod-cache'),
+    GOFLAGS: '-mod=mod',
+  }
+  if (!(await executable(toolchain.gvproxy))) {
+    await run(go, ['install', 'github.com/containers/gvisor-tap-vsock/cmd/gvproxy@v0.8.9'], { cwd: source, env: helperEnv })
+  }
+  if (!(await executable(toolchain.winSshProxy))) {
+    await run(go, ['install', 'github.com/containers/gvisor-tap-vsock/cmd/win-sshproxy@v0.8.9'], { cwd: source, env: helperEnv })
+  }
 }
 
 async function buildWithHostGo() {
@@ -85,6 +186,10 @@ async function buildWithHostGo() {
   } else if (process.platform === 'linux') {
     await run('make', ['GOOS=linux', `GOARCH=${process.arch === 'arm64' ? 'arm64' : 'amd64'}`, 'podman'], { cwd: source, env })
     await run('cp', [resolve(source, 'bin/podman'), resolve(output, 'podman')])
+  } else if (process.platform === 'win32') {
+    const go = await ensureGo()
+    await buildWindowsRemote(go, toolchain.podman)
+    await ensureWindowsHelpers(go)
   } else {
     throw new Error(`Podman source bootstrap is not implemented for ${host}`)
   }
@@ -101,13 +206,13 @@ async function downloadVerified(url, outputPath, expectedSha256) {
 async function ensureGo() {
   if (await commandExists('go')) return 'go'
   const version = process.env.OPENLINK_GO_VERSION || 'go1.25.12'
-  const platform = process.platform === 'darwin' ? 'darwin' : process.platform === 'linux' ? 'linux' : undefined
+  const platform = process.platform === 'darwin' ? 'darwin' : process.platform === 'linux' ? 'linux' : process.platform === 'win32' ? 'windows' : undefined
   const architecture = process.arch === 'arm64' ? 'arm64' : process.arch === 'x64' ? 'amd64' : undefined
   if (!platform || !architecture) throw new Error(`OpenLink cannot bootstrap Go for ${host}`)
-  const archiveName = `${version}.${platform}-${architecture}.tar.gz`
+  const archiveName = `${version}.${platform}-${architecture}.${process.platform === 'win32' ? 'zip' : 'tar.gz'}`
   const archivePath = resolve(output, archiveName)
   const goRoot = resolve(output, 'go')
-  const goBinary = resolve(goRoot, 'bin', 'go')
+  const goBinary = resolve(goRoot, 'bin', `go${hostPlatform.executableSuffix}`)
   if (!(await executable(goBinary))) {
     let releases
     try {
@@ -117,13 +222,13 @@ async function ensureGo() {
     }
     const release = releases.flatMap((item) => item.files ?? []).find((file) => file.filename === archiveName)
     if (!release?.sha256) throw new Error(`Go release ${archiveName} is not available from go.dev`)
-    if (!(await executable(archivePath))) {
+    if (!(await access(archivePath, constants.R_OK).then(() => true).catch(() => false))) {
       const data = await downloadBytes(`https://go.dev/dl/${archiveName}`, 10 * 60)
       const digest = createHash('sha256').update(data).digest('hex')
       if (digest !== release.sha256) throw new Error(`Checksum mismatch for ${archiveName}`)
       await writeFile(archivePath, data, { mode: 0o600 })
     }
-    await run('tar', ['-xzf', archivePath, '-C', output])
+    await run('tar', [process.platform === 'win32' ? '-xf' : '-xzf', archivePath, '-C', output])
     await chmod(goBinary, 0o755)
   }
   return goBinary
@@ -163,28 +268,34 @@ async function ensureDarwinHelpers() {
 
 await mkdir(output, { recursive: true, mode: 0o700 })
 const fingerprint = await sourceFingerprint()
-const podmanPath = resolve(output, 'podman')
+const podmanPath = toolchain.podman
 let manifest
 try { manifest = JSON.parse(await readFile(manifestPath, 'utf8')) } catch {}
 const requestedGoVersion = process.env.OPENLINK_GO_VERSION || 'go1.25.12'
-const manifestMatches = manifest?.sourceFingerprint === fingerprint && manifest?.host === host && manifest?.goVersion === requestedGoVersion
+const manifestMatches = process.platform === 'win32'
+  ? manifest?.host === host && manifest?.provider === hostPlatform.provider && manifest?.podmanRelease === WINDOWS_PODMAN_RELEASE.version && manifest?.podmanReleaseSha256 === WINDOWS_PODMAN_RELEASE.sha256
+  : manifest?.sourceFingerprint === fingerprint && manifest?.host === host && manifest?.goVersion === requestedGoVersion
+let go
 if (!(await executable(podmanPath)) || !manifestMatches) {
-  const go = await ensureGo()
-  const env = { ...process.env, GOFLAGS: '-mod=mod', PATH: `${dirname(go)}:${process.env.PATH || ''}` }
-  if (process.platform === 'darwin') {
+  if (process.platform === 'win32') {
+    await ensureWindowsStableRelease()
+  } else {
+    go = await ensureGo()
+    const env = { ...process.env, GOFLAGS: '-mod=mod', PATH: prependPath(dirname(go)) }
+    if (process.platform === 'darwin') {
     await run('make', ['GOOS=darwin', 'GOARCH=arm64', 'podman-remote'], { cwd: source, env })
     await run('cp', [resolve(source, 'bin/darwin/podman'), podmanPath])
-  } else if (process.platform === 'linux') {
+    } else if (process.platform === 'linux') {
     await run('make', ['GOOS=linux', `GOARCH=${process.arch === 'arm64' ? 'arm64' : 'amd64'}`, 'podman'], { cwd: source, env })
     await run('cp', [resolve(source, 'bin/podman'), podmanPath])
-  } else {
+    } else {
     throw new Error(`Podman source bootstrap is not implemented for ${host}`)
+    }
   }
 }
 await ensureDarwinHelpers()
-for (const helper of ['podman', 'vfkit', 'gvproxy']) {
-  const path = resolve(output, helper)
+for (const path of [toolchain.podman, toolchain.vfkit, toolchain.gvproxy, toolchain.winSshProxy].filter(Boolean)) {
   if (await executable(path)) await chmod(path, 0o755)
 }
-await writeFile(manifestPath, `${JSON.stringify({ host, sourceFingerprint: fingerprint, goVersion: requestedGoVersion, podmanPath, generatedAt: new Date().toISOString() }, null, 2)}\n`, { mode: 0o600 })
+await writeFile(manifestPath, `${JSON.stringify({ host, provider: hostPlatform.provider, sourceFingerprint: process.platform === 'win32' ? undefined : fingerprint, goVersion: process.platform === 'win32' ? undefined : requestedGoVersion, podmanRelease: process.platform === 'win32' ? WINDOWS_PODMAN_RELEASE.version : undefined, podmanReleaseSha256: process.platform === 'win32' ? WINDOWS_PODMAN_RELEASE.sha256 : undefined, podmanPath, helpers: [toolchain.gvproxy, toolchain.winSshProxy, toolchain.vfkit].filter(Boolean), generatedAt: new Date().toISOString() }, null, 2)}\n`, { mode: 0o600 })
 process.stdout.write(`${JSON.stringify({ host, podmanPath, toolchainRoot: dirname(podmanPath), sourceFingerprint: fingerprint })}\n`)

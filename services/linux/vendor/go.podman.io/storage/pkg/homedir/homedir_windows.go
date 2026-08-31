@@ -30,6 +30,14 @@ func Get() string {
 // environment variables depending on the target operating system.
 // Returned path should be used with "path/filepath" to form new paths.
 func GetConfigHome() (string, error) {
+	// OpenLink keeps every Podman Machine artifact in its product-owned runtime
+	// root. Upstream Windows historically ignored XDG_CONFIG_HOME here even
+	// though GetDataHome already honors XDG_DATA_HOME, which split one machine's
+	// config and disk across unrelated roots. Honor the same explicit override
+	// used on Unix; the default Windows behavior remains unchanged when unset.
+	if configHome := os.Getenv("XDG_CONFIG_HOME"); configHome != "" {
+		return configHome, nil
+	}
 	return filepath.Join(Get(), ".config"), nil
 }
 

@@ -12,6 +12,7 @@ import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
+import { ensureDockerEngine } from './lib/docker-runtime.mjs'
 
 const root = resolve(fileURLToPath(new URL('../', import.meta.url)))
 const backendRoot = resolve(root, 'backend')
@@ -20,6 +21,7 @@ const manifestPath = resolve(artifactRoot, 'manifest.json')
 const version = process.env.ZOKERBASE_IMAGE_VERSION || '2026.08.10'
 const allowAcquisition = process.env.OPENLINK_ZOKERBASE_ALLOW_UPSTREAM_ACQUISITION !== '0'
 const force = process.argv.includes('--force')
+const docker = await ensureDockerEngine()
 
 const specs = [
   ['studio', 'supabase/studio:2026.08.03-sha-022b374'],
@@ -57,7 +59,7 @@ function run(command, args, options = {}) {
 
 async function imageExists(reference) {
   try {
-    await run('docker', ['image', 'inspect', reference])
+    await run(docker, ['image', 'inspect', reference])
     return true
   } catch {
     return false
@@ -83,7 +85,7 @@ async function ensureSource(spec) {
   if (!allowAcquisition) {
     throw new Error(`Missing ZOKERBASE build input ${spec.source}. Import the published ZOKERBASE artifact or run image production with OPENLINK_ZOKERBASE_ALLOW_UPSTREAM_ACQUISITION=1.`)
   }
-  await run('docker', ['pull', spec.source])
+  await run(docker, ['pull', spec.source])
 }
 
 async function build(spec) {
@@ -101,7 +103,7 @@ async function build(spec) {
     `LABEL io.openlink.zokerbase.build-input="${spec.source}"`,
     '',
   ].join('\n')
-  await run('docker', [
+  await run(docker, [
     'build', '--pull=false', '--file', '-', '--tag', spec.target,
     '--build-arg', `BASE_IMAGE=${spec.source}`, '.',
   ], { cwd: backendRoot, input: dockerfile })
@@ -111,13 +113,13 @@ async function writeArtifact(spec) {
   const archive = resolve(artifactRoot, `${spec.name}.tar`)
   if (!force && await exists(archive)) return archive
   const temporary = `${archive}.${process.pid}.tmp`
-  await run('docker', ['save', '--output', temporary, spec.target])
+  await run(docker, ['save', '--output', temporary, spec.target])
   await rename(temporary, archive)
   return archive
 }
 
 async function main() {
-  await run('docker', ['info', '--format', '{{.ServerVersion}}'])
+  await run(docker, ['info', '--format', '{{.ServerVersion}}'])
   await mkdir(artifactRoot, { recursive: true, mode: 0o700 })
   const fingerprint = await sourceFingerprint()
   const images = []
