@@ -141,7 +141,11 @@ async function hashTreeEntry(hash, root, path) {
     return
   }
   if (!metadata.isFile()) throw new Error(`Unsupported Supabase configuration entry ${name}`)
-  hash.update(`file\0${name}\0${metadata.mode & 0o777}\0`)
+  // File mode bits are not a portable source identity: NTFS checkouts cannot
+  // represent Git's POSIX executable bit. Runtime permissions are assigned
+  // explicitly in the Linux image, so the reviewed tree digest binds paths
+  // and bytes identically on macOS, Windows and Linux.
+  hash.update(`file\0${name}\0`)
   hash.update(await readFile(path))
   hash.update('\0')
 }
@@ -149,7 +153,7 @@ async function hashTreeEntry(hash, root, path) {
 export async function hashConfigurationTree(root) {
   const absoluteRoot = resolve(root)
   const hash = createHash('sha256')
-  hash.update('project-supabase-configuration-v1\0')
+  hash.update('project-supabase-configuration-v2\0')
   for (const entry of (await readdir(absoluteRoot)).sort()) {
     if (entry === '.git') continue
     await hashTreeEntry(hash, absoluteRoot, resolve(absoluteRoot, entry))

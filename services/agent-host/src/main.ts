@@ -1,4 +1,4 @@
-import { resolve } from 'node:path'
+import { extname, resolve } from 'node:path'
 import { LocalOpenSandboxBackend } from './backends/local-opensandbox.js'
 import { PodmanProjectRuntimeServiceDriver, ProjectRuntimeManager } from './project-runtime.js'
 import { PodmanMachineDriver, ProjectVmManager } from './project-vm.js'
@@ -52,12 +52,18 @@ function networkDefaultAction(value: string | undefined): 'allow' | 'deny' {
 
 const env = process.env
 const supabaseAccessResolver = createAccessModeResolver(env)
+const hostMachineProvider = env.OPENLINK_PODMAN_MACHINE_PROVIDER?.trim()
+  || env.CONTAINERS_MACHINE_PROVIDER?.trim()
+  || (process.platform === 'win32' ? 'hyperv' : process.platform === 'darwin' ? 'applehv' : 'qemu')
+if (!['applehv', 'hyperv', 'qemu'].includes(hostMachineProvider)) throw new Error('OpenLink Podman Machine provider is invalid')
+const nativeProvider = process.platform === 'win32' ? 'hyperv' : process.platform === 'darwin' ? 'applehv' : process.platform === 'linux' ? 'qemu' : undefined
+if (!nativeProvider || hostMachineProvider !== nativeProvider) throw new Error(`OpenLink requires the native ${nativeProvider ?? 'unsupported'} Project VM provider on ${process.platform}`)
 if (env.OPENLINK_PODMAN_HELPER_BINARIES_DIR) {
   // Podman machine uses gvproxy/vfkit outside the engine binary. Keep the
   // helper lookup scoped to the bundled toolchain instead of requiring a
   // system Podman installation.
   process.env.CONTAINERS_HELPER_BINARY_DIR = env.OPENLINK_PODMAN_HELPER_BINARIES_DIR
-  process.env.CONTAINERS_MACHINE_PROVIDER ??= env.OPENLINK_PODMAN_MACHINE_PROVIDER || 'applehv'
+  process.env.CONTAINERS_MACHINE_PROVIDER ??= hostMachineProvider
 }
 const host = env.OPENLINK_AGENT_HOST || '127.0.0.1'
 const port = integer(env.OPENLINK_AGENT_PORT, 43121, 1, 65_535)
@@ -68,15 +74,21 @@ const storageRoot = resolve(env.OPENLINK_AGENT_STORAGE_ROOT || '.agent-data')
 const sessionIdleTtlMs = integer(env.OPENLINK_AGENT_SESSION_IDLE_TTL_MS, 30 * 60_000, 60_000, 24 * 60 * 60_000)
 const maxSessions = integer(env.OPENLINK_AGENT_MAX_SESSIONS, 32, 1, 512)
 const projectVmStateRoot = resolve(env.OPENLINK_PROJECT_VM_STATE_ROOT || '.project-vms')
+const projectBaseDisk = resolve(required(env, 'OPENLINK_PROJECT_VM_BASE_DISK'))
+const expectedDiskExtension = hostMachineProvider === 'hyperv' ? '.vhdx' : hostMachineProvider === 'applehv' ? '.raw' : '.qcow2'
+if (extname(projectBaseDisk).toLowerCase() !== expectedDiskExtension) throw new Error(`OpenLink ${hostMachineProvider} Project VM requires a ${expectedDiskExtension} Golden Disk`)
 const machineDriver = new PodmanMachineDriver({
   command: env.OPENLINK_PODMAN_COMMAND || 'podman',
   bootstrap: env.OPENLINK_PROJECT_VM_BOOTSTRAP !== '0',
   rootfulPodman: env.OPENLINK_PROJECT_VM_ROOTFUL === '1',
-  projectBaseDisk: resolve(required(env, 'OPENLINK_PROJECT_VM_BASE_DISK')),
+  projectBaseDisk,
+  machineProvider: hostMachineProvider as 'applehv' | 'hyperv' | 'qemu',
   directAppleHv: process.platform === 'darwin',
   helperBinaryDirectory: env.CONTAINERS_HELPER_BINARY_DIR || resolve('.openlink-runtime/toolchain/bin'),
-  directStateRoot: resolve(projectVmStateRoot, 'applehv'),
-  directSocketRoot: env.OPENLINK_PROJECT_VM_APPLEHV_SOCKET_ROOT,
+  ...(hostMachineProvider === 'applehv' ? {
+    directStateRoot: resolve(projectVmStateRoot, 'applehv'),
+    directSocketRoot: env.OPENLINK_PROJECT_VM_APPLEHV_SOCKET_ROOT,
+  } : {}),
 })
 const projectVmManager = new ProjectVmManager({
   stateRoot: projectVmStateRoot,

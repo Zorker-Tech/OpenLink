@@ -1,8 +1,12 @@
 import { createHash, createHmac } from 'node:crypto'
 import { spawn } from 'node:child_process'
-import { cp, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { ensureDockerEngine, resolveDockerCommand } from './lib/docker-runtime.mjs'
+import { enableZokerbaseModernAuthCompose, generateZokerbaseModernAuth, generateZokerbaseSecrets } from './lib/zokerbase-auth.mjs'
+import { hardenUserOnlySecret } from './lib/windows-security.mjs'
+import { resolveHostPlatform, resolveUserStateRoot } from './lib/host-platform.mjs'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
 const sourceRoot = resolve(root, 'backend/docker')
@@ -11,7 +15,11 @@ const sourceRoot = resolve(root, 'backend/docker')
 // service identity, runtime path, container names, or image references.
 const runtimeRoot = resolve(root, '.openlink-runtime/zokerbase')
 const stackRoot = resolve(runtimeRoot, 'stack')
-const envPath = resolve(stackRoot, '.env')
+const hostPlatform = resolveHostPlatform()
+const workspaceEnvPath = resolve(stackRoot, '.env')
+const envPath = hostPlatform.platform === 'win32'
+  ? resolve(resolveUserStateRoot(root, { host: hostPlatform }), 'zokerbase', '.env')
+  : workspaceEnvPath
 const manifestPath = resolve(runtimeRoot, 'manifest.json')
 const imageArtifactRoot = resolve(runtimeRoot, 'images')
 const imageArtifactManifestPath = resolve(imageArtifactRoot, 'manifest.json')
@@ -22,6 +30,12 @@ const apiPort = Number(process.env.OPENLINK_LOCAL_ZOKERBASE_API_PORT || process.
 const postgresPort = Number(process.env.OPENLINK_LOCAL_ZOKERBASE_POSTGRES_PORT || process.env.OPENLINK_LOCAL_SUPABASE_POSTGRES_PORT || 54382)
 const transactionPort = postgresPort + 1
 const directPostgresPort = Number(process.env.OPENLINK_LOCAL_ZOKERBASE_DB_DIRECT_PORT || process.env.OPENLINK_LOCAL_SUPABASE_DB_DIRECT_PORT || 54384)
+let dockerCommand
+
+async function docker() {
+  dockerCommand ||= await resolveDockerCommand()
+  return dockerCommand
+}
 
 function run(command, args, options = {}) {
   return new Promise((resolveRun, reject) => {
@@ -108,7 +122,7 @@ async function pathExists(path) {
 
 async function dockerVolumeExists(name) {
   try {
-    await run('docker', ['volume', 'inspect', name])
+    await run(await docker(), ['volume', 'inspect', name])
     return true
   } catch {
     return false
@@ -117,9 +131,9 @@ async function dockerVolumeExists(name) {
 
 async function migrateNamedVolume(source, destination) {
   if (await dockerVolumeExists(destination)) return
-  await run('docker', ['volume', 'create', destination])
+  await run(await docker(), ['volume', 'create', destination])
   if (!(await dockerVolumeExists(source))) return
-  await run('docker', [
+  await run(await docker(), [
     'run', '--rm', '--entrypoint', 'sh',
     '--volume', `${source}:/source:ro`,
     '--volume', `${destination}:/destination`,
@@ -133,55 +147,72 @@ async function migrateLegacyLocalRuntime() {
   // Supabase-branded state directory. Adopt it once so changing the product
   // distribution to ZOKERBASE never discards a user's local database, Auth
   // state, Storage files, or Studio configuration.
-  if (await pathExists(envPath) || !(await pathExists(legacyEnvPath))) return
+  if (await pathExists(envPath)) return undefined
+  const sourceEnvPath = await pathExists(workspaceEnvPath)
+    ? workspaceEnvPath
+    : await pathExists(legacyEnvPath) ? legacyEnvPath : undefined
+  if (!sourceEnvPath) return undefined
 
-  await ensureDocker()
-  await run('docker', [
-    'compose', '--env-file', legacyEnvPath,
-    '--file', 'docker-compose.yml', '--file', 'docker-compose.openlink.yml',
-    'down', '--remove-orphans',
-  ], { cwd: legacyStackRoot, inherit: true })
+  await mkdir(dirname(envPath), { recursive: true, mode: 0o700 })
 
-  // Postgres stores its pgsodium configuration in a Compose-managed named
-  // volume rather than the bind-mounted data directory. Carry it forward as
-  // well, otherwise an encrypted existing database can no longer be opened.
-  await migrateNamedVolume('supabase_db-config', 'zokerbase_db-config')
+  if (sourceEnvPath === legacyEnvPath) {
+    await ensureDocker()
+    await run(await docker(), [
+      'compose', '--env-file', legacyEnvPath,
+      '--file', 'docker-compose.yml', '--file', 'docker-compose.openlink.yml',
+      'down', '--remove-orphans',
+    ], { cwd: legacyStackRoot, inherit: true })
 
-  await cp(legacyEnvPath, envPath, { force: false })
-  for (const relative of [
-    'volumes/db/data',
-    'volumes/db-config',
-    'volumes/storage',
-    'volumes/functions',
-    'volumes/snippets',
-  ]) {
-    const source = resolve(legacyStackRoot, relative)
-    const destination = resolve(stackRoot, relative)
-    if (await pathExists(source)) await cp(source, destination, { recursive: true, force: false })
+    // Postgres stores its pgsodium configuration in a Compose-managed named
+    // volume rather than the bind-mounted data directory. Carry it forward as
+    // well, otherwise an encrypted existing database can no longer be opened.
+    await migrateNamedVolume('supabase_db-config', 'zokerbase_db-config')
   }
+
+  await cp(sourceEnvPath, envPath, { force: false })
+  if (sourceEnvPath === legacyEnvPath) {
+    for (const relative of [
+      'volumes/db/data',
+      'volumes/db-config',
+      'volumes/storage',
+      'volumes/functions',
+      'volumes/snippets',
+    ]) {
+      const source = resolve(legacyStackRoot, relative)
+      const destination = resolve(stackRoot, relative)
+      if (await pathExists(source)) await cp(source, destination, { recursive: true, force: false })
+    }
+  }
+  return sourceEnvPath
 }
 
 async function ensureSecrets() {
+  await mkdir(dirname(envPath), { recursive: true, mode: 0o700 })
+  let fresh = false
   try {
     await stat(envPath)
   } catch {
     await cp(resolve(sourceRoot, '.env.example'), envPath)
-    await run('sh', ['utils/generate-keys.sh', '--update-env'], { cwd: stackRoot })
+    fresh = true
   }
 
   let contents = await readFile(envPath, 'utf8')
+  if (fresh) contents = updateEnv(contents, generateZokerbaseSecrets())
   const current = parseEnv(contents)
   const jwtSecret = current.get('JWT_SECRET')
   if (!jwtSecret || jwtSecret.length < 32) throw new Error('ZOKERBASE JWT secret must be at least 32 characters')
-  const rotateKeys = current.get('JWT_SECRET') !== jwtSecret
-    || !current.get('SUPABASE_PUBLISHABLE_KEY')
+  const rotateKeys = !current.get('SUPABASE_PUBLISHABLE_KEY')
     || !current.get('SUPABASE_SECRET_KEY')
+    || !current.get('JWT_KEYS')
+    || !current.get('JWT_JWKS')
+  const modernAuth = rotateKeys ? generateZokerbaseModernAuth(jwtSecret) : {}
   contents = updateEnv(contents, {
     JWT_SECRET: jwtSecret,
     ...(rotateKeys ? {
       ANON_KEY: legacyJwt(jwtSecret, 'anon'),
       SERVICE_ROLE_KEY: legacyJwt(jwtSecret, 'service_role'),
     } : {}),
+    ...modernAuth,
     SUPABASE_PUBLIC_URL: `http://127.0.0.1:${apiPort}`,
     API_EXTERNAL_URL: `http://127.0.0.1:${apiPort}/auth/v1`,
     SITE_URL: process.env.OPENLINK_APP_URL || 'http://127.0.0.1:3000',
@@ -207,50 +238,21 @@ async function ensureSecrets() {
     OPENAI_API_KEY: '',
   })
   await writeFile(envPath, contents, { mode: 0o600 })
-
-  // Generate the official asymmetric and opaque keys after the authoritative
-  // JWT secret is in place. The official script output contains secrets, so it
-  // is intentionally captured and never relayed to the terminal.
-  if (rotateKeys) await run('sh', ['utils/add-new-auth-keys.sh', '--update-env'], { cwd: stackRoot })
+  const composePath = resolve(stackRoot, 'docker-compose.yml')
+  const compose = await readFile(composePath, 'utf8')
+  const enabledCompose = enableZokerbaseModernAuthCompose(compose)
+  if (enabledCompose !== compose) await writeFile(composePath, enabledCompose)
+  await hardenUserOnlySecret(envPath)
   const env = parseEnv(await readFile(envPath, 'utf8'))
   return { env }
 }
 
 async function ensureDocker() {
-  try {
-    await run('docker', ['info', '--format', '{{.ServerVersion}}'])
-    return
-  } catch {}
-  if (process.platform === 'darwin') {
-    // Docker Desktop's visible application name is not stable across releases
-    // and locales. Prefer its bundle identifier, then fall back to known names.
-    // Failing to launch must not skip the readiness loop: the engine may
-    // already be starting, or a compatible Docker endpoint may be available.
-    for (const args of [
-      ['-g', '-b', 'com.electron.dockerdesktop'],
-      ['-ga', 'Docker Desktop'],
-      ['-ga', 'Docker'],
-    ]) {
-      try {
-        await run('open', args)
-        break
-      } catch {}
-    }
-  }
-  const deadline = Date.now() + 180_000
-  while (Date.now() < deadline) {
-    try {
-      await run('docker', ['info', '--format', '{{.ServerVersion}}'])
-      return
-    } catch {
-      await new Promise((resolveDelay) => setTimeout(resolveDelay, 1000))
-    }
-  }
-  throw new Error('Docker did not become ready within 180 seconds')
+  dockerCommand = await ensureDockerEngine()
 }
 
 async function compose(args, options = {}) {
-  return run('docker', ['compose', '--env-file', envPath, '--file', 'docker-compose.yml', '--file', 'docker-compose.openlink.yml', '--file', 'docker-compose.zokerbase.yml', ...args], {
+  return run(await docker(), ['compose', '--env-file', envPath, '--file', 'docker-compose.yml', '--file', 'docker-compose.openlink.yml', '--file', 'docker-compose.zokerbase.yml', ...args], {
     cwd: stackRoot,
     ...options,
   })
@@ -261,7 +263,7 @@ async function ensureZokerbaseImages() {
   const missing = []
   for (const image of configuredImages) {
     try {
-      await run('docker', ['image', 'inspect', image])
+      await run(await docker(), ['image', 'inspect', image])
     } catch {
       missing.push(image)
     }
@@ -278,7 +280,7 @@ async function ensureZokerbaseImages() {
       for (const image of missing) {
         const entry = artifact.images.find((candidate) => candidate?.image === image)
         const archive = typeof entry?.archive === 'string' ? resolve(imageArtifactRoot, entry.archive) : undefined
-        if (archive && await pathExists(archive)) await run('docker', ['load', '--input', archive])
+        if (archive && await pathExists(archive)) await run(await docker(), ['load', '--input', archive])
       }
     }
   } catch {
@@ -289,7 +291,7 @@ async function ensureZokerbaseImages() {
   const unresolved = []
   for (const image of missing) {
     try {
-      await run('docker', ['image', 'inspect', image])
+      await run(await docker(), ['image', 'inspect', image])
     } catch {
       unresolved.push(image)
     }
@@ -302,7 +304,7 @@ async function ensureZokerbaseImages() {
   await run(process.execPath, ['scripts/build-zokerbase-images.mjs'], { cwd: root, inherit: true })
   for (const image of unresolved) {
     try {
-      await run('docker', ['image', 'inspect', image])
+      await run(await docker(), ['image', 'inspect', image])
     } catch {
       throw new Error(`ZOKERBASE image production completed without ${image}`)
     }
@@ -328,7 +330,7 @@ async function waitForContainerHealth(containerName, timeoutMs = 180_000) {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     try {
-      const state = await run('docker', [
+      const state = await run(await docker(), [
         'inspect',
         '--format',
         '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{end}}',
@@ -370,7 +372,7 @@ async function psql(sql, { tuplesOnly = false } = {}) {
   // migration role used by the self-hosted stack.
   const args = ['exec', '--interactive', 'zokerbase-db', 'psql', '--username', 'supabase_admin', '--dbname', 'postgres', '--set', 'ON_ERROR_STOP=1']
   if (tuplesOnly) args.push('--tuples-only', '--no-align')
-  return run('docker', args, { input: sql })
+  return run(await docker(), args, { input: sql })
 }
 
 async function applyMigrations() {
@@ -407,8 +409,11 @@ async function applyMigrations() {
 
 export async function ensureZokerbase() {
   await syncRuntimeAssets()
-  await migrateLegacyLocalRuntime()
+  const migratedEnvPath = await migrateLegacyLocalRuntime()
   const { env } = await ensureSecrets()
+  if (hostPlatform.platform === 'win32' && migratedEnvPath === workspaceEnvPath) {
+    await rm(workspaceEnvPath)
+  }
   await ensureDocker()
   // Compose treats the pgsodium key volume as external so it is never
   // re-created by an ordinary service restart. A brand-new install creates

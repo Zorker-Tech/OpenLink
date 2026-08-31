@@ -4,6 +4,7 @@ import { constants } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
+import { ensureDockerEngine, resolveDockerCommand } from './lib/docker-runtime.mjs'
 
 const root = resolve(fileURLToPath(new URL('../', import.meta.url)))
 const runtimeRoot = resolve(root, '.openlink-runtime/knowledge/zero')
@@ -14,6 +15,8 @@ const project = process.env.OPENLINK_ZERO_COMPOSE_PROJECT || 'openlink-zero'
 const imageVersion = process.env.OPENLINK_ZERO_IMAGE_VERSION || '3.0.0'
 const zeroPort = Number(process.env.OPENLINK_ZERO_PORT || 19530)
 const healthPort = Number(process.env.OPENLINK_ZERO_HEALTH_PORT || 9091)
+let dockerCommand
+async function docker() { dockerCommand ||= await resolveDockerCommand(); return dockerCommand }
 
 function run(command, args, options = {}) {
   return new Promise((resolveRun, reject) => {
@@ -25,7 +28,7 @@ function run(command, args, options = {}) {
   })
 }
 async function exists(path) { try { await stat(path); return true } catch { return false } }
-async function imageExists(reference) { try { await run('docker', ['image', 'inspect', reference]); return true } catch { return false } }
+async function imageExists(reference) { try { await run(await docker(), ['image', 'inspect', reference]); return true } catch { return false } }
 async function restoreArtifacts() {
   if (!await exists(artifactManifest)) return
   const manifest = JSON.parse(await readFile(artifactManifest, 'utf8'))
@@ -33,7 +36,7 @@ async function restoreArtifacts() {
   for (const item of manifest.images) {
     if (typeof item?.image !== 'string' || typeof item?.archive !== 'string' || await imageExists(item.image)) continue
     const archive = resolve(artifactRoot, item.archive)
-    try { await access(archive, constants.R_OK); await run('docker', ['load', '--input', archive], { inherit: true }) } catch {}
+    try { await access(archive, constants.R_OK); await run(await docker(), ['load', '--input', archive], { inherit: true }) } catch {}
   }
 }
 async function ensureImages() {
@@ -43,7 +46,7 @@ async function ensureImages() {
   if (missing.length) throw new Error(`Local ZOKERBASE Zero images are missing: ${missing.join(', ')}. Build once with OPENLINK_ZERO_ALLOW_UPSTREAM_ACQUISITION=1 node scripts/build-zero-images.mjs, then runtime will use only local images.`)
 }
 async function compose(args, options = {}) {
-  return run('docker', ['compose', '--project-name', project, '--file', composeFile, ...args], { cwd: runtimeRoot, env: { OPENLINK_ZERO_PORT: String(zeroPort), OPENLINK_ZERO_HEALTH_PORT: String(healthPort), OPENLINK_ZERO_DATA_ROOT: runtimeRoot, OPENLINK_ZERO_IMAGE_VERSION: imageVersion }, ...options })
+  return run(await docker(), ['compose', '--project-name', project, '--file', composeFile, ...args], { cwd: runtimeRoot, env: { OPENLINK_ZERO_PORT: String(zeroPort), OPENLINK_ZERO_HEALTH_PORT: String(healthPort), OPENLINK_ZERO_DATA_ROOT: runtimeRoot, OPENLINK_ZERO_IMAGE_VERSION: imageVersion }, ...options })
 }
 async function waitHealthy(timeoutMs = 180_000) {
   const deadline = Date.now() + timeoutMs
@@ -54,7 +57,7 @@ async function waitHealthy(timeoutMs = 180_000) {
   throw new Error(`Zero did not become healthy within ${timeoutMs / 1_000} seconds`)
 }
 export async function ensureZero() {
-  await run('docker', ['info', '--format', '{{.ServerVersion}}'])
+  dockerCommand = await ensureDockerEngine()
   await mkdir(resolve(runtimeRoot, 'etcd'), { recursive: true, mode: 0o700 })
   await mkdir(resolve(runtimeRoot, 'minio'), { recursive: true, mode: 0o700 })
   await mkdir(resolve(runtimeRoot, 'zero'), { recursive: true, mode: 0o700 })

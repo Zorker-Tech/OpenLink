@@ -1,5 +1,5 @@
 import { mkdir } from 'node:fs/promises'
-import { isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { isAbsolute, join, posix, relative, resolve, sep, win32 } from 'node:path'
 import { AgentHostError } from './errors.js'
 
 const SAFE_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
@@ -19,11 +19,22 @@ function safeSegment(value: string, label: string): string {
   return value
 }
 
+function pathApi(path: string) {
+  if (path.startsWith('/')) return posix
+  if (/^[A-Za-z]:[\\/]/.test(path) || path.startsWith('\\\\')) return win32
+  return { isAbsolute, join, relative, resolve, sep }
+}
+
+export function resolveScopedPath(root: string, ...segments: string[]): string {
+  return pathApi(root).resolve(root, ...segments)
+}
+
 export function assertContainedPath(root: string, candidate: string, label = 'path'): string {
-  const resolvedRoot = resolve(root)
-  const resolvedCandidate = resolve(candidate)
-  const rel = relative(resolvedRoot, resolvedCandidate)
-  if (rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
+  const api = pathApi(root)
+  const resolvedRoot = api.resolve(root)
+  const resolvedCandidate = api.resolve(candidate)
+  const rel = api.relative(resolvedRoot, resolvedCandidate)
+  if (rel === '..' || rel.startsWith(`..${api.sep}`) || api.isAbsolute(rel)) {
     throw new AgentHostError('INVALID_PATH', `${label} must remain inside ${resolvedRoot}`)
   }
   return resolvedCandidate
@@ -35,7 +46,8 @@ export function createSessionStorageLayout(
   workspaceId: string,
   sessionId: string,
 ): SessionStorageLayout {
-  const root = resolve(
+  const api = pathApi(baseRoot)
+  const root = api.resolve(
     baseRoot,
     safeSegment(userId, 'userId'),
     safeSegment(workspaceId, 'workspaceId'),
@@ -43,10 +55,10 @@ export function createSessionStorageLayout(
   )
   return {
     root,
-    workspace: join(root, 'workspace'),
-    piSessions: join(root, 'pi-sessions'),
-    artifacts: join(root, 'artifacts'),
-    logs: join(root, 'logs'),
+    workspace: api.join(root, 'workspace'),
+    piSessions: api.join(root, 'pi-sessions'),
+    artifacts: api.join(root, 'artifacts'),
+    logs: api.join(root, 'logs'),
   }
 }
 

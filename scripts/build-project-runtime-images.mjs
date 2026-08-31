@@ -286,7 +286,7 @@ if (changed.length) {
     for (const spec of changed) {
       const context = await materializeContext(spec)
       try {
-        if (builder.machineName && process.platform === 'darwin') {
+        if (builder.machineName) {
           await buildInDedicatedMachine(builder, spec, context)
         } else {
           await run(podman, [
@@ -300,7 +300,7 @@ if (changed.length) {
       } finally {
         await context.cleanup()
       }
-      if (!(builder.machineName && process.platform === 'darwin')) {
+      if (!builder.machineName) {
         const temporaryArchive = `${spec.archive}.${process.pid}.tmp`
         await rm(temporaryArchive, { force: true })
         await run(podman, [...builder.connectionArgs, 'save', '--output', temporaryArchive, spec.image], { cwd: root })

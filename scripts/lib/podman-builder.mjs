@@ -1,11 +1,35 @@
 import { spawn } from 'node:child_process'
 import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
+import { homedir } from 'node:os'
+import { resolveHostPlatform } from './host-platform.mjs'
+
+const WINDOWS_ORPHAN_BUILDER_INSPECTION_SCRIPT = [
+  '$name = [Environment]::GetEnvironmentVariable("OPENLINK_BUILDER_MACHINE", "Process")',
+  '$vm = Get-VM -Name $name -ErrorAction SilentlyContinue',
+  'if ($null -eq $vm) { "null"; exit 0 }',
+  '$drives = @(Get-VMHardDiskDrive -VMName $name -ErrorAction SilentlyContinue)',
+  '$adapters = @(Get-VMNetworkAdapter -VMName $name -ErrorAction SilentlyContinue)',
+  '[pscustomobject]@{ Name = $vm.Name; Id = $vm.Id.Guid; State = $vm.State.ToString(); DrivePaths = @($drives | ForEach-Object { [string]$_.Path }); NetworkAdapterCount = $adapters.Count } | ConvertTo-Json -Compress',
+].join('; ')
+
+const WINDOWS_ORPHAN_BUILDER_REMOVE_SCRIPT = [
+  '$name = [Environment]::GetEnvironmentVariable("OPENLINK_BUILDER_MACHINE", "Process")',
+  '$id = [Guid][Environment]::GetEnvironmentVariable("OPENLINK_BUILDER_VM_ID", "Process")',
+  '$vm = Get-VM -Id $id -ErrorAction Stop',
+  'if ($vm.Name -ne $name -or $vm.State -ne "Off") { throw "Refusing to remove a changed or running Hyper-V builder VM" }',
+  'Remove-VM -VM $vm -Force -ErrorAction Stop',
+].join('; ')
 
 export function run(command, args, options = {}) {
   return new Promise((resolveRun, rejectRun) => {
     const { input, ...spawnOptions } = options
-    const child = spawn(command, args, { stdio: input === undefined ? 'inherit' : ['pipe', 'inherit', 'inherit'], shell: false, timeout: 2 * 60 * 1000, killSignal: 'SIGTERM', ...spawnOptions })
+    // Windows command shims such as npm.cmd cannot be started with CreateProcess
+    // directly (Node reports EINVAL). Restrict shell dispatch to those explicit
+    // cmd/bat shims; Podman, PowerShell and all untrusted command paths retain
+    // shell=false.
+    const windowsCommandShim = process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(command)
+    const child = spawn(command, args, { stdio: input === undefined ? 'inherit' : ['pipe', 'inherit', 'inherit'], shell: windowsCommandShim, timeout: 2 * 60 * 1000, killSignal: 'SIGTERM', ...spawnOptions })
     if (input !== undefined) child.stdin.end(input)
     child.once('error', rejectRun)
     child.once('exit', (code, signal) => {
@@ -17,7 +41,8 @@ export function run(command, args, options = {}) {
 
 export function runCapture(command, args, options = {}) {
   return new Promise((resolveRun, rejectRun) => {
-    const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'], shell: false, timeout: 2 * 60 * 1000, killSignal: 'SIGTERM', ...options })
+    const windowsCommandShim = process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(command)
+    const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'], shell: windowsCommandShim, timeout: 2 * 60 * 1000, killSignal: 'SIGTERM', ...options })
     let stdout = ''
     let stderr = ''
     child.stdout.on('data', (chunk) => { stdout += chunk })
@@ -30,16 +55,18 @@ export function runCapture(command, args, options = {}) {
   })
 }
 
-async function cachedMachineImage() {
+async function cachedMachineImage(provider) {
+  const dataRoot = process.env.XDG_DATA_HOME || join(homedir(), '.local', 'share')
+  const suffixes = provider === 'hyperv' ? ['.vhdx.zst', '.vhdx'] : ['.raw.zst', '.raw']
   const roots = [
-    join(process.env.HOME || '', '.local/share/containers/podman/machine/applehv/cache'),
-    join(process.env.HOME || '', '.local/share/containers/podman/machine/libkrun/cache'),
+    join(dataRoot, 'containers', 'podman', 'machine', provider, 'cache'),
+    ...(provider === 'applehv' ? [join(dataRoot, 'containers', 'podman', 'machine', 'libkrun', 'cache')] : []),
   ]
   const candidates = []
   for (const root of roots) {
     try {
       for (const entry of await readdir(root)) {
-        if (!entry.endsWith('.raw.zst')) continue
+        if (!suffixes.some((suffix) => entry.endsWith(suffix))) continue
         const path = join(root, entry)
         const metadata = await stat(path)
         if (metadata.isFile() && metadata.size > 0) candidates.push({ path, mtime: metadata.mtimeMs })
@@ -50,13 +77,49 @@ async function cachedMachineImage() {
   return candidates[0]?.path
 }
 
+export function isSafeIncompleteWindowsBuilder(record, machineName) {
+  return record?.Name === machineName
+    && typeof record.Id === 'string'
+    && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(record.Id)
+    && record.State === 'Off'
+    && record.NetworkAdapterCount === 0
+    && Array.isArray(record.DrivePaths)
+    && record.DrivePaths.every((path) => path === '')
+}
+
+async function removeIncompleteWindowsBuilderMachine(machineName, options) {
+  const inspection = await runCapture('powershell.exe', [
+    '-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+    '-Command', WINDOWS_ORPHAN_BUILDER_INSPECTION_SCRIPT,
+  ], { ...options, env: { ...process.env, ...options.env, OPENLINK_BUILDER_MACHINE: machineName } })
+  const stdout = inspection.stdout.trim()
+  if (!stdout || stdout === 'null') return false
+  let record
+  try { record = JSON.parse(stdout) } catch { throw new Error(`Windows returned invalid Hyper-V metadata while checking ${machineName}`) }
+  if (!isSafeIncompleteWindowsBuilder(record, machineName)) {
+    throw new Error(`A Hyper-V machine named ${machineName} exists but is not a safe incomplete OpenLink builder residue. Inspect and remove it explicitly; OpenLink will not delete a configured or running VM.`)
+  }
+  await runCapture('powershell.exe', [
+    '-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+    '-Command', WINDOWS_ORPHAN_BUILDER_REMOVE_SCRIPT,
+  ], {
+    ...options,
+    env: { ...process.env, ...options.env, OPENLINK_BUILDER_MACHINE: machineName, OPENLINK_BUILDER_VM_ID: record.Id },
+  })
+  return true
+}
+
 export async function ensurePodmanBuilder(podman, options = {}) {
   if (process.platform === 'linux') {
     await runCapture(podman, ['info'], options)
     return { connectionArgs: [], machineName: null }
   }
-  if (process.platform !== 'darwin') {
+  if (process.platform !== 'darwin' && process.platform !== 'win32') {
     throw new Error(`OpenLink's bundled image builder is not implemented for ${process.platform}`)
+  }
+  const provider = process.env.CONTAINERS_MACHINE_PROVIDER || resolveHostPlatform().provider
+  if (process.platform === 'win32' && provider !== 'hyperv') {
+    throw new Error(`Windows image production requires the native Hyper-V provider; received ${provider}`)
   }
 
   const machineName = process.env.OPENLINK_BUILD_MACHINE || 'openlink-image-builder'
@@ -77,12 +140,20 @@ export async function ensurePodmanBuilder(podman, options = {}) {
   }
   const inspect = async () => runCapture(podman, ['machine', 'inspect', machineName], { ...options, timeout: 30_000 })
   await inspect().catch(async () => {
-    const image = await cachedMachineImage()
+    // A failed Hyper-V `machine init` can leave its VM registration behind
+    // while Podman has no matching machine metadata. Remove only the exact
+    // no-disk/no-network, powered-off residue produced by that failure mode.
+    if (process.platform === 'win32') await removeIncompleteWindowsBuilderMachine(machineName, options)
+    const image = await cachedMachineImage(provider)
     const imageArgs = image ? ['--image', image] : []
     await run(podman, [
       'machine', 'init', ...imageArgs,
       '--cpus', process.env.OPENLINK_BUILD_CPUS || '4',
-      '--memory', process.env.OPENLINK_BUILD_MEMORY_MB || '12288',
+      // Keep the dedicated artifact builder below the capacity commonly
+      // reserved by Docker Desktop on 32 GiB Windows hosts. Builds remain
+      // fully functional at 6 GiB; release automation can raise this via the
+      // explicit OPENLINK_BUILD_MEMORY_MB override.
+      '--memory', process.env.OPENLINK_BUILD_MEMORY_MB || '6144',
       '--disk-size', process.env.OPENLINK_BUILD_DISK_GB || '96',
       machineName,
     ], { ...options, input: options.input ?? 'n\n' })
@@ -143,3 +214,5 @@ export async function stopPodmanBuilder(podman, machineName, options = {}) {
     throw error
   })
 }
+
+export { WINDOWS_ORPHAN_BUILDER_INSPECTION_SCRIPT, WINDOWS_ORPHAN_BUILDER_REMOVE_SCRIPT }

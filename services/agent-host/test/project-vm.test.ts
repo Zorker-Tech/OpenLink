@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
-import { lstat, mkdtemp, open, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { lstat, mkdtemp, open, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
+import { resolve } from 'node:path'
 import test from 'node:test'
-import { ProjectVmManager, PodmanMachineDriver, appleHvMachineHasBooted, cloneThinProjectVmDisk, type ProjectVmCommandResult } from '../src/project-vm.js'
+import { ProjectVmManager, PodmanMachineDriver, appleHvMachineHasBooted, cloneThinHyperVProjectVmDisk, cloneThinProjectVmDisk, prepareHyperVNetworking, type ProjectVmCommandResult } from '../src/project-vm.js'
 
 const projectId = '2c51ca26-3cd0-4cb4-896d-2061de06098c'
 
@@ -12,6 +13,88 @@ test('distinguishes never-booted AppleHV configs from machines already provision
   assert.equal(appleHvMachineHasBooted({ LastUp: '0001-01-01T00:00:00Z' }), false)
   assert.equal(appleHvMachineHasBooted({ LastUp: 'not-a-time' }), false)
   assert.equal(appleHvMachineHasBooted({ LastUp: '2026-08-10T05:54:02.476379+08:00' }), true)
+})
+
+test('prepares Hyper-V networking before starting a stopped machine', async () => {
+  const events: string[] = []
+  const driver = new PodmanMachineDriver({
+    bootstrap: false,
+    machineProvider: 'hyperv',
+    prepareHyperVNetworking: async (name) => { events.push(`prepare:${name}`) },
+    run: async (_command, args) => {
+      if (args[0] === 'machine' && args[1] === 'inspect') {
+        return { stdout: JSON.stringify([{ State: 'stopped', Rootful: false }]), stderr: '' }
+      }
+      if (args[0] === 'machine' && args[1] === 'start') events.push(`start:${args[2]}`)
+      return { stdout: '', stderr: '' }
+    },
+  })
+
+  await driver.ensureMachine('openlink-project-network', { cpus: 4, memoryMb: 8192, diskGb: 64, diskMode: 'thin' })
+  assert.deepEqual(events, ['prepare:openlink-project-network', 'start:openlink-project-network'])
+})
+
+test('does not start Hyper-V when networking belongs to a running machine', async () => {
+  let started = false
+  const driver = new PodmanMachineDriver({
+    bootstrap: false,
+    machineProvider: 'hyperv',
+    prepareHyperVNetworking: async () => { throw new Error('networking is already owned by a running machine') },
+    run: async (_command, args) => {
+      if (args[0] === 'machine' && args[1] === 'inspect') {
+        return { stdout: JSON.stringify([{ State: 'stopped', Rootful: false }]), stderr: '' }
+      }
+      if (args[0] === 'machine' && args[1] === 'start') started = true
+      return { stdout: '', stderr: '' }
+    },
+  })
+
+  await assert.rejects(
+    () => driver.ensureMachine('openlink-project-conflict', { cpus: 4, memoryMb: 8192, diskGb: 64, diskMode: 'thin' }),
+    /already owned/,
+  )
+  assert.equal(started, false)
+})
+
+test('reconciles a Hyper-V start error only after inspect and SSH prove readiness', async () => {
+  const calls: string[] = []
+  let inspection = 0
+  const driver = new PodmanMachineDriver({
+    bootstrap: false,
+    machineProvider: 'hyperv',
+    prepareHyperVNetworking: async () => undefined,
+    run: async (_command, args) => {
+      calls.push(args.join(' '))
+      if (args[0] === 'machine' && args[1] === 'inspect') {
+        inspection += 1
+        return { stdout: JSON.stringify([{ State: inspection === 1 ? 'stopped' : 'running', Rootful: false }]), stderr: '' }
+      }
+      if (args[0] === 'machine' && args[1] === 'start') throw new Error('Podman WMI completion panic')
+      if (args[0] === 'machine' && args[1] === 'ssh' && args.at(-1) === 'true') return { stdout: '', stderr: '' }
+      throw new Error(`unexpected command: ${args.join(' ')}`)
+    },
+  })
+
+  await driver.ensureMachine('openlink-project-reconciled', { cpus: 4, memoryMb: 8192, diskGb: 64, diskMode: 'thin' })
+  assert.deepEqual(calls, [
+    'machine inspect openlink-project-reconciled',
+    'machine start openlink-project-reconciled',
+    'machine inspect openlink-project-reconciled',
+    'machine ssh openlink-project-reconciled true',
+  ])
+})
+
+test('invokes the host Hyper-V networking guard without interpolating arguments', async () => {
+  const calls: Array<{ command: string; args: string[] }> = []
+  await prepareHyperVNetworking('C:\\OpenLink Runtime\\bin', 'ol-project-safe', async (command, args) => {
+    calls.push({ command, args })
+    return { stdout: '{"Reaped":[],"Conflicts":[]}', stderr: '' }
+  })
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0]?.command, 'powershell.exe')
+  assert.equal(calls[0]?.args.at(-1), 'ol-project-safe')
+  assert.match(calls[0]?.args.at(-3) ?? '', /Get-CimInstance Win32_Process/)
+  assert.doesNotMatch(calls[0]?.args.at(-3) ?? '', /ol-project-safe/)
 })
 
 test('creates a durable project machine and bootstraps the development toolchain', async () => {
@@ -79,6 +162,7 @@ test('uses the locally published OpenLink boot disk as the Project VM base', asy
     const driver = new PodmanMachineDriver({
       run,
       bootstrap: false,
+      machineProvider: 'applehv',
       projectBaseDisk: '/tmp/openlink-project-vm-base.raw',
       cloneDisk: async (source, target) => { clones.push({ source, destination: target }) },
     })
@@ -86,7 +170,7 @@ test('uses the locally published OpenLink boot disk as the Project VM base', asy
     const init = calls.find((call) => call.args[0] === 'machine' && call.args[1] === 'init')
     const imageIndex = init?.args.indexOf('--image') ?? -1
     assert.ok(imageIndex >= 0)
-    assert.match(init?.args[imageIndex + 1] ?? '', /openlink-podman-init-.+\/placeholder\.raw$/)
+    assert.match(init?.args[imageIndex + 1] ?? '', /openlink-podman-init-.+[\\/]placeholder\.raw$/)
     assert.deepEqual(clones, [{ source: '/tmp/openlink-project-vm-base.raw', destination }])
     assert.ok(calls.some((call) => call.args[0] === 'machine' && call.args[1] === 'start'))
     assert.doesNotMatch(calls.map((call) => call.args.join(' ')).join('\n'), /bootc switch|oci-archive/)
@@ -115,6 +199,7 @@ test('materializes an independent Project VM disk for thick allocation', async (
     const driver = new PodmanMachineDriver({
       run,
       bootstrap: false,
+      machineProvider: 'applehv',
       projectBaseDisk: '/tmp/openlink-project-vm-base.raw',
       cloneDisk: async () => { throw new Error('thin clone must not be used') },
       materializeDisk: async (source, target) => { materialized.push({ source, destination: target }) },
@@ -148,6 +233,7 @@ test('resolves the AppleHV disk from Podman data root when inspect omits ImagePa
         return { stdout: '', stderr: '' }
       },
       bootstrap: false,
+      machineProvider: 'applehv',
       projectBaseDisk: '/tmp/openlink-project-vm-base.raw',
       machineDiskPath: () => destination,
       cloneDisk: async (source, target) => { clones.push({ source, destination: target }) },
@@ -220,7 +306,7 @@ test('publishes an independent native CoW clone without materializing sparse hol
   }
 })
 
-test('rejects a materialized Golden Disk without publishing or leaving clone staging files', async () => {
+test('rejects a materialized Golden Disk without publishing or leaving clone staging files', { skip: process.platform === 'win32' }, async () => {
   const root = await mkdtemp(`${tmpdir()}/openlink-project-thin-reject-`)
   const source = `${root}/golden.raw`
   const destination = `${root}/project.raw`
@@ -244,6 +330,7 @@ test('removes an incomplete Podman machine when its destination is not the prote
   try {
     const driver = new PodmanMachineDriver({
       bootstrap: false,
+      machineProvider: 'applehv',
       projectBaseDisk: '/tmp/openlink-project-vm-base.raw',
       run: async (_command, args) => {
         calls.push(args)
@@ -261,6 +348,97 @@ test('removes an incomplete Podman machine when its destination is not the prote
     )
     assert.ok(calls.some((args) => args[0] === 'machine' && args[1] === 'rm' && args.includes('--force')))
     assert.equal(calls.some((args) => args[0] === 'machine' && args[1] === 'start'), false)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('publishes a verified Hyper-V differencing VHDX over the Podman placeholder', async () => {
+  const root = await mkdtemp(`${tmpdir()}/openlink-project-hyperv-`)
+  const source = `${root}/golden.vhdx`
+  const destination = `${root}/project.vhdx`
+  const logicalBytes = 64 * 1024 * 1024
+  let published = false
+  await writeFile(source, 'immutable-golden')
+  await writeFile(destination, 'dynamic-placeholder')
+  const run = async (_command: string, args: string[]): Promise<ProjectVmCommandResult> => {
+    const script = args[args.indexOf('-Command') + 1] ?? ''
+    const values = args.slice(args.indexOf('-Command') + 2)
+    if (script.includes('New-VHD') && script.includes('-Differencing')) {
+      await writeFile(values[0]!, 'differencing-child', { flag: 'wx' })
+      return { stdout: '', stderr: '' }
+    }
+    if (script.includes('[IO.File]::Replace')) {
+      await rename(values[1]!, values[2]!)
+      await rename(values[0]!, values[1]!)
+      published = true
+      return { stdout: '', stderr: '' }
+    }
+    if (script.includes('Get-VHD')) {
+      const path = values[0]!
+      const differencing = path.includes('.diff-') || (resolve(path) === resolve(destination) && published)
+      return {
+        stdout: JSON.stringify({
+          Path: path,
+          VhdType: differencing ? 'Differencing' : 'Dynamic',
+          VhdFormat: 'VHDX',
+          Size: logicalBytes,
+          FileSize: differencing ? 4 * 1024 * 1024 : resolve(path) === resolve(source) ? 16 * 1024 * 1024 : 2 * 1024 * 1024,
+          ParentPath: differencing ? source : '',
+          IsReadOnly: resolve(path) === resolve(source),
+        }),
+        stderr: '',
+      }
+    }
+    throw new Error(`unexpected PowerShell operation: ${script}`)
+  }
+
+  try {
+    await cloneThinHyperVProjectVmDisk(source, destination, run)
+    assert.equal(await readFile(source, 'utf8'), 'immutable-golden')
+    assert.equal(await readFile(destination, 'utf8'), 'differencing-child')
+    assert.equal((await readdir(root)).some((entry) => entry.includes('.diff-') || entry.includes('.placeholder-')), false)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('rejects a Hyper-V child whose immutable Golden parent does not match', async () => {
+  const root = await mkdtemp(`${tmpdir()}/openlink-project-hyperv-parent-`)
+  const source = `${root}/golden.vhdx`
+  const destination = `${root}/project.vhdx`
+  const logicalBytes = 64 * 1024 * 1024
+  await writeFile(source, 'immutable-golden')
+  await writeFile(destination, 'dynamic-placeholder')
+  const run = async (_command: string, args: string[]): Promise<ProjectVmCommandResult> => {
+    const script = args[args.indexOf('-Command') + 1] ?? ''
+    const values = args.slice(args.indexOf('-Command') + 2)
+    if (script.includes('New-VHD')) {
+      await writeFile(values[0]!, 'invalid-child', { flag: 'wx' })
+      return { stdout: '', stderr: '' }
+    }
+    if (script.includes('Get-VHD')) {
+      const path = values[0]!
+      const differencing = path.includes('.diff-')
+      return {
+        stdout: JSON.stringify({
+          Path: path,
+          VhdType: differencing ? 'Differencing' : 'Dynamic',
+          VhdFormat: 'VHDX',
+          Size: logicalBytes,
+          FileSize: 2 * 1024 * 1024,
+          ParentPath: differencing ? `${root}/other-golden.vhdx` : '',
+          IsReadOnly: resolve(path) === resolve(source),
+        }),
+        stderr: '',
+      }
+    }
+    throw new Error('replace must not run for an invalid child')
+  }
+  try {
+    await assert.rejects(() => cloneThinHyperVProjectVmDisk(source, destination, run), /failed parent, size or allocation verification/)
+    assert.equal(await readFile(destination, 'utf8'), 'dynamic-placeholder')
+    assert.equal((await readdir(root)).some((entry) => entry.includes('.diff-')), false)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
