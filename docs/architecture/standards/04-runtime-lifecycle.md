@@ -34,6 +34,9 @@ Local mode starts a complete, independent backend domain:
 
 Initialization generates required secrets once, persists them under protected
 runtime state, applies migrations in order, and reuses them on later starts.
+On Windows, credential state is rooted in `%LOCALAPPDATA%\OpenLink\state` and
+is not co-located with the Hyper-V-accessible `.openlink-runtime` VM-storage
+tree. macOS retains the established repository-local runtime layout.
 Users may change settings after initialization; first boot does not require
 manual secret entry.
 
@@ -73,14 +76,16 @@ once and then copied/instantiated; ordinary runtime startup does not pull a
 machine OS or rebuild the base image.
 
 Thin local Project VM disks are instantiated by Agent Host through a verified
-native copy-on-write clone of the immutable Golden Disk. Podman owns machine
+provider-native child of the immutable Golden Disk. Podman owns machine
 configuration, Ignition, SSH identity and provider metadata, but must not copy
-the real Golden Disk through its custom-image path. The VM remains stopped
-until a staged clone has passed logical-size and host-allocation checks and has
-atomically replaced Podman's placeholder disk. Unsupported CoW filesystems
-fail thin provisioning explicitly; they never trigger an implicit thick copy.
-The Golden Disk keeps its GRUB-readable `/boot` on ext4 and its root/data on
-XFS so the same VM disk remains bootable across local AppleHV power cycles.
+the real Golden Disk through its custom-image path. macOS AppleHV uses a staged
+native APFS clone of the sparse raw Golden Disk; Windows Hyper-V uses a staged
+differencing VHDX whose parent is the dynamic Golden VHDX. The VM remains
+stopped until logical size, parent/clone identity and host allocation checks
+pass. Unsupported providers or filesystems fail thin provisioning explicitly;
+they never trigger an implicit thick copy or WSL fallback. The guest Golden
+Disk keeps its GRUB-readable `/boot` on ext4 and its root/data on XFS so the
+same VM disk remains bootable across provider power cycles.
 
 The Project VM owns:
 

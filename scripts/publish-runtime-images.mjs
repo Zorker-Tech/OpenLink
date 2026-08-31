@@ -10,15 +10,18 @@
 import { access, readFile } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
+import { ensureDockerEngine } from './lib/docker-runtime.mjs'
 
-const root = resolve(new URL('..', import.meta.url).pathname)
+const root = resolve(fileURLToPath(new URL('../', import.meta.url)))
 const artifactRoot = resolve(root, '.openlink-runtime')
 const registry = (process.env.OPENLINK_IMAGE_REGISTRY || 'git.haokir/hydite/openlink/openlink').replace(/\/$/, '')
 const packageUrl = (process.env.OPENLINK_IMAGE_PACKAGE_URL || `https://${registry}/api/v4/projects/hydite%2Fopenlink%2Fopenlink/packages/generic/openlink-images/${process.env.OPENLINK_IMAGE_PACKAGE_VERSION || '2026.08.30'}`).replace(/\/$/, '')
 const packageToken = process.env.OPENLINK_PACKAGE_TOKEN || process.env.GITLAB_TOKEN
 const packageMode = Boolean(packageToken || process.env.OPENLINK_IMAGE_PACKAGE_URL)
 const dryRun = process.argv.includes('--dry-run')
+let docker
 
 function run(command, args) {
   if (dryRun) {
@@ -91,9 +94,10 @@ for (const entry of entries) {
     continue
   }
   const target = targetName(entry.source)
-  await run('docker', ['load', '--input', entry.archive])
-  await run('docker', ['tag', entry.source, target])
-  await run('docker', ['push', target])
+  docker ??= await ensureDockerEngine()
+  await run(docker, ['load', '--input', entry.archive])
+  await run(docker, ['tag', entry.source, target])
+  await run(docker, ['push', target])
   process.stdout.write(`${entry.namespace}: published ${target}\n`)
 }
 

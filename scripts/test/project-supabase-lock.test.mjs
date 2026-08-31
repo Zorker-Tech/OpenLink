@@ -97,6 +97,14 @@ test('configuration tree hash is deterministic across root directories and chang
   assert.notEqual(await hashConfigurationTree(left), await hashConfigurationTree(right))
 })
 
+test('configuration tree identity is independent of host file mode representation', async () => {
+  const left = await mkdtemp(resolve(tmpdir(), 'project-supabase-mode-left-'))
+  const right = await mkdtemp(resolve(tmpdir(), 'project-supabase-mode-right-'))
+  await writeFile(resolve(left, 'entrypoint.sh'), '#!/bin/sh\nexit 0\n', { mode: 0o755 })
+  await writeFile(resolve(right, 'entrypoint.sh'), '#!/bin/sh\nexit 0\n', { mode: 0o644 })
+  assert.equal(await hashConfigurationTree(left), await hashConfigurationTree(right))
+})
+
 test('normalizes and semantically orders upstream upgrade gates', () => {
   assert.deepEqual(normalizeUpgradeGates({
     _schema: {},

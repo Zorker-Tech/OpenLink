@@ -2,7 +2,7 @@
 import { createHash, createHmac, generateKeyPairSync, randomBytes, randomUUID, sign } from 'node:crypto'
 import { execFileSync, spawn } from 'node:child_process'
 import { appendFile, chmod, cp, lstat, mkdir, open, readFile, readdir, rename, rm, stat, statfs, writeFile } from 'node:fs/promises'
-import { basename, dirname, resolve, sep } from 'node:path'
+import { basename, dirname, resolve, sep } from 'node:path/posix'
 import { fileURLToPath } from 'node:url'
 import {
   readTrustedReleaseKeys,
@@ -201,7 +201,8 @@ function podman(args, options = {}) {
     return execFileSync('podman', args, { encoding: 'utf8', stdio: options.capture ? ['ignore', 'pipe', 'pipe'] : ['ignore', 'pipe', 'pipe'], maxBuffer: 16 * 1024 * 1024 }).trim()
   } catch (error) {
     const status = typeof error?.status === 'number' ? error.status : 'unknown'
-    // `podman create` argv contains project secrets. Preserve only the
+    // `podman create` argv contains project secrets. Never surface the child
+    // argv or stdout. Preserve only the
     // runtime's stderr (never argv/stdout), redact all caller-provided secret
     // values, and cap it so provisioning failures are actionable without
     // turning the controller into a secret or log exfiltration path.
@@ -228,7 +229,11 @@ function shellQuote(value) {
 function healthCommand(test) {
   if (!Array.isArray(test) || test.length < 2) fail('healthcheck.test is invalid')
   if (test[0] === 'CMD-SHELL') return test.slice(1).join(' ')
-  if (test[0] === 'CMD') return test.slice(1).map(shellQuote).join(' ')
+  // Podman's --health-cmd accepts a JSON argv array. A plain string is always
+  // executed via /bin/sh -c, which breaks valid Compose CMD probes in minimal
+  // images (for example postgrest has no shell). Preserve the Compose contract
+  // exactly: CMD is an exec-form argv, CMD-SHELL is a shell-form string.
+  if (test[0] === 'CMD') return JSON.stringify(test.slice(1))
   fail(`unsupported healthcheck form ${test[0]}`)
 }
 

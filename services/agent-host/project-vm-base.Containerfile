@@ -23,7 +23,9 @@ COPY project-supabase-bundle.mjs /usr/libexec/openlink/project-supabase-bundle.m
 RUN chmod 0644 /usr/lib/openlink/project-supabase/runtime.lock.json \
     && chmod 0644 /usr/lib/openlink/project-supabase/runtime.spec.json \
     && chmod 0644 /usr/lib/openlink/project-supabase/release-trust.json \
-    && chmod -R a=rX /usr/lib/openlink/project-supabase/configuration \
+    && find /usr/lib/openlink/project-supabase/configuration -type d -exec chmod 0755 {} + \
+    && find /usr/lib/openlink/project-supabase/configuration -type f -exec chmod 0644 {} + \
+    && find /usr/lib/openlink/project-supabase/configuration -type f -name '*.sh' -exec chmod 0755 {} + \
     && chmod 0755 /usr/libexec/openlink/project-vm-seed-supabase \
     && chmod 0755 /usr/libexec/openlink/project-supabase-runtime \
     && chmod 0644 /usr/libexec/openlink/project-supabase-bundle.mjs
@@ -53,6 +55,7 @@ RUN dnf install -y \
       python3 \
       python3-devel \
       python3-pip \
+      qemu-img \
       ripgrep \
       tar \
       unzip \

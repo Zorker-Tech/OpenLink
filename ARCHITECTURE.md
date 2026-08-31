@@ -42,6 +42,9 @@ Browser
    unhealthy services are never represented as ready or replaced by fake data.
 10. **Architectural changes require an ADR.** Update the standards and include
     migration, rollback, failure, security, and lifecycle analysis.
+11. **Local host support is native and contract-equal.** macOS uses AppleHV
+    with sparse raw/APFS clones; Windows uses Hyper-V with dynamic/differencing
+    VHDX. WSL and Docker containers are not implicit Project VM fallbacks.
 
 ## Repository boundaries
 

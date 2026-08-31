@@ -4,3 +4,8 @@ allowBuilds:
   # MSW is only used as a JavaScript test/mock library; it has no runtime
   # native artifact that OpenLink needs to execute.
   msw: false
+
+overrides:
+  linkify-it: 6.1.0
+  postcss: 8.5.25
+  sharp: 0.35.0

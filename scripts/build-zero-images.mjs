@@ -9,6 +9,7 @@ import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
+import { ensureDockerEngine } from './lib/docker-runtime.mjs'
 
 const root = resolve(fileURLToPath(new URL('../', import.meta.url)))
 const artifactRoot = resolve(root, '.openlink-runtime/knowledge/images')
@@ -16,6 +17,7 @@ const manifestPath = resolve(artifactRoot, 'manifest.json')
 const version = process.env.OPENLINK_ZERO_IMAGE_VERSION || '3.0.0'
 const allowAcquisition = process.env.OPENLINK_ZERO_ALLOW_UPSTREAM_ACQUISITION === '1'
 const force = process.argv.includes('--force')
+const docker = await ensureDockerEngine()
 // The runtime is built from an OpenLink-owned, locally cached Zero build
 // input.  A source image may be supplied explicitly for image production;
 // runtime startup never uses this value and never pulls it.
@@ -44,12 +46,12 @@ function run(command, args, options = {}) {
 async function exists(path) {
   try { return (await stat(path)).isFile() && (await stat(path)).size > 1_024 } catch { return false }
 }
-async function imageExists(reference) { try { await run('docker', ['image', 'inspect', reference]); return true } catch { return false } }
+async function imageExists(reference) { try { await run(docker, ['image', 'inspect', reference]); return true } catch { return false } }
 async function ensureSource(spec) {
   if (await imageExists(spec.source)) return
   if (!allowAcquisition || !spec.upstream) throw new Error(`Missing local ZOKERBASE Zero build input ${spec.source}. Import the OpenLink Zero build artifact or provide OPENLINK_ZERO_UPSTREAM_IMAGE only while producing a new image.`)
-  await run('docker', ['pull', spec.upstream])
-  await run('docker', ['tag', spec.upstream, spec.source])
+  await run(docker, ['pull', spec.upstream])
+  await run(docker, ['tag', spec.upstream, spec.source])
 }
 async function build(spec) {
   if (!force && await imageExists(spec.target)) return
@@ -58,18 +60,18 @@ async function build(spec) {
     ? `ARG BASE_IMAGE\nFROM \${BASE_IMAGE}\nCOPY --chmod=0755 zero-entrypoint.sh /usr/local/bin/zero\nLABEL org.opencontainers.image.title="ZOKERBASE Zero"\nLABEL org.opencontainers.image.version="${version}"\nLABEL org.opencontainers.image.vendor="OpenLink"\nLABEL io.openlink.zero.build-input="vendored-vector-runtime"\n`
     : `ARG BASE_IMAGE\nFROM \${BASE_IMAGE}\nLABEL org.opencontainers.image.title="ZOKERBASE ${spec.name}"\nLABEL org.opencontainers.image.vendor="OpenLink"\n`
   const buildContext = spec.name === 'zero' ? resolve(root, 'services/zero/openlink') : root
-  await run('docker', ['build', '--pull=false', '--file', '-', '--tag', spec.target, '--build-arg', `BASE_IMAGE=${spec.source}`, buildContext], { input: dockerfile })
+  await run(docker, ['build', '--pull=false', '--file', '-', '--tag', spec.target, '--build-arg', `BASE_IMAGE=${spec.source}`, buildContext], { input: dockerfile })
 }
 async function archive(spec) {
   const path = resolve(artifactRoot, `${spec.name}.tar`)
   if (!force && await exists(path)) return path
   const temporary = `${path}.${process.pid}.tmp`
-  await run('docker', ['save', '--output', temporary, spec.target])
+  await run(docker, ['save', '--output', temporary, spec.target])
   await rename(temporary, path)
   return path
 }
 
-await run('docker', ['info', '--format', '{{.ServerVersion}}'])
+await run(docker, ['info', '--format', '{{.ServerVersion}}'])
 await mkdir(artifactRoot, { recursive: true, mode: 0o700 })
 const compose = await readFile(resolve(root, 'services/zero/openlink/docker-compose.standalone.yml'))
 const fingerprint = createHash('sha256').update(compose).update(JSON.stringify(specs)).digest('hex')

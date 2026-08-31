@@ -3,15 +3,19 @@ import { randomUUID } from 'node:crypto'
 import { access, chmod, lstat, mkdir, mkdtemp, open, readFile, rename, rm, statfs, writeFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:net'
 import { tmpdir } from 'node:os'
-import { basename, dirname, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, parse as parsePath, resolve } from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
 import { promisify } from 'node:util'
 import { AgentHostError } from './errors.js'
 
 const execFile = promisify(execFileCallback)
 
 const PROJECT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const HYPERV_START_RECONCILE_ATTEMPTS = 20
+const HYPERV_START_RECONCILE_DELAY_MS = 500
 
 export type ProjectVmDiskMode = 'thin' | 'thick'
+export type PodmanMachineProvider = 'applehv' | 'hyperv' | 'qemu'
 
 export interface ProjectVmMachineSpec {
   cpus: number
@@ -80,14 +84,89 @@ export interface PodmanMachineDriverOptions {
   materializeDisk?: (source: string, destination: string) => Promise<void>
   /** Resolve the Podman-owned target disk when inspect omits ImagePath. */
   machineDiskPath?: (name: string) => string | undefined
+  /** Explicit native provider selected by the root host lifecycle. */
+  machineProvider?: PodmanMachineProvider
   /** Run AppleHV machines directly so multiple Project VMs can be active. */
   directAppleHv?: boolean
   /** Directory containing repository-bundled vfkit and gvproxy binaries. */
   helperBinaryDirectory?: string
+  /**
+   * Prepare the native Hyper-V networking helper before a machine starts.
+   * Injectable so the Windows lifecycle can be tested without host mutation.
+   */
+  prepareHyperVNetworking?: (machineName: string) => Promise<void>
+  /** Keep a partially created machine when an explicit diagnostic run asks for it. */
+  preserveFailedMachine?: boolean
   /** Durable host process state for directly managed AppleHV machines. */
   directStateRoot?: string
   /** Short-lived Unix sockets; must stay below macOS's sockaddr_un limit. */
   directSocketRoot?: string
+}
+
+const PREPARE_HYPERV_NETWORKING_SCRIPT = String.raw`
+& {
+param(
+  [Parameter(Mandatory = $true)][string]$helperRootArgument,
+  [Parameter(Mandatory = $true)][string]$startingMachineArgument
+)
+$ErrorActionPreference = 'Stop'
+$helperRoot = [IO.Path]::GetFullPath($helperRootArgument).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+$expectedExecutable = [IO.Path]::Combine($helperRoot, 'gvproxy.exe')
+$startingMachine = $startingMachineArgument
+$machinePattern = [regex]'-forward-sock\s+npipe:////\./pipe/podman-([A-Za-z0-9_.-]+)(?:\s|$)'
+$reaped = [Collections.Generic.List[object]]::new()
+$conflicts = [Collections.Generic.List[object]]::new()
+
+foreach ($candidate in @(Get-CimInstance Win32_Process -Filter "Name = 'gvproxy.exe'" -ErrorAction Stop)) {
+  if (-not $candidate.ExecutablePath -or -not [StringComparer]::OrdinalIgnoreCase.Equals([IO.Path]::GetFullPath($candidate.ExecutablePath), $expectedExecutable)) { continue }
+  $match = $machinePattern.Match([string]$candidate.CommandLine)
+  if (-not $match.Success) { continue }
+  $machineName = $match.Groups[1].Value
+  $vm = Get-VM -Name $machineName -ErrorAction SilentlyContinue
+  if ($vm -and $vm.State -eq [Microsoft.HyperV.PowerShell.VMState]::Running) {
+    $conflicts.Add([ordered]@{ ProcessId = [int]$candidate.ProcessId; MachineName = $machineName })
+    continue
+  }
+
+  # Re-read the process immediately before termination. This prevents a PID
+  # reuse race from turning an orphan cleanup into an unrelated process kill.
+  $current = Get-CimInstance Win32_Process -Filter "ProcessId = $($candidate.ProcessId)" -ErrorAction SilentlyContinue
+  if (-not $current -or -not $current.ExecutablePath -or -not [StringComparer]::OrdinalIgnoreCase.Equals([IO.Path]::GetFullPath($current.ExecutablePath), $expectedExecutable)) { continue }
+  $currentMatch = $machinePattern.Match([string]$current.CommandLine)
+  if (-not $currentMatch.Success -or $currentMatch.Groups[1].Value -ne $machineName) { continue }
+  Stop-Process -Id $candidate.ProcessId -Force -ErrorAction Stop
+  $reaped.Add([ordered]@{ ProcessId = [int]$candidate.ProcessId; MachineName = $machineName })
+}
+
+if ($conflicts.Count -gt 0) {
+  $names = ($conflicts | ForEach-Object MachineName | Sort-Object -Unique) -join ', '
+  throw "OpenLink Hyper-V networking is already owned by running machine(s): $names; cannot start $startingMachine"
+}
+
+[ordered]@{ Reaped = @($reaped); Conflicts = @($conflicts) } | ConvertTo-Json -Compress -Depth 4
+}
+`.trim()
+
+/**
+ * Podman Hyper-V gvproxy binds a host-wide VSOCK service. An interrupted
+ * machine removal can leave the product-owned helper alive after its VM has
+ * gone, causing the next guest to connect to an old SSH identity. Reap only
+ * helpers from the exact bundled directory whose referenced VM is not running.
+ */
+export async function prepareHyperVNetworking(
+  helperBinaryDirectory: string,
+  machineName: string,
+  run: ProjectVmCommandRunner = runCommand,
+): Promise<void> {
+  await run('powershell.exe', [
+    '-NoLogo',
+    '-NoProfile',
+    '-NonInteractive',
+    '-Command',
+    PREPARE_HYPERV_NETWORKING_SCRIPT,
+    resolve(helperBinaryDirectory),
+    machineName,
+  ])
 }
 
 interface CommandError extends Error {
@@ -197,7 +276,7 @@ function machineDiskPath(raw: string): string | undefined {
       : image && typeof image === 'object'
         ? (image as Record<string, unknown>).Path ?? (image as Record<string, unknown>).path
         : undefined
-    return typeof value === 'string' && value.startsWith('/') ? value : undefined
+    return typeof value === 'string' && isAbsolute(value) ? value : undefined
   } catch {
     return undefined
   }
@@ -266,6 +345,127 @@ function diskAllocatedBytes(stats: { blocks: number }): number {
   return allocated
 }
 
+interface HyperVVhdInfo {
+  Path: string
+  VhdType: 'Dynamic' | 'Differencing' | 'Fixed'
+  VhdFormat: 'VHDX'
+  Size: number
+  FileSize: number
+  ParentPath?: string
+  IsReadOnly: boolean
+}
+
+const INSPECT_VHD_SCRIPT = '& { param($Path); $vhd = Get-VHD -Path $Path -ErrorAction Stop; $file = Get-Item -LiteralPath $Path -Force -ErrorAction Stop; [pscustomobject]@{ Path = $vhd.Path; VhdType = $vhd.VhdType.ToString(); VhdFormat = $vhd.VhdFormat.ToString(); Size = [int64]$vhd.Size; FileSize = [int64]$vhd.FileSize; ParentPath = $vhd.ParentPath; IsReadOnly = [bool]$file.IsReadOnly } | ConvertTo-Json -Compress }'
+
+const CREATE_DYNAMIC_VHD_SCRIPT = [
+  '& { param($Path, $SizeBytes)',
+  '$size = [int64]::Parse($SizeBytes, [Globalization.CultureInfo]::InvariantCulture)',
+  'New-VHD -Path $Path -Dynamic -SizeBytes $size -BlockSizeBytes 2097152 -ErrorAction Stop | Out-Null }',
+].join('; ')
+
+const CREATE_DIFFERENCING_VHD_SCRIPT = '& { param($Path, $ParentPath); New-VHD -Path $Path -ParentPath $ParentPath -Differencing -ErrorAction Stop | Out-Null }'
+const REPLACE_VHD_SCRIPT = '& { param($Staging, $Destination, $Backup); [IO.File]::Replace($Staging, $Destination, $Backup, $true) }'
+
+export async function inspectHyperVVhd(path: string, runner: ProjectVmCommandRunner = runCommand): Promise<HyperVVhdInfo> {
+  const result = await runner('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', INSPECT_VHD_SCRIPT, path])
+  let parsed: unknown
+  try { parsed = JSON.parse(result.stdout) } catch { throw new AgentHostError('PROVISIONING_FAILED', `Hyper-V returned invalid VHD metadata for ${path}`, { retryable: true }) }
+  if (!parsed || typeof parsed !== 'object') throw new AgentHostError('PROVISIONING_FAILED', `Hyper-V returned empty VHD metadata for ${path}`, { retryable: true })
+  const record = parsed as Record<string, unknown>
+  if (record.VhdFormat !== 'VHDX'
+    || !['Dynamic', 'Differencing', 'Fixed'].includes(String(record.VhdType))
+    || !Number.isSafeInteger(record.Size) || Number(record.Size) <= 0
+    || !Number.isSafeInteger(record.FileSize) || Number(record.FileSize) <= 0
+    || typeof record.IsReadOnly !== 'boolean') {
+    throw new AgentHostError('PROVISIONING_FAILED', `Hyper-V returned unsupported VHD metadata for ${path}`, { retryable: false })
+  }
+  return record as unknown as HyperVVhdInfo
+}
+
+async function createHyperVPlaceholder(path: string, logicalBytes: number, runner: ProjectVmCommandRunner): Promise<void> {
+  await runner('powershell.exe', [
+    '-NoLogo', '-NoProfile', '-NonInteractive', '-Command', CREATE_DYNAMIC_VHD_SCRIPT,
+    path, String(logicalBytes),
+  ])
+  const info = await inspectHyperVVhd(path, runner)
+  if (info.VhdType !== 'Dynamic' || info.Size !== logicalBytes || info.FileSize > PODMAN_EXPANDED_PLACEHOLDER_MAX_ALLOCATION_BYTES) {
+    throw new AgentHostError('PROVISIONING_FAILED', 'Hyper-V did not create a protected dynamic Project VM placeholder', { retryable: true })
+  }
+}
+
+export async function cloneThinHyperVProjectVmDisk(
+  source: string,
+  destination: string,
+  runner: ProjectVmCommandRunner = runCommand,
+): Promise<void> {
+  const sourcePath = resolve(source)
+  const destinationPath = resolve(destination)
+  if (sourcePath === destinationPath) throw new AgentHostError('PROVISIONING_FAILED', 'Project VM Golden Disk and destination must be different files', { retryable: false })
+  if (parsePath(sourcePath).root.toLowerCase() !== parsePath(destinationPath).root.toLowerCase()) {
+    throw new AgentHostError('PROVISIONING_FAILED', 'Hyper-V Golden and Project VHDX files must use the same host volume', { retryable: true })
+  }
+  const [sourceStats, destinationStats] = await Promise.all([lstat(sourcePath), lstat(destinationPath)]).catch((error) => {
+    throw new AgentHostError('PROVISIONING_FAILED', `Hyper-V Project VM disk is unavailable: ${error instanceof Error ? error.message : String(error)}`, { retryable: true })
+  })
+  if (!sourceStats.isFile() || sourceStats.isSymbolicLink() || !destinationStats.isFile() || destinationStats.isSymbolicLink()) {
+    throw new AgentHostError('PROVISIONING_FAILED', 'Hyper-V Project VM disks must be regular files', { retryable: false })
+  }
+
+  const [golden, placeholder] = await Promise.all([
+    inspectHyperVVhd(sourcePath, runner),
+    inspectHyperVVhd(destinationPath, runner),
+  ])
+  if (golden.VhdType !== 'Dynamic') throw new AgentHostError('PROVISIONING_FAILED', 'Hyper-V Golden Disk must be a dynamic VHDX', { retryable: false })
+  if (!golden.IsReadOnly) throw new AgentHostError('PROVISIONING_FAILED', 'Hyper-V Golden Disk must be protected by the read-only file attribute', { retryable: false })
+  if (golden.FileSize >= golden.Size * THIN_DISK_MATERIALIZATION_RATIO) throw new AgentHostError('PROVISIONING_FAILED', `Hyper-V Golden Disk is not thin (${golden.FileSize}/${golden.Size} bytes)`, { retryable: false })
+  if (placeholder.VhdType !== 'Dynamic'
+    || placeholder.Size !== golden.Size
+    || placeholder.FileSize > PODMAN_EXPANDED_PLACEHOLDER_MAX_ALLOCATION_BYTES) {
+    throw new AgentHostError('PROVISIONING_FAILED', 'Podman Hyper-V disk is not the expected protected dynamic placeholder', { retryable: true })
+  }
+
+  const staging = resolve(dirname(destinationPath), `.${basename(destinationPath)}.diff-${process.pid}-${randomUUID()}.vhdx`)
+  const backup = resolve(dirname(destinationPath), `.${basename(destinationPath)}.placeholder-${process.pid}-${randomUUID()}.bak`)
+  let published = false
+  try {
+    await runner('powershell.exe', [
+      '-NoLogo', '-NoProfile', '-NonInteractive', '-Command', CREATE_DIFFERENCING_VHD_SCRIPT,
+      staging, sourcePath,
+    ])
+    const child = await inspectHyperVVhd(staging, runner)
+    if (child.VhdType !== 'Differencing'
+      || resolve(child.ParentPath || '').toLowerCase() !== sourcePath.toLowerCase()
+      || child.Size !== golden.Size
+      || child.FileSize > PODMAN_EXPANDED_PLACEHOLDER_MAX_ALLOCATION_BYTES) {
+      throw new AgentHostError('PROVISIONING_FAILED', 'Hyper-V differencing Project VM disk failed parent, size or allocation verification', { retryable: true })
+    }
+    await runner('powershell.exe', [
+      '-NoLogo', '-NoProfile', '-NonInteractive', '-Command', REPLACE_VHD_SCRIPT,
+      staging, destinationPath, backup,
+    ])
+    published = true
+    const publishedChild = await inspectHyperVVhd(destinationPath, runner)
+    if (publishedChild.VhdType !== 'Differencing'
+      || resolve(publishedChild.ParentPath || '').toLowerCase() !== sourcePath.toLowerCase()) {
+      throw new AgentHostError('PROVISIONING_FAILED', 'Published Hyper-V Project VM disk lost its immutable Golden parent', { retryable: true })
+    }
+    await rm(backup, { force: true })
+  } catch (error) {
+    if (published) {
+      const backupExists = await access(backup).then(() => true).catch(() => false)
+      if (backupExists) {
+        await rm(destinationPath, { force: true }).catch(() => undefined)
+        await rename(backup, destinationPath).catch(() => undefined)
+      }
+    }
+    if (error instanceof AgentHostError) throw error
+    throw new AgentHostError('PROVISIONING_FAILED', `Hyper-V differencing disk creation failed: ${error instanceof Error ? error.message : String(error)}`, { retryable: true })
+  } finally {
+    await rm(staging, { force: true }).catch(() => undefined)
+    if (!published) await rm(backup, { force: true }).catch(() => undefined)
+  }
+}
+
 async function validatePodmanDiskPlaceholder(path: string, expandedLogicalBytes?: number): Promise<void> {
   const stats = await lstat(path).catch((error) => {
     throw new AgentHostError(
@@ -286,7 +486,7 @@ async function validatePodmanDiskPlaceholder(path: string, expandedLogicalBytes?
       { retryable: true },
     )
   }
-  if ((stats.mode & 0o022) !== 0) {
+  if (process.platform !== 'win32' && (stats.mode & 0o022) !== 0) {
     throw new AgentHostError('PROVISIONING_FAILED', `Podman Project VM disk placeholder is group/world writable: ${path}`, { retryable: true })
   }
   const allocated = diskAllocatedBytes(stats)
@@ -474,8 +674,11 @@ export class PodmanMachineDriver implements ProjectVmMachineDriver {
   private readonly cloneDisk: (source: string, destination: string) => Promise<void>
   private readonly materializeDisk: (source: string, destination: string) => Promise<void>
   private readonly resolveMachineDiskPath: (name: string) => string | undefined
+  private readonly machineProvider: PodmanMachineProvider
   private readonly directAppleHv: boolean
   private readonly helperBinaryDirectory?: string
+  private readonly prepareHyperVNetworking?: (machineName: string) => Promise<void>
+  private readonly preserveFailedMachine: boolean
   private readonly directStateRoot?: string
   private readonly directSocketRoot?: string
   readonly forwardPort?: (name: string, remotePort: number) => Promise<ProjectVmPortForward>
@@ -486,16 +689,28 @@ export class PodmanMachineDriver implements ProjectVmMachineDriver {
     this.bootstrapEnabled = options.bootstrap ?? true
     this.rootfulPodman = options.rootfulPodman ?? false
     this.projectBaseDisk = options.projectBaseDisk
-    this.cloneDisk = options.cloneDisk ?? cloneThinProjectVmDisk
+    this.machineProvider = options.machineProvider ?? (process.platform === 'win32' ? 'hyperv' : process.platform === 'darwin' ? 'applehv' : 'qemu')
+    this.cloneDisk = options.cloneDisk ?? (this.machineProvider === 'hyperv'
+      ? (source, destination) => cloneThinHyperVProjectVmDisk(source, destination, this.run)
+      : cloneThinProjectVmDisk)
     this.materializeDisk = options.materializeDisk ?? materializeIndependentDisk
     this.resolveMachineDiskPath = options.machineDiskPath ?? ((name) => {
       const dataRoot = process.env.XDG_DATA_HOME?.trim()
-      const provider = process.env.CONTAINERS_MACHINE_PROVIDER?.trim() || 'applehv'
-      if (!dataRoot || provider !== 'applehv') return undefined
-      return resolve(dataRoot, 'containers', 'podman', 'machine', provider, `${name}-${process.arch}.raw`)
+      if (!dataRoot) return undefined
+      if (this.machineProvider === 'applehv') return resolve(dataRoot, 'containers', 'podman', 'machine', 'applehv', `${name}-${process.arch}.raw`)
+      if (this.machineProvider === 'hyperv') {
+        const architecture = process.arch === 'arm64' ? 'arm64' : 'amd64'
+        return resolve(dataRoot, 'containers', 'podman', 'machine', 'hyperv', `${name}-${architecture}.vhdx`)
+      }
+      return undefined
     })
     this.directAppleHv = options.directAppleHv ?? false
     this.helperBinaryDirectory = options.helperBinaryDirectory ? resolve(options.helperBinaryDirectory) : undefined
+    this.prepareHyperVNetworking = options.prepareHyperVNetworking
+      ?? (process.platform === 'win32' && this.machineProvider === 'hyperv' && this.helperBinaryDirectory
+        ? (name) => prepareHyperVNetworking(this.helperBinaryDirectory!, name, this.run)
+        : undefined)
+    this.preserveFailedMachine = options.preserveFailedMachine ?? false
     this.directStateRoot = options.directStateRoot ? resolve(options.directStateRoot) : undefined
     this.directSocketRoot = options.directSocketRoot
       ? resolve(options.directSocketRoot)
@@ -534,10 +749,14 @@ export class PodmanMachineDriver implements ProjectVmMachineDriver {
         // replace its target disk with an APFS copy-on-write clone of the
         // immutable OpenLink base before the first boot.
         const placeholderRoot = await mkdtemp(resolve(tmpdir(), 'openlink-podman-init-'))
-        const placeholder = resolve(placeholderRoot, 'placeholder.raw')
+        const placeholder = resolve(placeholderRoot, this.machineProvider === 'hyperv' ? 'placeholder.vhdx' : 'placeholder.raw')
         try {
-          await writeFile(placeholder, Buffer.alloc(PODMAN_INIT_PLACEHOLDER_BYTES), { flag: 'wx', mode: 0o600 })
-          await validatePodmanDiskPlaceholder(placeholder)
+          if (this.machineProvider === 'hyperv') {
+            await createHyperVPlaceholder(placeholder, spec.diskGb * 1024 * 1024 * 1024, this.run)
+          } else {
+            await writeFile(placeholder, Buffer.alloc(PODMAN_INIT_PLACEHOLDER_BYTES), { flag: 'wx', mode: 0o600 })
+            await validatePodmanDiskPlaceholder(placeholder)
+          }
           await this.run(this.command, [
             'machine', 'init', '--image', placeholder,
             ...(this.rootfulPodman ? ['--rootful'] : []),
@@ -550,12 +769,21 @@ export class PodmanMachineDriver implements ProjectVmMachineDriver {
           const inspectedDestination = machineDiskPath(created.stdout)
           const destination = inspectedDestination ?? this.resolveMachineDiskPath(name)
           if (!destination) throw new AgentHostError('PROVISIONING_FAILED', `Podman machine ${name} did not expose its disk path`, { retryable: true })
-          await validatePodmanDiskPlaceholder(destination, spec.diskGb * 1024 * 1024 * 1024)
+          if (this.machineProvider === 'hyperv') {
+            const placeholderInfo = await inspectHyperVVhd(destination, this.run)
+            if (placeholderInfo.VhdType !== 'Dynamic'
+              || placeholderInfo.Size !== spec.diskGb * 1024 * 1024 * 1024
+              || placeholderInfo.FileSize > PODMAN_EXPANDED_PLACEHOLDER_MAX_ALLOCATION_BYTES) {
+              throw new AgentHostError('PROVISIONING_FAILED', 'Podman Hyper-V machine did not preserve the protected placeholder VHDX', { retryable: true })
+            }
+          } else {
+            await validatePodmanDiskPlaceholder(destination, spec.diskGb * 1024 * 1024 * 1024)
+          }
           if (spec.diskMode === 'thin') await this.cloneDisk(this.projectBaseDisk, destination)
           else await this.materializeDisk(this.projectBaseDisk, destination)
           await this.startMachine(name)
         } catch (error) {
-          await this.run(this.command, ['machine', 'rm', '--force', name]).catch(() => undefined)
+          if (!this.preserveFailedMachine) await this.run(this.command, ['machine', 'rm', '--force', name]).catch(() => undefined)
           throw error
         } finally {
           await rm(placeholderRoot, { recursive: true, force: true }).catch(() => undefined)
@@ -673,29 +901,6 @@ export class PodmanMachineDriver implements ProjectVmMachineDriver {
     await this.run(this.command, ['machine', 'cp', sourcePath, `${name}:${destinationPath}`])
   }
 
-  private async removeIgnitionFirstbootKarg(name: string): Promise<void> {
-    // A Project VM is a Golden Disk clone, so `bootc install` bakes
-    // `ignition.firstboot` into the BLS entries so the first boot provisions
-    // the unique machine identity. Fedora CoreOS normally consumes that karg
-    // after the first boot, but on a cloned disk the durable bootloader
-    // still carries it, which makes the second boot re-run Ignition without
-    // an injected config and stall sshd. Remove the karg once first-boot SSH
-    // is proven so subsequent power cycles boot the already-provisioned OS.
-    await this.runInMachine(name, 'bash', ['-lc', [
-      'set -e',
-      'if command -v grubby >/dev/null 2>&1; then',
-      '  grubby --remove-args=ignition.firstboot --update-kernel=ALL',
-      'else',
-      '  mount -o remount,rw /boot || true',
-      '  for entry in /boot/loader/entries/*.conf; do',
-      '    [ -e "$entry" ] || continue',
-      "    sed -i -E 's/(^|[[:space:]])ignition\\.firstboot([[:space:]]|$)/\\1\\2/g' \"$entry\"",
-      '  done',
-      '  mount -o remount,ro /boot || true',
-      'fi',
-    ].join('\n')])
-  }
-
   async stopMachine(name: string): Promise<void> {
     if (this.directAppleHv) {
       await this.stopDirectAppleHv(name)
@@ -717,7 +922,35 @@ export class PodmanMachineDriver implements ProjectVmMachineDriver {
 
   private async startMachine(name: string): Promise<void> {
     if (this.directAppleHv) await this.startDirectAppleHv(name)
-    else await this.run(this.command, ['machine', 'start', name])
+    else {
+      await this.prepareHyperVNetworking?.(name)
+      try {
+        await this.run(this.command, ['machine', 'start', name])
+      } catch (error) {
+        // Podman 6.0.x on Windows can panic while collecting the completed
+        // Hyper-V WMI job even though the VM, gvproxy and SSH transport are
+        // already live. Reconcile the durable target state before surfacing
+        // the command error; never accept inspect alone as proof of readiness.
+        if (this.machineProvider !== 'hyperv' || !await this.reconcileHyperVStart(name)) throw error
+      }
+    }
+  }
+
+  private async reconcileHyperVStart(name: string): Promise<boolean> {
+    for (let attempt = 0; attempt < HYPERV_START_RECONCILE_ATTEMPTS; attempt += 1) {
+      try {
+        const inspection = await this.run(this.command, ['machine', 'inspect', name])
+        if (machineState(inspection.stdout) === 'running') {
+          await this.run(this.command, ['machine', 'ssh', name, 'true'])
+          return true
+        }
+      } catch {
+        // The helper or SSH listener may still be converging after Hyper-V
+        // completed the asynchronous start job. Retry within a bounded window.
+      }
+      if (attempt + 1 < HYPERV_START_RECONCILE_ATTEMPTS) await delay(HYPERV_START_RECONCILE_DELAY_MS)
+    }
+    return false
   }
 
   private appleHvConfigRoot(): string {
@@ -889,7 +1122,6 @@ export class PodmanMachineDriver implements ProjectVmMachineDriver {
       vfkit.unref()
       await writeFile(statePath, `${JSON.stringify({ machineName: name, vfkitPid: vfkit.pid, gvproxyPid: gvproxy.pid, createdAt: new Date().toISOString() } satisfies DirectAppleHvState)}\n`, { mode: 0o600 })
       await this.waitForAppleHvSsh(config, vfkit.pid)
-      if (isFirstBoot) await this.removeIgnitionFirstbootKarg(name)
       await closeServer(readyServer)
       readyServer = undefined
       await writeFile(firstBootMarker, `${new Date().toISOString()}\n`, { mode: 0o600 })

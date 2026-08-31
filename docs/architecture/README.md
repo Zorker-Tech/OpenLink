@@ -45,6 +45,9 @@ The current ADR set covers these areas:
   ([ADR-0017](./ADR-0017-project-vm-disk-instantiation.md)).
 - the Local-only, scoped virtual-host proxy for a Project VM's upstream
   Supabase Studio ([ADR-0018](./ADR-0018-local-project-studio-proxy.md)).
+- native macOS AppleHV and Windows Hyper-V host drivers with equivalent thin
+  Project VM semantics
+  ([ADR-0019](./ADR-0019-native-host-platform-runtime.md)).
 
 New decisions use the format below and the next unused ADR number:
 

@@ -30,6 +30,60 @@ pnpm runtime:zero:status
 subset and claim the application is ready unless the task explicitly targets
 that isolated service.
 
+### Native desktop host setup
+
+Local development uses two independent host boundaries. Docker Desktop owns
+the ZOKERBASE/Zero Linux container control plane. A native Podman Machine owns
+each durable Project VM: AppleHV on Apple-silicon macOS and Hyper-V on Windows.
+Docker Desktop's selected internal backend does not change that contract, and
+WSL is never used as an implicit Project VM fallback.
+
+Windows requires Windows 11 Pro/Enterprise (or another Hyper-V-capable
+edition), firmware virtualization, the Hyper-V feature and Docker Desktop.
+Run the following once from an **elevated Windows PowerShell** terminal:
+
+```powershell
+Set-Location I:\openlink
+.\scripts\prepare-windows-host.ps1
+```
+
+This preparation entry point does not require a globally installed `pnpm`.
+It discovers `node.exe` from `PATH`, `NVM_SYMLINK`, the standard nvm4w
+symlink, or the machine/per-user Node installation, then invokes the same
+checked-in JavaScript preparation pipeline. `pnpm runtime:windows:prepare`
+remains an equivalent convenience command after dependencies are installed.
+
+The preparation command builds/verifies the pinned Windows Podman client and
+helpers, creates Podman's persistent Hyper-V VSock registry entries, adds the
+current account to the local Hyper-V Administrators group, and grants the
+well-known Hyper-V VM virtual-account SID (`S-1-5-83-0`) access to the
+product-owned VM storage tree. Sign out and sign back in afterward so a normal
+non-elevated OpenLink process receives the new group token. `pnpm dev:local`
+then checks Hyper-V, VSock, group membership, Docker CLI/Compose/engine health,
+artifact platform identity, VM-storage ACLs and secret-file ACLs before
+reporting readiness. It fails closed with an actionable error if any
+prerequisite is absent.
+
+Windows keeps Hyper-V disks, toolchain artifacts and non-secret runtime state
+under the checkout's `.openlink-runtime`. Credentials are a separate security
+domain under `%LOCALAPPDATA%\OpenLink\state` and receive a protected
+current-user-only DACL; POSIX `0600` modes alone are not treated as security on
+Windows. This separation also supports workspaces on enterprise volumes that
+permit ordinary data writes but reserve DACL changes for administrators.
+macOS retains its existing repository-local runtime paths. Golden Disks are
+provider-specific: macOS publishes sparse `.raw`
+with native APFS clones, while Windows publishes read-only dynamic `.vhdx`
+with verified Hyper-V differencing children. Never copy either artifact across
+providers or make a Golden VHDX writable.
+
+Moving to another Windows machine does not require reproducing hidden manual
+state. Install Node.js and Docker Desktop, run the checked-in preparation
+script once, sign out/in, install the frozen workspace dependencies, and
+consume or rebuild the provider-specific artifacts. Hyper-V features, group
+membership and VSock registration are host capabilities and are intentionally
+reconciled per machine; Project data and release artifacts remain explicit
+product state rather than implicit WSL state.
+
 Artifact production is separate from runtime startup:
 
 ```bash
@@ -41,6 +95,12 @@ pnpm runtime:project-supabase:sync
 pnpm runtime:project-supabase:images
 pnpm runtime:project-supabase:test
 ```
+
+If direct GitHub access is restricted, `OPENLINK_SUPABASE_FETCH_REPOSITORY`
+may point at a trusted Git transport mirror. This changes transport only: the
+official annotated tag object, peeled commit, configuration tree, upgrade
+gates, service contract, and compiled runtime specification remain pinned and
+are verified before anything is published into `.openlink-runtime`.
 
 Ordinary startup must consume those local product artifacts without pulling
 upstream images.
@@ -58,8 +118,8 @@ pnpm runtime:project-supabase:keygen
 OPENLINK_PROJECT_SUPABASE_SIGNING_KEY_FILE=/absolute/private.pem \
   pnpm runtime:project-supabase:upgrade-bundle
 
-# The complete image path: bootc OCI -> never-booted raw disk -> target
-# rootful Podman graphroot seeding -> fresh clone validation.
+# The complete image path: bootc OCI -> never-booted provider disk -> target
+# rootful Podman graphroot seeding -> fresh native-clone validation.
 pnpm runtime:vm-image
 pnpm runtime:project-supabase:validate-vm
 ```
