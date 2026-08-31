@@ -1,6 +1,7 @@
 import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { statSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { resolve as resolveGuestPath } from 'node:path/posix'
 import { createHash, randomBytes } from 'node:crypto'
 import { Buffer } from 'node:buffer'
 import { AgentHostError } from './errors.js'
@@ -1039,7 +1040,7 @@ export class ProjectRuntimeManager {
         projectId,
         machineName: vm.machineName,
         workspacePath: vm.workspacePath,
-        sessionStorageRoot: resolve(vm.workspacePath, '.openlink', 'sessions'),
+        sessionStorageRoot: resolveGuestPath(vm.workspacePath, '.openlink', 'sessions'),
         ports,
         ...secrets,
         browserAllowedOrigins: this.browserAllowedOrigins,

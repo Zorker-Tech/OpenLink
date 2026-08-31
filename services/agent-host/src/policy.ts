@@ -1,7 +1,6 @@
-import { resolve } from 'node:path'
 import type { AgentPolicy } from './contracts.js'
 import { AgentHostError } from './errors.js'
-import { assertContainedPath } from './storage.js'
+import { assertContainedPath, resolveScopedPath } from './storage.js'
 
 export interface CompiledSandboxPolicy {
   filesystem: {
@@ -36,8 +35,8 @@ export function compileSandboxPolicy(
   storageRoot: string,
   policy: AgentPolicy,
 ): CompiledSandboxPolicy {
-  const workspace = resolve(workspaceRoot)
-  const storage = resolve(storageRoot)
+  const workspace = resolveScopedPath(workspaceRoot)
+  const storage = resolveScopedPath(storageRoot)
   const writeRoots = policy.allowWrite.length > 0 ? policy.allowWrite : [workspace, storage]
 
   for (const path of writeRoots) {
@@ -56,7 +55,7 @@ export function compileSandboxPolicy(
   return {
     filesystem: {
       denyRead,
-      allowWrite: writeRoots.map((path) => resolve(path)),
+      allowWrite: writeRoots.map((path) => resolveScopedPath(path)),
       denyWrite,
     },
     network: {

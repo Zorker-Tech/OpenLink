@@ -31,6 +31,22 @@ async function request(path, { method = 'GET', key = anonKey, token = key, body,
   return { response, value }
 }
 
+async function requestWhenFunctionRouteReady(path, options) {
+  let lastError
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    try { return await request(path, options) } catch (error) {
+      lastError = error
+      // Edge Runtime starts its HTTP listener before the function bundle has
+      // completed loading. Envoy reports that narrow window as a 503 reset;
+      // retain a bounded, function-specific readiness wait rather than
+      // weakening the E2E requirement to a container/TCP health signal.
+      if (!/returned 503:.*(?:connection termination|upstream connect error)/i.test(String(error))) throw error
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 1_000))
+    }
+  }
+  throw lastError
+}
+
 const { default: postgres } = await import('postgres')
 const sql = postgres(databaseUrl, { max: 1, connect_timeout: 10, idle_timeout: 5 })
 let accessToken
@@ -71,7 +87,7 @@ try {
   assert.ok(download.ok, `Storage download returned ${download.status}`)
   assert.equal(Buffer.from(await download.arrayBuffer()).toString(), bytes.toString())
 
-  const edge = await request('/functions/v1/hello', { method: 'POST', token: accessToken, body: { name: marker } })
+  const edge = await requestWhenFunctionRouteReady('/functions/v1/hello', { method: 'POST', token: accessToken, body: { name: marker } })
   assert.match(String(edge.value), /Hello from Edge Functions/, 'Edge Function returned an unexpected body')
   await request('/pg/health', { key: serviceKey })
   const studio = await fetch(`${url}/`, {

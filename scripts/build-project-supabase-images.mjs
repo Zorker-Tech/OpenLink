@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
-import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, rm, stat, statfs, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { readProjectSupabaseLock } from './lib/project-supabase-lock.mjs'
 import { archiveName, immutablePullReference, readImageArtifactManifest, sha256File, targetArchitecture } from './lib/project-supabase-images.mjs'
+import { ensureDockerEngine } from './lib/docker-runtime.mjs'
 
 const execFileAsync = promisify(execFile)
 const root = resolve(fileURLToPath(new URL('../', import.meta.url)))
@@ -16,6 +17,7 @@ const architecture = targetArchitecture(architectureArgument)
 const outputRoot = resolve(root, '.openlink-runtime/project-supabase/images', architecture)
 const manifestPath = resolve(outputRoot, 'manifest.json')
 const force = process.argv.includes('--force')
+const docker = await ensureDockerEngine()
 
 async function command(commandName, args, options = {}) {
   const { stdout } = await execFileAsync(commandName, args, { maxBuffer: 64 * 1024 * 1024, ...options })
@@ -33,11 +35,10 @@ async function archiveImageId(path, reference) {
 }
 
 async function availableBytes(path) {
-  const stdout = await command('df', ['-Pk', path])
-  const fields = stdout.trim().split(/\r?\n/).at(-1).trim().split(/\s+/)
-  const kib = Number(fields[3])
-  if (!Number.isSafeInteger(kib) || kib <= 0) throw new Error('Unable to determine available disk capacity')
-  return kib * 1024
+  const filesystem = await statfs(path, { bigint: true })
+  const bytes = filesystem.bavail * filesystem.bsize
+  if (bytes <= 0n || bytes > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('Unable to determine available disk capacity')
+  return Number(bytes)
 }
 
 async function validCachedArtifact(service, verifiedPrevious) {
@@ -76,11 +77,11 @@ for (const service of lock.services) {
   const immutable = immutablePullReference(service.image, platformDigest)
   const temporaryArchive = `${archivePath}.${process.pid}.tmp`
   process.stderr.write(`Acquiring ${service.name} ${immutable} for linux/${architecture}\n`)
-  await command('docker', ['image', 'pull', '--platform', `linux/${architecture}`, immutable])
+  await command(docker, ['image', 'pull', '--platform', `linux/${architecture}`, immutable])
   try {
-    await command('docker', ['image', 'tag', immutable, service.image])
+    await command(docker, ['image', 'tag', immutable, service.image])
     await rm(temporaryArchive, { force: true })
-    await command('docker', ['image', 'save', '--platform', `linux/${architecture}`, '--output', temporaryArchive, service.image])
+    await command(docker, ['image', 'save', '--platform', `linux/${architecture}`, '--output', temporaryArchive, service.image])
     const metadata = await stat(temporaryArchive)
     if (!metadata.isFile() || metadata.size <= 1024) throw new Error(`Docker produced an invalid archive for ${service.name}`)
     const archiveSha256 = await sha256File(temporaryArchive)
@@ -92,8 +93,8 @@ for (const service of lock.services) {
     // Remove only this build's tag/reference. Shared layers remain available
     // for the next image and Docker decides when unreferenced content can be
     // reclaimed; no global prune can affect user-owned images.
-    await command('docker', ['image', 'rm', service.image]).catch(() => undefined)
-    await command('docker', ['image', 'rm', immutable]).catch(() => undefined)
+    await command(docker, ['image', 'rm', service.image]).catch(() => undefined)
+    await command(docker, ['image', 'rm', immutable]).catch(() => undefined)
   }
 }
 

@@ -16,7 +16,11 @@ test('VM validation proves persistence across a same-disk VM power cycle rather 
 
   assert.match(validation, /runE2eInVm\(\{ keepFixtures: true \}\)/)
   assert.match(validation, /new PodmanMachineDriver\(/)
-  assert.match(validation, /directAppleHv: true/)
+  assert.match(validation, /machineProvider: provider/)
+  assert.match(validation, /directAppleHv: provider === 'applehv'/)
+  assert.match(validation, /provider === 'hyperv' \? await inspectHyperVVhd/)
+  assert.match(validation, /VhdType, 'Differencing'/)
+  assert.match(validation, /immutable Golden parent/)
   assert.match(validation, /machineDriver\.ensureMachine\(machine,/)
   assert.match(validation, /machineDriver\.runInMachine\(machine, command, args\)/)
   assert.match(validation, /machineDriver\.copyToMachine\(machine,/)

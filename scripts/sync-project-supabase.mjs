@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { cp, mkdtemp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { basename, resolve } from 'node:path'
+import { basename, isAbsolute, posix, relative, resolve, sep, win32 } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import {
@@ -14,10 +14,15 @@ import {
   readProjectSupabaseLock,
   validateProjectSupabaseLock,
 } from './lib/project-supabase-lock.mjs'
+import { ensureDockerEngine } from './lib/docker-runtime.mjs'
 
 const execFileAsync = promisify(execFile)
 const root = resolve(fileURLToPath(new URL('../', import.meta.url)))
 const repository = 'https://github.com/supabase/supabase.git'
+// A transport mirror may be selected in restricted networks, but it cannot
+// change the reviewed source identity: annotated tag object, peeled commit,
+// configuration tree and runtime contract hashes are all checked below.
+const fetchRepository = process.env.OPENLINK_SUPABASE_FETCH_REPOSITORY?.trim() || repository
 const lockPath = resolve(root, 'services/project-supabase/runtime.lock.json')
 const outputRoot = resolve(root, '.openlink-runtime/project-supabase')
 const argumentsSet = new Set(process.argv.slice(2))
@@ -25,6 +30,7 @@ const updateLock = argumentsSet.has('--update-lock')
 const refreshRuntimeSpec = argumentsSet.has('--refresh-runtime-spec')
 const offline = argumentsSet.has('--offline')
 const tagArgument = process.argv.find((value) => value.startsWith('--tag='))?.slice('--tag='.length)
+let docker
 
 export function parseLsRemoteTags(output) {
   const refs = new Map()
@@ -68,7 +74,6 @@ function sortJson(value) {
 
 export function normalizeRuntimeSpec(compose, configurationRoot) {
   if (!compose || typeof compose !== 'object' || !compose.services || typeof compose.services !== 'object') throw new Error('Supabase Compose JSON is invalid')
-  const rootWithSeparator = `${resolve(configurationRoot)}/`
   const spec = structuredClone(compose)
   delete spec.name
   for (const service of Object.values(spec.services)) {
@@ -76,9 +81,18 @@ export function normalizeRuntimeSpec(compose, configurationRoot) {
     if (Array.isArray(service.volumes)) {
       for (const volume of service.volumes) {
         if (volume?.type !== 'bind' || typeof volume.source !== 'string') continue
-        const source = resolve(volume.source)
-        if (!source.startsWith(rootWithSeparator)) throw new Error(`Supabase runtime bind mount escapes the locked configuration root: ${source}`)
-        volume.source = `configuration/${source.slice(rootWithSeparator.length)}`
+        const pathApi = configurationRoot.startsWith('/') && volume.source.startsWith('/')
+          ? posix
+          : /^[A-Za-z]:[\\/]/.test(configurationRoot) || /^[A-Za-z]:[\\/]/.test(volume.source)
+            ? win32
+            : { resolve, relative, isAbsolute, sep }
+        const lockedRoot = pathApi.resolve(configurationRoot)
+        const source = pathApi.resolve(volume.source)
+        const relativeSource = pathApi.relative(lockedRoot, source)
+        if (!relativeSource || relativeSource === '..' || relativeSource.startsWith(`..${pathApi.sep}`) || pathApi.isAbsolute(relativeSource)) {
+          throw new Error(`Supabase runtime bind mount escapes the locked configuration root: ${source}`)
+        }
+        volume.source = `configuration/${relativeSource.split(pathApi.sep).join('/')}`
         if (volume.bind && typeof volume.bind === 'object') delete volume.bind.create_host_path
       }
     }
@@ -161,18 +175,22 @@ async function retryCommand(commandName, args, { attempts = 6, baseDelayMs = 1_0
 }
 
 async function remoteTags() {
-  const output = await retryCommand('git', ['ls-remote', repository, 'refs/tags/self-hosted/v*', 'refs/tags/self-hosted/v*^{}'])
+  const output = await retryCommand('git', ['ls-remote', fetchRepository, 'refs/tags/self-hosted/v*', 'refs/tags/self-hosted/v*^{}'])
   return parseLsRemoteTags(output)
 }
 
 async function checkout(tag, destination) {
-  await command('git', ['clone', '--quiet', '--depth', '1', '--branch', tag, '--filter=blob:none', '--sparse', repository, destination])
+  // Source bytes are part of the release authority. Never inherit a Windows
+  // user's core.autocrlf setting for this controlled artifact checkout.
+  await command('git', ['-c', 'core.autocrlf=false', '-c', 'core.eol=lf', 'clone', '--quiet', '--depth', '1', '--branch', tag, '--filter=blob:none', '--sparse', fetchRepository, destination])
+  await command('git', ['-C', destination, 'config', 'core.autocrlf', 'false'])
+  await command('git', ['-C', destination, 'config', 'core.eol', 'lf'])
   await command('git', ['-C', destination, 'sparse-checkout', 'set', 'docker'])
   return (await command('git', ['-C', destination, 'rev-parse', 'HEAD'])).trim()
 }
 
 async function composeDefinition(configurationRoot) {
-  const stdout = await command('docker', [
+  const stdout = await command(docker, [
     'compose',
     '--env-file', resolve(configurationRoot, '.env.example'),
     '--file', resolve(configurationRoot, 'docker-compose.yml'),
@@ -185,7 +203,7 @@ async function composeDefinition(configurationRoot) {
 }
 
 async function resolvePlatforms(image) {
-  const raw = await retryCommand('docker', ['buildx', 'imagetools', 'inspect', '--raw', image])
+  const raw = await retryCommand(docker, ['buildx', 'imagetools', 'inspect', '--raw', image])
   return platformDescriptors(raw, image)
 }
 
@@ -204,6 +222,7 @@ async function atomicConfiguration(source, destination) {
 }
 
 async function main() {
+  docker = await ensureDockerEngine()
   await mkdir(outputRoot, { recursive: true, mode: 0o700 })
   const existingLock = await readProjectSupabaseLock(lockPath).catch((error) => {
     if (!updateLock) throw error
