@@ -97,7 +97,7 @@ export async function createProductionConfiguration(options = {}) {
     OPENLINK_BROWSER_TOKEN_SECRET: token(),
     OPENLINK_AGENT_API_TOKEN: token(),
     OPENLINK_DESKTOP_AGENT_API_TOKEN: token(),
-    OPENLINK_PROVIDER_SECRET_KEY: token(),
+    OPENLINK_PROVIDER_SECRET_KEY: randomBytes(32).toString('base64url'),
     OPEN_SANDBOX_API_KEY: token(),
     OPENSANDBOX_SERVER_API_KEY: token(),
     OPENLINK_KNOWLEDGE_INTERNAL_TOKEN: token(),

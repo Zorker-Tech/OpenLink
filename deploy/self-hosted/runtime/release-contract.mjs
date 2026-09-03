@@ -152,6 +152,7 @@ function validateInventory(inventory) {
     invariant(path > previous, 'Release inventory paths must be unique and sorted')
     invariant(typeof entry.mode === 'string' && /^[0-7]{4}$/.test(entry.mode), `Release inventory mode is invalid: ${path}`)
     invariant((Number.parseInt(entry.mode, 8) & 0o022) === 0, `Release inventory contains a writable file: ${path}`)
+    invariant((Number.parseInt(entry.mode, 8) & 0o7000) === 0, `Release inventory contains special permission bits: ${path}`)
     invariant(Number.isSafeInteger(entry.size) && entry.size >= 0, `Release inventory size is invalid: ${path}`)
     invariant(typeof entry.sha256 === 'string' && DIGEST.test(entry.sha256), `Release inventory digest is invalid: ${path}`)
     previous = path

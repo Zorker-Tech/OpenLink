@@ -1,7 +1,7 @@
 import { constants } from 'node:fs'
 import { execFile as execFileCallback } from 'node:child_process'
 import { createServer } from 'node:net'
-import { access, lstat, mkdir, readFile, statfs } from 'node:fs/promises'
+import { access, lstat, mkdir, open, readFile, statfs } from 'node:fs/promises'
 import { totalmem } from 'node:os'
 import { join, resolve } from 'node:path'
 import { promisify } from 'node:util'
@@ -33,11 +33,21 @@ export function parseEnvironmentFile(contents) {
 }
 
 export async function readEnvironmentFile(path, options = {}) {
-  const stats = await lstat(path)
-  if (!stats.isFile()) throw new Error(`Environment path is not a regular file: ${path}`)
-  if (options.secrets && (stats.mode & 0o027) !== 0) throw new Error(`Secrets file permissions must be 0640 or stricter: ${path}`)
-  if (!options.secrets && (stats.mode & 0o022) !== 0) throw new Error(`Environment file is writable by group or others: ${path}`)
-  return parseEnvironmentFile(await readFile(path, 'utf8'))
+  const before = await lstat(path)
+  if (!before.isFile()) throw new Error(`Environment path is not a regular file: ${path}`)
+  if (before.size > 1024 * 1024) throw new Error(`Environment file exceeds the 1 MiB limit: ${path}`)
+  if (options.secrets && (before.mode & 0o027) !== 0) throw new Error(`Secrets file permissions must be 0640 or stricter: ${path}`)
+  if (!options.secrets && (before.mode & 0o022) !== 0) throw new Error(`Environment file is writable by group or others: ${path}`)
+  const handle = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
+  try {
+    const current = await handle.stat()
+    if (!current.isFile() || current.dev !== before.dev || current.ino !== before.ino || current.size !== before.size) {
+      throw new Error(`Environment file changed while opening: ${path}`)
+    }
+    return parseEnvironmentFile(await handle.readFile('utf8'))
+  } finally {
+    await handle.close()
+  }
 }
 
 async function assertFile(path, options = {}) {

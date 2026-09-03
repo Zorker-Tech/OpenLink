@@ -70,6 +70,8 @@ test('launchd service runs only the active prebuilt release and embeds no creden
 
 test('edge publishes Web and scoped gateway routes but no privileged service port', async () => {
   const source = await readFile(new URL('deploy/self-hosted/edge/Caddyfile', root), 'utf8')
+  assert.match(source, /^\s*admin off$/m)
+  assert.doesNotMatch(source, /admin 127\.0\.0\.1/)
   assert.match(source, /reverse_proxy 127\.0\.0\.1:3000/)
   assert.match(source, /reverse_proxy 127\.0\.0\.1:43121/)
   assert.doesNotMatch(source, /127\.0\.0\.1:(?:43120|43123|43124|54380|19530|9091)/)
@@ -134,6 +136,12 @@ test('Linux service installation fixes ownership, enables systemd and verifies a
   assert.equal((await lstat(secretsPath)).mode & 0o777, 0o640)
   assert.equal((await lstat(backupKeyPath)).mode & 0o777, 0o600)
   assert.equal((await lstat(brokerUnitPath)).mode & 0o777, 0o644)
+})
+
+test('Linux identity setup replaces legacy supplementary groups instead of retaining Docker', async () => {
+  const source = await readFile(new URL('deploy/self-hosted/runtime/native-service.mjs', root), 'utf8')
+  assert.match(source, /usermod', \['--groups', 'kvm', 'openlink'\]/)
+  assert.doesNotMatch(source, /usermod', \['--append'/)
 })
 
 test('Linux service installation restores previous units and service state after activation failure', async (t) => {

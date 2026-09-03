@@ -26,6 +26,7 @@ test('configure creates separate protected secrets with no development defaults'
   assert.equal(Object.keys(config).filter((key) => !key.endsWith('_FILE')).some((key) => /TOKEN|SECRET|PASSWORD/.test(key)), false)
   assert.notEqual(secrets.POSTGRES_PASSWORD, 'insecure')
   assert.match(secrets.ANON_KEY, /^[^.]+\.[^.]+\.[^.]+$/)
+  assert.equal(Buffer.from(secrets.OPENLINK_PROVIDER_SECRET_KEY, 'base64url').length, 32)
   assert.equal((await lstat(result.secretsPath)).mode & 0o077, 0)
   await assert.rejects(createProductionConfiguration({ releaseRoot, configPath, stateRoot: join(root, 'state'), appUrl: 'https://openlink.example.test' }), /exist/i)
 })

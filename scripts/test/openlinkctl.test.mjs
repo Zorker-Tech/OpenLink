@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { generateKeyPairSync } from 'node:crypto'
 import { createServer } from 'node:http'
-import { lstat, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { chmod, lstat, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -88,6 +88,23 @@ test('safe archive extractor bounds all headers before signature verification', 
     child.once('exit', (code) => code === 0 ? resolvePromise() : rejectPromise(new Error(`tar exited ${code}`)))
   })
   await assert.rejects(extractVerifiedTarGzip(archive, join(root, 'output'), { maximumEntries: 2 }), /more than 2 entries/i)
+  await assert.rejects(lstat(join(root, 'output')), /ENOENT/)
+})
+
+test('safe archive extractor rejects setuid, setgid and sticky permission bits', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'openlink-archive-special-mode-'))
+  t.after(async () => (await import('node:fs/promises')).rm(root, { recursive: true, force: true }))
+  const source = join(root, 'source')
+  const archive = join(root, 'payload.tar.gz')
+  await mkdir(source)
+  await writeFile(join(source, 'privileged'), '#!/bin/sh\n')
+  await chmod(join(source, 'privileged'), 0o4755)
+  await new Promise((resolvePromise, rejectPromise) => {
+    const child = spawn('tar', ['-czf', archive, '-C', source, '.'], { env: { ...process.env, COPYFILE_DISABLE: '1' } })
+    child.once('error', rejectPromise)
+    child.once('exit', (code) => code === 0 ? resolvePromise() : rejectPromise(new Error(`tar exited ${code}`)))
+  })
+  await assert.rejects(extractVerifiedTarGzip(archive, join(root, 'output')), /special permission bits/i)
   await assert.rejects(lstat(join(root, 'output')), /ENOENT/)
 })
 
