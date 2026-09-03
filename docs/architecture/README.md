@@ -52,6 +52,9 @@ The current ADR set covers these areas:
   single-node production completed before load-balanced multi-node and
   multi-cluster drivers
   ([ADR-0020](./ADR-0020-zokerbase-platform-console.md)).
+- sealed, platform-specific self-hosted releases that customers install and
+  operate without source builds or runtime registry pulls
+  ([ADR-0021](./ADR-0021-sealed-self-hosted-production-distribution.md)).
 
 New decisions use the format below and the next unused ADR number:
 
