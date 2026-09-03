@@ -9,7 +9,10 @@ import {
   safeReleasePath,
   verifyReleaseInventory,
   verifyReleaseManifest,
-} from '../../scripts/lib/self-hosted-release.mjs'
+} from './runtime/release-contract.mjs'
+import { readEnvironmentFile, runPreflight } from './runtime/preflight.mjs'
+
+const releaseRootFromScript = resolve(fileURLToPath(new URL('.', import.meta.url)))
 
 async function pathExists(path) {
   try {
@@ -119,9 +122,15 @@ function parseArguments(argv) {
 }
 
 async function trustedKeysFrom(path) {
+  if (!path) throw new Error('Release trust file is required')
   const document = JSON.parse(await readFile(resolve(path), 'utf8'))
   if (!document || typeof document !== 'object' || Array.isArray(document)) throw new Error('Release trust file is invalid')
-  return document
+  const keys = document.keys ?? document
+  if (!keys || typeof keys !== 'object' || Array.isArray(keys)) throw new Error('Release trust keys are invalid')
+  return Object.fromEntries(Object.entries(keys).map(([keyId, value]) => [
+    keyId,
+    typeof value === 'string' ? value : value?.publicKeyPem,
+  ]))
 }
 
 async function main(argv) {
@@ -152,7 +161,27 @@ async function main(argv) {
     process.stdout.write(`${JSON.stringify({ releaseId: basename(await readlink(link)) })}\n`)
     return
   }
-  throw new Error('Usage: openlinkctl <verify|install|version> [options]')
+  if (command === 'preflight' || command === 'doctor') {
+    const configPath = values.get('config')
+    const config = configPath ? await readEnvironmentFile(resolve(configPath)) : {}
+    const secrets = config.OPENLINK_SECRETS_FILE
+      ? await readEnvironmentFile(resolve(config.OPENLINK_SECRETS_FILE), { secrets: true })
+      : {}
+    const releaseRoot = resolve(values.get('release-root') || releaseRootFromScript)
+    const result = await runPreflight({
+      releaseRoot,
+      stateRoot: values.get('state-root') || config.OPENLINK_STATE_ROOT,
+      platform: process.platform,
+      architecture: process.arch,
+      dockerCommand: config.OPENLINK_DOCKER_COMMAND || 'docker',
+      environment: { ...config, ...secrets },
+      minimumFreeBytes: config.OPENLINK_MINIMUM_FREE_BYTES,
+      minimumMemoryBytes: config.OPENLINK_MINIMUM_MEMORY_BYTES,
+    })
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`)
+    return
+  }
+  throw new Error('Usage: openlinkctl <verify|install|version|preflight|doctor> [options]')
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -161,4 +190,3 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     process.exitCode = 1
   })
 }
-
