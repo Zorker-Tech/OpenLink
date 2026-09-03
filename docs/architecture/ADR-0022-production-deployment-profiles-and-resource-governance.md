@@ -21,14 +21,16 @@ not provide an independent guest kernel or a VM security boundary. A Docker
 container and a Project VM are therefore two different execution contracts;
 they must not be presented as equivalent isolation.
 
-Production sizing also has three independent concerns that must not be
+Production sizing and execution have four independent concerns that must not be
 collapsed into one installation-time number:
 
-1. A deployment profile describes the host baseline and the default resources
-   assigned to a Project workload.
-2. A tenant entitlement limits how many Project workloads a user or
+1. A deployment profile describes enabled product components, the host
+   baseline and the default resources assigned to a Project workload.
+2. A Project runtime backend selects container or VM isolation independently
+   from the deployment profile.
+3. A tenant entitlement limits how many Project workloads a user or
    organization may run concurrently.
-3. Platform capacity limits how many workloads the whole deployment or cluster
+4. Platform capacity limits how many workloads the whole deployment or cluster
    can safely admit at a particular time.
 
 Project concurrency cannot be permanently fixed during installation. A user's
@@ -48,8 +50,11 @@ self-hosted runtime contract established by
 ### Functional requirements
 
 - Provide named `core`, `standard` and `dense` production deployment profiles.
-- Allow Core to run Project workloads without KVM or Apple Hypervisor.
-- Preserve full Project VM semantics in Standard and Dense.
+- Keep deployment profile and Project runtime backend independently selectable.
+- Do not start the built-in Knowledge Service or Zero in Core.
+- Allow every profile to use the Container backend without KVM or Apple
+  Hypervisor.
+- Preserve full Project VM semantics when any profile uses the VM backend.
 - Detect required host capabilities before starting workloads.
 - Keep the selected profile and observed runtime backend visible to operators.
 - Allow the default per-Project resource shape to change after installation.
@@ -89,14 +94,15 @@ self-hosted runtime contract established by
 
 ## Decision
 
-### Three separate policy axes
+### Four separate policy axes
 
-OpenLink will model deployment sizing, tenant entitlement and platform capacity
-as independent policy axes:
+OpenLink will model deployment sizing, Project isolation, tenant entitlement
+and platform capacity as independent policy axes:
 
 ```mermaid
 flowchart LR
   Profile["Deployment profile\nCore / Standard / Dense"] --> Admission["Project admission"]
+  Backend["Project runtime\nContainer / VM"] --> Admission
   Entitlement["User or organization entitlement\nOpenLink Settings domain"] --> Admission
   Capacity["Host or cluster capacity\nPlatform operations domain"] --> Admission
   Admission --> Runtime["Selected Project runtime"]
@@ -123,13 +129,13 @@ versioned defaults, not permanent licensing limits. Operators may choose a
 larger host, and authorized reconfiguration may change Project defaults after
 preflight succeeds.
 
-| Profile | Project runtime | Host baseline | Default Project shape | Intended use |
+| Profile | Enabled product components | Host baseline | Default Project shape | Intended use |
 | --- | --- | --- | --- | --- |
-| Core | Docker Project Container | 4 logical CPU, 16 GiB RAM, 100 GiB free state storage | 2 vCPU, 4 GiB RAM, 40 GiB storage budget | Hosts without usable hardware virtualization, evaluation and compatibility-focused self-hosting |
-| Standard | Project VM through QEMU/KVM or AppleHV | 8 logical CPU, 32 GiB RAM, 200 GiB free state storage | 4 vCPU, 8 GiB RAM, 64 GiB virtual disk | Default production deployment with full Project VM isolation |
-| Dense | Project VM through QEMU/KVM or AppleHV | 16 logical CPU, 64 GiB RAM, 500 GiB free state storage | 2 vCPU, 6 GiB RAM, 64 GiB virtual disk | Higher Project density on a large host, with the same VM isolation contract |
+| Core | OpenLink application and data platform; built-in Knowledge Service and Zero disabled | 4 logical CPU, 16 GiB RAM, 100 GiB free state storage | 2 vCPU, 4 GiB RAM, 40 GiB storage budget | Deliberately reduced product surface for smaller or compatibility-focused self-hosting |
+| Standard | Complete product, including built-in Knowledge Service and Zero | 8 logical CPU, 32 GiB RAM, 200 GiB free state storage | 4 vCPU, 8 GiB RAM, 64 GiB storage budget or virtual disk | Default complete production deployment |
+| Dense | Complete product, including built-in Knowledge Service and Zero | 16 logical CPU, 64 GiB RAM, 500 GiB free state storage | 2 vCPU, 6 GiB RAM, 64 GiB storage budget or virtual disk | Higher Project density on a large host |
 
-Dense means a higher-density VM policy, not weaker isolation and not an
+Dense means a higher-density resource policy, not weaker isolation and not an
 unlimited Project count. Its smaller default CPU allocation is a scheduling
 default; an individual Project may receive another approved resource class.
 Memory and storage overcommit are disabled initially. CPU may be shared within
@@ -142,16 +148,20 @@ explicit compatibility declaration and upgrade preflight.
 
 ### Runtime contracts
 
-Core uses a `container` backend. Each Project receives a separately named
-container group, network namespace, volumes, credentials and resource limits,
-but it shares the host kernel. The UI and operational status must label this
-backend **Docker compatibility mode** and display `container` as its isolation
-class.
+Every profile may use the `container` or `vm` backend. Profile selection does
+not imply an isolation class.
 
-Standard and Dense use a `vm` backend. On Linux the backend is QEMU accelerated
-by KVM; on macOS it is `vfkit` accelerated by Apple Hypervisor, with `gvproxy`
-for networking. Project services, including their container engine, run inside
-the guest. The reported isolation class is `vm`.
+The `container` backend gives each Project a separately named container group,
+network namespace, volumes, credentials and resource limits, but it shares the
+host kernel. The UI and operational status must label this backend **Docker
+compatibility mode** and display `container` as its isolation class. Standard +
+Container and Dense + Container retain their complete product component set
+and resource policy; they do not become Core merely because KVM is absent.
+
+The `vm` backend uses QEMU accelerated by KVM on Linux and `vfkit` accelerated
+by Apple Hypervisor on macOS, with `gvproxy` for networking. Project services,
+including their container engine, run inside the guest. The reported isolation
+class is `vm`.
 
 Both backends implement one versioned `ProjectRuntime` contract:
 
@@ -176,11 +186,11 @@ The deployment profile is explicit desired state. Installation may recommend a
 profile after detection, but startup does not automatically change an existing
 profile.
 
-- Core requires a healthy Docker Engine and Compose support. KVM and AppleHV
-  are not required.
-- Standard and Dense on Linux require CPU virtualization flags, the appropriate
+- The Container backend requires a healthy Docker Engine and Compose support.
+  KVM and AppleHV are not required.
+- The VM backend on Linux requires CPU virtualization flags, the appropriate
   KVM kernel modules, usable `/dev/kvm`, and the pinned QEMU/runtime helpers.
-- Standard and Dense on macOS require `kern.hv_support=1` and the sealed `vfkit`
+- The VM backend on macOS requires `kern.hv_support=1` and the sealed `vfkit`
   and `gvproxy` artifacts.
 - Linux startup may load already installed `kvm`, `kvm_intel` or `kvm_amd`
   modules and configure the dedicated service identity's device access.
@@ -191,17 +201,20 @@ profile.
   cannot be enabled by the application. Their absence produces an actionable
   preflight failure.
 
-Standard or Dense never silently fall back to Core. The operator must perform
-an explicit profile change, acknowledge the isolation downgrade and pass Core
-preflight. A Core deployment may be promoted to Standard or Dense after the VM
-backend and all existing Project data have passed migration verification.
+No profile silently changes its runtime backend. If Linux VM preflight fails,
+an interactive CLI may offer to enable locally available KVM support, retain
+the same profile and select Container, select another profile, or exit. A
+Container selection is an explicit isolation change but not a profile
+downgrade. Non-interactive startup fails unless its policy explicitly chooses
+and acknowledges Container. Moving from Container to VM requires the VM
+backend and all existing Project data to pass migration verification.
 
 ### Configuration ownership and mutability
 
 The deployment CLI owns only host-level desired state:
 
 - deployment profile and profile revision;
-- runtime backend implied by that profile;
+- independently selected Project runtime backend;
 - host paths, public endpoints and certificates;
 - service resource envelope and platform reserve;
 - optional per-Project resource-class defaults;
@@ -211,13 +224,16 @@ The initial interface will expose the equivalent of:
 
 ```text
 openlinkctl install --profile core|standard|dense
+openlinkctl install --project-runtime container|vm|auto
 openlinkctl profile show
 openlinkctl profile plan standard
 openlinkctl profile apply standard
 ```
 
-`profile plan` is read-only and reports capability checks, data migration,
-required downtime and capacity impact. `profile apply` uses the existing
+`auto` is an installation-time request to detect and confirm a concrete
+backend; persisted desired state is always `container` or `vm`. `profile plan`
+is read-only and reports capability checks, data migration, required downtime
+and capacity impact. `profile apply` uses the existing
 lifecycle lock, backup and rollback contracts. It never changes a user or
 organization entitlement.
 
@@ -409,27 +425,30 @@ Required denial reason codes include `TENANT_CONCURRENCY_EXHAUSTED`,
 
 Supported transitions are explicit operations:
 
-- `core -> standard|dense` migrates Project container state into verified VM
-  disks, validates service readiness and cuts over one Project at a time.
-- `standard <-> dense` changes defaults and capacity policy; existing VMs keep
-  their allocated shape until an explicit resize or maintenance restart.
-- `standard|dense -> core` is an isolation downgrade. It requires an operator
-  acknowledgement, a backup, an export/import compatibility check and an audit
-  event. Features requiring VM isolation must be disabled or the transition is
-  rejected.
+- `core -> standard|dense` enables and validates Knowledge Service and Zero;
+  it does not change Project isolation unless separately requested.
+- `standard <-> dense` changes defaults and capacity policy; existing
+  workloads keep their allocated shape until an explicit resize or maintenance
+  restart.
+- `standard|dense -> core` disables Knowledge Service and Zero after a backup
+  and readiness plan. It does not change Project isolation.
+- `container -> vm` or `vm -> container` is an independent Project runtime
+  migration. Moving to Container is an isolation downgrade and requires an
+  acknowledgement, backup and export/import compatibility check.
 
 No transition changes tenant entitlements. Profile changes do not reinterpret
 plan or organization quota data.
 
 ## Implementation sequence
 
-1. Introduce a versioned deployment-profile module and CLI selection while
-   retaining Standard values as the compatibility default for existing
-   installations.
+1. Introduce a versioned deployment-profile module and an independent Project
+   runtime selector while retaining Standard + VM as the compatibility default
+   for existing installations.
 2. Add capability-aware preflight for Docker, Linux KVM/QEMU and macOS
    AppleHV/vfkit, with automatic safe module activation where possible.
 3. Extract the current Project VM implementation behind the common
-   `ProjectRuntime` contract and implement the Core container backend.
+   `ProjectRuntime` contract and implement the Container backend for every
+   profile.
 4. Persist desired/observed profile and expose it in health and diagnostics.
 5. Add atomic tenant entitlement and reservation schema plus scoped APIs.
 6. Add the OpenLink Settings resource page for personal and organization
@@ -446,12 +465,15 @@ does not change OpenLink Settings ownership.
 
 ### Profile and runtime tests
 
-- Core starts successfully on a test host without `/dev/kvm` or AppleHV.
-- Standard and Dense fail before workload launch when their accelerator is
+- Every profile can use Container on a test host without `/dev/kvm` or AppleHV.
+- Every profile using VM fails before workload launch when its accelerator is
   unavailable.
-- Standard and Dense run a Project with an independent guest kernel.
-- Core reports `container`; Standard and Dense report `vm`.
-- No Standard/Dense test observes an automatic Core fallback.
+- Every profile using VM runs a Project with an independent guest kernel.
+- Runtime status reports the selected isolation class independently from the
+  profile.
+- Core does not start Knowledge Service or Zero under either runtime backend.
+- Standard/Dense with Container retain the complete product component set.
+- No test observes an automatic profile or isolation change.
 - Profile reconfiguration preserves Project data and rolls back on a failed
   readiness gate.
 
@@ -481,8 +503,8 @@ does not change OpenLink Settings ownership.
 
 ### Positive
 
-- OpenLink can serve hardware-constrained installations without misrepresenting
-  their isolation level.
+- OpenLink can serve hardware-constrained installations at Standard or Dense
+  capacity without misrepresenting their isolation level.
 - Full VM isolation remains the default production recommendation.
 - Project concurrency becomes a dynamic tenant policy rather than an
   installation artifact.
@@ -496,8 +518,8 @@ does not change OpenLink Settings ownership.
 ### Negative
 
 - Two runtime backends increase implementation, qualification and support cost.
-- Core has a weaker isolation boundary and some VM-only features cannot be
-  offered.
+- Container has a weaker isolation boundary and some VM-only features cannot
+  be offered; Core additionally omits the built-in knowledge system by design.
 - Profile migration requires data conversion, readiness gates and rollback.
 - Atomic admission and reservation reconciliation add state-machine complexity.
 - Dense qualification requires realistic pressure and noisy-neighbor testing.
@@ -507,8 +529,8 @@ does not change OpenLink Settings ownership.
 - Commercial plan values remain outside this ADR even though their enforcement
   uses the defined entitlement model.
 - Operators may deploy more physical capacity than a profile baseline.
-- Existing installations map to Standard unless they explicitly choose another
-  profile.
+- Existing installations map to Standard + VM unless they explicitly choose
+  another profile or backend.
 
 ## Alternatives considered
 
