@@ -55,10 +55,11 @@ async function readProtectedTrustFile(path) {
   if (!before.isFile() || (before.mode & 0o022) !== 0 || (expectedUid !== undefined && before.uid !== expectedUid)) {
     throw new Error('Release trust file must be a protected regular file owned by the invoking trust administrator')
   }
+  if (before.size > 1024 * 1024) throw new Error('Release trust file exceeds the 1 MiB limit')
   const handle = await open(absolute, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
   try {
     const current = await handle.stat()
-    if (!current.isFile() || current.dev !== before.dev || current.ino !== before.ino) throw new Error('Release trust file changed while opening')
+    if (!current.isFile() || current.dev !== before.dev || current.ino !== before.ino || current.size !== before.size) throw new Error('Release trust file changed while opening')
     return JSON.parse(await handle.readFile('utf8'))
   } finally {
     await handle.close()

@@ -41,7 +41,9 @@ function parsePax(contents) {
   while (offset < contents.length) {
     const space = contents.indexOf(0x20, offset)
     if (space === -1) throw new Error('Archive PAX record has no length separator')
-    const length = Number.parseInt(contents.subarray(offset, space).toString('ascii'), 10)
+    const encodedLength = contents.subarray(offset, space).toString('ascii')
+    if (!/^[1-9][0-9]*$/.test(encodedLength)) throw new Error('Archive PAX record length is invalid')
+    const length = Number.parseInt(encodedLength, 10)
     if (!Number.isSafeInteger(length) || length <= space - offset + 1 || offset + length > contents.length) throw new Error('Archive PAX record length is invalid')
     if (contents[offset + length - 1] !== 0x0a) throw new Error('Archive PAX record is not newline terminated')
     const record = contents.subarray(space + 1, offset + length - 1).toString('utf8')
@@ -126,6 +128,7 @@ export async function extractVerifiedTarGzip(archive, destination, options = {})
     const type = String.fromCharCode(header[156] || 0)
     const headerLink = parseString(header.subarray(157, 257))
     const mode = parseTarNumber(header.subarray(100, 108), 'file mode') & 0o7777
+    if ((mode & 0o7000) !== 0) throw new Error('Archive entry may not set special permission bits')
     const headerSize = parseTarNumber(header.subarray(124, 136), 'file size')
     const sizeValue = pax.size === undefined ? headerSize : parsePaxSize(pax.size)
     if (!Number.isSafeInteger(sizeValue) || sizeValue < 0 || sizeValue > maximumFileBytes) throw new Error(`Archive file size is invalid: ${sizeValue}`)

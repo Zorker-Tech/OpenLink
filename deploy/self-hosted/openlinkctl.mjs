@@ -49,9 +49,17 @@ function contained(root, relative) {
 
 async function readSignedManifest(root) {
   const path = join(resolve(root), 'release.json')
-  const stats = await lstat(path)
-  if (!stats.isFile() || (stats.mode & 0o022) !== 0) throw new Error('Release manifest must be a protected regular file')
-  return JSON.parse(await readFile(path, 'utf8'))
+  const before = await lstat(path)
+  if (!before.isFile() || (before.mode & 0o022) !== 0) throw new Error('Release manifest must be a protected regular file')
+  if (before.size > 32 * 1024 * 1024) throw new Error('Release manifest exceeds the 32 MiB limit')
+  const handle = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
+  try {
+    const current = await handle.stat()
+    if (!current.isFile() || current.dev !== before.dev || current.ino !== before.ino || current.size !== before.size) throw new Error('Release manifest changed while opening')
+    return JSON.parse(await handle.readFile('utf8'))
+  } finally {
+    await handle.close()
+  }
 }
 
 export async function verifyInstalledRelease(directory, trustedKeys, expectedTarget, minimumReleaseSequence) {
@@ -205,10 +213,11 @@ async function trustPolicyFrom(path) {
   if (!before.isFile() || (before.mode & 0o022) !== 0 || (expectedUid !== undefined && before.uid !== expectedUid)) {
     throw new Error('Release trust file must be a protected regular file owned by the invoking trust administrator')
   }
+  if (before.size > 1024 * 1024) throw new Error('Release trust file exceeds the 1 MiB limit')
   const handle = await open(absolute, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
   try {
     const current = await handle.stat()
-    if (!current.isFile() || current.dev !== before.dev || current.ino !== before.ino) throw new Error('Release trust file changed while opening')
+    if (!current.isFile() || current.dev !== before.dev || current.ino !== before.ino || current.size !== before.size) throw new Error('Release trust file changed while opening')
     return parseReleaseTrustPolicy(JSON.parse(await handle.readFile('utf8')))
   } finally {
     await handle.close()

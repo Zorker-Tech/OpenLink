@@ -1,5 +1,5 @@
 {
-	admin 127.0.0.1:2019
+	admin off
 	servers {
 		client_ip_headers X-Forwarded-For X-Real-IP
 	}
