@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { getAsset, isSea } from 'node:sea'
 import { constants } from 'node:fs'
-import { lstat, open, readlink } from 'node:fs/promises'
+import { lstat, open, readlink, rm } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 
 import { activateRelease, installReleaseArchive } from './openlinkctl.mjs'
@@ -94,6 +94,14 @@ async function existingConfiguration(destination, appUrl) {
   return { configPath: destination.configPath, secretsPath: destination.secretsPath, backupKeyPath, stateRoot: destination.stateRoot, appUrl: expectedAppUrl, reused: true }
 }
 
+async function rollbackFreshActivation(installRoot, releaseId) {
+  const current = join(installRoot, 'current')
+  const target = await readlink(current).catch((error) => error?.code === 'ENOENT' ? undefined : Promise.reject(error))
+  if (target === undefined) return
+  if (target.split('/').at(-1) !== releaseId) throw new Error(`Refusing to roll back a concurrently changed active release: ${target}`)
+  await rm(current)
+}
+
 export async function runBootstrapInstaller(argv = process.argv.slice(2)) {
   if (argv.length === 1 && argv[0] === '--self-test') {
     const trust = await trustRoot(new Map())
@@ -114,41 +122,51 @@ export async function runBootstrapInstaller(argv = process.argv.slice(2)) {
     throw new Error(`Active release ${activeRelease} must be changed with openlinkctl upgrade, not the installer`)
   }
   await activateRelease(destination.installRoot, installed.releaseId)
-  const releaseRoot = installed.destination
-  const configuration = await existingConfiguration(destination, appUrl) ?? await createProductionConfiguration({
-    releaseRoot,
-    configPath: destination.configPath,
-    secretsPath: destination.secretsPath,
-    stateRoot: destination.stateRoot,
-    logRoot: destination.logRoot,
-    backupRoot: destination.backupRoot,
-    appUrl,
-    gatewayUrl: values.get('gateway-url'),
-    allowInsecure: values.get('allow-insecure-http') === '1',
-  })
-  if (values.get('skip-host-preflight') !== '1') {
-    const config = await readEnvironmentFile(destination.configPath)
-    const secrets = await readEnvironmentFile(destination.secretsPath, { secrets: true })
-    await runPreflight({
+  const activatedFresh = activeRelease === undefined
+  try {
+    const releaseRoot = installed.destination
+    const configuration = await existingConfiguration(destination, appUrl) ?? await createProductionConfiguration({
       releaseRoot,
+      configPath: destination.configPath,
+      secretsPath: destination.secretsPath,
       stateRoot: destination.stateRoot,
-      platform: process.platform,
-      architecture: process.arch,
-      dockerCommand: values.get('docker-command') || 'docker',
-      environment: { ...config, ...secrets },
+      logRoot: destination.logRoot,
+      backupRoot: destination.backupRoot,
+      appUrl,
+      gatewayUrl: values.get('gateway-url'),
+      allowInsecure: values.get('allow-insecure-http') === '1',
     })
+    if (values.get('skip-host-preflight') !== '1') {
+      const config = await readEnvironmentFile(destination.configPath)
+      const secrets = await readEnvironmentFile(destination.secretsPath, { secrets: true })
+      await runPreflight({
+        releaseRoot,
+        stateRoot: destination.stateRoot,
+        platform: process.platform,
+        architecture: process.arch,
+        dockerCommand: values.get('docker-command') || 'docker',
+        environment: { ...config, ...secrets },
+      })
+    }
+    const service = values.get('skip-service-install') === '1' ? { skipped: true } : await installNativeService({
+      releaseRoot,
+      installRoot: destination.installRoot,
+      configPath: destination.configPath,
+      secretsPath: destination.secretsPath,
+      backupKeyPath: configuration.backupKeyPath,
+      stateRoot: destination.stateRoot,
+      logRoot: destination.logRoot,
+      backupRoot: destination.backupRoot,
+    })
+    return { ok: true, installed, service, configuration: { ...configuration, secretsPath: '<protected>', backupKeyPath: '<protected>' } }
+  } catch (error) {
+    if (activatedFresh) {
+      await rollbackFreshActivation(destination.installRoot, installed.releaseId).catch((rollbackError) => {
+        throw new AggregateError([error, rollbackError], 'Installation failed and the fresh release activation could not be rolled back')
+      })
+    }
+    throw error
   }
-  const service = values.get('skip-service-install') === '1' ? { skipped: true } : await installNativeService({
-    releaseRoot,
-    installRoot: destination.installRoot,
-    configPath: destination.configPath,
-    secretsPath: destination.secretsPath,
-    backupKeyPath: configuration.backupKeyPath,
-    stateRoot: destination.stateRoot,
-    logRoot: destination.logRoot,
-    backupRoot: destination.backupRoot,
-  })
-  return { ok: true, installed, service, configuration: { ...configuration, secretsPath: '<protected>', backupKeyPath: '<protected>' } }
 }
 
 if (import.meta.url === `file://${process.argv[1]}` || isSea()) {

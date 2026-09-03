@@ -36,6 +36,7 @@ test('fixture preflight enforces immutable runtime inputs without requiring buil
     'project-vm/manifest.json',
     'orchestration/docker-compose.production.yml',
     'orchestration/docker-compose.zero-production.yml',
+    'systemd/openlink-container-broker.service',
   ]) {
     const path = join(releaseRoot, ...relative.split('/'))
     await mkdir(join(path, '..'), { recursive: true })

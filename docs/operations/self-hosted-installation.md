@@ -53,7 +53,7 @@ link. Mutable data is kept outside the release:
 
 ## Host prerequisites
 
-- A dedicated production host with at least 16 GiB RAM and 20 GiB free space
+- A dedicated production host with at least 32 GiB RAM and 200 GiB free space
   beyond the release, database, Golden Disk and backup capacity.
 - Docker Engine with Compose v2. Compose must support the `!override` merge tag.
 - macOS arm64 with Apple Hypervisor support, or Linux amd64 with hardware
@@ -78,11 +78,14 @@ sudo ./openlink-installer \
   --app-url https://openlink.example.com
 ```
 
-The installer creates the dedicated `openlink` identity, grants only the
-required `docker` and `kvm` group memberships, fixes secret/state ownership,
-enables `openlink.service`, and waits for systemd `Type=notify` readiness. If
-startup fails it disables and removes the unit instead of leaving a falsely
-enabled service. It never builds or downloads product dependencies.
+The installer creates the dedicated `openlink` identity and grants it only the
+required `kvm` membership. It does **not** grant Docker access to any
+network-facing application process. A root-isolated, Unix-socket-only lifecycle
+broker accepts only fixed `status`, `start`, and `stop` operations for the
+signed Compose plan. The installer fixes secret/state ownership, enables both
+`openlink-container-broker.service` and `openlink.service`, and waits for
+systemd `Type=notify` readiness. If startup fails it restores the previous unit
+files and service state. It never builds or downloads product dependencies.
 
 The installer is authenticated before it is allowed to run as root. Keep the
 approved release public key outside the download/import channel, then verify
