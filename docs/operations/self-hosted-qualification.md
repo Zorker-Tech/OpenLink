@@ -32,11 +32,12 @@ Linux fixture run copied from the target is
 qualification records are intentionally ignored by Git because they contain
 host-specific evidence rather than product source.
 
-The macOS qualification release
-`2026.09.03-macos-qualification.1` contains 15,929 inventoried files and
-78,439,812,426 logical bytes, including the real sparse Project VM disk and all
+The current macOS qualification release
+`2026.09.03-macos-qualification.2` contains 15,929 inventoried files and
+78,439,815,948 logical bytes, including the real sparse Project VM disk and all
 offline image archives. A second process verified its Ed25519 signature and
-every file path, type, mode, size and SHA-256 digest in 410,434 ms. The bundled
+every file path, type, mode, size and SHA-256 digest in 463,014 ms. All 21 image
+entries bind an immutable Docker image ID; tag reuse alone is rejected. The bundled
 Caddy 2.11.4 configuration parsed successfully and the bundled Chromium
 151.0.7922.34 process launched and rendered a DOM. The release excludes the Go
 SDK used by release engineering. This proves the complete directory contract,
@@ -54,6 +55,14 @@ the auth, REST, storage and realtime prefixes reached ZOKERBASE; all six checks
 returned the required security header. On Ubuntu 24.04/systemd 255, the hardened
 unit parsed successfully apart from the intentionally absent not-yet-installed
 executable and scored 4.5 (`OK`) in `systemd-analyze security --offline`.
+
+A macOS qualification-state backup was encrypted, restored into fresh roots,
+and compared byte-for-byte for state, config and secrets; restored modes were
+0700/0640/0600. On the Ubuntu target, 18 native Node 26 tests passed for backup
+corruption and wrong-key rejection, clean-root restore, lifecycle locking,
+dependency ordering, critical-child cleanup, systemd installation semantics,
+upgrade commit/rollback and incompatible schema rejection. These are native
+mechanism results, not a substitute for a running full-stack data restore.
 
 The authorized Linux target reports AMD Ryzen 5 5600X and `svm`-related CPU
 features, but loading `kvm_amd` fails with `SVM not supported by CPU` and
