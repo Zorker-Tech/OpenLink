@@ -3,6 +3,7 @@ import { chmod, lstat, mkdir, readFile, rm } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 
 import { parseEnvironmentFile } from './preflight.mjs'
+import { profileEnvironment, resolveDeploymentProfile, resolveProjectRuntime } from './deployment-profile.mjs'
 import { durableWriteFile, syncFile } from './durable-fs.mjs'
 
 function token(bytes = 48) { return randomBytes(bytes).toString('base64url') }
@@ -36,6 +37,9 @@ export async function createProductionConfiguration(options = {}) {
   const appUrl = safeHttpsUrl(options.appUrl, options.allowInsecure === true)
   const gatewayUrl = safeHttpsUrl(options.gatewayUrl ?? appUrl, options.allowInsecure === true)
   const parsedAppUrl = new URL(appUrl)
+  const deploymentProfile = resolveDeploymentProfile(options.deploymentProfile)
+  const projectRuntime = resolveProjectRuntime(options.projectRuntime)
+  const profile = profileEnvironment(deploymentProfile.name, projectRuntime)
   const template = parseEnvironmentFile(await readFile(join(releaseRoot, 'orchestration/backend/docker/.env.example'), 'utf8'))
   const jwtSecret = token(48)
   const postgresPassword = token(36)
@@ -72,6 +76,7 @@ export async function createProductionConfiguration(options = {}) {
     POSTGRES_PORT: '54384',
   }
   const config = {
+    ...profile,
     OPENLINK_RUNTIME_MODE: 'local',
     OPENLINK_APP_URL: appUrl,
     OPENLINK_EDGE_ADDRESS: `${parsedAppUrl.protocol === 'http:' ? 'http://' : ''}${parsedAppUrl.host}`,
@@ -86,11 +91,12 @@ export async function createProductionConfiguration(options = {}) {
     OPENLINK_ZOKERBASE_ENV_FILE: secretsPath,
     ...(process.platform === 'linux' ? { OPENLINK_CONTAINER_BROKER_SOCKET: '/run/openlink-container-broker/control.sock' } : {}),
     OPENLINK_AGENT_MAX_SESSIONS: String(options.maxSessions ?? 32),
-    OPENLINK_PROJECT_VM_CPUS: String(options.vmCpus ?? 4),
-    OPENLINK_PROJECT_VM_MEMORY_MB: String(options.vmMemoryMb ?? 8192),
-    OPENLINK_PROJECT_VM_DISK_GB: String(options.vmDiskGb ?? 64),
-    OPENLINK_MINIMUM_MEMORY_BYTES: String(options.minimumMemoryBytes ?? 32 * 1024 ** 3),
-    OPENLINK_MINIMUM_FREE_BYTES: String(options.minimumFreeBytes ?? 200 * 1024 ** 3),
+    OPENLINK_PROJECT_VM_CPUS: String(options.vmCpus ?? deploymentProfile.project.cpus),
+    OPENLINK_PROJECT_VM_MEMORY_MB: String(options.vmMemoryMb ?? deploymentProfile.project.memoryMb),
+    OPENLINK_PROJECT_VM_DISK_GB: String(options.vmDiskGb ?? deploymentProfile.project.diskGb),
+    OPENLINK_MINIMUM_LOGICAL_CPUS: String(options.minimumLogicalCpus ?? deploymentProfile.host.logicalCpus),
+    OPENLINK_MINIMUM_MEMORY_BYTES: String(options.minimumMemoryBytes ?? deploymentProfile.host.memoryBytes),
+    OPENLINK_MINIMUM_FREE_BYTES: String(options.minimumFreeBytes ?? deploymentProfile.host.freeBytes),
     ...(options.allowInsecure ? { OPENLINK_ALLOW_INSECURE_HTTP: '1' } : {}),
   }
   const secrets = {

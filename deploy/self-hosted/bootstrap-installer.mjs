@@ -169,6 +169,8 @@ export async function runBootstrapInstaller(argv = process.argv.slice(2)) {
       backupRoot: destination.backupRoot,
       appUrl,
       gatewayUrl: values.get('gateway-url'),
+      deploymentProfile: values.get('profile'),
+      projectRuntime: values.get('project-runtime'),
       allowInsecure: values.get('allow-insecure-http') === '1',
     })
     if (values.get('skip-host-preflight') !== '1') {
