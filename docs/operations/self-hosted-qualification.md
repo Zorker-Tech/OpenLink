@@ -42,6 +42,12 @@ Caddy 2.11.4 configuration parsed successfully and the bundled Chromium
 SDK used by release engineering. This proves the complete directory contract,
 not the final compressed archive or running-product support matrix.
 
+Full macOS host preflight passed Docker 29.4.3, AppleHV, clock synchronization
+and port availability, then correctly stopped before mutation because the
+selected state volume had only 10,278,043,648 bytes free against the 20 GiB
+production minimum. The threshold was not lowered for qualification. A full
+runtime run requires a clean production-sized volume.
+
 The authorized Linux target reports AMD Ryzen 5 5600X and `svm`-related CPU
 features, but loading `kvm_amd` fails with `SVM not supported by CPU` and
 `/dev/kvm` is absent. This normally means AMD SVM is disabled in firmware or is

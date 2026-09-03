@@ -67,6 +67,7 @@ export async function createProductionConfiguration(options = {}) {
     ADDITIONAL_REDIRECT_URLS: `${appUrl}/**`,
     PROXY_DOMAIN: new URL(appUrl).hostname,
     OPENLINK_DB_DIRECT_PORT: '54384',
+    POSTGRES_PORT: '54384',
   }
   const config = {
     OPENLINK_RUNTIME_MODE: 'local',
