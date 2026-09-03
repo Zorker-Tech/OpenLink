@@ -190,7 +190,10 @@ async function writeArchive(releaseDirectory, outputRoot, releaseId, target) {
   const archiveName = `openlink-self-hosted-${releaseId}-${target.triple}.tar.gz`
   const temporary = join(outputRoot, `.${archiveName}.${process.pid}.tmp`)
   const archive = join(outputRoot, archiveName)
-  await execFile('tar', ['-czf', temporary, '-C', releaseDirectory, '.'], { maxBuffer: 16 * 1024 * 1024 })
+  await execFile('tar', ['-czf', temporary, '-C', releaseDirectory, '.'], {
+    maxBuffer: 16 * 1024 * 1024,
+    env: { ...process.env, COPYFILE_DISABLE: '1' },
+  })
   const digest = createHash('sha256').update(await readFile(temporary)).digest('hex')
   await rename(temporary, archive)
   await writeFile(`${archive}.sha256`, `${digest}  ${archiveName}\n`, { mode: 0o644 })

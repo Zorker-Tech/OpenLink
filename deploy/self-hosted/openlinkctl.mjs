@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { cp, lstat, mkdir, mkdtemp, readFile, readlink, rename, rm, symlink, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -11,6 +12,7 @@ import {
   verifyReleaseManifest,
 } from './runtime/release-contract.mjs'
 import { readEnvironmentFile, runPreflight } from './runtime/preflight.mjs'
+import { extractVerifiedTarGzip } from './runtime/safe-archive.mjs'
 
 const releaseRootFromScript = resolve(fileURLToPath(new URL('.', import.meta.url)))
 
@@ -109,6 +111,16 @@ export async function installReleaseDirectory(options = {}) {
   return { releaseId: manifest.releaseId, destination, reused: false }
 }
 
+export async function installReleaseArchive(options = {}) {
+  const extractionRoot = await mkdtemp(join(options.temporaryRoot ? resolve(options.temporaryRoot) : tmpdir(), 'openlink-bundle-'))
+  try {
+    await extractVerifiedTarGzip(options.archive, extractionRoot, options.archiveLimits)
+    return await installReleaseDirectory({ ...options, source: extractionRoot })
+  } finally {
+    await rm(extractionRoot, { recursive: true, force: true })
+  }
+}
+
 function parseArguments(argv) {
   const [command, ...rest] = argv
   const values = new Map()
@@ -146,12 +158,14 @@ async function main(argv) {
     return
   }
   if (command === 'install') {
-    const result = await installReleaseDirectory({
-      source: values.get('source'),
+    const common = {
       installRoot: values.get('root'),
       trustedKeys: await trustedKeysFrom(values.get('trust')),
       expectedTarget,
-    })
+    }
+    const result = values.get('archive')
+      ? await installReleaseArchive({ ...common, archive: values.get('archive') })
+      : await installReleaseDirectory({ ...common, source: values.get('source') })
     process.stdout.write(`${JSON.stringify({ ok: true, ...result })}\n`)
     return
   }
@@ -184,7 +198,7 @@ async function main(argv) {
   throw new Error('Usage: openlinkctl <verify|install|version|preflight|doctor> [options]')
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && basename(process.argv[1]) === basename(fileURLToPath(import.meta.url))) {
   main(process.argv.slice(2)).catch((error) => {
     process.stderr.write(`openlinkctl: ${error instanceof Error ? error.message : String(error)}\n`)
     process.exitCode = 1

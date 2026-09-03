@@ -13,7 +13,7 @@ import {
   signReleaseManifest,
   verifyReleaseInventory,
   verifyReleaseManifest,
-} from '../lib/self-hosted-release.mjs'
+} from '../../deploy/self-hosted/runtime/release-contract.mjs'
 
 test('normalizes supported native release identities', () => {
   assert.equal(normalizeReleaseId('2026.09.03-rc.1'), '2026.09.03-rc.1')
@@ -95,4 +95,3 @@ test('signed manifests reject tampering, unknown keys and the wrong native targe
     expectedTarget: { platform: 'linux', architecture: 'x64' },
   }), /target/i)
 })
-
