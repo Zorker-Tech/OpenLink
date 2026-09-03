@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { getAsset, isSea } from 'node:sea'
-import { readFile } from 'node:fs/promises'
+import { lstat, readFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 
 import { installReleaseArchive } from './openlinkctl.mjs'
@@ -60,6 +60,28 @@ async function trustRoot(values) {
   return parseTrust(JSON.parse(await readFile(resolve(path), 'utf8')))
 }
 
+async function existingConfiguration(destination, appUrl) {
+  const backupKeyPath = join(dirname(destination.configPath), 'backup.key')
+  const paths = [destination.configPath, destination.secretsPath, backupKeyPath]
+  const present = await Promise.all(paths.map((path) => lstat(path).then((stats) => stats.isFile()).catch((error) => error?.code === 'ENOENT' ? false : Promise.reject(error))))
+  if (!present.some(Boolean)) return undefined
+  if (!present.every(Boolean)) throw new Error('Existing production configuration is incomplete; refusing secret rotation or partial reuse')
+  const config = await readEnvironmentFile(destination.configPath)
+  await readEnvironmentFile(destination.secretsPath, { secrets: true })
+  const backupKey = await lstat(backupKeyPath)
+  if (!backupKey.isFile() || (backupKey.mode & 0o077) !== 0) throw new Error('Existing backup key must be a protected regular file with mode 0600')
+  const expectedAppUrl = new URL(appUrl).origin
+  if (config.OPENLINK_APP_URL !== expectedAppUrl
+    || resolve(config.OPENLINK_STATE_ROOT) !== destination.stateRoot
+    || resolve(config.OPENLINK_LOG_ROOT) !== destination.logRoot
+    || resolve(config.OPENLINK_BACKUP_ROOT) !== destination.backupRoot
+    || resolve(config.OPENLINK_SECRETS_FILE) !== destination.secretsPath
+    || resolve(config.OPENLINK_BACKUP_KEY_FILE) !== backupKeyPath) {
+    throw new Error('Existing production configuration does not match this installation request')
+  }
+  return { configPath: destination.configPath, secretsPath: destination.secretsPath, backupKeyPath, stateRoot: destination.stateRoot, appUrl: expectedAppUrl, reused: true }
+}
+
 export async function runBootstrapInstaller(argv = process.argv.slice(2)) {
   if (argv.length === 1 && argv[0] === '--self-test') {
     const keys = await trustRoot(new Map())
@@ -74,7 +96,7 @@ export async function runBootstrapInstaller(argv = process.argv.slice(2)) {
   const expectedTarget = normalizeTarget({ platform: process.platform, architecture: process.arch })
   const installed = await installReleaseArchive({ archive, installRoot: destination.installRoot, trustedKeys, expectedTarget })
   const releaseRoot = installed.destination
-  const configuration = await createProductionConfiguration({
+  const configuration = await existingConfiguration(destination, appUrl) ?? await createProductionConfiguration({
     releaseRoot,
     configPath: destination.configPath,
     secretsPath: destination.secretsPath,

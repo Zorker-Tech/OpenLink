@@ -70,6 +70,9 @@ export async function extractVerifiedTarGzip(archive, destination, options = {})
   const paths = new Set()
   const maximumFileBytes = Number(options.maximumFileBytes ?? 128 * 1024 ** 3)
   const maximumFiles = Number(options.maximumFiles ?? 250_000)
+  const maximumTotalBytes = Number(options.maximumTotalBytes ?? 192 * 1024 ** 3)
+  const maximumMetadataBytes = Number(options.maximumMetadataBytes ?? 16 * 1024 ** 2)
+  let totalBytes = 0
 
   async function consumeHeader(header) {
     if (header.every((byte) => byte === 0)) {
@@ -87,6 +90,7 @@ export async function extractVerifiedTarGzip(archive, destination, options = {})
     const headerSize = parseTarNumber(header.subarray(124, 136), 'file size')
     const sizeValue = pax.size === undefined ? headerSize : Number(pax.size)
     if (!Number.isSafeInteger(sizeValue) || sizeValue < 0 || sizeValue > maximumFileBytes) throw new Error(`Archive file size is invalid: ${sizeValue}`)
+    if (['x', 'g', 'L'].includes(type) && sizeValue > maximumMetadataBytes) throw new Error(`Archive metadata exceeds ${maximumMetadataBytes} bytes`)
     const rawPath = String(pax.path ?? longName ?? headerPath)
     const rootDirectory = type === '5' && (rawPath === '.' || rawPath === './')
     const relative = type === 'x' || type === 'g' || type === 'L' || rootDirectory
@@ -105,6 +109,8 @@ export async function extractVerifiedTarGzip(archive, destination, options = {})
         if (sizeValue !== 0) throw new Error(`Archive directory has a payload: ${relative}`)
         await safeDirectory(root, relative)
       } else if (type === '0' || type === '\0') {
+        totalBytes += sizeValue
+        if (!Number.isSafeInteger(totalBytes) || totalBytes > maximumTotalBytes) throw new Error(`Archive expands beyond ${maximumTotalBytes} bytes`)
         await safeDirectory(root, dirname(relative).split(sep).join('/'))
         const output = resolve(root, ...relative.split('/'))
         state.handle = await open(output, 'wx', 0o600)

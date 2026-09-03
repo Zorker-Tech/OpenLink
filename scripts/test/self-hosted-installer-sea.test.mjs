@@ -83,5 +83,20 @@ test('sealed installer performs signed archive install and protected configurati
   assert.equal(result.installed.releaseId, 'sea-e2e-1')
   assert.equal(result.service.skipped, true)
   assert.match(await readFile(configPath, 'utf8'), /OPENLINK_APP_URL=http:\/\/127\.0\.0\.1:7443/)
-  assert.equal((await readFile(join(root, 'configuration/secrets.env'), 'utf8')).includes('insecure'), false)
+  const secretsBeforeRetry = await readFile(join(root, 'configuration/secrets.env'), 'utf8')
+  assert.equal(secretsBeforeRetry.includes('insecure'), false)
+  const retry = JSON.parse((await execFile(installer, [
+    '--archive', release.archive, '--app-url', 'http://127.0.0.1:7443', '--allow-insecure-http', '1',
+    '--root', installRoot, '--config', configPath, '--state-root', join(root, 'state'), '--skip-host-preflight', '1',
+    '--skip-service-install', '1',
+  ], { env: { PATH: '/usr/bin:/bin' }, timeout: 60_000 })).stdout)
+  assert.equal(retry.installed.reused, true)
+  assert.equal(retry.configuration.reused, true)
+  assert.equal(await readFile(join(root, 'configuration/secrets.env'), 'utf8'), secretsBeforeRetry)
+  await assert.rejects(execFile(installer, [
+    '--archive', release.archive, '--app-url', 'http://127.0.0.1:7444', '--allow-insecure-http', '1',
+    '--root', installRoot, '--config', configPath, '--state-root', join(root, 'state'), '--skip-host-preflight', '1',
+    '--skip-service-install', '1',
+  ], { env: { PATH: '/usr/bin:/bin' }, timeout: 60_000 }), /does not match/i)
+  assert.equal(await readFile(join(root, 'configuration/secrets.env'), 'utf8'), secretsBeforeRetry)
 })
