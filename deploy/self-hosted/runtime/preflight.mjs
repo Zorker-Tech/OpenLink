@@ -2,12 +2,14 @@ import { constants } from 'node:fs'
 import { execFile as execFileCallback } from 'node:child_process'
 import { createServer } from 'node:net'
 import { access, lstat, mkdir, open, readFile, statfs } from 'node:fs/promises'
-import { totalmem } from 'node:os'
+import { cpus, totalmem } from 'node:os'
 import { join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 
 import { normalizeTarget } from './release-contract.mjs'
 import { requestContainerBroker } from './container-broker.mjs'
+import { resolveDeploymentProfile, resolveProjectRuntime } from './deployment-profile.mjs'
+import { detectVirtualization, virtualizationHelp } from './virtualization.mjs'
 
 const execFile = promisify(execFileCallback)
 const ENVIRONMENT_KEY = /^[A-Z][A-Z0-9_]{0,127}$/
@@ -80,6 +82,9 @@ export async function runPreflight(options = {}) {
   const releaseRoot = resolve(options.releaseRoot)
   const stateRoot = resolve(options.stateRoot)
   const target = normalizeTarget({ platform: options.platform ?? process.platform, architecture: options.architecture ?? process.arch })
+  const environment = options.environment ?? {}
+  const profile = resolveDeploymentProfile(environment.OPENLINK_DEPLOYMENT_PROFILE)
+  const projectRuntime = resolveProjectRuntime(environment.OPENLINK_PROJECT_RUNTIME)
   const checks = []
   const required = [
     ['runtime/node/bin/node', true],
@@ -118,12 +123,19 @@ export async function runPreflight(options = {}) {
 
   const filesystem = await statfs(stateRoot)
   const freeBytes = Number(filesystem.bavail) * Number(filesystem.bsize)
-  const minimumFreeBytes = Number(options.minimumFreeBytes ?? 200 * 1024 ** 3)
+  const minimumFreeBytes = Number(options.minimumFreeBytes ?? environment.OPENLINK_MINIMUM_FREE_BYTES ?? profile.host.freeBytes)
   if (!Number.isFinite(minimumFreeBytes) || freeBytes < minimumFreeBytes) throw new Error(`Insufficient free disk space: ${freeBytes} bytes available, ${minimumFreeBytes} required`)
   checks.push({ name: 'disk-capacity', status: 'pass', freeBytes })
 
   const memoryBytes = totalmem()
-  const minimumMemoryBytes = Number(options.minimumMemoryBytes ?? 32 * 1024 ** 3)
+  const minimumLogicalCpus = Number(options.minimumLogicalCpus ?? environment.OPENLINK_MINIMUM_LOGICAL_CPUS ?? profile.host.logicalCpus)
+  const logicalCpus = Number(options.logicalCpus ?? cpus().length)
+  if (!Number.isSafeInteger(minimumLogicalCpus) || !Number.isSafeInteger(logicalCpus) || logicalCpus < minimumLogicalCpus) {
+    throw new Error(`Insufficient logical CPUs: ${logicalCpus} available, ${minimumLogicalCpus} required by ${profile.revision}`)
+  }
+  checks.push({ name: 'cpu-capacity', status: 'pass', logicalCpus })
+
+  const minimumMemoryBytes = Number(options.minimumMemoryBytes ?? environment.OPENLINK_MINIMUM_MEMORY_BYTES ?? profile.host.memoryBytes)
   if (!Number.isFinite(minimumMemoryBytes) || memoryBytes < minimumMemoryBytes) throw new Error(`Insufficient host memory: ${memoryBytes} bytes available, ${minimumMemoryBytes} required`)
   checks.push({ name: 'memory-capacity', status: 'pass', memoryBytes })
 
@@ -135,7 +147,6 @@ export async function runPreflight(options = {}) {
       await command(docker, ['compose', 'version', '--short'], { ...options, label: 'Docker Compose' })
     }
     checks.push({ name: 'docker-engine', status: 'pass' })
-    const environment = options.environment ?? {}
     const appUrl = environment.OPENLINK_APP_URL ? new URL(environment.OPENLINK_APP_URL) : undefined
     const edgePort = appUrl ? (appUrl.port || (appUrl.protocol === 'https:' ? 443 : 80)) : undefined
     const hostPorts = [...new Set([
@@ -143,14 +154,13 @@ export async function runPreflight(options = {}) {
       environment.OPENLINK_BROWSER_PORT || 43120,
       environment.OPENLINK_AGENT_PORT || 43121,
       environment.OPENLINK_DESKTOP_AGENT_PORT || 43123,
-      environment.OPENLINK_KNOWLEDGE_PORT || 43124,
+      ...(profile.components.knowledge ? [environment.OPENLINK_KNOWLEDGE_PORT || 43124] : []),
       environment.OPENLINK_STUDIO_PORT || 3002,
       environment.KONG_HTTP_PORT || 8000,
       environment.KONG_HTTPS_PORT || 8443,
       environment.POSTGRES_PORT || 54384,
       environment.POOLER_PROXY_PORT_TRANSACTION || 6543,
-      environment.OPENLINK_ZERO_PORT || 19530,
-      environment.OPENLINK_ZERO_HEALTH_PORT || 9091,
+      ...(profile.components.zero ? [environment.OPENLINK_ZERO_PORT || 19530, environment.OPENLINK_ZERO_HEALTH_PORT || 9091] : []),
       ...(edgePort ? [edgePort] : []),
     ])]
     for (const value of hostPorts) {
@@ -163,18 +173,29 @@ export async function runPreflight(options = {}) {
       await access('/usr/bin/setpriv', constants.X_OK).catch(() => {
         throw new Error('Linux production process isolation requires executable /usr/bin/setpriv')
       })
-      await access('/dev/kvm', constants.R_OK | constants.W_OK).catch(() => {
-        throw new Error('Linux Project VMs require read/write access to /dev/kvm')
-      })
       const synchronized = (await command('timedatectl', ['show', '--property=NTPSynchronized', '--value'], { ...options, label: 'Linux clock synchronization' })).trim()
       if (synchronized !== 'yes') throw new Error('Linux system clock is not synchronized')
-    } else {
-      const value = (await command('/usr/sbin/sysctl', ['-n', 'kern.hv_support'], { ...options, label: 'Apple Hypervisor' })).trim()
-      if (value !== '1') throw new Error('Apple Hypervisor support is unavailable')
+    } else if (target.platform === 'darwin') {
       const timed = await command('/bin/launchctl', ['print', 'system/com.apple.timed'], { ...options, label: 'macOS clock synchronization service' })
       if (!/\bstate\s*=\s*running\b/.test(timed)) throw new Error('macOS clock synchronization service is not running')
     }
-    checks.push({ name: 'virtualization', status: 'pass', provider: target.provider })
+    const virtualization = await (options.detectVirtualization ?? detectVirtualization)({
+      ...options,
+      platform: target.platform,
+      architecture: target.architecture,
+      projectRuntime,
+    })
+    if (virtualization.required && virtualization.status !== 'ready') {
+      const help = virtualizationHelp(virtualization)
+      throw new Error(`${help.code}: ${help.message}; guide: ${help.guide}`)
+    }
+    checks.push({
+      name: 'virtualization',
+      status: 'pass',
+      provider: virtualization.provider,
+      required: virtualization.required,
+      code: virtualization.code,
+    })
     checks.push({ name: 'clock-synchronization', status: 'pass' })
   }
 
