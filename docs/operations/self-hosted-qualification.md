@@ -54,20 +54,26 @@ production-sized volume.
 The sealed Caddy binary also passed a live route drill against isolated mock
 upstreams: `/` reached Web, `/v1/browser/gateway/*` reached Agent gateway, and
 the auth, REST, storage and realtime prefixes reached ZOKERBASE; all six checks
-returned the required security header. On Ubuntu 24.04/systemd 255, the hardened
-unit parsed successfully apart from the intentionally absent not-yet-installed
-executable and scored 4.5 (`OK`) in `systemd-analyze security --offline`.
+returned the required security header. Caddy's production admin API is now
+disabled. On Ubuntu 24.04/systemd 255, the current main supervisor unit scores
+5.0 (`MEDIUM`) and the private-network container broker scores 2.5 (`OK`) in
+`systemd-analyze security --offline`. The main score reflects its bounded root
+orchestration role and `SETUID`/`SETGID`/`SETPCAP` handoff capabilities; it has
+no network listener, while every network-facing child runs under a separate UID.
 
 A macOS qualification-state backup was encrypted, restored into fresh roots,
 and compared byte-for-byte for state, config and secrets; restored modes were
-0700/0640/0600. On the Ubuntu target, the latest hardened runtime set passed 36
-native Node 26 tests for safe archive limits, backup corruption and wrong-key
-rejection, clean-root restore, lifecycle locking, dependency ordering,
-critical-child cleanup, systemd installation semantics, upgrade commit/rollback,
-durable fsync publication and incompatible schema rejection. These are native
+0700/0640/0600. On the Ubuntu target, the latest privileged hardened runtime set
+passed 54/54 native Node 26 tests. This includes safe archive limits, backup
+corruption and wrong-key rejection, clean-root restore, lifecycle locking,
+dependency ordering, critical-child cleanup, native SEA installation, systemd
+installation semantics, upgrade commit/rollback, durable fsync publication,
+incompatible schema rejection, fixed service identities, legacy Docker-group
+removal and a real root-only aggregate-secret denial check. These are native
 mechanism results, not a substitute for a running full-stack data restore.
 
-The corresponding macOS delivery suite passes 49/49 tests, including the SEA
+The corresponding macOS delivery suite passes all 53 platform-applicable tests
+(with the one privileged Linux identity test skipped), including the SEA
 installer running without a source tree or system Node lookup, fresh-activation
 rollback, trust-key lifecycle and anti-replay policy, archive input/expansion/
 disk-reserve bounds, encrypted recovery, resource envelopes and service-unit
@@ -78,9 +84,23 @@ The Linux container lifecycle broker was exercised against the target's real
 Docker 29.4.2 daemon: the broker ran with UID 0 and a restricted primary group,
 created a group-readable mode-0660 Unix socket, and an unprivileged user received
 only the fixed `status` result. SIGINT removed the socket cleanly. The current
-systemd units score 2.5 (`OK`) for the broker and 4.5 (`OK`) for the main service
-under Ubuntu systemd 255's offline security analyzer. The main service has no
-Docker group membership.
+systemd units score 2.5 (`OK`) for the broker and 5.0 (`MEDIUM`) for the bounded
+root supervisor under Ubuntu systemd 255's offline security analyzer. Seven
+fixed accounts were created through the real privileged installer path. The
+`openlink-agent` account has only `kvm` and `openlink-workspace` supplementary
+access and no Docker membership; `openlink-web` was unable to read the
+`root:root` mode-0600 aggregate secret. A real `setpriv` edge launch reported
+UID `openlink-edge` and ambient capability mask `0x400`, exactly
+`CAP_NET_BIND_SERVICE`.
+
+A standard Codex Security scan of the preceding immutable snapshot reviewed
+23/23 scoped deployment files and reported two High and two Medium findings:
+shared service-secret identity, retained legacy Docker membership, mutable
+Caddy loopback administration, and an unbounded pre-signature manifest read.
+The latter three were closed in `786d0dcff8`; per-process kernel identity and
+root-only aggregate-secret enforcement were closed in `9c165a3b92` and then
+verified by the privileged Ubuntu test above. A fresh scan of the final release
+digest is still required before GA.
 
 The target's production preflight was exercised at each gate. It rejected
 155,956,445,184 available bytes against the 200 GiB minimum; with only that gate

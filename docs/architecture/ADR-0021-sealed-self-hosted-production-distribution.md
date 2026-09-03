@@ -112,8 +112,17 @@ a system LaunchDaemon. Service definitions invoke the active release's
 `openlinkctl run` contract, apply restart bounds, resource/file limits and a
 graceful stop timeout, and never embed credentials.
 
-On Linux, network-facing product processes never receive Docker group
-membership. A root-isolated container lifecycle broker reads only the signed,
+On Linux, network-facing product processes run as distinct fixed Unix accounts:
+`openlink-browser`, `openlink-knowledge`, `openlink-agent`,
+`openlink-desktop`, `openlink-web`, and `openlink-edge`. The non-listening
+supervisor starts as root only to apply those identities and the edge's single
+`CAP_NET_BIND_SERVICE` capability through `setpriv`; every other child receives
+an empty capability bounding set. Only `openlink-agent` receives KVM access,
+and only Agent/Desktop share the mode-0770 workspace group. No application
+identity receives Docker group membership or read access to the root-only
+aggregate secrets file. Each child receives an explicit environment allowlist.
+
+A separate root-isolated container lifecycle broker reads only the signed,
 root-owned runtime plan and exposes a mode-0660 Unix socket. Its complete
 protocol is three fixed operations: `status`, `start`, and `stop`; it accepts no
 path, image, Compose file, environment, argument, or arbitrary command from a
@@ -180,9 +189,11 @@ available or disaster-site redundant.
 - Privileged services bind to loopback/private sockets. The edge proxy is the
   only public listener and enforces TLS, request bounds and authenticated
   gateway routes.
-- Runtime processes use dedicated identities and least privilege. Container
-  authority is confined to the fixed lifecycle broker; KVM access remains an
-  explicit capability of the Project VM service identity.
+- Runtime processes use dedicated identities and least privilege. The shared
+  state root is search-only (`0711`) on Linux; each service state directory is
+  owned by its service identity with mode `0700`. Container authority is
+  confined to the fixed lifecycle broker; KVM access remains an explicit
+  capability of the Project VM service identity.
 - Audit logs are append-oriented, time synchronized and exportable to a remote
   collector. Security-relevant failure never falls back to a weaker mode.
 
