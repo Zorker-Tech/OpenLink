@@ -73,27 +73,30 @@ async function copyRequired(source, destination, options = {}) {
 
 async function copyLargeNativeArtifact(source, destination, target) {
   await mkdir(join(destination, '..'), { recursive: true, mode: 0o755 })
-  if (target.platform === 'darwin') {
+  // Copy semantics depend on the release-engineering host, not on the target
+  // encoded in the artifact. Cross-assembling a Darwin payload on Linux (or a
+  // Linux payload on macOS) must use the host's cp implementation.
+  if (process.platform === 'darwin') {
     await execFile('/bin/cp', ['-c', source, destination])
     return
   }
-  if (target.platform === 'linux') {
+  if (process.platform === 'linux') {
     await execFile('cp', ['--reflink=auto', '--sparse=always', '--preserve=mode', source, destination])
     return
   }
-  throw new Error(`Large release artifact copy is unsupported on ${target.platform}`)
+  throw new Error(`Large release artifact copy is unsupported on build host ${process.platform} for ${target.triple}`)
 }
 
 async function clonePayloadTree(source, destination, target) {
-  if (target.platform === 'darwin') {
+  if (process.platform === 'darwin') {
     await execFile('/bin/cp', ['-cR', `${source}/.`, destination])
     return
   }
-  if (target.platform === 'linux') {
+  if (process.platform === 'linux') {
     await execFile('cp', ['-a', '--reflink=auto', '--sparse=always', `${source}/.`, destination])
     return
   }
-  throw new Error(`Release payload cloning is unsupported on ${target.platform}`)
+  throw new Error(`Release payload cloning is unsupported on build host ${process.platform} for ${target.triple}`)
 }
 
 async function normalizePayloadModes(root) {
