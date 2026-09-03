@@ -7,7 +7,15 @@ import { requestContainerBroker } from './container-broker.mjs'
 
 const sleep = (milliseconds) => new Promise((resolveDelay) => setTimeout(resolveDelay, milliseconds))
 
-const PROCESS_AMBIENT_KEYS = ['HOME', 'LANG', 'LC_ALL', 'PATH', 'SSL_CERT_DIR', 'SSL_CERT_FILE', 'TEMP', 'TMP', 'TMPDIR', 'TZ']
+const PROCESS_AMBIENT_KEYS = ['LANG', 'LC_ALL', 'PATH', 'SSL_CERT_DIR', 'SSL_CERT_FILE', 'TEMP', 'TMP', 'TMPDIR', 'TZ']
+const PROCESS_IDENTITIES = {
+  'browser-host': 'openlink-browser',
+  'knowledge-service': 'openlink-knowledge',
+  'agent-host': 'openlink-agent',
+  'desktop-agent-host': 'openlink-desktop',
+  web: 'openlink-web',
+  edge: 'openlink-edge',
+}
 const BROWSER_ENVIRONMENT_KEYS = [
   'NODE_ENV', 'OPENLINK_RELEASE_ID', 'OPENLINK_RUNTIME_MODE', 'OPENLINK_BROWSER_API_TOKEN', 'OPENLINK_BROWSER_TOKEN_SECRET',
   'OPENLINK_BROWSER_HOST', 'OPENLINK_BROWSER_PORT', 'OPENLINK_BROWSER_PUBLIC_URL', 'OPENLINK_BROWSER_ALLOWED_ORIGINS',
@@ -136,8 +144,22 @@ async function imageEntries(releaseRoot, kind) {
   })
 }
 
-function processSpec(name, node, entrypoint, cwd, environment, healthUrl) {
-  return { name, command: node, args: [entrypoint], cwd, environment, healthUrl }
+function processSpec(name, node, entrypoint, cwd, environment, healthUrl, home) {
+  return { name, identity: PROCESS_IDENTITIES[name], command: node, args: [entrypoint], cwd, environment: { ...environment, HOME: home }, healthUrl }
+}
+
+export function isolatedProcessInvocation(spec, options = {}) {
+  const platform = options.platform ?? process.platform
+  const root = options.root ?? (typeof process.getuid === 'function' && process.getuid() === 0)
+  if (platform !== 'linux' || !root) return { command: spec.command, args: spec.args }
+  if (PROCESS_IDENTITIES[spec.name] !== spec.identity) throw new Error(`Production process identity is invalid for ${spec.name}`)
+  const capabilityArgs = spec.name === 'edge'
+    ? ['--inh-caps=+net_bind_service', '--ambient-caps=+net_bind_service', '--bounding-set=-all,+net_bind_service']
+    : ['--inh-caps=-all', '--ambient-caps=-all', '--bounding-set=-all']
+  return {
+    command: '/usr/bin/setpriv',
+    args: [`--reuid=${spec.identity}`, `--regid=${spec.identity}`, '--init-groups', ...capabilityArgs, '--no-new-privs', '--', spec.command, ...spec.args],
+  }
 }
 
 export async function createRuntimePlan(options = {}) {
@@ -227,16 +249,18 @@ export async function createRuntimePlan(options = {}) {
     },
   ]
   const processes = [
-    processSpec('browser-host', node, join(releaseRoot, 'services/browser-host/dist/src/main.js'), join(releaseRoot, 'services/browser-host'), selectEnvironment(environment, BROWSER_ENVIRONMENT_KEYS), `http://127.0.0.1:${browserPort}/healthz`),
-    processSpec('knowledge-service', node, join(releaseRoot, 'services/knowledge-service/dist/src/main.js'), join(releaseRoot, 'services/knowledge-service'), selectEnvironment(environment, KNOWLEDGE_ENVIRONMENT_KEYS), `http://127.0.0.1:${knowledgePort}/healthz`),
-    processSpec('agent-host', node, join(releaseRoot, 'services/agent-host/dist/src/main.js'), join(releaseRoot, 'services/agent-host'), selectEnvironment(environment, AGENT_ENVIRONMENT_KEYS), `http://127.0.0.1:${agentPort}/healthz`),
-    processSpec('desktop-agent-host', node, join(releaseRoot, 'services/agent-host/dist/src/desktop-main.js'), join(releaseRoot, 'services/agent-host'), selectEnvironment(environment, DESKTOP_AGENT_ENVIRONMENT_KEYS), `http://127.0.0.1:${desktopPort}/healthz`),
-    processSpec('web', node, join(releaseRoot, 'app/web/server.js'), join(releaseRoot, 'app/web'), selectEnvironment(environment, WEB_ENVIRONMENT_KEYS), `http://127.0.0.1:${webPort}/api/healthz`),
+    processSpec('browser-host', node, join(releaseRoot, 'services/browser-host/dist/src/main.js'), join(releaseRoot, 'services/browser-host'), selectEnvironment(environment, BROWSER_ENVIRONMENT_KEYS), `http://127.0.0.1:${browserPort}/healthz`, join(stateRoot, 'browser')),
+    processSpec('knowledge-service', node, join(releaseRoot, 'services/knowledge-service/dist/src/main.js'), join(releaseRoot, 'services/knowledge-service'), selectEnvironment(environment, KNOWLEDGE_ENVIRONMENT_KEYS), `http://127.0.0.1:${knowledgePort}/healthz`, join(stateRoot, 'knowledge')),
+    processSpec('agent-host', node, join(releaseRoot, 'services/agent-host/dist/src/main.js'), join(releaseRoot, 'services/agent-host'), selectEnvironment(environment, AGENT_ENVIRONMENT_KEYS), `http://127.0.0.1:${agentPort}/healthz`, join(stateRoot, 'agents')),
+    processSpec('desktop-agent-host', node, join(releaseRoot, 'services/agent-host/dist/src/desktop-main.js'), join(releaseRoot, 'services/agent-host'), selectEnvironment(environment, DESKTOP_AGENT_ENVIRONMENT_KEYS), `http://127.0.0.1:${desktopPort}/healthz`, join(stateRoot, 'desktop-agents')),
+    processSpec('web', node, join(releaseRoot, 'app/web/server.js'), join(releaseRoot, 'app/web'), selectEnvironment(environment, WEB_ENVIRONMENT_KEYS), `http://127.0.0.1:${webPort}/api/healthz`, join(stateRoot, 'web')),
     {
       name: 'edge', command: join(releaseRoot, 'edge/bin/caddy'),
+      identity: PROCESS_IDENTITIES.edge,
       args: ['run', '--config', join(releaseRoot, 'edge/Caddyfile'), '--adapter', 'caddyfile'],
       cwd: releaseRoot,
       environment: {
+        HOME: join(stateRoot, 'edge'),
         OPENLINK_EDGE_ADDRESS: supplied.OPENLINK_EDGE_ADDRESS,
         XDG_CONFIG_HOME: join(stateRoot, 'edge/config'),
         XDG_DATA_HOME: join(stateRoot, 'edge/data'),
@@ -299,7 +323,7 @@ export class ProductionSupervisor {
   constructor(plan, dependencies = {}) {
     this.plan = plan
     this.runCommand = dependencies.runCommand ?? defaultCommand
-    this.spawnProcess = dependencies.spawnProcess ?? ((command, args, options) => spawn(command, args, { cwd: options.cwd, env: { ...process.env, ...options.environment }, stdio: 'inherit' }))
+    this.spawnProcess = dependencies.spawnProcess ?? ((command, args, options) => spawn(command, args, { cwd: options.cwd, env: options.env, stdio: options.stdio ?? 'inherit' }))
     this.probe = dependencies.probe ?? defaultProbe
     this.notifyReady = dependencies.notifyReady ?? (async () => {
       if (!process.env.NOTIFY_SOCKET) return
@@ -327,7 +351,8 @@ export class ProductionSupervisor {
     if (this.plan.containerBrokerSocket) await requestContainerBroker(this.plan.containerBrokerSocket, 'start')
     else await startContainerRuntime(this.plan, this.runCommand)
     for (const item of this.plan.processes) {
-      const child = this.spawnProcess(item.command, item.args, { cwd: item.cwd, env: childEnvironment(item.environment), stdio: item.stdio, openlinkName: item.name })
+      const invocation = isolatedProcessInvocation(item)
+      const child = this.spawnProcess(invocation.command, invocation.args, { cwd: item.cwd, env: childEnvironment(item.environment), stdio: item.stdio, openlinkName: item.name, productionIdentity: item.identity })
       const running = { ...item, child }
       this.children.push(running)
       child.once('error', (error) => { if (!this.stopping) this.rejectFailure(new Error(`${item.name} failed: ${error.message}`)) })
