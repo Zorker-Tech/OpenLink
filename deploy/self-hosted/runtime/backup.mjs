@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 
-import { runtimeLockStatus } from './lifecycle-lock.mjs'
+import { acquireRuntimeLock, runtimeLockStatus } from './lifecycle-lock.mjs'
 import { extractVerifiedTarGzip } from './safe-archive.mjs'
 
 async function protectedKey(path) {
@@ -25,7 +25,8 @@ async function digestFile(path) {
 }
 
 function tarStream(root) {
-  const child = spawn('tar', ['-czhf', '-', '--exclude=./state/run', '-C', root, '.'], { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, COPYFILE_DISABLE: '1' } })
+  const portability = process.platform === 'darwin' ? ['--no-xattrs', '--no-mac-metadata', '--no-read-sparse'] : []
+  const child = spawn('tar', [...portability, '-czhf', '-', '--exclude=./state/run', '-C', root, '.'], { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, COPYFILE_DISABLE: '1' } })
   let stderr = ''
   child.stderr.on('data', (chunk) => { stderr += String(chunk) })
   const completion = new Promise((resolveExit, rejectExit) => {
@@ -45,47 +46,53 @@ export async function createEncryptedBackup(options = {}) {
   const configPath = resolve(options.configPath)
   const secretsPath = resolve(options.secretsPath)
   const output = resolve(options.output)
-  await assertStopped(stateRoot)
-  if (await lstat(output).then(() => true).catch((error) => error?.code === 'ENOENT' ? false : Promise.reject(error))) throw new Error(`Backup output already exists: ${output}`)
-  const key = await protectedKey(resolve(options.keyFile))
-  const staging = await mkdtemp(join(tmpdir(), 'openlink-backup-stage-'))
-  const temporary = `${output}.${process.pid}.tmp`
+  const lifecycle = await acquireRuntimeLock(stateRoot, { releaseId: 'backup' }).catch((error) => {
+    throw new Error(`A complete backup requires the OpenLink service to be stopped: ${error.message}`)
+  })
   try {
-    await mkdir(join(staging, 'configuration'), { recursive: true, mode: 0o700 })
-    await symlink(stateRoot, join(staging, 'state'))
-    await symlink(configPath, join(staging, 'configuration/openlink.env'))
-    await symlink(secretsPath, join(staging, 'configuration/secrets.env'))
-    await mkdir(dirname(output), { recursive: true, mode: 0o700 })
-    const salt = randomBytes(16)
-    const iv = randomBytes(12)
-    const cipher = createCipheriv('aes-256-gcm', scryptSync(key, salt, 32), iv)
-    const tar = tarStream(staging)
-    await Promise.all([
-      pipeline(tar.child.stdout, cipher, createWriteStream(temporary, { mode: 0o600, flags: 'wx' })),
-      tar.completion,
-    ])
-    const integrity = await digestFile(temporary)
-    const manifest = {
-      schemaVersion: 1,
-      product: 'OpenLink',
-      createdAt: new Date().toISOString(),
-      encryption: { algorithm: 'aes-256-gcm', kdf: 'scrypt', salt: salt.toString('base64url'), iv: iv.toString('base64url'), authTag: cipher.getAuthTag().toString('base64url') },
-      payload: { file: basename(output), ...integrity },
-    }
-    await link(temporary, output)
-    await rm(temporary, { force: true })
+    if (await lstat(output).then(() => true).catch((error) => error?.code === 'ENOENT' ? false : Promise.reject(error))) throw new Error(`Backup output already exists: ${output}`)
+    const key = await protectedKey(resolve(options.keyFile))
+    const staging = await mkdtemp(join(tmpdir(), 'openlink-backup-stage-'))
+    const temporary = `${output}.${process.pid}.tmp`
     try {
-      await writeFile(`${output}.json`, `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600, flag: 'wx' })
+      await mkdir(join(staging, 'configuration'), { recursive: true, mode: 0o700 })
+      await symlink(stateRoot, join(staging, 'state'))
+      await symlink(configPath, join(staging, 'configuration/openlink.env'))
+      await symlink(secretsPath, join(staging, 'configuration/secrets.env'))
+      await mkdir(dirname(output), { recursive: true, mode: 0o700 })
+      const salt = randomBytes(16)
+      const iv = randomBytes(12)
+      const cipher = createCipheriv('aes-256-gcm', scryptSync(key, salt, 32), iv)
+      const tar = tarStream(staging)
+      await Promise.all([
+        pipeline(tar.child.stdout, cipher, createWriteStream(temporary, { mode: 0o600, flags: 'wx' })),
+        tar.completion,
+      ])
+      const integrity = await digestFile(temporary)
+      const manifest = {
+        schemaVersion: 1,
+        product: 'OpenLink',
+        createdAt: new Date().toISOString(),
+        encryption: { algorithm: 'aes-256-gcm', kdf: 'scrypt', salt: salt.toString('base64url'), iv: iv.toString('base64url'), authTag: cipher.getAuthTag().toString('base64url') },
+        payload: { file: basename(output), ...integrity },
+      }
+      await link(temporary, output)
+      await rm(temporary, { force: true })
+      try {
+        await writeFile(`${output}.json`, `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600, flag: 'wx' })
+      } catch (error) {
+        await rm(output, { force: true })
+        throw error
+      }
+      return { output, manifestPath: `${output}.json`, manifest }
     } catch (error) {
-      await rm(output, { force: true })
+      await rm(temporary, { force: true })
       throw error
+    } finally {
+      await rm(staging, { recursive: true, force: true })
     }
-    return { output, manifestPath: `${output}.json`, manifest }
-  } catch (error) {
-    await rm(temporary, { force: true })
-    throw error
   } finally {
-    await rm(staging, { recursive: true, force: true })
+    await lifecycle.release()
   }
 }
 
@@ -107,8 +114,11 @@ export async function restoreEncryptedBackup(options = {}) {
   const stateRoot = resolve(options.stateRoot)
   const configPath = resolve(options.configPath)
   const secretsPath = resolve(options.secretsPath)
-  await assertStopped(stateRoot)
   await assertFresh(stateRoot)
+  const lifecycle = await acquireRuntimeLock(stateRoot, { releaseId: 'restore' }).catch((error) => {
+    throw new Error(`Restore requires the OpenLink service to be stopped: ${error.message}`)
+  })
+  try {
   for (const path of [configPath, secretsPath]) {
     if (await lstat(path).then(() => true).catch((error) => error?.code === 'ENOENT' ? false : Promise.reject(error))) throw new Error(`Restore destination already exists: ${path}`)
   }
@@ -124,11 +134,15 @@ export async function restoreEncryptedBackup(options = {}) {
     for (const relative of ['state', 'configuration/openlink.env', 'configuration/secrets.env']) {
       if (!await lstat(join(extracted, relative)).then(() => true).catch(() => false)) throw new Error(`Backup is incomplete: ${relative} is missing`)
     }
-    await mkdir(dirname(stateRoot), { recursive: true, mode: 0o700 })
-    await cp(join(extracted, 'state'), stateRoot, { recursive: true, force: false, errorOnExist: true, preserveTimestamps: false })
+    for (const name of await readdir(join(extracted, 'state'))) {
+      if (name === 'run') continue
+      await cp(join(extracted, 'state', name), join(stateRoot, name), { recursive: true, force: false, errorOnExist: true, preserveTimestamps: false })
+    }
+    await chmod(stateRoot, 0o700)
     await mkdir(dirname(configPath), { recursive: true, mode: 0o750 })
     await cp(join(extracted, 'configuration/openlink.env'), configPath, { force: false, errorOnExist: true })
     await cp(join(extracted, 'configuration/secrets.env'), secretsPath, { force: false, errorOnExist: true })
+    await chmod(configPath, 0o640)
     await chmod(secretsPath, 0o600)
     return { restored: true, stateRoot, configPath, secretsPath }
   } catch (error) {
@@ -138,5 +152,8 @@ export async function restoreEncryptedBackup(options = {}) {
     throw error
   } finally {
     await rm(work, { recursive: true, force: true })
+  }
+  } finally {
+    await lifecycle.release()
   }
 }
