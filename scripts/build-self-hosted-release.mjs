@@ -302,6 +302,7 @@ export async function assembleSelfHostedRelease(options = {}) {
       contractVersion: 1,
       product: 'OpenLink',
       releaseId,
+      releaseSequence: options.releaseSequence,
       target,
       createdAt: options.createdAt ?? new Date(Number(process.env.SOURCE_DATE_EPOCH || Date.now() / 1000) * 1000).toISOString(),
       compatibility: options.compatibility ?? {
@@ -363,6 +364,7 @@ async function main(argv) {
       payloadRoot,
       outputRoot,
       releaseId: args.get('release-id'),
+      releaseSequence: Number(args.get('release-sequence')),
       target,
       privateKey: await readFile(privateKeyPath),
       keyId: args.get('key-id'),

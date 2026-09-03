@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { generateKeyPairSync } from 'node:crypto'
+import { createServer } from 'node:http'
 import { lstat, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
-import { installReleaseArchive, installReleaseDirectory } from '../../deploy/self-hosted/openlinkctl.mjs'
+import { installReleaseArchive, installReleaseDirectory, waitForApplicationHealth } from '../../deploy/self-hosted/openlinkctl.mjs'
 import {
   createReleaseInventory,
   normalizeTarget,
@@ -44,6 +45,37 @@ test('safe archive extractor enforces a cumulative expansion limit', async (t) =
   await assert.rejects(lstat(join(root, 'output')), /ENOENT/)
 })
 
+test('safe archive extractor bounds all headers before signature verification', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'openlink-archive-entries-'))
+  t.after(async () => (await import('node:fs/promises')).rm(root, { recursive: true, force: true }))
+  const source = join(root, 'source')
+  const archive = join(root, 'payload.tar.gz')
+  await mkdir(source)
+  await writeFile(join(source, 'one'), '')
+  await writeFile(join(source, 'two'), '')
+  await new Promise((resolvePromise, rejectPromise) => {
+    const child = spawn('tar', ['-czf', archive, '-C', source, '.'], { env: { ...process.env, COPYFILE_DISABLE: '1' } })
+    child.once('error', rejectPromise)
+    child.once('exit', (code) => code === 0 ? resolvePromise() : rejectPromise(new Error(`tar exited ${code}`)))
+  })
+  await assert.rejects(extractVerifiedTarGzip(archive, join(root, 'output'), { maximumEntries: 2 }), /more than 2 entries/i)
+  await assert.rejects(lstat(join(root, 'output')), /ENOENT/)
+})
+
+test('application health requires the expected release identity', async (t) => {
+  let requests = 0
+  const server = createServer((_request, response) => {
+    requests += 1
+    response.setHeader('content-type', 'application/json')
+    response.end(JSON.stringify({ ok: true, releaseId: requests === 1 ? 'old-release' : 'new-release' }))
+  })
+  await new Promise((resolveListen) => server.listen(0, '127.0.0.1', resolveListen))
+  t.after(() => new Promise((resolveClose) => server.close(resolveClose)))
+  const address = server.address()
+  await waitForApplicationHealth(`http://127.0.0.1:${address.port}`, 'new-release', 5_000)
+  assert.equal(requests, 2)
+})
+
 async function fixture(t, releaseId = '2026.09.03-test.1') {
   const root = await mkdtemp(join(tmpdir(), 'openlinkctl-test-'))
   t.after(async () => (await import('node:fs/promises')).rm(root, { recursive: true, force: true }))
@@ -58,6 +90,7 @@ async function fixture(t, releaseId = '2026.09.03-test.1') {
     contractVersion: 1,
     product: 'OpenLink',
     releaseId,
+    releaseSequence: 1,
     target: normalizeTarget({ platform: process.platform, architecture: process.arch }),
     inventory,
     compatibility: { stateSchema: 1, minimumStateSchema: 1, maximumStateSchema: 1 },
