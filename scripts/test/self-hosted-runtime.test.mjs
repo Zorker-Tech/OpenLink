@@ -13,10 +13,11 @@ async function fixture(t) {
   t.after(async () => (await import('node:fs/promises')).rm(root, { recursive: true, force: true }))
   const releaseRoot = join(root, 'release')
   const stateRoot = join(root, 'state')
+  const imageId = `sha256:${'a'.repeat(64)}`
   const manifests = {
-    runtime: { images: { 'openlink/worker:2026.09.03': { archive: 'archives/worker.tar' } } },
-    zokerbase: { images: [{ image: 'zokerbase/postgres:2026.09.03', archive: 'postgres.tar' }] },
-    zero: { images: [{ image: 'zokerbase/zero:3.0.0', archive: 'zero.tar' }] },
+    runtime: { images: { 'openlink/worker:2026.09.03': { archive: 'archives/worker.tar', imageId } } },
+    zokerbase: { images: [{ image: 'zokerbase/postgres:2026.09.03', archive: 'postgres.tar', imageId }] },
+    zero: { images: [{ image: 'zokerbase/zero:3.0.0', archive: 'zero.tar', imageId }] },
   }
   for (const [name, manifest] of Object.entries(manifests)) {
     const path = join(releaseRoot, 'images', name, 'manifest.json')
@@ -57,6 +58,7 @@ test('supervisor starts dependencies in order and shuts down application before 
   const item = await fixture(t)
   const events = []
   const children = []
+  let forcedImageMismatch = true
   const childFor = (name) => {
     const child = new EventEmitter()
     child.exitCode = null
@@ -72,13 +74,19 @@ test('supervisor starts dependencies in order and shuts down application before 
   }
   const plan = await createRuntimePlan({ releaseRoot: item.releaseRoot, stateRoot: item.stateRoot, environment: { OPENLINK_ZOKERBASE_ENV_FILE: join(item.root, 'zokerbase.env') }, validate: false })
   const supervisor = new ProductionSupervisor(plan, {
-    runCommand: async (_command, args) => { events.push(`command:${args.join(' ')}`); return '' },
+    runCommand: async (_command, args) => {
+      events.push(`command:${args.join(' ')}`)
+      if (!args.includes('inspect')) return ''
+      if (forcedImageMismatch) { forcedImageMismatch = false; return `sha256:${'b'.repeat(64)}\n` }
+      return `sha256:${'a'.repeat(64)}\n`
+    },
     spawnProcess: (_command, _args, options) => { events.push(`spawn:${options.openlinkName}`); return childFor(options.openlinkName) },
     probe: async (url) => { events.push(`probe:${url}`); return true },
     notifyReady: async () => { events.push('ready') },
   })
   await supervisor.start()
   assert.equal(events.at(-1), 'ready')
+  assert.equal(events.some((event) => event.startsWith('command:load --input')), true)
   assert.equal(events.indexOf('spawn:web') > events.indexOf('spawn:agent-host'), true)
   await supervisor.stop('SIGTERM')
   const firstComposeStop = events.findIndex((event) => event.startsWith('command:compose') && event.includes(' stop'))
@@ -91,7 +99,7 @@ test('a critical child exit fails the runtime and triggers cleanup', async (t) =
   const children = new Map()
   const plan = await createRuntimePlan({ releaseRoot: item.releaseRoot, stateRoot: item.stateRoot, environment: { OPENLINK_ZOKERBASE_ENV_FILE: join(item.root, 'zokerbase.env') }, validate: false })
   const supervisor = new ProductionSupervisor(plan, {
-    runCommand: async () => '',
+    runCommand: async (_command, args) => args.includes('inspect') ? `sha256:${'a'.repeat(64)}\n` : '',
     spawnProcess: (_command, _args, options) => {
       const child = new EventEmitter()
       child.exitCode = null
