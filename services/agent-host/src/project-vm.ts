@@ -702,6 +702,10 @@ export class PodmanMachineDriver implements ProjectVmMachineDriver {
         const architecture = process.arch === 'arm64' ? 'arm64' : 'amd64'
         return resolve(dataRoot, 'containers', 'podman', 'machine', 'hyperv', `${name}-${architecture}.vhdx`)
       }
+      if (this.machineProvider === 'qemu') {
+        const architecture = process.arch === 'arm64' ? 'arm64' : 'amd64'
+        return resolve(dataRoot, 'containers', 'podman', 'machine', 'qemu', `${name}-${architecture}.qcow2`)
+      }
       return undefined
     })
     this.directAppleHv = options.directAppleHv ?? false
