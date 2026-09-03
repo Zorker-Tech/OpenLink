@@ -141,7 +141,9 @@ async function cachedMachineOs() {
   const candidates = []
   for (const cacheRoot of roots) {
     for (const entry of await readdir(cacheRoot).catch(() => [])) {
-      const validSuffixes = artifactContract.diskFormat === 'vhdx' ? ['.vhdx.zst', '.vhdx'] : ['.raw.zst', '.raw']
+      const validSuffixes = artifactContract.diskFormat === 'vhdx'
+        ? ['.vhdx.zst', '.vhdx']
+        : artifactContract.diskFormat === 'qcow2' ? ['.qcow2.zst', '.qcow2'] : ['.raw.zst', '.raw']
       if (!validSuffixes.some((suffix) => entry.endsWith(suffix))) continue
       const path = join(cacheRoot, entry)
       const metadata = await stat(path).catch(() => null)
@@ -337,7 +339,7 @@ try {
     'bash', '/tmp/project-vm-seed-supabase.sh', guestRawDisk, guestSupabaseImages,
   ].map(shellQuote).join(' ')
   await run(podman, ['machine', 'ssh', machineName, `${loadCommand} && ${buildCommand} && ${seedCommand}`], artifactOptions)
-  if (artifactContract.diskFormat === 'vhdx') {
+  if (artifactContract.diskFormat !== 'raw') {
     const convertCommand = [
       // The raw disk is produced by the preceding rootful, privileged bootc
       // installer. Preserve that same confined execution boundary for the
@@ -347,15 +349,15 @@ try {
       '--security-opt', 'label=type:unconfined_t',
       '-v', `${guestOutput}:${guestOutput}`,
       imageRef,
-      'qemu-img', 'convert', '-p', '-f', 'raw', '-O', 'vhdx',
-      '-o', 'subformat=dynamic,block_size=2097152', guestRawDisk, guestDisk,
+      'qemu-img', 'convert', '-p', '-f', 'raw', '-O', artifactContract.diskFormat,
+      '-o', artifactContract.diskFormat === 'vhdx' ? 'subformat=dynamic,block_size=2097152' : 'compat=1.1,lazy_refcounts=on', guestRawDisk, guestDisk,
     ].map(shellQuote).join(' ')
     const verifyCommand = [
       'sudo', 'podman', 'run', '--rm', '--privileged', '--pid=host', '--ipc=host',
       '--security-opt', 'label=type:unconfined_t',
       '-v', `${guestOutput}:${guestOutput}:ro`,
       imageRef,
-      'qemu-img', 'check', '-f', 'vhdx', guestDisk,
+      'qemu-img', 'check', '-f', artifactContract.diskFormat, guestDisk,
     ].map(shellQuote).join(' ')
     await run(podman, ['machine', 'ssh', machineName, `${convertCommand} && ${verifyCommand}`], artifactOptions)
     await run(podman, ['machine', 'cp', `${machineName}:${guestDisk}`, temporaryDiskPath], artifactOptions)
