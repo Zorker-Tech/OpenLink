@@ -12,7 +12,7 @@ import {
   normalizeTarget,
   signReleaseManifest,
 } from '../../deploy/self-hosted/runtime/release-contract.mjs'
-import { parseTarNumber } from '../../deploy/self-hosted/runtime/safe-archive.mjs'
+import { extractVerifiedTarGzip, parseTarNumber } from '../../deploy/self-hosted/runtime/safe-archive.mjs'
 
 test('safe archive parser accepts positive base-256 sizes and rejects unsafe values', () => {
   const encoded = Buffer.alloc(12)
@@ -25,6 +25,23 @@ test('safe archive parser accepts positive base-256 sizes and rejects unsafe val
   const unsafe = Buffer.alloc(12, 0xff)
   unsafe[0] = 0x80
   assert.throws(() => parseTarNumber(unsafe, 'file size'), /range/i)
+})
+
+test('safe archive extractor enforces a cumulative expansion limit', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'openlink-archive-limit-'))
+  t.after(async () => (await import('node:fs/promises')).rm(root, { recursive: true, force: true }))
+  const source = join(root, 'source')
+  const archive = join(root, 'payload.tar.gz')
+  await mkdir(source)
+  await writeFile(join(source, 'one'), '12345678')
+  await writeFile(join(source, 'two'), '12345678')
+  await new Promise((resolvePromise, rejectPromise) => {
+    const child = spawn('tar', ['-czf', archive, '-C', source, '.'], { env: { ...process.env, COPYFILE_DISABLE: '1' } })
+    child.once('error', rejectPromise)
+    child.once('exit', (code) => code === 0 ? resolvePromise() : rejectPromise(new Error(`tar exited ${code}`)))
+  })
+  await assert.rejects(extractVerifiedTarGzip(archive, join(root, 'output'), { maximumTotalBytes: 12 }), /expands beyond/i)
+  await assert.rejects(lstat(join(root, 'output')), /ENOENT/)
 })
 
 async function fixture(t, releaseId = '2026.09.03-test.1') {

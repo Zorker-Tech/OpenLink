@@ -72,6 +72,15 @@ and fixed two real cross-platform archive defects: Apple PAX/xattr metadata and
 GNU sparse path rewriting for the 64 GiB Golden Disk. The macOS archiver now
 disables xattrs, Apple metadata and sparse detection; the extractor accepts
 only positive, bounded base-256 tar numbers and rejects negative/unsafe values.
+It also caps cumulative expansion at 192 GiB and metadata records at 16 MiB.
+
+The matching macOS SEA installer is 143,746,432 bytes with SHA-256
+`14aff1ccdb89ae6f4eeeb48d453bb1c288ca0dfd85a8216ed15565427438d30d`.
+It passed ad-hoc code-signature verification and self-test with no system Node
+lookup. Re-running an interrupted install reuses only a complete, permission-safe
+configuration whose origin and state paths exactly match; it does not rotate
+secrets. A changed request fails closed. Developer ID signing and Apple
+notarization remain release-process requirements, so this binary is not GA.
 
 The authorized Linux target reports AMD Ryzen 5 5600X and `svm`-related CPU
 features, but loading `kvm_amd` fails with `SVM not supported by CPU` and
