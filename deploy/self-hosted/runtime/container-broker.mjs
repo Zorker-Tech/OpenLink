@@ -1,5 +1,5 @@
 import { createConnection, createServer } from 'node:net'
-import { chmod, mkdir, rm } from 'node:fs/promises'
+import { chmod, lstat, mkdir, rm } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 
 const ACTIONS = new Set(['status', 'start', 'stop'])
@@ -40,6 +40,8 @@ export function requestContainerBroker(socketPath, action, options = {}) {
 export async function serveContainerBroker(socketPath, handler) {
   const socket = resolve(socketPath)
   await mkdir(dirname(socket), { recursive: true, mode: 0o750 })
+  const existing = await lstat(socket).catch((error) => error?.code === 'ENOENT' ? undefined : Promise.reject(error))
+  if (existing && !existing.isSocket()) throw new Error(`Container broker refuses to replace a non-socket path: ${socket}`)
   await rm(socket, { force: true })
   let queue = Promise.resolve()
   let pending = 0

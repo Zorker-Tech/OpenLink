@@ -38,10 +38,23 @@ async function fixture(t) {
 
 test('production plan uses only sealed artifacts and loopback host services', async (t) => {
   const item = await fixture(t)
+  const supplied = {
+    OPENLINK_ZOKERBASE_ENV_FILE: join(item.root, 'zokerbase.env'),
+    POSTGRES_PASSWORD: 'database-only-secret',
+    OPENLINK_BROWSER_API_TOKEN: 'browser-api-secret',
+    OPENLINK_BROWSER_TOKEN_SECRET: 'browser-token-secret',
+    OPENLINK_AGENT_API_TOKEN: 'agent-api-secret',
+    OPENLINK_DESKTOP_AGENT_API_TOKEN: 'desktop-api-secret',
+    OPEN_SANDBOX_API_KEY: 'sandbox-api-secret',
+    OPENLINK_PROVIDER_SECRET_KEY: 'provider-secret',
+    OPENLINK_SUPABASE_SERVICE_ROLE_KEY: 'database-service-secret',
+    OPENLINK_KNOWLEDGE_INTERNAL_TOKEN: 'knowledge-secret',
+    OPENLINK_KNOWLEDGE_ZOKERBASE_SERVICE_KEY: 'knowledge-database-secret',
+  }
   const plan = await createRuntimePlan({
     releaseRoot: item.releaseRoot,
     stateRoot: item.stateRoot,
-    environment: { OPENLINK_ZOKERBASE_ENV_FILE: join(item.root, 'zokerbase.env') },
+    environment: supplied,
     validate: false,
   })
   assert.equal(plan.images.length, 3)
@@ -51,9 +64,25 @@ test('production plan uses only sealed artifacts and loopback host services', as
   assert.equal(plan.processes.find((process) => process.name === 'web').healthUrl.endsWith('/api/healthz'), true)
   assert.equal(plan.processes[0].environment.OPENLINK_RELEASE_ID, 'release')
   assert.equal(plan.processes.filter((process) => process.name !== 'edge').every((process) => process.environment.OPENLINK_RUNTIME_MODE === 'local'), true)
-  assert.equal(plan.processes.filter((process) => process.name !== 'edge').every((process) => process.environment.OPENLINK_AGENT_HOST === '127.0.0.1'), true)
+  assert.equal(plan.processes.find((process) => process.name === 'agent-host').environment.OPENLINK_AGENT_HOST, '127.0.0.1')
+  assert.equal(plan.processes.find((process) => process.name === 'web').environment.OPENLINK_AGENT_HOST_URL, 'http://127.0.0.1:43121')
   assert.equal(Object.keys(plan.processes.at(-1).environment).some((key) => /TOKEN|SECRET|PASSWORD|KEY/.test(key)), false)
   assert.equal(plan.compose.every((item) => item.args.includes('--pull') && item.args.includes('never')), true)
+  const processes = Object.fromEntries(plan.processes.map((process) => [process.name, process.environment]))
+  assert.equal(processes['browser-host'].OPENLINK_BROWSER_API_TOKEN, 'browser-api-secret')
+  assert.equal(processes['browser-host'].POSTGRES_PASSWORD, undefined)
+  assert.equal(processes['browser-host'].OPENLINK_AGENT_API_TOKEN, undefined)
+  assert.equal(processes['agent-host'].OPENLINK_AGENT_API_TOKEN, 'agent-api-secret')
+  assert.equal(processes['agent-host'].OPENLINK_SUPABASE_SERVICE_ROLE_KEY, 'database-service-secret')
+  assert.equal(processes['agent-host'].OPENLINK_BROWSER_TOKEN_SECRET, undefined)
+  assert.equal(processes['knowledge-service'].OPENLINK_KNOWLEDGE_ZOKERBASE_SERVICE_KEY, 'knowledge-database-secret')
+  assert.equal(processes['knowledge-service'].OPEN_SANDBOX_API_KEY, undefined)
+  assert.equal(processes['desktop-agent-host'].OPENLINK_DESKTOP_AGENT_API_TOKEN, 'desktop-api-secret')
+  assert.equal(processes['desktop-agent-host'].OPENLINK_BROWSER_API_TOKEN, undefined)
+  assert.equal(processes.web.OPENLINK_AGENT_API_TOKEN, 'agent-api-secret')
+  assert.equal(processes.web.OPENLINK_BROWSER_TOKEN_SECRET, undefined)
+  assert.equal(processes.web.POSTGRES_PASSWORD, undefined)
+  assert.equal(plan.compose[0].environment.POSTGRES_PASSWORD, 'database-only-secret')
   assert.doesNotMatch(JSON.stringify(plan), /\b(?:npm|pnpm|yarn|tsc)\b|\b(?:build|pull)\b.*(?:source|registry)/i)
 })
 
@@ -83,7 +112,12 @@ test('supervisor starts dependencies in order and shuts down application before 
       if (forcedImageMismatch) { forcedImageMismatch = false; return `sha256:${'b'.repeat(64)}\n` }
       return `sha256:${'a'.repeat(64)}\n`
     },
-    spawnProcess: (_command, _args, options) => { events.push(`spawn:${options.openlinkName}`); return childFor(options.openlinkName) },
+    spawnProcess: (_command, _args, options) => {
+      assert.ok(options.env)
+      assert.equal(options.environment, undefined)
+      events.push(`spawn:${options.openlinkName}`)
+      return childFor(options.openlinkName)
+    },
     probe: async (url) => { events.push(`probe:${url}`); return true },
     notifyReady: async () => { events.push('ready') },
   })

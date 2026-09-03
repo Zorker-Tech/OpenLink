@@ -36,7 +36,10 @@ async function ensureLinuxIdentity(runner, stateRoot) {
     await command(runner, 'useradd', ['--system', '--gid', 'openlink', '--home-dir', stateRoot, '--shell', '/usr/sbin/nologin', 'openlink'])
   }
   await requireGroup(runner, 'kvm')
-  await command(runner, 'usermod', ['--append', '--groups', 'kvm', 'openlink'])
+  // The dedicated identity owns no supplementary group except KVM. Using a
+  // replacement group list also removes legacy Docker membership from hosts
+  // upgraded from an older installer.
+  await command(runner, 'usermod', ['--groups', 'kvm', 'openlink'])
   const uid = Number((await command(runner, 'id', ['-u', 'openlink'])).trim())
   const groupRecord = (await command(runner, 'getent', ['group', 'openlink'])).trim().split(':')
   const gid = Number(groupRecord[2])
