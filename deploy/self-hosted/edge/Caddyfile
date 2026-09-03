@@ -5,7 +5,7 @@
 	}
 }
 
-{$OPENLINK_DOMAIN} {
+{$OPENLINK_EDGE_ADDRESS} {
 	encode zstd gzip
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
