@@ -24,17 +24,25 @@ test('fixture preflight enforces immutable runtime inputs without requiring buil
     'services/agent-host/dist/src/main.js',
     'services/browser-host/dist/src/main.js',
     'services/knowledge-service/dist/src/main.js',
+    'services/agent-host/dist/src/desktop-main.js',
     'images/runtime/manifest.json',
     'images/zokerbase/manifest.json',
     'images/zero/manifest.json',
     'toolchain/bin/podman',
+    'edge/bin/caddy',
+    'edge/Caddyfile',
+    'browser/manifest.json',
+    'browser/chromium/chrome',
     'project-vm/manifest.json',
     'orchestration/docker-compose.production.yml',
     'orchestration/docker-compose.zero-production.yml',
   ]) {
     const path = join(releaseRoot, ...relative.split('/'))
     await mkdir(join(path, '..'), { recursive: true })
-    await writeFile(path, relative.endsWith('.json') ? '{}\n' : 'fixture\n', { mode: relative.includes('/bin/') ? 0o755 : 0o644 })
+    const contents = relative === 'browser/manifest.json'
+      ? `${JSON.stringify({ target: process.platform === 'linux' && process.arch === 'x64' ? 'linux-amd64' : `${process.platform}-${process.arch}`, executable: 'chromium/chrome' })}\n`
+      : relative.endsWith('.json') ? '{}\n' : 'fixture\n'
+    await writeFile(path, contents, { mode: relative.includes('/bin/') || relative === 'browser/chromium/chrome' ? 0o755 : 0o644 })
   }
   const result = await runPreflight({
     releaseRoot,

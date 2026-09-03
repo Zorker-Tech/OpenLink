@@ -29,6 +29,7 @@ export function validateProductionEnvironment(environment = {}) {
   const required = [
     'OPENLINK_STATE_ROOT',
     'OPENLINK_APP_URL',
+    'OPENLINK_EDGE_ADDRESS',
     'OPENLINK_BROWSER_GATEWAY_PUBLIC_URL',
     'OPENLINK_BROWSER_GATEWAY_ALLOWED_ORIGINS',
     'OPENLINK_BROWSER_API_TOKEN',
@@ -88,6 +89,11 @@ export async function createRuntimePlan(options = {}) {
   const vmDisk = typeof vmManifest.disk === 'string' ? join(releaseRoot, 'project-vm', basename(vmManifest.disk)) : ''
   const runtimeImages = await imageEntries(releaseRoot, 'runtime')
   const projectArchives = Object.fromEntries(runtimeImages.map((entry) => [entry.image, entry.archive]))
+  const browserManifest = JSON.parse(await readFile(join(releaseRoot, 'browser/manifest.json'), 'utf8').catch(() => '{}'))
+  if (typeof browserManifest.executable !== 'string' || browserManifest.executable.startsWith('/') || browserManifest.executable.split('/').includes('..')) {
+    throw new Error('Sealed Chromium manifest is invalid')
+  }
+  const chromeExecutable = join(releaseRoot, 'browser', ...browserManifest.executable.split('/'))
   const environment = {
     ...supplied,
     NODE_ENV: 'production',
@@ -101,6 +107,7 @@ export async function createRuntimePlan(options = {}) {
     OPENLINK_BROWSER_PUBLIC_URL: `http://127.0.0.1:${browserPort}`,
     OPENLINK_BROWSER_ALLOWED_ORIGINS: supplied.OPENLINK_BROWSER_ALLOWED_ORIGINS || supplied.OPENLINK_BROWSER_GATEWAY_ALLOWED_ORIGINS,
     OPENLINK_BROWSER_STORAGE_ROOT: join(stateRoot, 'browser'),
+    OPENLINK_CHROME_EXECUTABLE: chromeExecutable,
     OPENLINK_AGENT_HOST: '127.0.0.1',
     OPENLINK_AGENT_PORT: agentPort,
     OPENLINK_AGENT_HOST_URL: `http://127.0.0.1:${agentPort}`,
@@ -156,6 +163,11 @@ export async function createRuntimePlan(options = {}) {
     processSpec('agent-host', node, join(releaseRoot, 'services/agent-host/dist/src/main.js'), join(releaseRoot, 'services/agent-host'), environment, `http://127.0.0.1:${agentPort}/healthz`),
     processSpec('desktop-agent-host', node, join(releaseRoot, 'services/agent-host/dist/src/desktop-main.js'), join(releaseRoot, 'services/agent-host'), environment, `http://127.0.0.1:${desktopPort}/healthz`),
     processSpec('web', node, join(releaseRoot, 'app/web/server.js'), join(releaseRoot, 'app/web'), environment, `http://127.0.0.1:${webPort}/`),
+    {
+      name: 'edge', command: join(releaseRoot, 'edge/bin/caddy'),
+      args: ['run', '--config', join(releaseRoot, 'edge/Caddyfile'), '--adapter', 'caddyfile'],
+      cwd: releaseRoot, environment, healthUrl: supplied.OPENLINK_APP_URL,
+    },
   ]
   return { releaseRoot, stateRoot, docker, images: [...runtimeImages, ...await imageEntries(releaseRoot, 'zokerbase'), ...await imageEntries(releaseRoot, 'zero')], compose, processes }
 }
