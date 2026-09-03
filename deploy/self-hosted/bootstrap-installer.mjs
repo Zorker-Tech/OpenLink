@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import { getAsset, isSea } from 'node:sea'
-import { lstat, readFile } from 'node:fs/promises'
+import { lstat, readFile, readlink } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 
-import { installReleaseArchive } from './openlinkctl.mjs'
+import { activateRelease, installReleaseArchive } from './openlinkctl.mjs'
 import { createProductionConfiguration } from './runtime/configuration.mjs'
 import { normalizeTarget } from './runtime/release-contract.mjs'
 import { readEnvironmentFile, runPreflight } from './runtime/preflight.mjs'
@@ -94,7 +94,14 @@ export async function runBootstrapInstaller(argv = process.argv.slice(2)) {
   const destination = paths(values)
   const trustedKeys = await trustRoot(values)
   const expectedTarget = normalizeTarget({ platform: process.platform, architecture: process.arch })
-  const installed = await installReleaseArchive({ archive, installRoot: destination.installRoot, trustedKeys, expectedTarget })
+  const installed = await installReleaseArchive({ archive, installRoot: destination.installRoot, trustedKeys, expectedTarget, activate: false })
+  const activeRelease = await readlink(join(destination.installRoot, 'current'))
+    .then((target) => target.split('/').at(-1))
+    .catch((error) => error?.code === 'ENOENT' ? undefined : Promise.reject(error))
+  if (activeRelease && activeRelease !== installed.releaseId) {
+    throw new Error(`Active release ${activeRelease} must be changed with openlinkctl upgrade, not the installer`)
+  }
+  await activateRelease(destination.installRoot, installed.releaseId)
   const releaseRoot = installed.destination
   const configuration = await existingConfiguration(destination, appUrl) ?? await createProductionConfiguration({
     releaseRoot,

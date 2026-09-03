@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { chmod, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { chmod, lstat, mkdir, mkdtemp, readFile, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -16,6 +16,9 @@ async function fixture(t) {
   await mkdir(join(stateRoot, 'zokerbase/postgres'), { recursive: true })
   await mkdir(join(configPath, '..'), { recursive: true })
   await writeFile(join(stateRoot, 'zokerbase/postgres/data.bin'), Buffer.from([0, 1, 2, 3]), { mode: 0o600 })
+  await mkdir(join(stateRoot, 'project-vms/vm-1'), { recursive: true })
+  await writeFile(join(stateRoot, 'project-vms/vm-1/disk.raw'), '')
+  await truncate(join(stateRoot, 'project-vms/vm-1/disk.raw'), 4 * 1024 * 1024)
   await writeFile(configPath, 'OPENLINK_STATE_ROOT=/state\n', { mode: 0o640 })
   await writeFile(secretsPath, 'OPENLINK_AGENT_API_TOKEN=secret\n', { mode: 0o600 })
   await writeFile(keyFile, `${Buffer.alloc(32, 7).toString('base64url')}\n`, { mode: 0o600 })
@@ -28,6 +31,7 @@ test('encrypted backup restores authoritative state and protected configuration 
   const item = await fixture(t)
   const backup = await createEncryptedBackup(item)
   assert.equal(backup.manifest.encryption.algorithm, 'aes-256-gcm')
+  await assert.rejects(lstat(join(item.stateRoot, 'run/runtime.lock')), /ENOENT/)
   assert.notEqual((await readFile(item.archive)).includes(Buffer.from('OPENLINK_AGENT_API_TOKEN')), true)
   const restored = {
     archive: item.archive,
@@ -38,7 +42,9 @@ test('encrypted backup restores authoritative state and protected configuration 
   }
   await restoreEncryptedBackup(restored)
   assert.deepEqual(await readFile(join(restored.stateRoot, 'zokerbase/postgres/data.bin')), Buffer.from([0, 1, 2, 3]))
+  assert.equal((await lstat(join(restored.stateRoot, 'project-vms/vm-1/disk.raw'))).size, 4 * 1024 * 1024)
   assert.equal(await readFile(restored.secretsPath, 'utf8'), 'OPENLINK_AGENT_API_TOKEN=secret\n')
+  await assert.rejects(lstat(join(restored.stateRoot, 'run/runtime.lock')), /ENOENT/)
 })
 
 test('backup corruption and the wrong key fail closed without a partial destination', async (t) => {

@@ -99,4 +99,11 @@ test('sealed installer performs signed archive install and protected configurati
     '--skip-service-install', '1',
   ], { env: { PATH: '/usr/bin:/bin' }, timeout: 60_000 }), /does not match/i)
   assert.equal(await readFile(join(root, 'configuration/secrets.env'), 'utf8'), secretsBeforeRetry)
+  const replacement = await assembleSelfHostedRelease({ payloadRoot: payload, outputRoot: join(root, 'replacement'), releaseId: 'sea-e2e-2', target, privateKey: keys.privateKey, keyId: 'e2e-key' })
+  await assert.rejects(execFile(installer, [
+    '--archive', replacement.archive, '--app-url', 'http://127.0.0.1:7443', '--allow-insecure-http', '1',
+    '--root', installRoot, '--config', configPath, '--state-root', join(root, 'state'), '--skip-host-preflight', '1',
+    '--skip-service-install', '1',
+  ], { env: { PATH: '/usr/bin:/bin' }, timeout: 60_000 }), /openlinkctl upgrade/i)
+  assert.equal((await readFile(join(installRoot, 'current/release.json'), 'utf8')).includes('sea-e2e-1'), true)
 })
