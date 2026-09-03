@@ -28,6 +28,7 @@ function requiredPayloadPaths(target) {
     'services/agent-host/dist/src/main.js',
     'services/browser-host/dist/src/main.js',
     'services/knowledge-service/dist/src/main.js',
+    'services/agent-host/dist/src/desktop-main.js',
     'orchestration/backend/docker/docker-compose.yml',
     'orchestration/services/zero/docker-compose.standalone.yml',
     'orchestration/docker-compose.production.yml',
@@ -36,6 +37,9 @@ function requiredPayloadPaths(target) {
     'images/zokerbase/manifest.json',
     'images/zero/manifest.json',
     'toolchain/bin/podman',
+    'edge/bin/caddy',
+    'edge/Caddyfile',
+    'browser/manifest.json',
     'project-vm/manifest.json',
     disk,
     'openlinkctl.mjs',
@@ -105,7 +109,7 @@ async function normalizePayloadModes(root) {
   await visit(root)
 }
 
-async function copyImageSet(sourceDirectory, destinationDirectory, kind) {
+async function copyImageSet(sourceDirectory, destinationDirectory, kind, target) {
   const manifest = JSON.parse(await readFile(join(sourceDirectory, 'manifest.json'), 'utf8'))
   await mkdir(join(destinationDirectory, 'archives'), { recursive: true, mode: 0o755 })
   if (kind === 'runtime') {
@@ -113,7 +117,7 @@ async function copyImageSet(sourceDirectory, destinationDirectory, kind) {
     const images = {}
     for (const [image, item] of Object.entries(manifest.images)) {
       const archiveName = basename(item.archive)
-      await copyRequired(resolve(sourceDirectory, item.archive), join(destinationDirectory, 'archives', archiveName))
+      await copyLargeNativeArtifact(resolve(sourceDirectory, item.archive), join(destinationDirectory, 'archives', archiveName), target)
       images[image] = { ...item, archive: `archives/${archiveName}` }
     }
     await writeFile(join(destinationDirectory, 'manifest.json'), `${JSON.stringify({ ...manifest, images }, null, 2)}\n`, { mode: 0o644 })
@@ -122,7 +126,7 @@ async function copyImageSet(sourceDirectory, destinationDirectory, kind) {
   if (!Array.isArray(manifest.images)) throw new Error(`${kind} image manifest is invalid`)
   for (const item of manifest.images) {
     if (typeof item.archive !== 'string' || basename(item.archive) !== item.archive) throw new Error(`${kind} image archive path is invalid`)
-    await copyRequired(join(sourceDirectory, item.archive), join(destinationDirectory, 'archives', item.archive))
+    await copyLargeNativeArtifact(join(sourceDirectory, item.archive), join(destinationDirectory, 'archives', item.archive), target)
   }
   await writeFile(join(destinationDirectory, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o644 })
 }
@@ -166,15 +170,38 @@ export async function stageNativeSelfHostedPayload(options = {}) {
   await copyRequired(join(sourceRoot, 'services/zero/openlink'), join(outputRoot, 'orchestration/services/zero'))
   await copyRequired(join(sourceRoot, 'zorkerbase/migrations'), join(outputRoot, 'orchestration/zorkerbase/migrations'))
 
-  await copyImageSet(join(runtimeRoot, 'images'), join(outputRoot, 'images/runtime'), 'runtime')
-  await copyImageSet(join(runtimeRoot, 'zokerbase/images'), join(outputRoot, 'images/zokerbase'), 'zokerbase')
-  await copyImageSet(join(runtimeRoot, 'knowledge/images'), join(outputRoot, 'images/zero'), 'zero')
+  await copyImageSet(join(runtimeRoot, 'images'), join(outputRoot, 'images/runtime'), 'runtime', target)
+  await copyImageSet(join(runtimeRoot, 'zokerbase/images'), join(outputRoot, 'images/zokerbase'), 'zokerbase', target)
+  await copyImageSet(join(runtimeRoot, 'knowledge/images'), join(outputRoot, 'images/zero'), 'zero', target)
+
+  const browserRoot = resolve(options.browserRoot ?? join(runtimeRoot, 'browser', target.triple))
+  const browserManifest = JSON.parse(await readFile(join(browserRoot, 'manifest.json'), 'utf8'))
+  if (browserManifest.target !== target.triple || typeof browserManifest.executable !== 'string'
+    || browserManifest.executable.startsWith('/') || browserManifest.executable.split('/').includes('..')) {
+    throw new Error(`Chromium artifact does not match ${target.triple}`)
+  }
+  await copyRequired(browserRoot, join(outputRoot, 'browser'))
+  const browserExecutable = join(outputRoot, 'browser', ...browserManifest.executable.split('/'))
+  if (!await regularFile(browserExecutable)) throw new Error(`Chromium executable is missing: ${browserManifest.executable}`)
+  await chmod(browserExecutable, 0o755)
+
+  await copyRequired(
+    resolve(options.caddyExecutable ?? join(runtimeRoot, 'edge', target.triple, 'caddy')),
+    join(outputRoot, 'edge/bin/caddy'),
+  )
+  await chmod(join(outputRoot, 'edge/bin/caddy'), 0o755)
 
   const nativeToolchain = target.platform === 'linux'
     ? join(runtimeRoot, 'toolchain/linux', target.architecture, 'podman')
     : join(runtimeRoot, 'toolchain/bin')
   if (target.platform === 'linux') await copyRequired(nativeToolchain, join(outputRoot, 'toolchain/bin/podman'))
-  else await copyRequired(nativeToolchain, join(outputRoot, 'toolchain/bin'))
+  else {
+    // The Go SDK and source bootstrap cache in the internal toolchain are
+    // release-engineering inputs, never customer runtime dependencies.
+    for (const executable of ['podman', 'gvproxy', 'vfkit']) {
+      await copyRequired(join(nativeToolchain, executable), join(outputRoot, 'toolchain/bin', executable))
+    }
+  }
 
   const vmRoot = join(runtimeRoot, 'project-vm-base')
   const vmManifest = JSON.parse(await readFile(join(vmRoot, 'manifest.json'), 'utf8'))
@@ -198,6 +225,13 @@ async function assertCompletePayload(root, target, inventory) {
     if (!paths.has(required) || !await regularFile(join(root, ...required.split('/')))) {
       throw new Error(`Self-hosted release payload is missing ${required}`)
     }
+  }
+  const browserManifest = JSON.parse(await readFile(join(root, 'browser/manifest.json'), 'utf8'))
+  if (browserManifest.target !== target.triple || typeof browserManifest.executable !== 'string'
+    || browserManifest.executable.startsWith('/') || browserManifest.executable.split('/').includes('..')
+    || !paths.has(`browser/${browserManifest.executable}`)
+    || !await regularFile(join(root, 'browser', ...browserManifest.executable.split('/')))) {
+    throw new Error(`Self-hosted release payload has no valid Chromium executable for ${target.triple}`)
   }
   for (const entry of inventory) {
     if (/(?:^|\/)(?:.*signing.*private|private[-_.]?key|release-signing-private)(?:[/.]|$)/i.test(entry.path)
@@ -235,9 +269,6 @@ export async function assembleSelfHostedRelease(options = {}) {
   const privateKey = options.privateKey?.type === 'private'
     ? options.privateKey
     : createPrivateKey(options.privateKey)
-  const payloadInventory = await createReleaseInventory(payloadRoot)
-  await assertCompletePayload(payloadRoot, target, payloadInventory)
-
   await mkdir(outputRoot, { recursive: true, mode: 0o755 })
   const releaseDirectory = join(outputRoot, `openlink-self-hosted-${releaseId}-${target.triple}`)
   if (await regularFile(releaseDirectory) || await lstat(releaseDirectory).then(() => true).catch(() => false)) {
@@ -247,6 +278,7 @@ export async function assembleSelfHostedRelease(options = {}) {
   try {
     await clonePayloadTree(payloadRoot, staging, target)
     const inventory = await createReleaseInventory(staging)
+    await assertCompletePayload(staging, target, inventory)
     const signed = signReleaseManifest({
       schemaVersion: 1,
       contractVersion: 1,

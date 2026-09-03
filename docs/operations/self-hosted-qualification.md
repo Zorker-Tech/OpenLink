@@ -16,7 +16,9 @@ support claim.
 | Bundled Node execution | Pass | Pass |
 | Tamper rejection | Pass | Pass |
 | No source build during install | Pass | Pass |
-| Full product release bundle | Pending | Pending |
+| Complete product release directory + independent inventory verification | Pass (qualification release) | Pending |
+| Final distributable archive digest | Pending | Pending |
+| Bundled Caddy configuration parse + Chromium process launch | Pass | Pending |
 | Native service install/start/reboot | Pending | Pending |
 | ZOKERBASE + Zero full health | Pending | Pending |
 | Real Project VM and browser/knowledge workflow | Pending | Blocked by host firmware virtualization |
@@ -29,6 +31,16 @@ Linux fixture run copied from the target is
 `.openlink-qualification/ubuntu-installer-20260903/results.json`. Generated
 qualification records are intentionally ignored by Git because they contain
 host-specific evidence rather than product source.
+
+The macOS qualification release
+`2026.09.03-macos-qualification.1` contains 15,929 inventoried files and
+78,439,812,426 logical bytes, including the real sparse Project VM disk and all
+offline image archives. A second process verified its Ed25519 signature and
+every file path, type, mode, size and SHA-256 digest in 410,434 ms. The bundled
+Caddy 2.11.4 configuration parsed successfully and the bundled Chromium
+151.0.7922.34 process launched and rendered a DOM. The release excludes the Go
+SDK used by release engineering. This proves the complete directory contract,
+not the final compressed archive or running-product support matrix.
 
 The authorized Linux target reports AMD Ryzen 5 5600X and `svm`-related CPU
 features, but loading `kvm_amd` fails with `SVM not supported by CPU` and

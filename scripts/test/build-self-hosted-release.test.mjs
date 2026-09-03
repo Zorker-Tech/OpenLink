@@ -14,6 +14,7 @@ const requiredFiles = [
   'services/agent-host/dist/src/main.js',
   'services/browser-host/dist/src/main.js',
   'services/knowledge-service/dist/src/main.js',
+  'services/agent-host/dist/src/desktop-main.js',
   'orchestration/backend/docker/docker-compose.yml',
   'orchestration/services/zero/docker-compose.standalone.yml',
   'orchestration/docker-compose.production.yml',
@@ -22,6 +23,10 @@ const requiredFiles = [
   'images/zokerbase/manifest.json',
   'images/zero/manifest.json',
   'toolchain/bin/podman',
+  'edge/bin/caddy',
+  'edge/Caddyfile',
+  'browser/manifest.json',
+  'browser/chromium/chrome',
   'project-vm/manifest.json',
   'project-vm/openlink-project-vm-base-arm64.raw',
   'openlinkctl.mjs',
@@ -36,7 +41,10 @@ async function payloadFixture(t) {
   for (const relative of requiredFiles) {
     const path = join(payload, ...relative.split('/'))
     await mkdir(join(path, '..'), { recursive: true })
-    await writeFile(path, `${relative}\n`, { mode: relative.includes('/bin/') || relative === 'bin/openlinkctl' ? 0o755 : 0o644 })
+    const contents = relative === 'browser/manifest.json'
+      ? `${JSON.stringify({ target: 'darwin-arm64', executable: 'chromium/chrome' })}\n`
+      : `${relative}\n`
+    await writeFile(path, contents, { mode: relative.includes('/bin/') || relative === 'bin/openlinkctl' || relative === 'browser/chromium/chrome' ? 0o755 : 0o644 })
   }
   return { root, payload, output }
 }

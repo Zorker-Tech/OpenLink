@@ -52,7 +52,9 @@ test('sealed installer performs signed archive install and protected configurati
     'orchestration/backend/docker/docker-compose.yml', 'orchestration/backend/docker/.env.example',
     'orchestration/services/zero/docker-compose.standalone.yml', 'orchestration/docker-compose.production.yml',
     'orchestration/docker-compose.zero-production.yml', 'images/runtime/manifest.json', 'images/zokerbase/manifest.json',
-    'images/zero/manifest.json', 'toolchain/bin/podman', 'project-vm/manifest.json',
+    'images/zero/manifest.json', 'toolchain/bin/podman', 'edge/bin/caddy', 'edge/Caddyfile',
+    'browser/manifest.json', 'browser/chromium/chrome', 'project-vm/manifest.json',
+    'services/agent-host/dist/src/desktop-main.js',
     `project-vm/openlink-project-vm-base-${targetArchitecture}.${diskFormat}`, 'openlinkctl.mjs', 'bin/openlinkctl',
   ]
   for (const relative of required) {
@@ -60,9 +62,10 @@ test('sealed installer performs signed archive install and protected configurati
     await mkdir(join(path, '..'), { recursive: true })
     const contents = relative.endsWith('.env.example')
       ? 'POSTGRES_PASSWORD=insecure\nJWT_SECRET=insecure\nANON_KEY=insecure\nSERVICE_ROLE_KEY=insecure\n'
+      : relative === 'browser/manifest.json' ? `${JSON.stringify({ target: `${target.platform}-${targetArchitecture}`, executable: 'chromium/chrome' })}\n`
       : relative.endsWith('project-vm/manifest.json') ? `${JSON.stringify({ disk: `openlink-project-vm-base-${targetArchitecture}.${diskFormat}` })}\n`
         : relative.endsWith('.json') ? '{}\n' : `${relative}\n`
-    await writeFile(path, contents, { mode: relative.includes('/bin/') || relative === 'bin/openlinkctl' ? 0o755 : 0o644 })
+    await writeFile(path, contents, { mode: relative.includes('/bin/') || relative === 'bin/openlinkctl' || relative === 'browser/chromium/chrome' ? 0o755 : 0o644 })
   }
   const release = await assembleSelfHostedRelease({ payloadRoot: payload, outputRoot: join(root, 'releases'), releaseId: 'sea-e2e-1', target, privateKey: keys.privateKey, keyId: 'e2e-key' })
   const installer = join(root, 'openlink-installer')

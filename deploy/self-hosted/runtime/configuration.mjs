@@ -33,6 +33,7 @@ export async function createProductionConfiguration(options = {}) {
   const stateRoot = resolve(options.stateRoot)
   const appUrl = safeHttpsUrl(options.appUrl, options.allowInsecure === true)
   const gatewayUrl = safeHttpsUrl(options.gatewayUrl ?? appUrl, options.allowInsecure === true)
+  const parsedAppUrl = new URL(appUrl)
   const template = parseEnvironmentFile(await readFile(join(releaseRoot, 'orchestration/backend/docker/.env.example'), 'utf8'))
   const jwtSecret = token(48)
   const postgresPassword = token(36)
@@ -70,6 +71,7 @@ export async function createProductionConfiguration(options = {}) {
   const config = {
     OPENLINK_RUNTIME_MODE: 'local',
     OPENLINK_APP_URL: appUrl,
+    OPENLINK_EDGE_ADDRESS: `${parsedAppUrl.protocol === 'http:' ? 'http://' : ''}${parsedAppUrl.host}`,
     OPENLINK_BROWSER_GATEWAY_PUBLIC_URL: gatewayUrl,
     OPENLINK_BROWSER_GATEWAY_ALLOWED_ORIGINS: appUrl,
     OPENLINK_STATE_ROOT: stateRoot,

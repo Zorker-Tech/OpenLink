@@ -29,6 +29,9 @@ async function fixture(t) {
       await writeFile(archive, 'sealed-image\n')
     }
   }
+  await mkdir(join(releaseRoot, 'browser/chromium'), { recursive: true })
+  await writeFile(join(releaseRoot, 'browser/manifest.json'), `${JSON.stringify({ target: process.platform === 'linux' && process.arch === 'x64' ? 'linux-amd64' : `${process.platform}-${process.arch}`, executable: 'chromium/chrome' })}\n`)
+  await writeFile(join(releaseRoot, 'browser/chromium/chrome'), 'fixture\n', { mode: 0o755 })
   return { root, releaseRoot, stateRoot }
 }
 
@@ -41,7 +44,9 @@ test('production plan uses only sealed artifacts and loopback host services', as
     validate: false,
   })
   assert.equal(plan.images.length, 3)
-  assert.deepEqual(plan.processes.map((process) => process.name), ['browser-host', 'knowledge-service', 'agent-host', 'desktop-agent-host', 'web'])
+  assert.deepEqual(plan.processes.map((process) => process.name), ['browser-host', 'knowledge-service', 'agent-host', 'desktop-agent-host', 'web', 'edge'])
+  assert.equal(plan.processes.at(-1).args.includes('--adapter'), true)
+  assert.equal(plan.processes[0].environment.OPENLINK_CHROME_EXECUTABLE, join(item.releaseRoot, 'browser/chromium/chrome'))
   assert.equal(plan.processes.every((process) => process.environment.OPENLINK_RUNTIME_MODE === 'local'), true)
   assert.equal(plan.processes.every((process) => process.environment.OPENLINK_AGENT_HOST === '127.0.0.1'), true)
   assert.equal(plan.compose.every((item) => item.args.includes('--pull') && item.args.includes('never')), true)
