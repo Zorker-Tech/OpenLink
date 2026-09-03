@@ -1,0 +1,13 @@
+# Production-only state boundary. Compose merges volume entries by container
+# target, so these bindings replace the source-tree-relative development paths.
+services:
+  storage:
+    volumes:
+      - ${OPENLINK_ZOKERBASE_DATA_ROOT}/storage:/var/lib/storage:Z
+  imgproxy:
+    volumes:
+      - ${OPENLINK_ZOKERBASE_DATA_ROOT}/storage:/var/lib/storage:ro,Z
+  db:
+    volumes:
+      - ${OPENLINK_ZOKERBASE_DATA_ROOT}/postgres:/var/lib/postgresql/data:Z
+      - ${OPENLINK_ZOKERBASE_DATA_ROOT}/postgres-config:/etc/postgresql-custom:Z

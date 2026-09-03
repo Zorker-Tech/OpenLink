@@ -13,6 +13,8 @@ import {
 } from './runtime/release-contract.mjs'
 import { readEnvironmentFile, runPreflight } from './runtime/preflight.mjs'
 import { extractVerifiedTarGzip } from './runtime/safe-archive.mjs'
+import { createRuntimePlan, ProductionSupervisor, validateProductionEnvironment } from './runtime/production-runtime.mjs'
+import { createProductionConfiguration } from './runtime/configuration.mjs'
 
 const releaseRootFromScript = resolve(fileURLToPath(new URL('.', import.meta.url)))
 
@@ -175,6 +177,22 @@ async function main(argv) {
     process.stdout.write(`${JSON.stringify({ releaseId: basename(await readlink(link)) })}\n`)
     return
   }
+  if (command === 'configure') {
+    const result = await createProductionConfiguration({
+      releaseRoot: resolve(values.get('release-root') || releaseRootFromScript),
+      configPath: values.get('config'),
+      secretsPath: values.get('secrets'),
+      stateRoot: values.get('state-root'),
+      logRoot: values.get('log-root'),
+      backupRoot: values.get('backup-root'),
+      appUrl: values.get('app-url'),
+      gatewayUrl: values.get('gateway-url'),
+      allowInsecure: values.get('allow-insecure-http') === '1',
+      overwrite: values.get('overwrite') === '1',
+    })
+    process.stdout.write(`${JSON.stringify({ ok: true, ...result })}\n`)
+    return
+  }
   if (command === 'preflight' || command === 'doctor') {
     const configPath = values.get('config')
     const config = configPath ? await readEnvironmentFile(resolve(configPath)) : {}
@@ -195,7 +213,46 @@ async function main(argv) {
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`)
     return
   }
-  throw new Error('Usage: openlinkctl <verify|install|version|preflight|doctor> [options]')
+  if (command === 'run') {
+    const configPath = values.get('config')
+    if (!configPath) throw new Error('run requires --config')
+    const config = await readEnvironmentFile(resolve(configPath))
+    const secrets = config.OPENLINK_SECRETS_FILE
+      ? await readEnvironmentFile(resolve(config.OPENLINK_SECRETS_FILE), { secrets: true })
+      : {}
+    const environment = validateProductionEnvironment({ ...config, ...secrets })
+    const releaseRoot = resolve(values.get('release-root') || releaseRootFromScript)
+    await runPreflight({
+      releaseRoot,
+      stateRoot: environment.OPENLINK_STATE_ROOT,
+      platform: process.platform,
+      architecture: process.arch,
+      dockerCommand: environment.OPENLINK_DOCKER_COMMAND || 'docker',
+      environment,
+      minimumFreeBytes: environment.OPENLINK_MINIMUM_FREE_BYTES,
+      minimumMemoryBytes: environment.OPENLINK_MINIMUM_MEMORY_BYTES,
+    })
+    const plan = await createRuntimePlan({ releaseRoot, stateRoot: environment.OPENLINK_STATE_ROOT, environment })
+    const supervisor = new ProductionSupervisor(plan)
+    let terminate
+    const termination = new Promise((resolveTermination) => { terminate = resolveTermination })
+    const onSignal = (signal) => terminate({ signal })
+    process.once('SIGINT', onSignal)
+    process.once('SIGTERM', onSignal)
+    try {
+      await supervisor.start()
+      const outcome = await Promise.race([termination, supervisor.wait().then(() => ({ signal: undefined }))])
+      await supervisor.stop(outcome.signal || 'SIGTERM')
+    } catch (error) {
+      await supervisor.stop('SIGTERM').catch(() => undefined)
+      throw error
+    } finally {
+      process.removeListener('SIGINT', onSignal)
+      process.removeListener('SIGTERM', onSignal)
+    }
+    return
+  }
+  throw new Error('Usage: openlinkctl <verify|install|configure|version|preflight|doctor|run> [options]')
 }
 
 if (process.argv[1] && basename(process.argv[1]) === basename(fileURLToPath(import.meta.url))) {

@@ -71,6 +71,7 @@ export async function runPreflight(options = {}) {
     ['images/zero/manifest.json', false],
     ['toolchain/bin/podman', true],
     ['project-vm/manifest.json', false],
+    ['orchestration/docker-compose.production.yml', false],
   ]
   for (const [relative, executable] of required) await assertFile(join(releaseRoot, ...relative.split('/')), { executable })
   checks.push({ name: 'release-artifacts', status: 'pass', target: target.triple })
@@ -109,4 +110,3 @@ export async function runPreflight(options = {}) {
 
   return { ok: true, target: target.triple, checks }
 }
-
