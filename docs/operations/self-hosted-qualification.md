@@ -48,6 +48,13 @@ selected state volume had only 10,278,043,648 bytes free against the 20 GiB
 production minimum. The threshold was not lowered for qualification. A full
 runtime run requires a clean production-sized volume.
 
+The sealed Caddy binary also passed a live route drill against isolated mock
+upstreams: `/` reached Web, `/v1/browser/gateway/*` reached Agent gateway, and
+the auth, REST, storage and realtime prefixes reached ZOKERBASE; all six checks
+returned the required security header. On Ubuntu 24.04/systemd 255, the hardened
+unit parsed successfully apart from the intentionally absent not-yet-installed
+executable and scored 4.5 (`OK`) in `systemd-analyze security --offline`.
+
 The authorized Linux target reports AMD Ryzen 5 5600X and `svm`-related CPU
 features, but loading `kvm_amd` fails with `SVM not supported by CPU` and
 `/dev/kvm` is absent. This normally means AMD SVM is disabled in firmware or is
