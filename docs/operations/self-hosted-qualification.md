@@ -17,7 +17,7 @@ support claim.
 | Tamper rejection | Pass | Pass |
 | No source build during install | Pass | Pass |
 | Complete product release directory + independent inventory verification | Pass (qualification release) | Pending |
-| Final distributable archive digest | Pending | Pending |
+| Final distributable archive digest + cross-host safe extraction | Pass (qualification release) | Pending |
 | Bundled Caddy configuration parse + Chromium process launch | Pass | Pending |
 | Native service install/start/reboot | Pending | Pending |
 | ZOKERBASE + Zero full health | Pending | Pending |
@@ -63,6 +63,15 @@ corruption and wrong-key rejection, clean-root restore, lifecycle locking,
 dependency ordering, critical-child cleanup, systemd installation semantics,
 upgrade commit/rollback and incompatible schema rejection. These are native
 mechanism results, not a substitute for a running full-stack data restore.
+
+The final portable macOS qualification archive is 9,570,549,760 bytes with
+SHA-256 `5861aa85c23f0143e4fda76b6912434e4dd53f8f9cf84c59223b0b7b7969aa72`.
+It was streamed directly to the Ubuntu host, safely extracted there and fully
+verified against the independent public key in 335,509 ms. Qualification found
+and fixed two real cross-platform archive defects: Apple PAX/xattr metadata and
+GNU sparse path rewriting for the 64 GiB Golden Disk. The macOS archiver now
+disables xattrs, Apple metadata and sparse detection; the extractor accepts
+only positive, bounded base-256 tar numbers and rejects negative/unsafe values.
 
 The authorized Linux target reports AMD Ryzen 5 5600X and `svm`-related CPU
 features, but loading `kvm_amd` fails with `SVM not supported by CPU` and

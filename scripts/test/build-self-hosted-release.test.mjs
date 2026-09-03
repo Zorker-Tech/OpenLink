@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { generateKeyPairSync } from 'node:crypto'
 import { execFile as execFileCallback } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -9,6 +9,7 @@ import test from 'node:test'
 
 import { assembleSelfHostedRelease, dockerArchiveImageId } from '../build-self-hosted-release.mjs'
 import { verifyReleaseInventory, verifyReleaseManifest } from '../../deploy/self-hosted/runtime/release-contract.mjs'
+import { verifyReleaseArchive } from '../../deploy/self-hosted/openlinkctl.mjs'
 
 const requiredFiles = [
   'runtime/node/bin/node',
@@ -99,6 +100,26 @@ test('derives an immutable Docker image ID from a sealed archive', async (t) => 
   const archive = join(root, 'image.tar')
   await execFile('tar', ['-cf', archive, '-C', root, 'manifest.json', `${digest}.json`])
   assert.equal(await dockerArchiveImageId(archive), `sha256:${digest}`)
+})
+
+test('portable release archives preserve a sparse VM disk as its declared regular path', async (t) => {
+  const fixture = await payloadFixture(t)
+  const keys = generateKeyPairSync('ed25519')
+  await truncate(join(fixture.payload, 'project-vm/openlink-project-vm-base-arm64.raw'), 4 * 1024 * 1024)
+  const result = await assembleSelfHostedRelease({
+    payloadRoot: fixture.payload,
+    outputRoot: fixture.output,
+    releaseId: '2026.09.03-sparse-portable',
+    target: { platform: 'darwin', architecture: 'arm64' },
+    privateKey: keys.privateKey,
+    keyId: 'fixture-key',
+  })
+  const manifest = await verifyReleaseArchive({
+    archive: result.archive,
+    trustedKeys: { 'fixture-key': keys.publicKey },
+    expectedTarget: { platform: 'darwin', architecture: 'arm64' },
+  })
+  assert.equal(manifest.releaseId, '2026.09.03-sparse-portable')
 })
 
 test('refuses private signing material inside a customer payload', async (t) => {
