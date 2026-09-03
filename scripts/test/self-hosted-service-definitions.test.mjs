@@ -17,6 +17,8 @@ test('systemd unit runs only the active prebuilt release with hardened state pat
   assert.match(source, /^UMask=0077$/m)
   assert.match(source, /^ProtectSystem=strict$/m)
   assert.match(source, /^NoNewPrivileges=true$/m)
+  assert.match(source, /^AmbientCapabilities=CAP_NET_BIND_SERVICE$/m)
+  assert.match(source, /^CapabilityBoundingSet=CAP_NET_BIND_SERVICE$/m)
   assert.doesNotMatch(source, /(password|secret|token)=/i)
   assert.doesNotMatch(source, /(?:npm|pnpm|yarn|next|tsc|go|docker|podman) (?:install|build|pull)/i)
 })

@@ -6,7 +6,7 @@ import { dirname, join, resolve } from 'node:path'
 import { installReleaseArchive } from './openlinkctl.mjs'
 import { createProductionConfiguration } from './runtime/configuration.mjs'
 import { normalizeTarget } from './runtime/release-contract.mjs'
-import { runPreflight } from './runtime/preflight.mjs'
+import { readEnvironmentFile, runPreflight } from './runtime/preflight.mjs'
 import { installNativeService } from './runtime/native-service.mjs'
 
 function parseArguments(argv) {
@@ -86,13 +86,15 @@ export async function runBootstrapInstaller(argv = process.argv.slice(2)) {
     allowInsecure: values.get('allow-insecure-http') === '1',
   })
   if (values.get('skip-host-preflight') !== '1') {
+    const config = await readEnvironmentFile(destination.configPath)
+    const secrets = await readEnvironmentFile(destination.secretsPath, { secrets: true })
     await runPreflight({
       releaseRoot,
       stateRoot: destination.stateRoot,
       platform: process.platform,
       architecture: process.arch,
       dockerCommand: values.get('docker-command') || 'docker',
-      environment: {},
+      environment: { ...config, ...secrets },
     })
   }
   const service = values.get('skip-service-install') === '1' ? { skipped: true } : await installNativeService({

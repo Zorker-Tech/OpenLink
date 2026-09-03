@@ -22,6 +22,7 @@ test('configure creates separate protected secrets with no development defaults'
   validateProductionEnvironment({ ...config, ...secrets })
   assert.equal(config.OPENLINK_APP_URL, 'https://openlink.example.test')
   assert.equal(config.OPENLINK_EDGE_ADDRESS, 'openlink.example.test')
+  assert.equal(secrets.POSTGRES_PORT, '54384')
   assert.equal(Object.keys(config).filter((key) => !key.endsWith('_FILE')).some((key) => /TOKEN|SECRET|PASSWORD/.test(key)), false)
   assert.notEqual(secrets.POSTGRES_PASSWORD, 'insecure')
   assert.match(secrets.ANON_KEY, /^[^.]+\.[^.]+\.[^.]+$/)

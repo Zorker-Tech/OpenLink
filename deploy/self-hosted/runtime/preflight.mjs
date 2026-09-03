@@ -119,7 +119,23 @@ export async function runPreflight(options = {}) {
     await command(docker, ['compose', 'version', '--short'], { ...options, label: 'Docker Compose' })
     checks.push({ name: 'docker-engine', status: 'pass' })
     const environment = options.environment ?? {}
-    const hostPorts = [environment.PORT || 3000, environment.OPENLINK_BROWSER_PORT || 43120, environment.OPENLINK_AGENT_PORT || 43121, environment.OPENLINK_DESKTOP_AGENT_PORT || 43123, environment.OPENLINK_KNOWLEDGE_PORT || 43124]
+    const appUrl = environment.OPENLINK_APP_URL ? new URL(environment.OPENLINK_APP_URL) : undefined
+    const edgePort = appUrl ? (appUrl.port || (appUrl.protocol === 'https:' ? 443 : 80)) : undefined
+    const hostPorts = [...new Set([
+      environment.PORT || 3000,
+      environment.OPENLINK_BROWSER_PORT || 43120,
+      environment.OPENLINK_AGENT_PORT || 43121,
+      environment.OPENLINK_DESKTOP_AGENT_PORT || 43123,
+      environment.OPENLINK_KNOWLEDGE_PORT || 43124,
+      environment.OPENLINK_STUDIO_PORT || 3002,
+      environment.KONG_HTTP_PORT || 8000,
+      environment.KONG_HTTPS_PORT || 8443,
+      environment.POSTGRES_PORT || 54384,
+      environment.POOLER_PROXY_PORT_TRANSACTION || 6543,
+      environment.OPENLINK_ZERO_PORT || 19530,
+      environment.OPENLINK_ZERO_HEALTH_PORT || 9091,
+      ...(edgePort ? [edgePort] : []),
+    ])]
     for (const value of hostPorts) {
       const port = Number(value)
       if (!Number.isSafeInteger(port) || port < 1 || port > 65_535) throw new Error(`Invalid runtime port: ${value}`)
