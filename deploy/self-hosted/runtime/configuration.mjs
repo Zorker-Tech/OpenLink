@@ -31,6 +31,7 @@ export async function createProductionConfiguration(options = {}) {
   const configPath = resolve(options.configPath)
   const secretsPath = resolve(options.secretsPath ?? join(dirname(configPath), 'secrets.env'))
   const backupKeyPath = resolve(options.backupKeyPath ?? join(dirname(configPath), 'backup.key'))
+  const trustPath = resolve(options.trustPath ?? join(dirname(configPath), 'release-keys.json'))
   const stateRoot = resolve(options.stateRoot)
   const appUrl = safeHttpsUrl(options.appUrl, options.allowInsecure === true)
   const gatewayUrl = safeHttpsUrl(options.gatewayUrl ?? appUrl, options.allowInsecure === true)
@@ -80,6 +81,7 @@ export async function createProductionConfiguration(options = {}) {
     OPENLINK_LOG_ROOT: resolve(options.logRoot ?? join(stateRoot, 'logs')),
     OPENLINK_BACKUP_ROOT: resolve(options.backupRoot ?? join(dirname(stateRoot), 'backups')),
     OPENLINK_BACKUP_KEY_FILE: backupKeyPath,
+    OPENLINK_RELEASE_TRUST_FILE: trustPath,
     OPENLINK_SECRETS_FILE: secretsPath,
     OPENLINK_ZOKERBASE_ENV_FILE: secretsPath,
     ...(process.platform === 'linux' ? { OPENLINK_CONTAINER_BROKER_SOCKET: '/run/openlink-container-broker/control.sock' } : {}),

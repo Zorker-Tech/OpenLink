@@ -27,6 +27,22 @@ export function assertUpgradeCompatible(currentManifest, candidateManifest) {
   return true
 }
 
+export function assertRollbackCompatible(currentManifest, targetManifest) {
+  const current = stateSchema(currentManifest)
+  const target = stateSchema(targetManifest)
+  if (!Number.isSafeInteger(currentManifest.releaseSequence) || !Number.isSafeInteger(targetManifest.releaseSequence)
+    || targetManifest.releaseSequence >= currentManifest.releaseSequence) {
+    throw new Error(`Rollback target sequence must be older than ${currentManifest.releaseSequence}`)
+  }
+  if (current.stateSchema < target.minimumStateSchema || current.stateSchema > target.maximumStateSchema) {
+    throw new Error(`Rollback target cannot read state schema ${current.stateSchema}`)
+  }
+  if (target.stateSchema !== current.stateSchema) {
+    throw new Error(`State schema rollback ${current.stateSchema} -> ${target.stateSchema} is not declared reversible`)
+  }
+  return true
+}
+
 async function writeJournal(stateRoot, value) {
   const directory = join(resolve(stateRoot), 'deployment')
   await mkdir(directory, { recursive: true, mode: 0o700 })
@@ -69,6 +85,53 @@ export async function executeUpgradeTransaction(options) {
   } catch (error) {
     if (activated) {
       await record('rolling-back', { failure: error instanceof Error ? error.message : String(error) })
+      await options.stopService().catch(() => undefined)
+      await options.activate(options.currentManifest.releaseId)
+      await options.startService()
+      await options.healthCheck(options.currentManifest.releaseId)
+      await record('rolled-back', { rolledBackAt: new Date().toISOString() })
+    } else {
+      await record('failed', { failure: error instanceof Error ? error.message : String(error) })
+      await options.startService()
+      await options.healthCheck(options.currentManifest.releaseId)
+    }
+    throw error
+  }
+}
+
+export async function executeRollbackTransaction(options) {
+  const transaction = {
+    schemaVersion: 1,
+    transactionId: options.transactionId,
+    previousReleaseId: options.currentManifest.releaseId,
+    candidateReleaseId: options.targetManifest.releaseId,
+    operation: 'rollback',
+    phase: 'planned',
+    startedAt: new Date().toISOString(),
+  }
+  assertRollbackCompatible(options.currentManifest, options.targetManifest)
+  const record = async (phase, extra = {}) => {
+    Object.assign(transaction, extra, { phase, updatedAt: new Date().toISOString() })
+    await writeJournal(options.stateRoot, transaction)
+  }
+  await record('stopping')
+  await options.stopService()
+  let activated = false
+  try {
+    await record('backing-up')
+    const backup = await options.backup()
+    await record('activating', { backup })
+    await options.activate(options.targetManifest.releaseId)
+    activated = true
+    await record('starting')
+    await options.startService()
+    await record('verifying')
+    await options.healthCheck(options.targetManifest.releaseId)
+    await record('committed', { committedAt: new Date().toISOString() })
+    return transaction
+  } catch (error) {
+    if (activated) {
+      await record('restoring-current', { failure: error instanceof Error ? error.message : String(error) })
       await options.stopService().catch(() => undefined)
       await options.activate(options.currentManifest.releaseId)
       await options.startService()

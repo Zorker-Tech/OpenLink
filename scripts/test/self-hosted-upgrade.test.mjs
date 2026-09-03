@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
-import { assertUpgradeCompatible, executeUpgradeTransaction } from '../../deploy/self-hosted/runtime/upgrade.mjs'
+import { assertRollbackCompatible, assertUpgradeCompatible, executeRollbackTransaction, executeUpgradeTransaction } from '../../deploy/self-hosted/runtime/upgrade.mjs'
 
 const manifest = (releaseId, releaseSequence, schema = 1, minimum = schema, maximum = schema) => ({ releaseId, releaseSequence, compatibility: { stateSchema: schema, minimumStateSchema: minimum, maximumStateSchema: maximum } })
 
@@ -56,4 +56,22 @@ test('failure before activation restarts the unchanged release', async (t) => {
     activate: async () => undefined, startService: async () => events.push('start'), healthCheck: async (id) => events.push(`health:${id}`),
   }), /backup failed/i)
   assert.deepEqual(events, ['stop', 'start', 'health:release-a'])
+})
+
+test('manual rollback is schema-safe, backed up, health-gated, and self-restoring', async (t) => {
+  const stateRoot = await mkdtemp(join(tmpdir(), 'openlink-manual-rollback-'))
+  t.after(async () => (await import('node:fs/promises')).rm(stateRoot, { recursive: true, force: true }))
+  assert.equal(assertRollbackCompatible(manifest('release-b', 2), manifest('release-a', 1)), true)
+  assert.throws(() => assertRollbackCompatible(manifest('release-b', 2, 2), manifest('release-a', 1, 1)), /state schema|reversible/i)
+  assert.throws(() => assertRollbackCompatible(manifest('release-b', 2), manifest('release-c', 3)), /older/i)
+  const events = []
+  await assert.rejects(executeRollbackTransaction({
+    transactionId: 'rollback-1', stateRoot,
+    currentManifest: manifest('release-b', 2), targetManifest: manifest('release-a', 1),
+    stopService: async () => events.push('stop'), backup: async () => { events.push('backup'); return { id: 'backup-r1' } },
+    activate: async (id) => events.push(`activate:${id}`), startService: async () => events.push('start'),
+    healthCheck: async (id) => { events.push(`health:${id}`); if (id === 'release-a') throw new Error('target unhealthy') },
+  }), /target unhealthy/i)
+  assert.deepEqual(events, ['stop', 'backup', 'activate:release-a', 'start', 'health:release-a', 'stop', 'activate:release-b', 'start', 'health:release-b'])
+  assert.equal(JSON.parse(await readFile(join(stateRoot, 'deployment/current.json'), 'utf8')).phase, 'rolled-back')
 })

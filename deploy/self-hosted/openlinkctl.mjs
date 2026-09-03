@@ -11,6 +11,7 @@ import { isSea } from 'node:sea'
 
 import {
   canonicalJson,
+  normalizeReleaseId,
   normalizeTarget,
   parseReleaseTrustPolicy,
   safeReleasePath,
@@ -24,7 +25,7 @@ import { serveContainerBroker } from './runtime/container-broker.mjs'
 import { createProductionConfiguration } from './runtime/configuration.mjs'
 import { acquireRuntimeLock, runtimeLockStatus } from './runtime/lifecycle-lock.mjs'
 import { createEncryptedBackup, restoreEncryptedBackup } from './runtime/backup.mjs'
-import { executeUpgradeTransaction } from './runtime/upgrade.mjs'
+import { executeRollbackTransaction, executeUpgradeTransaction } from './runtime/upgrade.mjs'
 import { durableRename, durableWriteFile, syncDirectory, syncTree } from './runtime/durable-fs.mjs'
 
 const execFile = promisify(execFileCallback)
@@ -157,24 +158,122 @@ export async function verifyReleaseArchive(options = {}) {
   }
 }
 
-async function serviceAction(action, stateRoot) {
-  if (process.platform === 'linux') {
-    await execFile('systemctl', [action, 'openlink.service'], { timeout: action === 'stop' ? 240_000 : 30_000 })
+function commandOutput(result) {
+  return typeof result === 'string' ? result : result?.stdout ?? ''
+}
+
+function defaultConfigPath(platform = process.platform) {
+  if (platform === 'linux') return '/etc/openlink/openlink.env'
+  if (platform === 'darwin') return '/Library/Application Support/OpenLink/config/openlink.env'
+  throw new Error(`Native service control is unsupported on ${platform}`)
+}
+
+function requireServiceAdministrator(platform, getuid = process.getuid?.bind(process)) {
+  if (platform === 'linux' && (typeof getuid !== 'function' || getuid() !== 0)) {
+    throw new Error('Linux production service control must run as root')
+  }
+}
+
+export async function serviceAction(action, stateRoot, options = {}) {
+  if (!['start', 'stop', 'restart'].includes(action)) throw new Error(`Unsupported service action: ${action}`)
+  const platform = options.platform ?? process.platform
+  const runner = options.execFile ?? execFile
+  requireServiceAdministrator(platform, options.getuid)
+  if (platform === 'linux') {
+    const services = action === 'stop'
+      ? ['openlink.service', 'openlink-container-broker.service']
+      : ['openlink-container-broker.service', 'openlink.service']
+    await runner('systemctl', [action, ...services], { timeout: action === 'stop' ? 240_000 : 660_000 })
     return
   }
-  if (process.platform === 'darwin') {
+  if (platform === 'darwin') {
     const args = action === 'stop'
       ? ['kill', 'SIGTERM', 'system/io.zokerbase.openlink']
       : ['kickstart', '-k', 'system/io.zokerbase.openlink']
-    await execFile('/bin/launchctl', args, { timeout: action === 'stop' ? 240_000 : 30_000 })
+    await runner('/bin/launchctl', args, { timeout: action === 'stop' ? 240_000 : 30_000 })
     if (action === 'stop') {
       const deadline = Date.now() + 240_000
-      while ((await runtimeLockStatus(stateRoot)).running && Date.now() < deadline) await new Promise((resolveDelay) => setTimeout(resolveDelay, 250))
-      if ((await runtimeLockStatus(stateRoot)).running) throw new Error('OpenLink LaunchDaemon did not stop within 240 seconds')
+      const lockStatus = options.runtimeLockStatus ?? runtimeLockStatus
+      while ((await lockStatus(stateRoot)).running && Date.now() < deadline) await new Promise((resolveDelay) => setTimeout(resolveDelay, 250))
+      if ((await lockStatus(stateRoot)).running) throw new Error('OpenLink LaunchDaemon did not stop within 240 seconds')
     }
     return
   }
-  throw new Error(`Native service control is unsupported on ${process.platform}`)
+  throw new Error(`Native service control is unsupported on ${platform}`)
+}
+
+function parseSystemdProperties(output) {
+  return Object.fromEntries(String(output).trim().split('\n').filter(Boolean).map((line) => {
+    const separator = line.indexOf('=')
+    return separator < 1 ? [line, ''] : [line.slice(0, separator), line.slice(separator + 1)]
+  }))
+}
+
+export async function nativeServiceStatus(options = {}) {
+  const platform = options.platform ?? process.platform
+  const runner = options.execFile ?? execFile
+  if (platform === 'linux') {
+    const inspect = async (service) => parseSystemdProperties(commandOutput(await runner('systemctl', [
+      'show', service, '--property=ActiveState', '--property=SubState', '--property=UnitFileState', '--property=MainPID', '--no-pager',
+    ], { timeout: 15_000 })))
+    const [service, broker] = await Promise.all([inspect('openlink.service'), inspect('openlink-container-broker.service')])
+    return { manager: 'systemd', active: service.ActiveState === 'active' && broker.ActiveState === 'active', service, broker }
+  }
+  if (platform === 'darwin') {
+    try {
+      const detail = commandOutput(await runner('/bin/launchctl', ['print', 'system/io.zokerbase.openlink'], { timeout: 15_000 }))
+      return { manager: 'launchd', active: /\bstate\s*=\s*running\b/.test(detail), loaded: true }
+    } catch (error) {
+      return { manager: 'launchd', active: false, loaded: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+  throw new Error(`Native service status is unsupported on ${platform}`)
+}
+
+async function boundedResponseText(response, maximumBytes = 64 * 1024) {
+  const declared = Number(response.headers.get('content-length'))
+  if (Number.isFinite(declared) && declared > maximumBytes) throw new Error('OpenLink health response is too large')
+  if (!response.body) return ''
+  const reader = response.body.getReader()
+  const chunks = []
+  let size = 0
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      size += value.byteLength
+      if (size > maximumBytes) throw new Error('OpenLink health response is too large')
+      chunks.push(value)
+    }
+  } finally {
+    reader.releaseLock()
+  }
+  return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString('utf8')
+}
+
+export async function inspectApplicationHealth(url, expectedReleaseId, options = {}) {
+  const healthUrl = new URL('/api/healthz', url)
+  const response = await (options.fetch ?? fetch)(healthUrl, { redirect: 'manual', signal: AbortSignal.timeout(options.timeoutMs ?? 5_000) })
+  const body = JSON.parse(await boundedResponseText(response, options.maximumBytes))
+  if (response.status !== 200 || body?.ok !== true) throw new Error(`OpenLink health check failed with HTTP ${response.status}`)
+  if (expectedReleaseId && body.releaseId !== expectedReleaseId) throw new Error(`OpenLink health reports release ${body.releaseId ?? '<missing>'}, expected ${expectedReleaseId}`)
+  return { url: healthUrl.href, status: response.status, releaseId: body.releaseId, healthy: true, checks: body.checks }
+}
+
+export async function readServiceLogs(options = {}) {
+  const platform = options.platform ?? process.platform
+  const runner = options.execFile ?? execFile
+  const lines = Number(options.lines ?? 200)
+  if (!Number.isSafeInteger(lines) || lines < 1 || lines > 5_000) throw new Error('Log line count must be between 1 and 5000')
+  if (platform === 'linux') {
+    return commandOutput(await runner('journalctl', ['--unit=openlink.service', '--unit=openlink-container-broker.service', `--lines=${lines}`, '--no-pager', '--output=short-iso-precise'], { timeout: 30_000, maxBuffer: 16 * 1024 * 1024 }))
+  }
+  if (platform === 'darwin') {
+    const output = commandOutput(await runner('/usr/bin/log', ['show', '--style', 'syslog', '--last', options.since ?? '1h', '--predicate', 'process == "openlinkctl"'], { timeout: 30_000, maxBuffer: 16 * 1024 * 1024 }))
+    const records = output.split('\n')
+    return records.slice(Math.max(0, records.length - lines - 1)).join('\n')
+  }
+  throw new Error(`Native service logs are unsupported on ${platform}`)
 }
 
 export async function waitForApplicationHealth(url, expectedReleaseId, timeoutMs = 600_000) {
@@ -182,11 +281,8 @@ export async function waitForApplicationHealth(url, expectedReleaseId, timeoutMs
   const healthUrl = new URL('/api/healthz', url)
   while (Date.now() < deadline) {
     try {
-      const response = await fetch(healthUrl, { redirect: 'manual', signal: AbortSignal.timeout(5_000) })
-      if (response.status === 200) {
-        const body = await response.json().catch(() => undefined)
-        if (body?.ok === true && body.releaseId === expectedReleaseId) return
-      }
+      await inspectApplicationHealth(url, expectedReleaseId)
+      return
     } catch {}
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 1_000))
   }
@@ -273,10 +369,31 @@ async function main(argv) {
     return
   }
   if (command === 'status') {
-    const config = await readEnvironmentFile(resolve(values.get('config')))
-    const status = await runtimeLockStatus(config.OPENLINK_STATE_ROOT)
-    process.stdout.write(`${JSON.stringify({ ok: true, ...status })}\n`)
-    if (!status.running) process.exitCode = 3
+    const config = await readEnvironmentFile(resolve(values.get('config') || defaultConfigPath()))
+    const [service, runtime] = await Promise.all([nativeServiceStatus(), runtimeLockStatus(config.OPENLINK_STATE_ROOT)])
+    const active = service.active && runtime.running
+    process.stdout.write(`${JSON.stringify({ ok: true, active, service, runtime })}\n`)
+    if (!active) process.exitCode = 3
+    return
+  }
+  if (command === 'start' || command === 'stop' || command === 'restart') {
+    const config = await readEnvironmentFile(resolve(values.get('config') || defaultConfigPath()))
+    await serviceAction(command, config.OPENLINK_STATE_ROOT)
+    const service = await nativeServiceStatus()
+    process.stdout.write(`${JSON.stringify({ ok: true, action: command, service })}\n`)
+    return
+  }
+  if (command === 'health') {
+    const config = await readEnvironmentFile(resolve(values.get('config') || defaultConfigPath()))
+    const installRoot = resolve(values.get('root') || (process.platform === 'linux' ? '/opt/openlink' : '/Library/Application Support/OpenLink'))
+    const expectedReleaseId = basename(await readlink(join(installRoot, 'current')))
+    const result = await inspectApplicationHealth(config.OPENLINK_APP_URL, expectedReleaseId)
+    process.stdout.write(`${JSON.stringify({ ok: true, ...result })}\n`)
+    return
+  }
+  if (command === 'logs') {
+    const result = await readServiceLogs({ lines: values.get('lines'), since: values.get('since') })
+    process.stdout.write(result.endsWith('\n') ? result : `${result}\n`)
     return
   }
   if (command === 'backup') {
@@ -335,6 +452,36 @@ async function main(argv) {
     process.stdout.write(`${JSON.stringify({ ok: true, transaction })}\n`)
     return
   }
+  if (command === 'rollback') {
+    const installRoot = resolve(values.get('root') || (process.platform === 'linux' ? '/opt/openlink' : '/Library/Application Support/OpenLink'))
+    const targetReleaseId = normalizeReleaseId(values.get('release'))
+    const configPath = resolve(values.get('config') || defaultConfigPath())
+    const config = await readEnvironmentFile(configPath)
+    const trust = await trustPolicyFrom(values.get('trust'))
+    const expectedTarget = normalizeTarget({ platform: process.platform, architecture: process.arch })
+    const currentDirectory = resolve(installRoot, await readlink(join(installRoot, 'current')))
+    const targetDirectory = join(installRoot, 'releases', targetReleaseId)
+    const currentManifest = (await verifyInstalledRelease(currentDirectory, trust.trustedKeys, expectedTarget, trust.minimumReleaseSequence)).manifest
+    const targetManifest = (await verifyInstalledRelease(targetDirectory, trust.trustedKeys, expectedTarget, trust.minimumReleaseSequence)).manifest
+    if (targetManifest.releaseId !== targetReleaseId) throw new Error('Rollback target release identity does not match its directory')
+    const backupOutput = resolve(values.get('backup-output') || join(config.OPENLINK_BACKUP_ROOT, `pre-rollback-${targetReleaseId}-${Date.now()}.olb`))
+    const transaction = await executeRollbackTransaction({
+      transactionId: randomUUID(),
+      stateRoot: config.OPENLINK_STATE_ROOT,
+      currentManifest,
+      targetManifest,
+      stopService: () => serviceAction('stop', config.OPENLINK_STATE_ROOT),
+      backup: async () => {
+        const result = await createEncryptedBackup({ stateRoot: config.OPENLINK_STATE_ROOT, configPath, secretsPath: config.OPENLINK_SECRETS_FILE, keyFile: config.OPENLINK_BACKUP_KEY_FILE, output: backupOutput })
+        return { output: result.output, manifestPath: result.manifestPath, sha256: result.manifest.payload.sha256 }
+      },
+      activate: (releaseId) => activateRelease(installRoot, releaseId),
+      startService: () => serviceAction('start', config.OPENLINK_STATE_ROOT),
+      healthCheck: (releaseId) => waitForApplicationHealth(config.OPENLINK_APP_URL, releaseId),
+    })
+    process.stdout.write(`${JSON.stringify({ ok: true, transaction })}\n`)
+    return
+  }
   if (command === 'preflight' || command === 'doctor') {
     const configPath = values.get('config')
     const config = configPath ? await readEnvironmentFile(resolve(configPath)) : {}
@@ -368,6 +515,8 @@ async function main(argv) {
       : {}
     const environment = validateProductionEnvironment({ ...config, ...secrets })
     const releaseRoot = resolve(values.get('release-root') || releaseRootFromScript)
+    const trust = await trustPolicyFrom(config.OPENLINK_RELEASE_TRUST_FILE)
+    const verified = await verifyInstalledRelease(releaseRoot, trust.trustedKeys, expectedTarget, trust.minimumReleaseSequence)
     const runtimeLock = await acquireRuntimeLock(environment.OPENLINK_STATE_ROOT, { releaseId: basename(releaseRoot) })
     let supervisor
     let terminate
@@ -388,6 +537,7 @@ async function main(argv) {
         minimumMemoryBytes: environment.OPENLINK_MINIMUM_MEMORY_BYTES,
       })
       const plan = await createRuntimePlan({ releaseRoot, stateRoot: environment.OPENLINK_STATE_ROOT, environment })
+      if (verified.manifest.releaseId !== basename(releaseRoot)) throw new Error('Active release directory does not match its signed release identity')
       supervisor = new ProductionSupervisor(plan)
       await supervisor.start()
       const outcome = await Promise.race([termination, supervisor.wait().then(() => ({ signal: undefined }))])
@@ -428,7 +578,7 @@ async function main(argv) {
     await broker.close()
     return
   }
-  throw new Error('Usage: openlinkctl <verify|install|configure|version|status|preflight|doctor|backup|restore|upgrade|run|container-broker> [options]')
+  throw new Error('Usage: openlinkctl <verify|install|configure|version|start|stop|restart|status|health|logs|preflight|doctor|backup|restore|upgrade|rollback|run|container-broker> [options]')
 }
 
 if (!isSea() && process.argv[1] && basename(process.argv[1]) === basename(fileURLToPath(import.meta.url))) {

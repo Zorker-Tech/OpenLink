@@ -99,8 +99,12 @@ shared service-secret identity, retained legacy Docker membership, mutable
 Caddy loopback administration, and an unbounded pre-signature manifest read.
 The latter three were closed in `786d0dcff8`; per-process kernel identity and
 root-only aggregate-secret enforcement were closed in `9c165a3b92` and then
-verified by the privileged Ubuntu test above. A fresh scan of the final release
-digest is still required before GA.
+verified by the privileged Ubuntu test above. Remediation scan
+`55764364-80c5-443c-b926-7c5824278fe2` then reviewed 23/23 files and all seven
+declared trust surfaces at immutable source revision `b4cf90ce95`, reporting no
+remaining or new findings. Its scope did not include subsequent day-two CLI
+work or a final distributable bundle digest, so a fresh final-artifact scan is
+still required before GA.
 
 The target's production preflight was exercised at each gate. It rejected
 155,956,445,184 available bytes against the 200 GiB minimum; with only that gate
