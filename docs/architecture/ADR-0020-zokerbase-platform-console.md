@@ -89,8 +89,8 @@ live infrastructure truth.
 
 | Surface | Audience | Owns | Must not own |
 | --- | --- | --- | --- |
-| OpenLink Settings | Tenant and organization administrators | Tenant members, projects, provider settings, delegated quotas, tenant environments and deployment requests | Cluster credentials, nodes belonging to other tenants, global routing, database failover or platform release authority |
-| ZOKERBASE Platform Console | Platform administrators and SREs | Global tenants, capacity, environments, releases, deployments, clusters, traffic, database topology, incidents, operations and audit | Direct shell execution in the browser, raw infrastructure credentials or tenant application workflows |
+| OpenLink Settings | Tenant and organization administrators | Tenant members, projects, provider settings, user/organization entitlements and delegated quotas, tenant environments and deployment requests | Host or cluster capacity, cluster credentials, nodes belonging to other tenants, global routing, database failover or platform release authority |
+| ZOKERBASE Platform Console | Platform administrators and SREs | Global tenant inventory, infrastructure capacity, environments, releases, deployments, clusters, traffic, database topology, incidents, operations and audit | User/organization entitlement editing, direct shell execution in the browser, raw infrastructure credentials or tenant application workflows |
 | ZOKERBASE Studio | Database engineers and break-glass SREs | Database inspection and data-platform diagnostics | Primary deployment workflow, product tenancy administration or infrastructure desired state |
 | Native infrastructure consoles | Restricted SREs | Deep component diagnostics and emergency repair | Product tenancy, product policy or an alternative source of deployment intent |
 
@@ -108,7 +108,7 @@ design, but the following identities and relationships are binding:
 
 | Resource | Purpose |
 | --- | --- |
-| Tenant and organization | Product ownership, membership, billing and quota boundary |
+| Tenant and organization | Product ownership and identity reference; OpenLink Settings remains the authority for user/organization resource entitlements and delegation |
 | Environment | Named development, staging or production boundary owned by a tenant or by the platform |
 | Deployment target | A single-node host, Kubernetes cluster or future provider target |
 | Cluster and node inventory | Capacity, architecture, region, health and maintenance state |
@@ -435,9 +435,12 @@ restricted diagnostic deep links.
 
 ### Make Rancher, Argo CD or Kubernetes the product source of truth
 
-Rejected because no single infrastructure tool owns product tenancy, billing,
-quota, releases, database topology and audit. It would also make single-node
-production depend on distributed infrastructure.
+Rejected because no single infrastructure tool owns the combined product and
+platform concerns of tenant inventory, infrastructure capacity, releases,
+database topology and audit. User/organization entitlements remain in the
+OpenLink application domain as refined by
+[ADR-0022](./ADR-0022-production-deployment-profiles-and-resource-governance.md).
+It would also make single-node production depend on distributed infrastructure.
 
 ### Build cluster, GitOps and database HA engines from scratch
 
@@ -462,4 +465,3 @@ contracts.
 - [`standards/07-non-functional-requirements.md`](./standards/07-non-functional-requirements.md)
 - [`ADR-0013-local-cloud-persistence-runtime.md`](./ADR-0013-local-cloud-persistence-runtime.md)
 - [`ADR-0019-native-host-platform-runtime.md`](./ADR-0019-native-host-platform-runtime.md)
-
