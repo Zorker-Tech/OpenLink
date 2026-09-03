@@ -2,23 +2,74 @@
 # target, so these bindings replace the source-tree-relative development paths.
 services:
   studio:
+    mem_limit: 1g
+    cpus: 1.0
+    pids_limit: 256
+    logging: &bounded-logs
+      driver: json-file
+      options: { max-size: 20m, max-file: "5" }
     ports: !override
       - 127.0.0.1:${OPENLINK_STUDIO_PORT:-3002}:3000/tcp
   kong:
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 256
+    logging: *bounded-logs
     ports: !override
       - 127.0.0.1:${KONG_HTTP_PORT}:8000/tcp
       - 127.0.0.1:${KONG_HTTPS_PORT}:8443/tcp
+  auth:
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 256
+    logging: *bounded-logs
+  rest:
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 256
+    logging: *bounded-logs
+  realtime:
+    mem_limit: 1g
+    cpus: 1.5
+    pids_limit: 512
+    logging: *bounded-logs
   supavisor:
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 256
+    logging: *bounded-logs
     ports: !override
       - 127.0.0.1:${POSTGRES_PORT}:5432
       - 127.0.0.1:${POOLER_PROXY_PORT_TRANSACTION}:6543
   storage:
+    mem_limit: 1g
+    cpus: 1.0
+    pids_limit: 256
+    logging: *bounded-logs
     volumes:
       - ${OPENLINK_ZOKERBASE_DATA_ROOT}/storage:/var/lib/storage:Z
   imgproxy:
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 256
+    logging: *bounded-logs
     volumes:
       - ${OPENLINK_ZOKERBASE_DATA_ROOT}/storage:/var/lib/storage:ro,Z
+  meta:
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 256
+    logging: *bounded-logs
+  functions:
+    mem_limit: 1g
+    cpus: 1.0
+    pids_limit: 512
+    logging: *bounded-logs
   db:
+    mem_limit: 4g
+    cpus: 4.0
+    pids_limit: 1024
+    logging: *bounded-logs
     volumes:
       - ${OPENLINK_ZOKERBASE_DATA_ROOT}/postgres:/var/lib/postgresql/data:Z
       - ${OPENLINK_ZOKERBASE_DATA_ROOT}/postgres-config:/etc/postgresql-custom:Z

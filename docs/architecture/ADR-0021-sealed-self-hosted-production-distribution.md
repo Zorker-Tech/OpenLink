@@ -80,7 +80,8 @@ under `/Library/Application Support/OpenLink` and `/Library/Logs/OpenLink`.
 Tests and non-root evaluation may override each root explicitly.
 
 An install extracts to a staging directory on the destination filesystem,
-verifies the complete inventory again, fsyncs durable metadata, renames the
+verifies the complete inventory again, fsyncs every regular file and directory,
+renames the
 directory to its immutable release identity, and atomically replaces the
 `current` symlink. It never overwrites an existing release directory with
 different bytes. Activation records the prior release so rollback is an
@@ -110,6 +111,22 @@ Linux production is supervised by systemd. macOS production is supervised by
 a system LaunchDaemon. Service definitions invoke the active release's
 `openlinkctl run` contract, apply restart bounds, resource/file limits and a
 graceful stop timeout, and never embed credentials.
+
+On Linux, network-facing product processes never receive Docker group
+membership. A root-isolated container lifecycle broker reads only the signed,
+root-owned runtime plan and exposes a mode-0660 Unix socket. Its complete
+protocol is three fixed operations: `status`, `start`, and `stop`; it accepts no
+path, image, Compose file, environment, argument, or arbitrary command from a
+client. Requests and connections are bounded and lifecycle mutations are
+serialized. systemd further restricts the broker to AF_UNIX, a private network
+namespace, no capabilities, no device access, no namespace creation, and fixed
+CPU, memory, task and writable-path ceilings.
+
+All containers have explicit memory, CPU and PID ceilings and bounded local log
+rotation. The native supervisor has an aggregate cgroup envelope. The baseline
+single-node profile fails closed below 32 GiB RAM or 200 GiB free state-volume
+capacity; deployment owners must raise these values when tenant/project quotas
+or retention policy require more capacity.
 
 ### Upgrade, rollback and migrations
 
@@ -150,6 +167,10 @@ available or disaster-site redundant.
 
 - Release signatures are verified against an installed trust root before any
   executable or migration runs.
+- Trust roots authorize only active Ed25519 keys inside their validity windows;
+  revoked, retired, expired and not-yet-valid keys are rejected. A monotonic
+  release sequence and trust-root floor prevent replay of an older signed
+  release.
 - The signed manifest covers every shipped regular file, its mode, size and
   digest; unexpected executable files are rejected.
 - Private signing keys never enter a release bundle or production host.
@@ -159,9 +180,9 @@ available or disaster-site redundant.
 - Privileged services bind to loopback/private sockets. The edge proxy is the
   only public listener and enforces TLS, request bounds and authenticated
   gateway routes.
-- Runtime processes use dedicated identities and least privilege. Container,
-  virtualization and host-administration authority remain explicit privileged
-  capabilities.
+- Runtime processes use dedicated identities and least privilege. Container
+  authority is confined to the fixed lifecycle broker; KVM access remains an
+  explicit capability of the Project VM service identity.
 - Audit logs are append-oriented, time synchronized and exportable to a remote
   collector. Security-relevant failure never falls back to a weaker mode.
 
@@ -240,4 +261,3 @@ HA and site disaster tolerance require the later multi-node/multi-site profile.
 - [`standards/04-runtime-lifecycle.md`](./standards/04-runtime-lifecycle.md)
 - [`standards/05-data-and-security.md`](./standards/05-data-and-security.md)
 - [`standards/07-non-functional-requirements.md`](./standards/07-non-functional-requirements.md)
-

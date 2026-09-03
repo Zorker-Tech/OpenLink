@@ -45,6 +45,7 @@ function requiredPayloadPaths(target) {
     disk,
     'openlinkctl.mjs',
     'bin/openlinkctl',
+    'systemd/openlink-container-broker.service',
   ]
 }
 

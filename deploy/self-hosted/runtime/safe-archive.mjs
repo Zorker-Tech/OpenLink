@@ -1,5 +1,6 @@
 import { createReadStream, createWriteStream } from 'node:fs'
-import { chmod, link, lstat, mkdir, open, rm, symlink } from 'node:fs/promises'
+import { constants } from 'node:fs'
+import { chmod, link, lstat, mkdir, open, rm, statfs, symlink } from 'node:fs/promises'
 import { dirname, resolve, sep } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { createGunzip } from 'node:zlib'
@@ -59,6 +60,12 @@ function parsePaxSize(value) {
   return Number(parsed)
 }
 
+function positiveLimit(value, fallback, label) {
+  const parsed = Number(value ?? fallback)
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) throw new Error(`Archive ${label} limit must be a positive safe integer`)
+  return parsed
+}
+
 async function safeDirectory(root, relative) {
   const output = resolve(root, ...relative.split('/'))
   if (output !== root && !output.startsWith(`${root}${sep}`)) throw new Error(`Archive path escapes extraction root: ${relative}`)
@@ -67,9 +74,25 @@ async function safeDirectory(root, relative) {
 }
 
 export async function extractVerifiedTarGzip(archive, destination, options = {}) {
+  const archivePath = resolve(archive)
+  const maximumArchiveBytes = positiveLimit(options.maximumArchiveBytes, 64 * 1024 ** 3, 'compressed size')
+  const archiveBefore = await lstat(archivePath)
+  if (!archiveBefore.isFile()) throw new Error(`Archive input is not a regular file: ${archivePath}`)
+  if (archiveBefore.size > maximumArchiveBytes) throw new Error(`Archive compressed size exceeds ${maximumArchiveBytes} bytes`)
+  const archiveHandle = await open(archivePath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
+  const archiveCurrent = await archiveHandle.stat()
+  if (!archiveCurrent.isFile() || archiveCurrent.dev !== archiveBefore.dev || archiveCurrent.ino !== archiveBefore.ino || archiveCurrent.size !== archiveBefore.size) {
+    await archiveHandle.close()
+    throw new Error('Archive input changed while opening')
+  }
   const root = resolve(destination)
-  await mkdir(root, { recursive: true, mode: 0o700 })
-  const stream = createReadStream(resolve(archive)).pipe(createGunzip())
+  try {
+    await mkdir(root, { recursive: true, mode: 0o700 })
+  } catch (error) {
+    await archiveHandle.close().catch(() => undefined)
+    throw error
+  }
+  const stream = createReadStream(archivePath, { fd: archiveHandle.fd, autoClose: false }).pipe(createGunzip())
   let pending = Buffer.alloc(0)
   let state = { kind: 'header' }
   let pax = {}
@@ -77,11 +100,15 @@ export async function extractVerifiedTarGzip(archive, destination, options = {})
   let zeroBlocks = 0
   const paths = new Set()
   const symbolicPaths = new Set()
-  const maximumFileBytes = Number(options.maximumFileBytes ?? 128 * 1024 ** 3)
-  const maximumFiles = Number(options.maximumFiles ?? 250_000)
-  const maximumEntries = Number(options.maximumEntries ?? 250_000)
-  const maximumTotalBytes = Number(options.maximumTotalBytes ?? 192 * 1024 ** 3)
-  const maximumMetadataBytes = Number(options.maximumMetadataBytes ?? 16 * 1024 ** 2)
+  const maximumFileBytes = positiveLimit(options.maximumFileBytes, 128 * 1024 ** 3, 'file size')
+  const maximumFiles = positiveLimit(options.maximumFiles, 250_000, 'path count')
+  const maximumEntries = positiveLimit(options.maximumEntries, 250_000, 'entry count')
+  const maximumTotalBytes = positiveLimit(options.maximumTotalBytes, 192 * 1024 ** 3, 'expanded size')
+  const maximumMetadataBytes = positiveLimit(options.maximumMetadataBytes, 16 * 1024 ** 2, 'metadata size')
+  const minimumFreeBytesAfterExtraction = positiveLimit(options.minimumFreeBytesAfterExtraction, 512 * 1024 ** 2, 'free-space reserve')
+  const filesystem = await statfs(root)
+  const initialFreeBytes = Number(filesystem.bavail) * Number(filesystem.bsize)
+  const maximumWritableBytes = Math.max(0, initialFreeBytes - minimumFreeBytesAfterExtraction)
   let totalBytes = 0
   let entries = 0
 
@@ -107,6 +134,7 @@ export async function extractVerifiedTarGzip(archive, destination, options = {})
     if (!Number.isSafeInteger(entries) || entries > maximumEntries) throw new Error(`Archive contains more than ${maximumEntries} entries`)
     totalBytes += sizeValue
     if (!Number.isSafeInteger(totalBytes) || totalBytes > maximumTotalBytes) throw new Error(`Archive expands beyond ${maximumTotalBytes} bytes`)
+    if (totalBytes > maximumWritableBytes) throw new Error(`Archive would violate the ${minimumFreeBytesAfterExtraction} byte free-space reserve`)
     const rawPath = String(pax.path ?? longName ?? headerPath)
     const linkTarget = String(pax.linkpath ?? headerLink)
     const rootDirectory = type === '5' && (rawPath === '.' || rawPath === './')
@@ -212,5 +240,7 @@ export async function extractVerifiedTarGzip(archive, destination, options = {})
     await state.handle?.close().catch(() => undefined)
     await rm(root, { recursive: true, force: true })
     throw error
+  } finally {
+    await archiveHandle.close().catch(() => undefined)
   }
 }

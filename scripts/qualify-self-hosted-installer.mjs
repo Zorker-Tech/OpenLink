@@ -52,6 +52,7 @@ try {
     'toolchain/bin/podman',
     'project-vm/manifest.json',
     `project-vm/openlink-project-vm-base-${target.architecture}.${target.diskFormat}`,
+    'systemd/openlink-container-broker.service',
   ]) await fixtureFile(relative, relative.endsWith('.json') ? '{}\n' : `${relative}\n`, relative.includes('/bin/') ? 0o755 : 0o644)
 
   const keys = generateKeyPairSync('ed25519')

@@ -7,6 +7,7 @@ import { join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 
 import { normalizeTarget } from './release-contract.mjs'
+import { requestContainerBroker } from './container-broker.mjs'
 
 const execFile = promisify(execFileCallback)
 const ENVIRONMENT_KEY = /^[A-Z][A-Z0-9_]{0,127}$/
@@ -34,7 +35,7 @@ export function parseEnvironmentFile(contents) {
 export async function readEnvironmentFile(path, options = {}) {
   const stats = await lstat(path)
   if (!stats.isFile()) throw new Error(`Environment path is not a regular file: ${path}`)
-  if (options.secrets && (stats.mode & 0o077) !== 0) throw new Error(`Secrets file permissions must be 0600: ${path}`)
+  if (options.secrets && (stats.mode & 0o027) !== 0) throw new Error(`Secrets file permissions must be 0640 or stricter: ${path}`)
   if (!options.secrets && (stats.mode & 0o022) !== 0) throw new Error(`Environment file is writable by group or others: ${path}`)
   return parseEnvironmentFile(await readFile(path, 'utf8'))
 }
@@ -87,6 +88,7 @@ export async function runPreflight(options = {}) {
     ['project-vm/manifest.json', false],
     ['orchestration/docker-compose.production.yml', false],
     ['orchestration/docker-compose.zero-production.yml', false],
+    ['systemd/openlink-container-broker.service', false],
   ]
   for (const [relative, executable] of required) await assertFile(join(releaseRoot, ...relative.split('/')), { executable })
   const browserManifest = JSON.parse(await readFile(join(releaseRoot, 'browser/manifest.json'), 'utf8'))
@@ -104,19 +106,22 @@ export async function runPreflight(options = {}) {
 
   const filesystem = await statfs(stateRoot)
   const freeBytes = Number(filesystem.bavail) * Number(filesystem.bsize)
-  const minimumFreeBytes = Number(options.minimumFreeBytes ?? 20 * 1024 ** 3)
+  const minimumFreeBytes = Number(options.minimumFreeBytes ?? 200 * 1024 ** 3)
   if (!Number.isFinite(minimumFreeBytes) || freeBytes < minimumFreeBytes) throw new Error(`Insufficient free disk space: ${freeBytes} bytes available, ${minimumFreeBytes} required`)
   checks.push({ name: 'disk-capacity', status: 'pass', freeBytes })
 
   const memoryBytes = totalmem()
-  const minimumMemoryBytes = Number(options.minimumMemoryBytes ?? 16 * 1024 ** 3)
+  const minimumMemoryBytes = Number(options.minimumMemoryBytes ?? 32 * 1024 ** 3)
   if (!Number.isFinite(minimumMemoryBytes) || memoryBytes < minimumMemoryBytes) throw new Error(`Insufficient host memory: ${memoryBytes} bytes available, ${minimumMemoryBytes} required`)
   checks.push({ name: 'memory-capacity', status: 'pass', memoryBytes })
 
   if (options.hostChecks !== false) {
     const docker = options.dockerCommand ?? 'docker'
-    await command(docker, ['info', '--format', '{{.ServerVersion}}'], { ...options, label: 'Docker Engine' })
-    await command(docker, ['compose', 'version', '--short'], { ...options, label: 'Docker Compose' })
+    if (options.containerBrokerSocket) await requestContainerBroker(options.containerBrokerSocket, 'status', { timeoutMs: 30_000 })
+    else {
+      await command(docker, ['info', '--format', '{{.ServerVersion}}'], { ...options, label: 'Docker Engine' })
+      await command(docker, ['compose', 'version', '--short'], { ...options, label: 'Docker Compose' })
+    }
     checks.push({ name: 'docker-engine', status: 'pass' })
     const environment = options.environment ?? {}
     const appUrl = environment.OPENLINK_APP_URL ? new URL(environment.OPENLINK_APP_URL) : undefined

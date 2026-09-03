@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { execFile as execFileCallback } from 'node:child_process'
 import { generateKeyPairSync, verify } from 'node:crypto'
-import { chmod, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { chmod, lstat, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -59,6 +59,7 @@ test('sealed installer performs signed archive install and protected configurati
     'browser/manifest.json', 'browser/chromium/chrome', 'project-vm/manifest.json',
     'services/agent-host/dist/src/desktop-main.js',
     `project-vm/openlink-project-vm-base-${targetArchitecture}.${diskFormat}`, 'openlinkctl.mjs', 'bin/openlinkctl',
+    'systemd/openlink-container-broker.service',
   ]
   for (const relative of required) {
     const path = join(payload, ...relative.split('/'))
@@ -75,6 +76,12 @@ test('sealed installer performs signed archive install and protected configurati
   await buildSelfHostedInstaller({ output: installer, trustFile, nodeExecutable: process.execPath, signingKey: keys.privateKey, keyId: 'e2e-key' })
   const installRoot = join(root, 'installed')
   const configPath = join(root, 'configuration/openlink.env')
+  await assert.rejects(execFile(installer, [
+    '--archive', release.archive, '--app-url', 'http://127.0.0.1:7443',
+    '--root', installRoot, '--config', configPath, '--state-root', join(root, 'state'), '--skip-host-preflight', '1',
+    '--skip-service-install', '1',
+  ], { env: { PATH: '/usr/bin:/bin' }, timeout: 60_000 }), /must use HTTPS/i)
+  await assert.rejects(lstat(join(installRoot, 'current')), /ENOENT/)
   const { stdout, stderr } = await execFile(installer, [
     '--archive', release.archive, '--app-url', 'http://127.0.0.1:7443', '--allow-insecure-http', '1',
     '--root', installRoot, '--config', configPath, '--state-root', join(root, 'state'), '--skip-host-preflight', '1',
