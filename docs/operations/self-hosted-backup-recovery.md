@@ -28,7 +28,8 @@ The command captures the state root plus `openlink.env` and `secrets.env`,
 excluding the transient runtime lock. The payload is encrypted with AES-256-GCM
 using a key derived with scrypt from the protected backup key. Its adjacent JSON
 manifest records ciphertext size and SHA-256, salt, nonce and authentication
-tag. Success is reported only after the encrypted file is durable and hashed.
+tag. Success is reported only after the encrypted payload, manifest and parent
+directory entries have been fsynced and the payload has been hashed.
 
 The backup key is deliberately not inside the backup. Escrow it separately;
 losing it makes recovery impossible, while storing it beside every backup
@@ -52,6 +53,9 @@ Restore checks the ciphertext digest and size, authenticates the complete AEAD
 payload, safely extracts only regular files/directories with traversal and
 symlink rejection, confirms all required roots exist, then publishes into the
 fresh destinations. Any failure removes partial restore outputs.
+The restored regular files and directory tree are fsynced before success is
+reported, so a successful restore means published state is durable rather than
+only present in the page cache.
 
 After restore: install a release compatible with the recorded state schema,
 run `preflight`, start the native service, exercise login/project/browser/data

@@ -3,6 +3,8 @@ import { access, mkdir, readFile } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 
+import { requestContainerBroker } from './container-broker.mjs'
+
 const sleep = (milliseconds) => new Promise((resolveDelay) => setTimeout(resolveDelay, milliseconds))
 
 function waitForExit(child, timeoutMs) {
@@ -177,7 +179,7 @@ export async function createRuntimePlan(options = {}) {
       healthUrl: supplied.OPENLINK_APP_URL,
     },
   ]
-  return { releaseRoot, stateRoot, docker, images: [...runtimeImages, ...await imageEntries(releaseRoot, 'zokerbase'), ...await imageEntries(releaseRoot, 'zero')], compose, processes }
+  return { releaseRoot, stateRoot, docker, containerBrokerSocket: supplied.OPENLINK_CONTAINER_BROKER_SOCKET, images: [...runtimeImages, ...await imageEntries(releaseRoot, 'zokerbase'), ...await imageEntries(releaseRoot, 'zero')], compose, processes }
 }
 
 async function defaultCommand(command, args, options = {}) {
@@ -196,6 +198,36 @@ async function defaultProbe(url) {
     const response = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(3_000) })
     return response.status >= 200 && response.status < 300
   } catch { return false }
+}
+
+export async function checkContainerRuntime(plan, runCommand = defaultCommand) {
+  await runCommand(plan.docker, ['info', '--format', '{{.ServerVersion}}'])
+  await runCommand(plan.docker, ['compose', 'version', '--short'])
+  return { ready: true }
+}
+
+export async function startContainerRuntime(plan, runCommand = defaultCommand) {
+  for (const item of plan.images) {
+    await access(item.archive, constants.R_OK)
+    const inspect = async () => (await runCommand(plan.docker, ['image', 'inspect', '--format', '{{.Id}}', item.image])).trim()
+    const installedId = await inspect().catch(() => '')
+    if (installedId !== item.imageId) {
+      await runCommand(plan.docker, ['load', '--input', item.archive], { stdio: 'inherit' })
+      const loadedId = await inspect().catch(() => '')
+      if (loadedId !== item.imageId) throw new Error(`Loaded image identity does not match the signed manifest: ${item.image}`)
+    }
+  }
+  for (const item of plan.compose) await runCommand(item.command, item.args, item)
+  return { started: true }
+}
+
+export async function stopContainerRuntime(plan, runCommand = defaultCommand) {
+  const failures = []
+  for (const item of [...plan.compose].reverse()) {
+    await runCommand(item.command, item.stopArgs, item).catch((error) => failures.push(`${item.name}: ${error instanceof Error ? error.message : String(error)}`))
+  }
+  if (failures.length) throw new Error(`Container runtime shutdown failed: ${failures.join('; ')}`)
+  return { stopped: true }
 }
 
 export class ProductionSupervisor {
@@ -227,17 +259,8 @@ export class ProductionSupervisor {
     for (const directory of ['workspaces', 'agents', 'desktop-agents', 'browser', 'knowledge', 'project-vms', 'podman/config', 'podman/data', 'edge/config', 'edge/data', 'zero', 'zokerbase']) {
       await mkdir(join(this.plan.stateRoot, directory), { recursive: true, mode: 0o700 })
     }
-    for (const item of this.plan.images) {
-      await access(item.archive, constants.R_OK)
-      const inspect = async () => (await this.runCommand(this.plan.docker, ['image', 'inspect', '--format', '{{.Id}}', item.image])).trim()
-      const installedId = await inspect().catch(() => '')
-      if (installedId !== item.imageId) {
-        await this.runCommand(this.plan.docker, ['load', '--input', item.archive], { stdio: 'inherit' })
-        const loadedId = await inspect().catch(() => '')
-        if (loadedId !== item.imageId) throw new Error(`Loaded image identity does not match the signed manifest: ${item.image}`)
-      }
-    }
-    for (const item of this.plan.compose) await this.runCommand(item.command, item.args, item)
+    if (this.plan.containerBrokerSocket) await requestContainerBroker(this.plan.containerBrokerSocket, 'start')
+    else await startContainerRuntime(this.plan, this.runCommand)
     for (const item of this.plan.processes) {
       const child = this.spawnProcess(item.command, item.args, { ...item, openlinkName: item.name })
       const running = { ...item, child }
@@ -260,6 +283,7 @@ export class ProductionSupervisor {
       const exited = await waitForExit(item.child, item.name === 'agent-host' ? 120_000 : 30_000)
       if (!exited && item.child.exitCode === null && item.child.signalCode === null) item.child.kill('SIGKILL')
     }
-    for (const item of [...this.plan.compose].reverse()) await this.runCommand(item.command, item.stopArgs, item).catch(() => undefined)
+    if (this.plan.containerBrokerSocket) await requestContainerBroker(this.plan.containerBrokerSocket, 'stop').catch(() => undefined)
+    else await stopContainerRuntime(this.plan, this.runCommand)
   }
 }

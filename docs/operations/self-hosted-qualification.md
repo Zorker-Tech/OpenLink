@@ -45,9 +45,11 @@ not the final compressed archive or running-product support matrix.
 
 Full macOS host preflight passed Docker 29.4.3, AppleHV, clock synchronization
 and port availability, then correctly stopped before mutation because the
-selected state volume had only 10,278,043,648 bytes free against the 20 GiB
-production minimum. The threshold was not lowered for qualification. A full
-runtime run requires a clean production-sized volume.
+selected state volume had only 10,278,043,648 bytes free against the then-current
+20 GiB gate. Subsequent resource-envelope hardening raised the production gate
+to 32 GiB RAM and 200 GiB free space; the earlier evidence therefore cannot
+qualify the current contract. A full runtime run requires a clean
+production-sized volume.
 
 The sealed Caddy binary also passed a live route drill against isolated mock
 upstreams: `/` reached Web, `/v1/browser/gateway/*` reached Agent gateway, and
@@ -58,11 +60,33 @@ executable and scored 4.5 (`OK`) in `systemd-analyze security --offline`.
 
 A macOS qualification-state backup was encrypted, restored into fresh roots,
 and compared byte-for-byte for state, config and secrets; restored modes were
-0700/0640/0600. On the Ubuntu target, 18 native Node 26 tests passed for backup
-corruption and wrong-key rejection, clean-root restore, lifecycle locking,
-dependency ordering, critical-child cleanup, systemd installation semantics,
-upgrade commit/rollback and incompatible schema rejection. These are native
+0700/0640/0600. On the Ubuntu target, the latest hardened runtime set passed 36
+native Node 26 tests for safe archive limits, backup corruption and wrong-key
+rejection, clean-root restore, lifecycle locking, dependency ordering,
+critical-child cleanup, systemd installation semantics, upgrade commit/rollback,
+durable fsync publication and incompatible schema rejection. These are native
 mechanism results, not a substitute for a running full-stack data restore.
+
+The corresponding macOS delivery suite passes 49/49 tests, including the SEA
+installer running without a source tree or system Node lookup, fresh-activation
+rollback, trust-key lifecycle and anti-replay policy, archive input/expansion/
+disk-reserve bounds, encrypted recovery, resource envelopes and service-unit
+rollback. Both production Compose overlays parse successfully with Docker
+Compose 5.1.3 on macOS and 2.40.3 on Ubuntu.
+
+The Linux container lifecycle broker was exercised against the target's real
+Docker 29.4.2 daemon: the broker ran with UID 0 and a restricted primary group,
+created a group-readable mode-0660 Unix socket, and an unprivileged user received
+only the fixed `status` result. SIGINT removed the socket cleanly. The current
+systemd units score 2.5 (`OK`) for the broker and 4.5 (`OK`) for the main service
+under Ubuntu systemd 255's offline security analyzer. The main service has no
+Docker group membership.
+
+The target's production preflight was exercised at each gate. It rejected
+155,956,445,184 available bytes against the 200 GiB minimum; with only that gate
+relaxed for diagnosis it rejected 33,536,204,800 bytes of RAM against the 32 GiB
+minimum; with both capacity gates relaxed it rejected the absent `/dev/kvm`.
+These diagnostic overrides did not start or mutate the product.
 
 The final portable macOS qualification archive is 9,570,549,760 bytes with
 SHA-256 `c3fa69c65e2eb5c017b755399f190cff9413fbc5bee0c2c546b044fbac1a1a48`.
