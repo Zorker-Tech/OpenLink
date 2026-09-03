@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
-import { ProductionSupervisor, createRuntimePlan } from '../../deploy/self-hosted/runtime/production-runtime.mjs'
+import { ProductionSupervisor, createRuntimePlan, isolatedProcessInvocation } from '../../deploy/self-hosted/runtime/production-runtime.mjs'
 import { acquireRuntimeLock, runtimeLockStatus } from '../../deploy/self-hosted/runtime/lifecycle-lock.mjs'
 
 async function fixture(t) {
@@ -59,6 +59,7 @@ test('production plan uses only sealed artifacts and loopback host services', as
   })
   assert.equal(plan.images.length, 3)
   assert.deepEqual(plan.processes.map((process) => process.name), ['browser-host', 'knowledge-service', 'agent-host', 'desktop-agent-host', 'web', 'edge'])
+  assert.deepEqual(plan.processes.map((process) => process.identity), ['openlink-browser', 'openlink-knowledge', 'openlink-agent', 'openlink-desktop', 'openlink-web', 'openlink-edge'])
   assert.equal(plan.processes.at(-1).args.includes('--adapter'), true)
   assert.equal(plan.processes[0].environment.OPENLINK_CHROME_EXECUTABLE, join(item.releaseRoot, 'browser/chromium/chrome'))
   assert.equal(plan.processes.find((process) => process.name === 'web').healthUrl.endsWith('/api/healthz'), true)
@@ -84,6 +85,19 @@ test('production plan uses only sealed artifacts and loopback host services', as
   assert.equal(processes.web.POSTGRES_PASSWORD, undefined)
   assert.equal(plan.compose[0].environment.POSTGRES_PASSWORD, 'database-only-secret')
   assert.doesNotMatch(JSON.stringify(plan), /\b(?:npm|pnpm|yarn|tsc)\b|\b(?:build|pull)\b.*(?:source|registry)/i)
+})
+
+test('Linux root supervisor launches every network process under its dedicated kernel identity', () => {
+  const base = { command: '/opt/openlink/current/runtime/node/bin/node', args: ['/opt/openlink/current/service.js'] }
+  const web = isolatedProcessInvocation({ ...base, name: 'web', identity: 'openlink-web' }, { platform: 'linux', root: true })
+  assert.equal(web.command, '/usr/bin/setpriv')
+  assert.deepEqual(web.args.slice(0, 6), ['--reuid=openlink-web', '--regid=openlink-web', '--init-groups', '--inh-caps=-all', '--ambient-caps=-all', '--bounding-set=-all'])
+  assert.equal(web.args.includes('--no-new-privs'), true)
+  assert.equal(web.args.at(-2), base.command)
+  const edge = isolatedProcessInvocation({ ...base, name: 'edge', identity: 'openlink-edge' }, { platform: 'linux', root: true })
+  assert.equal(edge.args.includes('--ambient-caps=+net_bind_service'), true)
+  assert.equal(edge.args.includes('--bounding-set=-all,+net_bind_service'), true)
+  assert.throws(() => isolatedProcessInvocation({ ...base, name: 'web', identity: 'openlink-agent' }, { platform: 'linux', root: true }), /identity is invalid/i)
 })
 
 test('supervisor starts dependencies in order and shuts down application before data stores', async (t) => {

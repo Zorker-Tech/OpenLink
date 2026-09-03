@@ -34,7 +34,7 @@ const requiredFiles = [
   'project-vm/openlink-project-vm-base-arm64.raw',
   'openlinkctl.mjs',
   'bin/openlinkctl',
-  'systemd/openlink-container-broker.service',
+  'systemd/openlink.service', 'systemd/openlink-container-broker.service',
 ]
 const execFile = promisify(execFileCallback)
 
