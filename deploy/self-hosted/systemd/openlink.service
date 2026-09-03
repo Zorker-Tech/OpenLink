@@ -1,0 +1,49 @@
+[Unit]
+Description=OpenLink self-hosted production runtime
+Documentation=https://git.haokir/hydite/openlink/openlink
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+Requires=docker.service
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=notify
+NotifyAccess=main
+User=openlink
+Group=openlink
+SupplementaryGroups=docker kvm
+EnvironmentFile=/etc/openlink/openlink.env
+ExecStart=/opt/openlink/current/bin/openlinkctl run --config /etc/openlink/openlink.env
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStartSec=600
+TimeoutStopSec=180
+Restart=on-failure
+RestartSec=5
+UMask=0077
+LimitNOFILE=1048576
+WorkingDirectory=/var/lib/openlink
+RuntimeDirectory=openlink
+RuntimeDirectoryMode=0700
+StateDirectory=openlink
+StateDirectoryMode=0700
+LogsDirectory=openlink
+LogsDirectoryMode=0700
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+PrivateDevices=false
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+ReadWritePaths=/var/lib/openlink /var/log/openlink /var/backups/openlink /run/openlink
+
+[Install]
+WantedBy=multi-user.target
+
