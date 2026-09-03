@@ -38,7 +38,8 @@ test('sealed installer performs signed archive install and protected configurati
   t.after(async () => (await import('node:fs/promises')).rm(root, { recursive: true, force: true }))
   const keys = generateKeyPairSync('ed25519')
   const trustFile = join(root, 'release-keys.json')
-  await writeFile(trustFile, `${JSON.stringify({ keys: { 'e2e-key': { publicKeyPem: keys.publicKey.export({ type: 'spki', format: 'pem' }) } } }, null, 2)}\n`)
+  await writeFile(trustFile, `${JSON.stringify({ keys: { 'e2e-key': { publicKeyPem: keys.publicKey.export({ type: 'spki', format: 'pem' }) } } }, null, 2)}\n`, { mode: 0o644 })
+  await chmod(trustFile, 0o644)
   const payload = join(root, 'payload')
   const target = process.platform === 'darwin'
     ? { platform: 'darwin', architecture: 'arm64' }
