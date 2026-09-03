@@ -357,6 +357,9 @@ async function main(argv) {
     return
   }
   if (command === 'run') {
+    if (process.platform === 'linux' && (typeof process.getuid !== 'function' || process.getuid() !== 0)) {
+      throw new Error('Linux production runtime supervisor must start as root to create isolated service identities')
+    }
     const configPath = values.get('config')
     if (!configPath) throw new Error('run requires --config')
     const config = await readEnvironmentFile(resolve(configPath))

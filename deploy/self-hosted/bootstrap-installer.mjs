@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { getAsset, isSea } from 'node:sea'
 import { constants } from 'node:fs'
-import { lstat, open, readlink, rm } from 'node:fs/promises'
+import { chmod, lstat, open, readlink, rm } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 
 import { activateRelease, installReleaseArchive } from './openlinkctl.mjs'
@@ -92,6 +92,7 @@ async function existingConfiguration(destination, appUrl) {
     || resolve(config.OPENLINK_BACKUP_KEY_FILE) !== backupKeyPath) {
     throw new Error('Existing production configuration does not match this installation request')
   }
+  if (process.platform === 'linux') await chmod(destination.stateRoot, 0o711)
   return { configPath: destination.configPath, secretsPath: destination.secretsPath, backupKeyPath, stateRoot: destination.stateRoot, appUrl: expectedAppUrl, reused: true }
 }
 

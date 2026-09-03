@@ -117,7 +117,9 @@ export async function createProductionConfiguration(options = {}) {
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: anonKey,
   }
   await mkdir(dirname(configPath), { recursive: true, mode: 0o750 })
-  await mkdir(stateRoot, { recursive: true, mode: 0o700 })
+  // Linux service processes use distinct UIDs and need search permission on
+  // the state root to reach their own 0700 subdirectories.
+  await mkdir(stateRoot, { recursive: true, mode: process.platform === 'linux' ? 0o711 : 0o700 })
   const outputs = [configPath, secretsPath, backupKeyPath]
   for (const path of outputs) {
     if (await lstat(path).then(() => true).catch((error) => error?.code === 'ENOENT' ? false : Promise.reject(error))) {

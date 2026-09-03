@@ -98,6 +98,7 @@ export async function runPreflight(options = {}) {
     ['project-vm/manifest.json', false],
     ['orchestration/docker-compose.production.yml', false],
     ['orchestration/docker-compose.zero-production.yml', false],
+    ['systemd/openlink.service', false],
     ['systemd/openlink-container-broker.service', false],
   ]
   for (const [relative, executable] of required) await assertFile(join(releaseRoot, ...relative.split('/')), { executable })
@@ -109,9 +110,10 @@ export async function runPreflight(options = {}) {
   await assertFile(join(releaseRoot, 'browser', ...browserManifest.executable.split('/')), { executable: true })
   checks.push({ name: 'release-artifacts', status: 'pass', target: target.triple })
 
-  await mkdir(stateRoot, { recursive: true, mode: 0o700 })
+  const requiredStateMode = target.platform === 'linux' ? 0o711 : 0o700
+  await mkdir(stateRoot, { recursive: true, mode: requiredStateMode })
   const state = await lstat(stateRoot)
-  if (!state.isDirectory() || (state.mode & 0o077) !== 0) throw new Error(`State root permissions must be 0700: ${stateRoot}`)
+  if (!state.isDirectory() || (state.mode & 0o777) !== requiredStateMode) throw new Error(`State root permissions must be ${requiredStateMode.toString(8).padStart(4, '0')}: ${stateRoot}`)
   checks.push({ name: 'state-permissions', status: 'pass' })
 
   const filesystem = await statfs(stateRoot)
@@ -158,6 +160,9 @@ export async function runPreflight(options = {}) {
     }
     checks.push({ name: 'loopback-ports', status: 'pass', ports: hostPorts.map(Number) })
     if (target.platform === 'linux') {
+      await access('/usr/bin/setpriv', constants.X_OK).catch(() => {
+        throw new Error('Linux production process isolation requires executable /usr/bin/setpriv')
+      })
       await access('/dev/kvm', constants.R_OK | constants.W_OK).catch(() => {
         throw new Error('Linux Project VMs require read/write access to /dev/kvm')
       })

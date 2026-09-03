@@ -16,9 +16,9 @@ function serviceBlock(source, name) {
 
 test('systemd unit runs only the active prebuilt release with hardened state paths', async () => {
   const source = await readFile(new URL('deploy/self-hosted/systemd/openlink.service', root), 'utf8')
-  assert.match(source, /^User=openlink$/m)
-  assert.match(source, /^SupplementaryGroups=kvm$/m)
-  assert.doesNotMatch(source, /SupplementaryGroups=.*docker/m)
+  assert.match(source, /^User=root$/m)
+  assert.match(source, /^Group=root$/m)
+  assert.doesNotMatch(source, /^SupplementaryGroups=/m)
   assert.match(source, /^Requires=openlink-container-broker\.service$/m)
   assert.match(source, /^ExecStart=\/opt\/openlink\/current\/bin\/openlinkctl run /m)
   assert.match(source, /^Restart=on-failure$/m)
@@ -30,8 +30,10 @@ test('systemd unit runs only the active prebuilt release with hardened state pat
   assert.match(source, /^CPUQuota=800%$/m)
   assert.match(source, /^ProtectSystem=strict$/m)
   assert.match(source, /^NoNewPrivileges=true$/m)
-  assert.match(source, /^AmbientCapabilities=CAP_NET_BIND_SERVICE$/m)
-  assert.match(source, /^CapabilityBoundingSet=CAP_NET_BIND_SERVICE$/m)
+  assert.match(source, /^AmbientCapabilities=CAP_SETUID CAP_SETGID CAP_SETPCAP CAP_NET_BIND_SERVICE$/m)
+  assert.match(source, /^CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_SETPCAP CAP_NET_BIND_SERVICE$/m)
+  assert.match(source, /^DevicePolicy=closed$/m)
+  assert.match(source, /^DeviceAllow=\/dev\/kvm rw$/m)
   assert.match(source, /^ProtectKernelLogs=true$/m)
   assert.match(source, /^ProtectClock=true$/m)
   assert.match(source, /^ProtectProc=invisible$/m)
@@ -118,7 +120,7 @@ test('Linux service installation fixes ownership, enables systemd and verifies a
     platform: 'linux', releaseRoot, installRoot: join(temporary, 'install'), configPath, secretsPath, backupKeyPath,
     stateRoot: join(temporary, 'state'), logRoot: join(temporary, 'logs'), backupRoot: join(temporary, 'backups'),
     unitPath, brokerUnitPath, allowCustomPaths: true, allowUnprivilegedTest: true, identity: { uid: process.getuid(), gid: process.getgid() },
-    rootUid: process.getuid(),
+    rootUid: process.getuid(), rootGid: process.getgid(),
     execFile: async (command, args) => {
       calls.push([command, ...args])
       return { stdout: args[0] === 'is-active' ? 'active\n' : '' }
@@ -133,14 +135,17 @@ test('Linux service installation fixes ownership, enables systemd and verifies a
   ])
   assert.equal((await lstat(unitPath)).mode & 0o777, 0o644)
   assert.equal((await lstat(configPath)).mode & 0o777, 0o640)
-  assert.equal((await lstat(secretsPath)).mode & 0o777, 0o640)
+  assert.equal((await lstat(secretsPath)).mode & 0o777, 0o600)
   assert.equal((await lstat(backupKeyPath)).mode & 0o777, 0o600)
+  assert.equal((await lstat(join(temporary, 'state'))).mode & 0o777, 0o711)
   assert.equal((await lstat(brokerUnitPath)).mode & 0o777, 0o644)
 })
 
-test('Linux identity setup replaces legacy supplementary groups instead of retaining Docker', async () => {
+test('Linux identity setup creates per-process accounts and replaces legacy supplementary groups', async () => {
   const source = await readFile(new URL('deploy/self-hosted/runtime/native-service.mjs', root), 'utf8')
-  assert.match(source, /usermod', \['--groups', 'kvm', 'openlink'\]/)
+  for (const account of ['openlink-browser', 'openlink-knowledge', 'openlink-agent', 'openlink-desktop', 'openlink-web', 'openlink-edge']) assert.match(source, new RegExp(account))
+  assert.match(source, /agent: \{ name: 'openlink-agent', groups: \['kvm', 'openlink-workspace'\] \}/)
+  assert.match(source, /await command\(runner, 'usermod', \['--home', stateRoot, '--shell', '\/usr\/sbin\/nologin', '--gid', name, '--groups', groups\.join\(','\), name\]\)/)
   assert.doesNotMatch(source, /usermod', \['--append'/)
 })
 
@@ -166,7 +171,7 @@ test('Linux service installation restores previous units and service state after
     platform: 'linux', releaseRoot, installRoot: join(temporary, 'install'), configPath, secretsPath, backupKeyPath,
     stateRoot: join(temporary, 'state'), logRoot: join(temporary, 'logs'), backupRoot: join(temporary, 'backups'),
     unitPath, brokerUnitPath, allowCustomPaths: true, allowUnprivilegedTest: true, identity: { uid: process.getuid(), gid: process.getgid() },
-    rootUid: process.getuid(),
+    rootUid: process.getuid(), rootGid: process.getgid(),
     execFile: async (command, args) => {
       calls.push([command, ...args])
       if (args[0] === 'is-enabled') return { stdout: 'enabled\n' }

@@ -24,27 +24,48 @@ async function requireGroup(runner, name) {
   }
 }
 
-async function ensureLinuxIdentity(runner, stateRoot) {
+const LINUX_IDENTITIES = {
+  supervisor: { name: 'openlink', groups: [] },
+  browser: { name: 'openlink-browser', groups: [] },
+  knowledge: { name: 'openlink-knowledge', groups: [] },
+  agent: { name: 'openlink-agent', groups: ['kvm', 'openlink-workspace'] },
+  desktop: { name: 'openlink-desktop', groups: ['openlink-workspace'] },
+  web: { name: 'openlink-web', groups: [] },
+  edge: { name: 'openlink-edge', groups: [] },
+}
+
+async function ensureGroup(runner, name) {
   try {
-    await command(runner, 'getent', ['group', 'openlink'])
+    await command(runner, 'getent', ['group', name])
   } catch {
-    await command(runner, 'groupadd', ['--system', 'openlink'])
+    await command(runner, 'groupadd', ['--system', name])
   }
+}
+
+async function ensureLinuxIdentity(runner, name, stateRoot, groups) {
+  await ensureGroup(runner, name)
   try {
-    await command(runner, 'id', ['-u', 'openlink'])
+    await command(runner, 'id', ['-u', name])
   } catch {
-    await command(runner, 'useradd', ['--system', '--gid', 'openlink', '--home-dir', stateRoot, '--shell', '/usr/sbin/nologin', 'openlink'])
+    await command(runner, 'useradd', ['--system', '--gid', name, '--home-dir', stateRoot, '--shell', '/usr/sbin/nologin', name])
   }
+  await command(runner, 'usermod', ['--home', stateRoot, '--shell', '/usr/sbin/nologin', '--gid', name, '--groups', groups.join(','), name])
+  const uid = Number((await command(runner, 'id', ['-u', name])).trim())
+  const gid = Number((await command(runner, 'id', ['-g', name])).trim())
+  if (!Number.isSafeInteger(uid) || uid < 0 || !Number.isSafeInteger(gid) || gid < 0) throw new Error(`Unable to resolve the ${name} service identity`)
+  return { name, uid, gid, groups }
+}
+
+async function ensureLinuxIdentities(runner, stateRoot) {
   await requireGroup(runner, 'kvm')
-  // The dedicated identity owns no supplementary group except KVM. Using a
-  // replacement group list also removes legacy Docker membership from hosts
-  // upgraded from an older installer.
-  await command(runner, 'usermod', ['--groups', 'kvm', 'openlink'])
-  const uid = Number((await command(runner, 'id', ['-u', 'openlink'])).trim())
-  const groupRecord = (await command(runner, 'getent', ['group', 'openlink'])).trim().split(':')
-  const gid = Number(groupRecord[2])
-  if (!Number.isSafeInteger(uid) || uid < 0 || !Number.isSafeInteger(gid) || gid < 0) throw new Error('Unable to resolve the openlink service identity')
-  return { uid, gid }
+  await ensureGroup(runner, 'openlink-workspace')
+  // Account databases use a global lock; serialize mutations so first install
+  // is deterministic under shadow-utils rather than racing concurrent useradd.
+  const entries = []
+  for (const [role, policy] of Object.entries(LINUX_IDENTITIES)) {
+    entries.push([role, await ensureLinuxIdentity(runner, policy.name, stateRoot, policy.groups)])
+  }
+  return Object.fromEntries(entries)
 }
 
 async function atomicInstallFile(source, destination, mode) {
@@ -124,24 +145,52 @@ export async function installNativeService(options = {}) {
     if (!await exists(path) || !(await lstat(path)).isFile()) throw new Error(`Service configuration is missing: ${path}`)
   }
   const runner = options.execFile ?? execFile
-  const identity = options.identity ?? await ensureLinuxIdentity(runner, stateRoot)
+  const identities = options.identities ?? (options.identity
+    ? Object.fromEntries(Object.keys(LINUX_IDENTITIES).map((role) => [role, { ...options.identity, name: LINUX_IDENTITIES[role].name }]))
+    : await ensureLinuxIdentities(runner, stateRoot))
+  const identity = identities.supervisor
   for (const path of [stateRoot, logRoot, backupRoot]) {
     await mkdir(path, { recursive: true, mode: 0o700 })
-    await chmod(path, 0o700)
+    await chmod(path, path === stateRoot ? 0o711 : 0o700)
     await chown(path, identity.uid, identity.gid)
   }
   await chmod(configPath, 0o640)
   await chown(configPath, options.rootUid ?? 0, identity.gid)
-  await chmod(secretsPath, 0o640)
-  await chown(secretsPath, options.rootUid ?? 0, identity.gid)
+  await chmod(secretsPath, 0o600)
+  await chown(secretsPath, options.rootUid ?? 0, options.rootGid ?? 0)
   await chmod(backupKeyPath, 0o600)
   await chown(backupKeyPath, options.rootUid ?? 0, identity.gid)
   await Promise.all([syncFile(configPath), syncFile(secretsPath), syncFile(backupKeyPath)])
+  const privateState = [
+    [identities.browser, ['browser']],
+    [identities.knowledge, ['knowledge']],
+    [identities.agent, ['agents', 'project-vms', 'podman', 'podman/config', 'podman/data']],
+    [identities.desktop, ['desktop-agents']],
+    [identities.web, ['web']],
+    [identities.edge, ['edge', 'edge/config', 'edge/data']],
+  ]
+  for (const [owner, directories] of privateState) {
+    for (const relative of directories) {
+      const path = join(stateRoot, relative)
+      await mkdir(path, { recursive: true, mode: 0o700 })
+      await chmod(path, 0o700)
+      await chown(path, owner.uid, owner.gid)
+    }
+  }
+  const workspaceGroup = options.workspaceGroup ?? (options.identity ? identity : {
+    gid: Number((await command(runner, 'getent', ['group', 'openlink-workspace'])).trim().split(':')[2]),
+  })
+  if (!Number.isSafeInteger(workspaceGroup.gid) || workspaceGroup.gid < 0) throw new Error('Unable to resolve the openlink-workspace group')
+  const workspaceRoot = join(stateRoot, 'workspaces')
+  await mkdir(workspaceRoot, { recursive: true, mode: 0o770 })
+  await chmod(workspaceRoot, 0o770)
+  await chown(workspaceRoot, identity.uid, workspaceGroup.gid)
   const unitSource = join(releaseRoot, 'systemd/openlink.service')
   const brokerUnitSource = join(releaseRoot, 'systemd/openlink-container-broker.service')
   const unit = await readFile(unitSource, 'utf8')
   const brokerUnit = await readFile(brokerUnitSource, 'utf8')
-  if (!/^ExecStart=\/opt\/openlink\/current\/bin\/openlinkctl run --config \/etc\/openlink\/openlink\.env$/m.test(unit)) {
+  if (!/^ExecStart=\/opt\/openlink\/current\/bin\/openlinkctl run --config \/etc\/openlink\/openlink\.env$/m.test(unit)
+    || !/^User=root$/m.test(unit) || !/^CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_SETPCAP CAP_NET_BIND_SERVICE$/m.test(unit)) {
     throw new Error('Release systemd unit does not match the production path contract')
   }
   if (!/^ExecStart=\/opt\/openlink\/current\/bin\/openlinkctl container-broker --config \/etc\/openlink\/openlink\.env$/m.test(brokerUnit)
@@ -177,5 +226,5 @@ export async function installNativeService(options = {}) {
     if (rollbackFailures.length) throw new AggregateError([error, ...rollbackFailures], 'Native service installation failed and rollback was incomplete')
     throw error
   }
-  return { manager: 'systemd', service: 'openlink.service', brokerService: 'openlink-container-broker.service', unitPath, brokerUnitPath, identity: 'openlink', active: true }
+  return { manager: 'systemd', service: 'openlink.service', brokerService: 'openlink-container-broker.service', unitPath, brokerUnitPath, identity: 'openlink', processIdentities: Object.values(identities).map((item) => item.name), active: true }
 }
