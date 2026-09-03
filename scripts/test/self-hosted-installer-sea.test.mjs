@@ -59,6 +59,7 @@ test('sealed installer performs signed archive install and protected configurati
     'browser/manifest.json', 'browser/chromium/chrome', 'project-vm/manifest.json',
     'services/agent-host/dist/src/desktop-main.js',
     `project-vm/openlink-project-vm-base-${targetArchitecture}.${diskFormat}`, 'openlinkctl.mjs', 'bin/openlinkctl',
+    'systemd/openlink.service',
     'systemd/openlink-container-broker.service',
   ]
   for (const relative of required) {
