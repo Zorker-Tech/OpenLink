@@ -18,6 +18,14 @@ const CONTRACTS = Object.freeze({
     diskLayout: 'podman-machine-os-efi-boot-root-hyperv-ignition-v1',
     cloneStrategy: 'hyperv-differencing',
   }),
+  qemu: Object.freeze({
+    hostPlatform: 'linux',
+    provider: 'qemu',
+    diskFormat: 'qcow2',
+    ignitionPlatform: 'qemu',
+    diskLayout: 'podman-machine-os-efi-boot-root-qemu-ignition-v1',
+    cloneStrategy: 'native-cow',
+  }),
 })
 
 export function projectVmArtifactContract(options = {}) {
@@ -31,8 +39,8 @@ export function projectVmArtifactContract(options = {}) {
   }
   return {
     ...contract,
-    architecture: host.architecture,
-    diskName: `openlink-project-vm-base-${host.architecture}.${contract.diskFormat}`,
+    architecture: host.platform === 'linux' && host.architecture === 'x64' ? 'amd64' : host.architecture,
+    diskName: `openlink-project-vm-base-${host.platform === 'linux' && host.architecture === 'x64' ? 'amd64' : host.architecture}.${contract.diskFormat}`,
   }
 }
 

@@ -2,9 +2,10 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { assertProjectVmArtifactManifest, projectVmArtifactContract } from '../lib/project-vm-artifact.mjs'
 
-test('defines independent AppleHV raw and Hyper-V VHDX artifact contracts', () => {
+test('defines independent AppleHV raw, Hyper-V VHDX and Linux QEMU qcow2 artifact contracts', () => {
   const apple = projectVmArtifactContract({ platform: 'darwin', architecture: 'arm64', env: {} })
   const windows = projectVmArtifactContract({ platform: 'win32', architecture: 'x64', env: {} })
+  const linux = projectVmArtifactContract({ platform: 'linux', architecture: 'x64', env: {} })
   assert.deepEqual(
     [apple.provider, apple.diskFormat, apple.ignitionPlatform, apple.cloneStrategy],
     ['applehv', 'raw', 'applehv', 'native-cow'],
@@ -14,6 +15,11 @@ test('defines independent AppleHV raw and Hyper-V VHDX artifact contracts', () =
     ['hyperv', 'vhdx', 'hyperv', 'hyperv-differencing'],
   )
   assert.equal(windows.diskName, 'openlink-project-vm-base-x64.vhdx')
+  assert.deepEqual(
+    [linux.provider, linux.architecture, linux.diskFormat, linux.ignitionPlatform, linux.cloneStrategy],
+    ['qemu', 'amd64', 'qcow2', 'qemu', 'native-cow'],
+  )
+  assert.equal(linux.diskName, 'openlink-project-vm-base-amd64.qcow2')
 })
 
 test('rejects a disk manifest produced for another native host provider', () => {
