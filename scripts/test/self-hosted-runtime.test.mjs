@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import test from 'node:test'
 
 import { ProductionSupervisor, createRuntimePlan } from '../../deploy/self-hosted/runtime/production-runtime.mjs'
+import { acquireRuntimeLock, runtimeLockStatus } from '../../deploy/self-hosted/runtime/lifecycle-lock.mjs'
 
 async function fixture(t) {
   const root = await mkdtemp(join(tmpdir(), 'openlink-production-runtime-'))
@@ -103,4 +104,18 @@ test('a critical child exit fails the runtime and triggers cleanup', async (t) =
   agent.exitCode = 23
   agent.emit('exit', 23)
   await assert.rejects(failure, /agent-host.*23/i)
+})
+
+test('runtime lock excludes a live owner and safely replaces a stale owner', async (t) => {
+  const item = await fixture(t)
+  const first = await acquireRuntimeLock(item.stateRoot, { pid: 101, isPidAlive: (pid) => pid === 101 })
+  assert.equal((await runtimeLockStatus(item.stateRoot, { isPidAlive: () => true })).running, true)
+  await assert.rejects(acquireRuntimeLock(item.stateRoot, { pid: 202, isPidAlive: (pid) => pid === 101 }), /already active.*101/i)
+  await first.release()
+  const stale = await acquireRuntimeLock(item.stateRoot, { pid: 303, isPidAlive: () => false })
+  const replacement = await acquireRuntimeLock(item.stateRoot, { pid: 404, isPidAlive: () => false })
+  assert.equal(replacement.owner.pid, 404)
+  await stale.release()
+  assert.equal((await runtimeLockStatus(item.stateRoot, { isPidAlive: () => true })).owner.pid, 404)
+  await replacement.release()
 })
