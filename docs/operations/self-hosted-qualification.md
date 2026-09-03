@@ -33,10 +33,10 @@ qualification records are intentionally ignored by Git because they contain
 host-specific evidence rather than product source.
 
 The current macOS qualification release
-`2026.09.03-macos-qualification.2` contains 15,929 inventoried files and
-78,439,815,948 logical bytes, including the real sparse Project VM disk and all
+`2026.09.03-macos-qualification.3` contains 15,929 inventoried files and
+78,439,820,149 logical bytes, including the real sparse Project VM disk and all
 offline image archives. A second process verified its Ed25519 signature and
-every file path, type, mode, size and SHA-256 digest in 463,014 ms. All 21 image
+every file path, type, mode, size and SHA-256 digest in 384,256 ms. All 21 image
 entries bind an immutable Docker image ID; tag reuse alone is rejected. The bundled
 Caddy 2.11.4 configuration parsed successfully and the bundled Chromium
 151.0.7922.34 process launched and rendered a DOM. The release excludes the Go
@@ -65,17 +65,18 @@ upgrade commit/rollback and incompatible schema rejection. These are native
 mechanism results, not a substitute for a running full-stack data restore.
 
 The final portable macOS qualification archive is 9,570,549,760 bytes with
-SHA-256 `5861aa85c23f0143e4fda76b6912434e4dd53f8f9cf84c59223b0b7b7969aa72`.
+SHA-256 `c3fa69c65e2eb5c017b755399f190cff9413fbc5bee0c2c546b044fbac1a1a48`.
 It was streamed directly to the Ubuntu host, safely extracted there and fully
-verified against the independent public key in 335,509 ms. Qualification found
-and fixed two real cross-platform archive defects: Apple PAX/xattr metadata and
-GNU sparse path rewriting for the 64 GiB Golden Disk. The macOS archiver now
+verified against the independent public key in 343,520 ms. Qualification found
+and fixed three real cross-platform archive defects: Apple PAX/xattr metadata,
+GNU sparse path rewriting for the 64 GiB Golden Disk, and base-256 size fields
+emitted for large regular files. The macOS archiver now
 disables xattrs, Apple metadata and sparse detection; the extractor accepts
 only positive, bounded base-256 tar numbers and rejects negative/unsafe values.
 It also caps cumulative expansion at 192 GiB and metadata records at 16 MiB.
 
 The matching macOS SEA installer is 143,746,432 bytes with SHA-256
-`14aff1ccdb89ae6f4eeeb48d453bb1c288ca0dfd85a8216ed15565427438d30d`.
+`414ab3b99140629990a27cfc01610fd2eebe663d1b284bb4d79659c3adfbfab8`.
 It passed ad-hoc code-signature verification and self-test with no system Node
 lookup. Re-running an interrupted install reuses only a complete, permission-safe
 configuration whose origin and state paths exactly match; it does not rotate
