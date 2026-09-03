@@ -37,7 +37,7 @@
     "runtime:zero:images": "node scripts/build-zero-images.mjs",
     "runtime:images:publish": "node scripts/publish-runtime-images.mjs",
     "release:build:self-hosted": "node scripts/build-self-hosted-release.mjs",
-    "release:test:self-hosted": "node --test scripts/test/self-hosted-release.test.mjs scripts/test/openlinkctl.test.mjs scripts/test/build-self-hosted-release.test.mjs scripts/test/self-hosted-preflight.test.mjs scripts/test/self-hosted-service-definitions.test.mjs",
+    "release:test:self-hosted": "node --test scripts/test/self-hosted-release.test.mjs scripts/test/openlinkctl.test.mjs scripts/test/build-self-hosted-release.test.mjs scripts/test/self-hosted-preflight.test.mjs scripts/test/self-hosted-configuration.test.mjs scripts/test/self-hosted-runtime.test.mjs scripts/test/self-hosted-service-definitions.test.mjs",
     "knowledge:check": "npm --prefix services/knowledge-service run check",
     "knowledge:test": "npm --prefix services/knowledge-service test"
   },

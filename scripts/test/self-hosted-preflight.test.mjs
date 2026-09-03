@@ -29,6 +29,7 @@ test('fixture preflight enforces immutable runtime inputs without requiring buil
     'images/zero/manifest.json',
     'toolchain/bin/podman',
     'project-vm/manifest.json',
+    'orchestration/docker-compose.production.yml',
   ]) {
     const path = join(releaseRoot, ...relative.split('/'))
     await mkdir(join(path, '..'), { recursive: true })
@@ -65,4 +66,3 @@ test('customer runtime source contains no build or dependency-install execution'
   const executableBuild = /(?:spawn|execFile|runCommand)[\s\S]{0,180}['"](?:npm|pnpm|yarn|next|tsc|go|docker|podman)['"][\s\S]{0,100}['"](?:install|ci|build|pull)['"]/i
   for (const source of sources) assert.doesNotMatch(source, executableBuild)
 })
-
