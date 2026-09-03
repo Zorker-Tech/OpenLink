@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import { createCipheriv, createDecipheriv, createHash, randomBytes, scryptSync } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
-import { chmod, cp, link, lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises'
+import { chmod, cp, link, lstat, mkdir, mkdtemp, readFile, readdir, readlink, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { pipeline } from 'node:stream/promises'
@@ -24,9 +24,12 @@ async function digestFile(path) {
   return { sha256: hash.digest('hex'), size }
 }
 
-function tarStream(root) {
+function tarStream(stateRoot, staging) {
   const portability = process.platform === 'darwin' ? ['--no-xattrs', '--no-mac-metadata', '--no-read-sparse'] : []
-  const child = spawn('tar', [...portability, '-czhf', '-', '--exclude=./state/run', '-C', root, '.'], { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, COPYFILE_DISABLE: '1' } })
+  const transform = process.platform === 'darwin'
+    ? ['-s', ',^\\.$,state,', '-s', ',^\\./,state/,']
+    : ['--transform=s,^\\.$,state,', '--transform=s,^\\./,state/,']
+  const child = spawn('tar', [...portability, '-czf', '-', '--exclude=./run', ...transform, '-C', stateRoot, '.', '-C', staging, 'configuration'], { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, COPYFILE_DISABLE: '1' } })
   let stderr = ''
   child.stderr.on('data', (chunk) => { stderr += String(chunk) })
   const completion = new Promise((resolveExit, rejectExit) => {
@@ -34,6 +37,35 @@ function tarStream(root) {
     child.once('exit', (code) => code === 0 ? resolveExit() : rejectExit(new Error(`Backup tar failed (${code ?? 'signal'}): ${stderr.slice(-4000)}`)))
   })
   return { child, completion }
+}
+
+async function validateBackupTree(root) {
+  const absoluteRoot = resolve(root)
+  async function visit(path) {
+    const stats = await lstat(path)
+    if (stats.isDirectory()) {
+      for (const name of await readdir(path)) await visit(join(path, name))
+      return
+    }
+    if (stats.isFile()) return
+    if (stats.isSymbolicLink()) {
+      const target = await readlink(path)
+      const resolvedTarget = resolve(dirname(path), target)
+      if (target.startsWith('/') || resolvedTarget !== absoluteRoot && !resolvedTarget.startsWith(`${absoluteRoot}/`)) {
+        throw new Error(`Backup state contains a symbolic link outside the state root: ${path}`)
+      }
+      return
+    }
+    throw new Error(`Backup state contains an unsupported filesystem object: ${path}`)
+  }
+  await visit(absoluteRoot)
+}
+
+async function copyProtectedInput(source, destination, secret) {
+  const stats = await lstat(source)
+  if (!stats.isFile() || (stats.mode & (secret ? 0o077 : 0o022)) !== 0) throw new Error(`Backup input must be a protected regular file: ${source}`)
+  await cp(source, destination, { force: false, errorOnExist: true, preserveTimestamps: false })
+  await chmod(destination, secret ? 0o600 : 0o640)
 }
 
 async function assertStopped(stateRoot) {
@@ -56,14 +88,14 @@ export async function createEncryptedBackup(options = {}) {
     const temporary = `${output}.${process.pid}.tmp`
     try {
       await mkdir(join(staging, 'configuration'), { recursive: true, mode: 0o700 })
-      await symlink(stateRoot, join(staging, 'state'))
-      await symlink(configPath, join(staging, 'configuration/openlink.env'))
-      await symlink(secretsPath, join(staging, 'configuration/secrets.env'))
+      await validateBackupTree(stateRoot)
+      await copyProtectedInput(configPath, join(staging, 'configuration/openlink.env'), false)
+      await copyProtectedInput(secretsPath, join(staging, 'configuration/secrets.env'), true)
       await mkdir(dirname(output), { recursive: true, mode: 0o700 })
       const salt = randomBytes(16)
       const iv = randomBytes(12)
       const cipher = createCipheriv('aes-256-gcm', scryptSync(key, salt, 32), iv)
-      const tar = tarStream(staging)
+      const tar = tarStream(stateRoot, staging)
       await Promise.all([
         pipeline(tar.child.stdout, cipher, createWriteStream(temporary, { mode: 0o600, flags: 'wx' })),
         tar.completion,
@@ -130,13 +162,13 @@ export async function restoreEncryptedBackup(options = {}) {
     const decipher = createDecipheriv('aes-256-gcm', scryptSync(key, Buffer.from(manifest.encryption.salt, 'base64url'), 32), Buffer.from(manifest.encryption.iv, 'base64url'))
     decipher.setAuthTag(Buffer.from(manifest.encryption.authTag, 'base64url'))
     await pipeline(createReadStream(archive), decipher, createWriteStream(plaintext, { mode: 0o600, flags: 'wx' })).catch((error) => { throw new Error(`Backup authentication failed: ${error.message}`) })
-    await extractVerifiedTarGzip(plaintext, extracted, { maximumFiles: options.maximumFiles ?? 500_000 })
+    await extractVerifiedTarGzip(plaintext, extracted, { maximumFiles: options.maximumFiles ?? 500_000, maximumEntries: options.maximumEntries ?? 500_000, allowSafeLinks: true })
     for (const relative of ['state', 'configuration/openlink.env', 'configuration/secrets.env']) {
       if (!await lstat(join(extracted, relative)).then(() => true).catch(() => false)) throw new Error(`Backup is incomplete: ${relative} is missing`)
     }
     for (const name of await readdir(join(extracted, 'state'))) {
       if (name === 'run') continue
-      await cp(join(extracted, 'state', name), join(stateRoot, name), { recursive: true, force: false, errorOnExist: true, preserveTimestamps: false })
+      await cp(join(extracted, 'state', name), join(stateRoot, name), { recursive: true, force: false, errorOnExist: true, preserveTimestamps: false, verbatimSymlinks: true })
     }
     await chmod(stateRoot, 0o700)
     await mkdir(dirname(configPath), { recursive: true, mode: 0o750 })

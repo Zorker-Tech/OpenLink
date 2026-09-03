@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { chmod, lstat, mkdir, mkdtemp, readFile, truncate, writeFile } from 'node:fs/promises'
+import { chmod, lstat, mkdir, mkdtemp, readFile, readlink, symlink, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -61,4 +61,27 @@ test('complete backup refuses to run while a live runtime lock exists', async (t
   await mkdir(join(item.stateRoot, 'run/runtime.lock'), { recursive: true })
   await writeFile(join(item.stateRoot, 'run/runtime.lock/owner.json'), `${JSON.stringify({ pid: process.pid })}\n`)
   await assert.rejects(createEncryptedBackup(item), /service.*stopped|PID/i)
+})
+
+test('backup preserves contained links but rejects links to host files', async (t) => {
+  const item = await fixture(t)
+  await mkdir(join(item.stateRoot, 'workspaces/project'), { recursive: true })
+  await symlink('../../zokerbase/postgres/data.bin', join(item.stateRoot, 'workspaces/project/data-link'))
+  await createEncryptedBackup(item)
+  const restored = {
+    archive: item.archive,
+    keyFile: item.keyFile,
+    stateRoot: join(item.root, 'restored/state'),
+    configPath: join(item.root, 'restored/config/openlink.env'),
+    secretsPath: join(item.root, 'restored/config/secrets.env'),
+  }
+  await restoreEncryptedBackup(restored)
+  assert.equal(await readlink(join(restored.stateRoot, 'workspaces/project/data-link')), '../../zokerbase/postgres/data.bin')
+  assert.deepEqual(await readFile(join(restored.stateRoot, 'workspaces/project/data-link')), Buffer.from([0, 1, 2, 3]))
+
+  const unsafe = await fixture(t)
+  await mkdir(join(unsafe.stateRoot, 'workspaces/project'), { recursive: true })
+  await symlink(unsafe.secretsPath, join(unsafe.stateRoot, 'workspaces/project/leak'))
+  await assert.rejects(createEncryptedBackup(unsafe), /symbolic link outside the state root/i)
+  await assert.rejects(lstat(unsafe.archive), /ENOENT/)
 })

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFile as execFileCallback } from 'node:child_process'
-import { generateKeyPairSync } from 'node:crypto'
+import { generateKeyPairSync, verify } from 'node:crypto'
 import { chmod, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -15,13 +15,16 @@ const execFile = promisify(execFileCallback)
 test('builds a native sealed installer that runs without a source tree or system Node lookup', { timeout: 240_000 }, async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'openlink-installer-sea-'))
   t.after(async () => (await import('node:fs/promises')).rm(root, { recursive: true, force: true }))
-  const publicKey = generateKeyPairSync('ed25519').publicKey.export({ type: 'spki', format: 'pem' })
+  const keys = generateKeyPairSync('ed25519')
+  const publicKey = keys.publicKey.export({ type: 'spki', format: 'pem' })
   const trustFile = join(root, 'release-keys.json')
-  await writeFile(trustFile, `${JSON.stringify({ keys: { 'qualification-key': { publicKeyPem: publicKey } } }, null, 2)}\n`, { mode: 0o644 })
+  await writeFile(trustFile, `${JSON.stringify({ schemaVersion: 1, minimumReleaseSequence: 1, keys: { 'qualification-key': { algorithm: 'Ed25519', status: 'active', publicKeyPem: publicKey } } }, null, 2)}\n`, { mode: 0o644 })
   await chmod(trustFile, 0o644)
   const output = join(root, 'build/openlink-installer')
-  const built = await buildSelfHostedInstaller({ output, trustFile, nodeExecutable: process.execPath })
+  const built = await buildSelfHostedInstaller({ output, trustFile, nodeExecutable: process.execPath, signingKey: keys.privateKey, keyId: 'qualification-key' })
   assert.ok(built.bytes > 10 * 1024 * 1024)
+  assert.equal(verify(null, await readFile(built.checksumPath), keys.publicKey, await readFile(built.signaturePath)), true)
+  assert.match(await readFile(built.checksumPath, 'utf8'), new RegExp(`^${built.sha256}  openlink-installer\\n$`))
   const isolated = join(root, 'isolated/openlink-installer')
   await mkdir(join(isolated, '..'), { recursive: true })
   await (await import('node:fs/promises')).copyFile(output, isolated)
@@ -38,7 +41,7 @@ test('sealed installer performs signed archive install and protected configurati
   t.after(async () => (await import('node:fs/promises')).rm(root, { recursive: true, force: true }))
   const keys = generateKeyPairSync('ed25519')
   const trustFile = join(root, 'release-keys.json')
-  await writeFile(trustFile, `${JSON.stringify({ keys: { 'e2e-key': { publicKeyPem: keys.publicKey.export({ type: 'spki', format: 'pem' }) } } }, null, 2)}\n`, { mode: 0o644 })
+  await writeFile(trustFile, `${JSON.stringify({ schemaVersion: 1, minimumReleaseSequence: 1, keys: { 'e2e-key': { algorithm: 'Ed25519', status: 'active', publicKeyPem: keys.publicKey.export({ type: 'spki', format: 'pem' }) } } }, null, 2)}\n`, { mode: 0o644 })
   await chmod(trustFile, 0o644)
   const payload = join(root, 'payload')
   const target = process.platform === 'darwin'
@@ -67,9 +70,9 @@ test('sealed installer performs signed archive install and protected configurati
         : relative.endsWith('.json') ? '{}\n' : `${relative}\n`
     await writeFile(path, contents, { mode: relative.includes('/bin/') || relative === 'bin/openlinkctl' || relative === 'browser/chromium/chrome' ? 0o755 : 0o644 })
   }
-  const release = await assembleSelfHostedRelease({ payloadRoot: payload, outputRoot: join(root, 'releases'), releaseId: 'sea-e2e-1', target, privateKey: keys.privateKey, keyId: 'e2e-key' })
+  const release = await assembleSelfHostedRelease({ payloadRoot: payload, outputRoot: join(root, 'releases'), releaseId: 'sea-e2e-1', releaseSequence: 1, target, privateKey: keys.privateKey, keyId: 'e2e-key' })
   const installer = join(root, 'openlink-installer')
-  await buildSelfHostedInstaller({ output: installer, trustFile, nodeExecutable: process.execPath })
+  await buildSelfHostedInstaller({ output: installer, trustFile, nodeExecutable: process.execPath, signingKey: keys.privateKey, keyId: 'e2e-key' })
   const installRoot = join(root, 'installed')
   const configPath = join(root, 'configuration/openlink.env')
   const { stdout, stderr } = await execFile(installer, [
@@ -99,7 +102,7 @@ test('sealed installer performs signed archive install and protected configurati
     '--skip-service-install', '1',
   ], { env: { PATH: '/usr/bin:/bin' }, timeout: 60_000 }), /does not match/i)
   assert.equal(await readFile(join(root, 'configuration/secrets.env'), 'utf8'), secretsBeforeRetry)
-  const replacement = await assembleSelfHostedRelease({ payloadRoot: payload, outputRoot: join(root, 'replacement'), releaseId: 'sea-e2e-2', target, privateKey: keys.privateKey, keyId: 'e2e-key' })
+  const replacement = await assembleSelfHostedRelease({ payloadRoot: payload, outputRoot: join(root, 'replacement'), releaseId: 'sea-e2e-2', releaseSequence: 2, target, privateKey: keys.privateKey, keyId: 'e2e-key' })
   await assert.rejects(execFile(installer, [
     '--archive', replacement.archive, '--app-url', 'http://127.0.0.1:7443', '--allow-insecure-http', '1',
     '--root', installRoot, '--config', configPath, '--state-root', join(root, 'state'), '--skip-host-preflight', '1',

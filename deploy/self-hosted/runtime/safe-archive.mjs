@@ -1,5 +1,5 @@
 import { createReadStream, createWriteStream } from 'node:fs'
-import { chmod, mkdir, open, rm } from 'node:fs/promises'
+import { chmod, link, lstat, mkdir, open, rm, symlink } from 'node:fs/promises'
 import { dirname, resolve, sep } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { createGunzip } from 'node:zlib'
@@ -42,6 +42,7 @@ function parsePax(contents) {
     if (space === -1) throw new Error('Archive PAX record has no length separator')
     const length = Number.parseInt(contents.subarray(offset, space).toString('ascii'), 10)
     if (!Number.isSafeInteger(length) || length <= space - offset + 1 || offset + length > contents.length) throw new Error('Archive PAX record length is invalid')
+    if (contents[offset + length - 1] !== 0x0a) throw new Error('Archive PAX record is not newline terminated')
     const record = contents.subarray(space + 1, offset + length - 1).toString('utf8')
     const separator = record.indexOf('=')
     if (separator <= 0) throw new Error('Archive PAX record is invalid')
@@ -49,6 +50,13 @@ function parsePax(contents) {
     offset += length
   }
   return attributes
+}
+
+function parsePaxSize(value) {
+  if (typeof value !== 'string' || !/^(?:0|[1-9][0-9]*)$/.test(value)) throw new Error('Archive PAX file size is invalid')
+  const parsed = BigInt(value)
+  if (parsed > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('Archive PAX file size is out of range')
+  return Number(parsed)
 }
 
 async function safeDirectory(root, relative) {
@@ -68,11 +76,14 @@ export async function extractVerifiedTarGzip(archive, destination, options = {})
   let longName
   let zeroBlocks = 0
   const paths = new Set()
+  const symbolicPaths = new Set()
   const maximumFileBytes = Number(options.maximumFileBytes ?? 128 * 1024 ** 3)
   const maximumFiles = Number(options.maximumFiles ?? 250_000)
+  const maximumEntries = Number(options.maximumEntries ?? 250_000)
   const maximumTotalBytes = Number(options.maximumTotalBytes ?? 192 * 1024 ** 3)
   const maximumMetadataBytes = Number(options.maximumMetadataBytes ?? 16 * 1024 ** 2)
   let totalBytes = 0
+  let entries = 0
 
   async function consumeHeader(header) {
     if (header.every((byte) => byte === 0)) {
@@ -86,12 +97,18 @@ export async function extractVerifiedTarGzip(archive, destination, options = {})
     const prefix = parseString(header.subarray(345, 500))
     const headerPath = prefix ? `${prefix}/${name}` : name
     const type = String.fromCharCode(header[156] || 0)
+    const headerLink = parseString(header.subarray(157, 257))
     const mode = parseTarNumber(header.subarray(100, 108), 'file mode') & 0o7777
     const headerSize = parseTarNumber(header.subarray(124, 136), 'file size')
-    const sizeValue = pax.size === undefined ? headerSize : Number(pax.size)
+    const sizeValue = pax.size === undefined ? headerSize : parsePaxSize(pax.size)
     if (!Number.isSafeInteger(sizeValue) || sizeValue < 0 || sizeValue > maximumFileBytes) throw new Error(`Archive file size is invalid: ${sizeValue}`)
     if (['x', 'g', 'L'].includes(type) && sizeValue > maximumMetadataBytes) throw new Error(`Archive metadata exceeds ${maximumMetadataBytes} bytes`)
+    entries += 1
+    if (!Number.isSafeInteger(entries) || entries > maximumEntries) throw new Error(`Archive contains more than ${maximumEntries} entries`)
+    totalBytes += sizeValue
+    if (!Number.isSafeInteger(totalBytes) || totalBytes > maximumTotalBytes) throw new Error(`Archive expands beyond ${maximumTotalBytes} bytes`)
     const rawPath = String(pax.path ?? longName ?? headerPath)
+    const linkTarget = String(pax.linkpath ?? headerLink)
     const rootDirectory = type === '5' && (rawPath === '.' || rawPath === './')
     const relative = type === 'x' || type === 'g' || type === 'L' || rootDirectory
       ? undefined
@@ -103,18 +120,36 @@ export async function extractVerifiedTarGzip(archive, destination, options = {})
 
     if (relative) {
       if (paths.has(relative)) throw new Error(`Archive contains a duplicate path: ${relative}`)
+      for (const symbolic of symbolicPaths) {
+        if (relative.startsWith(`${symbolic}/`)) throw new Error(`Archive path traverses a symbolic link: ${relative}`)
+      }
       paths.add(relative)
       if (paths.size > maximumFiles) throw new Error(`Archive contains more than ${maximumFiles} paths`)
       if (type === '5') {
         if (sizeValue !== 0) throw new Error(`Archive directory has a payload: ${relative}`)
         await safeDirectory(root, relative)
       } else if (type === '0' || type === '\0') {
-        totalBytes += sizeValue
-        if (!Number.isSafeInteger(totalBytes) || totalBytes > maximumTotalBytes) throw new Error(`Archive expands beyond ${maximumTotalBytes} bytes`)
         await safeDirectory(root, dirname(relative).split(sep).join('/'))
         const output = resolve(root, ...relative.split('/'))
         state.handle = await open(output, 'wx', 0o600)
         state.output = output
+      } else if (options.allowSafeLinks === true && type === '2') {
+        if (sizeValue !== 0 || !linkTarget || linkTarget.length > 1024 || linkTarget.startsWith('/') || linkTarget.includes('\\') || /[\0-\x1f\x7f]/.test(linkTarget)) {
+          throw new Error(`Archive symbolic link target is unsafe: ${relative}`)
+        }
+        const output = resolve(root, ...relative.split('/'))
+        const resolvedTarget = resolve(dirname(output), ...linkTarget.split('/'))
+        if (resolvedTarget !== root && !resolvedTarget.startsWith(`${root}${sep}`)) throw new Error(`Archive symbolic link escapes extraction root: ${relative}`)
+        await safeDirectory(root, dirname(relative).split(sep).join('/'))
+        await symlink(linkTarget, output)
+        symbolicPaths.add(relative)
+      } else if (options.allowSafeLinks === true && type === '1') {
+        if (sizeValue !== 0) throw new Error(`Archive hard link has a payload: ${relative}`)
+        const targetRelative = safeReleasePath(linkTarget.replace(/^\.\//, '').replace(/\/$/, ''))
+        const target = resolve(root, ...targetRelative.split('/'))
+        if (!paths.has(targetRelative) || !(await lstat(target).catch(() => undefined))?.isFile()) throw new Error(`Archive hard link target is unavailable: ${relative}`)
+        await safeDirectory(root, dirname(relative).split(sep).join('/'))
+        await link(target, resolve(root, ...relative.split('/')))
       } else {
         throw new Error(`Archive entry type ${JSON.stringify(type)} is forbidden: ${relative}`)
       }

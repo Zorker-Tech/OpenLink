@@ -48,6 +48,8 @@ test('production plan uses only sealed artifacts and loopback host services', as
   assert.deepEqual(plan.processes.map((process) => process.name), ['browser-host', 'knowledge-service', 'agent-host', 'desktop-agent-host', 'web', 'edge'])
   assert.equal(plan.processes.at(-1).args.includes('--adapter'), true)
   assert.equal(plan.processes[0].environment.OPENLINK_CHROME_EXECUTABLE, join(item.releaseRoot, 'browser/chromium/chrome'))
+  assert.equal(plan.processes.find((process) => process.name === 'web').healthUrl.endsWith('/api/healthz'), true)
+  assert.equal(plan.processes[0].environment.OPENLINK_RELEASE_ID, 'release')
   assert.equal(plan.processes.filter((process) => process.name !== 'edge').every((process) => process.environment.OPENLINK_RUNTIME_MODE === 'local'), true)
   assert.equal(plan.processes.filter((process) => process.name !== 'edge').every((process) => process.environment.OPENLINK_AGENT_HOST === '127.0.0.1'), true)
   assert.equal(Object.keys(plan.processes.at(-1).environment).some((key) => /TOKEN|SECRET|PASSWORD|KEY/.test(key)), false)
