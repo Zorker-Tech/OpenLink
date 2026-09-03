@@ -35,7 +35,7 @@ export function normalizeTarget(input = {}) {
 
 export function safeReleasePath(value) {
   invariant(typeof value === 'string' && value.length > 0 && value.length <= 1024, 'Release inventory path is invalid')
-  invariant(!value.includes('\\') && !value.startsWith('/') && !value.includes('\0'), 'Release inventory path is unsafe')
+  invariant(!value.includes('\\') && !value.startsWith('/') && !/[\0-\x1f\x7f]/.test(value), 'Release inventory path is unsafe')
   const normalized = posix.normalize(value)
   invariant(normalized === value && normalized !== '.' && !normalized.startsWith('../'), 'Release inventory path traversal is not allowed')
   return normalized
