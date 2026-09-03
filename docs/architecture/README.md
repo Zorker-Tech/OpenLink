@@ -55,6 +55,10 @@ The current ADR set covers these areas:
 - sealed, platform-specific self-hosted releases that customers install and
   operate without source builds or runtime registry pulls
   ([ADR-0021](./ADR-0021-sealed-self-hosted-production-distribution.md)).
+- Core, Standard and Dense production profiles with explicit container/VM
+  isolation and a strict separation between tenant entitlements in OpenLink
+  Settings and global capacity in ZOKERBASE Platform Console
+  ([ADR-0022](./ADR-0022-production-deployment-profiles-and-resource-governance.md)).
 
 New decisions use the format below and the next unused ADR number:
 
