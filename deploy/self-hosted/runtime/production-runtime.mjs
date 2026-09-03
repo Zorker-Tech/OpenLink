@@ -4,6 +4,7 @@ import { constants } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 
 import { requestContainerBroker } from './container-broker.mjs'
+import { isolationClass, resolveDeploymentProfile, resolveProjectRuntime } from './deployment-profile.mjs'
 
 const sleep = (milliseconds) => new Promise((resolveDelay) => setTimeout(resolveDelay, milliseconds))
 
@@ -33,7 +34,8 @@ const KNOWLEDGE_ENVIRONMENT_KEYS = [
   'OPENLINK_KNOWLEDGE_REQUEST_TIMEOUT_MS', 'OPENLINK_KNOWLEDGE_CHUNK_SIZE', 'OPENLINK_KNOWLEDGE_CHUNK_OVERLAP',
 ]
 const AGENT_ENVIRONMENT_KEYS = [
-  'NODE_ENV', 'OPENLINK_RELEASE_ID', 'OPENLINK_RUNTIME_MODE', 'OPENLINK_AGENT_API_TOKEN', 'OPEN_SANDBOX_API_KEY',
+  'NODE_ENV', 'OPENLINK_RELEASE_ID', 'OPENLINK_RUNTIME_MODE', 'OPENLINK_DEPLOYMENT_PROFILE', 'OPENLINK_DEPLOYMENT_PROFILE_REVISION',
+  'OPENLINK_PROJECT_RUNTIME', 'OPENLINK_PROJECT_ISOLATION', 'OPENLINK_AGENT_API_TOKEN', 'OPEN_SANDBOX_API_KEY',
   'OPEN_SANDBOX_DOMAIN', 'OPENLINK_PROVIDER_SECRET_KEY', 'OPENLINK_SUPABASE_URL', 'OPENLINK_SUPABASE_SERVICE_ROLE_KEY',
   'NEXT_PUBLIC_SUPABASE_URL', 'OPENLINK_AGENT_HOST', 'OPENLINK_AGENT_PORT', 'OPENLINK_AGENT_PUBLIC_URL',
   'OPENLINK_AGENT_STORAGE_ROOT', 'OPENLINK_AGENT_WORKSPACE_ROOT', 'OPENLINK_AGENT_SESSION_IDLE_TTL_MS',
@@ -61,7 +63,9 @@ const DESKTOP_AGENT_ENVIRONMENT_KEYS = [
   'OPENLINK_BROWSER_ALLOWED_ORIGINS',
 ]
 const WEB_ENVIRONMENT_KEYS = [
-  'NODE_ENV', 'OPENLINK_RELEASE_ID', 'OPENLINK_RUNTIME_MODE', 'NEXT_PUBLIC_OPENLINK_RUNTIME_MODE', 'PORT', 'HOSTNAME',
+  'NODE_ENV', 'OPENLINK_RELEASE_ID', 'OPENLINK_RUNTIME_MODE', 'NEXT_PUBLIC_OPENLINK_RUNTIME_MODE',
+  'OPENLINK_DEPLOYMENT_PROFILE', 'OPENLINK_DEPLOYMENT_PROFILE_REVISION', 'OPENLINK_PROJECT_RUNTIME',
+  'OPENLINK_PROJECT_ISOLATION', 'OPENLINK_KNOWLEDGE_ENABLED', 'OPENLINK_ZERO_ENABLED', 'PORT', 'HOSTNAME',
   'OPENLINK_APP_URL', 'OPENLINK_AGENT_API_TOKEN', 'OPENLINK_AGENT_HOST_URL', 'OPENLINK_KNOWLEDGE_INTERNAL_TOKEN',
   'OPENLINK_KNOWLEDGE_SERVICE_URL', 'OPENLINK_PROVIDER_SECRET_KEY', 'OPENLINK_STUDIO_ORIGIN',
   'OPENLINK_LOCAL_ZOKERBASE_URL', 'OPENLINK_LOCAL_ZOKERBASE_PUBLISHABLE_KEY', 'OPENLINK_LOCAL_SUPABASE_URL',
@@ -101,6 +105,8 @@ function positivePort(value, fallback) {
 }
 
 export function validateProductionEnvironment(environment = {}) {
+  const profile = resolveDeploymentProfile(environment.OPENLINK_DEPLOYMENT_PROFILE)
+  resolveProjectRuntime(environment.OPENLINK_PROJECT_RUNTIME)
   const required = [
     'OPENLINK_STATE_ROOT',
     'OPENLINK_APP_URL',
@@ -113,9 +119,9 @@ export function validateProductionEnvironment(environment = {}) {
     'OPENLINK_DESKTOP_AGENT_API_TOKEN',
     'OPENLINK_PROVIDER_SECRET_KEY',
     'OPEN_SANDBOX_API_KEY',
-    'OPENLINK_KNOWLEDGE_INTERNAL_TOKEN',
     'OPENLINK_ZOKERBASE_ENV_FILE',
   ]
+  if (profile.components.knowledge) required.push('OPENLINK_KNOWLEDGE_INTERNAL_TOKEN')
   for (const key of required) if (!environment[key]?.trim()) throw new Error(`Production configuration requires ${key}`)
   for (const key of required.filter((key) => /TOKEN|SECRET|API_KEY/.test(key))) {
     if (environment[key].length < 32) throw new Error(`${key} must contain at least 32 characters`)
@@ -166,6 +172,8 @@ export async function createRuntimePlan(options = {}) {
   const releaseRoot = resolve(options.releaseRoot)
   const stateRoot = resolve(options.stateRoot)
   const supplied = options.validate === false ? (options.environment ?? {}) : validateProductionEnvironment(options.environment)
+  const profile = resolveDeploymentProfile(supplied.OPENLINK_DEPLOYMENT_PROFILE)
+  const projectRuntime = resolveProjectRuntime(supplied.OPENLINK_PROJECT_RUNTIME)
   const node = join(releaseRoot, 'runtime/node/bin/node')
   const webPort = positivePort(supplied.PORT, 3000)
   const browserPort = positivePort(supplied.OPENLINK_BROWSER_PORT, 43120)
@@ -186,6 +194,12 @@ export async function createRuntimePlan(options = {}) {
   const chromeExecutable = join(releaseRoot, 'browser', ...browserManifest.executable.split('/'))
   const environment = {
     ...supplied,
+    OPENLINK_DEPLOYMENT_PROFILE: profile.name,
+    OPENLINK_DEPLOYMENT_PROFILE_REVISION: profile.revision,
+    OPENLINK_PROJECT_RUNTIME: projectRuntime,
+    OPENLINK_PROJECT_ISOLATION: isolationClass(projectRuntime),
+    OPENLINK_KNOWLEDGE_ENABLED: profile.components.knowledge ? '1' : '0',
+    OPENLINK_ZERO_ENABLED: profile.components.zero ? '1' : '0',
     NODE_ENV: 'production',
     OPENLINK_RUNTIME_MODE: 'local',
     OPENLINK_RELEASE_ID: basename(releaseRoot),
@@ -241,16 +255,16 @@ export async function createRuntimePlan(options = {}) {
       stopArgs: ['compose', '--project-name', 'zokerbase', '--env-file', zokerbaseEnvFile, '--file', join(zokerbaseRoot, 'docker-compose.yml'), '--file', join(zokerbaseRoot, 'docker-compose.zokerbase.yml'), '--file', join(zokerbaseRoot, 'docker-compose.openlink.yml'), '--file', productionOverlay, 'stop', '--timeout', '120'],
       environment: { ...environment, OPENLINK_ZOKERBASE_DATA_ROOT: join(stateRoot, 'zokerbase') },
     },
-    {
+    ...(profile.components.zero ? [{
       name: 'zero', command: docker, cwd: zeroRoot,
       args: ['compose', '--project-name', 'openlink-zero', '--file', join(zeroRoot, 'docker-compose.standalone.yml'), '--file', zeroProductionOverlay, 'up', '--detach', '--pull', 'never', '--wait', '--wait-timeout', '600'],
       stopArgs: ['compose', '--project-name', 'openlink-zero', '--file', join(zeroRoot, 'docker-compose.standalone.yml'), '--file', zeroProductionOverlay, 'stop', '--timeout', '120'],
       environment: { ...environment, OPENLINK_ZERO_DATA_ROOT: join(stateRoot, 'zero'), OPENLINK_ZERO_PORT: zeroPort, OPENLINK_ZERO_HEALTH_PORT: zeroHealthPort },
-    },
+    }] : []),
   ]
   const processes = [
     processSpec('browser-host', node, join(releaseRoot, 'services/browser-host/dist/src/main.js'), join(releaseRoot, 'services/browser-host'), selectEnvironment(environment, BROWSER_ENVIRONMENT_KEYS), `http://127.0.0.1:${browserPort}/healthz`, join(stateRoot, 'browser')),
-    processSpec('knowledge-service', node, join(releaseRoot, 'services/knowledge-service/dist/src/main.js'), join(releaseRoot, 'services/knowledge-service'), selectEnvironment(environment, KNOWLEDGE_ENVIRONMENT_KEYS), `http://127.0.0.1:${knowledgePort}/healthz`, join(stateRoot, 'knowledge')),
+    ...(profile.components.knowledge ? [processSpec('knowledge-service', node, join(releaseRoot, 'services/knowledge-service/dist/src/main.js'), join(releaseRoot, 'services/knowledge-service'), selectEnvironment(environment, KNOWLEDGE_ENVIRONMENT_KEYS), `http://127.0.0.1:${knowledgePort}/healthz`, join(stateRoot, 'knowledge'))] : []),
     processSpec('agent-host', node, join(releaseRoot, 'services/agent-host/dist/src/main.js'), join(releaseRoot, 'services/agent-host'), selectEnvironment(environment, AGENT_ENVIRONMENT_KEYS), `http://127.0.0.1:${agentPort}/healthz`, join(stateRoot, 'agents')),
     processSpec('desktop-agent-host', node, join(releaseRoot, 'services/agent-host/dist/src/desktop-main.js'), join(releaseRoot, 'services/agent-host'), selectEnvironment(environment, DESKTOP_AGENT_ENVIRONMENT_KEYS), `http://127.0.0.1:${desktopPort}/healthz`, join(stateRoot, 'desktop-agents')),
     processSpec('web', node, join(releaseRoot, 'app/web/server.js'), join(releaseRoot, 'app/web'), selectEnvironment(environment, WEB_ENVIRONMENT_KEYS), `http://127.0.0.1:${webPort}/api/healthz`, join(stateRoot, 'web')),
@@ -268,7 +282,22 @@ export async function createRuntimePlan(options = {}) {
       healthUrl: supplied.OPENLINK_APP_URL,
     },
   ]
-  return { releaseRoot, stateRoot, docker, containerBrokerSocket: supplied.OPENLINK_CONTAINER_BROKER_SOCKET, images: [...runtimeImages, ...await imageEntries(releaseRoot, 'zokerbase'), ...await imageEntries(releaseRoot, 'zero')], compose, processes }
+  const zeroImages = profile.components.zero ? await imageEntries(releaseRoot, 'zero') : []
+  const stateDirectories = ['workspaces', 'agents', 'desktop-agents', 'browser', 'project-vms', 'podman/config', 'podman/data', 'edge/config', 'edge/data', 'zokerbase', ...(profile.components.knowledge ? ['knowledge'] : []), ...(profile.components.zero ? ['zero'] : [])]
+  return {
+    releaseRoot,
+    stateRoot,
+    profile: profile.name,
+    profileRevision: profile.revision,
+    projectRuntime,
+    isolationClass: isolationClass(projectRuntime),
+    docker,
+    containerBrokerSocket: supplied.OPENLINK_CONTAINER_BROKER_SOCKET,
+    images: [...runtimeImages, ...await imageEntries(releaseRoot, 'zokerbase'), ...zeroImages],
+    compose,
+    processes,
+    stateDirectories,
+  }
 }
 
 async function defaultCommand(command, args, options = {}) {
@@ -345,7 +374,7 @@ export class ProductionSupervisor {
   }
 
   async start() {
-    for (const directory of ['workspaces', 'agents', 'desktop-agents', 'browser', 'knowledge', 'project-vms', 'podman/config', 'podman/data', 'edge/config', 'edge/data', 'zero', 'zokerbase']) {
+    for (const directory of this.plan.stateDirectories) {
       await mkdir(join(this.plan.stateRoot, directory), { recursive: true, mode: 0o700 })
     }
     if (this.plan.containerBrokerSocket) await requestContainerBroker(this.plan.containerBrokerSocket, 'start')

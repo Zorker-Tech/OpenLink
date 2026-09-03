@@ -58,6 +58,9 @@ test('production plan uses only sealed artifacts and loopback host services', as
     validate: false,
   })
   assert.equal(plan.images.length, 3)
+  assert.equal(plan.profile, 'standard')
+  assert.equal(plan.projectRuntime, 'vm')
+  assert.equal(plan.isolationClass, 'vm')
   assert.deepEqual(plan.processes.map((process) => process.name), ['browser-host', 'knowledge-service', 'agent-host', 'desktop-agent-host', 'web', 'edge'])
   assert.deepEqual(plan.processes.map((process) => process.identity), ['openlink-browser', 'openlink-knowledge', 'openlink-agent', 'openlink-desktop', 'openlink-web', 'openlink-edge'])
   assert.equal(plan.processes.at(-1).args.includes('--adapter'), true)
@@ -85,6 +88,52 @@ test('production plan uses only sealed artifacts and loopback host services', as
   assert.equal(processes.web.POSTGRES_PASSWORD, undefined)
   assert.equal(plan.compose[0].environment.POSTGRES_PASSWORD, 'database-only-secret')
   assert.doesNotMatch(JSON.stringify(plan), /\b(?:npm|pnpm|yarn|tsc)\b|\b(?:build|pull)\b.*(?:source|registry)/i)
+})
+
+test('Core omits the built-in knowledge system independently from Project isolation', async (t) => {
+  const item = await fixture(t)
+  for (const projectRuntime of ['container', 'vm']) {
+    const plan = await createRuntimePlan({
+      releaseRoot: item.releaseRoot,
+      stateRoot: item.stateRoot,
+      environment: {
+        OPENLINK_ZOKERBASE_ENV_FILE: join(item.root, 'zokerbase.env'),
+        OPENLINK_DEPLOYMENT_PROFILE: 'core',
+        OPENLINK_PROJECT_RUNTIME: projectRuntime,
+      },
+      validate: false,
+    })
+    assert.equal(plan.profile, 'core')
+    assert.equal(plan.projectRuntime, projectRuntime)
+    assert.equal(plan.processes.some((process) => process.name === 'knowledge-service'), false)
+    assert.equal(plan.compose.some((compose) => compose.name === 'zero'), false)
+    assert.equal(plan.images.some((image) => image.kind === 'zero'), false)
+    assert.equal(plan.stateDirectories.includes('knowledge'), false)
+    assert.equal(plan.stateDirectories.includes('zero'), false)
+    const web = plan.processes.find((process) => process.name === 'web')
+    assert.equal(web.environment.OPENLINK_KNOWLEDGE_ENABLED, '0')
+    assert.equal(web.environment.OPENLINK_PROJECT_RUNTIME, projectRuntime)
+  }
+})
+
+test('Standard and Dense retain knowledge when using the Container backend', async (t) => {
+  const item = await fixture(t)
+  for (const deploymentProfile of ['standard', 'dense']) {
+    const plan = await createRuntimePlan({
+      releaseRoot: item.releaseRoot,
+      stateRoot: item.stateRoot,
+      environment: {
+        OPENLINK_ZOKERBASE_ENV_FILE: join(item.root, 'zokerbase.env'),
+        OPENLINK_DEPLOYMENT_PROFILE: deploymentProfile,
+        OPENLINK_PROJECT_RUNTIME: 'container',
+      },
+      validate: false,
+    })
+    assert.equal(plan.processes.some((process) => process.name === 'knowledge-service'), true)
+    assert.equal(plan.compose.some((compose) => compose.name === 'zero'), true)
+    assert.equal(plan.isolationClass, 'container')
+    assert.equal(plan.profile, deploymentProfile)
+  }
 })
 
 test('Linux root supervisor launches every network process under its dedicated kernel identity', () => {
