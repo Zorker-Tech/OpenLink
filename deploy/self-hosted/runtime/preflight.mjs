@@ -1,5 +1,6 @@
 import { constants } from 'node:fs'
 import { execFile as execFileCallback } from 'node:child_process'
+import { createServer } from 'node:net'
 import { access, lstat, mkdir, readFile, statfs } from 'node:fs/promises'
 import { totalmem } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -55,6 +56,15 @@ async function command(commandPath, args, options = {}) {
   }
 }
 
+async function assertPortAvailable(port) {
+  await new Promise((resolveListen, rejectListen) => {
+    const server = createServer()
+    server.unref()
+    server.once('error', (error) => rejectListen(new Error(`Required loopback port ${port} is unavailable: ${error.message}`)))
+    server.listen(port, '127.0.0.1', () => server.close(resolveListen))
+  })
+}
+
 export async function runPreflight(options = {}) {
   const releaseRoot = resolve(options.releaseRoot)
   const stateRoot = resolve(options.stateRoot)
@@ -72,6 +82,7 @@ export async function runPreflight(options = {}) {
     ['toolchain/bin/podman', true],
     ['project-vm/manifest.json', false],
     ['orchestration/docker-compose.production.yml', false],
+    ['orchestration/docker-compose.zero-production.yml', false],
   ]
   for (const [relative, executable] of required) await assertFile(join(releaseRoot, ...relative.split('/')), { executable })
   checks.push({ name: 'release-artifacts', status: 'pass', target: target.triple })
@@ -97,15 +108,28 @@ export async function runPreflight(options = {}) {
     await command(docker, ['info', '--format', '{{.ServerVersion}}'], { ...options, label: 'Docker Engine' })
     await command(docker, ['compose', 'version', '--short'], { ...options, label: 'Docker Compose' })
     checks.push({ name: 'docker-engine', status: 'pass' })
+    const environment = options.environment ?? {}
+    const hostPorts = [environment.PORT || 3000, environment.OPENLINK_BROWSER_PORT || 43120, environment.OPENLINK_AGENT_PORT || 43121, environment.OPENLINK_DESKTOP_AGENT_PORT || 43123, environment.OPENLINK_KNOWLEDGE_PORT || 43124]
+    for (const value of hostPorts) {
+      const port = Number(value)
+      if (!Number.isSafeInteger(port) || port < 1 || port > 65_535) throw new Error(`Invalid runtime port: ${value}`)
+      await assertPortAvailable(port)
+    }
+    checks.push({ name: 'loopback-ports', status: 'pass', ports: hostPorts.map(Number) })
     if (target.platform === 'linux') {
       await access('/dev/kvm', constants.R_OK | constants.W_OK).catch(() => {
         throw new Error('Linux Project VMs require read/write access to /dev/kvm')
       })
+      const synchronized = (await command('timedatectl', ['show', '--property=NTPSynchronized', '--value'], { ...options, label: 'Linux clock synchronization' })).trim()
+      if (synchronized !== 'yes') throw new Error('Linux system clock is not synchronized')
     } else {
       const value = (await command('/usr/sbin/sysctl', ['-n', 'kern.hv_support'], { ...options, label: 'Apple Hypervisor' })).trim()
       if (value !== '1') throw new Error('Apple Hypervisor support is unavailable')
+      const timed = await command('/bin/launchctl', ['print', 'system/com.apple.timed'], { ...options, label: 'macOS clock synchronization service' })
+      if (!/\bstate\s*=\s*running\b/.test(timed)) throw new Error('macOS clock synchronization service is not running')
     }
     checks.push({ name: 'virtualization', status: 'pass', provider: target.provider })
+    checks.push({ name: 'clock-synchronization', status: 'pass' })
   }
 
   return { ok: true, target: target.triple, checks }

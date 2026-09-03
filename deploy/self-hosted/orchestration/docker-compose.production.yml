@@ -1,6 +1,17 @@
 # Production-only state boundary. Compose merges volume entries by container
 # target, so these bindings replace the source-tree-relative development paths.
 services:
+  studio:
+    ports: !override
+      - 127.0.0.1:${OPENLINK_STUDIO_PORT:-3002}:3000/tcp
+  kong:
+    ports: !override
+      - 127.0.0.1:${KONG_HTTP_PORT}:8000/tcp
+      - 127.0.0.1:${KONG_HTTPS_PORT}:8443/tcp
+  supavisor:
+    ports: !override
+      - 127.0.0.1:${POSTGRES_PORT}:5432
+      - 127.0.0.1:${POOLER_PROXY_PORT_TRANSACTION}:6543
   storage:
     volumes:
       - ${OPENLINK_ZOKERBASE_DATA_ROOT}/storage:/var/lib/storage:Z

@@ -104,6 +104,8 @@ export async function createRuntimePlan(options = {}) {
     OPENLINK_AGENT_HOST: '127.0.0.1',
     OPENLINK_AGENT_PORT: agentPort,
     OPENLINK_AGENT_HOST_URL: `http://127.0.0.1:${agentPort}`,
+    OPENLINK_AGENT_PUBLIC_URL: supplied.OPENLINK_BROWSER_GATEWAY_PUBLIC_URL,
+    OPENLINK_BROWSER_GATEWAY_UPSTREAM_ORIGIN: supplied.OPENLINK_APP_URL,
     OPENLINK_DESKTOP_AGENT_HOST: '127.0.0.1',
     OPENLINK_DESKTOP_AGENT_PORT: desktopPort,
     OPENLINK_DESKTOP_AGENT_HOST_URL: `http://127.0.0.1:${desktopPort}`,
@@ -113,6 +115,7 @@ export async function createRuntimePlan(options = {}) {
     OPENLINK_KNOWLEDGE_RUNTIME_ROOT: join(stateRoot, 'knowledge'),
     OPENLINK_ZERO_URL: `http://127.0.0.1:${zeroPort}`,
     OPENLINK_ZERO_HEALTH_URL: `http://127.0.0.1:${zeroHealthPort}`,
+    OPENLINK_STUDIO_ORIGIN: `http://127.0.0.1:${positivePort(supplied.OPENLINK_STUDIO_PORT, 3002)}`,
     OPENLINK_NODE_EXECUTABLE: node,
     OPENLINK_AGENT_WORKSPACE_ROOT: join(stateRoot, 'workspaces'),
     OPENLINK_AGENT_STORAGE_ROOT: join(stateRoot, 'agents'),
@@ -132,6 +135,7 @@ export async function createRuntimePlan(options = {}) {
   const zokerbaseRoot = join(releaseRoot, 'orchestration/backend/docker')
   const zeroRoot = join(releaseRoot, 'orchestration/services/zero')
   const productionOverlay = join(releaseRoot, 'orchestration/docker-compose.production.yml')
+  const zeroProductionOverlay = join(releaseRoot, 'orchestration/docker-compose.zero-production.yml')
   const compose = [
     {
       name: 'zokerbase', command: docker, cwd: zokerbaseRoot,
@@ -141,8 +145,8 @@ export async function createRuntimePlan(options = {}) {
     },
     {
       name: 'zero', command: docker, cwd: zeroRoot,
-      args: ['compose', '--project-name', 'openlink-zero', '--file', join(zeroRoot, 'docker-compose.standalone.yml'), 'up', '--detach', '--pull', 'never', '--wait', '--wait-timeout', '600'],
-      stopArgs: ['compose', '--project-name', 'openlink-zero', '--file', join(zeroRoot, 'docker-compose.standalone.yml'), 'stop', '--timeout', '120'],
+      args: ['compose', '--project-name', 'openlink-zero', '--file', join(zeroRoot, 'docker-compose.standalone.yml'), '--file', zeroProductionOverlay, 'up', '--detach', '--pull', 'never', '--wait', '--wait-timeout', '600'],
+      stopArgs: ['compose', '--project-name', 'openlink-zero', '--file', join(zeroRoot, 'docker-compose.standalone.yml'), '--file', zeroProductionOverlay, 'stop', '--timeout', '120'],
       environment: { ...environment, OPENLINK_ZERO_DATA_ROOT: join(stateRoot, 'zero'), OPENLINK_ZERO_PORT: zeroPort, OPENLINK_ZERO_HEALTH_PORT: zeroHealthPort },
     },
   ]
