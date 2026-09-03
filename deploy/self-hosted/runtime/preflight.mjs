@@ -76,15 +76,25 @@ export async function runPreflight(options = {}) {
     ['services/agent-host/dist/src/main.js', false],
     ['services/browser-host/dist/src/main.js', false],
     ['services/knowledge-service/dist/src/main.js', false],
+    ['services/agent-host/dist/src/desktop-main.js', false],
     ['images/runtime/manifest.json', false],
     ['images/zokerbase/manifest.json', false],
     ['images/zero/manifest.json', false],
     ['toolchain/bin/podman', true],
+    ['edge/bin/caddy', true],
+    ['edge/Caddyfile', false],
+    ['browser/manifest.json', false],
     ['project-vm/manifest.json', false],
     ['orchestration/docker-compose.production.yml', false],
     ['orchestration/docker-compose.zero-production.yml', false],
   ]
   for (const [relative, executable] of required) await assertFile(join(releaseRoot, ...relative.split('/')), { executable })
+  const browserManifest = JSON.parse(await readFile(join(releaseRoot, 'browser/manifest.json'), 'utf8'))
+  if (browserManifest.target !== target.triple || typeof browserManifest.executable !== 'string'
+    || browserManifest.executable.startsWith('/') || browserManifest.executable.split('/').includes('..')) {
+    throw new Error(`Chromium manifest does not match ${target.triple}`)
+  }
+  await assertFile(join(releaseRoot, 'browser', ...browserManifest.executable.split('/')), { executable: true })
   checks.push({ name: 'release-artifacts', status: 'pass', target: target.triple })
 
   await mkdir(stateRoot, { recursive: true, mode: 0o700 })
