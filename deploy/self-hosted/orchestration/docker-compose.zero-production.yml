@@ -1,5 +1,21 @@
 services:
+  etcd:
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 256
+    logging: &bounded-zero-logs
+      driver: json-file
+      options: { max-size: 20m, max-file: "5" }
+  minio:
+    mem_limit: 1g
+    cpus: 1.0
+    pids_limit: 256
+    logging: *bounded-zero-logs
   zero:
+    mem_limit: 4g
+    cpus: 4.0
+    pids_limit: 1024
+    logging: *bounded-zero-logs
     ports: !override
       - 127.0.0.1:${OPENLINK_ZERO_PORT:-19530}:19530
       - 127.0.0.1:${OPENLINK_ZERO_HEALTH_PORT:-9091}:9091

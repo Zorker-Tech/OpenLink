@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { constants } from 'node:fs'
-import { cp, lstat, mkdir, mkdtemp, open, readFile, readlink, rename, rm, symlink, writeFile } from 'node:fs/promises'
+import { cp, lstat, mkdir, mkdtemp, open, readFile, readlink, rm, symlink } from 'node:fs/promises'
 import { execFile as execFileCallback } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { tmpdir } from 'node:os'
@@ -19,11 +19,13 @@ import {
 } from './runtime/release-contract.mjs'
 import { readEnvironmentFile, runPreflight } from './runtime/preflight.mjs'
 import { extractVerifiedTarGzip } from './runtime/safe-archive.mjs'
-import { createRuntimePlan, ProductionSupervisor, validateProductionEnvironment } from './runtime/production-runtime.mjs'
+import { checkContainerRuntime, createRuntimePlan, ProductionSupervisor, startContainerRuntime, stopContainerRuntime, validateProductionEnvironment } from './runtime/production-runtime.mjs'
+import { serveContainerBroker } from './runtime/container-broker.mjs'
 import { createProductionConfiguration } from './runtime/configuration.mjs'
 import { acquireRuntimeLock, runtimeLockStatus } from './runtime/lifecycle-lock.mjs'
 import { createEncryptedBackup, restoreEncryptedBackup } from './runtime/backup.mjs'
 import { executeUpgradeTransaction } from './runtime/upgrade.mjs'
+import { durableRename, durableWriteFile, syncDirectory, syncTree } from './runtime/durable-fs.mjs'
 
 const execFile = promisify(execFileCallback)
 
@@ -73,19 +75,21 @@ export async function activateRelease(installRoot, releaseId) {
   const link = join(installRoot, 'current')
   const stagedLink = join(installRoot, `.current-${process.pid}-${Date.now()}`)
   await symlink(join('releases', releaseId), stagedLink, process.platform === 'win32' ? 'junction' : undefined)
+  await syncDirectory(installRoot)
   try {
-    await rename(stagedLink, link)
+    await durableRename(stagedLink, link)
   } catch (error) {
     if (error?.code !== 'EEXIST' && error?.code !== 'ENOTEMPTY') throw error
     const oldLink = join(installRoot, `.current-old-${process.pid}-${Date.now()}`)
-    await rename(link, oldLink)
+    await durableRename(link, oldLink)
     try {
-      await rename(stagedLink, link)
+      await durableRename(stagedLink, link)
     } catch (activationError) {
-      await rename(oldLink, link).catch(() => undefined)
+      await durableRename(oldLink, link).catch(() => undefined)
       throw activationError
     }
     await rm(oldLink, { force: true })
+    await syncDirectory(installRoot)
   } finally {
     await rm(stagedLink, { force: true })
   }
@@ -113,9 +117,10 @@ export async function installReleaseDirectory(options = {}) {
   const staging = await mkdtemp(join(installRoot, 'releases', `.staging-${manifest.releaseId}-`))
   try {
     await copyInventory(source, staging, manifest.inventory)
-    await writeFile(join(staging, 'release.json'), `${JSON.stringify(signed, null, 2)}\n`, { mode: 0o644, flag: 'wx' })
+    await durableWriteFile(join(staging, 'release.json'), `${JSON.stringify(signed, null, 2)}\n`, { mode: 0o644, flag: 'wx' })
     await verifyInstalledRelease(staging, options.trustedKeys, expectedTarget, options.minimumReleaseSequence)
-    await rename(staging, destination)
+    await syncTree(staging)
+    await durableRename(staging, destination)
   } catch (error) {
     await rm(staging, { recursive: true, force: true })
     throw error
@@ -334,6 +339,7 @@ async function main(argv) {
       platform: process.platform,
       architecture: process.arch,
       dockerCommand: config.OPENLINK_DOCKER_COMMAND || 'docker',
+      containerBrokerSocket: config.OPENLINK_CONTAINER_BROKER_SOCKET,
       environment: { ...config, ...secrets },
       minimumFreeBytes: config.OPENLINK_MINIMUM_FREE_BYTES,
       minimumMemoryBytes: config.OPENLINK_MINIMUM_MEMORY_BYTES,
@@ -364,6 +370,7 @@ async function main(argv) {
         platform: process.platform,
         architecture: process.arch,
         dockerCommand: environment.OPENLINK_DOCKER_COMMAND || 'docker',
+        containerBrokerSocket: environment.OPENLINK_CONTAINER_BROKER_SOCKET,
         environment,
         minimumFreeBytes: environment.OPENLINK_MINIMUM_FREE_BYTES,
         minimumMemoryBytes: environment.OPENLINK_MINIMUM_MEMORY_BYTES,
@@ -383,7 +390,33 @@ async function main(argv) {
     }
     return
   }
-  throw new Error('Usage: openlinkctl <verify|install|configure|version|status|preflight|doctor|backup|restore|upgrade|run> [options]')
+  if (command === 'container-broker') {
+    if (process.platform !== 'linux' || typeof process.getuid !== 'function' || process.getuid() !== 0) throw new Error('Container broker must run as root on Linux')
+    const configPath = values.get('config')
+    if (!configPath) throw new Error('container-broker requires --config')
+    const config = await readEnvironmentFile(resolve(configPath))
+    const secrets = await readEnvironmentFile(resolve(config.OPENLINK_SECRETS_FILE), { secrets: true })
+    const environment = validateProductionEnvironment({ ...config, ...secrets })
+    const releaseRoot = resolve(values.get('release-root') || releaseRootFromScript)
+    const plan = await createRuntimePlan({ releaseRoot, stateRoot: environment.OPENLINK_STATE_ROOT, environment })
+    const socket = environment.OPENLINK_CONTAINER_BROKER_SOCKET
+    if (!socket) throw new Error('Production configuration has no container broker socket')
+    await checkContainerRuntime(plan)
+    const broker = await serveContainerBroker(socket, async (action) => {
+      if (action === 'status') return checkContainerRuntime(plan)
+      if (action === 'start') return startContainerRuntime(plan)
+      if (action === 'stop') return stopContainerRuntime(plan)
+      throw new Error('Container broker action is not allowed')
+    })
+    if (process.env.NOTIFY_SOCKET) await execFile('systemd-notify', ['--ready', '--status=OpenLink container broker is ready'])
+    await new Promise((resolveStop) => {
+      process.once('SIGINT', resolveStop)
+      process.once('SIGTERM', resolveStop)
+    })
+    await broker.close()
+    return
+  }
+  throw new Error('Usage: openlinkctl <verify|install|configure|version|status|preflight|doctor|backup|restore|upgrade|run|container-broker> [options]')
 }
 
 if (!isSea() && process.argv[1] && basename(process.argv[1]) === basename(fileURLToPath(import.meta.url))) {

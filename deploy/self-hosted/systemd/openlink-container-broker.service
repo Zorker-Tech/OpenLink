@@ -1,0 +1,56 @@
+[Unit]
+Description=OpenLink sealed container lifecycle broker
+Documentation=https://git.haokir/hydite/openlink/openlink
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+Requires=docker.service
+Before=openlink.service
+
+[Service]
+Type=notify
+NotifyAccess=main
+User=root
+Group=openlink
+EnvironmentFile=/etc/openlink/openlink.env
+ExecStart=/opt/openlink/current/bin/openlinkctl container-broker --config /etc/openlink/openlink.env
+KillSignal=SIGTERM
+TimeoutStartSec=120
+TimeoutStopSec=180
+Restart=on-failure
+RestartSec=5
+UMask=0077
+TasksMax=512
+MemoryMax=1G
+MemorySwapMax=256M
+CPUQuota=400%
+RuntimeDirectory=openlink-container-broker
+RuntimeDirectoryMode=0750
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateNetwork=true
+PrivateDevices=true
+NoNewPrivileges=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+KeyringMode=private
+RemoveIPC=true
+RestrictAddressFamilies=AF_UNIX
+ReadOnlyPaths=/opt/openlink /etc/openlink
+ReadWritePaths=/run/openlink-container-broker
+
+[Install]
+WantedBy=multi-user.target

@@ -45,6 +45,35 @@ test('safe archive extractor enforces a cumulative expansion limit', async (t) =
   await assert.rejects(lstat(join(root, 'output')), /ENOENT/)
 })
 
+test('safe archive extractor rejects oversized compressed input before decompression', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'openlink-archive-compressed-limit-'))
+  t.after(async () => (await import('node:fs/promises')).rm(root, { recursive: true, force: true }))
+  const archive = join(root, 'oversized.tar.gz')
+  const handle = await (await import('node:fs/promises')).open(archive, 'w')
+  await handle.truncate(4097)
+  await handle.close()
+  await assert.rejects(extractVerifiedTarGzip(archive, join(root, 'output'), { maximumArchiveBytes: 4096 }), /compressed size exceeds/i)
+  await assert.rejects(lstat(join(root, 'output')), /ENOENT/)
+})
+
+test('safe archive extractor preserves an operator-defined disk reserve', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'openlink-archive-disk-reserve-'))
+  t.after(async () => (await import('node:fs/promises')).rm(root, { recursive: true, force: true }))
+  const source = join(root, 'source')
+  const archive = join(root, 'payload.tar.gz')
+  await mkdir(source)
+  await writeFile(join(source, 'payload'), 'reserved')
+  await new Promise((resolvePromise, rejectPromise) => {
+    const child = spawn('tar', ['-czf', archive, '-C', source, '.'], { env: { ...process.env, COPYFILE_DISABLE: '1' } })
+    child.once('error', rejectPromise)
+    child.once('exit', (code) => code === 0 ? resolvePromise() : rejectPromise(new Error(`tar exited ${code}`)))
+  })
+  await assert.rejects(extractVerifiedTarGzip(archive, join(root, 'output'), {
+    minimumFreeBytesAfterExtraction: Number.MAX_SAFE_INTEGER,
+  }), /free-space reserve/i)
+  await assert.rejects(lstat(join(root, 'output')), /ENOENT/)
+})
+
 test('safe archive extractor bounds all headers before signature verification', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'openlink-archive-entries-'))
   t.after(async () => (await import('node:fs/promises')).rm(root, { recursive: true, force: true }))

@@ -8,13 +8,26 @@ import { installNativeService } from '../../deploy/self-hosted/runtime/native-se
 
 const root = new URL('../../', import.meta.url)
 
+function serviceBlock(source, name) {
+  const match = source.match(new RegExp(`(?:^|\\n)  ${name}:\\n([\\s\\S]*?)(?=\\n  [A-Za-z0-9_-]+:\\n|$)`))
+  assert.ok(match, `missing service ${name}`)
+  return match[1]
+}
+
 test('systemd unit runs only the active prebuilt release with hardened state paths', async () => {
   const source = await readFile(new URL('deploy/self-hosted/systemd/openlink.service', root), 'utf8')
   assert.match(source, /^User=openlink$/m)
+  assert.match(source, /^SupplementaryGroups=kvm$/m)
+  assert.doesNotMatch(source, /SupplementaryGroups=.*docker/m)
+  assert.match(source, /^Requires=openlink-container-broker\.service$/m)
   assert.match(source, /^ExecStart=\/opt\/openlink\/current\/bin\/openlinkctl run /m)
   assert.match(source, /^Restart=on-failure$/m)
   assert.match(source, /^TimeoutStopSec=180$/m)
   assert.match(source, /^UMask=0077$/m)
+  assert.match(source, /^TasksMax=4096$/m)
+  assert.match(source, /^MemoryMax=16G$/m)
+  assert.match(source, /^MemorySwapMax=2G$/m)
+  assert.match(source, /^CPUQuota=800%$/m)
   assert.match(source, /^ProtectSystem=strict$/m)
   assert.match(source, /^NoNewPrivileges=true$/m)
   assert.match(source, /^AmbientCapabilities=CAP_NET_BIND_SERVICE$/m)
@@ -26,6 +39,24 @@ test('systemd unit runs only the active prebuilt release with hardened state pat
   assert.match(source, /^KeyringMode=private$/m)
   assert.doesNotMatch(source, /(password|secret|token)=/i)
   assert.doesNotMatch(source, /(?:npm|pnpm|yarn|next|tsc|go|docker|podman) (?:install|build|pull)/i)
+})
+
+test('container broker is root-isolated, Unix-only and accepts no customer command line', async () => {
+  const source = await readFile(new URL('deploy/self-hosted/systemd/openlink-container-broker.service', root), 'utf8')
+  assert.match(source, /^User=root$/m)
+  assert.match(source, /^Group=openlink$/m)
+  assert.match(source, /^ExecStart=\/opt\/openlink\/current\/bin\/openlinkctl container-broker --config \/etc\/openlink\/openlink\.env$/m)
+  assert.match(source, /^RestrictAddressFamilies=AF_UNIX$/m)
+  assert.match(source, /^PrivateNetwork=true$/m)
+  assert.match(source, /^RestrictNamespaces=true$/m)
+  assert.match(source, /^UMask=0077$/m)
+  assert.match(source, /^TasksMax=512$/m)
+  assert.match(source, /^MemoryMax=1G$/m)
+  assert.match(source, /^MemorySwapMax=256M$/m)
+  assert.match(source, /^CPUQuota=400%$/m)
+  assert.match(source, /^CapabilityBoundingSet=$/m)
+  assert.match(source, /^NoNewPrivileges=true$/m)
+  assert.doesNotMatch(source, /(password|secret|token)=/i)
 })
 
 test('launchd service runs only the active prebuilt release and embeds no credentials', async () => {
@@ -45,6 +76,27 @@ test('edge publishes Web and scoped gateway routes but no privileged service por
   assert.match(source, /Strict-Transport-Security/)
 })
 
+test('production Compose overlays bound memory, CPU, processes and local logs for every container', async () => {
+  const zokerbase = await readFile(new URL('deploy/self-hosted/orchestration/docker-compose.production.yml', root), 'utf8')
+  const zero = await readFile(new URL('deploy/self-hosted/orchestration/docker-compose.zero-production.yml', root), 'utf8')
+  for (const name of ['studio', 'kong', 'auth', 'rest', 'realtime', 'supavisor', 'storage', 'imgproxy', 'meta', 'functions', 'db']) {
+    const block = serviceBlock(zokerbase, name)
+    assert.match(block, /    mem_limit: /)
+    assert.match(block, /    cpus: /)
+    assert.match(block, /    pids_limit: /)
+    assert.match(block, /    logging: /)
+  }
+  for (const name of ['etcd', 'minio', 'zero']) {
+    const block = serviceBlock(zero, name)
+    assert.match(block, /    mem_limit: /)
+    assert.match(block, /    cpus: /)
+    assert.match(block, /    pids_limit: /)
+    assert.match(block, /    logging: /)
+  }
+  assert.match(zokerbase, /max-size: 20m, max-file: "5"/)
+  assert.match(zero, /max-size: 20m, max-file: "5"/)
+})
+
 test('Linux service installation fixes ownership, enables systemd and verifies active state', async (t) => {
   const temporary = await mkdtemp(join(tmpdir(), 'openlink-native-service-'))
   t.after(async () => (await import('node:fs/promises')).rm(temporary, { recursive: true, force: true }))
@@ -53,15 +105,17 @@ test('Linux service installation fixes ownership, enables systemd and verifies a
   const secretsPath = join(temporary, 'config/secrets.env')
   const backupKeyPath = join(temporary, 'config/backup.key')
   const unitPath = join(temporary, 'systemd/openlink.service')
+  const brokerUnitPath = join(temporary, 'systemd/openlink-container-broker.service')
   await mkdir(join(releaseRoot, 'systemd'), { recursive: true })
   await mkdir(join(configPath, '..'), { recursive: true })
   await writeFile(join(releaseRoot, 'systemd/openlink.service'), await readFile(new URL('deploy/self-hosted/systemd/openlink.service', root)))
+  await writeFile(join(releaseRoot, 'systemd/openlink-container-broker.service'), await readFile(new URL('deploy/self-hosted/systemd/openlink-container-broker.service', root)))
   for (const path of [configPath, secretsPath, backupKeyPath]) await writeFile(path, 'fixture\n', { mode: 0o600 })
   const calls = []
   const result = await installNativeService({
     platform: 'linux', releaseRoot, installRoot: join(temporary, 'install'), configPath, secretsPath, backupKeyPath,
     stateRoot: join(temporary, 'state'), logRoot: join(temporary, 'logs'), backupRoot: join(temporary, 'backups'),
-    unitPath, allowCustomPaths: true, allowUnprivilegedTest: true, identity: { uid: process.getuid(), gid: process.getgid() },
+    unitPath, brokerUnitPath, allowCustomPaths: true, allowUnprivilegedTest: true, identity: { uid: process.getuid(), gid: process.getgid() },
     rootUid: process.getuid(),
     execFile: async (command, args) => {
       calls.push([command, ...args])
@@ -71,10 +125,52 @@ test('Linux service installation fixes ownership, enables systemd and verifies a
   assert.equal(result.active, true)
   assert.deepEqual(calls, [
     ['systemctl', 'daemon-reload'],
-    ['systemctl', 'enable', '--now', 'openlink.service'],
+    ['systemctl', 'enable', '--now', 'openlink-container-broker.service', 'openlink.service'],
+    ['systemctl', 'is-active', 'openlink-container-broker.service'],
     ['systemctl', 'is-active', 'openlink.service'],
   ])
   assert.equal((await lstat(unitPath)).mode & 0o777, 0o644)
   assert.equal((await lstat(configPath)).mode & 0o777, 0o640)
-  assert.equal((await lstat(secretsPath)).mode & 0o777, 0o600)
+  assert.equal((await lstat(secretsPath)).mode & 0o777, 0o640)
+  assert.equal((await lstat(backupKeyPath)).mode & 0o777, 0o600)
+  assert.equal((await lstat(brokerUnitPath)).mode & 0o777, 0o644)
+})
+
+test('Linux service installation restores previous units and service state after activation failure', async (t) => {
+  const temporary = await mkdtemp(join(tmpdir(), 'openlink-native-service-rollback-'))
+  t.after(async () => (await import('node:fs/promises')).rm(temporary, { recursive: true, force: true }))
+  const releaseRoot = join(temporary, 'release')
+  const configPath = join(temporary, 'config/openlink.env')
+  const secretsPath = join(temporary, 'config/secrets.env')
+  const backupKeyPath = join(temporary, 'config/backup.key')
+  const unitPath = join(temporary, 'systemd/openlink.service')
+  const brokerUnitPath = join(temporary, 'systemd/openlink-container-broker.service')
+  await mkdir(join(releaseRoot, 'systemd'), { recursive: true })
+  await mkdir(join(configPath, '..'), { recursive: true })
+  await mkdir(join(unitPath, '..'), { recursive: true })
+  await writeFile(join(releaseRoot, 'systemd/openlink.service'), await readFile(new URL('deploy/self-hosted/systemd/openlink.service', root)))
+  await writeFile(join(releaseRoot, 'systemd/openlink-container-broker.service'), await readFile(new URL('deploy/self-hosted/systemd/openlink-container-broker.service', root)))
+  for (const path of [configPath, secretsPath, backupKeyPath]) await writeFile(path, 'fixture\n', { mode: 0o600 })
+  await writeFile(unitPath, 'previous main unit\n', { mode: 0o600 })
+  await writeFile(brokerUnitPath, 'previous broker unit\n', { mode: 0o600 })
+  const calls = []
+  await assert.rejects(installNativeService({
+    platform: 'linux', releaseRoot, installRoot: join(temporary, 'install'), configPath, secretsPath, backupKeyPath,
+    stateRoot: join(temporary, 'state'), logRoot: join(temporary, 'logs'), backupRoot: join(temporary, 'backups'),
+    unitPath, brokerUnitPath, allowCustomPaths: true, allowUnprivilegedTest: true, identity: { uid: process.getuid(), gid: process.getgid() },
+    rootUid: process.getuid(),
+    execFile: async (command, args) => {
+      calls.push([command, ...args])
+      if (args[0] === 'is-enabled') return { stdout: 'enabled\n' }
+      if (args[0] === 'is-active') return { stdout: 'active\n' }
+      if (args[0] === 'enable' && args[1] === '--now') throw new Error('simulated service activation failure')
+      return { stdout: '' }
+    },
+  }), /simulated service activation failure/i)
+  assert.equal(await readFile(unitPath, 'utf8'), 'previous main unit\n')
+  assert.equal(await readFile(brokerUnitPath, 'utf8'), 'previous broker unit\n')
+  assert.equal((await lstat(unitPath)).mode & 0o777, 0o600)
+  assert.equal((await lstat(brokerUnitPath)).mode & 0o777, 0o600)
+  assert.equal(calls.some((call) => call.join(' ') === 'systemctl start openlink-container-broker.service'), true)
+  assert.equal(calls.some((call) => call.join(' ') === 'systemctl start openlink.service'), true)
 })

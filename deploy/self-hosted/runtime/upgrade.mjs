@@ -1,5 +1,7 @@
-import { mkdir, rename, writeFile } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
+
+import { durableRename, durableWriteFile } from './durable-fs.mjs'
 
 function stateSchema(manifest) {
   const compatibility = manifest?.compatibility
@@ -29,8 +31,8 @@ async function writeJournal(stateRoot, value) {
   const directory = join(resolve(stateRoot), 'deployment')
   await mkdir(directory, { recursive: true, mode: 0o700 })
   const temporary = join(directory, `.transaction-${process.pid}-${Date.now()}.tmp`)
-  await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600, flag: 'wx' })
-  await rename(temporary, join(directory, 'current.json'))
+  await durableWriteFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600, flag: 'wx' })
+  await durableRename(temporary, join(directory, 'current.json'))
 }
 
 export async function executeUpgradeTransaction(options) {

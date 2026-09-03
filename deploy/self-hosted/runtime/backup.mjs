@@ -1,13 +1,14 @@
 import { spawn } from 'node:child_process'
 import { createCipheriv, createDecipheriv, createHash, randomBytes, scryptSync } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
-import { chmod, cp, link, lstat, mkdir, mkdtemp, readFile, readdir, readlink, rm, writeFile } from 'node:fs/promises'
+import { chmod, cp, link, lstat, mkdir, mkdtemp, readFile, readdir, readlink, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 
 import { acquireRuntimeLock, runtimeLockStatus } from './lifecycle-lock.mjs'
 import { extractVerifiedTarGzip } from './safe-archive.mjs'
+import { durableWriteFile, syncDirectory, syncFile, syncTree } from './durable-fs.mjs'
 
 async function protectedKey(path) {
   const stats = await lstat(path)
@@ -63,7 +64,7 @@ async function validateBackupTree(root) {
 
 async function copyProtectedInput(source, destination, secret) {
   const stats = await lstat(source)
-  if (!stats.isFile() || (stats.mode & (secret ? 0o077 : 0o022)) !== 0) throw new Error(`Backup input must be a protected regular file: ${source}`)
+  if (!stats.isFile() || (stats.mode & (secret ? 0o027 : 0o022)) !== 0) throw new Error(`Backup input must be a protected regular file: ${source}`)
   await cp(source, destination, { force: false, errorOnExist: true, preserveTimestamps: false })
   await chmod(destination, secret ? 0o600 : 0o640)
 }
@@ -100,6 +101,7 @@ export async function createEncryptedBackup(options = {}) {
         pipeline(tar.child.stdout, cipher, createWriteStream(temporary, { mode: 0o600, flags: 'wx' })),
         tar.completion,
       ])
+      await syncFile(temporary)
       const integrity = await digestFile(temporary)
       const manifest = {
         schemaVersion: 1,
@@ -109,9 +111,11 @@ export async function createEncryptedBackup(options = {}) {
         payload: { file: basename(output), ...integrity },
       }
       await link(temporary, output)
+      await syncDirectory(dirname(output))
       await rm(temporary, { force: true })
+      await syncDirectory(dirname(output))
       try {
-        await writeFile(`${output}.json`, `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600, flag: 'wx' })
+        await durableWriteFile(`${output}.json`, `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600, flag: 'wx' })
       } catch (error) {
         await rm(output, { force: true })
         throw error
@@ -176,6 +180,10 @@ export async function restoreEncryptedBackup(options = {}) {
     await cp(join(extracted, 'configuration/secrets.env'), secretsPath, { force: false, errorOnExist: true })
     await chmod(configPath, 0o640)
     await chmod(secretsPath, 0o600)
+    await syncTree(stateRoot)
+    await syncFile(configPath)
+    await syncFile(secretsPath)
+    await syncDirectory(dirname(configPath))
     return { restored: true, stateRoot, configPath, secretsPath }
   } catch (error) {
     await rm(stateRoot, { recursive: true, force: true })
