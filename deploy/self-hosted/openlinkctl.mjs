@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 import { cp, lstat, mkdir, mkdtemp, readFile, readlink, rename, rm, symlink, writeFile } from 'node:fs/promises'
+import { execFile as execFileCallback } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { promisify } from 'node:util'
 
 import {
   canonicalJson,
@@ -17,6 +20,9 @@ import { createRuntimePlan, ProductionSupervisor, validateProductionEnvironment 
 import { createProductionConfiguration } from './runtime/configuration.mjs'
 import { acquireRuntimeLock, runtimeLockStatus } from './runtime/lifecycle-lock.mjs'
 import { createEncryptedBackup, restoreEncryptedBackup } from './runtime/backup.mjs'
+import { executeUpgradeTransaction } from './runtime/upgrade.mjs'
+
+const execFile = promisify(execFileCallback)
 
 const releaseRootFromScript = resolve(fileURLToPath(new URL('.', import.meta.url)))
 
@@ -43,7 +49,7 @@ async function readSignedManifest(root) {
   return JSON.parse(await readFile(path, 'utf8'))
 }
 
-async function verifyInstalledRelease(directory, trustedKeys, expectedTarget) {
+export async function verifyInstalledRelease(directory, trustedKeys, expectedTarget) {
   const signed = await readSignedManifest(directory)
   const manifest = verifyReleaseManifest(signed, { trustedKeys, expectedTarget })
   await verifyReleaseInventory(directory, manifest.inventory)
@@ -60,7 +66,7 @@ async function copyInventory(source, destination, inventory) {
   }
 }
 
-async function activateRelease(installRoot, releaseId) {
+export async function activateRelease(installRoot, releaseId) {
   const link = join(installRoot, 'current')
   const stagedLink = join(installRoot, `.current-${process.pid}-${Date.now()}`)
   await symlink(join('releases', releaseId), stagedLink, process.platform === 'win32' ? 'junction' : undefined)
@@ -97,7 +103,7 @@ export async function installReleaseDirectory(options = {}) {
       throw new Error(`Immutable release collision for ${manifest.releaseId}: ${error instanceof Error ? error.message : String(error)}`)
     })
     if (canonicalJson(existing.signed) !== canonicalJson(signed)) throw new Error(`Immutable release collision for ${manifest.releaseId}`)
-    await activateRelease(installRoot, manifest.releaseId)
+    if (options.activate !== false) await activateRelease(installRoot, manifest.releaseId)
     return { releaseId: manifest.releaseId, destination, reused: true }
   }
 
@@ -111,7 +117,7 @@ export async function installReleaseDirectory(options = {}) {
     await rm(staging, { recursive: true, force: true })
     throw error
   }
-  await activateRelease(installRoot, manifest.releaseId)
+  if (options.activate !== false) await activateRelease(installRoot, manifest.releaseId)
   return { releaseId: manifest.releaseId, destination, reused: false }
 }
 
@@ -123,6 +129,48 @@ export async function installReleaseArchive(options = {}) {
   } finally {
     await rm(extractionRoot, { recursive: true, force: true })
   }
+}
+
+export async function verifyReleaseArchive(options = {}) {
+  const extractionRoot = await mkdtemp(join(options.temporaryRoot ? resolve(options.temporaryRoot) : tmpdir(), 'openlink-verify-bundle-'))
+  try {
+    await extractVerifiedTarGzip(options.archive, extractionRoot, options.archiveLimits)
+    return (await verifyInstalledRelease(extractionRoot, options.trustedKeys, options.expectedTarget)).manifest
+  } finally {
+    await rm(extractionRoot, { recursive: true, force: true })
+  }
+}
+
+async function serviceAction(action, stateRoot) {
+  if (process.platform === 'linux') {
+    await execFile('systemctl', [action, 'openlink.service'], { timeout: action === 'stop' ? 240_000 : 30_000 })
+    return
+  }
+  if (process.platform === 'darwin') {
+    const args = action === 'stop'
+      ? ['kill', 'SIGTERM', 'system/io.zokerbase.openlink']
+      : ['kickstart', '-k', 'system/io.zokerbase.openlink']
+    await execFile('/bin/launchctl', args, { timeout: action === 'stop' ? 240_000 : 30_000 })
+    if (action === 'stop') {
+      const deadline = Date.now() + 240_000
+      while ((await runtimeLockStatus(stateRoot)).running && Date.now() < deadline) await new Promise((resolveDelay) => setTimeout(resolveDelay, 250))
+      if ((await runtimeLockStatus(stateRoot)).running) throw new Error('OpenLink LaunchDaemon did not stop within 240 seconds')
+    }
+    return
+  }
+  throw new Error(`Native service control is unsupported on ${process.platform}`)
+}
+
+async function waitForApplicationHealth(url, timeoutMs = 600_000) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(5_000) })
+      if (response.status >= 200 && response.status < 500) return
+    } catch {}
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 1_000))
+  }
+  throw new Error(`OpenLink did not become healthy within ${timeoutMs / 1000} seconds`)
 }
 
 function parseArguments(argv) {
@@ -228,6 +276,35 @@ async function main(argv) {
     process.stdout.write(`${JSON.stringify({ ok: true, ...result })}\n`)
     return
   }
+  if (command === 'upgrade') {
+    const installRoot = resolve(values.get('root'))
+    const archive = resolve(values.get('archive'))
+    const configPath = resolve(values.get('config'))
+    const config = await readEnvironmentFile(configPath)
+    const trustedKeys = await trustedKeysFrom(values.get('trust'))
+    const expectedTarget = normalizeTarget({ platform: process.platform, architecture: process.arch })
+    const currentDirectory = resolve(installRoot, await readlink(join(installRoot, 'current')))
+    const currentManifest = (await verifyInstalledRelease(currentDirectory, trustedKeys, expectedTarget)).manifest
+    const candidateManifest = await verifyReleaseArchive({ archive, trustedKeys, expectedTarget })
+    const backupOutput = resolve(values.get('backup-output') || join(config.OPENLINK_BACKUP_ROOT, `pre-upgrade-${candidateManifest.releaseId}-${Date.now()}.olb`))
+    const transaction = await executeUpgradeTransaction({
+      transactionId: randomUUID(),
+      stateRoot: config.OPENLINK_STATE_ROOT,
+      currentManifest,
+      candidateManifest,
+      stopService: () => serviceAction('stop', config.OPENLINK_STATE_ROOT),
+      backup: async () => {
+        const result = await createEncryptedBackup({ stateRoot: config.OPENLINK_STATE_ROOT, configPath, secretsPath: config.OPENLINK_SECRETS_FILE, keyFile: config.OPENLINK_BACKUP_KEY_FILE, output: backupOutput })
+        return { output: result.output, manifestPath: result.manifestPath, sha256: result.manifest.payload.sha256 }
+      },
+      stage: () => installReleaseArchive({ archive, installRoot, trustedKeys, expectedTarget, activate: false }),
+      activate: (releaseId) => activateRelease(installRoot, releaseId),
+      startService: () => serviceAction('start', config.OPENLINK_STATE_ROOT),
+      healthCheck: () => waitForApplicationHealth(config.OPENLINK_APP_URL),
+    })
+    process.stdout.write(`${JSON.stringify({ ok: true, transaction })}\n`)
+    return
+  }
   if (command === 'preflight' || command === 'doctor') {
     const configPath = values.get('config')
     const config = configPath ? await readEnvironmentFile(resolve(configPath)) : {}
@@ -289,7 +366,7 @@ async function main(argv) {
     }
     return
   }
-  throw new Error('Usage: openlinkctl <verify|install|configure|version|status|preflight|doctor|backup|restore|run> [options]')
+  throw new Error('Usage: openlinkctl <verify|install|configure|version|status|preflight|doctor|backup|restore|upgrade|run> [options]')
 }
 
 if (process.argv[1] && basename(process.argv[1]) === basename(fileURLToPath(import.meta.url))) {
