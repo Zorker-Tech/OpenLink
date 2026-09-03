@@ -65,6 +65,31 @@ async function copyRequired(source, destination, options = {}) {
   })
 }
 
+async function copyLargeNativeArtifact(source, destination, target) {
+  await mkdir(join(destination, '..'), { recursive: true, mode: 0o755 })
+  if (target.platform === 'darwin') {
+    await execFile('/bin/cp', ['-c', source, destination])
+    return
+  }
+  if (target.platform === 'linux') {
+    await execFile('cp', ['--reflink=auto', '--sparse=always', '--preserve=mode', source, destination])
+    return
+  }
+  throw new Error(`Large release artifact copy is unsupported on ${target.platform}`)
+}
+
+async function clonePayloadTree(source, destination, target) {
+  if (target.platform === 'darwin') {
+    await execFile('/bin/cp', ['-cR', `${source}/.`, destination])
+    return
+  }
+  if (target.platform === 'linux') {
+    await execFile('cp', ['-a', '--reflink=auto', '--sparse=always', `${source}/.`, destination])
+    return
+  }
+  throw new Error(`Release payload cloning is unsupported on ${target.platform}`)
+}
+
 async function normalizePayloadModes(root) {
   async function visit(path) {
     const stats = await lstat(path)
@@ -160,7 +185,7 @@ export async function stageNativeSelfHostedPayload(options = {}) {
     throw new Error(`Project VM artifact does not match ${target.triple}`)
   }
   await copyRequired(join(vmRoot, 'manifest.json'), join(outputRoot, 'project-vm/manifest.json'))
-  await copyRequired(join(vmRoot, vmManifest.disk), join(outputRoot, 'project-vm', vmManifest.disk))
+  await copyLargeNativeArtifact(join(vmRoot, vmManifest.disk), join(outputRoot, 'project-vm', vmManifest.disk), target)
   if (typeof vmManifest.archive === 'string') await copyRequired(join(vmRoot, vmManifest.archive), join(outputRoot, 'project-vm', vmManifest.archive))
 
   await normalizePayloadModes(outputRoot)
@@ -220,7 +245,7 @@ export async function assembleSelfHostedRelease(options = {}) {
   }
   const staging = await mkdtemp(join(outputRoot, `.staging-${releaseId}-`))
   try {
-    await cp(payloadRoot, staging, { recursive: true, dereference: false, force: false, preserveTimestamps: false })
+    await clonePayloadTree(payloadRoot, staging, target)
     const inventory = await createReleaseInventory(staging)
     const signed = signReleaseManifest({
       schemaVersion: 1,
@@ -268,28 +293,30 @@ async function main(argv) {
     platform: args.get('platform') || process.platform,
     architecture: args.get('architecture') || process.arch,
   }
+  const outputRoot = resolve(args.get('output') || '.openlink-releases/self-hosted')
+  await mkdir(outputRoot, { recursive: true, mode: 0o755 })
   let temporaryPayload
-  let payloadRoot = args.get('payload-root')
-  if (!payloadRoot) {
-    temporaryPayload = await mkdtemp(join(tmpdir(), 'openlink-self-hosted-payload-'))
-    await stageNativeSelfHostedPayload({
-      sourceRoot: resolve(fileURLToPath(new URL('../', import.meta.url))),
-      runtimeRoot: args.get('runtime-root'),
-      outputRoot: temporaryPayload,
-      target,
-      nodeExecutable: args.get('node-executable'),
-    })
-    payloadRoot = temporaryPayload
-  }
-  const result = await assembleSelfHostedRelease({
-    payloadRoot,
-    outputRoot: args.get('output') || '.openlink-releases/self-hosted',
-    releaseId: args.get('release-id'),
-    target,
-    privateKey: await readFile(privateKeyPath),
-    keyId: args.get('key-id'),
-  })
   try {
+    let payloadRoot = args.get('payload-root')
+    if (!payloadRoot) {
+      temporaryPayload = await mkdtemp(join(outputRoot, '.payload-'))
+      await stageNativeSelfHostedPayload({
+        sourceRoot: resolve(fileURLToPath(new URL('../', import.meta.url))),
+        runtimeRoot: args.get('runtime-root'),
+        outputRoot: temporaryPayload,
+        target,
+        nodeExecutable: args.get('node-executable'),
+      })
+      payloadRoot = temporaryPayload
+    }
+    const result = await assembleSelfHostedRelease({
+      payloadRoot,
+      outputRoot,
+      releaseId: args.get('release-id'),
+      target,
+      privateKey: await readFile(privateKeyPath),
+      keyId: args.get('key-id'),
+    })
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`)
   } finally {
     if (temporaryPayload) await rm(temporaryPayload, { recursive: true, force: true })
