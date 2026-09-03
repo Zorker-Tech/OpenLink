@@ -72,11 +72,13 @@ test('sealed installer performs signed archive install and protected configurati
   const { stdout, stderr } = await execFile(installer, [
     '--archive', release.archive, '--app-url', 'http://127.0.0.1:7443', '--allow-insecure-http', '1',
     '--root', installRoot, '--config', configPath, '--state-root', join(root, 'state'), '--skip-host-preflight', '1',
+    '--skip-service-install', '1',
   ], { env: { PATH: '/usr/bin:/bin' }, timeout: 60_000 })
   assert.equal(stderr, '')
   const result = JSON.parse(stdout)
   assert.equal(result.ok, true)
   assert.equal(result.installed.releaseId, 'sea-e2e-1')
+  assert.equal(result.service.skipped, true)
   assert.match(await readFile(configPath, 'utf8'), /OPENLINK_APP_URL=http:\/\/127\.0\.0\.1:7443/)
   assert.equal((await readFile(join(root, 'configuration/secrets.env'), 'utf8')).includes('insecure'), false)
 })

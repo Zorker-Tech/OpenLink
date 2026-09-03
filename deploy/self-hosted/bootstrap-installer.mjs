@@ -7,6 +7,7 @@ import { installReleaseArchive } from './openlinkctl.mjs'
 import { createProductionConfiguration } from './runtime/configuration.mjs'
 import { normalizeTarget } from './runtime/release-contract.mjs'
 import { runPreflight } from './runtime/preflight.mjs'
+import { installNativeService } from './runtime/native-service.mjs'
 
 function parseArguments(argv) {
   const values = new Map()
@@ -94,7 +95,17 @@ export async function runBootstrapInstaller(argv = process.argv.slice(2)) {
       environment: {},
     })
   }
-  return { ok: true, installed, configuration: { ...configuration, secretsPath: '<protected>', backupKeyPath: '<protected>' } }
+  const service = values.get('skip-service-install') === '1' ? { skipped: true } : await installNativeService({
+    releaseRoot,
+    installRoot: destination.installRoot,
+    configPath: destination.configPath,
+    secretsPath: destination.secretsPath,
+    backupKeyPath: configuration.backupKeyPath,
+    stateRoot: destination.stateRoot,
+    logRoot: destination.logRoot,
+    backupRoot: destination.backupRoot,
+  })
+  return { ok: true, installed, service, configuration: { ...configuration, secretsPath: '<protected>', backupKeyPath: '<protected>' } }
 }
 
 if (import.meta.url === `file://${process.argv[1]}` || isSea()) {
