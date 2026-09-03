@@ -167,7 +167,13 @@ export async function createRuntimePlan(options = {}) {
     {
       name: 'edge', command: join(releaseRoot, 'edge/bin/caddy'),
       args: ['run', '--config', join(releaseRoot, 'edge/Caddyfile'), '--adapter', 'caddyfile'],
-      cwd: releaseRoot, environment, healthUrl: supplied.OPENLINK_APP_URL,
+      cwd: releaseRoot,
+      environment: {
+        OPENLINK_EDGE_ADDRESS: supplied.OPENLINK_EDGE_ADDRESS,
+        XDG_CONFIG_HOME: join(stateRoot, 'edge/config'),
+        XDG_DATA_HOME: join(stateRoot, 'edge/data'),
+      },
+      healthUrl: supplied.OPENLINK_APP_URL,
     },
   ]
   return { releaseRoot, stateRoot, docker, images: [...runtimeImages, ...await imageEntries(releaseRoot, 'zokerbase'), ...await imageEntries(releaseRoot, 'zero')], compose, processes }
@@ -217,7 +223,7 @@ export class ProductionSupervisor {
   }
 
   async start() {
-    for (const directory of ['workspaces', 'agents', 'desktop-agents', 'browser', 'knowledge', 'project-vms', 'podman/config', 'podman/data', 'zero', 'zokerbase']) {
+    for (const directory of ['workspaces', 'agents', 'desktop-agents', 'browser', 'knowledge', 'project-vms', 'podman/config', 'podman/data', 'edge/config', 'edge/data', 'zero', 'zokerbase']) {
       await mkdir(join(this.plan.stateRoot, directory), { recursive: true, mode: 0o700 })
     }
     for (const item of this.plan.images) {
