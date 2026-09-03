@@ -5,6 +5,7 @@
  */
 import { execFile as execFileCallback } from 'node:child_process'
 import { createHash, createPrivateKey } from 'node:crypto'
+import { createReadStream } from 'node:fs'
 import { chmod, cp, lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
@@ -265,11 +266,14 @@ async function writeArchive(releaseDirectory, outputRoot, releaseId, target) {
   const archiveName = `openlink-self-hosted-${releaseId}-${target.triple}.tar.gz`
   const temporary = join(outputRoot, `.${archiveName}.${process.pid}.tmp`)
   const archive = join(outputRoot, archiveName)
-  await execFile('tar', ['-czf', temporary, '-C', releaseDirectory, '.'], {
+  const portability = process.platform === 'darwin' ? ['--no-xattrs', '--no-mac-metadata', '--no-read-sparse'] : []
+  await execFile('tar', [...portability, '-czf', temporary, '-C', releaseDirectory, '.'], {
     maxBuffer: 16 * 1024 * 1024,
     env: { ...process.env, COPYFILE_DISABLE: '1' },
   })
-  const digest = createHash('sha256').update(await readFile(temporary)).digest('hex')
+  const hash = createHash('sha256')
+  for await (const chunk of createReadStream(temporary)) hash.update(chunk)
+  const digest = hash.digest('hex')
   await rename(temporary, archive)
   await writeFile(`${archive}.sha256`, `${digest}  ${archiveName}\n`, { mode: 0o644 })
   return { archive, archiveSha256: digest }
