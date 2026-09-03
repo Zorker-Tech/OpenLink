@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>io.zokerbase.openlink</string>
+  <key>UserName</key>
+  <string>openlink</string>
+  <key>GroupName</key>
+  <string>openlink</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Library/Application Support/OpenLink/current/bin/openlinkctl</string>
+    <string>run</string>
+    <string>--config</string>
+    <string>/Library/Application Support/OpenLink/config/openlink.env</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Library/Application Support/OpenLink/state</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+  <key>ThrottleInterval</key>
+  <integer>5</integer>
+  <key>ProcessType</key>
+  <string>Interactive</string>
+  <key>HardResourceLimits</key>
+  <dict>
+    <key>NumberOfFiles</key>
+    <integer>1048576</integer>
+  </dict>
+  <key>Umask</key>
+  <integer>63</integer>
+  <key>StandardOutPath</key>
+  <string>/Library/Logs/OpenLink/openlink.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Library/Logs/OpenLink/openlink.error.log</string>
+</dict>
+</plist>
+

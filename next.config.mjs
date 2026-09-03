@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Customer self-hosted releases run the prebuilt standalone server. Source
+  // compilation and dependency installation remain internal release tasks.
+  output: 'standalone',
   // The Local stack deliberately supports both localhost and 127.0.0.1. The
   // latter is used by ZOKERBASE callbacks, so permit its dev HMR origin too.
   allowedDevOrigins: ['localhost', '127.0.0.1'],
