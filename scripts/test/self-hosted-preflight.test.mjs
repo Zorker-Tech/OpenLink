@@ -67,6 +67,7 @@ test('customer runtime source contains no build or dependency-install execution'
     new URL('../../deploy/self-hosted/runtime/production-runtime.mjs', import.meta.url),
     new URL('../../deploy/self-hosted/runtime/lifecycle-lock.mjs', import.meta.url),
     new URL('../../deploy/self-hosted/runtime/backup.mjs', import.meta.url),
+    new URL('../../deploy/self-hosted/runtime/upgrade.mjs', import.meta.url),
   ].map((url) => (import('node:fs/promises')).then(({ readFile }) => readFile(url, 'utf8'))))
   const executableBuild = /(?:spawn|execFile|runCommand)[\s\S]{0,180}['"](?:npm|pnpm|yarn|next|tsc|go|docker|podman)['"][\s\S]{0,100}['"](?:install|ci|build|pull)['"]/i
   for (const source of sources) assert.doesNotMatch(source, executableBuild)

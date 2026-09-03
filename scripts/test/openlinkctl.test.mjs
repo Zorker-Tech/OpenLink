@@ -24,10 +24,12 @@ async function fixture(t, releaseId = '2026.09.03-test.1') {
   const keys = generateKeyPairSync('ed25519')
   const signedManifest = signReleaseManifest({
     schemaVersion: 1,
+    contractVersion: 1,
     product: 'OpenLink',
     releaseId,
     target: normalizeTarget({ platform: process.platform, architecture: process.arch }),
     inventory,
+    compatibility: { stateSchema: 1, minimumStateSchema: 1, maximumStateSchema: 1 },
   }, { privateKey: keys.privateKey, keyId: 'test-release-key' })
   await writeFile(join(source, 'release.json'), `${JSON.stringify(signedManifest, null, 2)}\n`, { mode: 0o644 })
   return { root, source, installRoot, keys, signedManifest }

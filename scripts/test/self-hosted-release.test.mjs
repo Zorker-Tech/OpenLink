@@ -69,10 +69,12 @@ test('signed manifests reject tampering, unknown keys and the wrong native targe
   const { privateKey, publicKey } = generateKeyPairSync('ed25519')
   const manifest = {
     schemaVersion: 1,
+    contractVersion: 1,
     product: 'OpenLink',
     releaseId: '2026.09.03-rc.1',
     target: normalizeTarget({ platform: 'darwin', architecture: 'arm64' }),
     inventory: [{ path: 'NOTICE', mode: '0644', size: 9, sha256: 'a'.repeat(64) }],
+    compatibility: { stateSchema: 1, minimumStateSchema: 1, maximumStateSchema: 1 },
   }
   const signed = signReleaseManifest(manifest, {
     privateKey,
