@@ -11,7 +11,14 @@ function parseString(buffer) {
   return buffer.subarray(0, end === -1 ? buffer.length : end).toString('utf8')
 }
 
-function parseOctal(buffer, label) {
+export function parseTarNumber(buffer, label) {
+  if ((buffer[0] & 0x80) !== 0) {
+    if ((buffer[0] & 0x40) !== 0) throw new Error(`Archive ${label} must not be negative`)
+    let value = BigInt(buffer[0] & 0x3f)
+    for (const byte of buffer.subarray(1)) value = (value << 8n) | BigInt(byte)
+    if (value > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error(`Archive ${label} is out of range`)
+    return Number(value)
+  }
   const value = parseString(buffer).trim().replace(/^0+/, '') || '0'
   if (!/^[0-7]+$/.test(value)) throw new Error(`Archive ${label} is not octal`)
   const result = Number.parseInt(value, 8)
@@ -70,14 +77,14 @@ export async function extractVerifiedTarGzip(archive, destination, options = {})
       return
     }
     if (zeroBlocks > 0) throw new Error('Archive contains data after an end marker')
-    const expectedChecksum = parseOctal(header.subarray(148, 156), 'checksum')
+    const expectedChecksum = parseTarNumber(header.subarray(148, 156), 'checksum')
     if (headerChecksum(header) !== expectedChecksum) throw new Error('Archive header checksum mismatch')
     const name = parseString(header.subarray(0, 100))
     const prefix = parseString(header.subarray(345, 500))
     const headerPath = prefix ? `${prefix}/${name}` : name
     const type = String.fromCharCode(header[156] || 0)
-    const mode = parseOctal(header.subarray(100, 108), 'file mode') & 0o7777
-    const headerSize = parseOctal(header.subarray(124, 136), 'file size')
+    const mode = parseTarNumber(header.subarray(100, 108), 'file mode') & 0o7777
+    const headerSize = parseTarNumber(header.subarray(124, 136), 'file size')
     const sizeValue = pax.size === undefined ? headerSize : Number(pax.size)
     if (!Number.isSafeInteger(sizeValue) || sizeValue < 0 || sizeValue > maximumFileBytes) throw new Error(`Archive file size is invalid: ${sizeValue}`)
     const rawPath = String(pax.path ?? longName ?? headerPath)

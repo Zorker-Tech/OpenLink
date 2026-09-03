@@ -12,6 +12,20 @@ import {
   normalizeTarget,
   signReleaseManifest,
 } from '../../deploy/self-hosted/runtime/release-contract.mjs'
+import { parseTarNumber } from '../../deploy/self-hosted/runtime/safe-archive.mjs'
+
+test('safe archive parser accepts positive base-256 sizes and rejects unsafe values', () => {
+  const encoded = Buffer.alloc(12)
+  encoded[0] = 0x80
+  encoded.writeBigUInt64BE(64n * 1024n ** 3n, 4)
+  assert.equal(parseTarNumber(encoded, 'file size'), 64 * 1024 ** 3)
+  const negative = Buffer.from(encoded)
+  negative[0] = 0xc0
+  assert.throws(() => parseTarNumber(negative, 'file size'), /negative/i)
+  const unsafe = Buffer.alloc(12, 0xff)
+  unsafe[0] = 0x80
+  assert.throws(() => parseTarNumber(unsafe, 'file size'), /range/i)
+})
 
 async function fixture(t, releaseId = '2026.09.03-test.1') {
   const root = await mkdtemp(join(tmpdir(), 'openlinkctl-test-'))
