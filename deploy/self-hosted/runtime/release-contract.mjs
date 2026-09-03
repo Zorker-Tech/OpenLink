@@ -61,6 +61,36 @@ export function canonicalJson(value) {
   return JSON.stringify(canonicalValue(value))
 }
 
+export function parseReleaseTrustPolicy(document, options = {}) {
+  invariant(document && typeof document === 'object' && !Array.isArray(document), 'Release trust root is invalid')
+  invariant(document.schemaVersion === 1, 'Unsupported release trust root schema')
+  invariant(Number.isSafeInteger(document.minimumReleaseSequence) && document.minimumReleaseSequence >= 1, 'Release trust minimum sequence is invalid')
+  invariant(document.keys && typeof document.keys === 'object' && !Array.isArray(document.keys), 'Release trust keys are invalid')
+  const now = options.now instanceof Date ? options.now.getTime() : Number(options.now ?? Date.now())
+  invariant(Number.isFinite(now), 'Release trust evaluation time is invalid')
+  const trustedKeys = {}
+  for (const [keyId, record] of Object.entries(document.keys)) {
+    invariant(KEY_ID.test(keyId), `Release trust key id is invalid: ${keyId}`)
+    invariant(record && typeof record === 'object' && !Array.isArray(record), `Release trust record is invalid: ${keyId}`)
+    invariant(record.algorithm === 'Ed25519', `Release trust key algorithm is invalid: ${keyId}`)
+    invariant(['active', 'retired', 'revoked'].includes(record.status), `Release trust key status is invalid: ${keyId}`)
+    invariant(typeof record.publicKeyPem === 'string' && record.publicKeyPem.length > 0, `Release trust public key is invalid: ${keyId}`)
+    const notBefore = record.notBefore === undefined ? undefined : Date.parse(record.notBefore)
+    const notAfter = record.notAfter === undefined ? undefined : Date.parse(record.notAfter)
+    invariant(notBefore === undefined || Number.isFinite(notBefore), `Release trust notBefore is invalid: ${keyId}`)
+    invariant(notAfter === undefined || Number.isFinite(notAfter), `Release trust notAfter is invalid: ${keyId}`)
+    invariant(notBefore === undefined || notAfter === undefined || notBefore < notAfter, `Release trust validity window is invalid: ${keyId}`)
+    if (record.status !== 'active' || (notBefore !== undefined && now < notBefore) || (notAfter !== undefined && now >= notAfter)) continue
+    trustedKeys[keyId] = record.publicKeyPem
+  }
+  invariant(Object.keys(trustedKeys).length > 0, 'Release trust root contains no currently active keys')
+  return { trustedKeys, minimumReleaseSequence: document.minimumReleaseSequence }
+}
+
+export function parseReleaseTrustRoot(document, options = {}) {
+  return parseReleaseTrustPolicy(document, options).trustedKeys
+}
+
 async function digestRegularFile(path) {
   const before = await lstat(path)
   invariant(before.isFile(), `Release inventory entry is not a regular file: ${path}`)
@@ -155,6 +185,7 @@ function validateManifestShape(manifest) {
   invariant(manifest.contractVersion === 1, 'Unsupported self-hosted release contract version')
   invariant(manifest.product === 'OpenLink', 'Release manifest product is invalid')
   normalizeReleaseId(manifest.releaseId)
+  invariant(Number.isSafeInteger(manifest.releaseSequence) && manifest.releaseSequence >= 1, 'Release manifest sequence is invalid')
   const target = normalizeTarget(manifest.target)
   invariant(canonicalJson(target) === canonicalJson(manifest.target), 'Release target is not canonical')
   validateInventory(manifest.inventory)
@@ -188,6 +219,10 @@ export function verifyReleaseManifest(manifest, options = {}) {
   if (options.expectedTarget) {
     const expected = normalizeTarget(options.expectedTarget)
     invariant(canonicalJson(expected) === canonicalJson(unsigned.target), `Release target mismatch: expected ${expected.triple}, received ${unsigned.target.triple}`)
+  }
+  if (options.minimumReleaseSequence !== undefined) {
+    invariant(Number.isSafeInteger(options.minimumReleaseSequence) && options.minimumReleaseSequence >= 1, 'Release trust minimum sequence is invalid')
+    invariant(unsigned.releaseSequence >= options.minimumReleaseSequence, `Release sequence ${unsigned.releaseSequence} is below the trusted minimum ${options.minimumReleaseSequence}`)
   }
   return unsigned
 }

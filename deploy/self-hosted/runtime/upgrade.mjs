@@ -13,6 +13,10 @@ function stateSchema(manifest) {
 export function assertUpgradeCompatible(currentManifest, candidateManifest) {
   const current = stateSchema(currentManifest)
   const candidate = stateSchema(candidateManifest)
+  if (!Number.isSafeInteger(currentManifest.releaseSequence) || !Number.isSafeInteger(candidateManifest.releaseSequence)
+    || candidateManifest.releaseSequence <= currentManifest.releaseSequence) {
+    throw new Error(`Candidate release sequence must increase from ${currentManifest.releaseSequence} to a newer value`)
+  }
   if (current.stateSchema < candidate.minimumStateSchema || current.stateSchema > candidate.maximumStateSchema) throw new Error(`Candidate release cannot read state schema ${current.stateSchema}`)
   // Schema migrations require a separately declared reversible migration.
   // Until that contract exists, upgrades fail closed instead of mutating data.

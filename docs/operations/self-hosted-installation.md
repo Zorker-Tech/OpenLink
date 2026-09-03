@@ -84,6 +84,23 @@ enables `openlink.service`, and waits for systemd `Type=notify` readiness. If
 startup fails it disables and removes the unit instead of leaving a falsely
 enabled service. It never builds or downloads product dependencies.
 
+The installer is authenticated before it is allowed to run as root. Keep the
+approved release public key outside the download/import channel, then verify
+the detached checksum signature and the installer bytes:
+
+```sh
+openssl pkeyutl -verify -pubin \
+  -inkey /secure-trust/openlink-release-signing.pub \
+  -rawin -in ./openlink-installer.sha256 \
+  -sigfile ./openlink-installer.sha256.sig
+sha256sum --check ./openlink-installer.sha256
+```
+
+Do not run the installer when either command fails. The checksum, detached
+signature and public key must not all come from the same mutable mirror. On
+macOS this release signature is additive: a supported public distribution also
+requires a valid Developer ID signature and Apple notarization.
+
 ```sh
 # 1. Verify and immutably install a native bundle.
 openlinkctl install \
