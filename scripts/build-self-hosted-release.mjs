@@ -117,8 +117,9 @@ async function copyImageSet(sourceDirectory, destinationDirectory, kind, target)
     const images = {}
     for (const [image, item] of Object.entries(manifest.images)) {
       const archiveName = basename(item.archive)
-      await copyLargeNativeArtifact(resolve(sourceDirectory, item.archive), join(destinationDirectory, 'archives', archiveName), target)
-      images[image] = { ...item, archive: `archives/${archiveName}` }
+      const archiveSource = resolve(sourceDirectory, item.archive)
+      await copyLargeNativeArtifact(archiveSource, join(destinationDirectory, 'archives', archiveName), target)
+      images[image] = { ...item, archive: `archives/${archiveName}`, imageId: await dockerArchiveImageId(archiveSource) }
     }
     await writeFile(join(destinationDirectory, 'manifest.json'), `${JSON.stringify({ ...manifest, images }, null, 2)}\n`, { mode: 0o644 })
     return
@@ -126,9 +127,22 @@ async function copyImageSet(sourceDirectory, destinationDirectory, kind, target)
   if (!Array.isArray(manifest.images)) throw new Error(`${kind} image manifest is invalid`)
   for (const item of manifest.images) {
     if (typeof item.archive !== 'string' || basename(item.archive) !== item.archive) throw new Error(`${kind} image archive path is invalid`)
-    await copyLargeNativeArtifact(join(sourceDirectory, item.archive), join(destinationDirectory, 'archives', item.archive), target)
+    const archiveSource = join(sourceDirectory, item.archive)
+    await copyLargeNativeArtifact(archiveSource, join(destinationDirectory, 'archives', item.archive), target)
+    item.imageId = await dockerArchiveImageId(archiveSource)
   }
   await writeFile(join(destinationDirectory, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o644 })
+}
+
+export async function dockerArchiveImageId(archive) {
+  const { stdout } = await execFile('tar', ['-xOf', archive, 'manifest.json'], { maxBuffer: 16 * 1024 * 1024 })
+  const manifest = JSON.parse(stdout)
+  if (!Array.isArray(manifest) || manifest.length !== 1 || typeof manifest[0]?.Config !== 'string') {
+    throw new Error(`Docker image archive must contain exactly one image: ${archive}`)
+  }
+  const digest = basename(manifest[0].Config).replace(/\.json$/, '')
+  if (!/^[a-f0-9]{64}$/.test(digest)) throw new Error(`Docker image archive has an invalid config digest: ${archive}`)
+  return `sha256:${digest}`
 }
 
 export async function stageNativeSelfHostedPayload(options = {}) {
