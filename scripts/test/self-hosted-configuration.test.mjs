@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
-import { createProductionConfiguration } from '../../deploy/self-hosted/runtime/configuration.mjs'
+import { createProductionConfiguration, updateProductionProjectRuntime } from '../../deploy/self-hosted/runtime/configuration.mjs'
 import { readEnvironmentFile } from '../../deploy/self-hosted/runtime/preflight.mjs'
 import { validateProductionEnvironment } from '../../deploy/self-hosted/runtime/production-runtime.mjs'
 
@@ -93,4 +93,20 @@ test('configure rejects plaintext production origins unless explicitly opted in'
   await mkdir(join(template, '..'), { recursive: true })
   await writeFile(template, 'POSTGRES_PASSWORD=insecure\n')
   await assert.rejects(createProductionConfiguration({ releaseRoot: join(root, 'release'), configPath: join(root, 'config.env'), stateRoot: join(root, 'state'), appUrl: 'http://127.0.0.1:3000' }), /https/i)
+})
+
+test('runtime selection updates only the persisted backend and isolation class', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'openlink-configure-runtime-update-'))
+  t.after(async () => (await import('node:fs/promises')).rm(root, { recursive: true, force: true }))
+  const template = join(root, 'release/orchestration/backend/docker/.env.example')
+  await mkdir(join(template, '..'), { recursive: true })
+  await writeFile(template, 'POSTGRES_PASSWORD=insecure\n')
+  const created = await createProductionConfiguration({ releaseRoot: join(root, 'release'), configPath: join(root, 'config.env'), stateRoot: join(root, 'state'), appUrl: 'https://openlink.example.test', deploymentProfile: 'dense', projectRuntime: 'vm' })
+  const changed = await updateProductionProjectRuntime(created.configPath, 'container')
+  assert.deepEqual({ previousRuntime: changed.previousRuntime, runtime: changed.runtime, changed: changed.changed }, { previousRuntime: 'vm', runtime: 'container', changed: true })
+  const config = await readEnvironmentFile(created.configPath)
+  assert.equal(config.OPENLINK_DEPLOYMENT_PROFILE, 'dense')
+  assert.equal(config.OPENLINK_PROJECT_RUNTIME, 'container')
+  assert.equal(config.OPENLINK_PROJECT_ISOLATION, 'container')
+  assert.equal((await lstat(created.configPath)).mode & 0o777, 0o640)
 })

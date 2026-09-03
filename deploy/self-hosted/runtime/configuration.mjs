@@ -152,3 +152,28 @@ export async function createProductionConfiguration(options = {}) {
   }
   return { configPath, secretsPath, backupKeyPath, stateRoot, appUrl }
 }
+
+export async function updateProductionProjectRuntime(configPath, runtimeValue) {
+  const absolute = resolve(configPath)
+  const runtime = resolveProjectRuntime(runtimeValue)
+  const before = await lstat(absolute)
+  if (!before.isFile() || (before.mode & 0o022) !== 0) throw new Error(`Production configuration is not a protected regular file: ${absolute}`)
+  const source = await readFile(absolute, 'utf8')
+  const values = parseEnvironmentFile(source)
+  const previous = resolveProjectRuntime(values.OPENLINK_PROJECT_RUNTIME)
+  const replacements = {
+    OPENLINK_PROJECT_RUNTIME: runtime,
+    OPENLINK_PROJECT_ISOLATION: runtime === 'vm' ? 'vm' : 'container',
+  }
+  let output = source
+  for (const [key, value] of Object.entries(replacements)) {
+    const pattern = new RegExp(`^${key}=.*$`, 'm')
+    output = pattern.test(output) ? output.replace(pattern, `${key}=${value}`) : `${output.replace(/\s*$/, '\n')}${key}=${value}\n`
+  }
+  if (output !== source) {
+    await durableWriteFile(absolute, output, { mode: before.mode & 0o777 })
+    await chmod(absolute, before.mode & 0o777)
+    await syncFile(absolute)
+  }
+  return { configPath: absolute, previousRuntime: previous, runtime, changed: previous !== runtime }
+}
