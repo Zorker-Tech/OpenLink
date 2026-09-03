@@ -69,12 +69,17 @@ async function digestRegularFile(path) {
   try {
     const current = await handle.stat()
     invariant(current.isFile() && current.dev === before.dev && current.ino === before.ino, `Release file changed while inventorying: ${path}`)
-    const contents = await handle.readFile()
-    invariant(contents.byteLength === current.size, `Release file size changed while inventorying: ${path}`)
+    const hash = createHash('sha256')
+    let bytes = 0
+    for await (const chunk of handle.createReadStream({ autoClose: false })) {
+      hash.update(chunk)
+      bytes += chunk.length
+    }
+    invariant(bytes === current.size, `Release file size changed while inventorying: ${path}`)
     return {
       mode: (current.mode & 0o7777).toString(8).padStart(4, '0'),
       size: current.size,
-      sha256: createHash('sha256').update(contents).digest('hex'),
+      sha256: hash.digest('hex'),
     }
   } finally {
     await handle.close()
@@ -147,11 +152,16 @@ function unsignedManifest(manifest) {
 
 function validateManifestShape(manifest) {
   invariant(manifest.schemaVersion === 1, 'Unsupported self-hosted release manifest schema')
+  invariant(manifest.contractVersion === 1, 'Unsupported self-hosted release contract version')
   invariant(manifest.product === 'OpenLink', 'Release manifest product is invalid')
   normalizeReleaseId(manifest.releaseId)
   const target = normalizeTarget(manifest.target)
   invariant(canonicalJson(target) === canonicalJson(manifest.target), 'Release target is not canonical')
   validateInventory(manifest.inventory)
+  const compatibility = manifest.compatibility
+  invariant(compatibility && Number.isSafeInteger(compatibility.stateSchema) && compatibility.stateSchema >= 1, 'Release state compatibility is invalid')
+  invariant(Number.isSafeInteger(compatibility.minimumStateSchema) && compatibility.minimumStateSchema >= 1 && compatibility.minimumStateSchema <= compatibility.stateSchema, 'Release minimum state compatibility is invalid')
+  invariant(Number.isSafeInteger(compatibility.maximumStateSchema) && compatibility.maximumStateSchema >= compatibility.stateSchema, 'Release maximum state compatibility is invalid')
   return manifest
 }
 
