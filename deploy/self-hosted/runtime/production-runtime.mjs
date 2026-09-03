@@ -62,9 +62,10 @@ async function imageEntries(releaseRoot, kind) {
     if (typeof entry.image !== 'string' || !entry.image || typeof entry.archive !== 'string' || !entry.archive) {
       throw new Error(`Invalid ${kind} image manifest entry`)
     }
+    if (!/^sha256:[a-f0-9]{64}$/.test(entry.imageId ?? '')) throw new Error(`Missing immutable image ID for ${entry.image}`)
     const archive = resolve(dirname(manifestPath), entry.archive.startsWith('archives/') ? entry.archive : join('archives', entry.archive))
     if (!archive.startsWith(`${resolve(dirname(manifestPath))}/`)) throw new Error(`Image archive escapes ${kind} payload`)
-    return { kind, image: entry.image, archive }
+    return { kind, image: entry.image, imageId: entry.imageId, archive }
   })
 }
 
@@ -221,8 +222,13 @@ export class ProductionSupervisor {
     }
     for (const item of this.plan.images) {
       await access(item.archive, constants.R_OK)
-      try { await this.runCommand(this.plan.docker, ['image', 'inspect', item.image]) }
-      catch { await this.runCommand(this.plan.docker, ['load', '--input', item.archive], { stdio: 'inherit' }) }
+      const inspect = async () => (await this.runCommand(this.plan.docker, ['image', 'inspect', '--format', '{{.Id}}', item.image])).trim()
+      const installedId = await inspect().catch(() => '')
+      if (installedId !== item.imageId) {
+        await this.runCommand(this.plan.docker, ['load', '--input', item.archive], { stdio: 'inherit' })
+        const loadedId = await inspect().catch(() => '')
+        if (loadedId !== item.imageId) throw new Error(`Loaded image identity does not match the signed manifest: ${item.image}`)
+      }
     }
     for (const item of this.plan.compose) await this.runCommand(item.command, item.args, item)
     for (const item of this.plan.processes) {

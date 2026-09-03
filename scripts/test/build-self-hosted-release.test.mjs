@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict'
 import { generateKeyPairSync } from 'node:crypto'
+import { execFile as execFileCallback } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { promisify } from 'node:util'
 import test from 'node:test'
 
-import { assembleSelfHostedRelease } from '../build-self-hosted-release.mjs'
+import { assembleSelfHostedRelease, dockerArchiveImageId } from '../build-self-hosted-release.mjs'
 import { verifyReleaseInventory, verifyReleaseManifest } from '../../deploy/self-hosted/runtime/release-contract.mjs'
 
 const requiredFiles = [
@@ -32,6 +34,7 @@ const requiredFiles = [
   'openlinkctl.mjs',
   'bin/openlinkctl',
 ]
+const execFile = promisify(execFileCallback)
 
 async function payloadFixture(t) {
   const root = await mkdtemp(join(tmpdir(), 'openlink-release-build-'))
@@ -85,6 +88,17 @@ test('refuses to assemble an incomplete customer runtime', async (t) => {
     keyId: 'fixture-key',
     createArchive: false,
   }), /missing.*app\/web\/server\.js/i)
+})
+
+test('derives an immutable Docker image ID from a sealed archive', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'openlink-image-id-'))
+  t.after(async () => (await import('node:fs/promises')).rm(root, { recursive: true, force: true }))
+  const digest = 'b'.repeat(64)
+  await writeFile(join(root, 'manifest.json'), `${JSON.stringify([{ Config: `${digest}.json`, RepoTags: ['fixture:test'], Layers: [] }])}\n`)
+  await writeFile(join(root, `${digest}.json`), '{}\n')
+  const archive = join(root, 'image.tar')
+  await execFile('tar', ['-cf', archive, '-C', root, 'manifest.json', `${digest}.json`])
+  assert.equal(await dockerArchiveImageId(archive), `sha256:${digest}`)
 })
 
 test('refuses private signing material inside a customer payload', async (t) => {
