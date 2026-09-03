@@ -66,11 +66,23 @@ at install/start time. The release supplies its own runtime and image archives.
 
 ## Installation transaction
 
-The production package entrypoint will perform these operations as one
-auditable transaction. Until the signed native package/bootstrap entrypoint is
-completed, these low-level commands are the authoritative qualification
-interface and must not be presented as a general-availability one-command
-installer.
+The sealed native installer performs signature verification, immutable install,
+protected configuration, fail-closed preflight, systemd registration, startup
+and readiness verification as one command on Linux. It contains its own runtime
+and trust root; the customer supplies only the signed release archive and public
+origin. The low-level commands below remain the recovery and audit interface.
+
+```sh
+sudo ./openlink-installer \
+  --archive /secure-import/openlink-self-hosted-<release>-linux-amd64.tar.gz \
+  --app-url https://openlink.example.com
+```
+
+The installer creates the dedicated `openlink` identity, grants only the
+required `docker` and `kvm` group memberships, fixes secret/state ownership,
+enables `openlink.service`, and waits for systemd `Type=notify` readiness. If
+startup fails it disables and removes the unit instead of leaving a falsely
+enabled service. It never builds or downloads product dependencies.
 
 ```sh
 # 1. Verify and immutably install a native bundle.
@@ -124,7 +136,9 @@ or undeclared state-schema transitions fail before mutation.
 
 The repository currently has passing contract/unit tests and real native
 installer-mechanism checks. General production support additionally requires a
-final full-product bundle, native service installation entrypoint, full macOS
-and Linux runtime qualification, clean-root restore drill, interruption tests,
-offline restart and security audit. See the qualification record; do not infer
-GA readiness from this runbook alone.
+final full-product bundle, full Linux runtime qualification, clean-root restore
+drill, interruption tests, offline restart and security audit. macOS package and
+runtime mechanics are tested, but automatic daemon installation is deliberately
+not a support claim until the container engine can run without a logged-in GUI
+user. See the qualification record; do not infer GA readiness from this runbook
+alone.
