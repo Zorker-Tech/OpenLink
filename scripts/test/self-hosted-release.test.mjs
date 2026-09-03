@@ -10,10 +10,28 @@ import {
   createReleaseInventory,
   normalizeReleaseId,
   normalizeTarget,
+  parseReleaseTrustRoot,
   signReleaseManifest,
   verifyReleaseInventory,
   verifyReleaseManifest,
 } from '../../deploy/self-hosted/runtime/release-contract.mjs'
+
+test('trust roots authorize only active Ed25519 keys inside their validity window', () => {
+  const keys = Object.fromEntries(['active', 'revoked', 'retired', 'expired', 'future'].map((name) => [name, generateKeyPairSync('ed25519').publicKey.export({ type: 'spki', format: 'pem' })]))
+  const trusted = parseReleaseTrustRoot({
+    schemaVersion: 1,
+    minimumReleaseSequence: 1,
+    keys: {
+      active: { algorithm: 'Ed25519', status: 'active', publicKeyPem: keys.active, notBefore: '2026-01-01T00:00:00.000Z', notAfter: '2027-01-01T00:00:00.000Z' },
+      revoked: { algorithm: 'Ed25519', status: 'revoked', publicKeyPem: keys.revoked },
+      retired: { algorithm: 'Ed25519', status: 'retired', publicKeyPem: keys.retired },
+      expired: { algorithm: 'Ed25519', status: 'active', publicKeyPem: keys.expired, notAfter: '2025-01-01T00:00:00.000Z' },
+      future: { algorithm: 'Ed25519', status: 'active', publicKeyPem: keys.future, notBefore: '2027-01-01T00:00:00.000Z' },
+    },
+  }, { now: Date.parse('2026-09-03T00:00:00.000Z') })
+  assert.deepEqual(Object.keys(trusted), ['active'])
+  assert.throws(() => parseReleaseTrustRoot({ schemaVersion: 1, minimumReleaseSequence: 1, keys: { revoked: { algorithm: 'Ed25519', status: 'revoked', publicKeyPem: keys.revoked } } }), /no currently active keys/i)
+})
 
 test('normalizes supported native release identities', () => {
   assert.equal(normalizeReleaseId('2026.09.03-rc.1'), '2026.09.03-rc.1')
@@ -72,6 +90,7 @@ test('signed manifests reject tampering, unknown keys and the wrong native targe
     contractVersion: 1,
     product: 'OpenLink',
     releaseId: '2026.09.03-rc.1',
+    releaseSequence: 1,
     target: normalizeTarget({ platform: 'darwin', architecture: 'arm64' }),
     inventory: [{ path: 'NOTICE', mode: '0644', size: 9, sha256: 'a'.repeat(64) }],
     compatibility: { stateSchema: 1, minimumStateSchema: 1, maximumStateSchema: 1 },
@@ -84,6 +103,11 @@ test('signed manifests reject tampering, unknown keys and the wrong native targe
     trustedKeys: { 'release-2026-01': publicKey },
     expectedTarget: { platform: 'darwin', architecture: 'arm64' },
   }).releaseId, manifest.releaseId)
+  assert.throws(() => verifyReleaseManifest(signed, {
+    trustedKeys: { 'release-2026-01': publicKey },
+    expectedTarget: { platform: 'darwin', architecture: 'arm64' },
+    minimumReleaseSequence: 2,
+  }), /below the trusted minimum/i)
   assert.throws(() => verifyReleaseManifest({ ...signed, releaseId: 'tampered' }, {
     trustedKeys: { 'release-2026-01': publicKey },
     expectedTarget: { platform: 'darwin', architecture: 'arm64' },

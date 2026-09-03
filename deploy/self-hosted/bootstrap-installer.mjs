@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 import { getAsset, isSea } from 'node:sea'
-import { lstat, readFile, readlink } from 'node:fs/promises'
+import { constants } from 'node:fs'
+import { lstat, open, readlink } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 
 import { activateRelease, installReleaseArchive } from './openlinkctl.mjs'
 import { createProductionConfiguration } from './runtime/configuration.mjs'
-import { normalizeTarget } from './runtime/release-contract.mjs'
+import { normalizeTarget, parseReleaseTrustPolicy } from './runtime/release-contract.mjs'
 import { readEnvironmentFile, runPreflight } from './runtime/preflight.mjs'
 import { installNativeService } from './runtime/native-service.mjs'
 
@@ -47,17 +48,28 @@ function paths(values) {
   throw new Error(`OpenLink production installer does not support ${process.platform}`)
 }
 
-function parseTrust(document) {
-  const keys = document?.keys ?? document
-  if (!keys || typeof keys !== 'object' || Array.isArray(keys)) throw new Error('Embedded release trust root is invalid')
-  return Object.fromEntries(Object.entries(keys).map(([id, value]) => [id, typeof value === 'string' ? value : value?.publicKeyPem]))
+async function readProtectedTrustFile(path) {
+  const absolute = resolve(path)
+  const before = await lstat(absolute)
+  const expectedUid = typeof process.getuid === 'function' && process.getuid() === 0 ? 0 : process.getuid?.()
+  if (!before.isFile() || (before.mode & 0o022) !== 0 || (expectedUid !== undefined && before.uid !== expectedUid)) {
+    throw new Error('Release trust file must be a protected regular file owned by the invoking trust administrator')
+  }
+  const handle = await open(absolute, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
+  try {
+    const current = await handle.stat()
+    if (!current.isFile() || current.dev !== before.dev || current.ino !== before.ino) throw new Error('Release trust file changed while opening')
+    return JSON.parse(await handle.readFile('utf8'))
+  } finally {
+    await handle.close()
+  }
 }
 
 async function trustRoot(values) {
-  if (isSea()) return parseTrust(JSON.parse(getAsset('release-keys.json', 'utf8')))
+  if (isSea()) return parseReleaseTrustPolicy(JSON.parse(getAsset('release-keys.json', 'utf8')))
   const path = values.get('trust')
   if (!path) throw new Error('A trust file is required outside the sealed installer')
-  return parseTrust(JSON.parse(await readFile(resolve(path), 'utf8')))
+  return parseReleaseTrustPolicy(await readProtectedTrustFile(path))
 }
 
 async function existingConfiguration(destination, appUrl) {
@@ -84,17 +96,17 @@ async function existingConfiguration(destination, appUrl) {
 
 export async function runBootstrapInstaller(argv = process.argv.slice(2)) {
   if (argv.length === 1 && argv[0] === '--self-test') {
-    const keys = await trustRoot(new Map())
-    return { ok: true, sealedInstaller: isSea(), target: normalizeTarget({ platform: process.platform, architecture: process.arch }).triple, trustedKeyIds: Object.keys(keys).sort() }
+    const trust = await trustRoot(new Map())
+    return { ok: true, sealedInstaller: isSea(), target: normalizeTarget({ platform: process.platform, architecture: process.arch }).triple, trustedKeyIds: Object.keys(trust.trustedKeys).sort(), minimumReleaseSequence: trust.minimumReleaseSequence }
   }
   const values = parseArguments(argv)
   const archive = values.get('archive')
   const appUrl = values.get('app-url')
   if (!archive || !appUrl) throw new Error('Usage: openlink-installer --archive <bundle.tar.gz> --app-url <https-origin> [--root <path>]')
   const destination = paths(values)
-  const trustedKeys = await trustRoot(values)
+  const trust = await trustRoot(values)
   const expectedTarget = normalizeTarget({ platform: process.platform, architecture: process.arch })
-  const installed = await installReleaseArchive({ archive, installRoot: destination.installRoot, trustedKeys, expectedTarget, activate: false })
+  const installed = await installReleaseArchive({ archive, installRoot: destination.installRoot, trustedKeys: trust.trustedKeys, minimumReleaseSequence: trust.minimumReleaseSequence, expectedTarget, activate: false })
   const activeRelease = await readlink(join(destination.installRoot, 'current'))
     .then((target) => target.split('/').at(-1))
     .catch((error) => error?.code === 'ENOENT' ? undefined : Promise.reject(error))

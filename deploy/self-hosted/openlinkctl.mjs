@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { cp, lstat, mkdir, mkdtemp, readFile, readlink, rename, rm, symlink, writeFile } from 'node:fs/promises'
+import { constants } from 'node:fs'
+import { cp, lstat, mkdir, mkdtemp, open, readFile, readlink, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { execFile as execFileCallback } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { tmpdir } from 'node:os'
@@ -11,6 +12,7 @@ import { isSea } from 'node:sea'
 import {
   canonicalJson,
   normalizeTarget,
+  parseReleaseTrustPolicy,
   safeReleasePath,
   verifyReleaseInventory,
   verifyReleaseManifest,
@@ -50,9 +52,9 @@ async function readSignedManifest(root) {
   return JSON.parse(await readFile(path, 'utf8'))
 }
 
-export async function verifyInstalledRelease(directory, trustedKeys, expectedTarget) {
+export async function verifyInstalledRelease(directory, trustedKeys, expectedTarget, minimumReleaseSequence) {
   const signed = await readSignedManifest(directory)
-  const manifest = verifyReleaseManifest(signed, { trustedKeys, expectedTarget })
+  const manifest = verifyReleaseManifest(signed, { trustedKeys, expectedTarget, minimumReleaseSequence })
   await verifyReleaseInventory(directory, manifest.inventory)
   return { signed, manifest }
 }
@@ -94,13 +96,13 @@ export async function installReleaseDirectory(options = {}) {
   const installRoot = resolve(options.installRoot)
   const expectedTarget = options.expectedTarget ?? { platform: process.platform, architecture: process.arch }
   const signed = await readSignedManifest(source)
-  const manifest = verifyReleaseManifest(signed, { trustedKeys: options.trustedKeys, expectedTarget })
+  const manifest = verifyReleaseManifest(signed, { trustedKeys: options.trustedKeys, expectedTarget, minimumReleaseSequence: options.minimumReleaseSequence })
   await verifyReleaseInventory(source, manifest.inventory)
 
   await mkdir(join(installRoot, 'releases'), { recursive: true, mode: 0o755 })
   const destination = join(installRoot, 'releases', manifest.releaseId)
   if (await pathExists(destination)) {
-    const existing = await verifyInstalledRelease(destination, options.trustedKeys, expectedTarget).catch((error) => {
+    const existing = await verifyInstalledRelease(destination, options.trustedKeys, expectedTarget, options.minimumReleaseSequence).catch((error) => {
       throw new Error(`Immutable release collision for ${manifest.releaseId}: ${error instanceof Error ? error.message : String(error)}`)
     })
     if (canonicalJson(existing.signed) !== canonicalJson(signed)) throw new Error(`Immutable release collision for ${manifest.releaseId}`)
@@ -112,7 +114,7 @@ export async function installReleaseDirectory(options = {}) {
   try {
     await copyInventory(source, staging, manifest.inventory)
     await writeFile(join(staging, 'release.json'), `${JSON.stringify(signed, null, 2)}\n`, { mode: 0o644, flag: 'wx' })
-    await verifyInstalledRelease(staging, options.trustedKeys, expectedTarget)
+    await verifyInstalledRelease(staging, options.trustedKeys, expectedTarget, options.minimumReleaseSequence)
     await rename(staging, destination)
   } catch (error) {
     await rm(staging, { recursive: true, force: true })
@@ -136,7 +138,7 @@ export async function verifyReleaseArchive(options = {}) {
   const extractionRoot = await mkdtemp(join(options.temporaryRoot ? resolve(options.temporaryRoot) : tmpdir(), 'openlink-verify-bundle-'))
   try {
     await extractVerifiedTarGzip(options.archive, extractionRoot, options.archiveLimits)
-    return (await verifyInstalledRelease(extractionRoot, options.trustedKeys, options.expectedTarget)).manifest
+    return (await verifyInstalledRelease(extractionRoot, options.trustedKeys, options.expectedTarget, options.minimumReleaseSequence)).manifest
   } finally {
     await rm(extractionRoot, { recursive: true, force: true })
   }
@@ -162,12 +164,16 @@ async function serviceAction(action, stateRoot) {
   throw new Error(`Native service control is unsupported on ${process.platform}`)
 }
 
-async function waitForApplicationHealth(url, timeoutMs = 600_000) {
+export async function waitForApplicationHealth(url, expectedReleaseId, timeoutMs = 600_000) {
   const deadline = Date.now() + timeoutMs
+  const healthUrl = new URL('/api/healthz', url)
   while (Date.now() < deadline) {
     try {
-      const response = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(5_000) })
-      if (response.status >= 200 && response.status < 500) return
+      const response = await fetch(healthUrl, { redirect: 'manual', signal: AbortSignal.timeout(5_000) })
+      if (response.status === 200) {
+        const body = await response.json().catch(() => undefined)
+        if (body?.ok === true && body.releaseId === expectedReleaseId) return
+      }
     } catch {}
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 1_000))
   }
@@ -186,16 +192,22 @@ function parseArguments(argv) {
   return { command, values }
 }
 
-async function trustedKeysFrom(path) {
+async function trustPolicyFrom(path) {
   if (!path) throw new Error('Release trust file is required')
-  const document = JSON.parse(await readFile(resolve(path), 'utf8'))
-  if (!document || typeof document !== 'object' || Array.isArray(document)) throw new Error('Release trust file is invalid')
-  const keys = document.keys ?? document
-  if (!keys || typeof keys !== 'object' || Array.isArray(keys)) throw new Error('Release trust keys are invalid')
-  return Object.fromEntries(Object.entries(keys).map(([keyId, value]) => [
-    keyId,
-    typeof value === 'string' ? value : value?.publicKeyPem,
-  ]))
+  const absolute = resolve(path)
+  const before = await lstat(absolute)
+  const expectedUid = typeof process.getuid === 'function' && process.getuid() === 0 ? 0 : process.getuid?.()
+  if (!before.isFile() || (before.mode & 0o022) !== 0 || (expectedUid !== undefined && before.uid !== expectedUid)) {
+    throw new Error('Release trust file must be a protected regular file owned by the invoking trust administrator')
+  }
+  const handle = await open(absolute, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
+  try {
+    const current = await handle.stat()
+    if (!current.isFile() || current.dev !== before.dev || current.ino !== before.ino) throw new Error('Release trust file changed while opening')
+    return parseReleaseTrustPolicy(JSON.parse(await handle.readFile('utf8')))
+  } finally {
+    await handle.close()
+  }
 }
 
 async function main(argv) {
@@ -203,17 +215,19 @@ async function main(argv) {
   const expectedTarget = normalizeTarget({ platform: process.platform, architecture: process.arch })
   if (command === 'verify') {
     const source = resolve(values.get('source') || '.')
-    const trustedKeys = await trustedKeysFrom(values.get('trust'))
+    const trust = await trustPolicyFrom(values.get('trust'))
     const signed = await readSignedManifest(source)
-    const manifest = verifyReleaseManifest(signed, { trustedKeys, expectedTarget })
+    const manifest = verifyReleaseManifest(signed, { trustedKeys: trust.trustedKeys, expectedTarget, minimumReleaseSequence: trust.minimumReleaseSequence })
     await verifyReleaseInventory(source, manifest.inventory)
     process.stdout.write(`${JSON.stringify({ ok: true, releaseId: manifest.releaseId, target: manifest.target.triple })}\n`)
     return
   }
   if (command === 'install') {
+    const trust = await trustPolicyFrom(values.get('trust'))
     const common = {
       installRoot: values.get('root'),
-      trustedKeys: await trustedKeysFrom(values.get('trust')),
+      trustedKeys: trust.trustedKeys,
+      minimumReleaseSequence: trust.minimumReleaseSequence,
       expectedTarget,
     }
     const result = values.get('archive')
@@ -282,11 +296,12 @@ async function main(argv) {
     const archive = resolve(values.get('archive'))
     const configPath = resolve(values.get('config'))
     const config = await readEnvironmentFile(configPath)
-    const trustedKeys = await trustedKeysFrom(values.get('trust'))
+    const trust = await trustPolicyFrom(values.get('trust'))
+    const trustedKeys = trust.trustedKeys
     const expectedTarget = normalizeTarget({ platform: process.platform, architecture: process.arch })
     const currentDirectory = resolve(installRoot, await readlink(join(installRoot, 'current')))
     const currentManifest = (await verifyInstalledRelease(currentDirectory, trustedKeys, expectedTarget)).manifest
-    const candidateManifest = await verifyReleaseArchive({ archive, trustedKeys, expectedTarget })
+    const candidateManifest = await verifyReleaseArchive({ archive, trustedKeys, expectedTarget, minimumReleaseSequence: trust.minimumReleaseSequence })
     const backupOutput = resolve(values.get('backup-output') || join(config.OPENLINK_BACKUP_ROOT, `pre-upgrade-${candidateManifest.releaseId}-${Date.now()}.olb`))
     const transaction = await executeUpgradeTransaction({
       transactionId: randomUUID(),
@@ -301,7 +316,7 @@ async function main(argv) {
       stage: () => installReleaseArchive({ archive, installRoot, trustedKeys, expectedTarget, activate: false }),
       activate: (releaseId) => activateRelease(installRoot, releaseId),
       startService: () => serviceAction('start', config.OPENLINK_STATE_ROOT),
-      healthCheck: () => waitForApplicationHealth(config.OPENLINK_APP_URL),
+      healthCheck: (releaseId) => waitForApplicationHealth(config.OPENLINK_APP_URL, releaseId),
     })
     process.stdout.write(`${JSON.stringify({ ok: true, transaction })}\n`)
     return

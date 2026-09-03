@@ -6,7 +6,7 @@ import test from 'node:test'
 
 import { assertUpgradeCompatible, executeUpgradeTransaction } from '../../deploy/self-hosted/runtime/upgrade.mjs'
 
-const manifest = (releaseId, schema = 1, minimum = schema, maximum = schema) => ({ releaseId, compatibility: { stateSchema: schema, minimumStateSchema: minimum, maximumStateSchema: maximum } })
+const manifest = (releaseId, releaseSequence, schema = 1, minimum = schema, maximum = schema) => ({ releaseId, releaseSequence, compatibility: { stateSchema: schema, minimumStateSchema: minimum, maximumStateSchema: maximum } })
 
 test('upgrade transaction commits only after stop, backup, stage, activation, start and health', async (t) => {
   const stateRoot = await mkdtemp(join(tmpdir(), 'openlink-upgrade-'))
@@ -14,7 +14,7 @@ test('upgrade transaction commits only after stop, backup, stage, activation, st
   const events = []
   const transaction = await executeUpgradeTransaction({
     transactionId: 'upgrade-1', stateRoot,
-    currentManifest: manifest('release-a'), candidateManifest: manifest('release-b'),
+    currentManifest: manifest('release-a', 1), candidateManifest: manifest('release-b', 2),
     stopService: async () => events.push('stop'), backup: async () => { events.push('backup'); return { id: 'backup-1' } },
     stage: async () => events.push('stage'), activate: async (id) => events.push(`activate:${id}`),
     startService: async () => events.push('start'), healthCheck: async (id) => events.push(`health:${id}`),
@@ -30,7 +30,7 @@ test('failed candidate health atomically rolls back to the prior compatible rele
   const events = []
   await assert.rejects(executeUpgradeTransaction({
     transactionId: 'upgrade-2', stateRoot,
-    currentManifest: manifest('release-a'), candidateManifest: manifest('release-b'),
+    currentManifest: manifest('release-a', 1), candidateManifest: manifest('release-b', 2),
     stopService: async () => events.push('stop'), backup: async () => ({ id: 'backup-2' }), stage: async () => undefined,
     activate: async (id) => events.push(`activate:${id}`), startService: async () => events.push('start'),
     healthCheck: async (id) => { events.push(`health:${id}`); if (id === 'release-b') throw new Error('candidate unhealthy') },
@@ -40,8 +40,10 @@ test('failed candidate health atomically rolls back to the prior compatible rele
 })
 
 test('upgrade refuses undeclared or irreversible state schema transitions', () => {
-  assert.throws(() => assertUpgradeCompatible(manifest('a', 1), manifest('b', 2, 1, 2)), /migration|reversible/i)
-  assert.throws(() => assertUpgradeCompatible(manifest('a', 1), { releaseId: 'b' }), /compatibility/i)
+  assert.throws(() => assertUpgradeCompatible(manifest('a', 1, 1), manifest('b', 2, 2, 1, 2)), /migration|reversible/i)
+  assert.throws(() => assertUpgradeCompatible(manifest('a', 1, 1), { releaseId: 'b', releaseSequence: 2 }), /compatibility/i)
+  assert.throws(() => assertUpgradeCompatible(manifest('a', 2, 1), manifest('b', 2, 1)), /sequence.*newer/i)
+  assert.throws(() => assertUpgradeCompatible(manifest('a', 2, 1), manifest('b', 1, 1)), /sequence.*newer/i)
 })
 
 test('failure before activation restarts the unchanged release', async (t) => {
@@ -49,7 +51,7 @@ test('failure before activation restarts the unchanged release', async (t) => {
   t.after(async () => (await import('node:fs/promises')).rm(stateRoot, { recursive: true, force: true }))
   const events = []
   await assert.rejects(executeUpgradeTransaction({
-    transactionId: 'upgrade-3', stateRoot, currentManifest: manifest('release-a'), candidateManifest: manifest('release-b'),
+    transactionId: 'upgrade-3', stateRoot, currentManifest: manifest('release-a', 1), candidateManifest: manifest('release-b', 2),
     stopService: async () => events.push('stop'), backup: async () => { throw new Error('backup failed') }, stage: async () => undefined,
     activate: async () => undefined, startService: async () => events.push('start'), healthCheck: async (id) => events.push(`health:${id}`),
   }), /backup failed/i)

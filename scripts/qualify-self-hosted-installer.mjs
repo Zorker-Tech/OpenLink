@@ -60,6 +60,7 @@ try {
     payloadRoot: payload,
     outputRoot: output,
     releaseId,
+    releaseSequence: 1,
     target,
     privateKey: keys.privateKey,
     keyId: 'qualification-only',

@@ -99,6 +99,7 @@ export async function createRuntimePlan(options = {}) {
     ...supplied,
     NODE_ENV: 'production',
     OPENLINK_RUNTIME_MODE: 'local',
+    OPENLINK_RELEASE_ID: basename(releaseRoot),
     NEXT_PUBLIC_OPENLINK_RUNTIME_MODE: 'local',
     PORT: webPort,
     HOSTNAME: '127.0.0.1',
@@ -163,7 +164,7 @@ export async function createRuntimePlan(options = {}) {
     processSpec('knowledge-service', node, join(releaseRoot, 'services/knowledge-service/dist/src/main.js'), join(releaseRoot, 'services/knowledge-service'), environment, `http://127.0.0.1:${knowledgePort}/healthz`),
     processSpec('agent-host', node, join(releaseRoot, 'services/agent-host/dist/src/main.js'), join(releaseRoot, 'services/agent-host'), environment, `http://127.0.0.1:${agentPort}/healthz`),
     processSpec('desktop-agent-host', node, join(releaseRoot, 'services/agent-host/dist/src/desktop-main.js'), join(releaseRoot, 'services/agent-host'), environment, `http://127.0.0.1:${desktopPort}/healthz`),
-    processSpec('web', node, join(releaseRoot, 'app/web/server.js'), join(releaseRoot, 'app/web'), environment, `http://127.0.0.1:${webPort}/`),
+    processSpec('web', node, join(releaseRoot, 'app/web/server.js'), join(releaseRoot, 'app/web'), environment, `http://127.0.0.1:${webPort}/api/healthz`),
     {
       name: 'edge', command: join(releaseRoot, 'edge/bin/caddy'),
       args: ['run', '--config', join(releaseRoot, 'edge/Caddyfile'), '--adapter', 'caddyfile'],
@@ -193,7 +194,7 @@ async function defaultCommand(command, args, options = {}) {
 async function defaultProbe(url) {
   try {
     const response = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(3_000) })
-    return response.status >= 200 && response.status < 500
+    return response.status >= 200 && response.status < 300
   } catch { return false }
 }
 
