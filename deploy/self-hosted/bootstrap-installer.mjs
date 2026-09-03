@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 import { getAsset, isSea } from 'node:sea'
 import { constants } from 'node:fs'
-import { chmod, lstat, open, readlink, rm } from 'node:fs/promises'
+import { chmod, chown, lstat, mkdir, open, readlink, rm } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 
 import { activateRelease, installReleaseArchive } from './openlinkctl.mjs'
 import { createProductionConfiguration } from './runtime/configuration.mjs'
-import { normalizeTarget, parseReleaseTrustPolicy } from './runtime/release-contract.mjs'
+import { canonicalJson, normalizeTarget, parseReleaseTrustPolicy } from './runtime/release-contract.mjs'
 import { readEnvironmentFile, runPreflight } from './runtime/preflight.mjs'
 import { installNativeService } from './runtime/native-service.mjs'
+import { durableWriteFile } from './runtime/durable-fs.mjs'
 
 function parseArguments(argv) {
   const values = new Map()
@@ -27,6 +28,7 @@ function paths(values) {
     return {
       installRoot: resolve(values.get('root') || '/opt/openlink'),
       configPath,
+      trustPath: resolve(values.get('trust-destination') || join(dirname(configPath), 'release-keys.json')),
       secretsPath: resolve(values.get('secrets') || join(dirname(configPath), 'secrets.env')),
       stateRoot: resolve(values.get('state-root') || '/var/lib/openlink'),
       logRoot: resolve(values.get('log-root') || '/var/log/openlink'),
@@ -39,6 +41,7 @@ function paths(values) {
     return {
       installRoot: root,
       configPath,
+      trustPath: resolve(values.get('trust-destination') || join(dirname(configPath), 'release-keys.json')),
       secretsPath: resolve(values.get('secrets') || join(dirname(configPath), 'secrets.env')),
       stateRoot: resolve(values.get('state-root') || join(root, 'state')),
       logRoot: resolve(values.get('log-root') || '/Library/Logs/OpenLink'),
@@ -67,18 +70,40 @@ async function readProtectedTrustFile(path) {
 }
 
 async function trustRoot(values) {
-  if (isSea()) return parseReleaseTrustPolicy(JSON.parse(getAsset('release-keys.json', 'utf8')))
+  if (isSea()) {
+    const document = JSON.parse(getAsset('release-keys.json', 'utf8'))
+    return { ...parseReleaseTrustPolicy(document), document }
+  }
   const path = values.get('trust')
   if (!path) throw new Error('A trust file is required outside the sealed installer')
-  return parseReleaseTrustPolicy(await readProtectedTrustFile(path))
+  const document = await readProtectedTrustFile(path)
+  return { ...parseReleaseTrustPolicy(document), document }
+}
+
+async function installTrustPolicy(path, document) {
+  const serialized = `${JSON.stringify(document, null, 2)}\n`
+  const existing = await lstat(path).catch((error) => error?.code === 'ENOENT' ? undefined : Promise.reject(error))
+  if (existing) {
+    const expectedUid = typeof process.getuid === 'function' ? process.getuid() : undefined
+    if (!existing.isFile() || (existing.mode & 0o022) !== 0 || (expectedUid !== undefined && existing.uid !== expectedUid)) throw new Error('Installed release trust policy must be a protected administrator-owned regular file')
+    const current = await readProtectedTrustFile(path)
+    parseReleaseTrustPolicy(current)
+    if (canonicalJson(current) !== canonicalJson(document)) throw new Error('Installed release trust policy differs; rotate trust explicitly before installing this release')
+    return
+  }
+  await mkdir(dirname(path), { recursive: true, mode: 0o750 })
+  await durableWriteFile(path, serialized, { mode: 0o644, flag: 'wx' })
+  await chmod(path, 0o644)
+  if (typeof process.getuid === 'function' && process.getuid() === 0) await chown(path, 0, 0)
 }
 
 async function existingConfiguration(destination, appUrl) {
   const backupKeyPath = join(dirname(destination.configPath), 'backup.key')
-  const paths = [destination.configPath, destination.secretsPath, backupKeyPath]
-  const present = await Promise.all(paths.map((path) => lstat(path).then((stats) => stats.isFile()).catch((error) => error?.code === 'ENOENT' ? false : Promise.reject(error))))
-  if (!present.some(Boolean)) return undefined
-  if (!present.every(Boolean)) throw new Error('Existing production configuration is incomplete; refusing secret rotation or partial reuse')
+  const corePaths = [destination.configPath, destination.secretsPath, backupKeyPath]
+  const corePresent = await Promise.all(corePaths.map((path) => lstat(path).then((stats) => stats.isFile()).catch((error) => error?.code === 'ENOENT' ? false : Promise.reject(error))))
+  if (!corePresent.some(Boolean)) return undefined
+  const trustPresent = await lstat(destination.trustPath).then((stats) => stats.isFile()).catch((error) => error?.code === 'ENOENT' ? false : Promise.reject(error))
+  if (!corePresent.every(Boolean) || !trustPresent) throw new Error('Existing production configuration is incomplete; refusing secret rotation or partial reuse')
   const config = await readEnvironmentFile(destination.configPath)
   await readEnvironmentFile(destination.secretsPath, { secrets: true })
   const backupKey = await lstat(backupKeyPath)
@@ -89,6 +114,7 @@ async function existingConfiguration(destination, appUrl) {
     || resolve(config.OPENLINK_LOG_ROOT) !== destination.logRoot
     || resolve(config.OPENLINK_BACKUP_ROOT) !== destination.backupRoot
     || resolve(config.OPENLINK_SECRETS_FILE) !== destination.secretsPath
+    || resolve(config.OPENLINK_RELEASE_TRUST_FILE) !== destination.trustPath
     || resolve(config.OPENLINK_BACKUP_KEY_FILE) !== backupKeyPath) {
     throw new Error('Existing production configuration does not match this installation request')
   }
@@ -113,6 +139,10 @@ export async function runBootstrapInstaller(argv = process.argv.slice(2)) {
   const archive = values.get('archive')
   const appUrl = values.get('app-url')
   if (!archive || !appUrl) throw new Error('Usage: openlink-installer --archive <bundle.tar.gz> --app-url <https-origin> [--root <path>]')
+  const parsedAppUrl = new URL(appUrl)
+  if (parsedAppUrl.protocol !== 'https:' && !(values.get('allow-insecure-http') === '1' && parsedAppUrl.protocol === 'http:')) {
+    throw new Error('Production deployment URL must use HTTPS')
+  }
   const destination = paths(values)
   const trust = await trustRoot(values)
   const expectedTarget = normalizeTarget({ platform: process.platform, architecture: process.arch })
@@ -126,11 +156,14 @@ export async function runBootstrapInstaller(argv = process.argv.slice(2)) {
   await activateRelease(destination.installRoot, installed.releaseId)
   const activatedFresh = activeRelease === undefined
   try {
+    const existing = await existingConfiguration(destination, appUrl)
+    await installTrustPolicy(destination.trustPath, trust.document)
     const releaseRoot = installed.destination
-    const configuration = await existingConfiguration(destination, appUrl) ?? await createProductionConfiguration({
+    const configuration = existing ?? await createProductionConfiguration({
       releaseRoot,
       configPath: destination.configPath,
       secretsPath: destination.secretsPath,
+      trustPath: destination.trustPath,
       stateRoot: destination.stateRoot,
       logRoot: destination.logRoot,
       backupRoot: destination.backupRoot,

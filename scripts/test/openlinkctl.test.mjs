@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
-import { installReleaseArchive, installReleaseDirectory, waitForApplicationHealth } from '../../deploy/self-hosted/openlinkctl.mjs'
+import { inspectApplicationHealth, installReleaseArchive, installReleaseDirectory, nativeServiceStatus, readServiceLogs, serviceAction, waitForApplicationHealth } from '../../deploy/self-hosted/openlinkctl.mjs'
 import {
   createReleaseInventory,
   normalizeTarget,
@@ -120,6 +120,41 @@ test('application health requires the expected release identity', async (t) => {
   const address = server.address()
   await waitForApplicationHealth(`http://127.0.0.1:${address.port}`, 'new-release', 5_000)
   assert.equal(requests, 2)
+})
+
+test('one-shot health inspection rejects mismatched and oversized responses', async () => {
+  await assert.rejects(inspectApplicationHealth('https://openlink.invalid', 'release-b', {
+    fetch: async () => new Response(JSON.stringify({ ok: true, releaseId: 'release-a' }), { status: 200 }),
+  }), /expected release-b/i)
+  await assert.rejects(inspectApplicationHealth('https://openlink.invalid', 'release-a', {
+    maximumBytes: 16,
+    fetch: async () => new Response(JSON.stringify({ ok: true, releaseId: 'release-a' }), { status: 200 }),
+  }), /too large/i)
+})
+
+test('Linux service operations are root-only, ordered, and report both units', async () => {
+  const calls = []
+  const runner = async (command, args) => {
+    calls.push([command, args])
+    if (args[0] === 'show') return { stdout: 'ActiveState=active\nSubState=running\nUnitFileState=enabled\nMainPID=42\n' }
+    return { stdout: '' }
+  }
+  await assert.rejects(serviceAction('start', '/var/lib/openlink', { platform: 'linux', getuid: () => 1000, execFile: runner }), /must run as root/i)
+  await serviceAction('stop', '/var/lib/openlink', { platform: 'linux', getuid: () => 0, execFile: runner })
+  assert.deepEqual(calls.at(-1)[1], ['stop', 'openlink.service', 'openlink-container-broker.service'])
+  const status = await nativeServiceStatus({ platform: 'linux', execFile: runner })
+  assert.equal(status.active, true)
+  assert.equal(status.service.MainPID, '42')
+  assert.equal(calls.filter(([, args]) => args[0] === 'show').length, 2)
+})
+
+test('service logs use bounded fixed argv', async () => {
+  const calls = []
+  const output = await readServiceLogs({ platform: 'linux', lines: 250, execFile: async (command, args) => { calls.push([command, args]); return { stdout: 'journal\n' } } })
+  assert.equal(output, 'journal\n')
+  assert.deepEqual(calls[0][0], 'journalctl')
+  assert.equal(calls[0][1].includes('--lines=250'), true)
+  await assert.rejects(readServiceLogs({ platform: 'linux', lines: 5001, execFile: async () => '' }), /between 1 and 5000/i)
 })
 
 async function fixture(t, releaseId = '2026.09.03-test.1') {

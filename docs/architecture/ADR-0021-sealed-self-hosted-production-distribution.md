@@ -107,6 +107,18 @@ public readiness until all critical health gates pass. It contains no code path
 for `npm install`, `npm ci`, `pnpm install`, `next build`, `tsc`, `go build`,
 `docker build`, `podman build`, or upstream acquisition.
 
+The sealed installer publishes its embedded public trust policy to a protected,
+administrator-owned path outside the release tree. The service supervisor uses
+that independent policy to verify the active signature, target, anti-replay
+sequence and every inventory digest before any runtime mutation.
+
+`status` reconciles the native service manager with the runtime fencing lock;
+`health` requires the live application to report the immutable active release;
+and `logs` uses bounded fixed arguments. Linux lifecycle mutation is root-only.
+Manual rollback is limited to a signed, already-installed older release with
+an identical state schema, creates an encrypted restore point first, and
+self-restores the starting release when the target health gate fails.
+
 Linux production is supervised by systemd. macOS production is supervised by
 a system LaunchDaemon. Service definitions invoke the active release's
 `openlinkctl run` contract, apply restart bounds, resource/file limits and a

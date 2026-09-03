@@ -183,3 +183,12 @@ test('runtime lock excludes a live owner and safely replaces a stale owner', asy
   assert.equal((await runtimeLockStatus(item.stateRoot, { isPidAlive: () => true })).owner.pid, 404)
   await replacement.release()
 })
+
+test('runtime lock status fails closed on corrupt owner metadata', async (t) => {
+  const item = await fixture(t)
+  const lockRoot = join(item.stateRoot, 'run/runtime.lock')
+  await mkdir(lockRoot, { recursive: true })
+  await writeFile(join(lockRoot, 'owner.json'), '{not-json\n')
+  await assert.rejects(runtimeLockStatus(item.stateRoot), /JSON|position|property/i)
+  await assert.rejects(acquireRuntimeLock(item.stateRoot), /JSON|position|property/i)
+})
