@@ -63,16 +63,17 @@ no network listener, while every network-facing child runs under a separate UID.
 
 A macOS qualification-state backup was encrypted, restored into fresh roots,
 and compared byte-for-byte for state, config and secrets; restored modes were
-0700/0640/0600. On the Ubuntu target, the latest privileged hardened runtime set
-passed 54/54 native Node 26 tests. This includes safe archive limits, backup
+0700/0640/0600. On the Ubuntu target, the final privileged hardened runtime set
+passed 59/59 native Node 26 tests. This includes safe archive limits, backup
 corruption and wrong-key rejection, clean-root restore, lifecycle locking,
 dependency ordering, critical-child cleanup, native SEA installation, systemd
 installation semantics, upgrade commit/rollback, durable fsync publication,
 incompatible schema rejection, fixed service identities, legacy Docker-group
-removal and a real root-only aggregate-secret denial check. These are native
+removal, a real root-only aggregate-secret denial check, bounded health/log
+handling, native service control and transactional manual rollback. These are native
 mechanism results, not a substitute for a running full-stack data restore.
 
-The corresponding macOS delivery suite passes all 53 platform-applicable tests
+The corresponding macOS delivery suite passes all 58 platform-applicable tests
 (with the one privileged Linux identity test skipped), including the SEA
 installer running without a source tree or system Node lookup, fresh-activation
 rollback, trust-key lifecycle and anti-replay policy, archive input/expansion/
@@ -102,9 +103,12 @@ root-only aggregate-secret enforcement were closed in `9c165a3b92` and then
 verified by the privileged Ubuntu test above. Remediation scan
 `55764364-80c5-443c-b926-7c5824278fe2` then reviewed 23/23 files and all seven
 declared trust surfaces at immutable source revision `b4cf90ce95`, reporting no
-remaining or new findings. Its scope did not include subsequent day-two CLI
-work or a final distributable bundle digest, so a fresh final-artifact scan is
-still required before GA.
+remaining or new findings. Final source scan
+`6da5c879-abda-45c7-8a27-2f783d336f01` reviewed the same 23/23 deployment files
+and nine trust surfaces at `a3d4fea43b`, including day-two service control,
+bounded health/log retrieval, startup inventory verification and manual
+rollback; it also reported zero findings. Neither source scan substitutes for
+scanning and qualifying the exact final distributable bundle digest before GA.
 
 The target's production preflight was exercised at each gate. It rejected
 155,956,445,184 available bytes against the 200 GiB minimum; with only that gate
