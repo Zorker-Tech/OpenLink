@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
-import { lstat, mkdtemp, open, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, mkdtemp, open, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import test from 'node:test'
 import { ProjectVmManager, PodmanMachineDriver, appleHvMachineHasBooted, cloneThinHyperVProjectVmDisk, cloneThinProjectVmDisk, prepareHyperVNetworking, type ProjectVmCommandResult } from '../src/project-vm.js'
 
@@ -242,6 +242,40 @@ test('resolves the AppleHV disk from Podman data root when inspect omits ImagePa
     assert.deepEqual(clones, [{ source: '/tmp/openlink-project-vm-base.raw', destination }])
     assert.ok(calls.some((call) => call.args[1] === 'start'))
   } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('resolves the native QEMU qcow2 disk from the isolated Podman data root', async () => {
+  const root = await mkdtemp(`${tmpdir()}/openlink-podman-qemu-data-`)
+  const previous = process.env.XDG_DATA_HOME
+  process.env.XDG_DATA_HOME = root
+  const architecture = process.arch === 'arm64' ? 'arm64' : 'amd64'
+  const destination = resolve(root, 'containers', 'podman', 'machine', 'qemu', `openlink-project-qemu-${architecture}.qcow2`)
+  await mkdir(dirname(destination), { recursive: true })
+  await writeFile(destination, Buffer.alloc(4_096), { mode: 0o600 })
+  const clones: Array<{ source: string; destination: string }> = []
+  let inspectReads = 0
+  try {
+    const driver = new PodmanMachineDriver({
+      run: async (_command, args) => {
+        if (args[0] === 'machine' && args[1] === 'inspect') {
+          inspectReads += 1
+          if (inspectReads === 1) throw new Error('machine openlink-project-qemu does not exist')
+          return { stdout: JSON.stringify([{ State: 'stopped' }]), stderr: '' }
+        }
+        return { stdout: '', stderr: '' }
+      },
+      bootstrap: false,
+      machineProvider: 'qemu',
+      projectBaseDisk: '/opt/openlink/project-vm/openlink-project-vm-base-amd64.qcow2',
+      cloneDisk: async (source, target) => { clones.push({ source, destination: target }) },
+    })
+    await driver.ensureMachine('openlink-project-qemu', { cpus: 4, memoryMb: 8192, diskGb: 64, diskMode: 'thin' })
+    assert.deepEqual(clones, [{ source: '/opt/openlink/project-vm/openlink-project-vm-base-amd64.qcow2', destination }])
+  } finally {
+    if (previous === undefined) delete process.env.XDG_DATA_HOME
+    else process.env.XDG_DATA_HOME = previous
     await rm(root, { recursive: true, force: true })
   }
 })
