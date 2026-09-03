@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import { chmod, lstat, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import test from 'node:test'
+
+import { installNativeService } from '../../deploy/self-hosted/runtime/native-service.mjs'
 
 const root = new URL('../../', import.meta.url)
 
@@ -34,3 +38,36 @@ test('edge publishes Web and scoped gateway routes but no privileged service por
   assert.match(source, /Strict-Transport-Security/)
 })
 
+test('Linux service installation fixes ownership, enables systemd and verifies active state', async (t) => {
+  const temporary = await mkdtemp(join(tmpdir(), 'openlink-native-service-'))
+  t.after(async () => (await import('node:fs/promises')).rm(temporary, { recursive: true, force: true }))
+  const releaseRoot = join(temporary, 'release')
+  const configPath = join(temporary, 'config/openlink.env')
+  const secretsPath = join(temporary, 'config/secrets.env')
+  const backupKeyPath = join(temporary, 'config/backup.key')
+  const unitPath = join(temporary, 'systemd/openlink.service')
+  await mkdir(join(releaseRoot, 'systemd'), { recursive: true })
+  await mkdir(join(configPath, '..'), { recursive: true })
+  await writeFile(join(releaseRoot, 'systemd/openlink.service'), await readFile(new URL('deploy/self-hosted/systemd/openlink.service', root)))
+  for (const path of [configPath, secretsPath, backupKeyPath]) await writeFile(path, 'fixture\n', { mode: 0o600 })
+  const calls = []
+  const result = await installNativeService({
+    platform: 'linux', releaseRoot, installRoot: join(temporary, 'install'), configPath, secretsPath, backupKeyPath,
+    stateRoot: join(temporary, 'state'), logRoot: join(temporary, 'logs'), backupRoot: join(temporary, 'backups'),
+    unitPath, allowCustomPaths: true, allowUnprivilegedTest: true, identity: { uid: process.getuid(), gid: process.getgid() },
+    rootUid: process.getuid(),
+    execFile: async (command, args) => {
+      calls.push([command, ...args])
+      return { stdout: args[0] === 'is-active' ? 'active\n' : '' }
+    },
+  })
+  assert.equal(result.active, true)
+  assert.deepEqual(calls, [
+    ['systemctl', 'daemon-reload'],
+    ['systemctl', 'enable', '--now', 'openlink.service'],
+    ['systemctl', 'is-active', 'openlink.service'],
+  ])
+  assert.equal((await lstat(unitPath)).mode & 0o777, 0o644)
+  assert.equal((await lstat(configPath)).mode & 0o777, 0o640)
+  assert.equal((await lstat(secretsPath)).mode & 0o777, 0o600)
+})
