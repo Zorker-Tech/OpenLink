@@ -22,7 +22,8 @@ import { readEnvironmentFile, runPreflight } from './runtime/preflight.mjs'
 import { extractVerifiedTarGzip } from './runtime/safe-archive.mjs'
 import { checkContainerRuntime, createRuntimePlan, ProductionSupervisor, startContainerRuntime, stopContainerRuntime, validateProductionEnvironment } from './runtime/production-runtime.mjs'
 import { serveContainerBroker } from './runtime/container-broker.mjs'
-import { createProductionConfiguration } from './runtime/configuration.mjs'
+import { createProductionConfiguration, updateProductionProjectRuntime } from './runtime/configuration.mjs'
+import { selectProjectRuntime, terminalProjectRuntimePrompt, terminalVirtualizationHelp } from './runtime/runtime-selection.mjs'
 import { acquireRuntimeLock, runtimeLockStatus } from './runtime/lifecycle-lock.mjs'
 import { createEncryptedBackup, restoreEncryptedBackup } from './runtime/backup.mjs'
 import { executeRollbackTransaction, executeUpgradeTransaction } from './runtime/upgrade.mjs'
@@ -353,6 +354,17 @@ async function main(argv) {
     return
   }
   if (command === 'configure') {
+    const requestedRuntime = values.get('project-runtime') || 'auto'
+    const runtimeSelection = await selectProjectRuntime({
+      requestedRuntime,
+      platform: process.platform,
+      architecture: process.arch,
+      policy: values.get('on-virtualization-unavailable'),
+      acknowledgeIsolationDowngrade: values.get('acknowledge-isolation-downgrade') === '1',
+      interactive: Boolean(process.stdin.isTTY && process.stdout.isTTY),
+      prompt: terminalProjectRuntimePrompt,
+      showHelp: terminalVirtualizationHelp,
+    })
     const result = await createProductionConfiguration({
       releaseRoot: resolve(values.get('release-root') || releaseRootFromScript),
       configPath: values.get('config'),
@@ -363,11 +375,11 @@ async function main(argv) {
       appUrl: values.get('app-url'),
       gatewayUrl: values.get('gateway-url'),
       deploymentProfile: values.get('profile'),
-      projectRuntime: values.get('project-runtime'),
+      projectRuntime: runtimeSelection.runtime,
       allowInsecure: values.get('allow-insecure-http') === '1',
       overwrite: values.get('overwrite') === '1',
     })
-    process.stdout.write(`${JSON.stringify({ ok: true, ...result })}\n`)
+    process.stdout.write(`${JSON.stringify({ ok: true, ...result, projectRuntime: runtimeSelection.runtime, runtimeSelection: runtimeSelection.action })}\n`)
     return
   }
   if (command === 'status') {
@@ -379,10 +391,33 @@ async function main(argv) {
     return
   }
   if (command === 'start' || command === 'stop' || command === 'restart') {
-    const config = await readEnvironmentFile(resolve(values.get('config') || defaultConfigPath()))
+    const configPath = resolve(values.get('config') || defaultConfigPath())
+    const config = await readEnvironmentFile(configPath)
+    let runtimeSelection
+    if (command !== 'stop') {
+      const requestedRuntime = values.get('project-runtime') || config.OPENLINK_PROJECT_RUNTIME || 'vm'
+      const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY)
+      if ((config.OPENLINK_PROJECT_RUNTIME || 'vm') === 'vm' && requestedRuntime === 'container'
+        && !interactive && values.get('acknowledge-isolation-downgrade') !== '1') {
+        throw new Error('Unattended VM-to-Container selection requires --acknowledge-isolation-downgrade 1')
+      }
+      runtimeSelection = await selectProjectRuntime({
+        requestedRuntime,
+        platform: process.platform,
+        architecture: process.arch,
+        policy: values.get('on-virtualization-unavailable'),
+        acknowledgeIsolationDowngrade: values.get('acknowledge-isolation-downgrade') === '1',
+        interactive,
+        prompt: terminalProjectRuntimePrompt,
+        showHelp: terminalVirtualizationHelp,
+      })
+      if (runtimeSelection.runtime !== (config.OPENLINK_PROJECT_RUNTIME || 'vm')) {
+        await updateProductionProjectRuntime(configPath, runtimeSelection.runtime)
+      }
+    }
     await serviceAction(command, config.OPENLINK_STATE_ROOT)
     const service = await nativeServiceStatus()
-    process.stdout.write(`${JSON.stringify({ ok: true, action: command, service })}\n`)
+    process.stdout.write(`${JSON.stringify({ ok: true, action: command, service, ...(runtimeSelection ? { projectRuntime: runtimeSelection.runtime, runtimeSelection: runtimeSelection.action } : {}) })}\n`)
     return
   }
   if (command === 'health') {
