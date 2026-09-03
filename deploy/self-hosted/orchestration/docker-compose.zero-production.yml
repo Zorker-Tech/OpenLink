@@ -1,0 +1,5 @@
+services:
+  zero:
+    ports: !override
+      - 127.0.0.1:${OPENLINK_ZERO_PORT:-19530}:19530
+      - 127.0.0.1:${OPENLINK_ZERO_HEALTH_PORT:-9091}:9091
