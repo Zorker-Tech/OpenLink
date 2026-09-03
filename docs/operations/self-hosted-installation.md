@@ -130,7 +130,12 @@ openlinkctl install \
 ```
 
 `configure` creates a non-secret configuration file, a root-only mode-0600
-secrets file, and an independent mode-0600 backup key. On Linux the state root
+secrets file, an independent mode-0600 backup key, and a reference to the
+administrator-owned installed release trust policy. The sealed installer
+publishes that public-key policy separately as `release-keys.json`; every native
+runtime start re-verifies the active release signature, anti-replay floor,
+target platform and complete file inventory before acquiring the lifecycle lock
+or starting a container. On Linux the state root
 is mode `0711` so distinct service UIDs can traverse to their own mode-0700
 subdirectories without listing sibling state. Re-running configuration never
 silently rotates a live database password, JWT root or backup key.
@@ -156,13 +161,60 @@ bound into the state root. The source/release tree is never a data volume. The
 production Compose overlays replace development port mappings with loopback
 bindings. Only the TLS edge may listen publicly.
 
-## Upgrade behavior
+## Day-two operations
+
+The installed CLI is the only supported service-control interface. Linux uses
+the default `/etc/openlink/openlink.env`, so normal operations do not require a
+source checkout or repeated path arguments:
+
+```sh
+sudo openlinkctl start
+sudo openlinkctl status
+sudo openlinkctl health
+sudo openlinkctl logs --lines 250
+sudo openlinkctl restart
+sudo openlinkctl stop
+```
+
+`status` reconciles both native units with the runtime fencing lock and exits
+with code 3 unless both agree that the deployment is active. `health` performs
+a bounded request to `/api/healthz` and requires the release identity returned
+by the application to equal the immutable `current` link. `logs` uses fixed,
+non-shell `journalctl`/macOS unified-log arguments and caps requests at 5,000
+lines. A corrupt or unreadable lifecycle owner record is an error, never
+silently treated as a stopped service.
+
+Create a consistent backup while stopped, then restart:
+
+```sh
+sudo openlinkctl stop
+sudo openlinkctl backup --config /etc/openlink/openlink.env
+sudo openlinkctl start
+```
+
+## Upgrade and rollback behavior
 
 `openlinkctl upgrade` verifies the candidate with the installed trust root,
 stops the native service, makes an encrypted backup, stages without activating,
 atomically activates, starts and verifies health. A failed candidate health
 gate restores the previous release link and verifies the old service. Unknown
 or undeclared state-schema transitions fail before mutation.
+
+An operator-requested binary rollback is also transactional and accepts only an
+already-installed, signed, older release that can read the current state schema:
+
+```sh
+sudo openlinkctl rollback \
+  --release <previous-release-id> \
+  --root /opt/openlink \
+  --trust /secure-trust/release-keys.json
+```
+
+Rollback stops service admission, creates an encrypted pre-rollback backup,
+atomically changes `current`, starts, and checks the exact target release. If
+the target fails health, it restores and health-checks the release that was
+active when the operation began. A trust-root anti-replay floor or incompatible
+state schema always wins over a rollback request.
 
 ## Not yet a support claim
 
