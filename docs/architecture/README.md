@@ -48,6 +48,10 @@ The current ADR set covers these areas:
 - native macOS AppleHV and Windows Hyper-V host drivers with equivalent thin
   Project VM semantics
   ([ADR-0019](./ADR-0019-native-host-platform-runtime.md)).
+- ZOKERBASE Platform Console as the product-wide platform control plane, with
+  single-node production completed before load-balanced multi-node and
+  multi-cluster drivers
+  ([ADR-0020](./ADR-0020-zokerbase-platform-console.md)).
 
 New decisions use the format below and the next unused ADR number:
 
