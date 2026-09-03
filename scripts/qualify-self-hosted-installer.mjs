@@ -44,6 +44,8 @@ try {
     'services/knowledge-service/dist/src/main.js',
     'orchestration/backend/docker/docker-compose.yml',
     'orchestration/services/zero/docker-compose.standalone.yml',
+    'orchestration/docker-compose.production.yml',
+    'orchestration/docker-compose.zero-production.yml',
     'images/runtime/manifest.json',
     'images/zokerbase/manifest.json',
     'images/zero/manifest.json',

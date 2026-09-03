@@ -15,6 +15,8 @@ import { readEnvironmentFile, runPreflight } from './runtime/preflight.mjs'
 import { extractVerifiedTarGzip } from './runtime/safe-archive.mjs'
 import { createRuntimePlan, ProductionSupervisor, validateProductionEnvironment } from './runtime/production-runtime.mjs'
 import { createProductionConfiguration } from './runtime/configuration.mjs'
+import { acquireRuntimeLock, runtimeLockStatus } from './runtime/lifecycle-lock.mjs'
+import { createEncryptedBackup, restoreEncryptedBackup } from './runtime/backup.mjs'
 
 const releaseRootFromScript = resolve(fileURLToPath(new URL('.', import.meta.url)))
 
@@ -193,6 +195,39 @@ async function main(argv) {
     process.stdout.write(`${JSON.stringify({ ok: true, ...result })}\n`)
     return
   }
+  if (command === 'status') {
+    const config = await readEnvironmentFile(resolve(values.get('config')))
+    const status = await runtimeLockStatus(config.OPENLINK_STATE_ROOT)
+    process.stdout.write(`${JSON.stringify({ ok: true, ...status })}\n`)
+    if (!status.running) process.exitCode = 3
+    return
+  }
+  if (command === 'backup') {
+    const configPath = resolve(values.get('config'))
+    const config = await readEnvironmentFile(configPath)
+    const output = resolve(values.get('output') || join(config.OPENLINK_BACKUP_ROOT, `openlink-${new Date().toISOString().replaceAll(':', '').replaceAll('.', '-')}.olb`))
+    const result = await createEncryptedBackup({
+      stateRoot: config.OPENLINK_STATE_ROOT,
+      configPath,
+      secretsPath: config.OPENLINK_SECRETS_FILE,
+      keyFile: config.OPENLINK_BACKUP_KEY_FILE,
+      output,
+    })
+    process.stdout.write(`${JSON.stringify({ ok: true, output: result.output, manifestPath: result.manifestPath, sha256: result.manifest.payload.sha256 })}\n`)
+    return
+  }
+  if (command === 'restore') {
+    const result = await restoreEncryptedBackup({
+      archive: values.get('archive'),
+      manifest: values.get('manifest'),
+      keyFile: values.get('key-file'),
+      stateRoot: values.get('state-root'),
+      configPath: values.get('config'),
+      secretsPath: values.get('secrets'),
+    })
+    process.stdout.write(`${JSON.stringify({ ok: true, ...result })}\n`)
+    return
+  }
   if (command === 'preflight' || command === 'doctor') {
     const configPath = values.get('config')
     const config = configPath ? await readEnvironmentFile(resolve(configPath)) : {}
@@ -234,6 +269,7 @@ async function main(argv) {
     })
     const plan = await createRuntimePlan({ releaseRoot, stateRoot: environment.OPENLINK_STATE_ROOT, environment })
     const supervisor = new ProductionSupervisor(plan)
+    const runtimeLock = await acquireRuntimeLock(environment.OPENLINK_STATE_ROOT, { releaseId: basename(releaseRoot) })
     let terminate
     const termination = new Promise((resolveTermination) => { terminate = resolveTermination })
     const onSignal = (signal) => terminate({ signal })
@@ -249,10 +285,11 @@ async function main(argv) {
     } finally {
       process.removeListener('SIGINT', onSignal)
       process.removeListener('SIGTERM', onSignal)
+      await runtimeLock.release()
     }
     return
   }
-  throw new Error('Usage: openlinkctl <verify|install|configure|version|preflight|doctor|run> [options]')
+  throw new Error('Usage: openlinkctl <verify|install|configure|version|status|preflight|doctor|backup|restore|run> [options]')
 }
 
 if (process.argv[1] && basename(process.argv[1]) === basename(fileURLToPath(import.meta.url))) {

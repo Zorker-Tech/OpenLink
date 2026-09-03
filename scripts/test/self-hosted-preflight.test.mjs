@@ -30,6 +30,7 @@ test('fixture preflight enforces immutable runtime inputs without requiring buil
     'toolchain/bin/podman',
     'project-vm/manifest.json',
     'orchestration/docker-compose.production.yml',
+    'orchestration/docker-compose.zero-production.yml',
   ]) {
     const path = join(releaseRoot, ...relative.split('/'))
     await mkdir(join(path, '..'), { recursive: true })
@@ -62,6 +63,10 @@ test('customer runtime source contains no build or dependency-install execution'
   const sources = await Promise.all([
     new URL('../../deploy/self-hosted/openlinkctl.mjs', import.meta.url),
     new URL('../../deploy/self-hosted/runtime/preflight.mjs', import.meta.url),
+    new URL('../../deploy/self-hosted/runtime/configuration.mjs', import.meta.url),
+    new URL('../../deploy/self-hosted/runtime/production-runtime.mjs', import.meta.url),
+    new URL('../../deploy/self-hosted/runtime/lifecycle-lock.mjs', import.meta.url),
+    new URL('../../deploy/self-hosted/runtime/backup.mjs', import.meta.url),
   ].map((url) => (import('node:fs/promises')).then(({ readFile }) => readFile(url, 'utf8'))))
   const executableBuild = /(?:spawn|execFile|runCommand)[\s\S]{0,180}['"](?:npm|pnpm|yarn|next|tsc|go|docker|podman)['"][\s\S]{0,100}['"](?:install|ci|build|pull)['"]/i
   for (const source of sources) assert.doesNotMatch(source, executableBuild)

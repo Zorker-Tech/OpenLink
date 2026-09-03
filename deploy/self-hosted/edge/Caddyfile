@@ -23,8 +23,14 @@
 		reverse_proxy 127.0.0.1:43121
 	}
 
+	# Tenant-facing ZOKERBASE APIs share the product origin. Administrative
+	# database ports and Studio remain private to the host/control plane.
+	@zokerbaseApi path /auth/* /rest/* /storage/* /realtime/*
+	handle @zokerbaseApi {
+		reverse_proxy 127.0.0.1:8000
+	}
+
 	handle {
 		reverse_proxy 127.0.0.1:3000
 	}
 }
-
