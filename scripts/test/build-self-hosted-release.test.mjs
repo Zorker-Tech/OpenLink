@@ -129,7 +129,7 @@ test('portable release archives preserve a sparse VM disk as its declared regula
 test('refuses private signing material inside a customer payload', async (t) => {
   const fixture = await payloadFixture(t)
   const keys = generateKeyPairSync('ed25519')
-  await writeFile(join(fixture.payload, 'release-signing-private.pem'), keys.privateKey.export({ type: 'pkcs8', format: 'pem' }))
+  await writeFile(join(fixture.payload, 'release-signing-private.pem'), keys.privateKey.export({ type: 'pkcs8', format: 'pem' }), { mode: 0o600 })
   await assert.rejects(assembleSelfHostedRelease({
     payloadRoot: fixture.payload,
     outputRoot: fixture.output,
