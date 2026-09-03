@@ -335,30 +335,31 @@ async function main(argv) {
       : {}
     const environment = validateProductionEnvironment({ ...config, ...secrets })
     const releaseRoot = resolve(values.get('release-root') || releaseRootFromScript)
-    await runPreflight({
-      releaseRoot,
-      stateRoot: environment.OPENLINK_STATE_ROOT,
-      platform: process.platform,
-      architecture: process.arch,
-      dockerCommand: environment.OPENLINK_DOCKER_COMMAND || 'docker',
-      environment,
-      minimumFreeBytes: environment.OPENLINK_MINIMUM_FREE_BYTES,
-      minimumMemoryBytes: environment.OPENLINK_MINIMUM_MEMORY_BYTES,
-    })
-    const plan = await createRuntimePlan({ releaseRoot, stateRoot: environment.OPENLINK_STATE_ROOT, environment })
-    const supervisor = new ProductionSupervisor(plan)
     const runtimeLock = await acquireRuntimeLock(environment.OPENLINK_STATE_ROOT, { releaseId: basename(releaseRoot) })
+    let supervisor
     let terminate
     const termination = new Promise((resolveTermination) => { terminate = resolveTermination })
     const onSignal = (signal) => terminate({ signal })
     process.once('SIGINT', onSignal)
     process.once('SIGTERM', onSignal)
     try {
+      await runPreflight({
+        releaseRoot,
+        stateRoot: environment.OPENLINK_STATE_ROOT,
+        platform: process.platform,
+        architecture: process.arch,
+        dockerCommand: environment.OPENLINK_DOCKER_COMMAND || 'docker',
+        environment,
+        minimumFreeBytes: environment.OPENLINK_MINIMUM_FREE_BYTES,
+        minimumMemoryBytes: environment.OPENLINK_MINIMUM_MEMORY_BYTES,
+      })
+      const plan = await createRuntimePlan({ releaseRoot, stateRoot: environment.OPENLINK_STATE_ROOT, environment })
+      supervisor = new ProductionSupervisor(plan)
       await supervisor.start()
       const outcome = await Promise.race([termination, supervisor.wait().then(() => ({ signal: undefined }))])
       await supervisor.stop(outcome.signal || 'SIGTERM')
     } catch (error) {
-      await supervisor.stop('SIGTERM').catch(() => undefined)
+      await supervisor?.stop('SIGTERM').catch(() => undefined)
       throw error
     } finally {
       process.removeListener('SIGINT', onSignal)
