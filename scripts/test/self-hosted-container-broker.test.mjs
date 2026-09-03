@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { createConnection } from 'node:net'
-import { mkdtemp } from 'node:fs/promises'
+import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -49,4 +49,13 @@ test('container broker exposes only serialized fixed lifecycle actions', async (
   assert.equal(multiple.ok, false)
   assert.match(multiple.error, /exactly one/i)
   assert.deepEqual(actions, ['status', 'start', 'stop'])
+})
+
+test('container broker never unlinks a non-socket filesystem object', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'openlink-container-broker-path-'))
+  t.after(async () => (await import('node:fs/promises')).rm(root, { recursive: true, force: true }))
+  const socket = join(root, 'control.sock')
+  await writeFile(socket, 'operator file\n')
+  await assert.rejects(serveContainerBroker(socket, async () => ({})), /refuses to replace a non-socket/i)
+  assert.equal(await (await import('node:fs/promises')).readFile(socket, 'utf8'), 'operator file\n')
 })

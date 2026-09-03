@@ -7,6 +7,71 @@ import { requestContainerBroker } from './container-broker.mjs'
 
 const sleep = (milliseconds) => new Promise((resolveDelay) => setTimeout(resolveDelay, milliseconds))
 
+const PROCESS_AMBIENT_KEYS = ['HOME', 'LANG', 'LC_ALL', 'PATH', 'SSL_CERT_DIR', 'SSL_CERT_FILE', 'TEMP', 'TMP', 'TMPDIR', 'TZ']
+const BROWSER_ENVIRONMENT_KEYS = [
+  'NODE_ENV', 'OPENLINK_RELEASE_ID', 'OPENLINK_RUNTIME_MODE', 'OPENLINK_BROWSER_API_TOKEN', 'OPENLINK_BROWSER_TOKEN_SECRET',
+  'OPENLINK_BROWSER_HOST', 'OPENLINK_BROWSER_PORT', 'OPENLINK_BROWSER_PUBLIC_URL', 'OPENLINK_BROWSER_ALLOWED_ORIGINS',
+  'OPENLINK_BROWSER_STORAGE_ROOT', 'OPENLINK_CHROME_EXECUTABLE', 'OPENLINK_BROWSER_MAX_SESSIONS',
+  'OPENLINK_BROWSER_SESSION_TTL_MS', 'OPENLINK_BROWSER_CONTROL_LEASE_TTL_MS', 'OPENLINK_BROWSER_SHUTDOWN_TIMEOUT_MS',
+]
+const KNOWLEDGE_ENVIRONMENT_KEYS = [
+  'NODE_ENV', 'OPENLINK_RELEASE_ID', 'OPENLINK_RUNTIME_MODE', 'OPENLINK_KNOWLEDGE_HOST', 'OPENLINK_KNOWLEDGE_PORT',
+  'OPENLINK_KNOWLEDGE_INTERNAL_TOKEN', 'OPENLINK_KNOWLEDGE_RUNTIME_ROOT', 'OPENLINK_KNOWLEDGE_ZOKERBASE_URL',
+  'OPENLINK_KNOWLEDGE_ZOKERBASE_SERVICE_KEY', 'OPENLINK_SUPABASE_SERVICE_ROLE_KEY', 'OPENLINK_LOCAL_ZOKERBASE_URL',
+  'OPENLINK_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_URL', 'OPENLINK_ZERO_URL', 'OPENLINK_ZERO_HEALTH_URL',
+  'OPENLINK_ZERO_TOKEN', 'OPENLINK_ZERO_COLLECTION', 'OPENLINK_ZERO_DIMENSION', 'OPENLINK_EMBEDDING_BASE_URL',
+  'OPENLINK_EMBEDDING_API_KEY', 'OPENAI_API_KEY', 'OPENLINK_EMBEDDING_MODEL', 'OPENLINK_EMBEDDING_PROVIDER',
+  'OPENLINK_EMBEDDING_PROTOCOL', 'OPENLINK_EMBEDDING_ALLOW_DETERMINISTIC', 'OPENLINK_PROVIDER_SECRET_KEY',
+  'OPENLINK_KNOWLEDGE_REQUEST_TIMEOUT_MS', 'OPENLINK_KNOWLEDGE_CHUNK_SIZE', 'OPENLINK_KNOWLEDGE_CHUNK_OVERLAP',
+]
+const AGENT_ENVIRONMENT_KEYS = [
+  'NODE_ENV', 'OPENLINK_RELEASE_ID', 'OPENLINK_RUNTIME_MODE', 'OPENLINK_AGENT_API_TOKEN', 'OPEN_SANDBOX_API_KEY',
+  'OPEN_SANDBOX_DOMAIN', 'OPENLINK_PROVIDER_SECRET_KEY', 'OPENLINK_SUPABASE_URL', 'OPENLINK_SUPABASE_SERVICE_ROLE_KEY',
+  'NEXT_PUBLIC_SUPABASE_URL', 'OPENLINK_AGENT_HOST', 'OPENLINK_AGENT_PORT', 'OPENLINK_AGENT_PUBLIC_URL',
+  'OPENLINK_AGENT_STORAGE_ROOT', 'OPENLINK_AGENT_WORKSPACE_ROOT', 'OPENLINK_AGENT_SESSION_IDLE_TTL_MS',
+  'OPENLINK_AGENT_MAX_SESSIONS', 'OPENLINK_AGENT_NETWORK_DEFAULT_ACTION', 'OPENLINK_BROWSER_GATEWAY_PUBLIC_URL',
+  'OPENLINK_BROWSER_GATEWAY_ALLOWED_ORIGINS', 'OPENLINK_BROWSER_GATEWAY_UPSTREAM_ORIGIN', 'OPENLINK_BROWSER_ALLOWED_ORIGINS',
+  'OPENLINK_PODMAN_COMMAND', 'OPENLINK_PODMAN_HELPER_BINARIES_DIR', 'CONTAINERS_HELPER_BINARY_DIR',
+  'CONTAINERS_MACHINE_PROVIDER', 'OPENLINK_PODMAN_MACHINE_PROVIDER', 'OPENLINK_PROJECT_VM_STATE_ROOT',
+  'OPENLINK_PROJECT_VM_BASE_DISK', 'OPENLINK_PROJECT_VM_BOOTSTRAP', 'OPENLINK_PROJECT_VM_ROOTFUL',
+  'OPENLINK_PROJECT_VM_APPLEHV_SOCKET_ROOT', 'OPENLINK_PROJECT_VM_GUEST_WORKSPACE_ROOT', 'OPENLINK_PROJECT_VM_CPUS',
+  'OPENLINK_PROJECT_VM_MEMORY_MB', 'OPENLINK_PROJECT_VM_DISK_GB', 'OPENLINK_PROJECT_RUNTIME_IMAGE_ARCHIVES',
+  'OPENLINK_PROJECT_RUNTIME_PORT_BASE', 'OPENLINK_PROJECT_RUNTIME_PORT_RANGE_SIZE', 'OPENLINK_OPENSANDBOX_SERVER_IMAGE',
+  'OPENLINK_BROWSER_HOST_IMAGE', 'OPENLINK_OPENSANDBOX_EXECD_IMAGE', 'OPENLINK_OPENSANDBOX_EGRESS_IMAGE',
+  'OPENLINK_AGENT_WORKER_IMAGE', 'OPENLINK_AGENT_RPC_WORKER_IMAGE', 'OPENLINK_CODE_SERVER_IMAGE',
+  'OPENLINK_SSH_PROJECT_VM_STATE_ROOT', 'OPENLINK_REMOTE_RELEASE_DIR', 'OPENLINK_REMOTE_HTTP_PROXY',
+  'OPENLINK_REMOTE_HTTPS_PROXY', 'OPENLINK_ALLOW_UNSAFE_ROOTLESS_PROVIDER_CREDENTIALS',
+]
+const DESKTOP_AGENT_ENVIRONMENT_KEYS = [
+  'NODE_ENV', 'OPENLINK_RELEASE_ID', 'OPENLINK_RUNTIME_MODE', 'OPENLINK_DESKTOP_AGENT_API_TOKEN',
+  'OPENLINK_PROVIDER_SECRET_KEY', 'OPENLINK_SUPABASE_URL', 'OPENLINK_SUPABASE_SERVICE_ROLE_KEY', 'NEXT_PUBLIC_SUPABASE_URL',
+  'OPENLINK_DESKTOP_AGENT_HOST', 'OPENLINK_DESKTOP_AGENT_PORT', 'OPENLINK_DESKTOP_AGENT_PUBLIC_URL',
+  'OPENLINK_DESKTOP_AGENT_STORAGE_ROOT', 'OPENLINK_AGENT_WORKSPACE_ROOT', 'OPENLINK_AGENT_SESSION_IDLE_TTL_MS',
+  'OPENLINK_AGENT_MAX_SESSIONS', 'OPENLINK_NODE_EXECUTABLE', 'OPENLINK_AGENT_WORKER_ENTRYPOINT',
+  'OPENLINK_AGENT_BROWSER_EXTENSION_PATH', 'OPENLINK_AGENT_SUPABASE_EXTENSION_PATH', 'OPENLINK_AGENT_ALLOWED_DOMAINS',
+  'OPENLINK_AGENT_DENIED_DOMAINS', 'OPENLINK_BROWSER_GATEWAY_ALLOWED_ORIGINS', 'OPENLINK_BROWSER_GATEWAY_UPSTREAM_ORIGIN',
+  'OPENLINK_BROWSER_ALLOWED_ORIGINS',
+]
+const WEB_ENVIRONMENT_KEYS = [
+  'NODE_ENV', 'OPENLINK_RELEASE_ID', 'OPENLINK_RUNTIME_MODE', 'NEXT_PUBLIC_OPENLINK_RUNTIME_MODE', 'PORT', 'HOSTNAME',
+  'OPENLINK_APP_URL', 'OPENLINK_AGENT_API_TOKEN', 'OPENLINK_AGENT_HOST_URL', 'OPENLINK_KNOWLEDGE_INTERNAL_TOKEN',
+  'OPENLINK_KNOWLEDGE_SERVICE_URL', 'OPENLINK_PROVIDER_SECRET_KEY', 'OPENLINK_STUDIO_ORIGIN',
+  'OPENLINK_LOCAL_ZOKERBASE_URL', 'OPENLINK_LOCAL_ZOKERBASE_PUBLISHABLE_KEY', 'OPENLINK_LOCAL_SUPABASE_URL',
+  'OPENLINK_LOCAL_SUPABASE_PUBLISHABLE_KEY', 'NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
+  'OPENLINK_BROWSER_ALLOWED_DOMAINS', 'OPENLINK_BROWSER_DENIED_DOMAINS', 'OPENLINK_BROWSER_ALLOW_LOOPBACK',
+  'OPENLINK_BROWSER_ALLOW_PRIVATE_NETWORKS', 'OPENLINK_PREVIEW_PATH_MODE', 'OPENLINK_PREVIEW_TARGET_URL',
+  'OPENLINK_CLOUD_SUPABASE_URL', 'OPENLINK_CLOUD_SUPABASE_PUBLISHABLE_KEY', 'CROSS_APP_AUTH_SECRET', 'ZORKER_APP_URL',
+]
+
+function selectEnvironment(source, keys) {
+  return Object.fromEntries(keys.filter((key) => source[key] !== undefined).map((key) => [key, source[key]]))
+}
+
+function childEnvironment(serviceEnvironment) {
+  const ambient = selectEnvironment(process.env, PROCESS_AMBIENT_KEYS)
+  return { ...ambient, ...serviceEnvironment }
+}
+
 function waitForExit(child, timeoutMs) {
   return new Promise((resolveExit) => {
     const timeout = setTimeout(() => {
@@ -162,11 +227,11 @@ export async function createRuntimePlan(options = {}) {
     },
   ]
   const processes = [
-    processSpec('browser-host', node, join(releaseRoot, 'services/browser-host/dist/src/main.js'), join(releaseRoot, 'services/browser-host'), environment, `http://127.0.0.1:${browserPort}/healthz`),
-    processSpec('knowledge-service', node, join(releaseRoot, 'services/knowledge-service/dist/src/main.js'), join(releaseRoot, 'services/knowledge-service'), environment, `http://127.0.0.1:${knowledgePort}/healthz`),
-    processSpec('agent-host', node, join(releaseRoot, 'services/agent-host/dist/src/main.js'), join(releaseRoot, 'services/agent-host'), environment, `http://127.0.0.1:${agentPort}/healthz`),
-    processSpec('desktop-agent-host', node, join(releaseRoot, 'services/agent-host/dist/src/desktop-main.js'), join(releaseRoot, 'services/agent-host'), environment, `http://127.0.0.1:${desktopPort}/healthz`),
-    processSpec('web', node, join(releaseRoot, 'app/web/server.js'), join(releaseRoot, 'app/web'), environment, `http://127.0.0.1:${webPort}/api/healthz`),
+    processSpec('browser-host', node, join(releaseRoot, 'services/browser-host/dist/src/main.js'), join(releaseRoot, 'services/browser-host'), selectEnvironment(environment, BROWSER_ENVIRONMENT_KEYS), `http://127.0.0.1:${browserPort}/healthz`),
+    processSpec('knowledge-service', node, join(releaseRoot, 'services/knowledge-service/dist/src/main.js'), join(releaseRoot, 'services/knowledge-service'), selectEnvironment(environment, KNOWLEDGE_ENVIRONMENT_KEYS), `http://127.0.0.1:${knowledgePort}/healthz`),
+    processSpec('agent-host', node, join(releaseRoot, 'services/agent-host/dist/src/main.js'), join(releaseRoot, 'services/agent-host'), selectEnvironment(environment, AGENT_ENVIRONMENT_KEYS), `http://127.0.0.1:${agentPort}/healthz`),
+    processSpec('desktop-agent-host', node, join(releaseRoot, 'services/agent-host/dist/src/desktop-main.js'), join(releaseRoot, 'services/agent-host'), selectEnvironment(environment, DESKTOP_AGENT_ENVIRONMENT_KEYS), `http://127.0.0.1:${desktopPort}/healthz`),
+    processSpec('web', node, join(releaseRoot, 'app/web/server.js'), join(releaseRoot, 'app/web'), selectEnvironment(environment, WEB_ENVIRONMENT_KEYS), `http://127.0.0.1:${webPort}/api/healthz`),
     {
       name: 'edge', command: join(releaseRoot, 'edge/bin/caddy'),
       args: ['run', '--config', join(releaseRoot, 'edge/Caddyfile'), '--adapter', 'caddyfile'],
@@ -262,7 +327,7 @@ export class ProductionSupervisor {
     if (this.plan.containerBrokerSocket) await requestContainerBroker(this.plan.containerBrokerSocket, 'start')
     else await startContainerRuntime(this.plan, this.runCommand)
     for (const item of this.plan.processes) {
-      const child = this.spawnProcess(item.command, item.args, { ...item, openlinkName: item.name })
+      const child = this.spawnProcess(item.command, item.args, { cwd: item.cwd, env: childEnvironment(item.environment), stdio: item.stdio, openlinkName: item.name })
       const running = { ...item, child }
       this.children.push(running)
       child.once('error', (error) => { if (!this.stopping) this.rejectFailure(new Error(`${item.name} failed: ${error.message}`)) })
