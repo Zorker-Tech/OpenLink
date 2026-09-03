@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
+import { isSea } from 'node:sea'
 
 import {
   canonicalJson,
@@ -369,7 +370,7 @@ async function main(argv) {
   throw new Error('Usage: openlinkctl <verify|install|configure|version|status|preflight|doctor|backup|restore|upgrade|run> [options]')
 }
 
-if (process.argv[1] && basename(process.argv[1]) === basename(fileURLToPath(import.meta.url))) {
+if (!isSea() && process.argv[1] && basename(process.argv[1]) === basename(fileURLToPath(import.meta.url))) {
   main(process.argv.slice(2)).catch((error) => {
     process.stderr.write(`openlinkctl: ${error instanceof Error ? error.message : String(error)}\n`)
     process.exitCode = 1

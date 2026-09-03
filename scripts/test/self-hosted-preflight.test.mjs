@@ -62,6 +62,7 @@ test('fixture preflight enforces immutable runtime inputs without requiring buil
 test('customer runtime source contains no build or dependency-install execution', async () => {
   const sources = await Promise.all([
     new URL('../../deploy/self-hosted/openlinkctl.mjs', import.meta.url),
+    new URL('../../deploy/self-hosted/bootstrap-installer.mjs', import.meta.url),
     new URL('../../deploy/self-hosted/runtime/preflight.mjs', import.meta.url),
     new URL('../../deploy/self-hosted/runtime/configuration.mjs', import.meta.url),
     new URL('../../deploy/self-hosted/runtime/production-runtime.mjs', import.meta.url),
