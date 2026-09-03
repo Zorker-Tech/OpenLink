@@ -83,6 +83,8 @@ test('sealed installer performs signed archive install and protected configurati
     '--skip-service-install', '1',
   ], { env: { PATH: '/usr/bin:/bin' }, timeout: 60_000 }), /must use HTTPS/i)
   await assert.rejects(lstat(join(installRoot, 'current')), /ENOENT/)
+  await mkdir(join(root, 'configuration'), { recursive: true })
+  await writeFile(join(root, 'configuration/release-keys.json'), await readFile(trustFile), { mode: 0o644 })
   const { stdout, stderr } = await execFile(installer, [
     '--archive', release.archive, '--app-url', 'http://127.0.0.1:7443', '--allow-insecure-http', '1',
     '--root', installRoot, '--config', configPath, '--state-root', join(root, 'state'), '--skip-host-preflight', '1',
@@ -94,6 +96,10 @@ test('sealed installer performs signed archive install and protected configurati
   assert.equal(result.installed.releaseId, 'sea-e2e-1')
   assert.equal(result.service.skipped, true)
   assert.match(await readFile(configPath, 'utf8'), /OPENLINK_APP_URL=http:\/\/127\.0\.0\.1:7443/)
+  assert.match(await readFile(configPath, 'utf8'), /OPENLINK_RELEASE_TRUST_FILE=.*release-keys\.json/)
+  const installedTrust = join(root, 'configuration/release-keys.json')
+  assert.equal((await lstat(installedTrust)).mode & 0o777, 0o644)
+  assert.equal(JSON.parse(await readFile(installedTrust, 'utf8')).keys['e2e-key'].status, 'active')
   const secretsBeforeRetry = await readFile(join(root, 'configuration/secrets.env'), 'utf8')
   assert.equal(secretsBeforeRetry.includes('insecure'), false)
   const retry = JSON.parse((await execFile(installer, [

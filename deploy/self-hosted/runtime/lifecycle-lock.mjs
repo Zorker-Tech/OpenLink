@@ -8,7 +8,12 @@ function pidAlive(pid) {
 }
 
 async function readOwner(path) {
-  try { return JSON.parse(await readFile(path, 'utf8')) } catch { return undefined }
+  try {
+    return JSON.parse(await readFile(path, 'utf8'))
+  } catch (error) {
+    if (error?.code === 'ENOENT') return undefined
+    throw error
+  }
 }
 
 export async function acquireRuntimeLock(stateRoot, options = {}) {
