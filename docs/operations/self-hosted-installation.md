@@ -78,9 +78,13 @@ sudo ./openlink-installer \
   --app-url https://openlink.example.com
 ```
 
-The installer creates the dedicated `openlink` identity and grants it only the
-required `kvm` membership. It does **not** grant Docker access to any
-network-facing application process. A root-isolated, Unix-socket-only lifecycle
+The installer creates a non-listening `openlink` supervisor identity plus
+separate `openlink-browser`, `openlink-knowledge`, `openlink-agent`,
+`openlink-desktop`, `openlink-web`, and `openlink-edge` identities. Only Agent
+receives `kvm`; Agent and Desktop share only the protected workspace group.
+Exact supplementary-group replacement removes legacy Docker membership. The
+aggregate secrets file remains `root:root` mode `0600`, and each child receives
+only its service-specific environment. A root-isolated, Unix-socket-only lifecycle
 broker accepts only fixed `status`, `start`, and `stop` operations for the
 signed Compose plan. The installer fixes secret/state ownership, enables both
 `openlink-container-broker.service` and `openlink.service`, and waits for
@@ -125,9 +129,11 @@ openlinkctl install \
   --config /etc/openlink/openlink.env
 ```
 
-`configure` creates a non-secret configuration file, a mode-0600 secrets file,
-and an independent mode-0600 backup key. Re-running it never silently rotates a
-live database password, JWT root or backup key.
+`configure` creates a non-secret configuration file, a root-only mode-0600
+secrets file, and an independent mode-0600 backup key. On Linux the state root
+is mode `0711` so distinct service UIDs can traverse to their own mode-0700
+subdirectories without listing sibling state. Re-running configuration never
+silently rotates a live database password, JWT root or backup key.
 
 ## Runtime and network rules
 
@@ -138,6 +144,12 @@ archives, starts Compose with `--pull never`, then starts prebuilt host services
 in dependency order. Readiness is withheld until every critical health gate
 passes. Shutdown reverses the dependency order and gives Agent Host up to 120
 seconds to stop Project VMs cleanly.
+
+The Linux supervisor is a non-listening root control process whose bounded job
+is preflight, identity/capability assignment, health supervision and signal
+forwarding. Network-facing children never run as root. Caddy's mutable admin
+API is disabled in production; the edge child alone retains
+`CAP_NET_BIND_SERVICE`, while all other child capability sets are empty.
 
 PostgreSQL, Storage, Zero, browser profiles, workspaces and Project VM disks are
 bound into the state root. The source/release tree is never a data volume. The
