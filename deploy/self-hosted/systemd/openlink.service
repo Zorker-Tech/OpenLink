@@ -35,6 +35,8 @@ ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
 NoNewPrivileges=true
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 PrivateDevices=false
 ProtectKernelTunables=true
 ProtectKernelModules=true
@@ -46,4 +48,3 @@ ReadWritePaths=/var/lib/openlink /var/log/openlink /var/backups/openlink /run/op
 
 [Install]
 WantedBy=multi-user.target
-
