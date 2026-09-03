@@ -4,6 +4,10 @@ allowBuilds:
   # MSW is only used as a JavaScript test/mock library; it has no runtime
   # native artifact that OpenLink needs to execute.
   msw: false
+  # Internal release engineering bundles the verified installer into a native
+  # SEA executable. esbuild's install hook selects the locked host binary;
+  # esbuild is never shipped as a customer runtime dependency.
+  esbuild: true
 
 overrides:
   linkify-it: 6.1.0
