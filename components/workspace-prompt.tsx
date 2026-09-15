@@ -3,12 +3,14 @@
 import {
   PromptInput,
   PromptInputBody,
-  PromptInputTextarea,
   PromptInputFooter,
   PromptInputTools,
   PromptInputButton,
   PromptInputSubmit,
+  usePromptInputAttachments,
 } from '@/components/ai-elements/prompt-input'
+import { Attachment, AttachmentInfo, AttachmentPreview, AttachmentRemove, Attachments } from '@/components/ai-elements/attachments'
+import { AgentPromptTextarea, type AgentPromptSuggestion } from '@/components/agent-prompt-textarea'
 import {
   ModelSelector,
   ModelSelectorTrigger,
@@ -22,17 +24,31 @@ import {
   ModelSelectorLogo,
 } from '@/components/ai-elements/model-selector'
 import { PromptAddMenu } from '@/components/prompt-add-menu'
-import { createChatSessionAction } from '@/app/chat/actions'
+import { createChatSessionAction, deleteChatSessionAction } from '@/app/chat/actions'
 import type { ConfiguredModelOption } from '@/lib/ai-provider-types'
 import type { ProjectSummary } from '@/lib/projects'
+import { projectRuntimeDisplay } from '@/lib/project-runtime-display'
 import type { ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { AccessModePicker } from '@/components/access-mode-picker'
 import { AgentKindPicker } from '@/components/agent-kind-picker'
 import type { AccessMode } from '@/lib/chat-sessions'
 import type { AgentKind } from '@/lib/chat-session-types'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BookOpenText, Code2, Plus, Send } from 'lucide-react'
+import { serializePromptAttachments } from '@/lib/agent-runtime/serialize-prompt-attachments.client'
+
+function WorkspacePromptAttachments() {
+  const attachments = usePromptInputAttachments()
+  if (!attachments.files.length) return null
+  return <Attachments className="w-full px-3 pt-2" variant="inline">
+    {attachments.files.map((file) => <Attachment data={file} key={file.id} onRemove={() => attachments.remove(file.id)}>
+      <AttachmentPreview />
+      <AttachmentInfo />
+      <AttachmentRemove label={`移除 ${file.filename ?? '附件'}`} />
+    </Attachment>)}
+  </Attachments>
+}
 
 export interface WorkspacePromptProps {
   configuredModels: ConfiguredModelOption[]
@@ -95,11 +111,36 @@ export function WorkspacePrompt({
   const [selectedProject, setSelectedProject] = useState<ProjectSummary | null>(
     selectableProjects.find((project) => project.id === initialProjectId) ?? null,
   )
+  useEffect(() => {
+    setSelectedProject((current) => current
+      ? projects.find((project) => !project.is_default && project.id === current.id) ?? null
+      : current)
+  }, [projects])
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [accessMode, setAccessMode] = useState<AccessMode>('restricted')
   const [agentKind, setAgentKind] = useState<AgentKind>('codex')
   const runtimeProject = selectedProject ?? defaultProject
-  const runtimeReady = runtimeProject.status === 'active' && runtimeProject.runtime_status === 'ready'
+  const runtimeDisplay = projectRuntimeDisplay(runtimeProject)
+  const runtimeReady = runtimeDisplay.ready
+  useEffect(() => {
+    if (runtimeReady || runtimeProject.status === 'archived') return
+
+    // The Project VM is provisioned out of band. Server-component props are a
+    // snapshot, so keep the home composer in sync until the runtime reaches a
+    // terminal/usable state instead of leaving a stale "initializing" screen.
+    const refresh = () => router.refresh()
+    const interval = window.setInterval(refresh, 2_500)
+    window.addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', refresh)
+    return () => {
+      window.clearInterval(interval)
+      window.removeEventListener('focus', refresh)
+      document.removeEventListener('visibilitychange', refresh)
+    }
+  }, [router, runtimeProject.id, runtimeProject.status, runtimeReady])
+  // Agent resources are session-scoped. Before a session exists there is no
+  // runtime protocol to expose, so the home composer intentionally has none.
+  const promptSuggestions: AgentPromptSuggestion[] = []
 
   return (
     <div className="flex w-full max-w-[700px] flex-col">
@@ -114,12 +155,15 @@ export function WorkspacePrompt({
         </div>
       </div>
     <PromptInput
-      className="mt-3 w-full max-w-[700px] [&>[data-slot=input-group]]:h-[122px] [&>[data-slot=input-group]]:min-h-[122px] [&>[data-slot=input-group]]:rounded-[20px] [&>[data-slot=input-group]]:border-[var(--app-control-border)] [&>[data-slot=input-group]]:bg-[var(--app-surface)] [&>[data-slot=input-group]]:shadow-none [&>[data-slot=input-group]]:focus-within:border-[var(--app-focus-ring)] [&>[data-slot=input-group]]:focus-within:ring-0"
-      onSubmit={async ({ text }) => {
+      className="mt-3 w-full max-w-[700px] [&>[data-slot=input-group]]:h-[122px] [&>[data-slot=input-group]]:min-h-[122px] [&>[data-slot=input-group]]:overflow-visible! [&>[data-slot=input-group]]:rounded-[20px] [&>[data-slot=input-group]]:border-[var(--app-control-border)] [&>[data-slot=input-group]]:bg-[var(--app-surface)] [&>[data-slot=input-group]]:shadow-none [&>[data-slot=input-group]]:focus-within:border-[var(--app-focus-ring)] [&>[data-slot=input-group]]:focus-within:ring-0"
+      accept={undefined}
+      multiple
+      onError={() => setSubmitError('无法添加文件，请检查文件数量和大小')}
+      onSubmit={async ({ text, files }) => {
         const prompt = text.trim()
-        if (!prompt) return
+        if (!prompt && !files.length) return
         if (!runtimeReady) {
-          setSubmitError('项目环境仍在初始化，完成后即可创建对话。')
+          setSubmitError(`${runtimeDisplay.label}：${runtimeDisplay.detail}`)
           return
         }
         setSubmitError(null)
@@ -131,37 +175,72 @@ export function WorkspacePrompt({
           modelId: selectedModel?.modelId,
           accessMode: accessMode,
           agent: agentKind,
+          autoStart: files.length === 0,
         })
         if (onUnauthenticated && 'error' in result && result.error === 'AUTH_REQUIRED') {
           onUnauthenticated()
           return
         }
-        if (result.path) router.push(result.path)
+        if (!result.id || !result.path) {
+          const message = 'error' in result ? result.error : 'CHAT_SESSION_CREATE_FAILED'
+          setSubmitError(message)
+          throw new Error(message)
+        }
+        if (files.length) {
+          try {
+            const attachments = await serializePromptAttachments(result.id, files)
+            const response = await fetch(`/api/chat/${encodeURIComponent(result.id)}/queue`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                id: crypto.randomUUID(),
+                message: prompt,
+                attachments,
+                model: selectedModel ? { providerId: selectedModel.providerId, modelId: selectedModel.modelId } : null,
+              }),
+            })
+            if (!response.ok) throw new Error('附件消息加入队列失败，请重试')
+          } catch (error) {
+            await deleteChatSessionAction(result.id)
+            const message = error instanceof Error ? error.message : '文件上传失败，请重试'
+            setSubmitError(message)
+            throw error
+          }
+        }
+        router.push(result.path)
       }}
     >
-      <PromptInputBody>
-        <PromptInputTextarea
+      <PromptInputBody className="relative flex w-full min-w-0 flex-1 flex-col">
+        <WorkspacePromptAttachments />
+        <AgentPromptTextarea
           aria-label="描述你想创建的内容"
           className="min-h-[64px]! px-4 pt-4 text-[14px] leading-5 text-[var(--app-foreground)] placeholder:text-[var(--app-subtle-foreground)]"
-          onChange={(event) => updateInput(event.currentTarget.value)}
+          onValueChange={updateInput}
           disabled={!runtimeReady}
-          placeholder={runtimeReady ? '描述你想构建的内容，或向 OpenLink 提问' : '项目环境正在初始化…'}
+          placeholder=""
+          suggestions={promptSuggestions}
           value={input}
+          wrapperClassName="w-full self-stretch"
         />
       </PromptInputBody>
       <PromptInputFooter className="h-10 px-3 pb-3">
-        <PromptInputTools className="gap-0.5">
-          <PromptAddMenu variant="home" />
+        <PromptInputTools className="min-w-0 flex-1 gap-0.5 overflow-hidden">
+          <PromptAddMenu variant="home" agent={agentKind} attachmentsEnabled />
           <AccessModePicker value={accessMode} onChange={setAccessMode} />
           <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
             <ModelSelectorTrigger
               render={
-                <PromptInputButton className="-ml-0.5 h-7 max-w-[220px] gap-1 rounded-full px-2 text-[13px] font-medium text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]" type="button" />
+                <PromptInputButton
+                  aria-label={`选择模型，当前 ${selectedModel?.name ?? '未配置'}`}
+                  className="-ml-0.5 h-7 min-w-0 max-w-[220px] shrink gap-1 overflow-hidden rounded-full px-2 text-[13px] font-medium text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]"
+                  title={selectedModel?.name ?? '配置模型'}
+                  type="button"
+                />
               }
             >
-              {selectedModel && <ModelSelectorLogo className="size-4" provider={selectedModel.logo} />}
-              <span>{selectedModel?.name ?? '配置模型'}</span>
-              <img alt="" className="app-control-icon size-4" src="/openlink/app/prompt-chevron.svg" />
+              {selectedModel && <ModelSelectorLogo className="size-4 shrink-0" provider={selectedModel.logo} />}
+              <span className="min-w-0 truncate">{selectedModel?.name ?? '配置模型'}</span>
+              <img alt="" className="app-control-icon size-4 shrink-0" src="/openlink/app/prompt-chevron.svg" />
             </ModelSelectorTrigger>
             <ModelSelectorContent className="w-[320px]" title="选择模型">
               <ModelSelectorInput className="border-0 bg-transparent text-foreground placeholder:text-muted-foreground" placeholder="搜索模型" />
@@ -239,7 +318,8 @@ export function WorkspacePrompt({
                   </ModelSelectorItem>
                   {selectableProjects.map((project) => {
                     const Icon = project.kind === 'research' ? BookOpenText : Code2
-                    const ready = project.status === 'active' && project.runtime_status === 'ready'
+                    const display = projectRuntimeDisplay(project)
+                    const ready = display.ready
                     return (
                       <ModelSelectorItem
                         className="h-9 text-muted-foreground data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground"
@@ -253,7 +333,7 @@ export function WorkspacePrompt({
                       >
                         <Icon className="size-4" />
                         <ModelSelectorName>{project.name}</ModelSelectorName>
-                        <span className="text-xs text-[var(--app-subtle-foreground)]">{ready ? (project.kind === 'research' ? '研究' : '代码') : '等待初始化'}</span>
+                        <span className="max-w-[170px] truncate text-xs text-[var(--app-subtle-foreground)]" title={display.detail}>{ready ? (project.kind === 'research' ? '研究' : '代码') : display.label}</span>
                       </ModelSelectorItem>
                     )
                   })}
@@ -275,7 +355,6 @@ export function WorkspacePrompt({
           </ModelSelectorContent>
         </ModelSelector>
       </div>
-      {!runtimeReady && <p className="px-4 text-xs text-[var(--app-muted)]">{runtimeProject.name} 正在初始化 VM，项目进入活动状态后才能创建对话。</p>}
       {submitError && <p className="px-4 text-xs text-destructive" role="alert">{submitError}</p>}
     </div>
   )

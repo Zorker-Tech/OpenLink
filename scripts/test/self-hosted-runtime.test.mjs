@@ -116,23 +116,26 @@ test('Core omits the built-in knowledge system independently from Project isolat
   }
 })
 
-test('Standard and Dense retain knowledge when using the Container backend', async (t) => {
+test('Standard and Dense retain knowledge with both Project backends', async (t) => {
   const item = await fixture(t)
   for (const deploymentProfile of ['standard', 'dense']) {
-    const plan = await createRuntimePlan({
-      releaseRoot: item.releaseRoot,
-      stateRoot: item.stateRoot,
-      environment: {
-        OPENLINK_ZOKERBASE_ENV_FILE: join(item.root, 'zokerbase.env'),
-        OPENLINK_DEPLOYMENT_PROFILE: deploymentProfile,
-        OPENLINK_PROJECT_RUNTIME: 'container',
-      },
-      validate: false,
-    })
-    assert.equal(plan.processes.some((process) => process.name === 'knowledge-service'), true)
-    assert.equal(plan.compose.some((compose) => compose.name === 'zero'), true)
-    assert.equal(plan.isolationClass, 'container')
-    assert.equal(plan.profile, deploymentProfile)
+    for (const projectRuntime of ['container', 'vm']) {
+      const plan = await createRuntimePlan({
+        releaseRoot: item.releaseRoot,
+        stateRoot: item.stateRoot,
+        environment: {
+          OPENLINK_ZOKERBASE_ENV_FILE: join(item.root, 'zokerbase.env'),
+          OPENLINK_DEPLOYMENT_PROFILE: deploymentProfile,
+          OPENLINK_PROJECT_RUNTIME: projectRuntime,
+        },
+        validate: false,
+      })
+      assert.equal(plan.processes.some((process) => process.name === 'knowledge-service'), true)
+      assert.equal(plan.compose.some((compose) => compose.name === 'zero'), true)
+      assert.equal(plan.isolationClass, projectRuntime === 'container' ? 'container' : 'vm')
+      assert.equal(plan.projectRuntime, projectRuntime)
+      assert.equal(plan.profile, deploymentProfile)
+    }
   }
 })
 

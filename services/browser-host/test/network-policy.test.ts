@@ -16,3 +16,22 @@ test('network guard enforces domain patterns before DNS access', async () => {
   await assert.rejects(() => guard.assertUrl('https://blocked.example.com'), /denied/)
   await assert.rejects(() => guard.assertUrl('https://example.net'), /not allowlisted/)
 })
+
+test('network guard accepts fake-IP DNS for a domain but rejects the same literal address', async () => {
+  const guard = new BrowserNetworkGuard(
+    { allowedDomains: [], deniedDomains: [], allowLoopback: false, allowPrivateNetworks: false },
+    Date.now,
+    async () => [{ address: '198.18.1.81', family: 4 }],
+  )
+  assert.equal((await guard.assertUrl('https://example.com')).hostname, 'example.com')
+  await assert.rejects(() => guard.assertUrl('https://198.18.1.81'), /Private network access is denied/)
+})
+
+test('network guard still rejects RFC1918 DNS answers', async () => {
+  const guard = new BrowserNetworkGuard(
+    { allowedDomains: [], deniedDomains: [], allowLoopback: false, allowPrivateNetworks: false },
+    Date.now,
+    async () => [{ address: '192.168.1.25', family: 4 }],
+  )
+  await assert.rejects(() => guard.assertUrl('https://internal.example'), /Private network access is denied/)
+})

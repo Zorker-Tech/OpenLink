@@ -4,7 +4,7 @@ services:
       # Create the exposed OpenLink schema during a brand-new official
       # Supabase database initialization so PostgREST can pass its first
       # health check before application migrations are applied.
-      - ./volumes/db/migrations/96-openlink-schema.sql:/docker-entrypoint-initdb.d/migrations/96-openlink-schema.sql:Z
+      - ${OPENLINK_ZOKERBASE_STACK_ROOT:-.}/volumes/db/migrations/96-openlink-schema.sql:/docker-entrypoint-initdb.d/migrations/96-openlink-schema.sql:Z
     # OpenLink server processes use this loopback-only direct connection for
     # trusted identity projection and migration checks. It is never exposed to
     # the browser or to Project VM workloads.

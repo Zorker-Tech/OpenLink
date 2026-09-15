@@ -1,0 +1,14 @@
+{
+  "duration": 60,
+  "sampleRate": 48000,
+  "channels": 2,
+  "peakDbFS": -13.468880299270387,
+  "rmsDbFS": -29.509436376870084,
+  "clippedSamples": 0,
+  "finalSamples": [
+    0,
+    0
+  ],
+  "rights": "Original procedural synthesis; no external audio sources.",
+  "listeningReview": false
+}

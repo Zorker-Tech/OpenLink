@@ -7,6 +7,7 @@ const root = resolve(import.meta.dirname, '../..')
 
 test('VM validation proves persistence across a same-disk VM power cycle rather than a new Golden Disk clone', async () => {
   const validation = await readFile(resolve(root, 'scripts/validate-project-vm-supabase.mjs'), 'utf8')
+  const diskBuild = await readFile(resolve(root, 'scripts/build-project-vm-disk.mjs'), 'utf8')
   const e2e = await readFile(resolve(root, 'scripts/e2e-project-supabase.mjs'), 'utf8')
   const verifier = await readFile(resolve(root, 'scripts/verify-project-supabase-persistence.mjs'), 'utf8')
   const persistenceStart = validation.indexOf('e2e smoke passed')
@@ -27,6 +28,7 @@ test('VM validation proves persistence across a same-disk VM power cycle rather 
   assert.match(validation, /diskMode: 'thin'/)
   assert.match(validation, /Project VM clone must remain thin/)
   assert.doesNotMatch(validation, /run\(podman, \['machine', 'init', '--image', disk/)
+  assert.match(diskBuild, /\['machine', 'start', machineName\], \{ \.\.\.artifactOptions, input: 'n\\n' \}/)
   assert.match(e2e, /OPENLINK_PROJECT_SUPABASE_KEEP_FIXTURES/)
   assert.match(e2e, /!keepFixtures/)
   assert.match(persistence, /machineDriver\.stopMachine\(machine\)/)

@@ -54,13 +54,13 @@ export async function GET(
   const session = await getChatSession(supabase, user.id, sessionId)
   if (!session) return Response.json({ error: 'SESSION_NOT_FOUND' }, { status: 404 })
 
-  const usage = await loadSessionContextUsage(supabase, user.id, sessionId)
+  const usage = await loadSessionContextUsage(supabase, user.id, sessionId, session.agent ?? 'codex')
   const contextWindow = await resolveContextWindow(
     supabase,
     user.id,
     session.provider_id,
     usage.modelId ?? session.model_id,
-    null,
+    usage.contextWindow,
   )
 
   const payload: SessionContextResponse = {

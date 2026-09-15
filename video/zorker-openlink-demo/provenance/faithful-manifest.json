@@ -1,0 +1,341 @@
+{
+  "baseCommit": "25214c809079b54cd8c61dae79fa14f080c90a8b",
+  "workingTree": "Source contains existing user modifications; hashes are authoritative.",
+  "records": [
+    {
+      "source": "lib/agent-runtime/message-revisions.ts",
+      "sourceSha256": "4daa5dd0b2a9774010a77392660370d7134d0cfa392f695a494ad2b1d20af46d",
+      "output": "src/source-snapshot/lib/agent-runtime/message-revisions.js",
+      "outputSha256": "6b6896ace13fae4824b2107d914c4cce538ba701e58f051591670e577253051f",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "lib/agent-runtime/error-groups.ts",
+      "sourceSha256": "e593a1514cc3aac2d67d4bb9686f3d88128cef82fb978ba53be89c9c90c9388b",
+      "output": "src/source-snapshot/lib/agent-runtime/error-groups.js",
+      "outputSha256": "5e8a9289e1f407c1ab5e21ab9079a5a03a4e5936c26dc7bdb8a1b925394d7c32",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "lib/utils.ts",
+      "sourceSha256": "e46429536f43f5910f5b2b0c50bb2769b510a4558bb4b5d20a3b0a9091dbf7c3",
+      "output": "src/source-snapshot/lib/utils.js",
+      "outputSha256": "65f369004a052eabd90633cb51b5fae3d6e22923212354e7adc073caa1b18723",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/ui/button.tsx",
+      "sourceSha256": "d14549ab3ba7a9d5d1f424c2599233bffa0b317121abf3b6efa2fb902d5e2781",
+      "output": "src/source-snapshot/components/ui/button.js",
+      "outputSha256": "cbccc19976bb79c79216a03c5b93cc8f3ea43673d99fd1ab7999eb1e886d054f",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/ui/separator.tsx",
+      "sourceSha256": "75085bd84ff6965e4a356c53a4689799cabf65caa93c0bba064d5a0c6fa78f13",
+      "output": "src/source-snapshot/components/ui/separator.js",
+      "outputSha256": "c35f5a44748a845592d72c37b41516de48d4ef14bac65402b56c776f8537f100",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/ui/button-group.tsx",
+      "sourceSha256": "fe97631e1a07bc0add09503c5032002e37f4c71ef5dd3c7475b856a29848583d",
+      "output": "src/source-snapshot/components/ui/button-group.js",
+      "outputSha256": "fbc4c5af04a2f2f136227710dcaf196dddd376a7a5492f2f31316d26201b286f",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/ui/theme-scope.tsx",
+      "sourceSha256": "72215a0332a81a06b3919ae4ec138de38aec3f11c7435e1d2574523e058f93b3",
+      "output": "src/source-snapshot/components/ui/theme-scope.js",
+      "outputSha256": "2f85e2887ae4d3c5790977d8fed2294c2c4a0e76077ce9c0637873ece2724657",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/ui/tooltip.tsx",
+      "sourceSha256": "1fb2835e8177c9088e63e63cf49f76c4253caf59600866033fbd84d053b0974c",
+      "output": "src/source-snapshot/components/ui/tooltip.js",
+      "outputSha256": "ee9e6b176b93ed52d6233331b7456a98dced125c0c4001fd5aca6843adec9a6d",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/ai-elements/message.tsx",
+      "sourceSha256": "e0d1ae36d67580f9a4aba558349e1a929777791d4fd02895598c1e070c22c70d",
+      "output": "src/source-snapshot/components/ai-elements/message.js",
+      "outputSha256": "553cc84f3b75e27ea4efe4344517c30053df2cc24927d144823d421bd3c6630d",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/ui/collapsible.tsx",
+      "sourceSha256": "ead4349ff7b01d696ef89294a81d18ee1d3f732321398896462c834ab9b9e065",
+      "output": "src/source-snapshot/components/ui/collapsible.js",
+      "outputSha256": "3d00cc79a3fcc4c8397d1957789e6ca936173e1df5dd4bb374ce2bc10b3e18ee",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/ai-elements/shimmer.tsx",
+      "sourceSha256": "24bcb9b1dd45d616bd50dc6500e9f414ccabf440efb249e8d92522344b9057d6",
+      "output": "src/source-snapshot/components/ai-elements/shimmer.js",
+      "outputSha256": "73800e16b8a0634f02d919d9e3d402257463c5611108c444b400ca72e2b6cc71",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/ai-elements/reasoning.tsx",
+      "sourceSha256": "efe4d92ee54441133bcb2d45cb327551719bcfd95ffd13e840adb98eaa0e8b8a",
+      "output": "src/source-snapshot/components/ai-elements/reasoning.js",
+      "outputSha256": "b494e671f2237449d0fb1a339b65cbc52f027e97b7365499a0e2dbc8f50c3c62",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/ai-elements/task.tsx",
+      "sourceSha256": "a61627f48d97dc4e1e28971eb5185cd745e03dd9f0ca7caae0f11ef20e450b6d",
+      "output": "src/source-snapshot/components/ai-elements/task.js",
+      "outputSha256": "f8c680062c8e88913717e4c9e639ecd2a19dcdfc67c6bec09c0f459b77e7051c",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/chat-code-preview.tsx",
+      "sourceSha256": "9939bbb5a2f396b2cb469d4ff8125afbec178307c58b77dfc886cabd71bf8f22",
+      "output": "src/source-snapshot/components/chat-code-preview.js",
+      "outputSha256": "61a36de70b67d8e3fcdb36a1f8686e46c966a6769a8a163b62feaa8faa0086fc",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/ui/dropdown-menu.tsx",
+      "sourceSha256": "4c0a6c8ad0b97b042990217a314ecbf47c4093b4d1549168b23f7fcac5dd6b60",
+      "output": "src/source-snapshot/components/ui/dropdown-menu.js",
+      "outputSha256": "b2cc1c91c2f23d7a3a3bf115e9400e9350675aba51e1ebee6b5f29e86ed3f8ab",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/chat-timeline.tsx",
+      "sourceSha256": "1f9dbea6dcfd0100e965a3c8c82f87fe5ab5bbeb34ed503b91969f30b2fcdce1",
+      "output": "src/source-snapshot/components/chat-timeline.js",
+      "outputSha256": "7a63f6662e78343e25616b2b3c7065efc8b9c4ca15bbd4fefa0e74170e841269",
+      "method": "source presentation with explicit frame adaptation"
+    },
+    {
+      "source": "components/ui/dialog.tsx",
+      "sourceSha256": "03af7b3b6ff03c4b88053eafab3ebf2ae0bd5c931a77e896eef51af097d156bb",
+      "output": "src/source-snapshot/components/ui/dialog.js",
+      "outputSha256": "2219f42728593075a71484a485729477f8b5105b885b22c9513c2e37e4fb7381",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/ui/input.tsx",
+      "sourceSha256": "f7d6ecff9a4d631feeaf401c02bb87e26ddb38131c55d15a43b9290747390847",
+      "output": "src/source-snapshot/components/ui/input.js",
+      "outputSha256": "ab89b4734ec59f31ddd712acca38ebcf3413fc6da5a012ff5621f40f2c1d2de7",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/ui/textarea.tsx",
+      "sourceSha256": "58b58d84fc54ba5f4ca46937870c619349fd9eccc4d494250ac7bc73a94e05e9",
+      "output": "src/source-snapshot/components/ui/textarea.js",
+      "outputSha256": "ad2196f884a239d9baf590e374db23f3681e53e7a95b0217c791893d3a708926",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/ui/input-group.tsx",
+      "sourceSha256": "17e76f6e6093754756dd10182f833abf35f1020dc4a8a7ead8c0f9703576870b",
+      "output": "src/source-snapshot/components/ui/input-group.js",
+      "outputSha256": "771ba53eaa812a03626499985f78c56a00efe3413ba8ec453fd9a6b2c86fc5b6",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/ui/command.tsx",
+      "sourceSha256": "b80b0f0356add12993366cd4571ceae1416f50035ac189876373d0e5050308c5",
+      "output": "src/source-snapshot/components/ui/command.js",
+      "outputSha256": "6684e84ccea6c50637d32a6274dcba427ba6754b7bbcd60686b05bb7b1e165a5",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/ui/hover-card.tsx",
+      "sourceSha256": "c4d107bcdc7fc3bdffc43f0b297ec02569816690e2bac3bb3a124c0dd189f8ec",
+      "output": "src/source-snapshot/components/ui/hover-card.js",
+      "outputSha256": "3c14d74c3f3afbb1dacda2a5dc24eb98dfacb99a2d36540e981459222dd64fab",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/ui/select.tsx",
+      "sourceSha256": "997869eb0a7249d29f8ac7b932c7eed5091cb95cd1e6d7569712619d055743e6",
+      "output": "src/source-snapshot/components/ui/select.js",
+      "outputSha256": "5ec31aad40edd80ec69ecbfeb30ae70a6556f6b4a11f2da0b2e6f1342be554c9",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/ui/spinner.tsx",
+      "sourceSha256": "900f722c961fa6e1c28104809d56831c9056dc69599e49d364cc13a6f33966a3",
+      "output": "src/source-snapshot/components/ui/spinner.js",
+      "outputSha256": "b193237b81d992f93461660e846e291b52fed69d48cd376a6aec5ecc2c37a781",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/ai-elements/prompt-input.tsx",
+      "sourceSha256": "9476d77ff208db78f70ac9724240fa79ccee4c7ba3e71b629267c3ea57a8a1f2",
+      "output": "src/source-snapshot/components/ai-elements/prompt-input.js",
+      "outputSha256": "a3994048319c7ffc482cae444db14c81049b97657d5f9b2f3f8d7997c02ce13d",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "lib/prompt-input-protocol.ts",
+      "sourceSha256": "f459b22fcf0a08dbf8c7a5c223f42aaa054d0871e5774d489551ec8c5c5bcad4",
+      "output": "src/source-snapshot/lib/prompt-input-protocol.js",
+      "outputSha256": "9908519f34266752290f21e20e0bf9eab32d4bb4e133e16abb9d213b4c5e0306",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/agent-prompt-textarea.tsx",
+      "sourceSha256": "24f35fd00c2fbbdc0cdb85ce128a37fedf591e03a5fcc2c695ea329e463a8c34",
+      "output": "src/source-snapshot/components/agent-prompt-textarea.js",
+      "outputSha256": "ce3223ba48c30176e998b46bd1d6121128f0f829151c93b193ed3f2a218f058a",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/prompt-add-menu.tsx",
+      "sourceSha256": "e6019a902e61899792a736b343bebc737d5c53179199b272322d8ca814362564",
+      "output": "src/source-snapshot/components/prompt-add-menu.js",
+      "outputSha256": "7df2991ccce6fa3ac2f0916cf6968715f881398cb3340251db0ed9a0a5f408e4",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/ai-elements/model-selector.tsx",
+      "sourceSha256": "23e0d7b6bc4dd857db0855fc0f86cfc5596d7da6d31fe6c0d581b8d6249f47e5",
+      "output": "src/source-snapshot/components/ai-elements/model-selector.js",
+      "outputSha256": "ff0021a09838b46eb90b9f775f5bc1b1bf8368b852e7a297594042a6a0bdb2a7",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/chat-workspace.tsx:ChatComposer + ComposerSubmitButton",
+      "sourceSha256": "3425289c2c6e753f742861a3557cca52217b18050098544ab8d701e7403d66fe",
+      "output": "src/source-snapshot/components/film-session-composer.js",
+      "outputSha256": "7577d61b50f3603d794a6fc1a39fd8e1bfe115278f370f0b7b51483ddc69a702",
+      "method": "source presentation with explicit frame adaptation"
+    },
+    {
+      "source": "components/ai-elements/conversation.tsx",
+      "sourceSha256": "1875e32cc23a6e6c7291baa3ca2b34b5086ef8ab680bf14b6372da64e9c69553",
+      "output": "src/source-snapshot/components/ai-elements/conversation.js",
+      "outputSha256": "06b99861d15e8e9f2f2a4202f3e518d7d3eed4c3173ba34fd1f520a8a66f1ff2",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/thinking/src/engine/core.ts",
+      "sourceSha256": "f0162bbb5829e61a3f938a352b6dcd13d74a036ce17529b9b9ee7dd1ca8626b4",
+      "output": "src/source-snapshot/components/thinking/src/engine/core.js",
+      "outputSha256": "9122c2b0730796f2f1092c8715b73d55b7a079020ea95f15f68b2e99df6cd1f6",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/thinking/src/engine/braid.ts",
+      "sourceSha256": "7b056cdf72440485902e2879c9130d93693f1f8918dedc35a96a2ecbaaa6a151",
+      "output": "src/source-snapshot/components/thinking/src/engine/braid.js",
+      "outputSha256": "79be4fc7fc8a59c0176bc783c34e5ac2da3abeb4385c9a4ec2601cc09cc0b4ea",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/thinking/src/engine/lattice.ts",
+      "sourceSha256": "077f81473c400f2af73be8ba755c08565d0459997265dfc88b7660962ee8a2b7",
+      "output": "src/source-snapshot/components/thinking/src/engine/lattice.js",
+      "outputSha256": "99853adfbb5bdc2b716c091d1f92314b2c2e97254b6432637b7639c4c7e3fe8d",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/thinking/src/engine/morph.ts",
+      "sourceSha256": "be06dd420e5298d376338badcaf62e090b5672b1e2a019ecdce7c2278455ab9c",
+      "output": "src/source-snapshot/components/thinking/src/engine/morph.js",
+      "outputSha256": "bc6a2ecd184f67f309fa8785bd331c78e3af88ff87836c5a61b1a2a5e47229d2",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/thinking/src/engine/orbits.ts",
+      "sourceSha256": "b56cd939698cac9759f52c0af315b0f7c0fb18f994d5765124fc9a4a03ed9906",
+      "output": "src/source-snapshot/components/thinking/src/engine/orbits.js",
+      "outputSha256": "5e578dc072b44e516243de3cf44c3758e26ccf8219444ea5dfa2105d6b2ae6c1",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/thinking/src/engine/ribbon.ts",
+      "sourceSha256": "db60f9d6ae1a5e5b9f435f35a9007559b646b433d541467d833104ec068d49d6",
+      "output": "src/source-snapshot/components/thinking/src/engine/ribbon.js",
+      "outputSha256": "33f2ce0779cf725cca09d9eeb1d5d746636b8b7953bc2b3997f2b6206c798dad",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/thinking/src/engine/web.ts",
+      "sourceSha256": "99cd0a761522833e455be2822d6acaea8dd2e2433d3e6cd2e7f16bc012c81cce",
+      "output": "src/source-snapshot/components/thinking/src/engine/web.js",
+      "outputSha256": "fcc20fa9409973032fcde3802109debc00f5b907db804fdbba0abef84687bba8",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/thinking/src/engine/registry.ts",
+      "sourceSha256": "a6ae08d90e02a0cc45d876f52bbdb5da3b6d2c0015fe113a799ba6ebe63720aa",
+      "output": "src/source-snapshot/components/thinking/src/engine/registry.js",
+      "outputSha256": "d6a067651e8e3540508bf0d247a17318be46632e6c3e024a02b1ff80384e1e3c",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/thinking/src/engine/profiles.ts",
+      "sourceSha256": "e1a5ca49a5e6ac80b56d77073cb28f1ea36742bee7be3a13ccaba7d3731d360b",
+      "output": "src/source-snapshot/components/thinking/src/engine/profiles.js",
+      "outputSha256": "a029c24c91222ae4848ff0d04ab9ab000b5baba5a9baac2340f90a1f2bf7408c",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/thinking/src/presets.ts",
+      "sourceSha256": "626ac53625751029472c44536d3ca359988fbb1790b453f29f2e34d49de013d9",
+      "output": "src/source-snapshot/components/thinking/src/presets.js",
+      "outputSha256": "779bfd7723343c9716fb41f711d3c0b6fded5103ace3ae7ce2a5f582ab8cd8f7",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/thinking/src/theme.ts",
+      "sourceSha256": "f8650dcef8796ac92260f62cf3f4739763512012de288a541c0b15b127726a1b",
+      "output": "src/source-snapshot/components/thinking/src/theme.js",
+      "outputSha256": "e7cadbd87697fc40aed03fc27b10e18219e2222b7d21d1cf726cc40e8eded758",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/thinking/src/ThinkingOrb.tsx",
+      "sourceSha256": "9ce03c2f4a309621734f5411661b76b83ae56b1f08a97ddca02c4307cc4bd9c1",
+      "output": "src/source-snapshot/components/thinking/src/ThinkingOrb.js",
+      "outputSha256": "e7fad6bf17a367086b04497c0d2ed1394c0ec5dec05920a551f05b950bcb7c1a",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/thinking/src/index.ts",
+      "sourceSha256": "40c43e15c53bcda366918d565cd0d2eca63c8db90e53045cdb667ffb8eb1c8bd",
+      "output": "src/source-snapshot/components/thinking/src/index.js",
+      "outputSha256": "cba96328178aa2d5b3e30961222840b18ed4f9a230532fe0a1887a33b3f1d6c1",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "components/chat-timeline.tsx",
+      "sourceSha256": "1f9dbea6dcfd0100e965a3c8c82f87fe5ab5bbeb34ed503b91969f30b2fcdce1",
+      "output": "src/source-snapshot/components/film-reference-timeline.js",
+      "outputSha256": "cfc0215a1e843c47af015f92937991c88c49b1c53228ea57d1fd6cd98403cd40",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "app/fonts/geist-latin.woff2",
+      "output": "public/fonts/geist-latin.woff2",
+      "sourceSha256": "1b5ebfb3a01a97343ac96873e6d59a8cb285c66012b6a1ac509cb2765e995ba8"
+    }
+  ],
+  "adaptations": [
+    "ChatTimeline retains real event reducer, round grouping, nested task presentation and summary/change placement.",
+    "Editor, workflow and task disclosure are frame-controlled; UI action attributes removed from timeline. No source app changes.",
+    "Session composer is extracted from ChatComposer, not WorkspacePrompt. Empty attachment/queue/goal states; closed original menus; no service callbacks.",
+    "Conversation auto-scroll becomes static source-class containers; offscreen TaskPositionCapsule omitted because all shown tasks fit.",
+    "Original orb canvas painters use frame/fps instead of performance clock.",
+    "English labels, deterministic timestamps and fictional events/results.",
+    "Source Geist font copied locally. Root dependency installation supplies pinned existing UI packages.",
+    "Monaco file detail is outside shot scope and remains closed; no substitute code renderer in the timeline."
+  ],
+  "reference": {
+    "path": "/Users/yikewang/Tibo-Please",
+    "used": "Inspected source: glyph relay, focused camera and settled holds. Not a claim of watching a finished reference video."
+  },
+  "rights": "User-supplied OpenLink source, brand and font for requested video; dependency licenses still apply. No purchased or external generated media."
+}

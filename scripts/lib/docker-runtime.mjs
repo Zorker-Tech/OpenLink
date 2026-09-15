@@ -36,19 +36,24 @@ export function isDockerServerVersion(output) {
 }
 
 async function engineWorks(command) {
-  try {
-    const { stdout } = await execFile(command, ['info', '--format', '{{json .ServerVersion}}'], {
-      shell: false,
-      windowsHide: true,
-      timeout: 15_000,
-    })
-    // Docker Desktop 4.88 on Windows can return exit code 0 while printing
-    // "Docker Desktop is unable to start". Bind readiness to an actual engine
-    // version instead of trusting the process status alone.
-    return isDockerServerVersion(stdout)
-  } catch {
-    return false
+  // OPENLINK_DOCKER_COMMAND deliberately accepts Docker-compatible engines.
+  // Docker exposes its daemon version at .ServerVersion while Podman exposes
+  // the remote engine version at .Version.Version, so probe both schemas.
+  // Keep the validation strict: Docker Desktop can return exit code 0 while
+  // printing an error message when its VM failed to start.
+  for (const template of ['{{json .ServerVersion}}', '{{json .Version.Version}}']) {
+    try {
+      const { stdout } = await execFile(command, ['info', '--format', template], {
+        shell: false,
+        windowsHide: true,
+        timeout: 15_000,
+      })
+      if (isDockerServerVersion(stdout)) return true
+    } catch {
+      // A compatible engine can reject the other engine's Go-template field.
+    }
   }
+  return false
 }
 
 export async function resolveDockerCommand(options = {}) {
@@ -108,12 +113,20 @@ export async function ensureDockerEngine(options = {}) {
   const probe = () => engineWorks(docker)
   if (await probe()) return docker
 
-  await launchDockerDesktop(host)
+  // An explicit command is an operator-selected engine boundary (for example
+  // OpenLink's bundled Podman on macOS). Never cross that boundary by
+  // launching Docker Desktop when the selected engine is still converging or
+  // unhealthy.
+  const configured = env.OPENLINK_DOCKER_COMMAND?.trim()
+  if (!configured) await launchDockerDesktop(host)
   const timeoutMs = options.timeoutMs ?? 180_000
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     if (await probe()) return docker
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 1_000))
+  }
+  if (configured) {
+    throw new Error(`Configured container engine did not become ready within ${Math.ceil(timeoutMs / 1_000)} seconds: ${configured}`)
   }
   throw new Error(`Docker Desktop did not become ready within ${Math.ceil(timeoutMs / 1_000)} seconds on ${host.platform}`)
 }

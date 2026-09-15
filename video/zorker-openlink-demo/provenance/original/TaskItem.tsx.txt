@@ -1,0 +1,5 @@
+export const TaskItem = ({ children, className, ...props }: TaskItemProps) => (
+  <div className={cn("text-muted-foreground text-sm", className)} {...props}>
+    {children}
+  </div>
+);

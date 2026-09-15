@@ -1,5 +1,9 @@
 'use client'
 
+import { projectMessageRevisions } from '@/lib/agent-runtime/message-revisions'
+import { agentErrorTitle, groupAgentErrorRecords } from '@/lib/agent-runtime/error-groups'
+import { useRef } from 'react'
+
 import {
   Conversation,
   ConversationContent,
@@ -18,16 +22,19 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import type { AgentFileChange, OpenLinkAgentEvent } from '@/lib/agent-runtime/events'
+import type { AgentFileChange, AgentPromptAttachment, OpenLinkAgentEvent } from '@/lib/agent-runtime/events'
 import {
   Atom,
+  BookOpen,
   ChevronDown,
   ChevronRight,
   CircleAlert,
   CircleCheck,
   Clock3,
   Copy,
+  FileText,
   Link2,
+  MessageCircle,
   MoreHorizontal,
   RefreshCw,
   RotateCcw,
@@ -56,14 +63,14 @@ interface TaskExecution {
 }
 
 type TimelineItem =
-  | { id: string; kind: 'message'; role: 'user' | 'assistant'; text: string; streaming: boolean }
+  | { id: string; kind: 'message'; role: 'user' | 'assistant'; text: string; attachments?: AgentPromptAttachment[]; streaming: boolean }
   | { id: string; kind: 'reasoning'; text: string; streaming: boolean; durationMs?: number }
   | { id: string; kind: 'task'; label: string; detail?: string; state: ExecutionState; executions: TaskExecution[] }
   | { id: string; kind: 'status'; label: string; detail?: string; state: 'active' | 'completed' | 'failed' }
   | { id: string; kind: 'change'; label: string; additions?: number; deletions?: number; files?: Array<string | AgentFileChange>; changeCount?: number; snapshot?: boolean; baseCommit?: string }
   | { id: string; kind: 'confirmation'; title: string; message?: string; options?: string[]; resolved?: boolean; approved?: boolean }
   | { id: string; kind: 'checkpoint'; label: string; timestamp: string; metrics?: { actions?: number; credits?: number; model?: string } }
-  | { id: string; kind: 'error'; message: string }
+  | { id: string; kind: 'error'; message: string; title?: string; messages?: string[] }
 
 type MessageTimelineItem = Extract<TimelineItem, { kind: 'message' }>
 type ChangeTimelineItem = Extract<TimelineItem, { kind: 'change' }>
@@ -223,7 +230,7 @@ function buildTimeline(events: OpenLinkAgentEvent[]): TimelineState {
         state.activeExecutionTaskId = undefined
         state.lastExecutionStartedAt = undefined
         state.partTaskIds = {}
-        state.items = replaceItem(state.items, event.messageId, () => ({ id: event.messageId, kind: 'message', role: 'user', text: event.text, streaming: false }))
+        state.items = replaceItem(state.items, event.messageId, () => ({ id: event.messageId, kind: 'message', role: 'user', text: event.text, attachments: event.attachments, streaming: false }))
         break
       case 'message.delta':
         if (!state.items.some((item) => item.kind === 'message' && item.id === event.messageId)) {
@@ -435,11 +442,30 @@ function buildConversationRounds(timeline: TimelineState): ConversationRound[] {
           && (item.kind !== 'task' || item.executions.length > 0)
         ))
       : []
-    const thinkingItems = hasToolExecution ? [] : nonMessageItems
+    const thinkingItems = hasToolExecution ? [] : groupTimelineErrors(nonMessageItems)
     const outputItems = hasToolExecution ? [] : assistantMessages.filter((item) => item !== ending)
 
-    return { id: group.id, state, user: group.user, thinkingItems, workingItems, outputItems, ending, endingChange, checkpoint }
+    return { id: group.id, state, user: group.user, thinkingItems, workingItems: groupTimelineErrors(workingItems), outputItems, ending, endingChange, checkpoint }
   })
+}
+
+function groupTimelineErrors(items: TimelineItem[]): TimelineItem[] {
+  const groups = groupAgentErrorRecords(items.flatMap((item) => item.kind === 'error' ? [{ id: item.id, message: item.message }] : []))
+  const byTitle = new Map(groups.map((group) => [group.title, group]))
+  const emitted = new Set<string>()
+  const result: TimelineItem[] = []
+  for (const item of items) {
+    if (item.kind !== 'error') {
+      result.push(item)
+      continue
+    }
+    const title = agentErrorTitle(item.message)
+    if (emitted.has(title)) continue
+    emitted.add(title)
+    const group = byTitle.get(title)
+    result.push(group ? { ...item, title: group.title, messages: group.messages } : item)
+  }
+  return result
 }
 
 function mergeRoundChanges(roundId: string, entries: ChangeTimelineItem[]): ChangeTimelineItem | undefined {
@@ -567,6 +593,7 @@ function getActiveFlowStatus(timeline: TimelineState): ActiveFlowStatus | null {
   if (timeline.status !== 'running') return null
 
   for (const item of [...timeline.items].reverse()) {
+    if (item.kind === 'confirmation' && !item.resolved) return { label: '等待你的回答', state: 'working' }
     if (item.kind === 'message' && item.streaming) return { label: '正在生成回复', state: 'composing' }
     if (item.kind === 'reasoning' && item.streaming) return { label: '正在思考', state: 'solving' }
     if (item.kind === 'status' && item.state === 'active') return { label: item.label, state: 'working' }
@@ -767,25 +794,39 @@ function StatusItem({ item }: { item: Extract<TimelineItem, { kind: 'status' }> 
   )
 }
 
+function isLegacyRuntimeSnapshotPath(input: string): boolean {
+  const segments = input.replaceAll('\\', '/').replace(/^\.\//, '').split('/').filter(Boolean)
+  if (segments.some((segment) => ['.agents', '.cache', '.codex', '.local', '.openlink', '.supabase'].includes(segment))) return true
+  const basename = segments.at(-1) ?? ''
+  return /\.log(?:\.[^/]*)?$/i.test(basename) || /^(?:stderr|stdout)(?:[-_.].*)?\.(?:log|txt)$/i.test(basename)
+}
+
 function ChangeItem({ item }: { item: Extract<TimelineItem, { kind: 'change' }> }) {
   const [open, setOpen] = useState(false)
   const [selectedPath, setSelectedPath] = useState<string | undefined>()
-  const files = (item.files ?? []).map((file) => typeof file === 'string' ? { path: file } : file)
+  // Old persisted snapshots may predate the Worker-level exclusion policy.
+  // Filter them at render time as a migration guard; all new snapshots are
+  // already clean at collection time.
+  const files = (item.files ?? []).map((file) => typeof file === 'string' ? { path: file } : file).filter((file) => !isLegacyRuntimeSnapshotPath(file.path))
   const selected = files.find((file) => file.path === selectedPath) ?? files[0]
+  const additions = item.snapshot ? files.reduce((total, file) => total + (file.additions ?? 0), 0) : item.additions
+  const deletions = item.snapshot ? files.reduce((total, file) => total + (file.deletions ?? 0), 0) : item.deletions
+
+  if (item.snapshot && files.length === 0) return null
 
   return (
-    <div className={`overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] p-2 shadow-[0_2px_1px_rgb(0_0_0_/_4%),0_8px_4px_rgb(0_0_0_/_4%)] transition-[max-height] duration-200 ease-out ${open ? 'max-h-[540px]' : 'max-h-[46px]'}`}>
+    <div className={`overflow-hidden rounded-lg border border-[color-mix(in_oklab,var(--app-foreground)_16%,var(--app-border))] bg-[var(--app-elevated)] p-2 shadow-[0_6px_20px_var(--app-shadow)] transition-[max-height,border-color] duration-200 ease-out ${open ? 'max-h-[540px] border-[color-mix(in_oklab,var(--app-foreground)_24%,var(--app-border))]' : 'max-h-[46px]'}`} data-slot="git-snapshot">
       <div className="flex h-7 items-center gap-1">
         <button aria-expanded={open} className="flex h-7 min-w-0 flex-1 select-none items-center gap-2 rounded-md text-left outline-none hover:text-[var(--app-foreground)] focus:outline-none focus-visible:outline-none" onClick={() => setOpen((value) => !value)} type="button">
           {open ? <ChevronDown className="size-[13px] shrink-0 text-[var(--app-muted)]" /> : <ChevronRight className="size-[13px] shrink-0 text-[var(--app-muted)]" />}
-          <span className="min-w-0 truncate text-[13px] tracking-[-0.0762px]">{item.label}</span>
-          {item.baseCommit ? <span className="shrink-0 text-[12px] text-[var(--app-muted)]">@{item.baseCommit}</span> : item.changeCount && item.changeCount > 1 ? <span className="shrink-0 text-[13px] text-[var(--app-muted)]">v{item.changeCount}</span> : null}
+          <span className="min-w-0 truncate text-[13px] font-medium tracking-[-0.0762px] text-[var(--app-foreground)]">{item.label}</span>
+          {item.baseCommit ? <span className="shrink-0 font-mono text-[11px] text-[var(--app-muted)]">@{item.baseCommit}</span> : item.changeCount && item.changeCount > 1 ? <span className="shrink-0 text-[12px] text-[var(--app-muted)]">v{item.changeCount}</span> : null}
         </button>
-        {(item.additions !== undefined || item.deletions !== undefined) && (
-          <button aria-label="查看差异" className="flex h-6 shrink-0 items-center rounded border border-[var(--app-control-border)] px-2 text-xs font-medium hover:bg-[var(--app-hover)]" type="button">
-            <span className="text-[var(--app-success)]">+{item.additions ?? 0}</span>
+        {(additions !== undefined || deletions !== undefined) && (
+          <button aria-label="查看差异" className="flex h-6 shrink-0 items-center rounded-md border border-[var(--app-control-border)] bg-[var(--app-active)] px-2 text-xs font-semibold hover:bg-[var(--app-hover)]" type="button">
+            <span className="text-[var(--app-success)]">+{additions ?? 0}</span>
             <span className="px-0.5 text-[var(--app-muted)]">/</span>
-            <span className="text-[var(--app-danger)]">-{item.deletions ?? 0}</span>
+            <span className="text-[var(--app-danger)]">-{deletions ?? 0}</span>
           </button>
         )}
         <button aria-label={open ? '收起 Git 变更' : '展开 Git 变更'} className="flex size-6 items-center justify-center rounded text-[var(--app-muted)] hover:bg-[var(--app-active)] hover:text-[var(--app-foreground)]" onClick={() => setOpen((value) => !value)} type="button"><RotateCcw className="size-3.5" /></button>
@@ -801,7 +842,7 @@ function ChangeItem({ item }: { item: Extract<TimelineItem, { kind: 'change' }> 
               <button aria-pressed={selected?.path === change.path} className={`flex h-7 w-full min-w-0 items-center gap-2 rounded px-0.5 text-left transition-colors hover:bg-[var(--app-hover)] ${selected?.path === change.path ? 'bg-[var(--app-active)]' : ''}`} key={change.path} onClick={() => setSelectedPath(change.path)} type="button">
                 <Atom className="size-4 shrink-0 text-[var(--app-info)]" />
                 <span className="shrink-0 text-[13px] text-[var(--app-foreground)]">{name}</span>
-                <span className="min-w-0 flex-1 truncate text-[13px] text-[var(--app-muted)]">{directory}</span>
+                <span className="min-w-0 flex-1 truncate text-[12px] text-[var(--app-subtle-foreground)]">{directory}</span>
                 {(change.additions !== undefined || change.deletions !== undefined) && (
                   <span className="flex shrink-0 items-center gap-0.5 text-[12px]">
                     <span className="text-[var(--app-success)]">+{change.additions ?? 0}</span>
@@ -813,7 +854,7 @@ function ChangeItem({ item }: { item: Extract<TimelineItem, { kind: 'change' }> 
           })}
           </div>
           {selected?.patch ? (
-            <pre className="mt-2 max-h-[248px] overflow-auto rounded-md border border-[var(--app-control-border)] bg-[var(--app-active)] p-2 font-mono text-[11px] leading-4 text-[var(--app-foreground)]"><code className="whitespace-pre-wrap break-words">{selected.patch}</code></pre>
+            <pre className="mt-2 max-h-[248px] overflow-auto rounded-md border border-[var(--app-control-border)] bg-[var(--app-surface)] p-2 font-mono text-[11px] leading-4 text-[var(--app-foreground)]"><code className="whitespace-pre-wrap break-words">{selected.patch}</code></pre>
           ) : item.snapshot ? <p className="mt-2 text-[12px] text-[var(--app-muted)]">Git detected this file, but it has no text diff to preview.</p> : null}
         </div>
       ) : null}
@@ -861,23 +902,119 @@ function formatClockTime(timestamp: string) {
   }).format(new Date(timestamp))
 }
 
+function UserPromptAttachments({ attachments }: { attachments: AgentPromptAttachment[] }) {
+  if (!attachments.length) return null
+  return <div className="mb-1.5 flex flex-wrap gap-2">
+    {attachments.map((attachment, index) => attachment.type === 'image'
+      ? <img alt={attachment.filename ?? `图片 ${index + 1}`} className="max-h-64 max-w-full rounded-lg object-contain" key={`${attachment.url.slice(0, 48)}:${index}`} src={attachment.url} />
+      : attachment.type === 'reference'
+        ? <div className="flex max-w-full items-center gap-2 rounded-lg border border-[var(--app-control-border)] bg-[var(--app-surface)] px-2 py-1.5 text-left" key={`reference:${attachment.path}`}>
+          {attachment.referenceType === 'thread' ? <MessageCircle aria-hidden className="size-4 shrink-0 text-[var(--app-muted)]" /> : <FileText aria-hidden className="size-4 shrink-0 text-[var(--app-muted)]" />}
+          <span className="min-w-0"><span className="block truncate text-xs font-medium">{attachment.name}</span><span className="block truncate text-[10px] text-[var(--app-muted)]">{attachment.referenceType === 'thread' ? '任务引用' : attachment.path}</span></span>
+        </div>
+        : attachment.type === 'file'
+          ? <div className="flex max-w-full items-center gap-2 rounded-lg border border-[var(--app-control-border)] bg-[var(--app-surface)] px-2 py-1.5 text-left" key={`upload:${attachment.uploadId}`}>
+            <FileText aria-hidden className="size-4 shrink-0 text-[var(--app-muted)]" />
+            <span className="min-w-0"><span className="block truncate text-xs font-medium">{attachment.filename}</span><span className="block truncate text-[10px] text-[var(--app-muted)]">{attachment.relativePath ?? `${Math.ceil(attachment.sizeBytes / 1024)} KB`}</span></span>
+          </div>
+        : attachment.type === 'instruction'
+          ? <div className="flex max-w-full items-center gap-2 rounded-lg border border-[var(--app-control-border)] bg-[var(--app-surface)] px-2 py-1.5 text-left" key={`instruction:${index}:${attachment.name}`}>
+            <BookOpen aria-hidden className="size-4 shrink-0 text-[var(--app-muted)]" />
+            <span className="min-w-0"><span className="block truncate text-xs font-medium">{attachment.name}</span><span className="block text-[10px] text-[var(--app-muted)]">指令协议</span></span>
+          </div>
+        : <div className="flex max-w-full items-center gap-2 rounded-lg border border-[var(--app-control-border)] bg-[var(--app-surface)] px-2 py-1.5 text-left" key={`text:${index}:${attachment.text.length}`}>
+        <FileText aria-hidden className="size-4 shrink-0 text-[var(--app-muted)]" />
+        <span className="min-w-0"><span className="block truncate text-xs font-medium">{attachment.filename ?? '已粘贴的文本.txt'}</span><span className="block text-[10px] text-[var(--app-muted)]">{attachment.text.length.toLocaleString()} 个字符</span></span>
+      </div>)}
+  </div>
+}
+
 function TimelineMessageItem({ item }: { item: Extract<TimelineItem, { kind: 'message' }> }) {
-  const compactUserMessage = item.role === 'user' && !item.text.includes('\n') && item.text.trim().length <= 16
   return (
     <Message className={item.role === 'user' ? 'mb-4 max-w-[95%]' : 'max-w-full'} from={item.role}>
       <MessageContent className={item.role === 'user'
-        ? `relative isolate min-h-0 overflow-hidden border border-[var(--app-control-border)] bg-[var(--app-active)]! text-[13px] text-[var(--app-foreground)]! before:hidden after:hidden ${compactUserMessage ? 'rounded-lg! px-2.5! py-px! leading-5' : 'rounded-2xl! px-3! py-1.5! leading-[21.125px]'}`
+        ? 'relative isolate min-h-[34px] overflow-hidden rounded-xl! border border-[var(--app-control-border)] bg-[var(--app-active)]! px-3! py-1.5! text-[13px] leading-[21.125px] text-[var(--app-foreground)]! before:hidden after:hidden'
         : 'w-full gap-0 overflow-visible text-[13px] leading-[21.125px]'}>
         {item.role === 'assistant'
-          ? <MessageResponse className="chat-message-markdown text-[13px] leading-[21.125px] [&_li]:my-1 [&_p]:my-0 [&_ul]:list-outside [&_ul]:pl-[1.5em] [&_ul]:my-1 [&_ol]:list-outside [&_ol]:pl-[1.5em] [&_ol]:my-1 [&_li>p]:inline">{item.text}</MessageResponse>
-          : <p className="whitespace-pre-wrap break-words">{item.text}</p>}
+          ? <MessageResponse key={item.id} className="chat-message-markdown text-[13px] leading-[21.125px] [&_li]:my-1 [&_p]:my-0 [&_ul]:list-outside [&_ul]:pl-[1.5em] [&_ul]:my-1 [&_ol]:list-outside [&_ol]:pl-[1.5em] [&_ol]:my-1 [&_li>p]:inline">{item.text}</MessageResponse>
+          : <>{item.attachments?.length ? <UserPromptAttachments attachments={item.attachments} /> : null}{item.text ? <p className="whitespace-pre-wrap break-words">{item.text}</p> : null}</>}
         {item.streaming && <span className="inline-block h-3 w-1 animate-pulse bg-[var(--app-foreground)]" />}
       </MessageContent>
     </Message>
   )
 }
 
-function TimelineItemView({ item }: { item: TimelineItem }) {
+function EditableUserMessage({ item, disabled, onEditMessage }: {
+  item: Extract<TimelineItem, { kind: 'message' }>
+  disabled: boolean
+  onEditMessage?: (messageId: string, text: string) => Promise<void>
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(item.text)
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const trigger = useRef<HTMLButtonElement>(null)
+  const restoreFocus = useRef(false)
+  const cancel = () => { restoreFocus.current = true; setEditing(false); setError(null) }
+  useEffect(() => {
+    if (!editing && restoreFocus.current) {
+      restoreFocus.current = false
+      trigger.current?.focus()
+    }
+  }, [editing])
+  const submit = async () => {
+    if (pending || disabled || !draft.trim() || !onEditMessage) return
+    setPending(true)
+    setError(null)
+    try { await onEditMessage(item.id, draft.trim()); setEditing(false) }
+    catch (cause) { setError(cause instanceof Error ? cause.message : '重发失败，修改内容已保留') }
+    finally { setPending(false) }
+  }
+  return <div className="relative flex w-full justify-end" data-message-id={item.id}>
+    {editing && <div aria-hidden="true" className="invisible mb-4 max-w-[95%] whitespace-pre-wrap break-words rounded-xl border px-3 py-1.5 text-[13px] leading-[21.125px]">{item.text}</div>}
+    {editing ? <form
+      aria-label="编辑原消息"
+      className="absolute left-1/2 top-0 z-20 mx-auto flex w-[95%] min-w-0 -translate-x-1/2 flex-col gap-3 rounded-xl border border-dashed border-[var(--app-muted)] bg-[var(--app-elevated)] p-3 shadow-[0_12px_36px_var(--app-shadow)]"
+      onSubmit={(event) => { event.preventDefault(); void submit() }}
+      onKeyDown={(event) => {
+        if (event.nativeEvent.isComposing) return
+        if (event.key === 'Escape' && !pending) { event.preventDefault(); cancel() }
+        if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void submit() }
+      }}
+    >
+      <textarea autoFocus aria-label="消息内容" className="min-h-20 max-h-64 w-full resize-y bg-transparent text-[13px] leading-[21px] text-[var(--app-foreground)] outline-none" value={draft} maxLength={10000} disabled={pending} onChange={(event) => setDraft(event.target.value)} />
+      <p className="text-[11px] leading-4 text-[var(--app-muted)]">从此处重新生成后续对话，不回滚文件修改。</p>
+      {error && <p role="alert" className="text-xs text-[var(--app-danger)]">{error}</p>}
+      <div className="flex justify-end gap-2">
+        <button type="button" className="rounded-md px-3 py-1.5 text-xs hover:bg-[var(--app-hover)] focus-visible:outline" disabled={pending} onClick={cancel}>取消</button>
+        <button type="submit" className="rounded-md bg-[var(--app-submit-background)] px-3 py-1.5 text-xs text-[var(--app-submit-foreground)] disabled:opacity-40 focus-visible:outline" disabled={pending || disabled || !draft.trim()}>{pending ? '正在重发…' : '重发'}</button>
+      </div>
+    </form> : <button ref={trigger} type="button" aria-label={`编辑消息：${item.text}`} disabled={disabled || !onEditMessage}
+      className="mb-4 max-w-[95%] whitespace-pre-wrap break-words rounded-xl border border-[var(--app-control-border)] bg-[var(--app-active)] px-3 py-1.5 text-left text-[13px] leading-[21.125px] text-[var(--app-foreground)] outline-none hover:border-[var(--app-muted)] focus-visible:ring-1 focus-visible:ring-[var(--app-muted)]"
+      onClick={() => { setDraft(item.text); setError(null); setEditing(true) }}
+    >{item.text}</button>}
+  </div>
+}
+
+function ErrorItem({ item }: { item: Extract<TimelineItem, { kind: 'error' }> }) {
+  const [open, setOpen] = useState(false)
+  const detailsId = useId()
+  const messages = item.messages ?? [item.message]
+  const title = item.title ?? agentErrorTitle(item.message)
+  return (
+    <div className="py-0.5" data-slot="timeline-error">
+      <button aria-controls={detailsId} aria-expanded={open} className="group flex min-h-6 w-full items-center gap-2 text-left text-[12px] leading-5 text-[color-mix(in_oklab,var(--app-danger)_62%,var(--app-muted))] outline-none transition-colors hover:text-[var(--app-danger)] focus-visible:text-[var(--app-danger)]" onClick={() => setOpen((value) => !value)} type="button">
+        <CircleAlert className="size-3.5 shrink-0" />
+        <span className="min-w-0 flex-1 truncate font-medium">{title}</span>
+        {messages.length > 1 ? <span aria-label={`${messages.length} 次`} className="shrink-0 tabular-nums text-[var(--app-subtle-foreground)]">{messages.length}</span> : null}
+        <ChevronRight className={`size-3 shrink-0 text-[var(--app-subtle-foreground)] transition-transform ${open ? 'rotate-90' : ''}`} />
+      </button>
+      {open ? <div className="ml-[6px] mt-1 max-h-44 space-y-2 overflow-y-auto border-l border-[var(--app-border)] py-1 pl-[18px] pr-1 text-[11px] leading-[18px] text-[var(--app-muted)] [scrollbar-width:thin]" id={detailsId}>{messages.map((message, index) => <div className="whitespace-pre-wrap break-words" key={`${index}:${message}`}><span className="mr-2 font-mono text-[10px] text-[var(--app-subtle-foreground)]">#{index + 1}</span>{message}</div>)}</div> : null}
+    </div>
+  )
+}
+
+function TimelineItemView({ item, showContent = true }: { item: TimelineItem; showContent?: boolean }) {
   if (item.kind === 'message') return <TimelineMessageItem item={item} />
   if (item.kind === 'reasoning') {
     return (
@@ -886,7 +1023,7 @@ function TimelineItemView({ item }: { item: TimelineItem }) {
           <StatusGlyph doneIcon={AiBrain02Icon} label={item.streaming ? '正在思考' : '思考已完成'} orbState="solving" running={item.streaming} />
           <span>{item.streaming ? 'Thinking…' : 'Thought for a moment'}</span>
         </ReasoningTrigger>
-        {item.text && <ReasoningContent className="relative mt-2 pl-7 text-[12px] leading-5 before:absolute before:inset-y-0 before:left-[9.5px] before:w-px before:bg-gradient-to-b before:from-[var(--app-border)] before:to-transparent">{item.text}</ReasoningContent>}
+        {showContent && item.text && <ReasoningContent className="relative mt-2 pl-7 text-[12px] leading-5 before:absolute before:inset-y-0 before:left-[9.5px] before:w-px before:bg-gradient-to-b before:from-[var(--app-border)] before:to-transparent">{item.text}</ReasoningContent>}
       </Reasoning>
     )
   }
@@ -895,7 +1032,7 @@ function TimelineItemView({ item }: { item: TimelineItem }) {
   if (item.kind === 'change') return <ChangeItem item={item} />
   if (item.kind === 'confirmation') return item.resolved ? <ConfirmationResultItem item={item} /> : null
   if (item.kind === 'checkpoint') return null
-  return <div className="flex gap-2 rounded-lg border border-[color-mix(in_oklab,var(--destructive)_35%,transparent)] bg-[color-mix(in_oklab,var(--destructive)_8%,transparent)] p-2 text-[13px] text-[var(--destructive)]"><CircleAlert className="mt-1 size-3.5 shrink-0" />{item.message}</div>
+  return <ErrorItem item={item} />
 }
 
 function StreamingThinkingItem() {
@@ -1015,13 +1152,17 @@ function EndingSection({ round }: { round: ConversationRound }) {
 export function ChatTimeline({
   events,
   isStreaming = false,
+  showThinkingContent = true,
   onFlowStatusChange,
+  onEditMessage,
 }: {
   events: OpenLinkAgentEvent[]
   isStreaming?: boolean
+  showThinkingContent?: boolean
   onFlowStatusChange?: (status: ActiveFlowStatus | null) => void
+  onEditMessage?: (messageId: string, text: string) => Promise<void>
 }) {
-  const timeline = useMemo(() => buildTimeline(events), [events])
+  const timeline = useMemo(() => buildTimeline(projectMessageRevisions(events)), [events])
   const rounds = useMemo(() => buildConversationRounds(timeline), [timeline])
   const activeFlow = useMemo(() => getActiveFlowStatus(timeline) ?? (isStreaming ? { label: '正在思考', state: 'solving' as OrbState } : null), [isStreaming, timeline])
 
@@ -1034,12 +1175,12 @@ export function ChatTimeline({
       <ConversationContent className="min-h-full gap-5 px-3 pb-6 pt-20 text-[13px] leading-[21.125px] tracking-[-0.0762px]">
         {rounds.map((round) => (
           <section className="flex w-full flex-col gap-3" data-round-state={round.state} key={round.id}>
-            {round.user ? <TimelineMessageItem item={round.user} /> : null}
-            {round.thinkingItems.map((item) => <TimelineItemView item={item} key={item.id} />)}
+            {round.user ? <EditableUserMessage item={round.user} disabled={isStreaming} onEditMessage={onEditMessage} /> : null}
+            {round.thinkingItems.map((item) => <TimelineItemView item={item} key={item.id} showContent={showThinkingContent} />)}
             {isStreaming && round === rounds.at(-1) && !round.thinkingItems.length && !round.workingItems.length && !round.outputItems.length && !round.ending ? <StreamingThinkingItem /> : null}
             {round.workingItems.length || round.checkpoint ? (
               <WorkFlowGroup activeFlow={round.state === 'working' ? activeFlow : null} round={round}>
-                {round.workingItems.map((item) => <TimelineItemView item={item} key={item.id} />)}
+                {round.workingItems.map((item) => <TimelineItemView item={item} key={item.id} showContent={showThinkingContent} />)}
               </WorkFlowGroup>
             ) : null}
             {round.outputItems.map((item) => <TimelineMessageItem item={item} key={item.id} />)}

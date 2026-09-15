@@ -133,9 +133,9 @@ export function buildRemoteProjectVmBootstrapPlan(
       },
       {
         id: 'preflight-kvm',
-        description: 'Verify KVM is available for Project VM provisioning',
+        description: 'Verify hardware virtualization and passwordless sudo before KVM activation',
         requiresPrivilege: false,
-        command: { executable: 'ssh', args: [...common, 'bash', '-lc', 'test -r /dev/kvm && test -w /dev/kvm'] },
+        command: { executable: 'ssh', args: [...common, 'bash', '-lc', "command -v sudo >/dev/null && sudo -n true && grep -Eq '(^|[[:space:]])(vmx|svm)([[:space:]]|$)' /proc/cpuinfo"] },
       },
       {
         id: 'create-release-dir',

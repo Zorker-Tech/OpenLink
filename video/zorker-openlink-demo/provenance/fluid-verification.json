@@ -1,0 +1,72 @@
+{
+  "sourceModules": 25,
+  "durations": [
+    198,
+    514,
+    698,
+    400,
+    394,
+    268,
+    754,
+    382
+  ],
+  "overlaps": [
+    36,
+    32,
+    44,
+    36,
+    32,
+    24,
+    44
+  ],
+  "durationSeconds": 56,
+  "primaryFps": 60,
+  "width": 3840,
+  "height": 2160,
+  "tracks": [
+    {
+      "name": "intent",
+      "maxPositionStep": 0,
+      "maxScaleStep": 0.01570600000000022
+    },
+    {
+      "name": "refinement",
+      "maxPositionStep": 0,
+      "maxScaleStep": 0.0405669999999998
+    },
+    {
+      "name": "execution",
+      "maxPositionStep": 0.7551789999999983,
+      "maxScaleStep": 0.0006040000000000489
+    },
+    {
+      "name": "artifact",
+      "maxPositionStep": 0.6136664555970406,
+      "maxScaleStep": 0.001367000000000007
+    },
+    {
+      "name": "resolution",
+      "maxPositionStep": 0.2070084615397795,
+      "maxScaleStep": 0.00009600000000009601
+    },
+    {
+      "name": "inspector",
+      "maxPositionStep": 4.175311082964181,
+      "maxScaleStep": 0.014813000000000187
+    },
+    {
+      "name": "diff",
+      "maxPositionStep": 0,
+      "maxScaleStep": 0
+    },
+    {
+      "name": "versions",
+      "maxPositionStep": 0,
+      "maxScaleStep": 0
+    }
+  ],
+  "stableInputGeometry": true,
+  "scopedNativeGsap": true,
+  "singlePaletteTree": true,
+  "noFrozenSceneHandles": true
+}

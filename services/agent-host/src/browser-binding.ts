@@ -11,6 +11,12 @@ function isLoopback(hostname: string): boolean {
   return value === 'localhost' || value === '127.0.0.1' || value === '::1'
 }
 
+export function projectBrowserHostOrigin(projectRuntime: ProjectRuntimeDescriptor): string {
+  const url = new URL(projectRuntime.browserHostEndpoint)
+  if (isLoopback(url.hostname)) url.hostname = 'host.containers.internal'
+  return url.origin
+}
+
 /**
  * Convert Browser Host's events URL to the REST origin used by the Pi
  * extension. Project session containers reach the Project VM's published

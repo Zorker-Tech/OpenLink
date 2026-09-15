@@ -92,8 +92,14 @@ export class BrowserHostClient {
       state: payload.session,
       controlToken: payload.connection.controlToken,
       connection: {
-        eventsUrl: payload.connection.eventsUrl,
-        previewUrl: payload.connection.previewUrl,
+        // Browser Host runs inside a Project VM and reports URLs using its
+        // guest-local listen port. Agent Host reaches that service through a
+        // host-side forwarded endpoint, so project the trusted path/query onto
+        // the configured base URL before the public gateway connects to it.
+        eventsUrl: this.projectRuntimeUrl(payload.connection.eventsUrl, true),
+        previewUrl: payload.connection.previewUrl
+          ? this.projectRuntimeUrl(payload.connection.previewUrl, false)
+          : undefined,
         bridgeNonce: payload.connection.bridgeNonce,
       },
     }
@@ -134,5 +140,27 @@ export class BrowserHostClient {
       ...init,
       headers: { Authorization: `Bearer ${this.options.serviceToken}`, 'Content-Type': 'application/json', ...init.headers },
     })
+  }
+
+  private projectRuntimeUrl(rawUrl: string, websocket: boolean): string {
+    let source: URL
+    let base: URL
+    try {
+      source = new URL(rawUrl)
+      base = new URL(this.baseUrl)
+    } catch {
+      throw new AgentHostError('BROWSER_SESSION_FAILED', 'Browser Host returned an invalid connection URL')
+    }
+    if (websocket && source.protocol !== 'ws:' && source.protocol !== 'wss:') {
+      throw new AgentHostError('BROWSER_SESSION_FAILED', 'Browser Host returned an invalid events URL')
+    }
+    if (!websocket && source.protocol !== 'http:' && source.protocol !== 'https:') {
+      throw new AgentHostError('BROWSER_SESSION_FAILED', 'Browser Host returned an invalid preview URL')
+    }
+    source.protocol = websocket
+      ? (base.protocol === 'https:' ? 'wss:' : 'ws:')
+      : base.protocol
+    source.host = base.host
+    return source.toString()
   }
 }

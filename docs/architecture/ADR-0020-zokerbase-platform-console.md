@@ -161,6 +161,12 @@ Single-node production is the only implementation priority under this ADR.
 Multi-node and multi-cluster components are architectural extension points and
 must not enter the single-node installation or startup dependency graph.
 
+[ADR-0022](./ADR-0022-production-deployment-profiles-and-resource-governance.md)
+now defines the concrete single-node profiles and supersedes the diagram below
+where it shows one unconditional topology: Core omits Knowledge Service and
+Zero, while Project execution independently selects the VM or Container
+backend. This does not change the Platform Console boundaries in this ADR.
+
 The supported topology is:
 
 ```mermaid

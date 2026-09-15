@@ -53,6 +53,7 @@ test('Linux distinguishes inactive modules, permissions, nested virtualization a
   assert.equal((await detectVirtualization({ ...linuxFixture({ kvm: 'denied' }), projectRuntime: 'vm' })).code, 'KVM_PERMISSION_DENIED')
   assert.equal((await detectVirtualization({ ...linuxFixture({ kvm: 'missing', cpuinfo: 'flags : hypervisor\n' }), projectRuntime: 'vm' })).code, 'NESTED_VIRTUALIZATION_UNAVAILABLE')
   assert.equal((await detectVirtualization({ ...linuxFixture({ kvm: 'missing', cpuinfo: 'flags : fpu\n' }), projectRuntime: 'vm' })).code, 'CPU_VIRTUALIZATION_UNAVAILABLE')
+  assert.equal((await detectVirtualization({ ...linuxFixture({ kvm: 'missing', qemu: false, cpuinfo: 'flags : hypervisor\n' }), projectRuntime: 'vm' })).code, 'NESTED_VIRTUALIZATION_UNAVAILABLE')
 })
 
 test('Linux activation installs QEMU when requested, loads vendor modules and rechecks', async () => {

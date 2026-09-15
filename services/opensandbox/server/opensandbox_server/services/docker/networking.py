@@ -428,6 +428,9 @@ class DockerNetworkingMixin:
         base_sidecar_host_config_kwargs: dict[str, Any] = {
             "network_mode": BRIDGE_NETWORK_MODE,
             "cap_add": ["NET_ADMIN"],
+            # The sidecar must return with its Agent container after a Project
+            # VM reboot so provider traffic never races a missing egress path.
+            "restart_policy": {"Name": "unless-stopped"},
             "port_bindings": normalize_port_bindings(sidecar_port_bindings),
         }
         if runtime_volume_name:

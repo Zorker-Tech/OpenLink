@@ -46,7 +46,16 @@ async function ensureImages() {
   if (missing.length) throw new Error(`Local ZOKERBASE Zero images are missing: ${missing.join(', ')}. Build once with OPENLINK_ZERO_ALLOW_UPSTREAM_ACQUISITION=1 node scripts/build-zero-images.mjs, then runtime will use only local images.`)
 }
 async function compose(args, options = {}) {
-  return run(await docker(), ['compose', '--project-name', project, '--file', composeFile, ...args], { cwd: runtimeRoot, env: { OPENLINK_ZERO_PORT: String(zeroPort), OPENLINK_ZERO_HEALTH_PORT: String(healthPort), OPENLINK_ZERO_DATA_ROOT: runtimeRoot, OPENLINK_ZERO_IMAGE_VERSION: imageVersion }, ...options })
+  const dataRoot = process.env.OPENLINK_ZERO_GUEST_DATA_ROOT || runtimeRoot
+  return run(await docker(), ['compose', '--project-name', project, '--file', composeFile, ...args], { cwd: runtimeRoot, env: {
+    OPENLINK_ZERO_PORT: String(zeroPort),
+    OPENLINK_ZERO_HEALTH_PORT: String(healthPort),
+    OPENLINK_ZERO_DATA_ROOT: dataRoot,
+    OPENLINK_ZERO_ETCD_SOURCE: process.env.OPENLINK_ZERO_ETCD_SOURCE || `${dataRoot}/etcd`,
+    OPENLINK_ZERO_MINIO_SOURCE: process.env.OPENLINK_ZERO_MINIO_SOURCE || `${dataRoot}/minio`,
+    OPENLINK_ZERO_ENGINE_SOURCE: process.env.OPENLINK_ZERO_ENGINE_SOURCE || `${dataRoot}/zero`,
+    OPENLINK_ZERO_IMAGE_VERSION: imageVersion,
+  }, ...options })
 }
 async function waitHealthy(timeoutMs = 180_000) {
   const deadline = Date.now() + timeoutMs

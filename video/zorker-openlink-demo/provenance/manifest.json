@@ -1,0 +1,53 @@
+{
+  "repository": "OpenLink",
+  "baseCommit": "25214c809079b54cd8c61dae79fa14f080c90a8b",
+  "capturedAt": "2026-09-07",
+  "records": [
+    {
+      "path": "components/ai-elements/message.tsx",
+      "sha256": "e0d1ae36d67580f9a4aba558349e1a929777791d4fd02895598c1e070c22c70d"
+    },
+    {
+      "path": "components/ai-elements/task.tsx",
+      "sha256": "a61627f48d97dc4e1e28971eb5185cd745e03dd9f0ca7caae0f11ef20e450b6d"
+    },
+    {
+      "path": "components/ai-elements/artifact.tsx",
+      "sha256": "cac4fc71baabe8393bff40e4f8570a4009de0b880c0b5426b627160c14a1b75b"
+    },
+    {
+      "path": "components/chat-timeline.tsx",
+      "sha256": "9341437301c77fccfa9fce9517c761c56d95e3d391b7ab7201c42fab1afe211f"
+    },
+    {
+      "path": "app/globals.css",
+      "sha256": "2002e0c5ef8aa62e6f66f3af622060ad841058f10f1e6c707770b9c6ed1c5e1c"
+    },
+    {
+      "path": "public/openlink/logos/zorker-dark.svg",
+      "sha256": "f5463728389fa4c389c3c7b2de1c87624d06b50eb9ffde59a902472ad42aab16"
+    },
+    {
+      "path": "public/openlink/logos/zorker-light.svg",
+      "sha256": "244f15bafe481a4244478400e319b91bd80c21103082ecec41cf791cba4bad9c"
+    },
+    {
+      "path": "public/openlink/logos/zorker-logo-dark.svg",
+      "sha256": "2d0c9c4b08ffcfcc5f15cc8cf571fb51f3b1121a55c7ec77a93eedb1deb9239b"
+    },
+    {
+      "path": "public/openlink/logos/zorker-logo-light.svg",
+      "sha256": "b94c67b4de5ce9e55f20c99c1fc6e8548e89b5172235c704e8eac7ce32379e9b"
+    }
+  ],
+  "adaptations": [
+    "Selected pure exports copied without JSX/style changes.",
+    "EditableUserMessage and ChangeItem retain source JSX and class names; local state becomes frame props, callbacks inert, labels translated to English.",
+    "Legacy file filtering omitted because fixtures contain only safe paths.",
+    "Composer visible layout is a presentation-only port of workspace-prompt.tsx; no server actions or model menu.",
+    "Browser/code shell is a presentation-only adaptation of chat-workspace.tsx; preview is a fictional website fixture, not a live provider result.",
+    "Source CSS retained, CSS animations/transitions disabled by video override.",
+    "Source snapshots include existing user modifications; no app business logic changed."
+  ],
+  "rights": "User-supplied project and brand assets, for requested demo. No third-party media. Component dependency licenses remain applicable; public distribution rights not independently audited."
+}

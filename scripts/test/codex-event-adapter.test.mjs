@@ -6,6 +6,25 @@ import { CodexEventAdapter } from '../../lib/agent-runtime/codex-event-adapter.t
 const adapter = () => new CodexEventAdapter('TESTSESS01', () => '2026-01-01T00:00:00Z', 100)
 const kinds = (events) => events.map((event) => event.type)
 
+test('native usage keeps current context separate from cumulative usage', () => {
+  const events = adapter().adapt({ method: 'thread/tokenUsage/updated', params: { tokenUsage: {
+    total: { totalTokens: 90000, inputTokens: 80000, outputTokens: 10000, cachedInputTokens: 40000, reasoningOutputTokens: 2000 },
+    last: { totalTokens: 12000 }, modelContextWindow: 128000,
+  } } })
+  assert.equal(events[0].type, 'usage.updated')
+  assert.equal(events[0].totalTokens, 90000)
+  assert.equal(events[0].contextTokens, 12000)
+  assert.equal(events[0].contextWindow, 128000)
+  assert.deepEqual(adapter().adapt({ method: 'thread/tokenUsage/updated', params: {} }), [])
+})
+
+test('native user-input completion is persisted so reopened approval docks stay resolved', () => {
+  const events = adapter().adapt({ type: 'openlink_confirmation_resolved', id: 'input:7:0', confirmed: true, value: 'A' })
+  assert.equal(events[0].type, 'confirmation.resolved')
+  assert.equal(events[0].approved, true)
+  assert.equal(events[0].value, 'A')
+})
+
 test('thread/started maps to session.started with codex source and envelope', () => {
   const events = adapter().adapt({ method: 'thread/started', params: { threadId: 't1' } })
   assert.deepEqual(kinds(events), ['session.started'])
@@ -87,10 +106,19 @@ test('approval requests surface as confirmation.requested', () => {
 
 test('worker approval passthrough surfaces as confirmation.requested', () => {
   const events = adapter().adapt({
-    type: 'extension_ui_request', id: 'exec:42', method: 'confirm', title: '执行确认', message: '是否执行 pwd',
+    type: 'extension_ui_request', id: 'exec:42', requestKind: 'approval', method: 'confirm', title: '执行确认', message: '是否执行 pwd',
   })
   assert.deepEqual(kinds(events), ['confirmation.requested'])
   assert.equal(events[0].confirmationId, 'exec:42')
+  assert.equal(events[0].confirmationKind, 'approval')
+})
+
+test('worker questions remain distinct from approvals', () => {
+  const events = adapter().adapt({
+    type: 'extension_ui_request', id: 'input:7:0', requestKind: 'question', method: 'select', title: '方向', options: ['A', 'B'],
+  })
+  assert.equal(events[0].confirmationKind, 'question')
+  assert.equal(events[0].inputKind, 'select')
 })
 
 test('failed current turns emit an error and still terminate the session', () => {
@@ -116,6 +144,11 @@ test('worker passthrough frames map: git snapshot, file preview, extension error
   const failure = a.adapt({ type: 'extension_error', error: 'codex crashed' })
   assert.deepEqual(kinds(failure), ['error'])
   assert.equal(failure[0].message, 'codex crashed')
+  assert.equal(failure[0].recoverable, true)
+
+  const terminalFailure = a.adapt({ type: 'extension_error', error: 'codex exited', terminal: true })
+  assert.deepEqual(kinds(terminalFailure), ['error'])
+  assert.equal(terminalFailure[0].recoverable, false)
 })
 
 test('unrecognized notifications and malformed frames produce no events', () => {

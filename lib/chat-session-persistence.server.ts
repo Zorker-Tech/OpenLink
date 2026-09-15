@@ -172,6 +172,24 @@ export async function listPersistedChatEvents(
   return events
 }
 
+export async function forkPersistedChatEvents(
+  supabase: ServerSupabaseClient,
+  userId: string,
+  sourceSessionId: string,
+  targetSessionId: string,
+): Promise<void> {
+  const events = await listPersistedChatEvents(supabase, userId, sourceSessionId)
+  const pageSize = 1_000
+  for (let offset = 0; offset < events.length; offset += pageSize) {
+    await persistChatEvents(
+      supabase,
+      userId,
+      targetSessionId,
+      events.slice(offset, offset + pageSize).map((event) => ({ ...event, sessionId: targetSessionId })),
+    )
+  }
+}
+
 export async function loadPiSessionSnapshot(
   supabase: ServerSupabaseClient,
   userId: string,
@@ -214,6 +232,8 @@ export async function loadPiSessionSnapshot(
 }
 
 export interface SessionContextUsage {
+  contextTokens: number | null
+  contextWindow: number | null
   inputTokens: number
   outputTokens: number
   totalTokens: number
@@ -234,14 +254,31 @@ export async function loadSessionContextUsage(
   supabase: ServerSupabaseClient,
   userId: string,
   sessionId: string,
+  agent: 'pi' | 'codex' = 'pi',
 ): Promise<SessionContextUsage> {
   const usage: SessionContextUsage = {
+    contextTokens: null,
+    contextWindow: null,
     inputTokens: 0,
     outputTokens: 0,
     totalTokens: 0,
     reasoningTokens: 0,
     cachedInputTokens: 0,
     modelId: null,
+  }
+
+  if (agent === 'codex') {
+    const { data, error } = await supabase.schema('openlink').from('chat_session_events')
+      .select('payload').eq('session_id', sessionId).eq('user_id', userId)
+      .eq('event_type', 'usage.updated').order('sequence', { ascending: false }).limit(1).maybeSingle()
+    if (error) throw error
+    const event = (data as { payload?: OpenLinkAgentEvent } | null)?.payload
+    if (event?.type === 'usage.updated') {
+      for (const key of ['inputTokens', 'outputTokens', 'totalTokens', 'cachedInputTokens', 'reasoningTokens'] as const) usage[key] = toNonNegativeNumber(event[key])
+      usage.contextTokens = typeof event.contextTokens === 'number' ? toNonNegativeNumber(event.contextTokens) : null
+      usage.contextWindow = typeof event.contextWindow === 'number' && event.contextWindow > 0 ? event.contextWindow : null
+    }
+    return usage
   }
 
   const pageSize = 1_000
@@ -257,6 +294,9 @@ export async function loadSessionContextUsage(
     if (error) throw error
     for (const row of data ?? []) {
       const entry = asRecord((row as { entry: unknown }).entry)
+      // Compaction changes model-visible history. Wait for the next provider
+      // usage report rather than presenting pre-compaction occupancy as live.
+      if (entry?.type === 'compaction') usage.contextTokens = null
       const message = asRecord(entry?.['message'])
       if (!message || stringValue(message['role']) !== 'assistant') continue
       const model = stringValue(message['model'])
@@ -266,16 +306,22 @@ export async function loadSessionContextUsage(
       const input = toNonNegativeNumber(messageUsage['input'])
       const output = toNonNegativeNumber(messageUsage['output'])
       const cacheRead = toNonNegativeNumber(messageUsage['cacheRead'])
+      const cacheWrite = toNonNegativeNumber(messageUsage['cacheWrite'])
       const reasoning = toNonNegativeNumber(messageUsage['reasoning']) || toNonNegativeNumber(messageUsage['reasoningTokens'])
-      usage.inputTokens += input
+      usage.inputTokens += input + cacheRead + cacheWrite
       usage.outputTokens += output
       usage.cachedInputTokens += cacheRead
       usage.reasoningTokens += reasoning
+      // Pi input excludes cache tokens; reasoning is a subset of output.
+      const contextTokens = input + cacheRead + cacheWrite + output
+      // Aborted/error messages commonly carry an all-zero usage placeholder.
+      // It does not mean that an existing conversation has an empty context.
+      usage.contextTokens = contextTokens > 0 ? contextTokens : null
     }
     if ((data ?? []).length < pageSize) break
   }
 
-  usage.totalTokens = usage.inputTokens + usage.outputTokens + usage.reasoningTokens + usage.cachedInputTokens
+  usage.totalTokens = usage.inputTokens + usage.outputTokens
   return usage
 }
 

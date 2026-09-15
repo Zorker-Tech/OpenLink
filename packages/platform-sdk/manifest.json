@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "name": "@vtslx/platform-sdk",
+  "version": "0.2.0",
+	"file": "platform-sdk-0.2.0-a43aa75e.tgz",
+	"sha256": "a43aa75eb8166961d60b2f32789993210602914a29faeba7ae40d488ed03c079",
+  "status": "break-glass-fallback",
+  "registry": "http://192.168.3.5:8081/repository/npm-public/",
+  "sourcePackage": "AoAPI/dashboard/ui/hydite-www/packages/platform-sdk",
+  "provenance": "Packed from the reviewed working candidate; not a signed published release."
+}

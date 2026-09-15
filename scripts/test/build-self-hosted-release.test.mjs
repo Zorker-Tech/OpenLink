@@ -15,6 +15,9 @@ const requiredFiles = [
   'runtime/node/bin/node',
   'app/web/server.js',
   'services/agent-host/dist/src/main.js',
+  'services/agent-host/dist/src/project-container-main.js',
+  'services/agent-host/project-supabase-runtime.mjs',
+  'scripts/lib/project-supabase-bundle.mjs',
   'services/browser-host/dist/src/main.js',
   'services/knowledge-service/dist/src/main.js',
   'services/agent-host/dist/src/desktop-main.js',
@@ -32,9 +35,14 @@ const requiredFiles = [
   'browser/chromium/chrome',
   'project-vm/manifest.json',
   'project-vm/openlink-project-vm-base-arm64.raw',
+  'project-supabase/manifest.json',
+  'project-supabase/runtime.lock.json',
+  'project-supabase/runtime.spec.json',
+  'project-supabase/image-manifest.json',
+  'project-supabase/release-trust.json',
   'openlinkctl.mjs',
   'bin/openlinkctl',
-  'systemd/openlink.service', 'systemd/openlink-container-broker.service',
+  'systemd/openlink.service', 'systemd/openlink-container-broker.service', 'systemd/openlink-project-container-broker.service',
 ]
 const execFile = promisify(execFileCallback)
 

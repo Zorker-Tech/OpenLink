@@ -33,6 +33,7 @@ export interface DesktopNodeSdkSession {
   readonly pid: number
   prompt(message: string, signal?: AbortSignal): Promise<Response>
   resolveExtensionUi(response: AgentExtensionUiResponse): Promise<void>
+  setBrowser(browser?: BrowserAgentSession): Promise<void>
   cleanup(): Promise<void>
 }
 
@@ -147,16 +148,19 @@ export class DesktopSandboxRuntimeNodeBackend {
     const providerBaseUrl = runtimeConfiguration.baseUrl
     const providerHosts = providerNetworkTargets(providerId, providerBaseUrl)
     const model = `${runtimeConfiguration.providerId}/${runtimeConfiguration.modelId}`
+    const browserExtensionPath = this.config.browserExtensionPath || resolve(process.cwd(), '../agent-browser-extension/openlink-browser.ts')
     const browser = browserSession
-      ? browserAgentBinding(browserSession, this.config.browserExtensionPath || resolve(process.cwd(), '../agent-browser-extension/openlink-browser.ts'))
+      ? browserAgentBinding(browserSession, browserExtensionPath)
       : undefined
+    const browserCapabilityFile = resolve(layout.root, 'browser-capability.json')
+    await writeFile(browserCapabilityFile, `${JSON.stringify(browser ?? null)}\n`, { encoding: 'utf8', mode: 0o600 })
     const browserHost = browser ? browserHostNetworkTarget(browser.hostUrl) : undefined
     const effectivePolicy = {
       ...this.config.policy,
       // Browser actions are issued by the Pi extension through Browser Host.
       // Include its origin in the sandbox policy or desktop agents would have
       // browser UI but no network permission to use it.
-      allowedDomains: [...new Set([...providerHosts, ...(browserHost ? [browserHost] : []), ...this.config.policy.allowedDomains])],
+      allowedDomains: [...new Set([...providerHosts, ...(browserHost ? [browserHost] : ['127.0.0.1', 'localhost']), ...this.config.policy.allowedDomains])],
     }
     const compiledPolicy = compileSandboxPolicy(this.config.workspaceRoot, layout.root, effectivePolicy)
     const policy = {
@@ -200,12 +204,8 @@ export class DesktopSandboxRuntimeNodeBackend {
       // They are not part of the generic inherited environment and therefore
       // cannot expose Supabase/SSH credentials to the desktop worker.
       ...ambientProviderEnvironment(providerId),
-      ...(browser ? {
-        OPENLINK_BROWSER_HOST_URL: browser.hostUrl,
-        OPENLINK_BROWSER_SESSION_ID: browser.sessionId,
-        OPENLINK_BROWSER_CONTROL_TOKEN: browser.controlToken,
-        OPENLINK_BROWSER_EXTENSION_PATH: browser.extensionPath,
-      } : {}),
+      OPENLINK_BROWSER_EXTENSION_PATH: browserExtensionPath,
+      OPENLINK_BROWSER_CAPABILITY_FILE: browserCapabilityFile,
       ...(projectId && this.config.supabaseMcp ? {
         OPENLINK_SUPABASE_EXTENSION_PATH: this.config.supabaseMcp.extensionPath,
         OPENLINK_SUPABASE_MCP_URL: this.config.supabaseMcp.urlFor(projectId),
@@ -277,6 +277,16 @@ export class DesktopSandboxRuntimeNodeBackend {
             { retryable: true },
           )
         }
+      },
+      setBrowser: async (nextBrowserSession) => {
+        const capability = nextBrowserSession ? browserAgentBinding(nextBrowserSession, browserExtensionPath) : null
+        const result = await fetch(`${baseUrl}/v1/browser-capability`, {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ capability }),
+          signal: AbortSignal.timeout(5_000),
+        })
+        if (!result.ok) throw new AgentHostError('INVALID_SESSION', `Desktop Agent Worker could not update Browser capability (${result.status})`, { retryable: true })
       },
       cleanup: async () => {
         if (cleaned) return

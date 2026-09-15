@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import test from 'node:test'
 import { PodmanProjectRuntimeServiceDriver, ProjectRuntimeManager, type ProjectRuntimeServiceInput } from '../src/project-runtime.js'
@@ -41,6 +41,8 @@ test('recreates failed Project VM service containers instead of restarting stale
     if (podmanArgs?.[0] === 'inspect' && podmanArgs[1] === '--format' && podmanArgs[2] === '{{.State.Status}}') return { stdout: 'exited\n', stderr: '' }
     if (podmanArgs?.[0] === 'inspect' && podmanArgs[1] === '--format' && podmanArgs[2] === '{{.Image}}') return { stdout: 'old-image\n', stderr: '' }
     if (podmanArgs?.[0] === 'image' && podmanArgs[1] === 'inspect') return { stdout: 'new-image\n', stderr: '' }
+    if (podmanArgs?.[0] === 'ps' && podmanArgs.includes('label=opensandbox.io/id')) return { stdout: 'sessionmain\n', stderr: '' }
+    if (podmanArgs?.[0] === 'ps' && podmanArgs.includes('label=opensandbox.io/egress-sidecar-for')) return { stdout: 'sessionegress\n', stderr: '' }
     if (podmanArgs?.[0] === 'rm') stale.delete(podmanArgs.at(-1) ?? '')
     return { stdout: '', stderr: '' }
   }
@@ -90,6 +92,14 @@ test('recreates failed Project VM service containers instead of restarting stale
   assert.ok(recreated.includes('openlink-project-2c51ca263cd04cb4-opensandbox'))
   assert.ok(recreated.includes('openlink-project-2c51ca263cd04cb4-browser'))
   assert.ok(recreated.includes('openlink-project-2c51ca263cd04cb4-code-server'))
+  assert.equal(calls.some((call) => call.args.includes('rm') && call.args.includes('sessionmain')), false,
+    'replacing the durable OpenSandbox control plane must preserve live session workloads')
+  assert.ok(calls.some((call) => call.args.includes('update') && call.args.includes('unless-stopped') && call.args.includes('sessionmain')))
+  assert.ok(calls.some((call) => call.args.includes('update') && call.args.includes('unless-stopped') && call.args.includes('sessionegress')))
+  const restoredSessions = calls.filter((call) => call.args.includes('start') && (call.args.includes('sessionmain') || call.args.includes('sessionegress')))
+  assert.equal(restoredSessions.length, 2)
+  assert.ok(restoredSessions[0]?.args.includes('sessionegress'), 'the egress sidecar must start before the Agent container')
+  assert.ok(restoredSessions[1]?.args.includes('sessionmain'))
   const opensandboxRun = calls.find((call) => call.args.includes('run') && call.args.includes('openlink/opensandbox-server:dev'))
   assert.ok(opensandboxRun)
   assert.equal(opensandboxRun?.args[opensandboxRun.args.indexOf('--user') + 1], '0:0')
@@ -98,6 +108,124 @@ test('recreates failed Project VM service containers instead of restarting stale
   const configEnv = opensandboxRun?.args.find((arg) => arg.startsWith('OPENLINK_OPENSANDBOX_CONFIG_B64='))
   assert.ok(configEnv)
   assert.match(Buffer.from(configEnv!.slice('OPENLINK_OPENSANDBOX_CONFIG_B64='.length), 'base64').toString('utf8'), /userns_mode = "keep-id"/)
+})
+
+test('resumes definition-identical Project VM services after a VM restart without treating shutdown signals as corruption', async () => {
+  const calls: Array<{ command: string; args: string[] }> = []
+  const containers = new Map<string, { imageId: string; configHash: string }>()
+  let secondEnsure = false
+  const imageByContainer = new Map([
+    ['openlink-project-2c51ca263cd04cb4-opensandbox', 'openlink/opensandbox-server:dev'],
+    ['openlink-project-2c51ca263cd04cb4-browser', 'openlink/browser-host:dev'],
+    ['openlink-project-2c51ca263cd04cb4-code-server', 'openlink/code-server:dev'],
+  ])
+  const imageId = (image: string) => `sha256:${Buffer.from(image).toString('hex').slice(0, 32)}`
+  const runInMachine = async (_machine: string, command: string, args: string[] = []): Promise<ProjectVmCommandResult> => {
+    calls.push({ command, args })
+    const podmanArgs = command === 'podman' ? args : null
+    if (command === 'id' && args[0] === '-u') return { stdout: '1000\n', stderr: '' }
+    if (command === 'id' && args[0] === '-g') return { stdout: '1000\n', stderr: '' }
+    if (podmanArgs?.[0] === 'image' && podmanArgs[1] === 'exists') return { stdout: 'true\n', stderr: '' }
+    if (podmanArgs?.[0] === 'container' && podmanArgs[1] === 'inspect') {
+      if (containers.has(podmanArgs[2] ?? '')) return { stdout: '{}\n', stderr: '' }
+      throw new Error('container does not exist')
+    }
+    if (podmanArgs?.[0] === 'image' && podmanArgs[1] === 'inspect') return { stdout: `${imageId(podmanArgs.at(-1) ?? '')}\n`, stderr: '' }
+    if (podmanArgs?.[0] === 'inspect' && podmanArgs[1] === '--format') {
+      const name = podmanArgs.at(-1) ?? ''
+      const container = containers.get(name)
+      if (podmanArgs[2] === '{{json .State}}') return { stdout: `${JSON.stringify({ Status: secondEnsure ? 'exited' : 'running', ExitCode: 137, Error: '' })}\n`, stderr: '' }
+      if (podmanArgs[2] === '{{.Image}}') return { stdout: `${container?.imageId ?? ''}\n`, stderr: '' }
+      if (podmanArgs[2]?.includes('io.openlink.project-runtime-config')) return { stdout: `${container?.configHash ?? ''}\n`, stderr: '' }
+    }
+    if (podmanArgs?.[0] === 'run') {
+      const name = podmanArgs[podmanArgs.indexOf('--name') + 1] ?? ''
+      const label = podmanArgs[podmanArgs.indexOf('--label') + 1] ?? ''
+      const image = imageByContainer.get(name) ?? ''
+      containers.set(name, { imageId: imageId(image), configHash: label.split('=').at(-1) ?? '' })
+    }
+    return { stdout: '', stderr: '' }
+  }
+  const machineDriver: ProjectVmMachineDriver = {
+    ensureMachine: async () => undefined,
+    bootstrapToolchain: async () => undefined,
+    runInMachine,
+    forwardPort: async (_machine, remotePort) => ({ localPort: remotePort, close: async () => undefined }),
+    stopMachine: async () => undefined,
+    removeMachine: async () => undefined,
+  }
+  const input: ProjectRuntimeServiceInput = {
+    projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c',
+    machineName: 'olp-test',
+    workspacePath: '/home/core/openlink/projects/test/workspace',
+    sessionStorageRoot: '/home/core/openlink/projects/test/workspace/.openlink/sessions',
+    ports: { opensandbox: 51000, browserHost: 52000, codeServer: 53000, supabaseGateway: 54000, supabaseDatabase: 55000, supabasePooler: 56000 },
+    opensandboxApiKey: 'sandbox-key', browserApiToken: 'browser-token', browserTokenSecret: 'browser-secret',
+    browserAllowedOrigins: 'http://localhost:3000',
+    opensandboxImage: 'openlink/opensandbox-server:dev', browserHostImage: 'openlink/browser-host:dev',
+    execdImage: 'openlink/opensandbox-execd:dev', egressImage: 'openlink/opensandbox-egress:dev',
+    agentWorkerImage: 'openlink/agent-worker:dev', agentRpcWorkerImage: 'openlink/agent-rpc-worker:dev',
+    codeServerImage: 'openlink/code-server:dev',
+  }
+  const driver = new PodmanProjectRuntimeServiceDriver(machineDriver, { rootful: false })
+
+  await driver.ensureServices(input)
+  const created = calls.filter((call) => call.command === 'podman' && call.args[0] === 'run')
+  assert.equal(created.length, 3)
+  for (const call of created) {
+    assert.deepEqual(call.args.slice(call.args.indexOf('--restart'), call.args.indexOf('--restart') + 2), ['--restart', 'unless-stopped'])
+  }
+
+  calls.length = 0
+  secondEnsure = true
+  await driver.ensureServices(input)
+  const started = calls.filter((call) => call.command === 'podman' && call.args[0] === 'start').map((call) => call.args[1]).sort()
+  assert.deepEqual(started, [...imageByContainer.keys()].sort())
+  assert.equal(calls.some((call) => call.command === 'podman' && call.args[0] === 'rm'), false)
+  assert.equal(calls.some((call) => call.command === 'podman' && call.args[0] === 'run'), false)
+})
+
+test('transient health timeout preserves active worker endpoints and tunnels', async () => {
+  const stateRoot = await mkdtemp(join('/tmp', 'openlink-health-timeout-'))
+  let provisions = 0
+  let closedForwards = 0
+  const machineDriver: ProjectVmMachineDriver = {
+    ensureMachine: async () => undefined,
+    bootstrapToolchain: async () => undefined,
+    runInMachine: projectSupabaseRunInMachine,
+    forwardPort: async (_machine, remotePort) => ({ localPort: remotePort, close: async () => { closedForwards++ } }),
+    stopMachine: async () => undefined,
+    removeMachine: async () => undefined,
+  }
+  const runtime = new ProjectRuntimeManager({
+    stateRoot,
+    vmManager: new ProjectVmManager({ stateRoot, machineDriver, machinePrefix: 'olp', guestWorkspaceRoot: '/var/lib/openlink/test-projects' }),
+    machineDriver,
+    serviceDriver: { ensureServices: async () => { provisions++ }, stopServices: async () => {}, removeServices: async () => {} },
+    opensandboxImage: 'test/opensandbox', browserHostImage: 'test/browser', execdImage: 'test/execd',
+    egressImage: 'test/egress', agentWorkerImage: 'test/worker', hostPortAvailable: async () => true, healthCheckIntervalMs: 0,
+  })
+  const projectId = '2c51ca26-3cd0-4cb4-896d-2061de06098c'
+  const originalFetch = globalThis.fetch
+  try {
+    const first = await runtime.ensure(projectId, 'thin')
+    globalThis.fetch = async () => { throw new DOMException('probe timed out', 'TimeoutError') }
+    await assert.rejects(runtime.ensure(projectId), (error: unknown) =>
+      error instanceof Error && 'code' in error && error.code === 'PROJECT_BACKEND_UNAVAILABLE')
+    assert.equal(provisions, 1, 'a probe timeout must not reprovision a healthy VM')
+    assert.equal(closedForwards, 0, 'existing Worker handles still own these endpoints')
+    globalThis.fetch = async (url) => {
+      if (String(url).endsWith('/health')) return new Response('{}')
+      throw new DOMException('optional Browser is slow', 'TimeoutError')
+    }
+    assert.equal(await runtime.ensure(projectId, undefined, 'agent'), first, 'Agent must not wait for optional Browser or Studio health')
+    globalThis.fetch = async () => new Response('{}')
+    assert.equal(await runtime.ensure(projectId), first)
+  } finally {
+    globalThis.fetch = originalFetch
+    await runtime.close({ stopRuntimes: false })
+    await rm(stateRoot, { recursive: true, force: true })
+  }
 })
 
 test('allocates durable non-colliding Project VM service ports', async () => {
@@ -128,6 +256,8 @@ test('allocates durable non-colliding Project VM service ports', async () => {
     egressImage: 'openlink/opensandbox-egress:dev',
     agentWorkerImage: 'openlink/agent-worker:dev',
     projectPortBase: 51_000,
+    projectPortRangeSize: 10,
+    hostPortAvailable: async () => true,
   })
   const first = '2c51ca26-3cd0-4cb4-896d-2061de06098c'
   const second = '3ef1d54c-7a74-4a04-88b1-cfa94f61fafb'
@@ -141,6 +271,8 @@ test('allocates durable non-colliding Project VM service ports', async () => {
     assert.notEqual(allocations[0]?.ports.codeServer, allocations[1]?.ports.codeServer)
     assert.notEqual(allocations[0]?.ports.codeServer, allocations[1]?.ports.browserHost)
     assert.notEqual(allocations[1]?.ports.codeServer, allocations[0]?.ports.browserHost)
+    assert.deepEqual(allocations.map((allocation) => allocation.ports.opensandbox).sort(), [51_000, 51_001])
+    assert.deepEqual(allocations.map((allocation) => allocation.ports.codeServer).sort(), [53_000, 53_001])
     assert.match(await readFile(`${stateRoot}/projects/${first}/runtime.json`, 'utf8'), /"diskMode":"thin"/)
     assert.match(await readFile(`${stateRoot}/projects/${second}/runtime.json`, 'utf8'), /"diskMode":"thick"/)
     assert.match(await readFile(`${stateRoot}/projects/${first}/ports.json`, 'utf8'), new RegExp(first))
@@ -151,6 +283,103 @@ test('allocates durable non-colliding Project VM service ports', async () => {
     // cleanup request does not boot this VM again merely to find no session.
     assert.equal(await runtime.hasPersistedRuntime(first), false)
     await runtime.close()
+  } finally {
+    await rm(stateRoot, { recursive: true, force: true })
+  }
+})
+
+test('reassigns a persisted Project port bundle when a host port is occupied', async () => {
+  const stateRoot = await mkdtemp(join('/tmp', 'openlink-project-runtime-port-conflict-'))
+  const projectId = '2c51ca26-3cd0-4cb4-896d-2061de06098c'
+  const allocations: ProjectRuntimeServiceInput[] = []
+  const machineDriver: ProjectVmMachineDriver = {
+    ensureMachine: async () => undefined,
+    bootstrapToolchain: async () => undefined,
+    runInMachine: projectSupabaseRunInMachine,
+    stopMachine: async () => undefined,
+    removeMachine: async () => undefined,
+  }
+  try {
+    await mkdir(resolve(stateRoot, 'projects', projectId), { recursive: true })
+    await writeFile(resolve(stateRoot, 'projects', projectId, 'ports.json'), JSON.stringify({
+      projectId,
+      opensandbox: 51_000,
+      browserHost: 52_000,
+      codeServer: 53_000,
+      supabaseGateway: 54_000,
+      supabaseDatabase: 55_000,
+      supabasePooler: 56_000,
+      allocatedAt: '2026-08-31T00:00:00.000Z',
+    }))
+    const vmManager = new ProjectVmManager({ stateRoot, machineDriver, machinePrefix: 'olp', guestWorkspaceRoot: '/var/lib/openlink/test-projects' })
+    const runtime = new ProjectRuntimeManager({
+      stateRoot,
+      vmManager,
+      machineDriver,
+      serviceDriver: {
+        supportsEgress: true,
+        ensureServices: async (input) => { allocations.push(input) },
+        stopServices: async () => undefined,
+        removeServices: async () => undefined,
+      },
+      opensandboxImage: 'openlink/opensandbox-server:dev',
+      browserHostImage: 'openlink/browser-host:dev',
+      execdImage: 'openlink/opensandbox-execd:dev',
+      egressImage: 'openlink/opensandbox-egress:dev',
+      agentWorkerImage: 'openlink/agent-worker:dev',
+      projectPortBase: 51_000,
+      projectPortRangeSize: 3,
+      hostPortAvailable: async (port) => port !== 53_000,
+    })
+
+    await runtime.ensure(projectId, 'thin')
+
+    assert.equal(allocations.length, 1)
+    assert.deepEqual(allocations[0]?.ports, {
+      opensandbox: 51_001,
+      browserHost: 52_001,
+      codeServer: 53_001,
+      supabaseGateway: 54_001,
+      supabaseDatabase: 55_001,
+      supabasePooler: 56_001,
+    })
+    assert.match(await readFile(resolve(stateRoot, 'projects', projectId, 'ports.json'), 'utf8'), /"codeServer":53001/)
+    await runtime.close()
+  } finally {
+    await rm(stateRoot, { recursive: true, force: true })
+  }
+})
+
+test('fails clearly when the configured Project port range is exhausted', async () => {
+  const stateRoot = await mkdtemp(join('/tmp', 'openlink-project-runtime-port-exhausted-'))
+  const machineDriver: ProjectVmMachineDriver = {
+    ensureMachine: async () => undefined,
+    bootstrapToolchain: async () => undefined,
+    runInMachine: projectSupabaseRunInMachine,
+    stopMachine: async () => undefined,
+    removeMachine: async () => undefined,
+  }
+  try {
+    const vmManager = new ProjectVmManager({ stateRoot, machineDriver })
+    const runtime = new ProjectRuntimeManager({
+      stateRoot,
+      vmManager,
+      machineDriver,
+      serviceDriver: { ensureServices: async () => undefined, stopServices: async () => undefined, removeServices: async () => undefined },
+      opensandboxImage: 'openlink/opensandbox-server:dev',
+      browserHostImage: 'openlink/browser-host:dev',
+      execdImage: 'openlink/opensandbox-execd:dev',
+      egressImage: 'openlink/opensandbox-egress:dev',
+      agentWorkerImage: 'openlink/agent-worker:dev',
+      projectPortBase: 51_000,
+      projectPortRangeSize: 1,
+      hostPortAvailable: async () => false,
+    })
+
+    await assert.rejects(
+      () => runtime.ensure('2c51ca26-3cd0-4cb4-896d-2061de06098c', 'thin'),
+      /Project runtime port range is exhausted/,
+    )
   } finally {
     await rm(stateRoot, { recursive: true, force: true })
   }
@@ -310,7 +539,7 @@ test('initializes a Project workspace Git baseline exactly once before agent use
   try {
     await runtime.ensure(projectId, 'thin')
     await Promise.all([
-      runtime.ensureProjectGitRepository(projectId),
+      runtime.listGitVersions(projectId),
       runtime.ensureProjectGitRepository(projectId),
     ])
     const gitInitializers = calls.filter((call) => call.command === 'sh' && call.args.includes('openlink-project-git-init'))

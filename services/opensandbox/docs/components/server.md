@@ -168,6 +168,15 @@ For Kubernetes-backed sandboxes, pause/resume is implemented via `BatchSandbox.s
 
 ## Architecture
 
+### Docker host-port contention
+
+Bridge-mode Egress creation retries up to five freshly allocated port bundles
+when the container engine confirms a host-port collision. The failed sidecar
+is removed before retrying under the same sandbox identity. Other creation
+errors still fail immediately; configured port ranges and Egress isolation
+remain unchanged. A socket probe inside a container is only advisory, since
+the engine publishes ports in the VM host's network namespace.
+
 ### Component Responsibilities
 
 - **API Layer** (`opensandbox_server/api/`): HTTP request handling, validation, and response formatting

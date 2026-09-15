@@ -50,17 +50,20 @@ test('sealed installer performs signed archive install and protected configurati
   const targetArchitecture = process.platform === 'linux' && process.arch === 'x64' ? 'amd64' : process.arch
   const diskFormat = process.platform === 'darwin' ? 'raw' : 'qcow2'
   const required = [
-    'runtime/node/bin/node', 'app/web/server.js', 'services/agent-host/dist/src/main.js',
+    'runtime/node/bin/node', 'app/web/server.js', 'services/agent-host/dist/src/main.js', 'services/agent-host/dist/src/project-container-main.js',
+    'services/agent-host/project-supabase-runtime.mjs', 'scripts/lib/project-supabase-bundle.mjs',
     'services/browser-host/dist/src/main.js', 'services/knowledge-service/dist/src/main.js',
     'orchestration/backend/docker/docker-compose.yml', 'orchestration/backend/docker/.env.example',
     'orchestration/services/zero/docker-compose.standalone.yml', 'orchestration/docker-compose.production.yml',
     'orchestration/docker-compose.zero-production.yml', 'images/runtime/manifest.json', 'images/zokerbase/manifest.json',
     'images/zero/manifest.json', 'toolchain/bin/podman', 'edge/bin/caddy', 'edge/Caddyfile',
     'browser/manifest.json', 'browser/chromium/chrome', 'project-vm/manifest.json',
+    'project-supabase/manifest.json', 'project-supabase/runtime.lock.json', 'project-supabase/runtime.spec.json', 'project-supabase/image-manifest.json', 'project-supabase/release-trust.json',
     'services/agent-host/dist/src/desktop-main.js',
     `project-vm/openlink-project-vm-base-${targetArchitecture}.${diskFormat}`, 'openlinkctl.mjs', 'bin/openlinkctl',
     'systemd/openlink.service',
     'systemd/openlink-container-broker.service',
+    'systemd/openlink-project-container-broker.service',
   ]
   for (const relative of required) {
     const path = join(payload, ...relative.split('/'))

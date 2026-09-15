@@ -1,0 +1,56 @@
+{
+  "sourceRepository": "/Volumes/Net/OpenLink",
+  "sourceFiles": [
+    {
+      "path": "components/chat-workspace.tsx",
+      "sha256": "5bf5790f350d05c1945b110d9fdb6959ee3671217d60570625f1abf3cf3887c1",
+      "symbols": [
+        "ToolbarButton",
+        "ChatTopbar",
+        "PreviewCanvas"
+      ],
+      "method": "Native JSX and classes extracted; on-handlers/refs removed; explicit fixture state; no source edits."
+    },
+    {
+      "path": "components/browser/browser-workbench.tsx",
+      "sha256": "15d4a8a9b51c669d1ca039f7a93b546f7b61d85bcde9c8f76c6e67171a5e1e7c",
+      "symbols": [
+        "BrowserWorkbench"
+      ],
+      "method": "Ready-state section/div retained; live connection state excluded; content child supplied as deterministic project fixture."
+    },
+    {
+      "path": "components/browser/chromium-stream-surface.tsx",
+      "sha256": "2a435558ce2b10539e2ea6531bed45dfbcb226b170068883f42bca580ae7c51a",
+      "symbols": [
+        "selection overlay"
+      ],
+      "method": "Exact overlay JSX/classes extracted; bounds and source label passed as fixture props."
+    },
+    {
+      "path": "src/source-snapshot/components/chat-timeline.js",
+      "sha256": "7a63f6662e78343e25616b2b3c7065efc8b9c4ca15bbd4fefa0e74170e841269",
+      "symbols": [
+        "ChatTimeline",
+        "ChangeItem"
+      ],
+      "method": "Existing source-derived baseline copied to new module; workflow disclosure state becomes an explicit frame prop. Native JSX/classes unchanged."
+    }
+  ],
+  "outputs": [
+    {
+      "path": "src/reference-film/source/preview.js",
+      "sha256": "4431f1e45de5069efa41aabbc7cae25c4662974a15bc187837d72aabfa96eaa6"
+    },
+    {
+      "path": "src/reference-film/source/timeline.js",
+      "sha256": "fd44299fb106863d3af3045f4c294aa99622c03437bf4581e72316794a964b75"
+    }
+  ],
+  "limitations": [
+    "Actual NativePreviewSurface uses a nonce-bound iframe and live browser protocol. Film excludes those connections and supplies the illustrative Forma React content inside the extracted ready-state wrapper. This is not a live website capture.",
+    "Version hashes, inspector selection and generated files are deterministic fictional fixtures, not records of live product execution.",
+    "Native menu portal is replaced by inert presentation tags retaining source subtree and styles so it follows the film camera."
+  ],
+  "noBusinessLogicWrites": true
+}

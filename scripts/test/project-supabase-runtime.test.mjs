@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   compareRelease,
+  containerUsesImage,
   dependencyOrder,
   generateProjectSupabaseSecrets,
   interpolate,
@@ -42,6 +43,13 @@ test('rejects unreviewed Compose fields and dependency cycles', () => {
   assert.throws(() => validateRuntimeSpec({ schemaVersion: 1, compose: { services: { db: { image: 'supabase/postgres:v1', privileged: true } } } }), /unsupported field privileged/)
   assert.deepEqual(dependencyOrder({ db: {}, auth: { depends_on: { db: {} } }, api: { depends_on: { auth: {} } } }), ['db', 'auth', 'api'])
   assert.throws(() => dependencyOrder({ a: { depends_on: { b: {} } }, b: { depends_on: { a: {} } } }), /dependency cycle/)
+})
+
+test('matches resident Supabase containers by immutable image id instead of canonicalized image name', () => {
+  const id = 'a'.repeat(64)
+  assert.equal(containerUsesImage({ Image: id, ImageName: 'docker.io/supabase/postgres:17.6.1.136' }, `sha256:${id}`), true)
+  assert.equal(containerUsesImage({ Image: 'b'.repeat(64), ImageName: 'supabase/postgres:17.6.1.136' }, `sha256:${id}`), false)
+  assert.equal(containerUsesImage({ ImageName: 'docker.io/supabase/postgres:17.6.1.136' }, `sha256:${id}`), false)
 })
 
 test('builds fixed Podman argv with loopback publications and mapped durable paths', () => {

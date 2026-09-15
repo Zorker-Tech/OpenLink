@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
-import { inspectApplicationHealth, installReleaseArchive, installReleaseDirectory, nativeServiceStatus, readServiceLogs, serviceAction, waitForApplicationHealth } from '../../deploy/self-hosted/openlinkctl.mjs'
+import { deploymentStatus, inspectApplicationHealth, installReleaseArchive, installReleaseDirectory, nativeServiceStatus, readServiceLogs, serviceAction, waitForApplicationHealth } from '../../deploy/self-hosted/openlinkctl.mjs'
 import {
   createReleaseInventory,
   normalizeTarget,
@@ -146,6 +146,36 @@ test('Linux service operations are root-only, ordered, and report both units', a
   assert.equal(status.active, true)
   assert.equal(status.service.MainPID, '42')
   assert.equal(calls.filter(([, args]) => args[0] === 'show').length, 2)
+})
+
+test('Linux Container lifecycle reconciles and orders the isolated Project broker', async () => {
+  const calls = []
+  const runner = async (command, args) => {
+    calls.push([command, args])
+    if (args[0] === 'show') return { stdout: 'ActiveState=active\nSubState=running\nUnitFileState=enabled\nMainPID=42\n' }
+    return { stdout: '' }
+  }
+  const options = { platform: 'linux', getuid: () => 0, execFile: runner, projectRuntime: 'container', reconcileProjectBroker: true }
+  await serviceAction('start', '/var/lib/openlink', options)
+  assert.deepEqual(calls[0][1], ['enable', 'openlink-project-container-broker.service'])
+  assert.deepEqual(calls[1][1], ['start', 'openlink-container-broker.service', 'openlink-project-container-broker.service', 'openlink.service'])
+  calls.length = 0
+  await serviceAction('stop', '/var/lib/openlink', options)
+  assert.deepEqual(calls[0][1], ['stop', 'openlink.service', 'openlink-project-container-broker.service', 'openlink-container-broker.service'])
+  calls.length = 0
+  const status = await nativeServiceStatus({ platform: 'linux', execFile: runner, projectRuntime: 'container' })
+  assert.equal(status.active, true)
+  assert.equal(status.projectBroker.MainPID, '42')
+  assert.equal(calls.length, 3)
+})
+
+test('operator status exposes profile and backend without conflating Core with Container', () => {
+  assert.deepEqual(deploymentStatus({
+    OPENLINK_DEPLOYMENT_PROFILE: 'core', OPENLINK_DEPLOYMENT_PROFILE_REVISION: 'core/v1',
+    OPENLINK_PROJECT_RUNTIME: 'vm', OPENLINK_PROJECT_ISOLATION: 'vm',
+    OPENLINK_KNOWLEDGE_ENABLED: '0', OPENLINK_ZERO_ENABLED: '0',
+  }), { profile: 'core', profileRevision: 'core/v1', projectRuntime: 'vm', isolation: 'vm', knowledge: false, zero: false })
+  assert.equal(deploymentStatus({ OPENLINK_DEPLOYMENT_PROFILE: 'dense', OPENLINK_PROJECT_RUNTIME: 'container', OPENLINK_PROJECT_ISOLATION: 'container' }).profile, 'dense')
 })
 
 test('service logs use bounded fixed argv', async () => {
