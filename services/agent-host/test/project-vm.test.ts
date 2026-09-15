@@ -15,6 +15,48 @@ test('distinguishes never-booted AppleHV configs from machines already provision
   assert.equal(appleHvMachineHasBooted({ LastUp: '2026-08-10T05:54:02.476379+08:00' }), true)
 })
 
+test('reaps a surviving direct AppleHV helper before rebinding VM sockets', { skip: process.platform !== 'darwin' }, async () => {
+  const root = await mkdtemp(`${tmpdir()}/openlink-applehv-partial-`)
+  const socketRoot = `/tmp/olp-test-${process.pid}`
+  const machineName = 'openlink-project-partial'
+  const stateDirectory = resolve(root, 'state', machineName)
+  await mkdir(stateDirectory, { recursive: true })
+  await writeFile(resolve(stateDirectory, 'processes.json'), JSON.stringify({
+    machineName,
+    vfkitPid: 999_999_999,
+    gvproxyPid: process.pid,
+    createdAt: new Date().toISOString(),
+  }))
+  try {
+    const driver = new PodmanMachineDriver({
+      bootstrap: false,
+      directAppleHv: true,
+      machineProvider: 'applehv',
+      helperBinaryDirectory: root,
+      directStateRoot: resolve(root, 'state'),
+      directSocketRoot: socketRoot,
+      run: async () => ({ stdout: '', stderr: '' }),
+    })
+    let cleanupCalls = 0
+    const internals = driver as unknown as {
+      appleHvMachineConfig(name: string): Promise<unknown>
+      stopDirectAppleHv(name: string): Promise<void>
+      startDirectAppleHv(name: string): Promise<void>
+    }
+    internals.appleHvMachineConfig = async () => ({})
+    internals.stopDirectAppleHv = async (name) => {
+      cleanupCalls += 1
+      assert.equal(name, machineName)
+      throw new Error('cleanup reached before helper launch')
+    }
+    await assert.rejects(() => internals.startDirectAppleHv(machineName), /cleanup reached/)
+    assert.equal(cleanupCalls, 1)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+    await rm(socketRoot, { recursive: true, force: true })
+  }
+})
+
 test('prepares Hyper-V networking before starting a stopped machine', async () => {
   const events: string[] = []
   const driver = new PodmanMachineDriver({

@@ -12,7 +12,7 @@ import { basename, join, resolve } from 'node:path'
 import { createHash, randomBytes } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { configureBundledPodmanRuntime } from './lib/bundled-podman-runtime.mjs'
-import { run, runCapture } from './lib/podman-builder.mjs'
+import { removePodmanMachine, run, runCapture } from './lib/podman-builder.mjs'
 import { prependPath, resolveHostPlatform } from './lib/host-platform.mjs'
 import { assertProjectVmArtifactManifest, projectVmArtifactContract } from './lib/project-vm-artifact.mjs'
 import { readProjectSupabaseLock } from './lib/project-supabase-lock.mjs'
@@ -206,7 +206,7 @@ try {
     ], artifactOptions)
     builderWasCreated = true
   }
-  await run(podman, ['machine', 'start', machineName], artifactOptions).catch((error) => {
+  await run(podman, ['machine', 'start', machineName], { ...artifactOptions, input: 'n\n' }).catch((error) => {
     if (!/already running|currently starting/i.test(error instanceof Error ? error.message : String(error))) throw error
   })
   await waitForSsh()
@@ -367,7 +367,7 @@ try {
     await run(podman, ['machine', 'cp', `${machineName}:${guestCompressedDisk}`, compressedDiskPath], artifactOptions)
   }
   if (builderWasCreated) {
-    await run(podman, ['machine', 'rm', '--force', machineName], artifactOptions)
+    await removePodmanMachine(podman, machineName, artifactOptions)
     builderWasCreated = false
   }
   // macOS ships only BSD libarchive tar, which materialises GNU sparse holes
@@ -423,5 +423,5 @@ try {
   process.stdout.write(`${JSON.stringify({ disk: diskPath, fingerprint: manifest.fingerprint })}\n`)
 } finally {
   if (stagingRoot && !keepBuilderOnFailure) await rm(stagingRoot, { recursive: true, force: true }).catch(() => undefined)
-  if (builderWasCreated && !keepBuilderOnFailure) await run(podman, ['machine', 'rm', '--force', machineName], { env: { ...process.env, ...podmanEnv } }).catch(() => undefined)
+  if (builderWasCreated && !keepBuilderOnFailure) await removePodmanMachine(podman, machineName, { env: { ...process.env, ...podmanEnv } }).catch(() => undefined)
 }

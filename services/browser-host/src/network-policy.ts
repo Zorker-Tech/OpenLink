@@ -9,6 +9,11 @@ export interface BrowserNetworkPolicy {
   allowPrivateNetworks: boolean
 }
 
+type HostLookup = (
+  hostname: string,
+  options: { all: true; verbatim: true },
+) => Promise<Array<{ address: string; family: number }>>
+
 function matchDomain(hostname: string, pattern: string): boolean {
   const normalized = pattern.toLowerCase().replace(/\.$/, '')
   if (normalized.startsWith('*.')) {
@@ -34,6 +39,14 @@ function isPrivateIpv4(address: string): boolean {
     || (octets[0] === 203 && octets[1] === 0 && octets[2] === 113)
     || octets[0] === 0
     || octets[0] >= 224
+}
+
+function isSyntheticDnsIpv4(address: string): boolean {
+  const octets = address.split('.').map(Number)
+  return octets.length === 4
+    && octets.every((value) => Number.isInteger(value) && value >= 0 && value <= 255)
+    && octets[0] === 198
+    && (octets[1] === 18 || octets[1] === 19)
 }
 
 function isPrivateIpv6(address: string): boolean {
@@ -95,7 +108,11 @@ function parseIpv6(value: string): number[] | null {
 export class BrowserNetworkGuard {
   private readonly cache = new Map<string, { expiresAt: number; addresses: string[] }>()
 
-  constructor(private readonly policy: BrowserNetworkPolicy, private readonly now: () => number = Date.now) {}
+  constructor(
+    private readonly policy: BrowserNetworkPolicy,
+    private readonly now: () => number = Date.now,
+    private readonly lookupHost: HostLookup = lookup,
+  ) {}
 
   async assertUrl(raw: string): Promise<URL> {
     return (await this.resolveUrl(raw)).url
@@ -120,13 +137,20 @@ export class BrowserNetworkGuard {
     }
 
     const addresses = await this.resolve(hostname)
+    const hostnameIsIpLiteral = isIP(hostname) !== 0
     for (const address of addresses) {
       if (isLoopbackAddress(address)) {
         if (!this.policy.allowLoopback) throw new BrowserHostError('NETWORK_LOOPBACK_DENIED', `Loopback access is denied: ${hostname}`, 403)
         continue
       }
       const privateAddress = isIP(address) === 4 ? isPrivateIpv4(address) : isPrivateIpv6(address)
-      if (privateAddress && !this.policy.allowPrivateNetworks) {
+      // Clash/sing-box style fake-IP DNS intentionally maps public domain
+      // names into RFC 2544's 198.18.0.0/15 range and routes those addresses
+      // through the host proxy. That range is not a reachable RFC1918 target.
+      // Permit it only as a resolver result for an already policy-checked DNS
+      // name; an explicit 198.18.x.x URL remains denied.
+      const syntheticDnsAddress = !hostnameIsIpLiteral && isSyntheticDnsIpv4(address)
+      if (privateAddress && !syntheticDnsAddress && !this.policy.allowPrivateNetworks) {
         throw new BrowserHostError('NETWORK_PRIVATE_ADDRESS_DENIED', `Private network access is denied: ${hostname}`, 403)
       }
     }
@@ -139,7 +163,7 @@ export class BrowserNetworkGuard {
     if (cached && cached.expiresAt > this.now()) return cached.addresses
     let results: Array<{ address: string; family: number }>
     try {
-      results = await lookup(hostname, { all: true, verbatim: true })
+      results = await this.lookupHost(hostname, { all: true, verbatim: true })
     } catch (error) {
       throw new BrowserHostError('NETWORK_DNS_FAILED', `DNS lookup failed for ${hostname}: ${error instanceof Error ? error.message : String(error)}`, 502, true)
     }

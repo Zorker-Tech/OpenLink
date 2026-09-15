@@ -1,0 +1,112 @@
+'use client';
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { PromptInputTextarea } from "./ai-elements/prompt-input.js";
+import { promptTriggerAt, replacePromptTrigger } from "../lib/prompt-input-protocol.js";
+import { cn } from "../lib/utils.js";
+import { File, PackagePlus, Sparkles, TerminalSquare } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { forwardRef, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
+export const AgentPromptTextarea = forwardRef(function AgentPromptTextarea({ value, suggestions, onValueChange, onChange, onKeyDown, onSelect, onClick, className, commandPaletteLabel = 'Agent 原生指令', commandPaletteLoading = false, onTriggerChange, onContentSizeChange, wrapperClassName, onAction, onSuggestionSelect, lineStartCommandsOnly = false, ...props }, forwardedRef) {
+    const ref = useRef(null);
+    useImperativeHandle(forwardedRef, () => ref.current);
+    const dismissedAt = useRef(null);
+    const contentSizeCallbackRef = useRef(onContentSizeChange);
+    const [trigger, setTrigger] = useState(null);
+    const [activeIndex, setActiveIndex] = useState(0);
+    const [pickerHost, setPickerHost] = useState(null);
+    const visible = useMemo(() => {
+        if (!trigger)
+            return [];
+        const query = trigger.query.toLocaleLowerCase();
+        return suggestions
+            .filter((item) => item.kind === trigger.kind)
+            .filter((item) => !item.requiresEmptyComposer || !(value.slice(0, trigger.start) + value.slice(trigger.end)).trim())
+            .filter((item) => trigger.kind !== 'command' || item.command === trigger.command)
+            .filter((item) => !query || `${item.label} ${item.description ?? ''}`.toLocaleLowerCase().includes(query))
+            .slice(0, 80);
+    }, [suggestions, trigger, value]);
+    useLayoutEffect(() => {
+        setPickerHost(ref.current?.closest('[data-slot="input-group"]') ?? null);
+    }, []);
+    contentSizeCallbackRef.current = onContentSizeChange;
+    useLayoutEffect(() => {
+        if (!ref.current)
+            return;
+        // Controlled value updates do not emit input/change events. Report the
+        // intrinsic content height after every programmatic insertion so the
+        // composer can switch out of its one-line layout immediately.
+        contentSizeCallbackRef.current?.(ref.current.scrollHeight);
+    }, [value]);
+    useLayoutEffect(() => {
+        const textarea = ref.current;
+        if (!textarea)
+            return;
+        let previousWidth = textarea.getBoundingClientRect().width;
+        const observer = new ResizeObserver(() => {
+            const width = textarea.getBoundingClientRect().width;
+            if (width === previousWidth)
+                return;
+            previousWidth = width;
+            contentSizeCallbackRef.current?.(textarea.scrollHeight);
+        });
+        observer.observe(textarea);
+        return () => observer.disconnect();
+    }, []);
+    const refreshTrigger = (element, nextValue = element.value) => {
+        const cursor = element.selectionStart ?? nextValue.length;
+        const next = dismissedAt.current?.value === nextValue && dismissedAt.current.cursor === cursor ? null
+            : promptTriggerAt(nextValue, cursor, { lineStartOnly: lineStartCommandsOnly });
+        setTrigger(next);
+        onTriggerChange?.(next);
+        setActiveIndex(0);
+    };
+    const choose = (item) => {
+        if (!trigger || item.disabled)
+            return;
+        const effectiveTrigger = item.replaceCommand && trigger.command
+            ? { ...trigger, start: value.lastIndexOf('/', trigger.start) }
+            : trigger;
+        const selectedAsReference = onSuggestionSelect?.(item) === true;
+        const replacement = replacePromptTrigger(value, effectiveTrigger, item.action || selectedAsReference ? '' : item.insertText);
+        onValueChange(replacement.value);
+        const nextTrigger = item.drilldown ? promptTriggerAt(replacement.value, replacement.cursor, { lineStartOnly: lineStartCommandsOnly }) : null;
+        dismissedAt.current = nextTrigger ? null : { value: replacement.value, cursor: replacement.cursor };
+        setTrigger(nextTrigger);
+        onTriggerChange?.(nextTrigger);
+        requestAnimationFrame(() => {
+            ref.current?.focus();
+            ref.current?.setSelectionRange(replacement.cursor, replacement.cursor);
+            if (item.action)
+                onAction?.(item.action);
+        });
+    };
+    const picker = trigger && pickerHost ? createPortal(_jsxs("div", { "aria-label": trigger.kind === 'command' ? commandPaletteLabel : trigger.kind === 'skill' ? 'Codex skills' : 'Codex references', className: "absolute bottom-[calc(100%+8px)] left-[-1px] z-[100] max-h-[min(52vh,420px)] w-[calc(100%+2px)] overflow-hidden rounded-[20px] border border-[var(--app-border)] bg-[var(--app-elevated)] p-2 text-[var(--app-foreground)] shadow-[0_4px_80px_8px_var(--app-shadow)]", role: "listbox", children: [_jsxs("div", { className: "flex h-9 items-center gap-2 rounded-xl bg-[var(--app-active)] px-3 text-xs text-[var(--app-muted)]", children: [trigger.kind === 'command' ? _jsx(TerminalSquare, { className: "size-4" }) : trigger.kind === 'skill' ? _jsx(Sparkles, { className: "size-4" }) : _jsx(File, { className: "size-4" }), _jsx("span", { className: "truncate", children: trigger.kind === 'command' ? trigger.command ? `/${trigger.command}` : commandPaletteLabel : trigger.kind === 'skill' ? 'Skills' : '引用' }), _jsxs("span", { className: "ml-auto truncate font-mono text-[11px]", children: [trigger.kind === 'command' ? `/${trigger.command ? `${trigger.command} ` : ''}` : trigger.kind === 'skill' ? '$' : '@', trigger.query] })] }), _jsxs("div", { className: "mt-1 max-h-[min(42vh,330px)] overflow-y-auto overscroll-contain", children: [visible.length === 0 && _jsx("div", { className: "flex h-14 items-center justify-center px-3 text-xs text-[var(--app-muted)]", role: "status", children: commandPaletteLoading ? '正在加载…' : '没有匹配项' }), visible.map((item, index) => _jsxs("button", { "aria-selected": index === activeIndex, "aria-disabled": item.disabled, disabled: item.disabled, className: "flex min-h-11 w-full items-center gap-3 rounded-xl px-2 py-2 text-left text-sm hover:bg-[var(--app-hover)] aria-selected:bg-[var(--app-hover)] disabled:opacity-40", onMouseDown: (event) => event.preventDefault(), onClick: () => choose(item), role: "option", type: "button", children: [_jsx("span", { className: "flex size-6 shrink-0 items-center justify-center rounded-md bg-[var(--app-surface)] text-[var(--app-muted)] shadow-[0_4px_16px_rgba(0,0,0,0.05)]", children: item.kind === 'command' ? _jsx(TerminalSquare, { className: "size-4" }) : item.kind === 'skill' ? _jsx(Sparkles, { className: "size-4" }) : item.group === 'Plugins' || item.group === 'Plugin Prompts' ? _jsx(PackagePlus, { className: "size-4" }) : _jsx(File, { className: "size-4" }) }), _jsx("span", { className: "min-w-0 flex-1", children: _jsxs("span", { className: "flex items-baseline gap-2", children: [_jsx("span", { className: "shrink-0 font-medium", children: item.label }), item.description && _jsx("span", { className: "truncate text-xs text-[var(--app-muted)]", children: item.description })] }) }), item.group && _jsx("span", { className: "shrink-0 text-[10px] text-[var(--app-muted)]", children: item.group })] }, item.id))] }), _jsxs("div", { className: "flex h-8 items-center border-t border-[var(--app-border)] px-2 text-[11px] text-[var(--app-muted)]", children: [_jsx("span", { children: "\u2191\u2193 \u9009\u62E9" }), _jsx("span", { className: "ml-3", children: "Enter \u786E\u8BA4" }), _jsx("span", { className: "ml-auto", children: "Esc \u5173\u95ED" })] })] }), pickerHost) : null;
+    return _jsxs("div", { className: cn('relative flex min-w-0 flex-1 items-start text-left', wrapperClassName), children: [picker, _jsx(PromptInputTextarea, { ...props, className: `${className ?? ''} w-full text-left`, onBlur: (event) => { setTrigger(null); onTriggerChange?.(null); props.onBlur?.(event); }, onChange: (event) => { onValueChange(event.currentTarget.value); refreshTrigger(event.currentTarget); onChange?.(event); }, onClick: (event) => { dismissedAt.current = null; refreshTrigger(event.currentTarget); onClick?.(event); }, onKeyDown: (event) => {
+                    if (event.nativeEvent.isComposing || event.keyCode === 229)
+                        return;
+                    if (trigger && event.key === 'Escape') {
+                        dismissedAt.current = { value: event.currentTarget.value, cursor: event.currentTarget.selectionStart };
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setTrigger(null);
+                        onTriggerChange?.(null);
+                        return;
+                    }
+                    if (trigger && visible.length) {
+                        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                            event.preventDefault();
+                            setActiveIndex((current) => (current + (event.key === 'ArrowDown' ? 1 : -1) + visible.length) % visible.length);
+                        }
+                        else if (event.key === 'Tab' || (event.key === 'Enter' && !event.shiftKey)) {
+                            event.preventDefault();
+                            choose(visible[activeIndex] ?? visible[0]);
+                        }
+                        else if (event.key === 'Escape') {
+                            event.preventDefault();
+                            setTrigger(null);
+                            onTriggerChange?.(null);
+                        }
+                    }
+                    onKeyDown?.(event);
+                }, onSelect: (event) => { refreshTrigger(event.currentTarget); onSelect?.(event); }, ref: ref, value: value })] });
+});

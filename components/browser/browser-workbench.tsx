@@ -3,7 +3,7 @@
 import { ChromiumStreamSurface } from '@/components/browser/chromium-stream-surface'
 import { NativePreviewSurface } from '@/components/browser/native-preview-surface'
 import { ThinkingOrb } from '@/components/thinking/src'
-import { BrowserConnection, createBrowserSession, deleteBrowserSession, type BrowserConnectionStatus } from '@/lib/browser-runtime/client'
+import { BrowserConnection, BrowserSessionCreateError, createBrowserSession, deleteBrowserSession, type BrowserConnectionStatus } from '@/lib/browser-runtime/client'
 import type { BrowserActionResult, BrowserSessionState, ElementReference } from '@/packages/browser-protocol/src/index'
 import { MonitorUp, RotateCw } from 'lucide-react'
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
@@ -42,12 +42,15 @@ export interface BrowserWorkbenchHandle {
 
 interface BrowserWorkbenchProps {
   chatSessionId: string
+  /** Surface to launch when this workbench is mounted from a newly opened tab. */
+  initialSurface?: BrowserWorkbenchUiState['surface']
   onStateChange?: (state: BrowserWorkbenchUiState) => void
   viewportMode: 'mobile' | 'browser'
 }
 
-export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbenchProps>(function BrowserWorkbench({ chatSessionId, onStateChange, viewportMode }, ref) {
-  const [surface, setSurface] = useState<'native-preview' | 'chromium-stream'>('native-preview')
+export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbenchProps>(function BrowserWorkbench({ chatSessionId, initialSurface = 'native-preview', onStateChange, viewportMode }, ref) {
+  const initialSurfaceRef = useRef<BrowserWorkbenchUiState['surface']>(initialSurface)
+  const [surface, setSurface] = useState<BrowserWorkbenchUiState['surface']>(initialSurface)
   const [connection, setConnection] = useState<BrowserConnection | null>(null)
   const [sessionState, setSessionState] = useState<BrowserSessionState | null>(null)
   const [status, setStatus] = useState<BrowserConnectionStatus>('connecting')
@@ -117,6 +120,17 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
       next.connect()
     } catch (sessionError) {
       if (version !== requestVersion.current) return
+      // A Project preview is optional, but the session-scoped Browser agent
+      // capability is not. Fall back to the realtime Chromium surface when no
+      // project web server is listening so @Browser can still navigate and
+      // inspect external pages instead of disappearing from an active chat.
+      if (nextSurface === 'native-preview'
+        && sessionError instanceof BrowserSessionCreateError
+        && sessionError.code === 'PREVIEW_NOT_ATTACHED') {
+        setSurface('chromium-stream')
+        await openSession('chromium-stream', initialUrl || address || 'about:blank')
+        return
+      }
       setConnection(null)
       setSessionState(null)
       setStatus('failed')
@@ -130,7 +144,7 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
   }, [openSession])
 
   useEffect(() => {
-    void openSessionRef.current('native-preview')
+    void openSessionRef.current(initialSurfaceRef.current)
     return () => {
       requestVersion.current += 1
       const current = connectionRef.current

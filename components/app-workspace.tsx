@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { OpenLinkThemeProvider } from '@/components/ui/theme-scope'
+import { deleteChatSessionAction } from '@/app/chat/actions'
 import type { ActiveWorkspaceSummary, PersonalWorkspaceSummary } from '@/components/workspace-switcher'
 import type { OrganizationSummary } from '@/lib/organizations'
 import type { ProjectSummary } from '@/lib/projects'
@@ -20,7 +21,7 @@ import type { ConfiguredModelOption } from '@/lib/ai-provider-types'
 import type { ChatSessionSummary } from '@/lib/chat-session-types'
 import { MoreHorizontal, Pencil, Plus, Share2, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 interface AppWorkspaceProps {
   activeWorkspace: ActiveWorkspaceSummary
@@ -112,15 +113,17 @@ function SidebarItem({
   onClick?: () => void
 }) {
   return (
-    <div className={`group relative flex h-8 w-full items-center rounded-md text-sm tracking-[-0.1504px] transition-colors ${active ? 'bg-[var(--app-selected,var(--app-active))] text-[var(--app-foreground)]' : 'text-[var(--app-muted)] hover:bg-[var(--app-surface)] hover:text-[var(--app-foreground)]'}`}>
+    <div className={`group relative flex h-8 w-full items-center rounded-md text-sm tracking-[-0.1504px] transition-colors ${active ? 'bg-[var(--app-selected,var(--app-active))] text-[var(--app-foreground)]' : 'text-[var(--app-muted)] hover:bg-[var(--app-surface)] hover:text-[var(--app-foreground)]'}`} data-chat-row={chatMenu ? '' : undefined}>
       <button aria-current={active ? 'page' : undefined} className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md pl-2 pr-2 text-inherit" onClick={onClick} type="button">
         <span className="min-w-0 flex-1 truncate text-left">{label}</span>
         {chatRuntime
-          ? <ThinkingOrb aria-label={chatRuntime.state} className="shrink-0" size={20} speed={chatRuntime.speed} state={chatRuntime.state} />
+          ? <span className={`flex size-5 shrink-0 items-center justify-center transition-opacity duration-150 ease-out ${chatMenu ? 'group-hover:opacity-0 group-focus-within:opacity-0' : ''}`} data-chat-status-orb>
+              <ThinkingOrb aria-label={chatRuntime.state} className="shrink-0" size={20} speed={chatRuntime.speed} state={chatRuntime.state} />
+            </span>
           : <img alt="" className="app-nav-icon size-4 shrink-0" src={icon} />}
       </button>
       {chatMenu ? (
-        <div className="pointer-events-none absolute right-1 top-1/2 flex -translate-y-1/2 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
+        <div className="pointer-events-none absolute right-1 top-1/2 flex -translate-y-1/2 opacity-0 transition-opacity duration-150 ease-out group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100" data-chat-actions>
           <SidebarChatMenu {...chatMenu} />
         </div>
       ) : null}
@@ -149,6 +152,7 @@ export function Sidebar({
   onNewChat,
   onRenameActiveChat,
   onDeleteActiveChat,
+  onDeleteChat,
   projects,
   secondaryPanel,
 }: {
@@ -172,6 +176,7 @@ export function Sidebar({
   onNewChat?: () => void
   onRenameActiveChat?: () => void
   onDeleteActiveChat?: () => void
+  onDeleteChat?: (chatId: string) => void
   projects?: ProjectSummary[]
   /** Replaces the primary workspace navigation inside this same sidebar. */
   secondaryPanel?: React.ReactNode
@@ -210,13 +215,21 @@ export function Sidebar({
     return [...groups.values()]
   }, [chatSessions])
 
-  const activeChatMenu = activeChatLabel
-    ? {
-        onRename: onRenameActiveChat,
-        onShare: () => { void navigator.clipboard.writeText(window.location.href) },
-        onDelete: onDeleteActiveChat,
-      }
-    : undefined
+  const chatMenuFor = (chat: ChatSessionSummary, active: boolean): SidebarChatMenuProps | undefined => {
+    if (!active && !onDeleteChat) return undefined
+    return {
+      onRename: active ? onRenameActiveChat : undefined,
+      onShare: () => {
+        const path = `/${chat.userId}/chat/${chat.id}`
+        void navigator.clipboard.writeText(`${window.location.origin}${path}`)
+      },
+      onDelete: onDeleteChat
+        ? () => onDeleteChat(chat.id)
+        : active
+          ? onDeleteActiveChat
+          : undefined,
+    }
+  }
 
   return (
     <>
@@ -282,7 +295,7 @@ export function Sidebar({
                         <div className="flex min-w-0 flex-col gap-1.5 overflow-hidden pl-4">
                           {group.chats.map((chat) => {
                             const active = activeChatId === chat.id
-                            return <SidebarItem active={active} chatMenu={active ? activeChatMenu : undefined} chatRuntime={active ? activeChatRuntime ?? IDLE_CHAT_RUNTIME : IDLE_CHAT_RUNTIME} icon="/openlink/app/chat.svg" key={chat.id} label={active && activeChatLabel ? activeChatLabel : chat.title} onClick={() => router.push(`/${chat.userId}/chat/${chat.id}`)} />
+                            return <SidebarItem active={active} chatMenu={chatMenuFor(chat, active)} chatRuntime={active ? activeChatRuntime ?? IDLE_CHAT_RUNTIME : IDLE_CHAT_RUNTIME} icon="/openlink/app/chat.svg" key={chat.id} label={active && activeChatLabel ? activeChatLabel : chat.title} onClick={() => router.push(`/${chat.userId}/chat/${chat.id}`)} />
                           })}
                         </div>
                       </div>
@@ -346,6 +359,16 @@ export function AppWorkspace({
   const [systemLight, setSystemLight] = useState(false)
   const [composerVersion, setComposerVersion] = useState(0)
 
+  const deleteChat = useCallback(async (chatId: string) => {
+    if (!window.confirm('确定要删除这个会话吗？删除后不可恢复。')) return
+    const result = await deleteChatSessionAction(chatId)
+    if (!result.ok) {
+      console.error('OpenLink session delete failed:', result.error)
+      return
+    }
+    router.refresh()
+  }, [router])
+
   useEffect(() => {
     const runtimes = [defaultProject, ...projects]
     if (!runtimes.some((project) => project.status === 'waiting' || project.runtime_status !== 'ready')) return
@@ -393,6 +416,7 @@ export function AppWorkspace({
             router.replace(`/app/${activeWorkspace.slug}`)
             setComposerVersion((value) => value + 1)
           }}
+          onDeleteChat={(chatId) => { void deleteChat(chatId) }}
           organizations={organizations}
           personalWorkspace={personalWorkspace}
           projects={projects}

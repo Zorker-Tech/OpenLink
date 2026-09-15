@@ -61,6 +61,19 @@ test('container broker is root-isolated, Unix-only and accepts no customer comma
   assert.doesNotMatch(source, /(password|secret|token)=/i)
 })
 
+test('Project Container broker owns Docker while Agent Host receives only a Unix RPC socket', async () => {
+  const source = await readFile(new URL('deploy/self-hosted/systemd/openlink-project-container-broker.service', root), 'utf8')
+  assert.match(source, /^User=root$/m)
+  assert.match(source, /^Group=openlink-agent$/m)
+  assert.match(source, /^ExecStart=\/opt\/openlink\/current\/runtime\/node\/bin\/node \/opt\/openlink\/current\/services\/agent-host\/dist\/src\/project-container-main\.js$/m)
+  assert.match(source, /^NoNewPrivileges=true$/m)
+  assert.match(source, /^CapabilityBoundingSet=$/m)
+  assert.match(source, /^ReadWritePaths=\/var\/lib\/openlink \/run\/openlink-project-container-broker$/m)
+  const lifecycle = await readFile(new URL('deploy/self-hosted/runtime/native-service.mjs', root), 'utf8')
+  assert.match(lifecycle, /agent: \{ name: 'openlink-agent', groups: \['kvm', 'openlink-workspace'\] \}/)
+  assert.doesNotMatch(lifecycle, /agent: \{[^\n]*docker/)
+})
+
 test('launchd service runs only the active prebuilt release and embeds no credentials', async () => {
   const source = await readFile(new URL('deploy/self-hosted/launchd/io.zokerbase.openlink.plist', root), 'utf8')
   assert.match(source, /<string>\/Library\/Application Support\/OpenLink\/current\/bin\/openlinkctl<\/string>/)
@@ -110,16 +123,18 @@ test('Linux service installation fixes ownership, enables systemd and verifies a
   const backupKeyPath = join(temporary, 'config/backup.key')
   const unitPath = join(temporary, 'systemd/openlink.service')
   const brokerUnitPath = join(temporary, 'systemd/openlink-container-broker.service')
+  const projectBrokerUnitPath = join(temporary, 'systemd/openlink-project-container-broker.service')
   await mkdir(join(releaseRoot, 'systemd'), { recursive: true })
   await mkdir(join(configPath, '..'), { recursive: true })
   await writeFile(join(releaseRoot, 'systemd/openlink.service'), await readFile(new URL('deploy/self-hosted/systemd/openlink.service', root)))
   await writeFile(join(releaseRoot, 'systemd/openlink-container-broker.service'), await readFile(new URL('deploy/self-hosted/systemd/openlink-container-broker.service', root)))
+  await writeFile(join(releaseRoot, 'systemd/openlink-project-container-broker.service'), await readFile(new URL('deploy/self-hosted/systemd/openlink-project-container-broker.service', root)))
   for (const path of [configPath, secretsPath, backupKeyPath]) await writeFile(path, 'fixture\n', { mode: 0o600 })
   const calls = []
   const result = await installNativeService({
     platform: 'linux', releaseRoot, installRoot: join(temporary, 'install'), configPath, secretsPath, backupKeyPath,
     stateRoot: join(temporary, 'state'), logRoot: join(temporary, 'logs'), backupRoot: join(temporary, 'backups'),
-    unitPath, brokerUnitPath, allowCustomPaths: true, allowUnprivilegedTest: true, identity: { uid: process.getuid(), gid: process.getgid() },
+    unitPath, brokerUnitPath, projectBrokerUnitPath, allowCustomPaths: true, allowUnprivilegedTest: true, identity: { uid: process.getuid(), gid: process.getgid() },
     rootUid: process.getuid(), rootGid: process.getgid(),
     execFile: async (command, args) => {
       calls.push([command, ...args])
@@ -139,6 +154,7 @@ test('Linux service installation fixes ownership, enables systemd and verifies a
   assert.equal((await lstat(backupKeyPath)).mode & 0o777, 0o600)
   assert.equal((await lstat(join(temporary, 'state'))).mode & 0o777, 0o711)
   assert.equal((await lstat(brokerUnitPath)).mode & 0o777, 0o644)
+  assert.equal((await lstat(projectBrokerUnitPath)).mode & 0o777, 0o644)
 })
 
 test('Linux identity setup creates per-process accounts and replaces legacy supplementary groups', async () => {
@@ -158,11 +174,13 @@ test('Linux service installation restores previous units and service state after
   const backupKeyPath = join(temporary, 'config/backup.key')
   const unitPath = join(temporary, 'systemd/openlink.service')
   const brokerUnitPath = join(temporary, 'systemd/openlink-container-broker.service')
+  const projectBrokerUnitPath = join(temporary, 'systemd/openlink-project-container-broker.service')
   await mkdir(join(releaseRoot, 'systemd'), { recursive: true })
   await mkdir(join(configPath, '..'), { recursive: true })
   await mkdir(join(unitPath, '..'), { recursive: true })
   await writeFile(join(releaseRoot, 'systemd/openlink.service'), await readFile(new URL('deploy/self-hosted/systemd/openlink.service', root)))
   await writeFile(join(releaseRoot, 'systemd/openlink-container-broker.service'), await readFile(new URL('deploy/self-hosted/systemd/openlink-container-broker.service', root)))
+  await writeFile(join(releaseRoot, 'systemd/openlink-project-container-broker.service'), await readFile(new URL('deploy/self-hosted/systemd/openlink-project-container-broker.service', root)))
   for (const path of [configPath, secretsPath, backupKeyPath]) await writeFile(path, 'fixture\n', { mode: 0o600 })
   await writeFile(unitPath, 'previous main unit\n', { mode: 0o600 })
   await writeFile(brokerUnitPath, 'previous broker unit\n', { mode: 0o600 })
@@ -170,7 +188,7 @@ test('Linux service installation restores previous units and service state after
   await assert.rejects(installNativeService({
     platform: 'linux', releaseRoot, installRoot: join(temporary, 'install'), configPath, secretsPath, backupKeyPath,
     stateRoot: join(temporary, 'state'), logRoot: join(temporary, 'logs'), backupRoot: join(temporary, 'backups'),
-    unitPath, brokerUnitPath, allowCustomPaths: true, allowUnprivilegedTest: true, identity: { uid: process.getuid(), gid: process.getgid() },
+    unitPath, brokerUnitPath, projectBrokerUnitPath, allowCustomPaths: true, allowUnprivilegedTest: true, identity: { uid: process.getuid(), gid: process.getgid() },
     rootUid: process.getuid(), rootGid: process.getgid(),
     execFile: async (command, args) => {
       calls.push([command, ...args])

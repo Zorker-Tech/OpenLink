@@ -59,7 +59,8 @@ test('initialize and tools/list speak MCP JSON-RPC', async () => {
   })
   const tools = JSON.parse((await list.done).body).result.tools
   assert.ok(Array.isArray(tools) && tools.length >= 9, 'must advertise the management tools')
-  assert.ok(tools.some((tool: { name: string }) => tool.name === 'supabase_execute_sql'))
+  assert.equal(tools.find((tool: { name: string }) => tool.name === 'supabase_database_info')?.annotations?.readOnlyHint, true)
+  assert.equal(tools.find((tool: { name: string }) => tool.name === 'supabase_execute_sql')?.annotations?.readOnlyHint, false)
   assert.equal(calls.length, 0, 'tools/list must not execute management operations')
 })
 

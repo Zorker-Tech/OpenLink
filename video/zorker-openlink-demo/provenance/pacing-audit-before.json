@@ -1,0 +1,16 @@
+[
+  {
+    "file": "/Users/yikewang/Movies/OpenLink-Reference-20260912/revision-5-white-120fps/OpenLink-Promo-White-4K120.mp4",
+    "fps": 120,
+    "frames": 6720,
+    "timestampGaps": [],
+    "nonIncreasingTimestamps": []
+  },
+  {
+    "file": "/Users/yikewang/Movies/OpenLink-Reference-20260912/revision-5-white-120fps/OpenLink-Promo-White-4K60-Compatible.mp4",
+    "fps": 60,
+    "frames": 3360,
+    "timestampGaps": [],
+    "nonIncreasingTimestamps": []
+  }
+]

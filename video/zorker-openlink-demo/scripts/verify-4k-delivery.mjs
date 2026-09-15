@@ -1,0 +1,15 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import {execFileSync} from 'node:child_process';
+import assert from 'node:assert/strict';
+const output=process.env.FILM_OUTPUT||path.resolve('out/4k');
+const binaries=path.resolve('node_modules/@remotion/compositor-darwin-arm64'),env={...process.env,DYLD_LIBRARY_PATH:binaries};
+const file=path.join(output,'OpenLink-Promo-4K60.mp4');
+const result=JSON.parse(execFileSync(path.join(binaries,'ffprobe'),['-v','error','-count_frames','-show_entries','format=duration,size:stream=codec_name,width,height,r_frame_rate,duration,nb_frames,nb_read_frames,sample_rate,channels','-of','json',file],{env,encoding:'utf8'}));
+const video=result.streams.find(s=>s.codec_name==='h264'),audio=result.streams.find(s=>s.codec_name==='aac');
+assert.equal(video.width,3840);assert.equal(video.height,2160);assert.equal(video.r_frame_rate,'60/1');assert.equal(Number(video.nb_read_frames),3600);assert.equal(Number(video.duration),60);assert.equal(audio.channels,2);assert.equal(Number(audio.sample_rate),48000);
+for(const second of [7,11,13,15,26,32,35,38,46,50,52.6,54,59])execFileSync(path.join(binaries,'ffmpeg'),['-hide_banner','-loglevel','error','-y','-ss',String(second),'-i',file,'-frames:v','1',path.join(output,'qa',`encoded-${Math.round(second*10)}.png`)],{env});
+const sha256=crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+fs.writeFileSync(path.join(output,'qa/delivery-metadata.json'),JSON.stringify({...result,sha256,decodedFrames:3600,sourceAudit:'provenance/4k-verification.json',visualAudit:'qa/render-report.json',note:'Native 4K rasterization from DOM/SVG, not an upscale of a 1080p video.'},null,2));
+console.log(JSON.stringify({video,audio,sha256,bytes:Number(result.format.size)},null,2));

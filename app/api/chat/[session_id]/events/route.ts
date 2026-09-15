@@ -1,10 +1,14 @@
 import { PiEventAdapter } from '@/lib/agent-runtime/pi-event-adapter'
 import { CodexEventAdapter } from '@/lib/agent-runtime/codex-event-adapter'
-import type { OpenLinkAgentEvent } from '@/lib/agent-runtime/events'
+import type { AgentPromptAttachment, OpenLinkAgentEvent } from '@/lib/agent-runtime/events'
+import { isTerminalErrorEvent, missingTerminalEventMessage } from '@/lib/agent-runtime/stream-integrity'
+import { projectMessageRevisions } from '@/lib/agent-runtime/message-revisions'
+import { parsePromptAttachments } from '@/lib/agent-runtime/prompt-attachments'
 import { randomBytes } from 'node:crypto'
 import { resolveAgentProviderRuntimeConfiguration } from '@/lib/ai-provider-configurations.server'
 import {
   findFirstPersistedUserMessage,
+  listPersistedChatEvents,
   nextChatEventSequence,
   loadPiSessionSnapshot,
   parsePiSessionDelta,
@@ -12,6 +16,7 @@ import {
   persistPiSessionDelta,
 } from '@/lib/chat-session-persistence.server'
 import { getChatSession, isChatSessionId } from '@/lib/chat-sessions'
+import { resolvePromptFileAttachments, type ResolvedPromptAttachment } from '@/lib/chat-session-uploads.server'
 import { createClient } from '@/utils/supabase/server'
 
 export const runtime = 'nodejs'
@@ -52,28 +57,46 @@ export async function POST(
   const session = await getChatSession(supabase, user.id, sessionId)
   if (!session) return Response.json({ error: 'SESSION_NOT_FOUND' }, { status: 404 })
 
-  let body: { message?: unknown; startSequence?: unknown; model?: unknown; browserSessionId?: unknown; requestKind?: unknown }
+  let body: { message?: unknown; attachments?: unknown; startSequence?: unknown; model?: unknown; browserSessionId?: unknown; requestKind?: unknown; editMessageId?: unknown }
   try {
     body = await request.json() as {
       message?: unknown
+      attachments?: unknown
       startSequence?: unknown
       model?: unknown
       browserSessionId?: unknown
       requestKind?: unknown
+      editMessageId?: unknown
     }
   } catch {
     return Response.json({ error: 'INVALID_BODY' }, { status: 400 })
   }
 
   const message = typeof body.message === 'string' ? body.message.trim().slice(0, 10_000) : ''
-  if (!message) return Response.json({ error: 'MESSAGE_REQUIRED' }, { status: 400 })
+  const attachments = parsePromptAttachments(body.attachments)
+  if (!attachments) return Response.json({ error: 'INVALID_ATTACHMENTS' }, { status: 400 })
+  if (!message && !attachments.length) return Response.json({ error: 'MESSAGE_REQUIRED' }, { status: 400 })
+  let resolvedAttachments: ResolvedPromptAttachment[]
+  try {
+    resolvedAttachments = await resolvePromptFileAttachments(supabase, sessionId, user.id, attachments)
+  } catch (error) {
+    return Response.json({ error: error instanceof Error && error.message === 'UPLOAD_NOT_FOUND' ? 'UPLOAD_NOT_FOUND' : 'UPLOAD_RESOLVE_FAILED' }, { status: 400 })
+  }
+  const editMessageId = typeof body.editMessageId === 'string' && body.editMessageId.length <= 256 && body.editMessageId.length > 0 ? body.editMessageId : undefined
+  if (body.editMessageId !== undefined && !editMessageId) return Response.json({ error: 'INVALID_EDIT_MESSAGE' }, { status: 400 })
+  if (editMessageId && body.requestKind && body.requestKind !== 'message') return Response.json({ error: 'INVALID_EDIT_REQUEST' }, { status: 400 })
+  const agent = session.agent ?? 'codex'
+  // Prompt syntax is owned by the selected session agent. Pi expands its
+  // native slash commands in the Resource Loader; Codex receives its native
+  // skill/file syntax unchanged.
+  const agentMessage = message
   const requestKind = body.requestKind === undefined || body.requestKind === 'message'
     ? 'message'
     : body.requestKind === 'initial-prompt'
       ? 'initial-prompt'
       : null
   if (!requestKind) return Response.json({ error: 'INVALID_REQUEST_KIND' }, { status: 400 })
-  if (requestKind === 'initial-prompt' && message !== session.initial_prompt.trim().slice(0, 10_000)) {
+  if (requestKind === 'initial-prompt' && (attachments.length || message !== session.initial_prompt.trim().slice(0, 10_000))) {
     return Response.json({ error: 'INITIAL_PROMPT_MISMATCH' }, { status: 400 })
   }
   const browserSessionId = body.browserSessionId === undefined
@@ -177,19 +200,6 @@ export async function POST(
     return Response.json({ error: 'SESSION_UPDATE_FAILED' }, { status: 500 })
   }
 
-  // Codex persists its own rollout inside the VM ($CODEX_HOME/sessions), so it
-  // does not take a Pi-native snapshot from Postgres. Pi sessions restore from
-  // the durable pi-entries table.
-  let nativeSession
-  if ((session.agent ?? 'codex') !== 'codex') {
-    try {
-      nativeSession = await loadPiSessionSnapshot(supabase, user.id, sessionId)
-    } catch {
-      await releaseLease()
-      return Response.json({ error: 'PI_SESSION_READ_FAILED' }, { status: 500 })
-    }
-  }
-
   // Reserve the stream's sequence range only after body/model/session
   // validation succeeds. Invalid requests should not consume a million-event range or
   // create an event-counter row for a session that never reaches Agent Host.
@@ -199,6 +209,27 @@ export async function POST(
   } catch {
     await releaseLease()
     return Response.json({ error: 'SESSION_EVENTS_READ_FAILED' }, { status: 500 })
+  }
+
+  if (editMessageId) {
+    try {
+      const active = projectMessageRevisions(await listPersistedChatEvents(supabase, user.id, sessionId))
+      const target = active.find((event) => event.type === 'message.user' && event.messageId === editMessageId)
+      if (!target || target.type !== 'message.user') {
+        await releaseLease()
+        return Response.json({ error: 'EDIT_MESSAGE_NOT_FOUND', detail: '原消息已变更，请刷新后重试' }, { status: 409 })
+      }
+      const rewind = await fetch(`${host.baseUrl}/v1/agent/sessions/${encodeURIComponent(sessionId)}/control`, {
+        method: 'POST', headers: { Authorization: `Bearer ${host.apiToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'rewind', text: target.text, sessionId, userId: user.id, workspaceId: session.workspace_id, projectId: session.project_id }),
+        signal: AbortSignal.timeout(35_000), cache: 'no-store',
+      })
+      const result = await rewind.json().catch(() => null)
+      if (!rewind.ok || result?.result?.rewound !== true) throw new Error('REWIND_NOT_CONFIRMED')
+    } catch {
+      await releaseLease()
+      return Response.json({ error: 'EDIT_REWIND_FAILED', detail: 'Agent 未确认回到原消息之前，未作为新消息发送。修改内容已保留，请确认运行时就绪后重试' }, { status: 409 })
+    }
   }
 
   // The user message is part of the durable turn boundary, not something that
@@ -211,10 +242,12 @@ export async function POST(
     sequence: startSequence,
     sessionId,
     timestamp: new Date().toISOString(),
-    source: (session.agent ?? 'codex') === 'codex' ? 'codex' : 'pi',
+    source: agent === 'codex' ? 'codex' : 'pi',
     type: 'message.user',
-    messageId: `${sessionId}:user:${startSequence}`,
+    messageId: editMessageId ?? `${sessionId}:user:${startSequence}`,
+    ...(editMessageId ? { replacesMessageId: editMessageId } : {}),
     text: message,
+    ...(attachments.length ? { attachments } : {}),
   }
   try {
     await persistChatEvents(supabase, user.id, sessionId, [canonicalUserEvent])
@@ -222,14 +255,6 @@ export async function POST(
     await releaseLease()
     return Response.json({ error: 'SESSION_EVENTS_WRITE_FAILED' }, { status: 500 })
   }
-  const persistTerminalFailure = async (messageText: string) => {
-    const failure = new PiEventAdapter(sessionId, () => new Date().toISOString(), startSequence + 1)
-      .adapt({ type: 'extension_error', error: messageText })
-      .find((event): event is OpenLinkAgentEvent => event.type === 'error')
-    if (!failure) return
-    await persistChatEvents(supabase, user.id, sessionId, [failure])
-  }
-
   const upstreamAbortController = new AbortController()
   // Keep the BFF↔Agent Host stream alive briefly after the browser disconnects
   // so the worker can flush its Pi-native JSONL delta. Cancellation is sent to
@@ -277,68 +302,15 @@ export async function POST(
   }
   request.signal.addEventListener('abort', onRequestAbort, { once: true })
   if (request.signal.aborted) onRequestAbort()
-  let upstream: Response
-  try {
-    upstream = await fetch(`${host.baseUrl}/v1/agent/sessions/${encodeURIComponent(sessionId)}/events`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${host.apiToken}`,
-        'Content-Type': 'application/json',
-        'X-OpenLink-Drain-On-Close': '1',
-      },
-      body: JSON.stringify({
-        userId: user.id,
-        workspaceId: session.workspace_id,
-        projectId: session.project_id,
-        message,
-        runtimeConfiguration,
-        agent: session.agent ?? 'codex',
-        accessMode: session.access_mode,
-        ...(browserSessionId ? { browserSessionId } : {}),
-        ...(nativeSession ? { nativeSession } : {}),
-      }),
-      signal: upstreamSignal,
-      cache: 'no-store',
-    })
-  } catch {
-    request.signal.removeEventListener('abort', onRequestAbort)
-    if (drainTimer !== null) clearTimeout(drainTimer)
-    await persistTerminalFailure(request.signal.aborted
-      ? 'Agent request was canceled before the worker started'
-      : 'Agent Host was unavailable before the worker started').catch((error) => {
-      console.error('OpenLink failed to persist pre-stream Agent error', error)
-    })
-    await releaseLease()
-    return Response.json({ error: 'AGENT_HOST_UNAVAILABLE', retryable: true }, { status: 502 })
-  }
-  if (!upstream.ok || !upstream.body) {
-    // Agent Host diagnostics can contain provider responses or provisioning
-    // details that are not safe to reflect into the browser. Preserve only a
-    // bounded machine-readable code; operators can inspect the Agent Host
-    // logs with the request/session id.
-    const payload = await upstream.json().catch(() => null) as { error?: { code?: unknown; retryable?: unknown } } | null
-    const code = typeof payload?.error?.code === 'string' && /^[A-Z0-9_]{1,64}$/.test(payload.error.code)
-      ? payload.error.code
-      : 'AGENT_HOST_FAILED'
-    request.signal.removeEventListener('abort', onRequestAbort)
-    if (drainTimer !== null) clearTimeout(drainTimer)
-    await persistTerminalFailure('Agent Host failed before the worker stream started').catch((error) => {
-      console.error('OpenLink failed to persist Agent Host failure', error)
-    })
-    await releaseLease()
-    return Response.json({ error: 'AGENT_HOST_FAILED', code, retryable: payload?.error?.retryable === true }, { status: upstream.status || 502 })
-  }
-  upstreamReady = true
-  if (clientDisconnected) scheduleClientDrain()
-
+  let upstream: Response | undefined
   // Leave the first reserved sequence to the canonical user event above. The
   // adapter follows the session's agent kind: Codex workers speak app-server
   // JSON-RPC, Pi workers speak their native event stream.
-  const isCodexSession = (session.agent ?? 'codex') === 'codex'
-  const piAdapter = isCodexSession ? null : new PiEventAdapter(sessionId, () => new Date().toISOString(), startSequence + 1)
-  const adapter = isCodexSession
+  const isCodexSession = agent === 'codex'
+  const adapter: PiEventAdapter | CodexEventAdapter = isCodexSession
     ? new CodexEventAdapter(sessionId, () => new Date().toISOString(), startSequence + 1)
-    : piAdapter
+    : new PiEventAdapter(sessionId, () => new Date().toISOString(), startSequence + 1)
+  const piAdapter = adapter instanceof PiEventAdapter ? adapter : null
   let activeReader: ReadableStreamDefaultReader<Uint8Array> | null = null
   let leaseHeartbeat: ReturnType<typeof setInterval> | null = null
   let leaseRenewalFailure: Error | null = null
@@ -348,7 +320,7 @@ export async function POST(
     if (activeReader) {
       void activeReader.cancel().catch(() => undefined)
     } else {
-      void upstream.body?.cancel().catch(() => undefined)
+      void upstream?.body?.cancel().catch(() => undefined)
     }
   }
   const stopLeaseHeartbeat = () => {
@@ -389,8 +361,7 @@ export async function POST(
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       startLeaseHeartbeat()
-      const reader = upstream.body!.getReader()
-      activeReader = reader
+      let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
       const decoder = new TextDecoder()
       let buffer = ''
       // Keep persistence ordered, but never make the browser wait for a
@@ -406,12 +377,13 @@ export async function POST(
       // drained; otherwise a fast reopen can observe "completed" with no
       // durable Pi entries yet.
       let pendingCompletedEvents: OpenLinkAgentEvent[] = []
-      let errorEventSeen = false
+      let terminalErrorSeen = false
       const emitSyntheticError = (message: string) => {
-        if (errorEventSeen) return
-        const event = adapter.adapt({ type: 'extension_error', error: message })[0]
-        if (!event || event.type !== 'error') return
-        errorEventSeen = true
+        if (terminalErrorSeen) return
+        const adapted = adapter.adapt({ type: 'extension_error', error: message })[0]
+        if (!adapted || adapted.type !== 'error') return
+        const event: OpenLinkAgentEvent = { ...adapted, recoverable: false }
+        terminalErrorSeen = true
         queueChatEvents([event])
         if (!clientDisconnected) {
           try { controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`)) } catch {}
@@ -437,7 +409,58 @@ export async function POST(
       }
       try {
         if (request.signal.aborted && !clientDisconnected) throw new Error('REQUEST_ABORTED')
+        // Confirm durable receipt before any runtime provisioning starts.
         controller.enqueue(encoder.encode(`${JSON.stringify(canonicalUserEvent)}\n`))
+        // Sandbox readiness alone may take 180s, followed by native Worker
+        // initialization. Keep the outer budget larger than those inner
+        // bounds; explicit cancellation remains immediate at every stage.
+        const preparationTimeout = setTimeout(() => upstreamAbortController.abort(), 300_000)
+        preparationTimeout.unref?.()
+        try {
+          // Native history restoration belongs to execution, not receipt.
+          // Codex restores its VM rollout; only Pi needs the DB snapshot.
+          const nativeSession = agent === 'pi'
+            ? await loadPiSessionSnapshot(supabase, user.id, sessionId)
+            : undefined
+          upstreamSignal.throwIfAborted()
+          upstream = await fetch(`${host.baseUrl}/v1/agent/sessions/${encodeURIComponent(sessionId)}/events`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${host.apiToken}`,
+              'Content-Type': 'application/json',
+              'X-OpenLink-Drain-On-Close': '1',
+            },
+            body: JSON.stringify({
+              userId: user.id,
+              workspaceId: session.workspace_id,
+              projectId: session.project_id,
+              message: agentMessage,
+              ...(resolvedAttachments.length ? { attachments: resolvedAttachments } : {}),
+              runtimeConfiguration,
+              agent,
+              accessMode: session.access_mode,
+              ...(browserSessionId ? { browserSessionId } : {}),
+              ...(nativeSession ? { nativeSession } : {}),
+            }),
+            signal: upstreamSignal,
+            cache: 'no-store',
+          })
+        } finally {
+          clearTimeout(preparationTimeout)
+        }
+        if (!upstream.ok || !upstream.body) {
+          // Only forward known codes, never provider/Host diagnostic text,
+          // which can contain credentials or private filesystem paths.
+          const failure = await upstream.json().catch(() => null) as { error?: { code?: unknown } } | null
+          const code = failure?.error?.code
+          const safeCodes = ['SESSION_BUSY', 'PROJECT_BACKEND_UNAVAILABLE', 'PROVISIONING_FAILED', 'BROWSER_SESSION_FAILED', 'INVALID_SESSION', 'BACKEND_NOT_CONFIGURED', 'REQUEST_ABORTED', 'AUTH_DENIED', 'AGENT_TIMEOUT']
+          if (typeof code === 'string' && safeCodes.includes(code)) throw new Error(`AGENT_HOST_${code}`)
+          throw new Error('AGENT_HOST_FAILED')
+        }
+        upstreamReady = true
+        if (clientDisconnected) scheduleClientDrain()
+        reader = upstream.body.getReader()
+        activeReader = reader
         while (true) {
           const { done, value } = await reader.read()
           buffer += decoder.decode(value, { stream: !done })
@@ -453,7 +476,7 @@ export async function POST(
                 queuePersistence(() => persistPiSessionDelta(supabase, user.id, sessionId, piSessionDelta))
               } else {
                 const events = adapter.adapt(frame)
-                if (events.some((event) => event.type === 'error')) errorEventSeen = true
+                if (events.some(isTerminalErrorEvent)) terminalErrorSeen = true
                 const completedEvents = events.filter((event) => event.type === 'session.completed')
                 const liveEvents = events.filter((event) => event.type !== 'session.completed')
                 for (const event of liveEvents) controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`))
@@ -468,10 +491,12 @@ export async function POST(
           if (done) break
         }
         if (buffer.trim()) throw new Error('Agent RPC stream ended mid-frame')
-        if (!pendingCompletedEvents.length && !errorEventSeen && !isCodexSession) {
-          emitSyntheticError(clientDisconnected
-            ? 'Agent request was canceled before the worker reported a terminal state'
-            : 'Agent worker ended before reporting a terminal state')
+        // Every worker protocol must report a terminal state. A stale or
+        // incompatible runtime image can otherwise emit only frames that its
+        // selected adapter does not recognize; the HTTP stream then closes
+        // cleanly and the UI appears to erase the turn after "thinking".
+        if (!pendingCompletedEvents.length && !terminalErrorSeen) {
+          emitSyntheticError(missingTerminalEventMessage(clientDisconnected))
         }
         queueChatEvents(pendingCompletedEvents)
         flushChatEvents()
@@ -481,19 +506,35 @@ export async function POST(
         for (const event of pendingCompletedEvents) controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`))
         controller.close()
       } catch (error) {
-        if (!leaseRenewalFailure && !persistenceFailure && !errorEventSeen) {
-          emitSyntheticError(error instanceof Error && error.message === 'REQUEST_ABORTED'
+        const hostCode = error instanceof Error && error.message.startsWith('AGENT_HOST_')
+          ? error.message.slice('AGENT_HOST_'.length) : null
+        if (!upstreamReady) console.error('OpenLink Agent preparation failed', { sessionId, code: hostCode ?? (upstreamSignal.aborted ? 'PREPARATION_TIMEOUT' : 'TRANSPORT_FAILED') })
+        if (!leaseRenewalFailure && !persistenceFailure && !terminalErrorSeen) {
+          emitSyntheticError(clientDisconnected || (error instanceof Error && error.message === 'REQUEST_ABORTED')
             ? 'Agent request was canceled'
-            : 'Agent worker stream failed before reporting a terminal state')
+            : !upstreamReady
+              ? hostCode && hostCode !== 'FAILED'
+                ? `Agent runtime could not start (${hostCode}); your message has been saved`
+                : upstreamSignal.aborted
+                  ? 'Agent runtime preparation timed out; your message has been saved'
+                  : 'Agent runtime connection failed; your message has been saved'
+              : 'Agent worker stream failed before reporting a terminal state')
         }
         flushChatEvents()
         if (leaseRenewalFailure) {
           controller.error(leaseRenewalFailure)
-        } else if (persistenceFailure) {
-          console.error('OpenLink chat event persistence failed', persistenceFailure)
-          controller.error(new Error('CHAT_PERSISTENCE_FAILED'))
         } else {
-          controller.error(error)
+          // A transport/runtime failure has already been converted into the
+          // canonical terminal error above. Persist it before closing the
+          // NDJSON stream normally so Fetch readers receive that final frame
+          // instead of only observing a rejected body stream.
+          await persistenceQueue.catch(() => undefined)
+          if (persistenceFailure) {
+            console.error('OpenLink chat event persistence failed', persistenceFailure)
+            controller.error(new Error('CHAT_PERSISTENCE_FAILED'))
+          } else {
+            try { controller.close() } catch {}
+          }
         }
       } finally {
         stopLeaseHeartbeat()
@@ -511,7 +552,7 @@ export async function POST(
           console.error('OpenLink chat event persistence failed during cleanup', error)
         })
         await releaseLease()
-        reader.releaseLock()
+        reader?.releaseLock()
         activeReader = null
       }
     },

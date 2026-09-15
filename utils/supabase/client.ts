@@ -1,11 +1,19 @@
 import { createBrowserClient } from '@supabase/ssr'
 
-function runtimePublicConfig(name: string, fallback: string | undefined) {
+export function runtimePublicConfig(name: string, fallback: string | undefined) {
   if (typeof document !== 'undefined') {
-    const value = document.querySelector(`meta[name="${name}"]`)?.getAttribute('content')
-    if (value) return value
+    const element = document.querySelector(`meta[name="${name}"]`)
+    if (element) {
+      const value = element.getAttribute('content')?.trim()
+      if (!value) {
+        throw new Error(`OpenLink runtime configuration is missing ${name}`)
+      }
+      return value
+    }
   }
-  return fallback
+  const value = fallback?.trim()
+  if (!value) throw new Error(`OpenLink build configuration is missing ${name}`)
+  return value
 }
 
 export function createClient() {

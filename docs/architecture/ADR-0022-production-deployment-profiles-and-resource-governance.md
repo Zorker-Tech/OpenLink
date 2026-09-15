@@ -203,9 +203,11 @@ profile.
 
 No profile silently changes its runtime backend. If Linux VM preflight fails,
 an interactive CLI may offer to enable locally available KVM support, retain
-the same profile and select Container, select another profile, or exit. A
+the same profile and select Container, show the matching repair guide, or exit. A
 Container selection is an explicit isolation change but not a profile
-downgrade. Non-interactive startup fails unless its policy explicitly chooses
+downgrade. Core is not presented as a virtualization workaround because it
+would remove product features without solving the missing VM capability.
+Non-interactive startup fails unless its policy explicitly chooses
 and acknowledges Container. Moving from Container to VM requires the VM
 backend and all existing Project data to pass migration verification.
 

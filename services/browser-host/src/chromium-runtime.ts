@@ -1,5 +1,6 @@
 import { mkdir, readlink, rm } from 'node:fs/promises'
 import { join } from 'node:path'
+import { hostname } from 'node:os'
 import { createHash, randomBytes } from 'node:crypto'
 import {
   BROWSER_PROTOCOL_VERSION,
@@ -65,8 +66,8 @@ function asText(value: unknown): string | undefined {
   return undefined
 }
 
-function isProcessSingletonFailure(error: unknown): boolean {
-  return /ProcessSingleton|SingletonLock|profile directory.*in use/i.test(error instanceof Error ? error.message : String(error))
+export function isProcessSingletonFailure(error: unknown): boolean {
+  return /process[_ ]?singleton|SingletonLock|profile(?: directory)? appears to be in use/i.test(error instanceof Error ? error.message : String(error))
 }
 
 function processAlive(pid: number): boolean {
@@ -78,6 +79,14 @@ function processAlive(pid: number): boolean {
     // an active Chromium lock and must not be removed.
     return (error as NodeJS.ErrnoException).code === 'EPERM'
   }
+}
+
+export function chromiumSingletonOwner(target: string): { hostname: string; pid: number } | null {
+  const match = /^(.+)-(\d+)$/.exec(target)
+  if (!match) return null
+  const pid = Number(match[2])
+  if (!match[1] || !Number.isSafeInteger(pid) || pid <= 1) return null
+  return { hostname: match[1], pid }
 }
 
 export class ChromiumRuntime implements BrowserRuntimeSession {
@@ -173,11 +182,15 @@ export class ChromiumRuntime implements BrowserRuntimeSession {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
       return false
     }
-    // Chromium creates a symlink named like "<hostname>-<pid>". Its exact
-    // hostname portion is intentionally ignored; only a numeric terminal PID
-    // is safe to inspect. Unknown lock formats are treated as active.
-    const pid = Number(/(?:^|[-/])(\d+)$/.exec(target)?.[1])
-    if (!Number.isSafeInteger(pid) || pid <= 1 || processAlive(pid)) return false
+    // Chromium creates a symlink named "<hostname>-<pid>". A Project Browser
+    // service container gets a new hostname when it is reconciled after a
+    // restart, while the durable profile survives. In that case the PID is
+    // from a different PID namespace and may coincidentally be alive in this
+    // new container; treating it as local strands the profile forever. Only
+    // consult kill(0) when the recorded hostname is this exact runtime.
+    // Unknown lock formats remain fail-closed.
+    const owner = chromiumSingletonOwner(target)
+    if (!owner || (owner.hostname === hostname() && processAlive(owner.pid))) return false
     await Promise.all([
       rm(lock, { force: true }),
       rm(join(this.profilePath, 'SingletonCookie'), { force: true }),

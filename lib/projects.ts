@@ -10,6 +10,9 @@ export type ProjectKind = 'code' | 'research'
 export type ProjectSourceType = 'blank' | 'github'
 export type ProjectStatus = 'waiting' | 'active' | 'archived'
 export type ProjectRuntimeStatus = 'provisioning' | 'ready' | 'stopped' | 'error' | 'deleting'
+export type ProjectRuntimeProvisioningPhase = 'queued' | 'claimed' | 'starting_vm' | 'configuring_runtime'
+  | 'starting_project_database' | 'starting_agent_services' | 'connecting_services'
+  | 'retry_wait' | 'ready' | 'stopped' | 'deleting' | 'failed'
 export type ProjectDiskMode = 'thin' | 'thick'
 export type ProjectExecutionMode = 'local' | 'ssh'
 
@@ -36,6 +39,12 @@ export interface ProjectSummary {
   status: ProjectStatus
   runtime_status: ProjectRuntimeStatus | null
   runtime_error: string | null
+  runtime_phase: ProjectRuntimeProvisioningPhase | null
+  runtime_phase_updated_at: string | null
+  runtime_provisioning_attempts: number
+  runtime_provisioning_next_attempt_at: string | null
+  runtime_provisioning_lease_expires_at: string | null
+  runtime_claimed: boolean
   is_default: boolean
   default_agent?: AgentKind
   disk_mode: ProjectDiskMode
@@ -67,16 +76,22 @@ type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>
 // disk-mode governance adds a composite FK in addition to the canonical
 // project_id relationship. Name the one-to-one FK explicitly so PostgREST
 // never has to guess which embedding path represents runtime projection.
-const PROJECT_SELECT = 'id, workspace_id, created_by, name, slug, kind, source_type, source_url, description, status, is_default, default_agent, disk_mode, execution_mode, ssh_host, ssh_port, ssh_user, ssh_remote_root, ssh_known_hosts, ssh_private_key_hint, created_at, updated_at, project_runtimes:project_runtimes!project_runtimes_project_id_fkey(status, last_error)'
+const PROJECT_SELECT = 'id, workspace_id, created_by, name, slug, kind, source_type, source_url, description, status, is_default, default_agent, disk_mode, execution_mode, ssh_host, ssh_port, ssh_user, ssh_remote_root, ssh_known_hosts, ssh_private_key_hint, created_at, updated_at, project_runtimes:project_runtimes!project_runtimes_project_id_fkey(status, last_error, provisioning_phase, provisioning_phase_updated_at, provisioning_attempts, provisioning_next_attempt_at, provisioning_lease_expires_at, provisioning_claimed_by)'
 
 function projectSummary(row: Record<string, unknown>): ProjectSummary {
   const relation = row.project_runtimes
-  const runtime = (Array.isArray(relation) ? relation[0] : relation) as { status?: unknown; last_error?: unknown } | null | undefined
+  const runtime = (Array.isArray(relation) ? relation[0] : relation) as Record<string, unknown> | null | undefined
   const { project_runtimes: _projectRuntimes, ...project } = row
   return {
     ...project,
     runtime_status: typeof runtime?.status === 'string' ? runtime.status as ProjectRuntimeStatus : null,
     runtime_error: typeof runtime?.last_error === 'string' ? runtime.last_error : null,
+    runtime_phase: typeof runtime?.provisioning_phase === 'string' ? runtime.provisioning_phase as ProjectRuntimeProvisioningPhase : null,
+    runtime_phase_updated_at: typeof runtime?.provisioning_phase_updated_at === 'string' ? runtime.provisioning_phase_updated_at : null,
+    runtime_provisioning_attempts: typeof runtime?.provisioning_attempts === 'number' ? runtime.provisioning_attempts : 0,
+    runtime_provisioning_next_attempt_at: typeof runtime?.provisioning_next_attempt_at === 'string' ? runtime.provisioning_next_attempt_at : null,
+    runtime_provisioning_lease_expires_at: typeof runtime?.provisioning_lease_expires_at === 'string' ? runtime.provisioning_lease_expires_at : null,
+    runtime_claimed: typeof runtime?.provisioning_claimed_by === 'string' && runtime.provisioning_claimed_by.length > 0,
   } as ProjectSummary
 }
 
@@ -164,7 +179,7 @@ function normalizeSshTarget(input: ProjectSshTarget | undefined): ProjectSshTarg
 export async function listProjects(
   supabase: ServerSupabaseClient,
   workspaceId: string,
-) {
+): Promise<ProjectSummary[]> {
   const { data, error } = await supabase
     .schema('openlink')
     .from('projects')
@@ -175,7 +190,7 @@ export async function listProjects(
     .order('updated_at', { ascending: false })
 
   if (error) throw error
-  return (data ?? []).map((row) => projectSummary(row as Record<string, unknown>))
+  return (data ?? []).map((row: unknown) => projectSummary(row as Record<string, unknown>))
 }
 
 export async function getDefaultProject(

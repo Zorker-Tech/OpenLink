@@ -32,6 +32,9 @@ export function PreferencesForm({ initial }: { initial: UserPreferences }) {
         <SettingRow description="Choose the language used throughout OpenLink." label="Language">
           <AppSelect ariaLabel="Language" className="w-36" onValueChange={(locale) => setValue((current) => ({ ...current, locale: locale as UserPreferences['locale'] }))} options={[{ label: '简体中文', value: 'zh-CN' }, { label: 'English', value: 'en-US' }]} value={value.locale} />
         </SettingRow>
+        <SettingRow description="Choose whether the chat renders thinking details or keeps the summary only." label="Thinking Accessibility">
+          <AppSelect ariaLabel="Thinking Visibility" className="w-36" onValueChange={(thinkingVisibility) => setValue((current) => ({ ...current, thinkingVisibility: thinkingVisibility as UserPreferences['thinkingVisibility'] }))} options={[{ label: 'Details', value: 'summary' }, { label: 'Summary only', value: 'hidden' }]} value={value.thinkingVisibility} />
+        </SettingRow>
         <SettingRow description="Choose which side of the screen the chat is on." label="Chat Position">
           <AppSelect ariaLabel="Chat Position" className="w-36" onValueChange={(chatPosition) => setValue((current) => ({ ...current, chatPosition: chatPosition as UserPreferences['chatPosition'] }))} options={[{ label: 'Left', value: 'left' }, { label: 'Right', value: 'right' }]} value={value.chatPosition} />
         </SettingRow>
@@ -49,10 +52,10 @@ export function PreferencesForm({ initial }: { initial: UserPreferences }) {
   )
 }
 
-function SettingRow({ children, description, label }: { children: React.ReactNode; description: string; label: string }) {
+export function SettingRow({ children, description, label }: { children: React.ReactNode; description: string; label: string }) {
   return (
     <div className="flex min-h-[74px] items-center gap-4 border-b border-[var(--app-border)] py-4">
-      <div className="min-w-0 flex-1"><div className="text-sm font-medium">{label}</div><div className="mt-0.5 text-sm text-[var(--app-muted)]">{description}</div></div>
+      <div className="min-w-0 flex-1"><div className="text-sm font-medium">{label}</div><div className="mt-0.5 break-words text-sm text-[var(--app-muted)]">{description}</div></div>
       {children}
     </div>
   )

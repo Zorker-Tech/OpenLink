@@ -1,0 +1,363 @@
+{
+  "music": false,
+  "cues": [
+    {
+      "type": "transition",
+      "at": 3.0999999999999996,
+      "duration": 0.8
+    },
+    {
+      "type": "transition",
+      "at": 8.6,
+      "duration": 0.8
+    },
+    {
+      "type": "transition",
+      "at": 10.6,
+      "duration": 0.8
+    },
+    {
+      "type": "transition",
+      "at": 21.7,
+      "duration": 0.8
+    },
+    {
+      "type": "transition",
+      "at": 27.8,
+      "duration": 0.8
+    },
+    {
+      "type": "transition",
+      "at": 33.7,
+      "duration": 0.8
+    },
+    {
+      "type": "transition",
+      "at": 37.7,
+      "duration": 0.8
+    },
+    {
+      "type": "transition",
+      "at": 41.7,
+      "duration": 0.8
+    },
+    {
+      "type": "transition",
+      "at": 45.7,
+      "duration": 0.8
+    },
+    {
+      "type": "transition",
+      "at": 49.7,
+      "duration": 0.8
+    },
+    {
+      "type": "click",
+      "at": 9.75,
+      "duration": 0.18
+    },
+    {
+      "type": "click",
+      "at": 33.2,
+      "duration": 0.18
+    },
+    {
+      "type": "click",
+      "at": 38.5833,
+      "duration": 0.18
+    },
+    {
+      "type": "click",
+      "at": 39.25,
+      "duration": 0.18
+    },
+    {
+      "type": "click",
+      "at": 41.6667,
+      "duration": 0.18
+    },
+    {
+      "type": "click",
+      "at": 48.2,
+      "duration": 0.18
+    },
+    {
+      "type": "typing",
+      "at": 3.84,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 3.955,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 4.07,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 4.1850000000000005,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 4.300000000000001,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 4.415000000000001,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 4.530000000000001,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 4.645000000000001,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 4.760000000000002,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 4.875000000000002,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 4.990000000000002,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 5.105000000000002,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 5.220000000000002,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 5.335000000000003,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 5.450000000000003,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 5.565000000000003,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 5.680000000000003,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 5.7950000000000035,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 5.910000000000004,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 6.025000000000004,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 6.140000000000004,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 6.255000000000004,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 6.3700000000000045,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 6.485000000000005,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 6.600000000000005,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 6.715000000000005,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 6.830000000000005,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 6.945000000000006,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 7.060000000000006,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 28.5,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 28.615000000000002,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 28.730000000000004,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 28.845000000000006,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 28.960000000000008,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 29.07500000000001,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 29.190000000000012,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 29.305000000000014,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 29.420000000000016,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 29.535000000000018,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 29.65000000000002,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 29.765000000000022,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 29.880000000000024,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 29.995000000000026,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 30.110000000000028,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 30.22500000000003,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 30.340000000000032,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 30.455000000000034,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 30.570000000000036,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 30.685000000000038,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 30.80000000000004,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 30.915000000000042,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 31.030000000000044,
+      "duration": 0.036
+    },
+    {
+      "type": "typing",
+      "at": 31.145000000000046,
+      "duration": 0.036
+    }
+  ],
+  "silenceRatio": 0.8077157738095239,
+  "duration": 56,
+  "sampleRate": 48000,
+  "channels": 2,
+  "peakDbFS": -20.753368184101006,
+  "rmsDbFS": -45.51429092584107,
+  "clippedSamples": 0,
+  "finalSamples": [
+    0,
+    0
+  ],
+  "rights": "Original procedural synthesis; no external audio sources.",
+  "listeningReview": false
+}

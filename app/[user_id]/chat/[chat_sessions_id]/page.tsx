@@ -82,6 +82,7 @@ export default async function ChatSessionPage({
       projectId={project.id}
       projectName={project.name}
       sessionId={session.id}
+      thinkingVisibility={preferences.thinkingVisibility}
       initialAccessMode={session.access_mode}
       composerResources={{
         agent: session.agent ?? 'codex',

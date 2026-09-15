@@ -88,6 +88,11 @@ export class CodexEventAdapter {
   adapt(raw: unknown): OpenLinkAgentEvent[] {
     const message = asRecord(raw)
     if (!message) return []
+    if (message.type === 'openlink_confirmation_resolved' && typeof message.id === 'string') return [this.make({
+      type: 'confirmation.resolved', confirmationId: message.id, approved: message.confirmed === true,
+      ...(typeof message.value === 'string' ? { value: message.value } : {}),
+    })]
+    if (message.type === 'openlink_user_steer') return [this.make({ type: 'message.user', messageId: stringValue(message.messageId), text: stringValue(message.text) })]
 
     // 1. Check for synthetic / extension events passed through from worker
     if (message.type === 'openlink_git_snapshot' && typeof message.signature === 'string') {
@@ -121,7 +126,7 @@ export class CodexEventAdapter {
         type: 'error',
         errorId: `${this.sessionId}:error:${Date.now()}`,
         message: message.error,
-        recoverable: true,
+        recoverable: message.terminal !== true,
       })]
     }
 
@@ -136,6 +141,7 @@ export class CodexEventAdapter {
         message: stringValue(message.message) || undefined,
         options: Array.isArray(message.options) ? message.options.filter((option): option is string => typeof option === 'string') : undefined,
         inputKind,
+        confirmationKind: message.requestKind === 'question' || inputKind !== 'confirm' ? 'question' : 'approval',
       })]
     }
 
@@ -144,6 +150,21 @@ export class CodexEventAdapter {
     const params = asRecord(message.params) ?? {}
 
     switch (method) {
+      case 'thread/tokenUsage/updated': {
+        const usage = asRecord(params.tokenUsage)
+        const total = asRecord(usage?.total)
+        const last = asRecord(usage?.last)
+        if (!total) return []
+        const count = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0
+        return [this.make({
+          type: 'usage.updated',
+          inputTokens: count(total.inputTokens), outputTokens: count(total.outputTokens),
+          totalTokens: count(total.totalTokens), cachedInputTokens: count(total.cachedInputTokens),
+          reasoningTokens: count(total.reasoningOutputTokens),
+          contextTokens: typeof last?.totalTokens === 'number' ? count(last.totalTokens) : null,
+          contextWindow: typeof usage?.modelContextWindow === 'number' && usage.modelContextWindow > 0 ? usage.modelContextWindow : null,
+        })]
+      }
       case 'thread/started':
         this.sessionStarted = true
         return [this.make({ type: 'session.started' })]
@@ -406,6 +427,7 @@ export class CodexEventAdapter {
           title: '执行确认',
           message: command ? `执行命令：${command}` : reason,
           inputKind: 'confirm',
+          confirmationKind: 'approval',
         })]
       }
 

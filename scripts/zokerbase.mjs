@@ -301,7 +301,11 @@ async function ensureZokerbaseImages() {
   // A first start is allowed to produce the local ZOKERBASE artifact once.
   // Subsequent starts only inspect local images and compose uses --pull never,
   // so no service execution path resolves any upstream registry image.
-  await run(process.execPath, ['scripts/build-zokerbase-images.mjs'], { cwd: root, inherit: true })
+  await run(process.execPath, ['scripts/build-zokerbase-images.mjs'], {
+    cwd: root,
+    inherit: true,
+    env: { OPENLINK_SKIP_IMAGE_ARCHIVES: process.env.OPENLINK_BUILD_ARTIFACTS === '1' ? '0' : '1' },
+  })
   for (const image of unresolved) {
     try {
       await run(await docker(), ['image', 'inspect', image])

@@ -1,6 +1,7 @@
-import { randomBytes, timingSafeEqual } from 'node:crypto'
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { createServer, type IncomingMessage, type Server } from 'node:http'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, readFile, writeFile, rename } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import { isIP } from 'node:net'
 import type { AgentExtensionUiResponse, AgentNativeSessionSnapshot, AgentProviderRuntimeConfiguration } from './contracts.js'
 import { AgentHostError } from './errors.js'
@@ -13,7 +14,8 @@ import { CodeServerGateway } from './code-server-gateway.js'
 import { approveSupabaseMcpConfirmation, handleSupabaseMcpRequest, listPendingSupabaseMcpConfirmations } from './supabase-mcp.js'
 
 export interface PromptRuntimeSession {
-  prompt(message: string, signal?: AbortSignal): Promise<Response>
+  control?(input: { action: string; text?: string }): Promise<unknown>
+  prompt(message: string, signal?: AbortSignal, attachments?: PromptAttachment[]): Promise<Response>
   /** Pause an idle Worker while retaining its sandbox state for fast resume. */
   pause?(): Promise<void>
   /** Resume a paused Worker before serving a prompt or lease warmup. */
@@ -23,8 +25,27 @@ export interface PromptRuntimeSession {
   /** Resolve a pending Pi extension UI request (confirm/select/input/editor). */
   resolveExtensionUi?(response: AgentExtensionUiResponse): Promise<void>
   /** Read display-safe capabilities from the already provisioned worker. */
-  resources?(): Promise<unknown>
+  resources?(request?: AgentResourceRequest): Promise<unknown>
+  /** Hot-swap the optional Browser capability without recreating the Agent. */
+  setBrowser?(browser?: BrowserAgentSession): Promise<void>
   cleanup(): Promise<void>
+}
+
+export type PromptAttachment = {
+  type: 'image'; mediaType: string; url: string; filename?: string
+} | {
+  type: 'text'; mediaType: 'text/plain'; text: string; filename?: string
+} | {
+  type: 'reference'; referenceType: 'file' | 'thread'; name: string; path: string
+} | {
+  type: 'file'; uploadId: string; batchId: string; mediaType: string; filename: string
+  relativePath?: string; sizeBytes: number; sha256: string; contentBase64: string
+}
+
+export interface AgentResourceRequest {
+  scope?: 'command' | 'mention' | 'skill' | 'title'
+  command?: string
+  query?: string
 }
 
 export interface PromptRuntimeAgentOptions {
@@ -34,6 +55,8 @@ export interface PromptRuntimeAgentOptions {
 
 export interface PromptRuntimeBackend {
   createSession(userId: string, workspaceId: string, sessionId: string, runtimeConfiguration: AgentProviderRuntimeConfiguration, nativeSession?: AgentNativeSessionSnapshot, projectId?: string, projectRuntime?: ProjectRuntimeDescriptor, browser?: BrowserAgentSession, agentOptions?: PromptRuntimeAgentOptions): Promise<PromptRuntimeSession>
+  /** Reattach a still-running durable workload after Agent Host restarts. */
+  recoverSession?(userId: string, workspaceId: string, sessionId: string, runtimeConfiguration: AgentProviderRuntimeConfiguration, nativeSession?: AgentNativeSessionSnapshot, projectId?: string, projectRuntime?: ProjectRuntimeDescriptor, browser?: BrowserAgentSession, agentOptions?: PromptRuntimeAgentOptions): Promise<PromptRuntimeSession | null>
   /** Remove a durable Project VM workload left by a previous Agent Host process. */
   cleanupSession?(userId: string, workspaceId: string, sessionId: string, projectId?: string, projectRuntime?: ProjectRuntimeDescriptor): Promise<void>
   close(): Promise<void>
@@ -56,6 +79,10 @@ export interface PromptHttpServerConfig {
   browserGatewayPublicUrl?: string
   browserGatewayAllowedOrigins?: string[]
   browserGatewayUpstreamOrigin?: string
+  /** Keep durable Agent workloads alive while the coordinating Host process restarts. */
+  preserveSessionsOnShutdown?: boolean
+  /** Invalidates the host-derived Codex plugin snapshot after installation. */
+  invalidateCodexPluginSnapshot?: () => void
 }
 
 interface PromptBody {
@@ -63,6 +90,7 @@ interface PromptBody {
   workspaceId: string
   projectId?: string
   message: string
+  attachments: PromptAttachment[]
   runtimeConfiguration: AgentProviderRuntimeConfiguration
   nativeSession?: AgentNativeSessionSnapshot
   browserSessionId?: string
@@ -70,6 +98,73 @@ interface PromptBody {
   agent?: 'pi' | 'codex'
   /** Session access mode; maps to codex sandbox/approval flags. */
   accessMode?: 'restricted' | 'ask' | 'open'
+}
+
+function parsePromptAttachments(value: unknown): PromptAttachment[] {
+  if (value === undefined) return []
+  if (!Array.isArray(value) || value.length > 24) throw new AgentHostError('INVALID_BODY', 'attachments are invalid')
+  let encodedImageBytes = 0
+  let textBytes = 0
+  let imageCount = 0
+  let textCount = 0
+  let referenceCount = 0
+  let fileCount = 0
+  let encodedFileBytes = 0
+  return value.map((candidate) => {
+    if (!candidate || typeof candidate !== 'object') throw new AgentHostError('INVALID_BODY', 'attachments are invalid')
+    const item = candidate as Record<string, unknown>
+    const mediaType = typeof item.mediaType === 'string' ? item.mediaType.toLowerCase() : ''
+    const filename = typeof item.filename === 'string' ? item.filename.trim().slice(0, 240) : undefined
+    if (item.type === 'file') {
+      const uploadId = typeof item.uploadId === 'string' ? item.uploadId : ''
+      const batchId = typeof item.batchId === 'string' ? item.batchId : ''
+      const relativePath = typeof item.relativePath === 'string' ? item.relativePath : undefined
+      const sizeBytes = typeof item.sizeBytes === 'number' ? item.sizeBytes : -1
+      const sha256 = typeof item.sha256 === 'string' ? item.sha256.toLowerCase() : ''
+      const contentBase64 = typeof item.contentBase64 === 'string' ? item.contentBase64 : ''
+      const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+      const safeFilename = Boolean(filename && filename !== '.' && filename !== '..' && !/[/\\\u0000-\u001f\u007f]/.test(filename))
+      const safeRelativePath = relativePath === undefined || (relativePath.length <= 1024
+        && !relativePath.startsWith('/') && !relativePath.includes('\\') && !relativePath.includes('//')
+        && !/[\u0000-\u001f\u007f]/.test(relativePath)
+        && relativePath.split('/').every((segment) => segment && segment !== '.' && segment !== '..'))
+      fileCount += 1
+      encodedFileBytes += contentBase64.length
+      if (!uuid.test(uploadId) || !uuid.test(batchId) || !safeFilename || !safeRelativePath
+        || !mediaType || mediaType.length > 160 || !Number.isSafeInteger(sizeBytes) || sizeBytes < 0 || sizeBytes > 2 * 1024 * 1024
+        || !/^[a-f0-9]{64}$/.test(sha256) || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(contentBase64)
+        || fileCount > 16 || encodedFileBytes + encodedImageBytes > 12_000_000) throw new AgentHostError('INVALID_BODY', 'attachments are invalid')
+      const content = Buffer.from(contentBase64, 'base64')
+      if (content.byteLength !== sizeBytes || createHash('sha256').update(content).digest('hex') !== sha256) throw new AgentHostError('INVALID_BODY', 'attachments are invalid')
+      return { type: 'file' as const, uploadId, batchId, mediaType, filename: filename!, ...(relativePath ? { relativePath } : {}), sizeBytes, sha256, contentBase64 }
+    }
+    if (item.type === 'reference') {
+      const referenceType: 'file' | 'thread' | '' = item.referenceType === 'file' || item.referenceType === 'thread' ? item.referenceType : ''
+      const name = typeof item.name === 'string' ? item.name.trim().slice(0, 160) : ''
+      const path = typeof item.path === 'string' ? item.path : ''
+      referenceCount += 1
+      if (!referenceType || !name || referenceCount > 16 || path.length > 1024 || path.includes('\0')
+        || (referenceType === 'thread' && !/^thread:\/\/[A-Za-z0-9_-]{1,64}$/.test(path))
+        || (referenceType === 'file' && (!path || /^\w+:\/\//.test(path)))) throw new AgentHostError('INVALID_BODY', 'attachments are invalid')
+      return { type: 'reference' as const, referenceType, name, path }
+    }
+    if (item.type === 'text') {
+      const text = typeof item.text === 'string' ? item.text : ''
+      const bytes = Buffer.byteLength(text, 'utf8')
+      textCount += 1
+      textBytes += bytes
+      if (mediaType !== 'text/plain' || !text || textCount > 4 || bytes > 256 * 1024 || textBytes > 512 * 1024) throw new AgentHostError('INVALID_BODY', 'attachments are invalid')
+      return { type: 'text' as const, mediaType: 'text/plain' as const, text, ...(filename ? { filename } : {}) }
+    }
+    const url = typeof item.url === 'string' ? item.url : ''
+    imageCount += 1
+    if (item.type !== 'image' || imageCount > 4 || !/^image\/(?:png|jpeg|webp|gif)$/.test(mediaType) || !url.startsWith(`data:${mediaType};base64,`) || url.length > 3_000_000) {
+      throw new AgentHostError('INVALID_BODY', 'attachments are invalid')
+    }
+    encodedImageBytes += url.length
+    if (encodedImageBytes + encodedFileBytes > 12_000_000) throw new AgentHostError('INVALID_BODY', 'attachments are invalid')
+    return { type: 'image' as const, mediaType, url, ...(filename ? { filename } : {}) }
+  })
 }
 
 interface PreparedSessionRequest {
@@ -80,6 +175,7 @@ interface PreparedSessionRequest {
   runtimeConfiguration: AgentProviderRuntimeConfiguration
   nativeSession?: AgentNativeSessionSnapshot
   browser?: BrowserAgentSession
+  browserSessionId?: string
   projectRuntime?: ProjectRuntimeDescriptor
   agent?: 'pi' | 'codex'
   accessMode?: 'restricted' | 'ask' | 'open'
@@ -138,6 +234,8 @@ interface SessionEntry {
   busy: boolean
   recovering?: boolean
   paused?: boolean
+  userPaused?: boolean
+  browserSessionId?: string
 }
 
 function isMissingSandboxFailure(error: unknown): boolean {
@@ -181,10 +279,11 @@ function parsePromptBody(value: unknown): PromptBody {
   const workspaceId = typeof body.workspaceId === 'string' ? body.workspaceId : ''
   const projectId = body.projectId === undefined ? undefined : typeof body.projectId === 'string' ? body.projectId : ''
   const message = typeof body.message === 'string' ? body.message.trim() : ''
+  const attachments = parsePromptAttachments(body.attachments)
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(userId)) throw new AgentHostError('INVALID_BODY', 'userId is invalid')
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(workspaceId)) throw new AgentHostError('INVALID_BODY', 'workspaceId is invalid')
   if (projectId !== undefined && !isProjectId(projectId)) throw new AgentHostError('INVALID_BODY', 'projectId is invalid')
-  if (!message || message.length > 10_000) throw new AgentHostError('INVALID_BODY', 'message is invalid')
+  if ((!message && !attachments.length) || message.length > 10_000) throw new AgentHostError('INVALID_BODY', 'message is invalid')
   const runtimeConfiguration = parseRuntimeConfiguration(body.runtimeConfiguration)
   const nativeSession = body.nativeSession === undefined ? undefined : parseNativeSession(body.nativeSession)
   const browserSessionId = body.browserSessionId === undefined
@@ -197,7 +296,7 @@ function parsePromptBody(value: unknown): PromptBody {
   const accessMode: 'restricted' | 'ask' | 'open' | undefined = body.accessMode === 'restricted' || body.accessMode === 'ask' || body.accessMode === 'open'
     ? body.accessMode
     : undefined
-  return { userId, workspaceId, projectId, message, runtimeConfiguration, nativeSession, browserSessionId, agent, accessMode }
+  return { userId, workspaceId, projectId, message, attachments, runtimeConfiguration, nativeSession, browserSessionId, agent, accessMode }
 }
 
 function parseNetworkAccessBody(value: unknown): NetworkAccessBody {
@@ -547,6 +646,10 @@ export async function startPromptHttpServer(
 ): Promise<{ server: Server; shutdown(): Promise<void> }> {
   await mkdir(config.storageRoot, { recursive: true, mode: 0o700 })
   const sessions = new Map<string, SessionEntry>()
+  // A host plugin install changes immutable files mounted into Codex Workers.
+  // Include a local generation in the in-memory runtime identity so the next
+  // lease cannot reuse a Worker created from the previous snapshot.
+  let codexPluginSnapshotGeneration = 0
   const browserGateway = new BrowserGateway({
     publicBaseUrl: config.browserGatewayPublicUrl ?? `http://${config.host}:${config.port}`,
     allowedOrigins: config.browserGatewayAllowedOrigins ?? ['http://localhost:3000'],
@@ -618,7 +721,7 @@ export async function startPromptHttpServer(
       : undefined
     let projectRuntime: ProjectRuntimeDescriptor | undefined
     if (config.projectRuntimeManager) {
-      projectRuntime = await config.projectRuntimeManager.ensure(input.projectId)
+      projectRuntime = await config.projectRuntimeManager.ensure(input.projectId, undefined, 'agent')
     } else if (config.projectVmManager) {
       await config.projectVmManager.ensure(input.projectId)
     }
@@ -628,14 +731,10 @@ export async function startPromptHttpServer(
       await config.projectRuntimeManager.ensureProjectGitRepository(input.projectId)
     }
     const baseKey = `${input.userId}:${input.workspaceId}:${input.sessionId}`
-    // A Pi worker receives the Browser Host capability only at provisioning
-    // time. Treat the browser capability as part of the runtime identity so a
-    // recreated browser session gets a worker bound to the new capability.
-    const browserIdentity = input.browserSessionId ?? 'none'
     // Permissions configure Codex's process-level sandbox and approval mode.
     // Include them in the runtime identity so a user-visible mode change
     // recreates the worker with the new policy rather than only updating DB.
-    const runtimeIdentity = `${input.runtimeConfiguration.providerId}/${input.runtimeConfiguration.modelId}@${input.runtimeConfiguration.revision}:browser=${browserIdentity}:agent=${input.agent ?? 'pi'}:access=${input.accessMode ?? 'restricted'}`
+    const runtimeIdentity = `${input.runtimeConfiguration.providerId}/${input.runtimeConfiguration.modelId}@${input.runtimeConfiguration.revision}:agent=${input.agent ?? 'pi'}:access=${input.accessMode ?? 'restricted'}:plugins=${input.agent === 'codex' ? codexPluginSnapshotGeneration : 'none'}`
     return {
       ...input,
       browser,
@@ -645,12 +744,38 @@ export async function startPromptHttpServer(
     }
   }
 
+  function pausePath(input: { userId: string; workspaceId: string; sessionId: string }): string {
+    return join(config.storageRoot, '.session-controls', input.userId, input.workspaceId, `${input.sessionId}.json`)
+  }
+  async function readUserPause(input: { userId: string; workspaceId: string; sessionId: string }): Promise<boolean> {
+    try { return JSON.parse(await readFile(pausePath(input), 'utf8')).paused === true }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false; throw error }
+  }
+  async function writeUserPause(input: { userId: string; workspaceId: string; sessionId: string }, paused: boolean): Promise<void> {
+    const path = pausePath(input)
+    await mkdir(dirname(path), { recursive: true, mode: 0o700 })
+    const temporary = `${path}.${randomBytes(8).toString('hex')}.tmp`
+    await writeFile(temporary, JSON.stringify({ paused }), { mode: 0o600 })
+    await rename(temporary, path)
+  }
+
   async function createEntry(request: PreparedSessionRequest): Promise<{ entry: SessionEntry; created: boolean }> {
     return withSessionCreationLock(request.baseKey, async () => {
+      const updateBrowser = async (entry: SessionEntry): Promise<boolean> => {
+        // Omission means "leave the current optional capability unchanged" so
+        // the browser-independent project keepalive cannot detach a live tab.
+        if (request.browserSessionId === undefined || entry.browserSessionId === request.browserSessionId) return true
+        if (!entry.runtime.setBrowser) return false
+        await entry.runtime.setBrowser(request.browser)
+        entry.browserSessionId = request.browserSessionId
+        return true
+      }
       // Re-check after waiting for another request that may have created the
-      // same provider/model/browser runtime while this request was queued.
+      // same provider/model/agent runtime while this request was queued.
       const existingForKey = sessions.get(request.key)
-      if (existingForKey) return { entry: existingForKey, created: false }
+      if (existingForKey) {
+        if (await updateBrowser(existingForKey)) return { entry: existingForKey, created: false }
+      }
 
       // A model/provider/browser switch replaces the old runtime before global
       // capacity is evaluated. With maxSessions=1 the old ordering incorrectly
@@ -666,9 +791,24 @@ export async function startPromptHttpServer(
       }
       creatingSessions += 1
       try {
-        // The in-memory session map is intentionally not persisted. Reclaim
-        // only this exact workload left by a previous Agent Host process
-        // before materialising its replacement.
+        const recoveredRuntime = await backend.recoverSession?.(
+          request.userId,
+          request.workspaceId,
+          request.sessionId,
+          request.runtimeConfiguration,
+          request.nativeSession,
+          request.projectId,
+          request.projectRuntime,
+          request.browser,
+          { agent: request.agent, accessMode: request.accessMode },
+        )
+        if (recoveredRuntime) {
+          const entry: SessionEntry = { runtime: recoveredRuntime, lastUsedAt: Date.now(), busy: false, paused: false, userPaused: await readUserPause(request), browserSessionId: request.browserSessionId }
+          sessions.set(request.key, entry)
+          return { entry, created: false }
+        }
+        // No compatible durable lease was recoverable. Reclaim only this
+        // exact stale workload before materialising its replacement.
         await backend.cleanupSession?.(request.userId, request.workspaceId, request.sessionId, request.projectId, request.projectRuntime)
         const entry: SessionEntry = {
           runtime: await backend.createSession(
@@ -685,6 +825,8 @@ export async function startPromptHttpServer(
           lastUsedAt: Date.now(),
           busy: false,
           paused: false,
+          userPaused: await readUserPause(request),
+          browserSessionId: request.browserSessionId,
         }
         sessions.set(request.key, entry)
         return { entry, created: true }
@@ -702,19 +844,14 @@ export async function startPromptHttpServer(
     if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(sessionId)) throw new AgentHostError('INVALID_SESSION', 'sessionId is invalid')
     const body = parsePromptBody(await readJson(request))
     if (!body.projectId) throw new AgentHostError('INVALID_BODY', 'projectId is required for agent sessions')
-    const prepared = await prepareSessionRequest({
-      userId: body.userId,
-      workspaceId: body.workspaceId,
-      sessionId,
-      projectId: body.projectId,
-      runtimeConfiguration: body.runtimeConfiguration,
-      nativeSession: body.nativeSession,
-      browserSessionId: body.browserSessionId,
-      agent: body.agent,
-      accessMode: body.accessMode,
-    })
     let createdEntryByRequest = false
     const abortController = new AbortController()
+    const preparingKey = `${body.userId}:${body.workspaceId}:${sessionId}`
+    if (activePromptControllers.has(preparingKey)) throw new AgentHostError('SESSION_BUSY', 'Session already has an active or preparing prompt', { retryable: true })
+    // Reserve cancellation ownership before ANY slow VM/Worker preparation.
+    // Previously /cancel during ensure() succeeded without finding a target,
+    // and the abandoned prompt could start minutes later.
+    activePromptControllers.set(preparingKey, abortController)
     // Normal direct Agent Host clients are canceled when their HTTP response
     // closes. The web BFF sets this opt-in header because it has a separate
     // /cancel request and must drain the worker's final native-session delta
@@ -722,6 +859,7 @@ export async function startPromptHttpServer(
     const drainOnClose = request.headers['x-openlink-drain-on-close'] === '1'
     let closeAbortTimer: NodeJS.Timeout | undefined
     response.once('close', () => {
+      if (activePromptControllers.get(preparingKey) === abortController) activePromptControllers.delete(preparingKey)
       if (response.writableEnded) return
       if (!drainOnClose) {
         abortController.abort()
@@ -737,7 +875,14 @@ export async function startPromptHttpServer(
       }, 5_000)
       closeAbortTimer.unref()
     })
+    const prepared = await prepareSessionRequest({
+      userId: body.userId, workspaceId: body.workspaceId, sessionId, projectId: body.projectId,
+      runtimeConfiguration: body.runtimeConfiguration, nativeSession: body.nativeSession,
+      browserSessionId: body.browserSessionId, agent: body.agent, accessMode: body.accessMode,
+    })
+    if (abortController.signal.aborted || response.destroyed) throw new AgentHostError('REQUEST_ABORTED', 'Agent request was aborted before Worker creation')
     const runPrompt = async (entry: SessionEntry): Promise<void> => {
+      if (entry.userPaused) throw new AgentHostError('SESSION_BUSY', 'Session is paused; resume it before sending a message', { retryable: true })
       if (entry.busy || entry.recovering) throw new AgentHostError('SESSION_BUSY', 'Agent session is already processing a prompt', { retryable: true })
       if (entry.paused) {
         await entry.runtime.resume?.()
@@ -746,7 +891,7 @@ export async function startPromptHttpServer(
       entry.busy = true
       entry.lastUsedAt = Date.now()
       try {
-        await pipeResponse(await entry.runtime.prompt(body.message, abortController.signal), response, config.transport)
+        await pipeResponse(await entry.runtime.prompt(body.message, abortController.signal, body.attachments), response, config.transport)
       } finally {
         if (closeAbortTimer) {
           clearTimeout(closeAbortTimer)
@@ -786,7 +931,7 @@ export async function startPromptHttpServer(
       throw new AgentHostError('REQUEST_ABORTED', 'Agent request was aborted', { retryable: true })
     }
     const activeControllerKey = prepared.baseKey
-    if (activePromptControllers.has(activeControllerKey)) {
+    if (activePromptControllers.has(activeControllerKey) && activePromptControllers.get(activeControllerKey) !== abortController) {
       throw new AgentHostError('SESSION_BUSY', 'Agent session is already processing a prompt', { retryable: true })
     }
     activePromptControllers.set(activeControllerKey, abortController)
@@ -931,6 +1076,14 @@ export async function startPromptHttpServer(
     json(response, 200, { versions: await config.projectRuntimeManager.listGitVersions(projectId) })
   }
 
+  async function handleProjectWorkspaceFiles(
+    response: import('node:http').ServerResponse,
+    projectId: string,
+  ): Promise<void> {
+    if (!config.projectRuntimeManager) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project runtime manager is required')
+    json(response, 200, { files: await config.projectRuntimeManager.listWorkspaceFiles(projectId) })
+  }
+
   async function handleProjectGitCheckout(
     request: IncomingMessage,
     response: import('node:http').ServerResponse,
@@ -1030,6 +1183,7 @@ export async function startPromptHttpServer(
         accessMode: body.accessMode,
       })
       const { entry } = await createEntry(prepared)
+      if (entry.userPaused) return json(response, 200, { ok: true, active: 1, ready: true, paused: true })
       if (entry.paused) {
         await entry.runtime.resume?.()
         entry.paused = false
@@ -1041,6 +1195,7 @@ export async function startPromptHttpServer(
     const now = Date.now()
     for (const [key, entry] of sessions) {
       if (!key.startsWith(`${baseKey}:`)) continue
+      if (entry.userPaused) { active += 1; continue }
       if (entry.paused) {
         await entry.runtime.resume?.()
         entry.paused = false
@@ -1055,19 +1210,44 @@ export async function startPromptHttpServer(
     request: IncomingMessage,
     response: import('node:http').ServerResponse,
     pathSessionId: string,
+    resourceRequest?: AgentResourceRequest,
   ): Promise<void> {
-    const body = parseLeaseBody(await readJson(request))
+    const raw = await readJson(request)
+    const body = parseLeaseBody(raw)
     if (body.sessionId !== pathSessionId) throw new AgentHostError('INVALID_BODY', 'Runtime resource session does not match the route')
+    if (resourceRequest?.scope === 'title') {
+      const prompt = (raw as Record<string, unknown>).titlePrompt
+      if (typeof prompt !== 'string' || !prompt.trim()) throw new AgentHostError('INVALID_BODY', 'Title prompt is required')
+      resourceRequest = { scope: 'title', query: prompt.slice(0, 4000) }
+    }
     const baseKey = `${body.userId}:${body.workspaceId}:${body.sessionId}`
-    const entry = [...sessions.entries()].find(([key]) => key.startsWith(`${baseKey}:`))?.[1]
-    if (!entry) throw new AgentHostError('INVALID_SESSION', 'Agent runtime is not ready', { retryable: true })
+    let entry = [...sessions.entries()].find(([key]) => key.startsWith(`${baseKey}:`))?.[1]
+    // Resource discovery is a first-class Agent operation, not a passive
+    // cache lookup.  If Agent Host restarted, the command palette must be
+    // able to materialize the exact session runtime without requiring a fake
+    // user turn first.
+    if (!entry && body.runtimeConfiguration) {
+      const prepared = await prepareSessionRequest({
+        userId: body.userId,
+        workspaceId: body.workspaceId,
+        sessionId: body.sessionId,
+        projectId: body.projectId,
+        runtimeConfiguration: body.runtimeConfiguration,
+        nativeSession: body.nativeSession,
+        browserSessionId: body.browserSessionId,
+        agent: body.agent,
+        accessMode: body.accessMode,
+      })
+      entry = (await createEntry(prepared)).entry
+    }
+    if (!entry) throw new AgentHostError('INVALID_SESSION', 'Agent runtime configuration is required to restore this session', { retryable: true })
     if (entry.paused) {
       await entry.runtime.resume?.()
       entry.paused = false
     }
     if (!entry.runtime.resources) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'This Agent backend does not expose runtime resources', { retryable: true })
     entry.lastUsedAt = Date.now()
-    json(response, 200, await entry.runtime.resources())
+    json(response, 200, await entry.runtime.resources(resourceRequest))
   }
 
   async function handleAgentCancel(
@@ -1173,6 +1353,13 @@ export async function startPromptHttpServer(
       }
       // Session Supabase write-confirmation approval (internal Bearer only) and listing.
       if (!authorized(request, config.apiToken)) throw new AgentHostError('AUTH_DENIED', 'Agent Host authorization is invalid')
+      if (request.method === 'POST' && url.pathname === '/v1/agent/plugins/invalidate') {
+        if (!config.invalidateCodexPluginSnapshot) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Codex plugin snapshot invalidation is not configured')
+        config.invalidateCodexPluginSnapshot()
+        codexPluginSnapshotGeneration += 1
+        json(response, 200, { ok: true })
+        return
+      }
       // Session Supabase write-confirmation approval/listing (internal Bearer).
       const confirmationApprove = /^\/v1\/projects\/([^/]+)\/supabase\/mcp\/confirmations\/([^/]+)\/approve$/.exec(url.pathname)
       if (confirmationApprove && request.method === 'POST') {
@@ -1245,8 +1432,57 @@ export async function startPromptHttpServer(
       if (request.method === 'POST' && resourcesMatch) {
         const sessionId = decodeURIComponent(resourcesMatch[1]!)
         if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(sessionId)) throw new AgentHostError('INVALID_SESSION', 'sessionId is invalid')
-        await handleRuntimeResources(request, response, sessionId)
+        const scope = url.searchParams.get('scope')
+        await handleRuntimeResources(request, response, sessionId, {
+          ...(scope === 'command' || scope === 'mention' || scope === 'skill' || scope === 'title' ? { scope } : {}),
+          ...(url.searchParams.has('command') ? { command: url.searchParams.get('command') ?? '' } : {}),
+          ...(url.searchParams.has('query') ? { query: url.searchParams.get('query') ?? '' } : {}),
+        })
         return
+      }
+      const controlMatch = /^\/v1\/agent\/sessions\/([^/]+)\/control$/.exec(url.pathname)
+      if (request.method === 'POST' && controlMatch) {
+        const sessionId = decodeURIComponent(controlMatch[1]!)
+        const raw = await readJson(request) as Record<string, unknown>
+        const body = parseLeaseBody(raw)
+        if (body.sessionId !== sessionId) throw new AgentHostError('INVALID_BODY', 'Session does not match route')
+        if (typeof raw.action !== 'string' || !['status', 'interrupt', 'pause', 'resume', 'steer', 'plan', 'default', 'goal', 'goal-clear', 'compact', 'rewind', 'fork'].includes(raw.action)
+          || (raw.text !== undefined && (typeof raw.text !== 'string' || raw.text.length > 100000))
+          || (raw.targetSessionId !== undefined && (typeof raw.targetSessionId !== 'string' || !/^[A-Za-z0-9]{11}$/.test(raw.targetSessionId)))) throw new AgentHostError('INVALID_BODY', 'Invalid session control')
+        const baseKey = `${body.userId}:${body.workspaceId}:${sessionId}`
+        const entry = [...sessions.entries()].find(([key]) => key.startsWith(`${baseKey}:`))?.[1]
+        if (raw.action === 'interrupt') {
+          activePromptControllers.get(baseKey)?.abort()
+          return json(response, 200, { ok: true, paused: entry?.userPaused === true, busy: entry?.busy === true })
+        }
+        if (raw.action === 'pause') {
+          await writeUserPause(body, true)
+          if (entry) entry.userPaused = true
+          activePromptControllers.get(baseKey)?.abort()
+          return json(response, 200, { ok: true, paused: true, busy: entry?.busy === true })
+        }
+        if (!entry) throw new AgentHostError('INVALID_SESSION', 'Agent session is not ready', { retryable: true })
+        if (raw.action === 'resume') {
+          if (entry.paused) await entry.runtime.resume?.()
+          await writeUserPause(body, false)
+          entry.paused = false
+          entry.userPaused = false
+          entry.lastUsedAt = Date.now()
+          return json(response, 200, { ok: true, paused: false })
+        }
+        if (entry.userPaused && raw.action !== 'status') throw new AgentHostError('SESSION_BUSY', 'Session is paused', { retryable: true })
+        if (!entry.runtime.control) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Worker does not support session controls')
+        if (raw.action === 'fork') {
+          if (typeof raw.targetSessionId !== 'string' || raw.targetSessionId === sessionId) throw new AgentHostError('INVALID_BODY', 'A distinct target session is required')
+          if (!config.projectRuntimeManager || !body.projectId) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project runtime manager is required to persist a fork')
+        }
+        const result = await entry.runtime.control({ action: raw.action, text: raw.text as string | undefined })
+        if (raw.action === 'fork') {
+          const threadId = (result && typeof result === 'object' && !Array.isArray(result)) ? (result as Record<string, unknown>).threadId : undefined
+          if (typeof threadId !== 'string') throw new AgentHostError('INVALID_BODY', 'Codex fork did not return a thread id')
+          await config.projectRuntimeManager!.persistCodexThreadId(body.projectId!, body.userId, body.workspaceId, raw.targetSessionId as string, threadId)
+        }
+        return json(response, 200, { result, paused: entry.userPaused === true })
       }
       const cancelMatch = /^\/v1\/agent\/sessions\/([^/]+)\/cancel$/.exec(url.pathname)
       if (request.method === 'POST' && cancelMatch) {
@@ -1311,6 +1547,13 @@ export async function startPromptHttpServer(
         await handleProjectGitVersions(response, projectId)
         return
       }
+      const projectWorkspaceFiles = /^\/v1\/projects\/([^/]+)\/workspace\/files$/.exec(url.pathname)
+      if (request.method === 'GET' && projectWorkspaceFiles) {
+        const projectId = decodeURIComponent(projectWorkspaceFiles[1]!)
+        if (!isProjectId(projectId)) throw new AgentHostError('INVALID_BODY', 'projectId is invalid')
+        await handleProjectWorkspaceFiles(response, projectId)
+        return
+      }
       const projectGitCheckout = /^\/v1\/projects\/([^/]+)\/git\/checkout$/.exec(url.pathname)
       if (request.method === 'POST' && projectGitCheckout) {
         const projectId = decodeURIComponent(projectGitCheckout[1]!)
@@ -1346,6 +1589,12 @@ export async function startPromptHttpServer(
       const failure = error instanceof AgentHostError
         ? error
         : new AgentHostError('PROVISIONING_FAILED', error instanceof Error ? error.message : String(error))
+      // Keep detailed diagnostics on the trusted Host, not in the browser's
+      // canonical error event. Codes alone cannot diagnose a failed create.
+      console.error('OpenLink Agent Host request failed', {
+        code: failure.code,
+        message: failure.message.replace(/Bearer\s+\S+/gi, 'Bearer [redacted]').slice(0, 2000),
+      })
       const status = failure.code === 'AUTH_DENIED' ? 403 : failure.code === 'SESSION_BUSY' ? 409 : 400
       json(response, status, { error: { code: failure.code, message: failure.message, retryable: failure.retryable } })
     })
@@ -1392,11 +1641,13 @@ export async function startPromptHttpServer(
     // Do not close the OpenSandbox transport while a model-switch/create lock
     // is still provisioning a workload for an in-flight request.
     await Promise.allSettled([...sessionCreationLocks.values()])
-    await Promise.allSettled([...sessions.values()].map((entry) => {
-      entry.recovering = true
-      return trackCleanup(entry.runtime.cleanup())
-    }))
-    await Promise.allSettled([...cleanupOperations])
+    if (!config.preserveSessionsOnShutdown) {
+      await Promise.allSettled([...sessions.values()].map((entry) => {
+        entry.recovering = true
+        return trackCleanup(entry.runtime.cleanup())
+      }))
+      await Promise.allSettled([...cleanupOperations])
+    }
     sessions.clear()
     codeServerGateway.close()
     browserGateway.close()

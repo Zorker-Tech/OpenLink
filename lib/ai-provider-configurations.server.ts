@@ -269,8 +269,9 @@ export async function resolveAgentProviderRuntimeConfiguration(
   const modelId = requestedModel?.modelId ?? row.default_model_id
   if (!modelId || !row.enabled_model_ids.includes(modelId)) throw new Error('MODEL_NOT_ENABLED')
   const models = await getAiProviderModels(row.provider_id)
-  if (models.length && !models.some((model) => model.id === modelId)) throw new Error('UNKNOWN_PROVIDER_MODEL')
-  const modelBaseUrl = models.find((model) => model.id === modelId)?.baseUrl
+  const modelDefinition = models.find((model) => model.id === modelId)
+  if (models.length && !modelDefinition) throw new Error('UNKNOWN_PROVIDER_MODEL')
+  const modelBaseUrl = modelDefinition?.baseUrl
   const baseUrl = row.base_url || modelBaseUrl || definition.baseUrl || ''
   if (!row.encrypted_api_key || !row.api_key_iv || !row.api_key_tag) {
     if (definition.authMode === 'ambient') {

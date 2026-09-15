@@ -10,6 +10,11 @@
 @source '../lib';
 @source '../utils';
 @source '../packages';
+/* Storybook stories are first-class consumers of the OpenLink token layer.
+   Scan them so their layout utilities (including arbitrary max/width values)
+   are emitted; without this, isolated stories collapse to intrinsic-width
+   strips even though the component itself is `w-full`. */
+@source '../stories';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -256,6 +261,65 @@
 }
 
 @layer components {
+  /* One interaction rhythm for every OpenLink surface. The scale property is
+     independent from transform, so existing layout transforms (centering,
+     sidebar slides, etc.) remain intact while a press still feels tactile. */
+  .openlink-motion-page {
+    min-height: 100%;
+    width: 100%;
+  }
+
+  body :where(button:not(:disabled), a[href], [role='button'], [role='menuitem'], [role='tab']):not([data-no-press-motion]) {
+    transition-property: color, background-color, border-color, box-shadow, opacity, transform, scale;
+    transition-duration: 160ms;
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  body :where(button:not(:disabled), a[href], [role='button'], [role='menuitem'], [role='tab']):not([data-no-press-motion]):active {
+    scale: 0.985;
+  }
+
+  body :where(button:not(:disabled), a[href], [role='button'], [role='menuitem'], [role='tab']):not([data-no-press-motion]):focus-visible {
+    transition-duration: 120ms;
+  }
+
+  /* Base UI keeps a collapsible panel mounted while these authored
+     transitions run. The measured CSS variable lets height interpolate from
+     the closed state without relying on `height: auto`, while opacity keeps
+     the content from popping in before its layout has settled. */
+  .openlink-collapsible-content {
+    height: var(--collapsible-panel-height, auto);
+    overflow: hidden;
+    opacity: 1;
+    transition-property: height, opacity;
+    transition-duration: 220ms, 160ms;
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .openlink-collapsible-content[data-closed],
+  .openlink-collapsible-content[data-ending-style],
+  .openlink-collapsible-content[data-starting-style] {
+    height: 0;
+    opacity: 0;
+  }
+
+  .openlink-collapsible-content[data-open] {
+    opacity: 1;
+  }
+
+  /* react-resizable-panels writes the live size to the outer panel's inline
+     flex-grow value. Limit this transition to explicit toolbar toggles so a
+     pointer drag remains direct and latency-free. */
+  #chat-workspace-panels[data-panel-motion='active'] > [data-slot='resizable-panel'] {
+    transition-property: flex-grow;
+    transition-duration: 280ms;
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  #chat-workspace-panels[data-panel-motion='active'] > [data-slot='resizable-handle'] {
+    transition: opacity 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
   .openlink-app-shell,
   [data-openlink-theme] {
     --app-background: #000000;
@@ -489,4 +553,15 @@
 
 @media (prefers-reduced-motion: reduce) {
   .brand-track { animation: none; }
+
+  body :where(button, a[href], [role='button'], [role='menuitem'], [role='tab']) {
+    transition-duration: 0ms !important;
+    scale: 1 !important;
+  }
+
+  .openlink-collapsible-content,
+  #chat-workspace-panels[data-panel-motion='active'] > [data-slot='resizable-panel'],
+  #chat-workspace-panels[data-panel-motion='active'] > [data-slot='resizable-handle'] {
+    transition-duration: 0ms !important;
+  }
 }

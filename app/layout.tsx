@@ -1,4 +1,5 @@
 import { Analytics } from '@vercel/analytics/next'
+import { OpenLinkMotionProvider } from '@/components/ui/motion-provider'
 import type { Metadata, Viewport } from 'next'
 import localFont from 'next/font/local'
 import { isLocalRuntime } from '@/lib/runtime-mode.server'
@@ -17,6 +18,12 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   colorScheme: 'dark light',
 }
+
+// Self-hosted releases are built before an installation has a ZOKERBASE URL
+// or publishable key. Render the layout at request time so the browser always
+// receives the endpoint injected by the production supervisor for this
+// installation, rather than an empty value frozen into the release artifact.
+export const dynamic = 'force-dynamic'
 
 export default function RootLayout({
   children,
@@ -42,7 +49,7 @@ export default function RootLayout({
       <body className={`${geist.className} antialiased`}>
         <meta content={supabaseUrl || ''} name="openlink-supabase-url" />
         <meta content={publishableKey || ''} name="openlink-supabase-publishable-key" />
-        {children}
+        <OpenLinkMotionProvider>{children}</OpenLinkMotionProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

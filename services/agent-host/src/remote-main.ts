@@ -169,12 +169,18 @@ const projectRuntimeManager = new ProjectRuntimeManager({
     [manifest.images.rpcImage]: imageArchive,
   },
   projectPortBase: integer(env.OPENLINK_PROJECT_RUNTIME_PORT_BASE, 51_000, 1_024, 65_000),
+  projectPortRangeSize: integer(env.OPENLINK_PROJECT_RUNTIME_PORT_RANGE_SIZE, 1_000, 1, 64_000),
   browserAllowedOrigins: env.OPENLINK_BROWSER_ALLOWED_ORIGINS || 'http://localhost:3000',
   publicHost: '127.0.0.1',
 })
 const provisioningQueue = createSupabaseProjectRuntimeProvisioningQueue(env)
+const provisionerId = env.OPENLINK_PROJECT_RUNTIME_PROVISIONER_ID?.trim()
 const projectRuntimeProvisioner = provisioningQueue
-  ? new ProjectRuntimeProvisioner({ queue: provisioningQueue, runtimeManager: projectRuntimeManager })
+  ? new ProjectRuntimeProvisioner({
+      queue: provisioningQueue,
+      runtimeManager: projectRuntimeManager,
+      ...(provisionerId ? { workerId: `${provisionerId}-remote` } : {}),
+    })
   : undefined
 
 const sessionIdleTtlMs = integer(env.OPENLINK_AGENT_SESSION_IDLE_TTL_MS, 30 * 60_000, 60_000, 24 * 60 * 60_000)

@@ -1,6 +1,10 @@
-import { delimiter, resolve } from 'node:path'
+import { delimiter, posix, win32 } from 'node:path'
 
 const SUPPORTED_ARCHITECTURES = new Set(['x64', 'arm64'])
+
+function pathsForPlatform(platform) {
+  return platform === 'win32' ? win32 : posix
+}
 
 export function resolveHostPlatform(options = {}) {
   const platform = options.platform ?? process.platform
@@ -33,6 +37,7 @@ export function resolveHostPlatform(options = {}) {
   }
 
   if (platform === 'win32') {
+    const { resolve } = pathsForPlatform(platform)
     const localAppData = env.LOCALAPPDATA?.trim()
     const programFiles = env.ProgramFiles?.trim() || 'C:\\Program Files'
     const programFilesX86 = env['ProgramFiles(x86)']?.trim() || 'C:\\Program Files (x86)'
@@ -97,6 +102,7 @@ export function resolveHostPlatform(options = {}) {
  */
 export function resolveUserStateRoot(productRoot, options = {}) {
   const host = options.host ?? resolveHostPlatform(options)
+  const { resolve } = pathsForPlatform(host.platform)
   if (host.platform !== 'win32') return resolve(productRoot, '.openlink-runtime')
   const env = options.env ?? process.env
   const localAppData = env.LOCALAPPDATA?.trim()
@@ -120,6 +126,7 @@ export function prependPath(directory, current = process.env.PATH ?? '', platfor
 }
 
 export function bundledToolchainPaths(root, platform = process.platform) {
+  const { resolve } = pathsForPlatform(platform)
   const bin = resolve(root, '.openlink-runtime', 'toolchain', 'bin')
   return {
     bin,

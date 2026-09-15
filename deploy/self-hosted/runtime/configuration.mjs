@@ -1,5 +1,5 @@
 import { createHmac, randomBytes } from 'node:crypto'
-import { chmod, lstat, mkdir, readFile, rm } from 'node:fs/promises'
+import { chmod, lstat, mkdir, readFile, readdir, rm } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 
 import { parseEnvironmentFile } from './preflight.mjs'
@@ -89,7 +89,10 @@ export async function createProductionConfiguration(options = {}) {
     OPENLINK_RELEASE_TRUST_FILE: trustPath,
     OPENLINK_SECRETS_FILE: secretsPath,
     OPENLINK_ZOKERBASE_ENV_FILE: secretsPath,
-    ...(process.platform === 'linux' ? { OPENLINK_CONTAINER_BROKER_SOCKET: '/run/openlink-container-broker/control.sock' } : {}),
+    ...(process.platform === 'linux' ? {
+      OPENLINK_CONTAINER_BROKER_SOCKET: '/run/openlink-container-broker/control.sock',
+      OPENLINK_PROJECT_CONTAINER_BROKER_SOCKET: '/run/openlink-project-container-broker/control.sock',
+    } : {}),
     OPENLINK_AGENT_MAX_SESSIONS: String(options.maxSessions ?? 32),
     OPENLINK_PROJECT_VM_CPUS: String(options.vmCpus ?? deploymentProfile.project.cpus),
     OPENLINK_PROJECT_VM_MEMORY_MB: String(options.vmMemoryMb ?? deploymentProfile.project.memoryMb),
@@ -161,6 +164,15 @@ export async function updateProductionProjectRuntime(configPath, runtimeValue) {
   const source = await readFile(absolute, 'utf8')
   const values = parseEnvironmentFile(source)
   const previous = resolveProjectRuntime(values.OPENLINK_PROJECT_RUNTIME)
+  if (previous !== runtime) {
+    const stateRoot = values.OPENLINK_STATE_ROOT
+    if (!stateRoot) throw new Error('Production configuration has no OPENLINK_STATE_ROOT')
+    const previousProjectsRoot = join(resolve(stateRoot), previous === 'vm' ? 'project-vms/projects' : 'project-containers/projects')
+    const persisted = await readdir(previousProjectsRoot, { withFileTypes: true }).catch((error) => error?.code === 'ENOENT' ? [] : Promise.reject(error))
+    if (persisted.some((entry) => entry.isDirectory())) {
+      throw new Error(`Cannot change Project backend from ${previous} to ${runtime} while persisted Projects exist; migrate or remove those runtimes first`)
+    }
+  }
   const replacements = {
     OPENLINK_PROJECT_RUNTIME: runtime,
     OPENLINK_PROJECT_ISOLATION: runtime === 'vm' ? 'vm' : 'container',

@@ -344,7 +344,13 @@ class DockerContainerOpsMixin:
         network_mode: str,
         gpu_count: Optional[int] = None,
     ) -> Dict[str, Any]:
-        host_config_kwargs: Dict[str, Any] = {"network_mode": network_mode}
+        # OpenLink sandboxes are durable Project-VM workloads. Keep the Agent
+        # process resident across a VM/host reboot; explicit timeout cleanup
+        # and DELETE still remove the container normally.
+        host_config_kwargs: Dict[str, Any] = {
+            "network_mode": network_mode,
+            "restart_policy": {"Name": "unless-stopped"},
+        }
         docker_cfg = self.app_config.docker
         security_opts: list[str] = list(docker_cfg.security_opts)
         if docker_cfg.userns_mode:

@@ -83,10 +83,19 @@ require_host_dependencies() {
     sudo -n DEBIAN_FRONTEND=noninteractive apt-get install -y \
       ca-certificates curl openssh-client netcat-openbsd qemu-system-x86 qemu-utils cloud-image-utils
   fi
-  [[ -e /dev/kvm ]] || fail "/dev/kvm is required for Project VM execution"
   command -v sudo >/dev/null 2>&1 || fail "sudo is required to access KVM"
   sudo -n true >/dev/null 2>&1 || fail "the SSH account needs passwordless sudo for KVM access"
-  sudo -n test -r /dev/kvm && sudo -n test -w /dev/kvm || fail "the SSH account's sudo policy cannot access /dev/kvm"
+  grep -Eq '(^|[[:space:]])(vmx|svm)([[:space:]]|$)' /proc/cpuinfo || fail "CPU_VIRTUALIZATION_UNAVAILABLE: enable VT-x/AMD-V in firmware or expose nested virtualization"
+  if [[ ! -e /dev/kvm ]]; then
+    sudo -n modprobe kvm || fail "KVM_MODULES_INACTIVE: unable to load the generic KVM module"
+    if grep -Eq '(^|[[:space:]])vmx([[:space:]]|$)' /proc/cpuinfo; then
+      sudo -n modprobe kvm_intel || fail "KVM_MODULES_INACTIVE: unable to load kvm_intel"
+    else
+      sudo -n modprobe kvm_amd || fail "KVM_MODULES_INACTIVE: unable to load kvm_amd"
+    fi
+  fi
+  [[ -e /dev/kvm ]] || fail "NESTED_VIRTUALIZATION_UNAVAILABLE: KVM modules loaded but /dev/kvm was not created"
+  sudo -n test -r /dev/kvm && sudo -n test -w /dev/kvm || fail "KVM_PERMISSION_DENIED: the SSH account's sudo policy cannot access /dev/kvm"
 }
 
 base_image() {

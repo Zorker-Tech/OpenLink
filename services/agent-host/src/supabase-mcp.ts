@@ -35,18 +35,20 @@ interface McpToolDefinition {
   operation: ProjectSupabaseManagementOperation
   /** Argument name promoted into the management request body, if any. */
   argument?: 'query' | 'service'
+  /** MCP capability annotation consumed by Codex's native approval policy. */
+  readOnly: boolean
 }
 
 const TOOLS: McpToolDefinition[] = [
-  { name: 'supabase_list_tables', description: 'List every table visible in the project PostgreSQL (information_schema), including auth.* and storage.* schemas.', inputSchema: { type: 'object', properties: {}, additionalProperties: false }, operation: 'tables' },
-  { name: 'supabase_database_info', description: 'Read PostgreSQL version, database size and active connection count for the project backend.', inputSchema: { type: 'object', properties: {}, additionalProperties: false }, operation: 'database' },
-  { name: 'supabase_execute_sql', description: 'Run a SQL statement against the project PostgreSQL. In controlled mode only single read-only statements are allowed; in ask mode writes require user confirmation; in open mode writes are unrestricted.', inputSchema: { type: 'object', properties: { query: { type: 'string', description: 'SQL statement to execute' }, confirmationId: { type: 'string', description: 'Confirmation id returned for a pending write in ask mode' } }, required: ['query'], additionalProperties: false }, operation: 'query', argument: 'query' },
-  { name: 'supabase_list_auth_users', description: 'List Auth (GoTrue) users with sanitized profiles.', inputSchema: { type: 'object', properties: {}, additionalProperties: false }, operation: 'auth-users' },
-  { name: 'supabase_list_storage_buckets', description: 'List Storage buckets and their visibility.', inputSchema: { type: 'object', properties: {}, additionalProperties: false }, operation: 'storage-buckets' },
-  { name: 'supabase_list_edge_functions', description: 'List Edge Functions present in the project workspace.', inputSchema: { type: 'object', properties: {}, additionalProperties: false }, operation: 'functions' },
-  { name: 'supabase_realtime_status', description: 'Read Realtime channels/broadcast status.', inputSchema: { type: 'object', properties: {}, additionalProperties: false }, operation: 'realtime' },
-  { name: 'supabase_list_services', description: 'Read the health of every managed Supabase service inside the Project VM.', inputSchema: { type: 'object', properties: {}, additionalProperties: false }, operation: 'services' },
-  { name: 'supabase_get_logs', description: 'Read the latest log lines of one managed service (default: rest). Secrets are redacted inside the VM.', inputSchema: { type: 'object', properties: { service: { type: 'string', description: 'Service name such as rest, db, auth, storage' } }, additionalProperties: false }, operation: 'logs', argument: 'service' },
+  { name: 'supabase_list_tables', description: 'List every table visible in the project PostgreSQL (information_schema), including auth.* and storage.* schemas.', inputSchema: { type: 'object', properties: {}, additionalProperties: false }, operation: 'tables', readOnly: true },
+  { name: 'supabase_database_info', description: 'Read PostgreSQL version, database size and active connection count for the project backend.', inputSchema: { type: 'object', properties: {}, additionalProperties: false }, operation: 'database', readOnly: true },
+  { name: 'supabase_execute_sql', description: 'Run a SQL statement against the project PostgreSQL. In controlled mode only single read-only statements are allowed; in ask mode writes require user confirmation; in open mode writes are unrestricted.', inputSchema: { type: 'object', properties: { query: { type: 'string', description: 'SQL statement to execute' }, confirmationId: { type: 'string', description: 'Confirmation id returned for a pending write in ask mode' } }, required: ['query'], additionalProperties: false }, operation: 'query', argument: 'query', readOnly: false },
+  { name: 'supabase_list_auth_users', description: 'List Auth (GoTrue) users with sanitized profiles.', inputSchema: { type: 'object', properties: {}, additionalProperties: false }, operation: 'auth-users', readOnly: true },
+  { name: 'supabase_list_storage_buckets', description: 'List Storage buckets and their visibility.', inputSchema: { type: 'object', properties: {}, additionalProperties: false }, operation: 'storage-buckets', readOnly: true },
+  { name: 'supabase_list_edge_functions', description: 'List Edge Functions present in the project workspace.', inputSchema: { type: 'object', properties: {}, additionalProperties: false }, operation: 'functions', readOnly: true },
+  { name: 'supabase_realtime_status', description: 'Read Realtime channels/broadcast status.', inputSchema: { type: 'object', properties: {}, additionalProperties: false }, operation: 'realtime', readOnly: true },
+  { name: 'supabase_list_services', description: 'Read the health of every managed Supabase service inside the Project VM.', inputSchema: { type: 'object', properties: {}, additionalProperties: false }, operation: 'services', readOnly: true },
+  { name: 'supabase_get_logs', description: 'Read the latest log lines of one managed service (default: rest). Secrets are redacted inside the VM.', inputSchema: { type: 'object', properties: { service: { type: 'string', description: 'Service name such as rest, db, auth, storage' } }, additionalProperties: false }, operation: 'logs', argument: 'service', readOnly: true },
 ]
 
 /** Scoped, short-lived capability so the in-VM agent never holds the global Agent Host secret. */
@@ -212,7 +214,20 @@ export async function handleSupabaseMcpRequest(options: SupabaseMcpRequestOption
         return
       case 'tools/list':
         reply({
-          tools: TOOLS.map((tool) => ({ name: tool.name, description: tool.description, inputSchema: tool.inputSchema })),
+          tools: TOOLS.map((tool) => ({
+            name: tool.name,
+            description: tool.description,
+            inputSchema: tool.inputSchema,
+            // Native MCP annotations let Codex auto-run genuinely read-only
+            // operations in restricted sessions. SQL stays write-capable and
+            // therefore continues through Codex/OpenLink confirmation layers.
+            annotations: {
+              readOnlyHint: tool.readOnly,
+              destructiveHint: false,
+              idempotentHint: tool.readOnly,
+              openWorldHint: false,
+            },
+          })),
         })
         return
       case 'tools/call': {

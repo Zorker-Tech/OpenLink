@@ -1,0 +1,61 @@
+[Unit]
+Description=OpenLink sealed Project Container broker
+Documentation=https://git.haokir/hydite/openlink/openlink
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+Requires=docker.service
+Before=openlink.service
+
+[Service]
+Type=notify
+NotifyAccess=main
+User=root
+Group=openlink-agent
+EnvironmentFile=/etc/openlink/openlink.env
+EnvironmentFile=/etc/openlink/secrets.env
+Environment=OPENLINK_AGENT_RELEASE_ROOT=/opt/openlink/current
+Environment=OPENLINK_PROJECT_CONTAINER_BROKER_SOCKET=/run/openlink-project-container-broker/control.sock
+ExecStart=/opt/openlink/current/runtime/node/bin/node /opt/openlink/current/services/agent-host/dist/src/project-container-main.js
+KillSignal=SIGTERM
+TimeoutStartSec=120
+TimeoutStopSec=180
+Restart=on-failure
+RestartSec=5
+UMask=0077
+TasksMax=4096
+MemoryMax=16G
+MemorySwapMax=2G
+CPUQuota=800%
+RuntimeDirectory=openlink-project-container-broker
+RuntimeDirectoryMode=0750
+StateDirectory=openlink
+StateDirectoryMode=0711
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateNetwork=false
+PrivateDevices=true
+NoNewPrivileges=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+KeyringMode=private
+RemoveIPC=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadOnlyPaths=/opt/openlink /etc/openlink
+ReadWritePaths=/var/lib/openlink /run/openlink-project-container-broker
+
+[Install]
+WantedBy=multi-user.target

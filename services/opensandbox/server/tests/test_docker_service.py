@@ -183,6 +183,9 @@ async def test_create_sandbox_applies_security_defaults(mock_docker):
         await service.create_sandbox(request)
 
     host_config = mock_client.api.create_container.call_args.kwargs["host_config"]
+    assert mock_client.api.create_host_config.call_args.kwargs["restart_policy"] == {
+        "Name": "unless-stopped"
+    }
     assert "label=disable" in host_config.get("security_opt", [])
     assert "no-new-privileges:true" in host_config.get("security_opt", [])
     assert host_config.get("cap_drop") == service.app_config.docker.drop_capabilities
@@ -892,11 +895,13 @@ async def test_egress_sidecar_injection_and_capabilities(mock_docker):
 
     # Sidecar host config should have NET_ADMIN and port bindings
     assert "NET_ADMIN" in sidecar_kwargs["host_config"]["cap_add"]
+    assert sidecar_kwargs["host_config"]["restart_policy"] == {"Name": "unless-stopped"}
     assert "44772" in sidecar_kwargs["host_config"]["port_bindings"]
     assert "8080" in sidecar_kwargs["host_config"]["port_bindings"]
 
     # Main container should share sidecar netns, drop NET_ADMIN, and have no port bindings
     assert main_kwargs["host_config"]["network_mode"] == "container:sidecar-id"
+    assert main_kwargs["host_config"]["restart_policy"] == {"Name": "unless-stopped"}
     assert "NET_ADMIN" in set(main_kwargs["host_config"].get("cap_drop") or [])
     assert "port_bindings" not in main_kwargs["host_config"]
 

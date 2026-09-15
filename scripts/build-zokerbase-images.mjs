@@ -21,6 +21,7 @@ const manifestPath = resolve(artifactRoot, 'manifest.json')
 const version = process.env.ZOKERBASE_IMAGE_VERSION || '2026.08.10'
 const allowAcquisition = process.env.OPENLINK_ZOKERBASE_ALLOW_UPSTREAM_ACQUISITION !== '0'
 const force = process.argv.includes('--force')
+const skipArchives = process.env.OPENLINK_SKIP_IMAGE_ARCHIVES === '1'
 const docker = await ensureDockerEngine()
 
 const specs = [
@@ -119,13 +120,13 @@ async function writeArtifact(spec) {
 }
 
 async function main() {
-  await run(docker, ['info', '--format', '{{.ServerVersion}}'])
+  await run(docker, ['info', '--format', 'json'])
   await mkdir(artifactRoot, { recursive: true, mode: 0o700 })
   const fingerprint = await sourceFingerprint()
   const images = []
   for (const spec of specs) {
     await build(spec)
-    const archive = await writeArtifact(spec)
+    if (!skipArchives) await writeArtifact(spec)
     images.push({ name: spec.name, image: spec.target, archive: `${spec.name}.tar`, source: spec.source })
   }
   const manifest = {
@@ -136,8 +137,8 @@ async function main() {
     createdAt: new Date().toISOString(),
     images,
   }
-  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600 })
-  process.stdout.write(`ZOKERBASE image artifact ready: ${artifactRoot}\n`)
+  if (!skipArchives) await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600 })
+  process.stdout.write(skipArchives ? 'ZOKERBASE runtime images ready\n' : `ZOKERBASE image artifact ready: ${artifactRoot}\n`)
 }
 
 await main()

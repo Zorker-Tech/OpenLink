@@ -1,0 +1,22 @@
+import { Meta } from "@storybook/addon-docs/blocks"
+
+<Meta title="Start Here/Contribution Guide" />
+
+# Contributing UI to OpenLink
+
+Storybook is the visual contract for reusable OpenLink UI. It mirrors the real application tokens and gives every component an isolated place for development, review and regression testing.
+
+## Before implementation
+
+1. Reuse a semantic token or existing primitive before adding a new visual value.
+2. Decide whether the component belongs to `components/ui`, `components/ai-elements`, or an application-level composition.
+3. Identify the meaningful states: default, disabled, loading, empty, error, destructive, long content and narrow viewport.
+
+## Before review
+
+1. Switch the toolbar between Light and Dark.
+2. Check keyboard behavior and focus indication.
+3. Run the Accessibility panel and component tests.
+4. Run `pnpm storybook:build` so the complete static library remains publishable.
+
+Application-bound components still appear in the generated Component Inventory. Add a Canvas only when the component can be rendered truthfully without pretending that a backend or agent runtime is connected.
