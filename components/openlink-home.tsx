@@ -1,6 +1,7 @@
 'use client'
 
 import { PromptComposer } from '@/components/prompt-composer'
+import { ZorkerLogo } from '@/components/zorker-logo'
 import type { ComposerContext } from '@/lib/composer-context'
 import {
   ArrowRight,
@@ -112,8 +113,8 @@ function Header({ user }: { user: HomeUser | null }) {
 
   return (
     <header className={`fixed inset-x-0 top-0 z-50 flex h-[50px] items-center justify-between border-b px-2 ${theme('canvas', 'softBorder')}`}>
-      <a aria-label="OpenLink home" className="flex h-10 w-9 items-center justify-center rounded-lg" href="#">
-        <img alt="OpenLink" className="h-8 w-7" src="/openlink/logo.svg" />
+      <a aria-label="Zorker home" className="flex h-10 w-9 items-center justify-center rounded-lg" href="#">
+        <ZorkerLogo className="h-5 w-[34px]" />
       </a>
 
       <nav aria-label="Main navigation" className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-1 md:flex">
@@ -249,7 +250,7 @@ function FeaturesSection() {
     <section className="mx-auto mt-[72px] max-w-[1264px] px-6 pb-20">
       <div className="feature-grid">
         <FeatureCard body="Generate working applications in minutes with AI. Publish as live websites in seconds." lead title={<>Prompt.<br />Build. Publish.</>} />
-        <FeatureCard body="Connect to GitHub and push code directly to your repository." title="Sync with a repo" visual={<div className="flex flex-1 items-center justify-center gap-10"><span className="visual-orb"><img alt="GitHub" className="size-11" src="/openlink/github.svg" /></span><span className="visual-orb"><img alt="OpenLink" className="size-8" src="/openlink/logo.svg" /></span></div>} />
+        <FeatureCard body="Connect to GitHub and push code directly to your repository." title="Sync with a repo" visual={<div className="flex flex-1 items-center justify-center gap-10"><span className="visual-orb"><img alt="GitHub" className="size-11" src="/openlink/github.svg" /></span><span className="visual-orb"><ZorkerLogo className="h-6 w-10" /></span></div>} />
         <FeatureCard body="Build with your favorite tools and APIs. Automatic integration, no accounts required." title="Integrate with apps" visual={<div className="app-cloud">{['AI', 'DB', 'API', 'UI', 'CMS', 'Git'].map((item) => <span key={item}>{item}</span>)}</div>} />
         <FeatureCard body="Go live instantly with one-click deployment to production in seconds." title="Deploy to Vercel" visual={<div className="flex flex-1 items-center justify-center"><Rocket className="size-24 text-[var(--app-foreground)]" strokeWidth={1} /></div>} />
         <FeatureCard body="Fine-tune every detail with visual controls and live preview." title="Edit with design mode" visual={<div className="design-window"><span /><span /><span /><div /></div>} />
@@ -313,7 +314,7 @@ function Footer() {
   return (
     <footer className="px-6 py-16">
       <div className="mx-auto flex min-h-[226px] max-w-[1400px] items-start justify-between gap-16 px-[60px] pt-6 pb-10">
-        <a aria-label="OpenLink home" href="#"><img alt="OpenLink" className="h-6 w-12" src="/openlink/logo-wide.svg" /></a>
+        <a aria-label="Zorker home" className="flex h-8 items-center" href="#"><ZorkerLogo className="h-7 w-[95px]" variant="wordmark" /></a>
         <div className="grid flex-1 grid-cols-2 gap-12 sm:grid-cols-4 lg:max-w-[870px] lg:gap-[108px]">
           {footerGroups.map((group) => (
             <div key={group.title}>

@@ -7,6 +7,7 @@ import { promisify } from 'node:util'
 import { readProjectSupabaseLock } from './lib/project-supabase-lock.mjs'
 import { archiveName, immutablePullReference, readImageArtifactManifest, sha256File, targetArchitecture } from './lib/project-supabase-images.mjs'
 import { ensureDockerEngine } from './lib/docker-runtime.mjs'
+import { retryDockerPull } from './lib/docker-pull-retry.mjs'
 
 const execFileAsync = promisify(execFile)
 const root = resolve(fileURLToPath(new URL('../', import.meta.url)))
@@ -18,6 +19,10 @@ const outputRoot = resolve(root, '.openlink-runtime/project-supabase/images', ar
 const manifestPath = resolve(outputRoot, 'manifest.json')
 const force = process.argv.includes('--force')
 const docker = await ensureDockerEngine()
+const pullAttempts = Number.parseInt(process.env.OPENLINK_IMAGE_PULL_ATTEMPTS || '8', 10)
+if (!Number.isSafeInteger(pullAttempts) || pullAttempts < 1 || pullAttempts > 20) {
+  throw new Error('OPENLINK_IMAGE_PULL_ATTEMPTS must be an integer between 1 and 20')
+}
 
 async function command(commandName, args, options = {}) {
   const { stdout } = await execFileAsync(commandName, args, { maxBuffer: 64 * 1024 * 1024, ...options })
@@ -77,7 +82,13 @@ for (const service of lock.services) {
   const immutable = immutablePullReference(service.image, platformDigest)
   const temporaryArchive = `${archivePath}.${process.pid}.tmp`
   process.stderr.write(`Acquiring ${service.name} ${immutable} for linux/${architecture}\n`)
-  await command(docker, ['image', 'pull', '--platform', `linux/${architecture}`, immutable])
+  await retryDockerPull(
+    () => command(docker, ['image', 'pull', '--platform', `linux/${architecture}`, immutable]),
+    {
+      attempts: pullAttempts,
+      onRetry: (attempt, attempts) => process.stderr.write(`Retrying ${service.name} image pull after transient failure (${attempt}/${attempts})\n`),
+    },
+  )
   try {
     await command(docker, ['image', 'tag', immutable, service.image])
     await rm(temporaryArchive, { force: true })

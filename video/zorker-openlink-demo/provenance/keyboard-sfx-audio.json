@@ -1,0 +1,924 @@
+{
+  "music": false,
+  "keyboardCues": 103,
+  "keyboardSync": "one keydown at each newly visible character frame",
+  "cues": [
+    {
+      "type": "transition",
+      "at": 3.0999999999999996,
+      "duration": 0.8
+    },
+    {
+      "type": "transition",
+      "at": 8.6,
+      "duration": 0.8
+    },
+    {
+      "type": "transition",
+      "at": 10.6,
+      "duration": 0.8
+    },
+    {
+      "type": "transition",
+      "at": 21.7,
+      "duration": 0.8
+    },
+    {
+      "type": "transition",
+      "at": 27.8,
+      "duration": 0.8
+    },
+    {
+      "type": "transition",
+      "at": 33.7,
+      "duration": 0.8
+    },
+    {
+      "type": "transition",
+      "at": 37.7,
+      "duration": 0.8
+    },
+    {
+      "type": "transition",
+      "at": 41.7,
+      "duration": 0.8
+    },
+    {
+      "type": "transition",
+      "at": 45.7,
+      "duration": 0.8
+    },
+    {
+      "type": "transition",
+      "at": 49.7,
+      "duration": 0.8
+    },
+    {
+      "type": "click",
+      "at": 9.75,
+      "duration": 0.18
+    },
+    {
+      "type": "click",
+      "at": 33.2,
+      "duration": 0.18
+    },
+    {
+      "type": "click",
+      "at": 38.5833,
+      "duration": 0.18
+    },
+    {
+      "type": "click",
+      "at": 39.25,
+      "duration": 0.18
+    },
+    {
+      "type": "click",
+      "at": 41.6667,
+      "duration": 0.18
+    },
+    {
+      "type": "click",
+      "at": 48.2,
+      "duration": 0.18
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 234,
+      "at": 3.9,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 237,
+      "at": 3.95,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 240,
+      "at": 4,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 243,
+      "at": 4.05,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 246,
+      "at": 4.1,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 249,
+      "at": 4.15,
+      "duration": 0.076,
+      "key": "space"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 252,
+      "at": 4.2,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 255,
+      "at": 4.25,
+      "duration": 0.076,
+      "key": "space"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 258,
+      "at": 4.3,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 261,
+      "at": 4.35,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 264,
+      "at": 4.4,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 267,
+      "at": 4.45,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 270,
+      "at": 4.5,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 273,
+      "at": 4.55,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 276,
+      "at": 4.6,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 279,
+      "at": 4.65,
+      "duration": 0.076,
+      "key": "space"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 282,
+      "at": 4.7,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 285,
+      "at": 4.75,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 288,
+      "at": 4.8,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 291,
+      "at": 4.85,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 294,
+      "at": 4.9,
+      "duration": 0.076,
+      "key": "space"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 298,
+      "at": 4.966666666666667,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 301,
+      "at": 5.016666666666667,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 304,
+      "at": 5.066666666666666,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 307,
+      "at": 5.116666666666666,
+      "duration": 0.076,
+      "key": "space"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 310,
+      "at": 5.166666666666667,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 313,
+      "at": 5.216666666666667,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 316,
+      "at": 5.266666666666667,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 319,
+      "at": 5.316666666666666,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 322,
+      "at": 5.366666666666666,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 325,
+      "at": 5.416666666666667,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 328,
+      "at": 5.466666666666667,
+      "duration": 0.076,
+      "key": "space"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 331,
+      "at": 5.516666666666667,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 334,
+      "at": 5.566666666666666,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 337,
+      "at": 5.616666666666666,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 340,
+      "at": 5.666666666666667,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 343,
+      "at": 5.716666666666667,
+      "duration": 0.076,
+      "key": "space"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 346,
+      "at": 5.766666666666667,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 349,
+      "at": 5.816666666666666,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 352,
+      "at": 5.866666666666666,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 355,
+      "at": 5.916666666666667,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 358,
+      "at": 5.966666666666667,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 362,
+      "at": 6.033333333333333,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 365,
+      "at": 6.083333333333333,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 368,
+      "at": 6.133333333333334,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 371,
+      "at": 6.183333333333334,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 374,
+      "at": 6.233333333333333,
+      "duration": 0.076,
+      "key": "space"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 377,
+      "at": 6.283333333333333,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 380,
+      "at": 6.333333333333333,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 383,
+      "at": 6.383333333333334,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 386,
+      "at": 6.433333333333334,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 389,
+      "at": 6.483333333333333,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 392,
+      "at": 6.533333333333333,
+      "duration": 0.076,
+      "key": "space"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 395,
+      "at": 6.583333333333333,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 398,
+      "at": 6.633333333333334,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 401,
+      "at": 6.683333333333334,
+      "duration": 0.076,
+      "key": "space"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 404,
+      "at": 6.733333333333333,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 407,
+      "at": 6.783333333333333,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 410,
+      "at": 6.833333333333333,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 413,
+      "at": 6.883333333333334,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 416,
+      "at": 6.933333333333334,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 419,
+      "at": 6.983333333333333,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 422,
+      "at": 7.033333333333333,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 425,
+      "at": 7.083333333333333,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1715,
+      "at": 28.583333333333332,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1719,
+      "at": 28.65,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1723,
+      "at": 28.716666666666665,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1727,
+      "at": 28.783333333333335,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1731,
+      "at": 28.85,
+      "duration": 0.076,
+      "key": "space"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1735,
+      "at": 28.916666666666668,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1740,
+      "at": 29,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1744,
+      "at": 29.066666666666666,
+      "duration": 0.076,
+      "key": "space"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1748,
+      "at": 29.133333333333333,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1752,
+      "at": 29.2,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1756,
+      "at": 29.266666666666666,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1760,
+      "at": 29.333333333333332,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1764,
+      "at": 29.4,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1769,
+      "at": 29.483333333333334,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1773,
+      "at": 29.55,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1777,
+      "at": 29.616666666666667,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1781,
+      "at": 29.683333333333334,
+      "duration": 0.076,
+      "key": "space"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1785,
+      "at": 29.75,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1789,
+      "at": 29.816666666666666,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1794,
+      "at": 29.9,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1798,
+      "at": 29.966666666666665,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1802,
+      "at": 30.033333333333335,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1806,
+      "at": 30.1,
+      "duration": 0.076,
+      "key": "space"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1810,
+      "at": 30.166666666666668,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1814,
+      "at": 30.233333333333334,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1818,
+      "at": 30.3,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1823,
+      "at": 30.383333333333333,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1827,
+      "at": 30.45,
+      "duration": 0.076,
+      "key": "space"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1831,
+      "at": 30.516666666666666,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1835,
+      "at": 30.583333333333332,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1839,
+      "at": 30.65,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1843,
+      "at": 30.716666666666665,
+      "duration": 0.076,
+      "key": "space"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1848,
+      "at": 30.8,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1852,
+      "at": 30.866666666666667,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1856,
+      "at": 30.933333333333334,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1860,
+      "at": 31,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1864,
+      "at": 31.066666666666666,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1868,
+      "at": 31.133333333333333,
+      "duration": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "timbre": "keyboard",
+      "frame": 1872,
+      "at": 31.2,
+      "duration": 0.076,
+      "key": "key"
+    }
+  ],
+  "silenceRatio": 0.7351514136904762,
+  "duration": 56,
+  "sampleRate": 48000,
+  "channels": 2,
+  "peakDbFS": -16.13424100122738,
+  "rmsDbFS": -42.5685486940109,
+  "clippedSamples": 0,
+  "finalSamples": [
+    0,
+    0
+  ],
+  "rights": "Original procedural synthesis; no external audio sources.",
+  "listeningReview": false
+}

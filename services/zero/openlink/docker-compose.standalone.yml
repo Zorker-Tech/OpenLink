@@ -8,7 +8,7 @@ services:
       ETCD_QUOTA_BACKEND_BYTES: "4294967296"
       ETCD_SNAPSHOT_COUNT: "50000"
     volumes:
-      - ${OPENLINK_ZERO_DATA_ROOT:-.}/etcd:/etcd
+      - ${OPENLINK_ZERO_ETCD_SOURCE:-./etcd}:/etcd
     command: etcd -advertise-client-urls=http://etcd:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
     healthcheck:
       test: ["CMD", "etcdctl", "endpoint", "health"]
@@ -23,7 +23,7 @@ services:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
     volumes:
-      - ${OPENLINK_ZERO_DATA_ROOT:-.}/minio:/minio_data
+      - ${OPENLINK_ZERO_MINIO_SOURCE:-./minio}:/minio_data
     command: minio server /minio_data --console-address ":9001"
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
@@ -46,7 +46,7 @@ services:
       # The right-hand path is an image-internal compatibility path used by
       # the vendored engine. The host-side runtime directory is product-owned
       # and is always named `zero`.
-      - ${OPENLINK_ZERO_DATA_ROOT:-.}/zero:/var/lib/milvus
+      - ${OPENLINK_ZERO_ENGINE_SOURCE:-./zero}:/var/lib/milvus
     ports:
       - "${OPENLINK_ZERO_PORT:-19530}:19530"
       - "${OPENLINK_ZERO_HEALTH_PORT:-9091}:9091"
@@ -65,3 +65,8 @@ services:
 networks:
   default:
     name: openlink-zero
+
+volumes:
+  zero-etcd:
+  zero-minio:
+  zero-engine:

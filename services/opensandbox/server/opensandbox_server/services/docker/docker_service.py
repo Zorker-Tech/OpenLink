@@ -73,6 +73,7 @@ from opensandbox_server.services.docker.metadata import DockerMetadataStore
 from opensandbox_server.services.docker.port_allocator import (
     allocate_port_bindings,
     normalize_port_bindings,
+    with_port_binding_retry,
 )
 from opensandbox_server.services.windows_common import (
     inject_windows_resource_limits_env,
@@ -804,29 +805,23 @@ class DockerSandboxService(DockerDiagnosticsMixin, DockerRuntimeMixin, DockerVol
 
                 egress_token = generate_egress_token()
                 labels[SANDBOX_EGRESS_AUTH_TOKEN_METADATA_KEY] = egress_token
-                sidecar_port_bindings = allocate_port_bindings([*exposed_ports, "18080"], min_port=self.app_config.docker.port_range_min, max_port=self.app_config.docker.port_range_max)
+                sidecar_port_bindings, sidecar_container = with_port_binding_retry(
+                    lambda: allocate_port_bindings([*exposed_ports, "18080"], min_port=self.app_config.docker.port_range_min, max_port=self.app_config.docker.port_range_max),
+                    lambda bindings: self._start_egress_sidecar(
+                        sandbox_id=sandbox_id,
+                        network_policy=request.network_policy,
+                        egress_token=egress_token,
+                        host_execd_port=bindings["44772"][1],
+                        host_http_port=bindings["8080"][1],
+                        extra_port_bindings={port: binding for port, binding in bindings.items() if port not in {"44772", "8080"}},
+                        egress_api_host_port=bindings["18080"][1] if "18080" in bindings else None,
+                        runtime_volume_name=runtime_volume_name,
+                        credential_proxy_enabled=credential_proxy_enabled,
+                        extra_env=egress_env or None,
+                    ),
+                )
                 host_execd_port = sidecar_port_bindings["44772"][1]
                 host_http_port = sidecar_port_bindings["8080"][1]
-                egress_api_binding = sidecar_port_bindings.get("18080")
-                extra_sidecar_port_bindings = {
-                    port: binding
-                    for port, binding in sidecar_port_bindings.items()
-                    if port not in {"44772", "8080"}
-                }
-                sidecar_container = self._start_egress_sidecar(
-                    sandbox_id=sandbox_id,
-                    network_policy=request.network_policy,
-                    egress_token=egress_token,
-                    host_execd_port=host_execd_port,
-                    host_http_port=host_http_port,
-                    extra_port_bindings=extra_sidecar_port_bindings,
-                    egress_api_host_port=(
-                        egress_api_binding[1] if egress_api_binding is not None else None
-                    ),
-                    runtime_volume_name=runtime_volume_name,
-                    credential_proxy_enabled=credential_proxy_enabled,
-                    extra_env=egress_env or None,
-                )
                 labels[SANDBOX_EMBEDDING_PROXY_PORT_LABEL] = str(host_execd_port)
                 labels[SANDBOX_HTTP_PORT_LABEL] = str(host_http_port)
                 host_config_kwargs = self._base_host_config_kwargs(

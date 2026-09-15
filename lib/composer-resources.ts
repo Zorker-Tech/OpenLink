@@ -16,6 +16,28 @@ export interface RuntimeComposerResources {
   accessMode: 'restricted' | 'ask' | 'open'
   mcpServers: Array<{ id: string; name: string }>
   imageGeneration: boolean
+  /** Native commands returned by this session's agent runtime. */
+  commands: Array<{
+    name: string
+    description: string
+    source: 'builtin' | 'extension' | 'prompt' | 'skill'
+  }>
+}
+
+/** Dynamic prompt candidates returned by the selected session's native Agent.
+ * `path` is a canonical Codex mention target (file path, plugin://, app:// or
+ * thread://), never a browser-invented identifier. */
+export interface RuntimePromptResource {
+  id: string
+  type: 'skill' | 'plugin' | 'app' | 'file' | 'thread' | 'model' | 'mode' | 'mcp' | 'permission'
+  label: string
+  description: string
+  /** Right-aligned status used by read-only native inventories such as MCP. */
+  secondaryContent?: string
+  insertText: string
+  group: string
+  command?: string
+  path?: string
 }
 
 /** Display-safe snapshot of the current machine's Codex runtime. Plugin

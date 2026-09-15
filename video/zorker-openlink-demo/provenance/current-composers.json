@@ -1,0 +1,205 @@
+{
+  "roots": [
+    {
+      "source": "components/workspace-prompt.tsx",
+      "symbol": "WorkspacePrompt",
+      "sha256": "1e9f262b21b213f82211888716cb814249c8f1ca3f8d8acf83c480eb1aed1303",
+      "output": "components/film-home-composer.tsx"
+    },
+    {
+      "source": "components/chat-workspace.tsx",
+      "symbol": "ChatComposer / ComposerSubmitButton / ComposerAttachments",
+      "sha256": "197ac0e73e0eec670faa200586dc1740d77d7b99e9ca5dc2013d98c5cf71bda6",
+      "output": "components/film-chat-composer.tsx"
+    }
+  ],
+  "records": [
+    {
+      "source": "lib/utils.ts",
+      "sourceSha256": "e46429536f43f5910f5b2b0c50bb2769b510a4558bb4b5d20a3b0a9091dbf7c3",
+      "output": "src/reference-film/current-ui/lib/utils.js",
+      "outputSha256": "65f369004a052eabd90633cb51b5fae3d6e22923212354e7adc073caa1b18723",
+      "method": "current source TypeScript transpilation with import rebasing only"
+    },
+    {
+      "source": "components/ui/button.tsx",
+      "sourceSha256": "d14549ab3ba7a9d5d1f424c2599233bffa0b317121abf3b6efa2fb902d5e2781",
+      "output": "src/reference-film/current-ui/components/ui/button.js",
+      "outputSha256": "cbccc19976bb79c79216a03c5b93cc8f3ea43673d99fd1ab7999eb1e886d054f",
+      "method": "current source TypeScript transpilation with import rebasing only"
+    },
+    {
+      "source": "components/ui/theme-scope.tsx",
+      "sourceSha256": "72215a0332a81a06b3919ae4ec138de38aec3f11c7435e1d2574523e058f93b3",
+      "output": "src/reference-film/current-ui/components/ui/theme-scope.js",
+      "outputSha256": "2f85e2887ae4d3c5790977d8fed2294c2c4a0e76077ce9c0637873ece2724657",
+      "method": "current source TypeScript transpilation with import rebasing only"
+    },
+    {
+      "source": "components/ui/dialog.tsx",
+      "sourceSha256": "03af7b3b6ff03c4b88053eafab3ebf2ae0bd5c931a77e896eef51af097d156bb",
+      "output": "src/reference-film/current-ui/components/ui/dialog.js",
+      "outputSha256": "2219f42728593075a71484a485729477f8b5105b885b22c9513c2e37e4fb7381",
+      "method": "current source TypeScript transpilation with import rebasing only"
+    },
+    {
+      "source": "components/ui/input.tsx",
+      "sourceSha256": "f7d6ecff9a4d631feeaf401c02bb87e26ddb38131c55d15a43b9290747390847",
+      "output": "src/reference-film/current-ui/components/ui/input.js",
+      "outputSha256": "ab89b4734ec59f31ddd712acca38ebcf3413fc6da5a012ff5621f40f2c1d2de7",
+      "method": "current source TypeScript transpilation with import rebasing only"
+    },
+    {
+      "source": "components/ui/textarea.tsx",
+      "sourceSha256": "58b58d84fc54ba5f4ca46937870c619349fd9eccc4d494250ac7bc73a94e05e9",
+      "output": "src/reference-film/current-ui/components/ui/textarea.js",
+      "outputSha256": "ad2196f884a239d9baf590e374db23f3681e53e7a95b0217c791893d3a708926",
+      "method": "current source TypeScript transpilation with import rebasing only"
+    },
+    {
+      "source": "components/ui/input-group.tsx",
+      "sourceSha256": "17e76f6e6093754756dd10182f833abf35f1020dc4a8a7ead8c0f9703576870b",
+      "output": "src/reference-film/current-ui/components/ui/input-group.js",
+      "outputSha256": "771ba53eaa812a03626499985f78c56a00efe3413ba8ec453fd9a6b2c86fc5b6",
+      "method": "current source TypeScript transpilation with import rebasing only"
+    },
+    {
+      "source": "components/ui/command.tsx",
+      "sourceSha256": "b80b0f0356add12993366cd4571ceae1416f50035ac189876373d0e5050308c5",
+      "output": "src/reference-film/current-ui/components/ui/command.js",
+      "outputSha256": "6684e84ccea6c50637d32a6274dcba427ba6754b7bbcd60686b05bb7b1e165a5",
+      "method": "current source TypeScript transpilation with import rebasing only"
+    },
+    {
+      "source": "components/ui/dropdown-menu.tsx",
+      "sourceSha256": "4c0a6c8ad0b97b042990217a314ecbf47c4093b4d1549168b23f7fcac5dd6b60",
+      "output": "src/reference-film/current-ui/components/ui/dropdown-menu.js",
+      "outputSha256": "b2cc1c91c2f23d7a3a3bf115e9400e9350675aba51e1ebee6b5f29e86ed3f8ab",
+      "method": "current source TypeScript transpilation with import rebasing only"
+    },
+    {
+      "source": "components/ui/hover-card.tsx",
+      "sourceSha256": "c4d107bcdc7fc3bdffc43f0b297ec02569816690e2bac3bb3a124c0dd189f8ec",
+      "output": "src/reference-film/current-ui/components/ui/hover-card.js",
+      "outputSha256": "3c14d74c3f3afbb1dacda2a5dc24eb98dfacb99a2d36540e981459222dd64fab",
+      "method": "current source TypeScript transpilation with import rebasing only"
+    },
+    {
+      "source": "components/ui/select.tsx",
+      "sourceSha256": "997869eb0a7249d29f8ac7b932c7eed5091cb95cd1e6d7569712619d055743e6",
+      "output": "src/reference-film/current-ui/components/ui/select.js",
+      "outputSha256": "5ec31aad40edd80ec69ecbfeb30ae70a6556f6b4a11f2da0b2e6f1342be554c9",
+      "method": "current source TypeScript transpilation with import rebasing only"
+    },
+    {
+      "source": "components/ui/spinner.tsx",
+      "sourceSha256": "900f722c961fa6e1c28104809d56831c9056dc69599e49d364cc13a6f33966a3",
+      "output": "src/reference-film/current-ui/components/ui/spinner.js",
+      "outputSha256": "b193237b81d992f93461660e846e291b52fed69d48cd376a6aec5ecc2c37a781",
+      "method": "current source TypeScript transpilation with import rebasing only"
+    },
+    {
+      "source": "components/ui/tooltip.tsx",
+      "sourceSha256": "1fb2835e8177c9088e63e63cf49f76c4253caf59600866033fbd84d053b0974c",
+      "output": "src/reference-film/current-ui/components/ui/tooltip.js",
+      "outputSha256": "ee9e6b176b93ed52d6233331b7456a98dced125c0c4001fd5aca6843adec9a6d",
+      "method": "current source TypeScript transpilation with import rebasing only"
+    },
+    {
+      "source": "lib/prompt-keyboard.ts",
+      "sourceSha256": "19118bbae1081793167145cbce718806a6167c1a82ceb1e94b1d8d6796bc06ae",
+      "output": "src/reference-film/current-ui/lib/prompt-keyboard.js",
+      "outputSha256": "4b6e91346af697bd4e297a2e6cb89d3f45193bb4f4992f70358a9f3cf767436a",
+      "method": "current source TypeScript transpilation with import rebasing only"
+    },
+    {
+      "source": "components/ai-elements/prompt-input.tsx",
+      "sourceSha256": "a3b6f9cf0e98167c08d91b9000c74261e023bf927860d33a9eece68e9cc49b8f",
+      "output": "src/reference-film/current-ui/components/ai-elements/prompt-input.js",
+      "outputSha256": "0ac02d0596f3c3ac5eea0add799b9107019c50d73fe1e3860da4a195a35b69bf",
+      "method": "current source TypeScript transpilation with import rebasing only"
+    },
+    {
+      "source": "lib/prompt-input-protocol.ts",
+      "sourceSha256": "0aac2688b504d4dea63f3f21f20f3e7b1c8ed279010fa40eb8d7bcb2d7e2b9cc",
+      "output": "src/reference-film/current-ui/lib/prompt-input-protocol.js",
+      "outputSha256": "f4475623435e89b745b228feec51d1ae9414f4ace2fa86efa8cc58f21030c624",
+      "method": "current source TypeScript transpilation with import rebasing only"
+    },
+    {
+      "source": "lib/prompt-suggestion-navigation.ts",
+      "sourceSha256": "106adf6243d1fcc761595c6e1c7f3563db60576b4af7c72a83f505564fd8fa1a",
+      "output": "src/reference-film/current-ui/lib/prompt-suggestion-navigation.js",
+      "outputSha256": "05206fb799958bccda4ad28e66094d1fe013ed192304c415ba927c6ad9208967",
+      "method": "current source TypeScript transpilation with import rebasing only"
+    },
+    {
+      "source": "components/agent-prompt-textarea.tsx",
+      "sourceSha256": "54eb9473da3c0dd31a19029f0c38b7fee170bb551a2d79afa18a53da7125ed7c",
+      "output": "src/reference-film/current-ui/components/agent-prompt-textarea.js",
+      "outputSha256": "2911b0350ae7f97530d1d9b044a78651a810f9c399c9bffec11835eef2d7068b",
+      "method": "current source TypeScript transpilation with import rebasing only"
+    },
+    {
+      "source": "components/prompt-add-menu.tsx",
+      "sourceSha256": "d74d0e8325d556dbf812da0a3b987a18e888c656014a01f4acb09c66019b928a",
+      "output": "src/reference-film/current-ui/components/prompt-add-menu.js",
+      "outputSha256": "c37f3fdd8d35abccd72ef47db310bdb5fbc9d8fc75dcf592478b2843498612cf",
+      "method": "current source TypeScript transpilation with import rebasing only"
+    },
+    {
+      "source": "components/access-mode-picker.tsx",
+      "sourceSha256": "d07445bdc4cfada396262158ff4c20fce86895463f638fd33a41564029b77a8c",
+      "output": "src/reference-film/current-ui/components/access-mode-picker.js",
+      "outputSha256": "73f83450034d51d51af30cfffb818a56d7fef5c975566ab1b63857c8d8d2b7ff",
+      "method": "current source TypeScript transpilation with import rebasing only"
+    },
+    {
+      "source": "components/agent-kind-picker.tsx",
+      "sourceSha256": "cc6cb2044d9171206f0c9bb6df8b92186b2f4053724bcf820f53d64b93b4232e",
+      "output": "src/reference-film/current-ui/components/agent-kind-picker.js",
+      "outputSha256": "3f77babf294ae14658d28062d07d98093d3e72af86f80ad282388e2bd406f57a",
+      "method": "current source TypeScript transpilation with import rebasing only"
+    },
+    {
+      "source": "components/ai-elements/model-selector.tsx",
+      "sourceSha256": "23e0d7b6bc4dd857db0855fc0f86cfc5596d7da6d31fe6c0d581b8d6249f47e5",
+      "output": "src/reference-film/current-ui/components/ai-elements/model-selector.js",
+      "outputSha256": "51c8c5905d53176763f893838c42bfe5eb5058182c0b46d5b3db711df69c6a84",
+      "method": "current source TypeScript transpilation with import rebasing only"
+    },
+    {
+      "source": "components/film-home-composer.tsx",
+      "sourceSha256": "6bf376a43a8cd7022d9a5ad515d9454b4debd113582acdf91b64887d750c560d",
+      "output": "src/reference-film/current-ui/components/film-home-composer.js",
+      "outputSha256": "6f2ad0520977e0313f80795812227a9411c0615e8c0124d7f723708858505a6e",
+      "method": "current source JSX with deterministic fixture state and inert callbacks"
+    },
+    {
+      "source": "components/ai-elements/attachments.tsx",
+      "sourceSha256": "841c70af1fb6b7d284b4dcd5ab650a87f0ea9298cbc41e6f6f409e13c2dba155",
+      "output": "src/reference-film/current-ui/components/ai-elements/attachments.js",
+      "outputSha256": "b6ced0832d08ebebb1bd62fbad9b0fb57e79e2b86a11276837736f53c41e1ae7",
+      "method": "current source TypeScript transpilation with import rebasing only"
+    },
+    {
+      "source": "components/film-chat-composer.tsx",
+      "sourceSha256": "b7218821068bb13d9527895cf9bd31606585cc95f7646b198316c65c4ce97e91",
+      "output": "src/reference-film/current-ui/components/film-chat-composer.js",
+      "outputSha256": "a47866082ffd8b121ae2d09a255ae88791b387fe9a7e882922da562998ff7870",
+      "method": "current source JSX with deterministic fixture state and inert callbacks"
+    }
+  ],
+  "css": {
+    "source": "app/globals.css",
+    "sha256": "2002e0c5ef8aa62e6f66f3af622060ad841058f10f1e6c707770b9c6ed1c5e1c",
+    "output": "src/reference-film/current-theme.css",
+    "outputSha256": "9ee00deffed053f10a3e536e936f917d98401148dec5329d778cf2921832870c"
+  },
+  "adaptations": [
+    "Homepage uses current WorkspacePrompt with Zorker/agent, disabled Cloud and active Local, permission, named model, project entry and round send button.",
+    "Chat uses current compact single-line composer unless actual wrapping requires expansion. No forced expanded state.",
+    "Menus remain closed, attachments empty, service callbacks inert. Model name is a repository Storybook-style demonstration fixture.",
+    "Current dependencies, JSX, CSS classes and SVG assets retained. No source application changes."
+  ]
+}

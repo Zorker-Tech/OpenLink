@@ -40,9 +40,14 @@ try {
   for (const relative of [
     'app/web/server.js',
     'services/agent-host/dist/src/main.js',
+    'services/agent-host/dist/src/project-container-main.js',
+    'services/agent-host/project-supabase-runtime.mjs',
+    'scripts/lib/project-supabase-bundle.mjs',
+    'services/agent-host/dist/src/desktop-main.js',
     'services/browser-host/dist/src/main.js',
     'services/knowledge-service/dist/src/main.js',
     'orchestration/backend/docker/docker-compose.yml',
+    'orchestration/backend/docker/.env.example',
     'orchestration/services/zero/docker-compose.standalone.yml',
     'orchestration/docker-compose.production.yml',
     'orchestration/docker-compose.zero-production.yml',
@@ -50,10 +55,26 @@ try {
     'images/zokerbase/manifest.json',
     'images/zero/manifest.json',
     'toolchain/bin/podman',
+    'edge/bin/caddy',
+    'edge/Caddyfile',
+    'browser/manifest.json',
+    'browser/chromium/chrome',
     'project-vm/manifest.json',
     `project-vm/openlink-project-vm-base-${target.architecture}.${target.diskFormat}`,
+    'project-supabase/manifest.json',
+    'project-supabase/runtime.lock.json',
+    'project-supabase/runtime.spec.json',
+    'project-supabase/image-manifest.json',
+    'project-supabase/release-trust.json',
+    'systemd/openlink.service',
     'systemd/openlink-container-broker.service',
-  ]) await fixtureFile(relative, relative.endsWith('.json') ? '{}\n' : `${relative}\n`, relative.includes('/bin/') ? 0o755 : 0o644)
+    'systemd/openlink-project-container-broker.service',
+  ]) {
+    const contents = relative === 'browser/manifest.json'
+      ? `${JSON.stringify({ target: target.triple, executable: 'chromium/chrome' })}\n`
+      : relative.endsWith('.json') ? '{}\n' : `${relative}\n`
+    await fixtureFile(relative, contents, relative.includes('/bin/') || relative === 'browser/chromium/chrome' ? 0o755 : 0o644)
+  }
 
   const keys = generateKeyPairSync('ed25519')
   const releaseId = `qualification-${target.triple}`

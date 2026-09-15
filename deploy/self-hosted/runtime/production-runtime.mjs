@@ -35,7 +35,7 @@ const KNOWLEDGE_ENVIRONMENT_KEYS = [
 ]
 const AGENT_ENVIRONMENT_KEYS = [
   'NODE_ENV', 'OPENLINK_RELEASE_ID', 'OPENLINK_RUNTIME_MODE', 'OPENLINK_DEPLOYMENT_PROFILE', 'OPENLINK_DEPLOYMENT_PROFILE_REVISION',
-  'OPENLINK_PROJECT_RUNTIME', 'OPENLINK_PROJECT_ISOLATION', 'OPENLINK_AGENT_API_TOKEN', 'OPEN_SANDBOX_API_KEY',
+  'OPENLINK_PROJECT_RUNTIME', 'OPENLINK_PROJECT_ISOLATION', 'OPENLINK_PROJECT_CONTAINER_BROKER_SOCKET', 'OPENLINK_AGENT_RELEASE_ROOT', 'OPENLINK_AGENT_API_TOKEN', 'OPEN_SANDBOX_API_KEY',
   'OPEN_SANDBOX_DOMAIN', 'OPENLINK_PROVIDER_SECRET_KEY', 'OPENLINK_SUPABASE_URL', 'OPENLINK_SUPABASE_SERVICE_ROLE_KEY',
   'NEXT_PUBLIC_SUPABASE_URL', 'OPENLINK_AGENT_HOST', 'OPENLINK_AGENT_PORT', 'OPENLINK_AGENT_PUBLIC_URL',
   'OPENLINK_AGENT_STORAGE_ROOT', 'OPENLINK_AGENT_WORKSPACE_ROOT', 'OPENLINK_AGENT_SESSION_IDLE_TTL_MS',
@@ -203,6 +203,7 @@ export async function createRuntimePlan(options = {}) {
     NODE_ENV: 'production',
     OPENLINK_RUNTIME_MODE: 'local',
     OPENLINK_RELEASE_ID: basename(releaseRoot),
+    OPENLINK_AGENT_RELEASE_ROOT: releaseRoot,
     NEXT_PUBLIC_OPENLINK_RUNTIME_MODE: 'local',
     PORT: webPort,
     HOSTNAME: '127.0.0.1',
@@ -253,13 +254,21 @@ export async function createRuntimePlan(options = {}) {
       name: 'zokerbase', command: docker, cwd: zokerbaseRoot,
       args: ['compose', '--project-name', 'zokerbase', '--env-file', zokerbaseEnvFile, '--file', join(zokerbaseRoot, 'docker-compose.yml'), '--file', join(zokerbaseRoot, 'docker-compose.zokerbase.yml'), '--file', join(zokerbaseRoot, 'docker-compose.openlink.yml'), '--file', productionOverlay, 'up', '--detach', '--pull', 'never', '--wait', '--wait-timeout', '600'],
       stopArgs: ['compose', '--project-name', 'zokerbase', '--env-file', zokerbaseEnvFile, '--file', join(zokerbaseRoot, 'docker-compose.yml'), '--file', join(zokerbaseRoot, 'docker-compose.zokerbase.yml'), '--file', join(zokerbaseRoot, 'docker-compose.openlink.yml'), '--file', productionOverlay, 'stop', '--timeout', '120'],
-      environment: { ...environment, OPENLINK_ZOKERBASE_DATA_ROOT: join(stateRoot, 'zokerbase') },
+      environment: {
+        ...environment,
+        OPENLINK_ZOKERBASE_DATA_ROOT: environment.OPENLINK_ZOKERBASE_GUEST_DATA_ROOT || join(stateRoot, 'zokerbase'),
+      },
     },
     ...(profile.components.zero ? [{
       name: 'zero', command: docker, cwd: zeroRoot,
       args: ['compose', '--project-name', 'openlink-zero', '--file', join(zeroRoot, 'docker-compose.standalone.yml'), '--file', zeroProductionOverlay, 'up', '--detach', '--pull', 'never', '--wait', '--wait-timeout', '600'],
       stopArgs: ['compose', '--project-name', 'openlink-zero', '--file', join(zeroRoot, 'docker-compose.standalone.yml'), '--file', zeroProductionOverlay, 'stop', '--timeout', '120'],
-      environment: { ...environment, OPENLINK_ZERO_DATA_ROOT: join(stateRoot, 'zero'), OPENLINK_ZERO_PORT: zeroPort, OPENLINK_ZERO_HEALTH_PORT: zeroHealthPort },
+      environment: {
+        ...environment,
+        OPENLINK_ZERO_DATA_ROOT: environment.OPENLINK_ZERO_GUEST_DATA_ROOT || join(stateRoot, 'zero'),
+        OPENLINK_ZERO_PORT: zeroPort,
+        OPENLINK_ZERO_HEALTH_PORT: zeroHealthPort,
+      },
     }] : []),
   ]
   const processes = [
@@ -319,7 +328,7 @@ async function defaultProbe(url) {
 }
 
 export async function checkContainerRuntime(plan, runCommand = defaultCommand) {
-  await runCommand(plan.docker, ['info', '--format', '{{.ServerVersion}}'])
+  await runCommand(plan.docker, ['info', '--format', 'json'])
   await runCommand(plan.docker, ['compose', 'version', '--short'])
   return { ready: true }
 }

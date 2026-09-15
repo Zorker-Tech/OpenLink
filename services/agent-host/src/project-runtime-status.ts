@@ -1,6 +1,9 @@
 import type { ProjectVmBackend, ProjectVmDiskMode } from './project-vm.js'
 
 export type ProjectRuntimeStatus = 'provisioning' | 'ready' | 'stopped' | 'error' | 'deleting'
+export type ProjectRuntimeProvisioningPhase = 'queued' | 'claimed' | 'starting_vm' | 'configuring_runtime'
+  | 'starting_project_database' | 'starting_agent_services' | 'connecting_services'
+  | 'retry_wait' | 'ready' | 'stopped' | 'deleting' | 'failed'
 
 export interface ProjectRuntimeStatusUpdate {
   projectId: string
@@ -8,6 +11,7 @@ export interface ProjectRuntimeStatusUpdate {
   machineName: string
   workspacePath: string
   status: ProjectRuntimeStatus
+  phase?: ProjectRuntimeProvisioningPhase
   opensandboxEndpoint?: string
   browserHostEndpoint?: string
   desiredCpus?: number
@@ -59,12 +63,19 @@ export class SupabaseProjectRuntimeStatusWriter implements ProjectRuntimeStatusW
   }
 
   async update(update: ProjectRuntimeStatusUpdate): Promise<void> {
+    const phase = update.phase ?? (update.status === 'ready' ? 'ready'
+      : update.status === 'stopped' ? 'stopped'
+        : update.status === 'deleting' ? 'deleting'
+          : update.status === 'error' ? 'failed'
+            : 'configuring_runtime')
     const payload = {
       project_id: update.projectId,
       backend: update.backend,
       machine_name: update.machineName,
       workspace_path: update.workspacePath,
       status: update.status,
+      provisioning_phase: phase,
+      provisioning_phase_updated_at: new Date().toISOString(),
       ...(update.opensandboxEndpoint !== undefined ? { opensandbox_endpoint: update.opensandboxEndpoint } : {}),
       ...(update.browserHostEndpoint !== undefined ? { browser_host_endpoint: update.browserHostEndpoint } : {}),
       ...(update.desiredCpus !== undefined ? { desired_cpus: update.desiredCpus } : {}),
@@ -73,7 +84,13 @@ export class SupabaseProjectRuntimeStatusWriter implements ProjectRuntimeStatusW
       ...(update.diskMode !== undefined ? { disk_mode: update.diskMode } : {}),
       ...(update.lastError !== undefined ? { last_error: update.lastError } : {}),
       updated_at: new Date().toISOString(),
-      ...(update.status === 'ready' ? { started_at: new Date().toISOString(), stopped_at: null } : {}),
+      ...(update.status === 'ready' ? {
+        started_at: new Date().toISOString(),
+        stopped_at: null,
+        provisioning_claimed_by: null,
+        provisioning_lease_expires_at: null,
+        provisioning_next_attempt_at: null,
+      } : {}),
       ...(update.status === 'stopped' ? { stopped_at: new Date().toISOString() } : {}),
     }
     const response = await this.fetchImpl(`${this.baseUrl}/rest/v1/project_runtimes?on_conflict=project_id`, {

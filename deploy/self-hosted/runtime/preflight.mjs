@@ -90,6 +90,9 @@ export async function runPreflight(options = {}) {
     ['runtime/node/bin/node', true],
     ['app/web/server.js', false],
     ['services/agent-host/dist/src/main.js', false],
+    ['services/agent-host/dist/src/project-container-main.js', false],
+    ['services/agent-host/project-supabase-runtime.mjs', false],
+    ['scripts/lib/project-supabase-bundle.mjs', false],
     ['services/browser-host/dist/src/main.js', false],
     ['services/knowledge-service/dist/src/main.js', false],
     ['services/agent-host/dist/src/desktop-main.js', false],
@@ -101,10 +104,16 @@ export async function runPreflight(options = {}) {
     ['edge/Caddyfile', false],
     ['browser/manifest.json', false],
     ['project-vm/manifest.json', false],
+    ['project-supabase/manifest.json', false],
+    ['project-supabase/runtime.lock.json', false],
+    ['project-supabase/runtime.spec.json', false],
+    ['project-supabase/image-manifest.json', false],
+    ['project-supabase/release-trust.json', false],
     ['orchestration/docker-compose.production.yml', false],
     ['orchestration/docker-compose.zero-production.yml', false],
     ['systemd/openlink.service', false],
     ['systemd/openlink-container-broker.service', false],
+    ['systemd/openlink-project-container-broker.service', false],
   ]
   for (const [relative, executable] of required) await assertFile(join(releaseRoot, ...relative.split('/')), { executable })
   const browserManifest = JSON.parse(await readFile(join(releaseRoot, 'browser/manifest.json'), 'utf8'))
@@ -143,7 +152,7 @@ export async function runPreflight(options = {}) {
     const docker = options.dockerCommand ?? 'docker'
     if (options.containerBrokerSocket) await requestContainerBroker(options.containerBrokerSocket, 'status', { timeoutMs: 30_000 })
     else {
-      await command(docker, ['info', '--format', '{{.ServerVersion}}'], { ...options, label: 'Docker Engine' })
+      await command(docker, ['info', '--format', 'json'], { ...options, label: 'Container Engine' })
       await command(docker, ['compose', 'version', '--short'], { ...options, label: 'Docker Compose' })
     }
     checks.push({ name: 'docker-engine', status: 'pass' })

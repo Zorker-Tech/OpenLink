@@ -108,6 +108,8 @@ function fileContentFromArgs(args: UnknownRecord, operation: 'write' | 'edit') {
 }
 
 export class PiEventAdapter {
+  private readonly sessionId: string
+  private readonly now: () => string
   private sequence: number
   // An adapter is created for every HTTP turn. Keep the turn's reserved event
   // range in generated task ids so `task:0` from a later turn cannot overwrite
@@ -128,10 +130,12 @@ export class PiEventAdapter {
   private taskIndex = 0
 
   constructor(
-    private readonly sessionId: string,
-    private readonly now: () => string = () => new Date().toISOString(),
+    sessionId: string,
+    now: () => string = () => new Date().toISOString(),
     startSequence = 0,
   ) {
+    this.sessionId = sessionId
+    this.now = now
     this.sequence = Math.max(0, startSequence)
     this.taskScope = String(this.sequence)
   }
@@ -142,6 +146,8 @@ export class PiEventAdapter {
     if (!value || !type || type === 'response') return []
 
     switch (type) {
+      case 'openlink_user_steer':
+        return [this.make({ type: 'message.user', messageId: stringValue(value.messageId), text: stringValue(value.text) })]
       case 'agent_start':
         return [this.make({ type: 'session.started' })]
       case 'agent_settled':
@@ -175,7 +181,7 @@ export class PiEventAdapter {
         })]
       }
       case 'extension_error':
-        return [this.make({ type: 'error', errorId: this.identity('extension-error'), message: stringValue(value.error) || stringValue(value.message) || 'Pi extension failed', recoverable: true })]
+        return [this.make({ type: 'error', errorId: this.identity('extension-error'), message: stringValue(value.error) || stringValue(value.message) || 'Pi extension failed', recoverable: value.terminal !== true })]
       case 'auto_retry_start':
         return [this.make({ type: 'status.updated', statusId: this.identity('retry'), label: `正在重试（${Number(value.attempt) || 1}/${Number(value.maxAttempts) || 3}）`, status: 'active', detail: stringValue(value.errorMessage) })]
       case 'compaction_start':
@@ -214,7 +220,13 @@ export class PiEventAdapter {
     }
     if (updateType === 'text_end') {
       this.currentAssistantMessageId ??= this.identity('assistant-message')
-      return [this.make({ type: 'message.completed', messageId: this.currentAssistantMessageId, text: stringValue(update.content) || undefined })]
+      // Pi's public stream always follows text_end with the authoritative
+      // assistant message_end frame. Completing here as well persisted every
+      // assistant bubble twice (once from the streaming part and once from the
+      // final message). Keep text_end as an internal part boundary and emit
+      // exactly one canonical completion from message_end, which also carries
+      // the final stopReason/error state.
+      return []
     }
     if (updateType === 'thinking_start') {
       this.currentReasoningId = this.identity('reasoning')
@@ -425,6 +437,7 @@ export class PiEventAdapter {
         message: stringValue(value.message) || undefined,
         options: Array.isArray(value.options) ? value.options.filter((option): option is string => typeof option === 'string') : undefined,
         inputKind: method,
+        confirmationKind: method === 'confirm' ? 'approval' : 'question',
       })]
     }
     if (method === 'notify') {

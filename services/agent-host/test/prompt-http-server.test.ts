@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { once } from 'node:events'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { createServer } from 'node:http'
@@ -9,14 +10,73 @@ import test from 'node:test'
 import { startPromptHttpServer, type PromptRuntimeBackend } from '../src/prompt-http-server.js'
 import type { ProjectRuntimeManager } from '../src/project-runtime.js'
 
+test('Codex plugin snapshot invalidation is authenticated and explicit', async (context) => {
+  const storageRoot = await mkdtemp(join(tmpdir(), 'openlink-plugin-invalidate-route-'))
+  context.after(async () => { await rm(storageRoot, { recursive: true, force: true }) })
+  let invalidations = 0
+  let creations = 0
+  let cleanups = 0
+  const backend: PromptRuntimeBackend = {
+    createSession: async () => {
+      creations += 1
+      return { prompt: async () => new Response(), cleanup: async () => { cleanups += 1 } }
+    },
+    close: async () => {},
+  }
+  const runtime = await startPromptHttpServer({
+    host: '127.0.0.1', port: 0, apiToken: 'test-token-which-is-long-enough', storageRoot,
+    transport: 'test', sessionIdleTtlMs: 60_000,
+    invalidateCodexPluginSnapshot: () => { invalidations += 1 },
+  }, backend)
+  context.after(async () => { runtime.server.close(); await runtime.shutdown() })
+  const address = runtime.server.address() as AddressInfo
+  const endpoint = `http://127.0.0.1:${address.port}/v1/agent/plugins/invalidate`
+  const leaseUrl = `http://127.0.0.1:${address.port}/v1/agent/sessions/plugin-session/lease`
+  const headers = { Authorization: 'Bearer test-token-which-is-long-enough', 'Content-Type': 'application/json' }
+  const leaseBody = JSON.stringify({
+    userId: 'user', workspaceId: 'workspace', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c', sessionId: 'plugin-session',
+    runtimeConfiguration: { providerId: 'openai', modelId: 'gpt-test', apiKey: 'test-key', baseUrl: 'https://api.openai.com/v1', revision: 'revision' },
+    agent: 'codex', accessMode: 'restricted',
+  })
+  assert.equal((await fetch(leaseUrl, { method: 'POST', headers, body: leaseBody })).status, 200)
+  const denied = await fetch(endpoint, { method: 'POST' })
+  assert.equal(denied.status, 403)
+  const accepted = await fetch(endpoint, { method: 'POST', headers })
+  assert.equal(accepted.status, 200)
+  assert.deepEqual(await accepted.json(), { ok: true })
+  assert.equal((await fetch(leaseUrl, { method: 'POST', headers, body: leaseBody })).status, 200)
+  assert.equal(invalidations, 1)
+  assert.equal(creations, 2)
+  assert.equal(cleanups, 1)
+})
+
 test('prompt server authenticates, streams NDJSON, and enforces runtime capacity', async () => {
   const storageRoot = await mkdtemp(join(tmpdir(), 'openlink-prompt-server-test-'))
   let closes = 0
+  let receivedAttachments: unknown
+  const imageAttachment = { type: 'image' as const, mediaType: 'image/png', url: 'data:image/png;base64,aGVsbG8=', filename: 'sample.png' }
+  const textAttachment = { type: 'text' as const, mediaType: 'text/plain' as const, text: 'pasted context', filename: '已粘贴的文本.txt' }
+  const referenceAttachment = { type: 'reference' as const, referenceType: 'thread' as const, name: 'Previous task', path: 'thread://task-123' }
+  const fileContent = Buffer.from('hello')
+  const fileAttachment = {
+    type: 'file' as const,
+    uploadId: '11111111-1111-4111-8111-111111111111',
+    batchId: '22222222-2222-4222-8222-222222222222',
+    mediaType: 'text/plain',
+    filename: 'notes.txt',
+    relativePath: 'sample/docs/notes.txt',
+    sizeBytes: fileContent.length,
+    sha256: createHash('sha256').update(fileContent).digest('hex'),
+    contentBase64: fileContent.toString('base64'),
+  }
   const backend: PromptRuntimeBackend = {
     createSession: async (_userId, _workspaceId, sessionId) => ({
-      prompt: async (message) => new Response(`${JSON.stringify({ type: 'echo', sessionId, message })}\n`, {
+      prompt: async (message, _signal, attachments) => {
+        receivedAttachments = attachments
+        return new Response(`${JSON.stringify({ type: 'echo', sessionId, message })}\n`, {
         headers: { 'Content-Type': 'application/x-ndjson' },
-      }),
+        })
+      },
       cleanup: async () => { closes += 1 },
     }),
     close: async () => { },
@@ -37,7 +97,7 @@ test('prompt server authenticates, streams NDJSON, and enforces runtime capacity
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        userId: 'user', workspaceId: 'workspace', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c', message: 'hello', runtimeConfiguration: {
+        userId: 'user', workspaceId: 'workspace', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c', message: 'hello', attachments: [imageAttachment], runtimeConfiguration: {
           providerId: 'deepseek', modelId: 'deepseek-v4-flash', apiKey: 'test-key', baseUrl: 'https://api.deepseek.com', revision: 'test-revision',
         }
       }),
@@ -48,7 +108,7 @@ test('prompt server authenticates, streams NDJSON, and enforces runtime capacity
       method: 'POST',
       headers: { Authorization: 'Bearer test-token-which-is-long-enough', 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        userId: 'user', workspaceId: 'workspace', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c', message: 'hello', runtimeConfiguration: {
+        userId: 'user', workspaceId: 'workspace', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c', message: 'hello', attachments: [imageAttachment, textAttachment, referenceAttachment, fileAttachment], runtimeConfiguration: {
           providerId: 'deepseek', modelId: 'deepseek-v4-flash', apiKey: 'test-key', baseUrl: 'https://api.deepseek.com', revision: 'test-revision',
         }
       }),
@@ -56,6 +116,18 @@ test('prompt server authenticates, streams NDJSON, and enforces runtime capacity
     assert.equal(accepted.status, 200)
     assert.equal(accepted.headers.get('x-openlink-agent-transport'), 'test-runtime')
     assert.deepEqual(JSON.parse((await accepted.text()).trim()), { type: 'echo', sessionId: 'one', message: 'hello' })
+    assert.deepEqual(receivedAttachments, [imageAttachment, textAttachment, referenceAttachment, fileAttachment])
+
+    const tampered = await fetch(`${endpoint}/v1/agent/sessions/one/events`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer test-token-which-is-long-enough', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: 'user', workspaceId: 'workspace', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c', message: 'hello', attachments: [{ ...fileAttachment, sha256: '0'.repeat(64) }], runtimeConfiguration: {
+          providerId: 'deepseek', modelId: 'deepseek-v4-flash', apiKey: 'test-key', baseUrl: 'https://api.deepseek.com', revision: 'test-revision',
+        }
+      }),
+    })
+    assert.equal(tampered.status, 400)
 
     const capacity = await fetch(`${endpoint}/v1/agent/sessions/two/events`, {
       method: 'POST',
@@ -211,6 +283,14 @@ test('agent lease refresh touches existing runtimes without provisioning a sandb
     assert.equal(lease.status, 200)
     assert.deepEqual(await lease.json(), { ok: true, active: 0 })
     assert.equal(creations, 0)
+    const resources = await fetch(`http://127.0.0.1:${address.port}/v1/agent/sessions/leaseable/resources`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer test-token-which-is-long-enough', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: 'user', workspaceId: 'workspace', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c', sessionId: 'leaseable' }),
+    })
+    assert.equal(resources.ok, false)
+    await resources.text()
+    assert.equal(creations, 0, 'passive resource inspection must not provision a Worker')
   } finally {
     runtime.server.close()
     await once(runtime.server, 'close')
@@ -325,14 +405,22 @@ test('codex lease warmup preserves agent identity and access mode for the first 
   }
 })
 
-test('runtime resources are read from the already leased worker', async () => {
+test('runtime resources materialize a missing worker without a synthetic prompt', async () => {
   const storageRoot = await mkdtemp(join(tmpdir(), 'openlink-runtime-resources-test-'))
+  let creations = 0
+  let resourceRequest: unknown
   const backend: PromptRuntimeBackend = {
-    createSession: async () => ({
-      prompt: async () => new Response(''),
-      resources: async () => ({ agent: 'codex', source: 'Codex App Server', accessMode: 'ask', imageGeneration: false, mcpServers: [{ id: 'openlink_supabase', name: 'OpenLink Supabase' }] }),
-      cleanup: async () => { },
-    }),
+    createSession: async () => {
+      creations += 1
+      return {
+        prompt: async () => new Response(''),
+        resources: async (request) => {
+          resourceRequest = request
+          return { agent: 'codex', source: 'Codex App Server', accessMode: 'ask', imageGeneration: false, mcpServers: [{ id: 'openlink_supabase', name: 'OpenLink Supabase' }] }
+        },
+        cleanup: async () => { },
+      }
+    },
     close: async () => { },
   }
   const runtime = await startPromptHttpServer({ host: '127.0.0.1', port: 0, apiToken: 'test-token-which-is-long-enough', storageRoot, transport: 'test-runtime', sessionIdleTtlMs: 60_000 }, backend)
@@ -341,17 +429,65 @@ test('runtime resources are read from the already leased worker', async () => {
   const body = { userId: 'user', workspaceId: 'workspace', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c', sessionId: 'resourceable', runtimeConfiguration: { providerId: 'openai', modelId: 'gpt-5.6-terra', apiKey: 'test-key', baseUrl: 'https://api.openai.com/v1', revision: 'test-revision' }, agent: 'codex', accessMode: 'ask' }
   try {
     const headers = { Authorization: 'Bearer test-token-which-is-long-enough', 'Content-Type': 'application/json' }
-    const lease = await fetch(`${endpoint}/v1/agent/sessions/resourceable/lease`, { method: 'POST', headers, body: JSON.stringify(body) })
-    assert.equal(lease.status, 200)
-    const resources = await fetch(`${endpoint}/v1/agent/sessions/resourceable/resources`, { method: 'POST', headers, body: JSON.stringify(body) })
+    const resources = await fetch(`${endpoint}/v1/agent/sessions/resourceable/resources?scope=command&command=plugins&query=fig`, { method: 'POST', headers, body: JSON.stringify(body) })
     assert.equal(resources.status, 200)
     assert.deepEqual(await resources.json(), { agent: 'codex', source: 'Codex App Server', accessMode: 'ask', imageGeneration: false, mcpServers: [{ id: 'openlink_supabase', name: 'OpenLink Supabase' }] })
+    assert.deepEqual(resourceRequest, { scope: 'command', command: 'plugins', query: 'fig' })
+    assert.equal(creations, 1)
   } finally {
     runtime.server.close()
     await once(runtime.server, 'close')
     await runtime.shutdown()
     await rm(storageRoot, { recursive: true, force: true })
   }
+})
+
+test('reattaches a durable worker after Host restart and preserves it during shutdown', async () => {
+  const storageRoot = await mkdtemp(join(tmpdir(), 'openlink-runtime-reattach-test-'))
+  let recoveries = 0
+  let creations = 0
+  let cleanups = 0
+  const backend: PromptRuntimeBackend = {
+    recoverSession: async () => {
+      recoveries += 1
+      return {
+        prompt: async () => new Response(''),
+        resources: async () => ({ agent: 'pi', source: 'Pi Resource Loader', commands: [] }),
+        cleanup: async () => { cleanups += 1 },
+      }
+    },
+    createSession: async () => {
+      creations += 1
+      return { prompt: async () => new Response(''), cleanup: async () => { cleanups += 1 } }
+    },
+    close: async () => { },
+  }
+  const runtime = await startPromptHttpServer({
+    host: '127.0.0.1', port: 0, apiToken: 'test-token-which-is-long-enough', storageRoot,
+    transport: 'test-runtime', sessionIdleTtlMs: 60_000, preserveSessionsOnShutdown: true,
+  }, backend)
+  const address = runtime.server.address() as AddressInfo
+  const body = {
+    userId: 'user', workspaceId: 'workspace', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c', sessionId: 'reattachable',
+    runtimeConfiguration: { providerId: 'deepseek', modelId: 'deepseek-v4-flash', apiKey: 'test-key', baseUrl: 'https://api.deepseek.com', revision: 'restart-test' },
+    agent: 'pi', accessMode: 'restricted',
+  }
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/v1/agent/sessions/reattachable/resources`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer test-token-which-is-long-enough', 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    assert.equal(response.status, 200)
+    assert.equal(recoveries, 1)
+    assert.equal(creations, 0)
+  } finally {
+    runtime.server.close()
+    await once(runtime.server, 'close')
+    await runtime.shutdown()
+    await rm(storageRoot, { recursive: true, force: true })
+  }
+  assert.equal(cleanups, 0)
 })
 
 test('agent cancellation aborts the active worker without deleting the reusable session', async () => {

@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { ZorkerLogo } from '@/components/zorker-logo'
 import { createClient } from '@/utils/supabase/client'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -124,7 +125,7 @@ export function AuthPage({ mode, localRuntime = false }: AuthPageProps) {
       setErrorMessage(authenticationErrorMessage(
         error,
         isLocalRuntime
-          ? 'Local authentication is temporarily unavailable. Check Docker Desktop, then try again.'
+          ? 'Self-hosted authentication is temporarily unavailable. Check the OpenLink services, then try again.'
           : 'Unable to authenticate. Please try again.',
       ))
     } finally {
@@ -159,8 +160,8 @@ export function AuthPage({ mode, localRuntime = false }: AuthPageProps) {
   return (
     <div className="flex min-h-[100svh] flex-col overflow-hidden bg-background text-foreground">
       <header className="flex min-h-16 shrink-0 items-center px-6">
-        <Link aria-label="OpenLink home" className="flex h-8 items-center" href="/">
-          <img alt="OpenLink" className="h-[15px] w-8" src="/openlink/auth/header-logo.svg" />
+        <Link aria-label="Zorker home" className="flex h-8 items-center" href="/">
+          <ZorkerLogo className="h-[18px] w-[31px]" />
         </Link>
         <nav className="ml-auto flex items-center pl-8">
           <Link className="flex h-8 items-center rounded-md px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted" href={alternateHref}>
@@ -172,7 +173,7 @@ export function AuthPage({ mode, localRuntime = false }: AuthPageProps) {
       <main className="flex min-h-0 flex-1 flex-col items-center justify-center gap-6 pb-8">
         <div className="flex flex-col items-center justify-center gap-4">
           <div className="flex size-20 items-center justify-center overflow-hidden rounded-full border border-border bg-muted">
-            <img alt="OpenLink" className="h-[25px] w-[53px]" src="/openlink/auth/app-logo.svg" />
+            <ZorkerLogo className="h-[30px] w-[51px]" />
           </div>
           <div className="flex flex-col items-center justify-center gap-2 text-center">
             <h1 className="text-[32px] leading-10 font-semibold tracking-[-0.96px] text-foreground">Open Link</h1>
@@ -237,7 +238,7 @@ export function AuthPage({ mode, localRuntime = false }: AuthPageProps) {
 
           {isLocalRuntime ? (
             <p className="w-full text-center text-sm leading-5 text-muted-foreground">
-              Local development uses email and password.
+              Self-hosted OpenLink uses email and password.
             </p>
           ) : (
             <>

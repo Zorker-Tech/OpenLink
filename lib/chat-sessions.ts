@@ -281,3 +281,35 @@ export async function createChatSession(
 
   throw new Error('CHAT_SESSION_ID_CONFLICT')
 }
+
+export async function forkChatSession(
+  supabase: ServerSupabaseClient,
+  userId: string,
+  source: ChatSession,
+): Promise<ChatSession> {
+  if (source.user_id !== userId) throw new Error('CHAT_SESSION_NOT_FOUND')
+  const title = deriveChatSessionTitle(`${source.title} 分支`)
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const id = generateChatSessionId()
+    const { data, error } = await supabase
+      .schema('openlink')
+      .from('chat_sessions')
+      .insert({
+        id,
+        user_id: userId,
+        workspace_id: source.workspace_id,
+        project_id: source.project_id,
+        provider_id: source.provider_id,
+        model_id: source.model_id,
+        agent: source.agent,
+        title,
+        initial_prompt: '',
+        access_mode: source.access_mode,
+      })
+      .select('id, user_id, workspace_id, project_id, provider_id, model_id, agent, title, initial_prompt, access_mode, created_at, updated_at')
+      .single()
+    if (!error) return data as ChatSession
+    if (error.code !== '23505') throw error
+  }
+  throw new Error('CHAT_SESSION_ID_CONFLICT')
+}

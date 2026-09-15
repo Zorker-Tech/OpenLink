@@ -9,6 +9,8 @@
 
 # production
 /build
+/storybook-static
+/coverage
 
 # debug
 npm-debug.log*
@@ -37,3 +39,6 @@ next-env.d.ts
 /.next
 /.next.*
 /.zcode/
+
+# nested package installs should never be committed
+node_modules/

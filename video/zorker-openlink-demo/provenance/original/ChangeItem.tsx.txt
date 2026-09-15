@@ -1,0 +1,60 @@
+function ChangeItem({ item }: { item: Extract<TimelineItem, { kind: 'change' }> }) {
+  const [open, setOpen] = useState(false)
+  const [selectedPath, setSelectedPath] = useState<string | undefined>()
+  // Old persisted snapshots may predate the Worker-level exclusion policy.
+  // Filter them at render time as a migration guard; all new snapshots are
+  // already clean at collection time.
+  const files = (item.files ?? []).map((file) => typeof file === 'string' ? { path: file } : file).filter((file) => !isLegacyRuntimeSnapshotPath(file.path))
+  const selected = files.find((file) => file.path === selectedPath) ?? files[0]
+  const additions = item.snapshot ? files.reduce((total, file) => total + (file.additions ?? 0), 0) : item.additions
+  const deletions = item.snapshot ? files.reduce((total, file) => total + (file.deletions ?? 0), 0) : item.deletions
+
+  if (item.snapshot && files.length === 0) return null
+
+  return (
+    <div className={`overflow-hidden rounded-lg border border-[color-mix(in_oklab,var(--app-foreground)_16%,var(--app-border))] bg-[var(--app-elevated)] p-2 shadow-[0_6px_20px_var(--app-shadow)] transition-[max-height,border-color] duration-200 ease-out ${open ? 'max-h-[540px] border-[color-mix(in_oklab,var(--app-foreground)_24%,var(--app-border))]' : 'max-h-[46px]'}`} data-slot="git-snapshot">
+      <div className="flex h-7 items-center gap-1">
+        <button aria-expanded={open} className="flex h-7 min-w-0 flex-1 select-none items-center gap-2 rounded-md text-left outline-none hover:text-[var(--app-foreground)] focus:outline-none focus-visible:outline-none" onClick={() => setOpen((value) => !value)} type="button">
+          {open ? <ChevronDown className="size-[13px] shrink-0 text-[var(--app-muted)]" /> : <ChevronRight className="size-[13px] shrink-0 text-[var(--app-muted)]" />}
+          <span className="min-w-0 truncate text-[13px] font-medium tracking-[-0.0762px] text-[var(--app-foreground)]">{item.label}</span>
+          {item.baseCommit ? <span className="shrink-0 font-mono text-[11px] text-[var(--app-muted)]">@{item.baseCommit}</span> : item.changeCount && item.changeCount > 1 ? <span className="shrink-0 text-[12px] text-[var(--app-muted)]">v{item.changeCount}</span> : null}
+        </button>
+        {(additions !== undefined || deletions !== undefined) && (
+          <button aria-label="查看差异" className="flex h-6 shrink-0 items-center rounded-md border border-[var(--app-control-border)] bg-[var(--app-active)] px-2 text-xs font-semibold hover:bg-[var(--app-hover)]" type="button">
+            <span className="text-[var(--app-success)]">+{additions ?? 0}</span>
+            <span className="px-0.5 text-[var(--app-muted)]">/</span>
+            <span className="text-[var(--app-danger)]">-{deletions ?? 0}</span>
+          </button>
+        )}
+        <button aria-label={open ? '收起 Git 变更' : '展开 Git 变更'} className="flex size-6 items-center justify-center rounded text-[var(--app-muted)] hover:bg-[var(--app-active)] hover:text-[var(--app-foreground)]" onClick={() => setOpen((value) => !value)} type="button"><RotateCcw className="size-3.5" /></button>
+      </div>
+      {open && files.length ? (
+        <div className="max-h-[480px] overflow-y-auto pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="space-y-0.5">
+          {files.map((change) => {
+            const segments = change.path.split('/')
+            const name = segments.at(-1) ?? change.path
+            const directory = segments.slice(0, -1).join('/')
+            return (
+              <button aria-pressed={selected?.path === change.path} className={`flex h-7 w-full min-w-0 items-center gap-2 rounded px-0.5 text-left transition-colors hover:bg-[var(--app-hover)] ${selected?.path === change.path ? 'bg-[var(--app-active)]' : ''}`} key={change.path} onClick={() => setSelectedPath(change.path)} type="button">
+                <Atom className="size-4 shrink-0 text-[var(--app-info)]" />
+                <span className="shrink-0 text-[13px] text-[var(--app-foreground)]">{name}</span>
+                <span className="min-w-0 flex-1 truncate text-[12px] text-[var(--app-subtle-foreground)]">{directory}</span>
+                {(change.additions !== undefined || change.deletions !== undefined) && (
+                  <span className="flex shrink-0 items-center gap-0.5 text-[12px]">
+                    <span className="text-[var(--app-success)]">+{change.additions ?? 0}</span>
+                    {change.deletions ? <span className="text-[var(--app-danger)]">/-{change.deletions}</span> : null}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+          </div>
+          {selected?.patch ? (
+            <pre className="mt-2 max-h-[248px] overflow-auto rounded-md border border-[var(--app-control-border)] bg-[var(--app-surface)] p-2 font-mono text-[11px] leading-4 text-[var(--app-foreground)]"><code className="whitespace-pre-wrap break-words">{selected.patch}</code></pre>
+          ) : item.snapshot ? <p className="mt-2 text-[12px] text-[var(--app-muted)]">Git detected this file, but it has no text diff to preview.</p> : null}
+        </div>
+      ) : null}
+    </div>
+  )
+}

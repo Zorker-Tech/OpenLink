@@ -1,4 +1,5 @@
 import { OnboardingForm } from './onboarding-form'
+import { ZorkerLogo } from '@/components/zorker-logo'
 import { getDefaultNickname } from '@/lib/workspaces'
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
@@ -62,7 +63,7 @@ export default async function OnboardingPage({
       <header className="flex h-16 items-center justify-between border-b border-border px-5 sm:px-8 lg:px-10">
         <div className="flex items-center gap-3">
           <div className="flex size-9 items-center justify-center rounded-full border border-border bg-card">
-            <img alt="OpenLink" className="h-3.5 w-7" src="/openlink/logo-wide.svg" />
+            <ZorkerLogo className="h-5 w-[34px]" />
           </div>
           <span className="text-sm font-semibold tracking-[-0.01em]">OpenLink</span>
         </div>

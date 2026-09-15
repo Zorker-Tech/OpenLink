@@ -110,3 +110,15 @@ test('runtime selection updates only the persisted backend and isolation class',
   assert.equal(config.OPENLINK_PROJECT_ISOLATION, 'container')
   assert.equal((await lstat(created.configPath)).mode & 0o777, 0o640)
 })
+
+test('runtime selection refuses to orphan persisted Projects without migration', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'openlink-configure-runtime-migration-'))
+  t.after(async () => (await import('node:fs/promises')).rm(root, { recursive: true, force: true }))
+  const template = join(root, 'release/orchestration/backend/docker/.env.example')
+  await mkdir(join(template, '..'), { recursive: true })
+  await writeFile(template, 'POSTGRES_PASSWORD=insecure\n')
+  const created = await createProductionConfiguration({ releaseRoot: join(root, 'release'), configPath: join(root, 'config.env'), stateRoot: join(root, 'state'), appUrl: 'https://openlink.example.test', projectRuntime: 'vm' })
+  await mkdir(join(root, 'state/project-vms/projects/123e4567-e89b-42d3-a456-426614174000'), { recursive: true })
+  await assert.rejects(updateProductionProjectRuntime(created.configPath, 'container'), /persisted Projects exist/i)
+  assert.equal((await readEnvironmentFile(created.configPath)).OPENLINK_PROJECT_RUNTIME, 'vm')
+})

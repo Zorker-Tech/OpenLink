@@ -1,5 +1,6 @@
 import { Type } from '@earendil-works/pi-ai'
 import { defineTool, type ExtensionAPI } from '@earendil-works/pi-coding-agent'
+import { readFile } from 'node:fs/promises'
 
 function required(name: string): string {
   const value = process.env[name]?.trim()
@@ -7,13 +8,42 @@ function required(name: string): string {
   return value
 }
 
-const hostUrl = required('OPENLINK_BROWSER_HOST_URL').replace(/\/$/, '')
-const sessionId = required('OPENLINK_BROWSER_SESSION_ID')
-let controlToken = required('OPENLINK_BROWSER_CONTROL_TOKEN')
+const capabilityFile = required('OPENLINK_BROWSER_CAPABILITY_FILE')
+let activeSessionId = ''
+let controlToken = ''
+let sourceControlToken = ''
 let controlTokenIssuedAt = Date.now()
 
-async function refreshControlToken(signal?: AbortSignal): Promise<void> {
-  const response = await fetch(`${hostUrl}/v1/browser/sessions/${encodeURIComponent(sessionId)}/capability`, {
+interface BrowserCapability {
+  hostUrl: string
+  sessionId: string
+  controlToken: string
+}
+
+async function capability(): Promise<BrowserCapability> {
+  let value: unknown
+  try {
+    value = JSON.parse(await readFile(capabilityFile, 'utf8'))
+  } catch {
+    throw new Error('Browser capability is not connected to this Agent session')
+  }
+  if (!value || typeof value !== 'object') throw new Error('Browser capability is not connected to this Agent session')
+  const candidate = value as Record<string, unknown>
+  if (typeof candidate.hostUrl !== 'string' || typeof candidate.sessionId !== 'string' || typeof candidate.controlToken !== 'string') {
+    throw new Error('Browser capability is not connected to this Agent session')
+  }
+  const next = { hostUrl: candidate.hostUrl.replace(/\/$/, ''), sessionId: candidate.sessionId, controlToken: candidate.controlToken }
+  if (next.sessionId !== activeSessionId || next.controlToken !== sourceControlToken) {
+    activeSessionId = next.sessionId
+    sourceControlToken = next.controlToken
+    controlToken = next.controlToken
+    controlTokenIssuedAt = Date.now()
+  }
+  return next
+}
+
+async function refreshControlToken(binding: BrowserCapability, signal?: AbortSignal): Promise<void> {
+  const response = await fetch(`${binding.hostUrl}/v1/browser/sessions/${encodeURIComponent(binding.sessionId)}/capability`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${controlToken}`, 'Content-Type': 'application/json' },
     signal,
@@ -27,20 +57,21 @@ async function refreshControlToken(signal?: AbortSignal): Promise<void> {
 }
 
 async function invoke(action: Record<string, unknown>, signal?: AbortSignal) {
-  if (Date.now() - controlTokenIssuedAt >= 5 * 60_000) await refreshControlToken(signal)
+  const binding = await capability()
+  if (Date.now() - controlTokenIssuedAt >= 5 * 60_000) await refreshControlToken(binding, signal)
   const actionId = crypto.randomUUID()
-  let response = await fetch(`${hostUrl}/v1/browser/sessions/${encodeURIComponent(sessionId)}/actions`, {
+  let response = await fetch(`${binding.hostUrl}/v1/browser/sessions/${encodeURIComponent(binding.sessionId)}/actions`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${controlToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ version: 1, actionId, sessionId, actor: 'agent', action }),
+    body: JSON.stringify({ version: 1, actionId, sessionId: binding.sessionId, actor: 'agent', action }),
     signal,
   })
   if (response.status === 401) {
-    await refreshControlToken(signal)
-    response = await fetch(`${hostUrl}/v1/browser/sessions/${encodeURIComponent(sessionId)}/actions`, {
+    await refreshControlToken(binding, signal)
+    response = await fetch(`${binding.hostUrl}/v1/browser/sessions/${encodeURIComponent(binding.sessionId)}/actions`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${controlToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ version: 1, actionId, sessionId, actor: 'agent', action }),
+      body: JSON.stringify({ version: 1, actionId, sessionId: binding.sessionId, actor: 'agent', action }),
       signal,
     })
   }

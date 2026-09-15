@@ -10,13 +10,15 @@ import { RemoteQemuProjectVmDriver } from './remote-project-vm.js'
 import { buildRemoteProjectVmBootstrapPlan, SshTransport, type SshTarget } from './ssh.js'
 
 export interface ProjectRuntimeController {
-  ensure(projectId: string, requestedDiskMode?: 'thin' | 'thick'): Promise<ProjectRuntimeDescriptor>
-  describeSupabase?(projectId: string): Promise<ProjectRuntimeDescriptor['supabase'] | null>
-  manageSupabase?(projectId: string, request: ProjectSupabaseManagementRequest): Promise<Record<string, unknown>>
-  proxySupabaseStudio?(projectId: string, request: ProjectSupabaseStudioProxyRequest): Promise<ProjectSupabaseStudioProxyResponse>
+  ensure(projectId: string, requestedDiskMode?: 'thin' | 'thick', scope?: 'all' | 'agent'): Promise<ProjectRuntimeDescriptor>
+  describeSupabase(projectId: string): Promise<ProjectRuntimeDescriptor['supabase'] | null>
+  manageSupabase(projectId: string, request: ProjectSupabaseManagementRequest): Promise<Record<string, unknown>>
+  proxySupabaseStudio(projectId: string, request: ProjectSupabaseStudioProxyRequest): Promise<ProjectSupabaseStudioProxyResponse>
   prepareSessionStorage(projectId: string, userId: string, workspaceId: string, sessionId: string): Promise<string>
+  persistCodexThreadId(projectId: string, userId: string, workspaceId: string, sessionId: string, threadId: string): Promise<void>
   ensureProjectGitRepository(projectId: string): Promise<void>
   listGitVersions(projectId: string): Promise<ProjectGitVersion[]>
+  listWorkspaceFiles(projectId: string): Promise<string[]>
   checkoutGitVersion(projectId: string, ref: string): Promise<ProjectGitVersion>
   getActive(projectId: string): ProjectRuntimeDescriptor | undefined
   hasPersistedRuntime(projectId: string): Promise<boolean>
@@ -254,17 +256,21 @@ export class ProjectRuntimeRouter implements ProjectRuntimeController {
   private readonly resolvedRemoteManagers = new Map<string, ProjectRuntimeManager>()
 
   constructor(
-    private readonly local: ProjectRuntimeManager,
+    private readonly local: ProjectRuntimeController,
     private readonly targetProvider: SupabaseProjectExecutionTargetProvider | undefined,
     private readonly remoteFactory: RemoteProjectRuntimeFactory | undefined,
   ) {}
 
-  async ensure(projectIdValue: string, diskMode?: 'thin' | 'thick') {
-    return (await this.manager(projectIdValue)).ensure(projectIdValue, diskMode)
+  async ensure(projectIdValue: string, diskMode?: 'thin' | 'thick', scope?: 'all' | 'agent') {
+    return (await this.manager(projectIdValue)).ensure(projectIdValue, diskMode, scope)
   }
 
   async prepareSessionStorage(projectIdValue: string, userId: string, workspaceId: string, sessionId: string) {
     return (await this.manager(projectIdValue)).prepareSessionStorage(projectIdValue, userId, workspaceId, sessionId)
+  }
+
+  async persistCodexThreadId(projectIdValue: string, userId: string, workspaceId: string, sessionId: string, threadId: string) {
+    return (await this.manager(projectIdValue)).persistCodexThreadId(projectIdValue, userId, workspaceId, sessionId, threadId)
   }
 
   async manageSupabase(projectIdValue: string, request: ProjectSupabaseManagementRequest) {
@@ -285,6 +291,10 @@ export class ProjectRuntimeRouter implements ProjectRuntimeController {
 
   async listGitVersions(projectIdValue: string) {
     return (await this.manager(projectIdValue)).listGitVersions(projectIdValue)
+  }
+
+  async listWorkspaceFiles(projectIdValue: string) {
+    return (await this.manager(projectIdValue)).listWorkspaceFiles(projectIdValue)
   }
 
   async checkoutGitVersion(projectIdValue: string, ref: string) {
@@ -318,7 +328,7 @@ export class ProjectRuntimeRouter implements ProjectRuntimeController {
     await Promise.allSettled([this.local.close(options), ...[...this.remoteManagers.values()].map(async (item) => (await item).close(options))])
   }
 
-  private async manager(projectIdValue: string): Promise<ProjectRuntimeManager> {
+  private async manager(projectIdValue: string): Promise<ProjectRuntimeController> {
     const target = this.targetProvider ? await this.targetProvider.get(projectIdValue) : null
     return target ? this.managerForTarget(target) : this.local
   }

@@ -1,0 +1,44 @@
+function EditableUserMessage({ item, disabled, onEditMessage }: {
+  item: Extract<TimelineItem, { kind: 'message' }>
+  disabled: boolean
+  onEditMessage?: (messageId: string, text: string) => Promise<void>
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(item.text)
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const trigger = useRef<HTMLButtonElement>(null)
+  const cancel = () => { setEditing(false); setError(null); requestAnimationFrame(() => trigger.current?.focus()) }
+  const submit = async () => {
+    if (pending || disabled || !draft.trim() || !onEditMessage) return
+    setPending(true)
+    setError(null)
+    try { await onEditMessage(item.id, draft.trim()); setEditing(false) }
+    catch (cause) { setError(cause instanceof Error ? cause.message : '重发失败，修改内容已保留') }
+    finally { setPending(false) }
+  }
+  return <div className="relative flex w-full justify-end" data-message-id={item.id}>
+    {editing && <div aria-hidden="true" className="invisible mb-4 max-w-[95%] whitespace-pre-wrap break-words rounded-xl border px-3 py-1.5 text-[13px] leading-[21.125px]">{item.text}</div>}
+    {editing ? <form
+      aria-label="编辑原消息"
+      className="absolute left-1/2 top-0 z-20 mx-auto flex w-[95%] min-w-0 -translate-x-1/2 flex-col gap-3 rounded-xl border border-dashed border-[var(--app-muted)] bg-[var(--app-elevated)] p-3 shadow-[0_12px_36px_var(--app-shadow)]"
+      onSubmit={(event) => { event.preventDefault(); void submit() }}
+      onKeyDown={(event) => {
+        if (event.nativeEvent.isComposing) return
+        if (event.key === 'Escape' && !pending) { event.preventDefault(); cancel() }
+        if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void submit() }
+      }}
+    >
+      <textarea autoFocus aria-label="消息内容" className="min-h-20 max-h-64 w-full resize-y bg-transparent text-[13px] leading-[21px] text-[var(--app-foreground)] outline-none" value={draft} maxLength={10000} disabled={pending} onChange={(event) => setDraft(event.target.value)} />
+      <p className="text-[11px] leading-4 text-[var(--app-muted)]">从此处重新生成后续对话，不回滚文件修改。</p>
+      {error && <p role="alert" className="text-xs text-red-500">{error}</p>}
+      <div className="flex justify-end gap-2">
+        <button type="button" className="rounded-md px-3 py-1.5 text-xs hover:bg-[var(--app-hover)] focus-visible:outline" disabled={pending} onClick={cancel}>取消</button>
+        <button type="submit" className="rounded-md bg-[var(--app-submit-background)] px-3 py-1.5 text-xs text-[var(--app-submit-foreground)] disabled:opacity-40 focus-visible:outline" disabled={pending || disabled || !draft.trim()}>{pending ? '正在重发…' : '重发'}</button>
+      </div>
+    </form> : <button ref={trigger} type="button" aria-label={`编辑消息：${item.text}`} disabled={disabled || !onEditMessage}
+      className="mb-4 max-w-[95%] whitespace-pre-wrap break-words rounded-xl border border-[var(--app-control-border)] bg-[var(--app-active)] px-3 py-1.5 text-left text-[13px] leading-[21.125px] text-[var(--app-foreground)] outline-none hover:border-[var(--app-muted)] focus-visible:ring-1 focus-visible:ring-[var(--app-muted)]"
+      onClick={() => { setDraft(item.text); setError(null); setEditing(true) }}
+    >{item.text}</button>}
+  </div>
+}

@@ -1,6 +1,7 @@
 'use client'
 
 import { Sidebar } from '@/components/app-workspace'
+import { deleteChatSessionAction } from '@/app/chat/actions'
 import type { ThemeMode } from '@/components/account-drawer'
 import { OpenLinkThemeProvider } from '@/components/ui/theme-scope'
 import type { ActiveWorkspaceSummary, PersonalWorkspaceSummary } from '@/components/workspace-switcher'
@@ -134,6 +135,17 @@ export function ProjectSupabasePanel(props: ProjectSupabasePanelProps) {
   const [queryResult, setQueryResult] = useState<ManagementResult | null>(null)
   const content = sectionCopy[section]
 
+  const deleteChat = useCallback(async (chatId: string) => {
+    if (!window.confirm('确定要删除这个会话吗？删除后不可恢复。')) return
+    const result = await deleteChatSessionAction(chatId)
+    if (!result.ok) {
+      console.error('OpenLink session delete failed:', result.error)
+      return
+    }
+    if (chatId === props.sessionId) router.replace(`/app/${props.activeWorkspace.slug}`)
+    router.refresh()
+  }, [props.activeWorkspace.slug, props.sessionId, router])
+
   const activeTheme = themeMode === 'light' || (themeMode === 'system' && systemLight) ? 'light' : 'dark'
   const descriptorLabel = useMemo(() => descriptor?.revision.replace(/^self-hosted\//, '') ?? '正在连接', [descriptor])
 
@@ -230,6 +242,7 @@ export function ProjectSupabasePanel(props: ProjectSupabasePanelProps) {
           nickname={props.nickname}
           onCloseMobile={() => setMobileOpen(false)}
           onNewChat={() => router.push(`/app/${props.activeWorkspace.slug}`)}
+          onDeleteChat={(chatId) => { void deleteChat(chatId) }}
           onThemeChange={(mode) => { setThemeMode(mode); window.localStorage.setItem('openlink-theme', mode) }}
           onToggle={() => setCollapsed((value) => !value)}
           organizations={props.organizations}
