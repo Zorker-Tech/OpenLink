@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import random
 import socket
-from typing import Dict, Optional
+from typing import Callable, Dict, Optional, TypeVar
 
 from fastapi import HTTPException, status
 
@@ -27,6 +27,33 @@ DOCKER_PUBLISH_HOST = "0.0.0.0"
 # publish scope; probing only localhost can miss ports bound on other host
 # interfaces that Docker would later fail to publish.
 PORT_PROBE_HOST = DOCKER_PUBLISH_HOST
+T = TypeVar("T")
+
+
+def with_port_binding_retry(
+    allocate: Callable[[], Dict[str, tuple[str, int]]],
+    start: Callable[[Dict[str, tuple[str, int]]], T],
+    attempts: int = 5,
+) -> tuple[Dict[str, tuple[str, int]], T]:
+    """Retry confirmed engine port collisions after start cleans its sidecar."""
+    if attempts < 1:
+        raise ValueError("attempts must be positive")
+    for attempt in range(attempts):
+        bindings = allocate()
+        try:
+            return bindings, start(bindings)
+        except Exception as exc:
+            cause: BaseException | None = exc
+            collision = False
+            seen: set[int] = set()
+            while cause is not None and id(cause) not in seen:
+                seen.add(id(cause))
+                message = str(cause).lower()
+                collision = collision or "address already in use" in message or "port is already allocated" in message
+                cause = cause.__cause__
+            if not collision or attempt + 1 == attempts:
+                raise
+    raise RuntimeError("unreachable port retry state")
 
 
 def normalize_container_port_spec(port_spec: str) -> str:

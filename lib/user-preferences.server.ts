@@ -11,6 +11,7 @@ export const DEFAULT_USER_PREFERENCES: UserPreferences = {
   theme: 'system',
   locale: 'zh-CN',
   chatPosition: 'left',
+  thinkingVisibility: 'summary',
   customInstructions: '',
 }
 
@@ -18,7 +19,7 @@ export async function getUserPreferences(supabase: ServerSupabaseClient, userId:
   const { data, error } = await supabase
     .schema('openlink')
     .from('user_preferences')
-    .select('theme, locale, chat_position, custom_instructions')
+    .select('theme, locale, chat_position, thinking_visibility, custom_instructions')
     .eq('user_id', userId)
     .maybeSingle()
   if (error) throw error
@@ -27,6 +28,7 @@ export async function getUserPreferences(supabase: ServerSupabaseClient, userId:
     theme: data.theme as UserPreferences['theme'],
     locale: data.locale as UserPreferences['locale'],
     chatPosition: data.chat_position as UserPreferences['chatPosition'],
+    thinkingVisibility: (data.thinking_visibility ?? 'summary') as UserPreferences['thinkingVisibility'],
     customInstructions: data.custom_instructions,
   }
 }

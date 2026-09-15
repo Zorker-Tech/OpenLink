@@ -55,6 +55,27 @@ export function runCapture(command, args, options = {}) {
   })
 }
 
+export function isCompletedMachineRemovalError(error) {
+  return /process already finished|unable to clean up gvproxy/i.test(error instanceof Error ? error.message : String(error))
+}
+
+export async function removePodmanMachine(podman, machineName, options = {}) {
+  try {
+    await run(podman, ['machine', 'rm', '--force', machineName], options)
+  } catch (error) {
+    // Podman can remove the machine metadata and disk successfully, then
+    // return 125 because gvproxy exited before its final cleanup probe.
+    // Ignore only that narrow race and only after inspect confirms the exact
+    // machine no longer exists.
+    if (!isCompletedMachineRemovalError(error)) throw error
+    const stillExists = await runCapture(podman, ['machine', 'inspect', machineName], {
+      ...options,
+      timeout: 30_000,
+    }).then(() => true).catch(() => false)
+    if (stillExists) throw error
+  }
+}
+
 async function cachedMachineImage(provider) {
   const dataRoot = process.env.XDG_DATA_HOME || join(homedir(), '.local', 'share')
   const suffixes = provider === 'hyperv' ? ['.vhdx.zst', '.vhdx'] : ['.raw.zst', '.raw']
@@ -156,7 +177,14 @@ export async function ensurePodmanBuilder(podman, options = {}) {
       '--memory', process.env.OPENLINK_BUILD_MEMORY_MB || '6144',
       '--disk-size', process.env.OPENLINK_BUILD_DISK_GB || '96',
       machineName,
-    ], { ...options, input: options.input ?? 'n\n' })
+    ], {
+      ...options,
+      // Decompressing and allocating the bootable machine disk can exceed ten
+      // minutes on slower external volumes even when the cached image is
+      // healthy. Keep the limit finite, but allow release hosts to tune it.
+      timeout: Number(process.env.OPENLINK_BUILD_MACHINE_INIT_TIMEOUT_MS || 30 * 60_000),
+      input: options.input ?? 'n\n',
+    })
   })
   const inspection = await inspect()
   if (!/"(?:State|state)"\s*:\s*"running"/i.test(inspection.stdout)) {

@@ -12,10 +12,9 @@ function agentHostConfig() {
 }
 
 /**
- * Refreshes only an already-created Agent runtime for an open chat page. It
- * never provisions a VM/sandbox, so opening many idle tabs cannot create
- * hidden workloads. The runtime is still reclaimed after the page disappears
- * and its lease stops being refreshed.
+ * Declares this chat/project active and ensures its session-bound Agent is
+ * fully ready. Repeated calls are cheap keepalives; after a Host restart the
+ * same endpoint reattaches the durable Worker before falling back to creation.
  */
 export async function POST(
   request: Request,
@@ -97,7 +96,7 @@ export async function POST(
     // A mode switch intentionally replaces the session Worker because Codex
     // applies its sandbox/approval policy at process start. Project VM-backed
     // workers can take longer than the old five-second UI keepalive budget.
-    signal: AbortSignal.timeout(90_000),
+    signal: AbortSignal.timeout(300_000),
   })
   return new Response(response.body, { status: response.status, headers: { 'Content-Type': 'application/json' } })
 }

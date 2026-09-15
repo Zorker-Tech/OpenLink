@@ -1,0 +1,4103 @@
+{
+  "modules": 122,
+  "stories": 150,
+  "direct": 110,
+  "composition": 12,
+  "missing": [],
+  "coverage": [
+    {
+      "module": "access-mode-picker",
+      "status": "composition",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Chat Composer",
+          "file": "stories/chat-composer.stories.tsx",
+          "stories": [
+            {
+              "name": "ReviewAndFork",
+              "id": "product-chat-composer--review-and-fork"
+            },
+            {
+              "name": "KeyboardCompositionAndEscape",
+              "id": "product-chat-composer--keyboard-composition-and-escape"
+            },
+            {
+              "name": "ConfiguredModelAndClientActions",
+              "id": "product-chat-composer--configured-model-and-client-actions"
+            },
+            {
+              "name": "DurableQueueReloadAndDrain",
+              "id": "product-chat-composer--durable-queue-reload-and-drain"
+            },
+            {
+              "name": "PrivateFileUpload",
+              "id": "product-chat-composer--private-file-upload"
+            },
+            {
+              "name": "AccessModeCommitAndRollback",
+              "id": "product-chat-composer--access-mode-commit-and-rollback"
+            },
+            {
+              "name": "PluginInstallRetryAndWorkerActivation",
+              "id": "product-chat-composer--plugin-install-retry-and-worker-activation"
+            },
+            {
+              "name": "NativeResourceEmptyAndErrorStates",
+              "id": "product-chat-composer--native-resource-empty-and-error-states"
+            },
+            {
+              "name": "ForkFailureAndRunningGuard",
+              "id": "product-chat-composer--fork-failure-and-running-guard"
+            },
+            {
+              "name": "EditResendBranchAndRecovery",
+              "id": "product-chat-composer--edit-resend-branch-and-recovery"
+            },
+            {
+              "name": "PlanAndGoalNativeLifecycle",
+              "id": "product-chat-composer--plan-and-goal-native-lifecycle"
+            }
+          ]
+        },
+        {
+          "title": "Product/Timeline and Workspace",
+          "file": "stories/chat-timeline.stories.tsx",
+          "stories": [
+            {
+              "name": "FullWorkspace",
+              "id": "product-timeline-and-workspace--full-workspace"
+            },
+            {
+              "name": "PiWorkspace",
+              "id": "product-timeline-and-workspace--pi-workspace"
+            }
+          ]
+        },
+        {
+          "title": "Product/Pages",
+          "file": "stories/product-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "Home",
+              "id": "product-pages--home"
+            },
+            {
+              "name": "MarketingHome",
+              "id": "product-pages--marketing-home"
+            },
+            {
+              "name": "AnonymousComposer",
+              "id": "product-pages--anonymous-composer"
+            },
+            {
+              "name": "ProjectsEmpty",
+              "id": "product-pages--projects-empty"
+            },
+            {
+              "name": "ProjectLifecycle",
+              "id": "product-pages--project-lifecycle"
+            },
+            {
+              "name": "ProjectsReadOnly",
+              "id": "product-pages--projects-read-only"
+            }
+          ]
+        },
+        {
+          "title": "Product/Runtime States",
+          "file": "stories/runtime-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "KnowledgeEmpty",
+              "id": "product-runtime-states--knowledge-empty"
+            },
+            {
+              "name": "KnowledgeCreate",
+              "id": "product-runtime-states--knowledge-create"
+            },
+            {
+              "name": "KnowledgeUnavailable",
+              "id": "product-runtime-states--knowledge-unavailable"
+            },
+            {
+              "name": "KnowledgeError",
+              "id": "product-runtime-states--knowledge-error"
+            },
+            {
+              "name": "KnowledgeLoading",
+              "id": "product-runtime-states--knowledge-loading"
+            },
+            {
+              "name": "KnowledgeBackend",
+              "id": "product-runtime-states--knowledge-backend"
+            },
+            {
+              "name": "DatabaseUnavailable",
+              "id": "product-runtime-states--database-unavailable"
+            }
+          ]
+        },
+        {
+          "title": "Product/Workspace Runtime Hint",
+          "file": "stories/workspace-runtime-hint.stories.tsx",
+          "stories": [
+            {
+              "name": "RuntimeGateWithoutPromptHint",
+              "id": "product-workspace-runtime-hint--runtime-gate-without-prompt-hint"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "access-writes-banner",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Timeline and Workspace",
+          "file": "stories/chat-timeline.stories.tsx",
+          "stories": [
+            {
+              "name": "FullWorkspace",
+              "id": "product-timeline-and-workspace--full-workspace"
+            },
+            {
+              "name": "PiWorkspace",
+              "id": "product-timeline-and-workspace--pi-workspace"
+            },
+            {
+              "name": "NoPendingWrites",
+              "id": "product-timeline-and-workspace--no-pending-writes"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "account-drawer",
+      "status": "composition",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Chat Composer",
+          "file": "stories/chat-composer.stories.tsx",
+          "stories": [
+            {
+              "name": "ReviewAndFork",
+              "id": "product-chat-composer--review-and-fork"
+            },
+            {
+              "name": "KeyboardCompositionAndEscape",
+              "id": "product-chat-composer--keyboard-composition-and-escape"
+            },
+            {
+              "name": "ConfiguredModelAndClientActions",
+              "id": "product-chat-composer--configured-model-and-client-actions"
+            },
+            {
+              "name": "DurableQueueReloadAndDrain",
+              "id": "product-chat-composer--durable-queue-reload-and-drain"
+            },
+            {
+              "name": "PrivateFileUpload",
+              "id": "product-chat-composer--private-file-upload"
+            },
+            {
+              "name": "AccessModeCommitAndRollback",
+              "id": "product-chat-composer--access-mode-commit-and-rollback"
+            },
+            {
+              "name": "PluginInstallRetryAndWorkerActivation",
+              "id": "product-chat-composer--plugin-install-retry-and-worker-activation"
+            },
+            {
+              "name": "NativeResourceEmptyAndErrorStates",
+              "id": "product-chat-composer--native-resource-empty-and-error-states"
+            },
+            {
+              "name": "ForkFailureAndRunningGuard",
+              "id": "product-chat-composer--fork-failure-and-running-guard"
+            },
+            {
+              "name": "EditResendBranchAndRecovery",
+              "id": "product-chat-composer--edit-resend-branch-and-recovery"
+            },
+            {
+              "name": "PlanAndGoalNativeLifecycle",
+              "id": "product-chat-composer--plan-and-goal-native-lifecycle"
+            }
+          ]
+        },
+        {
+          "title": "Product/Timeline and Workspace",
+          "file": "stories/chat-timeline.stories.tsx",
+          "stories": [
+            {
+              "name": "FullWorkspace",
+              "id": "product-timeline-and-workspace--full-workspace"
+            },
+            {
+              "name": "PiWorkspace",
+              "id": "product-timeline-and-workspace--pi-workspace"
+            }
+          ]
+        },
+        {
+          "title": "Product/Pages",
+          "file": "stories/product-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "Home",
+              "id": "product-pages--home"
+            },
+            {
+              "name": "ProjectsEmpty",
+              "id": "product-pages--projects-empty"
+            },
+            {
+              "name": "ProjectLifecycle",
+              "id": "product-pages--project-lifecycle"
+            },
+            {
+              "name": "ProjectsReadOnly",
+              "id": "product-pages--projects-read-only"
+            }
+          ]
+        },
+        {
+          "title": "Product/Runtime States",
+          "file": "stories/runtime-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "KnowledgeEmpty",
+              "id": "product-runtime-states--knowledge-empty"
+            },
+            {
+              "name": "KnowledgeCreate",
+              "id": "product-runtime-states--knowledge-create"
+            },
+            {
+              "name": "KnowledgeUnavailable",
+              "id": "product-runtime-states--knowledge-unavailable"
+            },
+            {
+              "name": "KnowledgeError",
+              "id": "product-runtime-states--knowledge-error"
+            },
+            {
+              "name": "KnowledgeLoading",
+              "id": "product-runtime-states--knowledge-loading"
+            },
+            {
+              "name": "KnowledgeBackend",
+              "id": "product-runtime-states--knowledge-backend"
+            },
+            {
+              "name": "DatabaseUnavailable",
+              "id": "product-runtime-states--database-unavailable"
+            }
+          ]
+        },
+        {
+          "title": "Product/Settings",
+          "file": "stories/settings-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "Shell",
+              "id": "product-settings--shell"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "agent-kind-picker",
+      "status": "composition",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Chat Composer",
+          "file": "stories/chat-composer.stories.tsx",
+          "stories": [
+            {
+              "name": "ReviewAndFork",
+              "id": "product-chat-composer--review-and-fork"
+            },
+            {
+              "name": "KeyboardCompositionAndEscape",
+              "id": "product-chat-composer--keyboard-composition-and-escape"
+            },
+            {
+              "name": "ConfiguredModelAndClientActions",
+              "id": "product-chat-composer--configured-model-and-client-actions"
+            },
+            {
+              "name": "DurableQueueReloadAndDrain",
+              "id": "product-chat-composer--durable-queue-reload-and-drain"
+            },
+            {
+              "name": "PrivateFileUpload",
+              "id": "product-chat-composer--private-file-upload"
+            },
+            {
+              "name": "AccessModeCommitAndRollback",
+              "id": "product-chat-composer--access-mode-commit-and-rollback"
+            },
+            {
+              "name": "PluginInstallRetryAndWorkerActivation",
+              "id": "product-chat-composer--plugin-install-retry-and-worker-activation"
+            },
+            {
+              "name": "NativeResourceEmptyAndErrorStates",
+              "id": "product-chat-composer--native-resource-empty-and-error-states"
+            },
+            {
+              "name": "ForkFailureAndRunningGuard",
+              "id": "product-chat-composer--fork-failure-and-running-guard"
+            },
+            {
+              "name": "EditResendBranchAndRecovery",
+              "id": "product-chat-composer--edit-resend-branch-and-recovery"
+            },
+            {
+              "name": "PlanAndGoalNativeLifecycle",
+              "id": "product-chat-composer--plan-and-goal-native-lifecycle"
+            }
+          ]
+        },
+        {
+          "title": "Product/Timeline and Workspace",
+          "file": "stories/chat-timeline.stories.tsx",
+          "stories": [
+            {
+              "name": "FullWorkspace",
+              "id": "product-timeline-and-workspace--full-workspace"
+            },
+            {
+              "name": "PiWorkspace",
+              "id": "product-timeline-and-workspace--pi-workspace"
+            }
+          ]
+        },
+        {
+          "title": "Product/Pages",
+          "file": "stories/product-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "Home",
+              "id": "product-pages--home"
+            },
+            {
+              "name": "MarketingHome",
+              "id": "product-pages--marketing-home"
+            },
+            {
+              "name": "AnonymousComposer",
+              "id": "product-pages--anonymous-composer"
+            },
+            {
+              "name": "ProjectsEmpty",
+              "id": "product-pages--projects-empty"
+            },
+            {
+              "name": "ProjectLifecycle",
+              "id": "product-pages--project-lifecycle"
+            },
+            {
+              "name": "ProjectsReadOnly",
+              "id": "product-pages--projects-read-only"
+            }
+          ]
+        },
+        {
+          "title": "Product/Runtime States",
+          "file": "stories/runtime-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "KnowledgeEmpty",
+              "id": "product-runtime-states--knowledge-empty"
+            },
+            {
+              "name": "KnowledgeCreate",
+              "id": "product-runtime-states--knowledge-create"
+            },
+            {
+              "name": "KnowledgeUnavailable",
+              "id": "product-runtime-states--knowledge-unavailable"
+            },
+            {
+              "name": "KnowledgeError",
+              "id": "product-runtime-states--knowledge-error"
+            },
+            {
+              "name": "KnowledgeLoading",
+              "id": "product-runtime-states--knowledge-loading"
+            },
+            {
+              "name": "KnowledgeBackend",
+              "id": "product-runtime-states--knowledge-backend"
+            },
+            {
+              "name": "DatabaseUnavailable",
+              "id": "product-runtime-states--database-unavailable"
+            }
+          ]
+        },
+        {
+          "title": "Product/Workspace Runtime Hint",
+          "file": "stories/workspace-runtime-hint.stories.tsx",
+          "stories": [
+            {
+              "name": "RuntimeGateWithoutPromptHint",
+              "id": "product-workspace-runtime-hint--runtime-gate-without-prompt-hint"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "agent-prompt-textarea",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Agent Prompt Textarea",
+          "file": "stories/agent-prompt-textarea.stories.tsx",
+          "stories": [
+            {
+              "name": "CommandPicker",
+              "id": "product-agent-prompt-textarea--command-picker"
+            },
+            {
+              "name": "DisabledCommandFocusExit",
+              "id": "product-agent-prompt-textarea--disabled-command-focus-exit"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/agent",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Protocol Primitives",
+          "file": "stories/ai-protocols.stories.tsx",
+          "stories": [
+            {
+              "name": "AgentInstructions",
+              "id": "ai-elements-protocol-primitives--agent-instructions"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/artifact",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Pattern Gallery",
+          "file": "stories/ai-elements.stories.tsx",
+          "stories": [
+            {
+              "name": "AgentWork",
+              "id": "ai-elements-pattern-gallery--agent-work"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/attachments",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Protocol Primitives",
+          "file": "stories/ai-protocols.stories.tsx",
+          "stories": [
+            {
+              "name": "Attachments",
+              "id": "ai-elements-protocol-primitives--attachments"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/audio-player",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Media and Preview",
+          "file": "stories/ai-media.stories.tsx",
+          "stories": [
+            {
+              "name": "AudioPlayer",
+              "id": "ai-elements-media-and-preview--audio-player"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/canvas",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Workflow Canvas",
+          "file": "stories/ai-canvas.stories.tsx",
+          "stories": [
+            {
+              "name": "Connected",
+              "id": "ai-elements-workflow-canvas--connected"
+            },
+            {
+              "name": "Empty",
+              "id": "ai-elements-workflow-canvas--empty"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/chain-of-thought",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Protocol Primitives",
+          "file": "stories/ai-protocols.stories.tsx",
+          "stories": [
+            {
+              "name": "ChainOfThought",
+              "id": "ai-elements-protocol-primitives--chain-of-thought"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/checkpoint",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Protocol Primitives",
+          "file": "stories/ai-protocols.stories.tsx",
+          "stories": [
+            {
+              "name": "Checkpoint",
+              "id": "ai-elements-protocol-primitives--checkpoint"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/code-block",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Protocol Primitives",
+          "file": "stories/ai-protocols.stories.tsx",
+          "stories": [
+            {
+              "name": "AgentInstructions",
+              "id": "ai-elements-protocol-primitives--agent-instructions"
+            },
+            {
+              "name": "Tool",
+              "id": "ai-elements-protocol-primitives--tool"
+            },
+            {
+              "name": "Sandbox",
+              "id": "ai-elements-protocol-primitives--sandbox"
+            },
+            {
+              "name": "CodeBlock",
+              "id": "ai-elements-protocol-primitives--code-block"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/commit",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Protocol Primitives",
+          "file": "stories/ai-protocols.stories.tsx",
+          "stories": [
+            {
+              "name": "Commit",
+              "id": "ai-elements-protocol-primitives--commit"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/confirmation",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Protocol Primitives",
+          "file": "stories/ai-protocols.stories.tsx",
+          "stories": [
+            {
+              "name": "ApprovalRequested",
+              "id": "ai-elements-protocol-primitives--approval-requested"
+            },
+            {
+              "name": "ApprovalAccepted",
+              "id": "ai-elements-protocol-primitives--approval-accepted"
+            },
+            {
+              "name": "ApprovalDenied",
+              "id": "ai-elements-protocol-primitives--approval-denied"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/connection",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Workflow Canvas",
+          "file": "stories/ai-canvas.stories.tsx",
+          "stories": [
+            {
+              "name": "Connected",
+              "id": "ai-elements-workflow-canvas--connected"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/context",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Protocol Primitives",
+          "file": "stories/ai-protocols.stories.tsx",
+          "stories": [
+            {
+              "name": "Context",
+              "id": "ai-elements-protocol-primitives--context"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/controls",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Workflow Canvas",
+          "file": "stories/ai-canvas.stories.tsx",
+          "stories": [
+            {
+              "name": "Connected",
+              "id": "ai-elements-workflow-canvas--connected"
+            },
+            {
+              "name": "Empty",
+              "id": "ai-elements-workflow-canvas--empty"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/conversation",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Protocol Primitives",
+          "file": "stories/ai-protocols.stories.tsx",
+          "stories": [
+            {
+              "name": "Conversation",
+              "id": "ai-elements-protocol-primitives--conversation"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/edge",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Workflow Canvas",
+          "file": "stories/ai-canvas.stories.tsx",
+          "stories": [
+            {
+              "name": "Connected",
+              "id": "ai-elements-workflow-canvas--connected"
+            },
+            {
+              "name": "Empty",
+              "id": "ai-elements-workflow-canvas--empty"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/environment-variables",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Protocol Primitives",
+          "file": "stories/ai-protocols.stories.tsx",
+          "stories": [
+            {
+              "name": "EnvironmentVariables",
+              "id": "ai-elements-protocol-primitives--environment-variables"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/file-tree",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Pattern Gallery",
+          "file": "stories/ai-elements.stories.tsx",
+          "stories": [
+            {
+              "name": "DeveloperSurfaces",
+              "id": "ai-elements-pattern-gallery--developer-surfaces"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/image",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Media and Preview",
+          "file": "stories/ai-media.stories.tsx",
+          "stories": [
+            {
+              "name": "GeneratedImage",
+              "id": "ai-elements-media-and-preview--generated-image"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/inline-citation",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Protocol Primitives",
+          "file": "stories/ai-protocols.stories.tsx",
+          "stories": [
+            {
+              "name": "InlineCitation",
+              "id": "ai-elements-protocol-primitives--inline-citation"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/jsx-preview",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Media and Preview",
+          "file": "stories/ai-media.stories.tsx",
+          "stories": [
+            {
+              "name": "JsxOutput",
+              "id": "ai-elements-media-and-preview--jsx-output"
+            },
+            {
+              "name": "JsxStreaming",
+              "id": "ai-elements-media-and-preview--jsx-streaming"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/message",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Pattern Gallery",
+          "file": "stories/ai-elements.stories.tsx",
+          "stories": [
+            {
+              "name": "ConversationStates",
+              "id": "ai-elements-pattern-gallery--conversation-states"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/mic-selector",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Media and Preview",
+          "file": "stories/ai-media.stories.tsx",
+          "stories": [
+            {
+              "name": "MicrophoneUnavailable",
+              "id": "ai-elements-media-and-preview--microphone-unavailable"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/model-selector",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Media and Preview",
+          "file": "stories/ai-media.stories.tsx",
+          "stories": [
+            {
+              "name": "ModelSearch",
+              "id": "ai-elements-media-and-preview--model-search"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/node",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Workflow Canvas",
+          "file": "stories/ai-canvas.stories.tsx",
+          "stories": [
+            {
+              "name": "Connected",
+              "id": "ai-elements-workflow-canvas--connected"
+            },
+            {
+              "name": "Empty",
+              "id": "ai-elements-workflow-canvas--empty"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/open-in-chat",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Media and Preview",
+          "file": "stories/ai-media.stories.tsx",
+          "stories": [
+            {
+              "name": "OpenInChat",
+              "id": "ai-elements-media-and-preview--open-in-chat"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/package-info",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Protocol Primitives",
+          "file": "stories/ai-protocols.stories.tsx",
+          "stories": [
+            {
+              "name": "PackageInfoStates",
+              "id": "ai-elements-protocol-primitives--package-info-states"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/panel",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Workflow Canvas",
+          "file": "stories/ai-canvas.stories.tsx",
+          "stories": [
+            {
+              "name": "Connected",
+              "id": "ai-elements-workflow-canvas--connected"
+            },
+            {
+              "name": "Empty",
+              "id": "ai-elements-workflow-canvas--empty"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/persona",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Media and Preview",
+          "file": "stories/ai-media.stories.tsx",
+          "stories": [
+            {
+              "name": "Transcript",
+              "id": "ai-elements-media-and-preview--transcript"
+            },
+            {
+              "name": "AudioPlayer",
+              "id": "ai-elements-media-and-preview--audio-player"
+            },
+            {
+              "name": "VoicePicker",
+              "id": "ai-elements-media-and-preview--voice-picker"
+            },
+            {
+              "name": "MicrophoneUnavailable",
+              "id": "ai-elements-media-and-preview--microphone-unavailable"
+            },
+            {
+              "name": "SpeechUnavailable",
+              "id": "ai-elements-media-and-preview--speech-unavailable"
+            },
+            {
+              "name": "JsxOutput",
+              "id": "ai-elements-media-and-preview--jsx-output"
+            },
+            {
+              "name": "JsxStreaming",
+              "id": "ai-elements-media-and-preview--jsx-streaming"
+            },
+            {
+              "name": "GeneratedImage",
+              "id": "ai-elements-media-and-preview--generated-image"
+            },
+            {
+              "name": "OpenInChat",
+              "id": "ai-elements-media-and-preview--open-in-chat"
+            },
+            {
+              "name": "WebPreview",
+              "id": "ai-elements-media-and-preview--web-preview"
+            },
+            {
+              "name": "ModelSearch",
+              "id": "ai-elements-media-and-preview--model-search"
+            },
+            {
+              "name": "ThinkingStates",
+              "id": "ai-elements-media-and-preview--thinking-states"
+            },
+            {
+              "name": "PersonaStates",
+              "id": "ai-elements-media-and-preview--persona-states"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/plan",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Pattern Gallery",
+          "file": "stories/ai-elements.stories.tsx",
+          "stories": [
+            {
+              "name": "AgentWork",
+              "id": "ai-elements-pattern-gallery--agent-work"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/prompt-input",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Agent Prompt Textarea",
+          "file": "stories/agent-prompt-textarea.stories.tsx",
+          "stories": [
+            {
+              "name": "CommandPicker",
+              "id": "product-agent-prompt-textarea--command-picker"
+            },
+            {
+              "name": "DisabledCommandFocusExit",
+              "id": "product-agent-prompt-textarea--disabled-command-focus-exit"
+            }
+          ]
+        },
+        {
+          "title": "Product/Composer Overlays",
+          "file": "stories/composer-overlays.stories.tsx",
+          "stories": [
+            {
+              "name": "AddMenu",
+              "id": "product-composer-overlays--add-menu"
+            },
+            {
+              "name": "PluginInstallError",
+              "id": "product-composer-overlays--plugin-install-error"
+            },
+            {
+              "name": "Confirmations",
+              "id": "product-composer-overlays--confirmations"
+            },
+            {
+              "name": "ConfirmationError",
+              "id": "product-composer-overlays--confirmation-error"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/queue",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Protocol Primitives",
+          "file": "stories/ai-protocols.stories.tsx",
+          "stories": [
+            {
+              "name": "Queue",
+              "id": "ai-elements-protocol-primitives--queue"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/reasoning",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Pattern Gallery",
+          "file": "stories/ai-elements.stories.tsx",
+          "stories": [
+            {
+              "name": "ConversationStates",
+              "id": "ai-elements-pattern-gallery--conversation-states"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/sandbox",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Protocol Primitives",
+          "file": "stories/ai-protocols.stories.tsx",
+          "stories": [
+            {
+              "name": "Sandbox",
+              "id": "ai-elements-protocol-primitives--sandbox"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/schema-display",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Protocol Primitives",
+          "file": "stories/ai-protocols.stories.tsx",
+          "stories": [
+            {
+              "name": "SchemaDisplay",
+              "id": "ai-elements-protocol-primitives--schema-display"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/shimmer",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Protocol Primitives",
+          "file": "stories/ai-protocols.stories.tsx",
+          "stories": [
+            {
+              "name": "Shimmer",
+              "id": "ai-elements-protocol-primitives--shimmer"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/snippet",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Protocol Primitives",
+          "file": "stories/ai-protocols.stories.tsx",
+          "stories": [
+            {
+              "name": "Snippet",
+              "id": "ai-elements-protocol-primitives--snippet"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/sources",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Pattern Gallery",
+          "file": "stories/ai-elements.stories.tsx",
+          "stories": [
+            {
+              "name": "ConversationStates",
+              "id": "ai-elements-pattern-gallery--conversation-states"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/speech-input",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Media and Preview",
+          "file": "stories/ai-media.stories.tsx",
+          "stories": [
+            {
+              "name": "SpeechUnavailable",
+              "id": "ai-elements-media-and-preview--speech-unavailable"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/stack-trace",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Pattern Gallery",
+          "file": "stories/ai-elements.stories.tsx",
+          "stories": [
+            {
+              "name": "DeveloperSurfaces",
+              "id": "ai-elements-pattern-gallery--developer-surfaces"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/suggestion",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Pattern Gallery",
+          "file": "stories/ai-elements.stories.tsx",
+          "stories": [
+            {
+              "name": "ConversationStates",
+              "id": "ai-elements-pattern-gallery--conversation-states"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/task",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Pattern Gallery",
+          "file": "stories/ai-elements.stories.tsx",
+          "stories": [
+            {
+              "name": "AgentWork",
+              "id": "ai-elements-pattern-gallery--agent-work"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/terminal",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Pattern Gallery",
+          "file": "stories/ai-elements.stories.tsx",
+          "stories": [
+            {
+              "name": "DeveloperSurfaces",
+              "id": "ai-elements-pattern-gallery--developer-surfaces"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/test-results",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Protocol Primitives",
+          "file": "stories/ai-protocols.stories.tsx",
+          "stories": [
+            {
+              "name": "TestResults",
+              "id": "ai-elements-protocol-primitives--test-results"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/tool",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Protocol Primitives",
+          "file": "stories/ai-protocols.stories.tsx",
+          "stories": [
+            {
+              "name": "Tool",
+              "id": "ai-elements-protocol-primitives--tool"
+            },
+            {
+              "name": "Sandbox",
+              "id": "ai-elements-protocol-primitives--sandbox"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/toolbar",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Workflow Canvas",
+          "file": "stories/ai-canvas.stories.tsx",
+          "stories": [
+            {
+              "name": "Connected",
+              "id": "ai-elements-workflow-canvas--connected"
+            },
+            {
+              "name": "Empty",
+              "id": "ai-elements-workflow-canvas--empty"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/transcription",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Media and Preview",
+          "file": "stories/ai-media.stories.tsx",
+          "stories": [
+            {
+              "name": "Transcript",
+              "id": "ai-elements-media-and-preview--transcript"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/voice-selector",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Media and Preview",
+          "file": "stories/ai-media.stories.tsx",
+          "stories": [
+            {
+              "name": "VoicePicker",
+              "id": "ai-elements-media-and-preview--voice-picker"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ai-elements/web-preview",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Media and Preview",
+          "file": "stories/ai-media.stories.tsx",
+          "stories": [
+            {
+              "name": "WebPreview",
+              "id": "ai-elements-media-and-preview--web-preview"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "app-sidebar-controls",
+      "status": "composition",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Chat Composer",
+          "file": "stories/chat-composer.stories.tsx",
+          "stories": [
+            {
+              "name": "ReviewAndFork",
+              "id": "product-chat-composer--review-and-fork"
+            },
+            {
+              "name": "KeyboardCompositionAndEscape",
+              "id": "product-chat-composer--keyboard-composition-and-escape"
+            },
+            {
+              "name": "ConfiguredModelAndClientActions",
+              "id": "product-chat-composer--configured-model-and-client-actions"
+            },
+            {
+              "name": "DurableQueueReloadAndDrain",
+              "id": "product-chat-composer--durable-queue-reload-and-drain"
+            },
+            {
+              "name": "PrivateFileUpload",
+              "id": "product-chat-composer--private-file-upload"
+            },
+            {
+              "name": "AccessModeCommitAndRollback",
+              "id": "product-chat-composer--access-mode-commit-and-rollback"
+            },
+            {
+              "name": "PluginInstallRetryAndWorkerActivation",
+              "id": "product-chat-composer--plugin-install-retry-and-worker-activation"
+            },
+            {
+              "name": "NativeResourceEmptyAndErrorStates",
+              "id": "product-chat-composer--native-resource-empty-and-error-states"
+            },
+            {
+              "name": "ForkFailureAndRunningGuard",
+              "id": "product-chat-composer--fork-failure-and-running-guard"
+            },
+            {
+              "name": "EditResendBranchAndRecovery",
+              "id": "product-chat-composer--edit-resend-branch-and-recovery"
+            },
+            {
+              "name": "PlanAndGoalNativeLifecycle",
+              "id": "product-chat-composer--plan-and-goal-native-lifecycle"
+            }
+          ]
+        },
+        {
+          "title": "Product/Timeline and Workspace",
+          "file": "stories/chat-timeline.stories.tsx",
+          "stories": [
+            {
+              "name": "FullWorkspace",
+              "id": "product-timeline-and-workspace--full-workspace"
+            },
+            {
+              "name": "PiWorkspace",
+              "id": "product-timeline-and-workspace--pi-workspace"
+            }
+          ]
+        },
+        {
+          "title": "Product/Pages",
+          "file": "stories/product-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "Home",
+              "id": "product-pages--home"
+            },
+            {
+              "name": "ProjectsEmpty",
+              "id": "product-pages--projects-empty"
+            },
+            {
+              "name": "ProjectLifecycle",
+              "id": "product-pages--project-lifecycle"
+            },
+            {
+              "name": "ProjectsReadOnly",
+              "id": "product-pages--projects-read-only"
+            }
+          ]
+        },
+        {
+          "title": "Product/Runtime States",
+          "file": "stories/runtime-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "KnowledgeEmpty",
+              "id": "product-runtime-states--knowledge-empty"
+            },
+            {
+              "name": "KnowledgeCreate",
+              "id": "product-runtime-states--knowledge-create"
+            },
+            {
+              "name": "KnowledgeUnavailable",
+              "id": "product-runtime-states--knowledge-unavailable"
+            },
+            {
+              "name": "KnowledgeError",
+              "id": "product-runtime-states--knowledge-error"
+            },
+            {
+              "name": "KnowledgeLoading",
+              "id": "product-runtime-states--knowledge-loading"
+            },
+            {
+              "name": "KnowledgeBackend",
+              "id": "product-runtime-states--knowledge-backend"
+            },
+            {
+              "name": "DatabaseUnavailable",
+              "id": "product-runtime-states--database-unavailable"
+            }
+          ]
+        },
+        {
+          "title": "Product/Settings",
+          "file": "stories/settings-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "Shell",
+              "id": "product-settings--shell"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "app-sidebar-frame",
+      "status": "composition",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Chat Composer",
+          "file": "stories/chat-composer.stories.tsx",
+          "stories": [
+            {
+              "name": "ReviewAndFork",
+              "id": "product-chat-composer--review-and-fork"
+            },
+            {
+              "name": "KeyboardCompositionAndEscape",
+              "id": "product-chat-composer--keyboard-composition-and-escape"
+            },
+            {
+              "name": "ConfiguredModelAndClientActions",
+              "id": "product-chat-composer--configured-model-and-client-actions"
+            },
+            {
+              "name": "DurableQueueReloadAndDrain",
+              "id": "product-chat-composer--durable-queue-reload-and-drain"
+            },
+            {
+              "name": "PrivateFileUpload",
+              "id": "product-chat-composer--private-file-upload"
+            },
+            {
+              "name": "AccessModeCommitAndRollback",
+              "id": "product-chat-composer--access-mode-commit-and-rollback"
+            },
+            {
+              "name": "PluginInstallRetryAndWorkerActivation",
+              "id": "product-chat-composer--plugin-install-retry-and-worker-activation"
+            },
+            {
+              "name": "NativeResourceEmptyAndErrorStates",
+              "id": "product-chat-composer--native-resource-empty-and-error-states"
+            },
+            {
+              "name": "ForkFailureAndRunningGuard",
+              "id": "product-chat-composer--fork-failure-and-running-guard"
+            },
+            {
+              "name": "EditResendBranchAndRecovery",
+              "id": "product-chat-composer--edit-resend-branch-and-recovery"
+            },
+            {
+              "name": "PlanAndGoalNativeLifecycle",
+              "id": "product-chat-composer--plan-and-goal-native-lifecycle"
+            }
+          ]
+        },
+        {
+          "title": "Product/Timeline and Workspace",
+          "file": "stories/chat-timeline.stories.tsx",
+          "stories": [
+            {
+              "name": "FullWorkspace",
+              "id": "product-timeline-and-workspace--full-workspace"
+            },
+            {
+              "name": "PiWorkspace",
+              "id": "product-timeline-and-workspace--pi-workspace"
+            }
+          ]
+        },
+        {
+          "title": "Product/Pages",
+          "file": "stories/product-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "Home",
+              "id": "product-pages--home"
+            },
+            {
+              "name": "ProjectsEmpty",
+              "id": "product-pages--projects-empty"
+            },
+            {
+              "name": "ProjectLifecycle",
+              "id": "product-pages--project-lifecycle"
+            },
+            {
+              "name": "ProjectsReadOnly",
+              "id": "product-pages--projects-read-only"
+            }
+          ]
+        },
+        {
+          "title": "Product/Runtime States",
+          "file": "stories/runtime-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "KnowledgeEmpty",
+              "id": "product-runtime-states--knowledge-empty"
+            },
+            {
+              "name": "KnowledgeCreate",
+              "id": "product-runtime-states--knowledge-create"
+            },
+            {
+              "name": "KnowledgeUnavailable",
+              "id": "product-runtime-states--knowledge-unavailable"
+            },
+            {
+              "name": "KnowledgeError",
+              "id": "product-runtime-states--knowledge-error"
+            },
+            {
+              "name": "KnowledgeLoading",
+              "id": "product-runtime-states--knowledge-loading"
+            },
+            {
+              "name": "KnowledgeBackend",
+              "id": "product-runtime-states--knowledge-backend"
+            },
+            {
+              "name": "DatabaseUnavailable",
+              "id": "product-runtime-states--database-unavailable"
+            }
+          ]
+        },
+        {
+          "title": "Product/Settings",
+          "file": "stories/settings-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "Shell",
+              "id": "product-settings--shell"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "app-workspace",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Pages",
+          "file": "stories/product-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "Home",
+              "id": "product-pages--home"
+            },
+            {
+              "name": "ProjectsEmpty",
+              "id": "product-pages--projects-empty"
+            },
+            {
+              "name": "ProjectLifecycle",
+              "id": "product-pages--project-lifecycle"
+            },
+            {
+              "name": "ProjectsReadOnly",
+              "id": "product-pages--projects-read-only"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "auth-page",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Pages",
+          "file": "stories/product-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "Login",
+              "id": "product-pages--login"
+            },
+            {
+              "name": "Register",
+              "id": "product-pages--register"
+            },
+            {
+              "name": "HostedLogin",
+              "id": "product-pages--hosted-login"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "browser/browser-workbench",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Runtime States",
+          "file": "stories/runtime-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "BrowserUnavailable",
+              "id": "product-runtime-states--browser-unavailable"
+            },
+            {
+              "name": "BrowserMobileUnavailable",
+              "id": "product-runtime-states--browser-mobile-unavailable"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "browser/chromium-stream-surface",
+      "status": "composition",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Chat Composer",
+          "file": "stories/chat-composer.stories.tsx",
+          "stories": [
+            {
+              "name": "ReviewAndFork",
+              "id": "product-chat-composer--review-and-fork"
+            },
+            {
+              "name": "KeyboardCompositionAndEscape",
+              "id": "product-chat-composer--keyboard-composition-and-escape"
+            },
+            {
+              "name": "ConfiguredModelAndClientActions",
+              "id": "product-chat-composer--configured-model-and-client-actions"
+            },
+            {
+              "name": "DurableQueueReloadAndDrain",
+              "id": "product-chat-composer--durable-queue-reload-and-drain"
+            },
+            {
+              "name": "PrivateFileUpload",
+              "id": "product-chat-composer--private-file-upload"
+            },
+            {
+              "name": "AccessModeCommitAndRollback",
+              "id": "product-chat-composer--access-mode-commit-and-rollback"
+            },
+            {
+              "name": "PluginInstallRetryAndWorkerActivation",
+              "id": "product-chat-composer--plugin-install-retry-and-worker-activation"
+            },
+            {
+              "name": "NativeResourceEmptyAndErrorStates",
+              "id": "product-chat-composer--native-resource-empty-and-error-states"
+            },
+            {
+              "name": "ForkFailureAndRunningGuard",
+              "id": "product-chat-composer--fork-failure-and-running-guard"
+            },
+            {
+              "name": "EditResendBranchAndRecovery",
+              "id": "product-chat-composer--edit-resend-branch-and-recovery"
+            },
+            {
+              "name": "PlanAndGoalNativeLifecycle",
+              "id": "product-chat-composer--plan-and-goal-native-lifecycle"
+            }
+          ]
+        },
+        {
+          "title": "Product/Timeline and Workspace",
+          "file": "stories/chat-timeline.stories.tsx",
+          "stories": [
+            {
+              "name": "FullWorkspace",
+              "id": "product-timeline-and-workspace--full-workspace"
+            },
+            {
+              "name": "PiWorkspace",
+              "id": "product-timeline-and-workspace--pi-workspace"
+            }
+          ]
+        },
+        {
+          "title": "Product/Runtime States",
+          "file": "stories/runtime-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "BrowserUnavailable",
+              "id": "product-runtime-states--browser-unavailable"
+            },
+            {
+              "name": "BrowserMobileUnavailable",
+              "id": "product-runtime-states--browser-mobile-unavailable"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "browser/native-preview-surface",
+      "status": "composition",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Chat Composer",
+          "file": "stories/chat-composer.stories.tsx",
+          "stories": [
+            {
+              "name": "ReviewAndFork",
+              "id": "product-chat-composer--review-and-fork"
+            },
+            {
+              "name": "KeyboardCompositionAndEscape",
+              "id": "product-chat-composer--keyboard-composition-and-escape"
+            },
+            {
+              "name": "ConfiguredModelAndClientActions",
+              "id": "product-chat-composer--configured-model-and-client-actions"
+            },
+            {
+              "name": "DurableQueueReloadAndDrain",
+              "id": "product-chat-composer--durable-queue-reload-and-drain"
+            },
+            {
+              "name": "PrivateFileUpload",
+              "id": "product-chat-composer--private-file-upload"
+            },
+            {
+              "name": "AccessModeCommitAndRollback",
+              "id": "product-chat-composer--access-mode-commit-and-rollback"
+            },
+            {
+              "name": "PluginInstallRetryAndWorkerActivation",
+              "id": "product-chat-composer--plugin-install-retry-and-worker-activation"
+            },
+            {
+              "name": "NativeResourceEmptyAndErrorStates",
+              "id": "product-chat-composer--native-resource-empty-and-error-states"
+            },
+            {
+              "name": "ForkFailureAndRunningGuard",
+              "id": "product-chat-composer--fork-failure-and-running-guard"
+            },
+            {
+              "name": "EditResendBranchAndRecovery",
+              "id": "product-chat-composer--edit-resend-branch-and-recovery"
+            },
+            {
+              "name": "PlanAndGoalNativeLifecycle",
+              "id": "product-chat-composer--plan-and-goal-native-lifecycle"
+            }
+          ]
+        },
+        {
+          "title": "Product/Timeline and Workspace",
+          "file": "stories/chat-timeline.stories.tsx",
+          "stories": [
+            {
+              "name": "FullWorkspace",
+              "id": "product-timeline-and-workspace--full-workspace"
+            },
+            {
+              "name": "PiWorkspace",
+              "id": "product-timeline-and-workspace--pi-workspace"
+            }
+          ]
+        },
+        {
+          "title": "Product/Runtime States",
+          "file": "stories/runtime-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "BrowserUnavailable",
+              "id": "product-runtime-states--browser-unavailable"
+            },
+            {
+              "name": "BrowserMobileUnavailable",
+              "id": "product-runtime-states--browser-mobile-unavailable"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "chat-code-preview",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Pages",
+          "file": "stories/product-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "CodePreview",
+              "id": "product-pages--code-preview"
+            },
+            {
+              "name": "CodeStreaming",
+              "id": "product-pages--code-streaming"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "chat-confirmation-dock",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Composer Overlays",
+          "file": "stories/composer-overlays.stories.tsx",
+          "stories": [
+            {
+              "name": "AddMenu",
+              "id": "product-composer-overlays--add-menu"
+            },
+            {
+              "name": "PluginInstallError",
+              "id": "product-composer-overlays--plugin-install-error"
+            },
+            {
+              "name": "Confirmations",
+              "id": "product-composer-overlays--confirmations"
+            },
+            {
+              "name": "ConfirmationError",
+              "id": "product-composer-overlays--confirmation-error"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "chat-timeline",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Chat Composer",
+          "file": "stories/chat-composer.stories.tsx",
+          "stories": [
+            {
+              "name": "ReviewAndFork",
+              "id": "product-chat-composer--review-and-fork"
+            },
+            {
+              "name": "KeyboardCompositionAndEscape",
+              "id": "product-chat-composer--keyboard-composition-and-escape"
+            },
+            {
+              "name": "ConfiguredModelAndClientActions",
+              "id": "product-chat-composer--configured-model-and-client-actions"
+            },
+            {
+              "name": "DurableQueueReloadAndDrain",
+              "id": "product-chat-composer--durable-queue-reload-and-drain"
+            },
+            {
+              "name": "PrivateFileUpload",
+              "id": "product-chat-composer--private-file-upload"
+            },
+            {
+              "name": "AccessModeCommitAndRollback",
+              "id": "product-chat-composer--access-mode-commit-and-rollback"
+            },
+            {
+              "name": "PluginInstallRetryAndWorkerActivation",
+              "id": "product-chat-composer--plugin-install-retry-and-worker-activation"
+            },
+            {
+              "name": "NativeResourceEmptyAndErrorStates",
+              "id": "product-chat-composer--native-resource-empty-and-error-states"
+            },
+            {
+              "name": "ForkFailureAndRunningGuard",
+              "id": "product-chat-composer--fork-failure-and-running-guard"
+            },
+            {
+              "name": "EditResendBranchAndRecovery",
+              "id": "product-chat-composer--edit-resend-branch-and-recovery"
+            },
+            {
+              "name": "PlanAndGoalNativeLifecycle",
+              "id": "product-chat-composer--plan-and-goal-native-lifecycle"
+            }
+          ]
+        },
+        {
+          "title": "Product/Timeline and Workspace",
+          "file": "stories/chat-timeline.stories.tsx",
+          "stories": [
+            {
+              "name": "CompletedRound",
+              "id": "product-timeline-and-workspace--completed-round"
+            },
+            {
+              "name": "Empty",
+              "id": "product-timeline-and-workspace--empty"
+            },
+            {
+              "name": "Streaming",
+              "id": "product-timeline-and-workspace--streaming"
+            },
+            {
+              "name": "EditingFile",
+              "id": "product-timeline-and-workspace--editing-file"
+            },
+            {
+              "name": "FileChanges",
+              "id": "product-timeline-and-workspace--file-changes"
+            },
+            {
+              "name": "ToolFailure",
+              "id": "product-timeline-and-workspace--tool-failure"
+            },
+            {
+              "name": "ConfirmationEvent",
+              "id": "product-timeline-and-workspace--confirmation-event"
+            },
+            {
+              "name": "TaskStates",
+              "id": "product-timeline-and-workspace--task-states"
+            },
+            {
+              "name": "FullWorkspace",
+              "id": "product-timeline-and-workspace--full-workspace"
+            },
+            {
+              "name": "PiWorkspace",
+              "id": "product-timeline-and-workspace--pi-workspace"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "chat-workspace",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Chat Composer",
+          "file": "stories/chat-composer.stories.tsx",
+          "stories": [
+            {
+              "name": "ReviewAndFork",
+              "id": "product-chat-composer--review-and-fork"
+            },
+            {
+              "name": "KeyboardCompositionAndEscape",
+              "id": "product-chat-composer--keyboard-composition-and-escape"
+            },
+            {
+              "name": "ConfiguredModelAndClientActions",
+              "id": "product-chat-composer--configured-model-and-client-actions"
+            },
+            {
+              "name": "DurableQueueReloadAndDrain",
+              "id": "product-chat-composer--durable-queue-reload-and-drain"
+            },
+            {
+              "name": "PrivateFileUpload",
+              "id": "product-chat-composer--private-file-upload"
+            },
+            {
+              "name": "AccessModeCommitAndRollback",
+              "id": "product-chat-composer--access-mode-commit-and-rollback"
+            },
+            {
+              "name": "PluginInstallRetryAndWorkerActivation",
+              "id": "product-chat-composer--plugin-install-retry-and-worker-activation"
+            },
+            {
+              "name": "NativeResourceEmptyAndErrorStates",
+              "id": "product-chat-composer--native-resource-empty-and-error-states"
+            },
+            {
+              "name": "ForkFailureAndRunningGuard",
+              "id": "product-chat-composer--fork-failure-and-running-guard"
+            },
+            {
+              "name": "EditResendBranchAndRecovery",
+              "id": "product-chat-composer--edit-resend-branch-and-recovery"
+            },
+            {
+              "name": "PlanAndGoalNativeLifecycle",
+              "id": "product-chat-composer--plan-and-goal-native-lifecycle"
+            }
+          ]
+        },
+        {
+          "title": "Product/Timeline and Workspace",
+          "file": "stories/chat-timeline.stories.tsx",
+          "stories": [
+            {
+              "name": "FullWorkspace",
+              "id": "product-timeline-and-workspace--full-workspace"
+            },
+            {
+              "name": "PiWorkspace",
+              "id": "product-timeline-and-workspace--pi-workspace"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "code-server/code-server-workbench",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Runtime States",
+          "file": "stories/runtime-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "EditorUnavailable",
+              "id": "product-runtime-states--editor-unavailable"
+            },
+            {
+              "name": "EditorLoading",
+              "id": "product-runtime-states--editor-loading"
+            },
+            {
+              "name": "EditorFrame",
+              "id": "product-runtime-states--editor-frame"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "knowledge-workspace",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Runtime States",
+          "file": "stories/runtime-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "KnowledgeEmpty",
+              "id": "product-runtime-states--knowledge-empty"
+            },
+            {
+              "name": "KnowledgeCreate",
+              "id": "product-runtime-states--knowledge-create"
+            },
+            {
+              "name": "KnowledgeUnavailable",
+              "id": "product-runtime-states--knowledge-unavailable"
+            },
+            {
+              "name": "KnowledgeError",
+              "id": "product-runtime-states--knowledge-error"
+            },
+            {
+              "name": "KnowledgeLoading",
+              "id": "product-runtime-states--knowledge-loading"
+            },
+            {
+              "name": "KnowledgeBackend",
+              "id": "product-runtime-states--knowledge-backend"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "new-project-dialog",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Pages",
+          "file": "stories/product-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "ProjectsEmpty",
+              "id": "product-pages--projects-empty"
+            },
+            {
+              "name": "ProjectLifecycle",
+              "id": "product-pages--project-lifecycle"
+            },
+            {
+              "name": "ProjectsReadOnly",
+              "id": "product-pages--projects-read-only"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "openlink-home",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Pages",
+          "file": "stories/product-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "MarketingHome",
+              "id": "product-pages--marketing-home"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "organization-dialog",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Pages",
+          "file": "stories/product-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "Home",
+              "id": "product-pages--home"
+            },
+            {
+              "name": "ProjectsEmpty",
+              "id": "product-pages--projects-empty"
+            },
+            {
+              "name": "ProjectLifecycle",
+              "id": "product-pages--project-lifecycle"
+            },
+            {
+              "name": "ProjectsReadOnly",
+              "id": "product-pages--projects-read-only"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "organization-setup",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Pages",
+          "file": "stories/product-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "Organization",
+              "id": "product-pages--organization"
+            },
+            {
+              "name": "Home",
+              "id": "product-pages--home"
+            },
+            {
+              "name": "ProjectsEmpty",
+              "id": "product-pages--projects-empty"
+            },
+            {
+              "name": "ProjectLifecycle",
+              "id": "product-pages--project-lifecycle"
+            },
+            {
+              "name": "ProjectsReadOnly",
+              "id": "product-pages--projects-read-only"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "project-supabase-panel",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Runtime States",
+          "file": "stories/runtime-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "DatabaseUnavailable",
+              "id": "product-runtime-states--database-unavailable"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "project-supabase-studio-frame",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Runtime States",
+          "file": "stories/runtime-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "StudioUnavailable",
+              "id": "product-runtime-states--studio-unavailable"
+            },
+            {
+              "name": "StudioLoading",
+              "id": "product-runtime-states--studio-loading"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "projects-workspace",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Pages",
+          "file": "stories/product-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "ProjectsEmpty",
+              "id": "product-pages--projects-empty"
+            },
+            {
+              "name": "ProjectLifecycle",
+              "id": "product-pages--project-lifecycle"
+            },
+            {
+              "name": "ProjectsReadOnly",
+              "id": "product-pages--projects-read-only"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "prompt-add-menu",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Composer Overlays",
+          "file": "stories/composer-overlays.stories.tsx",
+          "stories": [
+            {
+              "name": "AddMenu",
+              "id": "product-composer-overlays--add-menu"
+            },
+            {
+              "name": "PluginInstallError",
+              "id": "product-composer-overlays--plugin-install-error"
+            },
+            {
+              "name": "Confirmations",
+              "id": "product-composer-overlays--confirmations"
+            },
+            {
+              "name": "ConfirmationError",
+              "id": "product-composer-overlays--confirmation-error"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "prompt-composer",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Pages",
+          "file": "stories/product-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "MarketingHome",
+              "id": "product-pages--marketing-home"
+            },
+            {
+              "name": "AnonymousComposer",
+              "id": "product-pages--anonymous-composer"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "settings/ai-providers-overview",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Settings",
+          "file": "stories/settings-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "Providers",
+              "id": "product-settings--providers"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "settings/cloud-connections",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Settings",
+          "file": "stories/settings-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "CloudAccountEmpty",
+              "id": "product-settings--cloud-account-empty"
+            },
+            {
+              "name": "CloudAccountConnected",
+              "id": "product-settings--cloud-account-connected"
+            },
+            {
+              "name": "CloudAccountRevoking",
+              "id": "product-settings--cloud-account-revoking"
+            },
+            {
+              "name": "CloudAccountEnglish",
+              "id": "product-settings--cloud-account-english"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "settings/embedding-provider-card",
+      "status": "composition",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Settings",
+          "file": "stories/settings-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "Embeddings",
+              "id": "product-settings--embeddings"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "settings/embedding-provider-configuration-form",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Settings",
+          "file": "stories/settings-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "EmbeddingConfiguration",
+              "id": "product-settings--embedding-configuration"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "settings/embedding-providers-overview",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Settings",
+          "file": "stories/settings-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "Embeddings",
+              "id": "product-settings--embeddings"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "settings/preferences-form",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Settings",
+          "file": "stories/settings-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "Preferences",
+              "id": "product-settings--preferences"
+            },
+            {
+              "name": "Shell",
+              "id": "product-settings--shell"
+            },
+            {
+              "name": "CloudAccountEmpty",
+              "id": "product-settings--cloud-account-empty"
+            },
+            {
+              "name": "CloudAccountConnected",
+              "id": "product-settings--cloud-account-connected"
+            },
+            {
+              "name": "CloudAccountRevoking",
+              "id": "product-settings--cloud-account-revoking"
+            },
+            {
+              "name": "CloudAccountEnglish",
+              "id": "product-settings--cloud-account-english"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "settings/provider-card",
+      "status": "composition",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Settings",
+          "file": "stories/settings-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "Providers",
+              "id": "product-settings--providers"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "settings/provider-configuration-form",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Settings",
+          "file": "stories/settings-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "ProviderConfiguration",
+              "id": "product-settings--provider-configuration"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "settings/provider-logo",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Settings",
+          "file": "stories/settings-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "Providers",
+              "id": "product-settings--providers"
+            },
+            {
+              "name": "Embeddings",
+              "id": "product-settings--embeddings"
+            },
+            {
+              "name": "ProviderConfiguration",
+              "id": "product-settings--provider-configuration"
+            },
+            {
+              "name": "EmbeddingConfiguration",
+              "id": "product-settings--embedding-configuration"
+            },
+            {
+              "name": "ProviderSearch",
+              "id": "product-settings--provider-search"
+            },
+            {
+              "name": "EmbeddingSearch",
+              "id": "product-settings--embedding-search"
+            },
+            {
+              "name": "ProviderBrands",
+              "id": "product-settings--provider-brands"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "settings/provider-navigation",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Settings",
+          "file": "stories/settings-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "ProviderSearch",
+              "id": "product-settings--provider-search"
+            },
+            {
+              "name": "EmbeddingSearch",
+              "id": "product-settings--embedding-search"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "settings/settings-shell",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Settings",
+          "file": "stories/settings-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "Shell",
+              "id": "product-settings--shell"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "settings/skills-workspace",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Settings",
+          "file": "stories/settings-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "SkillsEmpty",
+              "id": "product-settings--skills-empty"
+            },
+            {
+              "name": "SkillEditor",
+              "id": "product-settings--skill-editor"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "thinking/src/ThinkingOrb",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Media and Preview",
+          "file": "stories/ai-media.stories.tsx",
+          "stories": [
+            {
+              "name": "ThinkingStates",
+              "id": "ai-elements-media-and-preview--thinking-states"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ui/accordion",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "UI/Extended Primitives",
+          "file": "stories/ui-complete.stories.tsx",
+          "stories": [
+            {
+              "name": "Accordions",
+              "id": "ui-extended-primitives--accordions"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ui/alert",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "UI/Primitive Gallery",
+          "file": "stories/ui-primitives.stories.tsx",
+          "stories": [
+            {
+              "name": "FeedbackAndData",
+              "id": "ui-primitive-gallery--feedback-and-data"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ui/app-select",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "UI/Primitive Gallery",
+          "file": "stories/ui-primitives.stories.tsx",
+          "stories": [
+            {
+              "name": "Actions",
+              "id": "ui-primitive-gallery--actions"
+            },
+            {
+              "name": "Forms",
+              "id": "ui-primitive-gallery--forms"
+            },
+            {
+              "name": "FeedbackAndData",
+              "id": "ui-primitive-gallery--feedback-and-data"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ui/avatar",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "UI/Primitive Gallery",
+          "file": "stories/ui-primitives.stories.tsx",
+          "stories": [
+            {
+              "name": "FeedbackAndData",
+              "id": "ui-primitive-gallery--feedback-and-data"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ui/badge",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "UI/Primitive Gallery",
+          "file": "stories/ui-primitives.stories.tsx",
+          "stories": [
+            {
+              "name": "Actions",
+              "id": "ui-primitive-gallery--actions"
+            },
+            {
+              "name": "FeedbackAndData",
+              "id": "ui-primitive-gallery--feedback-and-data"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ui/button",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Pattern Gallery",
+          "file": "stories/ai-elements.stories.tsx",
+          "stories": [
+            {
+              "name": "ConversationStates",
+              "id": "ai-elements-pattern-gallery--conversation-states"
+            },
+            {
+              "name": "AgentWork",
+              "id": "ai-elements-pattern-gallery--agent-work"
+            },
+            {
+              "name": "DeveloperSurfaces",
+              "id": "ai-elements-pattern-gallery--developer-surfaces"
+            }
+          ]
+        },
+        {
+          "title": "UI/Overlays",
+          "file": "stories/overlays.stories.tsx",
+          "stories": [
+            {
+              "name": "OverlayGallery",
+              "id": "ui-overlays--overlay-gallery"
+            }
+          ]
+        },
+        {
+          "title": "UI/Extended Primitives",
+          "file": "stories/ui-complete.stories.tsx",
+          "stories": [
+            {
+              "name": "Collapse",
+              "id": "ui-extended-primitives--collapse"
+            },
+            {
+              "name": "Slides",
+              "id": "ui-extended-primitives--slides"
+            },
+            {
+              "name": "SearchCommand",
+              "id": "ui-extended-primitives--search-command"
+            },
+            {
+              "name": "FeatureModal",
+              "id": "ui-extended-primitives--feature-modal"
+            },
+            {
+              "name": "InputGroups",
+              "id": "ui-extended-primitives--input-groups"
+            }
+          ]
+        },
+        {
+          "title": "UI/Primitive Gallery",
+          "file": "stories/ui-primitives.stories.tsx",
+          "stories": [
+            {
+              "name": "Actions",
+              "id": "ui-primitive-gallery--actions"
+            },
+            {
+              "name": "FeedbackAndData",
+              "id": "ui-primitive-gallery--feedback-and-data"
+            }
+          ]
+        },
+        {
+          "title": "UI/Button",
+          "file": "components/ui/button.stories.tsx",
+          "stories": [
+            {
+              "name": "Playground",
+              "id": "ui-button--playground"
+            },
+            {
+              "name": "WithIcon",
+              "id": "ui-button--with-icon"
+            },
+            {
+              "name": "Loading",
+              "id": "ui-button--loading"
+            },
+            {
+              "name": "Destructive",
+              "id": "ui-button--destructive"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ui/button-group",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "UI/Primitive Gallery",
+          "file": "stories/ui-primitives.stories.tsx",
+          "stories": [
+            {
+              "name": "Actions",
+              "id": "ui-primitive-gallery--actions"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ui/card",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "UI/Primitive Gallery",
+          "file": "stories/ui-primitives.stories.tsx",
+          "stories": [
+            {
+              "name": "FeedbackAndData",
+              "id": "ui-primitive-gallery--feedback-and-data"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ui/carousel",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "UI/Extended Primitives",
+          "file": "stories/ui-complete.stories.tsx",
+          "stories": [
+            {
+              "name": "Slides",
+              "id": "ui-extended-primitives--slides"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ui/collapsible",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "UI/Extended Primitives",
+          "file": "stories/ui-complete.stories.tsx",
+          "stories": [
+            {
+              "name": "Collapse",
+              "id": "ui-extended-primitives--collapse"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ui/command",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "AI Elements/Media and Preview",
+          "file": "stories/ai-media.stories.tsx",
+          "stories": [
+            {
+              "name": "VoicePicker",
+              "id": "ai-elements-media-and-preview--voice-picker"
+            },
+            {
+              "name": "MicrophoneUnavailable",
+              "id": "ai-elements-media-and-preview--microphone-unavailable"
+            },
+            {
+              "name": "ModelSearch",
+              "id": "ai-elements-media-and-preview--model-search"
+            }
+          ]
+        },
+        {
+          "title": "UI/Extended Primitives",
+          "file": "stories/ui-complete.stories.tsx",
+          "stories": [
+            {
+              "name": "SearchCommand",
+              "id": "ui-extended-primitives--search-command"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ui/dialog",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "UI/Overlays",
+          "file": "stories/overlays.stories.tsx",
+          "stories": [
+            {
+              "name": "OverlayGallery",
+              "id": "ui-overlays--overlay-gallery"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ui/dropdown-menu",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "UI/Overlays",
+          "file": "stories/overlays.stories.tsx",
+          "stories": [
+            {
+              "name": "OverlayGallery",
+              "id": "ui-overlays--overlay-gallery"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ui/feature-dialog",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "UI/Extended Primitives",
+          "file": "stories/ui-complete.stories.tsx",
+          "stories": [
+            {
+              "name": "FeatureModal",
+              "id": "ui-extended-primitives--feature-modal"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ui/hover-card",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "UI/Extended Primitives",
+          "file": "stories/ui-complete.stories.tsx",
+          "stories": [
+            {
+              "name": "HoverPreview",
+              "id": "ui-extended-primitives--hover-preview"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ui/input",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "UI/Primitive Gallery",
+          "file": "stories/ui-primitives.stories.tsx",
+          "stories": [
+            {
+              "name": "Actions",
+              "id": "ui-primitive-gallery--actions"
+            },
+            {
+              "name": "Forms",
+              "id": "ui-primitive-gallery--forms"
+            },
+            {
+              "name": "FeedbackAndData",
+              "id": "ui-primitive-gallery--feedback-and-data"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ui/input-group",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "UI/Extended Primitives",
+          "file": "stories/ui-complete.stories.tsx",
+          "stories": [
+            {
+              "name": "SearchCommand",
+              "id": "ui-extended-primitives--search-command"
+            },
+            {
+              "name": "InputGroups",
+              "id": "ui-extended-primitives--input-groups"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ui/popover",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "UI/Overlays",
+          "file": "stories/overlays.stories.tsx",
+          "stories": [
+            {
+              "name": "OverlayGallery",
+              "id": "ui-overlays--overlay-gallery"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ui/progress",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "UI/Primitive Gallery",
+          "file": "stories/ui-primitives.stories.tsx",
+          "stories": [
+            {
+              "name": "FeedbackAndData",
+              "id": "ui-primitive-gallery--feedback-and-data"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ui/resizable",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "UI/Extended Primitives",
+          "file": "stories/ui-complete.stories.tsx",
+          "stories": [
+            {
+              "name": "SplitPanels",
+              "id": "ui-extended-primitives--split-panels"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ui/scroll-area",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "UI/Extended Primitives",
+          "file": "stories/ui-complete.stories.tsx",
+          "stories": [
+            {
+              "name": "Scrolling",
+              "id": "ui-extended-primitives--scrolling"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ui/select",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "UI/Extended Primitives",
+          "file": "stories/ui-complete.stories.tsx",
+          "stories": [
+            {
+              "name": "SelectStates",
+              "id": "ui-extended-primitives--select-states"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ui/separator",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "UI/Primitive Gallery",
+          "file": "stories/ui-primitives.stories.tsx",
+          "stories": [
+            {
+              "name": "Actions",
+              "id": "ui-primitive-gallery--actions"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ui/spinner",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "UI/Primitive Gallery",
+          "file": "stories/ui-primitives.stories.tsx",
+          "stories": [
+            {
+              "name": "Actions",
+              "id": "ui-primitive-gallery--actions"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ui/switch",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "UI/Primitive Gallery",
+          "file": "stories/ui-primitives.stories.tsx",
+          "stories": [
+            {
+              "name": "Actions",
+              "id": "ui-primitive-gallery--actions"
+            },
+            {
+              "name": "Forms",
+              "id": "ui-primitive-gallery--forms"
+            },
+            {
+              "name": "FeedbackAndData",
+              "id": "ui-primitive-gallery--feedback-and-data"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ui/tabs",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "UI/Primitive Gallery",
+          "file": "stories/ui-primitives.stories.tsx",
+          "stories": [
+            {
+              "name": "FeedbackAndData",
+              "id": "ui-primitive-gallery--feedback-and-data"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ui/textarea",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "UI/Primitive Gallery",
+          "file": "stories/ui-primitives.stories.tsx",
+          "stories": [
+            {
+              "name": "Actions",
+              "id": "ui-primitive-gallery--actions"
+            },
+            {
+              "name": "Forms",
+              "id": "ui-primitive-gallery--forms"
+            },
+            {
+              "name": "FeedbackAndData",
+              "id": "ui-primitive-gallery--feedback-and-data"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ui/theme-scope",
+      "status": "composition",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Agent Prompt Textarea",
+          "file": "stories/agent-prompt-textarea.stories.tsx",
+          "stories": [
+            {
+              "name": "CommandPicker",
+              "id": "product-agent-prompt-textarea--command-picker"
+            },
+            {
+              "name": "DisabledCommandFocusExit",
+              "id": "product-agent-prompt-textarea--disabled-command-focus-exit"
+            }
+          ]
+        },
+        {
+          "title": "AI Elements/Pattern Gallery",
+          "file": "stories/ai-elements.stories.tsx",
+          "stories": [
+            {
+              "name": "ConversationStates",
+              "id": "ai-elements-pattern-gallery--conversation-states"
+            },
+            {
+              "name": "AgentWork",
+              "id": "ai-elements-pattern-gallery--agent-work"
+            }
+          ]
+        },
+        {
+          "title": "AI Elements/Media and Preview",
+          "file": "stories/ai-media.stories.tsx",
+          "stories": [
+            {
+              "name": "VoicePicker",
+              "id": "ai-elements-media-and-preview--voice-picker"
+            },
+            {
+              "name": "MicrophoneUnavailable",
+              "id": "ai-elements-media-and-preview--microphone-unavailable"
+            },
+            {
+              "name": "OpenInChat",
+              "id": "ai-elements-media-and-preview--open-in-chat"
+            },
+            {
+              "name": "WebPreview",
+              "id": "ai-elements-media-and-preview--web-preview"
+            },
+            {
+              "name": "ModelSearch",
+              "id": "ai-elements-media-and-preview--model-search"
+            }
+          ]
+        },
+        {
+          "title": "AI Elements/Protocol Primitives",
+          "file": "stories/ai-protocols.stories.tsx",
+          "stories": [
+            {
+              "name": "AgentInstructions",
+              "id": "ai-elements-protocol-primitives--agent-instructions"
+            },
+            {
+              "name": "Tool",
+              "id": "ai-elements-protocol-primitives--tool"
+            },
+            {
+              "name": "Attachments",
+              "id": "ai-elements-protocol-primitives--attachments"
+            },
+            {
+              "name": "Context",
+              "id": "ai-elements-protocol-primitives--context"
+            },
+            {
+              "name": "Checkpoint",
+              "id": "ai-elements-protocol-primitives--checkpoint"
+            },
+            {
+              "name": "Sandbox",
+              "id": "ai-elements-protocol-primitives--sandbox"
+            },
+            {
+              "name": "InlineCitation",
+              "id": "ai-elements-protocol-primitives--inline-citation"
+            },
+            {
+              "name": "CodeBlock",
+              "id": "ai-elements-protocol-primitives--code-block"
+            }
+          ]
+        },
+        {
+          "title": "Product/Chat Composer",
+          "file": "stories/chat-composer.stories.tsx",
+          "stories": [
+            {
+              "name": "ReviewAndFork",
+              "id": "product-chat-composer--review-and-fork"
+            },
+            {
+              "name": "KeyboardCompositionAndEscape",
+              "id": "product-chat-composer--keyboard-composition-and-escape"
+            },
+            {
+              "name": "ConfiguredModelAndClientActions",
+              "id": "product-chat-composer--configured-model-and-client-actions"
+            },
+            {
+              "name": "DurableQueueReloadAndDrain",
+              "id": "product-chat-composer--durable-queue-reload-and-drain"
+            },
+            {
+              "name": "PrivateFileUpload",
+              "id": "product-chat-composer--private-file-upload"
+            },
+            {
+              "name": "AccessModeCommitAndRollback",
+              "id": "product-chat-composer--access-mode-commit-and-rollback"
+            },
+            {
+              "name": "PluginInstallRetryAndWorkerActivation",
+              "id": "product-chat-composer--plugin-install-retry-and-worker-activation"
+            },
+            {
+              "name": "NativeResourceEmptyAndErrorStates",
+              "id": "product-chat-composer--native-resource-empty-and-error-states"
+            },
+            {
+              "name": "ForkFailureAndRunningGuard",
+              "id": "product-chat-composer--fork-failure-and-running-guard"
+            },
+            {
+              "name": "EditResendBranchAndRecovery",
+              "id": "product-chat-composer--edit-resend-branch-and-recovery"
+            },
+            {
+              "name": "PlanAndGoalNativeLifecycle",
+              "id": "product-chat-composer--plan-and-goal-native-lifecycle"
+            }
+          ]
+        },
+        {
+          "title": "Product/Timeline and Workspace",
+          "file": "stories/chat-timeline.stories.tsx",
+          "stories": [
+            {
+              "name": "CompletedRound",
+              "id": "product-timeline-and-workspace--completed-round"
+            },
+            {
+              "name": "Empty",
+              "id": "product-timeline-and-workspace--empty"
+            },
+            {
+              "name": "Streaming",
+              "id": "product-timeline-and-workspace--streaming"
+            },
+            {
+              "name": "EditingFile",
+              "id": "product-timeline-and-workspace--editing-file"
+            },
+            {
+              "name": "FileChanges",
+              "id": "product-timeline-and-workspace--file-changes"
+            },
+            {
+              "name": "ToolFailure",
+              "id": "product-timeline-and-workspace--tool-failure"
+            },
+            {
+              "name": "ConfirmationEvent",
+              "id": "product-timeline-and-workspace--confirmation-event"
+            },
+            {
+              "name": "TaskStates",
+              "id": "product-timeline-and-workspace--task-states"
+            },
+            {
+              "name": "FullWorkspace",
+              "id": "product-timeline-and-workspace--full-workspace"
+            },
+            {
+              "name": "PiWorkspace",
+              "id": "product-timeline-and-workspace--pi-workspace"
+            }
+          ]
+        },
+        {
+          "title": "Product/Composer Overlays",
+          "file": "stories/composer-overlays.stories.tsx",
+          "stories": [
+            {
+              "name": "AddMenu",
+              "id": "product-composer-overlays--add-menu"
+            },
+            {
+              "name": "PluginInstallError",
+              "id": "product-composer-overlays--plugin-install-error"
+            },
+            {
+              "name": "Confirmations",
+              "id": "product-composer-overlays--confirmations"
+            },
+            {
+              "name": "ConfirmationError",
+              "id": "product-composer-overlays--confirmation-error"
+            }
+          ]
+        },
+        {
+          "title": "UI/Overlays",
+          "file": "stories/overlays.stories.tsx",
+          "stories": [
+            {
+              "name": "OverlayGallery",
+              "id": "ui-overlays--overlay-gallery"
+            }
+          ]
+        },
+        {
+          "title": "Product/Pages",
+          "file": "stories/product-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "Home",
+              "id": "product-pages--home"
+            },
+            {
+              "name": "MarketingHome",
+              "id": "product-pages--marketing-home"
+            },
+            {
+              "name": "AnonymousComposer",
+              "id": "product-pages--anonymous-composer"
+            },
+            {
+              "name": "ProjectsEmpty",
+              "id": "product-pages--projects-empty"
+            },
+            {
+              "name": "ProjectLifecycle",
+              "id": "product-pages--project-lifecycle"
+            },
+            {
+              "name": "ProjectsReadOnly",
+              "id": "product-pages--projects-read-only"
+            }
+          ]
+        },
+        {
+          "title": "Product/Runtime States",
+          "file": "stories/runtime-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "KnowledgeEmpty",
+              "id": "product-runtime-states--knowledge-empty"
+            },
+            {
+              "name": "KnowledgeCreate",
+              "id": "product-runtime-states--knowledge-create"
+            },
+            {
+              "name": "KnowledgeUnavailable",
+              "id": "product-runtime-states--knowledge-unavailable"
+            },
+            {
+              "name": "KnowledgeError",
+              "id": "product-runtime-states--knowledge-error"
+            },
+            {
+              "name": "KnowledgeLoading",
+              "id": "product-runtime-states--knowledge-loading"
+            },
+            {
+              "name": "KnowledgeBackend",
+              "id": "product-runtime-states--knowledge-backend"
+            },
+            {
+              "name": "DatabaseUnavailable",
+              "id": "product-runtime-states--database-unavailable"
+            }
+          ]
+        },
+        {
+          "title": "Product/Settings",
+          "file": "stories/settings-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "Preferences",
+              "id": "product-settings--preferences"
+            },
+            {
+              "name": "Shell",
+              "id": "product-settings--shell"
+            },
+            {
+              "name": "ProviderConfiguration",
+              "id": "product-settings--provider-configuration"
+            },
+            {
+              "name": "SkillsEmpty",
+              "id": "product-settings--skills-empty"
+            },
+            {
+              "name": "SkillEditor",
+              "id": "product-settings--skill-editor"
+            },
+            {
+              "name": "CloudAccountEmpty",
+              "id": "product-settings--cloud-account-empty"
+            },
+            {
+              "name": "CloudAccountConnected",
+              "id": "product-settings--cloud-account-connected"
+            },
+            {
+              "name": "CloudAccountRevoking",
+              "id": "product-settings--cloud-account-revoking"
+            },
+            {
+              "name": "CloudAccountEnglish",
+              "id": "product-settings--cloud-account-english"
+            }
+          ]
+        },
+        {
+          "title": "UI/Extended Primitives",
+          "file": "stories/ui-complete.stories.tsx",
+          "stories": [
+            {
+              "name": "SearchCommand",
+              "id": "ui-extended-primitives--search-command"
+            },
+            {
+              "name": "FeatureModal",
+              "id": "ui-extended-primitives--feature-modal"
+            },
+            {
+              "name": "HoverPreview",
+              "id": "ui-extended-primitives--hover-preview"
+            },
+            {
+              "name": "SelectStates",
+              "id": "ui-extended-primitives--select-states"
+            }
+          ]
+        },
+        {
+          "title": "UI/Primitive Gallery",
+          "file": "stories/ui-primitives.stories.tsx",
+          "stories": [
+            {
+              "name": "Actions",
+              "id": "ui-primitive-gallery--actions"
+            },
+            {
+              "name": "Forms",
+              "id": "ui-primitive-gallery--forms"
+            },
+            {
+              "name": "FeedbackAndData",
+              "id": "ui-primitive-gallery--feedback-and-data"
+            }
+          ]
+        },
+        {
+          "title": "Product/Workspace Runtime Hint",
+          "file": "stories/workspace-runtime-hint.stories.tsx",
+          "stories": [
+            {
+              "name": "RuntimeGateWithoutPromptHint",
+              "id": "product-workspace-runtime-hint--runtime-gate-without-prompt-hint"
+            }
+          ]
+        },
+        {
+          "title": "Product/Work Model Selector",
+          "file": "components/work-model-selector.stories.tsx",
+          "stories": [
+            {
+              "name": "Playground",
+              "id": "product-work-model-selector--playground"
+            },
+            {
+              "name": "HomeComposer",
+              "id": "product-work-model-selector--home-composer"
+            },
+            {
+              "name": "ConversationComposer",
+              "id": "product-work-model-selector--conversation-composer"
+            },
+            {
+              "name": "ModelList",
+              "id": "product-work-model-selector--model-list"
+            },
+            {
+              "name": "EffortControls",
+              "id": "product-work-model-selector--effort-controls"
+            },
+            {
+              "name": "Light",
+              "id": "product-work-model-selector--light"
+            },
+            {
+              "name": "Disabled",
+              "id": "product-work-model-selector--disabled"
+            },
+            {
+              "name": "Empty",
+              "id": "product-work-model-selector--empty"
+            },
+            {
+              "name": "Narrow",
+              "id": "product-work-model-selector--narrow"
+            },
+            {
+              "name": "SelectThenTune",
+              "id": "product-work-model-selector--select-then-tune"
+            },
+            {
+              "name": "KeyboardAndDefault",
+              "id": "product-work-model-selector--keyboard-and-default"
+            },
+            {
+              "name": "BackToModels",
+              "id": "product-work-model-selector--back-to-models"
+            },
+            {
+              "name": "MotionStressTest",
+              "id": "product-work-model-selector--motion-stress-test"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ui/tooltip",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "UI/Overlays",
+          "file": "stories/overlays.stories.tsx",
+          "stories": [
+            {
+              "name": "OverlayGallery",
+              "id": "ui-overlays--overlay-gallery"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "work-model-selector",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Work Model Selector",
+          "file": "components/work-model-selector.stories.tsx",
+          "stories": [
+            {
+              "name": "Playground",
+              "id": "product-work-model-selector--playground"
+            },
+            {
+              "name": "HomeComposer",
+              "id": "product-work-model-selector--home-composer"
+            },
+            {
+              "name": "ConversationComposer",
+              "id": "product-work-model-selector--conversation-composer"
+            },
+            {
+              "name": "ModelList",
+              "id": "product-work-model-selector--model-list"
+            },
+            {
+              "name": "EffortControls",
+              "id": "product-work-model-selector--effort-controls"
+            },
+            {
+              "name": "Light",
+              "id": "product-work-model-selector--light"
+            },
+            {
+              "name": "Disabled",
+              "id": "product-work-model-selector--disabled"
+            },
+            {
+              "name": "Empty",
+              "id": "product-work-model-selector--empty"
+            },
+            {
+              "name": "Narrow",
+              "id": "product-work-model-selector--narrow"
+            },
+            {
+              "name": "SelectThenTune",
+              "id": "product-work-model-selector--select-then-tune"
+            },
+            {
+              "name": "KeyboardAndDefault",
+              "id": "product-work-model-selector--keyboard-and-default"
+            },
+            {
+              "name": "BackToModels",
+              "id": "product-work-model-selector--back-to-models"
+            },
+            {
+              "name": "MotionStressTest",
+              "id": "product-work-model-selector--motion-stress-test"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "work-model-selector-motion",
+      "status": "composition",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Work Model Selector",
+          "file": "components/work-model-selector.stories.tsx",
+          "stories": [
+            {
+              "name": "Playground",
+              "id": "product-work-model-selector--playground"
+            },
+            {
+              "name": "HomeComposer",
+              "id": "product-work-model-selector--home-composer"
+            },
+            {
+              "name": "ConversationComposer",
+              "id": "product-work-model-selector--conversation-composer"
+            },
+            {
+              "name": "ModelList",
+              "id": "product-work-model-selector--model-list"
+            },
+            {
+              "name": "EffortControls",
+              "id": "product-work-model-selector--effort-controls"
+            },
+            {
+              "name": "Light",
+              "id": "product-work-model-selector--light"
+            },
+            {
+              "name": "Disabled",
+              "id": "product-work-model-selector--disabled"
+            },
+            {
+              "name": "Empty",
+              "id": "product-work-model-selector--empty"
+            },
+            {
+              "name": "Narrow",
+              "id": "product-work-model-selector--narrow"
+            },
+            {
+              "name": "SelectThenTune",
+              "id": "product-work-model-selector--select-then-tune"
+            },
+            {
+              "name": "KeyboardAndDefault",
+              "id": "product-work-model-selector--keyboard-and-default"
+            },
+            {
+              "name": "BackToModels",
+              "id": "product-work-model-selector--back-to-models"
+            },
+            {
+              "name": "MotionStressTest",
+              "id": "product-work-model-selector--motion-stress-test"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "workspace-prompt",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Workspace Runtime Hint",
+          "file": "stories/workspace-runtime-hint.stories.tsx",
+          "stories": [
+            {
+              "name": "RuntimeGateWithoutPromptHint",
+              "id": "product-workspace-runtime-hint--runtime-gate-without-prompt-hint"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "workspace-switcher",
+      "status": "composition",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Chat Composer",
+          "file": "stories/chat-composer.stories.tsx",
+          "stories": [
+            {
+              "name": "ReviewAndFork",
+              "id": "product-chat-composer--review-and-fork"
+            },
+            {
+              "name": "KeyboardCompositionAndEscape",
+              "id": "product-chat-composer--keyboard-composition-and-escape"
+            },
+            {
+              "name": "ConfiguredModelAndClientActions",
+              "id": "product-chat-composer--configured-model-and-client-actions"
+            },
+            {
+              "name": "DurableQueueReloadAndDrain",
+              "id": "product-chat-composer--durable-queue-reload-and-drain"
+            },
+            {
+              "name": "PrivateFileUpload",
+              "id": "product-chat-composer--private-file-upload"
+            },
+            {
+              "name": "AccessModeCommitAndRollback",
+              "id": "product-chat-composer--access-mode-commit-and-rollback"
+            },
+            {
+              "name": "PluginInstallRetryAndWorkerActivation",
+              "id": "product-chat-composer--plugin-install-retry-and-worker-activation"
+            },
+            {
+              "name": "NativeResourceEmptyAndErrorStates",
+              "id": "product-chat-composer--native-resource-empty-and-error-states"
+            },
+            {
+              "name": "ForkFailureAndRunningGuard",
+              "id": "product-chat-composer--fork-failure-and-running-guard"
+            },
+            {
+              "name": "EditResendBranchAndRecovery",
+              "id": "product-chat-composer--edit-resend-branch-and-recovery"
+            },
+            {
+              "name": "PlanAndGoalNativeLifecycle",
+              "id": "product-chat-composer--plan-and-goal-native-lifecycle"
+            }
+          ]
+        },
+        {
+          "title": "Product/Timeline and Workspace",
+          "file": "stories/chat-timeline.stories.tsx",
+          "stories": [
+            {
+              "name": "FullWorkspace",
+              "id": "product-timeline-and-workspace--full-workspace"
+            },
+            {
+              "name": "PiWorkspace",
+              "id": "product-timeline-and-workspace--pi-workspace"
+            }
+          ]
+        },
+        {
+          "title": "Product/Pages",
+          "file": "stories/product-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "Home",
+              "id": "product-pages--home"
+            },
+            {
+              "name": "ProjectsEmpty",
+              "id": "product-pages--projects-empty"
+            },
+            {
+              "name": "ProjectLifecycle",
+              "id": "product-pages--project-lifecycle"
+            },
+            {
+              "name": "ProjectsReadOnly",
+              "id": "product-pages--projects-read-only"
+            }
+          ]
+        },
+        {
+          "title": "Product/Runtime States",
+          "file": "stories/runtime-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "KnowledgeEmpty",
+              "id": "product-runtime-states--knowledge-empty"
+            },
+            {
+              "name": "KnowledgeCreate",
+              "id": "product-runtime-states--knowledge-create"
+            },
+            {
+              "name": "KnowledgeUnavailable",
+              "id": "product-runtime-states--knowledge-unavailable"
+            },
+            {
+              "name": "KnowledgeError",
+              "id": "product-runtime-states--knowledge-error"
+            },
+            {
+              "name": "KnowledgeLoading",
+              "id": "product-runtime-states--knowledge-loading"
+            },
+            {
+              "name": "KnowledgeBackend",
+              "id": "product-runtime-states--knowledge-backend"
+            },
+            {
+              "name": "DatabaseUnavailable",
+              "id": "product-runtime-states--database-unavailable"
+            }
+          ]
+        },
+        {
+          "title": "Product/Settings",
+          "file": "stories/settings-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "Shell",
+              "id": "product-settings--shell"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "zorker-logo",
+      "status": "direct",
+      "reason": null,
+      "entries": [
+        {
+          "title": "Product/Pages",
+          "file": "stories/product-pages.stories.tsx",
+          "stories": [
+            {
+              "name": "Login",
+              "id": "product-pages--login"
+            },
+            {
+              "name": "Register",
+              "id": "product-pages--register"
+            },
+            {
+              "name": "HostedLogin",
+              "id": "product-pages--hosted-login"
+            },
+            {
+              "name": "MarketingHome",
+              "id": "product-pages--marketing-home"
+            },
+            {
+              "name": "Brand",
+              "id": "product-pages--brand"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

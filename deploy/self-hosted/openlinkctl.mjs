@@ -23,6 +23,7 @@ import { extractVerifiedTarGzip } from './runtime/safe-archive.mjs'
 import { checkContainerRuntime, createRuntimePlan, ProductionSupervisor, startContainerRuntime, stopContainerRuntime, validateProductionEnvironment } from './runtime/production-runtime.mjs'
 import { serveContainerBroker } from './runtime/container-broker.mjs'
 import { createProductionConfiguration, updateProductionProjectRuntime } from './runtime/configuration.mjs'
+import { ensureMacPlatformContainerEngine } from './runtime/platform-container-engine.mjs'
 import { selectProjectRuntime, terminalProjectRuntimePrompt, terminalVirtualizationHelp } from './runtime/runtime-selection.mjs'
 import { acquireRuntimeLock, runtimeLockStatus } from './runtime/lifecycle-lock.mjs'
 import { createEncryptedBackup, restoreEncryptedBackup } from './runtime/backup.mjs'
@@ -175,15 +176,30 @@ function requireServiceAdministrator(platform, getuid = process.getuid?.bind(pro
   }
 }
 
+export function deploymentStatus(config = {}) {
+  return {
+    profile: config.OPENLINK_DEPLOYMENT_PROFILE || 'standard',
+    profileRevision: config.OPENLINK_DEPLOYMENT_PROFILE_REVISION || 'standard/v1',
+    projectRuntime: config.OPENLINK_PROJECT_RUNTIME || 'vm',
+    isolation: config.OPENLINK_PROJECT_ISOLATION || 'vm',
+    knowledge: config.OPENLINK_KNOWLEDGE_ENABLED !== '0',
+    zero: config.OPENLINK_ZERO_ENABLED !== '0',
+  }
+}
+
 export async function serviceAction(action, stateRoot, options = {}) {
   if (!['start', 'stop', 'restart'].includes(action)) throw new Error(`Unsupported service action: ${action}`)
   const platform = options.platform ?? process.platform
   const runner = options.execFile ?? execFile
   requireServiceAdministrator(platform, options.getuid)
   if (platform === 'linux') {
+    if (options.reconcileProjectBroker === true && action !== 'stop') {
+      await runner('systemctl', [options.projectRuntime === 'container' ? 'enable' : 'disable', ...(options.projectRuntime === 'container' ? [] : ['--now']), 'openlink-project-container-broker.service'], { timeout: 240_000 })
+    }
+    const projectBroker = options.projectRuntime === 'container' ? ['openlink-project-container-broker.service'] : []
     const services = action === 'stop'
-      ? ['openlink.service', 'openlink-container-broker.service']
-      : ['openlink-container-broker.service', 'openlink.service']
+      ? ['openlink.service', ...projectBroker, 'openlink-container-broker.service']
+      : ['openlink-container-broker.service', ...projectBroker, 'openlink.service']
     await runner('systemctl', [action, ...services], { timeout: action === 'stop' ? 240_000 : 660_000 })
     return
   }
@@ -217,8 +233,12 @@ export async function nativeServiceStatus(options = {}) {
     const inspect = async (service) => parseSystemdProperties(commandOutput(await runner('systemctl', [
       'show', service, '--property=ActiveState', '--property=SubState', '--property=UnitFileState', '--property=MainPID', '--no-pager',
     ], { timeout: 15_000 })))
-    const [service, broker] = await Promise.all([inspect('openlink.service'), inspect('openlink-container-broker.service')])
-    return { manager: 'systemd', active: service.ActiveState === 'active' && broker.ActiveState === 'active', service, broker }
+    const [service, broker, projectBroker] = await Promise.all([
+      inspect('openlink.service'),
+      inspect('openlink-container-broker.service'),
+      options.projectRuntime === 'container' ? inspect('openlink-project-container-broker.service') : undefined,
+    ])
+    return { manager: 'systemd', active: service.ActiveState === 'active' && broker.ActiveState === 'active' && (!projectBroker || projectBroker.ActiveState === 'active'), service, broker, ...(projectBroker ? { projectBroker } : {}) }
   }
   if (platform === 'darwin') {
     try {
@@ -267,7 +287,7 @@ export async function readServiceLogs(options = {}) {
   const lines = Number(options.lines ?? 200)
   if (!Number.isSafeInteger(lines) || lines < 1 || lines > 5_000) throw new Error('Log line count must be between 1 and 5000')
   if (platform === 'linux') {
-    return commandOutput(await runner('journalctl', ['--unit=openlink.service', '--unit=openlink-container-broker.service', `--lines=${lines}`, '--no-pager', '--output=short-iso-precise'], { timeout: 30_000, maxBuffer: 16 * 1024 * 1024 }))
+    return commandOutput(await runner('journalctl', ['--unit=openlink.service', '--unit=openlink-container-broker.service', '--unit=openlink-project-container-broker.service', `--lines=${lines}`, '--no-pager', '--output=short-iso-precise'], { timeout: 30_000, maxBuffer: 16 * 1024 * 1024 }))
   }
   if (platform === 'darwin') {
     const output = commandOutput(await runner('/usr/bin/log', ['show', '--style', 'syslog', '--last', options.since ?? '1h', '--predicate', 'process == "openlinkctl"'], { timeout: 30_000, maxBuffer: 16 * 1024 * 1024 }))
@@ -384,9 +404,15 @@ async function main(argv) {
   }
   if (command === 'status') {
     const config = await readEnvironmentFile(resolve(values.get('config') || defaultConfigPath()))
-    const [service, runtime] = await Promise.all([nativeServiceStatus(), runtimeLockStatus(config.OPENLINK_STATE_ROOT)])
+    const [service, runtime] = await Promise.all([nativeServiceStatus({ projectRuntime: config.OPENLINK_PROJECT_RUNTIME }), runtimeLockStatus(config.OPENLINK_STATE_ROOT)])
     const active = service.active && runtime.running
-    process.stdout.write(`${JSON.stringify({ ok: true, active, service, runtime })}\n`)
+    process.stdout.write(`${JSON.stringify({
+      ok: true,
+      active,
+      deployment: deploymentStatus(config),
+      service,
+      runtime,
+    })}\n`)
     if (!active) process.exitCode = 3
     return
   }
@@ -415,8 +441,8 @@ async function main(argv) {
         await updateProductionProjectRuntime(configPath, runtimeSelection.runtime)
       }
     }
-    await serviceAction(command, config.OPENLINK_STATE_ROOT)
-    const service = await nativeServiceStatus()
+    await serviceAction(command, config.OPENLINK_STATE_ROOT, { projectRuntime: runtimeSelection?.runtime ?? config.OPENLINK_PROJECT_RUNTIME, reconcileProjectBroker: command !== 'stop' })
+    const service = await nativeServiceStatus({ projectRuntime: runtimeSelection?.runtime ?? config.OPENLINK_PROJECT_RUNTIME })
     process.stdout.write(`${JSON.stringify({ ok: true, action: command, service, ...(runtimeSelection ? { projectRuntime: runtimeSelection.runtime, runtimeSelection: runtimeSelection.action } : {}) })}\n`)
     return
   }
@@ -476,14 +502,14 @@ async function main(argv) {
       stateRoot: config.OPENLINK_STATE_ROOT,
       currentManifest,
       candidateManifest,
-      stopService: () => serviceAction('stop', config.OPENLINK_STATE_ROOT),
+      stopService: () => serviceAction('stop', config.OPENLINK_STATE_ROOT, { projectRuntime: config.OPENLINK_PROJECT_RUNTIME }),
       backup: async () => {
         const result = await createEncryptedBackup({ stateRoot: config.OPENLINK_STATE_ROOT, configPath, secretsPath: config.OPENLINK_SECRETS_FILE, keyFile: config.OPENLINK_BACKUP_KEY_FILE, output: backupOutput })
         return { output: result.output, manifestPath: result.manifestPath, sha256: result.manifest.payload.sha256 }
       },
       stage: () => installReleaseArchive({ archive, installRoot, trustedKeys, expectedTarget, activate: false }),
       activate: (releaseId) => activateRelease(installRoot, releaseId),
-      startService: () => serviceAction('start', config.OPENLINK_STATE_ROOT),
+      startService: () => serviceAction('start', config.OPENLINK_STATE_ROOT, { projectRuntime: config.OPENLINK_PROJECT_RUNTIME }),
       healthCheck: (releaseId) => waitForApplicationHealth(config.OPENLINK_APP_URL, releaseId),
     })
     process.stdout.write(`${JSON.stringify({ ok: true, transaction })}\n`)
@@ -507,13 +533,13 @@ async function main(argv) {
       stateRoot: config.OPENLINK_STATE_ROOT,
       currentManifest,
       targetManifest,
-      stopService: () => serviceAction('stop', config.OPENLINK_STATE_ROOT),
+      stopService: () => serviceAction('stop', config.OPENLINK_STATE_ROOT, { projectRuntime: config.OPENLINK_PROJECT_RUNTIME }),
       backup: async () => {
         const result = await createEncryptedBackup({ stateRoot: config.OPENLINK_STATE_ROOT, configPath, secretsPath: config.OPENLINK_SECRETS_FILE, keyFile: config.OPENLINK_BACKUP_KEY_FILE, output: backupOutput })
         return { output: result.output, manifestPath: result.manifestPath, sha256: result.manifest.payload.sha256 }
       },
       activate: (releaseId) => activateRelease(installRoot, releaseId),
-      startService: () => serviceAction('start', config.OPENLINK_STATE_ROOT),
+      startService: () => serviceAction('start', config.OPENLINK_STATE_ROOT, { projectRuntime: config.OPENLINK_PROJECT_RUNTIME }),
       healthCheck: (releaseId) => waitForApplicationHealth(config.OPENLINK_APP_URL, releaseId),
     })
     process.stdout.write(`${JSON.stringify({ ok: true, transaction })}\n`)
@@ -562,6 +588,20 @@ async function main(argv) {
     process.once('SIGINT', onSignal)
     process.once('SIGTERM', onSignal)
     try {
+      if (process.platform === 'darwin') {
+        const vmManifest = JSON.parse(await readFile(join(releaseRoot, 'project-vm/manifest.json'), 'utf8'))
+        if (typeof vmManifest.disk !== 'string' || !vmManifest.disk || vmManifest.disk.includes('/') || vmManifest.disk.includes('\\')) {
+          throw new Error('Signed release does not contain a valid local platform Golden Disk')
+        }
+        await ensureMacPlatformContainerEngine({
+          env: environment,
+          releaseRoot,
+          stateRoot: environment.OPENLINK_STATE_ROOT,
+          baseDisk: join(releaseRoot, 'project-vm', vmManifest.disk),
+          podman: join(releaseRoot, 'toolchain/bin/podman'),
+          helperRoot: join(releaseRoot, 'toolchain/bin'),
+        })
+      }
       await runPreflight({
         releaseRoot,
         stateRoot: environment.OPENLINK_STATE_ROOT,

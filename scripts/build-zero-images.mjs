@@ -17,12 +17,16 @@ const manifestPath = resolve(artifactRoot, 'manifest.json')
 const version = process.env.OPENLINK_ZERO_IMAGE_VERSION || '3.0.0'
 const allowAcquisition = process.env.OPENLINK_ZERO_ALLOW_UPSTREAM_ACQUISITION === '1'
 const force = process.argv.includes('--force')
+const skipArchives = process.env.OPENLINK_SKIP_IMAGE_ARCHIVES === '1'
 const docker = await ensureDockerEngine()
 // The runtime is built from an OpenLink-owned, locally cached Zero build
 // input.  A source image may be supplied explicitly for image production;
 // runtime startup never uses this value and never pulls it.
 const localBuildInput = process.env.OPENLINK_ZERO_BUILD_INPUT_IMAGE || `zokerbase/zero-base:${version}`
-const upstreamBuildInput = process.env.OPENLINK_ZERO_UPSTREAM_IMAGE
+// Keep the controlled acquisition input aligned with the vendored standalone
+// deployment contract. Runtime startup still cannot pull: acquisition must be
+// enabled explicitly by the image-production command.
+const upstreamBuildInput = process.env.OPENLINK_ZERO_UPSTREAM_IMAGE || 'milvusdb/milvus:v3.0.0'
 const specs = [
   // The source tag is a build-time input only. It is intentionally omitted
   // from the artifact manifest and never referenced by runtime compose.
@@ -71,11 +75,17 @@ async function archive(spec) {
   return path
 }
 
-await run(docker, ['info', '--format', '{{.ServerVersion}}'])
+await run(docker, ['info', '--format', 'json'])
 await mkdir(artifactRoot, { recursive: true, mode: 0o700 })
 const compose = await readFile(resolve(root, 'services/zero/openlink/docker-compose.standalone.yml'))
 const fingerprint = createHash('sha256').update(compose).update(JSON.stringify(specs)).digest('hex')
 const images = []
-for (const spec of specs) { await build(spec); await archive(spec); images.push({ image: spec.target, archive: `${spec.name}.tar` }) }
-await writeFile(manifestPath, `${JSON.stringify({ schemaVersion: 1, product: 'ZOKERBASE', component: 'zero', version, fingerprint, createdAt: new Date().toISOString(), images }, null, 2)}\n`, { mode: 0o600 })
-process.stdout.write(`ZOKERBASE Zero image artifact ready: ${artifactRoot}\n`)
+for (const spec of specs) {
+  await build(spec)
+  if (!skipArchives) await archive(spec)
+  images.push({ image: spec.target, archive: `${spec.name}.tar` })
+}
+if (!skipArchives) {
+  await writeFile(manifestPath, `${JSON.stringify({ schemaVersion: 1, product: 'ZOKERBASE', component: 'zero', version, fingerprint, createdAt: new Date().toISOString(), images }, null, 2)}\n`, { mode: 0o600 })
+}
+process.stdout.write(skipArchives ? 'ZOKERBASE Zero runtime images ready\n' : `ZOKERBASE Zero image artifact ready: ${artifactRoot}\n`)

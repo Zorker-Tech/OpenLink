@@ -6,6 +6,7 @@ import { resolveEmbeddingProviderRuntimeConfiguration } from '@/lib/embedding-pr
 export type KnowledgeServiceConfig = { baseUrl: string; token: string }
 
 export function knowledgeServiceConfig(): KnowledgeServiceConfig | null {
+  if (process.env.OPENLINK_KNOWLEDGE_ENABLED === '0') return null
   const baseUrl = process.env.OPENLINK_KNOWLEDGE_SERVICE_URL?.trim().replace(/\/$/, '')
   const token = process.env.OPENLINK_KNOWLEDGE_INTERNAL_TOKEN?.trim()
   return baseUrl && token ? { baseUrl, token } : null
@@ -16,7 +17,16 @@ export async function authenticatedKnowledgeRequest(
   input: { workspaceId?: string; body?: Record<string, unknown>; path: string; method?: string },
 ) {
   const config = knowledgeServiceConfig()
-  if (!config) return { response: Response.json({ error: { code: 'KNOWLEDGE_SERVICE_NOT_CONFIGURED', retryable: true } }, { status: 503 }) }
+  if (!config) {
+    const coreProfile = process.env.OPENLINK_DEPLOYMENT_PROFILE === 'core' || process.env.OPENLINK_KNOWLEDGE_ENABLED === '0'
+    return {
+      response: Response.json({
+        error: coreProfile
+          ? { code: 'FEATURE_NOT_AVAILABLE_IN_CORE', message: '内置知识库在 Core 部署模式中未启用。切换到 Standard 或 Dense 后可使用。', retryable: false }
+          : { code: 'KNOWLEDGE_SERVICE_NOT_CONFIGURED', retryable: true },
+      }, { status: coreProfile ? 409 : 503 }),
+    }
+  }
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { response: Response.json({ error: { code: 'AUTH_REQUIRED' } }, { status: 401 }) }

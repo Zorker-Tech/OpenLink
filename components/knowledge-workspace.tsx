@@ -113,6 +113,7 @@ interface KnowledgeWorkspaceProps {
   nickname: string
   organizations: OrganizationSummary[]
   personalWorkspace: PersonalWorkspaceSummary
+  knowledgeEnabled?: boolean
 }
 
 type View = 'home' | 'create' | 'folder' | 'document' | 'source' | 'zero'
@@ -209,7 +210,7 @@ function EmptyState({ action, description, icon: Icon, title }: { action?: React
   )
 }
 
-export function KnowledgeWorkspace({ activeWorkspace, avatarUrl, email, initialPath, nickname, organizations, personalWorkspace, workspaceId }: KnowledgeWorkspaceProps) {
+export function KnowledgeWorkspace({ activeWorkspace, avatarUrl, email, initialPath, knowledgeEnabled = true, nickname, organizations, personalWorkspace, workspaceId }: KnowledgeWorkspaceProps) {
   const router = useRouter()
   const [themeMode, setThemeMode] = useState<ThemeMode>('system')
   const [systemLight, setSystemLight] = useState(false)
@@ -239,6 +240,11 @@ export function KnowledgeWorkspace({ activeWorkspace, avatarUrl, email, initialP
   }, [])
 
   const load = useCallback(async () => {
+    if (!knowledgeEnabled) {
+      setLoading(false)
+      setError(null)
+      return
+    }
     setLoading(true); setError(null)
     const query = `workspaceId=${encodeURIComponent(workspaceId)}`
     try {
@@ -253,7 +259,7 @@ export function KnowledgeWorkspace({ activeWorkspace, avatarUrl, email, initialP
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : '知识库暂时无法加载')
     } finally { setLoading(false) }
-  }, [workspaceId])
+  }, [knowledgeEnabled, workspaceId])
 
   useEffect(() => { void load() }, [load])
 
@@ -302,8 +308,14 @@ export function KnowledgeWorkspace({ activeWorkspace, avatarUrl, email, initialP
           <button aria-label="打开知识库导航" className="absolute left-3 top-3 z-20 flex size-8 items-center justify-center rounded-md border border-[var(--app-control-border)] bg-[var(--app-background)] text-[var(--app-muted)] hover:bg-[var(--app-surface)] lg:hidden" onClick={() => setMobileOpen(true)} type="button"><PanelLeft className="size-4" /></button>
           {collapsed && <button aria-label="展开侧边栏" className="absolute left-3 top-3 z-20 hidden size-8 items-center justify-center rounded-md hover:bg-[var(--app-surface)] lg:flex" onClick={() => setCollapsed(false)} type="button"><PanelLeft className="size-4" /></button>}
           <div className="flex min-h-full min-w-0 flex-col">
-            {error ? <ErrorBanner message={error} onRetry={load} /> : null}
-            {loading && current.view !== 'create' ? <KnowledgeSkeleton /> : current.view === 'home' ? (
+            {!knowledgeEnabled ? (
+              <EmptyState
+                description="Core 是明确的精简部署规格，不启动内置 Knowledge Service 与 Zero。切换到 Standard 或 Dense 后即可启用完整知识库。"
+                icon={BookOpen}
+                title="Core 模式未启用内置知识库"
+              />
+            ) : error ? <ErrorBanner message={error} onRetry={load} /> : null}
+            {knowledgeEnabled && (loading && current.view !== 'create' ? <KnowledgeSkeleton /> : current.view === 'home' ? (
               <KnowledgeHome collections={collections} documents={documents} onGo={go} />
             ) : current.view === 'create' ? (
               <KnowledgeCreate collections={collections} onCreated={async (collectionId, documentId) => { await load(); go(documentId ? `/documents/${documentId}` : collectionId ? `/folders/${collectionId}` : '') }} workspaceId={workspaceId} />
@@ -315,7 +327,7 @@ export function KnowledgeWorkspace({ activeWorkspace, avatarUrl, email, initialP
               <SourcePage document={selectedDocument} onGo={go} workspaceId={workspaceId} />
             ) : (
               <ZeroManagement backend={backend} onRefresh={load} workspaceId={workspaceId} />
-            )}
+            ))}
           </div>
         </main>
       </div>
@@ -476,14 +488,14 @@ function FolderPage({ collection, documents, onGo, onReload, workspaceId }: { co
   return <div className="flex min-h-full min-w-0 flex-col"><header className="flex h-11 shrink-0 items-center justify-between border-b border-[var(--app-border)] px-4 sm:px-5"><div className="flex min-w-0 items-center gap-2"><button aria-label="返回文档" className="flex size-7 items-center justify-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-active)]" onClick={() => onGo()} type="button"><ArrowLeft className="size-4" /></button><FolderOpen className="size-4 text-[var(--app-info)]" /><h1 className="truncate text-sm font-medium text-[var(--app-foreground)]">{collection.name}</h1></div><div className="flex items-center gap-1"><div className="relative"><button aria-label="文件夹更多操作" className="flex size-8 items-center justify-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-active)]" onClick={() => setOpen((value) => !value)} type="button"><MoreHorizontal className="size-4" /></button>{open && <div className="absolute right-0 top-9 z-20 min-w-36 rounded-lg border border-[var(--app-control-border)] bg-[var(--app-surface)] p-1 shadow-xl"><button className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-xs text-[var(--app-danger)] hover:bg-[var(--app-danger-surface)]" onClick={() => { if (!window.confirm('删除文件夹及其中的文档？')) return; void requestJson(`/api/knowledge/collections?collectionId=${encodeURIComponent(collection.id)}&workspaceId=${encodeURIComponent(workspaceId)}`, { method: 'DELETE', body: JSON.stringify({ workspaceId }) }).then(async () => { await onReload(); onGo() }) }} type="button"><Trash2 className="size-3.5" /> 删除文件夹</button></div>}</div><button className="ml-2 flex h-8 items-center gap-1 rounded-md bg-[var(--app-foreground)] px-3 text-xs font-medium text-[var(--app-background)]" onClick={() => onGo('/new')} type="button"><Plus className="size-3.5" /> 添加</button></div></header><div className="flex items-center gap-2 border-b border-[var(--app-border)] px-4 py-2 text-[11px] text-[var(--app-muted)] sm:px-5"><span>{documents.length} 个文件</span><span>·</span><span>更新于 {relativeTime(collection.updated_at)}</span>{collection.description && <span className="truncate">· {collection.description}</span>}</div>{documents.length ? <div className="min-w-0 flex-1 overflow-auto"><DocumentTable documents={documents} onOpen={(id) => onGo(`/documents/${id}`)} /></div> : <EmptyState action={<button className="rounded-md bg-[var(--app-foreground)] px-3 py-2 text-xs font-medium text-[var(--app-background)]" onClick={() => onGo('/new')} type="button">添加第一篇文档</button>} description="上传文件、粘贴 Markdown 或输入文本，Zero 会自动把内容转为可检索上下文。" icon={FilePlus2} title="此文件夹还是空的" />}</div>
 }
 
-function DocumentPage({ document, onGo, workspaceId }: { document?: KnowledgeDocument; onGo: (path?: string) => void; workspaceId: string }) {
+function DocumentPage({ document: knowledgeDocument, onGo, workspaceId }: { document?: KnowledgeDocument; onGo: (path?: string) => void; workspaceId: string }) {
   const [detail, setDetail] = useState<{ document: KnowledgeDocument; collection: KnowledgeCollection; chunks: KnowledgeChunk[] } | null>(null)
-  const [loading, setLoading] = useState(Boolean(document))
+  const [loading, setLoading] = useState(Boolean(knowledgeDocument))
   const [error, setError] = useState<string | null>(null)
   const [mode, setMode] = useState<'preview' | 'source'>('preview')
-  useEffect(() => { if (!document) return; setLoading(true); void requestJson<{ document: KnowledgeDocument; collection: KnowledgeCollection; chunks: KnowledgeChunk[] }>(`/api/knowledge/documents/${document.id}?workspaceId=${encodeURIComponent(workspaceId)}`).then(setDetail).catch((err) => setError(err instanceof Error ? err.message : '无法加载文档')).finally(() => setLoading(false)) }, [document, workspaceId])
-  if (!document) return <EmptyState action={<button className="rounded-lg bg-[var(--app-submit-background)] px-3 py-2 text-sm font-medium text-[var(--app-submit-foreground)]" onClick={() => onGo()} type="button">返回知识库</button>} description="这个文档不存在，或已经被删除。" icon={FileText} title="未找到文档" />
-  const active = detail?.document ?? document
+  useEffect(() => { if (!knowledgeDocument) return; setLoading(true); void requestJson<{ document: KnowledgeDocument; collection: KnowledgeCollection; chunks: KnowledgeChunk[] }>(`/api/knowledge/documents/${knowledgeDocument.id}?workspaceId=${encodeURIComponent(workspaceId)}`).then(setDetail).catch((err) => setError(err instanceof Error ? err.message : '无法加载文档')).finally(() => setLoading(false)) }, [knowledgeDocument, workspaceId])
+  if (!knowledgeDocument) return <EmptyState action={<button className="rounded-lg bg-[var(--app-submit-background)] px-3 py-2 text-sm font-medium text-[var(--app-submit-foreground)]" onClick={() => onGo()} type="button">返回知识库</button>} description="这个文档不存在，或已经被删除。" icon={FileText} title="未找到文档" />
+  const active = detail?.document ?? knowledgeDocument
   const rawContent = active.source_content || detail?.chunks.map((chunk) => chunk.content).join('\n\n') || '内容正在处理，请稍后刷新。'
   return <div className="flex min-h-full min-w-0 flex-col"><header className="flex h-11 shrink-0 items-center justify-between border-b border-[var(--app-border)] px-4 sm:px-5"><div className="flex min-w-0 items-center gap-2"><button aria-label="返回文档" className="flex size-7 items-center justify-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-active)]" onClick={() => onGo()} type="button"><ArrowLeft className="size-4" /></button><FileText className="size-4 text-[var(--app-info)]" /><h1 className="truncate text-sm font-medium text-[var(--app-foreground)]">{active.title}</h1></div><div className="flex items-center gap-1"><button aria-label="打开源代码" className="flex size-8 items-center justify-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-active)]" onClick={() => onGo(`/documents/${active.id}/source`)} type="button"><Braces className="size-4" /></button><button aria-label="下载文档" className="flex size-8 items-center justify-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-active)]" onClick={() => { const blob = new Blob([rawContent], { type: 'text/plain;charset=utf-8' }); const href = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = href; anchor.download = active.source_uri || `${active.title}.txt`; anchor.click(); URL.revokeObjectURL(href) }} type="button"><Download className="size-4" /></button><button aria-label="删除文档" className="flex size-8 items-center justify-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-danger-surface)] hover:text-[var(--app-danger)]" onClick={() => { if (window.confirm('删除这篇文档？')) void requestJson(`/api/knowledge/documents/${active.id}?workspaceId=${encodeURIComponent(workspaceId)}`, { method: 'DELETE', body: JSON.stringify({ workspaceId }) }).then(() => onGo()) }} type="button"><Trash2 className="size-4" /></button></div></header><div className="flex items-center justify-between border-b border-[var(--app-border)] px-4 py-2 sm:px-5"><div className="min-w-0 truncate text-xs text-[var(--app-muted)]">{detail?.collection.name || '文档'} <span className="mx-1">/</span> {active.source_uri || documentTypeLabel(active)}</div><div className="flex rounded-md border border-[var(--app-control-border)] p-0.5"><button className={cn('flex h-7 items-center gap-1 rounded px-2 text-xs', mode === 'preview' ? 'bg-[var(--app-active)] text-[var(--app-foreground)]' : 'text-[var(--app-muted)]')} onClick={() => setMode('preview')} type="button"><Eye className="size-3" />预览</button><button className={cn('flex h-7 items-center gap-1 rounded px-2 text-xs', mode === 'source' ? 'bg-[var(--app-active)] text-[var(--app-foreground)]' : 'text-[var(--app-muted)]')} onClick={() => setMode('source')} type="button"><Braces className="size-3" />原文</button></div></div><div className="grid min-w-0 flex-1 grid-cols-1 xl:grid-cols-[minmax(0,1fr)_240px]">{loading ? <div className="p-8 text-sm text-[var(--app-muted)]"><LoaderCircle className="mr-2 inline size-4 animate-spin" />正在读取文档…</div> : error ? <div className="p-8 text-sm text-[var(--app-danger)]">{error}</div> : <article className={cn('min-w-0 overflow-auto px-5 py-7 sm:px-8 lg:px-10', mode === 'source' && 'font-mono')}><div className={cn('mx-auto max-w-4xl whitespace-pre-wrap text-[14px] leading-7 text-[var(--app-foreground)]', mode === 'source' && 'text-[13px] leading-6 text-[var(--app-muted)]')}>{mode === 'preview' ? renderSimpleMarkdown(rawContent) : rawContent}</div></article>}<aside className="border-t border-[var(--app-border)] px-5 py-6 xl:border-l xl:border-t-0"><h2 className="text-xs font-medium text-[var(--app-muted)]">索引信息</h2><dl className="mt-5 space-y-4 text-xs"><Meta label="状态" value={<StatusPill status={active.status} />} /><Meta label="分块数" value={String(active.chunk_count)} /><Meta label="嵌入模型" value={active.embedding_model || '默认模型'} /><Meta label="最近更新" value={relativeTime(active.updated_at)} /><Meta label="内容哈希" value={<code className="block max-w-44 truncate text-[11px]">{active.content_hash}</code>} /></dl></aside></div></div>
 }
@@ -494,12 +506,13 @@ function renderSimpleMarkdown(value: string): ReactNode {
 
 function Meta({ label, value }: { label: string; value: ReactNode }) { return <div><dt className="text-[var(--app-subtle)]">{label}</dt><dd className="mt-1 text-[var(--app-foreground)]">{value}</dd></div> }
 
-function SourcePage({ document, onGo, workspaceId }: { document?: KnowledgeDocument; onGo: (path?: string) => void; workspaceId: string }) {
-  const [content, setContent] = useState(document?.source_content || '')
+function SourcePage({ document: knowledgeDocument, onGo, workspaceId }: { document?: KnowledgeDocument; onGo: (path?: string) => void; workspaceId: string }) {
+  const [content, setContent] = useState(knowledgeDocument?.source_content || '')
   const [copied, setCopied] = useState(false)
-  useEffect(() => { if (!document) return; void requestJson<{ document: KnowledgeDocument }>(`/api/knowledge/documents/${document.id}?workspaceId=${encodeURIComponent(workspaceId)}`).then((data) => setContent(data.document.source_content || '')).catch(() => undefined) }, [document, workspaceId])
-  if (!document) return <EmptyState action={<button className="rounded-lg bg-[var(--app-submit-background)] px-3 py-2 text-sm font-medium text-[var(--app-submit-foreground)]" onClick={() => onGo()} type="button">返回知识库</button>} description="无法找到对应的文档源内容。" icon={FileCode2} title="未找到源代码" />
-  const language = document.source_type === 'code' ? document.source_uri?.split('.').pop() || 'text' : document.source_type
+  useEffect(() => { if (!knowledgeDocument) return; void requestJson<{ document: KnowledgeDocument }>(`/api/knowledge/documents/${knowledgeDocument.id}?workspaceId=${encodeURIComponent(workspaceId)}`).then((data) => setContent(data.document.source_content || '')).catch(() => undefined) }, [knowledgeDocument, workspaceId])
+  if (!knowledgeDocument) return <EmptyState action={<button className="rounded-lg bg-[var(--app-submit-background)] px-3 py-2 text-sm font-medium text-[var(--app-submit-foreground)]" onClick={() => onGo()} type="button">返回知识库</button>} description="无法找到对应的文档源内容。" icon={FileCode2} title="未找到源代码" />
+  const language = knowledgeDocument.source_type === 'code' ? knowledgeDocument.source_uri?.split('.').pop() || 'text' : knowledgeDocument.source_type
+  const document = { ...knowledgeDocument, createElement: (_tag: 'a') => globalThis.document.createElement('a') }
   return <div className="flex min-h-full min-w-0 flex-col"><header className="flex h-11 shrink-0 items-center justify-between border-b border-[var(--app-border)] px-4 sm:px-5"><div className="flex min-w-0 items-center gap-2"><button aria-label="返回预览" className="flex size-7 items-center justify-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-active)]" onClick={() => onGo(`/documents/${document.id}`)} type="button"><ArrowLeft className="size-4" /></button><Code2 className="size-4 text-[var(--app-info)]" /><h1 className="truncate text-sm font-medium text-[var(--app-foreground)]">{document.title}</h1><span className="text-xs text-[var(--app-subtle)]">· {language}</span></div><div className="flex items-center gap-1"><button aria-label="复制源内容" className="flex size-8 items-center justify-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-active)]" onClick={() => { void navigator.clipboard.writeText(content); setCopied(true); window.setTimeout(() => setCopied(false), 1_500) }} type="button">{copied ? <Check className="size-4" /> : <Copy className="size-4" />}</button><button aria-label="下载源内容" className="flex size-8 items-center justify-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-active)]" onClick={() => { const blob = new Blob([content], { type: 'text/plain;charset=utf-8' }); const href = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = href; anchor.download = document.source_uri || `${document.title}.txt`; anchor.click(); URL.revokeObjectURL(href) }} type="button"><Download className="size-4" /></button></div></header><div className="flex min-h-0 flex-1 flex-col overflow-hidden"><div className="flex h-9 shrink-0 items-center justify-between border-b border-[var(--app-border)] px-4 text-[11px] text-[var(--app-muted)]"><span>原始内容 · {content.length.toLocaleString()} 字符</span><button className="text-[var(--app-muted)] hover:text-[var(--app-foreground)]" onClick={() => onGo(`/documents/${document.id}`)} type="button">切换到预览</button></div><pre className="min-h-0 flex-1 overflow-auto bg-transparent px-5 py-4 font-mono text-[13px] leading-6 text-[var(--app-foreground)] [scrollbar-color:var(--app-control-border)_transparent]">{content || '内容尚未加载。'}</pre></div></div>
 }
 

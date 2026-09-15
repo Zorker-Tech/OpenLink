@@ -22,6 +22,9 @@ test('fixture preflight enforces immutable runtime inputs without requiring buil
     'runtime/node/bin/node',
     'app/web/server.js',
     'services/agent-host/dist/src/main.js',
+    'services/agent-host/dist/src/project-container-main.js',
+    'services/agent-host/project-supabase-runtime.mjs',
+    'scripts/lib/project-supabase-bundle.mjs',
     'services/browser-host/dist/src/main.js',
     'services/knowledge-service/dist/src/main.js',
     'services/agent-host/dist/src/desktop-main.js',
@@ -34,10 +37,16 @@ test('fixture preflight enforces immutable runtime inputs without requiring buil
     'browser/manifest.json',
     'browser/chromium/chrome',
     'project-vm/manifest.json',
+    'project-supabase/manifest.json',
+    'project-supabase/runtime.lock.json',
+    'project-supabase/runtime.spec.json',
+    'project-supabase/image-manifest.json',
+    'project-supabase/release-trust.json',
     'orchestration/docker-compose.production.yml',
     'orchestration/docker-compose.zero-production.yml',
     'systemd/openlink.service',
     'systemd/openlink-container-broker.service',
+    'systemd/openlink-project-container-broker.service',
   ]) {
     const path = join(releaseRoot, ...relative.split('/'))
     await mkdir(join(path, '..'), { recursive: true })

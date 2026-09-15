@@ -1,0 +1,31 @@
+{
+  "currentSourceModules": 25,
+  "homeClassesPreserved": 44,
+  "sourceRoots": [
+    {
+      "source": "components/workspace-prompt.tsx",
+      "symbol": "WorkspacePrompt",
+      "sha256": "1e9f262b21b213f82211888716cb814249c8f1ca3f8d8acf83c480eb1aed1303",
+      "output": "components/film-home-composer.tsx"
+    },
+    {
+      "source": "components/chat-workspace.tsx",
+      "symbol": "ChatComposer / ComposerSubmitButton / ComposerAttachments",
+      "sha256": "197ac0e73e0eec670faa200586dc1740d77d7b99e9ca5dc2013d98c5cf71bda6",
+      "output": "components/film-chat-composer.tsx"
+    }
+  ],
+  "homeState": "current canonical workspace composer",
+  "chatState": "current single-line session composer, not forced expanded",
+  "majorOverlaps": 7,
+  "internalOverlaps": 3,
+  "transitionFrames": 48,
+  "durationInFrames": 3600,
+  "fps": 60,
+  "width": 3840,
+  "height": 2160,
+  "intermediateFormat": "lossless PNG",
+  "upscaledMovie": false,
+  "motion": "GSAP paused timeline + Motion spring, sampled deterministically offline",
+  "noOverheadTitles": true
+}

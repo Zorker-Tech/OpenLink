@@ -1,8 +1,20 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import type { ProjectRuntimeManager } from './project-runtime.js'
 import type { ProjectVmDiskMode } from './project-vm.js'
 
 export type ProjectRuntimeExecutionMode = 'local' | 'ssh'
+
+// Match project_runtimes_provisioning_claim_check. Older launchers persisted
+// base64url identities (including '_' and non-alphanumeric first characters).
+// Map those deterministically, without rotating valid identities or leases.
+const provisionerIdPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/
+export function normalizeProjectRuntimeProvisionerId(value: string): string {
+  const id = value.trim()
+  if (!id) throw new Error('Project runtime provisioner worker ID is empty')
+  return provisionerIdPattern.test(id)
+    ? id
+    : `agent-${createHash('sha256').update(id).digest('hex')}`
+}
 
 export interface ProjectRuntimeProvisioningClaim {
   projectId: string
@@ -53,7 +65,7 @@ export class ProjectRuntimeProvisioner {
   constructor(options: ProjectRuntimeProvisionerOptions) {
     this.queue = options.queue
     this.runtimeManager = options.runtimeManager
-    this.workerId = options.workerId ?? `agent-${randomUUID()}`
+    this.workerId = normalizeProjectRuntimeProvisionerId(options.workerId ?? `agent-${randomUUID()}`)
     this.pollIntervalMs = Math.max(250, options.pollIntervalMs ?? 2_000)
     this.leaseMs = Math.max(10_000, options.leaseMs ?? 5 * 60_000)
     this.retryBaseMs = Math.max(1_000, options.retryBaseMs ?? 5_000)
@@ -87,9 +99,11 @@ export class ProjectRuntimeProvisioner {
 
     try {
       await this.runtimeManager.ensure(claim.projectId, claim.diskMode)
-      // Provisioning itself is idempotent, but never let a host which lost its
-      // claim clear a newer host's lease.
-      if (!leaseLost) await this.queue.complete(claim.projectId, this.workerId)
+      // `ensure()` writes ready before returning. A renewal can therefore
+      // observe status != provisioning and set leaseLost even though a ready
+      // row cannot be claimed by another worker. Always conditionally release
+      // this worker id; release itself cannot clear another worker's claim.
+      await this.queue.complete(claim.projectId, this.workerId)
       return true
     } catch (error) {
       const message = safeError(error)
@@ -97,7 +111,10 @@ export class ProjectRuntimeProvisioner {
         // Exhausted: record a terminal error so the row is excluded from the
         // claim filter and cannot be retried automatically. A human must reset
         // the runtime (or its lease) to attempt again.
-        if (!leaseLost) await this.queue.terminalFail(claim.projectId, this.workerId, message)
+        // The conditional release is safe even after a lost lease: it can
+        // clear only this worker's own claim. Always attempt it so a concurrent
+        // ready projection cannot strand a `ready + claimed` contradiction.
+        await this.queue.terminalFail(claim.projectId, this.workerId, message)
         console.error(`OpenLink Project runtime provisioning exhausted after ${claim.attempt} attempts for ${claim.projectId}: ${message}`)
         return true
       }
@@ -171,10 +188,14 @@ export class SupabaseProjectRuntimeProvisioningQueue implements ProjectRuntimePr
 
   async claim(workerId: string, leaseMs: number): Promise<ProjectRuntimeProvisioningClaim | null> {
     const now = new Date()
+    if (!provisionerIdPattern.test(workerId)) throw new Error('Project runtime provisioner worker ID is invalid')
     // PostgREST's `and` query parameter accepts a parenthesized logic list;
     // including another `and(...)` wrapper makes the logic-tree parser reject
     // the request with PGRST100.
-    const eligibility = `(or(provisioning_lease_expires_at.is.null,provisioning_lease_expires_at.lt.${now.toISOString()}),or(provisioning_next_attempt_at.is.null,provisioning_next_attempt_at.lte.${now.toISOString()}))`
+    // A stable worker identity may immediately reclaim its own lease after a
+    // supervisor restart. Without this branch every clean application restart
+    // leaves active Projects cold until the old five-minute lease expires.
+    const eligibility = `(or(provisioning_lease_expires_at.is.null,provisioning_lease_expires_at.lt.${now.toISOString()},provisioning_claimed_by.eq.${workerId}),or(provisioning_next_attempt_at.is.null,provisioning_next_attempt_at.lte.${now.toISOString()}))`
     const candidates = new URLSearchParams({
       select: 'project_id,provisioning_attempts,disk_mode',
       status: 'in.(provisioning,stopped,error)',
@@ -194,6 +215,8 @@ export class SupabaseProjectRuntimeProvisioningQueue implements ProjectRuntimePr
         headers: { Prefer: 'return=representation' },
         body: JSON.stringify({
           status: 'provisioning',
+          provisioning_phase: 'claimed',
+          provisioning_phase_updated_at: now.toISOString(),
           provisioning_claimed_by: workerId,
           provisioning_lease_expires_at: new Date(now.getTime() + leaseMs).toISOString(),
           provisioning_attempts: attempt,
@@ -226,20 +249,23 @@ export class SupabaseProjectRuntimeProvisioningQueue implements ProjectRuntimePr
   }
 
   async complete(projectId: string, workerId: string): Promise<void> {
-    await this.release(projectId, workerId, null)
+    await this.release(projectId, workerId, null, undefined, false, 'ready')
   }
 
   async fail(projectId: string, workerId: string, retryAt: Date): Promise<void> {
-    await this.release(projectId, workerId, retryAt)
+    await this.release(projectId, workerId, retryAt, undefined, false, 'retry_wait')
   }
 
   async terminalFail(projectId: string, workerId: string, message: string): Promise<void> {
-    await this.release(projectId, workerId, null, message, true)
+    await this.release(projectId, workerId, null, message, true, 'failed')
   }
 
-  private async release(projectId: string, workerId: string, retryAt: Date | null, lastError?: string, terminal = false): Promise<void> {
+  private async release(projectId: string, workerId: string, retryAt: Date | null, lastError?: string, terminal = false, phase?: 'ready' | 'retry_wait' | 'failed'): Promise<void> {
     const now = new Date()
     const patch: Record<string, unknown> = {
+      ...(phase === 'ready' ? { status: 'ready' }
+        : phase === 'retry_wait' || phase === 'failed' ? { status: 'error' }
+          : {}),
       provisioning_claimed_by: null,
       provisioning_lease_expires_at: null,
       // A terminal failure parks the row a year out so the claim filter
@@ -248,6 +274,7 @@ export class SupabaseProjectRuntimeProvisioningQueue implements ProjectRuntimePr
       provisioning_next_attempt_at: terminal
         ? new Date(now.getTime() + 365 * 24 * 60 * 60 * 1_000).toISOString()
         : retryAt?.toISOString() ?? null,
+      ...(phase ? { provisioning_phase: phase, provisioning_phase_updated_at: now.toISOString() } : {}),
       updated_at: now.toISOString(),
     }
     if (lastError !== undefined) patch.last_error = lastError.slice(0, 2_000)
@@ -285,8 +312,12 @@ export class SupabaseProjectRuntimeProvisioningQueue implements ProjectRuntimePr
       signal: AbortSignal.timeout(this.timeoutMs),
     })
     if (!response.ok) {
-      const detail = await response.text().catch(() => '')
-      throw new Error(`Project runtime provisioning queue failed (${response.status}): ${detail.slice(0, 500)}`)
+      // Postgres details may embed a full row including the private lease ID.
+      // Keep only the structured error code/message, never row details.
+      const error = await response.json().catch(() => null) as { code?: unknown; message?: unknown } | null
+      const code = typeof error?.code === 'string' ? error.code.slice(0, 32) : 'UNKNOWN'
+      const message = typeof error?.message === 'string' ? safeError(new Error(error.message)).slice(0, 300) : 'Request failed'
+      throw new Error(`Project runtime provisioning queue failed (${response.status}): ${code} ${message}`)
     }
     return response
   }

@@ -22,6 +22,18 @@ export interface BrowserSessionConnectionDescriptor {
 
 export type BrowserConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'closed' | 'failed'
 
+export class BrowserSessionCreateError extends Error {
+  constructor(
+    message: string,
+    readonly code: string,
+    readonly status: number,
+    readonly recoverable: boolean,
+  ) {
+    super(message)
+    this.name = 'BrowserSessionCreateError'
+  }
+}
+
 export class BrowserConnection {
   private socket?: WebSocket
   private closed = false
@@ -231,8 +243,15 @@ export async function createBrowserSession(input: {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
   })
-  const payload = await response.json() as BrowserSessionConnectionDescriptor & { error?: { message?: string } }
-  if (!response.ok) throw new Error(payload.error?.message || `Browser session failed (${response.status})`)
+  const payload = await response.json() as BrowserSessionConnectionDescriptor & { error?: { code?: string; message?: string; recoverable?: boolean } }
+  if (!response.ok) {
+    throw new BrowserSessionCreateError(
+      payload.error?.message || `Browser session failed (${response.status})`,
+      payload.error?.code || 'BROWSER_SESSION_FAILED',
+      response.status,
+      payload.error?.recoverable === true,
+    )
+  }
   return payload
 }
 

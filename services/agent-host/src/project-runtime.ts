@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 import { resolve as resolveGuestPath } from 'node:path/posix'
 import { createHash, randomBytes } from 'node:crypto'
 import { Buffer } from 'node:buffer'
+import { createServer } from 'node:net'
 import { AgentHostError } from './errors.js'
 import { isProjectId, type ProjectVmDescriptor, type ProjectVmDiskMode, type ProjectVmManager, type ProjectVmMachineDriver, type ProjectVmCommandResult, type ProjectVmPortForward } from './project-vm.js'
 import type { ProjectRuntimeStatusUpdate, ProjectRuntimeStatusWriter } from './project-runtime-status.js'
@@ -50,6 +51,8 @@ export interface ProjectRuntimeDescriptor extends ProjectVmDescriptor {
   codeServerEndpoint: string
   sessionStorageRoot: string
   agentWorkerImage: string
+  /** Revision of the mutable worker image archive loaded into this Project VM. */
+  agentWorkerRevision?: string
   agentRpcWorkerImage: string
   codeServerImage: string
   /** Safe application-backend connection material; no administrative keys. */
@@ -120,6 +123,11 @@ export interface ProjectRuntimeServiceDriver {
 export interface PodmanProjectRuntimeServiceDriverOptions {
   /** Run the Project VM engine through its rootful system socket. */
   rootful?: boolean
+  /** Container engine exposed by the execution target. VM mode uses Podman;
+   * the host-isolated Container broker uses Docker. */
+  engine?: 'podman' | 'docker'
+  /** Socket mounted into the OpenSandbox control-plane container. */
+  engineSocketPath?: string
 }
 
 export interface ProjectRuntimeManagerOptions {
@@ -136,6 +144,8 @@ export interface ProjectRuntimeManagerOptions {
   codeServerImage?: string
   imageArchives?: Record<string, string>
   projectPortBase?: number
+  /** Number of consecutive base ports the scheduler may scan. */
+  projectPortRangeSize?: number
   opensandboxPortOffset?: number
   browserPortOffset?: number
   codeServerPortOffset?: number
@@ -145,6 +155,10 @@ export interface ProjectRuntimeManagerOptions {
   publicHost?: string
   browserAllowedOrigins?: string
   statusWriter?: ProjectRuntimeStatusWriter
+  /** Injectable host-port probe used by tests and embedded runtimes. */
+  hostPortAvailable?: (port: number) => Promise<boolean>
+  /** Coalesce chat warmup/resource/browser bursts into one health probe. */
+  healthCheckIntervalMs?: number
 }
 
 export interface ProjectRuntimeCloseOptions {
@@ -179,10 +193,15 @@ function port(value: number, label: string): number {
   return value
 }
 
-function hashProject(projectId: string): number {
-  let hash = 2166136261
-  for (const character of projectId) hash = Math.imul(hash ^ character.charCodeAt(0), 16777619)
-  return hash >>> 0
+async function isLoopbackPortAvailable(candidate: number): Promise<boolean> {
+  return new Promise<boolean>((resolveAvailability) => {
+    const server = createServer()
+    server.unref()
+    server.once('error', () => resolveAvailability(false))
+    server.listen(candidate, '127.0.0.1', () => {
+      server.close((error) => resolveAvailability(!error))
+    })
+  })
 }
 
 function randomSecret(): string {
@@ -214,6 +233,7 @@ export class ProjectRuntimeManager {
     imageArchives?: Record<string, string>
   }
   private readonly projectPortBase: number
+  private readonly projectPortRangeSize: number
   private readonly opensandboxPortOffset: number
   private readonly browserPortOffset: number
   private readonly codeServerPortOffset: number
@@ -223,7 +243,11 @@ export class ProjectRuntimeManager {
   private readonly publicHost: string
   private readonly browserAllowedOrigins: string
   private readonly statusWriter?: ProjectRuntimeStatusWriter
+  private readonly hostPortAvailable: (port: number) => Promise<boolean>
   private readonly active = new Map<string, ProjectRuntimeDescriptor>()
+  private readonly healthyAt = new WeakMap<ProjectRuntimeDescriptor, number>()
+  private readonly agentHealthyAt = new WeakMap<ProjectRuntimeDescriptor, number>()
+  private readonly healthCheckIntervalMs: number
   private readonly pending = new Map<string, Promise<ProjectRuntimeDescriptor>>()
   private readonly forwards = new Map<string, ProjectVmPortForward[]>()
   private readonly portAllocations = new Map<string, ProjectRuntimeServicePorts>()
@@ -239,6 +263,7 @@ export class ProjectRuntimeManager {
   private closing = false
 
   constructor(options: ProjectRuntimeManagerOptions) {
+    this.healthCheckIntervalMs = Math.max(0, options.healthCheckIntervalMs ?? 5_000)
     this.stateRoot = resolve(options.stateRoot)
     this.vmManager = options.vmManager
     this.machineDriver = options.machineDriver
@@ -257,6 +282,7 @@ export class ProjectRuntimeManager {
     // project VM. Keep the two long-lived control-plane endpoints outside that
     // range so a session cannot collide with its own OpenSandbox/Browser Host.
     this.projectPortBase = port(options.projectPortBase ?? 51_000, 'projectPortBase')
+    this.projectPortRangeSize = options.projectPortRangeSize ?? 1_000
     this.opensandboxPortOffset = options.opensandboxPortOffset ?? 0
     this.browserPortOffset = options.browserPortOffset ?? 1_000
     this.codeServerPortOffset = options.codeServerPortOffset ?? 2_000
@@ -267,15 +293,22 @@ export class ProjectRuntimeManager {
     if (offsets.some((offset) => !Number.isSafeInteger(offset) || offset < 0) || new Set(offsets).size !== offsets.length) {
       throw new AgentHostError('INVALID_BODY', 'Project runtime port offsets are invalid')
     }
+    if (!Number.isSafeInteger(this.projectPortRangeSize) || this.projectPortRangeSize < 1) {
+      throw new AgentHostError('INVALID_BODY', 'Project runtime port range size is invalid')
+    }
+    const highestPort = this.projectPortBase + this.projectPortRangeSize - 1
+      + Math.max(this.opensandboxPortOffset, this.browserPortOffset + 101, this.codeServerPortOffset, this.supabaseGatewayPortOffset, this.supabaseDatabasePortOffset, this.supabasePoolerPortOffset)
+    if (highestPort > 65_000) throw new AgentHostError('INVALID_BODY', 'Project runtime port range exceeds 65000')
     this.publicHost = options.publicHost ?? '127.0.0.1'
     this.browserAllowedOrigins = options.browserAllowedOrigins?.trim() || 'http://localhost:3000'
     this.statusWriter = options.statusWriter
+    this.hostPortAvailable = options.hostPortAvailable ?? isLoopbackPortAvailable
     if (!this.images.opensandboxImage || !this.images.browserHostImage || !this.images.execdImage || !this.images.egressImage) {
       throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project runtime images are required')
     }
   }
 
-  async ensure(projectId: string, requestedDiskMode?: ProjectVmDiskMode): Promise<ProjectRuntimeDescriptor> {
+  async ensure(projectId: string, requestedDiskMode?: ProjectVmDiskMode, scope: 'all' | 'agent' = 'all'): Promise<ProjectRuntimeDescriptor> {
     if (!isProjectId(projectId)) throw new AgentHostError('INVALID_BODY', 'projectId is invalid')
     return this.withLifecycleLock(projectId, async () => {
       if (this.closing) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project runtime manager is shutting down', { retryable: true })
@@ -285,9 +318,21 @@ export class ProjectRuntimeManager {
           throw new AgentHostError('PROVISIONING_FAILED', `Project runtime disk mode is immutable (${existing.diskMode} != ${requestedDiskMode})`)
         }
         try {
-          await this.assertRuntimeHealthy(existing)
+          const healthCache = scope === 'agent' ? this.agentHealthyAt : this.healthyAt
+          const checkedAt = healthCache.get(existing)
+          if (checkedAt !== undefined && Date.now() - checkedAt < this.healthCheckIntervalMs) return existing
+          await this.assertRuntimeHealthy(existing, scope)
+          healthCache.set(existing, Date.now())
           return existing
         } catch (error) {
+          // Slow optional Browser/Studio services are not evidence that the VM
+          // disappeared. Closing its forwards here invalidates every already
+          // created Worker handle (including the cleanup endpoint) and leaks
+          // workloads when the next warmup creates replacements. Fail this
+          // probe retryably and retain the descriptor/tunnels for the retry.
+          if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
+            throw new AgentHostError('PROJECT_BACKEND_UNAVAILABLE', 'Project runtime health probe timed out; existing sessions were preserved', { retryable: true })
+          }
           // A VM/container can disappear outside this process while the in-memory
           // descriptor remains. Evict the stale descriptor and rebuild it on the
           // same durable Project VM before the caller reaches a dead endpoint.
@@ -310,6 +355,7 @@ export class ProjectRuntimeManager {
       try {
         const descriptor = await task
         this.active.set(projectId, descriptor)
+        this.healthyAt.set(descriptor, Date.now())
         return descriptor
       } finally {
         this.pending.delete(projectId)
@@ -645,7 +691,7 @@ export class ProjectRuntimeManager {
   }
 
   async prepareSessionStorage(projectId: string, userId: string, workspaceId: string, sessionId: string): Promise<string> {
-    const descriptor = await this.ensure(projectId)
+    const descriptor = await this.ensure(projectId, undefined, 'agent')
     for (const [value, label] of [[userId, 'userId'], [workspaceId, 'workspaceId'], [sessionId, 'sessionId']] as const) {
       if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value)) throw new AgentHostError('INVALID_BODY', `${label} is invalid`)
     }
@@ -658,6 +704,35 @@ export class ProjectRuntimeManager {
     // so Pi can append its native JSONL log and runtime artifacts.
     await this.machineDriver.runInMachine(descriptor.machineName, 'chmod', ['777', root])
     return root
+  }
+
+  async persistCodexThreadId(projectId: string, userId: string, workspaceId: string, sessionId: string, threadId: string): Promise<void> {
+    const root = await this.prepareSessionStorage(projectId, userId, workspaceId, sessionId)
+    const descriptor = this.active.get(projectId) ?? await this.ensure(projectId, undefined, 'agent')
+    // Codex uses time-ordered UUIDv7 ids in current App Server builds. Keep
+    // canonical UUID/variant validation while accepting the modern version.
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(threadId)) {
+      throw new AgentHostError('INVALID_BODY', 'Codex thread id is invalid')
+    }
+    const payload = `${JSON.stringify({
+      version: 1,
+      threadId,
+      identity: JSON.stringify({ workspaceRoot: '/workspace' }),
+      updatedAt: new Date().toISOString(),
+    })}\n`
+    const destination = `${root}/codex-thread.json`
+    if (this.machineDriver.runInMachine && descriptor.backend !== 'docker-container') {
+      const encoded = Buffer.from(payload, 'utf8').toString('base64')
+      await this.machineDriver.runInMachine(
+        descriptor.machineName,
+        'sh',
+        ['-c', `printf '%s' '${encoded}' | base64 -d > '${destination}.tmp' && chmod 600 '${destination}.tmp' && mv '${destination}.tmp' '${destination}'`],
+      )
+      return
+    }
+    const temporary = `${destination}.tmp-${process.pid}`
+    await writeFile(temporary, payload, { encoding: 'utf8', mode: 0o600 })
+    await rename(temporary, destination)
   }
 
   /**
@@ -693,6 +768,10 @@ export class ProjectRuntimeManager {
   async listGitVersions(projectId: string): Promise<ProjectGitVersion[]> {
     const descriptor = await this.ensure(projectId)
     if (!this.machineDriver.runInMachine) return []
+    // Draft workspaces are intentionally created empty. Version controls can
+    // render before the first Agent lease, so establish the same durable Git
+    // baseline used by session preparation before asking Git for HEAD.
+    await this.ensureProjectGitRepository(projectId)
     const [log, head] = await Promise.all([
       this.machineDriver.runInMachine(descriptor.machineName, 'git', [
         '-C', descriptor.workspacePath,
@@ -714,6 +793,27 @@ export class ProjectRuntimeManager {
         current: ref === currentRef,
       }]
     })
+  }
+
+  /** List real files from the Project VM workspace for prompt `@file` completion. */
+  async listWorkspaceFiles(projectId: string): Promise<string[]> {
+    const descriptor = await this.ensure(projectId)
+    if (!this.machineDriver.runInMachine) return []
+    await this.ensureProjectGitRepository(projectId)
+    const result = await this.machineDriver.runInMachine(descriptor.machineName, 'git', [
+      '-C', descriptor.workspacePath,
+      'ls-files', '--cached', '--others', '--exclude-standard', '-z',
+    ])
+    return result.stdout
+      .split('\0')
+      .map((path) => path.trim())
+      .filter((path) => (
+        path.length > 0
+        && path.length <= 1_024
+        && !path.startsWith('/')
+        && !path.split('/').includes('..')
+      ))
+      .slice(0, 5_000)
   }
 
   async checkoutGitVersion(projectId: string, ref: string): Promise<ProjectGitVersion> {
@@ -932,17 +1032,17 @@ export class ProjectRuntimeManager {
     }
   }
 
-  private async assertRuntimeHealthy(descriptor: ProjectRuntimeDescriptor): Promise<void> {
+  private async assertRuntimeHealthy(descriptor: ProjectRuntimeDescriptor, scope: 'all' | 'agent' = 'all'): Promise<void> {
     const checks: Array<[string, string]> = [
       [descriptor.opensandboxEndpoint, '/health'],
-      [descriptor.browserHostEndpoint, '/healthz'],
-      [descriptor.codeServerEndpoint, '/healthz'],
+      ...(scope === 'all' ? [[descriptor.browserHostEndpoint, '/healthz'], [descriptor.codeServerEndpoint, '/healthz']] as Array<[string, string]> : []),
     ]
     for (const [endpoint, path] of checks) {
       const response = await fetch(`${endpoint}${path}`, { signal: AbortSignal.timeout(1_500), cache: 'no-store' })
       if (!response.ok) throw new Error(`${endpoint}${path} returned HTTP ${response.status}`)
       if (response.body) await response.body.cancel().catch(() => undefined)
     }
+    if (scope === 'agent') return
     const runner = this.machineDriver.runInMachine?.bind(this.machineDriver)
     if (!runner) throw new Error('Project VM driver cannot verify Project Supabase')
     const result = await runner(descriptor.machineName, 'sudo', [
@@ -988,6 +1088,15 @@ export class ProjectRuntimeManager {
     const ports = await this.allocateProjectPorts(projectId)
     let vm: ProjectVmDescriptor
     try {
+      await this.writeStatus({
+        projectId,
+        backend: this.vmManager.runtimeBackend,
+        machineName: this.vmManager.machineName(projectId),
+        workspacePath: this.vmManager.workspacePath(projectId),
+        status: 'provisioning',
+        phase: 'starting_vm',
+        diskMode,
+      })
       vm = await this.vmManager.ensure(projectId, {
         diskMode,
         servicePorts: [ports.opensandbox, ports.browserHost, ports.codeServer, ports.supabaseGateway, ports.supabaseDatabase, ports.supabasePooler],
@@ -1020,6 +1129,7 @@ export class ProjectRuntimeManager {
         machineName,
         workspacePath,
         status: 'error',
+        phase: 'failed',
         diskMode,
         lastError: error instanceof Error ? error.message : String(error),
       })
@@ -1031,6 +1141,7 @@ export class ProjectRuntimeManager {
       machineName: vm.machineName,
       workspacePath: vm.workspacePath,
       status: 'provisioning',
+      phase: 'configuring_runtime',
       diskMode,
     })
     let input: ProjectRuntimeServiceInput | undefined
@@ -1055,11 +1166,14 @@ export class ProjectRuntimeManager {
         // Podman drivers always take the guest-path branch above.
         await mkdir(input.sessionStorageRoot, { recursive: true, mode: 0o700 })
       }
+      await this.writeStatus({ projectId, backend: vm.backend, machineName: vm.machineName, workspacePath: vm.workspacePath, status: 'provisioning', phase: 'starting_project_database', diskMode: vm.diskMode })
       const supabase = await this.ensureProjectSupabase(vm.machineName, projectId, vm.workspacePath, ports)
+      await this.writeStatus({ projectId, backend: vm.backend, machineName: vm.machineName, workspacePath: vm.workspacePath, status: 'provisioning', phase: 'starting_agent_services', diskMode: vm.diskMode })
       await this.serviceDriver.ensureServices(input)
       const forwards: ProjectVmPortForward[] = []
       if (this.machineDriver.forwardPort) {
         try {
+          await this.writeStatus({ projectId, backend: vm.backend, machineName: vm.machineName, workspacePath: vm.workspacePath, status: 'provisioning', phase: 'connecting_services', diskMode: vm.diskMode })
           forwards.push(await this.machineDriver.forwardPort(vm.machineName, ports.opensandbox))
           forwards.push(await this.machineDriver.forwardPort(vm.machineName, ports.browserHost))
           forwards.push(await this.machineDriver.forwardPort(vm.machineName, ports.codeServer))
@@ -1092,6 +1206,7 @@ export class ProjectRuntimeManager {
         codeServerEndpoint: `http://${this.publicHost}:${endpointPorts.codeServer}`,
         sessionStorageRoot: input.sessionStorageRoot,
         agentWorkerImage: input.agentWorkerImage,
+        agentWorkerRevision: input.imageArchiveVersions?.[input.agentWorkerImage],
         agentRpcWorkerImage: input.agentRpcWorkerImage,
         codeServerImage: input.codeServerImage,
         supabase,
@@ -1104,6 +1219,7 @@ export class ProjectRuntimeManager {
         machineName: descriptor.machineName,
         workspacePath: descriptor.workspacePath,
         status: 'ready',
+        phase: 'ready',
         opensandboxEndpoint: descriptor.opensandboxEndpoint,
         browserHostEndpoint: descriptor.browserHostEndpoint,
         diskMode: descriptor.diskMode,
@@ -1117,6 +1233,7 @@ export class ProjectRuntimeManager {
         machineName: vm.machineName,
         workspacePath: vm.workspacePath,
         status: 'error',
+        phase: 'failed',
         diskMode: vm.diskMode,
         lastError: error instanceof Error ? error.message : String(error),
       })
@@ -1205,7 +1322,7 @@ export class ProjectRuntimeManager {
       // the repository root supplied by the lifecycle supervisor so this
       // update never resolves to the non-existent
       // `services/agent-host/services/agent-host/...` path.
-      const workspaceRoot = resolve(process.env.OPENLINK_AGENT_WORKSPACE_ROOT?.trim() || process.cwd())
+      const workspaceRoot = resolve(process.env.OPENLINK_AGENT_RELEASE_ROOT?.trim() || process.env.OPENLINK_AGENT_WORKSPACE_ROOT?.trim() || process.cwd())
       const controllerSrc = resolve(workspaceRoot, 'services/agent-host/project-supabase-runtime.mjs')
       const bundleSrc = resolve(workspaceRoot, 'scripts/lib/project-supabase-bundle.mjs')
       try {
@@ -1301,6 +1418,7 @@ export class ProjectRuntimeManager {
       codeServerEndpoint: descriptor.codeServerEndpoint,
       sessionStorageRoot: descriptor.sessionStorageRoot,
       agentWorkerImage: descriptor.agentWorkerImage,
+      agentWorkerRevision: descriptor.agentWorkerRevision,
       agentRpcWorkerImage: descriptor.agentRpcWorkerImage,
       codeServerImage: descriptor.codeServerImage,
       supabase: descriptor.supabase,
@@ -1331,20 +1449,17 @@ export class ProjectRuntimeManager {
     await previous
     try {
       const inMemory = this.portAllocations.get(projectId)
-      if (inMemory) return inMemory
+      if (inMemory && await this.areHostPortsAvailable(inMemory)) return inMemory
+      if (inMemory) this.portAllocations.delete(projectId)
       const persisted = await this.readPersistedProjectPorts(projectId)
-      if (persisted) {
+      if (persisted && await this.areHostPortsAvailable(persisted)) {
         this.portAllocations.set(projectId, persisted)
         return persisted
       }
 
       const used = await this.readUsedProjectPorts(projectId)
-      const maxStart = 65_000 - Math.max(this.opensandboxPortOffset, this.browserPortOffset + 101, this.codeServerPortOffset, this.supabaseGatewayPortOffset, this.supabaseDatabasePortOffset, this.supabasePoolerPortOffset)
-      const capacity = maxStart - this.projectPortBase + 1
-      if (capacity < 1) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project runtime port range is exhausted')
-      const initial = hashProject(projectId) % capacity
-      for (let offset = 0; offset < capacity; offset += 1) {
-        const openSandbox = this.projectPortBase + ((initial + offset) % capacity) + this.opensandboxPortOffset
+      for (let offset = 0; offset < this.projectPortRangeSize; offset += 1) {
+        const openSandbox = this.projectPortBase + offset + this.opensandboxPortOffset
         const browserHost = openSandbox - this.opensandboxPortOffset + this.browserPortOffset
         const codeServer = openSandbox - this.opensandboxPortOffset + this.codeServerPortOffset
         const supabaseGateway = openSandbox - this.opensandboxPortOffset + this.supabaseGatewayPortOffset
@@ -1355,14 +1470,22 @@ export class ProjectRuntimeManager {
         if (candidates.some((candidate) => !Number.isSafeInteger(candidate) || candidate < 1_024 || candidate > 65_000 || used.has(candidate))) continue
         if (new Set(candidates).size !== candidates.length) continue
         const allocation: ProjectRuntimeServicePorts = { opensandbox: openSandbox, browserHost, codeServer, supabaseGateway, supabaseDatabase, supabasePooler }
+        if (!await this.areHostPortsAvailable(allocation)) continue
         await this.persistProjectPorts(projectId, allocation)
         this.portAllocations.set(projectId, allocation)
         return allocation
       }
-      throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'No free Project runtime service port pair is available', { retryable: true })
+      throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project runtime port range is exhausted', { retryable: true })
     } finally {
       release()
     }
+  }
+
+  private async areHostPortsAvailable(ports: ProjectRuntimeServicePorts): Promise<boolean> {
+    for (const candidate of Object.values(ports)) {
+      if (!await this.hostPortAvailable(candidate)) return false
+    }
+    return true
   }
 
   private async readPersistedProjectPorts(projectId: string): Promise<ProjectRuntimeServicePorts | undefined> {
@@ -1458,6 +1581,8 @@ export class ProjectRuntimeManager {
 /** Podman-backed project runtime service lifecycle. */
 export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceDriver {
   private readonly rootful: boolean
+  private readonly engine: 'podman' | 'docker'
+  private readonly engineSocketPath: string
   readonly supportsEgress: boolean
 
   constructor(
@@ -1468,6 +1593,8 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
     // hard host boundary, while rootful Podman is required for OpenSandbox's
     // egress sidecars to install their nftables/NET_ADMIN policy.
     this.rootful = options.rootful ?? true
+    this.engine = options.engine ?? 'podman'
+    this.engineSocketPath = options.engineSocketPath ?? (this.engine === 'docker' ? '/var/run/docker.sock' : '/run/podman/podman.sock')
     this.supportsEgress = this.rootful
   }
 
@@ -1480,11 +1607,12 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
     const podmanSocketPath = await this.ensurePodmanSocket(runInMachine, input.machineName)
     const openSandboxConfig = this.openSandboxConfig(input)
     await this.writeOpenSandboxConfig(runInMachine, input, openSandboxConfig)
-    // Only purge session containers when the OpenSandbox control plane itself
-    // had to be recreated. A normal health check/reuse must never destroy a
-    // still-running session in the same Project VM just because another
-    // request asked the manager to ensure the durable services.
-    const openSandboxRecreated = await this.ensureContainer(runInMachine, input.machineName, {
+    // The control plane stores its registry in the Project workspace. Keep
+    // session workloads across both ordinary health checks and a control-plane
+    // container replacement so the replacement can adopt the same durable
+    // registry. A stale individual lease is reclaimed by Agent recovery; a
+    // service image/config refresh must not cold-start every active Agent.
+    await this.ensureContainer(runInMachine, input.machineName, {
       name: `${network}-opensandbox`,
       image: input.opensandboxImage,
       port: input.ports.opensandbox,
@@ -1609,7 +1737,7 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
       securityOpts: ['label=disable'],
       ...(!this.rootful ? { usernsMode: 'keep-id' } : {}),
     })
-    if (openSandboxRecreated) await this.cleanupSessionWorkloads(runInMachine, input.machineName)
+    await this.ensureSessionRestartPolicies(runInMachine, input.machineName)
     if (this.machineDriver.forwardPort) {
       try {
         await this.waitForMachineEndpoint(runInMachine, input.machineName, input.ports.opensandbox, '/health')
@@ -1639,7 +1767,7 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
   async stopServices(input: ProjectRuntimeServiceInput): Promise<void> {
     const runInMachine = this.requireRunner()
     const network = `openlink-project-${input.projectId.replaceAll('-', '').slice(0, 16)}`
-    await this.cleanupSessionWorkloads(runInMachine, input.machineName)
+    await this.cleanupSessionWorkloads(runInMachine, input.machineName, input.projectId)
     await Promise.all([
       this.ignoreMissingContainer(runInMachine(input.machineName, 'podman', ['stop', `${network}-opensandbox`])),
       this.ignoreMissingContainer(runInMachine(input.machineName, 'podman', ['stop', `${network}-browser`])),
@@ -1650,7 +1778,7 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
   async removeServices(input: ProjectRuntimeServiceInput): Promise<void> {
     const runInMachine = this.requireRunner()
     const network = `openlink-project-${input.projectId.replaceAll('-', '').slice(0, 16)}`
-    await this.cleanupSessionWorkloads(runInMachine, input.machineName)
+    await this.cleanupSessionWorkloads(runInMachine, input.machineName, input.projectId)
     await Promise.all([
       this.ignoreMissingContainer(runInMachine(input.machineName, 'podman', ['rm', '--force', `${network}-opensandbox`])),
       this.ignoreMissingContainer(runInMachine(input.machineName, 'podman', ['rm', '--force', `${network}-browser`])),
@@ -1671,12 +1799,49 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
   private async cleanupSessionWorkloads(
     runInMachine: (name: string, command: string, args?: string[]) => Promise<ProjectVmCommandResult>,
     machine: string,
+    projectId: string,
   ): Promise<void> {
-    const labels = ['opensandbox.io/id', 'opensandbox.io/egress-sidecar-for']
-    for (const label of labels) {
+    if (this.engine === 'docker') {
+      const primary = await runInMachine(machine, 'podman', ['ps', '--all', '--quiet', '--filter', 'label=opensandbox.io/id', '--filter', `label=openlink.project_id=${projectId}`])
+      const primaryIds = primary.stdout.split(/\s+/).map((value) => value.trim()).filter((value) => /^[A-Za-z0-9]+$/.test(value))
+      const related = [...primaryIds]
+      for (const containerId of primaryIds) {
+        const sandboxId = (await runInMachine(machine, 'podman', ['inspect', '--format', '{{index .Config.Labels "opensandbox.io/id"}}', containerId])).stdout.trim()
+        if (!/^[A-Za-z0-9._-]+$/.test(sandboxId)) continue
+        const sidecars = await runInMachine(machine, 'podman', ['ps', '--all', '--quiet', '--filter', `label=opensandbox.io/egress-sidecar-for=${sandboxId}`])
+        related.push(...sidecars.stdout.split(/\s+/).map((value) => value.trim()).filter((value) => /^[A-Za-z0-9]+$/.test(value)))
+      }
+      if (related.length) await this.ignoreMissingContainer(runInMachine(machine, 'podman', ['rm', '--force', ...new Set(related)]))
+      return
+    }
+    for (const label of ['opensandbox.io/id', 'opensandbox.io/egress-sidecar-for']) {
       const result = await runInMachine(machine, 'podman', ['ps', '--all', '--quiet', '--filter', `label=${label}`])
       const ids = result.stdout.split(/\s+/).map((value) => value.trim()).filter((value) => /^[A-Za-z0-9]+$/.test(value))
       if (ids.length) await this.ignoreMissingContainer(runInMachine(machine, 'podman', ['rm', '--force', ...ids]))
+    }
+  }
+
+  /**
+   * Session workers belong to the durable Project VM, not to the Agent Host
+   * process that created them. Migrate both sandbox containers and their
+   * egress sidecars to a VM-restart-safe policy. Explicit expiration/removal
+   * still stops and deletes them; an OS or VM reboot starts them in place.
+   */
+  private async ensureSessionRestartPolicies(
+    runInMachine: (name: string, command: string, args?: string[]) => Promise<ProjectVmCommandResult>,
+    machine: string,
+  ): Promise<void> {
+    // Restore the network sidecar before the Agent process can make provider
+    // requests. Podman update accepts one container per invocation on the
+    // Project VM image, so migrate each durable workload independently.
+    for (const label of ['opensandbox.io/egress-sidecar-for', 'opensandbox.io/id']) {
+      const result = await runInMachine(machine, 'podman', ['ps', '--all', '--quiet', '--filter', `label=${label}`])
+      const ids = result.stdout.split(/\s+/).map((value) => value.trim()).filter((value) => /^[A-Za-z0-9]+$/.test(value))
+      for (const id of ids) {
+        await runInMachine(machine, 'podman', ['update', '--restart', 'unless-stopped', id])
+        const state = (await runInMachine(machine, 'podman', ['inspect', '--format', '{{.State.Status}}', id])).stdout.trim()
+        if (['created', 'exited', 'dead'].includes(state)) await runInMachine(machine, 'podman', ['start', id])
+      }
     }
   }
 
@@ -1718,7 +1883,10 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
     const runner = this.machineDriver.runInMachine?.bind(this.machineDriver)
     if (!runner) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project VM driver cannot execute services')
     return (name, command, args = []) => {
-      if (this.rootful && command === 'podman') return runner(name, 'sudo', ['-n', 'podman', ...args])
+      if (command === 'podman') {
+        if (this.engine === 'docker') return runner(name, 'docker', args)
+        if (this.rootful) return runner(name, 'sudo', ['-n', 'podman', ...args])
+      }
       return runner(name, command, args)
     }
   }
@@ -1745,7 +1913,8 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
       const candidates = [image, `localhost/${image}`, `docker.io/${image}`]
       let existingImage: string | undefined
       for (const candidate of candidates) {
-        if (await runInMachine(input.machineName, 'podman', ['image', 'exists', candidate]).then(() => true).catch(() => false)) {
+        const existsArgs = this.engine === 'docker' ? ['image', 'inspect', candidate] : ['image', 'exists', candidate]
+        if (await runInMachine(input.machineName, 'podman', existsArgs).then(() => true).catch(() => false)) {
           existingImage = candidate
           break
         }
@@ -1781,7 +1950,8 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
         await runInMachine(input.machineName, 'rm', ['-f', filename]).catch(() => undefined)
       }
       for (const candidate of [`localhost/${image}`, `docker.io/${image}`]) {
-        if (await runInMachine(input.machineName, 'podman', ['image', 'exists', candidate]).then(() => true).catch(() => false)) {
+        const existsArgs = this.engine === 'docker' ? ['image', 'inspect', candidate] : ['image', 'exists', candidate]
+        if (await runInMachine(input.machineName, 'podman', existsArgs).then(() => true).catch(() => false)) {
           await runInMachine(input.machineName, 'podman', ['tag', candidate, image]).catch(() => undefined)
           break
         }
@@ -1806,7 +1976,9 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
     runInMachine: (name: string, command: string, args?: string[]) => Promise<ProjectVmCommandResult>,
     machine: string,
   ): Promise<string> {
-    const socketPath = this.rootful ? '/run/podman/podman.sock' : await this.rootlessSocketPath(runInMachine, machine)
+    const socketPath = this.engine === 'docker'
+      ? this.engineSocketPath
+      : this.rootful ? '/run/podman/podman.sock' : await this.rootlessSocketPath(runInMachine, machine)
     await runInMachine(machine, 'test', ['-S', socketPath])
     return socketPath
   }
@@ -1848,7 +2020,7 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
       // The OpenSandbox server runs in its own Project VM container. Its
       // server-proxy route must reach host-published execd ports through the
       // Podman gateway rather than the server container's own 127.0.0.1.
-      'host_ip = "host.containers.internal"',
+      `host_ip = "${this.engine === 'docker' ? 'host.docker.internal' : 'host.containers.internal'}"`,
       'port_range_min = 44000',
       'port_range_max = 50000',
       // Fedora CoreOS labels bind mounts by default. The Project VM is the
@@ -1914,26 +2086,47 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
       exists = true
     } catch {}
     if (exists) {
-      const state = await runInMachine(machine, 'podman', ['inspect', '--format', '{{.State.Status}}', input.name])
+      const state = await runInMachine(machine, 'podman', ['inspect', '--format', '{{json .State}}', input.name])
       const imageId = await runInMachine(machine, 'podman', ['image', 'inspect', '--format', '{{.Id}}', input.image])
       const containerImageId = await runInMachine(machine, 'podman', ['inspect', '--format', '{{.Image}}', input.name])
       const expectedConfigHash = this.containerConfigHash(input)
       const containerConfigHash = await runInMachine(machine, 'podman', ['inspect', '--format', '{{index .Config.Labels "io.openlink.project-runtime-config"}}', input.name])
-      // A stopped container may contain a failed bootstrap or stale mounts;
-      // restarting it hides the original failure and can preserve an old
-      // image/configuration. Recreate every non-running, image-mismatched, or
-      // definition-mismatched service container from the current Project VM.
-      if (state.stdout.trim() !== 'running'
-        || containerImageId.stdout.trim() !== imageId.stdout.trim()
-        || containerConfigHash.stdout.trim() !== expectedConfigHash) {
-        await runInMachine(machine, 'podman', ['rm', '--force', input.name])
-      } else {
+      const parsedState = (() => {
+        try { return JSON.parse(state.stdout) as { Status?: string; ExitCode?: number; Error?: string } } catch { return {} }
+      })()
+      const definitionMatches = containerImageId.stdout.trim() === imageId.stdout.trim()
+        && containerConfigHash.stdout.trim() === expectedConfigHash
+      if (parsedState.Status === 'running' && definitionMatches) return false
+
+      // A stopped, definition-identical service with no engine error is
+      // durable state, not a failed bootstrap. Project VM shutdown stops these
+      // containers; recreating them on the next Agent Host startup discards
+      // warm Chromium/Supabase/control-plane state and turns every restart
+      // into a cold provision. Chromium may report SIGTERM/SIGKILL as 137/143
+      // even during an orderly guest poweroff, so ExitCode is not a reliable
+      // corruption signal here. Resume the exact container in place; endpoint
+      // health validation immediately below remains the readiness authority.
+      if (definitionMatches && parsedState.Status === 'exited'
+        && !parsedState.Error) {
+        await runInMachine(machine, 'podman', ['start', input.name])
         return false
+      }
+      if (!definitionMatches || parsedState.Status !== 'running') {
+        await runInMachine(machine, 'podman', ['rm', '--force', input.name])
       }
     }
     const expectedConfigHash = this.containerConfigHash(input)
     const args = ['run', '--detach', '--name', input.name, '--network', input.network, '--publish', `127.0.0.1:${input.port}:${input.containerPort}`]
+    // Service control planes are Project-VM residents. Let Podman restore
+    // them as soon as the VM boots instead of waiting for the first chat turn
+    // to cold-start the project. An explicit `podman stop` still suppresses
+    // automatic restart until the runtime manager starts it again.
+    args.push('--restart', 'unless-stopped')
     args.push('--label', `io.openlink.project-runtime-config=${expectedConfigHash}`)
+    if (this.engine === 'docker') {
+      args.push('--add-host', 'host.docker.internal:host-gateway')
+      args.push('--add-host', 'host.containers.internal:host-gateway')
+    }
     if (input.usernsMode) args.push('--userns', input.usernsMode)
     if (input.user) args.push('--user', input.user)
     for (const securityOpt of input.securityOpts ?? []) args.push('--security-opt', securityOpt)
@@ -1971,6 +2164,7 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
       usernsMode: input.usernsMode ?? null,
       entrypoint: input.entrypoint ?? [],
       command: input.command ?? [],
+      restartPolicy: 'unless-stopped',
     })
     return createHash('sha256').update(canonical).digest('hex')
   }

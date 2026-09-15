@@ -7,6 +7,7 @@ import { OpenLinkThemeProvider } from '@/components/ui/theme-scope'
 import type { ActiveWorkspaceSummary, PersonalWorkspaceSummary } from '@/components/workspace-switcher'
 import type { OrganizationSummary } from '@/lib/organizations'
 import type { ProjectSummary } from '@/lib/projects'
+import { projectRuntimeDisplay } from '@/lib/project-runtime-display'
 import {
   BookOpenText,
   Code2,
@@ -42,8 +43,9 @@ function relativeProjectTime(value: string) {
 function ProjectCard({ project, workspaceSlug }: { project: ProjectSummary; workspaceSlug: string }) {
   const router = useRouter()
   const Icon = project.kind === 'research' ? BookOpenText : Code2
-  const ready = project.status === 'active' && project.runtime_status === 'ready'
-  const failed = project.runtime_status === 'error'
+  const runtime = projectRuntimeDisplay(project)
+  const ready = runtime.ready
+  const failed = runtime.failed
 
   return (
     <article className="group min-w-0">
@@ -57,8 +59,8 @@ function ProjectCard({ project, workspaceSlug }: { project: ProjectSummary; work
         <Icon className="size-9 opacity-35 transition-opacity group-hover:opacity-70" strokeWidth={1.5} />
         {!ready && (
           <span className="absolute bottom-3 left-3 flex h-6 items-center gap-1.5 rounded-full border border-[var(--app-control-border)] bg-[var(--app-background)]/90 px-2 text-[11px] text-[var(--app-muted)] backdrop-blur">
-            <LoaderCircle className="size-3 animate-spin" />
-            {failed ? '初始化重试中' : '等待初始化'}
+            <LoaderCircle className={`size-3 ${runtime.spinning ? 'animate-spin' : ''}`} />
+            <span className="max-w-[210px] truncate" title={`${runtime.label} · ${runtime.detail}`}>{runtime.label}</span>
           </span>
         )}
       </button>
@@ -81,7 +83,7 @@ function ProjectCard({ project, workspaceSlug }: { project: ProjectSummary; work
         </button>
         <span className="flex items-center gap-1.5 text-[13px] leading-4 tracking-[-0.0762px] text-[var(--app-muted)]">
           <i className={`size-1.5 rounded-full ${ready ? 'bg-[var(--app-success)]' : failed ? 'bg-[var(--app-warning)]' : 'bg-[var(--app-subtle-surface)]'}`} />
-          {ready ? `活动 · ${relativeProjectTime(project.updated_at)}` : failed ? '等待 · 正在重试' : '等待 · VM 初始化中'}
+          <span className="truncate" title={`${runtime.label} · ${runtime.detail}`}>{ready ? `活动 · ${relativeProjectTime(project.updated_at)}` : `${runtime.label} · ${runtime.detail}`}</span>
         </span>
       </div>
     </article>

@@ -14,6 +14,7 @@ export interface CreateChatSessionInput {
   modelId?: string
   accessMode?: AccessMode
   agent?: AgentKind
+  autoStart?: boolean
 }
 
 export type CreateChatSessionResult =
@@ -54,7 +55,7 @@ export async function createChatSessionAction(
       agent: input.agent,
     })
     const query = new URLSearchParams()
-    if (prompt) query.set('run', '1')
+    if (prompt && input.autoStart !== false) query.set('run', '1')
     const suffix = query.size ? `?${query.toString()}` : ''
     return { id: session.id, path: `/${user.id}/chat/${session.id}${suffix}`, fallback: false }
   } catch (error) {

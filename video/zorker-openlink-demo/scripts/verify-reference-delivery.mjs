@@ -1,0 +1,17 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import {execFileSync} from 'node:child_process';
+import assert from 'node:assert/strict';
+const output=process.env.FILM_OUTPUT||path.resolve('out/reference-film');
+const binary=path.resolve('node_modules/@remotion/compositor-darwin-arm64');
+const env={...process.env,DYLD_LIBRARY_PATH:binary};
+const file=path.join(output,'OpenLink-Reference-Film-1080p60.mp4');
+const result=JSON.parse(execFileSync(path.join(binary,'ffprobe'),['-v','error','-count_frames','-show_entries','format=duration,size:stream=codec_name,width,height,r_frame_rate,duration,nb_frames,nb_read_frames,sample_rate,channels','-of','json',file],{env,encoding:'utf8'}));
+const video=result.streams.find(s=>s.codec_name==='h264'),audio=result.streams.find(s=>s.codec_name==='aac');
+assert.equal(video.width,1920);assert.equal(video.height,1080);assert.equal(video.r_frame_rate,'60/1');assert.equal(Number(video.nb_read_frames),3600);assert.equal(Number(video.duration),60);assert.equal(audio.channels,2);assert.equal(Number(audio.sample_rate),48000);assert.ok(Number(result.format.duration)<60.1);
+for(const second of [2,11,19,24,30,37,43,47,51,53,59])execFileSync(path.join(binary,'ffmpeg'),['-hide_banner','-loglevel','error','-y','-ss',String(second),'-i',file,'-frames:v','1',path.join(output,'qa',`export-${second}.png`)],{env});
+const sha=crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+const report={...result,sha256:sha,decodedVideoFrames:3600,extractedSeconds:[2,11,19,24,30,37,43,47,51,53,59],sourceSnapshotAudit:'provenance/reference-film.json',nativePreviewAudit:'provenance/reference-preview-extraction.json',stillRenderAudit:'qa/render-report.json',audioReview:'Signal bounds verified; no subjective listening/mastering claim.',editorialRevision:'No overhead titles. Full top-to-bottom workflow through completion and expanded Git result; native preview chrome/canvas; native inspector, diff, and version-history feature inserts.',playbackReview:'See DELIVERY-QA.md for separately observed browser playback.'};
+fs.writeFileSync(path.join(output,'qa/delivery-metadata.json'),JSON.stringify(report,null,2));
+console.log(JSON.stringify({video,audio,sha256:sha,bytes:Number(result.format.size)},null,2));

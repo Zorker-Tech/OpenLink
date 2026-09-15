@@ -1,0 +1,16 @@
+{
+  "gsap": "3.15.0",
+  "motion": "12.43.0",
+  "method": "Paused GSAP numeric timeline sampled with totalTime; Motion spring generator sampled at explicit milliseconds. All movie animation indexes these immutable curves by frame.",
+  "gsapEase": "power3.inOut",
+  "spring": {
+    "durationMs": 800,
+    "bounce": 0.08
+  },
+  "samples": 1025,
+  "reverseSamplingPassed": true,
+  "docs": [
+    "https://gsap.com/docs/v3/GSAP/Timeline/totalTime()/",
+    "https://motion.dev/docs/spring"
+  ]
+}

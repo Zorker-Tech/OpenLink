@@ -8,6 +8,12 @@
 
 **Tech Stack:** Node.js 22 ESM, TypeScript 5.9, Docker Engine/Compose, QEMU/KVM, Apple Hypervisor/vfkit, node:test, systemd/launchd production lifecycle.
 
+**Implementation status (2026-09-03):** Implemented for the sealed single-node
+runtime. Automated release, six-combination plan, CLI decision, broker,
+packaging and Agent Host suites pass. Physical Linux KVM activation and a real
+Docker workload remain target-host qualification gates because they require a
+privileged production candidate host and the complete signed image set.
+
 ---
 
 ### Task 1: Lock the two-dimensional architecture
@@ -117,8 +123,8 @@
 ### Task 7: Introduce a host-container Project lifecycle adapter
 
 **Files:**
-- Create: `services/agent-host/src/host-container-runtime.ts`
-- Create: `services/agent-host/test/host-container-runtime.test.ts`
+- Create: `services/agent-host/src/project-container.ts`
+- Create: `services/agent-host/test/project-container-broker.test.ts`
 - Modify: `services/agent-host/src/project-vm.ts`
 - Modify: `services/agent-host/src/project-runtime.ts`
 - Modify: `services/agent-host/src/main.ts`
@@ -137,8 +143,9 @@
 ### Task 8: Preserve Docker privilege separation
 
 **Files:**
-- Create: `deploy/self-hosted/runtime/project-container-broker.mjs`
-- Create: `scripts/test/self-hosted-project-container-broker.test.mjs`
+- Create: `services/agent-host/src/project-container-broker.ts`
+- Create: `services/agent-host/src/project-container-main.ts`
+- Create: `services/agent-host/test/project-container-broker.test.ts`
 - Create: `deploy/self-hosted/systemd/openlink-project-container-broker.service`
 - Modify: `deploy/self-hosted/runtime/production-runtime.mjs`
 - Modify: `scripts/test/self-hosted-service-definitions.test.mjs`
@@ -190,7 +197,8 @@
 ### Task 11: Validate transitions and full lifecycle
 
 **Files:**
-- Create: `scripts/test/self-hosted-deployment-flow.test.mjs`
+- Modify: `scripts/test/self-hosted-runtime.test.mjs`
+- Modify: `scripts/test/openlinkctl.test.mjs`
 - Modify: `package.json`
 - Update: `docs/operations/self-hosted-production.md` or the current operator guide
 
@@ -205,4 +213,3 @@
 7. Run `npm --prefix services/agent-host test`.
 8. Run root type-check/lint commands available in `package.json`.
 9. Run `git diff --check` and inspect that unrelated dirty files were not staged.
-

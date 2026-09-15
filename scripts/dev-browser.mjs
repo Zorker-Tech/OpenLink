@@ -6,6 +6,7 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ensureZokerbase } from './zokerbase.mjs'
 import { ensureZero, stopZero } from './zero.mjs'
+import { ensureBundledPodmanPlatformEngine } from './lib/bundled-podman-runtime.mjs'
 import { bundledToolchainPaths, packageManagerCommand, prependPath, resolveHostPlatform, resolveUserStateRoot } from './lib/host-platform.mjs'
 import { assertProjectVmArtifactManifest, projectVmArtifactContract } from './lib/project-vm-artifact.mjs'
 import { hardenUserOnlySecret } from './lib/windows-security.mjs'
@@ -24,7 +25,9 @@ const hostPlatform = resolveHostPlatform()
 const projectVmArtifact = projectVmArtifactContract({ host: hostPlatform })
 const toolchain = bundledToolchainPaths(rootPath)
 const legacyProviderSecretPath = fileURLToPath(new URL('../.openlink-runtime/provider-secret.key', import.meta.url))
-const providerSecretPath = resolve(resolveUserStateRoot(rootPath, { host: hostPlatform }), 'provider-secret.key')
+const userStateRoot = resolveUserStateRoot(rootPath, { host: hostPlatform })
+const providerSecretPath = resolve(userStateRoot, 'provider-secret.key')
+const supervisorSecretRoot = resolve(userStateRoot, 'runtime-secrets')
 const podmanCommand = toolchain.podman
 const podmanHelperBinariesDir = toolchain.bin
 const podmanConfigRoot = fileURLToPath(new URL('../.openlink-runtime/podman-config/', import.meta.url))
@@ -37,7 +40,7 @@ const podmanDataRoot = fileURLToPath(new URL('../.openlink-runtime/podman-data/'
 const podmanContainersRoot = resolve(podmanConfigRoot, 'containers')
 const podmanContainersConfig = resolve(podmanContainersRoot, 'containers.conf')
 const podmanPolicy = resolve(podmanContainersRoot, 'policy.json')
-const podmanConnections = resolve(podmanConfigRoot, 'podman-connections.json')
+const podmanConnections = resolve(podmanContainersRoot, 'podman-connections.json')
 process.env.CONTAINERS_CONF ||= podmanContainersConfig
 process.env.CONTAINERS_POLICY ||= podmanPolicy
 process.env.PODMAN_CONNECTIONS_CONF ||= podmanConnections
@@ -45,12 +48,13 @@ const projectVmStateRoot = fileURLToPath(new URL('../.openlink-runtime/project-v
 const projectImageRoot = fileURLToPath(new URL('../.openlink-runtime/images/', import.meta.url))
 const projectVmBaseRoot = fileURLToPath(new URL('../.openlink-runtime/project-vm-base/', import.meta.url))
 const projectVmBaseManifestPath = `${projectVmBaseRoot}/manifest.json`
-const apiToken = process.env.OPENLINK_BROWSER_API_TOKEN || randomBytes(48).toString('base64url')
-const tokenSecret = process.env.OPENLINK_BROWSER_TOKEN_SECRET || randomBytes(48).toString('base64url')
-const agentApiToken = process.env.OPENLINK_AGENT_API_TOKEN || randomBytes(48).toString('base64url')
-const desktopAgentApiToken = process.env.OPENLINK_DESKTOP_AGENT_API_TOKEN || randomBytes(48).toString('base64url')
-const openSandboxApiToken = process.env.OPEN_SANDBOX_API_KEY || randomBytes(48).toString('base64url')
-const knowledgeApiToken = process.env.OPENLINK_KNOWLEDGE_INTERNAL_TOKEN || randomBytes(48).toString('base64url')
+const apiToken = await persistentRuntimeSecret('browser-api-token', process.env.OPENLINK_BROWSER_API_TOKEN)
+const tokenSecret = await persistentRuntimeSecret('browser-token-secret', process.env.OPENLINK_BROWSER_TOKEN_SECRET)
+const agentApiToken = await persistentRuntimeSecret('agent-api-token', process.env.OPENLINK_AGENT_API_TOKEN)
+const desktopAgentApiToken = await persistentRuntimeSecret('desktop-agent-api-token', process.env.OPENLINK_DESKTOP_AGENT_API_TOKEN)
+const openSandboxApiToken = await persistentRuntimeSecret('opensandbox-api-token', process.env.OPEN_SANDBOX_API_KEY)
+const knowledgeApiToken = await persistentRuntimeSecret('knowledge-api-token', process.env.OPENLINK_KNOWLEDGE_INTERNAL_TOKEN)
+const projectRuntimeProvisionerId = await persistentRuntimeSecret('project-runtime-provisioner-id', process.env.OPENLINK_PROJECT_RUNTIME_PROVISIONER_ID, 'hex')
 const hostUrl = process.env.OPENLINK_BROWSER_HOST_URL || 'http://127.0.0.1:43120'
 const agentHostUrl = process.env.OPENLINK_AGENT_HOST_URL || 'http://127.0.0.1:43121'
 const desktopAgentHostUrl = process.env.OPENLINK_DESKTOP_AGENT_HOST_URL || 'http://127.0.0.1:43123'
@@ -87,6 +91,7 @@ const agentGatewayPublicUrl = localPublicAgentGatewayUrl()
 // it instead of a hardcoded historical default.
 const webPort = String(Number(process.env.PORT || 3000))
 const localAllowedOrigins = process.env.OPENLINK_BROWSER_ALLOWED_ORIGINS || `http://localhost:${webPort},http://127.0.0.1:${webPort}`
+const localBrowserGatewayUpstreamOrigin = process.env.OPENLINK_BROWSER_GATEWAY_UPSTREAM_ORIGIN || `http://localhost:${webPort}`
 
 function lifecycleMode(argv) {
   const modeIndex = argv.indexOf('--mode')
@@ -178,6 +183,29 @@ async function persistentProviderSecret() {
     if (error?.code !== 'EEXIST') throw error
   })
   return readProtectedSecret()
+}
+
+async function persistentRuntimeSecret(name, supplied, encoding = 'base64url') {
+  if (supplied?.trim()) return supplied.trim()
+  if (!/^[a-z0-9-]{1,64}$/.test(name)) throw new Error('OpenLink runtime secret name is invalid')
+  const secretPath = resolve(supervisorSecretRoot, `${name}.key`)
+  const readProtected = async () => {
+    await hardenUserOnlySecret(secretPath)
+    const value = (await readFile(secretPath, 'utf8')).trim()
+    if (!value) throw new Error(`OpenLink runtime secret is empty: ${name}`)
+    return value
+  }
+  try {
+    return await readProtected()
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error
+  }
+  await mkdir(supervisorSecretRoot, { recursive: true, mode: 0o700 })
+  const secret = randomBytes(48).toString(encoding)
+  await writeFile(secretPath, `${secret}\n`, { mode: 0o600, flag: 'wx' }).catch(async (error) => {
+    if (error?.code !== 'EEXIST') throw error
+  })
+  return readProtected()
 }
 
 function enforceIsolatedMachineVolumes(contents) {
@@ -364,6 +392,22 @@ if (Number(process.versions.node.split('.')[0]) < 22) {
 const podmanBuild = run(process.execPath, ['scripts/ensure-podman-toolchain.mjs'], { cwd: root })
 await waitForExit(podmanBuild, 'Podman toolchain build')
 await ensurePodmanConfig()
+if (hostPlatform.platform === 'darwin' && runtimeMode === 'local') {
+  projectVmBase = await loadProjectVmBase()
+  process.env.OPENLINK_PODMAN_COMMAND = podmanCommand
+  process.env.XDG_CONFIG_HOME = podmanConfigRoot
+  process.env.XDG_DATA_HOME = podmanDataRoot
+  process.env.CONTAINERS_HELPER_BINARY_DIR = podmanHelperBinariesDir
+  process.env.CONTAINERS_CONF = podmanContainersConfig
+  process.env.CONTAINERS_POLICY = podmanPolicy
+  process.env.PODMAN_CONNECTIONS_CONF = podmanConnections
+  process.env.PATH = prependPath(podmanHelperBinariesDir)
+  await ensureBundledPodmanPlatformEngine(rootPath, {
+    podman: podmanCommand,
+    host: hostPlatform,
+    baseDisk: projectVmBase.diskPath,
+  })
+}
 if (hostPlatform.platform === 'win32') {
   await assertWindowsHyperVHostReady(podmanCommand, {
     commandOptions: {
@@ -467,10 +511,29 @@ if (process.env.OPENLINK_BUILD_ARTIFACTS === '1') {
   })
   await waitForExit(projectImagesBuild, 'Project runtime image build')
 
-  if (mode === 'production') {
-    const webBuild = run('pnpm', ['build:web'], { cwd: root })
-    await waitForExit(webBuild, 'OpenLink web production build')
-  }
+}
+
+// `npm start` is the source-tree production entry point. Always produce a
+// fresh web artifact here: reusing an existing `.next` directory can retain
+// build-time public configuration from another deployment domain. Packaged
+// self-hosted releases use openlinkctl and their sealed standalone artifact,
+// so this does not compile on customer startup.
+if (mode === 'production') {
+  const webBuild = run('npm', ['run', 'build:web'], {
+    cwd: root,
+    env: runtimeMode === 'local' && localZokerbase
+      ? {
+          ...process.env,
+          OPENLINK_RUNTIME_MODE: 'local',
+          NEXT_PUBLIC_OPENLINK_RUNTIME_MODE: 'local',
+          OPENLINK_LOCAL_ZOKERBASE_URL: localZokerbase.url,
+          OPENLINK_LOCAL_ZOKERBASE_PUBLISHABLE_KEY: localZokerbase.publishableKey,
+          NEXT_PUBLIC_SUPABASE_URL: localZokerbase.url,
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: localZokerbase.publishableKey,
+        }
+      : process.env,
+  })
+  await waitForExit(webBuild, 'OpenLink web production build')
 }
 
 if (runtimeMode === 'local') localZero = await ensureZero()
@@ -481,7 +544,7 @@ if (knowledgeServiceEnabled) {
   await waitForExit(knowledgeBuild, 'Knowledge Service build')
 }
 
-projectVmBase = await loadProjectVmBase()
+projectVmBase ||= await loadProjectVmBase()
 
 const shared = {
   ...process.env,
@@ -532,7 +595,7 @@ const shared = {
   OPENLINK_BROWSER_GATEWAY_PUBLIC_URL: agentGatewayPublicUrl,
   OPENLINK_AGENT_PUBLIC_URL: agentGatewayPublicUrl,
   OPENLINK_BROWSER_GATEWAY_ALLOWED_ORIGINS: process.env.OPENLINK_BROWSER_GATEWAY_ALLOWED_ORIGINS || localAllowedOrigins,
-  OPENLINK_BROWSER_GATEWAY_UPSTREAM_ORIGIN: process.env.OPENLINK_BROWSER_GATEWAY_UPSTREAM_ORIGIN || 'http://localhost:3000',
+  OPENLINK_BROWSER_GATEWAY_UPSTREAM_ORIGIN: localBrowserGatewayUpstreamOrigin,
   OPENLINK_DESKTOP_AGENT_HOST_URL: desktopAgentHostUrl,
   OPENLINK_AGENT_HOST: '127.0.0.1',
   OPENLINK_AGENT_PORT: new URL(agentHostUrl).port || '43121',
@@ -568,6 +631,9 @@ const shared = {
   // OpenSandbox's egress/Credential Vault sidecar requires NET_ADMIN; keep the
   // unsafe rootless credential path opt-in and explicit for development.
   OPENLINK_PROJECT_VM_ROOTFUL: process.env.OPENLINK_PROJECT_VM_ROOTFUL || '1',
+  // The durable queue uses this opaque host identity to reclaim its own lease
+  // immediately after an application restart instead of waiting five minutes.
+  OPENLINK_PROJECT_RUNTIME_PROVISIONER_ID: projectRuntimeProvisionerId,
   OPENLINK_ALLOW_UNSAFE_ROOTLESS_PROVIDER_CREDENTIALS: process.env.OPENLINK_ALLOW_UNSAFE_ROOTLESS_PROVIDER_CREDENTIALS || '0',
   OPENLINK_PROJECT_RUNTIME_IMAGE_ARCHIVES: JSON.stringify({
     'openlink/agent-worker:dev': `${projectImageRoot}/openlink_agent-worker_dev.tar`,
@@ -604,11 +670,11 @@ const agentHost = run(process.execPath, ['dist/src/main.js'], { cwd: agentHostDi
 await waitForHealth(agentHostUrl, agentHost, 'Agent Host')
 const desktopAgentHost = run(process.execPath, ['dist/src/desktop-main.js'], { cwd: agentHostDirectory, env: shared })
 await waitForHealth(desktopAgentHostUrl, desktopAgentHost, 'Desktop Agent Host')
-const next = run('pnpm', [mode === 'production' ? 'start:web' : 'dev:web'], { cwd: root, env: shared })
+const next = run('npm', ['run', mode === 'production' ? 'start:web' : 'dev:web'], { cwd: root, env: shared })
 // Studio is served on a second port of the same `localhost` host so its
 // SameSite cookie flows into the embedding iframe (same host => same site,
 // ports are not part of the site). See scripts/studio-origin-proxy.mjs.
-const studioOrigin = run(process.execPath, ['scripts/studio-origin-proxy.mjs'], { cwd: root, env: { ...shared, OPENLINK_WEB_PORT: '3001' } })
+const studioOrigin = run(process.execPath, ['scripts/studio-origin-proxy.mjs'], { cwd: root, env: { ...shared, OPENLINK_WEB_PORT: webPort } })
 
 let shuttingDown = false
 async function stop(child, signal, timeoutMs = 10_000) {

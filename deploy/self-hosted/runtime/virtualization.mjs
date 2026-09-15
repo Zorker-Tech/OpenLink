@@ -78,6 +78,35 @@ export async function detectVirtualization(options = {}) {
   if (kvmAccessible && qemuPath) {
     return { required: true, status: 'ready', code: 'KVM_READY', provider: 'qemu-kvm', repairable: false, qemuPath, cpu }
   }
+  // Do not offer package installation when the underlying host can never
+  // expose KVM. Otherwise a nested/cloud host with no QEMU binary looks
+  // repairable until after an unnecessary package installation.
+  if (!kvmExists && !cpu.hardwareVirtualization && cpu.hypervisor) {
+    return {
+      required: true,
+      status: 'nested-unavailable',
+      code: 'NESTED_VIRTUALIZATION_UNAVAILABLE',
+      provider: 'qemu-kvm',
+      repairable: false,
+      qemuPath,
+      cpu,
+      message: 'The host is virtualized but nested virtualization is not exposed; enable it in the provider or select Container',
+    }
+  }
+  if (!kvmExists && !cpu.hardwareVirtualization) {
+    return {
+      required: true,
+      status: architecture === 'x64' ? 'firmware-disabled' : 'unsupported',
+      code: architecture === 'x64' ? 'CPU_VIRTUALIZATION_UNAVAILABLE' : 'KVM_UNAVAILABLE',
+      provider: 'qemu-kvm',
+      repairable: false,
+      qemuPath,
+      cpu,
+      message: architecture === 'x64'
+        ? 'VT-x/AMD-V is unavailable or disabled in firmware; enable it in BIOS/UEFI or select Container'
+        : 'KVM is unavailable on this Linux host; select Container or use a KVM-capable host',
+    }
+  }
   if (!qemuPath) {
     return {
       required: true,
@@ -114,30 +143,7 @@ export async function detectVirtualization(options = {}) {
       message: 'The CPU exposes hardware virtualization but Linux KVM modules are not active',
     }
   }
-  if (cpu.hypervisor) {
-    return {
-      required: true,
-      status: 'nested-unavailable',
-      code: 'NESTED_VIRTUALIZATION_UNAVAILABLE',
-      provider: 'qemu-kvm',
-      repairable: false,
-      qemuPath,
-      cpu,
-      message: 'The host is virtualized but nested virtualization is not exposed; enable it in the provider or select Container',
-    }
-  }
-  return {
-    required: true,
-    status: architecture === 'x64' ? 'firmware-disabled' : 'unsupported',
-    code: architecture === 'x64' ? 'CPU_VIRTUALIZATION_UNAVAILABLE' : 'KVM_UNAVAILABLE',
-    provider: 'qemu-kvm',
-    repairable: false,
-    qemuPath,
-    cpu,
-    message: architecture === 'x64'
-      ? 'VT-x/AMD-V is unavailable or disabled in firmware; enable it in BIOS/UEFI or select Container'
-      : 'KVM is unavailable on this Linux host; select Container or use a KVM-capable host',
-  }
+  throw new Error('KVM detection reached an inconsistent state')
 }
 
 function privileged(command, args, options) {

@@ -49,6 +49,7 @@ export default async function KnowledgePage({
       avatarUrl={getAvatarUrl(user)}
       email={user.email ?? nickname}
       initialPath={knowledgePath}
+      knowledgeEnabled={process.env.OPENLINK_KNOWLEDGE_ENABLED !== '0' && process.env.OPENLINK_DEPLOYMENT_PROFILE !== 'core'}
       nickname={nickname}
       organizations={organizations}
       personalWorkspace={{ name: personalWorkspace.name, slug: personalWorkspace.slug }}

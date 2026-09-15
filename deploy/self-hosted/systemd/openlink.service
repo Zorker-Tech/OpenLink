@@ -2,7 +2,7 @@
 Description=OpenLink self-hosted production runtime
 Documentation=https://git.haokir/hydite/openlink/openlink
 Wants=network-online.target
-After=network-online.target openlink-container-broker.service
+After=network-online.target openlink-container-broker.service openlink-project-container-broker.service
 Requires=openlink-container-broker.service
 StartLimitIntervalSec=300
 StartLimitBurst=5

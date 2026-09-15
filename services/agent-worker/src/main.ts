@@ -8,37 +8,17 @@ import {
   type ExtensionUIDialogOptions,
   type AgentSession,
 } from '@earendil-works/pi-coding-agent'
-import { randomUUID, timingSafeEqual } from 'node:crypto'
-import { execFile } from 'node:child_process'
-import { access } from 'node:fs/promises'
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto'
+import { access, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { mkdir, readFile } from 'node:fs/promises'
 import { relative, resolve } from 'node:path'
-import { promisify } from 'node:util'
 import { EnvHttpProxyAgent, install, setGlobalDispatcher } from 'undici'
-import { CodexAppServerRuntime } from './codex-runtime.js'
+import { CodexAppServerRuntime, stageCodexPromptFiles } from './codex-runtime.js'
+import { piPromptProtocolInput } from './prompt-protocol.js'
+import { handleBrowserMcpRequest } from './browser-mcp.js'
+import { collectGitSnapshot } from './git-snapshot.js'
 
-const execFileAsync = promisify(execFile)
-const GIT_PATCH_LIMIT_PER_FILE = 24 * 1024
-const GIT_PATCH_LIMIT_TOTAL = 96 * 1024
 const FILE_PREVIEW_LIMIT = 192 * 1024
-
-interface GitChangedFile {
-  path: string
-  additions?: number
-  deletions?: number
-  patch?: string
-}
-
-interface GitSnapshotFrame {
-  type: 'openlink_git_snapshot'
-  toolCallId: string
-  baseCommit: string
-  files: GitChangedFile[]
-  additions: number
-  deletions: number
-  signature: string
-}
 
 interface CompletedMutableToolEvent extends Record<string, unknown> {
   type: 'tool_execution_end'
@@ -67,11 +47,13 @@ interface WorkerConfig {
   browserSessionId?: string
   browserControlToken?: string
   browserExtensionPath?: string
+  browserCapabilityFile?: string
   supabaseExtensionPath?: string
   agent: 'pi' | 'codex'
   codexBin: string
   codexHome: string
   accessMode: 'restricted' | 'ask' | 'open'
+  turnIdleTimeoutMs: number
 }
 
 interface AgentExtensionUiResponse {
@@ -95,6 +77,7 @@ function required(key: string): string {
 function config(): WorkerConfig {
   const port = Number(process.env.OPENLINK_AGENT_WORKER_PORT || 43130)
   if (!Number.isSafeInteger(port) || port < 1 || port > 65_535) throw new Error('OPENLINK_AGENT_WORKER_PORT is invalid')
+  const configuredTurnIdleTimeout = Number(process.env.OPENLINK_AGENT_TURN_IDLE_TIMEOUT_MS || process.env.OPENLINK_CODEX_TURN_IDLE_TIMEOUT_MS)
   const accessMode = process.env.OPENLINK_AGENT_ACCESS_MODE === 'open' || process.env.OPENLINK_AGENT_ACCESS_MODE === 'ask'
     ? process.env.OPENLINK_AGENT_ACCESS_MODE as 'open' | 'ask'
     : 'restricted'
@@ -113,11 +96,17 @@ function config(): WorkerConfig {
     browserSessionId: process.env.OPENLINK_BROWSER_SESSION_ID,
     browserControlToken: process.env.OPENLINK_BROWSER_CONTROL_TOKEN,
     browserExtensionPath: process.env.OPENLINK_BROWSER_EXTENSION_PATH,
+    browserCapabilityFile: process.env.OPENLINK_BROWSER_CAPABILITY_FILE
+      ? resolve(process.env.OPENLINK_BROWSER_CAPABILITY_FILE)
+      : undefined,
     supabaseExtensionPath: process.env.OPENLINK_SUPABASE_EXTENSION_PATH,
     agent: process.env.OPENLINK_AGENT_KIND === 'codex' ? 'codex' : 'pi',
     codexBin: process.env.OPENLINK_CODEX_BIN || 'codex',
     codexHome: resolve(process.env.OPENLINK_CODEX_HOME || '/openlink/session/codex-home'),
     accessMode,
+    turnIdleTimeoutMs: Number.isFinite(configuredTurnIdleTimeout) && configuredTurnIdleTimeout >= 1_000
+      ? configuredTurnIdleTimeout
+      : 10 * 60_000,
   }
 }
 
@@ -135,19 +124,114 @@ function authorized(request: IncomingMessage, token: string): boolean {
   return supplied.length === expected.length && timingSafeEqual(supplied, expected)
 }
 
-async function readMessage(request: IncomingMessage): Promise<string> {
+async function readRequestJson(request: IncomingMessage, maxBytes = 32 * 1024): Promise<unknown> {
   const chunks: Buffer[] = []
   let size = 0
   for await (const chunk of request) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
     size += buffer.length
-    if (size > 32 * 1024) throw new Error('Request body is too large')
+    if (size > maxBytes) throw new Error('Request body is too large')
     chunks.push(buffer)
   }
-  const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { message?: unknown }
+  return JSON.parse(Buffer.concat(chunks).toString('utf8'))
+}
+
+async function readMessage(request: IncomingMessage): Promise<string> {
+  const body = await readRequestJson(request) as { message?: unknown }
   const message = typeof body.message === 'string' ? body.message.trim() : ''
   if (!message || message.length > 10_000) throw new Error('message is invalid')
   return message
+}
+
+type WorkerPromptAttachment = {
+  type: 'image'; mediaType: string; url: string; filename?: string
+} | {
+  type: 'text'; mediaType: 'text/plain'; text: string; filename?: string
+} | {
+  type: 'instruction'; name: string; text: string
+} | {
+  type: 'reference'; referenceType: 'file' | 'thread'; name: string; path: string
+} | {
+  type: 'file'; uploadId: string; batchId: string; mediaType: string; filename: string
+  relativePath?: string; sizeBytes: number; sha256: string; contentBase64: string
+}
+
+async function readPrompt(request: IncomingMessage): Promise<{ message: string; attachments: WorkerPromptAttachment[] }> {
+  const body = await readRequestJson(request, 16 * 1024 * 1024) as { message?: unknown; attachments?: unknown }
+  const message = typeof body.message === 'string' ? body.message.trim() : ''
+  if (message.length > 10_000) throw new Error('message is invalid')
+  if (body.attachments !== undefined && (!Array.isArray(body.attachments) || body.attachments.length > 24)) throw new Error('attachments are invalid')
+  let encodedImageBytes = 0
+  let textBytes = 0
+  let imageCount = 0
+  let textCount = 0
+  let instructionCount = 0
+  let referenceCount = 0
+  let fileCount = 0
+  let encodedFileBytes = 0
+  const attachments = (body.attachments ?? []).map((candidate: unknown) => {
+    if (!candidate || typeof candidate !== 'object') throw new Error('attachments are invalid')
+    const item = candidate as Record<string, unknown>
+    const mediaType = typeof item.mediaType === 'string' ? item.mediaType.toLowerCase() : ''
+    const filename = typeof item.filename === 'string' ? item.filename.trim().slice(0, 240) : undefined
+    if (item.type === 'file') {
+      const uploadId = typeof item.uploadId === 'string' ? item.uploadId : ''
+      const batchId = typeof item.batchId === 'string' ? item.batchId : ''
+      const relativePath = typeof item.relativePath === 'string' ? item.relativePath : undefined
+      const sizeBytes = typeof item.sizeBytes === 'number' ? item.sizeBytes : -1
+      const sha256 = typeof item.sha256 === 'string' ? item.sha256.toLowerCase() : ''
+      const contentBase64 = typeof item.contentBase64 === 'string' ? item.contentBase64 : ''
+      const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+      const safeFilename = Boolean(filename && filename !== '.' && filename !== '..' && !/[/\\\u0000-\u001f\u007f]/.test(filename))
+      const safeRelativePath = relativePath === undefined || (relativePath.length <= 1024
+        && !relativePath.startsWith('/') && !relativePath.includes('\\') && !relativePath.includes('//')
+        && !/[\u0000-\u001f\u007f]/.test(relativePath)
+        && relativePath.split('/').every((segment) => segment && segment !== '.' && segment !== '..'))
+      fileCount += 1
+      encodedFileBytes += contentBase64.length
+      if (!uuid.test(uploadId) || !uuid.test(batchId) || !safeFilename || !safeRelativePath
+        || !mediaType || mediaType.length > 160 || !Number.isSafeInteger(sizeBytes) || sizeBytes < 0 || sizeBytes > 2 * 1024 * 1024
+        || !/^[a-f0-9]{64}$/.test(sha256) || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(contentBase64)
+        || fileCount > 16 || encodedFileBytes + encodedImageBytes > 12_000_000) throw new Error('attachments are invalid')
+      const content = Buffer.from(contentBase64, 'base64')
+      if (content.byteLength !== sizeBytes || createHash('sha256').update(content).digest('hex') !== sha256) throw new Error('attachments are invalid')
+      return { type: 'file' as const, uploadId, batchId, mediaType, filename: filename!, ...(relativePath ? { relativePath } : {}), sizeBytes, sha256, contentBase64 }
+    }
+    if (item.type === 'reference') {
+      const referenceType: 'file' | 'thread' | '' = item.referenceType === 'file' || item.referenceType === 'thread' ? item.referenceType : ''
+      const name = typeof item.name === 'string' ? item.name.trim().slice(0, 160) : ''
+      const path = typeof item.path === 'string' ? item.path : ''
+      referenceCount += 1
+      if (!referenceType || !name || referenceCount > 16 || path.length > 1024 || path.includes('\0')
+        || (referenceType === 'thread' && !/^thread:\/\/[A-Za-z0-9_-]{1,64}$/.test(path))
+        || (referenceType === 'file' && (!path || /^\w+:\/\//.test(path)))) throw new Error('attachments are invalid')
+      return { type: 'reference' as const, referenceType, name, path }
+    }
+    if (item.type === 'text') {
+      const text = typeof item.text === 'string' ? item.text : ''
+      const bytes = Buffer.byteLength(text, 'utf8')
+      textCount += 1
+      textBytes += bytes
+      if (mediaType !== 'text/plain' || !text || textCount > 4 || bytes > 256 * 1024 || textBytes > 512 * 1024) throw new Error('attachments are invalid')
+      return { type: 'text' as const, mediaType: 'text/plain' as const, text, ...(filename ? { filename } : {}) }
+    }
+    if (item.type === 'instruction') {
+      const name = typeof item.name === 'string' ? item.name.trim().slice(0, 160) : ''
+      const text = typeof item.text === 'string' ? item.text : ''
+      const bytes = Buffer.byteLength(text, 'utf8')
+      instructionCount += 1
+      if (!name || !text || instructionCount > 8 || bytes > 64 * 1024) throw new Error('attachments are invalid')
+      return { type: 'instruction' as const, name, text }
+    }
+    const url = typeof item.url === 'string' ? item.url : ''
+    imageCount += 1
+    if (item.type !== 'image' || imageCount > 4 || !/^image\/(?:png|jpeg|webp|gif)$/.test(mediaType) || !url.startsWith(`data:${mediaType};base64,`) || url.length > 3_000_000) throw new Error('attachments are invalid')
+    encodedImageBytes += url.length
+    if (encodedImageBytes + encodedFileBytes > 12_000_000) throw new Error('attachments are invalid')
+    return { type: 'image' as const, mediaType, url, ...(filename ? { filename } : {}) }
+  })
+  if (!message && !attachments.length) throw new Error('message is invalid')
+  return { message, attachments }
 }
 
 async function readExtensionUiResponse(request: IncomingMessage): Promise<AgentExtensionUiResponse> {
@@ -184,6 +268,34 @@ async function readExtensionUiResponse(request: IncomingMessage): Promise<AgentE
     ...(value !== undefined ? { value } : {}),
     ...(cancelled === true ? { cancelled: true } : {}),
   }
+}
+
+async function readBrowserCapability(request: IncomingMessage): Promise<Record<string, string> | null> {
+  const chunks: Buffer[] = []
+  let size = 0
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+    size += buffer.length
+    if (size > 32 * 1024) throw new Error('Browser capability is too large')
+    chunks.push(buffer)
+  }
+  const parsed = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { capability?: unknown }
+  if (parsed.capability === null) return null
+  if (!parsed.capability || typeof parsed.capability !== 'object') throw new Error('Browser capability is invalid')
+  const value = parsed.capability as Record<string, unknown>
+  if (typeof value.hostUrl !== 'string' || !/^https?:\/\//.test(value.hostUrl)
+    || typeof value.sessionId !== 'string' || !/^[A-Za-z0-9_-]{8,128}$/.test(value.sessionId)
+    || typeof value.controlToken !== 'string' || value.controlToken.length < 16) {
+    throw new Error('Browser capability is invalid')
+  }
+  return { hostUrl: value.hostUrl, sessionId: value.sessionId, controlToken: value.controlToken }
+}
+
+async function writeBrowserCapability(capability: Record<string, string> | null): Promise<void> {
+  if (!worker.browserCapabilityFile) throw new Error('Browser capability is not configured for this Agent')
+  const temporary = `${worker.browserCapabilityFile}.tmp-${process.pid}`
+  await writeFile(temporary, `${JSON.stringify(capability)}\n`, { encoding: 'utf8', mode: 0o600 })
+  await rename(temporary, worker.browserCapabilityFile)
 }
 
 function serializableEvent(event: unknown): unknown {
@@ -253,105 +365,6 @@ async function filePreviewFrame(workspaceRoot: string, event: Record<string, unk
   }
 }
 
-async function runGit(workspaceRoot: string, args: string[], maxBuffer = GIT_PATCH_LIMIT_TOTAL + 16 * 1024): Promise<string | null> {
-  try {
-    const { stdout } = await execFileAsync('git', ['-C', workspaceRoot, ...args], {
-      cwd: workspaceRoot,
-      maxBuffer,
-      windowsHide: true,
-    })
-    return stdout
-  } catch {
-    return null
-  }
-}
-
-function countLines(content: string): number {
-  if (!content.length) return 0
-  const trimmed = content.endsWith('\n') ? content.slice(0, -1) : content
-  return trimmed ? trimmed.split(/\r?\n/).length : 1
-}
-
-function untrackedPatch(path: string, content: string): string {
-  const lines = content.split(/(?<=\n)/).map((line) => `+${line.endsWith('\n') ? line.slice(0, -1) : line}`)
-  return [
-    `diff --git a/${path} b/${path}`,
-    'new file mode 100644',
-    '--- /dev/null',
-    `+++ b/${path}`,
-    `@@ -0,0 +1,${countLines(content)} @@`,
-    ...lines,
-  ].join('\n')
-}
-
-async function gitSnapshot(workspaceRoot: string): Promise<GitSnapshotFrame | null> {
-  const baseCommit = (await runGit(workspaceRoot, ['rev-parse', '--short=12', 'HEAD']))?.trim()
-  if (!baseCommit) return null
-  const status = await runGit(workspaceRoot, ['status', '--porcelain=v1', '-z'])
-  if (status === null) return null
-
-  const numstat = await runGit(workspaceRoot, ['diff', '--no-ext-diff', '--no-renames', '--numstat', '-z', 'HEAD', '--'])
-  if (numstat === null) return null
-  const stats = new Map<string, { additions?: number; deletions?: number }>()
-  for (const entry of numstat.split('\0')) {
-    if (!entry) continue
-    const [rawAdditions, rawDeletions, path] = entry.split('\t')
-    if (!path) continue
-    stats.set(path, {
-      ...(rawAdditions !== '-' ? { additions: Number(rawAdditions) || 0 } : {}),
-      ...(rawDeletions !== '-' ? { deletions: Number(rawDeletions) || 0 } : {}),
-    })
-  }
-  const untracked = (await runGit(workspaceRoot, ['ls-files', '--others', '--exclude-standard', '-z']))
-  if (untracked === null) return null
-  const untrackedPaths = untracked.split('\0').filter(Boolean)
-  const paths = new Set([...stats.keys(), ...untrackedPaths])
-  const files: GitChangedFile[] = []
-  let remainingPatch = GIT_PATCH_LIMIT_TOTAL
-
-  for (const path of [...paths].sort()) {
-    const details = stats.get(path) ?? {}
-    const absolutePath = resolve(workspaceRoot, path)
-    // Git paths are expected to be workspace-relative. Preserve that boundary
-    // even in the presence of a malicious filename from a mounted volume.
-    if (relative(workspaceRoot, absolutePath).startsWith('..')) continue
-    let patch = ''
-    if (untrackedPaths.includes(path)) {
-      try {
-        const source = await readFile(absolutePath)
-        // Avoid turning a binary asset into replacement characters in a text
-        // diff. Git still reports the real file and its byte-level status.
-        if (source.includes(0)) throw new Error('binary file')
-        const content = source.toString('utf8')
-        patch = untrackedPatch(path, content)
-        details.additions = countLines(content)
-        details.deletions = 0
-      } catch {
-        // Directories, binary files, and raced deletions are still included in
-        // the Git file list, without inventing a text diff.
-      }
-    } else {
-      patch = (await runGit(workspaceRoot, ['diff', '--no-ext-diff', '--no-renames', '--unified=3', 'HEAD', '--', path], GIT_PATCH_LIMIT_PER_FILE + 4 * 1024)) ?? ''
-    }
-    const boundedPatch = patch.slice(0, Math.max(0, Math.min(GIT_PATCH_LIMIT_PER_FILE, remainingPatch)))
-    remainingPatch -= boundedPatch.length
-    files.push({ path, ...details, ...(boundedPatch ? { patch: boundedPatch } : {}) })
-  }
-
-  const additions = files.reduce((total, file) => total + (file.additions ?? 0), 0)
-  const deletions = files.reduce((total, file) => total + (file.deletions ?? 0), 0)
-  return {
-    type: 'openlink_git_snapshot',
-    toolCallId: '',
-    baseCommit,
-    files,
-    additions,
-    deletions,
-    // This intentionally includes the actual diff, not only numstat: a
-    // one-character replacement can have unchanged line counts.
-    signature: JSON.stringify({ baseCommit, files }),
-  }
-}
 
 class SdkAgentRuntime {
   private sessionPromise?: Promise<{ session: AgentSession; sessionManager: SessionManager }>
@@ -365,11 +378,72 @@ class SdkAgentRuntime {
 
   constructor(private readonly worker: WorkerConfig) {}
 
-  async resources() {
+  async control(input: { action: string; text?: string }): Promise<unknown> {
+    const { session, sessionManager } = await this.session()
+    if (input.action === 'status') return { busy: this.busy, mode: 'default', goal: null }
+    if (input.action === 'rewind') {
+      if (this.busy || !input.text?.trim()) throw new Error('An idle session and original message are required')
+      const branch = sessionManager.getBranch()
+      const users = branch.filter((entry) => entry.type === 'message' && entry.message.role === 'user')
+      const matches = users.filter((entry) => {
+        if (entry.type !== 'message' || entry.message.role !== 'user') return false
+        const content = entry.message.content
+        return (typeof content === 'string' ? content : content.filter((part) => part.type === 'text').map((part) => part.text).join('\n')) === input.text
+      })
+      if (!users.length) return { rewound: true }
+      if (matches.length !== 1) throw new Error('Cannot unambiguously locate the original native message')
+      const result = await session.navigateTree(matches[0]!.id, { summarize: false })
+      if (result.cancelled || result.aborted) throw new Error('Native navigation was cancelled')
+      if (sessionManager.getLeafId() !== matches[0]!.parentId) throw new Error('Native navigation did not reach the message parent')
+      return { rewound: true }
+    }
+    if (input.action === 'steer') {
+      if (!this.busy || !input.text?.trim()) throw new Error('An active turn and steering text are required')
+      await session.steer(input.text)
+      this.writeFrame({ type: 'openlink_user_steer', text: input.text, messageId: randomUUID() })
+      return { accepted: true }
+    }
+    if (input.action === 'compact') {
+      if (this.busy) throw new Error('Wait for the active turn to finish before compacting')
+      this.busy = true
+      try {
+        await session.compact(input.text)
+        return { compacted: true, nativeSession: { type: 'openlink_session_entries', header: sessionManager.getHeader(), entries: sessionManager.getEntries() } }
+      } finally { this.busy = false }
+    }
+    throw new Error('This Pi runtime does not support the requested control')
+  }
+
+  /** Initialize Pi's native ModelRuntime, SessionManager and extensions during
+   * lease warmup, matching Codex's process/thread readiness semantics. */
+  async prepare(): Promise<void> {
+    await this.session()
+  }
+
+  async resources(_request?: { scope?: 'command' | 'mention' | 'skill' | 'title'; command?: string; query?: string }) {
     const extensions = await availableExtensionPaths([
       this.worker.browserExtensionPath,
       this.worker.supabaseExtensionPath,
     ])
+    const resourceLoader = new DefaultResourceLoader({
+      cwd: this.worker.workspaceRoot,
+      agentDir: this.worker.sessionRoot,
+      noExtensions: true,
+      additionalExtensionPaths: extensions,
+    })
+    await resourceLoader.reload()
+    const commands = [
+      ...resourceLoader.getPrompts().prompts.map((prompt) => ({
+        name: prompt.name,
+        description: prompt.description,
+        source: 'prompt' as const,
+      })),
+      ...resourceLoader.getSkills().skills.map((skill) => ({
+        name: `skill:${skill.name}`,
+        description: skill.description,
+        source: 'skill' as const,
+      })),
+    ]
     return {
       agent: 'pi' as const,
       source: 'Pi Resource Loader',
@@ -379,13 +453,14 @@ class SdkAgentRuntime {
       // local-only toggle as a usable capability.
       imageGeneration: false,
       extensions: extensions.map((path) => path.split('/').pop() || path),
+      commands,
       mcpServers: this.worker.supabaseExtensionPath && extensions.includes(this.worker.supabaseExtensionPath)
         ? [{ id: 'openlink_supabase', name: 'OpenLink Supabase' }]
         : [],
     }
   }
 
-  async prompt(message: string, response: ServerResponse, signal: AbortSignal): Promise<void> {
+  async prompt(message: string, response: ServerResponse, signal: AbortSignal, attachments: WorkerPromptAttachment[] = []): Promise<void> {
     if (this.busy) throw new Error('Agent is already processing a prompt')
     this.busy = true
     this.activeResponse = response
@@ -403,10 +478,28 @@ class SdkAgentRuntime {
         throw error
       }
       const { session, sessionManager } = context
+      const uploadedFiles = await stageCodexPromptFiles(this.worker.workspaceRoot, attachments.filter((attachment): attachment is Extract<WorkerPromptAttachment, { type: 'file' }> => attachment.type === 'file'))
+      const protocol = piPromptProtocolInput(
+        message,
+        attachments.filter((attachment): attachment is Exclude<WorkerPromptAttachment, Extract<WorkerPromptAttachment, { type: 'file' }>> => attachment.type !== 'file'),
+        uploadedFiles.map((attachment) => ({ name: String(attachment.name), path: String(attachment.path) })),
+      )
       const previousEntryCount = sessionManager.getEntries().length
       let eventQueue = Promise.resolve()
+      let idleTimer: ReturnType<typeof setTimeout> | undefined
+      let rejectIdle!: (error: Error) => void
+      const idleFailure = new Promise<never>((_resolve, reject) => { rejectIdle = reject })
+      const touchTurn = () => {
+        if (idleTimer) clearTimeout(idleTimer)
+        idleTimer = setTimeout(() => {
+          void session.abort()
+          rejectIdle(new Error(`Pi turn stopped emitting events for ${this.worker.turnIdleTimeoutMs}ms`))
+        }, this.worker.turnIdleTimeoutMs)
+        idleTimer.unref?.()
+      }
       const filePaths = new Map<string, string>()
       const unsubscribe = session.subscribe((event) => {
+        touchTurn()
         // Preserve Pi's event order while the Git probe runs. In particular,
         // the UI must never receive a snapshot before the completed edit that
         // caused it.
@@ -426,7 +519,7 @@ class SdkAgentRuntime {
             if (event.type === 'tool_execution_end' && typeof event.toolCallId === 'string') filePaths.delete(event.toolCallId)
           }
           if (!toolMayMutateWorkspace(event)) return
-          const snapshot = await gitSnapshot(this.worker.workspaceRoot)
+          const snapshot = await collectGitSnapshot(this.worker.workspaceRoot)
           if (!snapshot || (!snapshot.files.length && !this.gitSnapshotSignature)) return
           if (snapshot.signature === this.gitSnapshotSignature) return
           this.gitSnapshotSignature = snapshot.signature
@@ -444,18 +537,26 @@ class SdkAgentRuntime {
       signal.addEventListener('abort', abort, { once: true })
       let canceled = false
       try {
-        await session.prompt(message, { source: 'rpc' })
+        touchTurn()
+        await Promise.race([
+          session.prompt(protocol.message, { source: 'rpc', ...(protocol.images.length ? { images: protocol.images } : {}) }),
+          idleFailure,
+        ])
       } catch (error) {
         canceled = signal.aborted || this.cancelRequested
+        if (!canceled && error instanceof Error && error.message.startsWith('Pi turn stopped emitting events')) {
+          this.sessionPromise = undefined
+        }
         if (!canceled) throw error
       } finally {
+        if (idleTimer) clearTimeout(idleTimer)
         await eventQueue
         // Pi's abort path is allowed to settle without emitting
         // `agent_settled`. Send an explicit terminal frame so direct desktop
         // consumers (and the Web BFF drain path) never leave the turn looking
         // permanently Working after a canceled request.
         if ((canceled || signal.aborted || this.cancelRequested) && !response.writableEnded) {
-          response.write(`${JSON.stringify({ type: 'extension_error', error: 'Agent request was canceled' })}\n`)
+          response.write(`${JSON.stringify({ type: 'extension_error', error: 'Agent request was canceled', terminal: true })}\n`)
         }
         this.cancelRequested = false
         if (!response.writableEnded) {
@@ -631,10 +732,7 @@ class SdkAgentRuntime {
     const sessionManager = this.worker.sessionFile
       ? SessionManager.open(this.worker.sessionFile, this.worker.sessionRoot, this.worker.workspaceRoot)
       : SessionManager.create(this.worker.workspaceRoot, this.worker.sessionRoot)
-    const browserValues = [this.worker.browserHostUrl, this.worker.browserSessionId, this.worker.browserControlToken, this.worker.browserExtensionPath]
-    if (browserValues.some(Boolean) && browserValues.some((value) => !value)) {
-      throw new Error('OpenLink browser capability configuration is incomplete')
-    }
+    if (this.worker.browserExtensionPath && !this.worker.browserCapabilityFile) throw new Error('OpenLink browser capability file is required when the extension is enabled')
     const resourceLoader = new DefaultResourceLoader({
       cwd: this.worker.workspaceRoot,
       agentDir: this.worker.sessionRoot,
@@ -689,14 +787,47 @@ const runtime = worker.agent === 'codex'
     apiKey: worker.providerApiKey,
     supabaseMcpUrl: process.env.OPENLINK_SUPABASE_MCP_URL,
     supabaseMcpToken: process.env.OPENLINK_SUPABASE_MCP_TOKEN,
+    browserMcpUrl: worker.browserCapabilityFile ? `http://127.0.0.1:${worker.port}/v1/browser-mcp` : undefined,
+    turnIdleTimeoutMs: worker.turnIdleTimeoutMs,
   })
   : new SdkAgentRuntime(worker)
+let lifecycleState: 'starting' | 'ready' | 'error' = 'starting'
+let lifecycleError = ''
+let preparePromise: Promise<void> | undefined
+
+async function ensureRuntimeReady(): Promise<void> {
+  if (lifecycleState === 'ready') return
+  if (preparePromise) return preparePromise
+  lifecycleState = 'starting'
+  const operation = runtime.prepare()
+    .then(() => {
+      lifecycleState = 'ready'
+      lifecycleError = ''
+    })
+    .catch((error) => {
+      lifecycleState = 'error'
+      lifecycleError = error instanceof Error ? error.message : String(error)
+      throw error
+    })
+  preparePromise = operation
+  try {
+    await operation
+  } finally {
+    if (preparePromise === operation) preparePromise = undefined
+  }
+}
 const server = createServer((request, response) => {
   void (async () => {
     const url = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`)
     if (request.method === 'GET' && url.pathname === '/healthz') {
-      response.writeHead(200, { 'Content-Type': 'application/json' })
-      response.end(JSON.stringify({ ok: true, runtime: worker.agent === 'codex' ? 'codex-app-server' : 'pi-node-sdk' }))
+      const ready = lifecycleState === 'ready'
+      response.writeHead(ready ? 200 : 503, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
+      response.end(JSON.stringify({
+        ok: ready,
+        state: lifecycleState,
+        runtime: worker.agent === 'codex' ? 'codex-app-server' : 'pi-node-sdk',
+        ...(lifecycleState === 'error' ? { error: lifecycleError } : {}),
+      }))
       return
     }
     if (!authorized(request, worker.token)) {
@@ -710,10 +841,20 @@ const server = createServer((request, response) => {
       response.end(JSON.stringify({ ok: true, active }))
       return
     }
+    if (request.method === 'POST' && url.pathname === '/v1/control') {
+      const raw = await readRequestJson(request, 128 * 1024) as { action?: unknown; text?: unknown } | null
+      if (!raw || typeof raw.action !== 'string' || !['status', 'steer', 'plan', 'default', 'goal', 'goal-clear', 'compact', 'rewind', 'fork'].includes(raw.action)
+        || (raw.text !== undefined && (typeof raw.text !== 'string' || raw.text.length > 100000))) throw new Error('Invalid session control')
+      await ensureRuntimeReady()
+      const result = await runtime.control({ action: raw.action, text: raw.text as string | undefined })
+      response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
+      response.end(JSON.stringify(result))
+      return
+    }
     if (request.method === 'POST' && url.pathname === '/v1/extension-ui-response') {
       const uiResponse = await readExtensionUiResponse(request)
       if (worker.agent === 'codex') {
-        await (runtime as CodexAppServerRuntime).resolveApproval(uiResponse.id, uiResponse.confirmed === true)
+        await (runtime as CodexAppServerRuntime).resolveApproval(uiResponse.id, uiResponse.confirmed === true, uiResponse.value)
       } else {
         await (runtime as SdkAgentRuntime).resolveExtensionUi(uiResponse)
       }
@@ -721,16 +862,42 @@ const server = createServer((request, response) => {
       response.end(JSON.stringify({ ok: true }))
       return
     }
+    if (request.method === 'POST' && url.pathname === '/v1/browser-mcp') {
+      if (!worker.browserCapabilityFile) throw new Error('Browser capability is not configured for this Agent')
+      await handleBrowserMcpRequest(request, response, worker.browserCapabilityFile)
+      return
+    }
+    if (request.method === 'PUT' && url.pathname === '/v1/browser-capability') {
+      await writeBrowserCapability(await readBrowserCapability(request))
+      response.writeHead(204, { 'Cache-Control': 'no-store' })
+      response.end()
+      return
+    }
     if (request.method === 'GET' && url.pathname === '/v1/resources') {
+      await ensureRuntimeReady()
       response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
-      response.end(JSON.stringify(await runtime.resources()))
+      const scope = url.searchParams.get('scope')
+      response.end(JSON.stringify(await runtime.resources({
+        ...(scope === 'command' || scope === 'mention' || scope === 'skill' ? { scope } : {}),
+        ...(url.searchParams.has('command') ? { command: url.searchParams.get('command') ?? '' } : {}),
+        ...(url.searchParams.has('query') ? { query: url.searchParams.get('query') ?? '' } : {}),
+      })))
+      return
+    }
+    if (request.method === 'POST' && url.pathname === '/v1/title') {
+      const message = await readMessage(request)
+      await ensureRuntimeReady()
+      const result = await runtime.resources({ scope: 'title', query: message })
+      response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
+      response.end(JSON.stringify(result))
       return
     }
     if (request.method !== 'POST' || url.pathname !== '/v1/events') {
       response.writeHead(404).end()
       return
     }
-    const message = await readMessage(request)
+    const { message, attachments } = await readPrompt(request)
+    await ensureRuntimeReady()
     response.writeHead(200, {
       'Content-Type': 'application/x-ndjson; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
@@ -740,12 +907,12 @@ const server = createServer((request, response) => {
     response.flushHeaders?.()
     const abortController = new AbortController()
     response.once('close', () => { if (!response.writableEnded) abortController.abort() })
-    await runtime.prompt(message, response, abortController.signal)
+    await runtime.prompt(message, response, abortController.signal, attachments)
     response.end()
   })().catch((error) => {
     const message = error instanceof Error ? error.message : String(error)
     if (response.headersSent) {
-      if (!response.writableEnded) response.end(`${JSON.stringify({ type: 'extension_error', error: message })}\n`)
+      if (!response.writableEnded) response.end(`${JSON.stringify({ type: 'extension_error', error: message, terminal: true })}\n`)
     } else {
       response.writeHead(400, { 'Content-Type': 'application/json' })
       response.end(JSON.stringify({ error: message }))
@@ -755,6 +922,9 @@ const server = createServer((request, response) => {
 
 server.listen(worker.port, worker.host, () => {
   process.stdout.write(`OpenLink Agent Worker listening on http://${worker.host}:${worker.port}\n`)
+  void ensureRuntimeReady().catch((error) => {
+    console.error(`OpenLink Agent Worker initialization failed: ${error instanceof Error ? error.message : String(error)}`)
+  })
 })
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {

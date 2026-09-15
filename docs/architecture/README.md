@@ -62,6 +62,10 @@ The current ADR set covers these areas:
 
 New decisions use the format below and the next unused ADR number:
 
+The proposed Cloud SDK migration is tracked in
+[ADR-0023](./ADR-0023-cloud-platform-sdk.md); it is not an accepted replacement for
+the existing Local/Cloud identity or runtime contracts.
+
 ```text
 # ADR-NNNN: Decision title
 

@@ -16,14 +16,6 @@ async function command(runner, executable, args, options = {}) {
   return typeof result === 'string' ? result : result?.stdout ?? ''
 }
 
-async function requireGroup(runner, name) {
-  try {
-    await command(runner, 'getent', ['group', name])
-  } catch {
-    throw new Error(`Required Linux group does not exist: ${name}`)
-  }
-}
-
 const LINUX_IDENTITIES = {
   supervisor: { name: 'openlink', groups: [] },
   browser: { name: 'openlink-browser', groups: [] },
@@ -57,7 +49,10 @@ async function ensureLinuxIdentity(runner, name, stateRoot, groups) {
 }
 
 async function ensureLinuxIdentities(runner, stateRoot) {
-  await requireGroup(runner, 'kvm')
+  // Some container-only/minimal distributions do not pre-create this group.
+  // Creating it is harmless without /dev/kvm and keeps a later explicit move
+  // to VM mode possible without changing the Agent identity contract.
+  await ensureGroup(runner, 'kvm')
   await ensureGroup(runner, 'openlink-workspace')
   // Account databases use a global lock; serialize mutations so first install
   // is deterministic under shadow-utils rather than racing concurrent useradd.
@@ -126,6 +121,7 @@ export async function installNativeService(options = {}) {
   const backupRoot = resolve(options.backupRoot)
   const unitPath = resolve(options.unitPath ?? '/etc/systemd/system/openlink.service')
   const brokerUnitPath = resolve(options.brokerUnitPath ?? '/etc/systemd/system/openlink-container-broker.service')
+  const projectBrokerUnitPath = resolve(options.projectBrokerUnitPath ?? '/etc/systemd/system/openlink-project-container-broker.service')
   const expected = {
     releaseRoot: '/opt/openlink/current',
     configPath: '/etc/openlink/openlink.env',
@@ -134,16 +130,19 @@ export async function installNativeService(options = {}) {
     backupRoot: '/var/backups/openlink',
     unitPath: '/etc/systemd/system/openlink.service',
     brokerUnitPath: '/etc/systemd/system/openlink-container-broker.service',
+    projectBrokerUnitPath: '/etc/systemd/system/openlink-project-container-broker.service',
   }
   if (!options.allowCustomPaths) {
     for (const [name, value] of Object.entries(expected)) {
-      const actual = name === 'releaseRoot' ? resolve(options.installRoot, 'current') : { configPath, stateRoot, logRoot, backupRoot, unitPath, brokerUnitPath }[name]
+      const actual = name === 'releaseRoot' ? resolve(options.installRoot, 'current') : { configPath, stateRoot, logRoot, backupRoot, unitPath, brokerUnitPath, projectBrokerUnitPath }[name]
       if (actual !== value) throw new Error(`Linux production service requires ${name}=${value}`)
     }
   }
   for (const path of [configPath, secretsPath, backupKeyPath]) {
     if (!await exists(path) || !(await lstat(path)).isFile()) throw new Error(`Service configuration is missing: ${path}`)
   }
+  const configurationSource = await readFile(configPath, 'utf8')
+  const configuredForContainers = /^OPENLINK_PROJECT_RUNTIME=container$/m.test(configurationSource)
   const runner = options.execFile ?? execFile
   const identities = options.identities ?? (options.identity
     ? Object.fromEntries(Object.keys(LINUX_IDENTITIES).map((role) => [role, { ...options.identity, name: LINUX_IDENTITIES[role].name }]))
@@ -187,8 +186,10 @@ export async function installNativeService(options = {}) {
   await chown(workspaceRoot, identity.uid, workspaceGroup.gid)
   const unitSource = join(releaseRoot, 'systemd/openlink.service')
   const brokerUnitSource = join(releaseRoot, 'systemd/openlink-container-broker.service')
+  const projectBrokerUnitSource = join(releaseRoot, 'systemd/openlink-project-container-broker.service')
   const unit = await readFile(unitSource, 'utf8')
   const brokerUnit = await readFile(brokerUnitSource, 'utf8')
+  const projectBrokerUnit = await readFile(projectBrokerUnitSource, 'utf8')
   if (!/^ExecStart=\/opt\/openlink\/current\/bin\/openlinkctl run --config \/etc\/openlink\/openlink\.env$/m.test(unit)
     || !/^User=root$/m.test(unit) || !/^CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_SETPCAP CAP_NET_BIND_SERVICE$/m.test(unit)) {
     throw new Error('Release systemd unit does not match the production path contract')
@@ -197,8 +198,14 @@ export async function installNativeService(options = {}) {
     || !/^User=root$/m.test(brokerUnit) || !/^RestrictAddressFamilies=AF_UNIX$/m.test(brokerUnit)) {
     throw new Error('Release container broker unit does not match the privileged production contract')
   }
+  if (!/^ExecStart=\/opt\/openlink\/current\/runtime\/node\/bin\/node \/opt\/openlink\/current\/services\/agent-host\/dist\/src\/project-container-main\.js$/m.test(projectBrokerUnit)
+    || !/^User=root$/m.test(projectBrokerUnit) || !/^Group=openlink-agent$/m.test(projectBrokerUnit)
+    || !/^RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6$/m.test(projectBrokerUnit)) {
+    throw new Error('Release Project Container broker unit does not match the privileged production contract')
+  }
   const units = [
     { service: 'openlink-container-broker.service', source: brokerUnitSource, destination: brokerUnitPath },
+    { service: 'openlink-project-container-broker.service', source: projectBrokerUnitSource, destination: projectBrokerUnitPath },
     { service: 'openlink.service', source: unitSource, destination: unitPath },
   ]
   for (const item of units) {
@@ -209,14 +216,15 @@ export async function installNativeService(options = {}) {
   try {
     for (const item of units) await atomicInstallFile(item.source, item.destination, 0o644)
     await command(runner, 'systemctl', ['daemon-reload'])
-    await command(runner, 'systemctl', ['enable', '--now', 'openlink-container-broker.service', 'openlink.service'], { timeout: 660_000 })
-    for (const service of ['openlink-container-broker.service', 'openlink.service']) {
+    const enabledServices = ['openlink-container-broker.service', ...(configuredForContainers ? ['openlink-project-container-broker.service'] : []), 'openlink.service']
+    await command(runner, 'systemctl', ['enable', '--now', ...enabledServices], { timeout: 660_000 })
+    for (const service of enabledServices) {
       const state = (await command(runner, 'systemctl', ['is-active', service])).trim()
       if (state !== 'active') throw new Error(`${service} entered unexpected state: ${state || '<empty>'}`)
     }
   } catch (error) {
     const rollbackFailures = []
-    await command(runner, 'systemctl', ['disable', '--now', 'openlink.service', 'openlink-container-broker.service'], { timeout: 240_000 }).catch((failure) => rollbackFailures.push(failure))
+    await command(runner, 'systemctl', ['disable', '--now', 'openlink.service', 'openlink-project-container-broker.service', 'openlink-container-broker.service'], { timeout: 240_000 }).catch((failure) => rollbackFailures.push(failure))
     for (const item of units) await atomicRestoreFile(item.destination, item.snapshot).catch((failure) => rollbackFailures.push(failure))
     await command(runner, 'systemctl', ['daemon-reload']).catch((failure) => rollbackFailures.push(failure))
     for (const item of units) {
@@ -226,5 +234,5 @@ export async function installNativeService(options = {}) {
     if (rollbackFailures.length) throw new AggregateError([error, ...rollbackFailures], 'Native service installation failed and rollback was incomplete')
     throw error
   }
-  return { manager: 'systemd', service: 'openlink.service', brokerService: 'openlink-container-broker.service', unitPath, brokerUnitPath, identity: 'openlink', processIdentities: Object.values(identities).map((item) => item.name), active: true }
+  return { manager: 'systemd', service: 'openlink.service', brokerService: 'openlink-container-broker.service', ...(configuredForContainers ? { projectBrokerService: 'openlink-project-container-broker.service' } : {}), unitPath, brokerUnitPath, projectBrokerUnitPath, identity: 'openlink', processIdentities: Object.values(identities).map((item) => item.name), active: true }
 }

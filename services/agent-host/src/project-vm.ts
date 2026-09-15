@@ -43,7 +43,7 @@ export interface ProjectVmCommandResult {
   stderr: string
 }
 
-export type ProjectVmBackend = 'podman-machine' | 'qemu-kvm'
+export type ProjectVmBackend = 'podman-machine' | 'qemu-kvm' | 'docker-container'
 
 export interface ProjectVmPortForward {
   readonly localPort: number
@@ -1031,16 +1031,23 @@ export class PodmanMachineDriver implements ProjectVmMachineDriver {
     const existing = await readFile(statePath, 'utf8')
       .then((value) => JSON.parse(value) as DirectAppleHvState)
       .catch(() => undefined)
-    if (existing && processIsRunning(existing.vfkitPid) && processIsRunning(existing.gvproxyPid)) {
-      try {
-        await this.waitForAppleHvSsh(config, existing.vfkitPid)
-        return
-      } catch {
-        // A prior host crash may leave helpers alive while the guest is stuck
-        // before SSH. Tear down that exact process pair and perform a clean
-        // launch instead of treating PIDs alone as runtime readiness.
-        await this.stopDirectAppleHv(name)
+    if (existing) {
+      const vfkitRunning = processIsRunning(existing.vfkitPid)
+      const gvproxyRunning = processIsRunning(existing.gvproxyPid)
+      if (vfkitRunning && gvproxyRunning) {
+        try {
+          await this.waitForAppleHvSsh(config, existing.vfkitPid)
+          return
+        } catch {
+          // A prior host crash may leave helpers alive while the guest is stuck
+          // before SSH. Tear down that exact process pair and perform a clean
+          // launch instead of treating PIDs alone as runtime readiness.
+        }
       }
+      // Podman may stop vfkit while leaving the direct driver's gvproxy alive
+      // (or vice versa). Always reap the surviving half before unlinking and
+      // rebinding this Project VM's sockets.
+      await this.stopDirectAppleHv(name)
     }
 
     await Promise.all([

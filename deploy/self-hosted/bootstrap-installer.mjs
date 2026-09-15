@@ -10,6 +10,7 @@ import { canonicalJson, normalizeTarget, parseReleaseTrustPolicy } from './runti
 import { readEnvironmentFile, runPreflight } from './runtime/preflight.mjs'
 import { installNativeService } from './runtime/native-service.mjs'
 import { durableWriteFile } from './runtime/durable-fs.mjs'
+import { selectProjectRuntime, terminalProjectRuntimePrompt, terminalVirtualizationHelp } from './runtime/runtime-selection.mjs'
 
 function parseArguments(argv) {
   const values = new Map()
@@ -159,6 +160,22 @@ export async function runBootstrapInstaller(argv = process.argv.slice(2)) {
     const existing = await existingConfiguration(destination, appUrl)
     await installTrustPolicy(destination.trustPath, trust.document)
     const releaseRoot = installed.destination
+    const skipHostPreflight = values.get('skip-host-preflight') === '1'
+    const requestedRuntime = values.get('project-runtime') || 'auto'
+    const runtimeSelection = existing
+      ? undefined
+      : skipHostPreflight
+        ? { runtime: requestedRuntime === 'auto' ? 'vm' : requestedRuntime, action: 'preflight-skipped' }
+        : await selectProjectRuntime({
+            requestedRuntime,
+            platform: process.platform,
+            architecture: process.arch,
+            policy: values.get('on-virtualization-unavailable'),
+            acknowledgeIsolationDowngrade: values.get('acknowledge-isolation-downgrade') === '1',
+            interactive: Boolean(process.stdin.isTTY && process.stdout.isTTY),
+            prompt: terminalProjectRuntimePrompt,
+            showHelp: terminalVirtualizationHelp,
+          })
     const configuration = existing ?? await createProductionConfiguration({
       releaseRoot,
       configPath: destination.configPath,
@@ -170,10 +187,10 @@ export async function runBootstrapInstaller(argv = process.argv.slice(2)) {
       appUrl,
       gatewayUrl: values.get('gateway-url'),
       deploymentProfile: values.get('profile'),
-      projectRuntime: values.get('project-runtime'),
+      projectRuntime: runtimeSelection.runtime,
       allowInsecure: values.get('allow-insecure-http') === '1',
     })
-    if (values.get('skip-host-preflight') !== '1') {
+    if (!skipHostPreflight) {
       const config = await readEnvironmentFile(destination.configPath)
       const secrets = await readEnvironmentFile(destination.secretsPath, { secrets: true })
       await runPreflight({
@@ -195,7 +212,13 @@ export async function runBootstrapInstaller(argv = process.argv.slice(2)) {
       logRoot: destination.logRoot,
       backupRoot: destination.backupRoot,
     })
-    return { ok: true, installed, service, configuration: { ...configuration, secretsPath: '<protected>', backupKeyPath: '<protected>' } }
+    return {
+      ok: true,
+      installed,
+      service,
+      configuration: { ...configuration, secretsPath: '<protected>', backupKeyPath: '<protected>' },
+      ...(runtimeSelection ? { projectRuntime: runtimeSelection.runtime, runtimeSelection: runtimeSelection.action } : {}),
+    }
   } catch (error) {
     if (activatedFresh) {
       await rollbackFreshActivation(destination.installRoot, installed.releaseId).catch((rollbackError) => {

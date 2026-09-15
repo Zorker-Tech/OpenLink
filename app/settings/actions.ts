@@ -21,6 +21,7 @@ const preferencesSchema = z.object({
   theme: z.enum(['system', 'light', 'dark']),
   locale: z.enum(['zh-CN', 'en-US']),
   chatPosition: z.enum(['left', 'right']),
+  thinkingVisibility: z.enum(['summary', 'hidden']),
   customInstructions: z.string().max(12_000),
 })
 
@@ -92,6 +93,7 @@ export async function saveUserPreferencesAction(input: unknown) {
         theme: parsed.data.theme,
         locale: parsed.data.locale,
         chat_position: parsed.data.chatPosition,
+        thinking_visibility: parsed.data.thinkingVisibility,
         custom_instructions: parsed.data.customInstructions,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'user_id' })

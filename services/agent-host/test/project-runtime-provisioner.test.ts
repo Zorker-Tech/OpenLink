@@ -2,11 +2,58 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   ProjectRuntimeProvisioner,
+  normalizeProjectRuntimeProvisionerId,
   SupabaseProjectRuntimeProvisioningQueue,
   type ProjectRuntimeProvisioningQueue,
 } from '../src/project-runtime-provisioner.js'
 
 const projectId = '2c51ca26-3cd0-4cb4-896d-2061de06098c'
+
+test('queue errors preserve the constraint message but omit private failing-row details', async () => {
+  const queue = new SupabaseProjectRuntimeProvisioningQueue({
+    url: 'http://localhost:54380', serviceRoleKey: 'test-only',
+    fetch: async () => Response.json({ code: '23514', message: 'violates check constraint', details: 'private-lease-row' }, { status: 400 }),
+  })
+  await assert.rejects(queue.claim('agent-local', 10000), (error: Error) => {
+    assert.match(error.message, /23514 violates check constraint/)
+    assert.doesNotMatch(error.message, /private-lease-row/)
+    return true
+  })
+})
+
+test('preserves valid provisioner identities and deterministically repairs legacy base64url IDs', () => {
+  for (const valid of ['agent-local', 'host.name:1', 'A'.repeat(128)]) {
+    assert.equal(normalizeProjectRuntimeProvisionerId(valid), valid)
+  }
+  for (const invalid of ['-legacy_seed-local', '_seed', 'a'.repeat(129)]) {
+    const normalized = normalizeProjectRuntimeProvisionerId(invalid)
+    assert.match(normalized, /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/)
+    assert.equal(normalized, normalizeProjectRuntimeProvisionerId(invalid))
+  }
+  assert.notEqual(normalizeProjectRuntimeProvisionerId('_seed-local'), normalizeProjectRuntimeProvisionerId('_seed-ssh'))
+  assert.throws(() => normalizeProjectRuntimeProvisionerId(' '), /empty/)
+})
+
+test('legacy identity is repaired before the actual database claim request', async () => {
+  let claimedBy = ''
+  const queue = new SupabaseProjectRuntimeProvisioningQueue({
+    url: 'http://localhost:54380', serviceRoleKey: 'test-only',
+    fetch: async (_url, init) => {
+      if (init?.method === 'PATCH') {
+        claimedBy = JSON.parse(String(init.body)).provisioning_claimed_by
+        assert.match(claimedBy, /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/)
+        return Response.json([])
+      }
+      return Response.json([{ project_id: projectId, provisioning_attempts: 0, disk_mode: 'thin' }])
+    },
+  })
+  const provisioner = new ProjectRuntimeProvisioner({ queue, workerId: '-legacy_seed-local',
+    runtimeManager: { ensure: async () => { throw new Error('unclaimed runtime must not start') } },
+  })
+  assert.equal(await provisioner.runOnce(), false)
+  assert.equal(claimedBy, normalizeProjectRuntimeProvisionerId('-legacy_seed-local'))
+  await assert.rejects(queue.claim('-legacy_seed', 10000), /invalid/)
+})
 
 test('eagerly provisions a claimed Project and completes its lease', async () => {
   const calls: string[] = []
@@ -138,6 +185,7 @@ test('claims runtime rows with an atomic conditional PATCH', async () => {
   const candidateUrl = new URL(requests[0]?.url ?? '')
   assert.match(candidateUrl.searchParams.get('and') ?? '', /^\(or\(.+\),or\(.+\)\)$/)
   assert.doesNotMatch(candidateUrl.searchParams.get('and') ?? '', /^and\(/)
+  assert.match(candidateUrl.searchParams.get('and') ?? '', /provisioning_claimed_by\.eq\.agent-test/)
   assert.equal(requests[1]?.init.method, 'PATCH')
   assert.match(requests[1]?.url ?? '', /provisioning_lease_expires_at/)
   assert.equal((requests[1]?.init.headers as Record<string, string>).Authorization, 'Bearer server-secret')
@@ -145,4 +193,55 @@ test('claims runtime rows with an atomic conditional PATCH', async () => {
   const body = JSON.parse(String(requests[1]?.init.body)) as Record<string, unknown>
   assert.equal(body.status, 'provisioning')
   assert.equal(body.provisioning_claimed_by, 'agent-test')
+})
+
+test('rejects an unsafe provisioner identity before composing PostgREST filters', async () => {
+  let requested = false
+  const queue = new SupabaseProjectRuntimeProvisioningQueue({
+    url: 'https://backend.example.test',
+    serviceRoleKey: 'server-secret',
+    fetch: async () => {
+      requested = true
+      return Response.json([])
+    },
+  })
+
+  await assert.rejects(queue.claim('agent,or(status.eq.ready)', 60_000), /worker ID is invalid/)
+  assert.equal(requested, false)
+})
+
+test('completion clears its claim after runtime readiness changes the coarse status', async () => {
+  let request: { url: string; body: Record<string, unknown> } | undefined
+  const queue = new SupabaseProjectRuntimeProvisioningQueue({
+    url: 'https://backend.example.test',
+    serviceRoleKey: 'server-secret',
+    fetch: async (input, init = {}) => {
+      request = { url: String(input), body: JSON.parse(String(init.body)) as Record<string, unknown> }
+      return Response.json([])
+    },
+  })
+  await queue.complete(projectId, 'agent-test')
+  assert.match(request?.url ?? '', /provisioning_claimed_by=eq\.agent-test/)
+  assert.equal(request?.body.provisioning_claimed_by, null)
+  assert.equal(request?.body.provisioning_lease_expires_at, null)
+  assert.equal(request?.body.provisioning_phase, 'ready')
+  assert.equal(request?.body.status, 'ready')
+})
+
+test('terminal failure atomically clears the claim and overrides a stale ready projection', async () => {
+  let request: { url: string; body: Record<string, unknown> } | undefined
+  const queue = new SupabaseProjectRuntimeProvisioningQueue({
+    url: 'https://backend.example.test',
+    serviceRoleKey: 'server-secret',
+    fetch: async (input, init = {}) => {
+      request = { url: String(input), body: JSON.parse(String(init.body)) as Record<string, unknown> }
+      return Response.json([])
+    },
+  })
+  await queue.terminalFail(projectId, 'agent-test', 'VM health probe timed out')
+  assert.match(request?.url ?? '', /provisioning_claimed_by=eq\.agent-test/)
+  assert.equal(request?.body.status, 'error')
+  assert.equal(request?.body.provisioning_phase, 'failed')
+  assert.equal(request?.body.provisioning_claimed_by, null)
+  assert.equal(request?.body.last_error, 'VM health probe timed out')
 })

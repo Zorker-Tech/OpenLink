@@ -1,0 +1,6 @@
+export const ArtifactTitle = ({ className, ...props }: ArtifactTitleProps) => (
+  <p
+    className={cn("font-medium text-foreground text-sm", className)}
+    {...props}
+  />
+);

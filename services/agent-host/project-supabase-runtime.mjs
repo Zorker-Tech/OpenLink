@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { createHash, createHmac, generateKeyPairSync, randomBytes, randomUUID, sign } from 'node:crypto'
 import { execFileSync, spawn } from 'node:child_process'
+import { createReadStream } from 'node:fs'
 import { appendFile, chmod, cp, lstat, mkdir, open, readFile, readdir, rename, rm, stat, statfs, writeFile } from 'node:fs/promises'
 import { basename, dirname, resolve, sep } from 'node:path/posix'
 import { fileURLToPath } from 'node:url'
@@ -14,8 +15,12 @@ import {
 const IMMUTABLE_ROOT = '/usr/lib/openlink/project-supabase'
 const STATE_ROOT = '/var/lib/openlink/project-supabase'
 const RELEASE_TRUST = '/usr/lib/openlink/project-supabase/release-trust.json'
-const CONTAINER_PREFIX = 'openlink-project-supabase-'
-const NETWORK = 'openlink-project-supabase'
+const CONTAINER_ENGINE = process.env.OPENLINK_PROJECT_CONTAINER_ENGINE?.trim() || 'podman'
+if (!['podman', 'docker'].includes(CONTAINER_ENGINE)) throw new Error('Project Supabase runtime: unsupported container engine')
+const PROJECT_NAMESPACE = process.env.OPENLINK_PROJECT_CONTAINER_NAMESPACE?.trim() || ''
+if (PROJECT_NAMESPACE && !/^[a-f0-9]{8,32}$/.test(PROJECT_NAMESPACE)) throw new Error('Project Supabase runtime: invalid container namespace')
+const CONTAINER_PREFIX = PROJECT_NAMESPACE ? `openlink-project-${PROJECT_NAMESPACE}-supabase-` : 'openlink-project-supabase-'
+const NETWORK = PROJECT_NAMESPACE ? `openlink-project-${PROJECT_NAMESPACE}-supabase` : 'openlink-project-supabase'
 const SUPPORTED_SERVICE_FIELDS = new Set(['image', 'depends_on', 'entrypoint', 'environment', 'healthcheck', 'networks', 'ports', 'restart', 'volumes', 'command'])
 const RELEASE_NAME = /^self-hosted\/v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/
 
@@ -31,6 +36,12 @@ function normalizeImageId(value) {
 
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex')
+}
+
+async function sha256File(path) {
+  const hash = createHash('sha256')
+  for await (const chunk of createReadStream(path)) hash.update(chunk)
+  return hash.digest('hex')
 }
 
 function b64url(value) {
@@ -198,7 +209,7 @@ export function dependencyOrder(services) {
 
 function podman(args, options = {}) {
   try {
-    return execFileSync('podman', args, { encoding: 'utf8', stdio: options.capture ? ['ignore', 'pipe', 'pipe'] : ['ignore', 'pipe', 'pipe'], maxBuffer: 16 * 1024 * 1024 }).trim()
+    return execFileSync(CONTAINER_ENGINE, args, { encoding: 'utf8', stdio: options.capture ? ['ignore', 'pipe', 'pipe'] : ['ignore', 'pipe', 'pipe'], maxBuffer: 16 * 1024 * 1024 }).trim()
   } catch (error) {
     const status = typeof error?.status === 'number' ? error.status : 'unknown'
     // `podman create` argv contains project secrets. Never surface the child
@@ -474,7 +485,15 @@ async function verifySeed(lock, options) {
   for (const expected of lock.services) {
     const artifact = seed.imageArtifacts.find((candidate) => candidate.service === expected.name)
     if (!artifact || artifact.image !== expected.image || artifact.platformDigest !== expected.platforms[guestArchitecture()].digest) fail(`Project Supabase image attestation is missing image ${expected.name}`)
-    const observed = normalizeImageId(podman(['image', 'inspect', '--format', '{{.Id}}', expected.image], { capture: true }))
+    let observed
+    try { observed = normalizeImageId(podman(['image', 'inspect', '--format', '{{.Id}}', expected.image], { capture: true })) } catch {}
+    if (!golden && observed !== artifact.imageId) {
+      if (!/^[A-Za-z0-9._-]+$/.test(artifact.archive || '') || !/^[a-f0-9]{64}$/.test(artifact.archiveSha256 || '')) fail(`Project Supabase image archive metadata is invalid for ${expected.name}`)
+      const archive = resolve(options.immutableRoot, 'images', artifact.archive)
+      if (await sha256File(archive) !== artifact.archiveSha256) fail(`Project Supabase image archive checksum failed for ${expected.name}`)
+      podman(['load', '--input', archive])
+      observed = normalizeImageId(podman(['image', 'inspect', '--format', '{{.Id}}', expected.image], { capture: true }))
+    }
     if (observed !== artifact.imageId) fail(`Project Supabase image id mismatch for ${expected.name}`)
   }
 }
@@ -785,6 +804,11 @@ function inspectContainer(name) {
   try { return JSON.parse(podman(['container', 'inspect', name], { capture: true }))[0] } catch { return undefined }
 }
 
+export function containerUsesImage(container, desiredImageId) {
+  if (!container || typeof container.Image !== 'string') return false
+  try { return normalizeImageId(container.Image) === normalizeImageId(desiredImageId) } catch { return false }
+}
+
 async function waitReady(name, service, secrets, timeoutMs = 180_000) {
   const deadline = Date.now() + timeoutMs
   let last = ''
@@ -831,7 +855,12 @@ async function ensureRuntime(options) {
     const service = spec.compose.services[name]
     const existing = inspectContainer(containerName(name))
     const labels = existing?.Config?.Labels ?? {}
-    if (existing && (labels['io.openlink.project-supabase.config'] !== desiredHash || labels['io.openlink.project-supabase.revision'] !== lock.release.tag || existing.ImageName !== service.image)) {
+    // Podman canonicalizes a short image name such as `supabase/postgres` to
+    // `docker.io/supabase/postgres` in ImageName. Comparing those strings
+    // therefore rebuilt the entire Project Supabase stack on every VM boot.
+    // The locally attested immutable image ID is the real identity contract.
+    const desiredImageId = podman(['image', 'inspect', '--format', '{{.Id}}', service.image], { capture: true })
+    if (existing && (labels['io.openlink.project-supabase.config'] !== desiredHash || labels['io.openlink.project-supabase.revision'] !== lock.release.tag || !containerUsesImage(existing, desiredImageId))) {
       podman(['rm', '--force', containerName(name)])
     }
     if (!inspectContainer(containerName(name))) {
@@ -907,7 +936,7 @@ async function createUpgradeBackup(options, currentState) {
   const root = resolve(options.stateRoot, 'backups', identity)
   await mkdir(root, { recursive: true, mode: 0o700 })
   await atomicJson(resolve(root, 'metadata.json'), { schemaVersion: 1, identity, projectId: options.projectId, revision: currentState.observedRevision, runtimeRoot: currentState.runtimeRoot, createdAt: new Date().toISOString(), status: 'creating' })
-  await runToFile('podman', ['exec', containerName('db'), 'pg_dumpall', '--username', 'postgres'], resolve(root, 'postgres.sql'))
+  await runToFile(CONTAINER_ENGINE, ['exec', containerName('db'), 'pg_dumpall', '--username', 'postgres'], resolve(root, 'postgres.sql'))
   await stopRuntime(options)
   for (const name of ['postgres', 'storage', 'snippets']) await snapshotTree(resolve(options.stateRoot, 'data', name), resolve(root, 'data', name))
   await snapshotTree(resolve(options.workspace, 'supabase/functions'), resolve(root, 'functions'))

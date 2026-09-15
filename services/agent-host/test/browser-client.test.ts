@@ -15,13 +15,19 @@ test('browser client creates a scoped session and performs agent actions', async
           controlOwner: null, pages: [], viewport: { width: 1280, height: 800, deviceScaleFactor: 1 },
           capabilities: { nativeDom: false, screencast: true, componentInspection: true, downloads: true, uploads: true, dialogs: true, devtools: true },
         },
-        connection: { eventsUrl: 'ws://127.0.0.1:43120/v1/browser/sessions/browser-1/events?token=test', controlToken: 'scoped-control-token' },
+        connection: {
+          eventsUrl: 'ws://127.0.0.1:52002/v1/browser/sessions/browser-1/events?token=test',
+          previewUrl: 'http://127.0.0.1:52002/v1/browser/sessions/browser-1/preview/?token=test',
+          controlToken: 'scoped-control-token',
+        },
       }, { status: 201 })
     }
     return Response.json({ result: { version: 1, actionId: 'action-1', sessionId: 'browser-1', ok: true, snapshot: '{}' } })
   }
-  const client = new BrowserHostClient({ baseUrl: 'http://127.0.0.1:43120', serviceToken: 'service-token', fetch: fetchMock })
+  const client = new BrowserHostClient({ baseUrl: 'http://127.0.0.1:54322', serviceToken: 'service-token', fetch: fetchMock })
   const session = await client.createChromiumSession({ ownerId: 'user-1', workspaceId: 'workspace-1', projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c' })
+  assert.equal(session.connection.eventsUrl, 'ws://127.0.0.1:54322/v1/browser/sessions/browser-1/events?token=test')
+  assert.equal(session.connection.previewUrl, 'http://127.0.0.1:54322/v1/browser/sessions/browser-1/preview/?token=test')
   const result = await client.perform(session, { type: 'page.open', url: 'https://example.com' })
   assert.equal(result.ok, true)
   assert.equal((requests[0].init?.headers as Record<string, string>).Authorization, 'Bearer service-token')

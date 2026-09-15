@@ -40,10 +40,12 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { shouldSubmitPromptOnEnter } from "@/lib/prompt-keyboard";
 import type { ChatStatus, FileUIPart, SourceDocumentUIPart } from "ai";
 import {
   CornerDownLeftIcon,
   ImageIcon,
+  FolderUp,
   Monitor,
   PlusIcon,
   SquareIcon,
@@ -179,13 +181,22 @@ const captureScreenshot = async (): Promise<File | null> => {
 // ============================================================================
 
 export interface AttachmentsContext {
-  files: (FileUIPart & { id: string })[];
+  files: PromptInputAttachmentFile[];
   add: (files: File[] | FileList) => void;
   remove: (id: string) => void;
   clear: () => void;
   openFileDialog: () => void;
   fileInputRef: RefObject<HTMLInputElement | null>;
 }
+
+export type PromptInputAttachmentFile = FileUIPart & {
+  id: string;
+  uploadId: string;
+  batchId: string;
+  relativePath?: string;
+};
+
+export type PromptInputSubmissionFile = Omit<PromptInputAttachmentFile, "id">;
 
 export interface TextInputContext {
   value: string;
@@ -255,7 +266,7 @@ export const PromptInputProvider = ({
 
   // ----- attachments state (global when wrapped)
   const [attachmentFiles, setAttachmentFiles] = useState<
-    (FileUIPart & { id: string })[]
+    PromptInputAttachmentFile[]
   >([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   // oxlint-disable-next-line eslint(no-empty-function)
@@ -267,13 +278,17 @@ export const PromptInputProvider = ({
       return;
     }
 
+    const batchId = crypto.randomUUID();
     setAttachmentFiles((prev) => [
       ...prev,
       ...incoming.map((file) => ({
+        batchId,
         filename: file.name,
         id: nanoid(),
         mediaType: file.type,
+        relativePath: file.webkitRelativePath || undefined,
         type: "file" as const,
+        uploadId: crypto.randomUUID(),
         url: URL.createObjectURL(file),
       })),
     ]);
@@ -421,22 +436,55 @@ export const PromptInputActionAddAttachments = ({
 }: PromptInputActionAddAttachmentsProps) => {
   const attachments = usePromptInputAttachments();
 
-  const handleSelect = useCallback(
-    (e: Event) => {
-      e.preventDefault();
-      attachments.openFileDialog();
-    },
-    [attachments]
-  );
+  const handleClick = useCallback(() => {
+    attachments.openFileDialog();
+  }, [attachments]);
 
   return (
-    <DropdownMenuItem {...props} onSelect={handleSelect}>
+    <DropdownMenuItem {...props} onClick={handleClick}>
       {children ?? (
         <>
           <ImageIcon className="mr-2 size-4" /> {label}
         </>
       )}
     </DropdownMenuItem>
+  );
+};
+
+export type PromptInputActionAddFolderProps = ComponentProps<
+  typeof DropdownMenuItem
+> & {
+  label?: string;
+};
+
+export const PromptInputActionAddFolder = ({
+  children,
+  label = "Upload folder",
+  ...props
+}: PromptInputActionAddFolderProps) => {
+  const attachments = usePromptInputAttachments();
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  return (
+    <>
+      <input
+        aria-label={label}
+        className="hidden"
+        multiple
+        onChange={(event) => {
+          if (event.currentTarget.files?.length) attachments.add(event.currentTarget.files);
+          event.currentTarget.value = "";
+        }}
+        ref={inputRef}
+        type="file"
+        {...({ webkitdirectory: "", directory: "" } as Record<string, string>)}
+      />
+      <DropdownMenuItem
+        {...props}
+        onClick={() => inputRef.current?.click()}
+      >
+        {children ?? <><FolderUp className="mr-2 size-4" /> {label}</>}
+      </DropdownMenuItem>
+    </>
   );
 };
 
@@ -488,7 +536,7 @@ export const PromptInputActionAddScreenshot = ({
 
 export interface PromptInputMessage {
   text: string;
-  files: FileUIPart[];
+  files: PromptInputSubmissionFile[];
 }
 
 export type PromptInputProps = Omit<
@@ -538,7 +586,7 @@ export const PromptInput = ({
   const formRef = useRef<HTMLFormElement | null>(null);
 
   // ----- Local attachments (only used when no provider)
-  const [items, setItems] = useState<(FileUIPart & { id: string })[]>([]);
+  const [items, setItems] = useState<PromptInputAttachmentFile[]>([]);
   const files = usingProvider ? controller.attachments.files : items;
 
   // ----- Local referenced sources (always local to PromptInput)
@@ -615,13 +663,17 @@ export const PromptInput = ({
             message: "Too many files. Some were not added.",
           });
         }
-        const next: (FileUIPart & { id: string })[] = [];
+        const next: PromptInputAttachmentFile[] = [];
+        const batchId = crypto.randomUUID();
         for (const file of capped) {
           next.push({
+            batchId,
             filename: file.name,
             id: nanoid(),
             mediaType: file.type,
+            relativePath: file.webkitRelativePath || undefined,
             type: "file",
+            uploadId: crypto.randomUUID(),
             url: URL.createObjectURL(file),
           });
         }
@@ -866,7 +918,7 @@ export const PromptInput = ({
 
       try {
         // Convert blob URLs to data URLs asynchronously
-        const convertedFiles: FileUIPart[] = await Promise.all(
+        const convertedFiles: PromptInputSubmissionFile[] = await Promise.all(
           files.map(async ({ id: _id, ...item }) => {
             if (item.url?.startsWith("blob:")) {
               const dataUrl = await convertBlobUrlToDataUrl(item.url);
@@ -961,6 +1013,7 @@ export type PromptInputTextareaProps = ComponentProps<
 export const PromptInputTextarea = ({
   onChange,
   onKeyDown,
+  onPaste,
   className,
   placeholder = "What would you like to know?",
   ...props
@@ -979,13 +1032,12 @@ export const PromptInputTextarea = ({
         return;
       }
 
-      if (e.key === "Enter") {
-        if (isComposing || e.nativeEvent.isComposing) {
-          return;
-        }
-        if (e.shiftKey) {
-          return;
-        }
+      if (shouldSubmitPromptOnEnter({
+        key: e.key,
+        keyCode: e.keyCode,
+        shiftKey: e.shiftKey,
+        isComposing: isComposing || e.nativeEvent.isComposing,
+      })) {
         e.preventDefault();
 
         // Check if the submit button is disabled before submitting
@@ -1018,6 +1070,10 @@ export const PromptInputTextarea = ({
 
   const handlePaste: ClipboardEventHandler<HTMLTextAreaElement> = useCallback(
     (event) => {
+      onPaste?.(event);
+      if (event.defaultPrevented) {
+        return;
+      }
       const items = event.clipboardData?.items;
 
       if (!items) {
@@ -1040,7 +1096,7 @@ export const PromptInputTextarea = ({
         attachments.add(files);
       }
     },
-    [attachments]
+    [attachments, onPaste]
   );
 
   const handleCompositionEnd = useCallback(() => setIsComposing(false), []);

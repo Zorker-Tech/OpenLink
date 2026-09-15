@@ -27,6 +27,9 @@ function requiredPayloadPaths(target) {
     'runtime/node/bin/node',
     'app/web/server.js',
     'services/agent-host/dist/src/main.js',
+    'services/agent-host/dist/src/project-container-main.js',
+    'services/agent-host/project-supabase-runtime.mjs',
+    'scripts/lib/project-supabase-bundle.mjs',
     'services/browser-host/dist/src/main.js',
     'services/knowledge-service/dist/src/main.js',
     'services/agent-host/dist/src/desktop-main.js',
@@ -42,11 +45,17 @@ function requiredPayloadPaths(target) {
     'edge/Caddyfile',
     'browser/manifest.json',
     'project-vm/manifest.json',
+    'project-supabase/manifest.json',
+    'project-supabase/runtime.lock.json',
+    'project-supabase/runtime.spec.json',
+    'project-supabase/image-manifest.json',
+    'project-supabase/release-trust.json',
     disk,
     'openlinkctl.mjs',
     'bin/openlinkctl',
     'systemd/openlink.service',
     'systemd/openlink-container-broker.service',
+    'systemd/openlink-project-container-broker.service',
   ]
 }
 
@@ -179,6 +188,8 @@ export async function stageNativeSelfHostedPayload(options = {}) {
     })
     await copyRequired(join(source, 'package.json'), join(destination, 'package.json'))
   }
+  await copyRequired(join(sourceRoot, 'services/agent-host/project-supabase-runtime.mjs'), join(outputRoot, 'services/agent-host/project-supabase-runtime.mjs'))
+  await copyRequired(join(sourceRoot, 'scripts/lib/project-supabase-bundle.mjs'), join(outputRoot, 'scripts/lib/project-supabase-bundle.mjs'))
 
   await copyRequired(join(sourceRoot, 'deploy/self-hosted'), outputRoot)
   await copyRequired(join(sourceRoot, 'backend/docker'), join(outputRoot, 'orchestration/backend/docker'), {
@@ -193,6 +204,17 @@ export async function stageNativeSelfHostedPayload(options = {}) {
   await copyImageSet(join(runtimeRoot, 'images'), join(outputRoot, 'images/runtime'), 'runtime', target)
   await copyImageSet(join(runtimeRoot, 'zokerbase/images'), join(outputRoot, 'images/zokerbase'), 'zokerbase', target)
   await copyImageSet(join(runtimeRoot, 'knowledge/images'), join(outputRoot, 'images/zero'), 'zero', target)
+  const projectSupabaseRoot = join(runtimeRoot, 'project-supabase')
+  const projectSupabaseImages = join(projectSupabaseRoot, 'images', target.architecture)
+  await copyRequired(join(projectSupabaseRoot, 'manifest.json'), join(outputRoot, 'project-supabase/manifest.json'))
+  await copyRequired(join(projectSupabaseRoot, 'runtime.spec.json'), join(outputRoot, 'project-supabase/runtime.spec.json'))
+  await copyRequired(join(projectSupabaseRoot, 'configuration'), join(outputRoot, 'project-supabase/configuration'))
+  await copyRequired(join(sourceRoot, 'services/project-supabase/runtime.lock.json'), join(outputRoot, 'project-supabase/runtime.lock.json'))
+  await copyRequired(join(projectSupabaseImages, 'manifest.json'), join(outputRoot, 'project-supabase/image-manifest.json'))
+  await copyRequired(projectSupabaseImages, join(outputRoot, 'project-supabase/images'), {
+    filter: (path) => path !== join(projectSupabaseImages, 'manifest.json'),
+  })
+  await copyRequired(join(sourceRoot, 'services/project-supabase/release-trust.json'), join(outputRoot, 'project-supabase/release-trust.json'))
 
   const browserRoot = resolve(options.browserRoot ?? join(runtimeRoot, 'browser', target.triple))
   const browserManifest = JSON.parse(await readFile(join(browserRoot, 'manifest.json'), 'utf8'))

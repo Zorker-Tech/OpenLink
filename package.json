@@ -40,9 +40,16 @@
     "release:build:self-hosted-installer": "node scripts/build-self-hosted-installer.mjs",
     "release:test:self-hosted": "node --test --test-concurrency=1 scripts/test/self-hosted-release.test.mjs scripts/test/openlinkctl.test.mjs scripts/test/build-self-hosted-release.test.mjs scripts/test/self-hosted-deployment-profile.test.mjs scripts/test/self-hosted-virtualization.test.mjs scripts/test/self-hosted-runtime-selection.test.mjs scripts/test/self-hosted-preflight.test.mjs scripts/test/self-hosted-configuration.test.mjs scripts/test/self-hosted-runtime.test.mjs scripts/test/self-hosted-container-broker.test.mjs scripts/test/self-hosted-backup.test.mjs scripts/test/self-hosted-upgrade.test.mjs scripts/test/self-hosted-service-definitions.test.mjs scripts/test/self-hosted-installer-sea.test.mjs scripts/test/self-hosted-linux-identity-integration.test.mjs",
     "knowledge:check": "npm --prefix services/knowledge-service run check",
-    "knowledge:test": "npm --prefix services/knowledge-service test"
+    "knowledge:test": "npm --prefix services/knowledge-service test",
+    "platform-sdk:verify": "node scripts/verify-platform-sdk-install.mjs",
+    "storybook:inventory": "node scripts/generate-storybook-inventory.mjs",
+    "storybook": "pnpm storybook:inventory && storybook dev -p 6006 --no-open",
+    "storybook:build": "pnpm storybook:inventory && storybook build",
+    "storybook:test": "pnpm storybook:inventory && vitest run --project=storybook",
+    "build-storybook": "pnpm storybook:inventory && storybook build"
   },
   "dependencies": {
+    "@vtslx/platform-sdk": "0.2.0",
     "@ai-sdk/react": "^4.0.54",
     "@base-ui/react": "^1.5.0",
     "@hugeicons/core-free-icons": "^4.3.0",
@@ -64,6 +71,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "embla-carousel-react": "^8.6.0",
+    "gsap": "^3.15.0",
     "lucide-react": "^1.16.0",
     "media-chrome": "^4.19.2",
     "monaco-editor": "^0.52.2",
@@ -85,14 +93,26 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "jsdom": "28.1.0",
+    "@chromatic-com/storybook": "latest",
+    "@storybook/addon-a11y": "^10.6.0",
+    "@storybook/addon-docs": "^10.6.0",
+    "@storybook/addon-vitest": "^10.6.0",
+    "@storybook/nextjs-vite": "^10.6.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^24",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
+    "@vitest/browser-playwright": "latest",
+    "@vitest/coverage-v8": "latest",
     "esbuild": "0.28.2",
+    "playwright": "latest",
     "postcss": "^8.5",
     "shadcn": "^4.8.0",
+    "storybook": "^10.6.0",
     "tailwindcss": "^4.3.3",
-    "typescript": "5.7.3"
+    "typescript": "5.7.3",
+    "vite": "latest",
+    "vitest": "latest"
   }
 }
