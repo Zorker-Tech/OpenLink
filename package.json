@@ -1,0 +1,17 @@
+{
+  "name": "@slate/work-host",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The Work platform: persistent agents, transcripts, runs, automation, workflow, rooms, channels and boxes. Ships with the desktop app; independent of the Code agent.",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@slate/work-protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.5.1",
+    "typescript": "catalog:"
+  }
+}
