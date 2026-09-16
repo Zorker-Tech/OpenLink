@@ -1,6 +1,10 @@
 # @slate/work-host
 
-The **Work platform**: persistent agents and everything they do — transcripts, runs, automations,
+> **Status: designed and frozen, not started.** This package holds architecture, layering and a
+> route contract only — there is no implementation. Do not change code under `apps/work-host` or
+> `packages/work-protocol` until work on Slate Assistant begins; change the documents first.
+
+The **Work platform** — **Slate Assistant** (also `slate-work` / `slate-bot`): persistent agents and everything they do — transcripts, runs, automations,
 workflows, groups, rooms, channels, boxes and cloud agents.
 
 It ships with the desktop app. That is deliberate: Work mode *is* the desktop product's main body,
