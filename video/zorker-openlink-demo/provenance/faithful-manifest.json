@@ -1,5 +1,5 @@
 {
-  "baseCommit": "25214c809079b54cd8c61dae79fa14f080c90a8b",
+  "baseCommit": "77c3badd65dd0e148dfbeb19edf9edea8cdf990e",
   "workingTree": "Source contains existing user modifications; hashes are authoritative.",
   "records": [
     {
@@ -10,10 +10,38 @@
       "method": "TypeScript transpilation, local imports rebased; no presentation edits"
     },
     {
+      "source": "lib/agent-runtime/stream-integrity.ts",
+      "sourceSha256": "f94410567267ac0c36d89d8f06ffab84a4f94be75dd9968d449459bf40d34672",
+      "output": "src/source-snapshot/lib/agent-runtime/stream-integrity.js",
+      "outputSha256": "226532323d2ac8e43ce8b0aec00192ccbf8d4ce76e486f709699a86a59c86054",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
       "source": "lib/agent-runtime/error-groups.ts",
-      "sourceSha256": "e593a1514cc3aac2d67d4bb9686f3d88128cef82fb978ba53be89c9c90c9388b",
+      "sourceSha256": "93792896d23037ab1e6189c79356b89e90dbf8dc910c69b52a0c741be4b28ca7",
       "output": "src/source-snapshot/lib/agent-runtime/error-groups.js",
-      "outputSha256": "5e8a9289e1f407c1ab5e21ab9079a5a03a4e5936c26dc7bdb8a1b925394d7c32",
+      "outputSha256": "344fb17548a3222cdf43d54ca5cb910468a19e24fb0e3b8baa8c17fc55045328",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "lib/i18n/locales.ts",
+      "sourceSha256": "ddbf5766235e4fb0f5f8206ba047c1f99cb86f453ea4d22951211a347f64f589",
+      "output": "src/source-snapshot/lib/i18n/locales.js",
+      "outputSha256": "aca88b78bdd884b2e7f825889bc2e4c31a848347f7a7e37cb138c208710549cc",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "lib/i18n/messages.ts",
+      "sourceSha256": "a2519ed238cbea0ea5cfffa4fd0ed34f4553c224cd33b462a8b7f2303d37218d",
+      "output": "src/source-snapshot/lib/i18n/messages.js",
+      "outputSha256": "db63d343edcc96159746ac2060ea78405c62d09d901702e656eb77bcccf2f6ad",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "lib/i18n/client.tsx",
+      "sourceSha256": "abc784a2f5eaf5e3dcba270e9d4e84fa2fc435d769a42d440169496df2776e9d",
+      "output": "src/source-snapshot/lib/i18n/client.js",
+      "outputSha256": "9c9321a220128e00425658157275ea82e6354459c92b80218d69154b278b4917",
       "method": "TypeScript transpilation, local imports rebased; no presentation edits"
     },
     {
@@ -46,9 +74,9 @@
     },
     {
       "source": "components/ui/theme-scope.tsx",
-      "sourceSha256": "72215a0332a81a06b3919ae4ec138de38aec3f11c7435e1d2574523e058f93b3",
+      "sourceSha256": "51957a9ec163cdb136a7416d75c88cba9de71f8795470d033f4464c699b0311a",
       "output": "src/source-snapshot/components/ui/theme-scope.js",
-      "outputSha256": "2f85e2887ae4d3c5790977d8fed2294c2c4a0e76077ce9c0637873ece2724657",
+      "outputSha256": "2c4eb851c9358accbae678d5990edd24cfc200d31ff8d2642d1bd18e98c351f6",
       "method": "TypeScript transpilation, local imports rebased; no presentation edits"
     },
     {
@@ -67,9 +95,9 @@
     },
     {
       "source": "components/ui/collapsible.tsx",
-      "sourceSha256": "ead4349ff7b01d696ef89294a81d18ee1d3f732321398896462c834ab9b9e065",
+      "sourceSha256": "1b2b15d5aa14cfe7575f2aa0f753772e869f4853093943892b116119536ff1d3",
       "output": "src/source-snapshot/components/ui/collapsible.js",
-      "outputSha256": "3d00cc79a3fcc4c8397d1957789e6ca936173e1df5dd4bb374ce2bc10b3e18ee",
+      "outputSha256": "68342dab0e292301af651a17ea7bf2ec8e99303f630c5d6f666989e8dd78e928",
       "method": "TypeScript transpilation, local imports rebased; no presentation edits"
     },
     {
@@ -81,9 +109,9 @@
     },
     {
       "source": "components/ai-elements/reasoning.tsx",
-      "sourceSha256": "efe4d92ee54441133bcb2d45cb327551719bcfd95ffd13e840adb98eaa0e8b8a",
+      "sourceSha256": "789fe77475cf778024dba6c453b912b4f61bf18108104b9e80500a010f659f6e",
       "output": "src/source-snapshot/components/ai-elements/reasoning.js",
-      "outputSha256": "b494e671f2237449d0fb1a339b65cbc52f027e97b7365499a0e2dbc8f50c3c62",
+      "outputSha256": "1e5e2877a2e875b62e381fa82d6ae0994f6079419e1a969e1ffec9415274da13",
       "method": "TypeScript transpilation, local imports rebased; no presentation edits"
     },
     {
@@ -95,9 +123,9 @@
     },
     {
       "source": "components/chat-code-preview.tsx",
-      "sourceSha256": "9939bbb5a2f396b2cb469d4ff8125afbec178307c58b77dfc886cabd71bf8f22",
+      "sourceSha256": "181380b92aa86000d54169ceb6149b12fc7597f8efb1ca16dfe910852d42acb1",
       "output": "src/source-snapshot/components/chat-code-preview.js",
-      "outputSha256": "61a36de70b67d8e3fcdb36a1f8686e46c966a6769a8a163b62feaa8faa0086fc",
+      "outputSha256": "56830a94b36405ce002a4603a7ad4c17935481fb353dd2954f94a17230272497",
       "method": "TypeScript transpilation, local imports rebased; no presentation edits"
     },
     {
@@ -109,9 +137,9 @@
     },
     {
       "source": "components/chat-timeline.tsx",
-      "sourceSha256": "1f9dbea6dcfd0100e965a3c8c82f87fe5ab5bbeb34ed503b91969f30b2fcdce1",
+      "sourceSha256": "38fdda3d58e82f9ae2a529faef918a3efb7ab766dd0961df72a2247246e0c3f6",
       "output": "src/source-snapshot/components/chat-timeline.js",
-      "outputSha256": "7a63f6662e78343e25616b2b3c7065efc8b9c4ca15bbd4fefa0e74170e841269",
+      "outputSha256": "1c06078345bb9cfc300ac063362b956e9e6e7fd45fa8be19d4297ae23658e83c",
       "method": "source presentation with explicit frame adaptation"
     },
     {
@@ -171,31 +199,45 @@
       "method": "TypeScript transpilation, local imports rebased; no presentation edits"
     },
     {
+      "source": "lib/prompt-keyboard.ts",
+      "sourceSha256": "19118bbae1081793167145cbce718806a6167c1a82ceb1e94b1d8d6796bc06ae",
+      "output": "src/source-snapshot/lib/prompt-keyboard.js",
+      "outputSha256": "4b6e91346af697bd4e297a2e6cb89d3f45193bb4f4992f70358a9f3cf767436a",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
       "source": "components/ai-elements/prompt-input.tsx",
-      "sourceSha256": "9476d77ff208db78f70ac9724240fa79ccee4c7ba3e71b629267c3ea57a8a1f2",
+      "sourceSha256": "5225b540daf66628337f72f6c2b82799f2af97258f2e7929edd17494735f465e",
       "output": "src/source-snapshot/components/ai-elements/prompt-input.js",
-      "outputSha256": "a3994048319c7ffc482cae444db14c81049b97657d5f9b2f3f8d7997c02ce13d",
+      "outputSha256": "87fbe33beabc0e8292ac20de8a10b61b9b45d39149b41471181df92352d67785",
       "method": "TypeScript transpilation, local imports rebased; no presentation edits"
     },
     {
       "source": "lib/prompt-input-protocol.ts",
-      "sourceSha256": "f459b22fcf0a08dbf8c7a5c223f42aaa054d0871e5774d489551ec8c5c5bcad4",
+      "sourceSha256": "0aac2688b504d4dea63f3f21f20f3e7b1c8ed279010fa40eb8d7bcb2d7e2b9cc",
       "output": "src/source-snapshot/lib/prompt-input-protocol.js",
-      "outputSha256": "9908519f34266752290f21e20e0bf9eab32d4bb4e133e16abb9d213b4c5e0306",
+      "outputSha256": "f4475623435e89b745b228feec51d1ae9414f4ace2fa86efa8cc58f21030c624",
+      "method": "TypeScript transpilation, local imports rebased; no presentation edits"
+    },
+    {
+      "source": "lib/prompt-suggestion-navigation.ts",
+      "sourceSha256": "106adf6243d1fcc761595c6e1c7f3563db60576b4af7c72a83f505564fd8fa1a",
+      "output": "src/source-snapshot/lib/prompt-suggestion-navigation.js",
+      "outputSha256": "05206fb799958bccda4ad28e66094d1fe013ed192304c415ba927c6ad9208967",
       "method": "TypeScript transpilation, local imports rebased; no presentation edits"
     },
     {
       "source": "components/agent-prompt-textarea.tsx",
-      "sourceSha256": "24f35fd00c2fbbdc0cdb85ce128a37fedf591e03a5fcc2c695ea329e463a8c34",
+      "sourceSha256": "db4791457877d492f0887d8fc1bf54641afb0a2fc944b6bc754a5e1ceb439c9f",
       "output": "src/source-snapshot/components/agent-prompt-textarea.js",
-      "outputSha256": "ce3223ba48c30176e998b46bd1d6121128f0f829151c93b193ed3f2a218f058a",
+      "outputSha256": "a6f1f0fc7d6fa79c8b688a55a8b71cbcf94d0a2fa5c57390bf23df4f6337b5db",
       "method": "TypeScript transpilation, local imports rebased; no presentation edits"
     },
     {
       "source": "components/prompt-add-menu.tsx",
-      "sourceSha256": "e6019a902e61899792a736b343bebc737d5c53179199b272322d8ca814362564",
+      "sourceSha256": "e8550b7b6d7870a102317519365e5ae4ea92795f9c6fd08e8306f63334334abe",
       "output": "src/source-snapshot/components/prompt-add-menu.js",
-      "outputSha256": "7df2991ccce6fa3ac2f0916cf6968715f881398cb3340251db0ed9a0a5f408e4",
+      "outputSha256": "2ad070afaf49ceb23b656c0184e51dd9167f6b872dc4b4abfa6bac5a14b6da7a",
       "method": "TypeScript transpilation, local imports rebased; no presentation edits"
     },
     {
@@ -207,9 +249,9 @@
     },
     {
       "source": "components/chat-workspace.tsx:ChatComposer + ComposerSubmitButton",
-      "sourceSha256": "3425289c2c6e753f742861a3557cca52217b18050098544ab8d701e7403d66fe",
+      "sourceSha256": "c00c85d83c458cdeccba4b61c963a911d8e489bb787670b1ed764a2e8815b384",
       "output": "src/source-snapshot/components/film-session-composer.js",
-      "outputSha256": "7577d61b50f3603d794a6fc1a39fd8e1bfe115278f370f0b7b51483ddc69a702",
+      "outputSha256": "b2a6be8a12ba528a289a1df82a7c41d700bf18e870b7b566eebcefa4f9db72af",
       "method": "source presentation with explicit frame adaptation"
     },
     {
@@ -312,9 +354,9 @@
     },
     {
       "source": "components/chat-timeline.tsx",
-      "sourceSha256": "1f9dbea6dcfd0100e965a3c8c82f87fe5ab5bbeb34ed503b91969f30b2fcdce1",
+      "sourceSha256": "38fdda3d58e82f9ae2a529faef918a3efb7ab766dd0961df72a2247246e0c3f6",
       "output": "src/source-snapshot/components/film-reference-timeline.js",
-      "outputSha256": "cfc0215a1e843c47af015f92937991c88c49b1c53228ea57d1fd6cd98403cd40",
+      "outputSha256": "818445df9fc26c7c81646d54576b365345d007ba9dedabb6857db78a972a2192",
       "method": "TypeScript transpilation, local imports rebased; no presentation edits"
     },
     {

@@ -233,11 +233,10 @@ export const usePromptInputReferencedSources = () => {
 };
 export const PromptInputActionAddAttachments = ({ children, label = "Add photos or files", ...props }) => {
     const attachments = usePromptInputAttachments();
-    const handleSelect = useCallback((e) => {
-        e.preventDefault();
+    const handleClick = useCallback(() => {
         attachments.openFileDialog();
     }, [attachments]);
-    return (_jsx(DropdownMenuItem, { ...props, onSelect: handleSelect, children: children ?? (_jsxs(_Fragment, { children: [_jsx(ImageIcon, { className: "mr-2 size-4" }), " ", label] })) }));
+    return (_jsx(DropdownMenuItem, { ...props, onClick: handleClick, children: children ?? (_jsxs(_Fragment, { children: [_jsx(ImageIcon, { className: "mr-2 size-4" }), " ", label] })) }));
 };
 export const PromptInputActionAddFolder = ({ children, label = "Upload folder", ...props }) => {
     const attachments = usePromptInputAttachments();
@@ -246,10 +245,7 @@ export const PromptInputActionAddFolder = ({ children, label = "Upload folder", 
                     if (event.currentTarget.files?.length)
                         attachments.add(event.currentTarget.files);
                     event.currentTarget.value = "";
-                }, ref: inputRef, type: "file", ...{ webkitdirectory: "", directory: "" } }), _jsx(DropdownMenuItem, { ...props, onSelect: (event) => {
-                    event.preventDefault();
-                    inputRef.current?.click();
-                }, children: children ?? _jsxs(_Fragment, { children: [_jsx(FolderUp, { className: "mr-2 size-4" }), " ", label] }) })] }));
+                }, ref: inputRef, type: "file", ...{ webkitdirectory: "", directory: "" } }), _jsx(DropdownMenuItem, { ...props, onClick: () => inputRef.current?.click(), children: children ?? _jsxs(_Fragment, { children: [_jsx(FolderUp, { className: "mr-2 size-4" }), " ", label] }) })] }));
 };
 export const PromptInputActionAddScreenshot = ({ label = "Take screenshot", onSelect, ...props }) => {
     const attachments = usePromptInputAttachments();

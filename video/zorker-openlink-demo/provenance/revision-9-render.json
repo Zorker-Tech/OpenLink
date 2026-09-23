@@ -1,0 +1,36 @@
+{
+  "output": "/Users/yikewang/Movies/OpenLink-Reference-20260923/revision-9-session-layout/OpenLink-4K60-Latest-Session.mp4",
+  "sha256": "af021a00259d39f331bbb3d042f8b4d3f771b910f907f6d7632f46589dea0222",
+  "sizeBytes": 32414563,
+  "video": {
+    "codec": "h264",
+    "width": 3840,
+    "height": 2160,
+    "pixelFormat": "yuv420p",
+    "fps": 60,
+    "frameCount": 3360,
+    "durationSeconds": 56
+  },
+  "audio": {
+    "codec": "aac",
+    "sampleRate": 48000,
+    "channels": 2,
+    "durationSeconds": 56.042667,
+    "music": false,
+    "contains": ["keyboard typing", "transition air", "UI clicks"]
+  },
+  "verification": {
+    "composerParity": {"home": true, "session": true},
+    "representativeAndTransitionStills": "passed; see output/qa/render-report.json",
+    "deterministicRepeatedFrames": "passed",
+    "adjacentFrameMotion": "passed",
+    "fullVideoDecode": "passed with bundled Remotion FFmpeg decoder",
+    "fullAudioDecode": "passed with bundled Remotion FFmpeg decoder",
+    "browserErrors": 0,
+    "typescript": "npx tsc --noEmit passed"
+  },
+  "limitations": [
+    "Forma website content and session history are deterministic illustrative fixtures, not a live user project or authenticated agent run.",
+    "Audio is verified against generated SFX cues and fully decoded; no subjective mastering review is claimed."
+  ]
+}

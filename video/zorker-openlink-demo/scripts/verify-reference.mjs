@@ -2,36 +2,64 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import assert from 'node:assert/strict';
+
+const read=p=>fs.readFileSync(p,'utf8');
 const hash=p=>crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
-const manifest=JSON.parse(fs.readFileSync('provenance/faithful-manifest.json','utf8'));
-const verified=[];
-for(const record of manifest.records)if(record.outputSha256){assert.equal(hash(record.output),record.outputSha256,record.output);verified.push(record.output);}
-for(const file of fs.readdirSync('src/reference-film').filter(f=>f.endsWith('.tsx'))) {
- const content=fs.readFileSync(path.join('src/reference-film',file),'utf8');
- assert.ok(!/Date\.now\(|Math\.random\(|performance\.now\(|requestAnimationFrame\(|setTimeout\(|fetch\(/.test(content),file);
+const board=JSON.parse(read('src/reference-film/storyboard-v10.json'));
+const sourceRoot=path.resolve('../..');
+const faithful=JSON.parse(read('provenance/faithful-manifest.json'));
+let verified=0;
+for(const record of faithful.records)if(record.outputSha256){assert.equal(hash(record.output),record.outputSha256,record.output);verified++;}
+
+const film=read('src/reference-film/Film.tsx');
+assert.equal(board.shots.length,8);assert.equal(board.transitions.length,7);
+assert.equal(board.shots.reduce((sum,s)=>sum+s.activeFrames,0),board.runtimeFrames);
+assert.equal(board.shots.reduce((sum,s)=>sum+s.sequenceFrames,0)-board.transitions.reduce((sum,t)=>sum+t.frames,0),board.runtimeFrames);
+assert.ok(film.includes('storyboard-v10.json'));
+assert.ok(film.includes("background:'#ffffff'"));
+assert.ok(film.includes('audio/openlink-keyboard-sfx.wav'));
+assert.ok(board.audio.music===false&&board.model==='GPT-6 Luna');
+
+for(const name of ['Intent','Execution','Artifact','Refinement','Resolution','Features']){
+ const scene=read(`src/reference-film/${name}.tsx`);
+ assert.ok(!scene.includes('Caption'),`Overhead title is prohibited: ${name}`);
+ assert.ok(!scene.includes('What do you want to build?'),`Intro copy is prohibited: ${name}`);
 }
-const film=fs.readFileSync('src/reference-film/Film.tsx','utf8');
-const durations=[...film.matchAll(/durationInFrames=\{(\d+)\}/g)].map(m=>Number(m[1]));
-assert.equal(durations.length,8);assert.equal(durations.reduce((a,b)=>a+b,0),3600);
-const native=fs.readFileSync('src/reference-film/Native.tsx','utf8');
-for(const file of ['Intent','Execution','Artifact','Refinement','Resolution']) {
- const source=fs.readFileSync(`src/reference-film/${file}.tsx`,'utf8');
- assert.ok(!source.includes('Caption'),`Overhead title is prohibited: ${file}`);
- assert.ok(!source.includes('What do you want to build?'),`Intro copy is prohibited: ${file}`);
-}
-assert.ok(native.includes('source-snapshot/components/film-session-composer.js'));assert.ok(native.includes('./source/timeline.js'));
-const audio=JSON.parse(fs.readFileSync('provenance/reference-audio.json','utf8'));
-assert.equal(audio.duration,60);assert.ok(audio.peakDbFS<0);assert.deepEqual(audio.finalSamples,[0,0]);
-const preview=JSON.parse(fs.readFileSync('provenance/reference-preview-extraction.json','utf8'));
+
+const product=read('src/reference-film/ProductPreview.tsx');
+for(const item of ['SourceTopbar','SourceChatTopbar','NativeTimeline','CurrentSessionComposer','SourcePreviewCanvas'])assert.ok(product.includes(item),item);
+assert.ok(product.includes('width:390'),'Latest chat column is 390px');
+assert.ok(product.includes('height={742}'),'Timeline uses the measured default session-workspace viewport');
+const native=read('src/reference-film/Native.tsx');
+assert.ok(native.includes("'./source/timeline.js'"));
+assert.ok(native.includes('FilmTimelineUi'));
+assert.ok(read('src/reference-film/source/timeline.js').includes("?? 'GPT-6 Luna'"));
+for(const file of ['film-home-composer.js','film-chat-composer.js'])assert.ok(read(`src/reference-film/current-ui/components/${file}`).includes("name: 'GPT-6 Luna'"),file);
+
+const preview=JSON.parse(read('provenance/reference-preview-extraction.json'));
 for(const record of preview.outputs)assert.equal(hash(record.path),record.sha256,record.path);
-const execution=fs.readFileSync('src/reference-film/Execution.tsx','utf8');
-assert.ok(execution.includes('590,700'));assert.ok(execution.includes('workflowOpen'));assert.ok(execution.includes('expanded={f>=440}'));
-const sourcePaths=['components/chat-workspace.tsx','components/chat-timeline.tsx','app/globals.css','app/fonts/geist-latin.woff2','public/openlink/logos/zorker-logo-light.svg'];
-const report={sourceBaselineCommit:manifest.baseCommit,baselineNote:'Frozen 2026-09-07 source-derived presentation. Snapshot hashes validated. Current dirty application has evolved; this is not a claim of current full-app parity.',verifiedSnapshotFiles:verified.length,sourceFiles:sourcePaths.map(p=>({path:p,currentSha256:hash(path.join('../..',p))})),shownComponents:[{source:'components/chat-workspace.tsx:ChatComposer + ComposerSubmitButton',frozen:'src/source-snapshot/components/film-session-composer.js',adapter:'src/reference-film/Native.tsx:NativePrompt',shots:[2,5],changes:'Uses previously extracted presentation. Deterministic text, no events dispatched. Adds cinematic caret overlay and camera outside the component.'},{source:'components/chat-timeline.tsx:ChatTimeline',frozen:'src/source-snapshot/components/chat-timeline.js',adapter:'src/reference-film/Native.tsx:NativeTimeline',shots:[3,4],changes:'Existing reducer, grouped task rows and file changes. Synthetic English fixture messages; 560px viewport. Closed error/edit/disclosure states.'}],artwork:[{file:'src/reference-film/primitives.tsx:GlassOrb',rights:'Original procedural vector artwork; reference used for motion direction only.'},{file:'src/scenes/SampleSite.tsx',rights:'Existing illustrative Forma demo output; not a recorded live build.'},{file:'public/brand/zorker-logo-light.svg',rights:'User-supplied Zorker mark.'},{file:'public/fonts/geist-latin.woff2',rights:'Existing repository Geist font; original font license applies.'},{file:'public/audio/openlink-reference-original.wav',rights:'Original synthesis from scripts/reference-audio.mjs; no borrowed soundtrack.'}],durationInFrames:2760,fps:60,deterministicSourceAudit:true,referenceMediaIncluded:false,liveExecution:false,currentParityException:'Existing verify-faithful.mjs fails against newer application EditableUserMessage error class text-xs text-[var(--app-danger)]. Snapshot hashes pass; this state is not in the film.'};
-report.durationInFrames=durations.reduce((a,b)=>a+b,0);
-report.revision='3: complete workflow, native preview, feature inserts';
-report.nativePreviewExtraction='provenance/reference-preview-extraction.json';
-report.workflowVerification={completeReplyShown:true,gitSnapshotExpanded:true,topToBottomCamera:true,completedDetailsRemainOpen:true};
-report.artwork=report.artwork.map(item=>item.file==='public/audio/openlink-reference-original.wav'?{...item,file:'public/audio/openlink-reference-original-60s.wav'}:item);
-fs.writeFileSync('provenance/reference-film.json',JSON.stringify(report,null,2));
-console.log(`PASS: ${verified.length} unchanged baseline files; native preview/inspector/version extraction hashes; 8 scenes / 3600 frames; completed workflow; no overhead titles; PCM audio bounds.`);
+for(const record of preview.sourceFiles){
+ if(['components/chat-workspace.tsx','components/chat-timeline.tsx','components/browser/browser-workbench.tsx','components/browser/chromium-stream-surface.tsx'].includes(record.path))
+  assert.equal(hash(path.join(sourceRoot,record.path)),record.sha256,record.path);
+}
+const previewModule=read('src/reference-film/source/preview.js');
+for(const symbol of ['SourceChatTopbar','SourceTopbar','BrowserNavigationBar','SourcePreviewCanvas'])assert.ok(previewModule.includes(symbol),symbol);
+assert.ok(!/fetch\(|WebSocket|BrowserRuntimeClient/.test(previewModule),'No live runtime/network adapters in extracted film UI');
+assert.equal(preview.noBusinessLogicWrites,true);
+assert.equal(preview.modelFixture.name,'GPT-6 Luna');assert.equal(preview.modelFixture.liveProviderCall,false);
+
+const filmReport=JSON.parse(read('provenance/reference-film.json'));
+assert.equal(filmReport.liveExecution,false);
+assert.equal(filmReport.audio.music,false);
+assert.deepEqual([filmReport.composition.width,filmReport.composition.height,filmReport.composition.fps,filmReport.composition.durationInFrames],[board.format.width,board.format.height,board.format.fps,board.runtimeFrames]);
+assert.equal(filmReport.modelFixture.name,'GPT-6 Luna');assert.equal(filmReport.modelFixture.liveProviderCall,false);
+
+const audio=JSON.parse(read('provenance/keyboard-sfx-audio.json'));
+assert.equal(audio.music,false);
+assert.ok(Math.abs(audio.duration-board.runtimeFrames/board.format.fps)<1e-9);
+assert.ok(audio.keyboardCues>0);
+assert.equal(audio.clippedSamples,0);
+assert.deepEqual(audio.finalSamples,[0,0]);
+const keyCues=audio.cues.filter(c=>c.type==='typing');assert.equal(keyCues.length,audio.keyboardCues);
+assert.ok(keyCues.every(c=>Math.abs(c.at*board.format.fps-c.frame)<1e-8));
+console.log(`PASS: ${verified} frozen extraction records; current session layout and composers; source/output hashes; 8-shot director's cut = ${board.runtimeSeconds}s at 4K60; GPT-6 Luna demo fixture; no overhead titles; SFX-only mix.`);

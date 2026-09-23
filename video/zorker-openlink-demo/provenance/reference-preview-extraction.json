@@ -3,17 +3,20 @@
   "sourceFiles": [
     {
       "path": "components/chat-workspace.tsx",
-      "sha256": "5bf5790f350d05c1945b110d9fdb6959ee3671217d60570625f1abf3cf3887c1",
+      "sha256": "8d261377ec292108f2ae7fe78f8f337f919eb997dd126dba8589025933b740a6",
       "symbols": [
         "ToolbarButton",
-        "ChatTopbar",
+        "ChatTopbar.chat",
+        "ChatTopbar.workspace",
+        "WorkspaceTabs",
+        "BrowserNavigationBar",
         "PreviewCanvas"
       ],
-      "method": "Native JSX and classes extracted; on-handlers/refs removed; explicit fixture state; no source edits."
+      "method": "Current native JSX and classes extracted for both chat and workspace headers, tabs, browser navigation, and canvas; handlers, refs, and live runtime state neutralized into explicit deterministic fixture state."
     },
     {
       "path": "components/browser/browser-workbench.tsx",
-      "sha256": "15d4a8a9b51c669d1ca039f7a93b546f7b61d85bcde9c8f76c6e67171a5e1e7c",
+      "sha256": "645d59f57de4572288eb7f35304b2006a4de4a9cd7bd5489ab805390dc680405",
       "symbols": [
         "BrowserWorkbench"
       ],
@@ -21,35 +24,39 @@
     },
     {
       "path": "components/browser/chromium-stream-surface.tsx",
-      "sha256": "2a435558ce2b10539e2ea6531bed45dfbcb226b170068883f42bca580ae7c51a",
+      "sha256": "19880bc2a315f1c333de334ff1136fa3810d7245702b78ad778cacbb997b16cc",
       "symbols": [
         "selection overlay"
       ],
       "method": "Exact overlay JSX/classes extracted; bounds and source label passed as fixture props."
     },
     {
-      "path": "src/source-snapshot/components/chat-timeline.js",
-      "sha256": "7a63f6662e78343e25616b2b3c7065efc8b9c4ca15bbd4fefa0e74170e841269",
+      "path": "components/chat-timeline.tsx",
+      "sha256": "38fdda3d58e82f9ae2a529faef918a3efb7ab766dd0961df72a2247246e0c3f6",
       "symbols": [
         "ChatTimeline",
         "ChangeItem"
       ],
-      "method": "Existing source-derived baseline copied to new module; workflow disclosure state becomes an explicit frame prop. Native JSX/classes unchanged."
+      "method": "Latest source-snapshot JSX/classes used; timeline state and workflow disclosure are explicit deterministic frame props. Native markup/classes unchanged."
     }
   ],
   "outputs": [
     {
       "path": "src/reference-film/source/preview.js",
-      "sha256": "4431f1e45de5069efa41aabbc7cae25c4662974a15bc187837d72aabfa96eaa6"
+      "sha256": "efe89fede0a4dc3fdaf657f9eb70efc5a0895bd9d34abbdf5e67eaf461d49322"
     },
     {
       "path": "src/reference-film/source/timeline.js",
-      "sha256": "fd44299fb106863d3af3045f4c294aa99622c03437bf4581e72316794a964b75"
+      "sha256": "28737886b59dd150912f983bad95967395227cc36605b1efb806a880d88e8631"
     }
   ],
+  "modelFixture": {
+    "name": "GPT-6 Luna",
+    "liveProviderCall": false
+  },
   "limitations": [
     "Actual NativePreviewSurface uses a nonce-bound iframe and live browser protocol. Film excludes those connections and supplies the illustrative Forma React content inside the extracted ready-state wrapper. This is not a live website capture.",
-    "Version hashes, inspector selection and generated files are deterministic fictional fixtures, not records of live product execution.",
+    "Version hashes, inspector selection, GPT-6 Luna model label and generated files are deterministic fictional fixtures, not records of live product execution or proof of provider availability.",
     "Native menu portal is replaced by inert presentation tags retaining source subtree and styles so it follows the film camera."
   ],
   "noBusinessLogicWrites": true
