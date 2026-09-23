@@ -3,6 +3,10 @@ import { loadComposerContext } from '@/lib/composer-context'
 import { createClient } from '@/utils/supabase/server'
 
 export default async function Home() {
+  if (process.env.OPENLINK_STATIC_UI === '1') {
+    return <OpenLinkHome user={null} composerContext={null} />
+  }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
