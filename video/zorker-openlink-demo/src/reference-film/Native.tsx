@@ -6,6 +6,7 @@ import {CurrentSessionComposer} from './current-ui/components/film-chat-composer
 import {ChatTimeline,SourceGitSnapshot} from './source/timeline.js';
 import {eventsAt} from '../adapters/Timeline';
 import {FilmState} from './state';
+import {FilmCurrentUi,FilmTimelineUi} from './FilmLocale';
 import {at,layoutPoint,useGsapScrub} from './Choreography';
 
 export const PROMPT='Build a landing page for Forma. Warm neutrals. Space to breathe.';
@@ -42,12 +43,12 @@ export function NativePrompt({text,fullText=text,kind='chat',caret=false,width=7
  },kind+':'+String(clickFrame),animationFrame!==undefined);
  const caretX=point.startX+(point.fronts?.[text.length]??point.fullWidth);
  return <div ref={host} data-openlink-theme="light" className="light" style={{width,position:'relative',background:'transparent'}}>
-  {kind==='home'?<CurrentHomeComposer text={text}/>:<CurrentSessionComposer text={text} expanded={false} busy={busy}/>}
+  {kind==='home'?<FilmCurrentUi><CurrentHomeComposer text={text}/></FilmCurrentUi>:<FilmCurrentUi><CurrentSessionComposer text={text} expanded={false} busy={busy}/></FilmCurrentUi>}
   {caret&&<div style={{position:'absolute',left:caretX+1,top:point.y+1,width:1.5,height:point.h-2,background:'var(--app-foreground)',borderRadius:2}}/>}
  </div>;
 }
 
-export function NativeTimeline({f,width=560,expanded=false,workflowOpen,animationFrame}: {f:number;width?:number;expanded?:boolean;workflowOpen?:boolean;animationFrame?:number}) {
+export function NativeTimeline({f,width=560,height=604,expanded=false,workflowOpen,animationFrame}: {f:number;width?:number;height?:number;expanded?:boolean;workflowOpen?:boolean;animationFrame?:number}) {
  const ref=useRef<HTMLDivElement>(null);
  const events=eventsAt(f).map(e=>e.type==='message.user'?{...e,text:f>=1220?REVISION:PROMPT}:e.type==='message.completed'?{...e,text:f>=1220?'Updated to electric blue. Your layout and project inquiry link are unchanged.':'The Forma landing page is ready to review. Open the preview or inspect the changed files.'}:e);
  const phase=[245,275,365,390,465,480,570,600].filter(n=>f>=n).length+Number(expanded)*10;
@@ -59,9 +60,9 @@ export function NativeTimeline({f,width=560,expanded=false,workflowOpen,animatio
   const card=el.querySelector('[data-slot="git-snapshot"]') as HTMLElement|null;
   if(card){const reply=el.querySelector('[data-ending-item="summary"]');if(reply)tl.fromTo(reply,{y:18,opacity:0},{y:0,opacity:1,duration:.5,ease:'power2.out'},at(380));tl.fromTo(card,{y:22,opacity:0},{y:0,opacity:1,duration:.45,ease:'power2.out'},at(386));if(expanded){const h=card.scrollHeight;tl.fromTo(card,{height:44},{height:h,duration:.8,ease:'power2.inOut'},at(460));const pre=card.querySelector('pre');if(pre)tl.fromTo(pre,{y:15,opacity:0},{y:0,opacity:1,duration:.45,ease:'power2.out'},at(474));}}
  },phase,animationFrame!==undefined);
- return <div ref={ref} data-openlink-theme="light" className="light" style={{width,height:604,position:'relative',background:'transparent'}}>
+ return <div ref={ref} data-openlink-theme="light" className="light" style={{width,height,position:'relative',background:'transparent'}}>
   <FilmState.Provider value={{editing:false,pending:false,draft:PROMPT,changesOpen:expanded,workflowOpen}}>
-   <ChatTimeline events={events} isStreaming={f<600} onFlowStatusChange={undefined} onEditMessage={undefined}/>
+   <FilmTimelineUi><ChatTimeline events={events} isStreaming={f<600} onFlowStatusChange={undefined} onEditMessage={undefined}/></FilmTimelineUi>
   </FilmState.Provider>
  </div>;
 }
@@ -74,5 +75,5 @@ export function NativeChanges({animationFrame}: {animationFrame?:number}) {
   if(file)tl.fromTo(file,{x:-16,opacity:0},{x:0,opacity:1,duration:.4,ease:'power3.out'},at(6));
   if(code)tl.fromTo(code,{y:18,opacity:0},{y:0,opacity:1,duration:.5,ease:'power2.out'},at(20));
  },'diff',animationFrame!==undefined);
- return <div ref={ref} data-openlink-theme="light" className="light" style={{width:560,background:'transparent'}}><FilmState.Provider value={{editing:false,pending:false,draft:'',changesOpen:true,workflowOpen:false}}><SourceGitSnapshot item={{...event,id:'film-change',kind:'change',label:'Updated the visual theme'}}/></FilmState.Provider></div>;
+ return <div ref={ref} data-openlink-theme="light" className="light" style={{width:560,background:'transparent'}}><FilmState.Provider value={{editing:false,pending:false,draft:'',changesOpen:true,workflowOpen:false}}><FilmTimelineUi><SourceGitSnapshot item={{...event,id:'film-change',kind:'change',label:'Updated the visual theme'}}/></FilmTimelineUi></FilmState.Provider></div>;
 }

@@ -5,6 +5,7 @@
 @font-face {font-family:OpenLinkGeist;src:url('../public/fonts/geist-latin.woff2') format('woff2');font-weight:100 900;font-display:block;}
 .film {font-family:OpenLinkGeist,Arial, sans-serif; background:#f4f4f1;color:#171717;}
 .film *, .film *::before, .film *::after {animation:none!important;transition:none!important;caret-color:transparent;}
+.film textarea, .film [contenteditable="true"] {caret-color:transparent!important;}
 .film button, .film textarea {font-family:inherit;}
 .film h1,.film h2,.film p {margin:0;}
 .eyebrow {font-size:22px;letter-spacing:4px;text-transform:uppercase;color:#858585;font-weight:500;}

@@ -1,11 +1,12 @@
 import {useLayoutEffect,useRef,useState} from 'react';
 import {flushSync} from 'react-dom';
 import {continueRender,delayRender} from 'remotion';
-import {SourceInspectorOverlay,SourcePreviewCanvas,SourceTopbar} from './source/preview.js';
+import {SourceChatTopbar,SourceInspectorOverlay,SourcePreviewCanvas,SourceTopbar} from './source/preview.js';
 import {SampleSite} from '../scenes/SampleSite';
 import {NativeTimeline} from './Native';
 import {CurrentSessionComposer} from './current-ui/components/film-chat-composer.js';
 import {at,layoutPoint,useGsapScrub} from './Choreography';
+import {FilmCurrentUi} from './FilmLocale';
 
 export type ProductGeometry={hero:{x:number;y:number;width:number;height:number};inspect:{x:number;y:number};diff:{x:number;y:number};version:{x:number;y:number}};
 export function ProductPreview({blue=false,inspect=false,selected=inspect,version=null,paletteProgress,animationFrame,mode='entry',onGeometry}: {blue?:boolean;inspect?:boolean;selected?:boolean;version?:string|null;paletteProgress?:number;animationFrame?:number;mode?:'entry'|'inspect'|'version';onGeometry?:(g:ProductGeometry)=>void}) {
@@ -32,13 +33,14 @@ export function ProductPreview({blue=false,inspect=false,selected=inspect,versio
   if(mode==='version'){const target=el.querySelector('[aria-label="Switch preview version"]');if(target)tl.fromTo(target,{backgroundColor:'#ebebeb'},{backgroundColor:'rgba(0,0,0,0)',duration:1,ease:'sine.out'},at(160));}
  },mode+':'+Number(selected),animationFrame!==undefined);
  return <div ref={root} data-openlink-theme="light" data-theme="light" className="light" style={{position:'relative',width:1440,height:900,overflow:'hidden',background:'var(--app-background)',borderRadius:10,boxShadow:'0 20px 80px #00000018',border:'1px solid var(--app-control-border)'}}>
-  <SourceTopbar inspect={inspect} selectedGitRef={version}/>
+  <SourceTopbar/>
   <div style={{display:'flex',height:850}}>
    <aside style={{width:390,flexShrink:0,borderRight:'1px solid var(--app-border)',display:'flex',flexDirection:'column',overflow:'hidden'}}>
-    <div style={{flex:1,minHeight:0,overflow:'hidden'}}><NativeTimeline f={blue?1320:700} width={390}/></div>
-    <div style={{padding:8}}><CurrentSessionComposer text=""/></div>
+    <SourceChatTopbar title="Forma · Landing page"/>
+    <div style={{flex:1,minHeight:0,overflow:'hidden'}}><NativeTimeline f={blue?1320:700} width={390} height={742}/></div>
+    <FilmCurrentUi><div style={{padding:8}}><CurrentSessionComposer text=""/></div></FilmCurrentUi>
    </aside>
-   <div style={{flex:1,minWidth:0}}><SourcePreviewCanvas><div data-project-content style={{position:'relative',height:'100%'}}><SampleSite blue={blue} paletteProgress={paletteProgress}/>{selected&&<div data-film-selection style={{position:'absolute',inset:0,pointerEvents:'none'}}><SourceInspectorOverlay bounds={bounds} label="Hero · app/page.tsx"/></div>}</div></SourcePreviewCanvas></div>
+   <div style={{flex:1,minWidth:0}}><SourcePreviewCanvas inspect={inspect} selectedGitRef={version}><div data-project-content style={{position:'relative',height:'100%'}}><SampleSite blue={blue} paletteProgress={paletteProgress}/>{selected&&<div data-film-selection style={{position:'absolute',inset:0,pointerEvents:'none'}}><SourceInspectorOverlay bounds={bounds} label="Hero · app/page.tsx"/></div>}</div></SourcePreviewCanvas></div>
   </div>
  </div>;
 }

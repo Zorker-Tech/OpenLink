@@ -8,7 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "
 import { Spinner } from "../ui/spinner.js";
 import { Tooltip, TooltipContent, TooltipTrigger, } from "../ui/tooltip.js";
 import { cn } from "../../lib/utils.js";
-import { CornerDownLeftIcon, ImageIcon, Monitor, PlusIcon, SquareIcon, XIcon, } from "lucide-react";
+import { shouldSubmitPromptOnEnter } from "../../lib/prompt-keyboard.js";
+import { CornerDownLeftIcon, ImageIcon, FolderUp, Monitor, PlusIcon, SquareIcon, XIcon, } from "lucide-react";
 import { nanoid } from "nanoid";
 import { Children, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, } from "react";
 // ============================================================================
@@ -135,13 +136,17 @@ export const PromptInputProvider = ({ initialInput: initialTextInput = "", child
         if (incoming.length === 0) {
             return;
         }
+        const batchId = crypto.randomUUID();
         setAttachmentFiles((prev) => [
             ...prev,
             ...incoming.map((file) => ({
+                batchId,
                 filename: file.name,
                 id: nanoid(),
                 mediaType: file.type,
+                relativePath: file.webkitRelativePath || undefined,
                 type: "file",
+                uploadId: crypto.randomUUID(),
                 url: URL.createObjectURL(file),
             })),
         ]);
@@ -228,11 +233,19 @@ export const usePromptInputReferencedSources = () => {
 };
 export const PromptInputActionAddAttachments = ({ children, label = "Add photos or files", ...props }) => {
     const attachments = usePromptInputAttachments();
-    const handleSelect = useCallback((e) => {
-        e.preventDefault();
+    const handleClick = useCallback(() => {
         attachments.openFileDialog();
     }, [attachments]);
-    return (_jsx(DropdownMenuItem, { ...props, onSelect: handleSelect, children: children ?? (_jsxs(_Fragment, { children: [_jsx(ImageIcon, { className: "mr-2 size-4" }), " ", label] })) }));
+    return (_jsx(DropdownMenuItem, { ...props, onClick: handleClick, children: children ?? (_jsxs(_Fragment, { children: [_jsx(ImageIcon, { className: "mr-2 size-4" }), " ", label] })) }));
+};
+export const PromptInputActionAddFolder = ({ children, label = "Upload folder", ...props }) => {
+    const attachments = usePromptInputAttachments();
+    const inputRef = useRef(null);
+    return (_jsxs(_Fragment, { children: [_jsx("input", { "aria-label": label, className: "hidden", multiple: true, onChange: (event) => {
+                    if (event.currentTarget.files?.length)
+                        attachments.add(event.currentTarget.files);
+                    event.currentTarget.value = "";
+                }, ref: inputRef, type: "file", ...{ webkitdirectory: "", directory: "" } }), _jsx(DropdownMenuItem, { ...props, onClick: () => inputRef.current?.click(), children: children ?? _jsxs(_Fragment, { children: [_jsx(FolderUp, { className: "mr-2 size-4" }), " ", label] }) })] }));
 };
 export const PromptInputActionAddScreenshot = ({ label = "Take screenshot", onSelect, ...props }) => {
     const attachments = usePromptInputAttachments();
@@ -325,12 +338,16 @@ export const PromptInput = ({ className, accept, multiple, globalDrop, syncHidde
                 });
             }
             const next = [];
+            const batchId = crypto.randomUUID();
             for (const file of capped) {
                 next.push({
+                    batchId,
                     filename: file.name,
                     id: nanoid(),
                     mediaType: file.type,
+                    relativePath: file.webkitRelativePath || undefined,
                     type: "file",
+                    uploadId: crypto.randomUUID(),
                     url: URL.createObjectURL(file),
                 });
             }
@@ -576,13 +593,12 @@ export const PromptInputTextarea = ({ onChange, onKeyDown, onPaste, className, p
         if (e.defaultPrevented) {
             return;
         }
-        if (e.key === "Enter") {
-            if (isComposing || e.nativeEvent.isComposing) {
-                return;
-            }
-            if (e.shiftKey) {
-                return;
-            }
+        if (shouldSubmitPromptOnEnter({
+            key: e.key,
+            keyCode: e.keyCode,
+            shiftKey: e.shiftKey,
+            isComposing: isComposing || e.nativeEvent.isComposing,
+        })) {
             e.preventDefault();
             // Check if the submit button is disabled before submitting
             const { form } = e.currentTarget;

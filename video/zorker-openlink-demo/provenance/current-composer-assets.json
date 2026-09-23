@@ -1,0 +1,12 @@
+[
+  {
+    "source": "public/openlink/app/plus.svg",
+    "output": "public/openlink/app/plus.svg",
+    "sha256": "95f9ea2894cf78da29d92b550a80de3ff2c95488788a54e61650862d94ad1fde"
+  },
+  {
+    "source": "public/openlink/providers/hydite.svg",
+    "output": "public/openlink/providers/hydite.svg",
+    "sha256": "128a0ceb00d8c291c93739c85bae15fd819be5006180485395470741c40aae2e"
+  }
+]

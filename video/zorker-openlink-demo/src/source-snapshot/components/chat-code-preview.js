@@ -1,6 +1,7 @@
 'use client';
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useEffect, useRef } from 'react';
+import { useT } from "../lib/i18n/client.js";
 /**
  * A deliberately small, read-only Monaco surface for the message timeline.
  * The full code-server workbench remains the editing destination; this view is
@@ -12,6 +13,7 @@ export function ChatCodePreview({ path, content, language = 'plaintext', classNa
     const editorRef = useRef(null);
     const contentRef = useRef(content);
     contentRef.current = content;
+    const t = useT();
     useEffect(() => {
         let disposed = false;
         void import('monaco-editor').then((module) => {
@@ -60,5 +62,5 @@ export function ChatCodePreview({ path, content, language = 'plaintext', classNa
         if (model && model.getValue() !== content)
             model.setValue(content);
     }, [content]);
-    return (_jsxs("div", { className: `relative min-w-0 overflow-hidden rounded-md border border-[var(--app-control-border)] bg-[var(--app-surface)] ${className}`, "data-code-preview": path, children: [_jsxs("div", { className: "flex h-6 items-center justify-between border-b border-[var(--app-control-border)] px-2 text-[11px] text-[var(--app-muted)]", children: [_jsx("span", { className: "min-w-0 truncate font-mono", children: path }), streaming ? _jsx("span", { className: "shrink-0 text-[var(--app-subtle-foreground)]", children: "\u6B63\u5728\u7F16\u8F91" }) : null] }), _jsx("div", { className: "h-[220px] w-full", ref: hostRef })] }));
+    return (_jsxs("div", { className: `relative min-w-0 overflow-hidden rounded-md border border-[var(--app-control-border)] bg-[var(--app-surface)] ${className}`, "data-code-preview": path, children: [_jsxs("div", { className: "flex h-6 items-center justify-between border-b border-[var(--app-control-border)] px-2 text-[11px] text-[var(--app-muted)]", children: [_jsx("span", { className: "min-w-0 truncate font-mono", children: path }), streaming ? _jsx("span", { className: "shrink-0 text-[var(--app-subtle-foreground)]", children: t('正在编辑') }) : null] }), _jsx("div", { className: "h-[220px] w-full", ref: hostRef })] }));
 }
