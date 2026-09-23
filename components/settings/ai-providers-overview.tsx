@@ -1,8 +1,12 @@
+'use client'
+
 import { ProviderCard } from '@/components/settings/provider-card'
 import type { AiProviderConfigurationSummary } from '@/lib/ai-provider-types'
 import { AI_PROVIDERS } from '@/lib/ai-providers'
+import { useT } from '@/lib/i18n/client'
 
 export function AiProvidersOverview({ configurations }: { configurations: AiProviderConfigurationSummary[] }) {
+  const t = useT()
   const configurationMap = new Map(configurations.map((item) => [item.providerId, item]))
   const enabled = AI_PROVIDERS.filter((item) => configurationMap.get(item.id)?.enabled)
   const disabled = AI_PROVIDERS.filter((item) => !configurationMap.get(item.id)?.enabled)
@@ -11,14 +15,14 @@ export function AiProvidersOverview({ configurations }: { configurations: AiProv
     <main className="h-full min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6">
       <div className="mx-auto w-full max-w-[1024px] pb-12">
         <header>
-          <h1 className="text-[24px] font-semibold tracking-[-0.55px]">AI 服务商</h1>
-          <p className="mt-1.5 max-w-[720px] text-sm leading-[22px] text-[var(--app-muted)]">
-            配置 Pi Agent 使用的模型服务商。密钥经 AES-256-GCM 加密，并在隔离运行时中通过 Credential Vault 注入。
+          <h1 className="text-[24px] font-semibold tracking-[-0.55px]">{t('AI 服务商')}</h1>
+          <p className="mt-1 max-w-[720px] text-sm leading-[22px] text-[var(--app-muted)]">
+            {t('配置 Pi Agent 使用的模型服务商。密钥经 AES-256-GCM 加密，并在隔离运行时中通过 Credential Vault 注入。')}
           </p>
         </header>
 
-        {enabled.length > 0 && <ProviderGrid configurations={configurationMap} label="已启用服务商" providers={enabled} />}
-        <ProviderGrid configurations={configurationMap} label="未启用服务商" providers={disabled} />
+        {enabled.length > 0 && <ProviderGrid configurations={configurationMap} label={t('已启用服务商')} providers={enabled} />}
+        <ProviderGrid configurations={configurationMap} label={t('未启用服务商')} providers={disabled} />
       </div>
     </main>
   )

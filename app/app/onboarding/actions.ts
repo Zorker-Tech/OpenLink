@@ -1,5 +1,6 @@
 'use server'
 
+import { getT } from '@/lib/i18n/server'
 import { confirmNickname } from '@/lib/workspaces'
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
@@ -14,9 +15,10 @@ export async function saveNickname(
 ): Promise<NicknameActionState> {
   const nickname = String(formData.get('nickname') ?? '').trim()
   const prompt = String(formData.get('prompt') ?? '').trim()
+  const { t } = await getT()
 
   if (!nickname || nickname.length > 64) {
-    return { error: '昵称需要包含 1–64 个字符。' }
+    return { error: t('昵称需要包含 1–64 个字符。') }
   }
 
   const supabase = await createClient()
@@ -32,6 +34,6 @@ export async function saveNickname(
     redirect(target)
   } catch (error) {
     if (error && typeof error === 'object' && 'digest' in error) throw error
-    return { error: error instanceof Error ? error.message : '暂时无法创建工作区，请重试。' }
+    return { error: error instanceof Error ? error.message : t('暂时无法创建工作区，请重试。') }
   }
 }

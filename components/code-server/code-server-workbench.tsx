@@ -1,6 +1,7 @@
 'use client'
 
 import { ThinkingOrb } from '@/components/thinking/src'
+import { useT } from '@/lib/i18n/client'
 import { theme } from '@/lib/theme'
 import { AlertCircle, RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
@@ -37,6 +38,7 @@ function browserReachableGatewayUrl(value: string): string {
 }
 
 export function CodeServerWorkbench({ chatSessionId }: CodeServerWorkbenchProps) {
+  const t = useT()
   const [url, setUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
@@ -74,12 +76,12 @@ export function CodeServerWorkbench({ chatSessionId }: CodeServerWorkbenchProps)
 
   if (error) {
     return (
-      <main aria-label="代码编辑器" className={`flex size-full items-center justify-center p-6 ${theme('canvas')}`}>
+      <main aria-label={t('代码编辑器')} className={`flex size-full items-center justify-center p-6 ${theme('canvas')}`}>
         <div className="flex max-w-sm flex-col items-center text-center">
           <span className={`mb-4 flex size-10 items-center justify-center rounded-xl ${theme('border', 'criticalSurface')}`}><AlertCircle className={`size-5 ${theme('critical')}`} /></span>
-          <h2 className="text-sm font-medium">代码编辑器暂时无法连接</h2>
-          <p className={`mt-2 text-xs leading-5 ${theme('muted')}`}>{error === 'CODE_SERVER_NOT_CONFIGURED' ? '代码运行时尚未配置。' : '项目运行时正在启动或连接已过期。'}</p>
-          <button className={`mt-4 inline-flex h-8 items-center gap-2 rounded-md px-3 text-xs transition-colors ${theme('border', 'hover')}`} onClick={retry} type="button"><RefreshCw className="size-3.5" />重试</button>
+          <h2 className="text-sm font-medium">{t('代码编辑器暂时无法连接')}</h2>
+          <p className={`mt-2 text-xs leading-5 ${theme('muted')}`}>{error === 'CODE_SERVER_NOT_CONFIGURED' ? t('代码运行时尚未配置。') : t('项目运行时正在启动或连接已过期。')}</p>
+          <button className={`mt-4 inline-flex h-8 items-center gap-2 rounded-md px-3 text-xs transition-colors ${theme('border', 'hover')}`} onClick={retry} type="button"><RefreshCw className="size-3.5" />{t('重试')}</button>
         </div>
       </main>
     )
@@ -87,23 +89,23 @@ export function CodeServerWorkbench({ chatSessionId }: CodeServerWorkbenchProps)
 
   if (!url) {
     return (
-      <main aria-label="正在启动代码编辑器" className={`flex size-full items-center justify-center ${theme('canvas', 'muted')}`}>
+      <main aria-label={t('正在启动代码编辑器')} className={`flex size-full items-center justify-center ${theme('canvas', 'muted')}`}>
         <div className="flex flex-col items-center gap-3 text-xs">
-          <ThinkingOrb aria-label="正在连接项目代码环境" className="shrink-0" size={64} state="breathing" />
-          <span>正在连接项目代码环境…</span>
+          <ThinkingOrb aria-label={t('正在连接项目代码环境')} className="shrink-0" size={64} state="breathing" />
+          <span>{t('正在连接项目代码环境…')}</span>
         </div>
       </main>
     )
   }
 
   return (
-    <main aria-label="代码编辑器" className={`size-full overflow-hidden ${theme('editor')}`}>
+    <main aria-label={t('代码编辑器')} className={`size-full overflow-hidden ${theme('editor')}`}>
       <iframe
         allow="clipboard-read; clipboard-write; fullscreen"
         className={`block size-full border-0 ${theme('editor')}`}
         sandbox="allow-downloads allow-forms allow-modals allow-pointer-lock allow-popups allow-same-origin allow-scripts"
         src={url}
-        title="项目代码编辑器"
+        title={t('项目代码编辑器')}
       />
     </main>
   )

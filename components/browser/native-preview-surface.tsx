@@ -9,6 +9,7 @@ import {
   type InspectorBridgeEvent,
 } from '@/packages/browser-protocol/src/index'
 import { BrowserConnection } from '@/lib/browser-runtime/client'
+import { useT } from '@/lib/i18n/client'
 import { theme } from '@/lib/theme'
 import { useEffect, useMemo, useRef } from 'react'
 
@@ -21,6 +22,7 @@ export function NativePreviewSurface({
   inspectMode: boolean
   onElementSelected: (element: ElementReference | null) => void
 }) {
+  const t = useT()
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const commandIds = useRef(new Map<string, string>())
   const pendingCommands = useRef(new Map<string, InspectorBridgeEnvelope['payload']>())
@@ -81,7 +83,7 @@ export function NativePreviewSurface({
     if (!inspectMode) onElementSelected(null)
   }, [inspectMode, nonce])
 
-  if (!iframeUrl) return <div className={`flex size-full items-center justify-center text-sm ${theme('canvas', 'muted')}`}>预览地址尚未就绪</div>
+  if (!iframeUrl) return <div className={`flex size-full items-center justify-center text-sm ${theme('canvas', 'muted')}`}>{t('预览地址尚未就绪')}</div>
 
   return (
     <iframe
@@ -90,7 +92,7 @@ export function NativePreviewSurface({
       ref={iframeRef}
       sandbox={sandbox}
       src={iframeUrl}
-      title="OpenLink 项目预览"
+      title={t('OpenLink 项目预览')}
     />
   )
 }

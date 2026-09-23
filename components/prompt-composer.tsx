@@ -11,6 +11,7 @@ import {
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { Send } from 'lucide-react'
+import { useT } from '@/lib/i18n/client'
 import type { ComposerContext } from '@/lib/composer-context'
 
 export type { ComposerContext, ComposerWorkspace } from '@/lib/composer-context'
@@ -33,6 +34,7 @@ function loginRedirect(prompt: string): string {
 
 export function PromptComposer({ user, composerContext }: PromptComposerProps) {
   const router = useRouter()
+  const t = useT()
   const workspaces = composerContext?.workspaces ?? []
   const [selectedSlug, setSelectedSlug] = useState<string>(workspaces[0]?.slug ?? '')
   const [input, setInput] = useState('')
@@ -52,7 +54,7 @@ export function PromptComposer({ user, composerContext }: PromptComposerProps) {
         >
           <PromptInputBody>
             <PromptInputTextarea
-              aria-label="描述您想创建的内容"
+              aria-label={t('描述您想创建的内容')}
               className="min-h-[54px]! px-3 pt-3 text-[15px] text-[var(--app-foreground)] placeholder:text-[var(--app-subtle-foreground)]"
               onChange={(event) => setInput(event.currentTarget.value)}
               placeholder=""
@@ -60,7 +62,7 @@ export function PromptComposer({ user, composerContext }: PromptComposerProps) {
             />
           </PromptInputBody>
           <PromptInputFooter className="h-10 px-3 pb-3">
-            <PromptInputSubmit aria-label="发送" className="size-7 rounded-full border border-[var(--app-submit-background)] bg-[var(--app-submit-background)] p-0 text-[var(--app-submit-foreground)] hover:bg-[var(--app-submit-hover)]">
+            <PromptInputSubmit aria-label={t('发送')} className="size-7 rounded-full border border-[var(--app-submit-background)] bg-[var(--app-submit-background)] p-0 text-[var(--app-submit-foreground)] hover:bg-[var(--app-submit-hover)]">
               <Send aria-hidden className="size-3.5" />
             </PromptInputSubmit>
           </PromptInputFooter>
@@ -82,7 +84,7 @@ export function PromptComposer({ user, composerContext }: PromptComposerProps) {
               type="button"
             >
               {candidate.name}
-              <span className="text-[10px] text-[var(--app-subtle-foreground)]">{candidate.scopeType === 'organization' ? '组织' : '个人'}</span>
+              <span className="text-[10px] text-[var(--app-subtle-foreground)]">{candidate.scopeType === 'organization' ? t('组织') : t('个人')}</span>
             </button>
           ))}
         </div>

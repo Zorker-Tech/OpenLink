@@ -1,7 +1,10 @@
 'use client'
 
 import { projectMessageRevisions } from '@/lib/agent-runtime/message-revisions'
+import { orderAgentEvents } from '@/lib/agent-runtime/stream-integrity'
 import { agentErrorTitle, groupAgentErrorRecords } from '@/lib/agent-runtime/error-groups'
+import { useT } from '@/lib/i18n/client'
+import type { Translator } from '@/lib/i18n/messages'
 import { useRef } from 'react'
 
 import {
@@ -400,7 +403,7 @@ function buildTimeline(events: OpenLinkAgentEvent[]): TimelineState {
   }, { items: [], status: 'idle', source: 'demo', partTaskIds: {} })
 }
 
-function buildConversationRounds(timeline: TimelineState): ConversationRound[] {
+function buildConversationRounds(timeline: TimelineState, t: Translator): ConversationRound[] {
   const groups: Array<{ id: string; user?: MessageTimelineItem; items: TimelineItem[] }> = []
 
   for (const item of timeline.items) {
@@ -420,7 +423,7 @@ function buildConversationRounds(timeline: TimelineState): ConversationRound[] {
     const assistantMessages = group.items.filter((item): item is MessageTimelineItem => item.kind === 'message' && item.role === 'assistant')
     const changes = group.items.filter((item): item is ChangeTimelineItem => item.kind === 'change')
     const ending = state === 'worked' ? assistantMessages.at(-1) : undefined
-    const endingChange = state === 'worked' && changes.length ? mergeRoundChanges(group.id, changes) : undefined
+    const endingChange = state === 'worked' && changes.length ? mergeRoundChanges(group.id, changes, t) : undefined
     const nonMessageItems = group.items.filter((item) => (
       item !== checkpoint
       && item.kind !== 'change'
@@ -442,15 +445,15 @@ function buildConversationRounds(timeline: TimelineState): ConversationRound[] {
           && (item.kind !== 'task' || item.executions.length > 0)
         ))
       : []
-    const thinkingItems = hasToolExecution ? [] : groupTimelineErrors(nonMessageItems)
+    const thinkingItems = hasToolExecution ? [] : groupTimelineErrors(nonMessageItems, t)
     const outputItems = hasToolExecution ? [] : assistantMessages.filter((item) => item !== ending)
 
-    return { id: group.id, state, user: group.user, thinkingItems, workingItems: groupTimelineErrors(workingItems), outputItems, ending, endingChange, checkpoint }
+    return { id: group.id, state, user: group.user, thinkingItems, workingItems: groupTimelineErrors(workingItems, t), outputItems, ending, endingChange, checkpoint }
   })
 }
 
-function groupTimelineErrors(items: TimelineItem[]): TimelineItem[] {
-  const groups = groupAgentErrorRecords(items.flatMap((item) => item.kind === 'error' ? [{ id: item.id, message: item.message }] : []))
+function groupTimelineErrors(items: TimelineItem[], t: Translator): TimelineItem[] {
+  const groups = groupAgentErrorRecords(items.flatMap((item) => item.kind === 'error' ? [{ id: item.id, message: item.message }] : []), t)
   const byTitle = new Map(groups.map((group) => [group.title, group]))
   const emitted = new Set<string>()
   const result: TimelineItem[] = []
@@ -459,7 +462,7 @@ function groupTimelineErrors(items: TimelineItem[]): TimelineItem[] {
       result.push(item)
       continue
     }
-    const title = agentErrorTitle(item.message)
+    const title = agentErrorTitle(item.message, t)
     if (emitted.has(title)) continue
     emitted.add(title)
     const group = byTitle.get(title)
@@ -468,7 +471,7 @@ function groupTimelineErrors(items: TimelineItem[]): TimelineItem[] {
   return result
 }
 
-function mergeRoundChanges(roundId: string, entries: ChangeTimelineItem[]): ChangeTimelineItem | undefined {
+function mergeRoundChanges(roundId: string, entries: ChangeTimelineItem[], t: Translator): ChangeTimelineItem | undefined {
   // A Git snapshot represents the whole working tree at a precise point in
   // time. Do not sum snapshots from individual tool calls: doing so inflated
   // additions/deletions every time an agent made a second edit in one turn.
@@ -500,7 +503,7 @@ function mergeRoundChanges(roundId: string, entries: ChangeTimelineItem[]): Chan
   return {
     id: `${roundId}:ending-changes`,
     kind: 'change',
-    label: 'Applied changes',
+    label: t('Applied changes'),
     additions: hasAdditions ? entries.reduce((total, change) => total + (change.additions ?? 0), 0) : undefined,
     deletions: hasDeletions ? entries.reduce((total, change) => total + (change.deletions ?? 0), 0) : undefined,
     files: files.size ? [...files.values()] : undefined,
@@ -508,18 +511,18 @@ function mergeRoundChanges(roundId: string, entries: ChangeTimelineItem[]): Chan
   }
 }
 
-function toolActionLabel(execution: TaskExecution) {
-  if (execution.kind === 'command') return 'Run'
+function toolActionLabel(execution: TaskExecution, t: Translator) {
+  if (execution.kind === 'command') return t('Run')
   if (execution.kind === 'file') {
-    if (execution.editState === 'editing' || execution.state === 'active') return '正在编辑'
-    if (execution.editState === 'failed' || execution.state === 'failed') return '编辑失败'
-    return 'Edited'
+    if (execution.editState === 'editing' || execution.state === 'active') return t('正在编辑')
+    if (execution.editState === 'failed' || execution.state === 'failed') return t('编辑失败')
+    return t('Edited')
   }
   const name = execution.label.toLowerCase()
-  if (/read|open/.test(name)) return 'Read'
-  if (/search|find|grep/.test(name)) return 'Search'
-  if (/edit|write|patch/.test(name)) return 'Edit'
-  if (/fetch|web|http|browser/.test(name)) return 'Fetch'
+  if (/read|open/.test(name)) return t('Read')
+  if (/search|find|grep/.test(name)) return t('Search')
+  if (/edit|write|patch/.test(name)) return t('Edit')
+  if (/fetch|web|http|browser/.test(name)) return t('Fetch')
   return humanizeToolName(execution.label)
 }
 
@@ -545,8 +548,8 @@ function executionAction(execution: TaskExecution): ExecutionAction {
   return 'other'
 }
 
-function dynamicTaskLabel(executions: TaskExecution[], active: boolean) {
-  if (!executions.length) return active ? 'Working' : 'Worked'
+function dynamicTaskLabel(executions: TaskExecution[], active: boolean, t: Translator) {
+  if (!executions.length) return active ? t('Working') : t('Worked')
   const actions = new Map<ExecutionAction, number>()
   for (const execution of executions) {
     const action = executionAction(execution)
@@ -554,26 +557,27 @@ function dynamicTaskLabel(executions: TaskExecution[], active: boolean) {
   }
 
   return [...actions].map(([action, count]) => {
-    if (action === 'browser') return active ? 'Using the browser' : 'Used the browser'
-    if (action === 'command') return active ? `Running ${count === 1 ? 'a command' : 'commands'}` : `Ran ${count === 1 ? 'a command' : 'commands'}`
-    if (action === 'edit') return active ? `正在编辑 ${count === 1 ? '文件' : `${count} 个文件`}` : `Edited ${count === 1 ? 'a file' : 'files'}`
-    if (action === 'read') return active ? `Reading ${count === 1 ? 'a file' : 'files'}` : `Read ${count === 1 ? 'a file' : 'files'}`
-    if (action === 'search') return active ? 'Searching the project' : 'Searched the project'
-    if (action === 'fetch') return active ? `Fetching ${count === 1 ? 'a resource' : 'resources'}` : `Fetched ${count === 1 ? 'a resource' : 'resources'}`
-    return active ? `Using ${count === 1 ? 'a tool' : 'tools'}` : `Used ${count === 1 ? 'a tool' : 'tools'}`
+    const target = (singular: string, plural: string) => count === 1 ? t(singular) : t(plural)
+    if (action === 'browser') return active ? t('Using the browser') : t('Used the browser')
+    if (action === 'command') return active ? t('Running {target}', { target: target('a command', 'commands') }) : t('Ran {target}', { target: target('a command', 'commands') })
+    if (action === 'edit') return active ? t('正在编辑 {target}', { target: count === 1 ? t('文件') : t('{count} 个文件', { count }) }) : t('Edited {target}', { target: target('a file', 'files') })
+    if (action === 'read') return active ? t('Reading {target}', { target: target('a file', 'files') }) : t('Read {target}', { target: target('a file', 'files') })
+    if (action === 'search') return active ? t('Searching the project') : t('Searched the project')
+    if (action === 'fetch') return active ? t('Fetching {target}', { target: target('a resource', 'resources') }) : t('Fetched {target}', { target: target('a resource', 'resources') })
+    return active ? t('Using {target}', { target: target('a tool', 'tools') }) : t('Used {target}', { target: target('a tool', 'tools') })
   }).join(', ')
 }
 
-function latestFlowForItems(items: TimelineItem[]): ActiveFlowStatus {
+function latestFlowForItems(items: TimelineItem[], t: Translator): ActiveFlowStatus {
   for (const item of [...items].reverse()) {
     if (item.kind === 'task' && item.executions.length) {
       const execution = item.executions.findLast((candidate) => candidate.state === 'active') ?? item.executions.at(-1)!
-      return { label: dynamicTaskLabel(item.executions, item.state === 'active'), state: executionOrbState(execution) }
+      return { label: dynamicTaskLabel(item.executions, item.state === 'active', t), state: executionOrbState(execution) }
     }
   }
   for (const item of [...items].reverse()) {
-    if (item.kind === 'message') return { label: item.streaming ? '正在生成回复' : '生成回复', state: 'composing' }
-    if (item.kind === 'reasoning') return { label: item.streaming ? '正在思考' : '完成思考', state: 'solving' }
+    if (item.kind === 'message') return { label: item.streaming ? t('正在生成回复') : t('生成回复'), state: 'composing' }
+    if (item.kind === 'reasoning') return { label: item.streaming ? t('正在思考') : t('完成思考'), state: 'solving' }
     if (item.kind === 'status') return { label: item.label, state: 'working' }
     if (item.kind === 'change') return { label: item.label, state: 'shaping' }
   }
@@ -589,31 +593,32 @@ const IDLE_FLOW_STATUS: ActiveFlowStatus = { label: 'Solving', state: 'solving' 
 const CAPSULE_ORB_SIZE = 30
 const TASK_POSITION_TOLERANCE = 8
 
-function getActiveFlowStatus(timeline: TimelineState): ActiveFlowStatus | null {
+function getActiveFlowStatus(timeline: TimelineState, t: Translator): ActiveFlowStatus | null {
   if (timeline.status !== 'running') return null
 
   for (const item of [...timeline.items].reverse()) {
-    if (item.kind === 'confirmation' && !item.resolved) return { label: '等待你的回答', state: 'working' }
-    if (item.kind === 'message' && item.streaming) return { label: '正在生成回复', state: 'composing' }
-    if (item.kind === 'reasoning' && item.streaming) return { label: '正在思考', state: 'solving' }
+    if (item.kind === 'confirmation' && !item.resolved) return { label: t('等待你的回答'), state: 'working' }
+    if (item.kind === 'message' && item.streaming) return { label: t('正在生成回复'), state: 'composing' }
+    if (item.kind === 'reasoning' && item.streaming) return { label: t('正在思考'), state: 'solving' }
     if (item.kind === 'status' && item.state === 'active') return { label: item.label, state: 'working' }
     if (item.kind === 'task' && item.state === 'active') {
       const execution = [...item.executions].reverse().find((candidate) => candidate.state === 'active')
       return {
-        label: execution ? `${toolActionLabel(execution)} · ${item.label}` : item.label,
+        label: execution ? `${toolActionLabel(execution, t)} · ${item.label}` : item.label,
         state: execution ? executionOrbState(execution) : 'working',
       }
     }
   }
 
-  const latest = latestFlowForItems(timeline.items)
-  return latest === IDLE_FLOW_STATUS ? { label: '正在思考', state: 'solving' } : latest
+  const latest = latestFlowForItems(timeline.items, t)
+  return latest === IDLE_FLOW_STATUS ? { label: t('正在思考'), state: 'solving' } : latest
 }
 
 function TaskPositionCapsule({ activeFlow }: { activeFlow: ActiveFlowStatus | null }) {
   const { contentRef, escapedFromLock, scrollRef, scrollToBottom } = useStickToBottomContext()
-  const capsuleFlow = activeFlow ?? IDLE_FLOW_STATUS
   const [awayFromTaskPosition, setAwayFromTaskPosition] = useState(false)
+  const t = useT()
+  const capsuleFlow = activeFlow ?? { ...IDLE_FLOW_STATUS, label: t('空闲中') }
 
   useEffect(() => {
     const scrollElement = scrollRef.current
@@ -640,18 +645,18 @@ function TaskPositionCapsule({ activeFlow }: { activeFlow: ActiveFlowStatus | nu
 
   return (
     <button
-      aria-label={activeFlow ? '返回正在工作的位置' : '返回任务位置'}
+      aria-label={activeFlow ? t('返回正在工作的位置') : t('返回任务位置')}
       className="absolute bottom-3 left-1/2 z-30 flex h-10 max-w-[calc(100%_-_24px)] -translate-x-1/2 items-center gap-1.5 overflow-hidden rounded-full border border-[var(--app-status-glass-border)] bg-[var(--app-status-glass)] py-1 pl-1.5 pr-3 text-left text-[var(--app-status-glass-foreground)] shadow-[inset_0_0_50px_rgb(255_255_255_/_1%),0_16px_48px_var(--app-shadow)] backdrop-blur-xl transition-transform active:scale-[0.98]"
       onClick={() => scrollToBottom()}
       type="button"
     >
       <ThinkingOrb aria-label={capsuleFlow.label} className="shrink-0" size={CAPSULE_ORB_SIZE} speed={activeFlow ? 1 : 0.5} state={capsuleFlow.state} />
-      <span className="min-w-0 max-w-[160px] truncate text-[12px] font-normal leading-[14px]">{activeFlow?.label ?? '空闲中'}</span>
+      <span className="min-w-0 max-w-[160px] truncate text-[12px] font-normal leading-[14px]">{activeFlow?.label ?? t('空闲中')}</span>
     </button>
   )
 }
 
-function executionInput(execution: TaskExecution) {
+function executionInput(execution: TaskExecution, t: Translator) {
   const input = execution.input && typeof execution.input === 'object'
     ? execution.input as Record<string, unknown>
     : {}
@@ -675,7 +680,7 @@ function executionInput(execution: TaskExecution) {
   const start = input.line_start ?? input.lineStart ?? input.startLine
   const end = input.line_end ?? input.lineEnd ?? input.endLine
   const range = typeof start === 'number'
-    ? `Lines ${start}${typeof end === 'number' ? `-${end}` : ''}`
+    ? t('Lines {range}', { range: typeof end === 'number' ? `${start}-${end}` : `${start}` })
     : undefined
   return { displayValue, primary, range, title: [primary, range, execution.error ?? execution.output].filter(Boolean).join(' · ') }
 }
@@ -704,14 +709,15 @@ function executionDoneIcon(execution: TaskExecution): IconSvgElement {
 }
 
 function ExecutionIcon({ execution }: { execution: TaskExecution }) {
-  const action = toolActionLabel(execution)
+  const t = useT()
+  const action = toolActionLabel(execution, t)
   const stateLabel = execution.state === 'active'
-    ? `${action} 中`
+    ? t('{action} 中', { action })
     : execution.state === 'failed'
-      ? `${action} 失败`
+      ? t('{action} 失败', { action })
       : execution.state === 'completed'
-        ? `${action} 已完成`
-        : `${action} 等待中`
+        ? t('{action} 已完成', { action })
+        : t('{action} 等待中', { action })
 
   return (
     <StatusGlyph doneIcon={executionDoneIcon(execution)} label={stateLabel} orbState={executionOrbState(execution)} running={execution.state === 'active'} />
@@ -721,7 +727,8 @@ function ExecutionIcon({ execution }: { execution: TaskExecution }) {
 function TaskExecutionRow({ execution }: { execution: TaskExecution }) {
   const [open, setOpen] = useState(false)
   const detailsId = useId()
-  const input = executionInput(execution)
+  const t = useT()
+  const input = executionInput(execution, t)
   const expandable = execution.kind === 'command' || execution.kind === 'file'
   const command = execution.kind === 'command' ? input.primary : undefined
   const output = execution.error ?? execution.output
@@ -729,7 +736,7 @@ function TaskExecutionRow({ execution }: { execution: TaskExecution }) {
   return (
     <div className="min-w-0 text-[13px] leading-4 tracking-[-0.0762px] text-[var(--app-muted)]">
       <div className="flex h-6 min-w-0 items-center gap-2">
-        <span className={execution.state === 'failed' ? 'w-14 shrink-0 truncate text-[var(--destructive)]' : 'w-14 shrink-0 truncate'}>{toolActionLabel(execution)}</span>
+        <span className={execution.state === 'failed' ? 'w-14 shrink-0 truncate text-[var(--destructive)]' : 'w-14 shrink-0 truncate'}>{toolActionLabel(execution, t)}</span>
         <button
           aria-controls={expandable ? detailsId : undefined}
           aria-expanded={expandable ? open : undefined}
@@ -747,7 +754,7 @@ function TaskExecutionRow({ execution }: { execution: TaskExecution }) {
       {expandable && open ? (
         <div className="mt-2 max-h-[240px] w-full max-w-[350px] space-y-2 overflow-y-auto font-mono text-[13px] leading-5 text-[var(--app-muted)]" id={detailsId}>
           {execution.kind === 'file' ? (
-            execution.content !== undefined ? <ChatCodePreview className="max-w-none" content={execution.content} language={execution.language} path={execution.path ?? input.primary} streaming={execution.editState === 'editing'} /> : <p className="rounded-md border border-[var(--app-control-border)] bg-[var(--app-surface)] p-3 text-[12px] text-[var(--app-muted)]">等待代码内容…</p>
+            execution.content !== undefined ? <ChatCodePreview className="max-w-none" content={execution.content} language={execution.language} path={execution.path ?? input.primary} streaming={execution.editState === 'editing'} /> : <p className="rounded-md border border-[var(--app-control-border)] bg-[var(--app-surface)] p-3 text-[12px] text-[var(--app-muted)]">{t('等待代码内容…')}</p>
           ) : (
             <>
               <pre className="overflow-x-auto rounded-md border border-[var(--app-control-border)] bg-[var(--app-surface)] p-3 text-[var(--app-foreground)]"><code className="whitespace-pre">$ {command}</code></pre>
@@ -762,8 +769,9 @@ function TaskExecutionRow({ execution }: { execution: TaskExecution }) {
 
 function TaskGroupItem({ item }: { item: Extract<TimelineItem, { kind: 'task' }> }) {
   const [open, setOpen] = useState(false)
+  const t = useT()
   const latestExecution = item.executions.findLast((execution) => execution.state === 'active') ?? item.executions.at(-1)
-  const title = item.executions.length ? dynamicTaskLabel(item.executions, item.state === 'active') : item.label
+  const title = item.executions.length ? dynamicTaskLabel(item.executions, item.state === 'active', t) : item.label
   const orbState = latestExecution ? executionOrbState(latestExecution) : 'working'
   return (
     <Task className="w-full" onOpenChange={setOpen} open={open}>
@@ -786,9 +794,11 @@ function TaskGroupItem({ item }: { item: Extract<TimelineItem, { kind: 'task' }>
 }
 
 function StatusItem({ item }: { item: Extract<TimelineItem, { kind: 'status' }> }) {
+  const t = useT()
+  const stateSuffix = item.state === 'active' ? t('中') : item.state === 'failed' ? t('失败') : t('已完成')
   return (
     <div className="flex h-7 items-center gap-2 text-[13px] leading-[21px] tracking-[-0.0762px] text-[var(--app-muted)]">
-      <StatusGlyph doneIcon={BadgeCheckIcon} label={`${item.label}${item.state === 'active' ? '中' : item.state === 'failed' ? '失败' : '已完成'}`} running={item.state === 'active'} />
+      <StatusGlyph doneIcon={BadgeCheckIcon} label={`${item.label}${stateSuffix}`} running={item.state === 'active'} />
       <div className="min-w-0 leading-[21px]"><p>{item.label}</p>{item.detail ? <p className="text-[12px] text-[var(--app-subtle-foreground)]">{item.detail}</p> : null}</div>
     </div>
   )
@@ -804,6 +814,7 @@ function isLegacyRuntimeSnapshotPath(input: string): boolean {
 function ChangeItem({ item }: { item: Extract<TimelineItem, { kind: 'change' }> }) {
   const [open, setOpen] = useState(false)
   const [selectedPath, setSelectedPath] = useState<string | undefined>()
+  const t = useT()
   // Old persisted snapshots may predate the Worker-level exclusion policy.
   // Filter them at render time as a migration guard; all new snapshots are
   // already clean at collection time.
@@ -823,13 +834,13 @@ function ChangeItem({ item }: { item: Extract<TimelineItem, { kind: 'change' }> 
           {item.baseCommit ? <span className="shrink-0 font-mono text-[11px] text-[var(--app-muted)]">@{item.baseCommit}</span> : item.changeCount && item.changeCount > 1 ? <span className="shrink-0 text-[12px] text-[var(--app-muted)]">v{item.changeCount}</span> : null}
         </button>
         {(additions !== undefined || deletions !== undefined) && (
-          <button aria-label="查看差异" className="flex h-6 shrink-0 items-center rounded-md border border-[var(--app-control-border)] bg-[var(--app-active)] px-2 text-xs font-semibold hover:bg-[var(--app-hover)]" type="button">
+          <button aria-label={t('查看差异')} className="flex h-6 shrink-0 items-center rounded-md border border-[var(--app-control-border)] bg-[var(--app-active)] px-2 text-xs font-semibold hover:bg-[var(--app-hover)]" type="button">
             <span className="text-[var(--app-success)]">+{additions ?? 0}</span>
             <span className="px-0.5 text-[var(--app-muted)]">/</span>
             <span className="text-[var(--app-danger)]">-{deletions ?? 0}</span>
           </button>
         )}
-        <button aria-label={open ? '收起 Git 变更' : '展开 Git 变更'} className="flex size-6 items-center justify-center rounded text-[var(--app-muted)] hover:bg-[var(--app-active)] hover:text-[var(--app-foreground)]" onClick={() => setOpen((value) => !value)} type="button"><RotateCcw className="size-3.5" /></button>
+        <button aria-label={open ? t('收起 Git 变更') : t('展开 Git 变更')} className="flex size-6 items-center justify-center rounded text-[var(--app-muted)] hover:bg-[var(--app-active)] hover:text-[var(--app-foreground)]" onClick={() => setOpen((value) => !value)} type="button"><RotateCcw className="size-3.5" /></button>
       </div>
       {open && files.length ? (
         <div className="max-h-[480px] overflow-y-auto pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -855,7 +866,7 @@ function ChangeItem({ item }: { item: Extract<TimelineItem, { kind: 'change' }> 
           </div>
           {selected?.patch ? (
             <pre className="mt-2 max-h-[248px] overflow-auto rounded-md border border-[var(--app-control-border)] bg-[var(--app-surface)] p-2 font-mono text-[11px] leading-4 text-[var(--app-foreground)]"><code className="whitespace-pre-wrap break-words">{selected.patch}</code></pre>
-          ) : item.snapshot ? <p className="mt-2 text-[12px] text-[var(--app-muted)]">Git detected this file, but it has no text diff to preview.</p> : null}
+          ) : item.snapshot ? <p className="mt-2 text-[12px] text-[var(--app-muted)]">{t('Git detected this file, but it has no text diff to preview.')}</p> : null}
         </div>
       ) : null}
     </div>
@@ -863,15 +874,16 @@ function ChangeItem({ item }: { item: Extract<TimelineItem, { kind: 'change' }> 
 }
 
 function ConfirmationResultItem({ item }: { item: Extract<TimelineItem, { kind: 'confirmation' }> }) {
+  const t = useT()
   const approved = item.approved ?? false
 
   return (
     <div
-      aria-label={`${item.title}，${approved ? '已批准执行' : '已拒绝执行'}`}
+      aria-label={t('{title}，{result}', { title: item.title, result: approved ? t('已批准执行') : t('已拒绝执行') })}
       className="flex h-6 min-w-0 items-center gap-2 text-[13px] leading-4 tracking-[-0.0762px] text-[var(--app-muted)]"
       role="status"
     >
-      <span className="w-14 shrink-0 truncate">{approved ? '批准' : '跳过'}</span>
+      <span className="w-14 shrink-0 truncate">{approved ? t('批准') : t('跳过')}</span>
       <div className="flex h-6 min-w-0 max-w-[200px] items-center gap-1.5 overflow-hidden rounded-md border border-[var(--app-control-border)] bg-[var(--app-active)] pl-1 pr-1.5">
         <span className="flex size-4 shrink-0 items-center justify-center">
           {approved
@@ -884,14 +896,14 @@ function ConfirmationResultItem({ item }: { item: Extract<TimelineItem, { kind: 
   )
 }
 
-function formatRelativeTime(timestamp: string) {
+function formatRelativeTime(timestamp: string, t: Translator) {
   const elapsed = Math.max(0, Date.now() - new Date(timestamp).getTime())
   const minutes = Math.floor(elapsed / 60_000)
-  if (minutes < 1) return 'now'
-  if (minutes < 60) return `${minutes}m ago`
+  if (minutes < 1) return t('now')
+  if (minutes < 60) return t('{minutes}m ago', { minutes })
   const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  return `${Math.floor(hours / 24)}d ago`
+  if (hours < 24) return t('{hours}h ago', { hours })
+  return t('{days}d ago', { days: Math.floor(hours / 24) })
 }
 
 function formatClockTime(timestamp: string) {
@@ -903,14 +915,15 @@ function formatClockTime(timestamp: string) {
 }
 
 function UserPromptAttachments({ attachments }: { attachments: AgentPromptAttachment[] }) {
+  const t = useT()
   if (!attachments.length) return null
   return <div className="mb-1.5 flex flex-wrap gap-2">
     {attachments.map((attachment, index) => attachment.type === 'image'
-      ? <img alt={attachment.filename ?? `图片 ${index + 1}`} className="max-h-64 max-w-full rounded-lg object-contain" key={`${attachment.url.slice(0, 48)}:${index}`} src={attachment.url} />
+      ? <img alt={attachment.filename ?? t("图片 {index}", { index: index + 1 })} className="max-h-64 max-w-full rounded-lg object-contain" key={`${attachment.url.slice(0, 48)}:${index}`} src={attachment.url} />
       : attachment.type === 'reference'
         ? <div className="flex max-w-full items-center gap-2 rounded-lg border border-[var(--app-control-border)] bg-[var(--app-surface)] px-2 py-1.5 text-left" key={`reference:${attachment.path}`}>
           {attachment.referenceType === 'thread' ? <MessageCircle aria-hidden className="size-4 shrink-0 text-[var(--app-muted)]" /> : <FileText aria-hidden className="size-4 shrink-0 text-[var(--app-muted)]" />}
-          <span className="min-w-0"><span className="block truncate text-xs font-medium">{attachment.name}</span><span className="block truncate text-[10px] text-[var(--app-muted)]">{attachment.referenceType === 'thread' ? '任务引用' : attachment.path}</span></span>
+          <span className="min-w-0"><span className="block truncate text-xs font-medium">{attachment.name}</span><span className="block truncate text-[10px] text-[var(--app-muted)]">{attachment.referenceType === 'thread' ? t("任务引用") : attachment.path}</span></span>
         </div>
         : attachment.type === 'file'
           ? <div className="flex max-w-full items-center gap-2 rounded-lg border border-[var(--app-control-border)] bg-[var(--app-surface)] px-2 py-1.5 text-left" key={`upload:${attachment.uploadId}`}>
@@ -920,11 +933,11 @@ function UserPromptAttachments({ attachments }: { attachments: AgentPromptAttach
         : attachment.type === 'instruction'
           ? <div className="flex max-w-full items-center gap-2 rounded-lg border border-[var(--app-control-border)] bg-[var(--app-surface)] px-2 py-1.5 text-left" key={`instruction:${index}:${attachment.name}`}>
             <BookOpen aria-hidden className="size-4 shrink-0 text-[var(--app-muted)]" />
-            <span className="min-w-0"><span className="block truncate text-xs font-medium">{attachment.name}</span><span className="block text-[10px] text-[var(--app-muted)]">指令协议</span></span>
+            <span className="min-w-0"><span className="block truncate text-xs font-medium">{attachment.name}</span><span className="block text-[10px] text-[var(--app-muted)]">{t("指令协议")}</span></span>
           </div>
         : <div className="flex max-w-full items-center gap-2 rounded-lg border border-[var(--app-control-border)] bg-[var(--app-surface)] px-2 py-1.5 text-left" key={`text:${index}:${attachment.text.length}`}>
         <FileText aria-hidden className="size-4 shrink-0 text-[var(--app-muted)]" />
-        <span className="min-w-0"><span className="block truncate text-xs font-medium">{attachment.filename ?? '已粘贴的文本.txt'}</span><span className="block text-[10px] text-[var(--app-muted)]">{attachment.text.length.toLocaleString()} 个字符</span></span>
+        <span className="min-w-0"><span className="block truncate text-xs font-medium">{attachment.filename ?? t("已粘贴的文本.txt")}</span><span className="block text-[10px] text-[var(--app-muted)]">{t('{count} 个字符', { count: attachment.text.length.toLocaleString() })}</span></span>
       </div>)}
   </div>
 }
@@ -955,6 +968,7 @@ function EditableUserMessage({ item, disabled, onEditMessage }: {
   const [error, setError] = useState<string | null>(null)
   const trigger = useRef<HTMLButtonElement>(null)
   const restoreFocus = useRef(false)
+  const t = useT()
   const cancel = () => { restoreFocus.current = true; setEditing(false); setError(null) }
   useEffect(() => {
     if (!editing && restoreFocus.current) {
@@ -967,13 +981,13 @@ function EditableUserMessage({ item, disabled, onEditMessage }: {
     setPending(true)
     setError(null)
     try { await onEditMessage(item.id, draft.trim()); setEditing(false) }
-    catch (cause) { setError(cause instanceof Error ? cause.message : '重发失败，修改内容已保留') }
+    catch (cause) { setError(cause instanceof Error ? cause.message : t('重发失败，修改内容已保留')) }
     finally { setPending(false) }
   }
   return <div className="relative flex w-full justify-end" data-message-id={item.id}>
     {editing && <div aria-hidden="true" className="invisible mb-4 max-w-[95%] whitespace-pre-wrap break-words rounded-xl border px-3 py-1.5 text-[13px] leading-[21.125px]">{item.text}</div>}
     {editing ? <form
-      aria-label="编辑原消息"
+      aria-label={t('编辑原消息')}
       className="absolute left-1/2 top-0 z-20 mx-auto flex w-[95%] min-w-0 -translate-x-1/2 flex-col gap-3 rounded-xl border border-dashed border-[var(--app-muted)] bg-[var(--app-elevated)] p-3 shadow-[0_12px_36px_var(--app-shadow)]"
       onSubmit={(event) => { event.preventDefault(); void submit() }}
       onKeyDown={(event) => {
@@ -982,14 +996,14 @@ function EditableUserMessage({ item, disabled, onEditMessage }: {
         if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void submit() }
       }}
     >
-      <textarea autoFocus aria-label="消息内容" className="min-h-20 max-h-64 w-full resize-y bg-transparent text-[13px] leading-[21px] text-[var(--app-foreground)] outline-none" value={draft} maxLength={10000} disabled={pending} onChange={(event) => setDraft(event.target.value)} />
-      <p className="text-[11px] leading-4 text-[var(--app-muted)]">从此处重新生成后续对话，不回滚文件修改。</p>
+      <textarea autoFocus aria-label={t('消息内容')} className="min-h-20 max-h-64 w-full resize-y bg-transparent text-[13px] leading-[21px] text-[var(--app-foreground)] outline-none" value={draft} maxLength={10000} disabled={pending} onChange={(event) => setDraft(event.target.value)} />
+      <p className="text-[11px] leading-4 text-[var(--app-muted)]">{t('从此处重新生成后续对话，不回滚文件修改。')}</p>
       {error && <p role="alert" className="text-xs text-[var(--app-danger)]">{error}</p>}
       <div className="flex justify-end gap-2">
-        <button type="button" className="rounded-md px-3 py-1.5 text-xs hover:bg-[var(--app-hover)] focus-visible:outline" disabled={pending} onClick={cancel}>取消</button>
-        <button type="submit" className="rounded-md bg-[var(--app-submit-background)] px-3 py-1.5 text-xs text-[var(--app-submit-foreground)] disabled:opacity-40 focus-visible:outline" disabled={pending || disabled || !draft.trim()}>{pending ? '正在重发…' : '重发'}</button>
+        <button type="button" className="rounded-md px-3 py-1.5 text-xs hover:bg-[var(--app-hover)] focus-visible:outline" disabled={pending} onClick={cancel}>{t('取消')}</button>
+        <button type="submit" className="rounded-md bg-[var(--app-submit-background)] px-3 py-1.5 text-xs text-[var(--app-submit-foreground)] disabled:opacity-40 focus-visible:outline" disabled={pending || disabled || !draft.trim()}>{pending ? t('正在重发…') : t('重发')}</button>
       </div>
-    </form> : <button ref={trigger} type="button" aria-label={`编辑消息：${item.text}`} disabled={disabled || !onEditMessage}
+    </form> : <button ref={trigger} type="button" aria-label={t('编辑消息：{text}', { text: item.text })} disabled={disabled || !onEditMessage}
       className="mb-4 max-w-[95%] whitespace-pre-wrap break-words rounded-xl border border-[var(--app-control-border)] bg-[var(--app-active)] px-3 py-1.5 text-left text-[13px] leading-[21.125px] text-[var(--app-foreground)] outline-none hover:border-[var(--app-muted)] focus-visible:ring-1 focus-visible:ring-[var(--app-muted)]"
       onClick={() => { setDraft(item.text); setError(null); setEditing(true) }}
     >{item.text}</button>}
@@ -999,14 +1013,15 @@ function EditableUserMessage({ item, disabled, onEditMessage }: {
 function ErrorItem({ item }: { item: Extract<TimelineItem, { kind: 'error' }> }) {
   const [open, setOpen] = useState(false)
   const detailsId = useId()
+  const t = useT()
   const messages = item.messages ?? [item.message]
-  const title = item.title ?? agentErrorTitle(item.message)
+  const title = item.title ?? agentErrorTitle(item.message, t)
   return (
     <div className="py-0.5" data-slot="timeline-error">
       <button aria-controls={detailsId} aria-expanded={open} className="group flex min-h-6 w-full items-center gap-2 text-left text-[12px] leading-5 text-[color-mix(in_oklab,var(--app-danger)_62%,var(--app-muted))] outline-none transition-colors hover:text-[var(--app-danger)] focus-visible:text-[var(--app-danger)]" onClick={() => setOpen((value) => !value)} type="button">
         <CircleAlert className="size-3.5 shrink-0" />
         <span className="min-w-0 flex-1 truncate font-medium">{title}</span>
-        {messages.length > 1 ? <span aria-label={`${messages.length} 次`} className="shrink-0 tabular-nums text-[var(--app-subtle-foreground)]">{messages.length}</span> : null}
+        {messages.length > 1 ? <span aria-label={t('{count} 次', { count: messages.length })} className="shrink-0 tabular-nums text-[var(--app-subtle-foreground)]">{messages.length}</span> : null}
         <ChevronRight className={`size-3 shrink-0 text-[var(--app-subtle-foreground)] transition-transform ${open ? 'rotate-90' : ''}`} />
       </button>
       {open ? <div className="ml-[6px] mt-1 max-h-44 space-y-2 overflow-y-auto border-l border-[var(--app-border)] py-1 pl-[18px] pr-1 text-[11px] leading-[18px] text-[var(--app-muted)] [scrollbar-width:thin]" id={detailsId}>{messages.map((message, index) => <div className="whitespace-pre-wrap break-words" key={`${index}:${message}`}><span className="mr-2 font-mono text-[10px] text-[var(--app-subtle-foreground)]">#{index + 1}</span>{message}</div>)}</div> : null}
@@ -1015,13 +1030,17 @@ function ErrorItem({ item }: { item: Extract<TimelineItem, { kind: 'error' }> })
 }
 
 function TimelineItemView({ item, showContent = true }: { item: TimelineItem; showContent?: boolean }) {
+  const t = useT()
   if (item.kind === 'message') return <TimelineMessageItem item={item} />
   if (item.kind === 'reasoning') {
+    // Hidden thinking keeps the live progress row only; once the model stops
+    // reasoning the row is noise, so it disappears with the content.
+    if (!showContent && !item.streaming) return null
     return (
       <Reasoning className="mb-0!" defaultOpen={false} duration={item.durationMs ? Math.max(1, Math.round(item.durationMs / 1000)) : undefined} isStreaming={item.streaming}>
-        <ReasoningTrigger className="h-7 gap-2 text-[13px] leading-[21px] tracking-[-0.0762px]" getThinkingMessage={(streaming) => streaming ? <span>Thinking…</span> : <span>Thought for a moment</span>}>
-          <StatusGlyph doneIcon={AiBrain02Icon} label={item.streaming ? '正在思考' : '思考已完成'} orbState="solving" running={item.streaming} />
-          <span>{item.streaming ? 'Thinking…' : 'Thought for a moment'}</span>
+        <ReasoningTrigger className="h-7 gap-2 text-[13px] leading-[21px] tracking-[-0.0762px]" getThinkingMessage={(streaming) => streaming ? <span>{t('Thinking…')}</span> : <span>{t('Thought for a moment')}</span>}>
+          <StatusGlyph doneIcon={AiBrain02Icon} label={item.streaming ? t('正在思考') : t('思考已完成')} orbState="solving" running={item.streaming} />
+          <span>{item.streaming ? t('Thinking…') : t('Thought for a moment')}</span>
         </ReasoningTrigger>
         {showContent && item.text && <ReasoningContent className="relative mt-2 pl-7 text-[12px] leading-5 before:absolute before:inset-y-0 before:left-[9.5px] before:w-px before:bg-gradient-to-b before:from-[var(--app-border)] before:to-transparent">{item.text}</ReasoningContent>}
       </Reasoning>
@@ -1036,12 +1055,13 @@ function TimelineItemView({ item, showContent = true }: { item: TimelineItem; sh
 }
 
 function StreamingThinkingItem() {
+  const t = useT()
   return (
     <div className="flex h-7 items-center gap-2 text-[13px] leading-[21px] text-[var(--app-muted)]" data-streaming-thinking>
       <span className="flex size-5 shrink-0 items-center justify-center">
-        <ThinkingOrb aria-label="正在思考" className="shrink-0" size={20} state="solving" />
+        <ThinkingOrb aria-label={t('正在思考')} className="shrink-0" size={20} state="solving" />
       </span>
-      <span>Thinking…</span>
+      <span>{t('Thinking…')}</span>
     </div>
   )
 }
@@ -1056,13 +1076,14 @@ function WorkFlowGroup({
   round: ConversationRound
 }) {
   const [open, setOpen] = useState(round.state === 'working')
+  const t = useT()
   const checkpoint = round.checkpoint
-  const flow = round.state === 'working' && activeFlow ? activeFlow : latestFlowForItems(round.workingItems)
-  const label = round.state === 'working' ? 'Working' : checkpoint?.label ?? 'Worked'
+  const flow = round.state === 'working' && activeFlow ? activeFlow : latestFlowForItems(round.workingItems, t)
+  const label = round.state === 'working' ? t('Working') : checkpoint?.label ?? t('Worked')
   const checkpointText = checkpoint ? [
     checkpoint.label,
-    `${checkpoint.metrics?.actions ?? 0} actions`,
-    `${checkpoint.metrics?.credits?.toFixed(3) ?? '0.000'} credits`,
+    t('{count} actions', { count: checkpoint.metrics?.actions ?? 0 }),
+    t('{count} credits', { count: checkpoint.metrics?.credits?.toFixed(3) ?? '0.000' }),
     checkpoint.metrics?.model ?? 'Fable 5',
   ].join('\n') : ''
 
@@ -1092,10 +1113,10 @@ function WorkFlowGroup({
           <span className="truncate text-[14px] font-medium">{label}</span>
           <ChevronDown className={`size-[13px] shrink-0 transition-transform ${open ? '' : '-rotate-90'}`} />
         </button>
-        {checkpoint ? <span className="hidden shrink-0 items-center gap-1 sm:flex"><Clock3 className="size-[13px]" />{open ? formatClockTime(checkpoint.timestamp) : formatRelativeTime(checkpoint.timestamp)}</span> : null}
+        {checkpoint ? <span className="hidden shrink-0 items-center gap-1 sm:flex"><Clock3 className="size-[13px]" />{open ? formatClockTime(checkpoint.timestamp) : formatRelativeTime(checkpoint.timestamp, t)}</span> : null}
         {checkpoint ? <DropdownMenu>
           <DropdownMenuTrigger
-            render={<button aria-label="更多运行操作" className="flex size-6 shrink-0 items-center justify-center rounded-md hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)] data-popup-open:bg-[var(--app-active)] data-popup-open:text-[var(--app-foreground)]" type="button" />}
+            render={<button aria-label={t('更多运行操作')} className="flex size-6 shrink-0 items-center justify-center rounded-md hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)] data-popup-open:bg-[var(--app-active)] data-popup-open:text-[var(--app-foreground)]" type="button" />}
           >
             <MoreHorizontal className="size-4" />
           </DropdownMenuTrigger>
@@ -1108,20 +1129,20 @@ function WorkFlowGroup({
             <DropdownMenuSub>
               <DropdownMenuSubTrigger className="h-8 cursor-pointer gap-2.5 rounded-md px-2.5 text-[13px] focus:bg-[var(--app-hover)] data-popup-open:bg-[var(--app-hover)]">
                 <RefreshCw className="size-4 text-[var(--app-muted)]" />
-                <span>重试</span>
+                <span>{t('重试')}</span>
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="w-[144px] rounded-lg border border-[var(--app-border)] bg-[var(--app-elevated)] p-1 shadow-[0_12px_36px_var(--app-shadow)] ring-0">
-                <DropdownMenuItem className="h-8 cursor-pointer rounded-md px-2.5 text-[13px] focus:bg-[var(--app-hover)]" onClick={() => requestRetry('from-checkpoint')}>从此处重试</DropdownMenuItem>
-                <DropdownMenuItem className="h-8 cursor-pointer rounded-md px-2.5 text-[13px] focus:bg-[var(--app-hover)]" onClick={() => requestRetry('same-model')}>使用相同模型</DropdownMenuItem>
+                <DropdownMenuItem className="h-8 cursor-pointer rounded-md px-2.5 text-[13px] focus:bg-[var(--app-hover)]" onClick={() => requestRetry('from-checkpoint')}>{t('从此处重试')}</DropdownMenuItem>
+                <DropdownMenuItem className="h-8 cursor-pointer rounded-md px-2.5 text-[13px] focus:bg-[var(--app-hover)]" onClick={() => requestRetry('same-model')}>{t('使用相同模型')}</DropdownMenuItem>
               </DropdownMenuSubContent>
             </DropdownMenuSub>
             <DropdownMenuItem className="h-8 cursor-pointer gap-2.5 rounded-md px-2.5 text-[13px] focus:bg-[var(--app-hover)]" onClick={() => { void navigator.clipboard.writeText(checkpointText) }}>
               <Copy className="size-4 text-[var(--app-muted)]" />
-              <span>复制</span>
+              <span>{t('复制')}</span>
             </DropdownMenuItem>
             <DropdownMenuItem className="h-8 cursor-pointer gap-2.5 rounded-md px-2.5 text-[13px] focus:bg-[var(--app-hover)]" onClick={copyCheckpointLink}>
               <Link2 className="size-4 text-[var(--app-muted)]" />
-              <span>Copy Link</span>
+              <span>{t('Copy Link')}</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu> : null}
@@ -1162,9 +1183,12 @@ export function ChatTimeline({
   onFlowStatusChange?: (status: ActiveFlowStatus | null) => void
   onEditMessage?: (messageId: string, text: string) => Promise<void>
 }) {
-  const timeline = useMemo(() => buildTimeline(projectMessageRevisions(events)), [events])
-  const rounds = useMemo(() => buildConversationRounds(timeline), [timeline])
-  const activeFlow = useMemo(() => getActiveFlowStatus(timeline) ?? (isStreaming ? { label: '正在思考', state: 'solving' as OrbState } : null), [isStreaming, timeline])
+  const t = useT()
+  // Normalize durable order first: a reconnect can deliver replay frames after
+  // later live frames, and both projections below are order-sensitive.
+  const timeline = useMemo(() => buildTimeline(projectMessageRevisions(orderAgentEvents(events))), [events])
+  const rounds = useMemo(() => buildConversationRounds(timeline, t), [timeline])
+  const activeFlow = useMemo(() => getActiveFlowStatus(timeline, t) ?? (isStreaming ? { label: t('正在思考'), state: 'solving' as OrbState } : null), [isStreaming, timeline])
 
   useEffect(() => {
     onFlowStatusChange?.(activeFlow)

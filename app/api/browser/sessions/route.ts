@@ -1,3 +1,4 @@
+import { getT } from '@/lib/i18n/server'
 import { getChatSession, isChatSessionId } from '@/lib/chat-sessions'
 import { createClient } from '@/utils/supabase/server'
 
@@ -50,6 +51,7 @@ async function discoverProjectPreviewTarget(config: { baseUrl: string; apiToken:
 }
 
 export async function POST(request: Request) {
+  const { t } = await getT()
   const config = hostConfig()
   if (!config) return Response.json({ error: { code: 'BROWSER_HOST_NOT_CONFIGURED', message: 'Browser Host is not configured', recoverable: true } }, { status: 503 })
 
@@ -88,7 +90,7 @@ export async function POST(request: Request) {
   }
   if (body.surface === 'native-preview') {
     const targetUrl = discoveredPreview?.url || process.env.OPENLINK_PREVIEW_TARGET_URL
-    if (!targetUrl) return Response.json({ error: { code: 'PREVIEW_NOT_ATTACHED', message: '未检测到运行中的 Web 服务。请先在项目环境中启动开发服务器。', recoverable: true } }, { status: 409 })
+    if (!targetUrl) return Response.json({ error: { code: 'PREVIEW_NOT_ATTACHED', message: t('未检测到运行中的 Web 服务。请先在项目环境中启动开发服务器。'), recoverable: true } }, { status: 409 })
     requestBody.preview = {
       targetUrl,
       ...(discoveredPreview?.headers ? { targetHeaders: discoveredPreview.headers } : {}),
