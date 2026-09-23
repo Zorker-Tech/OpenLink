@@ -3,6 +3,8 @@
 import { ShieldAlert } from 'lucide-react'
 import { useState } from 'react'
 
+import { useT } from '@/lib/i18n/client'
+
 export interface ComposerConfirmationRequest {
   id: string
   title: string
@@ -22,6 +24,7 @@ export function ChatConfirmationDock({
   const [resolving, setResolving] = useState<Set<string>>(() => new Set())
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const t = useT()
   if (requests.length === 0) return null
 
   const resolve = async (request: ComposerConfirmationRequest, approved: boolean, value?: string) => {
@@ -35,7 +38,7 @@ export function ChatConfirmationDock({
     try {
       await onResolve(request.id, approved, value)
     } catch (error) {
-      setErrors((current) => ({ ...current, [request.id]: error instanceof Error ? error.message : '操作失败，请重试' }))
+      setErrors((current) => ({ ...current, [request.id]: error instanceof Error ? error.message : t('操作失败，请重试') }))
     } finally {
       setResolving((current) => {
         const next = new Set(current)
@@ -46,11 +49,11 @@ export function ChatConfirmationDock({
   }
 
   return (
-    <div aria-label="待确认操作" aria-live="polite" className="relative z-10 mx-[21px] flex flex-col gap-1">
+    <div aria-label={t('待确认操作')} aria-live="polite" className="relative z-10 mx-[21px] flex flex-col gap-1">
       {requests.map((request) => (
         <section
           aria-busy={resolving.has(request.id)}
-          aria-label={request.confirmationKind === 'approval' ? `审批：${request.title}` : `问题：${request.title}`}
+          aria-label={request.confirmationKind === 'approval' ? t('审批：{title}', { title: request.title }) : t('问题：{title}', { title: request.title })}
           className={`relative flex min-w-0 items-center gap-2 border border-b-0 border-[var(--app-border)] bg-[var(--app-elevated)] px-3.5 py-2 text-[12px] leading-[18px] text-[var(--app-foreground)] first:rounded-t-[12px] ${request.inputKind && request.inputKind !== 'confirm' ? 'min-h-9 flex-wrap' : 'h-9'}`}
           key={request.id}
           role={request.confirmationKind === 'approval' ? 'alert' : 'group'}
@@ -85,7 +88,7 @@ export function ChatConfirmationDock({
                 const value = event.currentTarget.value
                 setDrafts((current) => ({ ...current, [request.id]: value }))
               }}
-              placeholder="输入内容"
+              placeholder={t('输入内容')}
               value={drafts[request.id] ?? ''}
             />
           ) : null}
@@ -98,7 +101,7 @@ export function ChatConfirmationDock({
                 const value = event.currentTarget.value
                 setDrafts((current) => ({ ...current, [request.id]: value }))
               }}
-              placeholder="输入内容"
+              placeholder={t('输入内容')}
               value={drafts[request.id] ?? ''}
             />
           ) : null}
@@ -109,7 +112,7 @@ export function ChatConfirmationDock({
               onClick={() => { void resolve(request, false) }}
               type="button"
             >
-              {request.confirmationKind === 'approval' ? '拒绝' : '跳过'}
+              {request.confirmationKind === 'approval' ? t('拒绝') : t('跳过')}
             </button>
             {request.inputKind !== 'select' ? <button
               className="flex h-6 items-center justify-center rounded-md bg-[var(--app-submit-background)] px-2.5 text-[11px] font-medium text-[var(--app-submit-foreground)] hover:opacity-90"
@@ -117,7 +120,7 @@ export function ChatConfirmationDock({
               onClick={() => { void resolve(request, true, request.inputKind === 'input' || request.inputKind === 'editor' ? drafts[request.id] ?? '' : undefined) }}
               type="button"
             >
-              {resolving.has(request.id) ? '处理中' : request.confirmationKind === 'approval' ? '允许' : '提交'}
+              {resolving.has(request.id) ? t('处理中') : request.confirmationKind === 'approval' ? t('允许') : t('提交')}
             </button> : null}
           </div>
           {errors[request.id] ? <span className="basis-full pl-6 text-[10px] text-[var(--app-danger)]" role="alert">{errors[request.id]}</span> : null}

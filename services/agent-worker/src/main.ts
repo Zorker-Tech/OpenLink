@@ -16,7 +16,7 @@ import { EnvHttpProxyAgent, install, setGlobalDispatcher } from 'undici'
 import { CodexAppServerRuntime, stageCodexPromptFiles } from './codex-runtime.js'
 import { piPromptProtocolInput } from './prompt-protocol.js'
 import { handleBrowserMcpRequest } from './browser-mcp.js'
-import { collectGitSnapshot } from './git-snapshot.js'
+import { createGitBaseline, collectGitSnapshot, type GitWorkingTreeBaseline } from './git-snapshot.js'
 
 const FILE_PREVIEW_LIMIT = 192 * 1024
 
@@ -375,6 +375,7 @@ class SdkAgentRuntime {
   private activeSignal?: AbortSignal
   private readonly pendingUi = new Map<string, PendingExtensionUiRequest>()
   private gitSnapshotSignature?: string
+  private turnBaseline?: GitWorkingTreeBaseline | null
 
   constructor(private readonly worker: WorkerConfig) {}
 
@@ -485,6 +486,11 @@ class SdkAgentRuntime {
         uploadedFiles.map((attachment) => ({ name: String(attachment.name), path: String(attachment.path) })),
       )
       const previousEntryCount = sessionManager.getEntries().length
+      // Report only what this turn changed: record the working tree before the
+      // turn can touch it, the way Codex/ChatGPT clients checkpoint a turn.
+      await this.turnBaseline?.dispose()
+      this.turnBaseline = await createGitBaseline(this.worker.workspaceRoot)
+      this.gitSnapshotSignature = undefined
       let eventQueue = Promise.resolve()
       let idleTimer: ReturnType<typeof setTimeout> | undefined
       let rejectIdle!: (error: Error) => void
@@ -519,7 +525,7 @@ class SdkAgentRuntime {
             if (event.type === 'tool_execution_end' && typeof event.toolCallId === 'string') filePaths.delete(event.toolCallId)
           }
           if (!toolMayMutateWorkspace(event)) return
-          const snapshot = await collectGitSnapshot(this.worker.workspaceRoot)
+          const snapshot = await collectGitSnapshot(this.worker.workspaceRoot, this.turnBaseline)
           if (!snapshot || (!snapshot.files.length && !this.gitSnapshotSignature)) return
           if (snapshot.signature === this.gitSnapshotSignature) return
           this.gitSnapshotSignature = snapshot.signature

@@ -7,6 +7,7 @@ import {
   type PersonalWorkspaceSummary,
 } from '@/components/workspace-switcher'
 import type { OrganizationSummary } from '@/lib/organizations'
+import { useT } from '@/lib/i18n/client'
 import { useState } from 'react'
 
 export function AppSidebarWorkspaceHeader({
@@ -22,10 +23,11 @@ export function AppSidebarWorkspaceHeader({
   organizations: OrganizationSummary[]
   personalWorkspace: PersonalWorkspaceSummary
 }) {
+  const t = useT()
   return (
     <div className="flex h-8 items-center gap-1 px-2">
       <WorkspaceSwitcher activeWorkspace={activeWorkspace} onAddOrganization={onAddOrganization} organizations={organizations} personalWorkspace={personalWorkspace} />
-      <button aria-label="收起侧边栏" className="flex size-8 shrink-0 items-center justify-center rounded-md hover:bg-[var(--app-surface)]" onClick={onToggle} type="button">
+      <button aria-label={t('收起侧边栏')} className="flex size-8 shrink-0 items-center justify-center rounded-md hover:bg-[var(--app-surface)]" onClick={onToggle} type="button">
         <img alt="" className="app-control-icon size-4" src="/openlink/app/sidebar-toggle.svg" />
       </button>
     </div>

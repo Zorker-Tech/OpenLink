@@ -1,11 +1,13 @@
 import { AuthPage } from '@/components/auth-page'
 import { safeInternalPath } from '@/lib/cross-app-auth.server'
+import { getT } from '@/lib/i18n/server'
 import { isLocalRuntime } from '@/lib/runtime-mode.server'
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 
-export const metadata: Metadata = {
-  title: 'Sign in — OpenLink',
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getT()
+  return { title: t('Sign in — OpenLink') }
 }
 
 type LoginPageProps = Readonly<{

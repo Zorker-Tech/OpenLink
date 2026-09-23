@@ -24,7 +24,7 @@ test('later message edits preserve all preceding conversation and survive anothe
 test('message edit is inline and session command buttons are absent', () => {
   const timeline = readFileSync(new URL('../../components/chat-timeline.tsx', import.meta.url), 'utf8')
   const workspace = readFileSync(new URL('../../components/chat-workspace.tsx', import.meta.url), 'utf8')
-  assert.match(timeline, /aria-label="编辑原消息"/)
+  assert.match(timeline, /aria-label=\{t\('编辑原消息'\)\}/)
   assert.match(timeline, /mx-auto.*border-dashed/)
   assert.match(timeline, /if \(!editing && restoreFocus\.current\)[\s\S]*trigger\.current\?\.focus\(\)/)
   assert.match(timeline, /<MessageResponse key=\{item\.id\}/)

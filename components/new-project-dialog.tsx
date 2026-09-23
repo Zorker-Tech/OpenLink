@@ -24,6 +24,8 @@ import {
   Network,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { useT } from '@/lib/i18n/client'
+import type { Translator } from '@/lib/i18n/messages'
 import { useState, useTransition } from 'react'
 
 type ProjectCreationMode = 'blank-code' | 'github' | 'research'
@@ -50,28 +52,28 @@ function ProjectKindIcon({ kind, className = 'size-4' }: { kind: ProjectKind; cl
   return <Icon aria-hidden className={className} />
 }
 
-function creationDetails(mode: ProjectCreationMode) {
+function creationDetails(mode: ProjectCreationMode, t: Translator) {
   if (mode === 'github') {
     return {
-      title: 'Import from GitHub',
+      title: t('Import from GitHub'),
       kind: 'code' as const,
       sourceType: 'github' as const,
-      description: 'Connect a repository and use it as the project workspace.',
+      description: t('Connect a repository and use it as the project workspace.'),
     }
   }
   if (mode === 'research') {
     return {
-      title: 'New Research Project',
+      title: t('New Research Project'),
       kind: 'research' as const,
       sourceType: 'blank' as const,
-      description: 'Create a workspace for papers, sources, notes, and experiments.',
+      description: t('Create a workspace for papers, sources, notes, and experiments.'),
     }
   }
   return {
-    title: 'New Blank Project',
+    title: t('New Blank Project'),
     kind: 'code' as const,
     sourceType: 'blank' as const,
-    description: 'Start an empty code project for a website, app, or service.',
+    description: t('Start an empty code project for a website, app, or service.'),
   }
 }
 
@@ -81,6 +83,7 @@ export function NewProjectDialog({
   projects,
   workspaceSlug,
 }: NewProjectDialogProps) {
+  const t = useT()
   const router = useRouter()
   const [mode, setMode] = useState<ProjectCreationMode | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -99,7 +102,7 @@ export function NewProjectDialog({
     }
   }
 
-  const details = mode ? creationDetails(mode) : null
+  const details = mode ? creationDetails(mode, t) : null
 
   return (
     <FeatureDialog onOpenChange={handleOpenChange} open={open}>
@@ -110,7 +113,7 @@ export function NewProjectDialog({
         {!mode ? (
           <>
             <FeatureDialogHeader className="border-b-0 px-6 pb-5 pt-6">
-              <FeatureDialogTitle className="text-xl leading-[26px] tracking-[-0.45px]">New Project</FeatureDialogTitle>
+              <FeatureDialogTitle className="text-xl leading-[26px] tracking-[-0.45px]">{t('New Project')}</FeatureDialogTitle>
             </FeatureDialogHeader>
             <FeatureDialogBody className="px-6 pb-6 pt-0">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -127,13 +130,13 @@ export function NewProjectDialog({
                     type="button"
                   >
                     <Icon aria-hidden className="size-6" strokeWidth={1.9} />
-                    <span className="text-sm leading-5 tracking-[-0.1504px]">{label}</span>
+                    <span className="text-sm leading-5 tracking-[-0.1504px]">{t(label)}</span>
                   </button>
                 ))}
               </div>
 
               <section className="mt-8">
-                <h3 className="text-sm font-normal leading-5 tracking-[-0.1504px] text-[var(--app-muted)]">Jump back in</h3>
+                <h3 className="text-sm font-normal leading-5 tracking-[-0.1504px] text-[var(--app-muted)]">{t('Jump back in')}</h3>
                 <div className="mt-3 flex min-h-[220px] flex-col">
                   {projects.length ? projects.slice(0, 5).map((project) => (
                     <button
@@ -149,11 +152,11 @@ export function NewProjectDialog({
                         <ProjectKindIcon className="size-3.5" kind={project.kind} />
                       </span>
                       <span className="min-w-0 flex-1 truncate text-sm text-[var(--app-foreground)]">{project.name}</span>
-                      <span className="text-xs text-[var(--app-subtle-foreground)]">{project.kind === 'research' ? 'Research' : 'Code'}</span>
+                      <span className="text-xs text-[var(--app-subtle-foreground)]">{project.kind === 'research' ? t('Research') : t('Code')}</span>
                     </button>
                   )) : (
                     <div className="flex min-h-[176px] items-center justify-center rounded-lg border border-dashed border-[var(--app-control-border)] text-sm text-[var(--app-subtle-foreground)]">
-                      No projects yet
+                      {t('No projects yet')}
                     </div>
                   )}
                 </div>
@@ -202,7 +205,7 @@ export function NewProjectDialog({
           >
             <FeatureDialogHeader className="border-b-0 px-6 pb-4 pt-6">
               <button
-                aria-label="返回项目类型"
+                aria-label={t('返回项目类型')}
                 className="mb-3 flex size-7 items-center justify-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-surface)] hover:text-[var(--app-foreground)]"
                 onClick={() => {
                   setMode(null)
@@ -217,19 +220,19 @@ export function NewProjectDialog({
             </FeatureDialogHeader>
             <FeatureDialogBody className="space-y-5 px-6 pb-6 pt-2">
               <label className="block space-y-2">
-                <span className="text-sm font-medium text-[var(--app-foreground)]">Project name</span>
+                <span className="text-sm font-medium text-[var(--app-foreground)]">{t('Project name')}</span>
                 <Input
                   autoFocus
                   className="h-9 rounded-md border-[var(--app-control-border)] bg-[var(--app-surface)] text-[var(--app-foreground)] placeholder:text-[var(--app-subtle-foreground)] focus-visible:ring-1 focus-visible:ring-[var(--app-focus-ring)]"
                   maxLength={100}
                   name="name"
-                  placeholder={mode === 'research' ? 'Research topic' : 'my-project'}
+                  placeholder={mode === 'research' ? t('Research topic') : t('my-project')}
                   required
                 />
               </label>
 
               <fieldset className="space-y-2">
-                <legend className="text-sm font-medium text-[var(--app-foreground)]">执行环境</legend>
+                <legend className="text-sm font-medium text-[var(--app-foreground)]">{t('执行环境')}</legend>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <button
                     aria-pressed={executionMode === 'local'}
@@ -238,7 +241,10 @@ export function NewProjectDialog({
                     type="button"
                   >
                     <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md border border-[var(--app-control-border)] bg-[var(--app-background)] text-[var(--app-muted)]"><MonitorCog aria-hidden className="size-3.5" /></span>
-                    <span><span className="block text-sm font-medium text-[var(--app-foreground)]">本地</span><span className="mt-1 block text-xs leading-4 text-[var(--app-muted)]">在本机的 Project VM 中初始化与运行。</span></span>
+                    <span>
+                      <span className="block text-sm font-medium text-[var(--app-foreground)]">{t('本地')}</span>
+                      <span className="mt-1 block text-xs leading-4 text-[var(--app-muted)]">{t('在本机的 Project VM 中初始化与运行。')}</span>
+                    </span>
                   </button>
                   <button
                     aria-pressed={executionMode === 'ssh'}
@@ -247,7 +253,10 @@ export function NewProjectDialog({
                     type="button"
                   >
                     <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md border border-[var(--app-control-border)] bg-[var(--app-background)] text-[var(--app-muted)]"><Network aria-hidden className="size-3.5" /></span>
-                    <span><span className="block text-sm font-medium text-[var(--app-foreground)]">远程 SSH</span><span className="mt-1 block text-xs leading-4 text-[var(--app-muted)]">在目标 Linux 主机内创建该项目专属 VM。</span></span>
+                    <span>
+                      <span className="block text-sm font-medium text-[var(--app-foreground)]">{t('远程 SSH')}</span>
+                      <span className="mt-1 block text-xs leading-4 text-[var(--app-muted)]">{t('在目标 Linux 主机内创建该项目专属 VM。')}</span>
+                    </span>
                   </button>
                 </div>
               </fieldset>
@@ -255,24 +264,42 @@ export function NewProjectDialog({
               {executionMode === 'ssh' && (
                 <fieldset className="space-y-3 rounded-lg border border-[var(--app-control-border)] bg-[var(--app-surface)] p-3">
                   <div>
-                    <p className="text-sm font-medium text-[var(--app-foreground)]">SSH 连接</p>
-                    <p className="mt-1 text-xs leading-4 text-[var(--app-muted)]">目标将永久绑定到此项目。私钥会以 AES-256-GCM 加密保存，且连接必须匹配你提供的主机密钥。</p>
+                    <p className="text-sm font-medium text-[var(--app-foreground)]">{t('SSH 连接')}</p>
+                    <p className="mt-1 text-xs leading-4 text-[var(--app-muted)]">{t('目标将永久绑定到此项目。私钥会以 AES-256-GCM 加密保存，且连接必须匹配你提供的主机密钥。')}</p>
                   </div>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_104px]">
-                    <label className="block space-y-1.5"><span className="text-xs font-medium text-[var(--app-muted)]">主机</span><Input name="sshHost" placeholder="192.168.1.20 或 server.example.com" required /></label>
-                    <label className="block space-y-1.5"><span className="text-xs font-medium text-[var(--app-muted)]">端口</span><Input defaultValue="22" max="65535" min="1" name="sshPort" required type="number" /></label>
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-medium text-[var(--app-muted)]">{t('主机')}</span>
+                      <Input name="sshHost" placeholder={t('192.168.1.20 或 server.example.com')} required />
+                    </label>
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-medium text-[var(--app-muted)]">{t('端口')}</span>
+                      <Input defaultValue="22" max="65535" min="1" name="sshPort" required type="number" />
+                    </label>
                   </div>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <label className="block space-y-1.5"><span className="text-xs font-medium text-[var(--app-muted)]">用户</span><Input name="sshUser" placeholder="ubuntu" required /></label>
-                    <label className="block space-y-1.5"><span className="text-xs font-medium text-[var(--app-muted)]">远程根目录</span><Input defaultValue="/opt/openlink" name="sshRemoteRoot" required /></label>
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-medium text-[var(--app-muted)]">{t('用户')}</span>
+                      <Input name="sshUser" placeholder={t('ubuntu')} required />
+                    </label>
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-medium text-[var(--app-muted)]">{t('远程根目录')}</span>
+                      <Input defaultValue="/opt/openlink" name="sshRemoteRoot" required />
+                    </label>
                   </div>
-                  <label className="block space-y-1.5"><span className="text-xs font-medium text-[var(--app-muted)]">私钥</span><Textarea className="min-h-[112px] resize-y font-mono text-xs" name="sshPrivateKey" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" required /></label>
-                  <label className="block space-y-1.5"><span className="text-xs font-medium text-[var(--app-muted)]">主机密钥（known_hosts）</span><Textarea className="min-h-[66px] resize-y font-mono text-xs" name="sshKnownHosts" placeholder="server.example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI…" required /></label>
+                  <label className="block space-y-1.5">
+                    <span className="text-xs font-medium text-[var(--app-muted)]">{t('私钥')}</span>
+                    <Textarea className="min-h-[112px] resize-y font-mono text-xs" name="sshPrivateKey" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" required />
+                  </label>
+                  <label className="block space-y-1.5">
+                    <span className="text-xs font-medium text-[var(--app-muted)]">{t('主机密钥（known_hosts）')}</span>
+                    <Textarea className="min-h-[66px] resize-y font-mono text-xs" name="sshKnownHosts" placeholder="server.example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI…" required />
+                  </label>
                 </fieldset>
               )}
 
               <fieldset className="space-y-2">
-                <legend className="text-sm font-medium text-[var(--app-foreground)]">Disk allocation</legend>
+                <legend className="text-sm font-medium text-[var(--app-foreground)]">{t('Disk allocation')}</legend>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <button
                     aria-pressed={diskMode === 'thin'}
@@ -285,10 +312,10 @@ export function NewProjectDialog({
                     </span>
                     <span className="min-w-0">
                       <span className="flex items-center gap-2 text-sm font-medium text-[var(--app-foreground)]">
-                        Sparse
-                        <span className="rounded-full bg-[var(--app-subtle-surface)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--app-muted)]">Recommended</span>
+                        {t('Sparse')}
+                        <span className="rounded-full bg-[var(--app-subtle-surface)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--app-muted)]">{t('Recommended')}</span>
                       </span>
-                      <span className="mt-1 block text-xs leading-4 text-[var(--app-muted)]">64 GB capacity. Host usage grows with project data.</span>
+                      <span className="mt-1 block text-xs leading-4 text-[var(--app-muted)]">{t('64 GB capacity. Host usage grows with project data.')}</span>
                     </span>
                   </button>
                   <button
@@ -301,8 +328,8 @@ export function NewProjectDialog({
                       <HardDrive aria-hidden className="size-3.5" />
                     </span>
                     <span className="min-w-0">
-                      <span className="text-sm font-medium text-[var(--app-foreground)]">Fully allocated</span>
-                      <span className="mt-1 block text-xs leading-4 text-[var(--app-muted)]">Reserves the full 64 GB on the host immediately.</span>
+                      <span className="text-sm font-medium text-[var(--app-foreground)]">{t('Fully allocated')}</span>
+                      <span className="mt-1 block text-xs leading-4 text-[var(--app-muted)]">{t('Reserves the full 64 GB on the host immediately.')}</span>
                     </span>
                   </button>
                 </div>
@@ -310,7 +337,7 @@ export function NewProjectDialog({
 
               {mode === 'github' && (
                 <label className="block space-y-2">
-                  <span className="text-sm font-medium text-[var(--app-foreground)]">GitHub repository</span>
+                  <span className="text-sm font-medium text-[var(--app-foreground)]">{t('GitHub repository')}</span>
                   <Input
                   className="h-9 rounded-md border-[var(--app-control-border)] bg-[var(--app-surface)] text-[var(--app-foreground)] placeholder:text-[var(--app-subtle-foreground)] focus-visible:ring-1 focus-visible:ring-[var(--app-focus-ring)]"
                     name="sourceUrl"
@@ -322,12 +349,12 @@ export function NewProjectDialog({
               )}
 
               <label className="block space-y-2">
-                <span className="text-sm font-medium text-[var(--app-foreground)]">Description <span className="font-normal text-[var(--app-subtle-foreground)]">Optional</span></span>
+                <span className="text-sm font-medium text-[var(--app-foreground)]">{t('Description')} <span className="font-normal text-[var(--app-subtle-foreground)]">{t('Optional')}</span></span>
                 <Textarea
                   className="min-h-[82px] resize-none rounded-md border-[var(--app-control-border)] bg-[var(--app-surface)] text-[var(--app-foreground)] placeholder:text-[var(--app-subtle-foreground)] focus-visible:ring-1 focus-visible:ring-[var(--app-focus-ring)]"
                   maxLength={2000}
                   name="description"
-                  placeholder={mode === 'research' ? 'What question are you investigating?' : 'What are you building?'}
+                  placeholder={mode === 'research' ? t('What question are you investigating?') : t('What are you building?')}
                 />
               </label>
 
@@ -340,7 +367,7 @@ export function NewProjectDialog({
                   onClick={() => handleOpenChange(false)}
                   type="button"
                 >
-                  Cancel
+                  {t('Cancel')}
                 </button>
                 <button
                   className="flex h-8 min-w-[84px] items-center justify-center gap-2 rounded-md bg-[var(--app-submit-background)] px-3 text-sm font-medium text-[var(--app-submit-foreground)] hover:opacity-90 disabled:opacity-50"
@@ -348,7 +375,7 @@ export function NewProjectDialog({
                   type="submit"
                 >
                   {isPending && <Loader2 className="size-4 animate-spin" />}
-                  {isPending ? '创建中…' : 'Create'}
+                  {isPending ? t('创建中…') : t('Create')}
                 </button>
               </div>
             </FeatureDialogBody>

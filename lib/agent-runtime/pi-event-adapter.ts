@@ -1,7 +1,17 @@
+import type { Translator } from '@/lib/i18n/messages'
+
 import type { OpenLinkAgentEvent } from './events'
 
 type UnknownRecord = Record<string, unknown>
 const FILE_EDIT_CONTENT_LIMIT = 192 * 1024
+/**
+ * Fallback for callers that render without a locale provider (tests, stories,
+ * isolated adapters). It mirrors `translate()` from lib/i18n/messages: no
+ * catalog lookup, but placeholders still resolve.
+ */
+const sourceTranslator: Translator = (source, values) => values
+  ? source.replace(/\{(\w+)\}/g, (match, key: string) => values[key] === undefined ? match : String(values[key]))
+  : source
 
 const asRecord = (value: unknown): UnknownRecord | null => value && typeof value === 'object' ? value as UnknownRecord : null
 
@@ -110,6 +120,7 @@ function fileContentFromArgs(args: UnknownRecord, operation: 'write' | 'edit') {
 export class PiEventAdapter {
   private readonly sessionId: string
   private readonly now: () => string
+  private readonly t: Translator
   private sequence: number
   // An adapter is created for every HTTP turn. Keep the turn's reserved event
   // range in generated task ids so `task:0` from a later turn cannot overwrite
@@ -133,11 +144,13 @@ export class PiEventAdapter {
     sessionId: string,
     now: () => string = () => new Date().toISOString(),
     startSequence = 0,
+    t: Translator = sourceTranslator,
   ) {
     this.sessionId = sessionId
     this.now = now
     this.sequence = Math.max(0, startSequence)
     this.taskScope = String(this.sequence)
+    this.t = t
   }
 
   adapt(frame: unknown): OpenLinkAgentEvent[] {
@@ -183,11 +196,11 @@ export class PiEventAdapter {
       case 'extension_error':
         return [this.make({ type: 'error', errorId: this.identity('extension-error'), message: stringValue(value.error) || stringValue(value.message) || 'Pi extension failed', recoverable: value.terminal !== true })]
       case 'auto_retry_start':
-        return [this.make({ type: 'status.updated', statusId: this.identity('retry'), label: `正在重试（${Number(value.attempt) || 1}/${Number(value.maxAttempts) || 3}）`, status: 'active', detail: stringValue(value.errorMessage) })]
+        return [this.make({ type: 'status.updated', statusId: this.identity('retry'), label: this.t('正在重试（{attempt}/{maxAttempts}）', { attempt: Number(value.attempt) || 1, maxAttempts: Number(value.maxAttempts) || 3 }), status: 'active', detail: stringValue(value.errorMessage) })]
       case 'compaction_start':
-        return [this.make({ type: 'status.updated', statusId: this.identity('compaction'), label: '正在压缩会话上下文', status: 'active' })]
+        return [this.make({ type: 'status.updated', statusId: this.identity('compaction'), label: this.t('正在压缩会话上下文'), status: 'active' })]
       case 'compaction_end':
-        return [this.make({ type: 'status.updated', statusId: this.identity('compaction'), label: '会话上下文压缩完成', status: value.errorMessage ? 'failed' : 'completed', detail: stringValue(value.errorMessage) })]
+        return [this.make({ type: 'status.updated', statusId: this.identity('compaction'), label: this.t('会话上下文压缩完成'), status: value.errorMessage ? 'failed' : 'completed', detail: stringValue(value.errorMessage) })]
       default:
         return []
     }

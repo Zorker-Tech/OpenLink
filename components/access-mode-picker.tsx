@@ -2,16 +2,22 @@
 
 import type { AccessMode } from '@/lib/chat-sessions'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { useT } from '@/lib/i18n/client'
+import type { Translator } from '@/lib/i18n/messages'
 import { Hand, ShieldCheck, Unlock } from 'lucide-react'
 
-const OPTIONS: Array<{ value: AccessMode; label: string; description: string; icon: typeof ShieldCheck }> = [
-  { value: 'restricted', label: '受控', description: '仅只读操作，走防护墙', icon: ShieldCheck },
-  { value: 'ask', label: '询问', description: '写操作需用户确认', icon: Hand },
-  { value: 'open', label: '开放', description: '完全访问，不做限制', icon: Unlock },
-]
+type AccessModeOption = { value: AccessMode; label: string; description: string; icon: typeof ShieldCheck }
 
-function currentOption(value: AccessMode) {
-  return OPTIONS.find((option) => option.value === value) ?? OPTIONS[0]!
+function accessModeOptions(t: Translator): AccessModeOption[] {
+  return [
+    { value: 'restricted', label: t('受控'), description: t('仅只读操作，走防护墙'), icon: ShieldCheck },
+    { value: 'ask', label: t('询问'), description: t('写操作需用户确认'), icon: Hand },
+    { value: 'open', label: t('开放'), description: t('完全访问，不做限制'), icon: Unlock },
+  ]
+}
+
+function currentOption(options: AccessModeOption[], value: AccessMode) {
+  return options.find((option) => option.value === value) ?? options[0]!
 }
 
 /**
@@ -26,7 +32,9 @@ export function AccessModePicker({
   value: AccessMode
   onChange: (mode: AccessMode) => void
 }) {
-  const active = currentOption(value)
+  const t = useT()
+  const options = accessModeOptions(t)
+  const active = currentOption(options, value)
   const ActiveIcon = active.icon
 
   return (
@@ -34,9 +42,9 @@ export function AccessModePicker({
       <DropdownMenuTrigger
         render={
           <button
-            aria-label={`访问模式：${active.label}（${active.description}）`}
+            aria-label={t('访问模式：{label}（{description}）', { label: active.label, description: active.description })}
             className="flex size-7 items-center justify-center rounded-md text-[var(--app-muted)] transition-colors hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]"
-            title={`${active.label}：${active.description}`}
+            title={t('{label}：{description}', { label: active.label, description: active.description })}
             type="button"
           />
         }
@@ -48,7 +56,7 @@ export function AccessModePicker({
         className="w-[190px] rounded-lg border border-[var(--app-border)] bg-[var(--app-elevated)] p-1 text-[var(--app-foreground)] shadow-[0_10px_28px_var(--app-shadow)]"
         side="top"
       >
-        {OPTIONS.map((option) => {
+        {options.map((option) => {
           const Icon = option.icon
           const selected = option.value === value
           return (

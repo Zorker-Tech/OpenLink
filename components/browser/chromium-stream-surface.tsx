@@ -2,6 +2,7 @@
 
 import type { ElementReference } from '@/packages/browser-protocol/src/index'
 import { ThinkingOrb } from '@/components/thinking/src'
+import { useT } from '@/lib/i18n/client'
 import { theme } from '@/lib/theme'
 import { BrowserConnection } from '@/lib/browser-runtime/client'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -49,6 +50,7 @@ export function ChromiumStreamSurface({
   selectedElement: ElementReference | null
   viewportMode: 'mobile' | 'browser'
 }) {
+  const t = useT()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const imageRef = useRef<HTMLImageElement | null>(null)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
@@ -172,7 +174,7 @@ export function ChromiumStreamSurface({
 
   return (
     <div
-      aria-label="远程 Chromium 实时交互画布"
+      aria-label={t('远程 Chromium 实时交互画布')}
       className={`relative size-full overflow-hidden outline-none ${theme('editor')}`}
       onContextMenu={(event) => event.preventDefault()}
       onPointerDown={(event) => {
@@ -201,11 +203,11 @@ export function ChromiumStreamSurface({
       ref={containerRef}
       role="application"
     >
-      <img alt="远程 Chromium 页面" className={`pointer-events-none size-full select-none ${fit === 'fill' ? 'object-fill' : 'object-contain'}`} draggable={false} ref={imageRef} />
+      <img alt={t('远程 Chromium 页面')} className={`pointer-events-none size-full select-none ${fit === 'fill' ? 'object-fill' : 'object-contain'}`} draggable={false} ref={imageRef} />
       {!hasFrame && (
         <div className={`absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 text-sm ${theme('editor', 'muted')}`}>
-          <ThinkingOrb aria-label="正在初始化实时浏览器" size={64} state="shaping" />
-          <span>正在初始化实时浏览器</span>
+          <ThinkingOrb aria-label={t('正在初始化实时浏览器')} size={64} state="shaping" />
+          <span>{t('正在初始化实时浏览器')}</span>
         </div>
       )}
       {overlayStyle && (
@@ -216,7 +218,7 @@ export function ChromiumStreamSurface({
         </div>
       )}
       <textarea
-        aria-label="远程浏览器键盘输入"
+        aria-label={t('远程浏览器键盘输入')}
         className="pointer-events-none absolute left-0 top-0 size-px resize-none opacity-0"
         onChange={(event) => {
           if (event.currentTarget.value && activePageId) send({ type: 'keyboard.insertText', pageId: activePageId, text: event.currentTarget.value })

@@ -1,12 +1,14 @@
 import { KnowledgeWorkspace } from '@/components/knowledge-workspace'
+import { getT } from '@/lib/i18n/server'
 import { listOrganizations } from '@/lib/organizations'
 import { getAccessibleWorkspace, getAvatarUrl, getOwnedWorkspace } from '@/lib/workspaces'
 import { createClient } from '@/utils/supabase/server'
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 
-export const metadata: Metadata = {
-  title: 'Knowledge · OpenLink',
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getT()
+  return { title: t('Knowledge · OpenLink') }
 }
 
 export default async function KnowledgePage({

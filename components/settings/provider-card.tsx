@@ -5,6 +5,7 @@ import { ProviderBrand } from '@/components/settings/provider-logo'
 import { Switch } from '@/components/ui/switch'
 import type { AiProviderConfigurationSummary } from '@/lib/ai-provider-types'
 import type { AiProviderDefinition } from '@/lib/ai-providers'
+import { useT } from '@/lib/i18n/client'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useOptimistic, useTransition } from 'react'
@@ -15,6 +16,7 @@ interface ProviderCardProps {
 }
 
 export function ProviderCard({ configuration, provider }: ProviderCardProps) {
+  const t = useT()
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [enabled, setOptimisticEnabled] = useOptimistic(configuration?.enabled ?? false)
@@ -48,7 +50,7 @@ export function ProviderCard({ configuration, provider }: ProviderCardProps) {
         >
           <ProviderBrand provider={provider} size={24} />
           <p className="line-clamp-2 h-11 text-sm leading-[22px] text-[var(--app-muted)]" id={descriptionId}>
-            {provider.description}
+            {t(provider.description)}
           </p>
         </Link>
 
@@ -58,7 +60,7 @@ export function ProviderCard({ configuration, provider }: ProviderCardProps) {
 
         <div className="flex h-4 items-center">
           <Switch
-            aria-label={`${enabled ? '停用' : '启用'} ${provider.name}`}
+            aria-label={enabled ? t('停用 {name}', { name: provider.name }) : t('启用 {name}', { name: provider.name })}
             checked={enabled}
             disabled={pending}
             onCheckedChange={toggle}
