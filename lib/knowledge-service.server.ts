@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { createClient } from '@/utils/supabase/server'
+import { getT } from '@/lib/i18n/server'
 import { resolveEmbeddingProviderRuntimeConfiguration } from '@/lib/embedding-provider-configurations.server'
 
 export type KnowledgeServiceConfig = { baseUrl: string; token: string }
@@ -19,10 +20,11 @@ export async function authenticatedKnowledgeRequest(
   const config = knowledgeServiceConfig()
   if (!config) {
     const coreProfile = process.env.OPENLINK_DEPLOYMENT_PROFILE === 'core' || process.env.OPENLINK_KNOWLEDGE_ENABLED === '0'
+    const { t } = await getT()
     return {
       response: Response.json({
         error: coreProfile
-          ? { code: 'FEATURE_NOT_AVAILABLE_IN_CORE', message: '内置知识库在 Core 部署模式中未启用。切换到 Standard 或 Dense 后可使用。', retryable: false }
+          ? { code: "FEATURE_NOT_AVAILABLE_IN_CORE", message: t("内置知识库在 Core 部署模式中未启用。切换到 Standard 或 Dense 后可使用。"), retryable: false }
           : { code: 'KNOWLEDGE_SERVICE_NOT_CONFIGURED', retryable: true },
       }, { status: coreProfile ? 409 : 503 }),
     }

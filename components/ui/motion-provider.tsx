@@ -1,39 +1,18 @@
 'use client'
 
-import { AnimatePresence, MotionConfig, motion } from 'motion/react'
-import { usePathname } from 'next/navigation'
+import { MotionConfig } from 'motion/react'
 import type { ReactNode } from 'react'
-
-const pageTransition = {
-  duration: 0.18,
-  ease: [0.22, 1, 0.36, 1] as const,
-}
 
 /**
  * Shared motion boundary for the web app.
  *
- * Keeping this at the root gives every OpenLink surface the same reduced-motion
- * contract and a small, deterministic route transition. Component-level
- * interactions can still opt into their own layout/gesture animations without
- * inventing a second timing system.
+ * This is intentionally *not* a page-transition wrapper: animating the whole
+ * document made the persistent chrome (sidebar, topbars) slide on every
+ * navigation. Route transitions belong to `PageTransition`, which each shell
+ * applies to its content region only. What remains here is the reduced-motion
+ * contract every surface inherits.
  */
 export function OpenLinkMotionProvider({ children }: { children: ReactNode }) {
-  const pathname = usePathname()
-
-  return (
-    <MotionConfig reducedMotion="user">
-      <AnimatePresence initial={false} mode="wait">
-        <motion.div
-          animate={{ opacity: 1, y: 0 }}
-          className="openlink-motion-page"
-          exit={{ opacity: 0, y: -4 }}
-          initial={{ opacity: 0, y: 6 }}
-          key={pathname}
-          transition={pageTransition}
-        >
-          {children}
-        </motion.div>
-      </AnimatePresence>
-    </MotionConfig>
-  )
+  return <MotionConfig reducedMotion="user">{children}</MotionConfig>
 }
+

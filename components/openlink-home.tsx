@@ -16,6 +16,7 @@ import type { ReactNode } from 'react'
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
+import { useT } from '@/lib/i18n/client'
 import { theme } from '@/lib/theme'
 
 interface HomeUser {
@@ -100,6 +101,7 @@ const footerGroups = [
 ] as const
 
 function Header({ user }: { user: HomeUser | null }) {
+  const t = useT()
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
   const [isSigningOut, setIsSigningOut] = useState(false)
@@ -131,7 +133,7 @@ function Header({ user }: { user: HomeUser | null }) {
       {user ? (
         <div className="flex items-center gap-2">
           <a className={`hidden max-w-[180px] truncate rounded-md px-2 py-1 text-sm transition-colors hover:text-[var(--app-foreground)] sm:block ${theme('muted', 'hover')}`} href="/app" title={user.email ?? user.name ?? undefined}>
-            {user.name ?? user.email ?? '已登录'}
+            {user.name ?? user.email ?? t('已登录')}
           </a>
           <button
             className={`flex h-8 items-center rounded-lg border px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${theme('surface', 'border', 'hover')}`}
@@ -139,16 +141,16 @@ function Header({ user }: { user: HomeUser | null }) {
             onClick={handleSignOut}
             type="button"
           >
-            {isSigningOut ? '退出中…' : '退出'}
+            {isSigningOut ? t('退出中…') : t('退出')}
           </button>
         </div>
       ) : (
         <div className="flex items-center gap-2">
           <a className={`flex h-8 items-center rounded-lg border px-3 text-sm font-medium transition-colors ${theme('surface', 'border', 'hover')}`} href="/login">
-            登录
+            {t('登录')}
           </a>
           <a className={`flex h-8 items-center rounded-lg border border-[var(--app-submit-background)] px-3 text-sm font-medium transition-colors ${theme('action', 'actionHover')}`} href="/register">
-            注册
+            {t('注册')}
           </a>
         </div>
       )}
@@ -157,10 +159,11 @@ function Header({ user }: { user: HomeUser | null }) {
 }
 
 function Hero({ user, composerContext }: { user: HomeUser | null; composerContext: ComposerContext | null }) {
+  const t = useT()
   return (
     <section className="h-[493px] px-6 pt-36">
       <h1 className="mb-4 text-center text-[32px] leading-10 font-semibold tracking-[-0.8737px] text-[var(--app-foreground)]">
-        您想创建什么？
+        {t('您想创建什么？')}
       </h1>
       <PromptComposer user={user} composerContext={composerContext} />
     </section>

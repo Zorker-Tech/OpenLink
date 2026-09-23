@@ -1,6 +1,8 @@
 'use client'
 
 import type { AgentKind } from '@/lib/chat-session-types'
+import { useT } from '@/lib/i18n/client'
+import type { Translator } from '@/lib/i18n/messages'
 import { Bot, Check, Sparkles } from 'lucide-react'
 import {
   DropdownMenu,
@@ -10,23 +12,29 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useState } from 'react'
 
-const OPTIONS: ReadonlyArray<{ value: AgentKind; label: string; description: string }> = [
-  { value: 'codex', label: 'Codex', description: 'OpenAI Codex · 默认 Agent，自带沙箱' },
-  { value: 'pi', label: 'Pi', description: 'Pi coding agent · 浏览器与 Supabase 扩展' },
-]
+type AgentKindOption = { value: AgentKind; label: string; description: string }
+
+function agentKindOptions(t: Translator): ReadonlyArray<AgentKindOption> {
+  return [
+    { value: 'codex', label: 'Codex', description: t('OpenAI Codex · 默认 Agent，自带沙箱') },
+    { value: 'pi', label: 'Pi', description: t('Pi coding agent · 浏览器与 Supabase 扩展') },
+  ]
+}
 
 export function AgentKindPicker({ value, onChange }: { value: AgentKind; onChange: (agent: AgentKind) => void }) {
   const [open, setOpen] = useState(false)
-  const active = OPTIONS.find((option) => option.value === value) ?? OPTIONS[0]!
+  const t = useT()
+  const options = agentKindOptions(t)
+  const active = options.find((option) => option.value === value) ?? options[0]!
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
           <button
-            aria-label={`Agent：${active.label}（${active.description}）`}
+            aria-label={t('Agent：{label}（{description}）', { label: active.label, description: active.description })}
             className="flex h-[22px] items-center rounded-md px-1 text-[12px] font-medium text-[var(--app-muted)] transition-colors hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]"
-            title={`${active.label}：${active.description}`}
+            title={t('{label}：{description}', { label: active.label, description: active.description })}
             type="button"
           />
         }
@@ -38,7 +46,7 @@ export function AgentKindPicker({ value, onChange }: { value: AgentKind; onChang
         className="w-[240px] rounded-lg border border-[var(--app-border)] bg-[var(--app-elevated)] p-1 text-[var(--app-foreground)] shadow-[0_10px_28px_var(--app-shadow)]"
         side="bottom"
       >
-        {OPTIONS.map((option) => {
+        {options.map((option) => {
           const selected = option.value === value
           const Icon = option.value === 'codex' ? Sparkles : Bot
           return (

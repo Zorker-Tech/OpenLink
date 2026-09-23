@@ -1,6 +1,7 @@
 'use client'
 
 import { PromptInputTextarea, type PromptInputTextareaProps } from '@/components/ai-elements/prompt-input'
+import { useT } from '@/lib/i18n/client'
 import type { PromptTrigger } from '@/lib/prompt-input-protocol'
 import { promptTriggerAt, replacePromptTrigger } from '@/lib/prompt-input-protocol'
 import { enabledSuggestionIndex, nextEnabledSuggestionIndex } from '@/lib/prompt-suggestion-navigation'
@@ -43,9 +44,12 @@ interface AgentPromptTextareaProps extends Omit<PromptInputTextareaProps, 'value
   onSuggestionSelect?: (item: AgentPromptSuggestion) => boolean
 }
 
-export const AgentPromptTextarea = forwardRef<HTMLTextAreaElement, AgentPromptTextareaProps>(function AgentPromptTextarea({ value, suggestions, onValueChange, onChange, onKeyDown, onSelect, onClick, className, commandPaletteLabel = 'Agent 原生指令', commandPaletteLoading = false, commandPaletteEmptyLabel = '没有匹配项', onTriggerChange, onContentSizeChange, wrapperClassName, onAction, onSuggestionSelect, lineStartCommandsOnly = false, ...props }, forwardedRef) {
+export const AgentPromptTextarea = forwardRef<HTMLTextAreaElement, AgentPromptTextareaProps>(function AgentPromptTextarea({ value, suggestions, onValueChange, onChange, onKeyDown, onSelect, onClick, className, commandPaletteLabel, commandPaletteLoading = false, commandPaletteEmptyLabel, onTriggerChange, onContentSizeChange, wrapperClassName, onAction, onSuggestionSelect, lineStartCommandsOnly = false, ...props }, forwardedRef) {
   const ref = useRef<HTMLTextAreaElement | null>(null)
   const pickerId = useId()
+  const t = useT()
+  const paletteLabel = commandPaletteLabel ?? t('Agent 原生指令')
+  const paletteEmptyLabel = commandPaletteEmptyLabel ?? t('没有匹配项')
   useImperativeHandle(forwardedRef, () => ref.current as HTMLTextAreaElement)
   const dismissedAt = useRef<{ value: string; cursor: number } | null>(null)
   const contentSizeCallbackRef = useRef(onContentSizeChange)
@@ -119,29 +123,29 @@ export const AgentPromptTextarea = forwardRef<HTMLTextAreaElement, AgentPromptTe
     })
   }
 
-  const pickerLabel = trigger?.kind === 'command' ? commandPaletteLabel : trigger?.kind === 'skill' ? 'Codex skills' : 'Codex references'
+  const pickerLabel = trigger?.kind === 'command' ? paletteLabel : trigger?.kind === 'skill' ? 'Codex skills' : 'Codex references'
   const picker = trigger && pickerHost ? createPortal(<div className="absolute bottom-[calc(100%+8px)] left-[-1px] z-[100] max-h-[min(52vh,420px)] w-[calc(100%+2px)] overflow-hidden rounded-[20px] border border-[var(--app-border)] bg-[var(--app-elevated)] p-2 text-[var(--app-foreground)] shadow-[0_4px_80px_8px_var(--app-shadow)]">
     <div className="flex h-9 items-center gap-2 rounded-xl bg-[var(--app-active)] px-3 text-xs text-[var(--app-muted)]">
       {trigger.kind === 'command' ? <TerminalSquare className="size-4" /> : trigger.kind === 'skill' ? <Sparkles className="size-4" /> : <File className="size-4" />}
-      <span className="truncate">{trigger.kind === 'command' ? trigger.command ? `/${trigger.command}` : commandPaletteLabel : trigger.kind === 'skill' ? 'Skills' : '引用'}</span>
+      <span className="truncate">{trigger.kind === 'command' ? trigger.command ? `/${trigger.command}` : paletteLabel : trigger.kind === 'skill' ? 'Skills' : t('引用')}</span>
       <span className="ml-auto truncate font-mono text-[11px]">{trigger.kind === 'command' ? `/${trigger.command ? `${trigger.command} ` : ''}` : trigger.kind === 'skill' ? '$' : '@'}{trigger.query}</span>
     </div>
     <div aria-busy={commandPaletteLoading} aria-label={pickerLabel} className="mt-1 max-h-[min(42vh,330px)] overflow-y-auto overscroll-contain" id={pickerId} role="listbox">
-      {visible.length === 0 && <div aria-disabled="true" aria-selected="false" className="flex h-14 items-center justify-center px-3 text-xs text-[var(--app-muted)]" role="option">{commandPaletteLoading ? '正在加载…' : commandPaletteEmptyLabel}</div>}
+      {visible.length === 0 && <div aria-disabled="true" aria-selected="false" className="flex h-14 items-center justify-center px-3 text-xs text-[var(--app-muted)]" role="option">{commandPaletteLoading ? t('正在加载…') : paletteEmptyLabel}</div>}
       {visible.map((item, index) => <button aria-selected={index === activeSuggestionIndex} aria-disabled={item.disabled} disabled={item.disabled} className="flex min-h-11 w-full items-center gap-3 rounded-xl px-2 py-2 text-left text-sm hover:bg-[var(--app-hover)] aria-selected:bg-[var(--app-hover)] disabled:opacity-40" id={`${pickerId}-option-${index}`} key={item.id} onMouseDown={(event) => event.preventDefault()} onClick={() => choose(item)} role="option" type="button">
         <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-[var(--app-surface)] text-[var(--app-muted)] shadow-[0_4px_16px_rgba(0,0,0,0.05)]">{item.kind === 'command' ? <TerminalSquare className="size-4" /> : item.kind === 'skill' ? <Sparkles className="size-4" /> : item.group === 'Plugins' || item.group === 'Plugin Prompts' ? <PackagePlus className="size-4" /> : <File className="size-4" />}</span>
         <span className="min-w-0 flex-1"><span className="flex items-baseline gap-2"><span className="shrink-0 font-medium">{item.label}</span>{item.description && <span className="truncate text-xs text-[var(--app-muted)]">{item.description}</span>}</span></span>
         {(item.secondaryContent || item.group) && <span className="shrink-0 text-[10px] text-[var(--app-muted)]">{item.secondaryContent || item.group}</span>}
       </button>)}
     </div>
-    <div className="flex h-8 items-center border-t border-[var(--app-border)] px-2 text-[11px] text-[var(--app-muted)]"><span>↑↓ 选择</span><span className="ml-3">Enter 确认</span><span className="ml-auto">Esc 关闭</span></div>
+    <div className="flex h-8 items-center border-t border-[var(--app-border)] px-2 text-[11px] text-[var(--app-muted)]"><span>{t("↑↓ 选择")}</span><span className="ml-3">{t("Enter 确认")}</span><span className="ml-auto">{t("Esc 关闭")}</span></div>
   </div>, pickerHost) : null
 
   return <div
     aria-controls={trigger ? pickerId : undefined}
     aria-expanded={Boolean(trigger)}
     aria-haspopup="listbox"
-    aria-label={typeof props['aria-label'] === 'string' ? props['aria-label'] : commandPaletteLabel}
+    aria-label={typeof props['aria-label'] === 'string' ? props['aria-label'] : paletteLabel}
     className={cn('relative flex min-w-0 flex-1 items-start text-left', wrapperClassName)}
     role="combobox"
   >

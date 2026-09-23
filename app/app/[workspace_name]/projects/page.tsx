@@ -1,4 +1,5 @@
 import { ProjectsWorkspace } from '@/components/projects-workspace'
+import { getT } from '@/lib/i18n/server'
 import { listOrganizations } from '@/lib/organizations'
 import { listProjects } from '@/lib/projects'
 import { getAccessibleWorkspace, getAvatarUrl, getOwnedWorkspace } from '@/lib/workspaces'
@@ -6,8 +7,9 @@ import { createClient } from '@/utils/supabase/server'
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 
-export const metadata: Metadata = {
-  title: 'Projects · OpenLink',
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getT()
+  return { title: t('Projects · OpenLink') }
 }
 
 export default async function ProjectsPage({

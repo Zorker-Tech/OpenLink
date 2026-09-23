@@ -20,6 +20,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { useT } from '@/lib/i18n/client'
+import type { Translator } from '@/lib/i18n/messages'
 import { readSkillZip } from '@/lib/read-skill-zip'
 import type { UserSkill, UserSkillSummary } from '@/lib/user-skill-types'
 import {
@@ -40,21 +42,24 @@ interface SkillsWorkspaceProps {
   skills: UserSkillSummary[]
 }
 
-const errorMessages: Record<string, string> = {
-  INVALID_ZIP: '无法读取这个 ZIP 文件。',
-  SKILL_MD_NOT_FOUND: 'ZIP 中没有找到 SKILL.md。',
-  SKILL_TOO_LARGE: 'SKILL.md 不能超过 200 KB。',
-  ZIP_TOO_LARGE: 'ZIP 文件不能超过 5 MB。',
-  ZIP_COMPRESSION_UNSUPPORTED: '这个 ZIP 使用了暂不支持的压缩格式。',
-  ZIP_DECOMPRESSION_UNSUPPORTED: '当前浏览器不支持 ZIP 解压。',
+function errorMessages(t: Translator): Record<string, string> {
+  return {
+    INVALID_ZIP: t('无法读取这个 ZIP 文件。'),
+    SKILL_MD_NOT_FOUND: t('ZIP 中没有找到 SKILL.md。'),
+    SKILL_TOO_LARGE: t('SKILL.md 不能超过 200 KB。'),
+    ZIP_TOO_LARGE: t('ZIP 文件不能超过 5 MB。'),
+    ZIP_COMPRESSION_UNSUPPORTED: t('这个 ZIP 使用了暂不支持的压缩格式。'),
+    ZIP_DECOMPRESSION_UNSUPPORTED: t('当前浏览器不支持 ZIP 解压。'),
+  }
 }
 
-function messageFor(error: unknown, fallback: string) {
+function messageFor(error: unknown, fallback: string, t: Translator) {
   const key = error instanceof Error ? error.message : ''
-  return errorMessages[key] ?? (key && !key.includes('_') ? key : fallback)
+  return errorMessages(t)[key] ?? (key && !key.includes('_') ? key : fallback)
 }
 
 export function SkillsWorkspace({ currentSkill, skills }: SkillsWorkspaceProps) {
+  const t = useT()
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
@@ -67,7 +72,7 @@ export function SkillsWorkspace({ currentSkill, skills }: SkillsWorkspaceProps) 
     startTransition(async () => {
       const result = await createUserSkillAction({ name, ...(content !== undefined ? { content } : {}) })
       if (!result.ok) {
-        setActionError(messageFor(new Error(result.error), '创建 Skill 失败。'))
+        setActionError(messageFor(new Error(result.error), t('创建 Skill 失败。'), t))
         return
       }
       setCreateOpen(false)
@@ -82,7 +87,7 @@ export function SkillsWorkspace({ currentSkill, skills }: SkillsWorkspaceProps) 
       const imported = await readSkillZip(file)
       createSkill(imported.name, imported.content)
     } catch (error) {
-      setActionError(messageFor(error, '导入 ZIP 失败。'))
+      setActionError(messageFor(error, t('导入 ZIP 失败。'), t))
     }
   }
 
@@ -125,20 +130,20 @@ export function SkillsWorkspace({ currentSkill, skills }: SkillsWorkspaceProps) 
             }}
           >
             <DialogHeader>
-              <DialogTitle>创建 Skill</DialogTitle>
-              <DialogDescription>输入一个名称，OpenLink 会创建标准的 SKILL.md。</DialogDescription>
+              <DialogTitle>{t('创建 Skill')}</DialogTitle>
+              <DialogDescription>{t('输入一个名称，OpenLink 会创建标准的 SKILL.md。')}</DialogDescription>
             </DialogHeader>
             <input
               autoFocus
               className="mt-4 h-10 w-full rounded-lg border border-[var(--app-control-border)] bg-[var(--app-background)] px-3 text-sm outline-none focus:border-[var(--app-muted)]"
               maxLength={64}
               onChange={(event) => setCreateName(event.currentTarget.value)}
-              placeholder="例如：frontend-review"
+              placeholder={t('例如：frontend-review')}
               value={createName}
             />
             <DialogFooter className="mt-4 border-[var(--app-border)] bg-[var(--app-surface)]">
-              <DialogClose render={<button className="h-9 rounded-lg border border-[var(--app-control-border)] px-4 text-sm hover:bg-[var(--app-hover)]" type="button" />}>取消</DialogClose>
-              <button className="h-9 rounded-lg bg-[var(--app-submit-background)] px-4 text-sm font-medium text-[var(--app-submit-foreground)] disabled:opacity-40" disabled={!createName.trim() || pending} type="submit">创建</button>
+              <DialogClose render={<button className="h-9 rounded-lg border border-[var(--app-control-border)] px-4 text-sm hover:bg-[var(--app-hover)]" type="button" />}>{t('取消')}</DialogClose>
+              <button className="h-9 rounded-lg bg-[var(--app-submit-background)] px-4 text-sm font-medium text-[var(--app-submit-foreground)] disabled:opacity-40" disabled={!createName.trim() || pending} type="submit">{t('创建')}</button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -154,6 +159,7 @@ function SkillsNavigation({ currentSkillId, importing, onCreate, onImport, skill
   onImport: () => void
   skills: UserSkillSummary[]
 }) {
+  const t = useT()
   const [wideViewport, setWideViewport] = useState(false)
 
   useEffect(() => {
@@ -174,13 +180,13 @@ function SkillsNavigation({ currentSkillId, importing, onCreate, onImport, skill
       <header className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--app-border)] pl-3 pr-2">
         <h1 className="text-sm font-semibold tracking-[-0.43px] text-[var(--app-foreground)]">Skills</h1>
         <div className="flex items-center gap-1">
-          <button aria-label="导入 ZIP" className="flex size-8 items-center justify-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)] disabled:opacity-40" disabled={importing} onClick={onImport} type="button"><FileInput className="size-4" strokeWidth={1.8} /></button>
-          <button aria-label="创建 Skill" className="flex size-8 items-center justify-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]" onClick={onCreate} type="button"><Plus className="size-4" strokeWidth={1.8} /></button>
+          <button aria-label={t('导入 ZIP')} className="flex size-8 items-center justify-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)] disabled:opacity-40" disabled={importing} onClick={onImport} type="button"><FileInput className="size-4" strokeWidth={1.8} /></button>
+          <button aria-label={t('创建 Skill')} className="flex size-8 items-center justify-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]" onClick={onCreate} type="button"><Plus className="size-4" strokeWidth={1.8} /></button>
         </div>
       </header>
       <div className="flex h-12 shrink-0 items-center gap-0.5 border-b border-[var(--app-border)] px-3 py-2">
         <span aria-current="true" className="flex h-7 items-center rounded-md bg-[var(--app-selected)] px-2 text-sm font-medium text-[var(--app-foreground)]">User</span>
-        <span aria-disabled="true" className="flex h-7 cursor-not-allowed items-center rounded-md px-2 text-sm font-medium text-[var(--app-subtle)] opacity-50" title="Team Skills 即将开放">Team</span>
+        <span aria-disabled="true" className="flex h-7 cursor-not-allowed items-center rounded-md px-2 text-sm font-medium text-[var(--app-subtle)] opacity-50" title={t('Team Skills 即将开放')}>Team</span>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto py-1">
         {skills.map((skill) => {
@@ -219,6 +225,7 @@ function SkillsEmptyState({ disabled, onCreate, onImport }: { disabled: boolean;
 }
 
 function SkillEditor({ skill }: { skill: UserSkill }) {
+  const t = useT()
   const router = useRouter()
   const [content, setContent] = useState(skill.content)
   const [savedContent, setSavedContent] = useState(skill.content)
@@ -237,7 +244,7 @@ function SkillEditor({ skill }: { skill: UserSkill }) {
     startTransition(async () => {
       const result = await saveUserSkillAction({ skillId: skill.id, content })
       if (!result.ok) {
-        setError(messageFor(new Error(result.error), '保存失败。'))
+        setError(messageFor(new Error(result.error), t('保存失败。'), t))
         return
       }
       setSavedContent(content)
@@ -250,7 +257,7 @@ function SkillEditor({ skill }: { skill: UserSkill }) {
     startTransition(async () => {
       const result = await deleteUserSkillAction(skill.id)
       if (!result.ok) {
-        setError(messageFor(new Error(result.error), '删除失败。'))
+        setError(messageFor(new Error(result.error), t('删除失败。'), t))
         return
       }
       router.push(result.path)
@@ -268,17 +275,17 @@ function SkillEditor({ skill }: { skill: UserSkill }) {
         </div>
         {error && <span className="max-w-[240px] truncate text-xs text-destructive" role="alert">{error}</span>}
         <DropdownMenu>
-          <DropdownMenuTrigger render={<button aria-label="更多操作" className="flex size-8 items-center justify-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]" type="button" />}><MoreHorizontal className="size-4" /></DropdownMenuTrigger>
+          <DropdownMenuTrigger render={<button aria-label={t('更多操作')} className="flex size-8 items-center justify-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]" type="button" />}><MoreHorizontal className="size-4" /></DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-40 border border-[var(--app-border)] bg-[var(--app-elevated)] p-1 text-[var(--app-foreground)] shadow-lg ring-0">
             <DropdownMenuItem className="h-8 cursor-pointer gap-2 rounded-md px-2 text-sm text-destructive focus:bg-destructive/10 focus:text-destructive" onClick={remove}>
-              <Trash2 className="size-4" />删除 Skill
+              <Trash2 className="size-4" />{t('删除 Skill')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
         <button className="h-8 rounded-lg border border-[var(--app-control-border)] bg-[var(--app-submit-background)] px-3 text-sm font-medium text-[var(--app-submit-foreground)] hover:opacity-90 disabled:bg-[var(--app-active)] disabled:text-[var(--app-subtle)] disabled:opacity-100" disabled={!dirty || pending} onClick={save} type="button">{pending ? 'Saving…' : 'Save'}</button>
       </header>
       <textarea
-        aria-label="SKILL.md 内容"
+        aria-label={t('SKILL.md 内容')}
         className="min-h-0 flex-1 resize-none bg-transparent p-6 font-mono text-xs leading-4 text-[var(--app-foreground)] outline-none placeholder:text-[var(--app-subtle)]"
         maxLength={200_000}
         onChange={(event) => setContent(event.currentTarget.value)}

@@ -11,11 +11,20 @@ const globalStyles = await readFile(new URL('../../app/globals.css', import.meta
 const chatWorkspace = await readFile(new URL('../../components/chat-workspace.tsx', import.meta.url), 'utf8')
 
 test('the app exposes one reduced-motion-aware motion boundary', () => {
-  assert.match(rootLayout, /<OpenLinkMotionProvider>\{children\}<\/OpenLinkMotionProvider>/)
+  assert.match(rootLayout, /<OpenLinkMotionProvider>[\s\S]*<\/OpenLinkMotionProvider>/)
   assert.match(motionProvider, /<MotionConfig reducedMotion="user">/)
-  assert.match(motionProvider, /<AnimatePresence initial=\{false\} mode="wait">/)
-  assert.match(motionProvider, /key=\{pathname\}/)
+  // The root boundary must not animate the document: the persistent chrome
+  // (sidebar, topbars) stayed fixed while the whole page faded and slid.
+  assert.doesNotMatch(motionProvider, /AnimatePresence|usePathname/)
   assert.match(themeScope, /<MotionConfig reducedMotion="user">/)
+})
+
+test('route transitions are scoped to each shell content region', () => {
+  const pageTransition = readFile(new URL('../../components/ui/page-transition.tsx', import.meta.url), 'utf8')
+  return pageTransition.then((source) => {
+    assert.match(source, /key=\{pathname\}/)
+    assert.match(source, /animate=\{\{ opacity: 1, y: 0 \}\}/)
+  })
 })
 
 test('global interaction feedback preserves reduced-motion users', () => {

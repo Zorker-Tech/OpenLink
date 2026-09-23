@@ -3,6 +3,7 @@
 import { ChromiumStreamSurface } from '@/components/browser/chromium-stream-surface'
 import { NativePreviewSurface } from '@/components/browser/native-preview-surface'
 import { ThinkingOrb } from '@/components/thinking/src'
+import { useT } from '@/lib/i18n/client'
 import { BrowserConnection, BrowserSessionCreateError, createBrowserSession, deleteBrowserSession, type BrowserConnectionStatus } from '@/lib/browser-runtime/client'
 import type { BrowserActionResult, BrowserSessionState, ElementReference } from '@/packages/browser-protocol/src/index'
 import { MonitorUp, RotateCw } from 'lucide-react'
@@ -49,6 +50,7 @@ interface BrowserWorkbenchProps {
 }
 
 export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbenchProps>(function BrowserWorkbench({ chatSessionId, initialSurface = 'native-preview', onStateChange, viewportMode }, ref) {
+  const t = useT()
   const initialSurfaceRef = useRef<BrowserWorkbenchUiState['surface']>(initialSurface)
   const [surface, setSurface] = useState<BrowserWorkbenchUiState['surface']>(initialSurface)
   const [connection, setConnection] = useState<BrowserConnection | null>(null)
@@ -103,7 +105,7 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
       next.onError(setError)
       next.onSessionLost((reason) => {
         if (version !== requestVersion.current) return
-        setError(`${reason}，正在重新创建浏览器会话`)
+        setError(t('{reason}，正在重新创建浏览器会话', { reason }))
         const currentAddress = next.state.pages.find((page) => page.active)?.url || initialUrl || address
         // Browser Host sessions are intentionally ephemeral. If the host
         // reaper, a VM restart, or a token expiry removes one while this tab is
@@ -136,7 +138,7 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
       setStatus('failed')
       setError(sessionError instanceof Error ? sessionError.message : String(sessionError))
     }
-  }, [address, chatSessionId, viewportMode])
+  }, [address, chatSessionId, t, viewportMode])
 
   const openSessionRef = useRef(openSession)
   useEffect(() => {
@@ -239,17 +241,18 @@ export const BrowserWorkbench = forwardRef<BrowserWorkbenchHandle, BrowserWorkbe
         )}
         {sessionInitializing ? (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-[var(--app-background)]/88 text-sm text-[var(--app-muted)] backdrop-blur-sm">
-            <ThinkingOrb aria-label={status === 'reconnecting' ? '正在恢复浏览器连接' : '正在启动浏览器'} size={64} state="shaping" />
-            <span>{status === 'reconnecting' ? '正在恢复浏览器连接' : '正在启动浏览器'}</span>
+            <ThinkingOrb aria-label={status === 'reconnecting' ? t('正在恢复浏览器连接') : t('正在启动浏览器')} size={64} state="shaping" />
+            <span>{status === 'reconnecting' ? t('正在恢复浏览器连接') : t('正在启动浏览器')}</span>
           </div>
         ) : null}
         {error && !connection ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[var(--app-background)] px-6 text-center">
             <MonitorUp className="size-7 text-[var(--app-muted)]" />
-            <div><p className="text-sm font-medium">浏览器运行时尚未就绪</p><p className="mt-1 max-w-md text-xs leading-5 text-[var(--app-muted)]">{error}</p></div>
+            <div><p className="text-sm font-medium">{t('浏览器运行时尚未就绪')}</p>
+              <p className="mt-1 max-w-md text-xs leading-5 text-[var(--app-muted)]">{error}</p></div>
             <div className="flex gap-2">
-              <button className="flex h-8 items-center gap-1.5 rounded-md border border-[var(--app-control-border)] px-3 text-xs hover:bg-[var(--app-active)]" onClick={() => void openSession(surface, address)} type="button"><RotateCw className="size-3.5" />重试</button>
-              {surface === 'native-preview' && <button className="h-8 rounded-md bg-[var(--app-foreground)] px-3 text-xs text-[var(--app-background)]" onClick={() => setNextSurface('chromium-stream')} type="button">打开实时浏览器</button>}
+              <button className="flex h-8 items-center gap-1.5 rounded-md border border-[var(--app-control-border)] px-3 text-xs hover:bg-[var(--app-active)]" onClick={() => void openSession(surface, address)} type="button"><RotateCw className="size-3.5" />{t('重试')}</button>
+              {surface === 'native-preview' && <button className="h-8 rounded-md bg-[var(--app-foreground)] px-3 text-xs text-[var(--app-background)]" onClick={() => setNextSurface('chromium-stream')} type="button">{t('打开实时浏览器')}</button>}
             </div>
           </div>
         ) : null}

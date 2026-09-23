@@ -15,11 +15,14 @@ import { getOwnedWorkspace } from '@/lib/workspaces'
 import type { AiProviderModel, ProviderModelParams } from '@/lib/ai-provider-types'
 import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { cookies } from 'next/headers'
 import { z } from 'zod'
+import { LOCALES } from '@/lib/i18n/locales'
+import { LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE } from '@/lib/i18n/messages'
 
 const preferencesSchema = z.object({
   theme: z.enum(['system', 'light', 'dark']),
-  locale: z.enum(['zh-CN', 'en-US']),
+  locale: z.enum(LOCALES),
   chatPosition: z.enum(['left', 'right']),
   thinkingVisibility: z.enum(['summary', 'hidden']),
   customInstructions: z.string().max(12_000),
@@ -98,6 +101,14 @@ export async function saveUserPreferencesAction(input: unknown) {
         updated_at: new Date().toISOString(),
       }, { onConflict: 'user_id' })
     if (error) throw error
+    // Mirror the locale into a cookie so the next server render — and every
+    // route after a client-side navigation — already knows the language.
+    const cookieStore = await cookies()
+    cookieStore.set(LOCALE_COOKIE, parsed.data.locale, {
+      path: '/',
+      sameSite: 'lax',
+      maxAge: LOCALE_COOKIE_MAX_AGE,
+    })
     revalidatePath('/settings')
     return { ok: true as const }
   } catch (error) {

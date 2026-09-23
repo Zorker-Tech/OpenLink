@@ -4,11 +4,13 @@ import { ProviderLogo } from '@/components/settings/provider-logo'
 import type { AiProviderConfigurationSummary, EmbeddingProviderConfigurationSummary } from '@/lib/ai-provider-types'
 import { AI_PROVIDERS } from '@/lib/ai-providers'
 import { EMBEDDING_PROVIDERS } from '@/lib/embedding-providers'
+import { useT } from '@/lib/i18n/client'
 import { ChevronDown, Search, Sparkles, WalletCards, X } from 'lucide-react'
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
 
 export function ProviderNavigation({ configurations, currentProviderId, embeddingConfigurations = [], mode = 'chat' }: { configurations: AiProviderConfigurationSummary[]; currentProviderId?: string; embeddingConfigurations?: EmbeddingProviderConfigurationSummary[]; mode?: 'chat' | 'embedding' }) {
+  const t = useT()
   const [query, setQuery] = useState('')
   const [expanded, setExpanded] = useState({ disabled: true, enabled: true })
   const definitions = mode === 'embedding' ? EMBEDDING_PROVIDERS : AI_PROVIDERS
@@ -27,30 +29,30 @@ export function ProviderNavigation({ configurations, currentProviderId, embeddin
         <div className="flex h-9 min-w-0 flex-1 items-center rounded-md bg-[var(--app-background)] px-2 transition-colors focus-within:bg-[var(--app-active)]">
           <Search className="size-4 shrink-0 text-[var(--app-subtle)]" strokeWidth={1.8} />
           <input
-            aria-label="搜索服务商"
+            aria-label={t('搜索服务商')}
             autoComplete="off"
             className="min-w-0 flex-1 bg-transparent px-2 text-sm outline-none placeholder:text-[var(--app-subtle)]"
             data-1p-ignore="true"
             data-lpignore="true"
             name="openlink-provider-search"
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="搜索服务商…"
+            placeholder={t('搜索服务商…')}
             spellCheck={false}
             value={query}
           />
-          {query && <button aria-label="清空搜索" className="flex size-6 items-center justify-center rounded text-[var(--app-muted)] hover:bg-[var(--app-hover)]" onClick={() => setQuery('')} type="button"><X className="size-3.5" /></button>}
+          {query && <button aria-label={t('清空搜索')} className="flex size-6 items-center justify-center rounded text-[var(--app-muted)] hover:bg-[var(--app-hover)]" onClick={() => setQuery('')} type="button"><X className="size-3.5" /></button>}
         </div>
       </div>
 
       <div className="flex gap-1 border-b border-[var(--app-border)] px-2 py-2">
-        <Link className={`flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md text-xs font-medium ${mode === 'chat' ? 'bg-[var(--app-selected)] text-[var(--app-foreground)]' : 'text-[var(--app-muted)] hover:bg-[var(--app-hover)]'}`} href="/settings/ai-providers"><WalletCards className="size-3.5" />普通</Link>
-        <Link className={`flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md text-xs font-medium ${mode === 'embedding' ? 'bg-[var(--app-selected)] text-[var(--app-foreground)]' : 'text-[var(--app-muted)] hover:bg-[var(--app-hover)]'}`} href="/settings/ai-providers/embeddings"><Sparkles className="size-3.5" />向量</Link>
+        <Link className={`flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md text-xs font-medium ${mode === 'chat' ? 'bg-[var(--app-selected)] text-[var(--app-foreground)]' : 'text-[var(--app-muted)] hover:bg-[var(--app-hover)]'}`} href="/settings/ai-providers"><WalletCards className="size-3.5" />{t('普通')}</Link>
+        <Link className={`flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md text-xs font-medium ${mode === 'embedding' ? 'bg-[var(--app-selected)] text-[var(--app-foreground)]' : 'text-[var(--app-muted)] hover:bg-[var(--app-hover)]'}`} href="/settings/ai-providers/embeddings"><Sparkles className="size-3.5" />{t('向量')}</Link>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-8 pt-2">
         <Link className={`flex h-9 items-center gap-2 rounded-md px-2 text-sm ${!currentProviderId ? 'bg-[var(--app-selected)] text-[var(--app-foreground)]' : 'text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]'}`} href={mode === 'embedding' ? '/settings/ai-providers/embeddings' : '/settings/ai-providers'}>
           <span className="flex size-[22px] shrink-0 items-center justify-center"><WalletCards className="size-[18px]" strokeWidth={1.7} /></span>
-          <span>{mode === 'embedding' ? '全部向量模型' : '全部'}</span>
+          <span>{mode === 'embedding' ? t('全部向量模型') : t('全部')}</span>
         </Link>
 
         {enabled.length > 0 && (
@@ -58,7 +60,7 @@ export function ProviderNavigation({ configurations, currentProviderId, embeddin
             configurations={configurationMap}
             currentProviderId={currentProviderId}
             expanded={expanded.enabled || Boolean(query)}
-            label="已启用"
+            label={t('已启用')}
             providers={enabled}
             mode={mode}
             onExpandedChange={() => setExpanded((value) => ({ ...value, enabled: !value.enabled }))}
@@ -68,7 +70,7 @@ export function ProviderNavigation({ configurations, currentProviderId, embeddin
           configurations={configurationMap}
           currentProviderId={currentProviderId}
           expanded={expanded.disabled || Boolean(query)}
-          label="未启用"
+          label={t('未启用')}
           providers={disabled}
           mode={mode}
           onExpandedChange={() => setExpanded((value) => ({ ...value, disabled: !value.disabled }))}
@@ -87,6 +89,7 @@ function ProviderGroup({ configurations, currentProviderId, expanded, label, mod
   providers: ReadonlyArray<{ id: string; name: string; logo: string }>
   mode: 'chat' | 'embedding'
 }) {
+  const t = useT()
   if (!providers.length) return null
 
   return (
@@ -105,7 +108,7 @@ function ProviderGroup({ configurations, currentProviderId, expanded, label, mod
                 <Link className={`flex h-9 items-center gap-2 rounded-md px-2 text-sm ${active ? 'bg-[var(--app-selected)] text-[var(--app-foreground)]' : 'text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]'}`} href={mode === 'embedding' ? `/settings/ai-providers/embeddings/${provider.id}` : `/settings/ai-providers/${provider.id}`} key={provider.id}>
                   <ProviderLogo provider={provider} size={22} />
                   <span className="min-w-0 flex-1 truncate">{provider.name}</span>
-                  {configuration?.enabled && <span aria-label="已启用" className="mr-1 size-1.5 rounded-full bg-[var(--app-success)]" />}
+                  {configuration?.enabled && <span aria-label={t('已启用')} className="mr-1 size-1.5 rounded-full bg-[var(--app-success)]" />}
                 </Link>
               )
             })}

@@ -1,7 +1,17 @@
+import type { Translator } from '@/lib/i18n/messages'
+
 import type { OpenLinkAgentEvent } from './events'
 
 type UnknownRecord = Record<string, unknown>
 const FILE_EDIT_CONTENT_LIMIT = 192 * 1024
+/**
+ * Fallback for callers that render without a locale provider (tests, stories,
+ * isolated adapters). It mirrors `translate()` from lib/i18n/messages: no
+ * catalog lookup, but placeholders still resolve.
+ */
+const sourceTranslator: Translator = (source, values) => values
+  ? source.replace(/\{(\w+)\}/g, (match, key: string) => values[key] === undefined ? match : String(values[key]))
+  : source
 
 const asRecord = (value: unknown): UnknownRecord | null => value && typeof value === 'object' ? value as UnknownRecord : null
 
@@ -60,6 +70,7 @@ function languageForPath(path: string): string {
 export class CodexEventAdapter {
   private readonly sessionId: string
   private readonly clock: () => string
+  private readonly t: Translator
   private nextSequence: number
   private currentTurnId: string | null = null
   private sessionStarted = false
@@ -67,10 +78,11 @@ export class CodexEventAdapter {
   private readonly reasoningItemMap = new Map<string, string>()
   private readonly fileChangeItemMap = new Map<string, { path: string; operation: 'write' | 'edit' }>()
 
-  constructor(sessionId: string, clock: () => string = () => new Date().toISOString(), startSequence = 0) {
+  constructor(sessionId: string, clock: () => string = () => new Date().toISOString(), startSequence = 0, t: Translator = sourceTranslator) {
     this.sessionId = sessionId
     this.clock = clock
     this.nextSequence = startSequence
+    this.t = t
   }
 
   private make<T extends { type: string }>(event: T): OpenLinkAgentEvent {
@@ -137,7 +149,7 @@ export class CodexEventAdapter {
       return [this.make({
         type: 'confirmation.requested',
         confirmationId: message.id,
-        title: stringValue(message.title) || '执行确认',
+        title: stringValue(message.title) || this.t('执行确认'),
         message: stringValue(message.message) || undefined,
         options: Array.isArray(message.options) ? message.options.filter((option): option is string => typeof option === 'string') : undefined,
         inputKind,
@@ -424,8 +436,8 @@ export class CodexEventAdapter {
         return [this.make({
           type: 'confirmation.requested',
           confirmationId: id,
-          title: '执行确认',
-          message: command ? `执行命令：${command}` : reason,
+          title: this.t('执行确认'),
+          message: command ? this.t('执行命令：{command}', { command }) : reason,
           inputKind: 'confirm',
           confirmationKind: 'approval',
         })]

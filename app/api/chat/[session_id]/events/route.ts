@@ -17,6 +17,7 @@ import {
 } from '@/lib/chat-session-persistence.server'
 import { getChatSession, isChatSessionId } from '@/lib/chat-sessions'
 import { resolvePromptFileAttachments, type ResolvedPromptAttachment } from '@/lib/chat-session-uploads.server'
+import { getT } from '@/lib/i18n/server'
 import { createClient } from '@/utils/supabase/server'
 
 export const runtime = 'nodejs'
@@ -46,6 +47,7 @@ export async function POST(
   { params }: { params: Promise<{ session_id: string }> },
 ) {
   const { session_id: sessionId } = await params
+  const { t } = await getT()
   if (!isChatSessionId(sessionId)) return Response.json({ error: 'INVALID_SESSION' }, { status: 404 })
   const host = agentHostConfig()
   if (!host) return Response.json({ error: 'AGENT_HOST_NOT_CONFIGURED' }, { status: 503 })
@@ -217,7 +219,7 @@ export async function POST(
       const target = active.find((event) => event.type === 'message.user' && event.messageId === editMessageId)
       if (!target || target.type !== 'message.user') {
         await releaseLease()
-        return Response.json({ error: 'EDIT_MESSAGE_NOT_FOUND', detail: '原消息已变更，请刷新后重试' }, { status: 409 })
+        return Response.json({ error: 'EDIT_MESSAGE_NOT_FOUND', detail: t('原消息已变更，请刷新后重试') }, { status: 409 })
       }
       const rewind = await fetch(`${host.baseUrl}/v1/agent/sessions/${encodeURIComponent(sessionId)}/control`, {
         method: 'POST', headers: { Authorization: `Bearer ${host.apiToken}`, 'Content-Type': 'application/json' },
@@ -228,7 +230,7 @@ export async function POST(
       if (!rewind.ok || result?.result?.rewound !== true) throw new Error('REWIND_NOT_CONFIRMED')
     } catch {
       await releaseLease()
-      return Response.json({ error: 'EDIT_REWIND_FAILED', detail: 'Agent 未确认回到原消息之前，未作为新消息发送。修改内容已保留，请确认运行时就绪后重试' }, { status: 409 })
+      return Response.json({ error: 'EDIT_REWIND_FAILED', detail: t('Agent 未确认回到原消息之前，未作为新消息发送。修改内容已保留，请确认运行时就绪后重试') }, { status: 409 })
     }
   }
 

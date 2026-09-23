@@ -2,6 +2,8 @@ import 'server-only'
 
 import { randomBytes } from 'node:crypto'
 import { resolveConfiguredModelSelection } from '@/lib/ai-provider-configurations.server'
+import { getT } from '@/lib/i18n/server'
+import type { Translator } from '@/lib/i18n/messages'
 import { ensureDraftProject, getProject } from '@/lib/projects'
 import type { AgentKind, ChatSessionSummary } from '@/lib/chat-session-types'
 import { getAccessibleWorkspace, getOwnedWorkspace, type OpenLinkWorkspace } from '@/lib/workspaces'
@@ -57,9 +59,15 @@ export function generateChatSessionId() {
   return result
 }
 
-export function deriveChatSessionTitle(prompt: string) {
+/**
+ * Keeps the authored source title for callers that have no request locale
+ * (the title route derives a provisional title outside a translated render).
+ */
+const sourceTranslator: Translator = (source) => source
+
+export function deriveChatSessionTitle(prompt: string, t: Translator = sourceTranslator) {
   const normalized = prompt.replace(/\s+/g, ' ').trim()
-  if (!normalized) return '新聊天'
+  if (!normalized) return t('新聊天')
   const characters = Array.from(normalized)
   return characters.length > 48 ? `${characters.slice(0, 48).join('')}…` : normalized
 }
@@ -70,6 +78,7 @@ export async function listChatSessions(
   workspaceId: string,
   limit = 30,
 ): Promise<ChatSessionSummary[]> {
+  const { t } = await getT()
   const { data, error } = await supabase
     .schema('openlink')
     .from('chat_sessions')
@@ -110,8 +119,8 @@ export async function listChatSessions(
     return {
       id: session.id,
       userId: session.user_id,
-      title: session.title === 'AI Elements 集成' && session.initial_prompt
-        ? deriveChatSessionTitle(session.initial_prompt)
+      title: session.title === t('AI Elements 集成') && session.initial_prompt
+        ? deriveChatSessionTitle(session.initial_prompt, t)
         : session.title,
       updatedAt: session.updated_at,
       projectId: session.project_id || 'draft',
@@ -220,6 +229,7 @@ export async function createChatSession(
     agent?: AgentKind
   },
 ) {
+  const { t } = await getT()
   const workspace = options.workspaceSlug
     ? await getAccessibleWorkspace(supabase, options.workspaceSlug)
     : await getOwnedWorkspace(supabase, userId)
@@ -242,7 +252,7 @@ export async function createChatSession(
   const projectId = project.id
 
   const initialPrompt = options.prompt?.trim().slice(0, 10000) ?? ''
-  const title = deriveChatSessionTitle(initialPrompt)
+  const title = deriveChatSessionTitle(initialPrompt, t)
   const requestedModel = options.providerId && options.modelId
     ? { providerId: options.providerId, modelId: options.modelId }
     : null
@@ -288,7 +298,8 @@ export async function forkChatSession(
   source: ChatSession,
 ): Promise<ChatSession> {
   if (source.user_id !== userId) throw new Error('CHAT_SESSION_NOT_FOUND')
-  const title = deriveChatSessionTitle(`${source.title} 分支`)
+  const { t } = await getT()
+  const title = deriveChatSessionTitle(t('{title} 分支', { title: source.title }), t)
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const id = generateChatSessionId()
     const { data, error } = await supabase

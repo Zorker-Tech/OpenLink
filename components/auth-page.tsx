@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ZorkerLogo } from '@/components/zorker-logo'
+import { useT } from '@/lib/i18n/client'
 import { createClient } from '@/utils/supabase/client'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -40,10 +41,11 @@ function authenticationErrorMessage(error: unknown, fallback: string) {
 }
 
 export function AuthPage({ mode, localRuntime = false }: AuthPageProps) {
+  const t = useT()
   const isRegister = mode === 'register'
   const isLocalRuntime = localRuntime
   const alternateBaseHref = isRegister ? '/login' : '/register'
-  const alternateLabel = isRegister ? 'Sign In' : 'Sign Up'
+  const alternateLabel = isRegister ? t('Sign In') : t('Sign Up')
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
   const [email, setEmail] = useState('')
@@ -61,13 +63,13 @@ export function AuthPage({ mode, localRuntime = false }: AuthPageProps) {
     setNextPath(safeNextPath(params.get('next'), isRegister ? '/app' : '/'))
 
     if (error === 'auth_callback') {
-      setErrorMessage('We could not complete sign in. Please try again.')
+      setErrorMessage(t('We could not complete sign in. Please try again.'))
     } else if (error === 'auth_confirm') {
-      setErrorMessage('This confirmation link is invalid or has expired.')
+      setErrorMessage(t('This confirmation link is invalid or has expired.'))
     } else if (params.get('sso')) {
-      setStatusMessage('No active Zorker session was found. Sign in below to continue.')
+      setStatusMessage(t('No active Zorker session was found. Sign in below to continue.'))
     }
-  }, [isRegister])
+  }, [isRegister, t])
 
   const shareSessionThenContinue = () => {
     if (isLocalRuntime) {
@@ -93,7 +95,7 @@ export function AuthPage({ mode, localRuntime = false }: AuthPageProps) {
     setStatusMessage(null)
 
     if (isRegister && password !== confirmPassword) {
-      setErrorMessage('Passwords do not match.')
+      setErrorMessage(t('Passwords do not match.'))
       return
     }
 
@@ -114,7 +116,7 @@ export function AuthPage({ mode, localRuntime = false }: AuthPageProps) {
         if (data.session) {
           shareSessionThenContinue()
         } else {
-          setStatusMessage('Check your email to confirm your account.')
+          setStatusMessage(t('Check your email to confirm your account.'))
         }
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
@@ -125,8 +127,8 @@ export function AuthPage({ mode, localRuntime = false }: AuthPageProps) {
       setErrorMessage(authenticationErrorMessage(
         error,
         isLocalRuntime
-          ? 'Self-hosted authentication is temporarily unavailable. Check the OpenLink services, then try again.'
-          : 'Unable to authenticate. Please try again.',
+          ? t('Self-hosted authentication is temporarily unavailable. Check the OpenLink services, then try again.')
+          : t('Unable to authenticate. Please try again.'),
       ))
     } finally {
       setIsSubmitting(false)
@@ -146,10 +148,10 @@ export function AuthPage({ mode, localRuntime = false }: AuthPageProps) {
         },
       })
       if (error) throw error
-      if (!data.url) throw new Error('OAuth provider did not return a redirect URL.')
+      if (!data.url) throw new Error(t('OAuth provider did not return a redirect URL.'))
       window.location.assign(data.url)
     } catch (error) {
-      setErrorMessage(authenticationErrorMessage(error, 'Unable to continue with OAuth.'))
+      setErrorMessage(authenticationErrorMessage(error, t('Unable to continue with OAuth.')))
     } finally {
       setIsSubmitting(false)
     }
@@ -160,7 +162,7 @@ export function AuthPage({ mode, localRuntime = false }: AuthPageProps) {
   return (
     <div className="flex min-h-[100svh] flex-col overflow-hidden bg-background text-foreground">
       <header className="flex min-h-16 shrink-0 items-center px-6">
-        <Link aria-label="Zorker home" className="flex h-8 items-center" href="/">
+        <Link aria-label={t('Zorker home')} className="flex h-8 items-center" href="/">
           <ZorkerLogo className="h-[18px] w-[31px]" />
         </Link>
         <nav className="ml-auto flex items-center pl-8">
@@ -179,7 +181,7 @@ export function AuthPage({ mode, localRuntime = false }: AuthPageProps) {
             <h1 className="text-[32px] leading-10 font-semibold tracking-[-0.96px] text-foreground">Open Link</h1>
             {isRegister && (
               <p className="w-80 text-base leading-6 text-foreground">
-                <span className="whitespace-nowrap">We suggest using the email address you use</span><br />at work or school
+                <span className="whitespace-nowrap">{t('We suggest using the email address you use')}</span><br />{t('at work or school')}
               </p>
             )}
           </div>
@@ -188,45 +190,45 @@ export function AuthPage({ mode, localRuntime = false }: AuthPageProps) {
         <div className="flex w-80 flex-col items-start gap-4">
           <form className="flex w-full flex-col gap-3" method="post" onSubmit={handleSubmit}>
             <Input
-              aria-label="Email address"
+              aria-label={t('Email address')}
               autoComplete="email"
               autoFocus={isRegister}
               className={inputClassName}
               name="email"
               onChange={(event) => setEmail(event.currentTarget.value)}
-              placeholder="name@work-email.com"
+              placeholder={t('name@work-email.com')}
               required
               type="email"
               value={email}
             />
             <Input
-              aria-label="Password"
+              aria-label={t('Password')}
               autoComplete={isRegister ? 'new-password' : 'current-password'}
               className={inputClassName}
               minLength={6}
               name="password"
               onChange={(event) => setPassword(event.currentTarget.value)}
-              placeholder="Password"
+              placeholder={t('Password')}
               required
               type="password"
               value={password}
             />
             {isRegister && (
               <Input
-                aria-label="Confirm password"
+                aria-label={t('Confirm password')}
                 autoComplete="new-password"
                 className={inputClassName}
                 minLength={6}
                 name="confirmPassword"
                 onChange={(event) => setConfirmPassword(event.currentTarget.value)}
-                placeholder="Confirm password"
+                placeholder={t('Confirm password')}
                 required
                 type="password"
                 value={confirmPassword}
               />
             )}
             <Button className="h-10 w-full rounded-lg" disabled={isSubmitting} type="submit">
-              {isSubmitting ? 'Please wait…' : 'Continue with Email'}
+              {isSubmitting ? t('Please wait…') : t('Continue with Email')}
             </Button>
           </form>
 
@@ -238,7 +240,7 @@ export function AuthPage({ mode, localRuntime = false }: AuthPageProps) {
 
           {isLocalRuntime ? (
             <p className="w-full text-center text-sm leading-5 text-muted-foreground">
-              Self-hosted OpenLink uses email and password.
+              {t('Self-hosted OpenLink uses email and password.')}
             </p>
           ) : (
             <>
@@ -249,11 +251,11 @@ export function AuthPage({ mode, localRuntime = false }: AuthPageProps) {
                   <div className="relative w-full" key={provider.label}>
                     <Button className="h-10 w-full rounded-lg px-3.5 text-base font-medium" disabled={isSubmitting} onClick={() => handleOAuth(provider.provider)} type="button" variant="outline">
                       <img alt="" className="size-5" src={provider.icon} />
-                      Continue with {provider.label}
+                      {t('Continue with {provider}', { provider: provider.label })}
                     </Button>
                     {index === 0 && (
                       <span className="absolute -top-2 -right-2 flex h-5 items-center rounded-full bg-primary px-2 text-[11px] leading-5 font-medium tracking-[0.2px] text-primary-foreground">
-                        Last Used
+                        {t('Last Used')}
                       </span>
                     )}
                   </div>
@@ -264,15 +266,15 @@ export function AuthPage({ mode, localRuntime = false }: AuthPageProps) {
         </div>
 
         <p className="text-center text-base leading-6 text-foreground">
-          {isRegister ? 'Already have an account? ' : "Don't have an account? "}
+          {isRegister ? t('Already have an account?') : t("Don't have an account?")}{' '}
           <Link className="text-primary hover:underline" href={alternateHref}>{alternateLabel}</Link>
         </p>
       </main>
 
       <footer className="shrink-0 px-4 text-center text-xs leading-4 text-muted-foreground">
-        By proceeding, you agree to creating an Open Link account subject to our{' '}
-        <a className="text-foreground hover:underline" href="#terms">Terms of Service</a>{' '}and{' '}
-        <a className="text-foreground hover:underline" href="#privacy">Privacy Policy</a>.
+        {t('By proceeding, you agree to creating an Open Link account subject to our')}{' '}
+        <a className="text-foreground hover:underline" href="#terms">{t('Terms of Service')}</a>{' '}{t('and')}{' '}
+        <a className="text-foreground hover:underline" href="#privacy">{t('Privacy Policy')}</a>.
       </footer>
     </div>
   )
