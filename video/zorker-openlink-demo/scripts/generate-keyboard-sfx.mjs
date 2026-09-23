@@ -1,6 +1,7 @@
 // SFX-only mix: no pads, bass, melody, music pulses, or pitched brand stingers.
 import fs from 'node:fs';
-const sr=48000,duration=56,n=sr*duration,left=new Float64Array(n),right=new Float64Array(n);
+import storyboard from '../src/reference-film/storyboard-v10.json' with {type:'json'};
+const sr=48000,duration=storyboard.runtimeFrames/storyboard.format.fps,n=Math.round(sr*duration),left=new Float64Array(n),right=new Float64Array(n);
 const tau=Math.PI*2;
 function tone(at,len,hz,gain,pan=0,kind='bell') {
  const start=Math.round(at*sr),length=Math.round(len*sr);
@@ -45,23 +46,27 @@ const native=fs.readFileSync('src/reference-film/Native.tsx','utf8');
 const prompt=/export const PROMPT='([^']*)'/.exec(native)[1];
 const revision=/export const REVISION='([^']*)'/.exec(native)[1];
 const intent=fs.readFileSync('src/reference-film/Intent.tsx','utf8'),refinement=fs.readFileSync('src/reference-film/Refinement.tsx','utf8');
-if(!intent.includes('(f-50)/195*PROMPT.length')||!refinement.includes('(f-30)/162*REVISION.length'))throw Error('Visual typing timing changed; update the keyboard cue scheduler.');
+if(!intent.includes('(f-50)/300*PROMPT.length')||!refinement.includes('(f-30)/162*REVISION.length'))throw Error('Visual typing timing changed; update the keyboard cue scheduler.');
 const cues=[];
-
-for(const sourceAt of [7.1,12.6,14.6,25.7,31.8,37.7,41.7,45.7,49.7,53.7]) {const at=sourceAt-4;air(at,.8,.2);cues.push({type:'transition',at,duration:.8});}
-for(const sourceAt of [13.75,37.2,42.5833,43.25,45.6667,52.2]) {const at=sourceAt-4;tone(at,.15,1700,.07,0);tone(at,.18,290,.06,0);cues.push({type:'click',at,duration:.18});}
+const shotById=Object.fromEntries(storyboard.shots.map(shot=>[shot.id,shot]));
+function frameForSource(shotId,sourceFrame){
+ const shot=shotById[shotId];
+ return shot.sequenceStart+Math.ceil((sourceFrame+shot.sourceLead)*shot.activeFrames/shot.sourceFrames-1e-9);
+}
+for(const transition of storyboard.transitions){
+ const cueFrames=Math.min(14,transition.frames-2),frame=transition.startFrame+(transition.frames-cueFrames)/2,at=frame/storyboard.format.fps,d=cueFrames/storyboard.format.fps;
+ air(at,d,.16,transition.kind==='rise'?.16:-.12);cues.push({type:'transition',from:transition.from,to:transition.to,frame,at,duration:d});
+}
+const visibleClicks=[['prompt',405],['refine',312],['proof',35],['proof',75],['proof',220],['proof',612]];
+for(const [shotId,sourceFrame] of visibleClicks){const frame=frameForSource(shotId,sourceFrame),at=frame/storyboard.format.fps;tone(at,.11,1700,.065,0);tone(at,.14,290,.055,0);cues.push({type:'click',shot:shotId,sourceFrame,frame,at,duration:.14});}
 let keyIndex=0;
-for(const [sceneStart,start,length,text] of [[180,50,195,prompt],[1680,30,162,revision]]){
- let previous=0;
- for(let f=0;f<=start+length;f++){
-  const count=Math.floor(Math.max(0,Math.min(text.length,(f-start)/length*text.length)));
-  for(let index=previous;index<count;index++){
-   const frame=sceneStart+f,at=frame/60;keyboard(at,keyIndex++,text[index]);
-   cues.push({type:'typing',timbre:'keyboard',frame,at,duration:.076,key:text[index]===' '?'space':'key'});
-  }
-  previous=count;
+function typeText(shotId,start,length,text){
+ for(let index=0;index<text.length;index++){
+  const sourceFrame=start+(index+1)*length/text.length,frame=frameForSource(shotId,sourceFrame),at=frame/storyboard.format.fps;
+  keyboard(at,keyIndex++,text[index]);cues.push({type:'typing',shot:shotId,sourceFrame,frame,at,duration:.076,key:text[index]===' '?'space':'key'});
  }
 }
+typeText('prompt',50,300,prompt);typeText('refine',30,162,revision);
 if(keyIndex!==prompt.length+revision.length)throw Error('Keyboard cue count does not match visible characters');
 let peak=0,sum=0,silentSamples=0;
 const pcm=Buffer.alloc(n*4);
@@ -73,5 +78,5 @@ for(let i=0;i<n;i++) {
 }
 const header=Buffer.alloc(44);header.write('RIFF');header.writeUInt32LE(36+pcm.length,4);header.write('WAVEfmt ',8);header.writeUInt32LE(16,16);header.writeUInt16LE(1,20);header.writeUInt16LE(2,22);header.writeUInt32LE(sr,24);header.writeUInt32LE(sr*4,28);header.writeUInt16LE(4,32);header.writeUInt16LE(16,34);header.write('data',36);header.writeUInt32LE(pcm.length,40);
 fs.mkdirSync('public/audio',{recursive:true});fs.writeFileSync('public/audio/openlink-keyboard-sfx.wav',Buffer.concat([header,pcm]));
-const report={music:false,keyboardCues:keyIndex,keyboardSync:"one keydown at each newly visible character frame",cues,silenceRatio:silentSamples/n,duration,sampleRate:sr,channels:2,peakDbFS:20*Math.log10(peak),rmsDbFS:20*Math.log10(Math.sqrt(sum/(n*2))),clippedSamples:0,finalSamples:[pcm.readInt16LE(pcm.length-4),pcm.readInt16LE(pcm.length-2)],rights:'Original procedural synthesis; no external audio sources.',listeningReview:false};
+const report={music:false,keyboardCues:keyIndex,keyboardSync:"one keydown on the first output frame each character becomes visible",timingSource:'src/reference-film/storyboard-v10.json',cues,silenceRatio:silentSamples/n,duration,sampleRate:sr,channels:2,peakDbFS:20*Math.log10(peak),rmsDbFS:20*Math.log10(Math.sqrt(sum/(n*2))),clippedSamples:0,finalSamples:[pcm.readInt16LE(pcm.length-4),pcm.readInt16LE(pcm.length-2)],rights:'Original procedural synthesis; no external audio sources.',listeningReview:false};
 fs.writeFileSync('provenance/keyboard-sfx-audio.json',JSON.stringify(report,null,2));console.log({music:report.music,duration,sampleRate:sr,cues:cues.length,keyboardCues:keyIndex,peakDbFS:report.peakDbFS,silenceRatio:report.silenceRatio});

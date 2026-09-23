@@ -27,10 +27,6 @@ export function codexPluginMentionName(pluginName, displayName) {
 export function codexPluginToken(pluginName, displayName) {
     return `@${codexPluginMentionName(pluginName.trim(), displayName.trim())} `;
 }
-/** `/mcp verbose` is Codex's native detailed MCP inventory command. */
-export function codexMcpInventoryToken() {
-    return '/mcp verbose ';
-}
 /** Pi exposes loaded Skills as native `/skill:<name>` commands. */
 export function piSkillToken(name) {
     return `/skill:${name.trim()} `;

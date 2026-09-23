@@ -12,6 +12,7 @@ function inert(s){const a=ast(s),edits=[];function visit(n){if(ts.isJsxAttribute
 function inputMarkup(s,name){const {n,a}=declaration(s,name);let result;function visit(n){if(ts.isJsxElement(n)&&n.openingElement.tagName.getText(a)==='PromptInput')result=n.getText(a);ts.forEachChild(n,visit);}visit(n);assert.ok(result);return inert(result).replace('<PromptInput','<PromptInput onSubmit={() => {}}').replace('<AgentPromptTextarea','<AgentPromptTextarea onValueChange={() => {}} readOnly');}
 const homeSource=read('components/workspace-prompt.tsx'),chatSource=read('components/chat-workspace.tsx');
 const homeDecl=declaration(homeSource,'WorkspacePrompt');
+const homeAttachments=declaration(homeSource,'WorkspacePromptAttachments').text;
 const homeReturn=homeDecl.n.body.statements.filter(ts.isReturnStatement).at(-1).getText(homeDecl.a);
 const imports=`import React from 'react';
 import {staticFile} from 'remotion';
@@ -23,12 +24,14 @@ import {AgentKindPicker} from '@/components/agent-kind-picker';
 import {ModelSelector,ModelSelectorTrigger,ModelSelectorContent,ModelSelectorInput,ModelSelectorList,ModelSelectorEmpty,ModelSelectorGroup,ModelSelectorItem,ModelSelectorName,ModelSelectorLogo} from '@/components/ai-elements/model-selector';
 import {Attachment,AttachmentInfo,AttachmentPreview,AttachmentRemove,Attachments} from '@/components/ai-elements/attachments';
 import {BookOpenText,Code2,Plus,Send,Square,ChevronDown,FileText,MessageCircle,X} from 'lucide-react';
-const model={id:'demo-model',name:'GPT-5',providerName:'OpenAI',logo:'openai',isDefault:true};
+import {useT} from '@/lib/i18n/client';
+const model={id:'demo-model',name:'GPT-6 Luna',providerName:'OpenAI',logo:'openai',isDefault:true};
 `;
 let home=`${imports}
+${inert(homeAttachments)}
 /** @param {{text?:string}} props */
 export function CurrentHomeComposer({text=''}) {
- const input=text,agentKind='codex',runtimeReady=true,runtimeHintId='film-home-hint',runtimeHint='What shall we build?',accessMode='restricted',modelSelectorOpen=false,projectSelectorOpen=false,selectedModel=model,selectedProject=null,modelGroups=new Map([['OpenAI',[model]]]),selectableProjects=[],renderExtraTools=null,submitError=null,promptSuggestions=[];
+ const t=useT(),input=text,agentKind='codex',runtimeReady=true,runtimeHintId='film-home-hint',runtimeHint='What shall we build?',accessMode='restricted',modelSelectorOpen=false,projectSelectorOpen=false,selectedModel=model,selectedProject=null,modelGroups=new Map([['OpenAI',[model]]]),selectableProjects=[],renderExtraTools=null,submitError=null,promptSuggestions=[];
  ${inert(homeReturn).replace('<PromptInput','<PromptInput onSubmit={() => {}}').replace('<AgentPromptTextarea','<AgentPromptTextarea onValueChange={() => {}} readOnly')}
 }`;
 let chat=`${imports}
@@ -36,7 +39,7 @@ ${inert(declaration(chatSource,'ComposerSubmitButton').text)}
 ${inert(declaration(chatSource,'ComposerAttachments').text)}
 /** @param {{text?:string,expanded?:boolean,busy?:boolean}} props */
 export function CurrentSessionComposer({text='',expanded=false,busy=false}) {
- const input=text,status=busy?'streaming':'idle',controlPending=false,selectedModel=model,composerResources={agent:'codex',customInstructions:'',skills:[]},accessMode='restricted',codexResources=null,runtimeResources=null,commandsLoaded=true,promptResourcesLoading=false,promptResourcesError=null,promptResourceRequest=null,promptSuggestions=[],pastedTextAttachments=[],referenceAttachments=[],modelSelectorOpen=false,modelGroups=new Map([['OpenAI',[model]]]),availableModels=[model];
+ const t=useT(),input=text,status=busy?'streaming':'idle',controlPending=false,selectedModel=model,composerResources={agent:'codex',customInstructions:'',skills:[]},accessMode='restricted',codexResources=null,runtimeResources=null,commandsLoaded=true,promptResourcesLoading=false,promptResourcesError=null,promptResourceRequest=null,promptSuggestions=[],pastedTextAttachments=[],referenceAttachments=[],instructionAttachments=[],modelSelectorOpen=false,modelGroups=new Map([['OpenAI',[model]]]),availableModels=[model];
  ${inert(declaration(declaration(chatSource,'ChatComposer').text,'actionButtons').text)}
  return <div className="relative flex w-full flex-col gap-1.5">${inputMarkup(chatSource,'ChatComposer')}</div>;
 }`;
@@ -51,6 +54,6 @@ function capture(file){if(seen.has(file))return;seen.add(file);const original=ov
 capture('components/film-home-composer.tsx');capture('components/film-chat-composer.tsx');
 fs.mkdirSync('public/openlink/app',{recursive:true});fs.copyFileSync(path.join(repo,'public/openlink/app/prompt-chevron.svg'),'public/openlink/app/prompt-chevron.svg');
 const css=read('app/globals.css').replace(/^@(import|source).*\n/gm,'');fs.writeFileSync('src/reference-film/current-theme.css',css);
-fs.writeFileSync('provenance/current-composers.json',JSON.stringify({roots:[{source:'components/workspace-prompt.tsx',symbol:'WorkspacePrompt',sha256:hash(homeSource),output:'components/film-home-composer.tsx'},{source:'components/chat-workspace.tsx',symbol:'ChatComposer / ComposerSubmitButton / ComposerAttachments',sha256:hash(chatSource),output:'components/film-chat-composer.tsx'}],records,css:{source:'app/globals.css',sha256:hash(read('app/globals.css')),output:'src/reference-film/current-theme.css',outputSha256:hash(css)},adaptations:['Homepage uses current WorkspacePrompt with Zorker/agent, disabled Cloud and active Local, permission, named model, project entry and round send button.','Chat uses current compact single-line composer unless actual wrapping requires expansion. No forced expanded state.','Menus remain closed, attachments empty, service callbacks inert. Model name is a repository Storybook-style demonstration fixture.','Current dependencies, JSX, CSS classes and SVG assets retained. No source application changes.']},null,2));
+fs.writeFileSync('provenance/current-composers.json',JSON.stringify({roots:[{source:'components/workspace-prompt.tsx',symbol:'WorkspacePrompt',sha256:hash(homeSource),output:'components/film-home-composer.tsx'},{source:'components/chat-workspace.tsx',symbol:'ChatComposer / ComposerSubmitButton / ComposerAttachments',sha256:hash(chatSource),output:'components/film-chat-composer.tsx'}],records,css:{source:'app/globals.css',sha256:hash(read('app/globals.css')),output:'src/reference-film/current-theme.css',outputSha256:hash(css)},modelFixture:{name:'GPT-6 Luna',liveProviderCall:false},adaptations:['Homepage uses current WorkspacePrompt with Zorker/agent, disabled Cloud and active Local, permission, named GPT-6 Luna demonstration model, project entry and round send button.','Chat uses current compact single-line composer unless actual wrapping requires expansion. No forced expanded state.','Menus remain closed, attachments empty, service callbacks inert. GPT-6 Luna is a deterministic film fixture, not a live provider selection or model-availability claim.','Current dependencies, JSX, CSS classes and SVG assets retained. No source application changes.']},null,2));
 fs.writeFileSync('provenance/current-composer-assets.json',JSON.stringify(assets,null,2));
 console.log('Captured current composers and '+records.length+' source modules.');

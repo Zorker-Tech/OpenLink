@@ -3,13 +3,13 @@
     {
       "source": "components/workspace-prompt.tsx",
       "symbol": "WorkspacePrompt",
-      "sha256": "1e9f262b21b213f82211888716cb814249c8f1ca3f8d8acf83c480eb1aed1303",
+      "sha256": "e74483e6f8b264eba8dfc9b4bdf897e7f99714ae5469c31648827823164b23d6",
       "output": "components/film-home-composer.tsx"
     },
     {
       "source": "components/chat-workspace.tsx",
       "symbol": "ChatComposer / ComposerSubmitButton / ComposerAttachments",
-      "sha256": "197ac0e73e0eec670faa200586dc1740d77d7b99e9ca5dc2013d98c5cf71bda6",
+      "sha256": "8d261377ec292108f2ae7fe78f8f337f919eb997dd126dba8589025933b740a6",
       "output": "components/film-chat-composer.tsx"
     }
   ],
@@ -30,9 +30,9 @@
     },
     {
       "source": "components/ui/theme-scope.tsx",
-      "sourceSha256": "72215a0332a81a06b3919ae4ec138de38aec3f11c7435e1d2574523e058f93b3",
+      "sourceSha256": "51957a9ec163cdb136a7416d75c88cba9de71f8795470d033f4464c699b0311a",
       "output": "src/reference-film/current-ui/components/ui/theme-scope.js",
-      "outputSha256": "2f85e2887ae4d3c5790977d8fed2294c2c4a0e76077ce9c0637873ece2724657",
+      "outputSha256": "2c4eb851c9358accbae678d5990edd24cfc200d31ff8d2642d1bd18e98c351f6",
       "method": "current source TypeScript transpilation with import rebasing only"
     },
     {
@@ -114,9 +114,30 @@
     },
     {
       "source": "components/ai-elements/prompt-input.tsx",
-      "sourceSha256": "a3b6f9cf0e98167c08d91b9000c74261e023bf927860d33a9eece68e9cc49b8f",
+      "sourceSha256": "5225b540daf66628337f72f6c2b82799f2af97258f2e7929edd17494735f465e",
       "output": "src/reference-film/current-ui/components/ai-elements/prompt-input.js",
-      "outputSha256": "0ac02d0596f3c3ac5eea0add799b9107019c50d73fe1e3860da4a195a35b69bf",
+      "outputSha256": "87fbe33beabc0e8292ac20de8a10b61b9b45d39149b41471181df92352d67785",
+      "method": "current source TypeScript transpilation with import rebasing only"
+    },
+    {
+      "source": "lib/i18n/locales.ts",
+      "sourceSha256": "ddbf5766235e4fb0f5f8206ba047c1f99cb86f453ea4d22951211a347f64f589",
+      "output": "src/reference-film/current-ui/lib/i18n/locales.js",
+      "outputSha256": "aca88b78bdd884b2e7f825889bc2e4c31a848347f7a7e37cb138c208710549cc",
+      "method": "current source TypeScript transpilation with import rebasing only"
+    },
+    {
+      "source": "lib/i18n/messages.ts",
+      "sourceSha256": "a2519ed238cbea0ea5cfffa4fd0ed34f4553c224cd33b462a8b7f2303d37218d",
+      "output": "src/reference-film/current-ui/lib/i18n/messages.js",
+      "outputSha256": "db63d343edcc96159746ac2060ea78405c62d09d901702e656eb77bcccf2f6ad",
+      "method": "current source TypeScript transpilation with import rebasing only"
+    },
+    {
+      "source": "lib/i18n/client.tsx",
+      "sourceSha256": "abc784a2f5eaf5e3dcba270e9d4e84fa2fc435d769a42d440169496df2776e9d",
+      "output": "src/reference-film/current-ui/lib/i18n/client.js",
+      "outputSha256": "9c9321a220128e00425658157275ea82e6354459c92b80218d69154b278b4917",
       "method": "current source TypeScript transpilation with import rebasing only"
     },
     {
@@ -135,45 +156,38 @@
     },
     {
       "source": "components/agent-prompt-textarea.tsx",
-      "sourceSha256": "54eb9473da3c0dd31a19029f0c38b7fee170bb551a2d79afa18a53da7125ed7c",
+      "sourceSha256": "db4791457877d492f0887d8fc1bf54641afb0a2fc944b6bc754a5e1ceb439c9f",
       "output": "src/reference-film/current-ui/components/agent-prompt-textarea.js",
-      "outputSha256": "2911b0350ae7f97530d1d9b044a78651a810f9c399c9bffec11835eef2d7068b",
+      "outputSha256": "a6f1f0fc7d6fa79c8b688a55a8b71cbcf94d0a2fa5c57390bf23df4f6337b5db",
       "method": "current source TypeScript transpilation with import rebasing only"
     },
     {
       "source": "components/prompt-add-menu.tsx",
-      "sourceSha256": "d74d0e8325d556dbf812da0a3b987a18e888c656014a01f4acb09c66019b928a",
+      "sourceSha256": "e8550b7b6d7870a102317519365e5ae4ea92795f9c6fd08e8306f63334334abe",
       "output": "src/reference-film/current-ui/components/prompt-add-menu.js",
-      "outputSha256": "c37f3fdd8d35abccd72ef47db310bdb5fbc9d8fc75dcf592478b2843498612cf",
+      "outputSha256": "110c9fa8c45b66b83af417d8216614a3656cf3e3b5e72918301dec396b456189",
       "method": "current source TypeScript transpilation with import rebasing only"
     },
     {
       "source": "components/access-mode-picker.tsx",
-      "sourceSha256": "d07445bdc4cfada396262158ff4c20fce86895463f638fd33a41564029b77a8c",
+      "sourceSha256": "e12093a17197a83839883c7413e5f2f3025a2c25f9d6a4293373a98b5353ec5b",
       "output": "src/reference-film/current-ui/components/access-mode-picker.js",
-      "outputSha256": "73f83450034d51d51af30cfffb818a56d7fef5c975566ab1b63857c8d8d2b7ff",
+      "outputSha256": "457b5f4cbb10f6039f316458cab76e27905bc3da07e5495ae56984eb3cd328dc",
       "method": "current source TypeScript transpilation with import rebasing only"
     },
     {
       "source": "components/agent-kind-picker.tsx",
-      "sourceSha256": "cc6cb2044d9171206f0c9bb6df8b92186b2f4053724bcf820f53d64b93b4232e",
+      "sourceSha256": "8333d07c2963bd20c01af03a5aade387685d377780787b73c9cc5cfe9b469c98",
       "output": "src/reference-film/current-ui/components/agent-kind-picker.js",
-      "outputSha256": "3f77babf294ae14658d28062d07d98093d3e72af86f80ad282388e2bd406f57a",
+      "outputSha256": "612aba768552b7686fa4ef469467404a2bcc698d332c6cbc7dea82e105205504",
       "method": "current source TypeScript transpilation with import rebasing only"
     },
     {
       "source": "components/ai-elements/model-selector.tsx",
-      "sourceSha256": "23e0d7b6bc4dd857db0855fc0f86cfc5596d7da6d31fe6c0d581b8d6249f47e5",
+      "sourceSha256": "ce85abacc4e93fed42f898ed94da19ba8b1ebdf54c7ec2c7f90bb27591b8828e",
       "output": "src/reference-film/current-ui/components/ai-elements/model-selector.js",
-      "outputSha256": "51c8c5905d53176763f893838c42bfe5eb5058182c0b46d5b3db711df69c6a84",
+      "outputSha256": "b77f0395600c7cf22375e073d7b951e8181b03ef77ec688a3a1b139df3ce933b",
       "method": "current source TypeScript transpilation with import rebasing only"
-    },
-    {
-      "source": "components/film-home-composer.tsx",
-      "sourceSha256": "6bf376a43a8cd7022d9a5ad515d9454b4debd113582acdf91b64887d750c560d",
-      "output": "src/reference-film/current-ui/components/film-home-composer.js",
-      "outputSha256": "6f2ad0520977e0313f80795812227a9411c0615e8c0124d7f723708858505a6e",
-      "method": "current source JSX with deterministic fixture state and inert callbacks"
     },
     {
       "source": "components/ai-elements/attachments.tsx",
@@ -183,23 +197,34 @@
       "method": "current source TypeScript transpilation with import rebasing only"
     },
     {
+      "source": "components/film-home-composer.tsx",
+      "sourceSha256": "7f4194737dab2a90bba4fe97713fee0889c8e79dbc17a38be61c18f2bf8594e8",
+      "output": "src/reference-film/current-ui/components/film-home-composer.js",
+      "outputSha256": "714cb3284a441a5b6ebad4b241cefcefeefcb3b1f823eb5a9976514873d98b2c",
+      "method": "current source JSX with deterministic fixture state and inert callbacks"
+    },
+    {
       "source": "components/film-chat-composer.tsx",
-      "sourceSha256": "b7218821068bb13d9527895cf9bd31606585cc95f7646b198316c65c4ce97e91",
+      "sourceSha256": "ac305b44d8327b00dcffb8eb2f779d42d4e31ec18f261431fb0f966b97c24161",
       "output": "src/reference-film/current-ui/components/film-chat-composer.js",
-      "outputSha256": "a47866082ffd8b121ae2d09a255ae88791b387fe9a7e882922da562998ff7870",
+      "outputSha256": "3696198e1e4bfe74ef5d23d03cdc24fb18329cac6fc89791722e94ae918e71e7",
       "method": "current source JSX with deterministic fixture state and inert callbacks"
     }
   ],
   "css": {
     "source": "app/globals.css",
-    "sha256": "2002e0c5ef8aa62e6f66f3af622060ad841058f10f1e6c707770b9c6ed1c5e1c",
+    "sha256": "58dccce5a3aacbd55105f467535b9c07eeeb39b513b2b788d330dd0dc6001205",
     "output": "src/reference-film/current-theme.css",
-    "outputSha256": "9ee00deffed053f10a3e536e936f917d98401148dec5329d778cf2921832870c"
+    "outputSha256": "43a31b31b4d57f24eff2a5e7bbeea4410cd15b54a7fca0f628d6c716bdcf0090"
+  },
+  "modelFixture": {
+    "name": "GPT-6 Luna",
+    "liveProviderCall": false
   },
   "adaptations": [
-    "Homepage uses current WorkspacePrompt with Zorker/agent, disabled Cloud and active Local, permission, named model, project entry and round send button.",
+    "Homepage uses current WorkspacePrompt with Zorker/agent, disabled Cloud and active Local, permission, named GPT-6 Luna demonstration model, project entry and round send button.",
     "Chat uses current compact single-line composer unless actual wrapping requires expansion. No forced expanded state.",
-    "Menus remain closed, attachments empty, service callbacks inert. Model name is a repository Storybook-style demonstration fixture.",
+    "Menus remain closed, attachments empty, service callbacks inert. GPT-6 Luna is a deterministic film fixture, not a live provider selection or model-availability claim.",
     "Current dependencies, JSX, CSS classes and SVG assets retained. No source application changes."
   ]
 }

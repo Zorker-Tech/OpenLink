@@ -1,25 +1,27 @@
 {
-  "sourceModules": 25,
-  "durations": [
-    198,
-    514,
-    698,
-    400,
-    394,
-    268,
-    754,
-    382
+  "sourceModules": 28,
+  "shots": [
+    121,
+    269,
+    349,
+    253,
+    230,
+    201,
+    346,
+    159
   ],
-  "overlaps": [
-    36,
-    32,
-    44,
-    36,
-    32,
-    24,
-    44
+  "transitions": [
+    20,
+    16,
+    25,
+    22,
+    21,
+    15,
+    19
   ],
-  "durationSeconds": 56,
+  "durationFrames": 1790,
+  "durationSeconds": 29.833333,
+  "modelFixture": "GPT-6 Luna",
   "primaryFps": 60,
   "width": 3840,
   "height": 2160,

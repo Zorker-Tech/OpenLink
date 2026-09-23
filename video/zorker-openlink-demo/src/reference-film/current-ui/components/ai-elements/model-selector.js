@@ -17,6 +17,7 @@ import OpenAIMono from "@lobehub/icons/es/OpenAI/components/Mono";
 import QwenMono from "@lobehub/icons/es/Qwen/components/Mono";
 import XAIMono from "@lobehub/icons/es/XAI/components/Mono";
 import ZhipuMono from "@lobehub/icons/es/Zhipu/components/Mono";
+import { Network as NetworkIcon } from "lucide-react";
 import { cn } from "../../lib/utils.js";
 /** LobeHub Mono icons keyed by the brand slug resolved from a model name. */
 const MODEL_LOGO_COMPONENTS = {
@@ -33,6 +34,8 @@ const MODEL_LOGO_COMPONENTS = {
     nvidia: NvidiaMono,
     openai: OpenAIMono,
     qwen: QwenMono,
+    v0: NetworkIcon,
+    vercel: NetworkIcon,
     xai: XAIMono,
     zhipu: ZhipuMono,
 };
@@ -58,7 +61,7 @@ export const ModelSelectorLogo = ({ provider, className, style, ...props }) => {
     const src = provider === "hydite" || provider === "hydite-vtslx-ao"
         ? filmStaticFile("openlink/providers/hydite.svg")
         : `https://models.dev/logos/${provider}.svg`;
-    return (_jsx("img", { ...props, alt: `${provider} logo`, className: cn("size-3 [filter:var(--app-logo-filter,none)]", className), height: 12, src: src, style: style, width: 12 }));
+    return (_jsx("img", { ...props, alt: provider === "v0" || provider === "vercel" ? "Model provider logo" : `${provider} logo`, className: cn("size-3 [filter:var(--app-logo-filter,none)]", className), height: 12, src: src, style: style, width: 12 }));
 };
 export const ModelSelectorLogoGroup = ({ className, ...props }) => (_jsx("div", { className: cn("flex shrink-0 items-center -space-x-1 [&>img]:rounded-full [&>img]:bg-background [&>img]:p-px [&>img]:ring-1 [&>img]:ring-border", className), ...props }));
 export const ModelSelectorName = ({ className, ...props }) => (_jsx("span", { className: cn("flex-1 truncate text-left", className), ...props }));

@@ -39,6 +39,8 @@ next-env.d.ts
 /.next
 /.next.*
 /.zcode/
+/openlink-paced-*/
+/puppeteer_dev_chrome_profile-*/
 
 # nested package installs should never be committed
 node_modules/

@@ -1,0 +1,29 @@
+{
+  "revision": 10,
+  "format": {"fps": 60, "width": 3840, "height": 2160},
+  "runtimeFrames": 1790,
+  "runtimeSeconds": 29.833333,
+  "model": "GPT-6 Luna",
+  "direction": "A concise functional product film: establish the mark, show a single user task from prompt through visible work to result, prove three capabilities in a rhythmic insert run, then close cleanly.",
+  "shots": [
+    {"id":"logo","title":"01 · Logo reveal","scene":"Genesis","purpose":"Brand recognition without a text preamble.","camera":"Short optical reveal; stop on the mark.","sourceFrames":180,"activeFrames":110,"sourceLead":0,"sourceTail":18,"leadFrames":0,"tailFrames":11,"sequenceFrames":121,"sequenceStart":0,"activeStart":0},
+    {"id":"prompt","title":"02 · One clear brief","scene":"Intent","purpose":"Show the actual home composer taking a concise Forma brief and submitting it.","camera":"Establish the real control, track the typing front, land on one send beat.","sourceFrames":480,"activeFrames":252,"sourceLead":18,"sourceTail":16,"leadFrames":9,"tailFrames":8,"sequenceFrames":269,"sequenceStart":101,"activeStart":110},
+    {"id":"work","title":"03 · Work, then proof","scene":"Execution","purpose":"Compress the waiting while keeping operation order and the completed reply/change card legible.","camera":"A single top-to-bottom timeline scan; no repeated pauses.","sourceFrames":660,"activeFrames":330,"sourceLead":16,"sourceTail":22,"leadFrames":8,"tailFrames":11,"sequenceFrames":349,"sequenceStart":354,"activeStart":362},
+    {"id":"workspace","title":"04 · Current session workspace","scene":"Artifact","purpose":"Re-establish the complete latest split layout before detail inserts.","camera":"Pull to a steady wide shot showing the chat pane and real preview shell together.","sourceFrames":360,"activeFrames":228,"sourceLead":22,"sourceTail":18,"leadFrames":14,"tailFrames":11,"sequenceFrames":253,"sequenceStart":678,"activeStart":692},
+    {"id":"refine","title":"05 · Refine with GPT-6 Luna","scene":"Refinement","purpose":"Show the selected GPT-6 Luna demo model and one compact follow-up instruction.","camera":"Match the composer, follow the second typing front, punch to submit.","sourceFrames":360,"activeFrames":210,"sourceLead":18,"sourceTail":16,"leadFrames":11,"tailFrames":9,"sequenceFrames":230,"sequenceStart":909,"activeStart":920},
+    {"id":"result","title":"06 · Result changes","scene":"Resolution","purpose":"Let the visible website change land and hold long enough to register.","camera":"A restrained palette reveal followed by a stable result frame.","sourceFrames":240,"activeFrames":180,"sourceLead":16,"sourceTail":12,"leadFrames":12,"tailFrames":9,"sequenceFrames":201,"sequenceStart":1118,"activeStart":1130},
+    {"id":"proof","title":"07 · Three fast proofs","scene":"Features","purpose":"Prove inspect, source diff, and version switching as three distinct actions.","camera":"Three motivated macro inserts with clean directional handoffs; no feature-card hold.","sourceFrames":720,"activeFrames":330,"sourceLead":12,"sourceTail":22,"leadFrames":6,"tailFrames":10,"sequenceFrames":346,"sequenceStart":1304,"activeStart":1310},
+    {"id":"close","title":"08 · Brand close","scene":"Finale","purpose":"Return to the mark and leave a clean end hold.","camera":"Quick pullback, then locked brand frame.","sourceFrames":360,"activeFrames":150,"sourceLead":22,"sourceTail":0,"leadFrames":9,"tailFrames":0,"sequenceFrames":159,"sequenceStart":1631,"activeStart":1640}
+  ],
+  "transitions": [
+    {"from":"logo","to":"prompt","kind":"rise","startFrame":101,"frames":20,"seconds":0.333333},
+    {"from":"prompt","to":"work","kind":"forward","startFrame":354,"frames":16,"seconds":0.266667},
+    {"from":"work","to":"workspace","kind":"reveal","startFrame":678,"frames":25,"seconds":0.416667},
+    {"from":"workspace","to":"refine","kind":"rise","startFrame":909,"frames":22,"seconds":0.366667},
+    {"from":"refine","to":"result","kind":"forward","startFrame":1118,"frames":21,"seconds":0.35},
+    {"from":"result","to":"proof","kind":"match","startFrame":1304,"frames":15,"seconds":0.25},
+    {"from":"proof","to":"close","kind":"reveal","startFrame":1631,"frames":19,"seconds":0.316667}
+  ],
+  "audio": {"music": false, "keyboardTapsFollowVisibleCharacters": true, "transitionSfx": "One short air cue per scene handoff; UI clicks only on visible interactions."},
+  "editorialBoundaries": ["The execution sequence is explicitly time-compressed; elapsed performance is not claimed.","The Forma website, agent timeline, selected model, and version states remain deterministic demonstration fixtures, not a live provider run.","No large overhead headline; the opening and closing use brand identity only."]
+}

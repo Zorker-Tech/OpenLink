@@ -39,6 +39,7 @@ timeline=replaceDeclaration(timeline,'TaskPositionCapsule','function TaskPositio
 const editor=declaration(timeline,'EditableUserMessage').text;
 timeline=replaceDeclaration(timeline,'EditableUserMessage',`function EditableUserMessage({item,disabled,onEditMessage=()=>{}}) {
  const {editing,pending,draft}=useContext(FilmState);
+ const t=useT();
  const error=null;
  ${editor.slice(editor.indexOf('  return <div'))}
 `);
