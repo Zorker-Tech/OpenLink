@@ -2,10 +2,30 @@
 
 A new reference-led composition, preserving the earlier `ZorkerOpenLink` video.
 
+## Revision 10 — director's cut, GPT-6 Luna
+
+Re-edited as a concise product film rather than a feature tour. The cut moves from one clear brief, through the completed work and current split workspace, into one revision and its visible result; three distinct capability inserts then land as a short proof run before the brand close. Waiting is explicitly time-compressed, repeated holds are removed, and each interaction keeps a readable beat. The exact timing and cut handles are in `src/reference-film/storyboard-v10.json`.
+
+| Shot | Editorial job | Active time |
+| --- | --- | ---: |
+| Logo | Recognize the mark; no title card | 1.83s |
+| Brief | Type once in the real current homepage composer and send | 4.20s |
+| Work | One top-to-bottom scan from activity to completed proof | 5.50s |
+| Workspace | Re-establish the current full split layout | 3.80s |
+| Refine | Show GPT-6 Luna and one compact follow-up | 3.50s |
+| Result | Let the visible site change register | 3.00s |
+| Capability proof | Inspect, source diff, then version switch | 5.50s |
+| Brand close | Return to the mark and finish clean | 2.50s |
+
+Total: 1,790 frames / 29.83s at 60 fps, with 7 directional overlaps of 15–25 frames. The GPT-6 Luna selection and all Forma/site/agent events are deterministic demo fixtures; the film does not make a live-provider execution or availability claim. Current session headers, preview, timeline and composers remain extracted from the Sep 23 OpenLink source. Nothing in the OpenLink app source was edited for this revision. Run `node scripts/verify-reference.mjs` for layout, extraction hashes, model label, title/audio rules, and timing checks.
+
+Revision 9's 56-second export is preserved as a historical deliverable and was not overwritten. Earlier revision notes below describe previous states; where they differ, Revision 10's storyboard, audio report and current extraction manifests above supersede them.
+
 ## Deliverable
 
 - Composition: `OpenLinkReferenceFilm`
-- Primary playback delivery: 3840 × 2160, 60 fps, 3,360 frames / 56 seconds (revision 6, fluid motion)
+- Primary playback delivery: 3840 × 2160, 60 fps, 1,790 frames / 29.83 seconds
+- Director's cut export: `/Users/yikewang/Movies/OpenLink-Reference-20260923/revision-10-paced-gpt6-luna/OpenLink-4K60-Paced-GPT-6-Luna.mp4`
 - Export: H.264, YUV 4:2:0, CRF 14, lossless PNG intermediates; AAC stereo, 48 kHz
 - Language: English
 - Direction: pure white negative space, logo-only opening, native light-theme UI, tracked input, no overhead explanatory titles, clear brand end hold. Opening decorative spheres are removed.
@@ -19,15 +39,12 @@ Run in `video/zorker-openlink-demo` from the OpenLink checkout:
 npx remotion studio --no-open --port=3117
 # Open http://localhost:3117/OpenLinkReferenceFilm
 
-node scripts/build-motion-curves.mjs
-node scripts/build-choreography.mjs
-node scripts/generate-keyboard-sfx.mjs
 npx tsc --noEmit
 node scripts/verify-fluid.mjs
-node scripts/render-fluid.mjs --video
+FILM_OUTPUT="/Users/yikewang/Movies/OpenLink-Reference-20260923/revision-10-paced-gpt6-luna" FILM_QA_OUTPUT="/Volumes/Net/OpenLink/video/zorker-openlink-demo/out/revision-10-qa" node scripts/render-fluid.mjs --video
 ```
 
-The current output directory defaults to `out/fluid-motion`. Set `FILM_OUTPUT` to another destination. `FILM_FRAMES=240,360,1080,1230,1800,2420` selects output-frame QA; `QA_SCALE=1` gives full-resolution stills. Four additional 4K detail stills are rendered during QA. `FRAME_RANGE=637,683` makes an interaction/transition test; `--only-video` skips still rendering. Keep root UI dependencies available. All versions are locked, including GSAP 3.15.0 and Motion 12.43.0. Older render/verify scripts describe earlier exports.
+`FILM_OUTPUT` selects the movie directory and `FILM_QA_OUTPUT` can place high-resolution QA stills on a separate volume; the film and cue scheduler both read the storyboard JSON. QA samples every shot and transition, checks deterministic seeks and frame-to-frame movement, and captures four 4K detail stills. `FILM_FRAMES` can override the general sample list; `QA_SCALE=1` makes all QA frames full resolution. `FRAME_RANGE=start,end` makes an interaction/transition test; `--only-video` skips still rendering. All versions are locked, including GSAP 3.15.0 and Motion 12.43.0. Earlier render/remux scripts describe historical exports.
 
 ## Revision 6: fluid motion
 
@@ -43,7 +60,7 @@ Revision 5 removes the four seconds previously occupied by opening sphere materi
 
 The 120fps H.264 master passes full software decoding, but the current in-app browser stopped it near 35 seconds during repeated playback tests, including a byte-range-enabled local server. A separate 4K60 compatibility MP4 is included in the delivery directory. Do not claim universal 120fps player compatibility.
 
-The approved source-derived input snapshot is retained. The main application file has changed independently since extraction; current static input classes still match the snapshot, and the video does not overwrite application changes. Refresh extraction only intentionally, then repeat source/adapter and visual verification.
+The original source-derived input snapshot remains for opening/home composer context. The current chat composer and timeline have also been re-extracted from the latest application source into isolated film modules. Extraction is kept under `src/reference-film/` and `src/source-snapshot/`; it does not overwrite product source files.
 
 Scene source is in `src/reference-film/`; registration is additive in `src/Root.tsx`. `Native.tsx` contains deterministic fixture adapters, not new product UI. `primitives.tsx` holds camera math, original optical artwork, editorial type and brand lockup. Each scene is separately named in Studio.
 
@@ -75,9 +92,9 @@ Forma is a fictional illustrative website. The task events, build result and tim
 
 ## QA scope
 
-The renderer outputs `qa/render-report.json`: dimensions, timing, representative/boundary still frames, browser errors and reverse-order repeated-frame equality checks. Full-resolution output must additionally be inspected for final media properties and decode errors. Studio/MP4 playback is a separate check from still-frame inspection; report it separately in the delivery QA notes.
+The renderer outputs `qa/render-report.json`: representative and transition stills, composer parity, browser errors, and repeated-frame determinism. Revision 10's `provenance/revision-10-render.json` records the final MP4 metadata, SHA-256, and full audio/video decode checks; Revision 9's report and export remain preserved. Studio/MP4 playback is a separate check from still-frame inspection.
 
-`provenance/reference-audio.json` records original synthesis, measured peak/RMS, zero clipping and a zero-valued faded tail. These measurements do not claim a subjective listening/mastering review. Do not describe the piece as independently certified “T0”; visual approval remains with the user.
+`provenance/keyboard-sfx-audio.json` records the revision's transition/click/keyboard cue positions, measured peak/RMS, zero clipping and a zero-valued faded tail. These measurements do not claim a subjective listening/mastering review. Do not describe the piece as independently certified “T0”; visual approval remains with the user.
 
 ## Rights and safety
 
