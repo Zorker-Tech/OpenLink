@@ -2,6 +2,7 @@
 
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { useEffect, useRef, useState } from 'react'
+import { useT } from '@/lib/i18n/client'
 import { theme } from '@/lib/theme'
 
 export const SIDEBAR_MIN_WIDTH = 250
@@ -19,6 +20,7 @@ export function AppSidebarFrame({ children, collapsed, mobileOpen, onCloseMobile
   mobileOpen: boolean
   onCloseMobile: () => void
 }) {
+  const t = useT()
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_MIN_WIDTH)
   const [isResizing, setIsResizing] = useState(false)
   const sidebarWidthRef = useRef(SIDEBAR_MIN_WIDTH)
@@ -76,12 +78,14 @@ export function AppSidebarFrame({ children, collapsed, mobileOpen, onCloseMobile
     updateSidebarWidth(nextWidth, true)
   }
 
+  const sidebarWidthValueText = t('{width} 像素', { width: sidebarWidth })
+
   return (
     <>
-      {mobileOpen && <button aria-label="关闭侧边栏" className={`fixed inset-0 z-30 md:hidden ${theme('overlay')}`} onClick={onCloseMobile} type="button" />}
+      {mobileOpen && <button aria-label={t('关闭侧边栏')} className={`fixed inset-0 z-30 md:hidden ${theme('overlay')}`} onClick={onCloseMobile} type="button" />}
       <aside className={`fixed inset-y-0 left-0 z-40 flex w-[var(--app-sidebar-width)] shrink-0 flex-col overflow-visible border-r border-[var(--app-border)] bg-[var(--app-background)] transition-[transform,margin-left] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] md:relative ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} ${collapsed ? 'md:-ml-[var(--app-sidebar-width)] md:translate-x-0 md:pointer-events-none' : 'md:ml-0 md:translate-x-0'}`} data-resizing={isResizing} style={{ '--app-sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
         {children}
-        <div aria-label="调整侧边栏宽度" aria-orientation="vertical" aria-valuemax={SIDEBAR_MAX_WIDTH} aria-valuemin={SIDEBAR_MIN_WIDTH} aria-valuenow={sidebarWidth} aria-valuetext={`${sidebarWidth} 像素`} className="group absolute inset-y-0 -right-1.5 z-50 hidden w-3 touch-none cursor-col-resize items-center justify-center outline-none md:flex" data-resizing={isResizing} onDoubleClick={() => updateSidebarWidth(SIDEBAR_MIN_WIDTH, true)} onKeyDown={resizeFromKeyboard} onPointerDown={resizeFromPointer} role="separator" tabIndex={0} title="拖动调整侧边栏宽度">
+        <div aria-label={t('调整侧边栏宽度')} aria-orientation="vertical" aria-valuemax={SIDEBAR_MAX_WIDTH} aria-valuemin={SIDEBAR_MIN_WIDTH} aria-valuenow={sidebarWidth} aria-valuetext={sidebarWidthValueText} className="group absolute inset-y-0 -right-1.5 z-50 hidden w-3 touch-none cursor-col-resize items-center justify-center outline-none md:flex" data-resizing={isResizing} onDoubleClick={() => updateSidebarWidth(SIDEBAR_MIN_WIDTH, true)} onKeyDown={resizeFromKeyboard} onPointerDown={resizeFromPointer} role="separator" tabIndex={0} title={t('拖动调整侧边栏宽度')}>
           <span className="h-10 w-1 rounded-full bg-transparent transition-colors group-hover:bg-[var(--app-control-border)] group-focus-visible:bg-[var(--app-focus-ring)] group-data-[resizing=true]:bg-[var(--app-focus-ring)]" />
         </div>
       </aside>

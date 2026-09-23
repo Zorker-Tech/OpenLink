@@ -2,6 +2,9 @@ import { Analytics } from '@vercel/analytics/next'
 import { OpenLinkMotionProvider } from '@/components/ui/motion-provider'
 import type { Metadata, Viewport } from 'next'
 import localFont from 'next/font/local'
+import { resolveLocale } from '@/lib/i18n/server'
+import { I18nProvider } from '@/lib/i18n/client'
+import { loadMessages } from '@/lib/i18n/messages'
 import { isLocalRuntime } from '@/lib/runtime-mode.server'
 import './globals.css'
 
@@ -25,12 +28,14 @@ export const viewport: Viewport = {
 // installation, rather than an empty value frozen into the release artifact.
 export const dynamic = 'force-dynamic'
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
   const local = isLocalRuntime()
+  const locale = await resolveLocale()
+  const messages = await loadMessages(locale)
   const supabaseUrl = local
     ? process.env.OPENLINK_LOCAL_ZOKERBASE_URL || process.env.OPENLINK_LOCAL_SUPABASE_URL
     : process.env.OPENLINK_CLOUD_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -38,7 +43,7 @@ export default function RootLayout({
     ? process.env.OPENLINK_LOCAL_ZOKERBASE_PUBLISHABLE_KEY || process.env.OPENLINK_LOCAL_SUPABASE_PUBLISHABLE_KEY
     : process.env.OPENLINK_CLOUD_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
   return (
-    <html lang="zh-CN" suppressHydrationWarning>
+    <html lang={locale} suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{
@@ -49,7 +54,9 @@ export default function RootLayout({
       <body className={`${geist.className} antialiased`}>
         <meta content={supabaseUrl || ''} name="openlink-supabase-url" />
         <meta content={publishableKey || ''} name="openlink-supabase-publishable-key" />
-        <OpenLinkMotionProvider>{children}</OpenLinkMotionProvider>
+        <OpenLinkMotionProvider>
+          <I18nProvider locale={locale} messages={messages}>{children}</I18nProvider>
+        </OpenLinkMotionProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

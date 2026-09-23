@@ -5,7 +5,7 @@ import { dirname, relative, resolve } from 'node:path'
 import { access, lstat, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { CodexTurnLifecycle } from './codex-turn-lifecycle.js'
 import { codexReviewTarget } from './codex-review.js'
-import { collectGitSnapshot } from './git-snapshot.js'
+import { createGitBaseline, collectGitSnapshot, type GitWorkingTreeBaseline } from './git-snapshot.js'
 import { instructionProtocolText } from './prompt-protocol.js'
 
 const FILE_PREVIEW_LIMIT = 192 * 1024
@@ -215,6 +215,7 @@ export class CodexAppServerRuntime {
   private notificationBuffer = ''
   private nextRequestId = 1
   private gitSnapshotSignature?: string
+  private turnBaseline?: GitWorkingTreeBaseline | null
   private started = false
   private startPromise?: Promise<void>
   private threadPromise?: Promise<string>
@@ -1039,7 +1040,7 @@ export class CodexAppServerRuntime {
   }
 
   private async maybeGitSnapshot(toolCallId: string): Promise<void> {
-    const snapshot = await collectGitSnapshot(this.config.workspaceRoot)
+    const snapshot = await collectGitSnapshot(this.config.workspaceRoot, this.turnBaseline)
     if (!snapshot || (!snapshot.files.length && !this.gitSnapshotSignature)) return
     if (snapshot.signature === this.gitSnapshotSignature) return
     this.gitSnapshotSignature = snapshot.signature
@@ -1155,6 +1156,11 @@ export class CodexAppServerRuntime {
       signal.addEventListener('abort', abort, { once: true })
       let canceled = false
       try {
+        // Report only what this turn changed: record the working tree before
+        // the turn can touch it, the way Codex/ChatGPT clients checkpoint a turn.
+        await this.turnBaseline?.dispose()
+        this.turnBaseline = await createGitBaseline(this.config.workspaceRoot)
+        this.gitSnapshotSignature = undefined
         const reviewTarget = attachments.length === 0 ? codexReviewTarget(message) : null
         const result = await this.request(reviewTarget ? 'review/start' : 'turn/start', reviewTarget
           ? { threadId, target: reviewTarget, delivery: 'inline' }

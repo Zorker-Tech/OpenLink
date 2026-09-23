@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Building2, Check, ChevronsUpDown, Plus, UserRound } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { useT } from '@/lib/i18n/client'
 import { theme } from '@/lib/theme'
 
 export interface PersonalWorkspaceSummary {
@@ -45,6 +46,7 @@ export function WorkspaceSwitcher({
   personalWorkspace: PersonalWorkspaceSummary
   onAddOrganization: () => void
 }) {
+  const t = useT()
   const router = useRouter()
 
   return (
@@ -56,7 +58,7 @@ export function WorkspaceSwitcher({
       >
         <ScopeAvatar label={activeWorkspace.name} organization={activeWorkspace.scopeType === 'organization'} />
         <span className="ml-1.5 min-w-0 flex-1 truncate text-left text-sm font-medium tracking-[-0.1504px] text-[var(--app-foreground)]">
-          {activeWorkspace.scopeType === 'personal' ? '个人' : activeWorkspace.name}
+          {activeWorkspace.scopeType === 'personal' ? t('个人') : activeWorkspace.name}
         </span>
         <ChevronsUpDown className="mx-1 size-3.5 text-[var(--app-muted)]" strokeWidth={1.8} />
       </DropdownMenuTrigger>
@@ -66,13 +68,13 @@ export function WorkspaceSwitcher({
         sideOffset={6}
       >
         <DropdownMenuGroup>
-          <DropdownMenuLabel className={`px-2 py-1.5 text-[11px] uppercase tracking-[0.08em] ${theme('muted')}`}>工作区</DropdownMenuLabel>
+          <DropdownMenuLabel className={`px-2 py-1.5 text-[11px] uppercase tracking-[0.08em] ${theme('muted')}`}>{t('工作区')}</DropdownMenuLabel>
           <DropdownMenuItem
             className="h-10 cursor-pointer gap-2 px-2 focus:bg-[var(--app-hover)] focus:text-[var(--app-foreground)]"
             onClick={() => router.push(`/app/${personalWorkspace.slug}`)}
           >
             <UserRound className="size-4" />
-            <span className="min-w-0 flex-1 truncate">个人</span>
+            <span className="min-w-0 flex-1 truncate">{t('个人')}</span>
             {activeWorkspace.scopeType === 'personal' && <Check className="size-4" />}
           </DropdownMenuItem>
           {organizations.length > 0 && <DropdownMenuSeparator />}
@@ -94,7 +96,7 @@ export function WorkspaceSwitcher({
           onClick={onAddOrganization}
         >
           <Plus className="size-4" />
-          <span>{organizations.length ? '创建或加入组织' : '添加组织'}</span>
+          <span>{organizations.length ? t('创建或加入组织') : t('添加组织')}</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

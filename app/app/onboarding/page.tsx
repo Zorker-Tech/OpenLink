@@ -1,11 +1,13 @@
 import { OnboardingForm } from './onboarding-form'
 import { ZorkerLogo } from '@/components/zorker-logo'
+import { getT } from '@/lib/i18n/server'
 import { getDefaultNickname } from '@/lib/workspaces'
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 
-export const metadata = {
-  title: '设置工作区 — OpenLink',
+export async function generateMetadata() {
+  const { t } = await getT()
+  return { title: t('设置工作区 — OpenLink') }
 }
 
 export default async function OnboardingPage({
@@ -14,6 +16,7 @@ export default async function OnboardingPage({
   searchParams: Promise<{ prompt?: string; step?: string }>
 }) {
   const { prompt = '', step: requestedStep } = await searchParams
+  const { t } = await getT()
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -41,15 +44,15 @@ export default async function OnboardingPage({
   const steps = [
     {
       index: '01',
-      title: '个人身份',
-      description: '确认昵称并创建个人工作区',
+      title: t('个人身份'),
+      description: t('确认昵称并创建个人工作区'),
       active: !isOrganizationStep,
       complete: isOrganizationStep,
     },
     {
       index: '02',
-      title: '组织空间',
-      description: '创建、加入或暂时跳过组织',
+      title: t('组织空间'),
+      description: t('创建、加入或暂时跳过组织'),
       active: isOrganizationStep,
       complete: false,
     },
@@ -81,10 +84,10 @@ export default async function OnboardingPage({
           <div className="max-w-md">
             <p className="text-xs font-semibold tracking-[0.18em] text-muted-foreground uppercase">Get started</p>
             <h2 className="mt-5 text-3xl font-semibold tracking-[-0.045em] text-balance sm:text-4xl lg:text-[2.75rem] lg:leading-[1.08]">
-              为你的工作建立一个清晰起点。
+              {t('为你的工作建立一个清晰起点。')}
             </h2>
             <p className="mt-5 max-w-sm text-sm leading-6 text-muted-foreground sm:text-[15px]">
-              先创建个人工作区，再按需连接组织。你的个人设置与组织权限始终保持独立。
+              {t('先创建个人工作区，再按需连接组织。你的个人设置与组织权限始终保持独立。')}
             </p>
 
             <ol className="mt-10 space-y-3 lg:mt-14">
@@ -106,7 +109,7 @@ export default async function OnboardingPage({
           </div>
 
           <p className="mt-12 hidden max-w-sm text-xs leading-5 text-muted-foreground lg:block">
-            工作区用于隔离项目、对话、知识与运行资源。之后可以随时在设置中调整。
+            {t('工作区用于隔离项目、对话、知识与运行资源。之后可以随时在设置中调整。')}
           </p>
         </aside>
 
@@ -116,12 +119,12 @@ export default async function OnboardingPage({
               Step {isOrganizationStep ? '02' : '01'} / 02
             </p>
             <h1 className="mt-4 text-3xl font-semibold tracking-[-0.04em] sm:text-4xl">
-              {isOrganizationStep ? '设置组织工作区' : '创建你的昵称'}
+              {isOrganizationStep ? t('设置组织工作区') : t('创建你的昵称')}
             </h1>
             <p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground sm:text-[15px]">
               {isOrganizationStep
-                ? '组织是可选的。你可以创建新组织、使用邀请码加入，也可以继续使用个人工作区。'
-                : '昵称将成为默认个人工作区名称，并显示在你的 OpenLink 工作空间中。'}
+                ? t('组织是可选的。你可以创建新组织、使用邀请码加入，也可以继续使用个人工作区。')
+                : t('昵称将成为默认个人工作区名称，并显示在你的 OpenLink 工作空间中。')}
             </p>
 
             <div className="mt-9 border-t border-border pt-8">

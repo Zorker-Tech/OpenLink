@@ -1,6 +1,8 @@
 'use client'
 
 import { WorkspacePrompt } from '@/components/workspace-prompt'
+import { PageTransition } from '@/components/ui/page-transition'
+import { useSidebarCollapsed } from '@/lib/use-sidebar-collapsed'
 import type { ThemeMode } from '@/components/account-drawer'
 import { AppSidebarFrame } from '@/components/app-sidebar-frame'
 import { AppSidebarAccountFooter, AppSidebarWorkspaceHeader } from '@/components/app-sidebar-controls'
@@ -14,6 +16,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { OpenLinkThemeProvider } from '@/components/ui/theme-scope'
 import { deleteChatSessionAction } from '@/app/chat/actions'
+import { useT } from '@/lib/i18n/client'
+import type { Translator } from '@/lib/i18n/messages'
 import type { ActiveWorkspaceSummary, PersonalWorkspaceSummary } from '@/components/workspace-switcher'
 import type { OrganizationSummary } from '@/lib/organizations'
 import type { ProjectSummary } from '@/lib/projects'
@@ -39,14 +43,21 @@ interface AppWorkspaceProps {
   workspaceSlug: string
 }
 
-const primaryNavigation = [
-  { label: '搜索', icon: '/openlink/app/search.svg' },
-  { label: '首页', icon: '/openlink/app/home.svg', active: true },
-  { label: '项目', icon: '/openlink/app/projects.svg' },
-  { label: '库', icon: '/openlink/app/library.svg' },
-  { label: '知识库', icon: '/openlink/app/design-system.svg' },
-  { label: '模板', icon: '/openlink/app/templates.svg' },
-] as const
+/**
+ * Primary navigation entries. Labels are translated here; `activeNavLabel`
+ * arrives as a source label from the other workspaces, so the active state
+ * compares translated labels while routing keys off the stable id.
+ */
+function primaryNavigation(t: Translator) {
+  return [
+    { id: 'search', label: t('搜索'), icon: '/openlink/app/search.svg' },
+    { id: 'home', label: t('首页'), icon: '/openlink/app/home.svg' },
+    { id: 'projects', label: t('项目'), icon: '/openlink/app/projects.svg' },
+    { id: 'library', label: t('库'), icon: '/openlink/app/library.svg' },
+    { id: 'knowledge', label: t('知识库'), icon: '/openlink/app/design-system.svg' },
+    { id: 'templates', label: t('模板'), icon: '/openlink/app/templates.svg' },
+  ]
+}
 
 interface SidebarChatMenuProps {
   onRename?: () => void
@@ -62,10 +73,11 @@ export interface SidebarChatRuntime {
 const IDLE_CHAT_RUNTIME: SidebarChatRuntime = { speed: 0.25, state: 'solving' }
 
 function SidebarChatMenu({ onRename, onShare, onDelete }: SidebarChatMenuProps) {
+  const t = useT()
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        render={<button aria-label="聊天操作" className="mr-0.5 flex size-7 shrink-0 items-center justify-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)] data-popup-open:bg-[var(--app-active)] data-popup-open:text-[var(--app-foreground)]" type="button" />}
+        render={<button aria-label={t('聊天操作')} className="mr-0.5 flex size-7 shrink-0 items-center justify-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)] data-popup-open:bg-[var(--app-active)] data-popup-open:text-[var(--app-foreground)]" type="button" />}
       >
         <MoreHorizontal className="size-4" />
       </DropdownMenuTrigger>
@@ -78,11 +90,11 @@ function SidebarChatMenu({ onRename, onShare, onDelete }: SidebarChatMenuProps) 
       >
         <DropdownMenuItem className="h-9 cursor-pointer gap-2.5 rounded-md px-2.5 text-sm focus:bg-[var(--app-hover)]" onClick={onShare}>
           <Share2 className="size-4 text-[var(--app-muted)]" />
-          <span>分享聊天</span>
+          <span>{t('分享聊天')}</span>
         </DropdownMenuItem>
         <DropdownMenuItem className="h-9 cursor-pointer gap-2.5 rounded-md px-2.5 text-sm focus:bg-[var(--app-hover)]" disabled={!onRename} onClick={onRename}>
           <Pencil className="size-4 text-[var(--app-muted)]" />
-          <span>重命名</span>
+          <span>{t('重命名')}</span>
         </DropdownMenuItem>
         <DropdownMenuItem
           className="h-9 cursor-pointer gap-2.5 rounded-md px-2.5 text-sm text-[var(--app-danger)] focus:bg-[var(--app-danger)]/10 focus:text-[var(--app-danger)]"
@@ -90,7 +102,7 @@ function SidebarChatMenu({ onRename, onShare, onDelete }: SidebarChatMenuProps) 
           onClick={onDelete}
         >
           <Trash2 className="size-4 text-[var(--app-danger)]" />
-          <span>删除会话</span>
+          <span>{t('删除会话')}</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -181,6 +193,7 @@ export function Sidebar({
   /** Replaces the primary workspace navigation inside this same sidebar. */
   secondaryPanel?: React.ReactNode
 }) {
+  const t = useT()
   const router = useRouter()
   const [organizationDialogOpen, setOrganizationDialogOpen] = useState(false)
   const [recentChatsOpen, setRecentChatsOpen] = useState(true)
@@ -240,21 +253,23 @@ export function Sidebar({
 
           <div className="px-2">
             <button className="flex h-8 w-full items-center justify-center rounded-md bg-[var(--app-surface)] pl-7 pr-2 text-sm font-medium tracking-[-0.1504px] text-[var(--app-foreground)]" onClick={onNewChat ?? (() => router.push(`/app/${activeWorkspace.slug}`))} type="button">
-              <span className="flex-1">新建聊天</span><img alt="" className="app-control-icon size-4" src="/openlink/app/new-chat-chevron.svg" />
+              <span className="flex-1">{t('新建聊天')}</span>
+              <img alt="" className="app-control-icon size-4" src="/openlink/app/new-chat-chevron.svg" />
             </button>
           </div>
 
-          <nav aria-label="工作区导航" className="-mt-0.5 flex flex-col gap-0.5 px-2">
-            {primaryNavigation.map((item) => (
+          <nav aria-label={t('工作区导航')} className="-mt-0.5 flex flex-col gap-0.5 px-2">
+            {primaryNavigation(t).map((item) => (
               <SidebarItem
-                key={item.label}
-                {...item}
-                active={activeNavLabel === item.label}
-                onClick={item.label === '首页'
+                key={item.id}
+                label={item.label}
+                icon={item.icon}
+                active={activeNavLabel ? t(activeNavLabel) === item.label : false}
+                onClick={item.id === 'home'
                   ? () => router.push(`/app/${activeWorkspace.slug}`)
-                  : item.label === '项目'
+                  : item.id === 'projects'
                     ? () => router.push(`/app/${activeWorkspace.slug}/projects`)
-                    : item.label === '知识库'
+                    : item.id === 'knowledge'
                       ? () => router.push(`/app/${activeWorkspace.slug}/knowledge`)
                     : undefined}
               />
@@ -272,7 +287,8 @@ export function Sidebar({
               onClick={() => setRecentChatsOpen((value) => !value)}
               type="button"
             >
-              <span>最近聊天</span><img alt="" className={`app-control-icon size-4 transition-transform duration-200 ${recentChatsOpen ? 'rotate-90' : ''}`} src="/openlink/app/section-chevron.svg" />
+              <span>{t('最近聊天')}</span>
+              <img alt="" className={`app-control-icon size-4 transition-transform duration-200 ${recentChatsOpen ? 'rotate-90' : ''}`} src="/openlink/app/section-chevron.svg" />
             </button>
             <div className={`grid transition-[grid-template-rows,opacity] duration-200 ${recentChatsOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`} id="sidebar-recent-chats-content">
               <div className="flex flex-col gap-2 overflow-hidden">
@@ -302,15 +318,15 @@ export function Sidebar({
                     </section>
                   )
                 })}
-                {!chatSessions.length && <p className="px-2 py-1 text-xs text-[var(--app-subtle-foreground)]">暂无聊天</p>}
+                {!chatSessions.length && <p className="px-2 py-1 text-xs text-[var(--app-subtle-foreground)]">{t('暂无聊天')}</p>}
               </div>
             </div>
           </section>
 
           {projects !== undefined && <section className="mt-5">
             <div className="flex h-[30px] items-start justify-between px-2 text-[13px] font-medium tracking-[-0.0762px] text-[var(--app-muted)]">
-              <span>项目</span>
-              <button aria-label="查看项目" className="flex size-5 items-center justify-center rounded hover:bg-[var(--app-surface)]" onClick={() => router.push(`/app/${activeWorkspace.slug}/projects`)} type="button"><Plus className="size-3.5" /></button>
+              <span>{t('项目')}</span>
+              <button aria-label={t('查看项目')} className="flex size-5 items-center justify-center rounded hover:bg-[var(--app-surface)]" onClick={() => router.push(`/app/${activeWorkspace.slug}/projects`)} type="button"><Plus className="size-3.5" /></button>
             </div>
             {visibleProjects.length ? (
               <div className="flex flex-col gap-0.5">
@@ -324,7 +340,7 @@ export function Sidebar({
                 ))}
               </div>
             ) : (
-              <button className="flex h-12 w-full items-center justify-center rounded-lg border border-dashed border-[var(--app-control-border)] text-xs text-[var(--app-subtle-foreground)] hover:bg-[var(--app-surface)]" onClick={() => router.push(`/app/${activeWorkspace.slug}/projects`)} type="button">暂无项目</button>
+              <button className="flex h-12 w-full items-center justify-center rounded-lg border border-dashed border-[var(--app-control-border)] text-xs text-[var(--app-subtle-foreground)] hover:bg-[var(--app-surface)]" onClick={() => router.push(`/app/${activeWorkspace.slug}/projects`)} type="button">{t('暂无项目')}</button>
             )}
           </section>}
         </div>}
@@ -352,22 +368,23 @@ export function AppWorkspace({
   projects,
   workspaceSlug,
 }: AppWorkspaceProps) {
+  const t = useT()
   const router = useRouter()
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useSidebarCollapsed()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [themeMode, setThemeMode] = useState<ThemeMode>('dark')
   const [systemLight, setSystemLight] = useState(false)
   const [composerVersion, setComposerVersion] = useState(0)
 
   const deleteChat = useCallback(async (chatId: string) => {
-    if (!window.confirm('确定要删除这个会话吗？删除后不可恢复。')) return
+    if (!window.confirm(t('确定要删除这个会话吗？删除后不可恢复。'))) return
     const result = await deleteChatSessionAction(chatId)
     if (!result.ok) {
       console.error('OpenLink session delete failed:', result.error)
       return
     }
     router.refresh()
-  }, [router])
+  }, [router, t])
 
   useEffect(() => {
     const runtimes = [defaultProject, ...projects]
@@ -421,7 +438,7 @@ export function AppWorkspace({
           personalWorkspace={personalWorkspace}
           projects={projects}
           themeMode={themeMode}
-          activeNavLabel="首页"
+          activeNavLabel={t('首页')}
           onToggle={() => {
             if (mobileOpen) {
               setMobileOpen(false)
@@ -433,17 +450,17 @@ export function AppWorkspace({
         />
         <main className="relative flex min-w-0 flex-1 items-center justify-center overflow-hidden bg-[var(--app-background)] px-6">
           <header className="absolute inset-x-0 top-0 flex h-12 items-center border-b border-[var(--app-border)] px-3 md:border-transparent">
-            <button aria-label="打开侧边栏" className="flex size-8 items-center justify-center rounded-md hover:bg-[var(--app-surface)] md:hidden" onClick={() => { setCollapsed(false); setMobileOpen(true) }} type="button">
+            <button aria-label={t('打开侧边栏')} className="flex size-8 items-center justify-center rounded-md hover:bg-[var(--app-surface)] md:hidden" onClick={() => { setCollapsed(false); setMobileOpen(true) }} type="button">
               <span className="flex w-4 flex-col gap-1"><i className="h-px w-4 bg-[var(--app-muted)]" /><i className="h-px w-4 bg-[var(--app-muted)]" /><i className="h-px w-4 bg-[var(--app-muted)]" /></span>
             </button>
             <span className="ml-2 truncate text-sm font-medium text-[var(--app-foreground)] md:hidden">{activeWorkspace.name}</span>
             {collapsed && (
-              <button aria-label="展开侧边栏" className="hidden size-8 items-center justify-center rounded-md hover:bg-[var(--app-surface)] md:flex" onClick={() => setCollapsed(false)} type="button">
+              <button aria-label={t('展开侧边栏')} className="hidden size-8 items-center justify-center rounded-md hover:bg-[var(--app-surface)] md:flex" onClick={() => setCollapsed(false)} type="button">
                 <img alt="" className="app-control-icon size-4" src="/openlink/app/sidebar-expand.svg" />
               </button>
             )}
           </header>
-          <div className="flex w-full justify-center">
+          <PageTransition className="flex w-full justify-center">
             <WorkspacePrompt
               configuredModels={configuredModels}
               defaultProject={defaultProject}
@@ -453,7 +470,7 @@ export function AppWorkspace({
               projects={projects}
               workspaceSlug={workspaceSlug}
             />
-          </div>
+          </PageTransition>
         </main>
       </div>
     </OpenLinkThemeProvider>

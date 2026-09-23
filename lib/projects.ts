@@ -2,6 +2,7 @@ import 'server-only'
 
 import { randomBytes, randomUUID } from 'node:crypto'
 import { encryptProjectSshPrivateKey } from '@/lib/project-ssh-secrets.server'
+import { getT } from '@/lib/i18n/server'
 import { slugifyWorkspaceName, type OpenLinkWorkspace } from '@/lib/workspaces'
 import type { AgentKind } from '@/lib/chat-session-types'
 import { createClient } from '@/utils/supabase/server'
@@ -100,6 +101,7 @@ export async function ensureDraftProject(
   userId: string,
   workspace: OpenLinkWorkspace,
 ): Promise<ProjectSummary> {
+  const { t } = await getT()
   const { data: existing, error: existingError } = await supabase
     .schema('openlink')
     .from('projects')
@@ -122,7 +124,7 @@ export async function ensureDraftProject(
       kind: 'code',
       source_type: 'blank',
       source_url: null,
-      description: '默认项目：未指定项目的聊天会话在此运行。',
+      description: t('默认项目：未指定项目的聊天会话在此运行。'),
         is_default: true,
         default_agent: 'codex',
         disk_mode: 'thin',

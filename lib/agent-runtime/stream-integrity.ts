@@ -9,6 +9,34 @@ export function isTerminalErrorEvent(event: { type?: unknown; recoverable?: unkn
 }
 
 /**
+ * Restores the durable event order before the timeline is projected.
+ *
+ * Events normally arrive in `sequence` order, but a reconnect — or an
+ * exception that tears the stream down mid-turn — can deliver replay frames
+ * after later live frames. The timeline reducer and the message-revision
+ * projection are both order-sensitive: a single out-of-order `error`,
+ * `status.updated`, or replayed `message.user` frame shifts every following
+ * task into the wrong round, which is what scrambled task order and task state
+ * after a failure. Sorting here keeps rendering a pure function of the event
+ * set rather than of arrival jitter.
+ */
+export function orderAgentEvents(events: OpenLinkAgentEvent[]): OpenLinkAgentEvent[] {
+  let sorted = true
+  for (let index = 1; index < events.length; index += 1) {
+    if (events[index - 1].sequence > events[index].sequence) {
+      sorted = false
+      break
+    }
+  }
+  if (sorted) return events
+  return [...events].sort((left, right) => (
+    left.sequence - right.sequence
+    || left.timestamp.localeCompare(right.timestamp)
+    || left.id.localeCompare(right.id)
+  ))
+}
+
+/**
  * A newly mounted browser cannot resume an old HTTP response body. If the
  * durable history ends inside a started turn, represent that disconnected
  * transport as a local terminal event instead of rebuilding an eternal

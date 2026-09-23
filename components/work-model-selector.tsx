@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import { Check, ChevronDown, Zap } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from '@/components/ui/popover'
+import { useT } from '@/lib/i18n/client'
 import { cn } from '@/lib/utils'
 import styles from './work-model-selector.module.css'
 import { WorkModelSelectorMotion } from './work-model-selector-motion'
@@ -32,7 +33,8 @@ export type WorkModelSelectorProps = {
 
 /** Presentation only: no provider, storage, network or application state dependencies. */
 export function WorkModelSelector({ models, value, onValueChange, disabled, className, initialView = 'effort', defaultOpen = false, labels }: WorkModelSelectorProps) {
-  const text = { selectModel: '选择模型', effort: '推理强度', enableFast: '启用快速模式', disableFast: '停用快速模式', empty: '暂无可用模型', ...labels }
+  const t = useT()
+  const text = { selectModel: t('选择模型'), effort: t('推理强度'), enableFast: t('启用快速模式'), disableFast: t('停用快速模式'), empty: t('暂无可用模型'), ...labels }
   const selected = models.find(model => model.id === value.modelId)
   const efforts = selected?.efforts ?? []
   const effortIndex = Math.max(0, efforts.findIndex(effort => effort.id === (value.effort ?? selected?.defaultEffort)))
@@ -78,7 +80,7 @@ export function WorkModelSelector({ models, value, onValueChange, disabled, clas
     setOpen(next)
     if (next) setView(initialView)
   }}>
-    <PopoverTrigger disabled={disabled} className={cn(styles.trigger, className)} aria-label={`${text.selectModel}，当前 ${selected?.label ?? text.selectModel}${effort ? ` ${effort.label}` : ''}`}>
+    <PopoverTrigger disabled={disabled} className={cn(styles.trigger, className)} aria-label={t('{model}，当前 {current}{effort}', { model: text.selectModel, current: selected?.label ?? text.selectModel, effort: effort ? ` ${effort.label}` : '' })}>
       {value.fast && selected?.supportsFastMode ? <Zap aria-hidden size={14} /> : null}
       <span>{selected?.label ?? text.selectModel}</span>
       {effort ? <span className={styles.muted}>{effort.label}</span> : null}

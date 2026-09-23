@@ -1,8 +1,19 @@
+import type { Translator } from '@/lib/i18n/messages'
+
 import type { AgentPromptTextAttachment } from './events'
 
 export const PASTED_TEXT_ATTACHMENT_THRESHOLD = 2_000
 export const PASTED_TEXT_ATTACHMENT_MAX_BYTES = 256 * 1024
 export const PASTED_TEXT_ATTACHMENT_MAX_COUNT = 4
+
+/**
+ * Fallback for callers that render without a locale provider (tests, stories,
+ * isolated adapters). It mirrors `translate()` from lib/i18n/messages: no
+ * catalog lookup, but placeholders still resolve.
+ */
+const sourceTranslator: Translator = (source, values) => values
+  ? source.replace(/\{(\w+)\}/g, (match, key: string) => values[key] === undefined ? match : String(values[key]))
+  : source
 
 export function pastedTextByteLength(text: string): number {
   return new TextEncoder().encode(text).byteLength
@@ -12,13 +23,13 @@ export function shouldAttachPastedText(text: string): boolean {
   return text.length >= PASTED_TEXT_ATTACHMENT_THRESHOLD
 }
 
-export function createPastedTextAttachment(text: string): AgentPromptTextAttachment | null {
+export function createPastedTextAttachment(text: string, t: Translator = sourceTranslator): AgentPromptTextAttachment | null {
   if (!shouldAttachPastedText(text) || pastedTextByteLength(text) > PASTED_TEXT_ATTACHMENT_MAX_BYTES) return null
   return {
     type: 'text',
     mediaType: 'text/plain',
     text,
-    filename: '已粘贴的文本.txt',
+    filename: t('已粘贴的文本.txt'),
   }
 }
 

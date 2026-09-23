@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
-import { readFile } from 'node:fs/promises'
-import { relative, resolve } from 'node:path'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, relative, resolve } from 'node:path'
 import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
@@ -49,12 +50,13 @@ export function isGitSnapshotArtifactPath(input: string): boolean {
   return false
 }
 
-async function runGit(workspaceRoot: string, args: string[], maxBuffer = GIT_PATCH_LIMIT_TOTAL + 16 * 1024): Promise<string | null> {
+async function runGit(workspaceRoot: string, args: string[], maxBuffer = GIT_PATCH_LIMIT_TOTAL + 16 * 1024, env?: NodeJS.ProcessEnv): Promise<string | null> {
   try {
     const { stdout } = await execFileAsync('git', ['-C', workspaceRoot, ...args], {
       cwd: workspaceRoot,
       maxBuffer,
       windowsHide: true,
+      ...(env ? { env } : {}),
     })
     return stdout
   } catch {
@@ -80,11 +82,58 @@ function untrackedPatch(path: string, content: string): string {
   ].join('\n')
 }
 
-export async function collectGitSnapshot(workspaceRoot: string): Promise<GitSnapshotFrame | null> {
+/**
+ * Working-tree baseline for one agent turn.
+ *
+ * `tree` is the Git tree object for the entire working copy at turn start:
+ * tracked edits, staged edits, and untracked files. It is written through a
+ * throwaway index in the OS temp directory, so capturing a baseline never
+ * touches the user's real index, HEAD, or stash. `refresh()` re-hashes the
+ * working copy through that same index, reusing Git's stat cache, and returns
+ * the tree for the current state.
+ */
+export interface GitWorkingTreeBaseline {
+  tree: string
+  refresh(): Promise<string | null>
+  dispose(): Promise<void>
+}
+
+export async function createGitBaseline(workspaceRoot: string): Promise<GitWorkingTreeBaseline | null> {
+  const directory = await mkdtemp(join(tmpdir(), 'openlink-git-baseline-'))
+  const env = { ...process.env, GIT_INDEX_FILE: join(directory, 'index') }
+  const dispose = async () => { await rm(directory, { recursive: true, force: true }).catch(() => undefined) }
+  const seeded = (await runGit(workspaceRoot, ['rev-parse', '--verify', 'HEAD']))
+    ? await runGit(workspaceRoot, ['read-tree', 'HEAD'], undefined, env)
+    : await runGit(workspaceRoot, ['read-tree', '--empty'], undefined, env)
+  if (seeded === null) {
+    await dispose()
+    return null
+  }
+  const refresh = async () => {
+    if (await runGit(workspaceRoot, ['add', '-A', '--', '.'], undefined, env) === null) return null
+    return (await runGit(workspaceRoot, ['write-tree'], undefined, env))?.trim() || null
+  }
+  const tree = await refresh()
+  if (!tree) {
+    await dispose()
+    return null
+  }
+  return { tree, refresh, dispose }
+}
+
+export async function collectGitSnapshot(workspaceRoot: string, baseline?: GitWorkingTreeBaseline | null): Promise<GitSnapshotFrame | null> {
   const baseCommit = (await runGit(workspaceRoot, ['rev-parse', '--short=12', 'HEAD']))?.trim()
   if (!baseCommit) return null
 
-  const numstat = await runGit(workspaceRoot, ['diff', '--no-ext-diff', '--no-renames', '--numstat', '-z', 'HEAD', '--'])
+  // With a turn baseline the snapshot answers "what did this turn change?",
+  // which is what Codex and ChatGPT clients show. Without one (baseline capture
+  // failed, or an older caller) it falls back to the whole working tree
+  // against HEAD.
+  const currentTree = baseline ? await baseline.refresh() : null
+  if (baseline && !currentTree) return null
+  const comparison = baseline && currentTree ? [baseline.tree, currentTree] : ['HEAD']
+
+  const numstat = await runGit(workspaceRoot, ['diff', '--no-ext-diff', '--no-renames', '--numstat', '-z', ...comparison, '--'])
   if (numstat === null) return null
   const stats = new Map<string, { additions?: number; deletions?: number }>()
   for (const entry of numstat.split('\0')) {
@@ -97,9 +146,14 @@ export async function collectGitSnapshot(workspaceRoot: string): Promise<GitSnap
     })
   }
 
-  const untracked = await runGit(workspaceRoot, ['ls-files', '--others', '--exclude-standard', '-z'])
-  if (untracked === null) return null
-  const untrackedPaths = untracked.split('\0').filter((path) => path && !isGitSnapshotArtifactPath(path))
+  // Untracked files are already part of both tree objects; only the HEAD
+  // fallback has to enumerate them separately.
+  let untrackedPaths: string[] = []
+  if (!currentTree) {
+    const untracked = await runGit(workspaceRoot, ['ls-files', '--others', '--exclude-standard', '-z'])
+    if (untracked === null) return null
+    untrackedPaths = untracked.split('\0').filter((path) => path && !isGitSnapshotArtifactPath(path))
+  }
   const untrackedSet = new Set(untrackedPaths)
   const paths = new Set([...stats.keys(), ...untrackedPaths])
   const files: GitChangedFile[] = []
@@ -126,7 +180,7 @@ export async function collectGitSnapshot(workspaceRoot: string): Promise<GitSnap
         // file list without inventing a text diff.
       }
     } else {
-      patch = (await runGit(workspaceRoot, ['diff', '--no-ext-diff', '--no-renames', '--unified=3', 'HEAD', '--', path], GIT_PATCH_LIMIT_PER_FILE + 4 * 1024)) ?? ''
+      patch = (await runGit(workspaceRoot, ['diff', '--no-ext-diff', '--no-renames', '--unified=3', ...comparison, '--', path], GIT_PATCH_LIMIT_PER_FILE + 4 * 1024)) ?? ''
     }
     const boundedPatch = patch.slice(0, Math.max(0, Math.min(GIT_PATCH_LIMIT_PER_FILE, remainingPatch)))
     remainingPatch -= boundedPatch.length
