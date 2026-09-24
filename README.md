@@ -1,16 +1,14 @@
 # @slate/work-host
 
-> **Status: designed and frozen, not started.** This package holds architecture, layering and a
-> route contract only — there is no implementation. Do not change code under `apps/work-host` or
-> `packages/work-protocol` until work on Slate Assistant begins; change the documents first.
+> **Status: landing module by module.** The platform is implemented here in Slate's own structure and
+> naming, one functional module at a time, each with behaviour tests. `source/` holds what exists so
+> far; the layer READMEs describe the layers as they are built out.
 
 The **Work platform** — **Slate Assistant** (also `slate-work` / `slate-bot`): persistent agents and everything they do — transcripts, runs, automations,
 workflows, groups, rooms, channels, boxes and cloud agents.
 
 It ships with the desktop app. That is deliberate: Work mode *is* the desktop product's main body,
-and the platform runs in the app's Node runtime next to the renderer, which is also how the
-reference implementation is packaged (one repository containing the Electron shell, the host, the
-coordinator and the two daemons).
+and the platform runs in the app's Node runtime next to the renderer.
 
 It is **independent of the Code agent**: different process, different repository, no shared code.
 Code mode talks to the local `slate-agent` binary; Work mode talks to this platform.
@@ -24,6 +22,7 @@ source/host          the platform itself: agents, transcript, runner, automation
 source/local-exec    standalone local execution daemon contract
 source/box-exec      box/remote execution bridge contract
 source/shared        cross-cutting types and policies
+source/packages      platform libraries the layers above are built from
 ```
 
 Rules:
@@ -35,6 +34,21 @@ Rules:
 - local-exec and box-exec are separate processes with their own lifecycle, identity and readiness
   records — they must not degrade into functions inside the host;
 - scheduled work belongs here, not in the renderer: persistent agents have to outlive the client.
+
+Conventions:
+
+- relative imports carry an explicit `.ts` extension, so any module runs directly under
+  `node --test` with `--experimental-transform-types` — no build step between writing a module and
+  testing it;
+- dependencies are declared when the module that needs them lands, not in advance;
+- everything here is ours: file names, identifiers, package names and strings; no third-party
+  product names, documentation links or telemetry endpoints;
+- `reference/` is local-only material and is never committed.
+
+```bash
+pnpm --filter @slate/work-host typecheck   # strict, NodeNext-style source layout
+pnpm --filter @slate/work-host test        # behaviour tests, run straight from TypeScript
+```
 
 See [work-backend.md](../../docs/architecture/work-backend.md) for the architecture,
 [work-routes.md](../../docs/api/work-routes.md) for the 83-route contract, and
