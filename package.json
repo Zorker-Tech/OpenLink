@@ -5,12 +5,15 @@
   "type": "module",
   "description": "The Work platform: persistent agents, transcripts, runs, automation, workflow, rooms, channels and boxes. Ships with the desktop app; independent of the Code agent.",
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-transform-types --no-warnings --test \"tests/**/*.test.ts\""
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.9.0",
     "@slate/work-protocol": "workspace:*"
   },
   "devDependencies": {
+    "@opentelemetry/sdk-trace-node": "^2.6.1",
     "@types/node": "^26.5.1",
     "typescript": "catalog:"
   }
