@@ -1,4 +1,9 @@
 {
   "extends": "../../tsconfig.base.json",
-  "include": ["source"]
+  "compilerOptions": {
+    "exactOptionalPropertyTypes": true,
+    "lib": ["ES2023", "ESNext.Disposable"],
+    "types": ["node"]
+  },
+  "include": ["source", "tests"]
 }
