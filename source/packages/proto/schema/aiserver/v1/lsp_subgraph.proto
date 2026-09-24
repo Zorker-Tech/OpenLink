@@ -1,0 +1,35 @@
+// aiserver.v1 — aiserver/v1/lsp_subgraph messages, enums and services.
+//
+// Generated from this repository's schema (source/packages/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package aiserver.v1;
+
+message LspSubgraphFullContext {
+  string uri = 1 [json_name = "uri"];
+  string symbol_name = 2 [json_name = "symbolName"];
+  repeated .aiserver.v1.LspSubgraphPosition positions = 3 [json_name = "positions"];
+  repeated .aiserver.v1.LspSubgraphContextItem context_items = 4 [json_name = "contextItems"];
+  float score = 5 [json_name = "score"];
+}
+
+message LspSubgraphPosition {
+  int32 line = 1 [json_name = "line"];
+  int32 character = 2 [json_name = "character"];
+}
+
+message LspSubgraphContextItem {
+  string uri = 1 [json_name = "uri"];
+  string type = 2 [json_name = "type"];
+  string content = 3 [json_name = "content"];
+  .aiserver.v1.LspSubgraphRange range = 4 [json_name = "range"];
+}
+
+message LspSubgraphRange {
+  int32 start_line = 1 [json_name = "startLine"];
+  int32 start_character = 2 [json_name = "startCharacter"];
+  int32 end_line = 3 [json_name = "endLine"];
+  int32 end_character = 4 [json_name = "endCharacter"];
+}

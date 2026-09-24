@@ -1,0 +1,37 @@
+// agent.v1 — agent/v1/semsearch_tool messages, enums and services.
+//
+// Generated from this repository's schema (source/packages/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+import "aiserver/v1/repository.proto";
+
+message SemSearchToolCall {
+  .agent.v1.SemSearchToolArgs args = 1 [json_name = "args"];
+  .agent.v1.SemSearchToolResult result = 2 [json_name = "result"];
+}
+
+message SemSearchToolArgs {
+  string query = 1 [json_name = "query"];
+  repeated string target_directories = 2 [json_name = "targetDirectories"];
+  string explanation = 3 [json_name = "explanation"];
+}
+
+message SemSearchToolResult {
+  oneof result {
+    .agent.v1.SemSearchToolSuccess success = 1 [json_name = "success"];
+    .agent.v1.SemSearchToolError error = 2 [json_name = "error"];
+  }
+}
+
+message SemSearchToolSuccess {
+  string results = 1 [json_name = "results"];
+  repeated .aiserver.v1.CodeResult code_results = 2 [json_name = "codeResults"];
+}
+
+message SemSearchToolError {
+  string error_message = 1 [json_name = "errorMessage"];
+}

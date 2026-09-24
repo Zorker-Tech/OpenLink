@@ -1,0 +1,33 @@
+// agent.v1 — agent/v1/pi_find_exec messages, enums and services.
+//
+// Generated from this repository's schema (source/packages/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+import "agent/v1/pi_common.proto";
+
+message PiFindExecArgs {
+  string pattern = 1 [json_name = "pattern"];
+  string path = 2 [json_name = "path"];
+  int32 limit = 3 [json_name = "limit"];
+}
+
+message PiFindExecResult {
+  oneof result {
+    .agent.v1.PiFindExecSuccess success = 1 [json_name = "success"];
+    .agent.v1.PiFindExecError error = 2 [json_name = "error"];
+  }
+}
+
+message PiFindExecSuccess {
+  string output = 1 [json_name = "output"];
+  .agent.v1.PiTruncation truncation = 2 [json_name = "truncation"];
+  uint32 result_limit_reached = 3 [json_name = "resultLimitReached"];
+}
+
+message PiFindExecError {
+  string error = 1 [json_name = "error"];
+}

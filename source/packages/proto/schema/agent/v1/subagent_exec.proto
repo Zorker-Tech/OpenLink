@@ -1,0 +1,117 @@
+// agent.v1 — agent/v1/subagent_exec messages, enums and services.
+//
+// Generated from this repository's schema (source/packages/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+import "agent/v1/agent.proto";
+import "agent/v1/selected_context.proto";
+import "agent/v1/subagents.proto";
+
+message SubagentArgs {
+  string tool_call_id = 1 [json_name = "toolCallId"];
+  string subagent_type = 2 [json_name = "subagentType"];
+  string model_id = 3 [json_name = "modelId"];
+  string prompt = 4 [json_name = "prompt"];
+  bool readonly = 5 [json_name = "readonly"];
+  string resume_agent_id = 6 [json_name = "resumeAgentId"];
+  bool run_in_background = 7 [json_name = "runInBackground"];
+  .agent.v1.ClientContinuationConfig continuation_config = 8 [json_name = "continuationConfig"];
+  string parent_conversation_id = 9 [json_name = "parentConversationId"];
+  bool interrupt = 13 [json_name = "interrupt"];
+  .agent.v1.TaskMode mode = 14 [json_name = "mode"];
+  string fork_agent_id = 15 [json_name = "forkAgentId"];
+  string root_parent_conversation_id = 16 [json_name = "rootParentConversationId"];
+  .agent.v1.SelectedContext selected_context = 17 [json_name = "selectedContext"];
+  bool direct_meta_parent_child_subagent = 18 [json_name = "directMetaParentChildSubagent"];
+  .agent.v1.SubagentExecutionEnvironment environment = 19 [json_name = "environment"];
+  string cloud_base_branch = 20 [json_name = "cloudBaseBranch"];
+  repeated .agent.v1.RequestedModel.ModelParameterValue model_parameters = 21 [json_name = "modelParameters"];
+  oneof credentials {
+    .agent.v1.ApiKeyCredentials api_key_credentials = 10 [json_name = "apiKeyCredentials"];
+    .agent.v1.AzureCredentials azure_credentials = 11 [json_name = "azureCredentials"];
+    .agent.v1.BedrockCredentials bedrock_credentials = 12 [json_name = "bedrockCredentials"];
+  }
+}
+
+message ForceBackgroundSubagentArgs {
+  string tool_call_id = 1 [json_name = "toolCallId"];
+}
+
+message SubagentAwaitArgs {
+  string agent_id = 1 [json_name = "agentId"];
+  uint32 timeout_ms = 2 [json_name = "timeoutMs"];
+}
+
+message ClientContinuationConfig {
+  int32 idle_threshold = 1 [json_name = "idleThreshold"];
+  int32 max_loops = 2 [json_name = "maxLoops"];
+  string nudge_message = 3 [json_name = "nudgeMessage"];
+  string escape_message_template = 4 [json_name = "escapeMessageTemplate"];
+  bool collect_background_children = 5 [json_name = "collectBackgroundChildren"];
+  string children_completed_message_template = 6 [json_name = "childrenCompletedMessageTemplate"];
+  int32 continuation_round_delay_ms = 7 [json_name = "continuationRoundDelayMs"];
+}
+
+message SubagentResult {
+  oneof result {
+    .agent.v1.SubagentSuccess success = 1 [json_name = "success"];
+    .agent.v1.SubagentError error = 2 [json_name = "error"];
+  }
+}
+
+message ForceBackgroundSubagentResult {
+  .agent.v1.ForceBackgroundSubagentStatus status = 1 [json_name = "status"];
+}
+
+message SubagentAwaitResult {
+  oneof result {
+    .agent.v1.SubagentAwaitComplete complete = 1 [json_name = "complete"];
+    .agent.v1.SubagentAwaitStillRunning still_running = 2 [json_name = "stillRunning"];
+    .agent.v1.SubagentAwaitNotFound not_found = 3 [json_name = "notFound"];
+    .agent.v1.SubagentAwaitError error = 4 [json_name = "error"];
+  }
+}
+
+message SubagentAwaitComplete {
+  string agent_id = 1 [json_name = "agentId"];
+  string transcript_path = 2 [json_name = "transcriptPath"];
+  int32 tool_call_count = 3 [json_name = "toolCallCount"];
+  string final_message = 4 [json_name = "finalMessage"];
+}
+
+message SubagentAwaitStillRunning {
+  string agent_id = 1 [json_name = "agentId"];
+  string transcript_path = 2 [json_name = "transcriptPath"];
+}
+
+message SubagentAwaitNotFound {
+  string agent_id = 1 [json_name = "agentId"];
+}
+
+message SubagentAwaitError {
+  string agent_id = 1 [json_name = "agentId"];
+  string error = 2 [json_name = "error"];
+}
+
+message SubagentSuccess {
+  string agent_id = 1 [json_name = "agentId"];
+  string final_message = 2 [json_name = "finalMessage"];
+  int32 tool_call_count = 3 [json_name = "toolCallCount"];
+  .agent.v1.SubagentBackgroundReason background_reason = 4 [json_name = "backgroundReason"];
+  string transcript_path = 5 [json_name = "transcriptPath"];
+}
+
+message SubagentError {
+  string agent_id = 1 [json_name = "agentId"];
+  string error = 2 [json_name = "error"];
+}
+
+enum ForceBackgroundSubagentStatus {
+  FORCE_BACKGROUND_SUBAGENT_STATUS_UNSPECIFIED = 0;
+  FORCE_BACKGROUND_SUBAGENT_STATUS_ACCEPTED = 1;
+  FORCE_BACKGROUND_SUBAGENT_STATUS_NOT_FOUND = 2;
+}

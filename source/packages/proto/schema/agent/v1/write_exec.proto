@@ -1,0 +1,56 @@
+// agent.v1 — agent/v1/write_exec messages, enums and services.
+//
+// Generated from this repository's schema (source/packages/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+message WriteArgs {
+  string path = 1 [json_name = "path"];
+  string file_text = 2 [json_name = "fileText"];
+  string tool_call_id = 3 [json_name = "toolCallId"];
+  bool return_file_content_after_write = 4 [json_name = "returnFileContentAfterWrite"];
+  bytes file_bytes = 5 [json_name = "fileBytes"];
+  string encoding_hint = 6 [json_name = "encodingHint"];
+}
+
+message WriteResult {
+  oneof result {
+    .agent.v1.WriteSuccess success = 1 [json_name = "success"];
+    .agent.v1.WritePermissionDenied permission_denied = 3 [json_name = "permissionDenied"];
+    .agent.v1.WriteNoSpace no_space = 4 [json_name = "noSpace"];
+    .agent.v1.WriteError error = 5 [json_name = "error"];
+    .agent.v1.WriteRejected rejected = 6 [json_name = "rejected"];
+  }
+}
+
+message WriteSuccess {
+  string path = 1 [json_name = "path"];
+  int32 lines_created = 2 [json_name = "linesCreated"];
+  int32 file_size = 3 [json_name = "fileSize"];
+  string file_content_after_write = 4 [json_name = "fileContentAfterWrite"];
+}
+
+message WritePermissionDenied {
+  string path = 1 [json_name = "path"];
+  string directory = 2 [json_name = "directory"];
+  string operation = 3 [json_name = "operation"];
+  string error = 4 [json_name = "error"];
+  bool is_readonly = 5 [json_name = "isReadonly"];
+}
+
+message WriteNoSpace {
+  string path = 1 [json_name = "path"];
+}
+
+message WriteError {
+  string path = 1 [json_name = "path"];
+  string error = 2 [json_name = "error"];
+}
+
+message WriteRejected {
+  string path = 1 [json_name = "path"];
+  string reason = 2 [json_name = "reason"];
+}

@@ -1,0 +1,143 @@
+// aiserver.v1 — aiserver/v1/filesyncserver messages, enums and services.
+//
+// Generated from this repository's schema (source/packages/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package aiserver.v1;
+
+import "google/protobuf/timestamp.proto";
+import "aiserver/v1/utils.proto";
+
+message FilesyncUpdateWithModelVersion {
+  int32 model_version = 1 [json_name = "modelVersion"];
+  string relative_workspace_path = 2 [json_name = "relativeWorkspacePath"];
+  repeated .aiserver.v1.SingleUpdateRequest updates = 3 [json_name = "updates"];
+  int32 expected_file_length = 4 [json_name = "expectedFileLength"];
+}
+
+message SingleUpdateRequest {
+  int32 start_position = 1 [json_name = "startPosition"];
+  int32 end_position = 2 [json_name = "endPosition"];
+  int32 change_length = 3 [json_name = "changeLength"];
+  string replaced_string = 4 [json_name = "replacedString"];
+  .aiserver.v1.SimpleRange range = 5 [json_name = "range"];
+}
+
+message FSConfigRequest {
+}
+
+message FSConfigResponse {
+  float check_filesync_hash_percent = 1 [json_name = "checkFilesyncHashPercent"];
+  int32 rate_limiter_breaker_reset_time_ms = 2 [json_name = "rateLimiterBreakerResetTimeMs"];
+  int32 rate_limiter_rps = 3 [json_name = "rateLimiterRps"];
+  int32 rate_limiter_burst_capacity = 4 [json_name = "rateLimiterBurstCapacity"];
+  int32 max_recent_updates_stored = 5 [json_name = "maxRecentUpdatesStored"];
+  int32 max_model_version_cache_size = 6 [json_name = "maxModelVersionCacheSize"];
+  int32 max_file_size_to_sync_bytes = 7 [json_name = "maxFileSizeToSyncBytes"];
+  int32 sync_retry_max_attempts = 8 [json_name = "syncRetryMaxAttempts"];
+  int32 sync_retry_initial_delay_ms = 9 [json_name = "syncRetryInitialDelayMs"];
+  int32 sync_retry_time_multiplier = 10 [json_name = "syncRetryTimeMultiplier"];
+  int32 file_sync_status_max_cache_size = 11 [json_name = "fileSyncStatusMaxCacheSize"];
+  int32 successive_syncs_required_for_reliance = 12 [json_name = "successiveSyncsRequiredForReliance"];
+  int32 extra_successful_syncs_needed_after_errors = 13 [json_name = "extraSuccessfulSyncsNeededAfterErrors"];
+  int32 big_change_stripping_threshold_bytes = 14 [json_name = "bigChangeStrippingThresholdBytes"];
+  int32 last_n_updates_to_send = 15 [json_name = "lastNUpdatesToSend"];
+  int32 file_sync_status_ttl_ms = 16 [json_name = "fileSyncStatusTtlMs"];
+  int32 sync_debounce_ms = 17 [json_name = "syncDebounceMs"];
+  int32 sync_update_threshold = 18 [json_name = "syncUpdateThreshold"];
+}
+
+message FSGetFileContentsRequest {
+  string uuid = 1 [json_name = "uuid"];
+  string auth_id = 2 [json_name = "authId"];
+  string relative_workspace_path = 3 [json_name = "relativeWorkspacePath"];
+  int32 model_version = 4 [json_name = "modelVersion"];
+  repeated .aiserver.v1.FilesyncUpdateWithModelVersion filesync_updates = 5 [json_name = "filesyncUpdates"];
+  string sha256_hash = 6 [json_name = "sha256Hash"];
+  .google.protobuf.Timestamp earliest_time = 7 [json_name = "earliestTime"];
+}
+
+message FSGetFileContentsResponse {
+  string contents = 1 [json_name = "contents"];
+  string sha256_hash = 2 [json_name = "sha256Hash"];
+}
+
+message FSGetMultiFileContentsRequest {
+  string auth_id = 1 [json_name = "authId"];
+  repeated .aiserver.v1.FilesyncUpdateWithModelVersion filesync_updates = 2 [json_name = "filesyncUpdates"];
+  repeated .aiserver.v1.FileRequest file_requests = 3 [json_name = "fileRequests"];
+  bool get_all_recent_files = 4 [json_name = "getAllRecentFiles"];
+}
+
+message FSGetMultiFileContentsResponse {
+  repeated .aiserver.v1.FileRetrieved files = 1 [json_name = "files"];
+}
+
+message FSInternalHealthCheckRequest {
+  bool from_server = 1 [json_name = "fromServer"];
+}
+
+message FSInternalHealthCheckResponse {
+  bool success = 1 [json_name = "success"];
+}
+
+message FSIsEnabledForUserRequest {
+  string uuid = 1 [json_name = "uuid"];
+}
+
+message FSIsEnabledForUserResponse {
+  bool enabled = 1 [json_name = "enabled"];
+}
+
+enum FSSyncErrorType {
+  FS_SYNC_ERROR_TYPE_UNSPECIFIED = 0;
+  FS_SYNC_ERROR_TYPE_NON_EXISTANT = 1;
+  FS_SYNC_ERROR_TYPE_HASH_MISMATCH = 2;
+}
+
+message FSSyncFileRequest {
+  string uuid = 1 [json_name = "uuid"];
+  string relative_workspace_path = 2 [json_name = "relativeWorkspacePath"];
+  int32 model_version = 3 [json_name = "modelVersion"];
+  repeated .aiserver.v1.FilesyncUpdateWithModelVersion filesync_updates = 4 [json_name = "filesyncUpdates"];
+  string sha256_hash = 5 [json_name = "sha256Hash"];
+}
+
+message FSSyncFileResponse {
+  .aiserver.v1.FSSyncErrorType error = 1 [json_name = "error"];
+}
+
+enum FSUploadErrorType {
+  FS_UPLOAD_ERROR_TYPE_UNSPECIFIED = 0;
+  FS_UPLOAD_ERROR_TYPE_NON_EXISTANT = 1;
+  FS_UPLOAD_ERROR_TYPE_HASH_MISMATCH = 2;
+}
+
+message FSUploadFileRequest {
+  string uuid = 1 [json_name = "uuid"];
+  string relative_workspace_path = 2 [json_name = "relativeWorkspacePath"];
+  string contents = 3 [json_name = "contents"];
+  int32 model_version = 4 [json_name = "modelVersion"];
+  string sha256_hash = 5 [json_name = "sha256Hash"];
+}
+
+message FSUploadFileResponse {
+  .aiserver.v1.FSUploadErrorType error = 1 [json_name = "error"];
+}
+
+message FileRequest {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+  int32 requested_version = 2 [json_name = "requestedVersion"];
+  string sha256_hash = 3 [json_name = "sha256Hash"];
+  bool required = 4 [json_name = "required"];
+  .google.protobuf.Timestamp earliest_time = 5 [json_name = "earliestTime"];
+}
+
+message FileRetrieved {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+  string contents = 2 [json_name = "contents"];
+  int32 model_version = 3 [json_name = "modelVersion"];
+  .google.protobuf.Timestamp last_modified = 4 [json_name = "lastModified"];
+}

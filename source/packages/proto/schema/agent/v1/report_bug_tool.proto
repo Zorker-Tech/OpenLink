@@ -1,0 +1,39 @@
+// agent.v1 — agent/v1/report_bug_tool messages, enums and services.
+//
+// Generated from this repository's schema (source/packages/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+message ReportBugToolCall {
+  .agent.v1.ReportBugArgs args = 1 [json_name = "args"];
+  .agent.v1.ReportBugResult result = 2 [json_name = "result"];
+}
+
+message ReportBugArgs {
+  string title = 1 [json_name = "title"];
+  string file = 2 [json_name = "file"];
+  int32 start_line = 3 [json_name = "startLine"];
+  int32 end_line = 4 [json_name = "endLine"];
+  string description = 5 [json_name = "description"];
+  string severity = 6 [json_name = "severity"];
+  string category = 7 [json_name = "category"];
+  string rationale = 8 [json_name = "rationale"];
+}
+
+message ReportBugResult {
+  oneof result {
+    .agent.v1.ReportBugSuccess success = 1 [json_name = "success"];
+    .agent.v1.ReportBugError error = 2 [json_name = "error"];
+  }
+}
+
+message ReportBugSuccess {
+  string output = 1 [json_name = "output"];
+}
+
+message ReportBugError {
+  string error_message = 1 [json_name = "errorMessage"];
+}

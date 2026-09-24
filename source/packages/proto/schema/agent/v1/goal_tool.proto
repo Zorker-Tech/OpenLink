@@ -1,0 +1,59 @@
+// agent.v1 — agent/v1/goal_tool messages, enums and services.
+//
+// Generated from this repository's schema (source/packages/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+message CreateGoalToolCall {
+  .agent.v1.CreateGoalArgs args = 1 [json_name = "args"];
+  .agent.v1.CreateGoalResult result = 2 [json_name = "result"];
+}
+
+message UpdateGoalToolCall {
+  .agent.v1.UpdateGoalArgs args = 1 [json_name = "args"];
+  .agent.v1.UpdateGoalResult result = 2 [json_name = "result"];
+}
+
+message UpdateGoalArgs {
+  .agent.v1.GoalStatus status = 1 [json_name = "status"];
+}
+
+message UpdateGoalResult {
+  oneof result {
+    .agent.v1.UpdateGoalSuccess success = 1 [json_name = "success"];
+    .agent.v1.GoalError error = 2 [json_name = "error"];
+  }
+}
+
+message UpdateGoalSuccess {
+  .agent.v1.GoalStatus status = 1 [json_name = "status"];
+}
+
+message GoalError {
+  string error = 1 [json_name = "error"];
+}
+
+message CreateGoalArgs {
+  string objective = 1 [json_name = "objective"];
+}
+
+message CreateGoalResult {
+  oneof result {
+    .agent.v1.CreateGoalSuccess success = 1 [json_name = "success"];
+    .agent.v1.GoalError error = 2 [json_name = "error"];
+  }
+}
+
+message CreateGoalSuccess {
+}
+
+enum GoalStatus {
+  GOAL_STATUS_UNSPECIFIED = 0;
+  GOAL_STATUS_ACTIVE = 1;
+  GOAL_STATUS_PAUSED = 2;
+  GOAL_STATUS_COMPLETE = 3;
+  GOAL_STATUS_CLEARED = 4;
+}

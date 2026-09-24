@@ -1,0 +1,208 @@
+// anyrun.v1 — anyrun/v1/pod messages, enums and services.
+//
+// Generated from this repository's schema (source/packages/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package anyrun.v1;
+
+import "google/protobuf/empty.proto";
+import "anyrun/v1/common.proto";
+import "anyrun/v1/persisted_dev_container.proto";
+
+message PodStatus {
+  oneof status {
+    .anyrun.v1.PodCreatingStatus creating = 1 [json_name = "creating"];
+    .anyrun.v1.PodRunningStatus running = 2 [json_name = "running"];
+    .anyrun.v1.PodFailedStatus failed = 3 [json_name = "failed"];
+    .anyrun.v1.PodTerminatedStatus terminated = 4 [json_name = "terminated"];
+  }
+}
+
+message PodCreatingStatus {
+  .anyrun.v1.PodCreatingPhase phase = 1 [json_name = "phase"];
+}
+
+message PodRunningStatus {
+  uint64 missed_heartbeat_deadline = 1 [json_name = "missedHeartbeatDeadline"];
+}
+
+message PodFailedStatus {
+  string reason = 1 [json_name = "reason"];
+  .anyrun.v1.PodFailureDetails failure_details = 2 [json_name = "failureDetails"];
+}
+
+message PodTerminatedStatus {
+  string reason = 1 [json_name = "reason"];
+  uint32 exit_code = 2 [json_name = "exitCode"];
+}
+
+message PodFailureDetails {
+  oneof details {
+    .anyrun.v1.InstallCommandFailure install_command_failure = 1 [json_name = "installCommandFailure"];
+    .anyrun.v1.DockerBuildFailure docker_build_failure = 2 [json_name = "dockerBuildFailure"];
+    .anyrun.v1.GitCloneFailure git_clone_failure = 3 [json_name = "gitCloneFailure"];
+    .anyrun.v1.GitCheckoutFailure git_checkout_failure = 4 [json_name = "gitCheckoutFailure"];
+    .anyrun.v1.ContainerWaitFailure container_wait_failure = 5 [json_name = "containerWaitFailure"];
+    .anyrun.v1.ImagePullFailure image_pull_failure = 6 [json_name = "imagePullFailure"];
+  }
+}
+
+message InstallCommandFailure {
+  bool is_system = 1 [json_name = "isSystem"];
+}
+
+message DockerBuildFailure {
+  int64 exit_code = 1 [json_name = "exitCode"];
+}
+
+message GitCloneFailure {
+  int64 exit_code = 1 [json_name = "exitCode"];
+  .anyrun.v1.GitCloneFailureCategory category = 2 [json_name = "category"];
+  bool retryable = 3 [json_name = "retryable"];
+  string remote_host = 4 [json_name = "remoteHost"];
+  int32 http_status = 5 [json_name = "httpStatus"];
+}
+
+message GitCheckoutFailure {
+  int64 exit_code = 1 [json_name = "exitCode"];
+}
+
+message ContainerWaitFailure {
+  int64 exit_code = 1 [json_name = "exitCode"];
+  string message = 2 [json_name = "message"];
+}
+
+message ImagePullFailure {
+  .anyrun.v1.ImagePullFailureCategory category = 1 [json_name = "category"];
+  bool retryable = 2 [json_name = "retryable"];
+  int32 http_status = 3 [json_name = "httpStatus"];
+  string repository = 4 [json_name = "repository"];
+}
+
+message DaemonPod {
+  .anyrun.v1.PodStatus status = 2 [json_name = "status"];
+  uint32 internal_proxy_port = 3 [json_name = "internalProxyPort"];
+  .anyrun.v1.DefaultPortConfig default_port_config = 4 [json_name = "defaultPortConfig"];
+  string started_from_checkpoint_group_id = 5 [json_name = "startedFromCheckpointGroupId"];
+  .anyrun.v1.PodStartCacheSource started_from_cache_source = 6 [json_name = "startedFromCacheSource"];
+  uint64 started_from_checkpoint_creation_timestamp = 7 [json_name = "startedFromCheckpointCreationTimestamp"];
+  string started_from_checkpoint_id = 8 [json_name = "startedFromCheckpointId"];
+}
+
+enum GitCloneFailureCategory {
+  GIT_CLONE_FAILURE_CATEGORY_UNSPECIFIED = 0;
+  GIT_CLONE_FAILURE_CATEGORY_IP_ALLOW_LIST = 1;
+  GIT_CLONE_FAILURE_CATEGORY_INVALID_CREDENTIALS = 2;
+  GIT_CLONE_FAILURE_CATEGORY_SSO_REDIRECT = 3;
+  GIT_CLONE_FAILURE_CATEGORY_PROXY_CONNECT = 4;
+  GIT_CLONE_FAILURE_CATEGORY_CONNECTION_RESET = 5;
+  GIT_CLONE_FAILURE_CATEGORY_TRANSPORT_INTERRUPTED = 6;
+  GIT_CLONE_FAILURE_CATEGORY_REMOTE_FORBIDDEN = 7;
+  GIT_CLONE_FAILURE_CATEGORY_UPSTREAM_BAD_GATEWAY = 8;
+}
+
+enum ImagePullFailureCategory {
+  IMAGE_PULL_FAILURE_CATEGORY_UNSPECIFIED = 0;
+  IMAGE_PULL_FAILURE_CATEGORY_DENIED = 1;
+  IMAGE_PULL_FAILURE_CATEGORY_UNAUTHORIZED = 2;
+  IMAGE_PULL_FAILURE_CATEGORY_NOT_FOUND = 3;
+  IMAGE_PULL_FAILURE_CATEGORY_RATE_LIMITED = 4;
+  IMAGE_PULL_FAILURE_CATEGORY_UPSTREAM = 5;
+}
+
+message Pod {
+  string tenant_id = 1 [json_name = "tenantId"];
+  string pod_id = 2 [json_name = "podId"];
+  .anyrun.v1.ResourceRequests resource_requests = 4 [json_name = "resourceRequests"];
+  string node_id = 5 [json_name = "nodeId"];
+  .anyrun.v1.PodPorts ports = 6 [json_name = "ports"];
+  string network_token = 7 [json_name = "networkToken"];
+  .anyrun.v1.PodStatus status = 8 [json_name = "status"];
+  uint32 resource_version = 9 [json_name = "resourceVersion"];
+  string name = 10 [json_name = "name"];
+  map<string, string> labels = 11 [json_name = "labels"];
+  uint64 creation_timestamp = 12 [json_name = "creationTimestamp"];
+  uint64 deletion_timestamp = 13 [json_name = "deletionTimestamp"];
+  uint64 hibernation_timestamp = 14 [json_name = "hibernationTimestamp"];
+  bool hibernated = 15 [json_name = "hibernated"];
+  .anyrun.v1.PersistedDevContainerConfig config = 16 [json_name = "config"];
+  .anyrun.v1.ResourceLimits resource_limits = 17 [json_name = "resourceLimits"];
+  bool cache = 18 [json_name = "cache"];
+  string cache_tag = 19 [json_name = "cacheTag"];
+  .anyrun.v1.ResourceRequests hibernated_resource_requests = 20 [json_name = "hibernatedResourceRequests"];
+  string workload = 21 [json_name = "workload"];
+  uint32 internal_proxy_port = 22 [json_name = "internalProxyPort"];
+  uint64 modified_timestamp = 23 [json_name = "modifiedTimestamp"];
+  uint64 pod_awake_since = 24 [json_name = "podAwakeSince"];
+  repeated string low_cardinality_labels = 25 [json_name = "lowCardinalityLabels"];
+  repeated string checkpoint_group_ids = 26 [json_name = "checkpointGroupIds"];
+  string started_from_checkpoint_group_id = 27 [json_name = "startedFromCheckpointGroupId"];
+  .anyrun.v1.PodStartCacheSource started_from_cache_source = 28 [json_name = "startedFromCacheSource"];
+  uint64 started_from_checkpoint_creation_timestamp = 29 [json_name = "startedFromCheckpointCreationTimestamp"];
+  string started_from_checkpoint_id = 30 [json_name = "startedFromCheckpointId"];
+  .anyrun.v1.AntiAffinityTags anti_affinity_tags = 31 [json_name = "antiAffinityTags"];
+  bool collect_metrics = 32 [json_name = "collectMetrics"];
+  repeated .anyrun.v1.PodMeshLink mesh_links = 34 [json_name = "meshLinks"];
+}
+
+message PodCollection {
+  repeated .anyrun.v1.Pod items = 1 [json_name = "items"];
+  string next_cursor = 2 [json_name = "nextCursor"];
+}
+
+enum PodCreatingPhase {
+  POD_CREATING_PHASE_UNSPECIFIED = 0;
+  POD_CREATING_PHASE_CLONE = 1;
+  POD_CREATING_PHASE_BUILD = 2;
+  POD_CREATING_PHASE_POST_CREATE = 3;
+  POD_CREATING_PHASE_UPDATE_CONTENT = 4;
+  POD_CREATING_PHASE_POST_START = 5;
+  POD_CREATING_PHASE_QUEUED = 6;
+}
+
+message PodFilter {
+  string pod_id = 1 [json_name = "podId"];
+  map<string, string> labels = 2 [json_name = "labels"];
+}
+
+message PodMeshLink {
+  string target_pod_id = 1 [json_name = "targetPodId"];
+  string virtual_ip = 2 [json_name = "virtualIp"];
+}
+
+message PodPorts {
+  repeated .anyrun.v1.PortDefinition ports = 1 [json_name = "ports"];
+  .anyrun.v1.DefaultPortConfig default_port_config = 2 [json_name = "defaultPortConfig"];
+}
+
+enum PodStartCacheSource {
+  POD_START_CACHE_SOURCE_UNSPECIFIED = 0;
+  POD_START_CACHE_SOURCE_NODE_LOCAL_FIRECRACKER_SNAPSHOT = 1;
+  POD_START_CACHE_SOURCE_REMOTE_ROOTAR_CHECKPOINT = 2;
+}
+
+message PodUpdate {
+  string event_id = 1 [json_name = "eventId"];
+  oneof update {
+    .anyrun.v1.PodCollection initial = 2 [json_name = "initial"];
+    .anyrun.v1.Pod added = 3 [json_name = "added"];
+    .anyrun.v1.Pod updated = 4 [json_name = "updated"];
+    .anyrun.v1.Pod removed = 5 [json_name = "removed"];
+  }
+}
+
+message PortState {
+  string port_name = 1 [json_name = "portName"];
+  uint32 container_port = 2 [json_name = "containerPort"];
+  uint32 host_port = 3 [json_name = "hostPort"];
+  oneof authentication {
+    .google.protobuf.Empty open = 6 [json_name = "open"];
+    .google.protobuf.Empty token = 7 [json_name = "token"];
+  }
+  oneof visibility {
+    .google.protobuf.Empty public = 4 [json_name = "public"];
+    .google.protobuf.Empty private = 5 [json_name = "private"];
+  }
+}

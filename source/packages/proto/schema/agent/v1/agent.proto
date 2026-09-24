@@ -1,0 +1,1637 @@
+// agent.v1 — agent/v1/agent messages, enums and services.
+//
+// Generated from this repository's schema (source/packages/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+import "google/protobuf/struct.proto";
+import "agent/v1/adopt_tool.proto";
+import "agent/v1/ai_attribution_tool.proto";
+import "agent/v1/apply_agent_diff_tool.proto";
+import "agent/v1/ask_question_tool.proto";
+import "agent/v1/await_tool.proto";
+import "agent/v1/blame_by_file_path_tool.proto";
+import "agent/v1/communicate_update_tool.proto";
+import "agent/v1/computer_use_tool.proto";
+import "agent/v1/connect_scm_tool.proto";
+import "agent/v1/coordinator_tools.proto";
+import "agent/v1/create_plan_tool.proto";
+import "agent/v1/delete_tool.proto";
+import "agent/v1/edit_pr_labels_tool.proto";
+import "agent/v1/edit_tool.proto";
+import "agent/v1/fetch_cloud_agent_data_tool.proto";
+import "agent/v1/fetch_tool.proto";
+import "agent/v1/generate_image_tool.proto";
+import "agent/v1/get_mcp_tools_tool.proto";
+import "agent/v1/glob_tool.proto";
+import "agent/v1/goal_tool.proto";
+import "agent/v1/grep_tool.proto";
+import "agent/v1/hook_additional_context.proto";
+import "agent/v1/ls_tool.proto";
+import "agent/v1/mcp.proto";
+import "agent/v1/mcp_auth_tool.proto";
+import "agent/v1/mcp_resource_tool.proto";
+import "agent/v1/mcp_tool.proto";
+import "agent/v1/pi_bash_tool.proto";
+import "agent/v1/pi_edit_tool.proto";
+import "agent/v1/pi_find_tool.proto";
+import "agent/v1/pi_grep_tool.proto";
+import "agent/v1/pi_ls_tool.proto";
+import "agent/v1/pi_read_tool.proto";
+import "agent/v1/pi_write_tool.proto";
+import "agent/v1/pr_management_tool.proto";
+import "agent/v1/read_lints_tool.proto";
+import "agent/v1/read_tool.proto";
+import "agent/v1/record_ci_investigation_findings_tool.proto";
+import "agent/v1/record_screen_tool.proto";
+import "agent/v1/reflect_tool.proto";
+import "agent/v1/replace_env_tool.proto";
+import "agent/v1/report_bug_tool.proto";
+import "agent/v1/report_bugfix_results_tool.proto";
+import "agent/v1/request_context_exec.proto";
+import "agent/v1/search_conversations_tool.proto";
+import "agent/v1/selected_context.proto";
+import "agent/v1/semsearch_tool.proto";
+import "agent/v1/send_final_summary_tool.proto";
+import "agent/v1/send_message_tool.proto";
+import "agent/v1/send_to_user_tool.proto";
+import "agent/v1/setup_vm_environment_tool.proto";
+import "agent/v1/shell_exec.proto";
+import "agent/v1/shell_tool.proto";
+import "agent/v1/start_grind_execution_tool.proto";
+import "agent/v1/start_grind_planning_tool.proto";
+import "agent/v1/subagents.proto";
+import "agent/v1/switch_mode_tool.proto";
+import "agent/v1/system_prompt.proto";
+import "agent/v1/todo_tool.proto";
+import "agent/v1/update_pr_code_tour_tool.proto";
+import "agent/v1/web_fetch_tool.proto";
+import "agent/v1/web_search_tool.proto";
+import "agent/v1/write_shell_stdin_tool.proto";
+
+message ApiKeyCredentials {
+  string api_key = 1 [json_name = "apiKey"];
+  string base_url = 2 [json_name = "baseUrl"];
+}
+
+message AzureCredentials {
+  string api_key = 1 [json_name = "apiKey"];
+  string base_url = 2 [json_name = "baseUrl"];
+  string deployment = 3 [json_name = "deployment"];
+}
+
+message BedrockCredentials {
+  string access_key = 1 [json_name = "accessKey"];
+  string secret_key = 2 [json_name = "secretKey"];
+  string region = 3 [json_name = "region"];
+  string session_token = 4 [json_name = "sessionToken"];
+}
+
+message TriggeringUserInfo {
+  string auth_id = 1 [json_name = "authId"];
+  int32 user_id = 2 [json_name = "userId"];
+}
+
+message SubscriptionEventDisplay {
+  string display_label = 1 [json_name = "displayLabel"];
+  string resource_url = 2 [json_name = "resourceUrl"];
+  string subscription_id = 3 [json_name = "subscriptionId"];
+}
+
+message PreCompactRequestQuery {
+  string trigger = 1 [json_name = "trigger"];
+  double context_usage_percent = 2 [json_name = "contextUsagePercent"];
+  int64 context_tokens = 3 [json_name = "contextTokens"];
+  int64 context_window_size = 4 [json_name = "contextWindowSize"];
+  int32 message_count = 5 [json_name = "messageCount"];
+  int32 messages_to_compact = 6 [json_name = "messagesToCompact"];
+  bool is_first_compaction = 7 [json_name = "isFirstCompaction"];
+  string conversation_id = 8 [json_name = "conversationId"];
+  string generation_id = 9 [json_name = "generationId"];
+  string model = 10 [json_name = "model"];
+  string model_id = 11 [json_name = "modelId"];
+  repeated .agent.v1.RequestedModel.ModelParameterValue model_params = 12 [json_name = "modelParams"];
+}
+
+message SubagentStartRequestQuery {
+  string subagent_id = 1 [json_name = "subagentId"];
+  string subagent_type = 2 [json_name = "subagentType"];
+  string task = 3 [json_name = "task"];
+  string parent_conversation_id = 4 [json_name = "parentConversationId"];
+  string tool_call_id = 5 [json_name = "toolCallId"];
+  string subagent_model = 6 [json_name = "subagentModel"];
+  bool is_parallel_worker = 7 [json_name = "isParallelWorker"];
+  string git_branch = 8 [json_name = "gitBranch"];
+  string conversation_id = 9 [json_name = "conversationId"];
+  string generation_id = 10 [json_name = "generationId"];
+  string model = 11 [json_name = "model"];
+  string model_id = 12 [json_name = "modelId"];
+  repeated .agent.v1.RequestedModel.ModelParameterValue model_params = 13 [json_name = "modelParams"];
+}
+
+message SubagentStopRequestQuery {
+  string subagent_id = 1 [json_name = "subagentId"];
+  string subagent_type = 2 [json_name = "subagentType"];
+  string status = 3 [json_name = "status"];
+  int64 duration_ms = 4 [json_name = "durationMs"];
+  string summary = 5 [json_name = "summary"];
+  string parent_conversation_id = 6 [json_name = "parentConversationId"];
+  int32 message_count = 7 [json_name = "messageCount"];
+  int32 tool_call_count = 8 [json_name = "toolCallCount"];
+  string error_message = 9 [json_name = "errorMessage"];
+  repeated string modified_files = 10 [json_name = "modifiedFiles"];
+  string git_branch = 11 [json_name = "gitBranch"];
+  string conversation_id = 12 [json_name = "conversationId"];
+  string generation_id = 13 [json_name = "generationId"];
+  string model = 14 [json_name = "model"];
+  int32 loop_count = 15 [json_name = "loopCount"];
+  string task = 16 [json_name = "task"];
+  string description = 17 [json_name = "description"];
+  string model_id = 18 [json_name = "modelId"];
+  repeated .agent.v1.RequestedModel.ModelParameterValue model_params = 19 [json_name = "modelParams"];
+}
+
+message PreToolUseRequestQuery {
+  string tool_name = 1 [json_name = "toolName"];
+  .google.protobuf.Struct tool_input = 2 [json_name = "toolInput"];
+  string tool_use_id = 3 [json_name = "toolUseId"];
+  string cwd = 4 [json_name = "cwd"];
+  string conversation_id = 5 [json_name = "conversationId"];
+  string generation_id = 6 [json_name = "generationId"];
+  string model = 7 [json_name = "model"];
+  string model_id = 8 [json_name = "modelId"];
+  repeated .agent.v1.RequestedModel.ModelParameterValue model_params = 9 [json_name = "modelParams"];
+}
+
+message PostToolUseRequestQuery {
+  string tool_name = 1 [json_name = "toolName"];
+  .google.protobuf.Struct tool_input = 2 [json_name = "toolInput"];
+  string tool_output = 3 [json_name = "toolOutput"];
+  int64 duration_ms = 4 [json_name = "durationMs"];
+  string tool_use_id = 5 [json_name = "toolUseId"];
+  string cwd = 6 [json_name = "cwd"];
+  string conversation_id = 7 [json_name = "conversationId"];
+  string generation_id = 8 [json_name = "generationId"];
+  string model = 9 [json_name = "model"];
+  string model_id = 10 [json_name = "modelId"];
+  repeated .agent.v1.RequestedModel.ModelParameterValue model_params = 11 [json_name = "modelParams"];
+}
+
+message PostToolUseFailureRequestQuery {
+  string tool_name = 1 [json_name = "toolName"];
+  .google.protobuf.Struct tool_input = 2 [json_name = "toolInput"];
+  string error_message = 3 [json_name = "errorMessage"];
+  string failure_type = 4 [json_name = "failureType"];
+  int64 duration_ms = 5 [json_name = "durationMs"];
+  string tool_use_id = 6 [json_name = "toolUseId"];
+  bool is_interrupt = 7 [json_name = "isInterrupt"];
+  string conversation_id = 8 [json_name = "conversationId"];
+  string generation_id = 9 [json_name = "generationId"];
+  string model = 10 [json_name = "model"];
+  string model_id = 11 [json_name = "modelId"];
+  repeated .agent.v1.RequestedModel.ModelParameterValue model_params = 12 [json_name = "modelParams"];
+}
+
+message BeforeSubmitPromptRequestQuery {
+  string prompt = 1 [json_name = "prompt"];
+  repeated .agent.v1.BeforeSubmitPromptAttachment attachments = 2 [json_name = "attachments"];
+  string composer_mode = 3 [json_name = "composerMode"];
+  string conversation_id = 4 [json_name = "conversationId"];
+  string generation_id = 5 [json_name = "generationId"];
+  string model = 6 [json_name = "model"];
+  string model_id = 7 [json_name = "modelId"];
+  repeated .agent.v1.RequestedModel.ModelParameterValue model_params = 8 [json_name = "modelParams"];
+}
+
+message AfterAgentResponseRequestQuery {
+  string text = 1 [json_name = "text"];
+  string conversation_id = 2 [json_name = "conversationId"];
+  string generation_id = 3 [json_name = "generationId"];
+  string model = 4 [json_name = "model"];
+  string model_id = 5 [json_name = "modelId"];
+  repeated .agent.v1.RequestedModel.ModelParameterValue model_params = 6 [json_name = "modelParams"];
+  int64 input_tokens = 7 [json_name = "inputTokens"];
+  int64 output_tokens = 8 [json_name = "outputTokens"];
+  int64 cache_read_tokens = 9 [json_name = "cacheReadTokens"];
+  int64 cache_write_tokens = 10 [json_name = "cacheWriteTokens"];
+}
+
+message AfterAgentThoughtRequestQuery {
+  string text = 1 [json_name = "text"];
+  int64 duration_ms = 2 [json_name = "durationMs"];
+  string conversation_id = 3 [json_name = "conversationId"];
+  string generation_id = 4 [json_name = "generationId"];
+  string model = 5 [json_name = "model"];
+  string model_id = 6 [json_name = "modelId"];
+  repeated .agent.v1.RequestedModel.ModelParameterValue model_params = 7 [json_name = "modelParams"];
+}
+
+message StopRequestQuery {
+  string status = 1 [json_name = "status"];
+  int32 loop_count = 2 [json_name = "loopCount"];
+  string conversation_id = 3 [json_name = "conversationId"];
+  string generation_id = 4 [json_name = "generationId"];
+  string model = 5 [json_name = "model"];
+  string model_id = 6 [json_name = "modelId"];
+  repeated .agent.v1.RequestedModel.ModelParameterValue model_params = 7 [json_name = "modelParams"];
+  int64 input_tokens = 8 [json_name = "inputTokens"];
+  int64 output_tokens = 9 [json_name = "outputTokens"];
+  int64 cache_read_tokens = 10 [json_name = "cacheReadTokens"];
+  int64 cache_write_tokens = 11 [json_name = "cacheWriteTokens"];
+}
+
+message BeforeSubmitPromptAttachment {
+  string type = 1 [json_name = "type"];
+  string file_path = 2 [json_name = "filePath"];
+}
+
+message PreCompactRequestResponse {
+  string user_message = 1 [json_name = "userMessage"];
+}
+
+message SubagentStartRequestResponse {
+  string permission = 1 [json_name = "permission"];
+  string user_message = 2 [json_name = "userMessage"];
+  string additional_context = 3 [json_name = "additionalContext"];
+}
+
+message SubagentStopRequestResponse {
+  string followup_message = 1 [json_name = "followupMessage"];
+  string additional_context = 2 [json_name = "additionalContext"];
+}
+
+message PreToolUseRequestResponse {
+  string permission = 1 [json_name = "permission"];
+  string user_message = 2 [json_name = "userMessage"];
+  string agent_message = 3 [json_name = "agentMessage"];
+  string updated_input = 4 [json_name = "updatedInput"];
+  string additional_context = 5 [json_name = "additionalContext"];
+}
+
+message PostToolUseRequestResponse {
+  string additional_context = 1 [json_name = "additionalContext"];
+}
+
+message PostToolUseFailureRequestResponse {
+  string additional_context = 1 [json_name = "additionalContext"];
+}
+
+message BeforeSubmitPromptRequestResponse {
+  bool continue = 1 [json_name = "continue"];
+  string user_message = 2 [json_name = "userMessage"];
+  string additional_context = 3 [json_name = "additionalContext"];
+}
+
+message AfterAgentResponseRequestResponse {
+}
+
+message AfterAgentThoughtRequestResponse {
+}
+
+message StopRequestResponse {
+  string followup_message = 1 [json_name = "followupMessage"];
+}
+
+message RequestedModel {
+  string model_id = 1 [json_name = "modelId"];
+  bool max_mode = 2 [json_name = "maxMode"];
+  repeated .agent.v1.RequestedModel.ModelParameterValue parameters = 3 [json_name = "parameters"];
+  bool built_in_model = 7 [json_name = "builtInModel"];
+  bool is_variant_string_representation = 8 [json_name = "isVariantStringRepresentation"];
+  oneof credentials {
+    .agent.v1.ApiKeyCredentials api_key_credentials = 4 [json_name = "apiKeyCredentials"];
+    .agent.v1.AzureCredentials azure_credentials = 5 [json_name = "azureCredentials"];
+    .agent.v1.BedrockCredentials bedrock_credentials = 6 [json_name = "bedrockCredentials"];
+  }
+  message ModelParameterValue {
+    string id = 1 [json_name = "id"];
+    string value = 2 [json_name = "value"];
+  }
+}
+
+message CustomModeDescriptor {
+  string id = 1 [json_name = "id"];
+  string label = 2 [json_name = "label"];
+  string description = 3 [json_name = "description"];
+  string icon = 4 [json_name = "icon"];
+  string color = 5 [json_name = "color"];
+  .agent.v1.CustomModeSource source = 6 [json_name = "source"];
+  string source_path = 7 [json_name = "sourcePath"];
+  string source_hash = 8 [json_name = "sourceHash"];
+  string managed_skill_id = 9 [json_name = "managedSkillId"];
+  string plugin_id = 10 [json_name = "pluginId"];
+  string plugin_snapshot_token = 11 [json_name = "pluginSnapshotToken"];
+}
+
+message InteractionResponse {
+  uint32 id = 1 [json_name = "id"];
+  oneof result {
+    .agent.v1.WebSearchRequestResponse web_search_request_response = 2 [json_name = "webSearchRequestResponse"];
+    .agent.v1.AskQuestionInteractionResponse ask_question_interaction_response = 3 [json_name = "askQuestionInteractionResponse"];
+    .agent.v1.SwitchModeRequestResponse switch_mode_request_response = 4 [json_name = "switchModeRequestResponse"];
+    .agent.v1.CreatePlanRequestResponse create_plan_request_response = 7 [json_name = "createPlanRequestResponse"];
+    .agent.v1.SetupVmEnvironmentResult setup_vm_environment_result = 8 [json_name = "setupVmEnvironmentResult"];
+    .agent.v1.WebFetchRequestResponse web_fetch_request_response = 9 [json_name = "webFetchRequestResponse"];
+    .agent.v1.PrManagementResult pr_management_result = 10 [json_name = "prManagementResult"];
+    .agent.v1.McpAuthRequestResponse mcp_auth_request_response = 11 [json_name = "mcpAuthRequestResponse"];
+    .agent.v1.GenerateImageRequestResponse generate_image_request_response = 12 [json_name = "generateImageRequestResponse"];
+    .agent.v1.ReplaceEnvResult replace_env_result = 13 [json_name = "replaceEnvResult"];
+    .agent.v1.ConnectScmRequestResponse connect_scm_request_response = 14 [json_name = "connectScmRequestResponse"];
+  }
+}
+
+message AskQuestionInteractionResponse {
+  .agent.v1.AskQuestionResult result = 1 [json_name = "result"];
+}
+
+message InteractionUpdate {
+  oneof message {
+    .agent.v1.TextDeltaUpdate text_delta = 1 [json_name = "textDelta"];
+    .agent.v1.ToolCallStartedUpdate tool_call_started = 2 [json_name = "toolCallStarted"];
+    .agent.v1.ToolCallCompletedUpdate tool_call_completed = 3 [json_name = "toolCallCompleted"];
+    .agent.v1.ThinkingDeltaUpdate thinking_delta = 4 [json_name = "thinkingDelta"];
+    .agent.v1.ThinkingCompletedUpdate thinking_completed = 5 [json_name = "thinkingCompleted"];
+    .agent.v1.UserMessageAppendedUpdate user_message_appended = 6 [json_name = "userMessageAppended"];
+    .agent.v1.PartialToolCallUpdate partial_tool_call = 7 [json_name = "partialToolCall"];
+    .agent.v1.TokenDeltaUpdate token_delta = 8 [json_name = "tokenDelta"];
+    .agent.v1.SummaryUpdate summary = 9 [json_name = "summary"];
+    .agent.v1.SummaryStartedUpdate summary_started = 10 [json_name = "summaryStarted"];
+    .agent.v1.SummaryCompletedUpdate summary_completed = 11 [json_name = "summaryCompleted"];
+    .agent.v1.ShellOutputDeltaUpdate shell_output_delta = 12 [json_name = "shellOutputDelta"];
+    .agent.v1.HeartbeatUpdate heartbeat = 13 [json_name = "heartbeat"];
+    .agent.v1.TurnEndedUpdate turn_ended = 14 [json_name = "turnEnded"];
+    .agent.v1.ToolCallDeltaUpdate tool_call_delta = 15 [json_name = "toolCallDelta"];
+    .agent.v1.StepStartedUpdate step_started = 16 [json_name = "stepStarted"];
+    .agent.v1.StepCompletedUpdate step_completed = 17 [json_name = "stepCompleted"];
+    .agent.v1.PromptSuggestionUpdate prompt_suggestion = 18 [json_name = "promptSuggestion"];
+    .agent.v1.PostRequestPromptUpdate post_request_prompt = 19 [json_name = "postRequestPrompt"];
+    .agent.v1.ActiveBranchChange active_branch_change = 20 [json_name = "activeBranchChange"];
+    .agent.v1.FeedbackRequestUpdate feedback_request = 21 [json_name = "feedbackRequest"];
+    .agent.v1.ResponseComparisonUpdate response_comparison = 22 [json_name = "responseComparison"];
+    .agent.v1.ContextInjectionStateUpdate context_injection_state = 23 [json_name = "contextInjectionState"];
+    .agent.v1.RoutedModelUpdate routed_model = 24 [json_name = "routedModel"];
+  }
+}
+
+message UserDisplayInfo {
+  int32 user_id = 1 [json_name = "userId"];
+  string display_name = 2 [json_name = "displayName"];
+  string email = 3 [json_name = "email"];
+  string profile_picture_url = 4 [json_name = "profilePictureUrl"];
+}
+
+message TextDeltaUpdate {
+  string text = 1 [json_name = "text"];
+  bool is_server_notice = 2 [json_name = "isServerNotice"];
+}
+
+message PartialToolCallUpdate {
+  string call_id = 1 [json_name = "callId"];
+  .agent.v1.ToolCall tool_call = 2 [json_name = "toolCall"];
+  string args_text_delta = 3 [json_name = "argsTextDelta"];
+  string model_call_id = 4 [json_name = "modelCallId"];
+}
+
+message ToolCallDeltaUpdate {
+  string call_id = 1 [json_name = "callId"];
+  .agent.v1.ToolCallDelta tool_call_delta = 2 [json_name = "toolCallDelta"];
+  string model_call_id = 3 [json_name = "modelCallId"];
+}
+
+message ToolCallStartedUpdate {
+  string call_id = 1 [json_name = "callId"];
+  .agent.v1.ToolCall tool_call = 2 [json_name = "toolCall"];
+  string model_call_id = 3 [json_name = "modelCallId"];
+}
+
+message ToolCallCompletedUpdate {
+  string call_id = 1 [json_name = "callId"];
+  .agent.v1.ToolCall tool_call = 2 [json_name = "toolCall"];
+  string model_call_id = 3 [json_name = "modelCallId"];
+}
+
+message ThinkingDeltaUpdate {
+  string text = 1 [json_name = "text"];
+  .agent.v1.ThinkingStyle thinking_style = 2 [json_name = "thinkingStyle"];
+}
+
+message ThinkingCompletedUpdate {
+  int32 thinking_duration_ms = 1 [json_name = "thinkingDurationMs"];
+}
+
+message UserMessageAppendedUpdate {
+  .agent.v1.UserMessage user_message = 1 [json_name = "userMessage"];
+}
+
+message TokenDeltaUpdate {
+  int32 tokens = 1 [json_name = "tokens"];
+}
+
+message SummaryUpdate {
+  string summary = 1 [json_name = "summary"];
+}
+
+message SummaryStartedUpdate {
+}
+
+message SummaryCompletedUpdate {
+  string hook_message = 1 [json_name = "hookMessage"];
+}
+
+message ShellOutputDeltaUpdate {
+  oneof event {
+    .agent.v1.ShellStreamStdout stdout = 1 [json_name = "stdout"];
+    .agent.v1.ShellStreamStderr stderr = 2 [json_name = "stderr"];
+    .agent.v1.ShellStreamExit exit = 3 [json_name = "exit"];
+    .agent.v1.ShellStreamStart start = 4 [json_name = "start"];
+  }
+}
+
+message HeartbeatUpdate {
+}
+
+message TurnEndedUpdate {
+  int64 input_tokens = 1 [json_name = "inputTokens"];
+  int64 output_tokens = 2 [json_name = "outputTokens"];
+  int64 cache_read_tokens = 3 [json_name = "cacheReadTokens"];
+  int64 cache_write_tokens = 4 [json_name = "cacheWriteTokens"];
+  int64 reasoning_tokens = 5 [json_name = "reasoningTokens"];
+}
+
+message StepStartedUpdate {
+  uint64 step_id = 1 [json_name = "stepId"];
+}
+
+message StepCompletedUpdate {
+  uint64 step_id = 1 [json_name = "stepId"];
+  int64 step_duration_ms = 2 [json_name = "stepDurationMs"];
+}
+
+message PromptSuggestionUpdate {
+  string suggestion = 1 [json_name = "suggestion"];
+}
+
+message PostRequestPromptUpdate {
+  string title = 1 [json_name = "title"];
+  string message = 2 [json_name = "message"];
+  string button_label = 3 [json_name = "buttonLabel"];
+  string button_url = 4 [json_name = "buttonUrl"];
+}
+
+message ActiveBranchChange {
+  string path = 1 [json_name = "path"];
+  string branch_name = 2 [json_name = "branchName"];
+}
+
+message FeedbackRequestUpdate {
+  string request_id = 1 [json_name = "requestId"];
+  string canonical_model_name = 2 [json_name = "canonicalModelName"];
+  repeated .agent.v1.FeedbackRequestCategory categories = 3 [json_name = "categories"];
+  repeated .agent.v1.FeedbackRequestCategoryGroup category_groups = 4 [json_name = "categoryGroups"];
+  bool show_form_immediately = 5 [json_name = "showFormImmediately"];
+  string title = 6 [json_name = "title"];
+  string negative_title = 7 [json_name = "negativeTitle"];
+  string comment_placeholder = 8 [json_name = "commentPlaceholder"];
+}
+
+message ResponseComparisonUpdate {
+  string comparison_id = 1 [json_name = "comparisonId"];
+  oneof event {
+    .agent.v1.ResponseComparisonStarted started = 2 [json_name = "started"];
+    .agent.v1.ResponseComparisonTextDelta text_delta = 3 [json_name = "textDelta"];
+    .agent.v1.ResponseComparisonCompleted completed = 4 [json_name = "completed"];
+    .agent.v1.ResponseComparisonSkipped skipped = 5 [json_name = "skipped"];
+  }
+}
+
+message ContextInjectionStateUpdate {
+  string injection_id = 1 [json_name = "injectionId"];
+  .agent.v1.ContextInjectionState state = 2 [json_name = "state"];
+}
+
+message RoutedModelUpdate {
+  string display_name = 1 [json_name = "displayName"];
+}
+
+message ContextInjectionState {
+  oneof state {
+    .agent.v1.ContextInjectionQueued queued = 1 [json_name = "queued"];
+    .agent.v1.ContextInjectionDelivered delivered = 2 [json_name = "delivered"];
+    .agent.v1.ContextInjectionQueuedForNextTurn queued_for_next_turn = 3 [json_name = "queuedForNextTurn"];
+    .agent.v1.ContextInjectionCancelled cancelled = 4 [json_name = "cancelled"];
+    .agent.v1.ContextInjectionRejected rejected = 5 [json_name = "rejected"];
+  }
+}
+
+message ContextInjectionQueued {
+}
+
+message ContextInjectionDelivered {
+  int32 step = 1 [json_name = "step"];
+  string delivery_batch_id = 2 [json_name = "deliveryBatchId"];
+  int64 delivered_at_ms = 3 [json_name = "deliveredAtMs"];
+}
+
+message ContextInjectionQueuedForNextTurn {
+}
+
+message ContextInjectionCancelled {
+}
+
+message ContextInjectionRejected {
+  string reason = 1 [json_name = "reason"];
+}
+
+message ResponseComparisonStarted {
+  .agent.v1.ResponseComparisonDisplayOrder display_order = 1 [json_name = "displayOrder"];
+  string parent_invocation_id = 2 [json_name = "parentInvocationId"];
+  string alternate_invocation_id = 3 [json_name = "alternateInvocationId"];
+  string parent_response = 4 [json_name = "parentResponse"];
+  string comparison_config_id = 5 [json_name = "comparisonConfigId"];
+  string alternate_model_id = 6 [json_name = "alternateModelId"];
+}
+
+message ResponseComparisonTextDelta {
+  string text = 1 [json_name = "text"];
+}
+
+message ResponseComparisonCompleted {
+}
+
+message ResponseComparisonSkipped {
+  .agent.v1.ResponseComparisonSkipReason reason = 1 [json_name = "reason"];
+}
+
+message FeedbackRequestCategory {
+  string id = 1 [json_name = "id"];
+  string label = 2 [json_name = "label"];
+}
+
+message FeedbackRequestCategoryGroup {
+  string id = 1 [json_name = "id"];
+  string prompt = 2 [json_name = "prompt"];
+  repeated .agent.v1.FeedbackRequestCategory categories = 3 [json_name = "categories"];
+}
+
+message UserMessage {
+  string text = 1 [json_name = "text"];
+  string message_id = 2 [json_name = "messageId"];
+  .agent.v1.SelectedContext selected_context = 3 [json_name = "selectedContext"];
+  .agent.v1.AgentMode mode = 4 [json_name = "mode"];
+  bool is_simulated_msg = 5 [json_name = "isSimulatedMsg"];
+  string best_of_n_group_id = 6 [json_name = "bestOfNGroupId"];
+  bool try_use_best_of_n_promotion = 7 [json_name = "tryUseBestOfNPromotion"];
+  string rich_text = 8 [json_name = "richText"];
+  .agent.v1.SimulatedMsgReason simulated_msg_reason = 9 [json_name = "simulatedMsgReason"];
+  bytes conversation_state_blob_id = 10 [json_name = "conversationStateBlobId"];
+  string subagent_system_reminder = 11 [json_name = "subagentSystemReminder"];
+  .agent.v1.TriggeringUserInfo triggering_user_info = 13 [json_name = "triggeringUserInfo"];
+  .agent.v1.ExecutePlanInfo execute_plan_info = 14 [json_name = "executePlanInfo"];
+  .agent.v1.UserMessage.SimulatedMessageMetadata simulated_message_metadata = 15 [json_name = "simulatedMessageMetadata"];
+  string prompt_reference_id = 16 [json_name = "promptReferenceId"];
+  string thread_id = 17 [json_name = "threadId"];
+  bytes text_blob_id = 18 [json_name = "textBlobId"];
+  bytes rich_text_blob_id = 19 [json_name = "richTextBlobId"];
+  repeated .agent.v1.HookAdditionalContext hook_additional_contexts = 21 [json_name = "hookAdditionalContexts"];
+  .agent.v1.CustomModeIntent custom_mode_intent = 22 [json_name = "customModeIntent"];
+  .agent.v1.ProjectDetails project_details = 23 [json_name = "projectDetails"];
+  message SimulatedMessageMetadata {
+    string title = 1 [json_name = "title"];
+    string task_id = 2 [json_name = "taskId"];
+    string fsd_finding_action = 3 [json_name = "fsdFindingAction"];
+    string url = 4 [json_name = "url"];
+    .agent.v1.SubscriptionSource subscription_source = 5 [json_name = "subscriptionSource"];
+    .agent.v1.SubscriptionEventDisplay subscription_event_display = 6 [json_name = "subscriptionEventDisplay"];
+  }
+}
+
+message ExecutePlanInfo {
+  string plan_id = 1 [json_name = "planId"];
+  string plan_title = 2 [json_name = "planTitle"];
+}
+
+message CustomModeIntent {
+  oneof intent {
+    .agent.v1.SubmittedCustomMode enter = 1 [json_name = "enter"];
+    .agent.v1.CustomModeExitIntent exit = 2 [json_name = "exit"];
+  }
+}
+
+message ProjectDetails {
+  string name = 1 [json_name = "name"];
+  .agent.v1.ProjectSubagentDetails subagent = 2 [json_name = "subagent"];
+  .agent.v1.ProjectSideChatDetails side_chat = 3 [json_name = "sideChat"];
+}
+
+message ProjectSubagentDetails {
+  string store_dir = 2 [json_name = "storeDir"];
+}
+
+message ProjectSideChatDetails {
+  string store_dir = 1 [json_name = "storeDir"];
+}
+
+message SubmittedCustomMode {
+  string id = 1 [json_name = "id"];
+  string label = 2 [json_name = "label"];
+  .agent.v1.CustomModeSource source = 5 [json_name = "source"];
+  string source_path = 6 [json_name = "sourcePath"];
+  string source_hash = 7 [json_name = "sourceHash"];
+  string managed_skill_id = 10 [json_name = "managedSkillId"];
+  string plugin_id = 11 [json_name = "pluginId"];
+  string plugin_snapshot_token = 12 [json_name = "pluginSnapshotToken"];
+}
+
+message CustomModeExitIntent {
+  .agent.v1.AgentMode next_mode = 1 [json_name = "nextMode"];
+  .agent.v1.SubmittedExitedCustomMode exited_mode = 2 [json_name = "exitedMode"];
+}
+
+message SubmittedExitedCustomMode {
+  string id = 1 [json_name = "id"];
+  string label = 2 [json_name = "label"];
+}
+
+message ToolCall {
+  repeated .agent.v1.HookAdditionalContext hook_additional_contexts = 54 [json_name = "hookAdditionalContexts"];
+  string tool_call_id = 57 [json_name = "toolCallId"];
+  uint64 started_at_ms = 59 [json_name = "startedAtMs"];
+  uint64 completed_at_ms = 60 [json_name = "completedAtMs"];
+  oneof tool {
+    .agent.v1.ShellToolCall shell_tool_call = 1 [json_name = "shellToolCall"];
+    .agent.v1.DeleteToolCall delete_tool_call = 3 [json_name = "deleteToolCall"];
+    .agent.v1.GlobToolCall glob_tool_call = 4 [json_name = "globToolCall"];
+    .agent.v1.GrepToolCall grep_tool_call = 5 [json_name = "grepToolCall"];
+    .agent.v1.ReadToolCall read_tool_call = 8 [json_name = "readToolCall"];
+    .agent.v1.UpdateTodosToolCall update_todos_tool_call = 9 [json_name = "updateTodosToolCall"];
+    .agent.v1.ReadTodosToolCall read_todos_tool_call = 10 [json_name = "readTodosToolCall"];
+    .agent.v1.EditToolCall edit_tool_call = 12 [json_name = "editToolCall"];
+    .agent.v1.LsToolCall ls_tool_call = 13 [json_name = "lsToolCall"];
+    .agent.v1.ReadLintsToolCall read_lints_tool_call = 14 [json_name = "readLintsToolCall"];
+    .agent.v1.McpToolCall mcp_tool_call = 15 [json_name = "mcpToolCall"];
+    .agent.v1.SemSearchToolCall sem_search_tool_call = 16 [json_name = "semSearchToolCall"];
+    .agent.v1.CreatePlanToolCall create_plan_tool_call = 17 [json_name = "createPlanToolCall"];
+    .agent.v1.WebSearchToolCall web_search_tool_call = 18 [json_name = "webSearchToolCall"];
+    .agent.v1.TaskToolCall task_tool_call = 19 [json_name = "taskToolCall"];
+    .agent.v1.ListMcpResourcesToolCall list_mcp_resources_tool_call = 20 [json_name = "listMcpResourcesToolCall"];
+    .agent.v1.ReadMcpResourceToolCall read_mcp_resource_tool_call = 21 [json_name = "readMcpResourceToolCall"];
+    .agent.v1.ApplyAgentDiffToolCall apply_agent_diff_tool_call = 22 [json_name = "applyAgentDiffToolCall"];
+    .agent.v1.AskQuestionToolCall ask_question_tool_call = 23 [json_name = "askQuestionToolCall"];
+    .agent.v1.FetchToolCall fetch_tool_call = 24 [json_name = "fetchToolCall"];
+    .agent.v1.SwitchModeToolCall switch_mode_tool_call = 25 [json_name = "switchModeToolCall"];
+    .agent.v1.GenerateImageToolCall generate_image_tool_call = 28 [json_name = "generateImageToolCall"];
+    .agent.v1.RecordScreenToolCall record_screen_tool_call = 29 [json_name = "recordScreenToolCall"];
+    .agent.v1.ComputerUseToolCall computer_use_tool_call = 30 [json_name = "computerUseToolCall"];
+    .agent.v1.WriteShellStdinToolCall write_shell_stdin_tool_call = 31 [json_name = "writeShellStdinToolCall"];
+    .agent.v1.ReflectToolCall reflect_tool_call = 32 [json_name = "reflectToolCall"];
+    .agent.v1.SetupVmEnvironmentToolCall setup_vm_environment_tool_call = 33 [json_name = "setupVmEnvironmentToolCall"];
+    .agent.v1.TruncatedToolCall truncated_tool_call = 34 [json_name = "truncatedToolCall"];
+    .agent.v1.StartGrindExecutionToolCall start_grind_execution_tool_call = 35 [json_name = "startGrindExecutionToolCall"];
+    .agent.v1.StartGrindPlanningToolCall start_grind_planning_tool_call = 36 [json_name = "startGrindPlanningToolCall"];
+    .agent.v1.WebFetchToolCall web_fetch_tool_call = 37 [json_name = "webFetchToolCall"];
+    .agent.v1.ReportBugfixResultsToolCall report_bugfix_results_tool_call = 38 [json_name = "reportBugfixResultsToolCall"];
+    .agent.v1.AiAttributionToolCall ai_attribution_tool_call = 39 [json_name = "aiAttributionToolCall"];
+    .agent.v1.PrManagementToolCall pr_management_tool_call = 40 [json_name = "prManagementToolCall"];
+    .agent.v1.McpAuthToolCall mcp_auth_tool_call = 41 [json_name = "mcpAuthToolCall"];
+    .agent.v1.AwaitToolCall await_tool_call = 42 [json_name = "awaitToolCall"];
+    .agent.v1.BlameByFilePathToolCall blame_by_file_path_tool_call = 43 [json_name = "blameByFilePathToolCall"];
+    .agent.v1.GetMcpToolsToolCall get_mcp_tools_tool_call = 44 [json_name = "getMcpToolsToolCall"];
+    .agent.v1.ReportBugToolCall report_bug_tool_call = 45 [json_name = "reportBugToolCall"];
+    .agent.v1.SetActiveBranchToolCall set_active_branch_tool_call = 46 [json_name = "setActiveBranchToolCall"];
+    .agent.v1.CommunicateUpdateToolCall communicate_update_tool_call = 48 [json_name = "communicateUpdateToolCall"];
+    .agent.v1.SendFinalSummaryToolCall send_final_summary_tool_call = 49 [json_name = "sendFinalSummaryToolCall"];
+    .agent.v1.UpdatePrCodeTourToolCall update_pr_code_tour_tool_call = 50 [json_name = "updatePrCodeTourToolCall"];
+    .agent.v1.ReplaceEnvToolCall replace_env_tool_call = 51 [json_name = "replaceEnvToolCall"];
+    .agent.v1.EditPrLabelsToolCall edit_pr_labels_tool_call = 52 [json_name = "editPrLabelsToolCall"];
+    .agent.v1.RecordCiInvestigationFindingsToolCall record_ci_investigation_findings_tool_call = 53 [json_name = "recordCiInvestigationFindingsToolCall"];
+    .agent.v1.SendMessageToolCall send_message_tool_call = 55 [json_name = "sendMessageToolCall"];
+    .agent.v1.FetchCloudAgentDataToolCall fetch_cloud_agent_data_tool_call = 56 [json_name = "fetchCloudAgentDataToolCall"];
+    .agent.v1.SendToUserToolCall send_to_user_tool_call = 58 [json_name = "sendToUserToolCall"];
+    .agent.v1.PiReadToolCall pi_read_tool_call = 61 [json_name = "piReadToolCall"];
+    .agent.v1.PiBashToolCall pi_bash_tool_call = 62 [json_name = "piBashToolCall"];
+    .agent.v1.PiEditToolCall pi_edit_tool_call = 63 [json_name = "piEditToolCall"];
+    .agent.v1.PiWriteToolCall pi_write_tool_call = 64 [json_name = "piWriteToolCall"];
+    .agent.v1.PiGrepToolCall pi_grep_tool_call = 65 [json_name = "piGrepToolCall"];
+    .agent.v1.PiFindToolCall pi_find_tool_call = 66 [json_name = "piFindToolCall"];
+    .agent.v1.PiLsToolCall pi_ls_tool_call = 67 [json_name = "piLsToolCall"];
+    .agent.v1.ConnectScmToolCall connect_scm_tool_call = 68 [json_name = "connectScmToolCall"];
+    .agent.v1.SearchConversationsToolCall search_conversations_tool_call = 69 [json_name = "searchConversationsToolCall"];
+    .agent.v1.CreateGoalToolCall create_goal_tool_call = 70 [json_name = "createGoalToolCall"];
+    .agent.v1.UpdateGoalToolCall update_goal_tool_call = 71 [json_name = "updateGoalToolCall"];
+    .agent.v1.AdoptToolCall adopt_tool_call = 72 [json_name = "adoptToolCall"];
+    .agent.v1.GetAgentStatusToolCall get_agent_status_tool_call = 73 [json_name = "getAgentStatusToolCall"];
+    .agent.v1.SendToAgentToolCall send_to_agent_tool_call = 74 [json_name = "sendToAgentToolCall"];
+    .agent.v1.ReadAgentTranscriptToolCall read_agent_transcript_tool_call = 75 [json_name = "readAgentTranscriptToolCall"];
+    .agent.v1.CreateAgentToolCall create_agent_tool_call = 76 [json_name = "createAgentToolCall"];
+    .agent.v1.StopAgentToolCall stop_agent_tool_call = 77 [json_name = "stopAgentToolCall"];
+  }
+}
+
+message TaskToolCall {
+  .agent.v1.TaskArgs args = 1 [json_name = "args"];
+  .agent.v1.TaskResult result = 2 [json_name = "result"];
+  string cloud_agent_bc_id = 3 [json_name = "cloudAgentBcId"];
+}
+
+message TruncatedToolCall {
+  bytes original_step_blob_id = 1 [json_name = "originalStepBlobId"];
+  .agent.v1.TruncatedToolCallArgs args = 2 [json_name = "args"];
+  .agent.v1.TruncatedToolCallResult result = 3 [json_name = "result"];
+}
+
+message SetActiveBranchToolCall {
+  .agent.v1.SetActiveBranchArgs args = 1 [json_name = "args"];
+  .agent.v1.SetActiveBranchResult result = 2 [json_name = "result"];
+}
+
+message SetActiveBranchArgs {
+  string path = 1 [json_name = "path"];
+  string branch_name = 2 [json_name = "branchName"];
+}
+
+message SetActiveBranchResult {
+  oneof result {
+    .agent.v1.SetActiveBranchSuccess success = 1 [json_name = "success"];
+    .agent.v1.SetActiveBranchError error = 2 [json_name = "error"];
+  }
+}
+
+message SetActiveBranchSuccess {
+}
+
+message SetActiveBranchError {
+  string error = 1 [json_name = "error"];
+}
+
+message TruncatedToolCallArgs {
+}
+
+message TruncatedToolCallResult {
+  oneof result {
+    .agent.v1.TruncatedToolCallSuccess success = 1 [json_name = "success"];
+    .agent.v1.TruncatedToolCallError error = 2 [json_name = "error"];
+  }
+}
+
+message TruncatedToolCallSuccess {
+}
+
+message TruncatedToolCallError {
+  string error = 1 [json_name = "error"];
+}
+
+message TaskArgs {
+  string description = 1 [json_name = "description"];
+  string prompt = 2 [json_name = "prompt"];
+  .agent.v1.SubagentType subagent_type = 3 [json_name = "subagentType"];
+  string model = 4 [json_name = "model"];
+  string resume = 5 [json_name = "resume"];
+  string agent_id = 6 [json_name = "agentId"];
+  repeated string attachments = 7 [json_name = "attachments"];
+  .agent.v1.TaskMode mode = 8 [json_name = "mode"];
+  repeated string responding_to_message_ids = 9 [json_name = "respondingToMessageIds"];
+  .agent.v1.SubagentExecutionEnvironment environment = 10 [json_name = "environment"];
+  .agent.v1.TargetMachine machine = 11 [json_name = "machine"];
+}
+
+message TaskResult {
+  oneof result {
+    .agent.v1.TaskSuccess success = 1 [json_name = "success"];
+    .agent.v1.TaskError error = 2 [json_name = "error"];
+  }
+}
+
+message TaskSuccess {
+  repeated .agent.v1.ConversationStep conversation_steps = 1 [json_name = "conversationSteps"];
+  string agent_id = 2 [json_name = "agentId"];
+  bool is_background = 3 [json_name = "isBackground"];
+  uint64 duration_ms = 4 [json_name = "durationMs"];
+  string result_suffix = 5 [json_name = "resultSuffix"];
+  .agent.v1.SubagentBackgroundReason background_reason = 6 [json_name = "backgroundReason"];
+  string transcript_path = 7 [json_name = "transcriptPath"];
+}
+
+message TaskError {
+  string error = 1 [json_name = "error"];
+}
+
+message ConversationStep {
+  oneof message {
+    .agent.v1.AssistantMessage assistant_message = 1 [json_name = "assistantMessage"];
+    .agent.v1.ToolCall tool_call = 2 [json_name = "toolCall"];
+    .agent.v1.ThinkingMessage thinking_message = 3 [json_name = "thinkingMessage"];
+  }
+}
+
+message AssistantMessage {
+  string text = 1 [json_name = "text"];
+}
+
+message ThinkingMessage {
+  string text = 1 [json_name = "text"];
+  uint32 duration_ms = 2 [json_name = "durationMs"];
+}
+
+message TargetMachine {
+  oneof machine {
+    .agent.v1.SameMachineTarget same_machine = 1 [json_name = "sameMachine"];
+    .agent.v1.NewCloudVmTarget new_cloud_vm = 2 [json_name = "newCloudVm"];
+    .agent.v1.SelfHostedWorkerTarget self_hosted_worker = 3 [json_name = "selfHostedWorker"];
+    .agent.v1.SelfHostedPoolTarget self_hosted_pool = 4 [json_name = "selfHostedPool"];
+  }
+}
+
+message SameMachineTarget {
+}
+
+message NewCloudVmTarget {
+  string environment_build_id = 1 [json_name = "environmentBuildId"];
+  string base_branch = 2 [json_name = "baseBranch"];
+}
+
+message SelfHostedWorkerTarget {
+  string worker_id = 1 [json_name = "workerId"];
+}
+
+message SelfHostedPoolTarget {
+  string pool = 1 [json_name = "pool"];
+  repeated .agent.v1.SelfHostedWorkerLabel labels = 2 [json_name = "labels"];
+}
+
+message SelfHostedWorkerLabel {
+  string key = 1 [json_name = "key"];
+  string value = 2 [json_name = "value"];
+}
+
+message ToolCallDelta {
+  oneof delta {
+    .agent.v1.ShellToolCallDelta shell_tool_call_delta = 1 [json_name = "shellToolCallDelta"];
+    .agent.v1.TaskToolCallDelta task_tool_call_delta = 2 [json_name = "taskToolCallDelta"];
+    .agent.v1.EditToolCallDelta edit_tool_call_delta = 3 [json_name = "editToolCallDelta"];
+    .agent.v1.ReplaceEnvToolCallDelta replace_env_tool_call_delta = 4 [json_name = "replaceEnvToolCallDelta"];
+  }
+}
+
+message TaskToolCallDelta {
+  .agent.v1.InteractionUpdate interaction_update = 1 [json_name = "interactionUpdate"];
+}
+
+message InteractionQuery {
+  uint32 id = 1 [json_name = "id"];
+  oneof query {
+    .agent.v1.WebSearchRequestQuery web_search_request_query = 2 [json_name = "webSearchRequestQuery"];
+    .agent.v1.AskQuestionInteractionQuery ask_question_interaction_query = 3 [json_name = "askQuestionInteractionQuery"];
+    .agent.v1.SwitchModeRequestQuery switch_mode_request_query = 4 [json_name = "switchModeRequestQuery"];
+    .agent.v1.CreatePlanRequestQuery create_plan_request_query = 7 [json_name = "createPlanRequestQuery"];
+    .agent.v1.SetupVmEnvironmentArgs setup_vm_environment_args = 8 [json_name = "setupVmEnvironmentArgs"];
+    .agent.v1.WebFetchRequestQuery web_fetch_request_query = 9 [json_name = "webFetchRequestQuery"];
+    .agent.v1.PrManagementRequestQuery pr_management_request_query = 10 [json_name = "prManagementRequestQuery"];
+    .agent.v1.McpAuthRequestQuery mcp_auth_request_query = 11 [json_name = "mcpAuthRequestQuery"];
+    .agent.v1.GenerateImageRequestQuery generate_image_request_query = 12 [json_name = "generateImageRequestQuery"];
+    .agent.v1.ReplaceEnvArgs replace_env_args = 13 [json_name = "replaceEnvArgs"];
+    .agent.v1.ConnectScmRequestQuery connect_scm_request_query = 14 [json_name = "connectScmRequestQuery"];
+  }
+}
+
+message AskQuestionInteractionQuery {
+  .agent.v1.AskQuestionArgs args = 1 [json_name = "args"];
+  string tool_call_id = 2 [json_name = "toolCallId"];
+}
+
+message ConversationAction {
+  string triggering_auth_id = 11 [json_name = "triggeringAuthId"];
+  .agent.v1.TriggeringUserInfo triggering_user_info = 15 [json_name = "triggeringUserInfo"];
+  .agent.v1.RequestContextPartReferences request_context_parts = 17 [json_name = "requestContextParts"];
+  oneof action {
+    .agent.v1.UserMessageAction user_message_action = 1 [json_name = "userMessageAction"];
+    .agent.v1.ResumeAction resume_action = 2 [json_name = "resumeAction"];
+    .agent.v1.CancelAction cancel_action = 3 [json_name = "cancelAction"];
+    .agent.v1.SummarizeAction summarize_action = 4 [json_name = "summarizeAction"];
+    .agent.v1.ShellCommandAction shell_command_action = 5 [json_name = "shellCommandAction"];
+    .agent.v1.StartPlanAction start_plan_action = 6 [json_name = "startPlanAction"];
+    .agent.v1.ExecutePlanAction execute_plan_action = 7 [json_name = "executePlanAction"];
+    .agent.v1.AsyncAskQuestionCompletionAction async_ask_question_completion_action = 8 [json_name = "asyncAskQuestionCompletionAction"];
+    .agent.v1.CancelSubagentAction cancel_subagent_action = 10 [json_name = "cancelSubagentAction"];
+    .agent.v1.BackgroundTaskCompletionAction background_task_completion_action = 12 [json_name = "backgroundTaskCompletionAction"];
+    .agent.v1.BackgroundShellAction background_shell_action = 13 [json_name = "backgroundShellAction"];
+    .agent.v1.BackgroundSubagentAction background_subagent_action = 14 [json_name = "backgroundSubagentAction"];
+    .agent.v1.SubscriptionNotificationAction subscription_notification_action = 16 [json_name = "subscriptionNotificationAction"];
+    .agent.v1.GoalContinuationAction goal_continuation_action = 18 [json_name = "goalContinuationAction"];
+    .agent.v1.InjectContextAction inject_context_action = 19 [json_name = "injectContextAction"];
+  }
+}
+
+message ConversationStateStructure {
+  repeated bytes root_prompt_messages_json = 1 [json_name = "rootPromptMessagesJson"];
+  repeated bytes todos = 3 [json_name = "todos"];
+  repeated string pending_tool_calls = 4 [json_name = "pendingToolCalls"];
+  .agent.v1.ConversationTokenDetails token_details = 5 [json_name = "tokenDetails"];
+  bytes summary = 6 [json_name = "summary"];
+  bytes plan = 7 [json_name = "plan"];
+  repeated bytes turns = 8 [json_name = "turns"];
+  repeated string previous_workspace_uris = 9 [json_name = "previousWorkspaceUris"];
+  .agent.v1.AgentMode mode = 10 [json_name = "mode"];
+  bytes summary_archive = 11 [json_name = "summaryArchive"];
+  map<string, bytes> file_states = 12 [json_name = "fileStates"];
+  repeated bytes summary_archives = 13 [json_name = "summaryArchives"];
+  repeated .agent.v1.StepTiming turn_timings = 14 [json_name = "turnTimings"];
+  map<string, .agent.v1.FileStateStructure> file_states_v2 = 15 [json_name = "fileStatesV2"];
+  map<string, .agent.v1.SubagentPersistedState> subagent_states = 16 [json_name = "subagentStates"];
+  uint32 self_summary_count = 17 [json_name = "selfSummaryCount"];
+  repeated string read_paths = 18 [json_name = "readPaths"];
+  string active_branch_name = 19 [json_name = "activeBranchName"];
+  map<string, .agent.v1.PlanRegistryEntry> plans = 20 [json_name = "plans"];
+  repeated .agent.v1.TrackedGitRepo tracked_git_repo_branches = 21 [json_name = "trackedGitRepoBranches"];
+  string agent_type = 22 [json_name = "agentType"];
+  repeated .agent.v1.CommunicateUpdateHistoryEntry communicate_update_history = 23 [json_name = "communicateUpdateHistory"];
+  map<string, string> subagent_threads = 24 [json_name = "subagentThreads"];
+  string communicate_update_final_summary = 25 [json_name = "communicateUpdateFinalSummary"];
+  uint64 conversation_started_timestamp_ms = 26 [json_name = "conversationStartedTimestampMs"];
+  string conversation_started_time_zone = 27 [json_name = "conversationStartedTimeZone"];
+  string communicate_update_completed_subtitle = 28 [json_name = "communicateUpdateCompletedSubtitle"];
+  map<string, .agent.v1.CommunicateUpdateTurnState> communicate_update_states_by_parent_tool_call_id = 29 [json_name = "communicateUpdateStatesByParentToolCallId"];
+  map<string, .agent.v1.SubagentRunState> subagent_runs_by_parent_tool_call_id = 30 [json_name = "subagentRunsByParentToolCallId"];
+  map<string, bytes> subagent_state_refs = 31 [json_name = "subagentStateRefs"];
+  .agent.v1.GoalState goal_state = 32 [json_name = "goalState"];
+  bool is_root_project_conversation = 33 [json_name = "isRootProjectConversation"];
+  repeated string completed_ask_question_tool_call_ids = 34 [json_name = "completedAskQuestionToolCallIds"];
+}
+
+message ConversationTokenDetails {
+  uint32 used_tokens = 1 [json_name = "usedTokens"];
+  uint32 max_tokens = 2 [json_name = "maxTokens"];
+  .agent.v1.PromptTokenBreakdownSnapshot breakdown = 3 [json_name = "breakdown"];
+  .agent.v1.PromptContextUsageTree prompt_context_usage_tree = 4 [json_name = "promptContextUsageTree"];
+  bytes prompt_context_usage_snapshot_blob_id = 5 [json_name = "promptContextUsageSnapshotBlobId"];
+}
+
+message FileStateStructure {
+  bytes content = 1 [json_name = "content"];
+  bytes initial_content = 2 [json_name = "initialContent"];
+}
+
+message StepTiming {
+  uint64 duration_ms = 1 [json_name = "durationMs"];
+  uint64 timestamp_ms = 2 [json_name = "timestampMs"];
+}
+
+message SubagentPersistedState {
+  .agent.v1.ConversationStateStructure conversation_state = 1 [json_name = "conversationState"];
+  uint64 created_timestamp_ms = 2 [json_name = "createdTimestampMs"];
+  uint64 last_used_timestamp_ms = 3 [json_name = "lastUsedTimestampMs"];
+  .agent.v1.SubagentType subagent_type = 4 [json_name = "subagentType"];
+  string model_id = 5 [json_name = "modelId"];
+  .agent.v1.SubagentExecutionEnvironment environment = 6 [json_name = "environment"];
+  .agent.v1.CloudSubagentReference cloud_subagent = 7 [json_name = "cloudSubagent"];
+  string first_class_bc_id = 8 [json_name = "firstClassBcId"];
+  string cloud_requested_environment_build_id = 9 [json_name = "cloudRequestedEnvironmentBuildId"];
+  .agent.v1.TargetMachine machine = 10 [json_name = "machine"];
+}
+
+message PlanRegistryEntry {
+  string id = 1 [json_name = "id"];
+  string path = 2 [json_name = "path"];
+}
+
+message TrackedGitRepo {
+  string repo_path = 1 [json_name = "repoPath"];
+  string branch_name = 2 [json_name = "branchName"];
+}
+
+message CommunicateUpdateHistoryEntry {
+  string step = 1 [json_name = "step"];
+  uint32 message_index = 3 [json_name = "messageIndex"];
+}
+
+message CommunicateUpdateTurnState {
+  repeated .agent.v1.CommunicateUpdateHistoryEntry history = 1 [json_name = "history"];
+  string final_summary = 2 [json_name = "finalSummary"];
+  string completed_subtitle = 3 [json_name = "completedSubtitle"];
+}
+
+message SubagentRunState {
+  string parent_tool_call_id = 1 [json_name = "parentToolCallId"];
+  string subagent_id = 2 [json_name = "subagentId"];
+  .agent.v1.SubagentExecutionEnvironment environment = 3 [json_name = "environment"];
+  .agent.v1.SubagentRunStatus status = 4 [json_name = "status"];
+  string title = 5 [json_name = "title"];
+  string detail = 6 [json_name = "detail"];
+  string transcript_path = 7 [json_name = "transcriptPath"];
+  string output_path = 8 [json_name = "outputPath"];
+  uint64 completed_timestamp_ms = 9 [json_name = "completedTimestampMs"];
+  .agent.v1.BackgroundTaskCompletionReason completion_reason = 10 [json_name = "completionReason"];
+}
+
+message GoalState {
+  string conversation_id = 1 [json_name = "conversationId"];
+  string goal_id = 2 [json_name = "goalId"];
+  string objective = 3 [json_name = "objective"];
+  .agent.v1.GoalStatus status = 4 [json_name = "status"];
+  uint32 idle_continuations_without_tool_calls = 5 [json_name = "idleContinuationsWithoutToolCalls"];
+  uint64 active_duration_ms = 6 [json_name = "activeDurationMs"];
+  uint64 last_accrued_at_ms = 7 [json_name = "lastAccruedAtMs"];
+  uint32 continuation_count = 8 [json_name = "continuationCount"];
+  string agent_session_id = 9 [json_name = "agentSessionId"];
+}
+
+message CloudSubagentReference {
+  string bc_id = 1 [json_name = "bcId"];
+  string transcript_path = 2 [json_name = "transcriptPath"];
+}
+
+message PromptTokenBreakdownSnapshot {
+  uint32 total_used_tokens = 1 [json_name = "totalUsedTokens"];
+  uint32 max_tokens = 2 [json_name = "maxTokens"];
+  repeated .agent.v1.PromptTokenBreakdownCategory categories = 3 [json_name = "categories"];
+}
+
+message PromptContextUsageTree {
+  uint32 schema_version = 1 [json_name = "schemaVersion"];
+  repeated .agent.v1.PromptContextNode nodes = 2 [json_name = "nodes"];
+}
+
+message PromptContextNode {
+  string id = 1 [json_name = "id"];
+  string parent_id = 2 [json_name = "parentId"];
+  string kind = 3 [json_name = "kind"];
+  string label = 4 [json_name = "label"];
+  string category_id = 5 [json_name = "categoryId"];
+  uint32 estimated_tokens = 6 [json_name = "estimatedTokens"];
+  uint32 character_count = 7 [json_name = "characterCount"];
+  bool content_available = 9 [json_name = "contentAvailable"];
+  .agent.v1.PromptContextSourceRef source = 11 [json_name = "source"];
+  string inline_content = 12 [json_name = "inlineContent"];
+}
+
+message PromptContextSourceRef {
+  string source_type = 1 [json_name = "sourceType"];
+  uint32 message_index = 3 [json_name = "messageIndex"];
+  string content_path = 4 [json_name = "contentPath"];
+  uint32 start_offset = 5 [json_name = "startOffset"];
+  uint32 end_offset = 6 [json_name = "endOffset"];
+}
+
+message PromptTokenBreakdownCategory {
+  string id = 1 [json_name = "id"];
+  string label = 2 [json_name = "label"];
+  uint32 estimated_tokens = 3 [json_name = "estimatedTokens"];
+  uint32 character_count = 4 [json_name = "characterCount"];
+}
+
+message UserMessageAction {
+  .agent.v1.UserMessage user_message = 1 [json_name = "userMessage"];
+  .agent.v1.RequestContext request_context = 2 [json_name = "requestContext"];
+  bool send_to_interaction_listener = 3 [json_name = "sendToInteractionListener"];
+  repeated .agent.v1.UserMessage prepend_user_messages = 4 [json_name = "prependUserMessages"];
+  .agent.v1.InterruptedPendingToolCallResolutions interrupted_pending_tool_call_resolutions = 6 [json_name = "interruptedPendingToolCallResolutions"];
+  .agent.v1.ConversationHistory conversation_history = 7 [json_name = "conversationHistory"];
+}
+
+message ResumeAction {
+  .agent.v1.RequestContext request_context = 2 [json_name = "requestContext"];
+}
+
+message CancelAction {
+  string reason = 1 [json_name = "reason"];
+  .agent.v1.InterruptedPendingToolCallResolutions interrupted_pending_tool_call_resolutions = 3 [json_name = "interruptedPendingToolCallResolutions"];
+}
+
+message SummarizeAction {
+}
+
+message ShellCommandAction {
+  .agent.v1.ShellCommand shell_command = 1 [json_name = "shellCommand"];
+  string exec_id = 2 [json_name = "execId"];
+}
+
+message StartPlanAction {
+  .agent.v1.UserMessage user_message = 1 [json_name = "userMessage"];
+  .agent.v1.RequestContext request_context = 2 [json_name = "requestContext"];
+  bool is_spec = 3 [json_name = "isSpec"];
+}
+
+message ExecutePlanAction {
+  .agent.v1.RequestContext request_context = 1 [json_name = "requestContext"];
+  .agent.v1.ConversationPlan plan = 2 [json_name = "plan"];
+  string plan_file_uri = 3 [json_name = "planFileUri"];
+  string plan_file_content = 4 [json_name = "planFileContent"];
+  .agent.v1.AgentMode execution_mode = 5 [json_name = "executionMode"];
+  string kickoff_message_id = 6 [json_name = "kickoffMessageId"];
+  string plan_id = 7 [json_name = "planId"];
+  string plan_file_path = 8 [json_name = "planFilePath"];
+}
+
+message AsyncAskQuestionCompletionAction {
+  string original_tool_call_id = 1 [json_name = "originalToolCallId"];
+  .agent.v1.AskQuestionArgs original_args = 2 [json_name = "originalArgs"];
+  .agent.v1.AskQuestionResult result = 3 [json_name = "result"];
+}
+
+message CancelSubagentAction {
+  string subagent_id = 1 [json_name = "subagentId"];
+}
+
+message BackgroundTaskCompletionAction {
+  repeated .agent.v1.BackgroundTaskCompletion completions = 1 [json_name = "completions"];
+}
+
+message BackgroundShellAction {
+  string tool_call_id = 1 [json_name = "toolCallId"];
+}
+
+message BackgroundSubagentAction {
+  string tool_call_id = 1 [json_name = "toolCallId"];
+}
+
+message SubscriptionNotificationAction {
+  repeated .agent.v1.UserMessage notifications = 1 [json_name = "notifications"];
+  .agent.v1.RequestContext request_context = 2 [json_name = "requestContext"];
+  bool send_to_interaction_listener = 3 [json_name = "sendToInteractionListener"];
+}
+
+message GoalContinuationAction {
+}
+
+message InjectContextAction {
+  string injection_id = 1 [json_name = "injectionId"];
+  string expected_run_id = 2 [json_name = "expectedRunId"];
+  oneof payload {
+    .agent.v1.UserContextInjection user_context = 3 [json_name = "userContext"];
+    .agent.v1.SystemContextInjection system_context = 4 [json_name = "systemContext"];
+  }
+}
+
+message UserContextInjection {
+  .agent.v1.UserMessage user_message = 1 [json_name = "userMessage"];
+  .agent.v1.RequestContext request_context = 2 [json_name = "requestContext"];
+}
+
+message SystemContextInjection {
+  string producer = 1 [json_name = "producer"];
+  string content = 2 [json_name = "content"];
+}
+
+message BackgroundTaskCompletion {
+  string task_id = 1 [json_name = "taskId"];
+  .agent.v1.BackgroundTaskKind kind = 2 [json_name = "kind"];
+  .agent.v1.BackgroundTaskStatus status = 3 [json_name = "status"];
+  string title = 4 [json_name = "title"];
+  string detail = 5 [json_name = "detail"];
+  string output_path = 6 [json_name = "outputPath"];
+  string thread_id = 7 [json_name = "threadId"];
+  .agent.v1.BackgroundTaskCompletionReason reason = 8 [json_name = "reason"];
+  string subagent_id = 9 [json_name = "subagentId"];
+  string tool_call_id = 10 [json_name = "toolCallId"];
+  .agent.v1.BackgroundTaskNotificationContext notification_context = 11 [json_name = "notificationContext"];
+}
+
+message ConversationPlan {
+  string plan = 1 [json_name = "plan"];
+}
+
+message ShellCommand {
+  string command = 1 [json_name = "command"];
+}
+
+message InterruptedPendingToolCallResolutions {
+  repeated .agent.v1.InterruptedPendingToolCallResolution resolutions = 1 [json_name = "resolutions"];
+}
+
+message InterruptedPendingToolCallResolution {
+  string tool_call_id = 1 [json_name = "toolCallId"];
+  oneof resolution {
+    .agent.v1.ShellResult shell_result = 2 [json_name = "shellResult"];
+    .agent.v1.TaskResult task_result = 3 [json_name = "taskResult"];
+  }
+}
+
+message ConversationHistory {
+  repeated .agent.v1.ConversationHistoryMessage messages = 1 [json_name = "messages"];
+  bool replace_user_info = 2 [json_name = "replaceUserInfo"];
+}
+
+message ConversationHistoryMessage {
+  oneof message {
+    .agent.v1.ConversationHistoryUserMessage user = 1 [json_name = "user"];
+    .agent.v1.ConversationHistoryAssistantMessage assistant = 2 [json_name = "assistant"];
+    .agent.v1.ConversationHistoryToolMessage tool = 3 [json_name = "tool"];
+  }
+}
+
+message ConversationHistoryUserMessage {
+  repeated .agent.v1.ConversationHistoryUserContent content = 1 [json_name = "content"];
+}
+
+message ConversationHistoryAssistantMessage {
+  repeated .agent.v1.ConversationHistoryAssistantContent content = 1 [json_name = "content"];
+}
+
+message ConversationHistoryToolMessage {
+  string tool_call_id = 1 [json_name = "toolCallId"];
+  string tool_name = 2 [json_name = "toolName"];
+  repeated .agent.v1.ConversationHistoryToolResultContent content = 3 [json_name = "content"];
+  bool is_error = 4 [json_name = "isError"];
+  repeated .agent.v1.HookAdditionalContext hook_additional_contexts = 5 [json_name = "hookAdditionalContexts"];
+}
+
+message ConversationHistoryToolResultContent {
+  oneof content {
+    .agent.v1.ConversationHistoryTextContent text = 1 [json_name = "text"];
+    .agent.v1.ConversationHistoryImageContent image = 2 [json_name = "image"];
+  }
+}
+
+message ConversationHistoryTextContent {
+  string text = 1 [json_name = "text"];
+}
+
+message ConversationHistoryImageContent {
+  string data = 1 [json_name = "data"];
+  string mime_type = 2 [json_name = "mimeType"];
+}
+
+message ConversationHistoryAssistantContent {
+  oneof content {
+    .agent.v1.ConversationHistoryTextContent text = 1 [json_name = "text"];
+    .agent.v1.ConversationHistoryReasoningContent reasoning = 2 [json_name = "reasoning"];
+    .agent.v1.ConversationHistoryRedactedReasoningContent redacted_reasoning = 3 [json_name = "redactedReasoning"];
+    .agent.v1.ConversationHistoryToolCall tool_call = 4 [json_name = "toolCall"];
+  }
+}
+
+message ConversationHistoryReasoningContent {
+  string text = 1 [json_name = "text"];
+  string signature = 2 [json_name = "signature"];
+}
+
+message ConversationHistoryRedactedReasoningContent {
+  string data = 1 [json_name = "data"];
+}
+
+message ConversationHistoryToolCall {
+  string tool_call_id = 1 [json_name = "toolCallId"];
+  string tool_name = 2 [json_name = "toolName"];
+  string args_json = 3 [json_name = "argsJson"];
+}
+
+message ConversationHistoryUserContent {
+  oneof content {
+    .agent.v1.ConversationHistoryTextContent text = 1 [json_name = "text"];
+    .agent.v1.ConversationHistoryImageContent image = 2 [json_name = "image"];
+  }
+}
+
+message FileState {
+  string content = 1 [json_name = "content"];
+  string initial_content = 2 [json_name = "initialContent"];
+}
+
+message AgentConversationTurn {
+  .agent.v1.UserMessage user_message = 1 [json_name = "userMessage"];
+  repeated .agent.v1.ConversationStep steps = 2 [json_name = "steps"];
+  string request_id = 3 [json_name = "requestId"];
+}
+
+message AgentConversationTurnStructure {
+  bytes user_message = 1 [json_name = "userMessage"];
+  repeated bytes steps = 2 [json_name = "steps"];
+  string request_id = 3 [json_name = "requestId"];
+  string encrypted_model = 4 [json_name = "encryptedModel"];
+  uint32 dynamic_tool_count = 5 [json_name = "dynamicToolCount"];
+  repeated uint32 send_message_step_indices = 6 [json_name = "sendMessageStepIndices"];
+}
+
+enum AgentMode {
+  AGENT_MODE_UNSPECIFIED = 0;
+  AGENT_MODE_AGENT = 1;
+  AGENT_MODE_ASK = 2;
+  AGENT_MODE_PLAN = 3;
+  AGENT_MODE_DEBUG = 4;
+  AGENT_MODE_TRIAGE = 5;
+  AGENT_MODE_PROJECT = 6;
+  AGENT_MODE_MULTITASK = 7;
+  AGENT_MODE_CUSTOM = 8;
+}
+
+message AgentRunRequest {
+  .agent.v1.ConversationStateStructure conversation_state = 1 [json_name = "conversationState"];
+  .agent.v1.ConversationAction action = 2 [json_name = "action"];
+  .agent.v1.ModelDetails model_details = 3 [json_name = "modelDetails"];
+  .agent.v1.McpTools mcp_tools = 4 [json_name = "mcpTools"];
+  string conversation_id = 5 [json_name = "conversationId"];
+  .agent.v1.McpFileSystemOptions mcp_file_system_options = 6 [json_name = "mcpFileSystemOptions"];
+  .agent.v1.SkillOptions skill_options = 7 [json_name = "skillOptions"];
+  string custom_system_prompt = 8 [json_name = "customSystemPrompt"];
+  .agent.v1.RequestedModel requested_model = 9 [json_name = "requestedModel"];
+  bool suggest_next_prompt = 10 [json_name = "suggestNextPrompt"];
+  string subagent_type_name = 11 [json_name = "subagentTypeName"];
+  bool exclude_workspace_context = 12 [json_name = "excludeWorkspaceContext"];
+  string harness = 13 [json_name = "harness"];
+  repeated .agent.v1.RequestedModel selected_subagent_models = 14 [json_name = "selectedSubagentModels"];
+  repeated .agent.v1.ModelDetails selected_subagent_model_details = 15 [json_name = "selectedSubagentModelDetails"];
+  string conversation_group_id = 16 [json_name = "conversationGroupId"];
+  repeated .agent.v1.PreFetchedBlob pre_fetched_blobs = 17 [json_name = "preFetchedBlobs"];
+  string dev_raw_model_slug = 18 [json_name = "devRawModelSlug"];
+  bool client_supports_inline_images = 19 [json_name = "clientSupportsInlineImages"];
+  repeated .agent.v1.SubagentModelOverride subagent_model_overrides = 20 [json_name = "subagentModelOverrides"];
+  bool can_create_cloud_subagents = 21 [json_name = "canCreateCloudSubagents"];
+  bool suppress_subagent_progress_update_tool = 22 [json_name = "suppressSubagentProgressUpdateTool"];
+  bool client_supports_send_to_user = 23 [json_name = "clientSupportsSendToUser"];
+  string computer_use_coordinate_mode = 24 [json_name = "computerUseCoordinateMode"];
+  string run_id = 25 [json_name = "runId"];
+  string agent_session_id = 26 [json_name = "agentSessionId"];
+  bool client_supports_prompt_context_usage_rpc = 27 [json_name = "clientSupportsPromptContextUsageRpc"];
+  bool client_supports_routed_model_update = 28 [json_name = "clientSupportsRoutedModelUpdate"];
+  .agent.v1.SystemPromptSpec system_prompt_spec = 29 [json_name = "systemPromptSpec"];
+  .agent.v1.ClientLlmGatewayCredential client_llm_gateway_credential = 30 [json_name = "clientLlmGatewayCredential"];
+}
+
+enum BackgroundTaskCompletionReason {
+  BACKGROUND_TASK_COMPLETION_REASON_UNSPECIFIED = 0;
+  BACKGROUND_TASK_COMPLETION_REASON_TASK_FINISHED = 1;
+  BACKGROUND_TASK_COMPLETION_REASON_TASK_PROGRESS = 2;
+  BACKGROUND_TASK_COMPLETION_REASON_WORKER_REPARENTED = 3;
+}
+
+enum BackgroundTaskKind {
+  BACKGROUND_TASK_KIND_UNSPECIFIED = 0;
+  BACKGROUND_TASK_KIND_SHELL = 1;
+  BACKGROUND_TASK_KIND_SUBAGENT = 2;
+}
+
+enum BackgroundTaskNotificationContext {
+  BACKGROUND_TASK_NOTIFICATION_CONTEXT_UNSPECIFIED = 0;
+  BACKGROUND_TASK_NOTIFICATION_CONTEXT_USER_DRIVEN_INTERACTIVE_CHILD = 1;
+}
+
+enum BackgroundTaskStatus {
+  BACKGROUND_TASK_STATUS_UNSPECIFIED = 0;
+  BACKGROUND_TASK_STATUS_SUCCESS = 1;
+  BACKGROUND_TASK_STATUS_ERROR = 2;
+  BACKGROUND_TASK_STATUS_ABORTED = 3;
+}
+
+message ClientLlmGatewayCredential {
+  string bearer_token = 1 [json_name = "bearerToken"];
+}
+
+message CloudSubagentInheritedContext {
+  string automation_run_bc_id = 1 [json_name = "automationRunBcId"];
+  string inline_mcp_config_json = 3 [json_name = "inlineMcpConfigJson"];
+  bool resolved = 4 [json_name = "resolved"];
+  bytes inline_mcp_config_blob_id = 5 [json_name = "inlineMcpConfigBlobId"];
+}
+
+message ConversationState {
+  repeated string root_prompt_messages_json = 1 [json_name = "rootPromptMessagesJson"];
+  repeated .agent.v1.TodoItem todos = 3 [json_name = "todos"];
+  repeated string pending_tool_calls = 4 [json_name = "pendingToolCalls"];
+  .agent.v1.ConversationTokenDetails token_details = 5 [json_name = "tokenDetails"];
+  .agent.v1.ConversationSummary summary = 6 [json_name = "summary"];
+  .agent.v1.ConversationPlan plan = 7 [json_name = "plan"];
+  repeated .agent.v1.ConversationTurn turns = 8 [json_name = "turns"];
+  .agent.v1.ConversationSummaryArchive summary_archive = 9 [json_name = "summaryArchive"];
+  map<string, .agent.v1.FileState> file_states = 10 [json_name = "fileStates"];
+  repeated .agent.v1.ConversationSummaryArchive summary_archives = 11 [json_name = "summaryArchives"];
+  map<string, .agent.v1.PlanRegistryEntry> plans = 12 [json_name = "plans"];
+  repeated .agent.v1.CommunicateUpdateHistoryEntry communicate_update_history = 13 [json_name = "communicateUpdateHistory"];
+  string communicate_update_final_summary = 14 [json_name = "communicateUpdateFinalSummary"];
+  string communicate_update_completed_subtitle = 15 [json_name = "communicateUpdateCompletedSubtitle"];
+  map<string, .agent.v1.CommunicateUpdateTurnState> communicate_update_states_by_parent_tool_call_id = 16 [json_name = "communicateUpdateStatesByParentToolCallId"];
+}
+
+message ConversationSummary {
+  string summary = 1 [json_name = "summary"];
+}
+
+message ConversationSummaryArchive {
+  repeated bytes summarized_messages = 1 [json_name = "summarizedMessages"];
+  string summary = 2 [json_name = "summary"];
+  uint32 window_tail = 3 [json_name = "windowTail"];
+  bytes summary_message = 4 [json_name = "summaryMessage"];
+}
+
+message ConversationTurn {
+  oneof turn {
+    .agent.v1.AgentConversationTurn agent_conversation_turn = 1 [json_name = "agentConversationTurn"];
+    .agent.v1.ShellConversationTurn shell_conversation_turn = 2 [json_name = "shellConversationTurn"];
+  }
+}
+
+message ConversationTurnStructure {
+  oneof turn {
+    .agent.v1.AgentConversationTurnStructure agent_conversation_turn = 1 [json_name = "agentConversationTurn"];
+    .agent.v1.ShellConversationTurnStructure shell_conversation_turn = 2 [json_name = "shellConversationTurn"];
+  }
+}
+
+enum CustomModeSource {
+  CUSTOM_MODE_SOURCE_UNSPECIFIED = 0;
+  CUSTOM_MODE_SOURCE_AGENT_SKILL = 1;
+  CUSTOM_MODE_SOURCE_PLUGIN_SKILL = 2;
+  CUSTOM_MODE_SOURCE_REPO_SKILL = 3;
+  CUSTOM_MODE_SOURCE_MANAGED_SKILL = 4;
+}
+
+message ModelDetails {
+  string model_id = 1 [json_name = "modelId"];
+  .agent.v1.ThinkingDetails thinking_details = 2 [json_name = "thinkingDetails"];
+  string display_model_id = 3 [json_name = "displayModelId"];
+  string display_name = 4 [json_name = "displayName"];
+  string display_name_short = 5 [json_name = "displayNameShort"];
+  repeated string aliases = 6 [json_name = "aliases"];
+  bool max_mode = 7 [json_name = "maxMode"];
+  oneof credentials {
+    .agent.v1.ApiKeyCredentials api_key_credentials = 8 [json_name = "apiKeyCredentials"];
+    .agent.v1.AzureCredentials azure_credentials = 9 [json_name = "azureCredentials"];
+    .agent.v1.BedrockCredentials bedrock_credentials = 10 [json_name = "bedrockCredentials"];
+  }
+}
+
+message PreFetchedBlob {
+  bytes id = 1 [json_name = "id"];
+  bytes value = 2 [json_name = "value"];
+}
+
+message PreparedTaskSubagent {
+  string subagent_id = 1 [json_name = "subagentId"];
+  string subagent_type_name = 2 [json_name = "subagentTypeName"];
+  .agent.v1.SubagentType subagent_type = 3 [json_name = "subagentType"];
+  string analytics_subagent_type = 4 [json_name = "analyticsSubagentType"];
+  string resolved_model_id = 5 [json_name = "resolvedModelId"];
+  bool effective_readonly = 6 [json_name = "effectiveReadonly"];
+  bool use_ask_mode_for_subagent = 7 [json_name = "useAskModeForSubagent"];
+  .agent.v1.ConversationStateStructure conversation_state = 8 [json_name = "conversationState"];
+  .agent.v1.ConversationAction initial_action = 9 [json_name = "initialAction"];
+  uint32 initial_turns_count = 10 [json_name = "initialTurnsCount"];
+  string subagent_request_id = 11 [json_name = "subagentRequestId"];
+  string tool_call_id = 12 [json_name = "toolCallId"];
+  bool is_resume = 13 [json_name = "isResume"];
+  string parent_request_id = 14 [json_name = "parentRequestId"];
+  string root_parent_request_id = 15 [json_name = "rootParentRequestId"];
+  string task_prompt = 16 [json_name = "taskPrompt"];
+  string task_description = 17 [json_name = "taskDescription"];
+  .agent.v1.SelectedContext selected_context = 18 [json_name = "selectedContext"];
+  string plugin = 19 [json_name = "plugin"];
+  string marketplace = 20 [json_name = "marketplace"];
+  string parent_model_name = 21 [json_name = "parentModelName"];
+  .agent.v1.TaskToolCallArgsProto raw_args = 22 [json_name = "rawArgs"];
+  .agent.v1.SubagentCredentials subagent_credentials = 23 [json_name = "subagentCredentials"];
+  string result_suffix = 25 [json_name = "resultSuffix"];
+  bool enable_execute_hook_exec = 26 [json_name = "enableExecuteHookExec"];
+  repeated string configured_steps = 27 [json_name = "configuredSteps"];
+  bool readonly_shell_enabled = 28 [json_name = "readonlyShellEnabled"];
+  string tool_name = 29 [json_name = "toolName"];
+  int64 prepared_timestamp_unix_ms = 30 [json_name = "preparedTimestampUnixMs"];
+  string plugin_id = 31 [json_name = "pluginId"];
+  string marketplace_id = 32 [json_name = "marketplaceId"];
+  string subagent_source = 33 [json_name = "subagentSource"];
+  string cloud_subagent_bc_id = 34 [json_name = "cloudSubagentBcId"];
+  string provider_tool_name = 35 [json_name = "providerToolName"];
+  .agent.v1.CloudSubagentInheritedContext inherited_context = 36 [json_name = "inheritedContext"];
+}
+
+message PromptContextUsageSnapshot {
+  .agent.v1.PromptContextUsageTree prompt_context_usage_tree = 1 [json_name = "promptContextUsageTree"];
+  repeated bytes root_prompt_messages_json = 2 [json_name = "rootPromptMessagesJson"];
+}
+
+enum ResponseComparisonDisplayOrder {
+  RESPONSE_COMPARISON_DISPLAY_ORDER_UNSPECIFIED = 0;
+  RESPONSE_COMPARISON_DISPLAY_ORDER_PARENT_FIRST = 1;
+  RESPONSE_COMPARISON_DISPLAY_ORDER_ALTERNATE_FIRST = 2;
+}
+
+enum ResponseComparisonSkipReason {
+  RESPONSE_COMPARISON_SKIP_REASON_UNSPECIFIED = 0;
+  RESPONSE_COMPARISON_SKIP_REASON_ALTERNATE_TOOL_CALL = 1;
+  RESPONSE_COMPARISON_SKIP_REASON_INFERENCE_ERROR = 2;
+  RESPONSE_COMPARISON_SKIP_REASON_TIMEOUT = 3;
+  RESPONSE_COMPARISON_SKIP_REASON_CANCELLED = 4;
+}
+
+message ShellConversationTurn {
+  .agent.v1.ShellCommand shell_command = 1 [json_name = "shellCommand"];
+  .agent.v1.ShellOutput shell_output = 2 [json_name = "shellOutput"];
+}
+
+message ShellConversationTurnStructure {
+  bytes shell_command = 1 [json_name = "shellCommand"];
+  bytes shell_output = 2 [json_name = "shellOutput"];
+}
+
+message ShellOutput {
+  string stdout = 1 [json_name = "stdout"];
+  string stderr = 2 [json_name = "stderr"];
+  int32 exit_code = 3 [json_name = "exitCode"];
+}
+
+enum SimulatedMsgReason {
+  SIMULATED_MSG_REASON_UNSPECIFIED = 0;
+  SIMULATED_MSG_REASON_PLAN_EXECUTION = 1;
+  SIMULATED_MSG_REASON_COMMIT_REMINDER = 2;
+  SIMULATED_MSG_REASON_BACKGROUND_TASK_COMPLETION = 3;
+  SIMULATED_MSG_REASON_DIFF_TAB_COMMIT = 4;
+  SIMULATED_MSG_REASON_DIFF_TAB_COMMIT_AND_PUSH = 5;
+  SIMULATED_MSG_REASON_DIFF_TAB_PUSH = 6;
+  SIMULATED_MSG_REASON_DIFF_TAB_CREATE_PR = 7;
+  SIMULATED_MSG_REASON_DIFF_TAB_FIX_MERGE_CONFLICTS = 8;
+  SIMULATED_MSG_REASON_USER_SENT_TO_SUBAGENT = 9;
+  SIMULATED_MSG_REASON_USER_INTERRUPTED_SUBAGENT = 10;
+  SIMULATED_MSG_REASON_USER_QUEUED_TO_SUBAGENT = 11;
+  SIMULATED_MSG_REASON_BABYSIT_PR_IN_CLOUD = 12;
+  SIMULATED_MSG_REASON_CI_PANEL_INVESTIGATE_FAILURE = 13;
+  SIMULATED_MSG_REASON_MULTITASK = 14;
+  SIMULATED_MSG_REASON_BUILD_IN_PARALLEL = 15;
+  SIMULATED_MSG_REASON_MULTITASK_SPLIT_PRS = 16;
+  SIMULATED_MSG_REASON_APPLY_LOCALLY = 17;
+  SIMULATED_MSG_REASON_CHECKOUT_BRANCH = 18;
+  SIMULATED_MSG_REASON_DIFF_TAB_UPDATE_BRANCH = 19;
+  SIMULATED_MSG_REASON_PR_TAB_BUGBOT_FIX = 20;
+  SIMULATED_MSG_REASON_RUN_BUGBOT_REVIEW = 22;
+  SIMULATED_MSG_REASON_RUN_SECURITY_REVIEW = 23;
+  SIMULATED_MSG_REASON_FSD_APPLY_FINDING = 24;
+  SIMULATED_MSG_REASON_FSD_UNDO_FINDING = 25;
+  SIMULATED_MSG_REASON_FSD_START = 26;
+  SIMULATED_MSG_REASON_FSD_PR_INTERRUPT = 27;
+  SIMULATED_MSG_REASON_SUBSCRIPTION = 28;
+  SIMULATED_MSG_REASON_DIFF_TAB_CREATE_BRANCH = 29;
+  SIMULATED_MSG_REASON_AGENT_STORE_CONFLICT = 30;
+  SIMULATED_MSG_REASON_GOAL_CONTINUATION = 31;
+  SIMULATED_MSG_REASON_PROJECT_KICKOFF = 32;
+}
+
+enum SubagentBackgroundReason {
+  SUBAGENT_BACKGROUND_REASON_UNSPECIFIED = 0;
+  SUBAGENT_BACKGROUND_REASON_AGENT_REQUEST = 1;
+  SUBAGENT_BACKGROUND_REASON_USER_REQUEST = 2;
+  SUBAGENT_BACKGROUND_REASON_QUEUED_FOLLOW_UP = 3;
+}
+
+message SubagentCredentials {
+  oneof credentials {
+    .agent.v1.ApiKeyCredentials api_key_credentials = 1 [json_name = "apiKeyCredentials"];
+    .agent.v1.AzureCredentials azure_credentials = 2 [json_name = "azureCredentials"];
+    .agent.v1.BedrockCredentials bedrock_credentials = 3 [json_name = "bedrockCredentials"];
+  }
+}
+
+enum SubagentExecutionEnvironment {
+  SUBAGENT_EXECUTION_ENVIRONMENT_UNSPECIFIED = 0;
+  SUBAGENT_EXECUTION_ENVIRONMENT_LOCAL = 1;
+  SUBAGENT_EXECUTION_ENVIRONMENT_CLOUD = 2;
+}
+
+message SubagentModelOverride {
+  string subagent_type = 1 [json_name = "subagentType"];
+  oneof selection {
+    .agent.v1.RequestedModel model = 2 [json_name = "model"];
+    bool inherit = 3 [json_name = "inherit"];
+    bool disabled = 4 [json_name = "disabled"];
+  }
+}
+
+enum SubagentRunStatus {
+  SUBAGENT_RUN_STATUS_UNSPECIFIED = 0;
+  SUBAGENT_RUN_STATUS_RUNNING = 1;
+  SUBAGENT_RUN_STATUS_BACKGROUNDED = 2;
+  SUBAGENT_RUN_STATUS_SUCCESS = 3;
+  SUBAGENT_RUN_STATUS_ERROR = 4;
+  SUBAGENT_RUN_STATUS_ABORTED = 5;
+}
+
+enum SubscriptionSource {
+  SUBSCRIPTION_SOURCE_UNSPECIFIED = 0;
+  SUBSCRIPTION_SOURCE_SLACK = 1;
+  SUBSCRIPTION_SOURCE_GITHUB = 2;
+  SUBSCRIPTION_SOURCE_LINEAR = 3;
+  SUBSCRIPTION_SOURCE_ORIGIN = 4;
+}
+
+message TaskToolCallArgsProto {
+  string description = 1 [json_name = "description"];
+  string prompt = 2 [json_name = "prompt"];
+  string model = 3 [json_name = "model"];
+  string subagent_type = 4 [json_name = "subagentType"];
+  string resume = 5 [json_name = "resume"];
+  bool readonly = 6 [json_name = "readonly"];
+  bool run_in_background = 7 [json_name = "runInBackground"];
+  repeated string attachments = 8 [json_name = "attachments"];
+  .agent.v1.SubagentExecutionEnvironment environment = 9 [json_name = "environment"];
+  string cloud_base_branch = 10 [json_name = "cloudBaseBranch"];
+  string cloud_requested_environment_build_id = 11 [json_name = "cloudRequestedEnvironmentBuildId"];
+  .agent.v1.TargetMachine machine = 12 [json_name = "machine"];
+}
+
+message ThinkingDetails {
+}
+
+enum ThinkingStyle {
+  THINKING_STYLE_UNSPECIFIED = 0;
+  THINKING_STYLE_DEFAULT = 1;
+  THINKING_STYLE_CODEX = 2;
+  THINKING_STYLE_GPT5 = 3;
+}

@@ -1,0 +1,60 @@
+// agent.v1 — agent/v1/record_ci_investigation_findings_tool messages, enums and services.
+//
+// Generated from this repository's schema (source/packages/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+message RecordCiInvestigationFindingsToolCall {
+  .agent.v1.RecordCiInvestigationFindingsArgs args = 1 [json_name = "args"];
+  .agent.v1.RecordCiInvestigationFindingsResult result = 2 [json_name = "result"];
+}
+
+message RecordCiInvestigationFindingsArgs {
+  repeated .agent.v1.RecordCiInvestigationFinding findings = 1 [json_name = "findings"];
+  .agent.v1.RecordCiInvestigationOverall overall = 2 [json_name = "overall"];
+  string tool_call_id = 3 [json_name = "toolCallId"];
+}
+
+message RecordCiInvestigationFindingsResult {
+  oneof result {
+    .agent.v1.RecordCiInvestigationFindingsSuccess success = 1 [json_name = "success"];
+    .agent.v1.RecordCiInvestigationFindingsError error = 2 [json_name = "error"];
+  }
+}
+
+message RecordCiInvestigationFindingsSuccess {
+  string message = 1 [json_name = "message"];
+}
+
+message RecordCiInvestigationFindingsError {
+  string error = 1 [json_name = "error"];
+}
+
+message RecordCiInvestigationFinding {
+  string check_name = 1 [json_name = "checkName"];
+  string details_url = 2 [json_name = "detailsUrl"];
+  string tldr = 3 [json_name = "tldr"];
+  string root_cause = 4 [json_name = "rootCause"];
+  string failing_signal = 5 [json_name = "failingSignal"];
+  string suggested_next_step = 6 [json_name = "suggestedNextStep"];
+  string diff_relation = 7 [json_name = "diffRelation"];
+  string diff_relation_evidence = 8 [json_name = "diffRelationEvidence"];
+  string flake_assessment = 9 [json_name = "flakeAssessment"];
+  string flake_evidence = 10 [json_name = "flakeEvidence"];
+  bool rerun_available = 11 [json_name = "rerunAvailable"];
+  string rerun_evidence = 12 [json_name = "rerunEvidence"];
+  string recommended_action = 13 [json_name = "recommendedAction"];
+  string recommended_action_evidence = 14 [json_name = "recommendedActionEvidence"];
+  string confidence = 15 [json_name = "confidence"];
+}
+
+message RecordCiInvestigationOverall {
+  string summary = 1 [json_name = "summary"];
+  repeated string themes = 2 [json_name = "themes"];
+  string recommended_action = 3 [json_name = "recommendedAction"];
+  string recommended_action_evidence = 4 [json_name = "recommendedActionEvidence"];
+  repeated string check_keys = 5 [json_name = "checkKeys"];
+}

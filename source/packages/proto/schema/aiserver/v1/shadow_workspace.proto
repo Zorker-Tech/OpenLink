@@ -1,0 +1,159 @@
+// aiserver.v1 — aiserver/v1/shadow_workspace messages, enums and services.
+//
+// Generated from this repository's schema (source/packages/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package aiserver.v1;
+
+import "agent/v1/diagnostics_exec.proto";
+import "aiserver/v1/repository.proto";
+import "aiserver/v1/tools.proto";
+import "aiserver/v1/utils.proto";
+
+message GetLintsForChangeResponse {
+  repeated .aiserver.v1.GetLintsForChangeResponse.Lint lints = 1 [json_name = "lints"];
+  message Lint {
+    string message = 1 [json_name = "message"];
+    string severity = 2 [json_name = "severity"];
+    string relative_workspace_path = 3 [json_name = "relativeWorkspacePath"];
+    int32 start_line_number_one_indexed = 4 [json_name = "startLineNumberOneIndexed"];
+    int32 start_column_one_indexed = 5 [json_name = "startColumnOneIndexed"];
+    int32 end_line_number_inclusive_one_indexed = 6 [json_name = "endLineNumberInclusiveOneIndexed"];
+    int32 end_column_one_indexed = 7 [json_name = "endColumnOneIndexed"];
+    repeated .aiserver.v1.GetLintsForChangeResponse.Lint.QuickFix quick_fixes = 9 [json_name = "quickFixes"];
+    message QuickFix {
+      string message = 1 [json_name = "message"];
+      string kind = 2 [json_name = "kind"];
+      bool is_preferred = 3 [json_name = "isPreferred"];
+      repeated .aiserver.v1.GetLintsForChangeResponse.Lint.QuickFix.Edit edits = 4 [json_name = "edits"];
+      message Edit {
+        string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+        string text = 2 [json_name = "text"];
+        int32 start_line_number_one_indexed = 3 [json_name = "startLineNumberOneIndexed"];
+        int32 start_column_one_indexed = 4 [json_name = "startColumnOneIndexed"];
+        int32 end_line_number_inclusive_one_indexed = 5 [json_name = "endLineNumberInclusiveOneIndexed"];
+        int32 end_column_one_indexed = 6 [json_name = "endColumnOneIndexed"];
+      }
+    }
+  }
+}
+
+message GetLintsForChangeRequest {
+  repeated .aiserver.v1.GetLintsForChangeRequest.File files = 1 [json_name = "files"];
+  bool include_quick_fixes = 2 [json_name = "includeQuickFixes"];
+  bool do_not_use_in_prod_new_files_should_be_temporarily_created_for_increased_accuracy = 3 [json_name = "doNotUseInProdNewFilesShouldBeTemporarilyCreatedForIncreasedAccuracy"];
+  message File {
+    string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+    string initial_content = 2 [json_name = "initialContent"];
+    string final_content = 3 [json_name = "finalContent"];
+    .aiserver.v1.GetLintsForChangeRequest.File.RangeCollection get_all_lints_not_just_delta_lints_for_ranges_in_final_model = 4 [json_name = "getAllLintsNotJustDeltaLintsForRangesInFinalModel"];
+    message IRange {
+      int32 start_line_number = 1 [json_name = "startLineNumber"];
+      int32 start_column = 2 [json_name = "startColumn"];
+      int32 end_line_number = 3 [json_name = "endLineNumber"];
+      int32 end_column = 4 [json_name = "endColumn"];
+    }
+    message RangeCollection {
+      repeated .aiserver.v1.GetLintsForChangeRequest.File.IRange ranges = 1 [json_name = "ranges"];
+    }
+  }
+}
+
+message ShadowHealthCheckRequest {
+}
+
+message ShadowHealthCheckResponse {
+}
+
+message SwCallClientSideV2ToolRequest {
+  .aiserver.v1.ClientSideToolV2Call tool_call = 1 [json_name = "toolCall"];
+  string composer_id = 2 [json_name = "composerId"];
+}
+
+message SwCallClientSideV2ToolResponse {
+  .aiserver.v1.ClientSideToolV2Result tool_result = 1 [json_name = "toolResult"];
+}
+
+message SwCallDiagnosticsExecutorRequest {
+  .agent.v1.DiagnosticsArgs diagnostics_args = 1 [json_name = "diagnosticsArgs"];
+}
+
+message SwCallDiagnosticsExecutorResponse {
+  .agent.v1.DiagnosticsResult diagnostics_result = 1 [json_name = "diagnosticsResult"];
+}
+
+message SwCompileRepoIncludeExcludePatternsRequest {
+  string include_pattern = 1 [json_name = "includePattern"];
+  string exclude_pattern = 2 [json_name = "excludePattern"];
+  string path_encryption_key = 3 [json_name = "pathEncryptionKey"];
+  .aiserver.v1.RepositoryInfo repository_info = 4 [json_name = "repositoryInfo"];
+}
+
+message SwCompileRepoIncludeExcludePatternsResponse {
+  string glob_filter = 1 [json_name = "globFilter"];
+  string not_glob_filter = 2 [json_name = "notGlobFilter"];
+}
+
+message SwGetEnvironmentInfoRequest {
+}
+
+message SwGetEnvironmentInfoResponse {
+  .aiserver.v1.EnvironmentInfo environment_info = 1 [json_name = "environmentInfo"];
+}
+
+message SwGetExplicitContextRequest {
+}
+
+message SwGetExplicitContextResponse {
+  .aiserver.v1.ExplicitContext explicit_context = 1 [json_name = "explicitContext"];
+}
+
+message SwGetLinterErrorsRequest {
+  repeated string absolute_paths = 1 [json_name = "absolutePaths"];
+}
+
+message SwGetLinterErrorsResponse {
+  repeated .aiserver.v1.LinterErrors linter_errors = 1 [json_name = "linterErrors"];
+}
+
+message SwGetMcpToolsRequest {
+  string browser_integration_preference = 1 [json_name = "browserIntegrationPreference"];
+}
+
+message SwGetMcpToolsResponse {
+  repeated .aiserver.v1.MCPParams.Tool tools = 1 [json_name = "tools"];
+}
+
+message SwProvideTemporaryAccessTokenRequest {
+  string access_token = 1 [json_name = "accessToken"];
+}
+
+message SwProvideTemporaryAccessTokenResponse {
+}
+
+message SwSyncIndexRequest {
+  .aiserver.v1.RepositoryInfo repository_info = 1 [json_name = "repositoryInfo"];
+  string path_encryption_key = 2 [json_name = "pathEncryptionKey"];
+  double indexing_progress_threshold = 3 [json_name = "indexingProgressThreshold"];
+}
+
+message SwSyncIndexResponse {
+}
+
+message SwTrackModelRequest {
+  string absolute_path = 1 [json_name = "absolutePath"];
+}
+
+message SwTrackModelResponse {
+}
+
+message SwWriteTextFileWithLintsRequest {
+  string absolute_path = 1 [json_name = "absolutePath"];
+  string new_contents = 2 [json_name = "newContents"];
+}
+
+message SwWriteTextFileWithLintsResponse {
+  repeated .aiserver.v1.LinterError new_linter_errors = 1 [json_name = "newLinterErrors"];
+}

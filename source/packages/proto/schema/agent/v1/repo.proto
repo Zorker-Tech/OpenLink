@@ -1,0 +1,21 @@
+// agent.v1 — agent/v1/repo messages, enums and services.
+//
+// Generated from this repository's schema (source/packages/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+message RepositoryIndexingInfo {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+  repeated string remote_urls = 2 [json_name = "remoteUrls"];
+  repeated string remote_names = 3 [json_name = "remoteNames"];
+  string repo_name = 4 [json_name = "repoName"];
+  string repo_owner = 5 [json_name = "repoOwner"];
+  bool is_tracked = 6 [json_name = "isTracked"];
+  bool is_local = 7 [json_name = "isLocal"];
+  double orthogonal_transform_seed = 8 [json_name = "orthogonalTransformSeed"];
+  string workspace_uri = 9 [json_name = "workspaceUri"];
+  string path_encryption_key = 10 [json_name = "pathEncryptionKey"];
+}

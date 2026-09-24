@@ -1,0 +1,14 @@
+# How the schema becomes TypeScript: one generated module per .proto, targeting the TypeScript
+# plugin, into ../generated. Run with `pnpm --filter @slate/work-host schema:generate`.
+version: v2
+plugins:
+  - local: protoc-gen-es
+    out: generated
+    opt:
+      - target=ts
+      - import_extension=.ts
+  - local: protoc-gen-connect-es
+    out: generated
+    opt:
+      - target=ts
+      - import_extension=.ts

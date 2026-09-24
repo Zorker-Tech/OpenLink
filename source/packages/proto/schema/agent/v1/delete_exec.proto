@@ -1,0 +1,61 @@
+// agent.v1 — agent/v1/delete_exec messages, enums and services.
+//
+// Generated from this repository's schema (source/packages/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+message DeleteArgs {
+  string path = 1 [json_name = "path"];
+  string tool_call_id = 2 [json_name = "toolCallId"];
+}
+
+message DeleteResult {
+  oneof result {
+    .agent.v1.DeleteSuccess success = 1 [json_name = "success"];
+    .agent.v1.DeleteFileNotFound file_not_found = 2 [json_name = "fileNotFound"];
+    .agent.v1.DeleteNotFile not_file = 3 [json_name = "notFile"];
+    .agent.v1.DeletePermissionDenied permission_denied = 4 [json_name = "permissionDenied"];
+    .agent.v1.DeleteFileBusy file_busy = 5 [json_name = "fileBusy"];
+    .agent.v1.DeleteRejected rejected = 6 [json_name = "rejected"];
+    .agent.v1.DeleteError error = 7 [json_name = "error"];
+  }
+}
+
+message DeleteSuccess {
+  string path = 1 [json_name = "path"];
+  string deleted_file = 2 [json_name = "deletedFile"];
+  int64 file_size = 3 [json_name = "fileSize"];
+  string prev_content = 4 [json_name = "prevContent"];
+}
+
+message DeleteFileNotFound {
+  string path = 1 [json_name = "path"];
+}
+
+message DeleteNotFile {
+  string path = 1 [json_name = "path"];
+  string actual_type = 2 [json_name = "actualType"];
+}
+
+message DeletePermissionDenied {
+  string path = 1 [json_name = "path"];
+  string client_visible_error = 2 [json_name = "clientVisibleError"];
+  bool is_readonly = 3 [json_name = "isReadonly"];
+}
+
+message DeleteFileBusy {
+  string path = 1 [json_name = "path"];
+}
+
+message DeleteRejected {
+  string path = 1 [json_name = "path"];
+  string reason = 2 [json_name = "reason"];
+}
+
+message DeleteError {
+  string path = 1 [json_name = "path"];
+  string error = 2 [json_name = "error"];
+}

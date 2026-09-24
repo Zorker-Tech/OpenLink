@@ -1,0 +1,1172 @@
+// aiserver.v1 — aiserver/v1/cpp messages, enums and services.
+//
+// Generated from this repository's schema (source/packages/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package aiserver.v1;
+
+import "aiserver/v1/bugbot.proto";
+import "aiserver/v1/filesyncserver.proto";
+import "aiserver/v1/lsp_subgraph.proto";
+import "aiserver/v1/repository.proto";
+import "aiserver/v1/utils.proto";
+
+message CppFileDiffHistory {
+  string file_name = 1 [json_name = "fileName"];
+  repeated string diff_history = 2 [json_name = "diffHistory"];
+  repeated double diff_history_timestamps = 3 [json_name = "diffHistoryTimestamps"];
+}
+
+message CppContextItem {
+  string contents = 1 [json_name = "contents"];
+  string symbol = 2 [json_name = "symbol"];
+  string relative_workspace_path = 3 [json_name = "relativeWorkspacePath"];
+  float score = 4 [json_name = "score"];
+}
+
+message BlockDiffPatch {
+  .aiserver.v1.BlockDiffPatch.ModelWindow start_model_window = 1 [json_name = "startModelWindow"];
+  repeated .aiserver.v1.BlockDiffPatch.Change changes = 3 [json_name = "changes"];
+  string relative_path = 4 [json_name = "relativePath"];
+  int32 start_from_change_index = 5 [json_name = "startFromChangeIndex"];
+  string model_uuid = 7 [json_name = "modelUuid"];
+  message ModelWindow {
+    repeated string lines = 1 [json_name = "lines"];
+    int32 start_line_number = 2 [json_name = "startLineNumber"];
+    int32 end_line_number = 3 [json_name = "endLineNumber"];
+  }
+  message Change {
+    string text = 1 [json_name = "text"];
+    .aiserver.v1.IRange range = 2 [json_name = "range"];
+  }
+}
+
+message CppParameterHint {
+  string label = 1 [json_name = "label"];
+  string documentation = 2 [json_name = "documentation"];
+}
+
+message CppIntentInfo {
+  string source = 1 [json_name = "source"];
+}
+
+message IRange {
+  int32 start_line_number = 1 [json_name = "startLineNumber"];
+  int32 start_column = 2 [json_name = "startColumn"];
+  int32 end_line_number = 3 [json_name = "endLineNumber"];
+  int32 end_column = 4 [json_name = "endColumn"];
+}
+
+message AcceptCursorPredictionEvent {
+  .aiserver.v1.CursorPrediction cursor_prediction = 1 [json_name = "cursorPrediction"];
+  .aiserver.v1.PointInTimeModel point_in_time_model = 2 [json_name = "pointInTimeModel"];
+}
+
+message AddTabRequestToEvalRequest {
+  string request_id = 1 [json_name = "requestId"];
+  string expected_behavior = 2 [json_name = "expectedBehavior"];
+}
+
+message AddTabRequestToEvalResponse {
+}
+
+message AdditionalFile {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+  bool is_open = 2 [json_name = "isOpen"];
+  repeated string visible_range_content = 3 [json_name = "visibleRangeContent"];
+  double last_viewed_at = 4 [json_name = "lastViewedAt"];
+  repeated int32 start_line_number_one_indexed = 5 [json_name = "startLineNumberOneIndexed"];
+  repeated .aiserver.v1.LineRange visible_ranges = 6 [json_name = "visibleRanges"];
+}
+
+message AiRequestEvent {
+  .aiserver.v1.AiRequestEvent.RequestType request_type = 1 [json_name = "requestType"];
+  string request_id = 2 [json_name = "requestId"];
+  .aiserver.v1.AiRequestEvent.Source source = 3 [json_name = "source"];
+  enum RequestType {
+    REQUEST_TYPE_UNSPECIFIED = 0;
+    REQUEST_TYPE_START = 1;
+    REQUEST_TYPE_END = 2;
+  }
+  enum Source {
+    SOURCE_UNSPECIFIED = 0;
+    SOURCE_CHAT = 1;
+    SOURCE_CMDK = 2;
+    SOURCE_APPLY = 3;
+    SOURCE_COMPOSER = 4;
+    SOURCE_TASK = 5;
+    SOURCE_CODE_INTERPRETER = 6;
+    SOURCE_INTERPRETER_EXECUTION = 7;
+    SOURCE_BUGBOT = 8;
+  }
+}
+
+message AnythingQuickAccessItem {
+  oneof item {
+    .aiserver.v1.AnythingQuickAccessItem.Resource resource = 1 [json_name = "resource"];
+    string separator = 2 [json_name = "separator"];
+    string section = 3 [json_name = "section"];
+  }
+  message Resource {
+    .aiserver.v1.PointInTimeModel model = 1 [json_name = "model"];
+    .aiserver.v1.IRange range = 2 [json_name = "range"];
+    string uri = 3 [json_name = "uri"];
+  }
+}
+
+message AnythingQuickAccessSelectionEvent {
+  string query = 1 [json_name = "query"];
+  repeated .aiserver.v1.AnythingQuickAccessItem items = 2 [json_name = "items"];
+  repeated int32 selected_indices = 3 [json_name = "selectedIndices"];
+}
+
+message AvailableCppModelsRequest {
+}
+
+message AvailableCppModelsResponse {
+  repeated string models = 1 [json_name = "models"];
+  string default_model = 2 [json_name = "defaultModel"];
+}
+
+message BackgroundFilesEvent {
+  repeated .aiserver.v1.BackgroundFilesEvent.BackgroundFile files = 2 [json_name = "files"];
+  message BackgroundFile {
+    string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+    string contents = 2 [json_name = "contents"];
+    string hash = 3 [json_name = "hash"];
+    string full_path = 4 [json_name = "fullPath"];
+  }
+}
+
+message BeforeAiEditEvent {
+  string tool_call_id = 2 [json_name = "toolCallId"];
+  string request_id = 3 [json_name = "requestId"];
+  string tool_name = 4 [json_name = "toolName"];
+  oneof model {
+    .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
+    string relative_workspace_path = 5 [json_name = "relativeWorkspacePath"];
+  }
+}
+
+message BrowserEvent {
+  string view_id = 1 [json_name = "viewId"];
+  oneof event {
+    .aiserver.v1.BrowserEvent.TabCreated tab_created = 2 [json_name = "tabCreated"];
+    .aiserver.v1.BrowserEvent.TabClosed tab_closed = 3 [json_name = "tabClosed"];
+    .aiserver.v1.BrowserEvent.Navigation navigation = 4 [json_name = "navigation"];
+    .aiserver.v1.BrowserEvent.ToolAction tool_action = 5 [json_name = "toolAction"];
+  }
+  message Navigation {
+    string url = 1 [json_name = "url"];
+    string title = 2 [json_name = "title"];
+  }
+  message TabClosed {
+  }
+  message TabCreated {
+  }
+  message ToolAction {
+    string tool_name = 1 [json_name = "toolName"];
+    string args_json = 2 [json_name = "argsJson"];
+    bool success = 3 [json_name = "success"];
+    string post_snapshot_yaml = 4 [json_name = "postSnapshotYaml"];
+    string post_url = 5 [json_name = "postUrl"];
+    string post_title = 6 [json_name = "postTitle"];
+    .aiserver.v1.BrowserEvent.ToolAction.Source source = 7 [json_name = "source"];
+    enum Source {
+      SOURCE_UNSPECIFIED = 0;
+      SOURCE_MCP_TOOL = 1;
+      SOURCE_MANUAL_USER = 2;
+    }
+  }
+}
+
+message BugBotEvent {
+  string request_id = 1 [json_name = "requestId"];
+  oneof event_type {
+    .aiserver.v1.BugBotEvent.Started started = 2 [json_name = "started"];
+    .aiserver.v1.BugBotEvent.ReportsGenerated reports_generated = 3 [json_name = "reportsGenerated"];
+    .aiserver.v1.BugBotEvent.PressedFixInComposer pressed_fix_in_composer = 4 [json_name = "pressedFixInComposer"];
+    .aiserver.v1.BugBotEvent.PressedOpenInEditor pressed_open_in_editor = 5 [json_name = "pressedOpenInEditor"];
+    .aiserver.v1.BugBotEvent.ViewedReport viewed_report = 6 [json_name = "viewedReport"];
+    .aiserver.v1.BugBotEvent.UserFeedback user_feedback = 7 [json_name = "userFeedback"];
+    .aiserver.v1.BugBotEvent.PressedAddToChat pressed_add_to_chat = 8 [json_name = "pressedAddToChat"];
+    .aiserver.v1.BugBotEvent.BackgroundIntervalStarted background_interval_started = 9 [json_name = "backgroundIntervalStarted"];
+    .aiserver.v1.BugBotEvent.BackgroundIntervalEnded background_interval_ended = 10 [json_name = "backgroundIntervalEnded"];
+    .aiserver.v1.BugBotEvent.BackgroundIntervalInterrupted background_interval_interrupted = 11 [json_name = "backgroundIntervalInterrupted"];
+    .aiserver.v1.BugBotEvent.BackgroundIntervalErrored background_interval_errored = 12 [json_name = "backgroundIntervalErrored"];
+  }
+  message BackgroundIntervalEnded {
+    bool success = 1 [json_name = "success"];
+  }
+  message BackgroundIntervalErrored {
+    string error_message = 1 [json_name = "errorMessage"];
+  }
+  message BackgroundIntervalInterrupted {
+    .aiserver.v1.BugBotEvent.BackgroundIntervalInterruptedReason reason = 1 [json_name = "reason"];
+  }
+  enum BackgroundIntervalInterruptedReason {
+    BACKGROUND_INTERVAL_INTERRUPTED_REASON_UNSPECIFIED = 0;
+    BACKGROUND_INTERVAL_INTERRUPTED_REASON_DISABLED = 1;
+    BACKGROUND_INTERVAL_INTERRUPTED_REASON_TOO_RECENT = 2;
+    BACKGROUND_INTERVAL_INTERRUPTED_REASON_UNVIEWED_BUG_REPORTS = 3;
+    BACKGROUND_INTERVAL_INTERRUPTED_REASON_NOT_IN_GIT_REPO = 4;
+    BACKGROUND_INTERVAL_INTERRUPTED_REASON_DEFAULT_BRANCH_IS_NOT_CURRENT_BRANCH = 5;
+    BACKGROUND_INTERVAL_INTERRUPTED_REASON_NO_GIT_USER = 6;
+    BACKGROUND_INTERVAL_INTERRUPTED_REASON_NO_LAST_COMMIT = 7;
+    BACKGROUND_INTERVAL_INTERRUPTED_REASON_LAST_COMMIT_NOT_MADE_BY_USER = 8;
+    BACKGROUND_INTERVAL_INTERRUPTED_REASON_LAST_COMMIT_TOO_OLD = 9;
+    BACKGROUND_INTERVAL_INTERRUPTED_REASON_DIFF_TOO_LONG = 10;
+    BACKGROUND_INTERVAL_INTERRUPTED_REASON_DIFF_TOO_SHORT = 11;
+    BACKGROUND_INTERVAL_INTERRUPTED_REASON_TELEMETRY_UNHEALTHY = 12;
+  }
+  message BackgroundIntervalStarted {
+  }
+  message PressedAddToChat {
+    string bug_report_id = 1 [json_name = "bugReportId"];
+  }
+  message PressedFixInComposer {
+    string bug_report_id = 1 [json_name = "bugReportId"];
+  }
+  message PressedOpenInEditor {
+    .aiserver.v1.BugLocation bug_location = 1 [json_name = "bugLocation"];
+    string bug_report_id = 2 [json_name = "bugReportId"];
+  }
+  message ReportsGenerated {
+    .aiserver.v1.BugReports bug_reports = 1 [json_name = "bugReports"];
+  }
+  message Started {
+  }
+  message UserFeedback {
+    string bug_report_id = 1 [json_name = "bugReportId"];
+    string feedback = 2 [json_name = "feedback"];
+  }
+  message ViewedReport {
+    int32 seconds_viewed = 1 [json_name = "secondsViewed"];
+    repeated .aiserver.v1.BugBotEvent.ViewedReport.ReportView report_views = 2 [json_name = "reportViews"];
+    message ReportView {
+      string bug_report_id = 1 [json_name = "bugReportId"];
+      double view_percentage = 2 [json_name = "viewPercentage"];
+      double text_percentage = 3 [json_name = "textPercentage"];
+    }
+  }
+}
+
+message BugBotLinterEvent {
+  string request_id = 1 [json_name = "requestId"];
+  .aiserver.v1.PointInTimeModel point_in_time_model = 2 [json_name = "pointInTimeModel"];
+  oneof event_type {
+    .aiserver.v1.BugBotLinterEvent.LintGenerated lint_generated = 3 [json_name = "lintGenerated"];
+    .aiserver.v1.BugBotLinterEvent.LintDismissed lint_dismissed = 4 [json_name = "lintDismissed"];
+    .aiserver.v1.BugBotLinterEvent.UserFeedback user_feedback = 5 [json_name = "userFeedback"];
+    .aiserver.v1.BugBotLinterEvent.ViewedReport viewed_report = 6 [json_name = "viewedReport"];
+    .aiserver.v1.BugBotLinterEvent.UnviewedReport unviewed_report = 7 [json_name = "unviewedReport"];
+    .aiserver.v1.BugBotLinterEvent.Started started = 8 [json_name = "started"];
+    .aiserver.v1.BugBotLinterEvent.NotShownBecauseHeuristic not_shown_because_heuristic = 9 [json_name = "notShownBecauseHeuristic"];
+  }
+  message LintDismissed {
+    string bug_report_id = 1 [json_name = "bugReportId"];
+  }
+  message LintGenerated {
+    .aiserver.v1.BugReport bug_report = 1 [json_name = "bugReport"];
+  }
+  message NotShownBecauseHeuristic {
+    .aiserver.v1.BugBotLinterEvent.NotShownBecauseHeuristic.Heuristic heuristic = 1 [json_name = "heuristic"];
+    enum Heuristic {
+      HEURISTIC_UNSPECIFIED = 0;
+      HEURISTIC_LINT_OVERLAP = 1;
+      HEURISTIC_LINES_MISMATCH = 2;
+    }
+  }
+  message Started {
+  }
+  message UnviewedReport {
+    string bug_report_id = 1 [json_name = "bugReportId"];
+  }
+  message UserFeedback {
+    string bug_report_id = 1 [json_name = "bugReportId"];
+    string feedback = 2 [json_name = "feedback"];
+  }
+  message ViewedReport {
+    string bug_report_id = 1 [json_name = "bugReportId"];
+  }
+}
+
+message ChatEvent {
+  string request_id = 1 [json_name = "requestId"];
+  oneof event_type {
+    .aiserver.v1.ChatEvent.SubmitPrompt submit_prompt = 2 [json_name = "submitPrompt"];
+    .aiserver.v1.ChatEvent.EndOfAnyGeneration end_of_any_generation = 3 [json_name = "endOfAnyGeneration"];
+    .aiserver.v1.ChatEvent.EndOfUninterruptedGeneration end_of_uninterrupted_generation = 4 [json_name = "endOfUninterruptedGeneration"];
+  }
+  message EndOfAnyGeneration {
+  }
+  message EndOfUninterruptedGeneration {
+  }
+  message SubmitPrompt {
+    string prompt = 1 [json_name = "prompt"];
+  }
+}
+
+message CmdKEvent {
+  .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
+  string request_id = 2 [json_name = "requestId"];
+  string prompt_bar_id = 20 [json_name = "promptBarId"];
+  oneof event_type {
+    .aiserver.v1.CmdKEvent.SubmitPrompt submit_prompt = 3 [json_name = "submitPrompt"];
+    .aiserver.v1.CmdKEvent.EndOfGeneration end_of_generation = 4 [json_name = "endOfGeneration"];
+    .aiserver.v1.CmdKEvent.InterruptGeneration interrupt_generation = 5 [json_name = "interruptGeneration"];
+    .aiserver.v1.CmdKEvent.AcceptDiffs accept_all = 6 [json_name = "acceptAll"];
+    .aiserver.v1.CmdKEvent.RejectDiffs reject_all = 7 [json_name = "rejectAll"];
+    .aiserver.v1.CmdKEvent.RejectPartialDiff reject_partial_diff = 8 [json_name = "rejectPartialDiff"];
+    .aiserver.v1.CmdKEvent.AcceptPartialDiff accept_partial_diff = 9 [json_name = "acceptPartialDiff"];
+    .aiserver.v1.CmdKEvent.AfterReject after_reject = 10 [json_name = "afterReject"];
+  }
+  message AcceptDiffs {
+  }
+  message AcceptPartialDiff {
+    .aiserver.v1.IRange green_range = 1 [json_name = "greenRange"];
+    repeated string green_lines = 2 [json_name = "greenLines"];
+    repeated string red_lines = 3 [json_name = "redLines"];
+  }
+  message AfterReject {
+  }
+  message EndOfGeneration {
+  }
+  message InterruptGeneration {
+  }
+  message RejectDiffs {
+    string actor_request_id = 1 [json_name = "actorRequestId"];
+    bool silent = 2 [json_name = "silent"];
+  }
+  message RejectPartialDiff {
+    .aiserver.v1.IRange green_range = 1 [json_name = "greenRange"];
+    repeated string green_lines = 2 [json_name = "greenLines"];
+    repeated string red_lines = 3 [json_name = "redLines"];
+  }
+  message SubmitPrompt {
+    .aiserver.v1.IRange original_range = 1 [json_name = "originalRange"];
+    string original_text = 2 [json_name = "originalText"];
+    string prompt = 3 [json_name = "prompt"];
+  }
+}
+
+message CppAcceptEvent {
+  .aiserver.v1.CppSuggestion cpp_suggestion = 1 [json_name = "cppSuggestion"];
+}
+
+message CppAcceptEventNew {
+  .aiserver.v1.CurrentlyShownCppSuggestion cpp_suggestion = 1 [json_name = "cppSuggestion"];
+  .aiserver.v1.PointInTimeModel point_in_time_model = 7 [json_name = "pointInTimeModel"];
+}
+
+message CppAppendRequest {
+  bytes changes = 1 [json_name = "changes"];
+}
+
+message CppAppendResponse {
+  bool success = 1 [json_name = "success"];
+}
+
+message CppChangeQuickActionEvent {
+  .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
+  repeated .aiserver.v1.CppQuickAction added = 2 [json_name = "added"];
+  repeated .aiserver.v1.CppQuickAction removed = 3 [json_name = "removed"];
+  repeated .aiserver.v1.CppQuickAction actions = 4 [json_name = "actions"];
+}
+
+message CppConfigRequest {
+  bool is_nightly = 1 [json_name = "isNightly"];
+  string model = 2 [json_name = "model"];
+  bool supports_cpt = 3 [json_name = "supportsCpt"];
+}
+
+message CppConfigResponse {
+  int32 above_radius = 1 [json_name = "aboveRadius"];
+  int32 below_radius = 2 [json_name = "belowRadius"];
+  .aiserver.v1.CppConfigResponse.MergeBehavior merge_behavior = 4 [json_name = "mergeBehavior"];
+  bool is_on = 5 [json_name = "isOn"];
+  bool is_ghost_text = 6 [json_name = "isGhostText"];
+  bool should_let_user_enable_cpp_even_if_not_pro = 7 [json_name = "shouldLetUserEnableCppEvenIfNotPro"];
+  repeated .aiserver.v1.CppConfigResponse.Heuristic heuristics = 8 [json_name = "heuristics"];
+  repeated string exclude_recently_viewed_files_patterns = 9 [json_name = "excludeRecentlyViewedFilesPatterns"];
+  bool enable_rvf_tracking = 10 [json_name = "enableRvfTracking"];
+  int32 global_debounce_duration_millis = 11 [json_name = "globalDebounceDurationMillis"];
+  int32 client_debounce_duration_millis = 12 [json_name = "clientDebounceDurationMillis"];
+  string cpp_url = 13 [json_name = "cppUrl"];
+  bool use_whitespace_diff_history = 14 [json_name = "useWhitespaceDiffHistory"];
+  .aiserver.v1.CppConfigResponse.ImportPredictionConfig import_prediction_config = 15 [json_name = "importPredictionConfig"];
+  bool enable_filesync_debounce_skipping = 16 [json_name = "enableFilesyncDebounceSkipping"];
+  float check_filesync_hash_percent = 17 [json_name = "checkFilesyncHashPercent"];
+  string geo_cpp_backend_url = 18 [json_name = "geoCppBackendUrl"];
+  .aiserver.v1.CppConfigResponse.RecentlyRejectedEditThresholds recently_rejected_edit_thresholds = 19 [json_name = "recentlyRejectedEditThresholds"];
+  bool is_fused_cursor_prediction_model = 20 [json_name = "isFusedCursorPredictionModel"];
+  bool include_unchanged_lines = 21 [json_name = "includeUnchangedLines"];
+  bool should_fetch_rvf_text = 22 [json_name = "shouldFetchRvfText"];
+  int32 max_number_of_cleared_suggestions_since_last_accept = 23 [json_name = "maxNumberOfClearedSuggestionsSinceLastAccept"];
+  .aiserver.v1.CppConfigResponse.SuggestionHintConfig suggestion_hint_config = 24 [json_name = "suggestionHintConfig"];
+  bool allows_tab_chunks = 25 [json_name = "allowsTabChunks"];
+  int32 tab_context_refresh_debounce_ms = 26 [json_name = "tabContextRefreshDebounceMs"];
+  int32 tab_context_refresh_editor_change_debounce_ms = 27 [json_name = "tabContextRefreshEditorChangeDebounceMs"];
+  enum Heuristic {
+    HEURISTIC_UNSPECIFIED = 0;
+    HEURISTIC_LOTS_OF_ADDED_TEXT = 1;
+    HEURISTIC_DUPLICATING_LINE_AFTER_SUGGESTION = 2;
+    HEURISTIC_DUPLICATING_MULTIPLE_LINES_AFTER_SUGGESTION = 3;
+    HEURISTIC_REVERTING_USER_CHANGE = 4;
+    HEURISTIC_OUTPUT_EXTENDS_BEYOND_RANGE_AND_IS_REPEATED = 5;
+    HEURISTIC_SUGGESTING_RECENTLY_REJECTED_EDIT = 6;
+  }
+  message ImportPredictionConfig {
+    bool is_disabled_by_backend = 1 [json_name = "isDisabledByBackend"];
+    bool should_turn_on_automatically = 2 [json_name = "shouldTurnOnAutomatically"];
+    bool python_enabled = 3 [json_name = "pythonEnabled"];
+  }
+  message MergeBehavior {
+    string type = 1 [json_name = "type"];
+    int32 limit = 2 [json_name = "limit"];
+    int32 radius = 3 [json_name = "radius"];
+  }
+  message RecentlyRejectedEditThresholds {
+    int32 hard_reject_threshold = 1 [json_name = "hardRejectThreshold"];
+    int32 soft_reject_threshold = 2 [json_name = "softRejectThreshold"];
+  }
+  message SuggestionHintConfig {
+    repeated string important_lsp_extensions = 1 [json_name = "importantLspExtensions"];
+    repeated string enabled_for_path_extensions = 2 [json_name = "enabledForPathExtensions"];
+  }
+}
+
+message CppCopyEvent {
+  string clipboard_contents = 1 [json_name = "clipboardContents"];
+}
+
+message CppDebouncedCursorMovementEvent {
+  .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
+  .aiserver.v1.OneIndexedPosition cursor_position = 2 [json_name = "cursorPosition"];
+}
+
+message CppEditHistoryStatusRequest {
+}
+
+message CppEditHistoryStatusResponse {
+  bool on = 1 [json_name = "on"];
+  bool only_if_explicit = 2 [json_name = "onlyIfExplicit"];
+}
+
+message CppEditorChangedEvent {
+  .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
+  .aiserver.v1.OneIndexedPosition cursor_position = 2 [json_name = "cursorPosition"];
+  repeated .aiserver.v1.IRange visible_ranges = 3 [json_name = "visibleRanges"];
+  string editor_id = 4 [json_name = "editorId"];
+}
+
+enum CppFate {
+  CPP_FATE_UNSPECIFIED = 0;
+  CPP_FATE_ACCEPT = 1;
+  CPP_FATE_REJECT = 2;
+  CPP_FATE_PARTIAL_ACCEPT = 3;
+}
+
+message CppHistoryAppendEvent {
+  string final_model_hash = 10 [json_name = "finalModelHash"];
+  oneof event {
+    .aiserver.v1.ModelChange model_change = 1 [json_name = "modelChange"];
+    .aiserver.v1.CppAcceptEvent accept_event = 2 [json_name = "acceptEvent"];
+    .aiserver.v1.CppRejectEvent reject_event = 3 [json_name = "rejectEvent"];
+    .aiserver.v1.CppManualTriggerEvent manual_trigger_event = 4 [json_name = "manualTriggerEvent"];
+  }
+}
+
+message CppLinterErrorEvent {
+  .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
+  repeated .aiserver.v1.LinterError added_errors = 2 [json_name = "addedErrors"];
+  repeated .aiserver.v1.LinterError removed_errors = 3 [json_name = "removedErrors"];
+  repeated .aiserver.v1.LinterError errors = 4 [json_name = "errors"];
+}
+
+message CppManualTriggerEvent {
+  .aiserver.v1.CursorPosition position = 2 [json_name = "position"];
+}
+
+message CppManualTriggerEventNew {
+  int32 line_number_one_indexed = 1 [json_name = "lineNumberOneIndexed"];
+  int32 column_number_one_indexed = 2 [json_name = "columnNumberOneIndexed"];
+  .aiserver.v1.PointInTimeModel point_in_time_model = 7 [json_name = "pointInTimeModel"];
+}
+
+message CppPartialAcceptEvent {
+  .aiserver.v1.CurrentlyShownCppSuggestion cpp_suggestion = 1 [json_name = "cppSuggestion"];
+  .aiserver.v1.Edit edit = 2 [json_name = "edit"];
+  .aiserver.v1.PointInTimeModel point_in_time_model = 3 [json_name = "pointInTimeModel"];
+}
+
+message CppQuickAction {
+  string title = 1 [json_name = "title"];
+  repeated .aiserver.v1.CppQuickAction.Edit edits = 2 [json_name = "edits"];
+  bool is_preferred = 3 [json_name = "isPreferred"];
+  .aiserver.v1.CppQuickActionCommand command = 4 [json_name = "command"];
+  message Edit {
+    string text = 1 [json_name = "text"];
+    .aiserver.v1.IRange range = 2 [json_name = "range"];
+  }
+}
+
+message CppQuickActionCommand {
+  string title = 1 [json_name = "title"];
+  string id = 2 [json_name = "id"];
+  repeated string arguments = 3 [json_name = "arguments"];
+}
+
+message CppQuickActionFireEvent {
+  .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
+  oneof action_identifier {
+    .aiserver.v1.CppQuickActionCommand quick_action_command = 2 [json_name = "quickActionCommand"];
+    .aiserver.v1.CppQuickAction quick_action_event = 3 [json_name = "quickActionEvent"];
+  }
+}
+
+message CppRejectEvent {
+  .aiserver.v1.CppSuggestion cpp_suggestion = 1 [json_name = "cppSuggestion"];
+}
+
+message CppRejectEventNew {
+  .aiserver.v1.CurrentlyShownCppSuggestion cpp_suggestion = 1 [json_name = "cppSuggestion"];
+  .aiserver.v1.PointInTimeModel point_in_time_model = 7 [json_name = "pointInTimeModel"];
+}
+
+message CppSessionEvent {
+  double performance_now_timestamp = 5 [json_name = "performanceNowTimestamp"];
+  double performance_time_origin = 25 [json_name = "performanceTimeOrigin"];
+  int64 global_index = 41 [json_name = "globalIndex"];
+  double performance_now_flush_time = 42 [json_name = "performanceNowFlushTime"];
+  int32 event_index = 43 [json_name = "eventIndex"];
+  int32 flush_index = 44 [json_name = "flushIndex"];
+  int32 global_index_v2 = 45 [json_name = "globalIndexV2"];
+  oneof event {
+    .aiserver.v1.CppAcceptEventNew accept_event = 2 [json_name = "acceptEvent"];
+    .aiserver.v1.CppRejectEventNew reject_event = 3 [json_name = "rejectEvent"];
+    .aiserver.v1.CppManualTriggerEventNew manual_trigger_event = 4 [json_name = "manualTriggerEvent"];
+    .aiserver.v1.CppStoppedTrackingModelEvent stopped_tracking_model_event = 6 [json_name = "stoppedTrackingModelEvent"];
+    .aiserver.v1.CppSuggestEvent suggest_event = 7 [json_name = "suggestEvent"];
+    .aiserver.v1.CppLinterErrorEvent linter_error_event = 8 [json_name = "linterErrorEvent"];
+    .aiserver.v1.CppDebouncedCursorMovementEvent debounced_cursor_movement_event = 9 [json_name = "debouncedCursorMovementEvent"];
+    .aiserver.v1.CppEditorChangedEvent editor_changed_event = 10 [json_name = "editorChangedEvent"];
+    .aiserver.v1.CppCopyEvent copy_event = 11 [json_name = "copyEvent"];
+    .aiserver.v1.CppChangeQuickActionEvent quick_action_event = 13 [json_name = "quickActionEvent"];
+    .aiserver.v1.CppQuickActionFireEvent quick_action_fire_event = 14 [json_name = "quickActionFireEvent"];
+    .aiserver.v1.ModelOpenedEvent model_opened_event = 15 [json_name = "modelOpenedEvent"];
+    .aiserver.v1.BackgroundFilesEvent background_files_event = 16 [json_name = "backgroundFilesEvent"];
+    .aiserver.v1.CmdKEvent cmd_k_event = 17 [json_name = "cmdKEvent"];
+    .aiserver.v1.ChatEvent chat_event = 18 [json_name = "chatEvent"];
+    .aiserver.v1.AiRequestEvent ai_event = 19 [json_name = "aiEvent"];
+    .aiserver.v1.ScrollEvent scroll_event = 21 [json_name = "scrollEvent"];
+    .aiserver.v1.EditorCloseEvent editor_close_event = 22 [json_name = "editorCloseEvent"];
+    .aiserver.v1.TabCloseEvent tab_close_event = 23 [json_name = "tabCloseEvent"];
+    .aiserver.v1.CppPartialAcceptEvent partial_accept_event = 26 [json_name = "partialAcceptEvent"];
+    .aiserver.v1.AcceptCursorPredictionEvent accept_cursor_prediction_event = 27 [json_name = "acceptCursorPredictionEvent"];
+    .aiserver.v1.RejectCursorPredictionEvent reject_cursor_prediction_event = 28 [json_name = "rejectCursorPredictionEvent"];
+    .aiserver.v1.SuggestCursorPredictionEvent suggest_cursor_prediction_event = 29 [json_name = "suggestCursorPredictionEvent"];
+    .aiserver.v1.CppTriggerEvent cpp_trigger_event = 30 [json_name = "cppTriggerEvent"];
+    .aiserver.v1.FinishedCppGenerationEvent finished_cpp_generation_event = 31 [json_name = "finishedCppGenerationEvent"];
+    .aiserver.v1.BugBotEvent bug_bot_event = 32 [json_name = "bugBotEvent"];
+    .aiserver.v1.ModelAddedEvent model_added_event = 33 [json_name = "modelAddedEvent"];
+    .aiserver.v1.BugBotLinterEvent bug_bot_linter_event = 34 [json_name = "bugBotLinterEvent"];
+    .aiserver.v1.AnythingQuickAccessSelectionEvent anything_quick_access_selection_event = 35 [json_name = "anythingQuickAccessSelectionEvent"];
+    .aiserver.v1.LspSuggestionEvent lsp_suggestion_event = 36 [json_name = "lspSuggestionEvent"];
+    .aiserver.v1.NtpEvent ntp_event = 37 [json_name = "ntpEvent"];
+    .aiserver.v1.RepoEvent repo_event = 38 [json_name = "repoEvent"];
+    .aiserver.v1.GitEvent git_event = 39 [json_name = "gitEvent"];
+    .aiserver.v1.ToolCallEvent tool_call_event = 40 [json_name = "toolCallEvent"];
+    .aiserver.v1.BeforeAiEditEvent before_ai_edit_event = 46 [json_name = "beforeAiEditEvent"];
+    .aiserver.v1.SearchEvent search_event = 47 [json_name = "searchEvent"];
+    .aiserver.v1.TerminalEvent terminal_event = 48 [json_name = "terminalEvent"];
+    .aiserver.v1.WorktreeEvent worktree_event = 49 [json_name = "worktreeEvent"];
+    .aiserver.v1.ReviewChangesOpenedEvent review_changes_opened_event = 50 [json_name = "reviewChangesOpenedEvent"];
+    .aiserver.v1.BrowserEvent browser_event = 51 [json_name = "browserEvent"];
+  }
+}
+
+enum CppSource {
+  CPP_SOURCE_UNSPECIFIED = 0;
+  CPP_SOURCE_LINE_CHANGE = 1;
+  CPP_SOURCE_TYPING = 2;
+  CPP_SOURCE_OPTION_HOLD = 3;
+  CPP_SOURCE_LINTER_ERRORS = 4;
+  CPP_SOURCE_PARAMETER_HINTS = 5;
+  CPP_SOURCE_CURSOR_PREDICTION = 6;
+  CPP_SOURCE_MANUAL_TRIGGER = 7;
+  CPP_SOURCE_EDITOR_CHANGE = 8;
+  CPP_SOURCE_LSP_SUGGESTIONS = 9;
+}
+
+message CppStoppedTrackingModelEvent {
+  string model_uuid = 1 [json_name = "modelUuid"];
+  string relative_path = 2 [json_name = "relativePath"];
+  .aiserver.v1.CppStoppedTrackingModelEvent.StoppedTrackingModelReason reason = 3 [json_name = "reason"];
+  enum StoppedTrackingModelReason {
+    STOPPED_TRACKING_MODEL_REASON_UNSPECIFIED = 0;
+    STOPPED_TRACKING_MODEL_REASON_FILE_TOO_BIG = 1;
+    STOPPED_TRACKING_MODEL_REASON_FILE_DISPOSED = 2;
+    STOPPED_TRACKING_MODEL_REASON_CHANGE_TOO_BIG = 3;
+  }
+}
+
+message CppSuggestEvent {
+  .aiserver.v1.CurrentlyShownCppSuggestion cpp_suggestion = 1 [json_name = "cppSuggestion"];
+  .aiserver.v1.PointInTimeModel point_in_time_model = 2 [json_name = "pointInTimeModel"];
+  .aiserver.v1.RecoverableCppData recoverable_cpp_data = 3 [json_name = "recoverableCppData"];
+}
+
+message CppSuggestion {
+  string suggestion_text = 1 [json_name = "suggestionText"];
+  .aiserver.v1.IRange range = 2 [json_name = "range"];
+  bool seen = 5 [json_name = "seen"];
+  .aiserver.v1.SelectionWithOrientation editor_selection_before_peek = 6 [json_name = "editorSelectionBeforePeek"];
+  string binding_id = 7 [json_name = "bindingId"];
+}
+
+message CppTimelineEvent {
+  double timestamp = 1 [json_name = "timestamp"];
+  oneof v {
+    .aiserver.v1.CppSessionEvent event = 2 [json_name = "event"];
+    .aiserver.v1.CppTimelineEvent.Change change = 3 [json_name = "change"];
+  }
+  message Change {
+    string model_uuid = 1 [json_name = "modelUuid"];
+    int32 change_index = 2 [json_name = "changeIndex"];
+    .aiserver.v1.ModelChange change = 3 [json_name = "change"];
+    .aiserver.v1.CppTimelineEvent.Change.Status status = 4 [json_name = "status"];
+    enum Status {
+      STATUS_UNSPECIFIED = 0;
+      STATUS_CORRECT = 1;
+      STATUS_UNVALIDATED = 2;
+      STATUS_INCORRECT = 3;
+    }
+  }
+}
+
+message CppTriggerEvent {
+  string generation_uuid = 1 [json_name = "generationUuid"];
+  int32 model_version = 2 [json_name = "modelVersion"];
+  .aiserver.v1.OneIndexedPosition cursor_position = 3 [json_name = "cursorPosition"];
+  .aiserver.v1.PointInTimeModel point_in_time_model = 4 [json_name = "pointInTimeModel"];
+  .aiserver.v1.CppSource source = 5 [json_name = "source"];
+}
+
+message CptFileDiffHistory {
+  string file_name = 1 [json_name = "fileName"];
+  repeated .aiserver.v1.EditPatch edit_patches = 2 [json_name = "editPatches"];
+}
+
+message CurrentlyShownCppSuggestion {
+  int32 suggestion_id = 1 [json_name = "suggestionId"];
+  string suggestion_text = 2 [json_name = "suggestionText"];
+  int32 model_version_when_the_change_is_first_indicated_to_the_user_but_not_shown_in_the_model = 3 [json_name = "modelVersionWhenTheChangeIsFirstIndicatedToTheUserButNotShownInTheModel"];
+  .aiserver.v1.IRange range_of_suggestion_in_current_model = 4 [json_name = "rangeOfSuggestionInCurrentModel"];
+  string original_text = 5 [json_name = "originalText"];
+  string binding_id = 6 [json_name = "bindingId"];
+}
+
+message CursorPrediction {
+  string request_id = 1 [json_name = "requestId"];
+  int32 prediction_id = 2 [json_name = "predictionId"];
+  int32 line_number = 3 [json_name = "lineNumber"];
+  .aiserver.v1.CursorPrediction.CursorPredictionSource source = 4 [json_name = "source"];
+  string binding_id = 5 [json_name = "bindingId"];
+  enum CursorPredictionSource {
+    CURSOR_PREDICTION_SOURCE_UNSPECIFIED = 0;
+    CURSOR_PREDICTION_SOURCE_ALWAYS_ON = 1;
+    CURSOR_PREDICTION_SOURCE_ACCEPT = 2;
+    CURSOR_PREDICTION_SOURCE_UNDO = 3;
+    CURSOR_PREDICTION_SOURCE_EDITOR_CHANGE = 4;
+  }
+}
+
+message CursorSelection {
+  int32 selection_start_line_number = 1 [json_name = "selectionStartLineNumber"];
+  int32 selection_start_column = 2 [json_name = "selectionStartColumn"];
+  int32 position_line_number = 3 [json_name = "positionLineNumber"];
+  int32 position_column = 4 [json_name = "positionColumn"];
+}
+
+message Edit {
+  string text = 1 [json_name = "text"];
+  .aiserver.v1.IRange range = 2 [json_name = "range"];
+}
+
+message EditHistoryAppendChangesRequest {
+  string session_id = 1 [json_name = "sessionId"];
+  string model_uuid = 2 [json_name = "modelUuid"];
+  string starting_model_value = 3 [json_name = "startingModelValue"];
+  repeated .aiserver.v1.ModelChange changes = 4 [json_name = "changes"];
+  string relative_path = 5 [json_name = "relativePath"];
+  string client_version = 6 [json_name = "clientVersion"];
+  repeated .aiserver.v1.CppHistoryAppendEvent events = 7 [json_name = "events"];
+  string client_commit = 8 [json_name = "clientCommit"];
+  repeated .aiserver.v1.CppSessionEvent session_events = 9 [json_name = "sessionEvents"];
+  int32 starting_model_version = 10 [json_name = "startingModelVersion"];
+  bool model_changes_may_be_out_of_order = 11 [json_name = "modelChangesMayBeOutOfOrder"];
+  .aiserver.v1.EditHistoryAppendChangesRequest.PrivacyModeStatus privacy_mode_status = 12 [json_name = "privacyModeStatus"];
+  float time_origin = 13 [json_name = "timeOrigin"];
+  string uri = 14 [json_name = "uri"];
+  enum PrivacyModeStatus {
+    PRIVACY_MODE_STATUS_UNSPECIFIED = 0;
+    PRIVACY_MODE_STATUS_PRIVACY_ENABLED = 1;
+    PRIVACY_MODE_STATUS_IMPLICIT_NO_PRIVACY = 2;
+    PRIVACY_MODE_STATUS_EXPLICIT_NO_PRIVACY = 3;
+  }
+}
+
+message EditHistoryAppendChangesResponse {
+  bool success = 1 [json_name = "success"];
+}
+
+message EditPatch {
+  string relative_path = 1 [json_name = "relativePath"];
+  uint32 line_number = 2 [json_name = "lineNumber"];
+  repeated string deleted_lines = 3 [json_name = "deletedLines"];
+  repeated string inserted_lines = 4 [json_name = "insertedLines"];
+}
+
+message EditorCloseEvent {
+  string editor_id = 1 [json_name = "editorId"];
+}
+
+message FinishedCppGenerationEvent {
+  .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
+  .aiserver.v1.RecoverableCppData recoverable_cpp_data = 2 [json_name = "recoverableCppData"];
+}
+
+message GetCppEditClassificationRequest {
+  .aiserver.v1.StreamCppRequest cpp_request = 1 [json_name = "cppRequest"];
+  repeated .aiserver.v1.SuggestedEdit suggested_edits = 25 [json_name = "suggestedEdits"];
+  bool marker_touches_green = 26 [json_name = "markerTouchesGreen"];
+  string current_file_contents_for_linter_errors = 27 [json_name = "currentFileContentsForLinterErrors"];
+}
+
+message GetCppEditClassificationResponse {
+  repeated .aiserver.v1.GetCppEditClassificationResponse.ScoredEdit scored_edits = 1 [json_name = "scoredEdits"];
+  .aiserver.v1.GetCppEditClassificationResponse.ScoredEdit noop_edit = 2 [json_name = "noopEdit"];
+  bool should_noop = 3 [json_name = "shouldNoop"];
+  .aiserver.v1.GetCppEditClassificationResponse.ScoredEdit generation_edit = 4 [json_name = "generationEdit"];
+  message LogProbs {
+    repeated string tokens = 1 [json_name = "tokens"];
+    repeated double token_logprobs = 2 [json_name = "tokenLogprobs"];
+  }
+  message ScoredEdit {
+    .aiserver.v1.SuggestedEdit edit = 1 [json_name = "edit"];
+    .aiserver.v1.GetCppEditClassificationResponse.LogProbs log_probs = 2 [json_name = "logProbs"];
+  }
+}
+
+message GitEvent {
+  .aiserver.v1.GitEvent.OperationType operation_type = 1 [json_name = "operationType"];
+  string repository_path = 2 [json_name = "repositoryPath"];
+  bool operation_success = 3 [json_name = "operationSuccess"];
+  string branch_name = 4 [json_name = "branchName"];
+  string error_message = 5 [json_name = "errorMessage"];
+  bool is_default_branch = 6 [json_name = "isDefaultBranch"];
+  string default_branch_name = 7 [json_name = "defaultBranchName"];
+  string commit_hash = 8 [json_name = "commitHash"];
+  string previous_commit_hash = 9 [json_name = "previousCommitHash"];
+  string remote_url = 10 [json_name = "remoteUrl"];
+  enum OperationType {
+    OPERATION_TYPE_UNSPECIFIED = 0;
+    OPERATION_TYPE_COMMIT = 1;
+    OPERATION_TYPE_CHECKOUT = 2;
+    OPERATION_TYPE_PULL = 3;
+    OPERATION_TYPE_FETCH = 4;
+    OPERATION_TYPE_MERGE = 5;
+    OPERATION_TYPE_REBASE = 6;
+    OPERATION_TYPE_STASH = 7;
+    OPERATION_TYPE_BRANCH = 8;
+    OPERATION_TYPE_TAG = 9;
+  }
+}
+
+message LspSuggestedItems {
+  repeated .aiserver.v1.LspSuggestion suggestions = 1 [json_name = "suggestions"];
+}
+
+message LspSuggestion {
+  string label = 1 [json_name = "label"];
+}
+
+message LspSuggestionEvent {
+  repeated string suggestions = 1 [json_name = "suggestions"];
+  string request_id = 2 [json_name = "requestId"];
+  string editor_id = 3 [json_name = "editorId"];
+  .aiserver.v1.PointInTimeModel point_in_time_model = 4 [json_name = "pointInTimeModel"];
+}
+
+message MarkCppRequest {
+  string request_id = 1 [json_name = "requestId"];
+  string session_id = 2 [json_name = "sessionId"];
+  .aiserver.v1.MarkCppRequest.CppResponseTypes response_type = 3 [json_name = "responseType"];
+  string desired_completion = 4 [json_name = "desiredCompletion"];
+  .aiserver.v1.MarkCppRequest.RangeTransformation range_transformation = 5 [json_name = "rangeTransformation"];
+  string model_code_name = 10 [json_name = "modelCodeName"];
+  string model_openai_name = 11 [json_name = "modelOpenaiName"];
+  double current_performance_now_time = 12 [json_name = "currentPerformanceNowTime"];
+  double session_performance_origin_time = 13 [json_name = "sessionPerformanceOriginTime"];
+  enum CppResponseTypes {
+    CPP_RESPONSE_TYPES_UNSPECIFIED = 0;
+    CPP_RESPONSE_TYPES_GOOD = 1;
+    CPP_RESPONSE_TYPES_BAD = 2;
+    CPP_RESPONSE_TYPES_BAD_CONTEXT = 3;
+    CPP_RESPONSE_TYPES_BAD_REASONING = 4;
+    CPP_RESPONSE_TYPES_BAD_STUPID_MISTAKE = 5;
+    CPP_RESPONSE_TYPES_BAD_FORMATTING = 6;
+    CPP_RESPONSE_TYPES_BAD_RANGE = 7;
+    CPP_RESPONSE_TYPES_GOOD_PREDICTION = 8;
+    CPP_RESPONSE_TYPES_BAD_FALSE_POSITIVE_TRIGGER = 9;
+    CPP_RESPONSE_TYPES_BAD_FALSE_NEGATIVE_TRIGGER = 10;
+  }
+  message RangeTransformation {
+    int32 start_line_number = 1 [json_name = "startLineNumber"];
+    int32 end_line_number = 2 [json_name = "endLineNumber"];
+  }
+}
+
+message MarkCppResponse {
+}
+
+message MaybeDefinedPointInTimeModel {
+  string model_uuid = 1 [json_name = "modelUuid"];
+  int32 model_version = 2 [json_name = "modelVersion"];
+  string relative_path = 3 [json_name = "relativePath"];
+  string model_id = 4 [json_name = "modelId"];
+}
+
+message ModelAddedEvent {
+  .aiserver.v1.MaybeDefinedPointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
+  string full_uri = 2 [json_name = "fullUri"];
+  string model_id = 3 [json_name = "modelId"];
+  string uri_scheme = 4 [json_name = "uriScheme"];
+  bool is_too_large_for_syncing = 5 [json_name = "isTooLargeForSyncing"];
+  bool is_too_large_for_tokenization = 6 [json_name = "isTooLargeForTokenization"];
+  bool is_too_large_for_heap_operation = 7 [json_name = "isTooLargeForHeapOperation"];
+}
+
+message ModelChange {
+  string text = 1 [json_name = "text"];
+  .aiserver.v1.IRange range = 2 [json_name = "range"];
+  string final_model_hash = 3 [json_name = "finalModelHash"];
+  int32 model_version_immediately_after_this_change = 4 [json_name = "modelVersionImmediatelyAfterThisChange"];
+  double performance_now_timestamp = 5 [json_name = "performanceNowTimestamp"];
+  bool is_undoing = 7 [json_name = "isUndoing"];
+  bool is_redoing = 8 [json_name = "isRedoing"];
+  bool model_is_attached_to_editor = 9 [json_name = "modelIsAttachedToEditor"];
+  bool model_is_attached_to_the_active_editor = 10 [json_name = "modelIsAttachedToTheActiveEditor"];
+  repeated .aiserver.v1.CursorSelection cursor_selections = 11 [json_name = "cursorSelections"];
+  int32 model_version_at_metadata_retrieval_time = 12 [json_name = "modelVersionAtMetadataRetrievalTime"];
+  int64 global_index = 13 [json_name = "globalIndex"];
+  double performance_now_flush_time = 14 [json_name = "performanceNowFlushTime"];
+  int32 change_index = 15 [json_name = "changeIndex"];
+  int32 flush_index = 16 [json_name = "flushIndex"];
+  int32 global_index_v2 = 17 [json_name = "globalIndexV2"];
+}
+
+message ModelOpenedEvent {
+  .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
+  .aiserver.v1.MaybeDefinedPointInTimeModel maybe_defined_point_in_time_model = 2 [json_name = "maybeDefinedPointInTimeModel"];
+}
+
+message ModelWithHistory {
+  repeated .aiserver.v1.ModelChange changes = 1 [json_name = "changes"];
+  string model_uuid = 2 [json_name = "modelUuid"];
+  .aiserver.v1.StartingModel starting_model = 3 [json_name = "startingModel"];
+  int32 num_correct_changes = 4 [json_name = "numCorrectChanges"];
+  int32 num_unvalidated_changes = 5 [json_name = "numUnvalidatedChanges"];
+  int32 num_incorrect_changes = 6 [json_name = "numIncorrectChanges"];
+  repeated .aiserver.v1.ModelChange before_start_model_changes = 7 [json_name = "beforeStartModelChanges"];
+  double starting_performance_now_timestamp = 8 [json_name = "startingPerformanceNowTimestamp"];
+}
+
+message NtpEvent {
+  double originate_timestamp = 1 [json_name = "originateTimestamp"];
+  double receive_timestamp = 2 [json_name = "receiveTimestamp"];
+  double transmit_timestamp = 3 [json_name = "transmitTimestamp"];
+  double destination_timestamp = 4 [json_name = "destinationTimestamp"];
+}
+
+message OneIndexedPosition {
+  int32 line_number_one_indexed = 1 [json_name = "lineNumberOneIndexed"];
+  int32 column_one_indexed = 2 [json_name = "columnOneIndexed"];
+}
+
+message PointInTimeModel {
+  string model_uuid = 1 [json_name = "modelUuid"];
+  int32 model_version = 2 [json_name = "modelVersion"];
+  string relative_path = 3 [json_name = "relativePath"];
+  string model_id = 4 [json_name = "modelId"];
+}
+
+message RecordCppFateRequest {
+  string request_id = 1 [json_name = "requestId"];
+  float performance_now_time = 2 [json_name = "performanceNowTime"];
+  .aiserver.v1.CppFate fate = 3 [json_name = "fate"];
+  string extension = 4 [json_name = "extension"];
+}
+
+message RecordCppFateResponse {
+}
+
+message RecoverableCppData {
+  string request_id = 1 [json_name = "requestId"];
+  string suggestion_text = 2 [json_name = "suggestionText"];
+  .aiserver.v1.IRange suggestion_range = 3 [json_name = "suggestionRange"];
+  .aiserver.v1.OneIndexedPosition position = 4 [json_name = "position"];
+}
+
+message RefreshTabContextRequest {
+  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  string model_name = 2 [json_name = "modelName"];
+  .aiserver.v1.LinterErrors linter_errors = 3 [json_name = "linterErrors"];
+  repeated .aiserver.v1.CppFileDiffHistory file_diff_histories = 4 [json_name = "fileDiffHistories"];
+  repeated .aiserver.v1.AdditionalFile additional_files = 5 [json_name = "additionalFiles"];
+  double client_time = 6 [json_name = "clientTime"];
+  double time_since_request_start = 7 [json_name = "timeSinceRequestStart"];
+  double time_at_request_send = 8 [json_name = "timeAtRequestSend"];
+  bool is_debug = 9 [json_name = "isDebug"];
+  string workspace_id = 10 [json_name = "workspaceId"];
+  bool supports_cpt = 11 [json_name = "supportsCpt"];
+  bool supports_crlf_cpt = 12 [json_name = "supportsCrlfCpt"];
+  .aiserver.v1.RepositoryInfo repository_info = 13 [json_name = "repositoryInfo"];
+}
+
+message RefreshTabContextResponse {
+  repeated .aiserver.v1.CodeResult code_results = 1 [json_name = "codeResults"];
+}
+
+message RejectCursorPredictionEvent {
+  .aiserver.v1.CursorPrediction cursor_prediction = 1 [json_name = "cursorPrediction"];
+  .aiserver.v1.PointInTimeModel point_in_time_model = 2 [json_name = "pointInTimeModel"];
+}
+
+message RepoEvent {
+  string repo_owner = 1 [json_name = "repoOwner"];
+  string repo_name = 2 [json_name = "repoName"];
+  .aiserver.v1.RepoEvent.Type event_type = 3 [json_name = "eventType"];
+  enum Type {
+    TYPE_UNSPECIFIED = 0;
+    TYPE_SYNCED = 1;
+    TYPE_LOADING = 2;
+    TYPE_INDEXING_SETUP = 3;
+    TYPE_INDEXING_INIT_FROM_SIMILAR_CODEBASE = 4;
+    TYPE_PAUSED = 5;
+    TYPE_INDEXING = 6;
+    TYPE_ERROR = 7;
+    TYPE_NOT_AUTO_INDEXING = 8;
+    TYPE_NOT_INDEXED = 9;
+  }
+}
+
+message ReviewChangesOpenedEvent {
+  string composer_id = 1 [json_name = "composerId"];
+  string best_of_n_group_id = 2 [json_name = "bestOfNGroupId"];
+}
+
+message ScrollEvent {
+  .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
+  repeated .aiserver.v1.IRange visible_ranges = 2 [json_name = "visibleRanges"];
+  string editor_id = 3 [json_name = "editorId"];
+}
+
+message SearchEvent {
+  string query = 1 [json_name = "query"];
+  int32 result_count = 2 [json_name = "resultCount"];
+  int32 file_count = 3 [json_name = "fileCount"];
+  bool is_regex = 4 [json_name = "isRegex"];
+  bool is_case_sensitive = 5 [json_name = "isCaseSensitive"];
+  bool is_whole_word = 6 [json_name = "isWholeWord"];
+  string files_to_include = 7 [json_name = "filesToInclude"];
+  string files_to_exclude = 8 [json_name = "filesToExclude"];
+  int32 duration_ms = 9 [json_name = "durationMs"];
+  repeated .aiserver.v1.SearchResultFile results = 10 [json_name = "results"];
+}
+
+message SearchMatch {
+  int32 line_number = 1 [json_name = "lineNumber"];
+  int32 column = 2 [json_name = "column"];
+  string match_text = 3 [json_name = "matchText"];
+}
+
+message SearchResultFile {
+  string file_path = 1 [json_name = "filePath"];
+  int32 match_count = 2 [json_name = "matchCount"];
+  repeated .aiserver.v1.SearchMatch matches = 3 [json_name = "matches"];
+}
+
+message ShouldTurnOnCppOnboardingRequest {
+}
+
+message ShouldTurnOnCppOnboardingResponse {
+  bool should_turn_on_cpp_onboarding = 1 [json_name = "shouldTurnOnCppOnboarding"];
+}
+
+message StartingModel {
+  string relative_path = 1 [json_name = "relativePath"];
+  string starting_contents = 2 [json_name = "startingContents"];
+  int32 starting_model_version = 3 [json_name = "startingModelVersion"];
+  repeated .aiserver.v1.ModelChange before_start_model_changes = 4 [json_name = "beforeStartModelChanges"];
+  string client_version = 5 [json_name = "clientVersion"];
+  string client_commit = 6 [json_name = "clientCommit"];
+  string model_uuid = 7 [json_name = "modelUuid"];
+  string session_id = 8 [json_name = "sessionId"];
+  string uri = 9 [json_name = "uri"];
+}
+
+message StreamCppRequest {
+  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  repeated string diff_history = 2 [json_name = "diffHistory"];
+  string model_name = 3 [json_name = "modelName"];
+  .aiserver.v1.LinterErrors linter_errors = 4 [json_name = "linterErrors"];
+  repeated string diff_history_keys = 5 [json_name = "diffHistoryKeys"];
+  bool give_debug_output = 6 [json_name = "giveDebugOutput"];
+  repeated .aiserver.v1.CppFileDiffHistory file_diff_histories = 7 [json_name = "fileDiffHistories"];
+  repeated .aiserver.v1.CppFileDiffHistory merged_diff_histories = 8 [json_name = "mergedDiffHistories"];
+  repeated .aiserver.v1.BlockDiffPatch block_diff_patches = 9 [json_name = "blockDiffPatches"];
+  bool is_nightly = 10 [json_name = "isNightly"];
+  bool is_debug = 11 [json_name = "isDebug"];
+  bool immediately_ack = 12 [json_name = "immediatelyAck"];
+  repeated .aiserver.v1.CppContextItem context_items = 13 [json_name = "contextItems"];
+  repeated .aiserver.v1.CppParameterHint parameter_hints = 14 [json_name = "parameterHints"];
+  repeated .aiserver.v1.LspSubgraphFullContext lsp_contexts = 15 [json_name = "lspContexts"];
+  .aiserver.v1.CppIntentInfo cpp_intent_info = 16 [json_name = "cppIntentInfo"];
+  bool enable_more_context = 17 [json_name = "enableMoreContext"];
+  string workspace_id = 18 [json_name = "workspaceId"];
+  repeated .aiserver.v1.AdditionalFile additional_files = 19 [json_name = "additionalFiles"];
+  .aiserver.v1.StreamCppRequest.ControlToken control_token = 20 [json_name = "controlToken"];
+  double client_time = 21 [json_name = "clientTime"];
+  repeated .aiserver.v1.FilesyncUpdateWithModelVersion filesync_updates = 22 [json_name = "filesyncUpdates"];
+  double time_since_request_start = 23 [json_name = "timeSinceRequestStart"];
+  double time_at_request_send = 24 [json_name = "timeAtRequestSend"];
+  double client_timezone_offset = 25 [json_name = "clientTimezoneOffset"];
+  .aiserver.v1.LspSuggestedItems lsp_suggested_items = 26 [json_name = "lspSuggestedItems"];
+  bool supports_cpt = 27 [json_name = "supportsCpt"];
+  bool supports_crlf_cpt = 28 [json_name = "supportsCrlfCpt"];
+  repeated .aiserver.v1.CodeResult code_results = 29 [json_name = "codeResults"];
+  enum ControlToken {
+    CONTROL_TOKEN_UNSPECIFIED = 0;
+    CONTROL_TOKEN_QUIET = 1;
+    CONTROL_TOKEN_LOUD = 2;
+    CONTROL_TOKEN_OP = 3;
+  }
+}
+
+message StreamCppResponse {
+  string text = 1 [json_name = "text"];
+  int32 suggestion_start_line = 2 [json_name = "suggestionStartLine"];
+  int32 suggestion_confidence = 3 [json_name = "suggestionConfidence"];
+  bool done_stream = 4 [json_name = "doneStream"];
+  string debug_model_output = 5 [json_name = "debugModelOutput"];
+  string debug_model_input = 6 [json_name = "debugModelInput"];
+  string debug_stream_time = 7 [json_name = "debugStreamTime"];
+  string debug_total_time = 8 [json_name = "debugTotalTime"];
+  string debug_ttft_time = 9 [json_name = "debugTtftTime"];
+  string debug_server_timing = 10 [json_name = "debugServerTiming"];
+  .aiserver.v1.LineRange range_to_replace = 11 [json_name = "rangeToReplace"];
+  .aiserver.v1.StreamCppResponse.CursorPredictionTarget cursor_prediction_target = 12 [json_name = "cursorPredictionTarget"];
+  bool done_edit = 13 [json_name = "doneEdit"];
+  .aiserver.v1.StreamCppResponse.ModelInfo model_info = 14 [json_name = "modelInfo"];
+  bool begin_edit = 15 [json_name = "beginEdit"];
+  bool should_remove_leading_eol = 16 [json_name = "shouldRemoveLeadingEol"];
+  string binding_id = 17 [json_name = "bindingId"];
+  message CursorPredictionTarget {
+    string relative_path = 1 [json_name = "relativePath"];
+    int32 line_number_one_indexed = 2 [json_name = "lineNumberOneIndexed"];
+    string expected_content = 3 [json_name = "expectedContent"];
+    bool should_retrigger_cpp = 4 [json_name = "shouldRetriggerCpp"];
+  }
+  message ModelInfo {
+    bool is_fused_cursor_prediction_model = 1 [json_name = "isFusedCursorPredictionModel"];
+    bool is_multidiff_model = 2 [json_name = "isMultidiffModel"];
+  }
+}
+
+message StreamHoldCppRequest {
+  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  .aiserver.v1.LinterErrors linter_errors = 4 [json_name = "linterErrors"];
+  repeated .aiserver.v1.CppFileDiffHistory file_diff_histories = 7 [json_name = "fileDiffHistories"];
+  repeated .aiserver.v1.CppFileDiffHistory merged_diff_histories = 8 [json_name = "mergedDiffHistories"];
+  repeated .aiserver.v1.BlockDiffPatch block_diff_patches = 9 [json_name = "blockDiffPatches"];
+  .aiserver.v1.ModelDetails model_details = 10 [json_name = "modelDetails"];
+  repeated .aiserver.v1.CppContextItem context_items = 13 [json_name = "contextItems"];
+}
+
+message StreamHoldCppResponse {
+  string text = 1 [json_name = "text"];
+}
+
+message SuggestCursorPredictionEvent {
+  .aiserver.v1.CursorPrediction cursor_prediction = 1 [json_name = "cursorPrediction"];
+  .aiserver.v1.PointInTimeModel point_in_time_model = 2 [json_name = "pointInTimeModel"];
+}
+
+message SuggestedEdit {
+  .aiserver.v1.SimpleRange edit_range = 1 [json_name = "editRange"];
+  string text = 2 [json_name = "text"];
+}
+
+message TabCloseEvent {
+  .aiserver.v1.MaybeDefinedPointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
+}
+
+message TerminalEvent {
+  string uri = 1 [json_name = "uri"];
+  oneof event {
+    .aiserver.v1.TerminalEvent.Create create = 2 [json_name = "create"];
+    .aiserver.v1.TerminalEvent.Exit exit = 3 [json_name = "exit"];
+    .aiserver.v1.TerminalEvent.CommandStart command_start = 4 [json_name = "commandStart"];
+    .aiserver.v1.TerminalEvent.CommandFinish command_finish = 5 [json_name = "commandFinish"];
+  }
+  message CommandFinish {
+    .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
+    int32 exit_code = 2 [json_name = "exitCode"];
+  }
+  message CommandStart {
+    .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
+    string cwd = 2 [json_name = "cwd"];
+  }
+  message Create {
+    bool is_remote = 1 [json_name = "isRemote"];
+  }
+  message Exit {
+    int32 exit_code = 1 [json_name = "exitCode"];
+  }
+}
+
+message ToolCallEvent {
+  string tool_call_id = 1 [json_name = "toolCallId"];
+  string request_id = 2 [json_name = "requestId"];
+  string tool_name = 3 [json_name = "toolName"];
+}
+
+message WorktreeEvent {
+  .aiserver.v1.WorktreeEvent.EventType event_type = 1 [json_name = "eventType"];
+  string model_name = 2 [json_name = "modelName"];
+  string best_of_n_group_id = 3 [json_name = "bestOfNGroupId"];
+  repeated string all_worktree_paths = 4 [json_name = "allWorktreePaths"];
+  string applied_worktree_path = 5 [json_name = "appliedWorktreePath"];
+  repeated .aiserver.v1.WorktreeEvent.WorktreeComposerMapping worktree_composer_mappings = 6 [json_name = "worktreeComposerMappings"];
+  repeated .aiserver.v1.WorktreeEvent.BackgroundAgentComposerMapping background_agent_composer_mappings = 7 [json_name = "backgroundAgentComposerMappings"];
+  string applied_composer_id = 8 [json_name = "appliedComposerId"];
+  string viewed_composer_id = 9 [json_name = "viewedComposerId"];
+  message BackgroundAgentComposerMapping {
+    string bc_id = 1 [json_name = "bcId"];
+    string composer_id = 2 [json_name = "composerId"];
+  }
+  enum EventType {
+    EVENT_TYPE_UNSPECIFIED = 0;
+    EVENT_TYPE_APPLY_TO_MAIN = 1;
+    EVENT_TYPE_UNDO_APPLY = 2;
+    EVENT_TYPE_VIEW_SUBCOMPOSER = 3;
+  }
+  message WorktreeComposerMapping {
+    string worktree_path = 1 [json_name = "worktreePath"];
+    string composer_id = 2 [json_name = "composerId"];
+  }
+}

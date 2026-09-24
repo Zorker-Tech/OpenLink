@@ -1,0 +1,30 @@
+// agent.v1 — agent/v1/mcp_tool messages, enums and services.
+//
+// Generated from this repository's schema (source/packages/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+import "agent/v1/mcp_exec.proto";
+
+message McpToolCall {
+  .agent.v1.McpArgs args = 1 [json_name = "args"];
+  .agent.v1.McpToolResult result = 2 [json_name = "result"];
+  string description = 3 [json_name = "description"];
+}
+
+message McpToolResult {
+  oneof result {
+    .agent.v1.McpSuccess success = 1 [json_name = "success"];
+    .agent.v1.McpToolError error = 2 [json_name = "error"];
+    .agent.v1.McpRejected rejected = 3 [json_name = "rejected"];
+    .agent.v1.McpPermissionDenied permission_denied = 4 [json_name = "permissionDenied"];
+  }
+}
+
+message McpToolError {
+  string error = 1 [json_name = "error"];
+  string read_tool_def_reminder = 2 [json_name = "readToolDefReminder"];
+}

@@ -1,0 +1,31 @@
+// agent.v1 — agent/v1/send_to_user_tool messages, enums and services.
+//
+// Generated from this repository's schema (source/packages/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+message SendToUserToolCall {
+  .agent.v1.SendToUserArgs args = 1 [json_name = "args"];
+  .agent.v1.SendToUserResult result = 2 [json_name = "result"];
+}
+
+message SendToUserArgs {
+  string message = 1 [json_name = "message"];
+}
+
+message SendToUserResult {
+  oneof result {
+    .agent.v1.SendToUserSuccess success = 1 [json_name = "success"];
+    .agent.v1.SendToUserError error = 2 [json_name = "error"];
+  }
+}
+
+message SendToUserSuccess {
+}
+
+message SendToUserError {
+  string error = 1 [json_name = "error"];
+}

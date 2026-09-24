@@ -1,0 +1,12 @@
+# The Work platform's protobuf schema.
+#
+# These files are the source of truth for every wire message the platform exchanges; the TypeScript
+# in ../generated is produced from them and is never edited by hand.
+#
+# Wire-visible names are part of the contract with the services this platform talks to, so the
+# schema is not linted for naming style: a rename here is a protocol change, not a cleanup.
+version: v2
+modules:
+  - path: schema
+lint:
+  use: []

@@ -1,0 +1,252 @@
+// aiserver.v1 — aiserver/v1/symbolic_context messages, enums and services.
+//
+// Generated from this repository's schema (source/packages/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package aiserver.v1;
+
+import "aiserver/v1/utils.proto";
+
+message ReflectionData {
+  string index_id = 1 [json_name = "indexId"];
+  string id = 2 [json_name = "id"];
+  string summary = 3 [json_name = "summary"];
+}
+
+message ChooseCodeReferencesRequest {
+  string index_id = 1 [json_name = "indexId"];
+  bool recompute = 4 [json_name = "recompute"];
+  oneof request {
+    .aiserver.v1.ChooseCodeReferencesRequest.FileRequest file = 2 [json_name = "file"];
+    .aiserver.v1.ChooseCodeReferencesRequest.NodeRequest node = 3 [json_name = "node"];
+  }
+  message FileRequest {
+    string file_id = 1 [json_name = "fileId"];
+  }
+  message NodeRequest {
+    string node_id = 1 [json_name = "nodeId"];
+  }
+}
+
+message ChooseCodeReferencesResponse {
+  oneof response {
+    .aiserver.v1.ChooseCodeReferencesResponse.FileResponse file = 1 [json_name = "file"];
+    .aiserver.v1.ChooseCodeReferencesResponse.NodeResponse node = 2 [json_name = "node"];
+  }
+  message FileResponse {
+    string file_id = 1 [json_name = "fileId"];
+    repeated .aiserver.v1.ChooseCodeReferencesResponse.NodeResponse node_responses = 2 [json_name = "nodeResponses"];
+  }
+  message NodeResponse {
+    string node_id = 1 [json_name = "nodeId"];
+    repeated .aiserver.v1.CodeSymbolWithAction actions = 2 [json_name = "actions"];
+    bool skipped = 3 [json_name = "skipped"];
+    repeated string dependencies = 4 [json_name = "dependencies"];
+  }
+}
+
+message CodeSnippet {
+  int32 start_line_number = 1 [json_name = "startLineNumber"];
+  int32 end_line_number = 2 [json_name = "endLineNumber"];
+  repeated string lines = 3 [json_name = "lines"];
+}
+
+message CodeSymbolWithAction {
+  string workspace_relative_path = 1 [json_name = "workspaceRelativePath"];
+  int32 line_number = 2 [json_name = "lineNumber"];
+  int32 symbol_start_column = 3 [json_name = "symbolStartColumn"];
+  int32 symbol_end_column = 4 [json_name = "symbolEndColumn"];
+  .aiserver.v1.CodeSymbolWithAction.CodeSymbolAction action = 5 [json_name = "action"];
+  string symbol = 6 [json_name = "symbol"];
+  enum CodeSymbolAction {
+    CODE_SYMBOL_ACTION_UNSPECIFIED = 0;
+    CODE_SYMBOL_ACTION_GO_TO_DEFINITION = 1;
+    CODE_SYMBOL_ACTION_GO_TO_IMPLEMENTATION = 2;
+    CODE_SYMBOL_ACTION_REFERENCES = 3;
+  }
+}
+
+message ComputeIndexTopoSortRequest {
+  string index_id = 1 [json_name = "indexId"];
+}
+
+message ComputeIndexTopoSortResponse {
+}
+
+message CreateExperimentalIndexRequest {
+  repeated string files = 1 [json_name = "files"];
+  string target_dir = 2 [json_name = "targetDir"];
+  string repo = 3 [json_name = "repo"];
+}
+
+message CreateExperimentalIndexResponse {
+  string index_id = 1 [json_name = "indexId"];
+}
+
+message ExtractPathsRequest {
+  .aiserver.v1.FileCodeSnippets file_code_snippets = 1 [json_name = "fileCodeSnippets"];
+}
+
+message ExtractPathsResponse {
+  repeated .aiserver.v1.CodeSymbolWithAction paths = 1 [json_name = "paths"];
+}
+
+message FileCodeSnippets {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+  int32 total_lines = 2 [json_name = "totalLines"];
+  repeated .aiserver.v1.CodeSnippet snippets = 3 [json_name = "snippets"];
+}
+
+message IndexFileData {
+  string index_id = 1 [json_name = "indexId"];
+  string workspace_relative_path = 2 [json_name = "workspaceRelativePath"];
+  string stage = 3 [json_name = "stage"];
+  int32 order = 4 [json_name = "order"];
+  repeated .aiserver.v1.IndexFileData.NodeData nodes = 5 [json_name = "nodes"];
+  message NodeData {
+    string node_id = 1 [json_name = "nodeId"];
+    string stage = 2 [json_name = "stage"];
+    string content = 3 [json_name = "content"];
+    string summary = 4 [json_name = "summary"];
+  }
+}
+
+message ListExperimentalIndexFilesRequest {
+  string index_id = 1 [json_name = "indexId"];
+}
+
+message ListExperimentalIndexFilesResponse {
+  string index_id = 1 [json_name = "indexId"];
+  repeated .aiserver.v1.IndexFileData files = 2 [json_name = "files"];
+}
+
+message ListenExperimentalIndexRequest {
+  string index_id = 1 [json_name = "indexId"];
+}
+
+message ListenExperimentalIndexResponse {
+  string index_id = 1 [json_name = "indexId"];
+  oneof item {
+    .aiserver.v1.ListenExperimentalIndexResponse.ReadyItem ready = 2 [json_name = "ready"];
+    .aiserver.v1.ListenExperimentalIndexResponse.RegisterItem register = 3 [json_name = "register"];
+    .aiserver.v1.ListenExperimentalIndexResponse.ChooseItem choose = 4 [json_name = "choose"];
+    .aiserver.v1.ListenExperimentalIndexResponse.SummarizeItem summarize = 5 [json_name = "summarize"];
+    .aiserver.v1.ListenExperimentalIndexResponse.ErrorItem error = 6 [json_name = "error"];
+  }
+  message ChooseItem {
+    .aiserver.v1.ChooseCodeReferencesResponse response = 1 [json_name = "response"];
+    .aiserver.v1.ChooseCodeReferencesRequest request = 2 [json_name = "request"];
+    string req_uuid = 3 [json_name = "reqUuid"];
+  }
+  message ErrorItem {
+    string message = 1 [json_name = "message"];
+    int32 status_code = 2 [json_name = "statusCode"];
+    string req_uuid = 6 [json_name = "reqUuid"];
+    oneof request {
+      .aiserver.v1.RegisterFileToIndexRequest register = 3 [json_name = "register"];
+      .aiserver.v1.ChooseCodeReferencesRequest choose = 4 [json_name = "choose"];
+      .aiserver.v1.SummarizeWithReferencesRequest summarize = 5 [json_name = "summarize"];
+    }
+  }
+  message ReadyItem {
+    string index_id = 1 [json_name = "indexId"];
+    .aiserver.v1.ListenExperimentalIndexRequest request = 2 [json_name = "request"];
+  }
+  message RegisterItem {
+    .aiserver.v1.RegisterFileToIndexResponse response = 1 [json_name = "response"];
+    .aiserver.v1.RegisterFileToIndexRequest request = 2 [json_name = "request"];
+    string req_uuid = 3 [json_name = "reqUuid"];
+  }
+  message SummarizeItem {
+    .aiserver.v1.SummarizeWithReferencesResponse response = 1 [json_name = "response"];
+    .aiserver.v1.SummarizeWithReferencesRequest request = 2 [json_name = "request"];
+    string req_uuid = 3 [json_name = "reqUuid"];
+  }
+}
+
+message RegisterCodeReferencesRequest {
+  string node_id = 1 [json_name = "nodeId"];
+  repeated .aiserver.v1.SymbolActionResults references = 2 [json_name = "references"];
+}
+
+message RegisterCodeReferencesResponse {
+  repeated string dependencies = 1 [json_name = "dependencies"];
+}
+
+message RegisterFileToIndexRequest {
+  string index_id = 1 [json_name = "indexId"];
+  string workspace_relative_path = 2 [json_name = "workspaceRelativePath"];
+  .aiserver.v1.SerializedContextNode root_context_node = 3 [json_name = "rootContextNode"];
+  repeated string content = 4 [json_name = "content"];
+}
+
+message RegisterFileToIndexResponse {
+  string file_id = 1 [json_name = "fileId"];
+  string root_context_node_id = 2 [json_name = "rootContextNodeId"];
+  repeated .aiserver.v1.URIResolutionAttempt dependency_resolution_attempts = 3 [json_name = "dependencyResolutionAttempts"];
+  .aiserver.v1.IndexFileData file_data = 4 [json_name = "fileData"];
+}
+
+message RequestReceivedResponse {
+  string req_uuid = 1 [json_name = "reqUuid"];
+}
+
+message SerializedContextNode {
+  string workspace_relative_path = 1 [json_name = "workspaceRelativePath"];
+  int32 start_line_number = 2 [json_name = "startLineNumber"];
+  int32 end_line_number = 3 [json_name = "endLineNumber"];
+  repeated .aiserver.v1.SerializedContextNode children = 4 [json_name = "children"];
+  .aiserver.v1.FileCodeSnippets node_snippets = 5 [json_name = "nodeSnippets"];
+}
+
+message SetupIndexDependenciesRequest {
+  string index_id = 1 [json_name = "indexId"];
+  repeated .aiserver.v1.URIResolutionResult dependency_resolution_results = 2 [json_name = "dependencyResolutionResults"];
+  string file_id = 3 [json_name = "fileId"];
+}
+
+message SetupIndexDependenciesResponse {
+}
+
+message SummarizeWithReferencesRequest {
+  string index_id = 1 [json_name = "indexId"];
+  string node_id = 2 [json_name = "nodeId"];
+  bool recompute = 3 [json_name = "recompute"];
+}
+
+message SummarizeWithReferencesResponse {
+  string node_id = 3 [json_name = "nodeId"];
+  oneof response {
+    .aiserver.v1.SummarizeWithReferencesResponse.Success success = 1 [json_name = "success"];
+    .aiserver.v1.SummarizeWithReferencesResponse.Dependency dependency = 2 [json_name = "dependency"];
+  }
+  message Dependency {
+    repeated string nodes = 2 [json_name = "nodes"];
+  }
+  message Success {
+    string summary = 1 [json_name = "summary"];
+  }
+}
+
+message SymbolActionResultReference {
+  .aiserver.v1.SimpleRange range = 1 [json_name = "range"];
+  .aiserver.v1.FileCodeSnippets reference = 2 [json_name = "reference"];
+}
+
+message SymbolActionResults {
+  .aiserver.v1.CodeSymbolWithAction action = 1 [json_name = "action"];
+  repeated .aiserver.v1.SymbolActionResultReference references = 2 [json_name = "references"];
+}
+
+message URIResolutionAttempt {
+  string workspace_relative_path = 1 [json_name = "workspaceRelativePath"];
+  string node_id = 2 [json_name = "nodeId"];
+  .aiserver.v1.CodeSymbolWithAction symbol = 3 [json_name = "symbol"];
+}
+
+message URIResolutionResult {
+  .aiserver.v1.URIResolutionAttempt request = 1 [json_name = "request"];
+  repeated string resolved_paths = 2 [json_name = "resolvedPaths"];
+}
