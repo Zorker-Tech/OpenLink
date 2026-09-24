@@ -1,0 +1,3575 @@
+// aiserver.v1 — aiserver/v1/aiserver messages, enums and services.
+//
+// Generated from this repository's schema (source/packages/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package aiserver.v1;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/struct.proto";
+import "agent/v1/agent.proto";
+import "agent/v1/agent_service.proto";
+import "agent/v1/exec.proto";
+import "aiserver/v1/bidi.proto";
+import "aiserver/v1/bugbot.proto";
+import "aiserver/v1/chat.proto";
+import "aiserver/v1/cmdk.proto";
+import "aiserver/v1/context.proto";
+import "aiserver/v1/context_ast.proto";
+import "aiserver/v1/cpp.proto";
+import "aiserver/v1/docs.proto";
+import "aiserver/v1/fastapply.proto";
+import "aiserver/v1/fastpreviews.proto";
+import "aiserver/v1/filesyncserver.proto";
+import "aiserver/v1/inline_gpt4.proto";
+import "aiserver/v1/interface_agent.proto";
+import "aiserver/v1/lint.proto";
+import "aiserver/v1/lsp_subgraph.proto";
+import "aiserver/v1/repository.proto";
+import "aiserver/v1/symbolic_context.proto";
+import "aiserver/v1/telemetry.proto";
+import "aiserver/v1/tools.proto";
+import "aiserver/v1/usage.proto";
+import "aiserver/v1/utils.proto";
+
+message AcknowledgeGracePeriodDisclaimerRequest {
+}
+
+message AcknowledgeGracePeriodDisclaimerResponse {
+}
+
+message AdvancedCodebaseContextOptions {
+  int32 num_results_per_search = 1 [json_name = "numResultsPerSearch"];
+  string include_pattern = 2 [json_name = "includePattern"];
+  string exclude_pattern = 3 [json_name = "excludePattern"];
+  .aiserver.v1.RerankerAlgorithm reranker = 4 [json_name = "reranker"];
+  string index_id = 5 [json_name = "indexId"];
+  bool reasoning_step = 6 [json_name = "reasoningStep"];
+  .aiserver.v1.RechunkerChoice rechunker = 7 [json_name = "rechunker"];
+}
+
+message AiCodeChange {
+  string change_id = 1 [json_name = "changeId"];
+  string source = 2 [json_name = "source"];
+  repeated .aiserver.v1.ScoredAiCodeMetadata metadata = 3 [json_name = "metadata"];
+  string model = 4 [json_name = "model"];
+  int32 total_lines_added = 5 [json_name = "totalLinesAdded"];
+  int32 total_lines_deleted = 6 [json_name = "totalLinesDeleted"];
+}
+
+message AiProjectRequest {
+  string description = 1 [json_name = "description"];
+  .aiserver.v1.ModelDetails model_details = 2 [json_name = "modelDetails"];
+}
+
+message AiProjectResponse {
+  string text = 1 [json_name = "text"];
+}
+
+message AiThoughtAnnotation {
+  string request_id = 1 [json_name = "requestId"];
+  string auth_id = 2 [json_name = "authId"];
+  .aiserver.v1.CmdKDebugInfo debug_info = 3 [json_name = "debugInfo"];
+  string thought = 4 [json_name = "thought"];
+}
+
+message ApiDetails {
+  string api_key = 1 [json_name = "apiKey"];
+  bool enable_ghost_mode = 2 [json_name = "enableGhostMode"];
+}
+
+message AtSymbolDependencyInformation {
+  string name = 1 [json_name = "name"];
+  string from_file = 2 [json_name = "fromFile"];
+}
+
+message AtSymbolOption {
+  int32 index = 1 [json_name = "index"];
+  string text = 2 [json_name = "text"];
+  string type = 3 [json_name = "type"];
+}
+
+message AutoContextFile {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+  string file_content = 2 [json_name = "fileContent"];
+}
+
+message AutoContextRankedFile {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+  float reranking_score = 2 [json_name = "rerankingScore"];
+}
+
+message AutoContextRequest {
+  string text = 1 [json_name = "text"];
+  repeated .aiserver.v1.AutoContextFile candidate_files = 2 [json_name = "candidateFiles"];
+  .aiserver.v1.ModelDetails model_details = 3 [json_name = "modelDetails"];
+}
+
+message AutoContextResponse {
+  repeated .aiserver.v1.AutoContextRankedFile ranked_files = 1 [json_name = "rankedFiles"];
+}
+
+message AutoSelectionInstructions {
+  string text = 1 [json_name = "text"];
+  int32 start_line = 2 [json_name = "startLine"];
+  int32 end_line = 3 [json_name = "endLine"];
+}
+
+message AutoSelectionResult {
+  int32 start_line = 1 [json_name = "startLine"];
+  int32 end_line = 2 [json_name = "endLine"];
+  repeated .aiserver.v1.AutoSelectionInstructions instructions = 3 [json_name = "instructions"];
+}
+
+message AvailableDocsRequest {
+  repeated string additional_doc_identifiers = 4 [json_name = "additionalDocIdentifiers"];
+  oneof partial_doc {
+    string partial_url = 1 [json_name = "partialUrl"];
+    string partial_doc_name = 2 [json_name = "partialDocName"];
+    bool get_all = 3 [json_name = "getAll"];
+  }
+}
+
+message AvailableDocsResponse {
+  repeated .aiserver.v1.DocumentationInfo docs = 1 [json_name = "docs"];
+}
+
+message AvailableModelsRequest {
+  bool is_nightly = 1 [json_name = "isNightly"];
+  bool include_long_context_models = 2 [json_name = "includeLongContextModels"];
+  bool exclude_max_named_models = 3 [json_name = "excludeMaxNamedModels"];
+  repeated string additional_model_names = 4 [json_name = "additionalModelNames"];
+  bool use_model_parameters = 5 [json_name = "useModelParameters"];
+  bool include_hidden_models = 6 [json_name = "includeHiddenModels"];
+  bool do_not_use_markdown = 7 [json_name = "doNotUseMarkdown"];
+  bool variants_will_be_shown_in_exploded_list = 8 [json_name = "variantsWillBeShownInExplodedList"];
+  bool for_automations = 9 [json_name = "forAutomations"];
+  .aiserver.v1.AvailableModelsScope scope = 10 [json_name = "scope"];
+  bool use_react_model_picker = 11 [json_name = "useReactModelPicker"];
+  bool use_cloud_agent_effort_modes = 12 [json_name = "useCloudAgentEffortModes"];
+  string admin_settings_group_public_id = 13 [json_name = "adminSettingsGroupPublicId"];
+  bool byok_enabled = 14 [json_name = "byokEnabled"];
+}
+
+message AvailableModelsResponse {
+  repeated string model_names = 1 [json_name = "modelNames"];
+  repeated .aiserver.v1.AvailableModelsResponse.AvailableModel models = 2 [json_name = "models"];
+  .aiserver.v1.AvailableModelsResponse.FeatureModelConfig composer_model_config = 4 [json_name = "composerModelConfig"];
+  .aiserver.v1.AvailableModelsResponse.FeatureModelConfig cmd_k_model_config = 5 [json_name = "cmdKModelConfig"];
+  .aiserver.v1.AvailableModelsResponse.FeatureModelConfig background_composer_model_config = 6 [json_name = "backgroundComposerModelConfig"];
+  .aiserver.v1.AvailableModelsResponse.FeatureModelConfig plan_execution_model_config = 7 [json_name = "planExecutionModelConfig"];
+  .aiserver.v1.AvailableModelsResponse.FeatureModelConfig spec_model_config = 8 [json_name = "specModelConfig"];
+  .aiserver.v1.AvailableModelsResponse.FeatureModelConfig deep_search_model_config = 9 [json_name = "deepSearchModelConfig"];
+  .aiserver.v1.AvailableModelsResponse.FeatureModelConfig quick_agent_model_config = 10 [json_name = "quickAgentModelConfig"];
+  bool use_model_parameters = 11 [json_name = "useModelParameters"];
+  int32 disable_unused_models_after_n_hours = 12 [json_name = "disableUnusedModelsAfterNHours"];
+  int32 upgrade_unchanged_models_after_n_hours = 13 [json_name = "upgradeUnchangedModelsAfterNHours"];
+  .aiserver.v1.AvailableModelsResponse.ModelPickerDisplayConfiguration display_configuration = 15 [json_name = "displayConfiguration"];
+  map<string, .aiserver.v1.AvailableModelsResponse.FeatureModelConfig> subagent_model_configs = 16 [json_name = "subagentModelConfigs"];
+  string experimental_model_id = 19 [json_name = "experimentalModelId"];
+  string experimental_model_display_name = 20 [json_name = "experimentalModelDisplayName"];
+  string nudge_new_chats_to_auto_optimize_for = 21 [json_name = "nudgeNewChatsToAutoOptimizeFor"];
+  message AvailableModel {
+    string name = 1 [json_name = "name"];
+    bool default_on = 2 [json_name = "defaultOn"];
+    bool is_long_context_only = 3 [json_name = "isLongContextOnly"];
+    bool is_chat_only = 4 [json_name = "isChatOnly"];
+    bool supports_agent = 5 [json_name = "supportsAgent"];
+    .aiserver.v1.AvailableModelsResponse.DegradationStatus degradation_status = 6 [json_name = "degradationStatus"];
+    double price = 7 [json_name = "price"];
+    .aiserver.v1.AvailableModelsResponse.TooltipData tooltip_data = 8 [json_name = "tooltipData"];
+    bool supports_thinking = 9 [json_name = "supportsThinking"];
+    bool supports_images = 10 [json_name = "supportsImages"];
+    bool supports_auto_context = 11 [json_name = "supportsAutoContext"];
+    int32 auto_context_max_tokens = 12 [json_name = "autoContextMaxTokens"];
+    int32 auto_context_extended_max_tokens = 13 [json_name = "autoContextExtendedMaxTokens"];
+    bool supports_max_mode = 14 [json_name = "supportsMaxMode"];
+    int32 context_token_limit = 15 [json_name = "contextTokenLimit"];
+    int32 context_token_limit_for_max_mode = 16 [json_name = "contextTokenLimitForMaxMode"];
+    string client_display_name = 17 [json_name = "clientDisplayName"];
+    string server_model_name = 18 [json_name = "serverModelName"];
+    bool supports_non_max_mode = 19 [json_name = "supportsNonMaxMode"];
+    .aiserver.v1.AvailableModelsResponse.TooltipData tooltip_data_for_max_mode = 20 [json_name = "tooltipDataForMaxMode"];
+    bool is_recommended_for_background_composer = 21 [json_name = "isRecommendedForBackgroundComposer"];
+    bool supports_plan_mode = 22 [json_name = "supportsPlanMode"];
+    bool is_user_added = 23 [json_name = "isUserAdded"];
+    string inputbox_short_model_name = 24 [json_name = "inputboxShortModelName"];
+    bool supports_sandboxing = 25 [json_name = "supportsSandboxing"];
+    bool supports_cmd_k = 26 [json_name = "supportsCmdK"];
+    bool only_supports_cmd_k = 27 [json_name = "onlySupportsCmdK"];
+    int32 background_composer_sort_order = 28 [json_name = "backgroundComposerSortOrder"];
+    repeated .aiserver.v1.ModelParameterDefinition parameter_definitions = 29 [json_name = "parameterDefinitions"];
+    repeated .aiserver.v1.AvailableModelsResponse.ModelVariantConfig variants = 30 [json_name = "variants"];
+    .aiserver.v1.CloudAgentEffortMode cloud_agent_effort_mode = 32 [json_name = "cloudAgentEffortMode"];
+    string cloud_migrate_to_model = 33 [json_name = "cloudMigrateToModel"];
+    string upgrade_model_id = 34 [json_name = "upgradeModelId"];
+    bool is_hidden = 35 [json_name = "isHidden"];
+    repeated string legacy_slugs = 36 [json_name = "legacySlugs"];
+    repeated string id_aliases = 37 [json_name = "idAliases"];
+    int32 named_model_section_index = 38 [json_name = "namedModelSectionIndex"];
+    string tagline = 39 [json_name = "tagline"];
+    bool visible_in_routed_model_view = 40 [json_name = "visibleInRoutedModelView"];
+    string vendor_name = 41 [json_name = "vendorName"];
+    .aiserver.v1.AvailableModelsResponse.ModelVendor vendor = 42 [json_name = "vendor"];
+    bool default_disabled_in_admin_allowlist = 43 [json_name = "defaultDisabledInAdminAllowlist"];
+    repeated .aiserver.v1.CloudAgentEffortMode cloud_agent_effort_modes = 44 [json_name = "cloudAgentEffortModes"];
+    bool supports_smart_mode_classifier = 45 [json_name = "supportsSmartModeClassifier"];
+    bool requires_data_retention = 46 [json_name = "requiresDataRetention"];
+    string reason_for_zdr_consent_block = 47 [json_name = "reasonForZdrConsentBlock"];
+    repeated .aiserver.v1.AvailableModelsResponse.ModelPickerBadge model_picker_badges = 48 [json_name = "modelPickerBadges"];
+  }
+  message ConfirmationDialogue {
+    string title = 1 [json_name = "title"];
+    string body = 2 [json_name = "body"];
+    string key = 3 [json_name = "key"];
+    bool blocks_submission = 4 [json_name = "blocksSubmission"];
+    .aiserver.v1.AvailableModelsResponse.ConfirmationDialogue.Presentation presentation = 5 [json_name = "presentation"];
+    enum Presentation {
+      PRESENTATION_UNSPECIFIED = 0;
+      PRESENTATION_POST_PICKER_WARNING = 1;
+    }
+  }
+  enum DegradationStatus {
+    DEGRADATION_STATUS_UNSPECIFIED = 0;
+    DEGRADATION_STATUS_DEGRADED = 1;
+    DEGRADATION_STATUS_DISABLED = 2;
+  }
+  message FeatureModelConfig {
+    string default_model = 1 [json_name = "defaultModel"];
+    repeated string fallback_models = 2 [json_name = "fallbackModels"];
+    repeated string best_of_n_default_models = 3 [json_name = "bestOfNDefaultModels"];
+  }
+  message ModelPickerBadge {
+    string label = 1 [json_name = "label"];
+    .aiserver.v1.AvailableModelsResponse.ModelPickerBadge.Variant variant = 2 [json_name = "variant"];
+    bool dismiss_on_selection = 3 [json_name = "dismissOnSelection"];
+    enum Variant {
+      VARIANT_UNSPECIFIED = 0;
+      VARIANT_ACCENT = 1;
+      VARIANT_NEUTRAL = 2;
+      VARIANT_SUCCESS = 3;
+      VARIANT_WARN = 4;
+      VARIANT_DANGER = 5;
+    }
+  }
+  message ModelPickerDisplayConfiguration {
+    .aiserver.v1.AvailableModelsResponse.ModelPickerDisplayConfiguration.RoutedModelViewConfig routed_model_view_config = 1 [json_name = "routedModelViewConfig"];
+    .aiserver.v1.AvailableModelsResponse.ModelPickerDisplayConfiguration.NamedModelsViewConfig named_models_view_config = 2 [json_name = "namedModelsViewConfig"];
+    bool hide_search_bar = 3 [json_name = "hideSearchBar"];
+    bool hide_add_models = 4 [json_name = "hideAddModels"];
+    string model_selection_restriction_message = 5 [json_name = "modelSelectionRestrictionMessage"];
+    message NamedModelsViewConfig {
+      .aiserver.v1.AvailableModelsResponse.ModelPickerDisplayConfiguration.NamedModelsViewConfig.NamedViewToRoutedModelViewToggle named_view_to_routed_model_view_toggle = 2 [json_name = "namedViewToRoutedModelViewToggle"];
+      .aiserver.v1.AvailableModelsResponse.ModelPickerDisplayConfiguration.NamedModelsViewConfig.NamedViewToRoutedModelViewNoButton named_view_to_routed_model_view_no_button = 3 [json_name = "namedViewToRoutedModelViewNoButton"];
+      .aiserver.v1.AvailableModelsResponse.ModelPickerDisplayConfiguration.NamedModelsViewConfig.NamedViewToRoutedModelViewButton named_view_to_routed_model_view_button = 4 [json_name = "namedViewToRoutedModelViewButton"];
+      message NamedViewToRoutedModelViewButton {
+        string markdown = 1 [json_name = "markdown"];
+      }
+      message NamedViewToRoutedModelViewNoButton {
+      }
+      message NamedViewToRoutedModelViewToggle {
+        string markdown = 1 [json_name = "markdown"];
+      }
+    }
+    message RoutedModelViewConfig {
+      string title = 1 [json_name = "title"];
+      .aiserver.v1.AvailableModelsResponse.ModelPickerDisplayConfiguration.RoutedModelViewConfig.RoutedModelViewToNamedViewToggle routed_model_view_to_named_view_toggle = 2 [json_name = "routedModelViewToNamedViewToggle"];
+      .aiserver.v1.AvailableModelsResponse.ModelPickerDisplayConfiguration.RoutedModelViewConfig.RoutedModelViewToNamedViewButton routed_model_view_to_named_view_button = 3 [json_name = "routedModelViewToNamedViewButton"];
+      bool hide_search_bar = 4 [json_name = "hideSearchBar"];
+      bool hide_routed_model_view = 5 [json_name = "hideRoutedModelView"];
+      message RoutedModelViewToNamedViewButton {
+        string markdown = 1 [json_name = "markdown"];
+      }
+      message RoutedModelViewToNamedViewToggle {
+        string title_markdown = 1 [json_name = "titleMarkdown"];
+        string subtitle = 2 [json_name = "subtitle"];
+        bool set_to_last_named_model = 3 [json_name = "setToLastNamedModel"];
+      }
+    }
+  }
+  message ModelVariantConfig {
+    repeated .agent.v1.RequestedModel.ModelParameterValue parameter_values = 1 [json_name = "parameterValues"];
+    string display_name = 2 [json_name = "displayName"];
+    bool is_max_mode = 3 [json_name = "isMaxMode"];
+    bool is_default_max_config = 4 [json_name = "isDefaultMaxConfig"];
+    bool is_default_non_max_config = 5 [json_name = "isDefaultNonMaxConfig"];
+    .aiserver.v1.AvailableModelsResponse.TooltipData tooltip_data = 6 [json_name = "tooltipData"];
+    string tagline = 7 [json_name = "tagline"];
+    string display_name_outside_picker = 8 [json_name = "displayNameOutsidePicker"];
+    string variant_string_representation = 9 [json_name = "variantStringRepresentation"];
+    .aiserver.v1.AvailableModelsResponse.ConfirmationDialogue confirmation_dialogue = 10 [json_name = "confirmationDialogue"];
+    string legacy_slug = 11 [json_name = "legacySlug"];
+  }
+  message ModelVendor {
+    .aiserver.v1.AvailableModelsResponse.ModelVendorId id = 1 [json_name = "id"];
+    string display_name = 2 [json_name = "displayName"];
+  }
+  enum ModelVendorId {
+    MODEL_VENDOR_ID_UNSPECIFIED = 0;
+    MODEL_VENDOR_ID_ANTHROPIC = 1;
+    MODEL_VENDOR_ID_OPENAI = 2;
+    MODEL_VENDOR_ID_GOOGLE = 3;
+    MODEL_VENDOR_ID_XAI = 4;
+    MODEL_VENDOR_ID_MOONSHOT = 5;
+    MODEL_VENDOR_ID_CURSOR = 6;
+    MODEL_VENDOR_ID_NVIDIA = 7;
+    MODEL_VENDOR_ID_ZAI = 8;
+    MODEL_VENDOR_ID_META = 9;
+  }
+  message TooltipData {
+    string primary_text = 1 [json_name = "primaryText"];
+    string secondary_text = 2 [json_name = "secondaryText"];
+    bool secondary_warning_text = 3 [json_name = "secondaryWarningText"];
+    string icon = 4 [json_name = "icon"];
+    string tertiary_text = 5 [json_name = "tertiaryText"];
+    string tertiary_text_url = 6 [json_name = "tertiaryTextUrl"];
+    string markdown_content = 7 [json_name = "markdownContent"];
+  }
+}
+
+enum AvailableModelsScope {
+  AVAILABLE_MODELS_SCOPE_UNSPECIFIED = 0;
+  AVAILABLE_MODELS_SCOPE_USER_AVAILABLE = 1;
+  AVAILABLE_MODELS_SCOPE_AUTOMATIONS = 2;
+  AVAILABLE_MODELS_SCOPE_ADMIN_SETTINGS_ALL_APPLICATION_MODELS = 3;
+}
+
+message BackgroundCmdKEvalRequest {
+  string instruction = 1 [json_name = "instruction"];
+  .aiserver.v1.CurrentFileInfo current_file = 2 [json_name = "currentFile"];
+  .aiserver.v1.SimpleRange selection_range = 3 [json_name = "selectionRange"];
+  string ground_truth = 4 [json_name = "groundTruth"];
+  .aiserver.v1.BackgroundCmdKEvalRequest.Experiment experiment = 5 [json_name = "experiment"];
+  bool run_automated_eval = 6 [json_name = "runAutomatedEval"];
+  repeated .aiserver.v1.BackgroundCmdKEvalRequest.ProposedChange proposed_change_history = 7 [json_name = "proposedChangeHistory"];
+  repeated .aiserver.v1.CommitNote commit_notes = 8 [json_name = "commitNotes"];
+  repeated .aiserver.v1.CodeBlock related_code_blocks = 9 [json_name = "relatedCodeBlocks"];
+  enum Experiment {
+    EXPERIMENT_UNSPECIFIED = 0;
+    EXPERIMENT_REFLECT = 1;
+    EXPERIMENT_CMD_K_ORIGINAL_RADIUS = 2;
+    EXPERIMENT_LOOP_ON_LINTS = 3;
+    EXPERIMENT_CHAT_AND_APPLY = 4;
+    EXPERIMENT_COMMIT_NOTES = 5;
+    EXPERIMENT_COALESCE_GENERATIONS = 6;
+    EXPERIMENT_REWORD_INSTRUCTIONS = 7;
+    EXPERIMENT_CODEBASE_CHUNKS = 8;
+    EXPERIMENT_SPEC_AND_APPLY = 9;
+    EXPERIMENT_ASK_CODEBASE = 10;
+  }
+  message Lint {
+    string message = 1 [json_name = "message"];
+    string severity = 2 [json_name = "severity"];
+    string relative_workspace_path = 3 [json_name = "relativeWorkspacePath"];
+    int32 start_line_number_one_indexed = 4 [json_name = "startLineNumberOneIndexed"];
+    int32 start_column_one_indexed = 5 [json_name = "startColumnOneIndexed"];
+    int32 end_line_number_inclusive_one_indexed = 6 [json_name = "endLineNumberInclusiveOneIndexed"];
+    int32 end_column_one_indexed = 7 [json_name = "endColumnOneIndexed"];
+    repeated .aiserver.v1.BackgroundCmdKEvalRequest.Lint.QuickFix quick_fixes = 9 [json_name = "quickFixes"];
+    message QuickFix {
+      string message = 1 [json_name = "message"];
+      string kind = 2 [json_name = "kind"];
+      bool is_preferred = 3 [json_name = "isPreferred"];
+      repeated .aiserver.v1.BackgroundCmdKEvalRequest.Lint.QuickFix.Edit edits = 4 [json_name = "edits"];
+      message Edit {
+        string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+        string text = 2 [json_name = "text"];
+        int32 start_line_number_one_indexed = 3 [json_name = "startLineNumberOneIndexed"];
+        int32 start_column_one_indexed = 4 [json_name = "startColumnOneIndexed"];
+        int32 end_line_number_inclusive_one_indexed = 5 [json_name = "endLineNumberInclusiveOneIndexed"];
+        int32 end_column_one_indexed = 6 [json_name = "endColumnOneIndexed"];
+      }
+    }
+  }
+  message ProposedChange {
+    string change = 1 [json_name = "change"];
+    repeated .aiserver.v1.BackgroundCmdKEvalRequest.Lint linter_errors = 2 [json_name = "linterErrors"];
+  }
+}
+
+message BackgroundCmdKEvalResponse {
+  string proposed_change = 1 [json_name = "proposedChange"];
+}
+
+message BackgroundCmdKRequest {
+  string instruction = 1 [json_name = "instruction"];
+  .aiserver.v1.CurrentFileInfo current_file = 2 [json_name = "currentFile"];
+  .aiserver.v1.SimpleRange selection_range = 3 [json_name = "selectionRange"];
+  .aiserver.v1.BackgroundCmdKRequest.Type type = 4 [json_name = "type"];
+  repeated .aiserver.v1.BackgroundCmdKRequest.ProposedChange proposed_change_history = 5 [json_name = "proposedChangeHistory"];
+  repeated .aiserver.v1.CodeBlock related_code_blocks = 6 [json_name = "relatedCodeBlocks"];
+  repeated .aiserver.v1.CppFileDiffHistory diff_history = 7 [json_name = "diffHistory"];
+  repeated .aiserver.v1.BackgroundCmdKRequest.Lint linter_errors = 8 [json_name = "linterErrors"];
+  repeated .aiserver.v1.BackgroundCmdKRequest.UsefulType useful_types = 9 [json_name = "usefulTypes"];
+  repeated .aiserver.v1.BackgroundCmdKRequest.RecentlyViewedFile recently_viewed_files = 10 [json_name = "recentlyViewedFiles"];
+  repeated .aiserver.v1.BackgroundCmdKRequest.Diff recent_diffs = 11 [json_name = "recentDiffs"];
+  bool multiple_completions = 12 [json_name = "multipleCompletions"];
+  message Diff {
+    string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+    string diff = 2 [json_name = "diff"];
+  }
+  message Lint {
+    string message = 1 [json_name = "message"];
+    string severity = 2 [json_name = "severity"];
+    string relative_workspace_path = 3 [json_name = "relativeWorkspacePath"];
+    int32 start_line_number_one_indexed = 4 [json_name = "startLineNumberOneIndexed"];
+    int32 start_column_one_indexed = 5 [json_name = "startColumnOneIndexed"];
+    int32 end_line_number_inclusive_one_indexed = 6 [json_name = "endLineNumberInclusiveOneIndexed"];
+    int32 end_column_one_indexed = 7 [json_name = "endColumnOneIndexed"];
+    repeated .aiserver.v1.BackgroundCmdKRequest.Lint.QuickFix quick_fixes = 9 [json_name = "quickFixes"];
+    message QuickFix {
+      string message = 1 [json_name = "message"];
+      string kind = 2 [json_name = "kind"];
+      bool is_preferred = 3 [json_name = "isPreferred"];
+      repeated .aiserver.v1.BackgroundCmdKRequest.Lint.QuickFix.Edit edits = 4 [json_name = "edits"];
+      message Edit {
+        string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+        string text = 2 [json_name = "text"];
+        int32 start_line_number_one_indexed = 3 [json_name = "startLineNumberOneIndexed"];
+        int32 start_column_one_indexed = 4 [json_name = "startColumnOneIndexed"];
+        int32 end_line_number_inclusive_one_indexed = 5 [json_name = "endLineNumberInclusiveOneIndexed"];
+        int32 end_column_one_indexed = 6 [json_name = "endColumnOneIndexed"];
+      }
+    }
+  }
+  message ProposedChange {
+    string change = 1 [json_name = "change"];
+    repeated .aiserver.v1.BackgroundCmdKRequest.Lint linter_errors = 2 [json_name = "linterErrors"];
+  }
+  message RecentlyViewedFile {
+    string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+    string contents = 2 [json_name = "contents"];
+    repeated .aiserver.v1.BackgroundCmdKRequest.RecentlyViewedFile.VisibleRange visible_ranges = 3 [json_name = "visibleRanges"];
+    message VisibleRange {
+      int32 start_line_number_inclusive = 1 [json_name = "startLineNumberInclusive"];
+      int32 end_line_number_exclusive = 2 [json_name = "endLineNumberExclusive"];
+      int32 viewed_at = 3 [json_name = "viewedAt"];
+      int32 global_order_descending = 4 [json_name = "globalOrderDescending"];
+    }
+  }
+  enum Type {
+    TYPE_UNSPECIFIED = 0;
+    TYPE_REFLECT = 1;
+    TYPE_LOOP_ON_LINTS = 2;
+    TYPE_CHAT_AND_APPLY = 3;
+    TYPE_COALESCE_GENERATIONS = 4;
+    TYPE_CODEBASE_CHUNKS = 5;
+    TYPE_SPEC_AND_APPLY = 6;
+    TYPE_ASK_CODEBASE = 7;
+    TYPE_FINETUNED_INSTRUCTIONS = 8;
+    TYPE_USEFUL_TYPES = 9;
+    TYPE_CHAT_AND_APPLY_UNDERSPECIFIED = 10;
+  }
+  message UsefulType {
+    string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+    int32 start_line = 2 [json_name = "startLine"];
+    string text = 3 [json_name = "text"];
+    double score = 4 [json_name = "score"];
+  }
+}
+
+message BackgroundCmdKResponse {
+  string proposed_change = 1 [json_name = "proposedChange"];
+}
+
+message BugBotStatus {
+  .aiserver.v1.BugBotStatus.Status status = 1 [json_name = "status"];
+  string message = 2 [json_name = "message"];
+  int32 iterations_completed = 3 [json_name = "iterationsCompleted"];
+  int32 total_iterations = 4 [json_name = "totalIterations"];
+  int32 total_tokens = 5 [json_name = "totalTokens"];
+  int32 processed_tokens = 6 [json_name = "processedTokens"];
+  float processed_cost = 7 [json_name = "processedCost"];
+  int32 thinking_tokens = 8 [json_name = "thinkingTokens"];
+  float thinking_cost = 9 [json_name = "thinkingCost"];
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    STATUS_IN_PROGRESS = 1;
+    STATUS_IN_PROGRESS_ITERATIONS = 2;
+    STATUS_DONE = 3;
+    STATUS_ERROR = 4;
+  }
+}
+
+message BugContext {
+  repeated string screenshots = 1 [json_name = "screenshots"];
+  .aiserver.v1.CurrentFileInfo current_file = 2 [json_name = "currentFile"];
+  repeated .aiserver.v1.ConversationMessage conversation = 3 [json_name = "conversation"];
+  repeated .aiserver.v1.LogFile logs = 4 [json_name = "logs"];
+  string console_logs = 5 [json_name = "consoleLogs"];
+  string cursor_version = 6 [json_name = "cursorVersion"];
+  string os = 7 [json_name = "os"];
+  string proto_url = 8 [json_name = "protoUrl"];
+  string failing_requst_id = 9 [json_name = "failingRequstId"];
+  string connection_error_raw = 10 [json_name = "connectionErrorRaw"];
+  .aiserver.v1.CmdKDebugInfo debug_info = 12 [json_name = "debugInfo"];
+  int32 connect_error_code = 13 [json_name = "connectErrorCode"];
+  .aiserver.v1.ErrorDetails.Error error_detail_code = 14 [json_name = "errorDetailCode"];
+  string error_detail_title = 15 [json_name = "errorDetailTitle"];
+  string error_detail_detail = 16 [json_name = "errorDetailDetail"];
+  repeated .aiserver.v1.BugReportScreenshot binary_screenshots = 17 [json_name = "binaryScreenshots"];
+}
+
+message BugReportScreenshot {
+  bytes data = 1 [json_name = "data"];
+  string mime_type = 2 [json_name = "mimeType"];
+}
+
+message BugbotTrialNotification {
+  bool show = 1 [json_name = "show"];
+  string message = 2 [json_name = "message"];
+  string learn_more_url = 3 [json_name = "learnMoreUrl"];
+}
+
+message BulkEmbedRequest {
+  repeated string texts = 1 [json_name = "texts"];
+}
+
+message BulkEmbedResponse {
+  repeated .aiserver.v1.EmbeddingResponse embeddings = 1 [json_name = "embeddings"];
+}
+
+message CachedFileContext {
+  string relative_path = 1 [json_name = "relativePath"];
+  string language = 2 [json_name = "language"];
+  string full_content = 3 [json_name = "fullContent"];
+  int64 last_viewed_timestamp = 4 [json_name = "lastViewedTimestamp"];
+}
+
+message CalculateAutoSelectionRequest {
+  .aiserver.v1.CurrentFileInfo current_file_info = 1 [json_name = "currentFileInfo"];
+  .aiserver.v1.CursorPosition cursor_position = 2 [json_name = "cursorPosition"];
+  .aiserver.v1.SimpleRange selection_range = 3 [json_name = "selectionRange"];
+  .aiserver.v1.ModelDetails model_details = 4 [json_name = "modelDetails"];
+  repeated .aiserver.v1.HeuristicsSelection heuristics_selections = 5 [json_name = "heuristicsSelections"];
+}
+
+message CalculateAutoSelectionResponse {
+  repeated .aiserver.v1.AutoSelectionResult results = 1 [json_name = "results"];
+}
+
+message ChatSuggestionItem {
+  string text = 1 [json_name = "text"];
+  string reason = 2 [json_name = "reason"];
+  string type = 3 [json_name = "type"];
+  string category = 4 [json_name = "category"];
+}
+
+message CheckBugBotPriceRequest {
+  int32 diff_char_len = 1 [json_name = "diffCharLen"];
+  int32 iterations = 2 [json_name = "iterations"];
+  .aiserver.v1.ModelDetails model_details = 3 [json_name = "modelDetails"];
+  string session_id = 4 [json_name = "sessionId"];
+}
+
+message CheckBugBotPriceResponse {
+  double cost = 1 [json_name = "cost"];
+  string price_id = 2 [json_name = "priceId"];
+}
+
+message CheckBugBotTelemetryHealthyRequest {
+  string session_id = 1 [json_name = "sessionId"];
+}
+
+message CheckBugBotTelemetryHealthyResponse {
+  bool is_healthy = 1 [json_name = "isHealthy"];
+}
+
+message CheckDoableAsTaskRequest {
+  string model_output = 1 [json_name = "modelOutput"];
+  .aiserver.v1.ModelDetails model_details = 2 [json_name = "modelDetails"];
+}
+
+message CheckDoableAsTaskResponse {
+  bool doable_as_task = 1 [json_name = "doableAsTask"];
+}
+
+message CheckFeatureStatusRequest {
+  string feature_name = 1 [json_name = "featureName"];
+}
+
+message CheckFeatureStatusResponse {
+  bool enabled = 1 [json_name = "enabled"];
+}
+
+message CheckFeaturesStatusRequest {
+  repeated string feature_names = 1 [json_name = "featureNames"];
+}
+
+message CheckFeaturesStatusResponse {
+  repeated .aiserver.v1.CheckFeaturesStatusResponse.FeatureStatus feature_statuses = 1 [json_name = "featureStatuses"];
+  message FeatureStatus {
+    string feature_name = 1 [json_name = "featureName"];
+    bool enabled = 2 [json_name = "enabled"];
+  }
+}
+
+message CheckLongFilesFitResponse {
+  bool did_fit = 1 [json_name = "didFit"];
+}
+
+message CheckNumberConfigRequest {
+  string key = 1 [json_name = "key"];
+}
+
+message CheckNumberConfigResponse {
+  int32 value = 1 [json_name = "value"];
+}
+
+message CheckNumberConfigsRequest {
+  repeated string config_names = 1 [json_name = "configNames"];
+}
+
+message CheckNumberConfigsResponse {
+  repeated .aiserver.v1.CheckNumberConfigsResponse.Config configs = 1 [json_name = "configs"];
+  message Config {
+    string config_name = 1 [json_name = "configName"];
+    int32 value = 2 [json_name = "value"];
+  }
+}
+
+message CheckQueuePositionRequest {
+  string orig_request_id = 1 [json_name = "origRequestId"];
+  .aiserver.v1.ModelDetails model_details = 2 [json_name = "modelDetails"];
+  string usage_uuid = 3 [json_name = "usageUuid"];
+}
+
+message CheckQueuePositionResponse {
+  int32 position = 1 [json_name = "position"];
+  int32 seconds_left_to_wait = 2 [json_name = "secondsLeftToWait"];
+  bool hit_hard_limit = 3 [json_name = "hitHardLimit"];
+  bool could_enable_usage_based_pricing_to_skip = 4 [json_name = "couldEnableUsageBasedPricingToSkip"];
+  .aiserver.v1.UsageEventDetails usage_event_details = 5 [json_name = "usageEventDetails"];
+  .aiserver.v1.CheckQueuePositionResponse.CustomLink custom_link = 6 [json_name = "customLink"];
+  int32 new_queue_position = 7 [json_name = "newQueuePosition"];
+  .aiserver.v1.CheckQueuePositionResponse.ModelForSlowPoolNudgeData model_for_slow_pool_nudge_data = 8 [json_name = "modelForSlowPoolNudgeData"];
+  message CustomLink {
+    string address = 1 [json_name = "address"];
+    string message = 2 [json_name = "message"];
+  }
+  message ModelForSlowPoolNudgeData {
+    string model = 1 [json_name = "model"];
+    string message = 2 [json_name = "message"];
+  }
+}
+
+message CheckUsageBasedPriceRequest {
+  .aiserver.v1.UsageEventDetails usage_event_details = 1 [json_name = "usageEventDetails"];
+}
+
+message CheckUsageBasedPriceResponse {
+  string markdown_response = 1 [json_name = "markdownResponse"];
+  int32 cents = 2 [json_name = "cents"];
+  string price_id = 3 [json_name = "priceId"];
+}
+
+message ClientNumericMetric {
+  string metric = 1 [json_name = "metric"];
+  double value = 2 [json_name = "value"];
+  string session_id = 3 [json_name = "sessionId"];
+  string ff_hash = 4 [json_name = "ffHash"];
+  int64 timestamp_ms = 5 [json_name = "timestampMs"];
+  string client_version = 6 [json_name = "clientVersion"];
+  string os = 7 [json_name = "os"];
+  string enabled_extensions_hash = 8 [json_name = "enabledExtensionsHash"];
+  string ff_resolved = 9 [json_name = "ffResolved"];
+  string extensions_resolved = 10 [json_name = "extensionsResolved"];
+  string window_type = 11 [json_name = "windowType"];
+}
+
+enum CloudAgentEffortMode {
+  CLOUD_AGENT_EFFORT_MODE_UNSPECIFIED = 0;
+  CLOUD_AGENT_EFFORT_MODE_STANDARD = 1;
+  CLOUD_AGENT_EFFORT_MODE_GRIND = 2;
+}
+
+message CloudSetupBlocker {
+  string id = 1 [json_name = "id"];
+  string icon = 2 [json_name = "icon"];
+  .aiserver.v1.CloudSetupBlockerAction action = 3 [json_name = "action"];
+  string cta_label = 4 [json_name = "ctaLabel"];
+  string checklist_title = 7 [json_name = "checklistTitle"];
+  string checklist_description = 8 [json_name = "checklistDescription"];
+}
+
+message CloudSetupBlockerAction {
+  oneof action {
+    string url = 1 [json_name = "url"];
+    .google.protobuf.Empty open_privacy_settings = 2 [json_name = "openPrivacySettings"];
+    .google.protobuf.Empty open_github_connect = 3 [json_name = "openGithubConnect"];
+    .google.protobuf.Empty open_repo_picker = 4 [json_name = "openRepoPicker"];
+  }
+}
+
+message CodeSearchResult {
+  repeated .aiserver.v1.CodeResult results = 1 [json_name = "results"];
+  repeated .aiserver.v1.File all_files = 2 [json_name = "allFiles"];
+}
+
+message CommitLineRange {
+  int32 start = 1 [json_name = "start"];
+  int32 end = 2 [json_name = "end"];
+  int32 absolute_start = 3 [json_name = "absoluteStart"];
+  int32 absolute_end = 4 [json_name = "absoluteEnd"];
+}
+
+message ComposerAutocompleteContext {
+  .aiserver.v1.CurrentFileContext current_file = 1 [json_name = "currentFile"];
+  repeated .aiserver.v1.CachedFileContext cached_files = 2 [json_name = "cachedFiles"];
+  repeated .aiserver.v1.ConversationMessage conversation_messages = 3 [json_name = "conversationMessages"];
+  string visible_viewport_text = 4 [json_name = "visibleViewportText"];
+  repeated string first_user_messages = 5 [json_name = "firstUserMessages"];
+}
+
+message ComposerEnhancerClientMessage {
+  oneof message {
+    .aiserver.v1.ComposerEnhancerRequest request = 1 [json_name = "request"];
+    .aiserver.v1.ComposerEnhancerToolResult tool_result = 2 [json_name = "toolResult"];
+  }
+}
+
+message ComposerEnhancerRequest {
+  string input_text = 1 [json_name = "inputText"];
+  string composer_id = 2 [json_name = "composerId"];
+}
+
+message ComposerEnhancerResponse {
+  string improved_text = 1 [json_name = "improvedText"];
+  bool is_final = 2 [json_name = "isFinal"];
+}
+
+message ComposerEnhancerServerMessage {
+  oneof message {
+    .aiserver.v1.ComposerEnhancerResponse response = 1 [json_name = "response"];
+    .aiserver.v1.ComposerEnhancerToolCall tool_call = 2 [json_name = "toolCall"];
+  }
+}
+
+message ComposerEnhancerToolCall {
+  string tool_call_id = 1 [json_name = "toolCallId"];
+  string tool_name = 2 [json_name = "toolName"];
+  string tool_args = 3 [json_name = "toolArgs"];
+  int32 tool_index = 4 [json_name = "toolIndex"];
+}
+
+message ComposerEnhancerToolResult {
+  string tool_call_id = 1 [json_name = "toolCallId"];
+  string result = 2 [json_name = "result"];
+  bool is_error = 3 [json_name = "isError"];
+}
+
+message ContextItemTokenDetail {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+  int32 count = 2 [json_name = "count"];
+  int32 line_count = 3 [json_name = "lineCount"];
+}
+
+message ContextOptions {
+  .aiserver.v1.ContextOptions.AllDocumentation all_documentation = 1 [json_name = "allDocumentation"];
+  .aiserver.v1.ContextOptions.CurrentFileContents current_file_contents = 2 [json_name = "currentFileContents"];
+  .aiserver.v1.ContextOptions.LinterDiagnostics linter_diagnostics = 3 [json_name = "linterDiagnostics"];
+  .aiserver.v1.ContextOptions.GlobalContext global_context = 4 [json_name = "globalContext"];
+  message AllDocumentation {
+    repeated .aiserver.v1.ContextOptions.AllDocumentation.Documentation available_docs = 1 [json_name = "availableDocs"];
+    message Documentation {
+      string name = 1 [json_name = "name"];
+      string url = 2 [json_name = "url"];
+      string identifier = 3 [json_name = "identifier"];
+    }
+  }
+  message CurrentFileContents {
+    string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+    string contents = 2 [json_name = "contents"];
+    .aiserver.v1.CursorPosition cursor_position = 3 [json_name = "cursorPosition"];
+    repeated .aiserver.v1.DataframeInfo dataframes = 4 [json_name = "dataframes"];
+    string language_id = 5 [json_name = "languageId"];
+    .aiserver.v1.CursorRange selection = 6 [json_name = "selection"];
+  }
+  message GlobalContext {
+  }
+  message LinterDiagnostics {
+    string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+    string contents = 2 [json_name = "contents"];
+    repeated .aiserver.v1.ContextOptions.LinterDiagnostics.Diagnostic diagnostics = 3 [json_name = "diagnostics"];
+    message Diagnostic {
+      string message = 1 [json_name = "message"];
+      string source = 2 [json_name = "source"];
+      .aiserver.v1.CursorRange range = 3 [json_name = "range"];
+      string relative_workspace_path = 4 [json_name = "relativeWorkspacePath"];
+    }
+  }
+}
+
+message ContextRerankingRequest {
+  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  repeated .aiserver.v1.ConversationMessage chat_conversation_history = 2 [json_name = "chatConversationHistory"];
+  repeated .aiserver.v1.CppFileDiffHistory cpp_diff_trajectories = 3 [json_name = "cppDiffTrajectories"];
+  repeated .aiserver.v1.ContextRerankingCandidateFile candidate_files = 4 [json_name = "candidateFiles"];
+}
+
+message ContextRerankingResponse {
+  repeated float reranking_scores = 1 [json_name = "rerankingScores"];
+}
+
+message ContextScoresRequest {
+  string source_range = 1 [json_name = "sourceRange"];
+  repeated string method_signatures = 2 [json_name = "methodSignatures"];
+}
+
+message ContextScoresResponse {
+  repeated float scores = 1 [json_name = "scores"];
+}
+
+message CountTokensRequest {
+  repeated .aiserver.v1.ContextItem context_items = 1 [json_name = "contextItems"];
+  string model_name = 2 [json_name = "modelName"];
+}
+
+message CountTokensResponse {
+  int32 count = 1 [json_name = "count"];
+  repeated .aiserver.v1.ContextItemTokenDetail token_details = 2 [json_name = "tokenDetails"];
+}
+
+message CurrentFileContext {
+  string relative_path = 1 [json_name = "relativePath"];
+  string language = 2 [json_name = "language"];
+  int32 cursor_line = 3 [json_name = "cursorLine"];
+  string full_content = 4 [json_name = "fullContent"];
+}
+
+message CurrentFolderFileOrFolder {
+  string name = 1 [json_name = "name"];
+  bool is_folder = 2 [json_name = "isFolder"];
+}
+
+message CursorHelpConversationMessage {
+  string id = 1 [json_name = "id"];
+  string role = 2 [json_name = "role"];
+  string content = 3 [json_name = "content"];
+}
+
+message DebugInfo {
+  .aiserver.v1.DebugInfo.Breakpoint breakpoint = 1 [json_name = "breakpoint"];
+  repeated .aiserver.v1.DebugInfo.CallStackFrame call_stack = 2 [json_name = "callStack"];
+  repeated .aiserver.v1.CodeBlock history = 3 [json_name = "history"];
+  message Breakpoint {
+    string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+    int32 line_number = 2 [json_name = "lineNumber"];
+    repeated string lines_before_breakpoint = 3 [json_name = "linesBeforeBreakpoint"];
+    repeated string lines_after_breakpoint = 4 [json_name = "linesAfterBreakpoint"];
+    string exception_info = 5 [json_name = "exceptionInfo"];
+  }
+  message CallStackFrame {
+    string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+    int32 line_number = 2 [json_name = "lineNumber"];
+    string function_name = 3 [json_name = "functionName"];
+    repeated .aiserver.v1.DebugInfo.Scope scopes = 4 [json_name = "scopes"];
+  }
+  message Scope {
+    string name = 1 [json_name = "name"];
+    repeated .aiserver.v1.DebugInfo.Variable variables = 2 [json_name = "variables"];
+  }
+  message Variable {
+    string name = 1 [json_name = "name"];
+    string value = 2 [json_name = "value"];
+    string type = 3 [json_name = "type"];
+  }
+}
+
+message DevOnlyGetPastRequestIdsRequest {
+  int32 count = 1 [json_name = "count"];
+  int32 page = 2 [json_name = "page"];
+}
+
+message DevOnlyGetPastRequestIdsResponse {
+  repeated .aiserver.v1.DevOnlyPastRequest past_requests = 1 [json_name = "pastRequests"];
+  int32 total_count = 10 [json_name = "totalCount"];
+  bool has_more = 11 [json_name = "hasMore"];
+}
+
+message DevOnlyPastRequest {
+  string request_id = 1 [json_name = "requestId"];
+  string date_time = 2 [json_name = "dateTime"];
+  string model_name = 3 [json_name = "modelName"];
+  string feature_name = 4 [json_name = "featureName"];
+  string s3_uri = 5 [json_name = "s3Uri"];
+  string status = 6 [json_name = "status"];
+  int32 num_prompt_tokens = 7 [json_name = "numPromptTokens"];
+  int32 num_completion_tokens = 8 [json_name = "numCompletionTokens"];
+  string api_call_method = 9 [json_name = "apiCallMethod"];
+}
+
+message DoThisForMeCheckRequest {
+  string generation_uuid = 1 [json_name = "generationUuid"];
+  string completion = 2 [json_name = "completion"];
+}
+
+message DoThisForMeCheckResponse {
+  string reasoning = 5 [json_name = "reasoning"];
+  oneof action {
+    .aiserver.v1.DoThisForMeCheckResponse.SkipAction skip_action = 1 [json_name = "skipAction"];
+    .aiserver.v1.DoThisForMeCheckResponse.EditAction edit_action = 2 [json_name = "editAction"];
+    .aiserver.v1.DoThisForMeCheckResponse.CreateAction create_action = 3 [json_name = "createAction"];
+    .aiserver.v1.DoThisForMeCheckResponse.RunAction run_action = 4 [json_name = "runAction"];
+  }
+  message CreateAction {
+    string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+  }
+  message EditAction {
+    string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+  }
+  message RunAction {
+    string command = 1 [json_name = "command"];
+  }
+  message SkipAction {
+  }
+}
+
+message DoThisForMeRequest {
+  string generation_uuid = 1 [json_name = "generationUuid"];
+  string completion = 2 [json_name = "completion"];
+  .aiserver.v1.DoThisForMeCheckResponse action = 3 [json_name = "action"];
+}
+
+message DoThisForMeResponse {
+  oneof event {
+    .aiserver.v1.DoThisForMeResponse.UpdateStatus update_status = 1 [json_name = "updateStatus"];
+  }
+  message UpdateStatus {
+    string status = 1 [json_name = "status"];
+  }
+}
+
+message DoThisForMeResponseWrapped {
+  oneof response {
+    .aiserver.v1.DoThisForMeResponse real_response = 1 [json_name = "realResponse"];
+    string background_task_uuid = 2 [json_name = "backgroundTaskUuid"];
+  }
+}
+
+message DocumentationInfo {
+  string doc_identifier = 1 [json_name = "docIdentifier"];
+  .aiserver.v1.DocumentationMetadata metadata = 2 [json_name = "metadata"];
+}
+
+message EmbeddingResponse {
+  repeated double embedding = 1 [json_name = "embedding"];
+}
+
+message EvaluatePromptHookRequest {
+  string prompt = 1 [json_name = "prompt"];
+  .google.protobuf.Value hook_input_json = 2 [json_name = "hookInputJson"];
+  string model_name = 3 [json_name = "modelName"];
+}
+
+message EvaluatePromptHookResponse {
+  bool ok = 1 [json_name = "ok"];
+  string reason = 2 [json_name = "reason"];
+}
+
+message FetchRelevantKnowledgeForConversationRequest {
+  string request_id = 1 [json_name = "requestId"];
+  repeated .aiserver.v1.ConversationMessage conversation = 2 [json_name = "conversation"];
+  string git_origin = 3 [json_name = "gitOrigin"];
+  int32 limit = 4 [json_name = "limit"];
+  repeated string tagged_filenames = 5 [json_name = "taggedFilenames"];
+}
+
+message FetchRelevantKnowledgeForConversationResponse {
+  repeated .aiserver.v1.ConversationMessage.KnowledgeItem knowledge_items = 1 [json_name = "knowledgeItems"];
+}
+
+message FileRangeAnnotations {
+  string file_path = 1 [json_name = "filePath"];
+  repeated .aiserver.v1.RangeGroup groups = 2 [json_name = "groups"];
+}
+
+message FindBugsRequest {
+  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  .aiserver.v1.ModelDetails model_details = 2 [json_name = "modelDetails"];
+}
+
+message FindBugsResponse {
+  .aiserver.v1.FindBugsResponse.Bug bug = 1 [json_name = "bug"];
+  message Bug {
+    string description = 1 [json_name = "description"];
+    int32 line_number = 2 [json_name = "lineNumber"];
+    float confidence = 3 [json_name = "confidence"];
+  }
+}
+
+message FixMarkersRequest {
+  repeated .aiserver.v1.FixMarkersRequest.Marker markers = 1 [json_name = "markers"];
+  .aiserver.v1.ModelDetails model_details = 2 [json_name = "modelDetails"];
+  int32 iteration_number = 3 [json_name = "iterationNumber"];
+  string sequence_id = 4 [json_name = "sequenceId"];
+  string user_instruction = 5 [json_name = "userInstruction"];
+  message Marker {
+    repeated string lines = 1 [json_name = "lines"];
+    int32 start_line = 2 [json_name = "startLine"];
+    int32 end_line_inclusive = 3 [json_name = "endLineInclusive"];
+    string message = 4 [json_name = "message"];
+    string relative_workspace_path = 5 [json_name = "relativeWorkspacePath"];
+    repeated .aiserver.v1.FixMarkersRequest.Marker.RelatedInformation related_information = 6 [json_name = "relatedInformation"];
+    repeated .aiserver.v1.FixMarkersRequest.Marker.ContextRange context_ranges = 7 [json_name = "contextRanges"];
+    repeated .aiserver.v1.FixMarkersRequest.Marker.AncestorTypeDefinition ancestor_type_definitions = 8 [json_name = "ancestorTypeDefinitions"];
+    repeated .aiserver.v1.FixMarkersRequest.Marker.InsertedSymbolType inserted_symbol_types = 9 [json_name = "insertedSymbolTypes"];
+    repeated .aiserver.v1.FixMarkersRequest.Marker.QuickFix quick_fixes = 10 [json_name = "quickFixes"];
+    int32 start_column = 11 [json_name = "startColumn"];
+    int32 end_column_inclusive = 12 [json_name = "endColumnInclusive"];
+    repeated .aiserver.v1.FixMarkersRequest.Marker.ClassInformation class_information = 13 [json_name = "classInformation"];
+    repeated .aiserver.v1.FixMarkersRequest.Marker.FunctionSignature function_signatures = 14 [json_name = "functionSignatures"];
+    int32 snapshot = 15 [json_name = "snapshot"];
+    message AncestorTypeDefinition {
+      string name = 1 [json_name = "name"];
+      string relative_workspace_path = 2 [json_name = "relativeWorkspacePath"];
+      int32 start_line = 3 [json_name = "startLine"];
+      repeated string lines = 4 [json_name = "lines"];
+    }
+    message ClassInformation {
+      string class_name = 1 [json_name = "className"];
+      int32 start_line = 2 [json_name = "startLine"];
+      repeated int32 top_level_lines = 3 [json_name = "topLevelLines"];
+      repeated string lines = 4 [json_name = "lines"];
+      repeated .aiserver.v1.FixMarkersRequest.Marker.ClassInformation.Constructor constructors = 5 [json_name = "constructors"];
+      string detail = 6 [json_name = "detail"];
+      message Constructor {
+        int32 start_line = 1 [json_name = "startLine"];
+        int32 end_line_inclusive = 2 [json_name = "endLineInclusive"];
+      }
+    }
+    message ContextRange {
+      int32 start_line = 1 [json_name = "startLine"];
+      int32 end_line_inclusive = 2 [json_name = "endLineInclusive"];
+    }
+    message FunctionSignature {
+      string label = 1 [json_name = "label"];
+      string documentation = 2 [json_name = "documentation"];
+      repeated .aiserver.v1.FixMarkersRequest.Marker.FunctionSignature.FunctionParameter parameters = 3 [json_name = "parameters"];
+      message FunctionParameter {
+        string label = 1 [json_name = "label"];
+        string documentation = 2 [json_name = "documentation"];
+      }
+    }
+    message InsertedSymbolType {
+      string symbol_name = 1 [json_name = "symbolName"];
+      string symbol_type = 2 [json_name = "symbolType"];
+      string relative_workspace_path = 3 [json_name = "relativeWorkspacePath"];
+      int32 symbol_line = 4 [json_name = "symbolLine"];
+    }
+    message QuickFix {
+      string message = 1 [json_name = "message"];
+      string kind = 2 [json_name = "kind"];
+      bool is_preferred = 3 [json_name = "isPreferred"];
+      repeated .aiserver.v1.FixMarkersRequest.Marker.QuickFix.Edit edits = 4 [json_name = "edits"];
+      message Edit {
+        string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+        int32 start_line = 2 [json_name = "startLine"];
+        int32 end_line_inclusive = 3 [json_name = "endLineInclusive"];
+        repeated string deleted_lines = 4 [json_name = "deletedLines"];
+        repeated string add_lines = 5 [json_name = "addLines"];
+        int32 snapshot = 6 [json_name = "snapshot"];
+      }
+    }
+    message RelatedInformation {
+      string message = 1 [json_name = "message"];
+      string relative_workspace_path = 2 [json_name = "relativeWorkspacePath"];
+      repeated string relevant_lines = 3 [json_name = "relevantLines"];
+      int32 start_line = 4 [json_name = "startLine"];
+    }
+  }
+}
+
+message FixMarkersResponse {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+  repeated .aiserver.v1.FixMarkersResponse.Change changes = 2 [json_name = "changes"];
+  bool success = 3 [json_name = "success"];
+  int32 iteration_number = 4 [json_name = "iterationNumber"];
+  message Change {
+    int32 start_line = 1 [json_name = "startLine"];
+    int32 end_line_exclusive = 2 [json_name = "endLineExclusive"];
+    repeated string deleted_lines = 3 [json_name = "deletedLines"];
+    repeated string add_lines = 4 [json_name = "addLines"];
+  }
+}
+
+message FullFileSearchResult {
+  repeated .aiserver.v1.FileResult results = 1 [json_name = "results"];
+}
+
+message GenerateImageReferenceImage {
+  string data = 1 [json_name = "data"];
+  string mime_type = 2 [json_name = "mimeType"];
+}
+
+message GenerateTldrRequest {
+  string text = 1 [json_name = "text"];
+}
+
+message GenerateTldrResponse {
+  string summary = 1 [json_name = "summary"];
+  string all = 2 [json_name = "all"];
+}
+
+message GetAtSymbolSuggestionsRequest {
+  .aiserver.v1.CurrentFileInfo current_file_info = 1 [json_name = "currentFileInfo"];
+  repeated .aiserver.v1.AtSymbolDependencyInformation at_symbol_dependencies = 2 [json_name = "atSymbolDependencies"];
+  repeated .aiserver.v1.AtSymbolOption at_symbol_options = 3 [json_name = "atSymbolOptions"];
+  string user_query = 4 [json_name = "userQuery"];
+  .aiserver.v1.ModelDetails model_details = 5 [json_name = "modelDetails"];
+}
+
+message GetAtSymbolSuggestionsResponse {
+  repeated int32 indices = 1 [json_name = "indices"];
+  string explanation = 2 [json_name = "explanation"];
+}
+
+message GetBackgroundComposerFeedbackLinkRequest {
+}
+
+message GetBackgroundComposerFeedbackLinkResponse {
+  string url = 1 [json_name = "url"];
+}
+
+message GetBedrockModelsRequest {
+  string access_key = 1 [json_name = "accessKey"];
+  string secret_key = 2 [json_name = "secretKey"];
+  string region = 3 [json_name = "region"];
+}
+
+message GetBedrockModelsResponse {
+  repeated string models = 1 [json_name = "models"];
+  string error = 2 [json_name = "error"];
+}
+
+message GetChatPromptResponse {
+  string prompt = 1 [json_name = "prompt"];
+  int32 token_count = 2 [json_name = "tokenCount"];
+}
+
+message GetChatRequest {
+  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  repeated .aiserver.v1.ConversationMessage conversation = 2 [json_name = "conversation"];
+  repeated .aiserver.v1.RepositoryInfo repositories = 3 [json_name = "repositories"];
+  .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
+  string workspace_root_path = 5 [json_name = "workspaceRootPath"];
+  repeated .aiserver.v1.CodeBlock code_blocks = 6 [json_name = "codeBlocks"];
+  .aiserver.v1.ModelDetails model_details = 7 [json_name = "modelDetails"];
+  repeated string documentation_identifiers = 8 [json_name = "documentationIdentifiers"];
+  string request_id = 9 [json_name = "requestId"];
+  .aiserver.v1.LinterErrors linter_errors = 10 [json_name = "linterErrors"];
+  string summary = 11 [json_name = "summary"];
+  int32 summary_up_until_index = 12 [json_name = "summaryUpUntilIndex"];
+  bool allow_long_file_scan = 13 [json_name = "allowLongFileScan"];
+  bool is_bash = 14 [json_name = "isBash"];
+  string conversation_id = 15 [json_name = "conversationId"];
+  bool can_handle_filenames_after_language_ids = 16 [json_name = "canHandleFilenamesAfterLanguageIds"];
+  string use_web = 17 [json_name = "useWeb"];
+  repeated .aiserver.v1.ChatQuote quotes = 18 [json_name = "quotes"];
+  .aiserver.v1.DebugInfo debug_info = 19 [json_name = "debugInfo"];
+  string workspace_id = 20 [json_name = "workspaceId"];
+  repeated .aiserver.v1.ChatExternalLink external_links = 21 [json_name = "externalLinks"];
+  bool long_context_mode = 22 [json_name = "longContextMode"];
+  repeated .aiserver.v1.CommitNote commit_notes = 23 [json_name = "commitNotes"];
+  bool is_eval = 24 [json_name = "isEval"];
+  .aiserver.v1.ContextAST context_ast = 25 [json_name = "contextAst"];
+  int32 desired_max_tokens = 26 [json_name = "desiredMaxTokens"];
+  bool is_composer = 27 [json_name = "isComposer"];
+  bool runnable_code_blocks = 28 [json_name = "runnableCodeBlocks"];
+  bool should_cache = 29 [json_name = "shouldCache"];
+  bool allow_model_fallbacks = 30 [json_name = "allowModelFallbacks"];
+  int32 number_of_times_shown_fallback_model_warning = 31 [json_name = "numberOfTimesShownFallbackModelWarning"];
+}
+
+message GetChatSuggestionsRequest {
+  repeated .aiserver.v1.RecentChat recent_chats = 1 [json_name = "recentChats"];
+}
+
+message GetChatSuggestionsResponse {
+  repeated .aiserver.v1.ChatSuggestionItem suggestions = 1 [json_name = "suggestions"];
+}
+
+message GetChatTitleRequest {
+  repeated .aiserver.v1.ConversationMessage conversation = 2 [json_name = "conversation"];
+}
+
+message GetChatTitleResponse {
+  string title = 1 [json_name = "title"];
+}
+
+message GetCloudSetupBlockersRequest {
+  string selected_target_repo_url = 1 [json_name = "selectedTargetRepoUrl"];
+}
+
+message GetCloudSetupBlockersResponse {
+  repeated .aiserver.v1.CloudSetupBlocker pending = 1 [json_name = "pending"];
+  repeated .aiserver.v1.CloudSetupBlocker completed = 2 [json_name = "completed"];
+}
+
+message GetCodebaseQuestionsResponse {
+  repeated string questions = 1 [json_name = "questions"];
+}
+
+message GetCompletionRequest {
+  .aiserver.v1.UniqueFileIdentifier file_identifier = 1 [json_name = "fileIdentifier"];
+  .aiserver.v1.CursorPosition cursor_position = 2 [json_name = "cursorPosition"];
+  .aiserver.v1.SurroundingLines surrounding_lines = 3 [json_name = "surroundingLines"];
+  .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
+  repeated string suggestions_from_editor = 5 [json_name = "suggestionsFromEditor"];
+}
+
+message GetCompletionResponse {
+  string completion = 1 [json_name = "completion"];
+  float score = 2 [json_name = "score"];
+  string debugging_only_completion_prompt = 3 [json_name = "debuggingOnlyCompletionPrompt"];
+}
+
+message GetComposerAutocompleteRequest {
+  string input_text = 1 [json_name = "inputText"];
+  string composer_id = 2 [json_name = "composerId"];
+  .aiserver.v1.ComposerAutocompleteContext context = 3 [json_name = "context"];
+}
+
+message GetComposerAutocompleteResponse {
+  string suggestion = 1 [json_name = "suggestion"];
+}
+
+message GetComposerChatRequest {
+  repeated .aiserver.v1.ConversationMessage conversation = 1 [json_name = "conversation"];
+  bool allow_long_file_scan = 2 [json_name = "allowLongFileScan"];
+  .aiserver.v1.ExplicitContext explicit_context = 3 [json_name = "explicitContext"];
+  bool can_handle_filenames_after_language_ids = 4 [json_name = "canHandleFilenamesAfterLanguageIds"];
+  .aiserver.v1.ModelDetails model_details = 5 [json_name = "modelDetails"];
+  .aiserver.v1.LinterErrors linter_errors = 6 [json_name = "linterErrors"];
+  repeated string documentation_identifiers = 7 [json_name = "documentationIdentifiers"];
+  string use_web = 8 [json_name = "useWeb"];
+  repeated .aiserver.v1.ComposerExternalLink external_links = 9 [json_name = "externalLinks"];
+  .aiserver.v1.ConversationMessage project_context = 10 [json_name = "projectContext"];
+  repeated .aiserver.v1.GetComposerChatRequest.RedDiff diffs_for_compressing_files = 11 [json_name = "diffsForCompressingFiles"];
+  bool compress_edits = 12 [json_name = "compressEdits"];
+  bool should_cache = 13 [json_name = "shouldCache"];
+  repeated .aiserver.v1.LinterErrors multi_file_linter_errors = 14 [json_name = "multiFileLinterErrors"];
+  .aiserver.v1.CurrentFileInfo current_file = 15 [json_name = "currentFile"];
+  .aiserver.v1.GetComposerChatRequest.RecentEdits recent_edits = 16 [json_name = "recentEdits"];
+  bool use_reference_composer_diff_prompt = 17 [json_name = "useReferenceComposerDiffPrompt"];
+  repeated .aiserver.v1.ComposerFileDiffHistory file_diff_histories = 18 [json_name = "fileDiffHistories"];
+  bool use_new_compression_scheme = 19 [json_name = "useNewCompressionScheme"];
+  repeated .aiserver.v1.RankedContext additional_ranked_context = 20 [json_name = "additionalRankedContext"];
+  repeated .aiserver.v1.ChatQuote quotes = 21 [json_name = "quotes"];
+  bool willing_to_pay_extra_for_speed = 22 [json_name = "willingToPayExtraForSpeed"];
+  string conversation_id = 23 [json_name = "conversationId"];
+  bool use_unified_chat_prompt = 24 [json_name = "useUnifiedChatPrompt"];
+  bool use_full_inputs_context = 25 [json_name = "useFullInputsContext"];
+  bool is_resume = 26 [json_name = "isResume"];
+  string context_bank_session_id = 27 [json_name = "contextBankSessionId"];
+  int32 context_bank_version = 28 [json_name = "contextBankVersion"];
+  .aiserver.v1.CodeSearchResult uses_codebase_results = 29 [json_name = "usesCodebaseResults"];
+  bytes context_bank_encryption_key = 31 [json_name = "contextBankEncryptionKey"];
+  message RecentEdits {
+    repeated .aiserver.v1.GetComposerChatRequest.RecentEdits.CodeBlockInfo code_block_info = 1 [json_name = "codeBlockInfo"];
+    repeated .aiserver.v1.GetComposerChatRequest.RecentEdits.FileInfo final_file_values = 2 [json_name = "finalFileValues"];
+    string edits_belong_to_composer_generation_uuid = 3 [json_name = "editsBelongToComposerGenerationUuid"];
+    message CodeBlockInfo {
+      string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+      string content_before = 2 [json_name = "contentBefore"];
+      string content_after = 3 [json_name = "contentAfter"];
+      string generation_uuid = 4 [json_name = "generationUuid"];
+      int32 version = 5 [json_name = "version"];
+    }
+    message FileInfo {
+      string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+      string content = 2 [json_name = "content"];
+    }
+  }
+  message RedDiff {
+    string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+    repeated .aiserver.v1.SimplestRange red_ranges = 2 [json_name = "redRanges"];
+    repeated .aiserver.v1.SimplestRange red_ranges_reversed = 3 [json_name = "redRangesReversed"];
+    string start_hash = 4 [json_name = "startHash"];
+    string end_hash = 5 [json_name = "endHash"];
+  }
+}
+
+message GetDefaultModelNudgeDataRequest {
+  .aiserver.v1.GetDefaultModelNudgeDataRequest.StartupOpportunity startup_opportunity = 1 [json_name = "startupOpportunity"];
+  .agent.v1.RequestedModel current_model = 2 [json_name = "currentModel"];
+  enum StartupOpportunity {
+    STARTUP_OPPORTUNITY_UNSPECIFIED = 0;
+    STARTUP_OPPORTUNITY_FIRST_OPEN = 1;
+    STARTUP_OPPORTUNITY_REOPEN = 2;
+  }
+}
+
+message GetDefaultModelNudgeDataResponse {
+  string nudge_date = 1 [json_name = "nudgeDate"];
+  bool should_default_switch_on_new_chat = 2 [json_name = "shouldDefaultSwitchOnNewChat"];
+  repeated string models_with_no_default_switch = 3 [json_name = "modelsWithNoDefaultSwitch"];
+  string conversion_model_override = 4 [json_name = "conversionModelOverride"];
+  .aiserver.v1.GetDefaultModelNudgeDataResponse.InitialModel initial_model = 5 [json_name = "initialModel"];
+  .aiserver.v1.GetDefaultModelNudgeDataResponse.ApplicationOpenModelSwitch application_open_model_switch = 6 [json_name = "applicationOpenModelSwitch"];
+  message ApplicationOpenModelSwitch {
+    string nudge_id = 1 [json_name = "nudgeId"];
+    string experiment_name = 2 [json_name = "experimentName"];
+    .aiserver.v1.GetDefaultModelNudgeDataResponse.InitialModel target_model = 3 [json_name = "targetModel"];
+  }
+  message InitialModel {
+    string model_id = 1 [json_name = "modelId"];
+    repeated .agent.v1.RequestedModel.ModelParameterValue parameters = 2 [json_name = "parameters"];
+  }
+}
+
+message GetDefaultModelRequest {
+}
+
+message GetDefaultModelResponse {
+  string model = 1 [json_name = "model"];
+  string thinking_model = 2 [json_name = "thinkingModel"];
+  bool max_mode = 3 [json_name = "maxMode"];
+  string next_default_set_date = 4 [json_name = "nextDefaultSetDate"];
+}
+
+message GetDiffReviewRequest {
+  repeated .aiserver.v1.GetDiffReviewRequest.SimpleFileDiff diffs = 1 [json_name = "diffs"];
+  string model = 2 [json_name = "model"];
+  message SimpleFileDiff {
+    string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+    repeated .aiserver.v1.GetDiffReviewRequest.SimpleFileDiff.Chunk chunks = 2 [json_name = "chunks"];
+    message Chunk {
+      repeated string old_lines = 1 [json_name = "oldLines"];
+      repeated string new_lines = 2 [json_name = "newLines"];
+      .aiserver.v1.LineRange old_range = 3 [json_name = "oldRange"];
+      .aiserver.v1.LineRange new_range = 4 [json_name = "newRange"];
+    }
+  }
+}
+
+message GetEditorBugbotAutoRunStatusRequest {
+}
+
+message GetEditorBugbotAutoRunStatusResponse {
+  bool should_auto_run = 1 [json_name = "shouldAutoRun"];
+}
+
+message GetEffectiveTokenLimitRequest {
+  .aiserver.v1.ModelDetails model_details = 1 [json_name = "modelDetails"];
+}
+
+message GetEffectiveTokenLimitResponse {
+  int32 token_limit = 1 [json_name = "tokenLimit"];
+}
+
+message GetEvaluationPromptRequest {
+  .aiserver.v1.GetEvaluationPromptRequest.EvaluationPromptType prompt_type = 1 [json_name = "promptType"];
+  .aiserver.v1.CurrentFileInfo current_file = 2 [json_name = "currentFile"];
+  string query = 3 [json_name = "query"];
+  string bucket_id = 4 [json_name = "bucketId"];
+  string query_strategy = 5 [json_name = "queryStrategy"];
+  int32 token_limit = 6 [json_name = "tokenLimit"];
+  .aiserver.v1.GetEvaluationPromptRequest.RerankingStrategy reranking_strategy = 7 [json_name = "rerankingStrategy"];
+  enum EvaluationPromptType {
+    EVALUATION_PROMPT_TYPE_UNSPECIFIED = 0;
+    EVALUATION_PROMPT_TYPE_GENERATE = 1;
+    EVALUATION_PROMPT_TYPE_CHAT = 2;
+  }
+  enum RerankingStrategy {
+    RERANKING_STRATEGY_UNSPECIFIED = 0;
+    RERANKING_STRATEGY_DISTANCE_ONLY = 1;
+    RERANKING_STRATEGY_GPT4_RELEVANCE = 2;
+  }
+}
+
+message GetEvaluationPromptResponse {
+  string prompt = 1 [json_name = "prompt"];
+  int32 token_count = 2 [json_name = "tokenCount"];
+  int32 estimated_token_count = 3 [json_name = "estimatedTokenCount"];
+}
+
+message GetFilesForComposerRequest {
+  repeated .aiserver.v1.ConversationMessage conversation = 1 [json_name = "conversation"];
+  repeated .aiserver.v1.CurrentFileInfo files = 2 [json_name = "files"];
+  bool rerank_results = 3 [json_name = "rerankResults"];
+  bool rerank_results_v2 = 6 [json_name = "rerankResultsV2"];
+  bool long_context_mode = 7 [json_name = "longContextMode"];
+  bool is_eval = 8 [json_name = "isEval"];
+  string request_id = 9 [json_name = "requestId"];
+  .aiserver.v1.ModelDetails model_details = 10 [json_name = "modelDetails"];
+  oneof context_results {
+    .aiserver.v1.FullFileSearchResult file_search_results = 4 [json_name = "fileSearchResults"];
+    .aiserver.v1.CodeSearchResult code_search_results = 5 [json_name = "codeSearchResults"];
+  }
+}
+
+message GetFilesForComposerResponse {
+  repeated string relative_workspace_paths = 1 [json_name = "relativeWorkspacePaths"];
+}
+
+message GetLastDefaultModelNudgeRequest {
+}
+
+message GetLastDefaultModelNudgeResponse {
+  string nudge_date = 1 [json_name = "nudgeDate"];
+}
+
+message GetModelLabelsRequest {
+}
+
+message GetModelLabelsResponse {
+  repeated .aiserver.v1.GetModelLabelsResponse.ModelLabel model_labels = 1 [json_name = "modelLabels"];
+  message ModelLabel {
+    string name = 1 [json_name = "name"];
+    string label = 2 [json_name = "label"];
+    string short_label = 3 [json_name = "shortLabel"];
+    bool supports_agent = 4 [json_name = "supportsAgent"];
+  }
+}
+
+message GetPassthroughPromptRequest {
+  string query = 1 [json_name = "query"];
+  string model_name = 2 [json_name = "modelName"];
+}
+
+message GetPassthroughPromptResponse {
+  string result = 1 [json_name = "result"];
+}
+
+message GetSimplePromptRequest {
+  string query = 1 [json_name = "query"];
+  string answer_placeholder = 2 [json_name = "answerPlaceholder"];
+}
+
+message GetSimplePromptResponse {
+  string result = 1 [json_name = "result"];
+}
+
+message GetSuggestedBugBotIterationsRequest {
+  int32 diff_char_len = 1 [json_name = "diffCharLen"];
+  .aiserver.v1.ModelDetails model_details = 2 [json_name = "modelDetails"];
+}
+
+message GetSuggestedBugBotIterationsResponse {
+  int32 iterations = 1 [json_name = "iterations"];
+}
+
+message GetTerminalCompletionRequest {
+  string current_command = 1 [json_name = "currentCommand"];
+  repeated string command_history = 2 [json_name = "commandHistory"];
+  string model_name = 3 [json_name = "modelName"];
+  repeated .aiserver.v1.CppFileDiffHistory file_diff_histories = 4 [json_name = "fileDiffHistories"];
+  string git_diff = 5 [json_name = "gitDiff"];
+  repeated string commit_history = 6 [json_name = "commitHistory"];
+  repeated string past_results = 7 [json_name = "pastResults"];
+  .aiserver.v1.ModelDetails model_details = 8 [json_name = "modelDetails"];
+  string user_platform = 9 [json_name = "userPlatform"];
+  string current_folder = 10 [json_name = "currentFolder"];
+  repeated .aiserver.v1.CurrentFolderFileOrFolder current_folder_structure = 11 [json_name = "currentFolderStructure"];
+  repeated .aiserver.v1.File relevant_files = 12 [json_name = "relevantFiles"];
+}
+
+message GetTerminalCompletionResponse {
+  string command = 1 [json_name = "command"];
+}
+
+message GetThoughtAnnotationRequest {
+  string request_id = 1 [json_name = "requestId"];
+}
+
+message GetThoughtAnnotationResponse {
+  .aiserver.v1.AiThoughtAnnotation thought_annotation = 1 [json_name = "thoughtAnnotation"];
+}
+
+message GetUserInfoRequest {
+}
+
+message GetUserInfoResponse {
+  string user_id = 1 [json_name = "userId"];
+  string jupyter_token = 2 [json_name = "jupyterToken"];
+  .aiserver.v1.UsageData usage = 3 [json_name = "usage"];
+}
+
+message GetUserInstructionsRequest {
+  repeated .aiserver.v1.RecentChatMessage chats = 1 [json_name = "chats"];
+  string existing_instructions = 2 [json_name = "existingInstructions"];
+}
+
+message GetUserInstructionsResponse {
+  string text = 1 [json_name = "text"];
+}
+
+message HealthCheckRequest {
+}
+
+message HealthCheckResponse {
+  .aiserver.v1.HealthCheckResponse.Status status = 1 [json_name = "status"];
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    STATUS_HEALTHY = 1;
+  }
+}
+
+message HeuristicsSelection {
+  .aiserver.v1.HeuristicsSelection.HeuristicsSelectionType type = 1 [json_name = "type"];
+  int32 start_line = 2 [json_name = "startLine"];
+  int32 end_line = 3 [json_name = "endLine"];
+  enum HeuristicsSelectionType {
+    HEURISTICS_SELECTION_TYPE_UNSPECIFIED = 0;
+    HEURISTICS_SELECTION_TYPE_GROUP = 1;
+    HEURISTICS_SELECTION_TYPE_LINE = 2;
+    HEURISTICS_SELECTION_TYPE_FOLDING = 3;
+  }
+}
+
+message InferBackgroundComposerScriptsRequest {
+  repeated .aiserver.v1.InferBackgroundComposerScriptsRequest.Command commands = 1 [json_name = "commands"];
+  message Command {
+    string command = 1 [json_name = "command"];
+    float timestamp = 2 [json_name = "timestamp"];
+    string cwd = 3 [json_name = "cwd"];
+  }
+}
+
+message InferBackgroundComposerScriptsResponse {
+  string install_script = 1 [json_name = "installScript"];
+  string start_script = 2 [json_name = "startScript"];
+  repeated .aiserver.v1.InferBackgroundComposerScriptsResponse.Terminal terminals = 3 [json_name = "terminals"];
+  message Terminal {
+    string name = 1 [json_name = "name"];
+    string command = 2 [json_name = "command"];
+  }
+}
+
+message IntentPredictionRequest {
+  repeated .aiserver.v1.ConversationMessage messages = 1 [json_name = "messages"];
+  .aiserver.v1.ContextOptions context_options = 2 [json_name = "contextOptions"];
+  .aiserver.v1.ModelDetails model_details = 3 [json_name = "modelDetails"];
+}
+
+message IntentPredictionResponse {
+  .aiserver.v1.IntentPredictionResponse.ChosenDocumentation chosen_documentation = 1 [json_name = "chosenDocumentation"];
+  .aiserver.v1.IntentPredictionResponse.ChosenFileContents chosen_file_contents = 2 [json_name = "chosenFileContents"];
+  .aiserver.v1.IntentPredictionResponse.ChosenLinterDiagnostics chosen_linter_diagnostics = 3 [json_name = "chosenLinterDiagnostics"];
+  bool use_global_context = 4 [json_name = "useGlobalContext"];
+  bool use_with_folder_context = 5 [json_name = "useWithFolderContext"];
+  message ChosenDocumentation {
+    repeated int32 doc_indices = 1 [json_name = "docIndices"];
+    repeated string doc_identifiers = 2 [json_name = "docIdentifiers"];
+    repeated string doc_names = 3 [json_name = "docNames"];
+  }
+  message ChosenFileContents {
+  }
+  message ChosenLinterDiagnostics {
+    repeated int32 diagnostic_indices = 1 [json_name = "diagnosticIndices"];
+  }
+}
+
+message InterfaceAgentInitRequest {
+  .aiserver.v1.ModelDetails model_details = 1 [json_name = "modelDetails"];
+  bool debugging_only_live_mode = 2 [json_name = "debuggingOnlyLiveMode"];
+  .aiserver.v1.InterfaceAgentClientState interface_agent_client_state = 3 [json_name = "interfaceAgentClientState"];
+}
+
+message InterfaceAgentInitResponse {
+  string task_uuid = 1 [json_name = "taskUuid"];
+  string human_readable_title = 2 [json_name = "humanReadableTitle"];
+}
+
+message IsCursorPredictionEnabledRequest {
+}
+
+message IsCursorPredictionEnabledResponse {
+  bool enabled = 1 [json_name = "enabled"];
+}
+
+message IsTerminalFinishedRequest {
+  string terminal_content = 1 [json_name = "terminalContent"];
+  bool check_for_hangs = 2 [json_name = "checkForHangs"];
+  string chat_request_id = 3 [json_name = "chatRequestId"];
+  string command = 4 [json_name = "command"];
+}
+
+message IsTerminalFinishedResponseV2 {
+  bool is_finished = 1 [json_name = "isFinished"];
+  .aiserver.v1.RunTerminalCommandEndedReason ended_reason = 2 [json_name = "endedReason"];
+  int32 exit_code = 3 [json_name = "exitCode"];
+  bool is_hanging = 4 [json_name = "isHanging"];
+}
+
+message IsolatedTreesitterRequest {
+  string file_content = 1 [json_name = "fileContent"];
+  string language_id = 2 [json_name = "languageId"];
+  string command_id = 3 [json_name = "commandId"];
+}
+
+message IsolatedTreesitterResponse {
+  repeated .aiserver.v1.IsolatedTreesitterResponse.TreesitterSymbolNameItem items = 1 [json_name = "items"];
+  message TreeSitterPosition {
+    int32 row = 1 [json_name = "row"];
+    int32 column = 2 [json_name = "column"];
+  }
+  message TreesitterSymbolNameItem {
+    string symbol_name = 1 [json_name = "symbolName"];
+    .aiserver.v1.IsolatedTreesitterResponse.TreeSitterPosition start_position = 2 [json_name = "startPosition"];
+    .aiserver.v1.IsolatedTreesitterResponse.TreeSitterPosition end_position = 3 [json_name = "endPosition"];
+  }
+}
+
+message IterativeSftInferenceConfig {
+  double temperature = 1 [json_name = "temperature"];
+  double top_p = 2 [json_name = "topP"];
+}
+
+message KeepComposerCacheWarmRequest {
+  .aiserver.v1.GetComposerChatRequest request = 1 [json_name = "request"];
+  string request_id = 2 [json_name = "requestId"];
+  bool is_composer_visible = 3 [json_name = "isComposerVisible"];
+}
+
+message KeepComposerCacheWarmResponse {
+  bool did_keep_warm = 1 [json_name = "didKeepWarm"];
+}
+
+message KnowledgeBaseAddRequest {
+  string knowledge = 1 [json_name = "knowledge"];
+  string title = 2 [json_name = "title"];
+  string git_origin = 3 [json_name = "gitOrigin"];
+  string composer_id = 4 [json_name = "composerId"];
+}
+
+message KnowledgeBaseAddResponse {
+  bool success = 1 [json_name = "success"];
+  string id = 2 [json_name = "id"];
+}
+
+message KnowledgeBaseGetRequest {
+  string id = 1 [json_name = "id"];
+}
+
+message KnowledgeBaseGetResponse {
+  bool success = 1 [json_name = "success"];
+  .aiserver.v1.KnowledgeBaseGetResponse.Item result = 2 [json_name = "result"];
+  message Item {
+    string id = 1 [json_name = "id"];
+    string knowledge = 2 [json_name = "knowledge"];
+    string title = 3 [json_name = "title"];
+    string created_at = 4 [json_name = "createdAt"];
+  }
+}
+
+message KnowledgeBaseListRequest {
+  int32 limit = 1 [json_name = "limit"];
+  string git_origin = 2 [json_name = "gitOrigin"];
+}
+
+message KnowledgeBaseListResponse {
+  bool success = 1 [json_name = "success"];
+  repeated .aiserver.v1.KnowledgeBaseListResponse.Item all_results = 2 [json_name = "allResults"];
+  message Item {
+    string id = 1 [json_name = "id"];
+    string knowledge = 2 [json_name = "knowledge"];
+    string title = 3 [json_name = "title"];
+    string created_at = 4 [json_name = "createdAt"];
+    bool is_generated = 5 [json_name = "isGenerated"];
+  }
+}
+
+message KnowledgeBaseRemoveRequest {
+  string id = 1 [json_name = "id"];
+}
+
+message KnowledgeBaseRemoveResponse {
+  bool success = 1 [json_name = "success"];
+}
+
+message KnowledgeBaseUpdateRequest {
+  string id = 1 [json_name = "id"];
+  string knowledge = 2 [json_name = "knowledge"];
+  string title = 3 [json_name = "title"];
+}
+
+message KnowledgeBaseUpdateResponse {
+  bool success = 1 [json_name = "success"];
+}
+
+message LogFile {
+  string relative_path_to_cursor_folder = 1 [json_name = "relativePathToCursorFolder"];
+  string contents = 2 [json_name = "contents"];
+}
+
+message LogLinterExplicitUserFeedbackRequest {
+  .aiserver.v1.AiLintBug bug = 1 [json_name = "bug"];
+  .aiserver.v1.LogLinterExplicitUserFeedbackRequest.LinterUserFeedback user_feedback = 3 [json_name = "userFeedback"];
+  string user_feedback_details = 4 [json_name = "userFeedbackDetails"];
+  enum LinterUserFeedback {
+    LINTER_USER_FEEDBACK_UNSPECIFIED = 0;
+    LINTER_USER_FEEDBACK_CORRECT = 1;
+    LINTER_USER_FEEDBACK_INCORRECT = 2;
+    LINTER_USER_FEEDBACK_OTHER = 3;
+  }
+}
+
+message LogLinterExplicitUserFeedbackResponse {
+}
+
+message LogUserLintReplyRequest {
+  string uuid = 1 [json_name = "uuid"];
+  string user_action = 2 [json_name = "userAction"];
+  bool debug_mode = 3 [json_name = "debugMode"];
+}
+
+message LogUserLintReplyResponse {
+}
+
+message ModelParameterDefinition {
+  string id = 1 [json_name = "id"];
+  string name = 2 [json_name = "name"];
+  string markdown_tooltip = 3 [json_name = "markdownTooltip"];
+  .aiserver.v1.ModelParameterDefinition.ModelParameterType parameter_type = 4 [json_name = "parameterType"];
+  bool is_cycleable_by_hotkey = 5 [json_name = "isCycleableByHotkey"];
+  message BooleanParameterDefinition {
+    repeated .aiserver.v1.ModelParameterDefinition.BooleanParameterDefinition.BooleanParameterValue values = 1 [json_name = "values"];
+    message BooleanParameterValue {
+      string value = 1 [json_name = "value"];
+      string display_name = 2 [json_name = "displayName"];
+      bool increases_model_cost = 3 [json_name = "increasesModelCost"];
+      bool default_blocked_in_admin_allowlist = 4 [json_name = "defaultBlockedInAdminAllowlist"];
+      bool hide_from_user_picker_when_admin_blocked = 5 [json_name = "hideFromUserPickerWhenAdminBlocked"];
+      bool blocked_by_admin_allowlist = 6 [json_name = "blockedByAdminAllowlist"];
+    }
+  }
+  message EnumParameterDefinition {
+    repeated .aiserver.v1.ModelParameterDefinition.EnumParameterDefinition.EnumParameterValue values = 1 [json_name = "values"];
+    message EnumParameterValue {
+      string value = 1 [json_name = "value"];
+      string display_name = 2 [json_name = "displayName"];
+      bool increases_model_cost = 3 [json_name = "increasesModelCost"];
+      bool blocked_by_admin_allowlist = 4 [json_name = "blockedByAdminAllowlist"];
+      string markdown_tooltip = 5 [json_name = "markdownTooltip"];
+      repeated .aiserver.v1.AvailableModelsResponse.ModelPickerBadge model_picker_badges = 6 [json_name = "modelPickerBadges"];
+    }
+  }
+  message ModelParameterType {
+    .aiserver.v1.ModelParameterDefinition.BooleanParameterDefinition boolean_parameter = 1 [json_name = "booleanParameter"];
+    .aiserver.v1.ModelParameterDefinition.EnumParameterDefinition enum_parameter = 2 [json_name = "enumParameter"];
+  }
+}
+
+message ModelQueryRequest {
+  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  repeated .aiserver.v1.ConversationMessage conversation = 2 [json_name = "conversation"];
+  repeated .aiserver.v1.RepositoryInfo repositories = 3 [json_name = "repositories"];
+  .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
+  string workspace_root_path = 5 [json_name = "workspaceRootPath"];
+  repeated .aiserver.v1.CodeBlock code_blocks = 6 [json_name = "codeBlocks"];
+  .aiserver.v1.ModelDetails model_details = 7 [json_name = "modelDetails"];
+  .aiserver.v1.ModelQueryRequest.QueryType query_type = 8 [json_name = "queryType"];
+  .aiserver.v1.RepositoryInfo repository_info = 9 [json_name = "repositoryInfo"];
+  bool faster_and_stupider = 10 [json_name = "fasterAndStupider"];
+  bool use_globs = 11 [json_name = "useGlobs"];
+  enum QueryType {
+    QUERY_TYPE_UNSPECIFIED = 0;
+    QUERY_TYPE_KEYWORDS = 1;
+    QUERY_TYPE_EMBEDDINGS = 2;
+  }
+}
+
+message ModelQueryResponse {
+  repeated .aiserver.v1.ModelQueryResponse.Query queries = 1 [json_name = "queries"];
+  message Query {
+    string query = 1 [json_name = "query"];
+    bool successful_parse = 2 [json_name = "successfulParse"];
+    repeated string good_file_extensions = 3 [json_name = "goodFileExtensions"];
+    repeated string bad_file_extensions = 4 [json_name = "badFileExtensions"];
+    repeated string good_paths = 5 [json_name = "goodPaths"];
+    repeated string bad_paths = 6 [json_name = "badPaths"];
+  }
+}
+
+message ModelQueryResponseV2 {
+  oneof query_or_reasoning {
+    .aiserver.v1.ModelQueryResponseV2.QueryItem query = 1 [json_name = "query"];
+    string reasoning = 2 [json_name = "reasoning"];
+  }
+  message QueryItem {
+    int32 index = 3 [json_name = "index"];
+    oneof partial_query {
+      string text = 1 [json_name = "text"];
+      string glob = 2 [json_name = "glob"];
+    }
+  }
+}
+
+message NameTabRequest {
+  repeated .aiserver.v1.ConversationMessage messages = 1 [json_name = "messages"];
+  bool is_project = 2 [json_name = "isProject"];
+  string conversation_id = 6 [json_name = "conversationId"];
+  bool is_side_chat = 7 [json_name = "isSideChat"];
+  oneof credentials {
+    .agent.v1.ApiKeyCredentials api_key_credentials = 3 [json_name = "apiKeyCredentials"];
+    .agent.v1.AzureCredentials azure_credentials = 4 [json_name = "azureCredentials"];
+    .agent.v1.BedrockCredentials bedrock_credentials = 5 [json_name = "bedrockCredentials"];
+  }
+}
+
+message NameTabResponse {
+  string name = 1 [json_name = "name"];
+  string reason = 2 [json_name = "reason"];
+  string icon = 3 [json_name = "icon"];
+}
+
+message PotentialLocsInitialQueriesRequest {
+  string query = 1 [json_name = "query"];
+}
+
+message PotentialLocsInitialQueriesResponse {
+  string hyde_query = 1 [json_name = "hydeQuery"];
+}
+
+message PotentialLocsRequest {
+  string text = 1 [json_name = "text"];
+}
+
+message PotentialLocsResponse {
+  string potential_loc = 1 [json_name = "potentialLoc"];
+}
+
+message PotentialLocsUnderneathRequest {
+  string file = 1 [json_name = "file"];
+  repeated .aiserver.v1.SimplestRange ranges = 2 [json_name = "ranges"];
+  string query = 3 [json_name = "query"];
+}
+
+message PotentialLocsUnderneathResponse {
+  string text = 1 [json_name = "text"];
+}
+
+message PotentiallyGenerateMemoryRequest {
+  string request_id = 1 [json_name = "requestId"];
+  repeated .aiserver.v1.ConversationMessage conversation = 2 [json_name = "conversation"];
+  string git_upstream_url = 3 [json_name = "gitUpstreamUrl"];
+  string composer_id = 4 [json_name = "composerId"];
+}
+
+message PotentiallyGenerateMemoryResponse {
+  string saved_memory = 1 [json_name = "savedMemory"];
+  string knowledge_id = 2 [json_name = "knowledgeId"];
+  string title = 3 [json_name = "title"];
+}
+
+message PreloadEditRequest {
+  .aiserver.v1.StreamEditRequest req = 1 [json_name = "req"];
+}
+
+message PreloadEditResponse {
+}
+
+message PrivacyCheckRequest {
+}
+
+message PrivacyCheckResponse {
+  bool is_on_privacy_pod = 1 [json_name = "isOnPrivacyPod"];
+  bool is_ghost_mode_on = 2 [json_name = "isGhostModeOn"];
+}
+
+message ProcessMetricsRowRequest {
+  int32 pid = 1 [json_name = "pid"];
+  int32 ppid = 2 [json_name = "ppid"];
+  string name = 3 [json_name = "name"];
+  string extension_id = 4 [json_name = "extensionId"];
+  int64 cpu_time_ms_sample = 5 [json_name = "cpuTimeMsSample"];
+  double sample_avg_mem_mb = 6 [json_name = "sampleAvgMemMb"];
+  double sample_peak_mem_mb = 7 [json_name = "samplePeakMemMb"];
+  double session_peak_mem_mb = 8 [json_name = "sessionPeakMemMb"];
+  string process_name_hash = 9 [json_name = "processNameHash"];
+}
+
+message ProcessMetricsV2RowRequest {
+  int32 pid = 1 [json_name = "pid"];
+  int32 ppid = 2 [json_name = "ppid"];
+  string process_name = 3 [json_name = "processName"];
+  string extension_id = 4 [json_name = "extensionId"];
+  string process_name_hash = 5 [json_name = "processNameHash"];
+  int64 sample_cpu_time_ms = 6 [json_name = "sampleCpuTimeMs"];
+  double sample_avg_mem_mb = 7 [json_name = "sampleAvgMemMb"];
+  double sample_peak_mem_mb = 8 [json_name = "samplePeakMemMb"];
+  double session_peak_mem_mb = 9 [json_name = "sessionPeakMemMb"];
+  double memory_during_sample_peak_mb = 10 [json_name = "memoryDuringSamplePeakMb"];
+  double cpu_during_sample_peak_pct = 11 [json_name = "cpuDuringSamplePeakPct"];
+  repeated string argv = 12 [json_name = "argv"];
+}
+
+message PseudocodeTarget {
+  .aiserver.v1.SimpleRange range = 1 [json_name = "range"];
+  string content = 2 [json_name = "content"];
+}
+
+message PullRequestResult {
+  string sha = 1 [json_name = "sha"];
+  string full_pr_contents = 2 [json_name = "fullPrContents"];
+  float score = 3 [json_name = "score"];
+}
+
+message PushAiThoughtRequest {
+  string thought = 1 [json_name = "thought"];
+  .aiserver.v1.CmdKDebugInfo cmd_k_debug_info = 2 [json_name = "cmdKDebugInfo"];
+  bool automated = 3 [json_name = "automated"];
+  .aiserver.v1.PushAiThoughtRequest.Metadata metadata = 4 [json_name = "metadata"];
+  message Metadata {
+    oneof event {
+      .aiserver.v1.PushAiThoughtRequest.Metadata.AcceptedHallucinatedFunctionEvent accepted_hallucinated_function_event = 1 [json_name = "acceptedHallucinatedFunctionEvent"];
+    }
+    message AcceptedHallucinatedFunctionEvent {
+      string implementation_uuid = 1 [json_name = "implementationUuid"];
+      string hallucinated_function_uuid = 2 [json_name = "hallucinatedFunctionUuid"];
+      string implementation = 3 [json_name = "implementation"];
+      string source = 4 [json_name = "source"];
+      string implementation_reqid = 5 [json_name = "implementationReqid"];
+      string plan_reqid = 6 [json_name = "planReqid"];
+      string reflection_reqid = 7 [json_name = "reflectionReqid"];
+    }
+  }
+}
+
+message PushAiThoughtResponse {
+}
+
+message QuickActionCandidate {
+  string id = 1 [json_name = "id"];
+  string description = 2 [json_name = "description"];
+}
+
+message RangeGroup {
+  string conversation_id = 1 [json_name = "conversationId"];
+  string model = 2 [json_name = "model"];
+  string operation_type = 3 [json_name = "operationType"];
+  repeated .aiserver.v1.CommitLineRange ranges = 4 [json_name = "ranges"];
+  string request_id = 5 [json_name = "requestId"];
+}
+
+message RecentChat {
+  string title = 1 [json_name = "title"];
+  int64 timestamp = 2 [json_name = "timestamp"];
+  string summary = 3 [json_name = "summary"];
+  repeated .aiserver.v1.RecentChatMessage messages = 4 [json_name = "messages"];
+  string todos = 5 [json_name = "todos"];
+}
+
+message RecentChatMessage {
+  string role = 1 [json_name = "role"];
+  string text = 2 [json_name = "text"];
+  string context = 3 [json_name = "context"];
+}
+
+message RecordIdeBugReactionRequest {
+  string bug_id = 1 [json_name = "bugId"];
+  string reaction = 2 [json_name = "reaction"];
+}
+
+message RecordIdeBugReactionResponse {
+  bool success = 1 [json_name = "success"];
+}
+
+message ReportAgentFeedbackRequest {
+  string request_id = 1 [json_name = "requestId"];
+  .aiserver.v1.ReportAgentFeedbackRequest.Sentiment sentiment = 2 [json_name = "sentiment"];
+  repeated string categories = 3 [json_name = "categories"];
+  string comment = 4 [json_name = "comment"];
+  string canonical_model_name = 5 [json_name = "canonicalModelName"];
+  .aiserver.v1.ReportAgentFeedbackRequest.Source source = 6 [json_name = "source"];
+  .aiserver.v1.ReportAgentFeedbackRequest.Variant variant = 7 [json_name = "variant"];
+  enum Sentiment {
+    SENTIMENT_UNSPECIFIED = 0;
+    SENTIMENT_UP = 1;
+    SENTIMENT_DOWN = 2;
+    SENTIMENT_RETRACTED = 3;
+  }
+  enum Source {
+    SOURCE_UNSPECIFIED = 0;
+    SOURCE_IDE = 1;
+    SOURCE_GLASS = 2;
+  }
+  enum Variant {
+    VARIANT_UNSPECIFIED = 0;
+    VARIANT_PROMINENT = 1;
+    VARIANT_INLINE = 2;
+  }
+}
+
+message ReportAgentFeedbackResponse {
+}
+
+message ReportAgentMessageFeedbackRequest {
+  string request_id = 1 [json_name = "requestId"];
+  string bubble_id = 2 [json_name = "bubbleId"];
+  string composer_id = 3 [json_name = "composerId"];
+  string selected_text = 4 [json_name = "selectedText"];
+  int32 selection_start = 5 [json_name = "selectionStart"];
+  int32 selection_end = 6 [json_name = "selectionEnd"];
+  string comment = 7 [json_name = "comment"];
+  string canonical_model_name = 8 [json_name = "canonicalModelName"];
+  string category = 9 [json_name = "category"];
+  string sentiment = 10 [json_name = "sentiment"];
+}
+
+message ReportAgentMessageFeedbackResponse {
+  string s3_uri = 1 [json_name = "s3Uri"];
+}
+
+message ReportAiCodeChangeMetricsRequest {
+  repeated .aiserver.v1.AiCodeChange changes = 1 [json_name = "changes"];
+}
+
+message ReportAiCodeChangeMetricsResponse {
+}
+
+message ReportAutoRoutingResultFeedbackRequest {
+  string request_id = 1 [json_name = "requestId"];
+  string rating = 2 [json_name = "rating"];
+  string source = 3 [json_name = "source"];
+  string displayed_model_label = 4 [json_name = "displayedModelLabel"];
+}
+
+message ReportAutoRoutingResultFeedbackResponse {
+}
+
+message ReportBugRequest {
+  string bug = 1 [json_name = "bug"];
+  .aiserver.v1.ReportBugRequest.BugType bug_type = 2 [json_name = "bugType"];
+  .aiserver.v1.BugContext context = 3 [json_name = "context"];
+  string contact_email = 4 [json_name = "contactEmail"];
+  enum BugType {
+    BUG_TYPE_UNSPECIFIED = 0;
+    BUG_TYPE_LOW = 1;
+    BUG_TYPE_MEDIUM = 2;
+    BUG_TYPE_URGENT = 3;
+    BUG_TYPE_CRASH = 4;
+    BUG_TYPE_CONNECTION_ERROR = 5;
+    BUG_TYPE_IDEA = 6;
+    BUG_TYPE_MISC_AUTOMATIC_ERROR = 7;
+  }
+}
+
+message ReportBugResponse {
+}
+
+message ReportClientNumericMetricsRequest {
+  repeated .aiserver.v1.ClientNumericMetric metrics = 1 [json_name = "metrics"];
+}
+
+message ReportClientNumericMetricsResponse {
+}
+
+message ReportCmdKFateRequest {
+  string request_id = 1 [json_name = "requestId"];
+  .aiserver.v1.ReportCmdKFateRequest.Fate fate = 2 [json_name = "fate"];
+  enum Fate {
+    FATE_UNSPECIFIED = 0;
+    FATE_CANCELLED = 1;
+    FATE_ACCEPTED = 2;
+    FATE_REJECTED = 3;
+    FATE_FOLLOWED_UP = 4;
+    FATE_REPROMPTED = 5;
+  }
+}
+
+message ReportCmdKFateResponse {
+}
+
+message ReportCommitAiAnalyticsRequest {
+  string commit_hash = 1 [json_name = "commitHash"];
+  int32 total_lines_added = 2 [json_name = "totalLinesAdded"];
+  int32 total_lines_deleted = 3 [json_name = "totalLinesDeleted"];
+  int32 tab_lines_added = 4 [json_name = "tabLinesAdded"];
+  int32 tab_lines_deleted = 5 [json_name = "tabLinesDeleted"];
+  int32 composer_lines_added = 6 [json_name = "composerLinesAdded"];
+  int32 composer_lines_deleted = 7 [json_name = "composerLinesDeleted"];
+  string branch_name = 8 [json_name = "branchName"];
+  bool is_primary_branch = 9 [json_name = "isPrimaryBranch"];
+  string repo_name = 10 [json_name = "repoName"];
+  int32 non_ai_lines_added = 11 [json_name = "nonAiLinesAdded"];
+  int32 non_ai_lines_deleted = 12 [json_name = "nonAiLinesDeleted"];
+  repeated string change_ids = 13 [json_name = "changeIds"];
+  string message = 14 [json_name = "message"];
+  int64 commit_ts = 15 [json_name = "commitTs"];
+  repeated .aiserver.v1.FileRangeAnnotations range_annotations = 16 [json_name = "rangeAnnotations"];
+  string commit_source = 17 [json_name = "commitSource"];
+}
+
+message ReportCommitAiAnalyticsResponse {
+}
+
+message ReportFeedbackRequest {
+  string feedback = 1 [json_name = "feedback"];
+  .aiserver.v1.ReportFeedbackRequest.FeedbackType feedback_type = 2 [json_name = "feedbackType"];
+  enum FeedbackType {
+    FEEDBACK_TYPE_UNSPECIFIED = 0;
+    FEEDBACK_TYPE_LOW_PRIORITY = 1;
+    FEEDBACK_TYPE_HIGH_PRIORITY = 2;
+  }
+}
+
+message ReportFeedbackResponse {
+}
+
+message ReportGenerationFeedbackRequest {
+  .aiserver.v1.ReportGenerationFeedbackRequest.FeedbackType feedback_type = 1 [json_name = "feedbackType"];
+  string request_id = 2 [json_name = "requestId"];
+  string comment = 3 [json_name = "comment"];
+  int32 stars_overall = 4 [json_name = "starsOverall"];
+  int32 stars_speed = 6 [json_name = "starsSpeed"];
+  int32 stars_accuracy = 7 [json_name = "starsAccuracy"];
+  int32 stars_style_taste = 8 [json_name = "starsStyleTaste"];
+  bool never_ask_again = 9 [json_name = "neverAskAgain"];
+  bool did_popup = 10 [json_name = "didPopup"];
+  .aiserver.v1.ReportGenerationFeedbackRequest.Source source = 11 [json_name = "source"];
+  enum FeedbackType {
+    FEEDBACK_TYPE_UNSPECIFIED = 0;
+    FEEDBACK_TYPE_THUMBS_UP = 1;
+    FEEDBACK_TYPE_THUMBS_DOWN = 2;
+    FEEDBACK_TYPE_NEUTRAL = 3;
+    FEEDBACK_TYPE_STARS = 4;
+  }
+  enum Source {
+    SOURCE_UNSPECIFIED = 0;
+    SOURCE_INLINE = 1;
+    SOURCE_VIBEOMETER = 2;
+  }
+}
+
+message ReportGenerationFeedbackResponse {
+}
+
+message ReportGroundTruthCandidateRequest {
+  string request_id = 1 [json_name = "requestId"];
+  int32 time_since_completed_action_ms = 2 [json_name = "timeSinceCompletedActionMs"];
+  .aiserver.v1.FeatureType feature_type = 3 [json_name = "featureType"];
+  string relative_workspace_path = 4 [json_name = "relativeWorkspacePath"];
+  string contents = 5 [json_name = "contents"];
+  .aiserver.v1.LineRange selection_in_question = 6 [json_name = "selectionInQuestion"];
+  int32 lines_above_and_below = 7 [json_name = "linesAboveAndBelow"];
+}
+
+message ReportGroundTruthCandidateResponse {
+}
+
+message ReportProcessMetricsRequest {
+  int64 sample_start = 1 [json_name = "sampleStart"];
+  int64 sample_end = 2 [json_name = "sampleEnd"];
+  int32 num_subsamples = 3 [json_name = "numSubsamples"];
+  int64 window_seq = 4 [json_name = "windowSeq"];
+  string session_id = 5 [json_name = "sessionId"];
+  repeated .aiserver.v1.ProcessMetricsRowRequest rows = 6 [json_name = "rows"];
+  string os = 7 [json_name = "os"];
+  string os_version = 8 [json_name = "osVersion"];
+  string arch = 9 [json_name = "arch"];
+  string client_version = 10 [json_name = "clientVersion"];
+  string client_id = 11 [json_name = "clientId"];
+}
+
+message ReportProcessMetricsResponse {
+}
+
+message ReportProcessMetricsV2Request {
+  int64 sample_start = 1 [json_name = "sampleStart"];
+  int64 sample_end = 2 [json_name = "sampleEnd"];
+  int32 num_subsamples = 3 [json_name = "numSubsamples"];
+  string session_id = 4 [json_name = "sessionId"];
+  repeated .aiserver.v1.ProcessMetricsV2RowRequest rows = 5 [json_name = "rows"];
+  string os = 6 [json_name = "os"];
+  string arch = 7 [json_name = "arch"];
+  string client_version = 8 [json_name = "clientVersion"];
+  string origin = 9 [json_name = "origin"];
+}
+
+message ReportProcessMetricsV2Response {
+}
+
+message ReportSandProcessMetricsRequest {
+  int64 sample_start = 1 [json_name = "sampleStart"];
+  int64 sample_end = 2 [json_name = "sampleEnd"];
+  int32 num_subsamples = 3 [json_name = "numSubsamples"];
+  int64 sample_seqno = 4 [json_name = "sampleSeqno"];
+  string session_id = 5 [json_name = "sessionId"];
+  repeated .aiserver.v1.SandProcessMetricsRowRequest rows = 6 [json_name = "rows"];
+  string os = 7 [json_name = "os"];
+  string os_version = 8 [json_name = "osVersion"];
+  string arch = 9 [json_name = "arch"];
+  string client_version = 10 [json_name = "clientVersion"];
+  string client_id = 11 [json_name = "clientId"];
+}
+
+message ReportSandProcessMetricsResponse {
+}
+
+message RerankerRequest {
+  repeated .aiserver.v1.CodeResult code_results = 1 [json_name = "codeResults"];
+  string query = 2 [json_name = "query"];
+  int32 num_blocks = 3 [json_name = "numBlocks"];
+  .aiserver.v1.CurrentFileInfo current_file = 4 [json_name = "currentFile"];
+  repeated .aiserver.v1.ConversationMessage conversation = 5 [json_name = "conversation"];
+  .aiserver.v1.ApiDetails api_details = 6 [json_name = "apiDetails"];
+  oneof context_results {
+    .aiserver.v1.FullFileSearchResult file_search_results = 7 [json_name = "fileSearchResults"];
+    .aiserver.v1.CodeSearchResult code_search_results = 8 [json_name = "codeSearchResults"];
+  }
+}
+
+message RerankerResponse {
+  repeated .aiserver.v1.CodeResult results = 1 [json_name = "results"];
+}
+
+message ReviewBug {
+  string id = 1 [json_name = "id"];
+  int32 start_line = 2 [json_name = "startLine"];
+  int32 end_line = 3 [json_name = "endLine"];
+  string description = 4 [json_name = "description"];
+  int32 severity = 5 [json_name = "severity"];
+  string tldr = 6 [json_name = "tldr"];
+}
+
+message ReviewChatMessage {
+  string text = 1 [json_name = "text"];
+  .aiserver.v1.ReviewChatMessage.ReviewChatMessageType type = 2 [json_name = "type"];
+  enum ReviewChatMessageType {
+    REVIEW_CHAT_MESSAGE_TYPE_UNSPECIFIED = 0;
+    REVIEW_CHAT_MESSAGE_TYPE_HUMAN = 1;
+    REVIEW_CHAT_MESSAGE_TYPE_AI = 2;
+  }
+}
+
+message ReviewChatRequest {
+  string chunk = 1 [json_name = "chunk"];
+  string file_context = 2 [json_name = "fileContext"];
+  .aiserver.v1.LineRange chunk_range = 3 [json_name = "chunkRange"];
+  repeated .aiserver.v1.ReviewChatMessage messages = 4 [json_name = "messages"];
+}
+
+message ReviewChatResponse {
+  string text = 1 [json_name = "text"];
+  bool should_resolve = 2 [json_name = "shouldResolve"];
+}
+
+message ReviewRequest {
+  string chunk = 1 [json_name = "chunk"];
+  string file_context = 2 [json_name = "fileContext"];
+  .aiserver.v1.LineRange chunk_range = 3 [json_name = "chunkRange"];
+  string diff_string = 4 [json_name = "diffString"];
+  string custom_instructions = 5 [json_name = "customInstructions"];
+}
+
+message ReviewResponse {
+  string text = 1 [json_name = "text"];
+  string prompt = 2 [json_name = "prompt"];
+  string tldr = 3 [json_name = "tldr"];
+  bool is_bug = 4 [json_name = "isBug"];
+  repeated .aiserver.v1.ReviewBug bugs = 5 [json_name = "bugs"];
+}
+
+message RunGenerateImageError {
+  string error = 1 [json_name = "error"];
+  bool model_restricted = 2 [json_name = "modelRestricted"];
+}
+
+message RunGenerateImageRequest {
+  string description = 1 [json_name = "description"];
+  repeated .aiserver.v1.GenerateImageReferenceImage reference_images = 2 [json_name = "referenceImages"];
+  string model_id = 3 [json_name = "modelId"];
+  bool max_mode = 4 [json_name = "maxMode"];
+}
+
+message RunGenerateImageResponse {
+  oneof result {
+    .aiserver.v1.RunGenerateImageSuccess success = 1 [json_name = "success"];
+    .aiserver.v1.RunGenerateImageError error = 2 [json_name = "error"];
+  }
+}
+
+message RunGenerateImageSuccess {
+  string image_data = 1 [json_name = "imageData"];
+  string mime_type = 2 [json_name = "mimeType"];
+}
+
+message RunWebFetchError {
+  string error = 1 [json_name = "error"];
+  bool is_timeout = 2 [json_name = "isTimeout"];
+}
+
+message RunWebFetchRequest {
+  string url = 1 [json_name = "url"];
+}
+
+message RunWebFetchResponse {
+  oneof result {
+    .aiserver.v1.RunWebFetchSuccess success = 1 [json_name = "success"];
+    .aiserver.v1.RunWebFetchError error = 2 [json_name = "error"];
+  }
+}
+
+message RunWebFetchSuccess {
+  string content = 1 [json_name = "content"];
+}
+
+message RunWebSearchRequest {
+  string search_term = 1 [json_name = "searchTerm"];
+  string explanation = 2 [json_name = "explanation"];
+  string model_id = 3 [json_name = "modelId"];
+}
+
+message RunWebSearchResponse {
+  string answer = 1 [json_name = "answer"];
+  repeated .aiserver.v1.WebSearchDocument documents = 2 [json_name = "documents"];
+}
+
+message SandProcessMetricsRowRequest {
+  int32 pid = 1 [json_name = "pid"];
+  int32 ppid = 2 [json_name = "ppid"];
+  string process_name = 3 [json_name = "processName"];
+  string process_name_hash = 4 [json_name = "processNameHash"];
+  int64 sample_cpu_time_ms = 5 [json_name = "sampleCpuTimeMs"];
+  double sample_avg_mem_mb = 6 [json_name = "sampleAvgMemMb"];
+  double sample_peak_mem_mb = 7 [json_name = "samplePeakMemMb"];
+  double session_peak_mem_mb = 8 [json_name = "sessionPeakMemMb"];
+  double memory_during_sample_peak_mb = 9 [json_name = "memoryDuringSamplePeakMb"];
+  double cpu_during_sample_peak_pct = 10 [json_name = "cpuDuringSamplePeakPct"];
+}
+
+message ScoredAiCodeMetadata {
+  string file_extension = 1 [json_name = "fileExtension"];
+  int32 lines_added = 2 [json_name = "linesAdded"];
+  int32 lines_deleted = 3 [json_name = "linesDeleted"];
+  string file_name = 4 [json_name = "fileName"];
+  repeated string change_hashes = 5 [json_name = "changeHashes"];
+}
+
+message SemanticDiffGroup {
+  string description = 1 [json_name = "description"];
+  repeated .aiserver.v1.SemanticDiffReference diffs = 2 [json_name = "diffs"];
+  string title = 3 [json_name = "title"];
+}
+
+message SemanticDiffGroups {
+  repeated .aiserver.v1.SemanticDiffGroup groups = 1 [json_name = "groups"];
+  string summary = 2 [json_name = "summary"];
+}
+
+message SemanticDiffReference {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+  int32 chunk_index = 2 [json_name = "chunkIndex"];
+}
+
+message SemanticFileGroup {
+  string title = 1 [json_name = "title"];
+  string description = 2 [json_name = "description"];
+  repeated string files = 3 [json_name = "files"];
+}
+
+message SemanticFileGroups {
+  repeated .aiserver.v1.SemanticFileGroup groups = 1 [json_name = "groups"];
+  string summary = 2 [json_name = "summary"];
+}
+
+message ServerTimeRequest {
+}
+
+message ServerTimeResponse {
+  double receive_timestamp = 1 [json_name = "receiveTimestamp"];
+  double transmit_timestamp = 2 [json_name = "transmitTimestamp"];
+}
+
+message ServerTimingInfo {
+  double server_start_time = 1 [json_name = "serverStartTime"];
+  double server_first_token_time = 2 [json_name = "serverFirstTokenTime"];
+  double server_request_sent_time = 3 [json_name = "serverRequestSentTime"];
+  double server_end_time = 4 [json_name = "serverEndTime"];
+}
+
+message ShowWelcomeScreenRequest {
+}
+
+message ShowWelcomeScreenResponse {
+  repeated string enable_cards = 1 [json_name = "enableCards"];
+}
+
+message SimpleCommitWithDiff {
+  string commit_hash = 1 [json_name = "commitHash"];
+  string diff = 2 [json_name = "diff"];
+}
+
+message SlashEditFollowUpWithPreviousEditsRequest {
+  repeated .aiserver.v1.ConversationMessage conversation = 1 [json_name = "conversation"];
+  .aiserver.v1.ModelDetails model_details = 2 [json_name = "modelDetails"];
+  repeated .aiserver.v1.SlashEditPreviousEdit previous_edits = 3 [json_name = "previousEdits"];
+}
+
+message SlashEditPreviousEdit {
+  repeated string original_lines = 1 [json_name = "originalLines"];
+  repeated string new_lines = 2 [json_name = "newLines"];
+  string relative_workspace_path = 3 [json_name = "relativeWorkspacePath"];
+  .aiserver.v1.LineRange range = 4 [json_name = "range"];
+}
+
+message SlashEditRequest {
+  .aiserver.v1.CurrentFileInfo current_file = 2 [json_name = "currentFile"];
+  repeated .aiserver.v1.ConversationMessage conversation = 3 [json_name = "conversation"];
+  .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
+  .aiserver.v1.ModelDetails model_details = 7 [json_name = "modelDetails"];
+  bool is_cmd_i = 8 [json_name = "isCmdI"];
+  string summary = 11 [json_name = "summary"];
+  int32 summary_up_until_index = 12 [json_name = "summaryUpUntilIndex"];
+  bool should_use_turbo_debug_prompt = 13 [json_name = "shouldUseTurboDebugPrompt"];
+  .aiserver.v1.LineRange edit_selection = 14 [json_name = "editSelection"];
+  repeated .aiserver.v1.CurrentFileInfo files = 15 [json_name = "files"];
+  string clicked_code_block_contents = 16 [json_name = "clickedCodeBlockContents"];
+  bool is_an_optimistic_request_for_caching_and_linting = 17 [json_name = "isAnOptimisticRequestForCachingAndLinting"];
+  string specific_instructions = 18 [json_name = "specificInstructions"];
+  bool use_fast_apply = 19 [json_name = "useFastApply"];
+  .aiserver.v1.SlashEditRequest.FastApplyModelType fast_apply_model_type = 20 [json_name = "fastApplyModelType"];
+  bool use_chunk_speculation_for_long_files = 25 [json_name = "useChunkSpeculationForLongFiles"];
+  string parent_request_id = 26 [json_name = "parentRequestId"];
+  .aiserver.v1.FastApplySource source = 27 [json_name = "source"];
+  bool is_reapply = 28 [json_name = "isReapply"];
+  bool willing_to_pay_extra_for_speed = 29 [json_name = "willingToPayExtraForSpeed"];
+  int32 attempt_number = 30 [json_name = "attemptNumber"];
+  bool should_throw_timeout_error = 31 [json_name = "shouldThrowTimeoutError"];
+  enum FastApplyModelType {
+    FAST_APPLY_MODEL_TYPE_UNSPECIFIED = 0;
+    FAST_APPLY_MODEL_TYPE_DEFAULT = 1;
+    FAST_APPLY_MODEL_TYPE_DEEPSEEK = 2;
+    FAST_APPLY_MODEL_TYPE_SONNET = 3;
+    FAST_APPLY_MODEL_TYPE_OPUS_DIFF = 4;
+    FAST_APPLY_MODEL_TYPE_SMART_REWRITE = 5;
+    FAST_APPLY_MODEL_TYPE_GPT4 = 6;
+    FAST_APPLY_MODEL_TYPE_GPT4_NOSPEC = 7;
+    FAST_APPLY_MODEL_TYPE_SMART_REWRITE_NOSPEC = 8;
+    FAST_APPLY_MODEL_TYPE_OPUS = 9;
+    FAST_APPLY_MODEL_TYPE_HAIKU = 10;
+    FAST_APPLY_MODEL_TYPE_GPT4O_NOSPEC = 11;
+    FAST_APPLY_MODEL_TYPE_GPT4O_DIFF = 12;
+    FAST_APPLY_MODEL_TYPE_CODESTRAL_REWRITE = 13;
+    FAST_APPLY_MODEL_TYPE_DEEPSEEK_33B = 14;
+    FAST_APPLY_MODEL_TYPE_SONNET_35_DIFF = 15;
+    FAST_APPLY_MODEL_TYPE_SONNET_35_REWRITE = 16;
+    FAST_APPLY_MODEL_TYPE_PROMPTED_DEEPSEEK_V2 = 17;
+    FAST_APPLY_MODEL_TYPE_CODESTRAL_REWRITE_OLD = 18;
+    FAST_APPLY_MODEL_TYPE_CODESTRAL_REWRITE_FP16 = 19;
+    FAST_APPLY_MODEL_TYPE_DEEPSEEK_33B_V2 = 20;
+    FAST_APPLY_MODEL_TYPE_CODESTRAL_V4 = 21;
+    FAST_APPLY_MODEL_TYPE_CODESTRAL_V5 = 22;
+    FAST_APPLY_MODEL_TYPE_CODESTRAL_V6 = 23;
+    FAST_APPLY_MODEL_TYPE_CODESTRAL_V7 = 24;
+  }
+}
+
+message SlashEditResponse {
+  .aiserver.v1.StreamCmdKResponse cmd_k_response = 1 [json_name = "cmdKResponse"];
+}
+
+message SshConfigPromptProps {
+  string ssh_string = 1 [json_name = "sshString"];
+}
+
+message StreamAiCursorHelpRequest {
+  repeated .aiserver.v1.CursorHelpConversationMessage messages = 1 [json_name = "messages"];
+  string user_os = 2 [json_name = "userOs"];
+  .aiserver.v1.ModelDetails model_details = 3 [json_name = "modelDetails"];
+}
+
+message StreamAiCursorHelpResponse {
+  string text = 1 [json_name = "text"];
+  repeated string actions = 2 [json_name = "actions"];
+}
+
+message StreamAiLintBugRequest {
+  repeated .aiserver.v1.StreamAiLintBugRequest.CodeChunk chunks_to_analyze = 1 [json_name = "chunksToAnalyze"];
+  .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
+  string workspace_root_path = 5 [json_name = "workspaceRootPath"];
+  .aiserver.v1.ModelDetails model_details = 9 [json_name = "modelDetails"];
+  repeated .aiserver.v1.AiLintBug dismissed_bugs = 10 [json_name = "dismissedBugs"];
+  repeated .aiserver.v1.AiLintBug active_bugs = 11 [json_name = "activeBugs"];
+  repeated .aiserver.v1.AiLintRule lint_rules = 12 [json_name = "lintRules"];
+  repeated .aiserver.v1.StreamAiLintBugRequest.CodeChunkList clients = 14 [json_name = "clients"];
+  .aiserver.v1.StreamAiLintBugRequest.DiscriminatorOptions discriminator_options = 15 [json_name = "discriminatorOptions"];
+  bool debug_mode = 16 [json_name = "debugMode"];
+  repeated .aiserver.v1.LintDiscriminator force_enable_discriminators = 17 [json_name = "forceEnableDiscriminators"];
+  repeated .aiserver.v1.LintDiscriminator force_disable_discriminators = 18 [json_name = "forceDisableDiscriminators"];
+  repeated .aiserver.v1.LintGenerator force_enable_generators = 19 [json_name = "forceEnableGenerators"];
+  repeated .aiserver.v1.LintGenerator force_disable_generators = 20 [json_name = "forceDisableGenerators"];
+  int32 version = 21 [json_name = "version"];
+  message CodeChunk {
+    string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+    int32 start_line_number = 2 [json_name = "startLineNumber"];
+    repeated string lines = 3 [json_name = "lines"];
+    repeated string context_lines_before = 4 [json_name = "contextLinesBefore"];
+    repeated string context_lines_after = 5 [json_name = "contextLinesAfter"];
+  }
+  message CodeChunkList {
+    repeated .aiserver.v1.StreamAiLintBugRequest.CodeChunk chunks = 13 [json_name = "chunks"];
+    repeated int32 referred_start_lines = 14 [json_name = "referredStartLines"];
+    repeated int32 referred_end_lines = 15 [json_name = "referredEndLines"];
+  }
+  message DiscriminatorOptions {
+    bool specific_rules = 1 [json_name = "specificRules"];
+    bool compile_errors = 2 [json_name = "compileErrors"];
+    bool change_behavior = 3 [json_name = "changeBehavior"];
+    bool match_code = 4 [json_name = "matchCode"];
+    bool relevance = 5 [json_name = "relevance"];
+    bool user_awareness = 6 [json_name = "userAwareness"];
+  }
+}
+
+message StreamAiLintBugResponse {
+  oneof response {
+    .aiserver.v1.AiLintBug bug = 1 [json_name = "bug"];
+    string background_task_uuid = 2 [json_name = "backgroundTaskUuid"];
+  }
+}
+
+message StreamBugBotAgenticClientMessage {
+  oneof message {
+    .aiserver.v1.StreamBugBotRequest start = 1 [json_name = "start"];
+    .agent.v1.ExecClientMessage exec_client_message = 2 [json_name = "execClientMessage"];
+    .agent.v1.ExecClientControlMessage exec_client_control_message = 3 [json_name = "execClientControlMessage"];
+  }
+}
+
+message StreamBugBotAgenticServerMessage {
+  oneof message {
+    .aiserver.v1.StreamBugBotResponse bugbot_response = 1 [json_name = "bugbotResponse"];
+    .agent.v1.ExecServerMessage exec_server_message = 2 [json_name = "execServerMessage"];
+    .agent.v1.ExecServerControlMessage exec_server_control_message = 3 [json_name = "execServerControlMessage"];
+  }
+}
+
+message StreamBugBotResponse {
+  .aiserver.v1.BugReports bug_reports = 1 [json_name = "bugReports"];
+  .aiserver.v1.BugBotStatus status = 2 [json_name = "status"];
+  string summary = 3 [json_name = "summary"];
+  .aiserver.v1.BugbotTrialNotification trial_notification = 4 [json_name = "trialNotification"];
+  int32 num_turns = 5 [json_name = "numTurns"];
+}
+
+message StreamChatContextRequest {
+  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  repeated .aiserver.v1.ConversationMessage conversation = 2 [json_name = "conversation"];
+  repeated .aiserver.v1.RepositoryInfo repositories = 3 [json_name = "repositories"];
+  .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
+  string workspace_root_path = 5 [json_name = "workspaceRootPath"];
+  repeated .aiserver.v1.CodeBlock code_blocks = 6 [json_name = "codeBlocks"];
+  .aiserver.v1.ModelDetails model_details = 7 [json_name = "modelDetails"];
+  repeated string documentation_identifiers = 8 [json_name = "documentationIdentifiers"];
+  string query = 9 [json_name = "query"];
+  .aiserver.v1.StreamChatContextRequest.CodeContext code_context = 10 [json_name = "codeContext"];
+  bool rerank_results = 11 [json_name = "rerankResults"];
+  .aiserver.v1.LinterErrors linter_errors = 14 [json_name = "linterErrors"];
+  bool is_bash = 15 [json_name = "isBash"];
+  bool rerank_results_v2 = 16 [json_name = "rerankResultsV2"];
+  string conversation_id = 17 [json_name = "conversationId"];
+  bool can_handle_filenames_after_language_ids = 18 [json_name = "canHandleFilenamesAfterLanguageIds"];
+  bool long_context_mode = 19 [json_name = "longContextMode"];
+  bool is_eval = 20 [json_name = "isEval"];
+  string request_id = 21 [json_name = "requestId"];
+  int32 desired_max_tokens = 22 [json_name = "desiredMaxTokens"];
+  bool runnable_code_blocks = 23 [json_name = "runnableCodeBlocks"];
+  oneof context_results {
+    .aiserver.v1.FullFileSearchResult file_search_results = 12 [json_name = "fileSearchResults"];
+    .aiserver.v1.CodeSearchResult code_search_results = 13 [json_name = "codeSearchResults"];
+  }
+  message CodeContext {
+    repeated .aiserver.v1.CodeBlock chunks = 1 [json_name = "chunks"];
+    repeated .aiserver.v1.CodeResult scored_chunks = 2 [json_name = "scoredChunks"];
+  }
+}
+
+message StreamChatContextResponse {
+  string text = 1 [json_name = "text"];
+  string debugging_only_chat_prompt = 2 [json_name = "debuggingOnlyChatPrompt"];
+  int32 debugging_only_token_count = 3 [json_name = "debuggingOnlyTokenCount"];
+  .aiserver.v1.DocumentationCitation document_citation = 4 [json_name = "documentCitation"];
+  string filled_prompt = 5 [json_name = "filledPrompt"];
+  .aiserver.v1.StreamChatContextResponse.UsedCode used_code = 6 [json_name = "usedCode"];
+  .aiserver.v1.StreamChatContextResponse.CodeLink code_link = 7 [json_name = "codeLink"];
+  .aiserver.v1.StreamChatContextResponse.ChunkIdentity chunk_identity = 8 [json_name = "chunkIdentity"];
+  .aiserver.v1.DocsReference docs_reference = 9 [json_name = "docsReference"];
+  .aiserver.v1.SymbolLink symbol_link = 10 [json_name = "symbolLink"];
+  .aiserver.v1.FileLink file_link = 11 [json_name = "fileLink"];
+  message ChunkIdentity {
+    string file_name = 1 [json_name = "fileName"];
+    int32 start_line = 2 [json_name = "startLine"];
+    int32 end_line = 3 [json_name = "endLine"];
+    string text = 4 [json_name = "text"];
+    .aiserver.v1.ChunkType chunk_type = 5 [json_name = "chunkType"];
+  }
+  message CodeLink {
+    string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+    int32 start_line_number = 2 [json_name = "startLineNumber"];
+    int32 end_line_number = 3 [json_name = "endLineNumber"];
+  }
+  message UsedCode {
+    repeated .aiserver.v1.CodeResult code_results = 1 [json_name = "codeResults"];
+  }
+}
+
+message StreamChatDeepContextRequest {
+  repeated .aiserver.v1.ConversationMessage conversation = 1 [json_name = "conversation"];
+  .aiserver.v1.ExplicitContext explicit_context = 2 [json_name = "explicitContext"];
+  .aiserver.v1.ModelDetails model_details = 3 [json_name = "modelDetails"];
+  .aiserver.v1.SearchRepositoryDeepContextResponse context_results = 4 [json_name = "contextResults"];
+  bool rerank_results = 5 [json_name = "rerankResults"];
+}
+
+message StreamChatDeepContextResponse {
+  string text = 1 [json_name = "text"];
+}
+
+message StreamChatResponse {
+  string text = 1 [json_name = "text"];
+  string debugging_only_chat_prompt = 2 [json_name = "debuggingOnlyChatPrompt"];
+  int32 debugging_only_token_count = 3 [json_name = "debuggingOnlyTokenCount"];
+  .aiserver.v1.DocumentationCitation document_citation = 4 [json_name = "documentCitation"];
+  string filled_prompt = 5 [json_name = "filledPrompt"];
+  bool is_big_file = 6 [json_name = "isBigFile"];
+  string intermediate_text = 7 [json_name = "intermediateText"];
+  .aiserver.v1.StreamChatResponse.ChunkIdentity chunk_identity = 8 [json_name = "chunkIdentity"];
+  .aiserver.v1.DocsReference docs_reference = 9 [json_name = "docsReference"];
+  bool is_using_slow_request = 10 [json_name = "isUsingSlowRequest"];
+  .aiserver.v1.WebCitation web_citation = 11 [json_name = "webCitation"];
+  .aiserver.v1.StatusUpdates status_updates = 12 [json_name = "statusUpdates"];
+  .aiserver.v1.ServerTimingInfo timing_info = 13 [json_name = "timingInfo"];
+  .aiserver.v1.SymbolLink symbol_link = 14 [json_name = "symbolLink"];
+  .aiserver.v1.FileLink file_link = 15 [json_name = "fileLink"];
+  .aiserver.v1.ConversationSummary conversation_summary = 16 [json_name = "conversationSummary"];
+  .aiserver.v1.ServiceStatusUpdate service_status_update = 17 [json_name = "serviceStatusUpdate"];
+  .aiserver.v1.StreamChatResponse.UsedCode used_code = 18 [json_name = "usedCode"];
+  string server_bubble_id = 22 [json_name = "serverBubbleId"];
+  bool stop_using_dsv3_agentic_model = 26 [json_name = "stopUsingDsv3AgenticModel"];
+  string usage_uuid = 27 [json_name = "usageUuid"];
+  message ChunkIdentity {
+    string file_name = 1 [json_name = "fileName"];
+    int32 start_line = 2 [json_name = "startLine"];
+    int32 end_line = 3 [json_name = "endLine"];
+    string text = 4 [json_name = "text"];
+    .aiserver.v1.ChunkType chunk_type = 5 [json_name = "chunkType"];
+  }
+  message UsedCode {
+    repeated .aiserver.v1.CodeResult code_results = 1 [json_name = "codeResults"];
+  }
+}
+
+message StreamChatToolformerContinueRequest {
+  string toolformer_session_id = 1 [json_name = "toolformerSessionId"];
+  .aiserver.v1.ToolResult tool_result = 2 [json_name = "toolResult"];
+}
+
+message StreamChatToolformerResponse {
+  string toolformer_session_id = 1 [json_name = "toolformerSessionId"];
+  oneof response_type {
+    .aiserver.v1.StreamChatToolformerResponse.Output output = 2 [json_name = "output"];
+    .aiserver.v1.StreamChatToolformerResponse.ToolAction tool_action = 3 [json_name = "toolAction"];
+    .aiserver.v1.StreamChatToolformerResponse.Thought thought = 4 [json_name = "thought"];
+  }
+  message Output {
+    string text = 1 [json_name = "text"];
+  }
+  message Thought {
+    string text = 1 [json_name = "text"];
+  }
+  message ToolAction {
+    string user_facing_text = 1 [json_name = "userFacingText"];
+    .aiserver.v1.ToolCall tool_call = 2 [json_name = "toolCall"];
+    string raw_model_output = 3 [json_name = "rawModelOutput"];
+    bool more_to_come = 4 [json_name = "moreToCome"];
+  }
+}
+
+message StreamComposerContextRequest {
+  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  repeated .aiserver.v1.ConversationMessage conversation = 2 [json_name = "conversation"];
+  repeated .aiserver.v1.RepositoryInfo repositories = 3 [json_name = "repositories"];
+  .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
+  string workspace_root_path = 5 [json_name = "workspaceRootPath"];
+  repeated .aiserver.v1.CodeBlock code_blocks = 6 [json_name = "codeBlocks"];
+  .aiserver.v1.ModelDetails model_details = 7 [json_name = "modelDetails"];
+  repeated string documentation_identifiers = 8 [json_name = "documentationIdentifiers"];
+  string query = 9 [json_name = "query"];
+  .aiserver.v1.StreamComposerContextRequest.CodeContext code_context = 10 [json_name = "codeContext"];
+  bool rerank_results = 11 [json_name = "rerankResults"];
+  .aiserver.v1.LinterErrors linter_errors = 14 [json_name = "linterErrors"];
+  bool is_bash = 15 [json_name = "isBash"];
+  bool rerank_results_v2 = 16 [json_name = "rerankResultsV2"];
+  string conversation_id = 17 [json_name = "conversationId"];
+  bool can_handle_filenames_after_language_ids = 18 [json_name = "canHandleFilenamesAfterLanguageIds"];
+  bool long_context_mode = 19 [json_name = "longContextMode"];
+  bool is_eval = 20 [json_name = "isEval"];
+  string request_id = 21 [json_name = "requestId"];
+  int32 desired_max_tokens = 22 [json_name = "desiredMaxTokens"];
+  bool runnable_code_blocks = 23 [json_name = "runnableCodeBlocks"];
+  oneof context_results {
+    .aiserver.v1.FullFileSearchResult file_search_results = 12 [json_name = "fileSearchResults"];
+    .aiserver.v1.CodeSearchResult code_search_results = 13 [json_name = "codeSearchResults"];
+  }
+  message CodeContext {
+    repeated .aiserver.v1.CodeBlock chunks = 1 [json_name = "chunks"];
+    repeated .aiserver.v1.CodeResult scored_chunks = 2 [json_name = "scoredChunks"];
+  }
+}
+
+message StreamCursorTutorRequest {
+  repeated .aiserver.v1.ConversationMessage conversation = 1 [json_name = "conversation"];
+  .aiserver.v1.ModelDetails model_details = 2 [json_name = "modelDetails"];
+}
+
+message StreamCursorTutorResponse {
+  string text = 1 [json_name = "text"];
+}
+
+message StreamDiffReviewByFileResponse {
+  oneof response {
+    string text = 1 [json_name = "text"];
+    .aiserver.v1.SemanticFileGroups groups = 2 [json_name = "groups"];
+  }
+}
+
+message StreamDiffReviewResponse {
+  oneof response {
+    string text = 1 [json_name = "text"];
+    .aiserver.v1.SemanticDiffGroups groups = 2 [json_name = "groups"];
+  }
+}
+
+message StreamEditRequest {
+  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  repeated .aiserver.v1.ConversationMessage conversation = 2 [json_name = "conversation"];
+  repeated .aiserver.v1.RepositoryInfo repositories = 3 [json_name = "repositories"];
+  .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
+  string workspace_root_path = 5 [json_name = "workspaceRootPath"];
+  string query = 6 [json_name = "query"];
+  repeated .aiserver.v1.CodeBlock code_blocks = 7 [json_name = "codeBlocks"];
+  .aiserver.v1.ModelDetails model_details = 9 [json_name = "modelDetails"];
+  repeated string documentation_identifiers = 10 [json_name = "documentationIdentifiers"];
+  .aiserver.v1.LinterErrors linter_errors = 11 [json_name = "linterErrors"];
+  repeated .aiserver.v1.CodeBlock prompt_code_blocks = 12 [json_name = "promptCodeBlocks"];
+  .aiserver.v1.CmdKDebugInfo cmd_k_debug_info = 13 [json_name = "cmdKDebugInfo"];
+  string session_id = 14 [json_name = "sessionId"];
+  bool fast_mode = 15 [json_name = "fastMode"];
+  .aiserver.v1.StreamEditRequest original_request = 16 [json_name = "originalRequest"];
+  repeated .aiserver.v1.ImageProto images = 17 [json_name = "images"];
+  repeated .aiserver.v1.CmdKExternalLink links = 18 [json_name = "links"];
+  repeated .aiserver.v1.CursorRule rules = 19 [json_name = "rules"];
+}
+
+message StreamFastEditRequest {
+  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  repeated .aiserver.v1.RepositoryInfo repositories = 3 [json_name = "repositories"];
+  .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
+  string workspace_root_path = 5 [json_name = "workspaceRootPath"];
+  string query = 6 [json_name = "query"];
+  repeated .aiserver.v1.CodeBlock code_blocks = 7 [json_name = "codeBlocks"];
+  .aiserver.v1.ModelDetails model_details = 9 [json_name = "modelDetails"];
+  repeated string documentation_identifiers = 10 [json_name = "documentationIdentifiers"];
+  .aiserver.v1.LinterErrors linter_errors = 11 [json_name = "linterErrors"];
+}
+
+message StreamFastEditResponse {
+  int32 line_number = 2 [json_name = "lineNumber"];
+  int32 replace_num_lines = 3 [json_name = "replaceNumLines"];
+  bool done = 4 [json_name = "done"];
+  string edit_uuid = 5 [json_name = "editUuid"];
+  string new_line = 6 [json_name = "newLine"];
+  bool reset_new_lines = 7 [json_name = "resetNewLines"];
+}
+
+message StreamGenerateRequest {
+  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  repeated .aiserver.v1.ConversationMessage conversation = 2 [json_name = "conversation"];
+  repeated .aiserver.v1.RepositoryInfo repositories = 3 [json_name = "repositories"];
+  .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
+  string workspace_root_path = 5 [json_name = "workspaceRootPath"];
+  string query = 6 [json_name = "query"];
+  repeated .aiserver.v1.CodeBlock code_blocks = 7 [json_name = "codeBlocks"];
+  .aiserver.v1.ModelDetails model_details = 9 [json_name = "modelDetails"];
+  repeated string documentation_identifiers = 10 [json_name = "documentationIdentifiers"];
+  .aiserver.v1.LinterErrors linter_errors = 11 [json_name = "linterErrors"];
+  repeated .aiserver.v1.CodeBlock prompt_code_blocks = 12 [json_name = "promptCodeBlocks"];
+  .aiserver.v1.CmdKDebugInfo cmd_k_debug_info = 13 [json_name = "cmdKDebugInfo"];
+  string session_id = 14 [json_name = "sessionId"];
+  bool fast_mode = 15 [json_name = "fastMode"];
+  .aiserver.v1.StreamGenerateRequest original_request = 16 [json_name = "originalRequest"];
+}
+
+message StreamInterfaceAgentStatusRequest {
+  string task_uuid = 1 [json_name = "taskUuid"];
+}
+
+message StreamInterfaceAgentStatusResponse {
+  .aiserver.v1.InterfaceAgentStatus status = 1 [json_name = "status"];
+}
+
+message StreamLintRequest {
+  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  repeated .aiserver.v1.ConversationMessage conversation = 2 [json_name = "conversation"];
+  repeated .aiserver.v1.RepositoryInfo repositories = 3 [json_name = "repositories"];
+  .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
+  string workspace_root_path = 5 [json_name = "workspaceRootPath"];
+  string query = 6 [json_name = "query"];
+  repeated .aiserver.v1.CodeBlock code_blocks = 7 [json_name = "codeBlocks"];
+  .aiserver.v1.ModelDetails model_details = 9 [json_name = "modelDetails"];
+  repeated string documentation_identifiers = 10 [json_name = "documentationIdentifiers"];
+  repeated string bad_notifications = 11 [json_name = "badNotifications"];
+  string lint_rules = 12 [json_name = "lintRules"];
+}
+
+message StreamNewRuleRequest {
+  string current_rules = 1 [json_name = "currentRules"];
+  string dismissed_bug = 2 [json_name = "dismissedBug"];
+}
+
+message StreamNextCursorPredictionRequest {
+  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  repeated string diff_history = 2 [json_name = "diffHistory"];
+  string model_name = 3 [json_name = "modelName"];
+  .aiserver.v1.LinterErrors linter_errors = 4 [json_name = "linterErrors"];
+  repeated string diff_history_keys = 5 [json_name = "diffHistoryKeys"];
+  bool give_debug_output = 6 [json_name = "giveDebugOutput"];
+  repeated .aiserver.v1.CppFileDiffHistory file_diff_histories = 7 [json_name = "fileDiffHistories"];
+  repeated .aiserver.v1.CppFileDiffHistory merged_diff_histories = 8 [json_name = "mergedDiffHistories"];
+  repeated .aiserver.v1.BlockDiffPatch block_diff_patches = 9 [json_name = "blockDiffPatches"];
+  bool is_nightly = 10 [json_name = "isNightly"];
+  bool is_debug = 11 [json_name = "isDebug"];
+  bool immediately_ack = 12 [json_name = "immediatelyAck"];
+  repeated .aiserver.v1.CppContextItem context_items = 13 [json_name = "contextItems"];
+  repeated .aiserver.v1.CppParameterHint parameter_hints = 14 [json_name = "parameterHints"];
+  repeated .aiserver.v1.LspSubgraphFullContext lsp_contexts = 15 [json_name = "lspContexts"];
+  .aiserver.v1.CppIntentInfo cpp_intent_info = 16 [json_name = "cppIntentInfo"];
+  bool enable_more_context = 17 [json_name = "enableMoreContext"];
+  string workspace_id = 18 [json_name = "workspaceId"];
+  repeated .aiserver.v1.FilesyncUpdateWithModelVersion file_sync_updates = 19 [json_name = "fileSyncUpdates"];
+  repeated .aiserver.v1.StreamNextCursorPredictionRequest.FileVisibleRange file_visible_ranges = 20 [json_name = "fileVisibleRanges"];
+  message FileVisibleRange {
+    string filename = 1 [json_name = "filename"];
+    repeated .aiserver.v1.StreamNextCursorPredictionRequest.VisibleRange visible_ranges = 2 [json_name = "visibleRanges"];
+  }
+  message VisibleRange {
+    int32 start_line_number_inclusive = 1 [json_name = "startLineNumberInclusive"];
+    int32 end_line_number_exclusive = 2 [json_name = "endLineNumberExclusive"];
+  }
+}
+
+message StreamNextCursorPredictionResponse {
+  oneof response {
+    string text = 1 [json_name = "text"];
+    int32 line_number = 2 [json_name = "lineNumber"];
+    bool is_not_in_range = 3 [json_name = "isNotInRange"];
+    string file_name = 4 [json_name = "fileName"];
+  }
+}
+
+message StreamPriomptPromptRequest {
+  string prompt_props = 2 [json_name = "promptProps"];
+  string prompt_props_type_name = 3 [json_name = "promptPropsTypeName"];
+  .aiserver.v1.ModelDetails model_details = 4 [json_name = "modelDetails"];
+  bool skip_login_check = 5 [json_name = "skipLoginCheck"];
+}
+
+message StreamPriomptPromptResponse {
+  string text = 1 [json_name = "text"];
+}
+
+message StreamPseudocodeGeneratorRequest {
+  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  .aiserver.v1.PseudocodeTarget target = 2 [json_name = "target"];
+}
+
+message StreamPseudocodeGeneratorResponse {
+  string text = 1 [json_name = "text"];
+}
+
+message StreamPseudocodeMapperRequest {
+  string pseudocode = 1 [json_name = "pseudocode"];
+  .aiserver.v1.PseudocodeTarget target = 2 [json_name = "target"];
+}
+
+message StreamPseudocodeMapperResponse {
+  string text = 1 [json_name = "text"];
+}
+
+message StreamSlashEditFollowUpWithPreviousEditsResponse {
+  oneof response {
+    .aiserver.v1.StreamSlashEditFollowUpWithPreviousEditsResponse.Chat chat = 1 [json_name = "chat"];
+    .aiserver.v1.StreamSlashEditFollowUpWithPreviousEditsResponse.EditsToUpdate edits_to_update = 2 [json_name = "editsToUpdate"];
+  }
+  message Chat {
+    string text = 1 [json_name = "text"];
+  }
+  message EditsToUpdate {
+    repeated .aiserver.v1.SlashEditPreviousEdit previous_edits = 1 [json_name = "previousEdits"];
+  }
+}
+
+message StreamTerminalAutocompleteRequest {
+  string current_command = 1 [json_name = "currentCommand"];
+  repeated string command_history = 2 [json_name = "commandHistory"];
+  string model_name = 3 [json_name = "modelName"];
+  repeated .aiserver.v1.CppFileDiffHistory file_diff_histories = 4 [json_name = "fileDiffHistories"];
+  string git_diff = 5 [json_name = "gitDiff"];
+  repeated string commit_history = 6 [json_name = "commitHistory"];
+  repeated string past_results = 7 [json_name = "pastResults"];
+}
+
+message StreamTerminalAutocompleteResponse {
+  string text = 1 [json_name = "text"];
+  bool done_stream = 2 [json_name = "doneStream"];
+}
+
+message StreamUiBestOfNJudgeClientMessage {
+  oneof message {
+    .aiserver.v1.StreamUiBestOfNJudgeStartRequest start = 1 [json_name = "start"];
+    .agent.v1.ExecClientMessage exec_client_message = 2 [json_name = "execClientMessage"];
+    .agent.v1.ExecClientControlMessage exec_client_control_message = 3 [json_name = "execClientControlMessage"];
+  }
+}
+
+message StreamUiBestOfNJudgeServerMessage {
+  oneof message {
+    .aiserver.v1.UiBestOfNJudgeFinalResult final_result = 1 [json_name = "finalResult"];
+    .agent.v1.ExecServerMessage exec_server_message = 2 [json_name = "execServerMessage"];
+    .agent.v1.ExecServerControlMessage exec_server_control_message = 3 [json_name = "execServerControlMessage"];
+  }
+}
+
+message StreamUiBestOfNJudgeStartRequest {
+  string task = 1 [json_name = "task"];
+  repeated .aiserver.v1.UiBestOfNJudgeCandidate candidates = 2 [json_name = "candidates"];
+}
+
+message StreamWebCmdKV1Request {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+  string file_contents = 2 [json_name = "fileContents"];
+  string prompt = 3 [json_name = "prompt"];
+  .aiserver.v1.LineRange selection_range = 4 [json_name = "selectionRange"];
+  .aiserver.v1.ModelDetails model_details = 5 [json_name = "modelDetails"];
+  repeated .aiserver.v1.ImageProto images = 10 [json_name = "images"];
+}
+
+message StreamWebCmdKV1Response {
+  .aiserver.v1.StreamCmdKResponse cmd_k_response = 1 [json_name = "cmdKResponse"];
+}
+
+message SttAudioChunk {
+  bytes pcm16 = 1 [json_name = "pcm16"];
+}
+
+message SttClientMessage {
+  oneof payload {
+    .aiserver.v1.SttConfig config = 1 [json_name = "config"];
+    .aiserver.v1.SttAudioChunk audio = 2 [json_name = "audio"];
+    .aiserver.v1.SttControl control = 3 [json_name = "control"];
+  }
+}
+
+message SttConfig {
+  string language = 1 [json_name = "language"];
+  bool punctuate = 2 [json_name = "punctuate"];
+}
+
+message SttControl {
+  .aiserver.v1.SttControl.Type type = 1 [json_name = "type"];
+  enum Type {
+    TYPE_UNSPECIFIED = 0;
+    TYPE_STOP = 1;
+    TYPE_CANCEL = 2;
+  }
+}
+
+message SttServerMessage {
+  string text = 1 [json_name = "text"];
+  bool is_final = 2 [json_name = "isFinal"];
+}
+
+message SuggestQuickActionsRequest {
+  repeated .aiserver.v1.QuickActionCandidate candidates = 1 [json_name = "candidates"];
+  string last_user_message = 2 [json_name = "lastUserMessage"];
+  string last_assistant_message = 3 [json_name = "lastAssistantMessage"];
+  int32 max_suggestions = 4 [json_name = "maxSuggestions"];
+  repeated string recently_used_skill_ids = 5 [json_name = "recentlyUsedSkillIds"];
+  bool include_skills = 6 [json_name = "includeSkills"];
+  bool include_text = 7 [json_name = "includeText"];
+}
+
+message SuggestQuickActionsResponse {
+  repeated .aiserver.v1.SuggestedQuickAction suggestions = 1 [json_name = "suggestions"];
+}
+
+message SuggestedQuickAction {
+  string id = 1 [json_name = "id"];
+  string label = 2 [json_name = "label"];
+  string type = 3 [json_name = "type"];
+}
+
+message SurroundingLines {
+  int32 start_line = 1 [json_name = "startLine"];
+  repeated string lines = 2 [json_name = "lines"];
+}
+
+message TakeNotesOnCommitDiffRequest {
+  .aiserver.v1.CommitDiffString diff = 1 [json_name = "diff"];
+  string commit_hash = 2 [json_name = "commitHash"];
+}
+
+message TakeNotesOnCommitDiffResponse {
+  repeated .aiserver.v1.CommitNoteWithEmbeddings notes = 1 [json_name = "notes"];
+}
+
+message TaskGetInterfaceAgentStatusRequest {
+  .aiserver.v1.InterfaceAgentClientState interface_agent_client_state = 1 [json_name = "interfaceAgentClientState"];
+}
+
+message TaskGetInterfaceAgentStatusResponse {
+  .aiserver.v1.InterfaceAgentStatus status = 1 [json_name = "status"];
+}
+
+message TaskGetInterfaceAgentStatusResponseWrapped {
+  oneof response {
+    .aiserver.v1.TaskGetInterfaceAgentStatusResponse real_response = 1 [json_name = "realResponse"];
+    string background_task_uuid = 2 [json_name = "backgroundTaskUuid"];
+  }
+}
+
+message TaskInfoRequest {
+  string task_uuid = 1 [json_name = "taskUuid"];
+}
+
+message TaskInfoResponse {
+  string human_readable_title = 1 [json_name = "humanReadableTitle"];
+  .aiserver.v1.TaskStatus task_status = 2 [json_name = "taskStatus"];
+  int32 last_log_sequence_number = 3 [json_name = "lastLogSequenceNumber"];
+}
+
+message TaskInitRequest {
+  .aiserver.v1.TaskInstruction instruction = 1 [json_name = "instruction"];
+  .aiserver.v1.ModelDetails model_details = 2 [json_name = "modelDetails"];
+  bool debugging_only_live_mode = 3 [json_name = "debuggingOnlyLiveMode"];
+  string engine_id = 4 [json_name = "engineId"];
+}
+
+message TaskInitResponse {
+  string task_uuid = 1 [json_name = "taskUuid"];
+  string human_readable_title = 2 [json_name = "humanReadableTitle"];
+}
+
+message TaskInstruction {
+  string text = 1 [json_name = "text"];
+  repeated .aiserver.v1.TaskInstruction.CodeChunk attached_code_chunks = 2 [json_name = "attachedCodeChunks"];
+  .aiserver.v1.CurrentFileInfo current_file = 3 [json_name = "currentFile"];
+  repeated .aiserver.v1.RepositoryInfo repositories = 4 [json_name = "repositories"];
+  .aiserver.v1.ExplicitContext explicit_context = 5 [json_name = "explicitContext"];
+  message CodeChunk {
+    string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+    int32 start_line_number = 2 [json_name = "startLineNumber"];
+    repeated string lines = 3 [json_name = "lines"];
+  }
+}
+
+message TaskLogItem {
+  int32 sequence_number = 1 [json_name = "sequenceNumber"];
+  bool is_not_done = 2 [json_name = "isNotDone"];
+  oneof log_item {
+    .aiserver.v1.TaskLogOutput output = 3 [json_name = "output"];
+    .aiserver.v1.TaskLogToolAction tool_action = 4 [json_name = "toolAction"];
+    .aiserver.v1.TaskLogThought thought = 5 [json_name = "thought"];
+    .aiserver.v1.TaskUserMessage user_message = 6 [json_name = "userMessage"];
+    .aiserver.v1.TaskInstruction instruction = 7 [json_name = "instruction"];
+    .aiserver.v1.TaskLogToolResult tool_result = 8 [json_name = "toolResult"];
+  }
+}
+
+message TaskLogOutput {
+  string text = 1 [json_name = "text"];
+}
+
+message TaskLogThought {
+  string text = 1 [json_name = "text"];
+}
+
+message TaskLogToolAction {
+  string user_facing_text = 1 [json_name = "userFacingText"];
+  .aiserver.v1.ToolCall tool_call = 2 [json_name = "toolCall"];
+  string raw_model_output = 3 [json_name = "rawModelOutput"];
+}
+
+message TaskLogToolResult {
+  .aiserver.v1.ToolResult tool_result = 1 [json_name = "toolResult"];
+  int32 action_sequence_number = 2 [json_name = "actionSequenceNumber"];
+}
+
+message TaskPauseRequest {
+  string task_uuid = 1 [json_name = "taskUuid"];
+}
+
+message TaskPauseResponse {
+}
+
+message TaskProvideResultRequest {
+  string task_uuid = 1 [json_name = "taskUuid"];
+  int32 action_sequence_number = 2 [json_name = "actionSequenceNumber"];
+  .aiserver.v1.ToolResult tool_result = 3 [json_name = "toolResult"];
+}
+
+message TaskProvideResultResponse {
+}
+
+message TaskSendMessageRequest {
+  string task_uuid = 1 [json_name = "taskUuid"];
+  .aiserver.v1.TaskUserMessage user_message = 2 [json_name = "userMessage"];
+  bool wants_attention_right_now = 3 [json_name = "wantsAttentionRightNow"];
+}
+
+message TaskSendMessageResponse {
+}
+
+enum TaskStatus {
+  TASK_STATUS_UNSPECIFIED = 0;
+  TASK_STATUS_RUNNING = 1;
+  TASK_STATUS_PAUSED = 2;
+  TASK_STATUS_DONE = 3;
+  TASK_STATUS_NOT_STARTED = 4;
+}
+
+message TaskStreamChatContextRequest {
+  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  repeated .aiserver.v1.ConversationMessage conversation = 2 [json_name = "conversation"];
+  repeated .aiserver.v1.RepositoryInfo repositories = 3 [json_name = "repositories"];
+  .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
+  string workspace_root_path = 5 [json_name = "workspaceRootPath"];
+  repeated .aiserver.v1.CodeBlock code_blocks = 6 [json_name = "codeBlocks"];
+  .aiserver.v1.ModelDetails model_details = 7 [json_name = "modelDetails"];
+  repeated string documentation_identifiers = 8 [json_name = "documentationIdentifiers"];
+  .aiserver.v1.LinterErrors linter_errors = 14 [json_name = "linterErrors"];
+  .aiserver.v1.AdvancedCodebaseContextOptions advanced_codebase_context = 15 [json_name = "advancedCodebaseContext"];
+  bool is_eval = 16 [json_name = "isEval"];
+  string request_id = 17 [json_name = "requestId"];
+  int32 desired_token_limit = 18 [json_name = "desiredTokenLimit"];
+}
+
+message TaskStreamChatContextResponse {
+  oneof response {
+    .aiserver.v1.TaskStreamChatContextResponse.Output output = 1 [json_name = "output"];
+    .aiserver.v1.TaskStreamChatContextResponse.GatheringStep gathering_step = 2 [json_name = "gatheringStep"];
+    .aiserver.v1.TaskStreamChatContextResponse.GatheringFile gathering_file = 3 [json_name = "gatheringFile"];
+    .aiserver.v1.TaskStreamChatContextResponse.RerankingStep reranking_step = 4 [json_name = "rerankingStep"];
+    .aiserver.v1.TaskStreamChatContextResponse.RerankingFile reranking_file = 5 [json_name = "rerankingFile"];
+    .aiserver.v1.TaskStreamChatContextResponse.ReasoningStep reasoning_step = 6 [json_name = "reasoningStep"];
+    .aiserver.v1.TaskStreamChatContextResponse.ReasoningSubstep reasoning_substep = 7 [json_name = "reasoningSubstep"];
+  }
+  message GatheringFile {
+    string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+    .aiserver.v1.SimpleRange range = 2 [json_name = "range"];
+    int32 step_index = 3 [json_name = "stepIndex"];
+    float score = 4 [json_name = "score"];
+  }
+  message GatheringStep {
+    string title = 1 [json_name = "title"];
+    int32 index = 2 [json_name = "index"];
+    string query = 3 [json_name = "query"];
+  }
+  message Output {
+    string text = 1 [json_name = "text"];
+  }
+  message ReasoningStep {
+    string title = 1 [json_name = "title"];
+    int32 index = 2 [json_name = "index"];
+  }
+  message ReasoningSubstep {
+    string markdown_explanation = 1 [json_name = "markdownExplanation"];
+    int32 step_index = 2 [json_name = "stepIndex"];
+  }
+  message RerankingFile {
+    string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+    .aiserver.v1.SimpleRange range = 2 [json_name = "range"];
+    string reason = 3 [json_name = "reason"];
+    bool failed = 4 [json_name = "failed"];
+    float score = 5 [json_name = "score"];
+    int32 step_index = 6 [json_name = "stepIndex"];
+  }
+  message RerankingStep {
+    string title = 1 [json_name = "title"];
+    int32 index = 2 [json_name = "index"];
+  }
+}
+
+message TaskStreamChatContextResponseWrapped {
+  oneof response {
+    .aiserver.v1.TaskStreamChatContextResponse real_response = 1 [json_name = "realResponse"];
+    string background_task_uuid = 2 [json_name = "backgroundTaskUuid"];
+  }
+}
+
+message TaskStreamLogRequest {
+  string task_uuid = 1 [json_name = "taskUuid"];
+  int32 start_sequence_number = 2 [json_name = "startSequenceNumber"];
+}
+
+message TaskStreamLogResponse {
+  oneof response {
+    .aiserver.v1.TaskLogItem streamed_log_item = 1 [json_name = "streamedLogItem"];
+    .aiserver.v1.TaskStreamLogResponse.InfoUpdate info_update = 2 [json_name = "infoUpdate"];
+    .aiserver.v1.TaskInfoResponse initial_task_info = 3 [json_name = "initialTaskInfo"];
+  }
+  message InfoUpdate {
+    string human_readable_title = 1 [json_name = "humanReadableTitle"];
+    .aiserver.v1.TaskStatus task_status = 2 [json_name = "taskStatus"];
+  }
+}
+
+message TaskUserMessage {
+  string text = 1 [json_name = "text"];
+  repeated .aiserver.v1.TaskUserMessage.CodeChunk attached_code_chunks = 2 [json_name = "attachedCodeChunks"];
+  message CodeChunk {
+    string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+    int32 start_line_number = 2 [json_name = "startLineNumber"];
+    repeated string lines = 3 [json_name = "lines"];
+  }
+}
+
+message TestBedrockCredentialsRequest {
+  string access_key = 1 [json_name = "accessKey"];
+  string secret_key = 2 [json_name = "secretKey"];
+  string region = 3 [json_name = "region"];
+  string model_name = 4 [json_name = "modelName"];
+}
+
+message TestBedrockCredentialsResponse {
+  bool success = 1 [json_name = "success"];
+  string error = 2 [json_name = "error"];
+}
+
+message TestBidiRequest {
+  string message = 1 [json_name = "message"];
+}
+
+message TestBidiResponse {
+  string message = 1 [json_name = "message"];
+}
+
+message TestModelStatusRequest {
+  string model_name = 1 [json_name = "modelName"];
+}
+
+message TestModelStatusResponse {
+  string text = 1 [json_name = "text"];
+  float latency = 2 [json_name = "latency"];
+  float ttft = 3 [json_name = "ttft"];
+  float max_time_between_chunks = 4 [json_name = "maxTimeBetweenChunks"];
+  string server_timing = 5 [json_name = "serverTiming"];
+}
+
+message ThrowErrorCheckRequest {
+  .aiserver.v1.ErrorDetails.Error error = 1 [json_name = "error"];
+}
+
+message ThrowErrorCheckResponse {
+}
+
+message TimeLeftHealthCheckResponse {
+  string time_left = 1 [json_name = "timeLeft"];
+}
+
+message ToCamelCaseRequest {
+  string text = 1 [json_name = "text"];
+}
+
+message ToCamelCaseResponse {
+  string text = 1 [json_name = "text"];
+}
+
+message TranscribeAudioRequest {
+  bytes audio = 1 [json_name = "audio"];
+  string mime_type = 2 [json_name = "mimeType"];
+  string language = 3 [json_name = "language"];
+}
+
+message TranscribeAudioResponse {
+  string text = 1 [json_name = "text"];
+  int64 transcription_time_ms = 2 [json_name = "transcriptionTimeMs"];
+}
+
+message TryParseTypeScriptTreeSitterRequest {
+  string workspace_relative_path = 1 [json_name = "workspaceRelativePath"];
+  string text = 2 [json_name = "text"];
+}
+
+message TryParseTypeScriptTreeSitterResponse {
+  string text = 1 [json_name = "text"];
+}
+
+message UiBestOfNJudgeCandidate {
+  string composer_id = 1 [json_name = "composerId"];
+  .aiserver.v1.GitDiff diff = 2 [json_name = "diff"];
+}
+
+message UiBestOfNJudgeFinalResult {
+  string winner_composer_id = 1 [json_name = "winnerComposerId"];
+  string reasoning = 2 [json_name = "reasoning"];
+}
+
+message UniqueFileIdentifier {
+  string project_uuid = 1 [json_name = "projectUuid"];
+  string relative_path = 2 [json_name = "relativePath"];
+  string language_id = 3 [json_name = "languageId"];
+}
+
+message UpdateVscodeProfileRequest {
+  string machine_id = 1 [json_name = "machineId"];
+  repeated string workspace_extensions = 2 [json_name = "workspaceExtensions"];
+  repeated string extensions = 3 [json_name = "extensions"];
+}
+
+message UpdateVscodeProfileResponse {
+}
+
+message UsageData {
+  int32 gpt4_requests = 2 [json_name = "gpt4Requests"];
+  int32 gpt4_max_requests = 3 [json_name = "gpt4MaxRequests"];
+}
+
+message WarmChatCacheRequest {
+  .aiserver.v1.GetChatRequest request = 1 [json_name = "request"];
+}
+
+message WarmChatCacheResponse {
+  bool did_warm_cache = 1 [json_name = "didWarmCache"];
+}
+
+message WarmComposerCacheResponse {
+  bool did_warm_cache = 1 [json_name = "didWarmCache"];
+}
+
+message WebSearchDocument {
+  string url = 1 [json_name = "url"];
+  string title = 2 [json_name = "title"];
+  string text = 3 [json_name = "text"];
+}
+
+message WriteGitBranchNameRequest {
+  string diffs = 1 [json_name = "diffs"];
+  string context = 2 [json_name = "context"];
+  string conversation_id = 3 [json_name = "conversationId"];
+  oneof credentials {
+    .agent.v1.ApiKeyCredentials api_key_credentials = 4 [json_name = "apiKeyCredentials"];
+    .agent.v1.AzureCredentials azure_credentials = 5 [json_name = "azureCredentials"];
+    .agent.v1.BedrockCredentials bedrock_credentials = 6 [json_name = "bedrockCredentials"];
+  }
+}
+
+message WriteGitBranchNameResponse {
+  string branch_name = 1 [json_name = "branchName"];
+}
+
+message WriteGitCommitMessageRequest {
+  repeated string diffs = 1 [json_name = "diffs"];
+  repeated string previous_commit_messages = 2 [json_name = "previousCommitMessages"];
+  .aiserver.v1.ExplicitContext explicit_context = 3 [json_name = "explicitContext"];
+  oneof credentials {
+    .agent.v1.ApiKeyCredentials api_key_credentials = 4 [json_name = "apiKeyCredentials"];
+    .agent.v1.AzureCredentials azure_credentials = 5 [json_name = "azureCredentials"];
+    .agent.v1.BedrockCredentials bedrock_credentials = 6 [json_name = "bedrockCredentials"];
+  }
+}
+
+message WriteGitCommitMessageResponse {
+  string commit_message = 1 [json_name = "commitMessage"];
+}
+
+service AiService {
+  rpc ServerTime(.aiserver.v1.ServerTimeRequest) returns (.aiserver.v1.ServerTimeResponse);
+  rpc HealthCheck(.aiserver.v1.HealthCheckRequest) returns (.aiserver.v1.HealthCheckResponse);
+  rpc PrivacyCheck(.aiserver.v1.PrivacyCheckRequest) returns (.aiserver.v1.PrivacyCheckResponse);
+  rpc TimeLeftHealthCheck(.aiserver.v1.HealthCheckRequest) returns (.aiserver.v1.TimeLeftHealthCheckResponse);
+  rpc ThrowErrorCheck(.aiserver.v1.ThrowErrorCheckRequest) returns (.aiserver.v1.ThrowErrorCheckResponse);
+  rpc AvailableModels(.aiserver.v1.AvailableModelsRequest) returns (.aiserver.v1.AvailableModelsResponse);
+  rpc StreamChatTryReallyHard(.aiserver.v1.GetChatRequest) returns (stream .aiserver.v1.StreamChatResponse);
+  rpc RerankDocuments(.aiserver.v1.RerankDocumentsRequest) returns (.aiserver.v1.RerankDocumentsResponse);
+  rpc StreamComposer(.aiserver.v1.GetComposerChatRequest) returns (stream .aiserver.v1.StreamChatResponse);
+  rpc StreamComposerContext(.aiserver.v1.StreamChatContextRequest) returns (stream .aiserver.v1.StreamChatContextResponse);
+  rpc WarmComposerCache(.aiserver.v1.GetComposerChatRequest) returns (.aiserver.v1.WarmComposerCacheResponse);
+  rpc KeepComposerCacheWarm(.aiserver.v1.KeepComposerCacheWarmRequest) returns (.aiserver.v1.KeepComposerCacheWarmResponse);
+  rpc CountTokens(.aiserver.v1.CountTokensRequest) returns (.aiserver.v1.CountTokensResponse);
+  rpc StreamPotentialLocs(.aiserver.v1.PotentialLocsRequest) returns (stream .aiserver.v1.PotentialLocsResponse);
+  rpc StreamPotentialLocsUnderneath(.aiserver.v1.PotentialLocsUnderneathRequest) returns (stream .aiserver.v1.PotentialLocsUnderneathResponse);
+  rpc StreamPotentialLocsInitialQueries(.aiserver.v1.PotentialLocsInitialQueriesRequest) returns (stream .aiserver.v1.PotentialLocsInitialQueriesResponse);
+  rpc GetChatTitle(.aiserver.v1.GetChatTitleRequest) returns (.aiserver.v1.GetChatTitleResponse);
+  rpc GetCompletion(.aiserver.v1.GetCompletionRequest) returns (.aiserver.v1.GetCompletionResponse);
+  rpc IsolatedTreesitter(.aiserver.v1.IsolatedTreesitterRequest) returns (.aiserver.v1.IsolatedTreesitterResponse);
+  rpc GetSimplePrompt(.aiserver.v1.GetSimplePromptRequest) returns (.aiserver.v1.GetSimplePromptResponse);
+  rpc GetPassthroughPrompt(.aiserver.v1.GetPassthroughPromptRequest) returns (.aiserver.v1.GetPassthroughPromptResponse);
+  rpc SuggestQuickActions(.aiserver.v1.SuggestQuickActionsRequest) returns (.aiserver.v1.SuggestQuickActionsResponse);
+  rpc CheckLongFilesFit(.aiserver.v1.GetChatRequest) returns (.aiserver.v1.CheckLongFilesFitResponse);
+  rpc GetEvaluationPrompt(.aiserver.v1.GetEvaluationPromptRequest) returns (.aiserver.v1.GetEvaluationPromptResponse);
+  rpc GetUserInfo(.aiserver.v1.GetUserInfoRequest) returns (.aiserver.v1.GetUserInfoResponse);
+  rpc StreamChat(.aiserver.v1.GetChatRequest) returns (stream .aiserver.v1.StreamChatResponse);
+  rpc StreamChatWeb(.aiserver.v1.GetChatRequest) returns (stream .aiserver.v1.StreamChatResponse);
+  rpc WarmChatCache(.aiserver.v1.WarmChatCacheRequest) returns (.aiserver.v1.WarmChatCacheResponse);
+  rpc StreamEdit(.aiserver.v1.StreamEditRequest) returns (stream .aiserver.v1.StreamChatResponse);
+  rpc PreloadEdit(.aiserver.v1.PreloadEditRequest) returns (.aiserver.v1.PreloadEditResponse);
+  rpc StreamFastEdit(.aiserver.v1.StreamFastEditRequest) returns (stream .aiserver.v1.StreamFastEditResponse);
+  rpc StreamGenerate(.aiserver.v1.StreamGenerateRequest) returns (stream .aiserver.v1.StreamChatResponse);
+  rpc StreamInlineLongCompletion(.aiserver.v1.StreamInlineLongCompletionRequest) returns (stream .aiserver.v1.StreamChatResponse);
+  rpc SlashEdit(.aiserver.v1.SlashEditRequest) returns (stream .aiserver.v1.SlashEditResponse);
+  rpc SlashEditFollowUpWithPreviousEdits(.aiserver.v1.SlashEditFollowUpWithPreviousEditsRequest) returns (stream .aiserver.v1.StreamSlashEditFollowUpWithPreviousEditsResponse);
+  rpc StreamAiPreviews(.aiserver.v1.StreamAiPreviewsRequest) returns (stream .aiserver.v1.StreamAiPreviewsResponse);
+  rpc ShouldTurnOnCppOnboarding(.aiserver.v1.ShouldTurnOnCppOnboardingRequest) returns (.aiserver.v1.ShouldTurnOnCppOnboardingResponse);
+  rpc GetComposerAutocomplete(.aiserver.v1.GetComposerAutocompleteRequest) returns (.aiserver.v1.GetComposerAutocompleteResponse);
+  rpc StreamReview(.aiserver.v1.ReviewRequest) returns (stream .aiserver.v1.ReviewResponse);
+  rpc StreamReviewChat(.aiserver.v1.ReviewChatRequest) returns (stream .aiserver.v1.ReviewChatResponse);
+  rpc CheckQueuePosition(.aiserver.v1.CheckQueuePositionRequest) returns (.aiserver.v1.CheckQueuePositionResponse);
+  rpc CheckUsageBasedPrice(.aiserver.v1.CheckUsageBasedPriceRequest) returns (.aiserver.v1.CheckUsageBasedPriceResponse);
+  rpc DoThisForMeCheck(.aiserver.v1.DoThisForMeCheckRequest) returns (.aiserver.v1.DoThisForMeCheckResponse);
+  rpc StreamDoThisForMe(.aiserver.v1.DoThisForMeRequest) returns (stream .aiserver.v1.DoThisForMeResponseWrapped);
+  rpc StreamChatToolformer(.aiserver.v1.GetChatRequest) returns (stream .aiserver.v1.StreamChatToolformerResponse);
+  rpc StreamChatToolformerContinue(.aiserver.v1.StreamChatToolformerContinueRequest) returns (stream .aiserver.v1.StreamChatToolformerResponse);
+  rpc PushAiThought(.aiserver.v1.PushAiThoughtRequest) returns (.aiserver.v1.PushAiThoughtResponse);
+  rpc CheckDoableAsTask(.aiserver.v1.CheckDoableAsTaskRequest) returns (.aiserver.v1.CheckDoableAsTaskResponse);
+  rpc ReportGroundTruthCandidate(.aiserver.v1.ReportGroundTruthCandidateRequest) returns (.aiserver.v1.ReportGroundTruthCandidateResponse);
+  rpc ReportCmdKFate(.aiserver.v1.ReportCmdKFateRequest) returns (.aiserver.v1.ReportCmdKFateResponse);
+  rpc ShowWelcomeScreen(.aiserver.v1.ShowWelcomeScreenRequest) returns (.aiserver.v1.ShowWelcomeScreenResponse);
+  rpc InterfaceAgentInit(.aiserver.v1.InterfaceAgentInitRequest) returns (.aiserver.v1.InterfaceAgentInitResponse);
+  rpc StreamInterfaceAgentStatus(.aiserver.v1.StreamInterfaceAgentStatusRequest) returns (stream .aiserver.v1.StreamInterfaceAgentStatusResponse);
+  rpc TaskGetInterfaceAgentStatus(.aiserver.v1.TaskGetInterfaceAgentStatusRequest) returns (stream .aiserver.v1.TaskGetInterfaceAgentStatusResponseWrapped);
+  rpc UpdateVscodeProfile(.aiserver.v1.UpdateVscodeProfileRequest) returns (.aiserver.v1.UpdateVscodeProfileResponse);
+  rpc TaskInit(.aiserver.v1.TaskInitRequest) returns (.aiserver.v1.TaskInitResponse);
+  rpc TaskPause(.aiserver.v1.TaskPauseRequest) returns (.aiserver.v1.TaskPauseResponse);
+  rpc TaskInfo(.aiserver.v1.TaskInfoRequest) returns (.aiserver.v1.TaskInfoResponse);
+  rpc TaskStreamLog(.aiserver.v1.TaskStreamLogRequest) returns (stream .aiserver.v1.TaskStreamLogResponse);
+  rpc TaskSendMessage(.aiserver.v1.TaskSendMessageRequest) returns (.aiserver.v1.TaskSendMessageResponse);
+  rpc TaskProvideResult(.aiserver.v1.TaskProvideResultRequest) returns (.aiserver.v1.TaskProvideResultResponse);
+  rpc CreateExperimentalIndex(.aiserver.v1.CreateExperimentalIndexRequest) returns (.aiserver.v1.CreateExperimentalIndexResponse);
+  rpc ListExperimentalIndexFiles(.aiserver.v1.ListExperimentalIndexFilesRequest) returns (.aiserver.v1.ListExperimentalIndexFilesResponse);
+  rpc ListenExperimentalIndex(.aiserver.v1.ListenExperimentalIndexRequest) returns (stream .aiserver.v1.ListenExperimentalIndexResponse);
+  rpc RegisterFileToIndex(.aiserver.v1.RegisterFileToIndexRequest) returns (.aiserver.v1.RequestReceivedResponse);
+  rpc SetupIndexDependencies(.aiserver.v1.SetupIndexDependenciesRequest) returns (.aiserver.v1.SetupIndexDependenciesResponse);
+  rpc ComputeIndexTopoSort(.aiserver.v1.ComputeIndexTopoSortRequest) returns (.aiserver.v1.ComputeIndexTopoSortResponse);
+  rpc StreamChatDeepContext(.aiserver.v1.StreamChatDeepContextRequest) returns (stream .aiserver.v1.StreamChatDeepContextResponse);
+  rpc ChooseCodeReferences(.aiserver.v1.ChooseCodeReferencesRequest) returns (.aiserver.v1.RequestReceivedResponse);
+  rpc RegisterCodeReferences(.aiserver.v1.RegisterCodeReferencesRequest) returns (.aiserver.v1.RegisterCodeReferencesResponse);
+  rpc ExtractPaths(.aiserver.v1.ExtractPathsRequest) returns (.aiserver.v1.ExtractPathsResponse);
+  rpc SummarizeWithReferences(.aiserver.v1.SummarizeWithReferencesRequest) returns (.aiserver.v1.RequestReceivedResponse);
+  rpc DocumentationQuery(.aiserver.v1.DocumentationQueryRequest) returns (.aiserver.v1.DocumentationQueryResponse);
+  rpc AvailableDocs(.aiserver.v1.AvailableDocsRequest) returns (.aiserver.v1.AvailableDocsResponse);
+  rpc RunWebSearch(.aiserver.v1.RunWebSearchRequest) returns (.aiserver.v1.RunWebSearchResponse);
+  rpc RunWebFetch(.aiserver.v1.RunWebFetchRequest) returns (.aiserver.v1.RunWebFetchResponse);
+  rpc RunGenerateImage(.aiserver.v1.RunGenerateImageRequest) returns (.aiserver.v1.RunGenerateImageResponse);
+  rpc ReportFeedback(.aiserver.v1.ReportFeedbackRequest) returns (.aiserver.v1.ReportFeedbackResponse);
+  rpc ReportBug(.aiserver.v1.ReportBugRequest) returns (.aiserver.v1.ReportBugResponse);
+  rpc StreamChatContext(.aiserver.v1.StreamChatContextRequest) returns (stream .aiserver.v1.StreamChatContextResponse);
+  rpc GenerateTldr(.aiserver.v1.GenerateTldrRequest) returns (.aiserver.v1.GenerateTldrResponse);
+  rpc TaskStreamChatContext(.aiserver.v1.TaskStreamChatContextRequest) returns (stream .aiserver.v1.TaskStreamChatContextResponseWrapped);
+  rpc RerankResults(.aiserver.v1.RerankerRequest) returns (.aiserver.v1.RerankerResponse);
+  rpc ModelQuery(.aiserver.v1.ModelQueryRequest) returns (.aiserver.v1.ModelQueryResponse);
+  rpc ModelQueryV2(.aiserver.v1.ModelQueryRequest) returns (stream .aiserver.v1.ModelQueryResponseV2);
+  rpc IntentPrediction(.aiserver.v1.IntentPredictionRequest) returns (.aiserver.v1.IntentPredictionResponse);
+  rpc GetChatSuggestions(.aiserver.v1.GetChatSuggestionsRequest) returns (.aiserver.v1.GetChatSuggestionsResponse);
+  rpc GetUserInstructions(.aiserver.v1.GetUserInstructionsRequest) returns (.aiserver.v1.GetUserInstructionsResponse);
+  rpc StreamCursorTutor(.aiserver.v1.StreamCursorTutorRequest) returns (stream .aiserver.v1.StreamCursorTutorResponse);
+  rpc CheckFeatureStatus(.aiserver.v1.CheckFeatureStatusRequest) returns (.aiserver.v1.CheckFeatureStatusResponse);
+  rpc CheckFeaturesStatus(.aiserver.v1.CheckFeaturesStatusRequest) returns (.aiserver.v1.CheckFeaturesStatusResponse);
+  rpc CheckFeatureStatusUnauthenticated(.aiserver.v1.CheckFeatureStatusRequest) returns (.aiserver.v1.CheckFeatureStatusResponse);
+  rpc GetEffectiveTokenLimit(.aiserver.v1.GetEffectiveTokenLimitRequest) returns (.aiserver.v1.GetEffectiveTokenLimitResponse);
+  rpc GetContextScores(.aiserver.v1.ContextScoresRequest) returns (.aiserver.v1.ContextScoresResponse);
+  rpc StreamCpp(.aiserver.v1.StreamCppRequest) returns (stream .aiserver.v1.StreamCppResponse);
+  rpc CppConfig(.aiserver.v1.CppConfigRequest) returns (.aiserver.v1.CppConfigResponse);
+  rpc CppEditHistoryStatus(.aiserver.v1.CppEditHistoryStatusRequest) returns (.aiserver.v1.CppEditHistoryStatusResponse);
+  rpc CppAppend(.aiserver.v1.CppAppendRequest) returns (.aiserver.v1.CppAppendResponse);
+  rpc RefreshTabContext(.aiserver.v1.RefreshTabContextRequest) returns (.aiserver.v1.RefreshTabContextResponse);
+  rpc CheckNumberConfig(.aiserver.v1.CheckNumberConfigRequest) returns (.aiserver.v1.CheckNumberConfigResponse);
+  rpc CheckNumberConfigUnauthenticated(.aiserver.v1.CheckNumberConfigRequest) returns (.aiserver.v1.CheckNumberConfigResponse);
+  rpc CheckNumberConfigs(.aiserver.v1.CheckNumberConfigsRequest) returns (.aiserver.v1.CheckNumberConfigsResponse);
+  rpc StreamTerminalAutocomplete(.aiserver.v1.StreamTerminalAutocompleteRequest) returns (stream .aiserver.v1.StreamTerminalAutocompleteResponse);
+  rpc StreamPseudocodeGenerator(.aiserver.v1.StreamPseudocodeGeneratorRequest) returns (stream .aiserver.v1.StreamPseudocodeGeneratorResponse);
+  rpc StreamPseudocodeMapper(.aiserver.v1.StreamPseudocodeMapperRequest) returns (stream .aiserver.v1.StreamPseudocodeMapperResponse);
+  rpc AcknowledgeGracePeriodDisclaimer(.aiserver.v1.AcknowledgeGracePeriodDisclaimerRequest) returns (.aiserver.v1.AcknowledgeGracePeriodDisclaimerResponse);
+  rpc StreamAiLintBug(.aiserver.v1.StreamAiLintBugRequest) returns (stream .aiserver.v1.StreamAiLintBugResponse);
+  rpc StreamAiCursorHelp(.aiserver.v1.StreamAiCursorHelpRequest) returns (stream .aiserver.v1.StreamAiCursorHelpResponse);
+  rpc LogUserLintReply(.aiserver.v1.LogUserLintReplyRequest) returns (.aiserver.v1.LogUserLintReplyResponse);
+  rpc LogLinterExplicitUserFeedback(.aiserver.v1.LogLinterExplicitUserFeedbackRequest) returns (.aiserver.v1.LogLinterExplicitUserFeedbackResponse);
+  rpc StreamFixMarkers(.aiserver.v1.FixMarkersRequest) returns (stream .aiserver.v1.FixMarkersResponse);
+  rpc ReportInlineAction(.aiserver.v1.ReportInlineActionRequest) returns (.aiserver.v1.ReportInlineActionResponse);
+  rpc StreamPriomptPrompt(.aiserver.v1.StreamPriomptPromptRequest) returns (stream .aiserver.v1.StreamPriomptPromptResponse);
+  rpc StreamLint(.aiserver.v1.StreamLintRequest) returns (stream .aiserver.v1.StreamChatResponse);
+  rpc StreamNewLintRule(.aiserver.v1.StreamNewRuleRequest) returns (stream .aiserver.v1.StreamChatResponse);
+  rpc AiProject(.aiserver.v1.AiProjectRequest) returns (stream .aiserver.v1.AiProjectResponse);
+  rpc ToCamelCase(.aiserver.v1.ToCamelCaseRequest) returns (.aiserver.v1.ToCamelCaseResponse);
+  rpc ReportGenerationFeedback(.aiserver.v1.ReportGenerationFeedbackRequest) returns (.aiserver.v1.ReportGenerationFeedbackResponse);
+  rpc ReportAgentFeedback(.aiserver.v1.ReportAgentFeedbackRequest) returns (.aiserver.v1.ReportAgentFeedbackResponse);
+  rpc ReportAgentMessageFeedback(.aiserver.v1.ReportAgentMessageFeedbackRequest) returns (.aiserver.v1.ReportAgentMessageFeedbackResponse);
+  rpc ReportAutoRoutingResultFeedback(.aiserver.v1.ReportAutoRoutingResultFeedbackRequest) returns (.aiserver.v1.ReportAutoRoutingResultFeedbackResponse);
+  rpc GetThoughtAnnotation(.aiserver.v1.GetThoughtAnnotationRequest) returns (.aiserver.v1.GetThoughtAnnotationResponse);
+  rpc StreamWebCmdKV1(.aiserver.v1.StreamWebCmdKV1Request) returns (stream .aiserver.v1.StreamWebCmdKV1Response);
+  rpc StreamNextCursorPrediction(.aiserver.v1.StreamNextCursorPredictionRequest) returns (stream .aiserver.v1.StreamNextCursorPredictionResponse);
+  rpc IsCursorPredictionEnabled(.aiserver.v1.IsCursorPredictionEnabledRequest) returns (.aiserver.v1.IsCursorPredictionEnabledResponse);
+  rpc GetCppEditClassification(.aiserver.v1.GetCppEditClassificationRequest) returns (.aiserver.v1.GetCppEditClassificationResponse);
+  rpc GetTerminalCompletion(.aiserver.v1.GetTerminalCompletionRequest) returns (.aiserver.v1.GetTerminalCompletionResponse);
+  rpc TakeNotesOnCommitDiff(.aiserver.v1.TakeNotesOnCommitDiffRequest) returns (.aiserver.v1.TakeNotesOnCommitDiffResponse);
+  rpc BulkEmbed(.aiserver.v1.BulkEmbedRequest) returns (.aiserver.v1.BulkEmbedResponse);
+  rpc BackgroundCmdKEval(.aiserver.v1.BackgroundCmdKEvalRequest) returns (stream .aiserver.v1.BackgroundCmdKEvalResponse);
+  rpc BackgroundCmdK(.aiserver.v1.BackgroundCmdKRequest) returns (stream .aiserver.v1.BackgroundCmdKResponse);
+  rpc CalculateAutoSelection(.aiserver.v1.CalculateAutoSelectionRequest) returns (.aiserver.v1.CalculateAutoSelectionResponse);
+  rpc GetAtSymbolSuggestions(.aiserver.v1.GetAtSymbolSuggestionsRequest) returns (.aiserver.v1.GetAtSymbolSuggestionsResponse);
+  rpc GetCodebaseQuestions(.aiserver.v1.GetChatRequest) returns (.aiserver.v1.GetCodebaseQuestionsResponse);
+  rpc CppEditHistoryAppend(.aiserver.v1.EditHistoryAppendChangesRequest) returns (.aiserver.v1.EditHistoryAppendChangesResponse);
+  rpc DevOnlyGetPastRequestIds(.aiserver.v1.DevOnlyGetPastRequestIdsRequest) returns (.aiserver.v1.DevOnlyGetPastRequestIdsResponse);
+  rpc GetFilesForComposer(.aiserver.v1.GetFilesForComposerRequest) returns (.aiserver.v1.GetFilesForComposerResponse);
+  rpc TryParseTypeScriptTreeSitter(.aiserver.v1.TryParseTypeScriptTreeSitterRequest) returns (.aiserver.v1.TryParseTypeScriptTreeSitterResponse);
+  rpc NameTab(.aiserver.v1.NameTabRequest) returns (.aiserver.v1.NameTabResponse);
+  rpc IsTerminalFinishedV2(.aiserver.v1.IsTerminalFinishedRequest) returns (.aiserver.v1.IsTerminalFinishedResponseV2);
+  rpc TestModelStatus(.aiserver.v1.TestModelStatusRequest) returns (.aiserver.v1.TestModelStatusResponse);
+  rpc FindBugs(.aiserver.v1.FindBugsRequest) returns (.aiserver.v1.FindBugsResponse);
+  rpc ContextReranking(.aiserver.v1.ContextRerankingRequest) returns (.aiserver.v1.ContextRerankingResponse);
+  rpc AutoContext(.aiserver.v1.AutoContextRequest) returns (.aiserver.v1.AutoContextResponse);
+  rpc WriteGitCommitMessage(.aiserver.v1.WriteGitCommitMessageRequest) returns (.aiserver.v1.WriteGitCommitMessageResponse);
+  rpc WriteGitBranchName(.aiserver.v1.WriteGitBranchNameRequest) returns (.aiserver.v1.WriteGitBranchNameResponse);
+  rpc StreamBugBot(.aiserver.v1.StreamBugBotRequest) returns (stream .aiserver.v1.StreamBugBotResponse);
+  rpc StreamBugBotAgentic(stream .aiserver.v1.StreamBugBotAgenticClientMessage) returns (stream .aiserver.v1.StreamBugBotAgenticServerMessage);
+  rpc StreamBugBotAgenticSSE(.aiserver.v1.BidiRequestId) returns (stream .aiserver.v1.StreamBugBotAgenticServerMessage);
+  rpc StreamBugBotAgenticPoll(.aiserver.v1.BidiPollRequest) returns (stream .aiserver.v1.BidiPollResponse);
+  rpc StreamUiBestOfNJudge(stream .aiserver.v1.StreamUiBestOfNJudgeClientMessage) returns (stream .aiserver.v1.StreamUiBestOfNJudgeServerMessage);
+  rpc StreamUiBestOfNJudgeSSE(.aiserver.v1.BidiRequestId) returns (stream .aiserver.v1.StreamUiBestOfNJudgeServerMessage);
+  rpc StreamUiBestOfNJudgePoll(.aiserver.v1.BidiPollRequest) returns (stream .aiserver.v1.BidiPollResponse);
+  rpc CheckBugBotPrice(.aiserver.v1.CheckBugBotPriceRequest) returns (.aiserver.v1.CheckBugBotPriceResponse);
+  rpc CheckBugBotTelemetryHealthy(.aiserver.v1.CheckBugBotTelemetryHealthyRequest) returns (.aiserver.v1.CheckBugBotTelemetryHealthyResponse);
+  rpc RecordIdeBugReaction(.aiserver.v1.RecordIdeBugReactionRequest) returns (.aiserver.v1.RecordIdeBugReactionResponse);
+  rpc GetSuggestedBugBotIterations(.aiserver.v1.GetSuggestedBugBotIterationsRequest) returns (.aiserver.v1.GetSuggestedBugBotIterationsResponse);
+  rpc GetEditorBugbotAutoRunStatus(.aiserver.v1.GetEditorBugbotAutoRunStatusRequest) returns (.aiserver.v1.GetEditorBugbotAutoRunStatusResponse);
+  rpc TestBidi(stream .aiserver.v1.TestBidiRequest) returns (stream .aiserver.v1.TestBidiResponse);
+  rpc StreamDiffReview(.aiserver.v1.GetDiffReviewRequest) returns (stream .aiserver.v1.StreamDiffReviewResponse);
+  rpc StreamDiffReviewByFile(.aiserver.v1.GetDiffReviewRequest) returns (stream .aiserver.v1.StreamDiffReviewByFileResponse);
+  rpc GetModelLabels(.aiserver.v1.GetModelLabelsRequest) returns (.aiserver.v1.GetModelLabelsResponse);
+  rpc GetLastDefaultModelNudge(.aiserver.v1.GetLastDefaultModelNudgeRequest) returns (.aiserver.v1.GetLastDefaultModelNudgeResponse);
+  rpc GetDefaultModelNudgeData(.aiserver.v1.GetDefaultModelNudgeDataRequest) returns (.aiserver.v1.GetDefaultModelNudgeDataResponse);
+  rpc GetDefaultModel(.aiserver.v1.GetDefaultModelRequest) returns (.aiserver.v1.GetDefaultModelResponse);
+  rpc ReportCommitAiAnalytics(.aiserver.v1.ReportCommitAiAnalyticsRequest) returns (.aiserver.v1.ReportCommitAiAnalyticsResponse);
+  rpc TestBedrockCredentials(.aiserver.v1.TestBedrockCredentialsRequest) returns (.aiserver.v1.TestBedrockCredentialsResponse);
+  rpc ReportAiCodeChangeMetrics(.aiserver.v1.ReportAiCodeChangeMetricsRequest) returns (.aiserver.v1.ReportAiCodeChangeMetricsResponse);
+  rpc ReportProcessMetrics(.aiserver.v1.ReportProcessMetricsRequest) returns (.aiserver.v1.ReportProcessMetricsResponse);
+  rpc ReportProcessMetricsV2(.aiserver.v1.ReportProcessMetricsV2Request) returns (.aiserver.v1.ReportProcessMetricsV2Response);
+  rpc ReportSandProcessMetrics(.aiserver.v1.ReportSandProcessMetricsRequest) returns (.aiserver.v1.ReportSandProcessMetricsResponse);
+  rpc ReportClientNumericMetrics(.aiserver.v1.ReportClientNumericMetricsRequest) returns (.aiserver.v1.ReportClientNumericMetricsResponse);
+  rpc PotentiallyGenerateMemory(.aiserver.v1.PotentiallyGenerateMemoryRequest) returns (.aiserver.v1.PotentiallyGenerateMemoryResponse);
+  rpc KnowledgeBaseAdd(.aiserver.v1.KnowledgeBaseAddRequest) returns (.aiserver.v1.KnowledgeBaseAddResponse);
+  rpc KnowledgeBaseList(.aiserver.v1.KnowledgeBaseListRequest) returns (.aiserver.v1.KnowledgeBaseListResponse);
+  rpc KnowledgeBaseRemove(.aiserver.v1.KnowledgeBaseRemoveRequest) returns (.aiserver.v1.KnowledgeBaseRemoveResponse);
+  rpc KnowledgeBaseUpdate(.aiserver.v1.KnowledgeBaseUpdateRequest) returns (.aiserver.v1.KnowledgeBaseUpdateResponse);
+  rpc FetchRelevantKnowledgeForConversation(.aiserver.v1.FetchRelevantKnowledgeForConversationRequest) returns (.aiserver.v1.FetchRelevantKnowledgeForConversationResponse);
+  rpc InferBackgroundComposerScripts(.aiserver.v1.InferBackgroundComposerScriptsRequest) returns (.aiserver.v1.InferBackgroundComposerScriptsResponse);
+  rpc GetBackgroundComposerFeedbackLink(.aiserver.v1.GetBackgroundComposerFeedbackLinkRequest) returns (.aiserver.v1.GetBackgroundComposerFeedbackLinkResponse);
+  rpc GetUsableModels(.agent.v1.GetUsableModelsRequest) returns (.agent.v1.GetUsableModelsResponse);
+  rpc GetDefaultModelForCli(.agent.v1.GetDefaultModelForCliRequest) returns (.agent.v1.GetDefaultModelForCliResponse);
+  rpc StreamComposerEnhancer(stream .aiserver.v1.ComposerEnhancerClientMessage) returns (stream .aiserver.v1.ComposerEnhancerServerMessage);
+  rpc StreamComposerEnhancerSSE(.aiserver.v1.BidiRequestId) returns (stream .aiserver.v1.ComposerEnhancerServerMessage);
+  rpc StreamComposerEnhancerPoll(.aiserver.v1.BidiPollRequest) returns (stream .aiserver.v1.BidiPollResponse);
+  rpc StreamStt(stream .aiserver.v1.SttClientMessage) returns (stream .aiserver.v1.SttServerMessage);
+  rpc StreamSttSSE(.aiserver.v1.BidiRequestId) returns (stream .aiserver.v1.SttServerMessage);
+  rpc StreamSttPoll(.aiserver.v1.BidiPollRequest) returns (stream .aiserver.v1.BidiPollResponse);
+  rpc TranscribeAudio(.aiserver.v1.TranscribeAudioRequest) returns (.aiserver.v1.TranscribeAudioResponse);
+  rpc NameAgent(.agent.v1.NameAgentRequest) returns (.agent.v1.NameAgentResponse);
+  rpc EvaluatePromptHook(.aiserver.v1.EvaluatePromptHookRequest) returns (.aiserver.v1.EvaluatePromptHookResponse);
+  rpc GetCloudSetupBlockers(.aiserver.v1.GetCloudSetupBlockersRequest) returns (.aiserver.v1.GetCloudSetupBlockersResponse);
+}

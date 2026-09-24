@@ -1,0 +1,36 @@
+// agent.v1 — agent/v1/reflect_tool messages, enums and services.
+//
+// Generated from this repository's schema (source/packages/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+message ReflectToolCall {
+  .agent.v1.ReflectArgs args = 1 [json_name = "args"];
+  .agent.v1.ReflectResult result = 2 [json_name = "result"];
+}
+
+message ReflectArgs {
+  string unexpected_action_outcomes = 1 [json_name = "unexpectedActionOutcomes"];
+  string relevant_instructions = 2 [json_name = "relevantInstructions"];
+  string scenario_analysis = 3 [json_name = "scenarioAnalysis"];
+  string critical_synthesis = 4 [json_name = "criticalSynthesis"];
+  string next_steps = 5 [json_name = "nextSteps"];
+  string tool_call_id = 6 [json_name = "toolCallId"];
+}
+
+message ReflectResult {
+  oneof result {
+    .agent.v1.ReflectSuccess success = 1 [json_name = "success"];
+    .agent.v1.ReflectError error = 2 [json_name = "error"];
+  }
+}
+
+message ReflectSuccess {
+}
+
+message ReflectError {
+  string error = 1 [json_name = "error"];
+}

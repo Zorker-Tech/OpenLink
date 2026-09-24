@@ -1,0 +1,162 @@
+// agent.v1 — agent/v1/coordinator_tools messages, enums and services.
+//
+// Generated from this repository's schema (source/packages/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+message GetAgentStatusToolCall {
+  .agent.v1.GetAgentStatusArgs args = 1 [json_name = "args"];
+  .agent.v1.GetAgentStatusResult result = 2 [json_name = "result"];
+}
+
+message SendToAgentToolCall {
+  .agent.v1.SendToAgentArgs args = 1 [json_name = "args"];
+  .agent.v1.SendToAgentResult result = 2 [json_name = "result"];
+}
+
+message ReadAgentTranscriptToolCall {
+  .agent.v1.ReadAgentTranscriptArgs args = 1 [json_name = "args"];
+  .agent.v1.ReadAgentTranscriptResult result = 2 [json_name = "result"];
+}
+
+message CreateAgentToolCall {
+  .agent.v1.CreateAgentArgs args = 1 [json_name = "args"];
+  .agent.v1.CreateAgentResult result = 2 [json_name = "result"];
+}
+
+message StopAgentToolCall {
+  .agent.v1.StopAgentArgs args = 1 [json_name = "args"];
+  .agent.v1.StopAgentResult result = 2 [json_name = "result"];
+}
+
+message StopAgentArgs {
+  string tool_call_id = 1 [json_name = "toolCallId"];
+  string agent_id = 2 [json_name = "agentId"];
+}
+
+message StopAgentResult {
+  oneof result {
+    .agent.v1.StopAgentSuccess success = 1 [json_name = "success"];
+    .agent.v1.StopAgentError error = 2 [json_name = "error"];
+  }
+}
+
+message StopAgentSuccess {
+  string worker_bc_id = 1 [json_name = "workerBcId"];
+  string message = 2 [json_name = "message"];
+}
+
+message StopAgentError {
+  string error = 1 [json_name = "error"];
+}
+
+message CreateAgentArgs {
+  string tool_call_id = 1 [json_name = "toolCallId"];
+  string prompt = 2 [json_name = "prompt"];
+  string name = 3 [json_name = "name"];
+  string model = 4 [json_name = "model"];
+  string base_branch = 5 [json_name = "baseBranch"];
+  string machine_type = 6 [json_name = "machineType"];
+  string worker_id = 7 [json_name = "workerId"];
+  string pool = 8 [json_name = "pool"];
+  map<string, string> labels = 9 [json_name = "labels"];
+  string environment_build_id = 10 [json_name = "environmentBuildId"];
+}
+
+message CreateAgentResult {
+  oneof result {
+    .agent.v1.CreateAgentSuccess success = 1 [json_name = "success"];
+    .agent.v1.CreateAgentError error = 2 [json_name = "error"];
+  }
+}
+
+message CreateAgentSuccess {
+  string agent_id = 1 [json_name = "agentId"];
+  string message = 2 [json_name = "message"];
+}
+
+message CreateAgentError {
+  string error = 1 [json_name = "error"];
+}
+
+message ReadAgentTranscriptArgs {
+  string tool_call_id = 1 [json_name = "toolCallId"];
+  string agent_id = 2 [json_name = "agentId"];
+  string mode = 3 [json_name = "mode"];
+  uint32 max_turns = 4 [json_name = "maxTurns"];
+}
+
+message ReadAgentTranscriptResult {
+  oneof result {
+    .agent.v1.ReadAgentTranscriptSuccess success = 1 [json_name = "success"];
+    .agent.v1.ReadAgentTranscriptError error = 2 [json_name = "error"];
+  }
+}
+
+message ReadAgentTranscriptSuccess {
+  string transcript = 1 [json_name = "transcript"];
+  bool truncated = 2 [json_name = "truncated"];
+}
+
+message ReadAgentTranscriptError {
+  string error = 1 [json_name = "error"];
+}
+
+message SendToAgentArgs {
+  string tool_call_id = 1 [json_name = "toolCallId"];
+  string agent_id = 2 [json_name = "agentId"];
+  string message = 3 [json_name = "message"];
+  string delivery = 4 [json_name = "delivery"];
+  string title = 5 [json_name = "title"];
+}
+
+message SendToAgentResult {
+  oneof result {
+    .agent.v1.SendToAgentSuccess success = 1 [json_name = "success"];
+    .agent.v1.SendToAgentError error = 2 [json_name = "error"];
+  }
+}
+
+message SendToAgentSuccess {
+  string worker_bc_id = 1 [json_name = "workerBcId"];
+  string delivered_as = 2 [json_name = "deliveredAs"];
+  string message = 3 [json_name = "message"];
+}
+
+message SendToAgentError {
+  string error = 1 [json_name = "error"];
+}
+
+message GetAgentStatusArgs {
+  string tool_call_id = 1 [json_name = "toolCallId"];
+  repeated string agent_ids = 2 [json_name = "agentIds"];
+}
+
+message GetAgentStatusResult {
+  oneof result {
+    .agent.v1.GetAgentStatusSuccess success = 1 [json_name = "success"];
+    .agent.v1.GetAgentStatusError error = 2 [json_name = "error"];
+  }
+}
+
+message GetAgentStatusSuccess {
+  repeated .agent.v1.GetAgentStatusWorker workers = 1 [json_name = "workers"];
+  string message = 2 [json_name = "message"];
+}
+
+message GetAgentStatusError {
+  string error = 1 [json_name = "error"];
+}
+
+message GetAgentStatusWorker {
+  string bc_id = 1 [json_name = "bcId"];
+  string name = 2 [json_name = "name"];
+  string lifecycle = 3 [json_name = "lifecycle"];
+  bool turn_in_flight = 4 [json_name = "turnInFlight"];
+  string last_terminal_turn_status = 5 [json_name = "lastTerminalTurnStatus"];
+  string pr_url = 6 [json_name = "prUrl"];
+  uint64 last_activity_at_ms = 7 [json_name = "lastActivityAtMs"];
+}

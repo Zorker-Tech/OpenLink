@@ -1,0 +1,211 @@
+// anyrun.v1 — anyrun/v1/persisted_dev_container messages, enums and services.
+//
+// Generated from this repository's schema (source/packages/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package anyrun.v1;
+
+import "anyrun/v1/common.proto";
+
+message DaemonCommandHandlerPersistentState {
+  int64 vpid = 1 [json_name = "vpid"];
+  string last_event_id = 2 [json_name = "lastEventId"];
+}
+
+message DockerContainerPersistentState {
+  string id = 1 [json_name = "id"];
+  string name = 2 [json_name = "name"];
+  bool stopped = 3 [json_name = "stopped"];
+  bool removed = 4 [json_name = "removed"];
+  bool leaked = 5 [json_name = "leaked"];
+  uint64 post_pause_unpause_delay_ms = 6 [json_name = "postPauseUnpauseDelayMs"];
+  string isod_container_name = 8 [json_name = "isodContainerName"];
+}
+
+message DockerDevContainerPersistentState {
+  string name = 1 [json_name = "name"];
+  .anyrun.v1.DockerContainerPersistentState container = 2 [json_name = "container"];
+  .anyrun.v1.RuntimeStatePersistentState runtime_state = 3 [json_name = "runtimeState"];
+  .anyrun.v1.ImageMetadata image_metadata = 4 [json_name = "imageMetadata"];
+  .anyrun.v1.NetworkInfo network_info = 5 [json_name = "networkInfo"];
+  string user = 6 [json_name = "user"];
+  string shell = 7 [json_name = "shell"];
+  uint32 daemon_port = 8 [json_name = "daemonPort"];
+  .anyrun.v1.WorkspaceConfig workspace = 9 [json_name = "workspace"];
+  bool v2_hydrated = 10 [json_name = "v2Hydrated"];
+  string pod_daemon_auth_token = 11 [json_name = "podDaemonAuthToken"];
+}
+
+message IsoDevContainerMetadata {
+  string name = 1 [json_name = "name"];
+  .anyrun.v1.DockerDevContainerPersistentState persistent_state = 2 [json_name = "persistentState"];
+  .anyrun.v1.IsoEnvConfig env_config = 3 [json_name = "envConfig"];
+  repeated .anyrun.v1.PersistedDriveDescriptor drive_descriptors = 4 [json_name = "driveDescriptors"];
+}
+
+message IsoEnvBalloonConfig {
+  uint32 amount_mib = 1 [json_name = "amountMib"];
+  bool deflate_on_oom = 2 [json_name = "deflateOnOom"];
+  uint32 stats_polling_interval_s = 3 [json_name = "statsPollingIntervalS"];
+}
+
+message IsoEnvConfig {
+  uint32 vcpu_count = 1 [json_name = "vcpuCount"];
+  uint32 mem_size_mib = 2 [json_name = "memSizeMib"];
+  uint32 swap_size_mib = 3 [json_name = "swapSizeMib"];
+  uint32 rootfs_size_mib = 4 [json_name = "rootfsSizeMib"];
+  repeated .anyrun.v1.IsoEnvExtraDriveConfig extra_drives = 5 [json_name = "extraDrives"];
+  .anyrun.v1.IsoEnvBalloonConfig balloon = 6 [json_name = "balloon"];
+  .anyrun.v1.FirecrackerVersion firecracker_version = 7 [json_name = "firecrackerVersion"];
+}
+
+message IsoEnvExtraDriveConfig {
+  .anyrun.v1.IsoEnvExtraDrivePurpose purpose = 1 [json_name = "purpose"];
+  uint32 size_mib = 3 [json_name = "sizeMib"];
+  string drive_id = 4 [json_name = "driveId"];
+  string guest_device = 5 [json_name = "guestDevice"];
+  string guest_mount_path = 6 [json_name = "guestMountPath"];
+}
+
+enum IsoEnvExtraDrivePurpose {
+  ISO_ENV_EXTRA_DRIVE_PURPOSE_UNSPECIFIED = 0;
+  ISO_ENV_EXTRA_DRIVE_PURPOSE_CHECKPOINT_SCRATCH = 1;
+}
+
+message NetworkInfo {
+  string ip_address = 1 [json_name = "ipAddress"];
+}
+
+message PersistedDevContainerConfig {
+  repeated .anyrun.v1.DevContainerExecCommand prepare_commands = 10 [json_name = "prepareCommands"];
+  repeated .anyrun.v1.DevContainerExecCommand install_commands = 11 [json_name = "installCommands"];
+  repeated .anyrun.v1.DevContainerExecCommand start_commands = 12 [json_name = "startCommands"];
+  repeated .anyrun.v1.PersistedEnvVar env = 13 [json_name = "env"];
+  repeated .anyrun.v1.PortDefinition ports = 14 [json_name = "ports"];
+  string shell = 15 [json_name = "shell"];
+  string user = 16 [json_name = "user"];
+  bool privileged = 17 [json_name = "privileged"];
+  repeated .anyrun.v1.DevContainerExecCommand verify_commands = 19 [json_name = "verifyCommands"];
+  bool build_container = 22 [json_name = "buildContainer"];
+  bool enable_checkpoint_scratch_drive = 25 [json_name = "enableCheckpointScratchDrive"];
+  bool blob_client_resilience_enabled = 26 [json_name = "blobClientResilienceEnabled"];
+  .anyrun.v1.ContainerRuntime container_runtime = 27 [json_name = "containerRuntime"];
+  .anyrun.v1.FirecrackerVersion firecracker_version = 28 [json_name = "firecrackerVersion"];
+  bool enable_lazy_v3_squashfs_snapshot_load = 29 [json_name = "enableLazyV3SquashfsSnapshotLoad"];
+  bool enable_lazy_v4_load = 30 [json_name = "enableLazyV4Load"];
+  oneof image {
+    string registry_reference = 5 [json_name = "registryReference"];
+    .anyrun.v1.Build build = 6 [json_name = "build"];
+    string snapshot_id = 7 [json_name = "snapshotId"];
+    .anyrun.v1.PersistedExternalSnapshot external_snapshot = 20 [json_name = "externalSnapshot"];
+    string checkpoint_group_id = 21 [json_name = "checkpointGroupId"];
+    .anyrun.v1.DevContainerConfig.RegistryReferenceAlias registry_reference_alias = 24 [json_name = "registryReferenceAlias"];
+  }
+  oneof source {
+    .anyrun.v1.PersistedGitRepoSource git = 1 [json_name = "git"];
+    .anyrun.v1.PersistedTarRepoSource tar = 2 [json_name = "tar"];
+    .anyrun.v1.PersistedLocalRepoSource local = 3 [json_name = "local"];
+    .anyrun.v1.PersistedTarGzipUrlSource tar_gzip_url = 4 [json_name = "tarGzipUrl"];
+    .anyrun.v1.PersistedNoopSource noop = 18 [json_name = "noop"];
+    .anyrun.v1.PersistedMultiSource multi = 23 [json_name = "multi"];
+  }
+  oneof workspace {
+    string workspace_path = 8 [json_name = "workspacePath"];
+    string workdir_relative_path = 9 [json_name = "workdirRelativePath"];
+  }
+}
+
+message PersistedDriveDescriptor {
+  oneof descriptor {
+    .anyrun.v1.PersistedFileDriveDescriptor file_v1 = 1 [json_name = "fileV1"];
+    .anyrun.v1.PersistedLazySquashfsDriveDescriptor lazy_squashfs_v1 = 2 [json_name = "lazySquashfsV1"];
+  }
+}
+
+message PersistedEnvVar {
+  string name = 1 [json_name = "name"];
+  string value = 2 [json_name = "value"];
+}
+
+message PersistedExternalSnapshot {
+  string snapshot_id = 1 [json_name = "snapshotId"];
+  string cpu_baseline_id = 2 [json_name = "cpuBaselineId"];
+}
+
+message PersistedFileDriveDescriptor {
+  string artifact_reference = 1 [json_name = "artifactReference"];
+  string drive_id = 2 [json_name = "driveId"];
+  string guest_path = 3 [json_name = "guestPath"];
+  bool is_root_device = 4 [json_name = "isRootDevice"];
+  uint32 size_mib = 5 [json_name = "sizeMib"];
+}
+
+message PersistedGitRepoSource {
+  string cache_uri = 1 [json_name = "cacheUri"];
+  bytes commit_hash = 2 [json_name = "commitHash"];
+}
+
+message PersistedLazyCheckpointSource {
+  string tenant_id = 1 [json_name = "tenantId"];
+  string checkpoint_id = 2 [json_name = "checkpointId"];
+}
+
+message PersistedLazySnapshotSource {
+  string tenant_id = 1 [json_name = "tenantId"];
+  string snapshot_id = 2 [json_name = "snapshotId"];
+}
+
+message PersistedLazySquashfsDriveDescriptor {
+  string drive_id = 1 [json_name = "driveId"];
+  string guest_path = 2 [json_name = "guestPath"];
+  uint64 chunk_size = 4 [json_name = "chunkSize"];
+  .anyrun.v1.BlobStorageFormat blob_storage_format = 6 [json_name = "blobStorageFormat"];
+  .anyrun.v1.V4RootArchiveOptions v4_root_archive_options = 7 [json_name = "v4RootArchiveOptions"];
+  oneof source {
+    .anyrun.v1.PersistedLazySnapshotSource snapshot = 3 [json_name = "snapshot"];
+    .anyrun.v1.PersistedLazyCheckpointSource checkpoint = 5 [json_name = "checkpoint"];
+  }
+}
+
+message PersistedLocalRepoSource {
+  string path = 1 [json_name = "path"];
+}
+
+message PersistedMultiSource {
+  repeated .anyrun.v1.PersistedMultiSourceEntry sources = 1 [json_name = "sources"];
+}
+
+message PersistedMultiSourceEntry {
+  string relative_path = 1 [json_name = "relativePath"];
+  oneof source {
+    .anyrun.v1.PersistedGitRepoSource git = 2 [json_name = "git"];
+    .anyrun.v1.PersistedTarRepoSource tar = 3 [json_name = "tar"];
+    .anyrun.v1.PersistedLocalRepoSource local = 4 [json_name = "local"];
+    .anyrun.v1.PersistedTarGzipUrlSource tar_gzip_url = 5 [json_name = "tarGzipUrl"];
+    .anyrun.v1.PersistedNoopSource noop = 6 [json_name = "noop"];
+  }
+}
+
+message PersistedNoopSource {
+}
+
+message PersistedTarGzipUrlSource {
+  string name = 1 [json_name = "name"];
+}
+
+message PersistedTarRepoSource {
+  string name = 1 [json_name = "name"];
+}
+
+message RuntimeStatePersistentState {
+  map<string, .anyrun.v1.DaemonCommandHandlerPersistentState> command_handlers = 1 [json_name = "commandHandlers"];
+}
+
+message WorkspaceConfig {
+  oneof config {
+    string absolute = 1 [json_name = "absolute"];
+    string workdir_relative = 2 [json_name = "workdirRelative"];
+  }
+}

@@ -1,0 +1,45 @@
+// aiserver.v1 — aiserver/v1/interface_agent messages, enums and services.
+//
+// Generated from this repository's schema (source/packages/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package aiserver.v1;
+
+message InterfaceAgentStatus {
+  .aiserver.v1.InterfaceAgentStatus.Status validate_configuration = 1 [json_name = "validateConfiguration"];
+  .aiserver.v1.InterfaceAgentStatus.Status stub_new_function = 2 [json_name = "stubNewFunction"];
+  .aiserver.v1.InterfaceAgentStatus.Status verify_spec = 3 [json_name = "verifySpec"];
+  .aiserver.v1.InterfaceAgentStatus.Status write_tests = 4 [json_name = "writeTests"];
+  .aiserver.v1.InterfaceAgentStatus.Status write_implementation = 5 [json_name = "writeImplementation"];
+  .aiserver.v1.InterfaceAgentStatus.Status implement_new_function = 6 [json_name = "implementNewFunction"];
+  .aiserver.v1.InterfaceAgentStatus.Status run_tests = 7 [json_name = "runTests"];
+  string validate_configuration_message = 8 [json_name = "validateConfigurationMessage"];
+  string stub_new_function_message = 9 [json_name = "stubNewFunctionMessage"];
+  string verify_spec_message = 10 [json_name = "verifySpecMessage"];
+  string write_tests_message = 11 [json_name = "writeTestsMessage"];
+  string write_implementation_message = 12 [json_name = "writeImplementationMessage"];
+  string implement_new_function_message = 13 [json_name = "implementNewFunctionMessage"];
+  string run_tests_message = 14 [json_name = "runTestsMessage"];
+  .aiserver.v1.InterfaceAgentStatus.Status write_test_plan = 15 [json_name = "writeTestPlan"];
+  string write_test_plan_message = 16 [json_name = "writeTestPlanMessage"];
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    STATUS_WAITING = 1;
+    STATUS_RUNNING = 2;
+    STATUS_SUCCESS = 3;
+    STATUS_FAILURE = 4;
+  }
+}
+
+message InterfaceAgentClientState {
+  string interface_relative_workspace_path = 3 [json_name = "interfaceRelativeWorkspacePath"];
+  repeated string interface_lines = 4 [json_name = "interfaceLines"];
+  string test_relative_workspace_path = 5 [json_name = "testRelativeWorkspacePath"];
+  string implementation_relative_workspace_path = 6 [json_name = "implementationRelativeWorkspacePath"];
+  repeated string implementation_lines = 7 [json_name = "implementationLines"];
+  string language = 8 [json_name = "language"];
+  string testing_framework = 9 [json_name = "testingFramework"];
+  repeated string test_lines = 10 [json_name = "testLines"];
+}

@@ -1,0 +1,43 @@
+// aiserver.v1 — aiserver/v1/grok_bot messages, enums and services.
+//
+// Generated from this repository's schema (source/packages/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package aiserver.v1;
+
+import "aiserver/v1/sand_box.proto";
+
+service GrokBotService {
+  rpc EnsureSandBox(.aiserver.v1.EnsureSandBoxRequest) returns (.aiserver.v1.EnsureSandBoxResponse);
+  rpc EnsureSandBoxWindow(.aiserver.v1.EnsureSandBoxWindowRequest) returns (.aiserver.v1.EnsureSandBoxResponse);
+  rpc RecreateSandBox(.aiserver.v1.RecreateSandBoxRequest) returns (.aiserver.v1.RecreateSandBoxResponse);
+  rpc ForceRecreateSandBox(.aiserver.v1.ForceRecreateSandBoxRequest) returns (.aiserver.v1.RecreateSandBoxResponse);
+  rpc AdminRecreateSandBox(.aiserver.v1.AdminRecreateSandBoxRequest) returns (.aiserver.v1.RecreateSandBoxResponse);
+  rpc AdminForceRecreateSandBox(.aiserver.v1.AdminForceRecreateSandBoxRequest) returns (.aiserver.v1.RecreateSandBoxResponse);
+  rpc PresignSandBoxStoreWrites(.aiserver.v1.PresignSandBoxStoreWritesRequest) returns (.aiserver.v1.PresignSandBoxStoreWritesResponse);
+  rpc CompleteSandBoxStoreMultipartWrites(.aiserver.v1.CompleteSandBoxStoreMultipartWritesRequest) returns (.aiserver.v1.CompleteSandBoxStoreMultipartWritesResponse);
+  rpc AbortSandBoxStoreMultipartWrites(.aiserver.v1.AbortSandBoxStoreMultipartWritesRequest) returns (.aiserver.v1.AbortSandBoxStoreMultipartWritesResponse);
+  rpc PresignSandBoxStoreReads(.aiserver.v1.PresignSandBoxStoreReadsRequest) returns (.aiserver.v1.PresignSandBoxStoreReadsResponse);
+  rpc StatSandBoxStoreObject(.aiserver.v1.StatSandBoxStoreObjectRequest) returns (.aiserver.v1.StatSandBoxStoreObjectResponse);
+  rpc ListSandBoxStoreObjects(.aiserver.v1.ListSandBoxStoreObjectsRequest) returns (.aiserver.v1.ListSandBoxStoreObjectsResponse);
+  rpc AdminGetSandBoxStoreStatus(.aiserver.v1.AdminSandBoxStoreStatusRequest) returns (.aiserver.v1.AdminSandBoxStoreStatusResponse);
+  rpc AdminUpdateSandBoxHost(.aiserver.v1.AdminUpdateSandBoxHostRequest) returns (.aiserver.v1.AdminUpdateSandBoxHostResponse);
+  rpc AdminGetSandBoxHostStatus(.aiserver.v1.AdminSandBoxHostStatusRequest) returns (.aiserver.v1.AdminSandBoxHostStatusResponse);
+  rpc AdminSnapshotSandBoxStore(.aiserver.v1.AdminSnapshotSandBoxStoreRequest) returns (.aiserver.v1.AdminSnapshotSandBoxStoreResponse);
+  rpc AdminHibernateSandBox(.aiserver.v1.AdminHibernateSandBoxRequest) returns (.aiserver.v1.AdminHibernateSandBoxResponse);
+  rpc AdminListSandAgents(.aiserver.v1.AdminListSandAgentsRequest) returns (.aiserver.v1.AdminListSandAgentsResponse);
+  rpc AdminGetSandAgentTranscriptPage(.aiserver.v1.AdminGetSandAgentTranscriptPageRequest) returns (.aiserver.v1.AdminGetSandAgentTranscriptPageResponse);
+  rpc WatchSandBoxMigration(.aiserver.v1.WatchSandBoxMigrationRequest) returns (stream .aiserver.v1.SandBoxMigrationEvent);
+  rpc AdminWatchSandBoxMigration(.aiserver.v1.AdminWatchSandBoxMigrationRequest) returns (stream .aiserver.v1.SandBoxMigrationEvent);
+  rpc GetSandBoxRunState(.aiserver.v1.GetSandBoxRunStateRequest) returns (.aiserver.v1.GetSandBoxRunStateResponse);
+  rpc ListSandBoxes(.aiserver.v1.ListSandBoxesRequest) returns (.aiserver.v1.ListSandBoxesResponse);
+  rpc NotifySandAgentTurnFinished(.aiserver.v1.NotifySandAgentTurnFinishedRequest) returns (.aiserver.v1.NotifySandAgentTurnFinishedResponse);
+  rpc ListSandSetupManifests(.aiserver.v1.ListSandSetupManifestsRequest) returns (.aiserver.v1.ListSandSetupManifestsResponse);
+  rpc ListTeamSandSetupManifests(.aiserver.v1.ListTeamSandSetupManifestsRequest) returns (.aiserver.v1.ListTeamSandSetupManifestsResponse);
+  rpc SaveTeamSandSetupManifest(.aiserver.v1.SaveTeamSandSetupManifestRequest) returns (.aiserver.v1.SaveTeamSandSetupManifestResponse);
+  rpc DeleteTeamSandSetupManifest(.aiserver.v1.DeleteTeamSandSetupManifestRequest) returns (.aiserver.v1.DeleteTeamSandSetupManifestResponse);
+  rpc ListTeamMemberSandBoxes(.aiserver.v1.ListTeamMemberSandBoxesRequest) returns (.aiserver.v1.ListTeamMemberSandBoxesResponse);
+  rpc KillTeamMemberSandBox(.aiserver.v1.KillTeamMemberSandBoxRequest) returns (.aiserver.v1.KillTeamMemberSandBoxResponse);
+}

@@ -1,0 +1,56 @@
+// agent.v1 — agent/v1/read_tool messages, enums and services.
+//
+// Generated from this repository's schema (source/packages/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+import "agent/v1/cursor_rules.proto";
+
+message ReadToolCall {
+  .agent.v1.ReadToolArgs args = 1 [json_name = "args"];
+  .agent.v1.ReadToolResult result = 2 [json_name = "result"];
+}
+
+message ReadToolArgs {
+  string path = 1 [json_name = "path"];
+  int32 offset = 2 [json_name = "offset"];
+  int32 limit = 3 [json_name = "limit"];
+  bool include_line_numbers = 5 [json_name = "includeLineNumbers"];
+}
+
+message ReadToolResult {
+  oneof result {
+    .agent.v1.ReadToolSuccess success = 1 [json_name = "success"];
+    .agent.v1.ReadToolError error = 2 [json_name = "error"];
+  }
+}
+
+message ReadToolSuccess {
+  bool is_empty = 2 [json_name = "isEmpty"];
+  bool exceeded_limit = 3 [json_name = "exceededLimit"];
+  uint32 total_lines = 4 [json_name = "totalLines"];
+  uint32 file_size = 5 [json_name = "fileSize"];
+  string path = 7 [json_name = "path"];
+  .agent.v1.ReadRange read_range = 8 [json_name = "readRange"];
+  bool include_line_numbers = 11 [json_name = "includeLineNumbers"];
+  repeated string related_cursor_rule_paths = 12 [json_name = "relatedCursorRulePaths"];
+  repeated .agent.v1.CursorRule related_cursor_rules = 13 [json_name = "relatedCursorRules"];
+  oneof output {
+    string content = 1 [json_name = "content"];
+    bytes data = 6 [json_name = "data"];
+    bytes data_blob_id = 9 [json_name = "dataBlobId"];
+    bytes content_blob_id = 10 [json_name = "contentBlobId"];
+  }
+}
+
+message ReadToolError {
+  string error_message = 1 [json_name = "errorMessage"];
+}
+
+message ReadRange {
+  uint32 start_line = 1 [json_name = "startLine"];
+  uint32 end_line = 2 [json_name = "endLine"];
+}

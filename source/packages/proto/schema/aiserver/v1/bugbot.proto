@@ -1,0 +1,152 @@
+// aiserver.v1 — aiserver/v1/bugbot messages, enums and services.
+//
+// Generated from this repository's schema (source/packages/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package aiserver.v1;
+
+import "aiserver/v1/utils.proto";
+
+message BugReports {
+  repeated .aiserver.v1.BugReport bug_reports = 1 [json_name = "bugReports"];
+}
+
+message BugReport {
+  repeated .aiserver.v1.BugLocation locations = 1 [json_name = "locations"];
+  string id = 2 [json_name = "id"];
+  string description = 3 [json_name = "description"];
+  float confidence = 4 [json_name = "confidence"];
+  string category = 5 [json_name = "category"];
+  string severity = 6 [json_name = "severity"];
+  string title = 7 [json_name = "title"];
+  string rationale = 9 [json_name = "rationale"];
+  string triggered_by_rule_id = 10 [json_name = "triggeredByRuleId"];
+  float model_confidence = 11 [json_name = "modelConfidence"];
+}
+
+message BugLocation {
+  string file = 1 [json_name = "file"];
+  int32 start_line = 2 [json_name = "startLine"];
+  int32 end_line = 3 [json_name = "endLine"];
+  repeated string code_lines = 4 [json_name = "codeLines"];
+}
+
+message StreamBugBotRequest {
+  .aiserver.v1.GitDiff git_diff = 1 [json_name = "gitDiff"];
+  .aiserver.v1.ModelDetails model_details = 2 [json_name = "modelDetails"];
+  string user_instructions = 3 [json_name = "userInstructions"];
+  string bug_detection_guidelines = 4 [json_name = "bugDetectionGuidelines"];
+  int32 iterations = 5 [json_name = "iterations"];
+  bool in_background_subsidized = 6 [json_name = "inBackgroundSubsidized"];
+  string session_id = 7 [json_name = "sessionId"];
+  string price_id = 8 [json_name = "priceId"];
+  bool has_telemetry = 9 [json_name = "hasTelemetry"];
+  string constrain_to_file = 10 [json_name = "constrainToFile"];
+  .aiserver.v1.StreamBugBotRequest.Range constrain_to_range = 11 [json_name = "constrainToRange"];
+  int32 unified_context_lines = 12 [json_name = "unifiedContextLines"];
+  repeated .aiserver.v1.CodeBlock context_files = 13 [json_name = "contextFiles"];
+  bool deep_review = 14 [json_name = "deepReview"];
+  message Range {
+    int32 start_line = 1 [json_name = "startLine"];
+    int32 end_line_inclusive = 2 [json_name = "endLineInclusive"];
+  }
+}
+
+message AddBugbotFeedbackRequest {
+  int64 comment_id = 1 [json_name = "commentId"];
+  .aiserver.v1.BugbotFeedbackReaction reaction = 2 [json_name = "reaction"];
+  string feedback = 3 [json_name = "feedback"];
+}
+
+message AddBugbotFeedbackResponse {
+  int64 id = 1 [json_name = "id"];
+}
+
+message BugBotDiscriminatorPromptProps {
+  .aiserver.v1.StreamBugBotRequest req = 1 [json_name = "req"];
+  .aiserver.v1.BugReport bug = 2 [json_name = "bug"];
+  string date = 3 [json_name = "date"];
+  string seed = 4 [json_name = "seed"];
+}
+
+message BugBotDiscriminatorTrainingPromptProps {
+  .aiserver.v1.BugBotDiscriminatorPromptProps props = 1 [json_name = "props"];
+  bool is_real_bug = 2 [json_name = "isRealBug"];
+}
+
+enum BugBotRunStatus {
+  BUG_BOT_RUN_STATUS_UNSPECIFIED = 0;
+  BUG_BOT_RUN_STATUS_NO_RUN = 1;
+  BUG_BOT_RUN_STATUS_IN_PROGRESS = 2;
+  BUG_BOT_RUN_STATUS_COMPLETED = 3;
+}
+
+enum BugbotDeeplinkEventKind {
+  BUGBOT_DEEPLINK_EVENT_KIND_UNSPECIFIED = 0;
+  BUGBOT_DEEPLINK_EVENT_KIND_CLICKED = 1;
+  BUGBOT_DEEPLINK_EVENT_KIND_HANDLED_DIALOG_SHOWN = 2;
+  BUGBOT_DEEPLINK_EVENT_KIND_HANDLED_CHAT_CREATED = 3;
+  BUGBOT_DEEPLINK_EVENT_KIND_ERROR = 4;
+  BUGBOT_DEEPLINK_EVENT_KIND_HANDLED_FIX_IN_WEB = 5;
+}
+
+enum BugbotFeedbackReaction {
+  BUGBOT_FEEDBACK_REACTION_UNSPECIFIED = 0;
+  BUGBOT_FEEDBACK_REACTION_THUMBS_UP = 1;
+  BUGBOT_FEEDBACK_REACTION_THUMBS_DOWN = 2;
+}
+
+message FileAndOutline {
+  .aiserver.v1.CodeBlock file = 1 [json_name = "file"];
+  string outline = 2 [json_name = "outline"];
+}
+
+message GetBugBotRunEtaRequest {
+  string repository_owner = 1 [json_name = "repositoryOwner"];
+  string repository_name = 2 [json_name = "repositoryName"];
+  int32 pr_number = 3 [json_name = "prNumber"];
+}
+
+message GetBugBotRunEtaResponse {
+  .aiserver.v1.BugBotRunStatus status = 1 [json_name = "status"];
+  int64 estimated_completion_time_ms = 2 [json_name = "estimatedCompletionTimeMs"];
+}
+
+message GetEncryptedBugDataMultipleRequest {
+  string redis_key = 1 [json_name = "redisKey"];
+  string encryption_key = 2 [json_name = "encryptionKey"];
+}
+
+message GetEncryptedBugDataMultipleResponse {
+  repeated .aiserver.v1.BugReport bug_reports = 1 [json_name = "bugReports"];
+}
+
+message GetEncryptedBugDataRequest {
+  string redis_key = 1 [json_name = "redisKey"];
+  string encryption_key = 2 [json_name = "encryptionKey"];
+}
+
+message GetEncryptedBugDataResponse {
+  .aiserver.v1.BugReport bug_report = 1 [json_name = "bugReport"];
+}
+
+message LogDeeplinkEventRequest {
+  int32 user_id = 1 [json_name = "userId"];
+  string bug_id = 2 [json_name = "bugId"];
+  int64 comment_id = 3 [json_name = "commentId"];
+  .aiserver.v1.BugbotDeeplinkEventKind event = 4 [json_name = "event"];
+}
+
+message LogDeeplinkEventResponse {
+  bool success = 1 [json_name = "success"];
+}
+
+message RunBugBotPromptProps {
+  .aiserver.v1.StreamBugBotRequest req = 1 [json_name = "req"];
+  string seed = 2 [json_name = "seed"];
+  string date = 3 [json_name = "date"];
+  repeated .aiserver.v1.FileAndOutline context_files = 4 [json_name = "contextFiles"];
+  string file_content_source = 5 [json_name = "fileContentSource"];
+}

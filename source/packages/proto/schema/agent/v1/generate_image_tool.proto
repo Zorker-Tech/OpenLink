@@ -1,0 +1,54 @@
+// agent.v1 — agent/v1/generate_image_tool messages, enums and services.
+//
+// Generated from this repository's schema (source/packages/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+message GenerateImageResult {
+  oneof result {
+    .agent.v1.GenerateImageSuccess success = 1 [json_name = "success"];
+    .agent.v1.GenerateImageError error = 2 [json_name = "error"];
+  }
+}
+
+message GenerateImageSuccess {
+  string file_path = 1 [json_name = "filePath"];
+  string image_data = 2 [json_name = "imageData"];
+}
+
+message GenerateImageError {
+  string error = 1 [json_name = "error"];
+}
+
+message GenerateImageRequestResponse {
+  oneof result {
+    .agent.v1.GenerateImageRequestResponse.Approved approved = 1 [json_name = "approved"];
+    .agent.v1.GenerateImageRequestResponse.Rejected rejected = 2 [json_name = "rejected"];
+  }
+  message Approved {
+    string description = 1 [json_name = "description"];
+  }
+  message Rejected {
+    string reason = 1 [json_name = "reason"];
+  }
+}
+
+message GenerateImageToolCall {
+  .agent.v1.GenerateImageArgs args = 1 [json_name = "args"];
+  .agent.v1.GenerateImageResult result = 2 [json_name = "result"];
+}
+
+message GenerateImageArgs {
+  string description = 1 [json_name = "description"];
+  string file_path = 2 [json_name = "filePath"];
+  repeated string reference_image_paths = 5 [json_name = "referenceImagePaths"];
+  string aspect_ratio = 6 [json_name = "aspectRatio"];
+}
+
+message GenerateImageRequestQuery {
+  .agent.v1.GenerateImageArgs args = 1 [json_name = "args"];
+  string tool_call_id = 2 [json_name = "toolCallId"];
+}

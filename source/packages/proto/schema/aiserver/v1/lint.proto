@@ -1,0 +1,145 @@
+// aiserver.v1 — aiserver/v1/lint messages, enums and services.
+//
+// Generated from this repository's schema (source/packages/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package aiserver.v1;
+
+import "aiserver/v1/utils.proto";
+
+message AiLintBug {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+  string message = 2 [json_name = "message"];
+  .aiserver.v1.SimpleRange replace_range = 3 [json_name = "replaceRange"];
+  string replace_text = 4 [json_name = "replaceText"];
+  string replace_initial_text = 5 [json_name = "replaceInitialText"];
+  .aiserver.v1.SimpleRange reevaluate_range = 6 [json_name = "reevaluateRange"];
+  string reevaluate_initial_text = 7 [json_name = "reevaluateInitialText"];
+  string uuid = 8 [json_name = "uuid"];
+  .aiserver.v1.LintGenerator generator = 9 [json_name = "generator"];
+  repeated .aiserver.v1.LintDiscriminatorResult discriminator_results = 10 [json_name = "discriminatorResults"];
+  .aiserver.v1.LogprobsLintPayload logprobs_payload = 11 [json_name = "logprobsPayload"];
+}
+
+message LintDiscriminatorResult {
+  .aiserver.v1.LintDiscriminator discriminator = 1 [json_name = "discriminator"];
+  bool allow = 2 [json_name = "allow"];
+  string reasoning = 3 [json_name = "reasoning"];
+}
+
+message LogprobsLintPayload {
+  string chunk = 1 [json_name = "chunk"];
+  string problematic_line = 2 [json_name = "problematicLine"];
+  int32 start_col = 3 [json_name = "startCol"];
+  int32 end_col = 4 [json_name = "endCol"];
+  string most_likely_replace = 5 [json_name = "mostLikelyReplace"];
+  int32 line_chunk_index_zero_based = 6 [json_name = "lineChunkIndexZeroBased"];
+}
+
+message AiLintRule {
+  string text = 1 [json_name = "text"];
+}
+
+message AiLintInlineSuggestion {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+  string message = 2 [json_name = "message"];
+  int32 line_number = 3 [json_name = "lineNumber"];
+  .aiserver.v1.SimpleRange reevaluate_range = 4 [json_name = "reevaluateRange"];
+  string reevaluate_initial_text = 5 [json_name = "reevaluateInitialText"];
+  string uuid = 8 [json_name = "uuid"];
+}
+
+message AiLintOutOfFlowSuggestion {
+  string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+  string message = 2 [json_name = "message"];
+  string uuid = 8 [json_name = "uuid"];
+}
+
+message LintChunk {
+  string chunk_contents = 2 [json_name = "chunkContents"];
+  int32 start_line_number = 3 [json_name = "startLineNumber"];
+  int32 num_remaining_lines = 4 [json_name = "numRemainingLines"];
+}
+
+message LintChunkRequest {
+  string relative_file_path = 1 [json_name = "relativeFilePath"];
+  .aiserver.v1.LintChunk chunk = 2 [json_name = "chunk"];
+  bool use_speculative_linter = 3 [json_name = "useSpeculativeLinter"];
+}
+
+message LintChunkResponse {
+  repeated .aiserver.v1.TokenIndex chunk_tokens = 1 [json_name = "chunkTokens"];
+}
+
+enum LintDiscriminator {
+  LINT_DISCRIMINATOR_UNSPECIFIED = 0;
+  LINT_DISCRIMINATOR_SPECIFIC_RULES = 1;
+  LINT_DISCRIMINATOR_COMPILE_ERRORS = 2;
+  LINT_DISCRIMINATOR_CHANGE_BEHAVIOR = 3;
+  LINT_DISCRIMINATOR_RELEVANCE = 5;
+  LINT_DISCRIMINATOR_USER_AWARENESS = 6;
+  LINT_DISCRIMINATOR_CORRECTNESS = 7;
+  LINT_DISCRIMINATOR_CHUNKING = 8;
+  LINT_DISCRIMINATOR_TYPO = 9;
+  LINT_DISCRIMINATOR_CONFIDENCE = 10;
+  LINT_DISCRIMINATOR_DISMISSED_BUGS = 11;
+}
+
+message LintExplanationRequest {
+  string relative_file_path = 1 [json_name = "relativeFilePath"];
+  .aiserver.v1.LintChunk chunk = 2 [json_name = "chunk"];
+  string line_selection = 3 [json_name = "lineSelection"];
+  int32 token_start_index = 4 [json_name = "tokenStartIndex"];
+  int32 token_end_index = 5 [json_name = "tokenEndIndex"];
+  string likely_alternate_token = 6 [json_name = "likelyAlternateToken"];
+  int32 line_chunk_index_zero_based = 7 [json_name = "lineChunkIndexZeroBased"];
+}
+
+message LintExplanationResponse {
+  string explanation = 1 [json_name = "explanation"];
+}
+
+message LintExplanationResponse2 {
+  string orig_line = 1 [json_name = "origLine"];
+  string new_line = 2 [json_name = "newLine"];
+}
+
+message LintFileRequest {
+  string relative_file_path = 1 [json_name = "relativeFilePath"];
+  string file_contents = 2 [json_name = "fileContents"];
+}
+
+message LintFileResponse {
+  repeated .aiserver.v1.TokenIndex tokens = 1 [json_name = "tokens"];
+}
+
+message LintFimChunkRequest {
+  string relative_file_path = 1 [json_name = "relativeFilePath"];
+  .aiserver.v1.LintChunk prefix = 2 [json_name = "prefix"];
+  .aiserver.v1.LintChunk suffix = 3 [json_name = "suffix"];
+  .aiserver.v1.LintChunk middle = 4 [json_name = "middle"];
+}
+
+message LintFimChunkResponse {
+  repeated .aiserver.v1.TokenIndex middle_chunk_tokens = 1 [json_name = "middleChunkTokens"];
+}
+
+enum LintGenerator {
+  LINT_GENERATOR_UNSPECIFIED = 0;
+  LINT_GENERATOR_NAIVE = 1;
+  LINT_GENERATOR_COMMENT_PIPELINE = 2;
+  LINT_GENERATOR_SIMPLE_BUG = 3;
+  LINT_GENERATOR_SIMPLE_LINT_RULES = 4;
+}
+
+message TokenIndex {
+  repeated .aiserver.v1.TokensWithLogprobs tokens_with_logprobs = 1 [json_name = "tokensWithLogprobs"];
+  string actual_token = 2 [json_name = "actualToken"];
+}
+
+message TokensWithLogprobs {
+  string token = 1 [json_name = "token"];
+  float log_probability = 2 [json_name = "logProbability"];
+}

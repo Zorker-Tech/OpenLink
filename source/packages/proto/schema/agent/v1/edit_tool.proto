@@ -1,0 +1,68 @@
+// agent.v1 — agent/v1/edit_tool messages, enums and services.
+//
+// Generated from this repository's schema (source/packages/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+message EditToolCall {
+  .agent.v1.EditArgs args = 1 [json_name = "args"];
+  .agent.v1.EditResult result = 2 [json_name = "result"];
+}
+
+message EditArgs {
+  string path = 1 [json_name = "path"];
+  string stream_content = 6 [json_name = "streamContent"];
+}
+
+message EditResult {
+  oneof result {
+    .agent.v1.EditSuccess success = 1 [json_name = "success"];
+    .agent.v1.EditFileNotFound file_not_found = 2 [json_name = "fileNotFound"];
+    .agent.v1.EditReadPermissionDenied read_permission_denied = 3 [json_name = "readPermissionDenied"];
+    .agent.v1.EditWritePermissionDenied write_permission_denied = 4 [json_name = "writePermissionDenied"];
+    .agent.v1.EditRejected rejected = 6 [json_name = "rejected"];
+    .agent.v1.EditError error = 7 [json_name = "error"];
+  }
+}
+
+message EditSuccess {
+  string path = 1 [json_name = "path"];
+  int32 lines_added = 3 [json_name = "linesAdded"];
+  int32 lines_removed = 4 [json_name = "linesRemoved"];
+  string diff_string = 5 [json_name = "diffString"];
+  string before_full_file_content = 6 [json_name = "beforeFullFileContent"];
+  string after_full_file_content = 7 [json_name = "afterFullFileContent"];
+  string message = 8 [json_name = "message"];
+}
+
+message EditFileNotFound {
+  string path = 1 [json_name = "path"];
+}
+
+message EditReadPermissionDenied {
+  string path = 1 [json_name = "path"];
+}
+
+message EditWritePermissionDenied {
+  string path = 1 [json_name = "path"];
+  string error = 2 [json_name = "error"];
+  bool is_readonly = 3 [json_name = "isReadonly"];
+}
+
+message EditRejected {
+  string path = 1 [json_name = "path"];
+  string reason = 2 [json_name = "reason"];
+}
+
+message EditError {
+  string path = 1 [json_name = "path"];
+  string error = 2 [json_name = "error"];
+  string model_visible_error = 5 [json_name = "modelVisibleError"];
+}
+
+message EditToolCallDelta {
+  string stream_content_delta = 1 [json_name = "streamContentDelta"];
+}

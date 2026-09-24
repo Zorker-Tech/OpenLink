@@ -1,0 +1,419 @@
+// agent.v1 — agent/v1/control_service messages, enums and services.
+//
+// Generated from this repository's schema (source/packages/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+import "aiserver/v1/utils.proto";
+
+message ArtifactPathError {
+  .agent.v1.ArtifactPathErrorKind kind = 1 [json_name = "kind"];
+  string code = 2 [json_name = "code"];
+  string message = 3 [json_name = "message"];
+}
+
+enum ArtifactPathErrorKind {
+  ARTIFACT_PATH_ERROR_KIND_UNSPECIFIED = 0;
+  ARTIFACT_PATH_ERROR_KIND_MISSING = 1;
+  ARTIFACT_PATH_ERROR_KIND_PERMISSION = 2;
+  ARTIFACT_PATH_ERROR_KIND_NOT_A_FILE = 3;
+  ARTIFACT_PATH_ERROR_KIND_INVALID_PATH = 4;
+  ARTIFACT_PATH_ERROR_KIND_UNKNOWN = 5;
+}
+
+enum ArtifactRestoreStatus {
+  ARTIFACT_RESTORE_STATUS_UNSPECIFIED = 0;
+  ARTIFACT_RESTORE_STATUS_RESTORED = 1;
+  ARTIFACT_RESTORE_STATUS_SKIPPED_ALREADY_EXISTS = 2;
+  ARTIFACT_RESTORE_STATUS_REJECTED = 3;
+}
+
+enum ArtifactRootKind {
+  ARTIFACT_ROOT_KIND_UNSPECIFIED = 0;
+  ARTIFACT_ROOT_KIND_LOCAL = 1;
+  ARTIFACT_ROOT_KIND_AGENT_STORE_BACKED = 2;
+}
+
+message ArtifactUploadDispatchResult {
+  string absolute_path = 1 [json_name = "absolutePath"];
+  .agent.v1.ArtifactUploadDispatchStatus status = 2 [json_name = "status"];
+  string message = 3 [json_name = "message"];
+  string slack_file_id = 4 [json_name = "slackFileId"];
+}
+
+enum ArtifactUploadDispatchStatus {
+  ARTIFACT_UPLOAD_DISPATCH_STATUS_UNSPECIFIED = 0;
+  ARTIFACT_UPLOAD_DISPATCH_STATUS_ACCEPTED = 1;
+  ARTIFACT_UPLOAD_DISPATCH_STATUS_REJECTED = 2;
+  ARTIFACT_UPLOAD_DISPATCH_STATUS_SKIPPED_ALREADY_IN_PROGRESS = 3;
+}
+
+message ArtifactUploadInstruction {
+  string absolute_path = 1 [json_name = "absolutePath"];
+  string upload_url = 2 [json_name = "uploadUrl"];
+  string method = 3 [json_name = "method"];
+  map<string, string> headers = 4 [json_name = "headers"];
+  string content_type = 5 [json_name = "contentType"];
+  string slack_upload_url = 6 [json_name = "slackUploadUrl"];
+  string slack_file_id = 7 [json_name = "slackFileId"];
+  string artifact_relative_path = 8 [json_name = "artifactRelativePath"];
+}
+
+message ArtifactUploadMetadata {
+  string absolute_path = 1 [json_name = "absolutePath"];
+  uint64 size_bytes = 2 [json_name = "sizeBytes"];
+  int64 updated_at_unix_ms = 3 [json_name = "updatedAtUnixMs"];
+  .agent.v1.ArtifactUploadStatus status = 4 [json_name = "status"];
+  uint64 bytes_uploaded = 5 [json_name = "bytesUploaded"];
+  string last_error = 6 [json_name = "lastError"];
+  uint32 upload_attempts = 7 [json_name = "uploadAttempts"];
+  int64 last_started_at_unix_ms = 8 [json_name = "lastStartedAtUnixMs"];
+  int64 last_finished_at_unix_ms = 9 [json_name = "lastFinishedAtUnixMs"];
+  string upload_id = 10 [json_name = "uploadId"];
+  string artifact_relative_path = 11 [json_name = "artifactRelativePath"];
+}
+
+enum ArtifactUploadStatus {
+  ARTIFACT_UPLOAD_STATUS_UNSPECIFIED = 0;
+  ARTIFACT_UPLOAD_STATUS_NOT_STARTED = 1;
+  ARTIFACT_UPLOAD_STATUS_IN_PROGRESS = 2;
+  ARTIFACT_UPLOAD_STATUS_COMPLETED = 3;
+  ARTIFACT_UPLOAD_STATUS_FAILED = 4;
+}
+
+message BatchGetDiffError {
+  .agent.v1.BatchGetDiffErrorKind kind = 1 [json_name = "kind"];
+  string message = 2 [json_name = "message"];
+}
+
+enum BatchGetDiffErrorKind {
+  BATCH_GET_DIFF_ERROR_KIND_UNSPECIFIED = 0;
+  BATCH_GET_DIFF_ERROR_KIND_FETCH_FAILED = 1;
+  BATCH_GET_DIFF_ERROR_KIND_DIFF_FAILED = 2;
+  BATCH_GET_DIFF_ERROR_KIND_UNAUTHENTICATED = 3;
+  BATCH_GET_DIFF_ERROR_KIND_NOT_FOUND = 4;
+  BATCH_GET_DIFF_ERROR_KIND_INTERNAL = 5;
+}
+
+message BatchGetDiffItem {
+  .aiserver.v1.GetDiffRequest diff_request = 1 [json_name = "diffRequest"];
+  repeated string fetch_branches = 2 [json_name = "fetchBranches"];
+}
+
+message BatchGetDiffRequest {
+  repeated .agent.v1.BatchGetDiffItem items = 1 [json_name = "items"];
+}
+
+message BatchGetDiffResponse {
+  repeated .agent.v1.BatchGetDiffResult results = 1 [json_name = "results"];
+}
+
+message BatchGetDiffResult {
+  uint32 item_index = 1 [json_name = "itemIndex"];
+  repeated string fetched_branches = 4 [json_name = "fetchedBranches"];
+  repeated string failed_branches = 5 [json_name = "failedBranches"];
+  oneof result {
+    .aiserver.v1.GetDiffResponse diff = 2 [json_name = "diff"];
+    .agent.v1.BatchGetDiffError error = 3 [json_name = "error"];
+  }
+}
+
+message DirectoryEntry {
+  string name = 1 [json_name = "name"];
+  string path = 2 [json_name = "path"];
+  .agent.v1.EntryType type = 3 [json_name = "type"];
+  uint64 size_bytes = 4 [json_name = "sizeBytes"];
+  int64 modified_at_unix_ms = 5 [json_name = "modifiedAtUnixMs"];
+}
+
+message DownloadCursorServerRequest {
+  string commit = 1 [json_name = "commit"];
+}
+
+message DownloadCursorServerResponse {
+  bool already_downloaded = 1 [json_name = "alreadyDownloaded"];
+}
+
+enum EntryType {
+  ENTRY_TYPE_UNSPECIFIED = 0;
+  ENTRY_TYPE_FILE = 1;
+  ENTRY_TYPE_DIRECTORY = 2;
+  ENTRY_TYPE_SYMLINK = 3;
+}
+
+message ExecRequest {
+  string command = 1 [json_name = "command"];
+  string cwd = 2 [json_name = "cwd"];
+  repeated string args = 3 [json_name = "args"];
+  map<string, string> environment = 4 [json_name = "environment"];
+}
+
+message ExecResponse {
+  oneof event {
+    .agent.v1.StdoutEvent stdout_event = 1 [json_name = "stdoutEvent"];
+    .agent.v1.StderrEvent stderr_event = 2 [json_name = "stderrEvent"];
+    .agent.v1.ExitEvent exit_event = 3 [json_name = "exitEvent"];
+  }
+}
+
+message ExitEvent {
+  int32 exit_code = 1 [json_name = "exitCode"];
+}
+
+message ExportFileMetadata {
+  uint64 total_bytes = 1 [json_name = "totalBytes"];
+}
+
+message ExportFileRequest {
+  string path = 1 [json_name = "path"];
+  string workspace_root_path = 2 [json_name = "workspaceRootPath"];
+}
+
+message ExportFileResponse {
+  oneof payload {
+    bytes content_chunk = 1 [json_name = "contentChunk"];
+    .agent.v1.ExportFileMetadata metadata = 2 [json_name = "metadata"];
+  }
+}
+
+message GetCapabilitiesRequest {
+}
+
+message GetCapabilitiesResponse {
+  bool computer_use_supported = 1 [json_name = "computerUseSupported"];
+  bool install_plugin_artifact_supported = 2 [json_name = "installPluginArtifactSupported"];
+}
+
+message GetMcpRefreshTokensRequest {
+}
+
+message GetMcpRefreshTokensResponse {
+  map<string, string> refresh_tokens = 1 [json_name = "refreshTokens"];
+}
+
+message GetWorkspaceChangesHashRequest {
+  string root_path = 1 [json_name = "rootPath"];
+  string base_ref = 2 [json_name = "baseRef"];
+}
+
+message GetWorkspaceChangesHashResponse {
+  string hash = 1 [json_name = "hash"];
+}
+
+message InstallPluginArtifactRequest {
+  string download_url = 1 [json_name = "downloadUrl"];
+  string target_root = 2 [json_name = "targetRoot"];
+  string artifact_digest = 3 [json_name = "artifactDigest"];
+}
+
+message InstallPluginArtifactResponse {
+}
+
+message ListArtifactsRequest {
+  repeated string extra_paths = 1 [json_name = "extraPaths"];
+}
+
+message ListArtifactsResponse {
+  repeated .agent.v1.ArtifactUploadMetadata artifacts = 1 [json_name = "artifacts"];
+  map<string, .agent.v1.ArtifactPathError> path_errors = 2 [json_name = "pathErrors"];
+  .agent.v1.ArtifactRootKind root_kind = 3 [json_name = "rootKind"];
+}
+
+message ListDirectoryRequest {
+  string path = 1 [json_name = "path"];
+  bool include_hidden = 2 [json_name = "includeHidden"];
+}
+
+message ListDirectoryResponse {
+  repeated .agent.v1.DirectoryEntry entries = 1 [json_name = "entries"];
+}
+
+message LoadMcpServersRequest {
+  string mcp_config_json = 1 [json_name = "mcpConfigJson"];
+  bool remove_missing = 2 [json_name = "removeMissing"];
+}
+
+message LoadMcpServersResponse {
+  repeated string loaded_server_names = 1 [json_name = "loadedServerNames"];
+}
+
+message PersistArtifactToAgentStoreInstruction {
+  string absolute_path = 1 [json_name = "absolutePath"];
+  string artifact_relative_path = 2 [json_name = "artifactRelativePath"];
+}
+
+message PersistArtifactToAgentStoreResult {
+  string absolute_path = 1 [json_name = "absolutePath"];
+  .agent.v1.PersistArtifactToAgentStoreStatus status = 2 [json_name = "status"];
+  string message = 3 [json_name = "message"];
+}
+
+enum PersistArtifactToAgentStoreStatus {
+  PERSIST_ARTIFACT_TO_AGENT_STORE_STATUS_UNSPECIFIED = 0;
+  PERSIST_ARTIFACT_TO_AGENT_STORE_STATUS_PERSISTED = 1;
+  PERSIST_ARTIFACT_TO_AGENT_STORE_STATUS_REJECTED = 2;
+}
+
+message PersistArtifactsToAgentStoreRequest {
+  repeated .agent.v1.PersistArtifactToAgentStoreInstruction artifacts = 1 [json_name = "artifacts"];
+}
+
+message PersistArtifactsToAgentStoreResponse {
+  repeated .agent.v1.PersistArtifactToAgentStoreResult results = 1 [json_name = "results"];
+}
+
+message PingRequest {
+}
+
+message PingResponse {
+}
+
+message ReadBinaryFileRequest {
+  string path = 1 [json_name = "path"];
+}
+
+message ReadBinaryFileResponse {
+  bytes content = 1 [json_name = "content"];
+}
+
+message ReadTextFileRequest {
+  string path = 1 [json_name = "path"];
+}
+
+message ReadTextFileResponse {
+  string content = 1 [json_name = "content"];
+}
+
+message RefreshGithubAccessTokenRequest {
+  string github_access_token = 1 [json_name = "githubAccessToken"];
+  string hostname = 2 [json_name = "hostname"];
+  string repo_url = 3 [json_name = "repoUrl"];
+  string clone_username = 4 [json_name = "cloneUsername"];
+}
+
+message RefreshGithubAccessTokenResponse {
+}
+
+message ReloadAgentSkillsRequest {
+}
+
+message ReloadAgentSkillsResponse {
+}
+
+message ReloadPluginsRequest {
+  repeated string reload_targets = 1 [json_name = "reloadTargets"];
+}
+
+message ReloadPluginsResponse {
+}
+
+message RestoreArtifactInstruction {
+  string absolute_path = 1 [json_name = "absolutePath"];
+  string download_url = 2 [json_name = "downloadUrl"];
+  int64 updated_at_unix_ms = 3 [json_name = "updatedAtUnixMs"];
+  string artifact_relative_path = 4 [json_name = "artifactRelativePath"];
+}
+
+message RestoreArtifactResult {
+  .agent.v1.ArtifactRestoreStatus status = 2 [json_name = "status"];
+  string error_message = 3 [json_name = "errorMessage"];
+}
+
+message RestoreArtifactsRequest {
+  repeated .agent.v1.RestoreArtifactInstruction artifacts = 1 [json_name = "artifacts"];
+}
+
+message RestoreArtifactsResponse {
+  repeated .agent.v1.RestoreArtifactResult results = 1 [json_name = "results"];
+}
+
+message RunScopedOverlay {
+  string run_id = 1 [json_name = "runId"];
+  bool release = 2 [json_name = "release"];
+  string holder = 3 [json_name = "holder"];
+}
+
+message StderrEvent {
+  string data = 1 [json_name = "data"];
+}
+
+message StdoutEvent {
+  string data = 1 [json_name = "data"];
+}
+
+message UpdateEnvironmentVariablesRequest {
+  map<string, string> env = 1 [json_name = "env"];
+  bool replace = 2 [json_name = "replace"];
+  bool restore_previous_values = 3 [json_name = "restorePreviousValues"];
+  .agent.v1.RunScopedOverlay run_scoped_overlay = 4 [json_name = "runScopedOverlay"];
+}
+
+message UpdateEnvironmentVariablesResponse {
+  uint32 applied = 1 [json_name = "applied"];
+  uint32 removed = 2 [json_name = "removed"];
+}
+
+message UploadArtifactsRequest {
+  repeated .agent.v1.ArtifactUploadInstruction uploads = 1 [json_name = "uploads"];
+  bool wait_for_completion = 2 [json_name = "waitForCompletion"];
+}
+
+message UploadArtifactsResponse {
+  repeated .agent.v1.ArtifactUploadDispatchResult results = 1 [json_name = "results"];
+}
+
+message WarmRemoteAccessServerRequest {
+  string commit = 1 [json_name = "commit"];
+  int32 port = 2 [json_name = "port"];
+  string connection_token = 3 [json_name = "connectionToken"];
+}
+
+message WarmRemoteAccessServerResponse {
+}
+
+message WriteBinaryFileRequest {
+  string path = 1 [json_name = "path"];
+  bytes content = 2 [json_name = "content"];
+}
+
+message WriteBinaryFileResponse {
+}
+
+message WriteTextFileRequest {
+  string path = 1 [json_name = "path"];
+  string content = 2 [json_name = "content"];
+}
+
+message WriteTextFileResponse {
+}
+
+service ControlService {
+  rpc Ping(.agent.v1.PingRequest) returns (.agent.v1.PingResponse);
+  rpc GetCapabilities(.agent.v1.GetCapabilitiesRequest) returns (.agent.v1.GetCapabilitiesResponse);
+  rpc Exec(.agent.v1.ExecRequest) returns (stream .agent.v1.ExecResponse);
+  rpc ListDirectory(.agent.v1.ListDirectoryRequest) returns (.agent.v1.ListDirectoryResponse);
+  rpc ReadTextFile(.agent.v1.ReadTextFileRequest) returns (.agent.v1.ReadTextFileResponse);
+  rpc WriteTextFile(.agent.v1.WriteTextFileRequest) returns (.agent.v1.WriteTextFileResponse);
+  rpc ReadBinaryFile(.agent.v1.ReadBinaryFileRequest) returns (.agent.v1.ReadBinaryFileResponse);
+  rpc WriteBinaryFile(.agent.v1.WriteBinaryFileRequest) returns (.agent.v1.WriteBinaryFileResponse);
+  rpc ExportFile(.agent.v1.ExportFileRequest) returns (stream .agent.v1.ExportFileResponse);
+  rpc GetDiff(.aiserver.v1.GetDiffRequest) returns (.aiserver.v1.GetDiffResponse);
+  rpc BatchGetDiff(.agent.v1.BatchGetDiffRequest) returns (.agent.v1.BatchGetDiffResponse);
+  rpc GetWorkspaceChangesHash(.agent.v1.GetWorkspaceChangesHashRequest) returns (.agent.v1.GetWorkspaceChangesHashResponse);
+  rpc RefreshGithubAccessToken(.agent.v1.RefreshGithubAccessTokenRequest) returns (.agent.v1.RefreshGithubAccessTokenResponse);
+  rpc WarmRemoteAccessServer(.agent.v1.WarmRemoteAccessServerRequest) returns (.agent.v1.WarmRemoteAccessServerResponse);
+  rpc ListArtifacts(.agent.v1.ListArtifactsRequest) returns (.agent.v1.ListArtifactsResponse);
+  rpc UploadArtifacts(.agent.v1.UploadArtifactsRequest) returns (.agent.v1.UploadArtifactsResponse);
+  rpc PersistArtifactsToAgentStore(.agent.v1.PersistArtifactsToAgentStoreRequest) returns (.agent.v1.PersistArtifactsToAgentStoreResponse);
+  rpc RestoreArtifacts(.agent.v1.RestoreArtifactsRequest) returns (.agent.v1.RestoreArtifactsResponse);
+  rpc GetMcpRefreshTokens(.agent.v1.GetMcpRefreshTokensRequest) returns (.agent.v1.GetMcpRefreshTokensResponse);
+  rpc DownloadCursorServer(.agent.v1.DownloadCursorServerRequest) returns (.agent.v1.DownloadCursorServerResponse);
+  rpc UpdateEnvironmentVariables(.agent.v1.UpdateEnvironmentVariablesRequest) returns (.agent.v1.UpdateEnvironmentVariablesResponse);
+  rpc ReloadAgentSkills(.agent.v1.ReloadAgentSkillsRequest) returns (.agent.v1.ReloadAgentSkillsResponse);
+  rpc ReloadPlugins(.agent.v1.ReloadPluginsRequest) returns (.agent.v1.ReloadPluginsResponse);
+  rpc InstallPluginArtifact(.agent.v1.InstallPluginArtifactRequest) returns (.agent.v1.InstallPluginArtifactResponse);
+  rpc LoadMcpServers(.agent.v1.LoadMcpServersRequest) returns (.agent.v1.LoadMcpServersResponse);
+}

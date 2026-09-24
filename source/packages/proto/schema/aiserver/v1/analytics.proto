@@ -1,0 +1,172 @@
+// aiserver.v1 — aiserver/v1/analytics messages, enums and services.
+//
+// Generated from this repository's schema (source/packages/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package aiserver.v1;
+
+import "google/protobuf/struct.proto";
+
+message AnalyticsContext {
+  .aiserver.v1.ClientInfo client = 1 [json_name = "client"];
+}
+
+message AnalyticsEvent {
+  string event_name = 1 [json_name = "eventName"];
+  map<string, .aiserver.v1.EventData> event_data = 2 [json_name = "eventData"];
+  int64 timestamp = 3 [json_name = "timestamp"];
+}
+
+message BatchEvent {
+  string event = 1 [json_name = "event"];
+  .google.protobuf.Struct properties = 2 [json_name = "properties"];
+  int64 timestamp = 3 [json_name = "timestamp"];
+  string user_id = 4 [json_name = "userId"];
+  string anonymous_id = 5 [json_name = "anonymousId"];
+  string message_id = 6 [json_name = "messageId"];
+  .aiserver.v1.AnalyticsContext context = 7 [json_name = "context"];
+}
+
+message BatchRequest {
+  repeated .aiserver.v1.BatchEvent events = 1 [json_name = "events"];
+}
+
+message BatchResponse {
+}
+
+message BootstrapStatsigRequest {
+  bool ignore_dev_status = 1 [json_name = "ignoreDevStatus"];
+  .aiserver.v1.ClientOS operating_system = 2 [json_name = "operatingSystem"];
+  string device_model = 3 [json_name = "deviceModel"];
+  string os_version = 4 [json_name = "osVersion"];
+  string form_factor = 5 [json_name = "formFactor"];
+  string stable_id = 6 [json_name = "stableId"];
+  string client_channel = 7 [json_name = "clientChannel"];
+  string bundle_id = 8 [json_name = "bundleId"];
+}
+
+message BootstrapStatsigResponse {
+  string config = 1 [json_name = "config"];
+  uint64 generated_at_ms = 2 [json_name = "generatedAtMs"];
+}
+
+message ClientInfo {
+  string os = 1 [json_name = "os"];
+  string arch = 2 [json_name = "arch"];
+  string os_version = 3 [json_name = "osVersion"];
+  string version = 4 [json_name = "version"];
+  string layout = 5 [json_name = "layout"];
+}
+
+message ClientLogEntry {
+  .aiserver.v1.ClientLogLevel level = 1 [json_name = "level"];
+  string message = 2 [json_name = "message"];
+  map<string, string> metadata = 3 [json_name = "metadata"];
+  int64 timestamp = 4 [json_name = "timestamp"];
+  string error_message = 5 [json_name = "errorMessage"];
+  string error_stack = 6 [json_name = "errorStack"];
+  string key = 7 [json_name = "key"];
+}
+
+enum ClientLogLevel {
+  CLIENT_LOG_LEVEL_UNSPECIFIED = 0;
+  CLIENT_LOG_LEVEL_INFO = 1;
+  CLIENT_LOG_LEVEL_DEBUG = 2;
+  CLIENT_LOG_LEVEL_WARN = 3;
+  CLIENT_LOG_LEVEL_ERROR = 4;
+}
+
+enum ClientOS {
+  CLIENT_OS_UNSPECIFIED = 0;
+  CLIENT_OS_WINDOWS = 1;
+  CLIENT_OS_MACOS = 2;
+  CLIENT_OS_LINUX = 3;
+  CLIENT_OS_IOS = 4;
+}
+
+message DownloadIssueTracesRequest {
+  string token = 1 [json_name = "token"];
+  int32 limit = 2 [json_name = "limit"];
+}
+
+message DownloadIssueTracesResponse {
+  bytes data = 1 [json_name = "data"];
+  int32 total_traces = 2 [json_name = "totalTraces"];
+  int64 total_bytes = 3 [json_name = "totalBytes"];
+}
+
+message EventData {
+  oneof data {
+    string string_value = 1 [json_name = "stringValue"];
+    int64 int_value = 2 [json_name = "intValue"];
+    bool bool_value = 3 [json_name = "boolValue"];
+    double double_value = 4 [json_name = "doubleValue"];
+  }
+}
+
+message GetFirstWindowStatsigDecisionRequest {
+  .aiserver.v1.ClientOS operating_system = 1 [json_name = "operatingSystem"];
+}
+
+message GetFirstWindowStatsigDecisionResponse {
+  string variant = 1 [json_name = "variant"];
+  string reason = 2 [json_name = "reason"];
+}
+
+message IngestConversationRequest {
+  string conversation_id = 1 [json_name = "conversationId"];
+  string transcript = 2 [json_name = "transcript"];
+  string transcript_json = 3 [json_name = "transcriptJson"];
+  string mode = 4 [json_name = "mode"];
+  string model = 5 [json_name = "model"];
+  int64 last_updated_at = 6 [json_name = "lastUpdatedAt"];
+}
+
+message IngestConversationResponse {
+  bool success = 1 [json_name = "success"];
+  string summary = 2 [json_name = "summary"];
+  string detailed_summary = 3 [json_name = "detailedSummary"];
+  string error_message = 4 [json_name = "errorMessage"];
+}
+
+message SubmitLogsRequest {
+  repeated .aiserver.v1.ClientLogEntry logs = 1 [json_name = "logs"];
+}
+
+message SubmitLogsResponse {
+  bool success = 1 [json_name = "success"];
+  string error_message = 2 [json_name = "errorMessage"];
+  uint32 logs_processed = 3 [json_name = "logsProcessed"];
+  uint32 logs_dropped = 4 [json_name = "logsDropped"];
+}
+
+message TrackEventsRequest {
+  repeated .aiserver.v1.AnalyticsEvent events = 1 [json_name = "events"];
+}
+
+message TrackEventsResponse {
+}
+
+message UploadIssueTraceRequest {
+  string token = 1 [json_name = "token"];
+  string payload = 2 [json_name = "payload"];
+  string payload_hash = 3 [json_name = "payloadHash"];
+}
+
+message UploadIssueTraceResponse {
+  string event_id = 1 [json_name = "eventId"];
+  int64 size = 2 [json_name = "size"];
+}
+
+service AnalyticsService {
+  rpc TrackEvents(.aiserver.v1.TrackEventsRequest) returns (.aiserver.v1.TrackEventsResponse);
+  rpc Batch(.aiserver.v1.BatchRequest) returns (.aiserver.v1.BatchResponse);
+  rpc BootstrapStatsig(.aiserver.v1.BootstrapStatsigRequest) returns (.aiserver.v1.BootstrapStatsigResponse);
+  rpc GetFirstWindowStatsigDecision(.aiserver.v1.GetFirstWindowStatsigDecisionRequest) returns (.aiserver.v1.GetFirstWindowStatsigDecisionResponse);
+  rpc SubmitLogs(.aiserver.v1.SubmitLogsRequest) returns (.aiserver.v1.SubmitLogsResponse);
+  rpc IngestConversation(.aiserver.v1.IngestConversationRequest) returns (.aiserver.v1.IngestConversationResponse);
+  rpc UploadIssueTrace(.aiserver.v1.UploadIssueTraceRequest) returns (.aiserver.v1.UploadIssueTraceResponse);
+  rpc DownloadIssueTraces(.aiserver.v1.DownloadIssueTracesRequest) returns (.aiserver.v1.DownloadIssueTracesResponse);
+}

@@ -1,0 +1,32 @@
+// agent.v1 — agent/v1/send_final_summary_tool messages, enums and services.
+//
+// Generated from this repository's schema (source/packages/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+message SendFinalSummaryToolCall {
+  .agent.v1.SendFinalSummaryArgs args = 1 [json_name = "args"];
+  .agent.v1.SendFinalSummaryResult result = 2 [json_name = "result"];
+}
+
+message SendFinalSummaryArgs {
+  string final_summary = 1 [json_name = "finalSummary"];
+}
+
+message SendFinalSummaryResult {
+  oneof result {
+    .agent.v1.SendFinalSummarySuccess success = 1 [json_name = "success"];
+    .agent.v1.SendFinalSummaryError error = 2 [json_name = "error"];
+  }
+}
+
+message SendFinalSummarySuccess {
+  string final_summary = 1 [json_name = "finalSummary"];
+}
+
+message SendFinalSummaryError {
+  string error = 1 [json_name = "error"];
+}
