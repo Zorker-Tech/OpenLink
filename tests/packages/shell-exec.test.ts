@@ -41,6 +41,15 @@ import { EventLoopPressureThresholdDefault, EventLoopPressureTrackerDefault } fr
 import { getRipgrepBinaryPath, withConfiguredRipgrepEnv } from "../../source/packages/shell-exec/ripgrep.ts"
 import { windowsPathToGitBash, getZshPath } from "../../source/packages/shell-exec/platform-shell.ts"
 import { spawnUnsafe } from "../../source/packages/shell-exec/sandbox/unsafe-spawn.ts"
+import { analyzeShellCommand } from "../../source/packages/shell-exec/shell-parser.ts"
+import { withPolicyDirectoryReadonly, withSandboxPolicyDirectoryReadonly } from "../../source/packages/shell-exec/sandbox/policy-readonly.ts"
+import {
+  buildSandboxArgv,
+  buildSandboxChildEnvironment,
+  buildSandboxPolicyEnvelope,
+  projectSandboxCommand,
+} from "../../source/packages/shell-exec/sandbox/helper-protocol.ts"
+import { buildNativeSandboxPolicy } from "../../source/packages/shell-exec/sandbox/native-policy.ts"
 
 // ---------------------------------------------------------------------------------------------
 // rewriting a command so sudo does not stop to ask
@@ -353,4 +362,217 @@ test("the sandbox can be skipped only by asking for it explicitly", async () => 
   const child = spawnUnsafe(process.execPath, ["-e", "process.exit(0)"])
   const code = await new Promise<number | null>((resolve) => child.on("exit", resolve))
   assert.equal(code, 0)
+})
+
+// ---------------------------------------------------------------------------------------------
+// reading a command
+// ---------------------------------------------------------------------------------------------
+
+test("a command's words and arguments are read out of it", () => {
+  const result = analyzeShellCommand("git commit -m 'a message'")
+  assert.equal(result.structured.parsingFailed, false)
+  assert.deepEqual(result.structured.executableCommands.map(command => command.name), ["git"])
+  assert.deepEqual(result.structured.executableCommands[0]?.args.map(arg => arg.value), ["commit", "-m", "'a message'"])
+  assert.equal(result.structured.executableCommands[0]?.fullText, "git commit -m 'a message'")
+  assert.deepEqual(result.legacy.simpleCommands, ["git"])
+})
+
+test("every command in a chain is read, not only the first", () => {
+  const result = analyzeShellCommand("git status && npm test | tee out")
+  assert.deepEqual(result.structured.executableCommands.map(command => command.name), ["git", "npm", "tee"])
+  assert.deepEqual(result.legacy.simpleCommands, ["git", "npm", "tee"])
+})
+
+test("a substitution is marked as one, and the command inside it is read", () => {
+  const result = analyzeShellCommand("echo $(ls -la)")
+  assert.equal(result.structured.hasCommandSubstitution, true)
+  assert.deepEqual(result.structured.executableCommands.map(command => command.name), ["echo", "ls"])
+})
+
+test("a redirect to the null device is safe to allow", () => {
+  const result = analyzeShellCommand("ls -la > /dev/null")
+  assert.equal(result.structured.hasRedirects, true)
+  assert.equal(result.structured.allRedirectsAreDevNull, true)
+  assert.deepEqual(result.structured.redirects[0], { operator: ">", destinationFds: [1], targetNodeType: "word", targetText: "/dev/null" })
+})
+
+test("a redirect to a file is not safe to allow", () => {
+  const result = analyzeShellCommand("ls -la > out.txt")
+  assert.equal(result.structured.allRedirectsAreDevNull, false)
+  assert.equal(result.structured.redirects[0]?.targetText, "out.txt")
+})
+
+test("redirecting a stream into another stream is safe only when the source is", () => {
+  // Standard error into standard output is the stream the command was given.
+  assert.equal(analyzeShellCommand("ls 2>&1").structured.allRedirectsAreDevNull, true)
+  // A stream that was already redirected to a file is not.
+  assert.equal(analyzeShellCommand("ls 2> out.txt 1>&2").structured.allRedirectsAreDevNull, false)
+})
+
+test("reading a file in is a redirect the caller has to decide about", () => {
+  const result = analyzeShellCommand("sort < in.txt")
+  assert.equal(result.structured.allRedirectsAreDevNull, false)
+  assert.equal(result.legacy.hasInputRedirect, true)
+})
+
+test("a heredoc is a redirect whose receiver is known", () => {
+  const result = analyzeShellCommand("cat <<EOF\nhello\nEOF")
+  assert.equal(result.structured.hasRedirects, true)
+  assert.equal(result.structured.allRedirectsAreDevNull, true)
+  assert.equal(result.structured.redirects[0]?.targetText, "cat")
+  assert.equal(result.legacy.hasInputRedirect, true)
+})
+
+test("a heredoc inside a substitution is not the receiver's own", () => {
+  const result = analyzeShellCommand("echo $(cat <<EOF\nhello\nEOF\n)")
+  assert.equal(result.structured.allRedirectsAreDevNull, false)
+})
+
+test("a redirect whose shape is not recognized is not safe", () => {
+  const result = analyzeShellCommand("ls &> /dev/null")
+  // Both streams go to the null device, which is safe.
+  assert.equal(result.structured.allRedirectsAreDevNull, true)
+  assert.deepEqual(analyzeShellCommand("ls > /dev/null > out.txt").structured.allRedirectsAreDevNull, false)
+})
+
+test("the older shape says whether anything was redirected at all", () => {
+  const plain = analyzeShellCommand("ls -la")
+  assert.deepEqual(plain.legacy, { simpleCommands: ["ls"], hasInputRedirect: false, hasOutputRedirect: false })
+  const redirected = analyzeShellCommand("ls > /dev/null")
+  assert.equal(redirected.legacy.hasOutputRedirect, true)
+})
+
+// ---------------------------------------------------------------------------------------------
+// the policy a sandbox is given
+// ---------------------------------------------------------------------------------------------
+
+test("the policy directory is made read-only in every policy", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "slate-policy-readonly-"))
+  const previous = process.env.SLATE_SANDBOX_POLICY_DIR
+  process.env.SLATE_SANDBOX_POLICY_DIR = dir
+  try {
+    const policyDirectory = ensureSandboxPolicyDirectory()
+    assert.deepEqual(withPolicyDirectoryReadonly(), [policyDirectory])
+    assert.deepEqual(withPolicyDirectoryReadonly(["/etc"]), ["/etc", policyDirectory])
+    // A list that already names it is not given it twice.
+    assert.deepEqual(withPolicyDirectoryReadonly([policyDirectory]), [policyDirectory])
+    const input = { type: "workspace_readwrite" as const, additionalReadonlyPaths: ["/etc"] }
+    const policy = withSandboxPolicyDirectoryReadonly(input)
+    assert.deepEqual(policy.additionalReadonlyPaths, ["/etc", policyDirectory])
+    assert.equal(policy.type, "workspace_readwrite")
+  } finally {
+    if (previous === undefined) delete process.env.SLATE_SANDBOX_POLICY_DIR
+    else process.env.SLATE_SANDBOX_POLICY_DIR = previous
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("the sandbox is told which command to run and where its policy is", () => {
+  assert.deepEqual(buildSandboxArgv("/tmp/policy", "ls", ["-la"]), ["--policy", "/tmp/policy", "--", "ls", "-la"])
+})
+
+test("a command run through a shell is projected into one", () => {
+  // Without a shell the command is run as the program it is.
+  assert.deepEqual(projectSandboxCommand("ls", ["-la"], false), { command: "ls", args: ["-la"] })
+  const throughShell = projectSandboxCommand("ls", ["-la"], true)
+  assert.equal(throughShell.args[0], "-c")
+  assert.equal(throughShell.args[1], "ls -la")
+})
+
+test("the environment a sandboxed command is given says it is sandboxed", () => {
+  const env = buildSandboxChildEnvironment({ KEEP: "yes" })
+  assert.equal(env.SLATE_SANDBOX, "native")
+  assert.equal(env.KEEP, "yes")
+})
+
+test("a network policy the helper cannot act on is left out of the envelope", () => {
+  const denied = buildSandboxPolicyEnvelope({ type: "workspace_readwrite" }, {
+    type: "workspace_readwrite",
+    networkPolicy: { version: 1, default: "deny" },
+  })
+  assert.equal(denied.networkPolicy, undefined)
+  const allowed = buildSandboxPolicyEnvelope({ type: "workspace_readwrite" }, {
+    type: "workspace_readwrite",
+    networkPolicy: { version: 1, default: "allow", deny: ["example.com"] },
+  })
+  assert.deepEqual(allowed.networkPolicy, { version: 1, default: "allow", deny: ["example.com"] })
+})
+
+test("a policy that is not sandboxed is not given a network policy at all", () => {
+  const envelope = buildSandboxPolicyEnvelope({ type: "insecure_none" }, {
+    type: "insecure_none",
+    networkPolicy: { version: 1, default: "allow" },
+  })
+  assert.equal(envelope.networkPolicy, undefined)
+  assert.deepEqual(envelope.sandbox, { type: "insecure_none" })
+})
+
+test("the policy a sandbox runs under is resolved from what the caller asked for", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "slate-native-policy-"))
+  try {
+    const policy = buildNativeSandboxPolicy({ type: "workspace_readwrite" }, dir)
+    assert.equal(policy.type, "workspace_readwrite")
+    assert.equal(policy.cwd, dir)
+    assert.equal(policy.readBoundary, "system")
+    // The system's own paths are readable, and a readwrite policy may also write its workspace.
+    assert.equal(policy.hardcodedReadPaths.length > 0, true)
+    assert.deepEqual(policy.additionalReadwritePaths, [])
+    assert.equal(policy.disableTmpWrite, false)
+    assert.equal(policy.networkAccess, false)
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("a read-only policy is not given anywhere to write", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "slate-native-policy-"))
+  try {
+    const policy = buildNativeSandboxPolicy({ type: "workspace_readonly" }, dir)
+    assert.equal("additionalReadwritePaths" in policy, false)
+    assert.equal("disableTmpWrite" in policy, false)
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("a policy confined to its workspace trusts only the roots it was given", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "slate-native-policy-"))
+  try {
+    const policy = buildNativeSandboxPolicy({ type: "workspace_readwrite", readBoundary: "workspace", additionalReadPaths: ["/srv/data", "/srv/data/**"] }, dir)
+    assert.equal(policy.readBoundary, "workspace")
+    // The glob is reduced to the directory it was anchored at, and named once.
+    assert.equal(policy.hardcodedReadPaths.includes("/srv/data"), true)
+    assert.equal(policy.hardcodedReadPaths.filter(entry => entry === "/srv/data").length, 1)
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("a write protection mapping is written under both the path and what it resolves to", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "slate-native-policy-"))
+  const link = `${dir}-link`
+  try {
+    fs.symlinkSync(dir, link)
+    const policy = buildNativeSandboxPolicy({
+      type: "workspace_readwrite",
+      writeProtectionMapping: { [link]: ["**/.git/**"] },
+    }, dir)
+    assert.deepEqual(policy.additionalReadonlyPaths?.[link], ["**/.git/**"])
+    // The same mapping is also under the canonical path, so a command reaching it either way is covered —
+    // and the canonical path is what the filesystem says it is, which may differ from the path given.
+    assert.deepEqual(policy.additionalReadonlyPaths?.[fs.realpathSync(dir)], ["**/.git/**"])
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+    fs.rmSync(link, { recursive: true, force: true })
+  }
+})
+
+test("a policy that allows the network says so", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "slate-native-policy-"))
+  try {
+    const policy = buildNativeSandboxPolicy({ type: "workspace_readwrite", networkPolicy: networkAllowAllPolicy() }, dir)
+    assert.equal(policy.networkAccess, true)
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
 })

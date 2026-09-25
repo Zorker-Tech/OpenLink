@@ -36,6 +36,8 @@
     "piscina": "^4.9.4",
     "re2js": "^2.8.6",
     "rxjs": "^7.8.1",
+    "tree-sitter": "^0.21.1",
+    "tree-sitter-bash": "^0.21.0",
     "zod": "^3.25.76",
     "zod-to-json-schema": "^3.24.5"
   },
