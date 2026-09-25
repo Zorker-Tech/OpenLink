@@ -43,7 +43,7 @@ function userMessagePlainText(message: { readonly content: UserMessageContent })
   return text.length > 0 ? text : undefined
 }
 
-type PriorUserMessage = Parameters<typeof fromRedactedCoreMessage>[0] & {
+export type PriorUserInfoMessage = Parameters<typeof fromRedactedCoreMessage>[0] & {
   readonly role: string
   readonly providerOptions?: {
     readonly cursor?: {
@@ -115,7 +115,7 @@ function userInfoHasExpectedCustomUserRules(
 
 export function shouldRerenderUserInfo(
   hasExistingNonSystemMessages: boolean,
-  priorMessages: readonly PriorUserMessage[],
+  priorMessages: readonly PriorUserInfoMessage[],
   expectedCustomUserRules: readonly string[],
   modelInfo: UserRuleModelInfo | undefined,
   forceRerender: boolean,
@@ -141,27 +141,27 @@ export function shouldRerenderUserInfo(
   return userInfoHasAnyGeneratedCustomUserRules(contentStr)
 }
 
-export function getFirstUserInfoRequestContextCompleteness(priorMessages: readonly PriorUserMessage[]) {
+export function getFirstUserInfoRequestContextCompleteness(priorMessages: readonly PriorUserInfoMessage[]) {
   const firstMsg = priorMessages[0]
   if (firstMsg?.role !== "user") return undefined
   return parseRequestContextCompletenessMetadata(firstMsg.providerOptions?.cursor?.requestContextCompleteness)
 }
 
-export function getFirstUserInfoSummarizationEpoch(priorMessages: readonly PriorUserMessage[]) {
+export function getFirstUserInfoSummarizationEpoch(priorMessages: readonly PriorUserInfoMessage[]) {
   const firstMsg = priorMessages[0]
   if (firstMsg?.role !== "user") return undefined
   return parseUserInfoSummarizationEpochMetadata(firstMsg.providerOptions?.cursor?.userInfoSummarizationEpoch)
 }
 
-export function getFirstUserInfoOmitCloudWorkerProcedure(priorMessages: readonly PriorUserMessage[]): boolean {
+export function getFirstUserInfoOmitCloudWorkerProcedure(priorMessages: readonly PriorUserInfoMessage[]): boolean {
   return priorMessages[0]?.providerOptions?.cursor?.omitCloudWorkerProcedure === true
 }
 
-export function hasSummaryCarrierMessage(priorMessages: readonly PriorUserMessage[]): boolean {
+export function hasSummaryCarrierMessage(priorMessages: readonly PriorUserInfoMessage[]): boolean {
   return priorMessages.some(message => message.providerOptions?.cursor?.isSummary === true)
 }
 
-export function getFirstUserInfoCloudTestingSectionsPlacement(priorMessages: readonly PriorUserMessage[]) {
+export function getFirstUserInfoCloudTestingSectionsPlacement(priorMessages: readonly PriorUserInfoMessage[]) {
   const firstMsg = priorMessages[0]
   if (firstMsg?.role !== "user") return undefined
   const placement = parseCloudTestingSectionsPlacementMetadata(
@@ -171,7 +171,7 @@ export function getFirstUserInfoCloudTestingSectionsPlacement(priorMessages: rea
   return getFirstUserInfoMessageContent(priorMessages) !== undefined ? "user_info" : undefined
 }
 
-export function getFirstUserInfoMessageContent(priorMessages: readonly PriorUserMessage[]) {
+export function getFirstUserInfoMessageContent(priorMessages: readonly PriorUserInfoMessage[]) {
   const firstMsg = priorMessages[0]
   if (firstMsg?.role !== "user") return undefined
   const plainFirst = fromRedactedCoreMessage(firstMsg, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
@@ -198,7 +198,7 @@ export function shouldMigrateMultitaskEnterReminderToUserInfo(params: {
   readonly hasExistingNonSystemMessages: boolean
   readonly previousTurnMode: AgentMode | undefined
   readonly resolvedTurnMode: AgentMode
-  readonly priorMessages: readonly PriorUserMessage[]
+  readonly priorMessages: readonly PriorUserInfoMessage[]
   readonly firstUserInfoContent: string | undefined
   readonly userInfoAlreadyHasMultitaskEnterReminder: boolean
 }): boolean {
