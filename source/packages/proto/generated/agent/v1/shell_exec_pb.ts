@@ -9,7 +9,7 @@
 // @ts-nocheck
 
 import type { BinaryReadOptions, FieldList, JsonReadOptions, JsonValue, PartialMessage, PlainMessage } from "@bufbuild/protobuf";
-import { Message, proto3, protoInt64 } from "@bufbuild/protobuf";
+import { Message, proto3 } from "@bufbuild/protobuf";
 import { SandboxPolicy } from "./sandbox_pb.ts";
 import { OutputLocation, SmartModeApproval } from "./utils_pb.ts";
 import { HookAdditionalContext } from "./hook_additional_context_pb.ts";
@@ -214,9 +214,9 @@ export class CommandClassifierResult_ClassifiedCommand extends Message<CommandCl
   arguments: string[] = [];
 
   /**
-   * @generated from field: string suggested_allowlist_entry = 3;
+   * @generated from field: optional string suggested_allowlist_entry = 3;
    */
-  suggestedAllowlistEntry = "";
+  suggestedAllowlistEntry?: string;
 
   /**
    * @generated from field: repeated string subcommand_tokens = 4;
@@ -233,7 +233,7 @@ export class CommandClassifierResult_ClassifiedCommand extends Message<CommandCl
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "arguments", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 3, name: "suggested_allowlist_entry", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "suggested_allowlist_entry", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 4, name: "subcommand_tokens", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
 
@@ -294,19 +294,19 @@ export class ShellArgs extends Message<ShellArgs> {
   hasOutputRedirect = false;
 
   /**
-   * @generated from field: agent.v1.ShellCommandParsingResult parsing_result = 8;
+   * @generated from field: optional agent.v1.ShellCommandParsingResult parsing_result = 8;
    */
   parsingResult?: ShellCommandParsingResult;
 
   /**
-   * @generated from field: agent.v1.SandboxPolicy requested_sandbox_policy = 9;
+   * @generated from field: optional agent.v1.SandboxPolicy requested_sandbox_policy = 9;
    */
   requestedSandboxPolicy?: SandboxPolicy;
 
   /**
-   * @generated from field: uint64 file_output_threshold_bytes = 10;
+   * @generated from field: optional uint64 file_output_threshold_bytes = 10;
    */
-  fileOutputThresholdBytes = protoInt64.zero;
+  fileOutputThresholdBytes?: bigint;
 
   /**
    * @generated from field: bool is_background = 11;
@@ -324,17 +324,17 @@ export class ShellArgs extends Message<ShellArgs> {
   timeoutBehavior = TimeoutBehavior.UNSPECIFIED;
 
   /**
-   * @generated from field: int32 hard_timeout = 14;
+   * @generated from field: optional int32 hard_timeout = 14;
    */
-  hardTimeout = 0;
+  hardTimeout?: number;
 
   /**
-   * @generated from field: string description = 15;
+   * @generated from field: optional string description = 15;
    */
-  description = "";
+  description?: string;
 
   /**
-   * @generated from field: agent.v1.CommandClassifierResult classifier_result = 16;
+   * @generated from field: optional agent.v1.CommandClassifierResult classifier_result = 16;
    */
   classifierResult?: CommandClassifierResult;
 
@@ -344,24 +344,24 @@ export class ShellArgs extends Message<ShellArgs> {
   closeStdin = false;
 
   /**
-   * @generated from field: agent.v1.ShellOutputNotificationConfig output_notification = 18;
+   * @generated from field: optional agent.v1.ShellOutputNotificationConfig output_notification = 18;
    */
   outputNotification?: ShellOutputNotificationConfig;
 
   /**
-   * @generated from field: agent.v1.SmartModeApproval smart_mode_approval = 19;
+   * @generated from field: optional agent.v1.SmartModeApproval smart_mode_approval = 19;
    */
   smartModeApproval?: SmartModeApproval;
 
   /**
-   * @generated from field: agent.v1.ShellHookApprovalRequirement hook_approval_requirement = 20;
+   * @generated from field: optional agent.v1.ShellHookApprovalRequirement hook_approval_requirement = 20;
    */
   hookApprovalRequirement?: ShellHookApprovalRequirement;
 
   /**
-   * @generated from field: string conversation_id = 21;
+   * @generated from field: optional string conversation_id = 21;
    */
-  conversationId = "";
+  conversationId?: string;
 
   /**
    * @generated from field: repeated string admin_command_denylist = 22;
@@ -383,20 +383,20 @@ export class ShellArgs extends Message<ShellArgs> {
     { no: 5, name: "simple_commands", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 6, name: "has_input_redirect", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 7, name: "has_output_redirect", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 8, name: "parsing_result", kind: "message", T: ShellCommandParsingResult },
-    { no: 9, name: "requested_sandbox_policy", kind: "message", T: SandboxPolicy },
-    { no: 10, name: "file_output_threshold_bytes", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
+    { no: 8, name: "parsing_result", kind: "message", T: ShellCommandParsingResult, opt: true },
+    { no: 9, name: "requested_sandbox_policy", kind: "message", T: SandboxPolicy, opt: true },
+    { no: 10, name: "file_output_threshold_bytes", kind: "scalar", T: 4 /* ScalarType.UINT64 */, opt: true },
     { no: 11, name: "is_background", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 12, name: "skip_approval", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 13, name: "timeout_behavior", kind: "enum", T: proto3.getEnumType(TimeoutBehavior) },
-    { no: 14, name: "hard_timeout", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 15, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 16, name: "classifier_result", kind: "message", T: CommandClassifierResult },
+    { no: 14, name: "hard_timeout", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 15, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 16, name: "classifier_result", kind: "message", T: CommandClassifierResult, opt: true },
     { no: 17, name: "close_stdin", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 18, name: "output_notification", kind: "message", T: ShellOutputNotificationConfig },
-    { no: 19, name: "smart_mode_approval", kind: "message", T: SmartModeApproval },
-    { no: 20, name: "hook_approval_requirement", kind: "message", T: ShellHookApprovalRequirement },
-    { no: 21, name: "conversation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 18, name: "output_notification", kind: "message", T: ShellOutputNotificationConfig, opt: true },
+    { no: 19, name: "smart_mode_approval", kind: "message", T: SmartModeApproval, opt: true },
+    { no: 20, name: "hook_approval_requirement", kind: "message", T: ShellHookApprovalRequirement, opt: true },
+    { no: 21, name: "conversation_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 22, name: "admin_command_denylist", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
 
@@ -479,9 +479,9 @@ export class ShellCommandParsingResult extends Message<ShellCommandParsingResult
   hasCommandSubstitution = false;
 
   /**
-   * @generated from field: bool all_redirects_are_dev_null = 5;
+   * @generated from field: optional bool all_redirects_are_dev_null = 5;
    */
-  allRedirectsAreDevNull = false;
+  allRedirectsAreDevNull?: boolean;
 
   /**
    * @generated from field: repeated agent.v1.ShellCommandParsingResult.Redirect redirects = 6;
@@ -500,7 +500,7 @@ export class ShellCommandParsingResult extends Message<ShellCommandParsingResult
     { no: 2, name: "executable_commands", kind: "message", T: ShellCommandParsingResult_ExecutableCommand, repeated: true },
     { no: 3, name: "has_redirects", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 4, name: "has_command_substitution", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "all_redirects_are_dev_null", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 5, name: "all_redirects_are_dev_null", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 6, name: "redirects", kind: "message", T: ShellCommandParsingResult_Redirect, repeated: true },
   ]);
 
@@ -590,9 +590,9 @@ export class ShellCommandParsingResult_Redirect extends Message<ShellCommandPars
   targetNodeType = "";
 
   /**
-   * @generated from field: string target_text = 4;
+   * @generated from field: optional string target_text = 4;
    */
-  targetText = "";
+  targetText?: string;
 
   constructor(data?: PartialMessage<ShellCommandParsingResult_Redirect>) {
     super();
@@ -605,7 +605,7 @@ export class ShellCommandParsingResult_Redirect extends Message<ShellCommandPars
     { no: 1, name: "operator", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "destination_fds", kind: "scalar", T: 13 /* ScalarType.UINT32 */, repeated: true },
     { no: 3, name: "target_node_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "target_text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "target_text", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ShellCommandParsingResult_Redirect {
@@ -683,14 +683,14 @@ export class ShellOutputNotificationConfig extends Message<ShellOutputNotificati
   reason = "";
 
   /**
-   * @generated from field: double debounce = 3;
+   * @generated from field: optional double debounce = 3;
    */
-  debounce = 0;
+  debounce?: number;
 
   /**
-   * @generated from field: int32 notification_limit = 4;
+   * @generated from field: optional int32 notification_limit = 4;
    */
-  notificationLimit = 0;
+  notificationLimit?: number;
 
   constructor(data?: PartialMessage<ShellOutputNotificationConfig>) {
     super();
@@ -702,8 +702,8 @@ export class ShellOutputNotificationConfig extends Message<ShellOutputNotificati
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "pattern", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "reason", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "debounce", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 4, name: "notification_limit", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 3, name: "debounce", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
+    { no: 4, name: "notification_limit", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ShellOutputNotificationConfig {
@@ -733,9 +733,9 @@ export class ShellHookApprovalRequirement extends Message<ShellHookApprovalRequi
   kind = ShellHookApprovalRequirement_Kind.UNSPECIFIED;
 
   /**
-   * @generated from field: string reason = 2;
+   * @generated from field: optional string reason = 2;
    */
-  reason = "";
+  reason?: string;
 
   constructor(data?: PartialMessage<ShellHookApprovalRequirement>) {
     super();
@@ -746,7 +746,7 @@ export class ShellHookApprovalRequirement extends Message<ShellHookApprovalRequi
   static readonly typeName = "agent.v1.ShellHookApprovalRequirement";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "kind", kind: "enum", T: proto3.getEnumType(ShellHookApprovalRequirement_Kind) },
-    { no: 2, name: "reason", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "reason", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ShellHookApprovalRequirement {
@@ -791,24 +791,24 @@ proto3.util.setEnumType(ShellHookApprovalRequirement_Kind, "agent.v1.ShellHookAp
  */
 export class ShellResult extends Message<ShellResult> {
   /**
-   * @generated from field: agent.v1.SandboxPolicy sandbox_policy = 101;
+   * @generated from field: optional agent.v1.SandboxPolicy sandbox_policy = 101;
    */
   sandboxPolicy?: SandboxPolicy;
 
   /**
-   * @generated from field: bool is_background = 102;
+   * @generated from field: optional bool is_background = 102;
    */
-  isBackground = false;
+  isBackground?: boolean;
 
   /**
-   * @generated from field: string terminals_folder = 103;
+   * @generated from field: optional string terminals_folder = 103;
    */
-  terminalsFolder = "";
+  terminalsFolder?: string;
 
   /**
-   * @generated from field: uint32 pid = 104;
+   * @generated from field: optional uint32 pid = 104;
    */
-  pid = 0;
+  pid?: number;
 
   /**
    * @generated from oneof agent.v1.ShellResult.result
@@ -859,10 +859,10 @@ export class ShellResult extends Message<ShellResult> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.ShellResult";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 101, name: "sandbox_policy", kind: "message", T: SandboxPolicy },
-    { no: 102, name: "is_background", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 103, name: "terminals_folder", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 104, name: "pid", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 101, name: "sandbox_policy", kind: "message", T: SandboxPolicy, opt: true },
+    { no: 102, name: "is_background", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 103, name: "terminals_folder", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 104, name: "pid", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
     { no: 1, name: "success", kind: "message", T: ShellSuccess, oneof: "result" },
     { no: 2, name: "failure", kind: "message", T: ShellFailure, oneof: "result" },
     { no: 3, name: "timeout", kind: "message", T: ShellTimeout, oneof: "result" },
@@ -997,7 +997,7 @@ export class ForceBackgroundShellResult extends Message<ForceBackgroundShellResu
   status = ForceBackgroundShellStatus.UNSPECIFIED;
 
   /**
-   * @generated from field: agent.v1.ShellResult shell_result = 2;
+   * @generated from field: optional agent.v1.ShellResult shell_result = 2;
    */
   shellResult?: ShellResult;
 
@@ -1010,7 +1010,7 @@ export class ForceBackgroundShellResult extends Message<ForceBackgroundShellResu
   static readonly typeName = "agent.v1.ForceBackgroundShellResult";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "status", kind: "enum", T: proto3.getEnumType(ForceBackgroundShellStatus) },
-    { no: 2, name: "shell_result", kind: "message", T: ShellResult },
+    { no: 2, name: "shell_result", kind: "message", T: ShellResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ForceBackgroundShellResult {
@@ -1290,7 +1290,7 @@ export class ShellStreamExit extends Message<ShellStreamExit> {
   cwd = "";
 
   /**
-   * @generated from field: agent.v1.OutputLocation output_location = 3;
+   * @generated from field: optional agent.v1.OutputLocation output_location = 3;
    */
   outputLocation?: OutputLocation;
 
@@ -1300,14 +1300,14 @@ export class ShellStreamExit extends Message<ShellStreamExit> {
   aborted = false;
 
   /**
-   * @generated from field: agent.v1.ShellAbortReason abort_reason = 5;
+   * @generated from field: optional agent.v1.ShellAbortReason abort_reason = 5;
    */
-  abortReason = ShellAbortReason.UNSPECIFIED;
+  abortReason?: ShellAbortReason;
 
   /**
-   * @generated from field: int32 local_execution_time_ms = 6;
+   * @generated from field: optional int32 local_execution_time_ms = 6;
    */
-  localExecutionTimeMs = 0;
+  localExecutionTimeMs?: number;
 
   constructor(data?: PartialMessage<ShellStreamExit>) {
     super();
@@ -1319,10 +1319,10 @@ export class ShellStreamExit extends Message<ShellStreamExit> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "code", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
     { no: 2, name: "cwd", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "output_location", kind: "message", T: OutputLocation },
+    { no: 3, name: "output_location", kind: "message", T: OutputLocation, opt: true },
     { no: 4, name: "aborted", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "abort_reason", kind: "enum", T: proto3.getEnumType(ShellAbortReason) },
-    { no: 6, name: "local_execution_time_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 5, name: "abort_reason", kind: "enum", T: proto3.getEnumType(ShellAbortReason), opt: true },
+    { no: 6, name: "local_execution_time_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ShellStreamExit {
@@ -1347,7 +1347,7 @@ export class ShellStreamExit extends Message<ShellStreamExit> {
  */
 export class ShellStreamStart extends Message<ShellStreamStart> {
   /**
-   * @generated from field: agent.v1.SandboxPolicy sandbox_policy = 1;
+   * @generated from field: optional agent.v1.SandboxPolicy sandbox_policy = 1;
    */
   sandboxPolicy?: SandboxPolicy;
 
@@ -1359,7 +1359,7 @@ export class ShellStreamStart extends Message<ShellStreamStart> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.ShellStreamStart";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "sandbox_policy", kind: "message", T: SandboxPolicy },
+    { no: 1, name: "sandbox_policy", kind: "message", T: SandboxPolicy, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ShellStreamStart {
@@ -1399,19 +1399,19 @@ export class ShellStreamBackgrounded extends Message<ShellStreamBackgrounded> {
   workingDirectory = "";
 
   /**
-   * @generated from field: uint32 pid = 4;
+   * @generated from field: optional uint32 pid = 4;
    */
-  pid = 0;
+  pid?: number;
 
   /**
-   * @generated from field: int32 ms_to_wait = 5;
+   * @generated from field: optional int32 ms_to_wait = 5;
    */
-  msToWait = 0;
+  msToWait?: number;
 
   /**
-   * @generated from field: agent.v1.ShellBackgroundReason reason = 6;
+   * @generated from field: optional agent.v1.ShellBackgroundReason reason = 6;
    */
-  reason = ShellBackgroundReason.UNSPECIFIED;
+  reason?: ShellBackgroundReason;
 
   constructor(data?: PartialMessage<ShellStreamBackgrounded>) {
     super();
@@ -1424,9 +1424,9 @@ export class ShellStreamBackgrounded extends Message<ShellStreamBackgrounded> {
     { no: 1, name: "shell_id", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
     { no: 2, name: "command", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "working_directory", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "pid", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 5, name: "ms_to_wait", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 6, name: "reason", kind: "enum", T: proto3.getEnumType(ShellBackgroundReason) },
+    { no: 4, name: "pid", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
+    { no: 5, name: "ms_to_wait", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 6, name: "reason", kind: "enum", T: proto3.getEnumType(ShellBackgroundReason), opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ShellStreamBackgrounded {
@@ -1523,54 +1523,54 @@ export class ShellSuccess extends Message<ShellSuccess> {
   executionTime = 0;
 
   /**
-   * @generated from field: agent.v1.OutputLocation output_location = 8;
+   * @generated from field: optional agent.v1.OutputLocation output_location = 8;
    */
   outputLocation?: OutputLocation;
 
   /**
-   * @generated from field: uint32 shell_id = 9;
+   * @generated from field: optional uint32 shell_id = 9;
    */
-  shellId = 0;
+  shellId?: number;
 
   /**
-   * @generated from field: string interleaved_output = 10;
+   * @generated from field: optional string interleaved_output = 10;
    */
-  interleavedOutput = "";
+  interleavedOutput?: string;
 
   /**
-   * @generated from field: uint32 pid = 11;
+   * @generated from field: optional uint32 pid = 11;
    */
-  pid = 0;
+  pid?: number;
 
   /**
-   * @generated from field: int32 ms_to_wait = 12;
+   * @generated from field: optional int32 ms_to_wait = 12;
    */
-  msToWait = 0;
+  msToWait?: number;
 
   /**
-   * @generated from field: int32 local_execution_time_ms = 13;
+   * @generated from field: optional int32 local_execution_time_ms = 13;
    */
-  localExecutionTimeMs = 0;
+  localExecutionTimeMs?: number;
 
   /**
-   * @generated from field: agent.v1.ShellBackgroundReason background_reason = 14;
+   * @generated from field: optional agent.v1.ShellBackgroundReason background_reason = 14;
    */
-  backgroundReason = ShellBackgroundReason.UNSPECIFIED;
+  backgroundReason?: ShellBackgroundReason;
 
   /**
-   * @generated from field: string output_head = 15;
+   * @generated from field: optional string output_head = 15;
    */
-  outputHead = "";
+  outputHead?: string;
 
   /**
-   * @generated from field: string output_tail = 16;
+   * @generated from field: optional string output_tail = 16;
    */
-  outputTail = "";
+  outputTail?: string;
 
   /**
-   * @generated from field: uint32 elided_chars = 17;
+   * @generated from field: optional uint32 elided_chars = 17;
    */
-  elidedChars = 0;
+  elidedChars?: number;
 
   constructor(data?: PartialMessage<ShellSuccess>) {
     super();
@@ -1587,16 +1587,16 @@ export class ShellSuccess extends Message<ShellSuccess> {
     { no: 5, name: "stdout", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 6, name: "stderr", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 7, name: "execution_time", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 8, name: "output_location", kind: "message", T: OutputLocation },
-    { no: 9, name: "shell_id", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 10, name: "interleaved_output", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 11, name: "pid", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 12, name: "ms_to_wait", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 13, name: "local_execution_time_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 14, name: "background_reason", kind: "enum", T: proto3.getEnumType(ShellBackgroundReason) },
-    { no: 15, name: "output_head", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 16, name: "output_tail", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 17, name: "elided_chars", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 8, name: "output_location", kind: "message", T: OutputLocation, opt: true },
+    { no: 9, name: "shell_id", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
+    { no: 10, name: "interleaved_output", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 11, name: "pid", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
+    { no: 12, name: "ms_to_wait", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 13, name: "local_execution_time_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 14, name: "background_reason", kind: "enum", T: proto3.getEnumType(ShellBackgroundReason), opt: true },
+    { no: 15, name: "output_head", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 16, name: "output_tail", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 17, name: "elided_chars", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ShellSuccess {
@@ -1656,19 +1656,19 @@ export class ShellFailure extends Message<ShellFailure> {
   executionTime = 0;
 
   /**
-   * @generated from field: agent.v1.OutputLocation output_location = 8;
+   * @generated from field: optional agent.v1.OutputLocation output_location = 8;
    */
   outputLocation?: OutputLocation;
 
   /**
-   * @generated from field: string interleaved_output = 9;
+   * @generated from field: optional string interleaved_output = 9;
    */
-  interleavedOutput = "";
+  interleavedOutput?: string;
 
   /**
-   * @generated from field: agent.v1.ShellAbortReason abort_reason = 10;
+   * @generated from field: optional agent.v1.ShellAbortReason abort_reason = 10;
    */
-  abortReason = ShellAbortReason.UNSPECIFIED;
+  abortReason?: ShellAbortReason;
 
   /**
    * @generated from field: bool aborted = 11;
@@ -1676,24 +1676,24 @@ export class ShellFailure extends Message<ShellFailure> {
   aborted = false;
 
   /**
-   * @generated from field: int32 local_execution_time_ms = 12;
+   * @generated from field: optional int32 local_execution_time_ms = 12;
    */
-  localExecutionTimeMs = 0;
+  localExecutionTimeMs?: number;
 
   /**
-   * @generated from field: string output_head = 13;
+   * @generated from field: optional string output_head = 13;
    */
-  outputHead = "";
+  outputHead?: string;
 
   /**
-   * @generated from field: string output_tail = 14;
+   * @generated from field: optional string output_tail = 14;
    */
-  outputTail = "";
+  outputTail?: string;
 
   /**
-   * @generated from field: uint32 elided_chars = 15;
+   * @generated from field: optional uint32 elided_chars = 15;
    */
-  elidedChars = 0;
+  elidedChars?: number;
 
   constructor(data?: PartialMessage<ShellFailure>) {
     super();
@@ -1710,14 +1710,14 @@ export class ShellFailure extends Message<ShellFailure> {
     { no: 5, name: "stdout", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 6, name: "stderr", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 7, name: "execution_time", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 8, name: "output_location", kind: "message", T: OutputLocation },
-    { no: 9, name: "interleaved_output", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "abort_reason", kind: "enum", T: proto3.getEnumType(ShellAbortReason) },
+    { no: 8, name: "output_location", kind: "message", T: OutputLocation, opt: true },
+    { no: 9, name: "interleaved_output", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 10, name: "abort_reason", kind: "enum", T: proto3.getEnumType(ShellAbortReason), opt: true },
     { no: 11, name: "aborted", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 12, name: "local_execution_time_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 13, name: "output_head", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 14, name: "output_tail", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 15, name: "elided_chars", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 12, name: "local_execution_time_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 13, name: "output_head", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 14, name: "output_tail", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 15, name: "elided_chars", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ShellFailure {

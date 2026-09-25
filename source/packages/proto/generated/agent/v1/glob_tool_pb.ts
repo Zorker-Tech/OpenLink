@@ -16,12 +16,12 @@ import { Message, proto3 } from "@bufbuild/protobuf";
  */
 export class GlobToolCall extends Message<GlobToolCall> {
   /**
-   * @generated from field: agent.v1.GlobToolArgs args = 1;
+   * @generated from field: optional agent.v1.GlobToolArgs args = 1;
    */
   args?: GlobToolArgs;
 
   /**
-   * @generated from field: agent.v1.GlobToolResult result = 2;
+   * @generated from field: optional agent.v1.GlobToolResult result = 2;
    */
   result?: GlobToolResult;
 
@@ -33,8 +33,8 @@ export class GlobToolCall extends Message<GlobToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.GlobToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: GlobToolArgs },
-    { no: 2, name: "result", kind: "message", T: GlobToolResult },
+    { no: 1, name: "args", kind: "message", T: GlobToolArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: GlobToolResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GlobToolCall {
@@ -59,9 +59,9 @@ export class GlobToolCall extends Message<GlobToolCall> {
  */
 export class GlobToolArgs extends Message<GlobToolArgs> {
   /**
-   * @generated from field: string target_directory = 1;
+   * @generated from field: optional string target_directory = 1;
    */
-  targetDirectory = "";
+  targetDirectory?: string;
 
   /**
    * @generated from field: string glob_pattern = 2;
@@ -76,7 +76,7 @@ export class GlobToolArgs extends Message<GlobToolArgs> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.GlobToolArgs";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "target_directory", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "target_directory", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "glob_pattern", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 

@@ -36,8 +36,8 @@ message InterfaceAgentStatus {
 message InterfaceAgentClientState {
   string interface_relative_workspace_path = 3 [json_name = "interfaceRelativeWorkspacePath"];
   repeated string interface_lines = 4 [json_name = "interfaceLines"];
-  string test_relative_workspace_path = 5 [json_name = "testRelativeWorkspacePath"];
-  string implementation_relative_workspace_path = 6 [json_name = "implementationRelativeWorkspacePath"];
+  optional string test_relative_workspace_path = 5 [json_name = "testRelativeWorkspacePath"];
+  optional string implementation_relative_workspace_path = 6 [json_name = "implementationRelativeWorkspacePath"];
   repeated string implementation_lines = 7 [json_name = "implementationLines"];
   string language = 8 [json_name = "language"];
   string testing_framework = 9 [json_name = "testingFramework"];

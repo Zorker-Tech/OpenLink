@@ -31,9 +31,9 @@ export class AgentSkill extends Message<AgentSkill> {
   description = "";
 
   /**
-   * @generated from field: string parse_error = 4;
+   * @generated from field: optional string parse_error = 4;
    */
-  parseError = "";
+  parseError?: string;
 
   /**
    * @generated from field: repeated string environments = 5;
@@ -46,9 +46,9 @@ export class AgentSkill extends Message<AgentSkill> {
   disabledEnvironments: string[] = [];
 
   /**
-   * @generated from field: string git_remote_origin = 7;
+   * @generated from field: optional string git_remote_origin = 7;
    */
-  gitRemoteOrigin = "";
+  gitRemoteOrigin?: string;
 
   /**
    * @generated from field: bool disable_model_invocation = 8;
@@ -56,24 +56,24 @@ export class AgentSkill extends Message<AgentSkill> {
   disableModelInvocation = false;
 
   /**
-   * @generated from field: string plugin = 9;
+   * @generated from field: optional string plugin = 9;
    */
-  plugin = "";
+  plugin?: string;
 
   /**
-   * @generated from field: string marketplace = 10;
+   * @generated from field: optional string marketplace = 10;
    */
-  marketplace = "";
+  marketplace?: string;
 
   /**
-   * @generated from field: string plugin_id = 11;
+   * @generated from field: optional string plugin_id = 11;
    */
-  pluginId = "";
+  pluginId?: string;
 
   /**
-   * @generated from field: string marketplace_id = 12;
+   * @generated from field: optional string marketplace_id = 12;
    */
-  marketplaceId = "";
+  marketplaceId?: string;
 
   /**
    * @generated from field: repeated string globs = 13;
@@ -96,15 +96,15 @@ export class AgentSkill extends Message<AgentSkill> {
     { no: 1, name: "full_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "parse_error", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "parse_error", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 5, name: "environments", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 6, name: "disabled_environments", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 7, name: "git_remote_origin", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 7, name: "git_remote_origin", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 8, name: "disable_model_invocation", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 9, name: "plugin", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "marketplace", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 11, name: "plugin_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 12, name: "marketplace_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 9, name: "plugin", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 10, name: "marketplace", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 11, name: "plugin_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 12, name: "marketplace_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 13, name: "globs", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 14, name: "scoped_to", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
@@ -141,9 +141,9 @@ export class AgentSkillMetadata extends Message<AgentSkillMetadata> {
   description = "";
 
   /**
-   * @generated from field: string parse_error = 3;
+   * @generated from field: optional string parse_error = 3;
    */
-  parseError = "";
+  parseError?: string;
 
   /**
    * @generated from field: repeated string environments = 4;
@@ -156,9 +156,9 @@ export class AgentSkillMetadata extends Message<AgentSkillMetadata> {
   disabledEnvironments: string[] = [];
 
   /**
-   * @generated from field: string git_remote_origin = 6;
+   * @generated from field: optional string git_remote_origin = 6;
    */
-  gitRemoteOrigin = "";
+  gitRemoteOrigin?: string;
 
   /**
    * @generated from field: bool disable_model_invocation = 7;
@@ -166,24 +166,24 @@ export class AgentSkillMetadata extends Message<AgentSkillMetadata> {
   disableModelInvocation = false;
 
   /**
-   * @generated from field: string plugin = 8;
+   * @generated from field: optional string plugin = 8;
    */
-  plugin = "";
+  plugin?: string;
 
   /**
-   * @generated from field: string marketplace = 9;
+   * @generated from field: optional string marketplace = 9;
    */
-  marketplace = "";
+  marketplace?: string;
 
   /**
-   * @generated from field: string plugin_id = 10;
+   * @generated from field: optional string plugin_id = 10;
    */
-  pluginId = "";
+  pluginId?: string;
 
   /**
-   * @generated from field: string marketplace_id = 11;
+   * @generated from field: optional string marketplace_id = 11;
    */
-  marketplaceId = "";
+  marketplaceId?: string;
 
   /**
    * @generated from field: repeated string globs = 12;
@@ -205,15 +205,15 @@ export class AgentSkillMetadata extends Message<AgentSkillMetadata> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "full_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "parse_error", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "parse_error", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 4, name: "environments", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 5, name: "disabled_environments", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 6, name: "git_remote_origin", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 6, name: "git_remote_origin", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 7, name: "disable_model_invocation", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 8, name: "plugin", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "marketplace", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "plugin_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 11, name: "marketplace_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 8, name: "plugin", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 9, name: "marketplace", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 10, name: "plugin_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 11, name: "marketplace_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 12, name: "globs", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 13, name: "scoped_to", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);

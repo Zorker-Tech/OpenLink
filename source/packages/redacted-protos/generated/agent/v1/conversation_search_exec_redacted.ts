@@ -50,7 +50,7 @@ function toRedactedConversationSearchHit(msg, privacyMode) {
     title: createRedactedString(msg.title, DataClassification.CODE, "title", privacyMode),
     source: msg.source,
     updatedAtMs: msg.updatedAtMs,
-    snippet: createRedactedString(msg.snippet, DataClassification.CODE, "snippet", privacyMode),
+    snippet: msg.snippet !== void 0 ? createRedactedString(msg.snippet, DataClassification.CODE, "snippet", privacyMode) : void 0,
   };
 }
 
@@ -62,7 +62,7 @@ function fromRedactedConversationSearchHit(msg, purpose, opts) {
     title: msg.title.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     source: msg.source,
     updatedAtMs: msg.updatedAtMs,
-    snippet: msg.snippet.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    snippet: msg.snippet?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
   });
 }
 

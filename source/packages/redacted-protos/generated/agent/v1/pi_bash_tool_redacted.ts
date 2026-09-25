@@ -50,7 +50,7 @@ function toRedactedPiBashToolError(msg, privacyMode) {
     _privacyMode: privacyMode,
     error: createRedactedString(msg.error, DataClassification.CODE, "error", privacyMode),
     truncation: msg.truncation !== void 0 ? toRedactedPiTruncation(msg.truncation, privacyMode) : void 0,
-    fullOutputPath: createRedactedString(msg.fullOutputPath, DataClassification.PATH, "full_output_path", privacyMode),
+    fullOutputPath: msg.fullOutputPath !== void 0 ? createRedactedString(msg.fullOutputPath, DataClassification.PATH, "full_output_path", privacyMode) : void 0,
   };
 }
 
@@ -60,7 +60,7 @@ function fromRedactedPiBashToolError(msg, purpose, opts) {
   return new PiBashToolError({
     error: msg.error.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     truncation: msg.truncation !== void 0 ? fromRedactedPiTruncation(msg.truncation, purpose, opts) : void 0,
-    fullOutputPath: msg.fullOutputPath.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    fullOutputPath: msg.fullOutputPath?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
   });
 }
 
@@ -114,7 +114,7 @@ function toRedactedPiBashToolSuccess(msg, privacyMode) {
     _privacyMode: privacyMode,
     output: createRedactedString(msg.output, DataClassification.CODE, "output", privacyMode),
     truncation: msg.truncation !== void 0 ? toRedactedPiTruncation(msg.truncation, privacyMode) : void 0,
-    fullOutputPath: createRedactedString(msg.fullOutputPath, DataClassification.PATH, "full_output_path", privacyMode),
+    fullOutputPath: msg.fullOutputPath !== void 0 ? createRedactedString(msg.fullOutputPath, DataClassification.PATH, "full_output_path", privacyMode) : void 0,
   };
 }
 
@@ -124,7 +124,7 @@ function fromRedactedPiBashToolSuccess(msg, purpose, opts) {
   return new PiBashToolSuccess({
     output: msg.output.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     truncation: msg.truncation !== void 0 ? fromRedactedPiTruncation(msg.truncation, purpose, opts) : void 0,
-    fullOutputPath: msg.fullOutputPath.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    fullOutputPath: msg.fullOutputPath?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
   });
 }
 

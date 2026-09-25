@@ -43,8 +43,8 @@ import "aiserver/v1/utils.proto";
 message ExecServerMessage {
   uint32 id = 1 [json_name = "id"];
   string exec_id = 15 [json_name = "execId"];
-  .agent.v1.SpanContext span_context = 19 [json_name = "spanContext"];
-  bool accept_hook_additional_contexts = 55 [json_name = "acceptHookAdditionalContexts"];
+  optional .agent.v1.SpanContext span_context = 19 [json_name = "spanContext"];
+  optional bool accept_hook_additional_contexts = 55 [json_name = "acceptHookAdditionalContexts"];
   oneof message {
     .agent.v1.ShellArgs shell_args = 2 [json_name = "shellArgs"];
     .agent.v1.WriteArgs write_args = 3 [json_name = "writeArgs"];
@@ -91,14 +91,14 @@ message ExecServerMessage {
 }
 
 message ExecuteHookArgs {
-  .agent.v1.ExecuteHookRequest request = 1 [json_name = "request"];
+  optional .agent.v1.ExecuteHookRequest request = 1 [json_name = "request"];
 }
 
 message SpanContext {
   string trace_id = 1 [json_name = "traceId"];
   string span_id = 2 [json_name = "spanId"];
-  uint32 trace_flags = 3 [json_name = "traceFlags"];
-  string trace_state = 4 [json_name = "traceState"];
+  optional uint32 trace_flags = 3 [json_name = "traceFlags"];
+  optional string trace_state = 4 [json_name = "traceState"];
 }
 
 message ExecuteHookRequest {
@@ -119,7 +119,7 @@ message ExecuteHookRequest {
 message ExecClientMessage {
   uint32 id = 1 [json_name = "id"];
   string exec_id = 15 [json_name = "execId"];
-  int32 local_execution_time_ms = 39 [json_name = "localExecutionTimeMs"];
+  optional int32 local_execution_time_ms = 39 [json_name = "localExecutionTimeMs"];
   repeated .agent.v1.HookAdditionalContext hook_additional_contexts = 45 [json_name = "hookAdditionalContexts"];
   oneof message {
     .agent.v1.ShellResult shell_result = 2 [json_name = "shellResult"];
@@ -181,8 +181,8 @@ message ExecClientStreamClose {
 message ExecClientThrow {
   uint32 id = 1 [json_name = "id"];
   string error = 2 [json_name = "error"];
-  string stack_trace = 3 [json_name = "stackTrace"];
-  string error_code = 4 [json_name = "errorCode"];
+  optional string stack_trace = 3 [json_name = "stackTrace"];
+  optional string error_code = 4 [json_name = "errorCode"];
 }
 
 message ExecClientHeartbeat {
@@ -190,7 +190,7 @@ message ExecClientHeartbeat {
 }
 
 message ExecuteHookResult {
-  .agent.v1.ExecuteHookResponse response = 1 [json_name = "response"];
+  optional .agent.v1.ExecuteHookResponse response = 1 [json_name = "response"];
 }
 
 message ExecuteHookResponse {

@@ -10,14 +10,14 @@ package agent.v1;
 import "agent/v1/pi_common.proto";
 
 message PiFindToolCall {
-  .agent.v1.PiFindToolArgs args = 1 [json_name = "args"];
-  .agent.v1.PiFindToolResult result = 2 [json_name = "result"];
+  optional .agent.v1.PiFindToolArgs args = 1 [json_name = "args"];
+  optional .agent.v1.PiFindToolResult result = 2 [json_name = "result"];
 }
 
 message PiFindToolArgs {
   string pattern = 1 [json_name = "pattern"];
-  string path = 2 [json_name = "path"];
-  int32 limit = 3 [json_name = "limit"];
+  optional string path = 2 [json_name = "path"];
+  optional int32 limit = 3 [json_name = "limit"];
 }
 
 message PiFindToolResult {
@@ -29,8 +29,8 @@ message PiFindToolResult {
 
 message PiFindToolSuccess {
   string output = 1 [json_name = "output"];
-  .agent.v1.PiTruncation truncation = 2 [json_name = "truncation"];
-  uint32 result_limit_reached = 3 [json_name = "resultLimitReached"];
+  optional .agent.v1.PiTruncation truncation = 2 [json_name = "truncation"];
+  optional uint32 result_limit_reached = 3 [json_name = "resultLimitReached"];
 }
 
 message PiFindToolError {

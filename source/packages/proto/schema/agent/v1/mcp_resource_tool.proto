@@ -10,11 +10,11 @@ package agent.v1;
 import "agent/v1/mcp_exec.proto";
 
 message ListMcpResourcesToolCall {
-  .agent.v1.ListMcpResourcesExecArgs args = 1 [json_name = "args"];
-  .agent.v1.ListMcpResourcesExecResult result = 2 [json_name = "result"];
+  optional .agent.v1.ListMcpResourcesExecArgs args = 1 [json_name = "args"];
+  optional .agent.v1.ListMcpResourcesExecResult result = 2 [json_name = "result"];
 }
 
 message ReadMcpResourceToolCall {
-  .agent.v1.ReadMcpResourceExecArgs args = 1 [json_name = "args"];
-  .agent.v1.ReadMcpResourceExecResult result = 2 [json_name = "result"];
+  optional .agent.v1.ReadMcpResourceExecArgs args = 1 [json_name = "args"];
+  optional .agent.v1.ReadMcpResourceExecResult result = 2 [json_name = "result"];
 }

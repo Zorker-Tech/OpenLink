@@ -10,15 +10,15 @@ package agent.v1;
 import "agent/v1/sandbox.proto";
 
 message TerminalMetadata {
-  string cwd = 1 [json_name = "cwd"];
+  optional string cwd = 1 [json_name = "cwd"];
   repeated .agent.v1.TerminalMetadata.Command last_commands = 2 [json_name = "lastCommands"];
-  int64 last_modified_ms = 3 [json_name = "lastModifiedMs"];
-  .agent.v1.TerminalMetadata.Command current_command = 4 [json_name = "currentCommand"];
+  optional int64 last_modified_ms = 3 [json_name = "lastModifiedMs"];
+  optional .agent.v1.TerminalMetadata.Command current_command = 4 [json_name = "currentCommand"];
   message Command {
     string command = 1 [json_name = "command"];
-    int32 exit_code = 2 [json_name = "exitCode"];
-    int64 timestamp_ms = 3 [json_name = "timestampMs"];
-    int64 duration_ms = 4 [json_name = "durationMs"];
+    optional int32 exit_code = 2 [json_name = "exitCode"];
+    optional int64 timestamp_ms = 3 [json_name = "timestampMs"];
+    optional int64 duration_ms = 4 [json_name = "durationMs"];
   }
 }
 
@@ -26,8 +26,8 @@ message LsArgs {
   string path = 1 [json_name = "path"];
   repeated string ignore = 2 [json_name = "ignore"];
   string tool_call_id = 3 [json_name = "toolCallId"];
-  .agent.v1.SandboxPolicy sandbox_policy = 4 [json_name = "sandboxPolicy"];
-  uint32 timeout_ms = 5 [json_name = "timeoutMs"];
+  optional .agent.v1.SandboxPolicy sandbox_policy = 4 [json_name = "sandboxPolicy"];
+  optional uint32 timeout_ms = 5 [json_name = "timeoutMs"];
 }
 
 message LsDirectoryTreeNode {
@@ -39,7 +39,7 @@ message LsDirectoryTreeNode {
   int32 num_files = 6 [json_name = "numFiles"];
   message File {
     string name = 1 [json_name = "name"];
-    .agent.v1.TerminalMetadata terminal_metadata = 2 [json_name = "terminalMetadata"];
+    optional .agent.v1.TerminalMetadata terminal_metadata = 2 [json_name = "terminalMetadata"];
   }
 }
 
@@ -53,7 +53,7 @@ message LsResult {
 }
 
 message LsSuccess {
-  .agent.v1.LsDirectoryTreeNode directory_tree_root = 1 [json_name = "directoryTreeRoot"];
+  optional .agent.v1.LsDirectoryTreeNode directory_tree_root = 1 [json_name = "directoryTreeRoot"];
 }
 
 message LsError {
@@ -67,5 +67,5 @@ message LsRejected {
 }
 
 message LsTimeout {
-  .agent.v1.LsDirectoryTreeNode directory_tree_root = 1 [json_name = "directoryTreeRoot"];
+  optional .agent.v1.LsDirectoryTreeNode directory_tree_root = 1 [json_name = "directoryTreeRoot"];
 }

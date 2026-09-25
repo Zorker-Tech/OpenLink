@@ -190,9 +190,9 @@ export class ConversationMessage extends Message<ConversationMessage> {
   notepads: ConversationMessage_NotepadContext[] = [];
 
   /**
-   * @generated from field: bool is_capability_iteration = 20;
+   * @generated from field: optional bool is_capability_iteration = 20;
    */
-  isCapabilityIteration = false;
+  isCapabilityIteration?: boolean;
 
   /**
    * @generated from field: repeated aiserver.v1.ComposerCapabilityRequest capabilities = 21;
@@ -245,14 +245,14 @@ export class ConversationMessage extends Message<ConversationMessage> {
   fileDiffTrajectories: ComposerFileDiffHistory[] = [];
 
   /**
-   * @generated from field: aiserver.v1.ConversationSummary conversation_summary = 31;
+   * @generated from field: optional aiserver.v1.ConversationSummary conversation_summary = 31;
    */
   conversationSummary?: ConversationSummary;
 
   /**
-   * @generated from field: string server_bubble_id = 32;
+   * @generated from field: optional string server_bubble_id = 32;
    */
-  serverBubbleId = "";
+  serverBubbleId?: string;
 
   /**
    * @generated from field: bool existed_subsequent_terminal_command = 33;
@@ -275,7 +275,7 @@ export class ConversationMessage extends Message<ConversationMessage> {
   webReferences: WebReference[] = [];
 
   /**
-   * @generated from field: aiserver.v1.ViewableGitContext git_context = 37;
+   * @generated from field: optional aiserver.v1.ViewableGitContext git_context = 37;
    */
   gitContext?: ViewableGitContext;
 
@@ -285,7 +285,7 @@ export class ConversationMessage extends Message<ConversationMessage> {
   attachedFoldersListDirResults: ListDirResult[] = [];
 
   /**
-   * @generated from field: aiserver.v1.ConversationSummary cached_conversation_summary = 39;
+   * @generated from field: optional aiserver.v1.ConversationSummary cached_conversation_summary = 39;
    */
   cachedConversationSummary?: ConversationSummary;
 
@@ -315,7 +315,7 @@ export class ConversationMessage extends Message<ConversationMessage> {
   contextPieces: ContextPiece[] = [];
 
   /**
-   * @generated from field: aiserver.v1.ConversationMessage.Thinking thinking = 45;
+   * @generated from field: optional aiserver.v1.ConversationMessage.Thinking thinking = 45;
    */
   thinking?: ConversationMessage_Thinking;
 
@@ -325,9 +325,9 @@ export class ConversationMessage extends Message<ConversationMessage> {
   allThinkingBlocks: ConversationMessage_Thinking[] = [];
 
   /**
-   * @generated from field: aiserver.v1.StreamUnifiedChatRequest.UnifiedMode unified_mode = 47;
+   * @generated from field: optional aiserver.v1.StreamUnifiedChatRequest.UnifiedMode unified_mode = 47;
    */
-  unifiedMode = StreamUnifiedChatRequest_UnifiedMode.UNSPECIFIED;
+  unifiedMode?: StreamUnifiedChatRequest_UnifiedMode;
 
   /**
    * @generated from field: repeated aiserver.v1.ConversationMessage.DiffSinceLastApply diffs_since_last_apply = 48;
@@ -340,9 +340,9 @@ export class ConversationMessage extends Message<ConversationMessage> {
   deletedFiles: ConversationMessage_DeletedFile[] = [];
 
   /**
-   * @generated from field: string usage_uuid = 50;
+   * @generated from field: optional string usage_uuid = 50;
    */
-  usageUuid = "";
+  usageUuid?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.ClientSideToolV2 supported_tools = 51;
@@ -350,24 +350,24 @@ export class ConversationMessage extends Message<ConversationMessage> {
   supportedTools: ClientSideToolV2[] = [];
 
   /**
-   * @generated from field: aiserver.v1.CurrentFileLocationData current_file_location_data = 52;
+   * @generated from field: optional aiserver.v1.CurrentFileLocationData current_file_location_data = 52;
    */
   currentFileLocationData?: CurrentFileLocationData;
 
   /**
-   * @generated from field: bool edit_tool_supports_search_and_replace = 53;
+   * @generated from field: optional bool edit_tool_supports_search_and_replace = 53;
    */
-  editToolSupportsSearchAndReplace = false;
+  editToolSupportsSearchAndReplace?: boolean;
 
   /**
-   * @generated from field: string last_terminal_cwd = 54;
+   * @generated from field: optional string last_terminal_cwd = 54;
    */
-  lastTerminalCwd = "";
+  lastTerminalCwd?: string;
 
   /**
-   * @generated from field: bool user_explicitly_asked_to_generate_cursor_rules = 55;
+   * @generated from field: optional bool user_explicitly_asked_to_generate_cursor_rules = 55;
    */
-  userExplicitlyAskedToGenerateCursorRules = false;
+  userExplicitlyAskedToGenerateCursorRules?: boolean;
 
   /**
    * @generated from field: repeated aiserver.v1.RCPLogEntry console_logs = 56;
@@ -375,9 +375,9 @@ export class ConversationMessage extends Message<ConversationMessage> {
   consoleLogs: RCPLogEntry[] = [];
 
   /**
-   * @generated from field: string rich_text = 57;
+   * @generated from field: optional string rich_text = 57;
    */
-  richText = "";
+  richText?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.ConversationMessage.KnowledgeItem knowledge_items = 58;
@@ -390,9 +390,9 @@ export class ConversationMessage extends Message<ConversationMessage> {
   uiElementPicked: RCPUIElementPicked[] = [];
 
   /**
-   * @generated from field: bool user_explicitly_asked_to_add_to_knowledge_base = 60;
+   * @generated from field: optional bool user_explicitly_asked_to_add_to_knowledge_base = 60;
    */
-  userExplicitlyAskedToAddToKnowledgeBase = false;
+  userExplicitlyAskedToAddToKnowledgeBase?: boolean;
 
   /**
    * @generated from field: repeated aiserver.v1.ConversationMessage.DocumentationSelection documentation_selections = 61;
@@ -405,9 +405,9 @@ export class ConversationMessage extends Message<ConversationMessage> {
   externalLinks: ComposerExternalLink[] = [];
 
   /**
-   * @generated from field: bool use_web = 63;
+   * @generated from field: optional bool use_web = 63;
    */
-  useWeb = false;
+  useWeb?: boolean;
 
   /**
    * @generated from field: repeated aiserver.v1.ProjectLayout project_layouts = 64;
@@ -415,19 +415,19 @@ export class ConversationMessage extends Message<ConversationMessage> {
   projectLayouts: ProjectLayout[] = [];
 
   /**
-   * @generated from field: int32 thinking_duration_ms = 65;
+   * @generated from field: optional int32 thinking_duration_ms = 65;
    */
-  thinkingDurationMs = 0;
+  thinkingDurationMs?: number;
 
   /**
-   * @generated from field: aiserver.v1.SubagentReturnCall subagent_return = 66;
+   * @generated from field: optional aiserver.v1.SubagentReturnCall subagent_return = 66;
    */
   subagentReturn?: SubagentReturnCall;
 
   /**
-   * @generated from field: bool is_simple_looping_message = 67;
+   * @generated from field: optional bool is_simple_looping_message = 67;
    */
-  isSimpleLoopingMessage = false;
+  isSimpleLoopingMessage?: boolean;
 
   /**
    * @generated from field: repeated aiserver.v1.ComposerCapabilityContext capability_contexts = 68;
@@ -435,14 +435,14 @@ export class ConversationMessage extends Message<ConversationMessage> {
   capabilityContexts: ComposerCapabilityContext[] = [];
 
   /**
-   * @generated from field: string checkpoint_commit_hash = 69;
+   * @generated from field: optional string checkpoint_commit_hash = 69;
    */
-  checkpointCommitHash = "";
+  checkpointCommitHash?: string;
 
   /**
-   * @generated from field: string git_status_raw = 70;
+   * @generated from field: optional string git_status_raw = 70;
    */
-  gitStatusRaw = "";
+  gitStatusRaw?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.TodoItem todos = 71;
@@ -450,12 +450,12 @@ export class ConversationMessage extends Message<ConversationMessage> {
   todos: TodoItem[] = [];
 
   /**
-   * @generated from field: bool is_review_edits_followup = 72;
+   * @generated from field: optional bool is_review_edits_followup = 72;
    */
-  isReviewEditsFollowup = false;
+  isReviewEditsFollowup?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.ConversationMessage.IdeEditorsState ide_editors_state = 73;
+   * @generated from field: optional aiserver.v1.ConversationMessage.IdeEditorsState ide_editors_state = 73;
    */
   ideEditorsState?: ConversationMessage_IdeEditorsState;
 
@@ -470,14 +470,14 @@ export class ConversationMessage extends Message<ConversationMessage> {
   aiWebSearchResults: AiWebSearchResult[] = [];
 
   /**
-   * @generated from field: aiserver.v1.ContextWindowStatus context_window_status = 76;
+   * @generated from field: optional aiserver.v1.ContextWindowStatus context_window_status = 76;
    */
   contextWindowStatus?: ContextWindowStatus;
 
   /**
-   * @generated from field: bool is_plan_execution = 77;
+   * @generated from field: optional bool is_plan_execution = 77;
    */
-  isPlanExecution = false;
+  isPlanExecution?: boolean;
 
   /**
    * @generated from field: string created_at = 78;
@@ -485,24 +485,24 @@ export class ConversationMessage extends Message<ConversationMessage> {
   createdAt = "";
 
   /**
-   * @generated from field: aiserver.v1.ModelInfo model_info = 79;
+   * @generated from field: optional aiserver.v1.ModelInfo model_info = 79;
    */
   modelInfo?: ModelInfo;
 
   /**
-   * @generated from field: bool is_quick_search_query = 80;
+   * @generated from field: optional bool is_quick_search_query = 80;
    */
-  isQuickSearchQuery = false;
+  isQuickSearchQuery?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.ConversationMessage.PlanUpdate plan_update = 81;
+   * @generated from field: optional aiserver.v1.ConversationMessage.PlanUpdate plan_update = 81;
    */
   planUpdate?: ConversationMessage_PlanUpdate;
 
   /**
-   * @generated from field: bool is_simulated_msg = 82;
+   * @generated from field: optional bool is_simulated_msg = 82;
    */
-  isSimulatedMsg = false;
+  isSimulatedMsg?: boolean;
 
   /**
    * @generated from field: repeated aiserver.v1.ConversationMessage.McpDescriptor mcp_descriptors = 83;
@@ -510,17 +510,17 @@ export class ConversationMessage extends Message<ConversationMessage> {
   mcpDescriptors: ConversationMessage_McpDescriptor[] = [];
 
   /**
-   * @generated from field: string workspace_project_dir = 84;
+   * @generated from field: optional string workspace_project_dir = 84;
    */
-  workspaceProjectDir = "";
+  workspaceProjectDir?: string;
 
   /**
-   * @generated from field: aiserver.v1.ConversationMessage.ThinkingStyle thinking_style = 85;
+   * @generated from field: optional aiserver.v1.ConversationMessage.ThinkingStyle thinking_style = 85;
    */
-  thinkingStyle = ConversationMessage_ThinkingStyle.UNSPECIFIED;
+  thinkingStyle?: ConversationMessage_ThinkingStyle;
 
   /**
-   * @generated from field: agent.v1.DebugModeConfig debug_mode_config = 86;
+   * @generated from field: optional agent.v1.DebugModeConfig debug_mode_config = 86;
    */
   debugModeConfig?: DebugModeConfig;
 
@@ -530,19 +530,19 @@ export class ConversationMessage extends Message<ConversationMessage> {
   workspaceUris: string[] = [];
 
   /**
-   * @generated from field: int32 step_duration_ms = 88;
+   * @generated from field: optional int32 step_duration_ms = 88;
    */
-  stepDurationMs = 0;
+  stepDurationMs?: number;
 
   /**
-   * @generated from field: bytes text_blob_id = 89;
+   * @generated from field: optional bytes text_blob_id = 89;
    */
-  textBlobId = new Uint8Array(0);
+  textBlobId?: Uint8Array;
 
   /**
-   * @generated from field: bytes rich_text_blob_id = 90;
+   * @generated from field: optional bytes rich_text_blob_id = 90;
    */
-  richTextBlobId = new Uint8Array(0);
+  richTextBlobId?: Uint8Array;
 
   /**
    * @generated from field: repeated agent.v1.SelectedCursorCommand cursor_commands = 91;
@@ -565,24 +565,24 @@ export class ConversationMessage extends Message<ConversationMessage> {
   pastChatsExplicitlySet = false;
 
   /**
-   * @generated from field: agent.v1.SimulatedMsgReason simulated_msg_reason = 95;
+   * @generated from field: optional agent.v1.SimulatedMsgReason simulated_msg_reason = 95;
    */
-  simulatedMsgReason = SimulatedMsgReason.UNSPECIFIED;
+  simulatedMsgReason?: SimulatedMsgReason;
 
   /**
-   * @generated from field: agent.v1.TriggeringUserInfo triggering_user_info = 96;
+   * @generated from field: optional agent.v1.TriggeringUserInfo triggering_user_info = 96;
    */
   triggeringUserInfo?: TriggeringUserInfo;
 
   /**
-   * @generated from field: aiserver.v1.ConversationMessage.SimulatedMessageMetadata simulated_message_metadata = 97;
+   * @generated from field: optional aiserver.v1.ConversationMessage.SimulatedMessageMetadata simulated_message_metadata = 97;
    */
   simulatedMessageMetadata?: ConversationMessage_SimulatedMessageMetadata;
 
   /**
-   * @generated from field: agent.v1.AgentMode agent_mode = 98;
+   * @generated from field: optional agent.v1.AgentMode agent_mode = 98;
    */
-  agentMode = AgentMode.UNSPECIFIED;
+  agentMode?: AgentMode;
 
   constructor(data?: PartialMessage<ConversationMessage>) {
     super();
@@ -611,7 +611,7 @@ export class ConversationMessage extends Message<ConversationMessage> {
     { no: 17, name: "relevant_files", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 18, name: "tool_results", kind: "message", T: ConversationMessage_ToolResult, repeated: true },
     { no: 19, name: "notepads", kind: "message", T: ConversationMessage_NotepadContext, repeated: true },
-    { no: 20, name: "is_capability_iteration", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 20, name: "is_capability_iteration", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 21, name: "capabilities", kind: "message", T: ComposerCapabilityRequest, repeated: true },
     { no: 22, name: "edit_trail_contexts", kind: "message", T: ConversationMessage_EditTrailContext, repeated: true },
     { no: 23, name: "suggested_code_blocks", kind: "message", T: SuggestedCodeBlock, repeated: true },
@@ -622,74 +622,74 @@ export class ConversationMessage extends Message<ConversationMessage> {
     { no: 28, name: "recent_locations_history", kind: "message", T: ConversationMessage_RecentLocation, repeated: true },
     { no: 29, name: "is_agentic", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 30, name: "file_diff_trajectories", kind: "message", T: ComposerFileDiffHistory, repeated: true },
-    { no: 31, name: "conversation_summary", kind: "message", T: ConversationSummary },
-    { no: 32, name: "server_bubble_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 31, name: "conversation_summary", kind: "message", T: ConversationSummary, opt: true },
+    { no: 32, name: "server_bubble_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 33, name: "existed_subsequent_terminal_command", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 34, name: "existed_previous_terminal_command", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 35, name: "docs_references", kind: "message", T: DocsReference, repeated: true },
     { no: 36, name: "web_references", kind: "message", T: WebReference, repeated: true },
-    { no: 37, name: "git_context", kind: "message", T: ViewableGitContext },
+    { no: 37, name: "git_context", kind: "message", T: ViewableGitContext, opt: true },
     { no: 38, name: "attached_folders_list_dir_results", kind: "message", T: ListDirResult, repeated: true },
-    { no: 39, name: "cached_conversation_summary", kind: "message", T: ConversationSummary },
+    { no: 39, name: "cached_conversation_summary", kind: "message", T: ConversationSummary, opt: true },
     { no: 40, name: "human_changes", kind: "message", T: ConversationMessage_HumanChange, repeated: true },
     { no: 41, name: "attached_human_changes", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 42, name: "summarized_composers", kind: "message", T: ConversationMessage_ComposerContext, repeated: true },
     { no: 43, name: "cursor_rules", kind: "message", T: CursorRule, repeated: true },
     { no: 44, name: "context_pieces", kind: "message", T: ContextPiece, repeated: true },
-    { no: 45, name: "thinking", kind: "message", T: ConversationMessage_Thinking },
+    { no: 45, name: "thinking", kind: "message", T: ConversationMessage_Thinking, opt: true },
     { no: 46, name: "all_thinking_blocks", kind: "message", T: ConversationMessage_Thinking, repeated: true },
-    { no: 47, name: "unified_mode", kind: "enum", T: proto3.getEnumType(StreamUnifiedChatRequest_UnifiedMode) },
+    { no: 47, name: "unified_mode", kind: "enum", T: proto3.getEnumType(StreamUnifiedChatRequest_UnifiedMode), opt: true },
     { no: 48, name: "diffs_since_last_apply", kind: "message", T: ConversationMessage_DiffSinceLastApply, repeated: true },
     { no: 49, name: "deleted_files", kind: "message", T: ConversationMessage_DeletedFile, repeated: true },
-    { no: 50, name: "usage_uuid", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 50, name: "usage_uuid", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 51, name: "supported_tools", kind: "enum", T: proto3.getEnumType(ClientSideToolV2), repeated: true },
-    { no: 52, name: "current_file_location_data", kind: "message", T: CurrentFileLocationData },
-    { no: 53, name: "edit_tool_supports_search_and_replace", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 54, name: "last_terminal_cwd", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 55, name: "user_explicitly_asked_to_generate_cursor_rules", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 52, name: "current_file_location_data", kind: "message", T: CurrentFileLocationData, opt: true },
+    { no: 53, name: "edit_tool_supports_search_and_replace", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 54, name: "last_terminal_cwd", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 55, name: "user_explicitly_asked_to_generate_cursor_rules", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 56, name: "console_logs", kind: "message", T: RCPLogEntry, repeated: true },
-    { no: 57, name: "rich_text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 57, name: "rich_text", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 58, name: "knowledge_items", kind: "message", T: ConversationMessage_KnowledgeItem, repeated: true },
     { no: 59, name: "ui_element_picked", kind: "message", T: RCPUIElementPicked, repeated: true },
-    { no: 60, name: "user_explicitly_asked_to_add_to_knowledge_base", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 60, name: "user_explicitly_asked_to_add_to_knowledge_base", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 61, name: "documentation_selections", kind: "message", T: ConversationMessage_DocumentationSelection, repeated: true },
     { no: 62, name: "external_links", kind: "message", T: ComposerExternalLink, repeated: true },
-    { no: 63, name: "use_web", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 63, name: "use_web", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 64, name: "project_layouts", kind: "message", T: ProjectLayout, repeated: true },
-    { no: 65, name: "thinking_duration_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 66, name: "subagent_return", kind: "message", T: SubagentReturnCall },
-    { no: 67, name: "is_simple_looping_message", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 65, name: "thinking_duration_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 66, name: "subagent_return", kind: "message", T: SubagentReturnCall, opt: true },
+    { no: 67, name: "is_simple_looping_message", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 68, name: "capability_contexts", kind: "message", T: ComposerCapabilityContext, repeated: true },
-    { no: 69, name: "checkpoint_commit_hash", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 70, name: "git_status_raw", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 69, name: "checkpoint_commit_hash", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 70, name: "git_status_raw", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 71, name: "todos", kind: "message", T: TodoItem, repeated: true },
-    { no: 72, name: "is_review_edits_followup", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 73, name: "ide_editors_state", kind: "message", T: ConversationMessage_IdeEditorsState },
+    { no: 72, name: "is_review_edits_followup", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 73, name: "ide_editors_state", kind: "message", T: ConversationMessage_IdeEditorsState, opt: true },
     { no: 74, name: "request_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 75, name: "ai_web_search_results", kind: "message", T: AiWebSearchResult, repeated: true },
-    { no: 76, name: "context_window_status", kind: "message", T: ContextWindowStatus },
-    { no: 77, name: "is_plan_execution", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 76, name: "context_window_status", kind: "message", T: ContextWindowStatus, opt: true },
+    { no: 77, name: "is_plan_execution", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 78, name: "created_at", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 79, name: "model_info", kind: "message", T: ModelInfo },
-    { no: 80, name: "is_quick_search_query", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 81, name: "plan_update", kind: "message", T: ConversationMessage_PlanUpdate },
-    { no: 82, name: "is_simulated_msg", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 79, name: "model_info", kind: "message", T: ModelInfo, opt: true },
+    { no: 80, name: "is_quick_search_query", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 81, name: "plan_update", kind: "message", T: ConversationMessage_PlanUpdate, opt: true },
+    { no: 82, name: "is_simulated_msg", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 83, name: "mcp_descriptors", kind: "message", T: ConversationMessage_McpDescriptor, repeated: true },
-    { no: 84, name: "workspace_project_dir", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 85, name: "thinking_style", kind: "enum", T: proto3.getEnumType(ConversationMessage_ThinkingStyle) },
-    { no: 86, name: "debug_mode_config", kind: "message", T: DebugModeConfig },
+    { no: 84, name: "workspace_project_dir", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 85, name: "thinking_style", kind: "enum", T: proto3.getEnumType(ConversationMessage_ThinkingStyle), opt: true },
+    { no: 86, name: "debug_mode_config", kind: "message", T: DebugModeConfig, opt: true },
     { no: 87, name: "workspace_uris", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 88, name: "step_duration_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 89, name: "text_blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
-    { no: 90, name: "rich_text_blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
+    { no: 88, name: "step_duration_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 89, name: "text_blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */, opt: true },
+    { no: 90, name: "rich_text_blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */, opt: true },
     { no: 91, name: "cursor_commands", kind: "message", T: SelectedCursorCommand, repeated: true },
     { no: 92, name: "cursor_commands_explicitly_set", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 93, name: "past_chats", kind: "message", T: SelectedPastChat, repeated: true },
     { no: 94, name: "past_chats_explicitly_set", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 95, name: "simulated_msg_reason", kind: "enum", T: proto3.getEnumType(SimulatedMsgReason) },
-    { no: 96, name: "triggering_user_info", kind: "message", T: TriggeringUserInfo },
-    { no: 97, name: "simulated_message_metadata", kind: "message", T: ConversationMessage_SimulatedMessageMetadata },
-    { no: 98, name: "agent_mode", kind: "enum", T: proto3.getEnumType(AgentMode) },
+    { no: 95, name: "simulated_msg_reason", kind: "enum", T: proto3.getEnumType(SimulatedMsgReason), opt: true },
+    { no: 96, name: "triggering_user_info", kind: "message", T: TriggeringUserInfo, opt: true },
+    { no: 97, name: "simulated_message_metadata", kind: "message", T: ConversationMessage_SimulatedMessageMetadata, opt: true },
+    { no: 98, name: "agent_mode", kind: "enum", T: proto3.getEnumType(AgentMode), opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ConversationMessage {
@@ -787,9 +787,9 @@ export class ConversationMessage_CodeChunk extends Message<ConversationMessage_C
   lines: string[] = [];
 
   /**
-   * @generated from field: aiserver.v1.ConversationMessage.CodeChunk.SummarizationStrategy summarization_strategy = 4;
+   * @generated from field: optional aiserver.v1.ConversationMessage.CodeChunk.SummarizationStrategy summarization_strategy = 4;
    */
-  summarizationStrategy = ConversationMessage_CodeChunk_SummarizationStrategy.NONE_UNSPECIFIED;
+  summarizationStrategy?: ConversationMessage_CodeChunk_SummarizationStrategy;
 
   /**
    * @generated from field: string language_identifier = 5;
@@ -797,32 +797,32 @@ export class ConversationMessage_CodeChunk extends Message<ConversationMessage_C
   languageIdentifier = "";
 
   /**
-   * @generated from field: aiserver.v1.ConversationMessage.CodeChunk.Intent intent = 6;
+   * @generated from field: optional aiserver.v1.ConversationMessage.CodeChunk.Intent intent = 6;
    */
-  intent = ConversationMessage_CodeChunk_Intent.UNSPECIFIED;
+  intent?: ConversationMessage_CodeChunk_Intent;
 
   /**
-   * @generated from field: bool is_final_version = 7;
+   * @generated from field: optional bool is_final_version = 7;
    */
-  isFinalVersion = false;
+  isFinalVersion?: boolean;
 
   /**
-   * @generated from field: bool is_first_version = 8;
+   * @generated from field: optional bool is_first_version = 8;
    */
-  isFirstVersion = false;
+  isFirstVersion?: boolean;
 
   /**
-   * @generated from field: bool contents_are_missing = 9;
+   * @generated from field: optional bool contents_are_missing = 9;
    */
-  contentsAreMissing = false;
+  contentsAreMissing?: boolean;
 
   /**
-   * @generated from field: bool is_only_included_from_folder = 10;
+   * @generated from field: optional bool is_only_included_from_folder = 10;
    */
-  isOnlyIncludedFromFolder = false;
+  isOnlyIncludedFromFolder?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.ConversationMessage.CodeChunk.CodeChunkGitContext code_chunk_git_context = 11;
+   * @generated from field: optional aiserver.v1.ConversationMessage.CodeChunk.CodeChunkGitContext code_chunk_git_context = 11;
    */
   codeChunkGitContext?: ConversationMessage_CodeChunk_CodeChunkGitContext;
 
@@ -837,14 +837,14 @@ export class ConversationMessage_CodeChunk extends Message<ConversationMessage_C
     { no: 1, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "start_line_number", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 3, name: "lines", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 4, name: "summarization_strategy", kind: "enum", T: proto3.getEnumType(ConversationMessage_CodeChunk_SummarizationStrategy) },
+    { no: 4, name: "summarization_strategy", kind: "enum", T: proto3.getEnumType(ConversationMessage_CodeChunk_SummarizationStrategy), opt: true },
     { no: 5, name: "language_identifier", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "intent", kind: "enum", T: proto3.getEnumType(ConversationMessage_CodeChunk_Intent) },
-    { no: 7, name: "is_final_version", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 8, name: "is_first_version", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 9, name: "contents_are_missing", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 10, name: "is_only_included_from_folder", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 11, name: "code_chunk_git_context", kind: "message", T: ConversationMessage_CodeChunk_CodeChunkGitContext },
+    { no: 6, name: "intent", kind: "enum", T: proto3.getEnumType(ConversationMessage_CodeChunk_Intent), opt: true },
+    { no: 7, name: "is_final_version", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 8, name: "is_first_version", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 9, name: "contents_are_missing", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 10, name: "is_only_included_from_folder", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 11, name: "code_chunk_git_context", kind: "message", T: ConversationMessage_CodeChunk_CodeChunkGitContext, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ConversationMessage_CodeChunk {
@@ -1122,7 +1122,7 @@ export class ConversationMessage_ApproximateLintError extends Message<Conversati
  */
 export class ConversationMessage_Lints extends Message<ConversationMessage_Lints> {
   /**
-   * @generated from field: aiserver.v1.GetLintsForChangeResponse lints = 1;
+   * @generated from field: optional aiserver.v1.GetLintsForChangeResponse lints = 1;
    */
   lints?: GetLintsForChangeResponse;
 
@@ -1139,7 +1139,7 @@ export class ConversationMessage_Lints extends Message<ConversationMessage_Lints
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ConversationMessage.Lints";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "lints", kind: "message", T: GetLintsForChangeResponse },
+    { no: 1, name: "lints", kind: "message", T: GetLintsForChangeResponse, opt: true },
     { no: 2, name: "chat_codeblock_model_value", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
@@ -1195,17 +1195,17 @@ export class ConversationMessage_ToolResult extends Message<ConversationMessage_
   attachedCodeChunks: ConversationMessage_CodeChunk[] = [];
 
   /**
-   * @generated from field: string content = 7;
+   * @generated from field: optional string content = 7;
    */
-  content = "";
+  content?: string;
 
   /**
-   * @generated from field: aiserver.v1.ClientSideToolV2Result result = 8;
+   * @generated from field: optional aiserver.v1.ClientSideToolV2Result result = 8;
    */
   result?: ClientSideToolV2Result;
 
   /**
-   * @generated from field: aiserver.v1.ToolResultError error = 9;
+   * @generated from field: optional aiserver.v1.ToolResultError error = 9;
    */
   error?: ToolResultError;
 
@@ -1215,24 +1215,24 @@ export class ConversationMessage_ToolResult extends Message<ConversationMessage_
   images: ImageProto[] = [];
 
   /**
-   * @generated from field: aiserver.v1.ClientSideToolV2Call tool_call = 11;
+   * @generated from field: optional aiserver.v1.ClientSideToolV2Call tool_call = 11;
    */
   toolCall?: ClientSideToolV2Call;
 
   /**
-   * @generated from field: string model_call_id = 12;
+   * @generated from field: optional string model_call_id = 12;
    */
-  modelCallId = "";
+  modelCallId?: string;
 
   /**
-   * @generated from field: uint64 started_at_ms = 13;
+   * @generated from field: optional uint64 started_at_ms = 13;
    */
-  startedAtMs = protoInt64.zero;
+  startedAtMs?: bigint;
 
   /**
-   * @generated from field: uint64 completed_at_ms = 14;
+   * @generated from field: optional uint64 completed_at_ms = 14;
    */
-  completedAtMs = protoInt64.zero;
+  completedAtMs?: bigint;
 
   constructor(data?: PartialMessage<ConversationMessage_ToolResult>) {
     super();
@@ -1248,14 +1248,14 @@ export class ConversationMessage_ToolResult extends Message<ConversationMessage_
     { no: 4, name: "args", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "raw_args", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 6, name: "attached_code_chunks", kind: "message", T: ConversationMessage_CodeChunk, repeated: true },
-    { no: 7, name: "content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "result", kind: "message", T: ClientSideToolV2Result },
-    { no: 9, name: "error", kind: "message", T: ToolResultError },
+    { no: 7, name: "content", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "result", kind: "message", T: ClientSideToolV2Result, opt: true },
+    { no: 9, name: "error", kind: "message", T: ToolResultError, opt: true },
     { no: 10, name: "images", kind: "message", T: ImageProto, repeated: true },
-    { no: 11, name: "tool_call", kind: "message", T: ClientSideToolV2Call },
-    { no: 12, name: "model_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 13, name: "started_at_ms", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
-    { no: 14, name: "completed_at_ms", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
+    { no: 11, name: "tool_call", kind: "message", T: ClientSideToolV2Call, opt: true },
+    { no: 12, name: "model_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 13, name: "started_at_ms", kind: "scalar", T: 4 /* ScalarType.UINT64 */, opt: true },
+    { no: 14, name: "completed_at_ms", kind: "scalar", T: 4 /* ScalarType.UINT64 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ConversationMessage_ToolResult {
@@ -1493,7 +1493,7 @@ export class ConversationMessage_ComposerContext extends Message<ConversationMes
   name = "";
 
   /**
-   * @generated from field: aiserver.v1.ConversationSummary conversation_summary = 2;
+   * @generated from field: optional aiserver.v1.ConversationSummary conversation_summary = 2;
    */
   conversationSummary?: ConversationSummary;
 
@@ -1506,7 +1506,7 @@ export class ConversationMessage_ComposerContext extends Message<ConversationMes
   static readonly typeName = "aiserver.v1.ConversationMessage.ComposerContext";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "conversation_summary", kind: "message", T: ConversationSummary },
+    { no: 2, name: "conversation_summary", kind: "message", T: ConversationSummary, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ConversationMessage_ComposerContext {
@@ -1591,24 +1591,24 @@ export class ConversationMessage_DiffSinceLastApply extends Message<Conversation
   relativeWorkspacePath = "";
 
   /**
-   * @generated from field: aiserver.v1.EditFileResult.FileDiff diff = 2;
+   * @generated from field: optional aiserver.v1.EditFileResult.FileDiff diff = 2;
    */
   diff?: EditFileResult_FileDiff;
 
   /**
-   * @generated from field: bool is_accepted = 4;
+   * @generated from field: optional bool is_accepted = 4;
    */
-  isAccepted = false;
+  isAccepted?: boolean;
 
   /**
-   * @generated from field: bool is_rejected = 5;
+   * @generated from field: optional bool is_rejected = 5;
    */
-  isRejected = false;
+  isRejected?: boolean;
 
   /**
-   * @generated from field: int32 last_apply_chained_from_n_human_messages_ago = 6;
+   * @generated from field: optional int32 last_apply_chained_from_n_human_messages_ago = 6;
    */
-  lastApplyChainedFromNHumanMessagesAgo = 0;
+  lastApplyChainedFromNHumanMessagesAgo?: number;
 
   constructor(data?: PartialMessage<ConversationMessage_DiffSinceLastApply>) {
     super();
@@ -1619,10 +1619,10 @@ export class ConversationMessage_DiffSinceLastApply extends Message<Conversation
   static readonly typeName = "aiserver.v1.ConversationMessage.DiffSinceLastApply";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "diff", kind: "message", T: EditFileResult_FileDiff },
-    { no: 4, name: "is_accepted", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "is_rejected", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 6, name: "last_apply_chained_from_n_human_messages_ago", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 2, name: "diff", kind: "message", T: EditFileResult_FileDiff, opt: true },
+    { no: 4, name: "is_accepted", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 5, name: "is_rejected", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 6, name: "last_apply_chained_from_n_human_messages_ago", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ConversationMessage_DiffSinceLastApply {
@@ -1848,29 +1848,29 @@ export class ConversationMessage_IdeEditorsState_File extends Message<Conversati
   relativePath = "";
 
   /**
-   * @generated from field: bool is_currently_focused = 2;
+   * @generated from field: optional bool is_currently_focused = 2;
    */
-  isCurrentlyFocused = false;
+  isCurrentlyFocused?: boolean;
 
   /**
-   * @generated from field: int32 current_line_number = 3;
+   * @generated from field: optional int32 current_line_number = 3;
    */
-  currentLineNumber = 0;
+  currentLineNumber?: number;
 
   /**
-   * @generated from field: string current_line_text = 4;
+   * @generated from field: optional string current_line_text = 4;
    */
-  currentLineText = "";
+  currentLineText?: string;
 
   /**
-   * @generated from field: int32 line_count = 5;
+   * @generated from field: optional int32 line_count = 5;
    */
-  lineCount = 0;
+  lineCount?: number;
 
   /**
-   * @generated from field: string absolute_path = 6;
+   * @generated from field: optional string absolute_path = 6;
    */
-  absolutePath = "";
+  absolutePath?: string;
 
   constructor(data?: PartialMessage<ConversationMessage_IdeEditorsState_File>) {
     super();
@@ -1881,11 +1881,11 @@ export class ConversationMessage_IdeEditorsState_File extends Message<Conversati
   static readonly typeName = "aiserver.v1.ConversationMessage.IdeEditorsState.File";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "relative_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "is_currently_focused", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "current_line_number", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 4, name: "current_line_text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "line_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 6, name: "absolute_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "is_currently_focused", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 3, name: "current_line_number", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 4, name: "current_line_text", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "line_count", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 6, name: "absolute_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ConversationMessage_IdeEditorsState_File {
@@ -1953,32 +1953,32 @@ export class ConversationMessage_PlanUpdate extends Message<ConversationMessage_
  */
 export class ConversationMessage_SimulatedMessageMetadata extends Message<ConversationMessage_SimulatedMessageMetadata> {
   /**
-   * @generated from field: string title = 1;
+   * @generated from field: optional string title = 1;
    */
-  title = "";
+  title?: string;
 
   /**
-   * @generated from field: string task_id = 2;
+   * @generated from field: optional string task_id = 2;
    */
-  taskId = "";
+  taskId?: string;
 
   /**
-   * @generated from field: string fsd_finding_action = 3;
+   * @generated from field: optional string fsd_finding_action = 3;
    */
-  fsdFindingAction = "";
+  fsdFindingAction?: string;
 
   /**
-   * @generated from field: string url = 4;
+   * @generated from field: optional string url = 4;
    */
-  url = "";
+  url?: string;
 
   /**
-   * @generated from field: agent.v1.SubscriptionSource subscription_source = 5;
+   * @generated from field: optional agent.v1.SubscriptionSource subscription_source = 5;
    */
-  subscriptionSource = SubscriptionSource.UNSPECIFIED;
+  subscriptionSource?: SubscriptionSource;
 
   /**
-   * @generated from field: agent.v1.SubscriptionEventDisplay subscription_event_display = 6;
+   * @generated from field: optional agent.v1.SubscriptionEventDisplay subscription_event_display = 6;
    */
   subscriptionEventDisplay?: SubscriptionEventDisplay;
 
@@ -1990,12 +1990,12 @@ export class ConversationMessage_SimulatedMessageMetadata extends Message<Conver
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ConversationMessage.SimulatedMessageMetadata";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "task_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "fsd_finding_action", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "subscription_source", kind: "enum", T: proto3.getEnumType(SubscriptionSource) },
-    { no: 6, name: "subscription_event_display", kind: "message", T: SubscriptionEventDisplay },
+    { no: 1, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "task_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "fsd_finding_action", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "subscription_source", kind: "enum", T: proto3.getEnumType(SubscriptionSource), opt: true },
+    { no: 6, name: "subscription_event_display", kind: "message", T: SubscriptionEventDisplay, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ConversationMessage_SimulatedMessageMetadata {
@@ -2025,9 +2025,9 @@ export class ConversationMessage_McpDescriptor extends Message<ConversationMessa
   folderPath = "";
 
   /**
-   * @generated from field: string server_name = 2;
+   * @generated from field: optional string server_name = 2;
    */
-  serverName = "";
+  serverName?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.ConversationMessage.McpDescriptor.Tool tools = 3;
@@ -2035,9 +2035,9 @@ export class ConversationMessage_McpDescriptor extends Message<ConversationMessa
   tools: ConversationMessage_McpDescriptor_Tool[] = [];
 
   /**
-   * @generated from field: string server_use_instructions = 4;
+   * @generated from field: optional string server_use_instructions = 4;
    */
-  serverUseInstructions = "";
+  serverUseInstructions?: string;
 
   constructor(data?: PartialMessage<ConversationMessage_McpDescriptor>) {
     super();
@@ -2048,9 +2048,9 @@ export class ConversationMessage_McpDescriptor extends Message<ConversationMessa
   static readonly typeName = "aiserver.v1.ConversationMessage.McpDescriptor";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "folder_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "server_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "server_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "tools", kind: "message", T: ConversationMessage_McpDescriptor_Tool, repeated: true },
-    { no: 4, name: "server_use_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "server_use_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ConversationMessage_McpDescriptor {
@@ -2080,9 +2080,9 @@ export class ConversationMessage_McpDescriptor_Tool extends Message<Conversation
   toolName = "";
 
   /**
-   * @generated from field: string description = 2;
+   * @generated from field: optional string description = 2;
    */
-  description = "";
+  description?: string;
 
   constructor(data?: PartialMessage<ConversationMessage_McpDescriptor_Tool>) {
     super();
@@ -2093,7 +2093,7 @@ export class ConversationMessage_McpDescriptor_Tool extends Message<Conversation
   static readonly typeName = "aiserver.v1.ConversationMessage.McpDescriptor.Tool";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "tool_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ConversationMessage_McpDescriptor_Tool {
@@ -2190,12 +2190,12 @@ export class ConversationMessage_EditLocation extends Message<ConversationMessag
   relativeWorkspacePath = "";
 
   /**
-   * @generated from field: aiserver.v1.SimplestRange range = 3;
+   * @generated from field: optional aiserver.v1.SimplestRange range = 3;
    */
   range?: SimplestRange;
 
   /**
-   * @generated from field: aiserver.v1.SimplestRange initial_range = 4;
+   * @generated from field: optional aiserver.v1.SimplestRange initial_range = 4;
    */
   initialRange?: SimplestRange;
 
@@ -2210,7 +2210,7 @@ export class ConversationMessage_EditLocation extends Message<ConversationMessag
   text = "";
 
   /**
-   * @generated from field: aiserver.v1.SimplestRange text_range = 7;
+   * @generated from field: optional aiserver.v1.SimplestRange text_range = 7;
    */
   textRange?: SimplestRange;
 
@@ -2223,11 +2223,11 @@ export class ConversationMessage_EditLocation extends Message<ConversationMessag
   static readonly typeName = "aiserver.v1.ConversationMessage.EditLocation";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "range", kind: "message", T: SimplestRange },
-    { no: 4, name: "initial_range", kind: "message", T: SimplestRange },
+    { no: 3, name: "range", kind: "message", T: SimplestRange, opt: true },
+    { no: 4, name: "initial_range", kind: "message", T: SimplestRange, opt: true },
     { no: 5, name: "context_lines", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 6, name: "text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "text_range", kind: "message", T: SimplestRange },
+    { no: 7, name: "text_range", kind: "message", T: SimplestRange, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ConversationMessage_EditLocation {
@@ -2301,7 +2301,7 @@ export class ConversationMessage_MultiRangeCodeChunk extends Message<Conversatio
  */
 export class ConversationMessage_MultiRangeCodeChunk_RangeWithPriority extends Message<ConversationMessage_MultiRangeCodeChunk_RangeWithPriority> {
   /**
-   * @generated from field: aiserver.v1.SimplestRange range = 1;
+   * @generated from field: optional aiserver.v1.SimplestRange range = 1;
    */
   range?: SimplestRange;
 
@@ -2318,7 +2318,7 @@ export class ConversationMessage_MultiRangeCodeChunk_RangeWithPriority extends M
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ConversationMessage.MultiRangeCodeChunk.RangeWithPriority";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "range", kind: "message", T: SimplestRange },
+    { no: 1, name: "range", kind: "message", T: SimplestRange, opt: true },
     { no: 2, name: "priority", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
   ]);
 
@@ -2525,12 +2525,12 @@ export class SimpleFileDiff_Chunk extends Message<SimpleFileDiff_Chunk> {
   newLines: string[] = [];
 
   /**
-   * @generated from field: aiserver.v1.LineRange old_range = 3;
+   * @generated from field: optional aiserver.v1.LineRange old_range = 3;
    */
   oldRange?: LineRange;
 
   /**
-   * @generated from field: aiserver.v1.LineRange new_range = 4;
+   * @generated from field: optional aiserver.v1.LineRange new_range = 4;
    */
   newRange?: LineRange;
 
@@ -2544,8 +2544,8 @@ export class SimpleFileDiff_Chunk extends Message<SimpleFileDiff_Chunk> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "old_lines", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 2, name: "new_lines", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 3, name: "old_range", kind: "message", T: LineRange },
-    { no: 4, name: "new_range", kind: "message", T: LineRange },
+    { no: 3, name: "old_range", kind: "message", T: LineRange, opt: true },
+    { no: 4, name: "new_range", kind: "message", T: LineRange, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SimpleFileDiff_Chunk {
@@ -2666,7 +2666,7 @@ export class UserResponseToSuggestedCodeBlock extends Message<UserResponseToSugg
   filePath = "";
 
   /**
-   * @generated from field: aiserver.v1.FileDiff user_modifications_to_suggested_code_blocks = 3;
+   * @generated from field: optional aiserver.v1.FileDiff user_modifications_to_suggested_code_blocks = 3;
    */
   userModificationsToSuggestedCodeBlocks?: FileDiff;
 
@@ -2680,7 +2680,7 @@ export class UserResponseToSuggestedCodeBlock extends Message<UserResponseToSugg
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "user_response_type", kind: "enum", T: proto3.getEnumType(UserResponseToSuggestedCodeBlock_UserResponseType) },
     { no: 2, name: "file_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "user_modifications_to_suggested_code_blocks", kind: "message", T: FileDiff },
+    { no: 3, name: "user_modifications_to_suggested_code_blocks", kind: "message", T: FileDiff, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UserResponseToSuggestedCodeBlock {
@@ -2855,7 +2855,7 @@ export class DiffHistoryData extends Message<DiffHistoryData> {
   uniqueId = "";
 
   /**
-   * @generated from field: aiserver.v1.ComposerFileDiff start_to_end_diff = 5;
+   * @generated from field: optional aiserver.v1.ComposerFileDiff start_to_end_diff = 5;
    */
   startToEndDiff?: ComposerFileDiff;
 
@@ -2871,7 +2871,7 @@ export class DiffHistoryData extends Message<DiffHistoryData> {
     { no: 2, name: "diffs", kind: "message", T: ComposerFileDiff, repeated: true },
     { no: 3, name: "timestamp", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
     { no: 4, name: "unique_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "start_to_end_diff", kind: "message", T: ComposerFileDiff },
+    { no: 5, name: "start_to_end_diff", kind: "message", T: ComposerFileDiff, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DiffHistoryData {
@@ -3159,12 +3159,12 @@ export class AiWebSearchResult extends Message<AiWebSearchResult> {
  */
 export class ViewableGitContext extends Message<ViewableGitContext> {
   /**
-   * @generated from field: aiserver.v1.ViewableCommitProps commit_data = 1;
+   * @generated from field: optional aiserver.v1.ViewableCommitProps commit_data = 1;
    */
   commitData?: ViewableCommitProps;
 
   /**
-   * @generated from field: aiserver.v1.ViewablePRProps pull_request_data = 2;
+   * @generated from field: optional aiserver.v1.ViewablePRProps pull_request_data = 2;
    */
   pullRequestData?: ViewablePRProps;
 
@@ -3181,8 +3181,8 @@ export class ViewableGitContext extends Message<ViewableGitContext> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ViewableGitContext";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "commit_data", kind: "message", T: ViewableCommitProps },
-    { no: 2, name: "pull_request_data", kind: "message", T: ViewablePRProps },
+    { no: 1, name: "commit_data", kind: "message", T: ViewableCommitProps, opt: true },
+    { no: 2, name: "pull_request_data", kind: "message", T: ViewablePRProps, opt: true },
     { no: 3, name: "diff_data", kind: "message", T: ViewableDiffProps, repeated: true },
   ]);
 
@@ -3311,12 +3311,12 @@ export class ProjectLayout extends Message<ProjectLayout> {
   rootPath = "";
 
   /**
-   * @generated from field: aiserver.v1.ProjectLayoutDirectoryContent content = 2;
+   * @generated from field: optional aiserver.v1.ProjectLayoutDirectoryContent content = 2;
    */
   content?: ProjectLayoutDirectoryContent;
 
   /**
-   * @generated from field: aiserver.v1.ListDirV2Result list_dir_v2_result = 3;
+   * @generated from field: optional aiserver.v1.ListDirV2Result list_dir_v2_result = 3;
    */
   listDirV2Result?: ListDirV2Result;
 
@@ -3329,8 +3329,8 @@ export class ProjectLayout extends Message<ProjectLayout> {
   static readonly typeName = "aiserver.v1.ProjectLayout";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "root_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "content", kind: "message", T: ProjectLayoutDirectoryContent },
-    { no: 3, name: "list_dir_v2_result", kind: "message", T: ListDirV2Result },
+    { no: 2, name: "content", kind: "message", T: ProjectLayoutDirectoryContent, opt: true },
+    { no: 3, name: "list_dir_v2_result", kind: "message", T: ListDirV2Result, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ProjectLayout {
@@ -3430,19 +3430,19 @@ export class ContextWindowStatus extends Message<ContextWindowStatus> {
   percentageRemaining = 0;
 
   /**
-   * @generated from field: int32 tokens_used = 2;
+   * @generated from field: optional int32 tokens_used = 2;
    */
-  tokensUsed = 0;
+  tokensUsed?: number;
 
   /**
-   * @generated from field: int32 token_limit = 3;
+   * @generated from field: optional int32 token_limit = 3;
    */
-  tokenLimit = 0;
+  tokenLimit?: number;
 
   /**
-   * @generated from field: float percentage_remaining_float = 4;
+   * @generated from field: optional float percentage_remaining_float = 4;
    */
-  percentageRemainingFloat = 0;
+  percentageRemainingFloat?: number;
 
   constructor(data?: PartialMessage<ContextWindowStatus>) {
     super();
@@ -3453,9 +3453,9 @@ export class ContextWindowStatus extends Message<ContextWindowStatus> {
   static readonly typeName = "aiserver.v1.ContextWindowStatus";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "percentage_remaining", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 2, name: "tokens_used", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "token_limit", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 4, name: "percentage_remaining_float", kind: "scalar", T: 2 /* ScalarType.FLOAT */ },
+    { no: 2, name: "tokens_used", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 3, name: "token_limit", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 4, name: "percentage_remaining_float", kind: "scalar", T: 2 /* ScalarType.FLOAT */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ContextWindowStatus {
@@ -3522,7 +3522,7 @@ export class DeepSearchSubagentReturnValue_ContextItem extends Message<DeepSearc
   file = "";
 
   /**
-   * @generated from field: aiserver.v1.LineRange line_range = 2;
+   * @generated from field: optional aiserver.v1.LineRange line_range = 2;
    */
   lineRange?: LineRange;
 
@@ -3540,7 +3540,7 @@ export class DeepSearchSubagentReturnValue_ContextItem extends Message<DeepSearc
   static readonly typeName = "aiserver.v1.DeepSearchSubagentReturnValue.ContextItem";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "file", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "line_range", kind: "message", T: LineRange },
+    { no: 2, name: "line_range", kind: "message", T: LineRange, opt: true },
     { no: 3, name: "explanation", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
@@ -3730,14 +3730,14 @@ export class ProjectLayoutDirectoryContent extends Message<ProjectLayoutDirector
   files: ProjectLayoutFile[] = [];
 
   /**
-   * @generated from field: int32 total_files = 3;
+   * @generated from field: optional int32 total_files = 3;
    */
-  totalFiles = 0;
+  totalFiles?: number;
 
   /**
-   * @generated from field: int32 total_subfolders = 4;
+   * @generated from field: optional int32 total_subfolders = 4;
    */
-  totalSubfolders = 0;
+  totalSubfolders?: number;
 
   /**
    * @generated from field: repeated aiserver.v1.ProjectLayoutFile hidden_files = 5;
@@ -3754,8 +3754,8 @@ export class ProjectLayoutDirectoryContent extends Message<ProjectLayoutDirector
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "directories", kind: "message", T: ProjectLayoutDirectory, repeated: true },
     { no: 2, name: "files", kind: "message", T: ProjectLayoutFile, repeated: true },
-    { no: 3, name: "total_files", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 4, name: "total_subfolders", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 3, name: "total_files", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 4, name: "total_subfolders", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 5, name: "hidden_files", kind: "message", T: ProjectLayoutFile, repeated: true },
   ]);
 
@@ -3786,7 +3786,7 @@ export class ProjectLayoutDirectory extends Message<ProjectLayoutDirectory> {
   name = "";
 
   /**
-   * @generated from field: aiserver.v1.ProjectLayoutDirectoryContent content = 2;
+   * @generated from field: optional aiserver.v1.ProjectLayoutDirectoryContent content = 2;
    */
   content?: ProjectLayoutDirectoryContent;
 
@@ -3799,7 +3799,7 @@ export class ProjectLayoutDirectory extends Message<ProjectLayoutDirectory> {
   static readonly typeName = "aiserver.v1.ProjectLayoutDirectory";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "content", kind: "message", T: ProjectLayoutDirectoryContent },
+    { no: 2, name: "content", kind: "message", T: ProjectLayoutDirectoryContent, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ProjectLayoutDirectory {
@@ -4467,14 +4467,14 @@ export class ServiceStatusUpdate extends Message<ServiceStatusUpdate> {
   codicon = "";
 
   /**
-   * @generated from field: bool allow_command_links_potentially_unsafe_please_only_use_for_handwritten_trusted_markdown = 3;
+   * @generated from field: optional bool allow_command_links_potentially_unsafe_please_only_use_for_handwritten_trusted_markdown = 3;
    */
-  allowCommandLinksPotentiallyUnsafePleaseOnlyUseForHandwrittenTrustedMarkdown = false;
+  allowCommandLinksPotentiallyUnsafePleaseOnlyUseForHandwrittenTrustedMarkdown?: boolean;
 
   /**
-   * @generated from field: string action_to_run_on_status_update = 4;
+   * @generated from field: optional string action_to_run_on_status_update = 4;
    */
-  actionToRunOnStatusUpdate = "";
+  actionToRunOnStatusUpdate?: string;
 
   constructor(data?: PartialMessage<ServiceStatusUpdate>) {
     super();
@@ -4486,8 +4486,8 @@ export class ServiceStatusUpdate extends Message<ServiceStatusUpdate> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "codicon", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "allow_command_links_potentially_unsafe_please_only_use_for_handwritten_trusted_markdown", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "action_to_run_on_status_update", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "allow_command_links_potentially_unsafe_please_only_use_for_handwritten_trusted_markdown", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 4, name: "action_to_run_on_status_update", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ServiceStatusUpdate {
@@ -4517,9 +4517,9 @@ export class StatusUpdate extends Message<StatusUpdate> {
   message = "";
 
   /**
-   * @generated from field: string metadata = 2;
+   * @generated from field: optional string metadata = 2;
    */
-  metadata = "";
+  metadata?: string;
 
   constructor(data?: PartialMessage<StatusUpdate>) {
     super();
@@ -4530,7 +4530,7 @@ export class StatusUpdate extends Message<StatusUpdate> {
   static readonly typeName = "aiserver.v1.StatusUpdate";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "metadata", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "metadata", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StatusUpdate {
@@ -4555,7 +4555,7 @@ export class StatusUpdate extends Message<StatusUpdate> {
  */
 export class RankedContext extends Message<RankedContext> {
   /**
-   * @generated from field: aiserver.v1.ContextToRank context = 1;
+   * @generated from field: optional aiserver.v1.ContextToRank context = 1;
    */
   context?: ContextToRank;
 
@@ -4572,7 +4572,7 @@ export class RankedContext extends Message<RankedContext> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.RankedContext";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "context", kind: "message", T: ContextToRank },
+    { no: 1, name: "context", kind: "message", T: ContextToRank, opt: true },
     { no: 2, name: "score", kind: "scalar", T: 2 /* ScalarType.FLOAT */ },
   ]);
 
@@ -4608,12 +4608,12 @@ export class ContextToRank extends Message<ContextToRank> {
   contents = "";
 
   /**
-   * @generated from field: aiserver.v1.LineRange line_range = 3;
+   * @generated from field: optional aiserver.v1.LineRange line_range = 3;
    */
   lineRange?: LineRange;
 
   /**
-   * @generated from field: aiserver.v1.CodeBlock code_block = 4;
+   * @generated from field: optional aiserver.v1.CodeBlock code_block = 4;
    */
   codeBlock?: CodeBlock;
 
@@ -4627,8 +4627,8 @@ export class ContextToRank extends Message<ContextToRank> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "contents", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "line_range", kind: "message", T: LineRange },
-    { no: 4, name: "code_block", kind: "message", T: CodeBlock },
+    { no: 3, name: "line_range", kind: "message", T: LineRange, opt: true },
+    { no: 4, name: "code_block", kind: "message", T: CodeBlock, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ContextToRank {
@@ -4763,9 +4763,9 @@ export class CodeChunkContextInclusionInfo extends Message<CodeChunkContextInclu
   promptTokenCount = 0;
 
   /**
-   * @generated from field: string exclusion_tooltip = 7;
+   * @generated from field: optional string exclusion_tooltip = 7;
    */
-  exclusionTooltip = "";
+  exclusionTooltip?: string;
 
   /**
    * @generated from field: aiserver.v1.CodeChunkContextInclusionInfo.Intent intent = 8;
@@ -4783,7 +4783,7 @@ export class CodeChunkContextInclusionInfo extends Message<CodeChunkContextInclu
   isCompressed = false;
 
   /**
-   * @generated from field: aiserver.v1.CodeChunkContextInclusionInfo.TokenCount full_file_tokens_count = 11;
+   * @generated from field: optional aiserver.v1.CodeChunkContextInclusionInfo.TokenCount full_file_tokens_count = 11;
    */
   fullFileTokensCount?: CodeChunkContextInclusionInfo_TokenCount;
 
@@ -4801,11 +4801,11 @@ export class CodeChunkContextInclusionInfo extends Message<CodeChunkContextInclu
     { no: 4, name: "inclusion_type", kind: "enum", T: proto3.getEnumType(CodeChunkContextInclusionInfo_InclusionType) },
     { no: 5, name: "full_file_token_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 6, name: "prompt_token_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 7, name: "exclusion_tooltip", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 7, name: "exclusion_tooltip", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 8, name: "intent", kind: "enum", T: proto3.getEnumType(CodeChunkContextInclusionInfo_Intent) },
     { no: 9, name: "chunk_is_from_last_user_message", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 10, name: "is_compressed", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 11, name: "full_file_tokens_count", kind: "message", T: CodeChunkContextInclusionInfo_TokenCount },
+    { no: 11, name: "full_file_tokens_count", kind: "message", T: CodeChunkContextInclusionInfo_TokenCount, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CodeChunkContextInclusionInfo {
@@ -4951,29 +4951,29 @@ export class CodeChunkContextInclusionInfoV2 extends Message<CodeChunkContextInc
   intent = CodeChunkContextInclusionInfoV2_Intent.UNSPECIFIED;
 
   /**
-   * @generated from field: string detail_text = 5;
+   * @generated from field: optional string detail_text = 5;
    */
-  detailText = "";
+  detailText?: string;
 
   /**
-   * @generated from field: string tooltip_text = 6;
+   * @generated from field: optional string tooltip_text = 6;
    */
-  tooltipText = "";
+  tooltipText?: string;
 
   /**
-   * @generated from field: string codicon_name = 7;
+   * @generated from field: optional string codicon_name = 7;
    */
-  codiconName = "";
+  codiconName?: string;
 
   /**
-   * @generated from field: string pill_sub_codicon_name = 8;
+   * @generated from field: optional string pill_sub_codicon_name = 8;
    */
-  pillSubCodiconName = "";
+  pillSubCodiconName?: string;
 
   /**
-   * @generated from field: bool pill_is_dashed = 9;
+   * @generated from field: optional bool pill_is_dashed = 9;
    */
-  pillIsDashed = false;
+  pillIsDashed?: boolean;
 
   /**
    * @generated from field: aiserver.v1.CodeChunkContextInclusionInfoV2.InclusionType inclusion_type = 10;
@@ -4992,11 +4992,11 @@ export class CodeChunkContextInclusionInfoV2 extends Message<CodeChunkContextInc
     { no: 2, name: "start_line_number", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 3, name: "end_line_number_inclusive", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 4, name: "intent", kind: "enum", T: proto3.getEnumType(CodeChunkContextInclusionInfoV2_Intent) },
-    { no: 5, name: "detail_text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "tooltip_text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "codicon_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "pill_sub_codicon_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "pill_is_dashed", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 5, name: "detail_text", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "tooltip_text", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "codicon_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "pill_sub_codicon_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 9, name: "pill_is_dashed", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 10, name: "inclusion_type", kind: "enum", T: proto3.getEnumType(CodeChunkContextInclusionInfoV2_InclusionType) },
   ]);
 
@@ -5122,9 +5122,9 @@ export class ConversationMessageHeader extends Message<ConversationMessageHeader
   bubbleId = "";
 
   /**
-   * @generated from field: string server_bubble_id = 2;
+   * @generated from field: optional string server_bubble_id = 2;
    */
-  serverBubbleId = "";
+  serverBubbleId?: string;
 
   /**
    * @generated from field: aiserver.v1.ConversationMessage.MessageType type = 3;
@@ -5140,7 +5140,7 @@ export class ConversationMessageHeader extends Message<ConversationMessageHeader
   static readonly typeName = "aiserver.v1.ConversationMessageHeader";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bubble_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "server_bubble_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "server_bubble_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "type", kind: "enum", T: proto3.getEnumType(ConversationMessage_MessageType) },
   ]);
 
@@ -5253,7 +5253,7 @@ export class ConversationSummaryStrategy extends Message<ConversationSummaryStra
  */
 export class ConversationSummaryStrategy_ArbitrarySummaryPlusToolResultTruncation extends Message<ConversationSummaryStrategy_ArbitrarySummaryPlusToolResultTruncation> {
   /**
-   * @generated from field: aiserver.v1.ConversationSummary arbitrary_summary = 1;
+   * @generated from field: optional aiserver.v1.ConversationSummary arbitrary_summary = 1;
    */
   arbitrarySummary?: ConversationSummary;
 
@@ -5270,7 +5270,7 @@ export class ConversationSummaryStrategy_ArbitrarySummaryPlusToolResultTruncatio
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ConversationSummaryStrategy.ArbitrarySummaryPlusToolResultTruncation";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "arbitrary_summary", kind: "message", T: ConversationSummary },
+    { no: 1, name: "arbitrary_summary", kind: "message", T: ConversationSummary, opt: true },
     { no: 2, name: "tool_result_truncation_length", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
   ]);
 
@@ -5296,7 +5296,7 @@ export class ConversationSummaryStrategy_ArbitrarySummaryPlusToolResultTruncatio
  */
 export class ConvertOALToNALRequest extends Message<ConvertOALToNALRequest> {
   /**
-   * @generated from field: aiserver.v1.StreamUnifiedChatRequest request = 1;
+   * @generated from field: optional aiserver.v1.StreamUnifiedChatRequest request = 1;
    */
   request?: StreamUnifiedChatRequest;
 
@@ -5313,7 +5313,7 @@ export class ConvertOALToNALRequest extends Message<ConvertOALToNALRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ConvertOALToNALRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "request", kind: "message", T: StreamUnifiedChatRequest },
+    { no: 1, name: "request", kind: "message", T: StreamUnifiedChatRequest, opt: true },
     { no: 2, name: "file_states", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "message", T: FileState} },
   ]);
 
@@ -5339,7 +5339,7 @@ export class ConvertOALToNALRequest extends Message<ConvertOALToNALRequest> {
  */
 export class ConvertOALToNALResponse extends Message<ConvertOALToNALResponse> {
   /**
-   * @generated from field: agent.v1.ConversationStateStructure conversation_state = 1;
+   * @generated from field: optional agent.v1.ConversationStateStructure conversation_state = 1;
    */
   conversationState?: ConversationStateStructure;
 
@@ -5361,7 +5361,7 @@ export class ConvertOALToNALResponse extends Message<ConvertOALToNALResponse> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ConvertOALToNALResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "conversation_state", kind: "message", T: ConversationStateStructure },
+    { no: 1, name: "conversation_state", kind: "message", T: ConversationStateStructure, opt: true },
     { no: 2, name: "blobs", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 12 /* ScalarType.BYTES */} },
     { no: 3, name: "bubble_checkpoints", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "message", T: ConversationStateStructure} },
   ]);
@@ -5557,12 +5557,12 @@ export class GetPromptDryRunResponse extends Message<GetPromptDryRunResponse> {
   userMessageTokenLimit = 0;
 
   /**
-   * @generated from field: aiserver.v1.GetPromptDryRunResponse.TokenCount user_message_token_count = 4;
+   * @generated from field: optional aiserver.v1.GetPromptDryRunResponse.TokenCount user_message_token_count = 4;
    */
   userMessageTokenCount?: GetPromptDryRunResponse_TokenCount;
 
   /**
-   * @generated from field: aiserver.v1.GetPromptDryRunResponse.TokenCount full_conversation_token_count = 5;
+   * @generated from field: optional aiserver.v1.GetPromptDryRunResponse.TokenCount full_conversation_token_count = 5;
    */
   fullConversationTokenCount?: GetPromptDryRunResponse_TokenCount;
 
@@ -5597,8 +5597,8 @@ export class GetPromptDryRunResponse extends Message<GetPromptDryRunResponse> {
     { no: 1, name: "code_chunks", kind: "message", T: CodeChunkContextInclusionInfo, repeated: true },
     { no: 2, name: "folder_exclusion_tooltip", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "user_message_token_limit", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 4, name: "user_message_token_count", kind: "message", T: GetPromptDryRunResponse_TokenCount },
-    { no: 5, name: "full_conversation_token_count", kind: "message", T: GetPromptDryRunResponse_TokenCount },
+    { no: 4, name: "user_message_token_count", kind: "message", T: GetPromptDryRunResponse_TokenCount, opt: true },
+    { no: 5, name: "full_conversation_token_count", kind: "message", T: GetPromptDryRunResponse_TokenCount, opt: true },
     { no: 6, name: "code_chunks_v2", kind: "message", T: CodeChunkContextInclusionInfoV2, repeated: true },
     { no: 7, name: "bar_fraction", kind: "scalar", T: 2 /* ScalarType.FLOAT */ },
     { no: 8, name: "did_bar_overflow", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
@@ -5632,9 +5632,9 @@ export class GetPromptDryRunResponse_TokenCount extends Message<GetPromptDryRunR
   isOverTokenLimit = false;
 
   /**
-   * @generated from field: int32 num_tokens = 2;
+   * @generated from field: optional int32 num_tokens = 2;
    */
-  numTokens = 0;
+  numTokens?: number;
 
   constructor(data?: PartialMessage<GetPromptDryRunResponse_TokenCount>) {
     super();
@@ -5645,7 +5645,7 @@ export class GetPromptDryRunResponse_TokenCount extends Message<GetPromptDryRunR
   static readonly typeName = "aiserver.v1.GetPromptDryRunResponse.TokenCount";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "is_over_token_limit", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 2, name: "num_tokens", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 2, name: "num_tokens", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetPromptDryRunResponse_TokenCount {
@@ -5846,14 +5846,14 @@ export class SpanContext extends Message<SpanContext> {
   spanId = "";
 
   /**
-   * @generated from field: uint32 trace_flags = 3;
+   * @generated from field: optional uint32 trace_flags = 3;
    */
-  traceFlags = 0;
+  traceFlags?: number;
 
   /**
-   * @generated from field: string trace_state = 4;
+   * @generated from field: optional string trace_state = 4;
    */
-  traceState = "";
+  traceState?: string;
 
   constructor(data?: PartialMessage<SpanContext>) {
     super();
@@ -5865,8 +5865,8 @@ export class SpanContext extends Message<SpanContext> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "trace_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "span_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "trace_flags", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 4, name: "trace_state", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "trace_flags", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
+    { no: 4, name: "trace_state", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SpanContext {
@@ -5976,9 +5976,9 @@ export class StreamReplayChatRequest extends Message<StreamReplayChatRequest> {
   requestId = "";
 
   /**
-   * @generated from field: double tokens_per_second = 3;
+   * @generated from field: optional double tokens_per_second = 3;
    */
-  tokensPerSecond = 0;
+  tokensPerSecond?: number;
 
   constructor(data?: PartialMessage<StreamReplayChatRequest>) {
     super();
@@ -5989,7 +5989,7 @@ export class StreamReplayChatRequest extends Message<StreamReplayChatRequest> {
   static readonly typeName = "aiserver.v1.StreamReplayChatRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "request_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "tokens_per_second", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
+    { no: 3, name: "tokens_per_second", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StreamReplayChatRequest {
@@ -6056,27 +6056,27 @@ export class StreamUnifiedChatRequest extends Message<StreamUnifiedChatRequest> 
   conversation: ConversationMessage[] = [];
 
   /**
-   * @generated from field: bool allow_long_file_scan = 2;
+   * @generated from field: optional bool allow_long_file_scan = 2;
    */
-  allowLongFileScan = false;
+  allowLongFileScan?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.ExplicitContext explicit_context = 3;
+   * @generated from field: optional aiserver.v1.ExplicitContext explicit_context = 3;
    */
   explicitContext?: ExplicitContext;
 
   /**
-   * @generated from field: bool can_handle_filenames_after_language_ids = 4;
+   * @generated from field: optional bool can_handle_filenames_after_language_ids = 4;
    */
-  canHandleFilenamesAfterLanguageIds = false;
+  canHandleFilenamesAfterLanguageIds?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.ModelDetails model_details = 5;
+   * @generated from field: optional aiserver.v1.ModelDetails model_details = 5;
    */
   modelDetails?: ModelDetails;
 
   /**
-   * @generated from field: aiserver.v1.LinterErrors linter_errors = 6;
+   * @generated from field: optional aiserver.v1.LinterErrors linter_errors = 6;
    */
   linterErrors?: LinterErrors;
 
@@ -6086,9 +6086,9 @@ export class StreamUnifiedChatRequest extends Message<StreamUnifiedChatRequest> 
   documentationIdentifiers: string[] = [];
 
   /**
-   * @generated from field: string use_web = 8;
+   * @generated from field: optional string use_web = 8;
    */
-  useWeb = "";
+  useWeb?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.ComposerExternalLink external_links = 9;
@@ -6096,7 +6096,7 @@ export class StreamUnifiedChatRequest extends Message<StreamUnifiedChatRequest> 
   externalLinks: ComposerExternalLink[] = [];
 
   /**
-   * @generated from field: aiserver.v1.ConversationMessage project_context = 10;
+   * @generated from field: optional aiserver.v1.ConversationMessage project_context = 10;
    */
   projectContext?: ConversationMessage;
 
@@ -6106,14 +6106,14 @@ export class StreamUnifiedChatRequest extends Message<StreamUnifiedChatRequest> 
   diffsForCompressingFiles: StreamUnifiedChatRequest_RedDiff[] = [];
 
   /**
-   * @generated from field: bool compress_edits = 12;
+   * @generated from field: optional bool compress_edits = 12;
    */
-  compressEdits = false;
+  compressEdits?: boolean;
 
   /**
-   * @generated from field: bool should_cache = 13;
+   * @generated from field: optional bool should_cache = 13;
    */
-  shouldCache = false;
+  shouldCache?: boolean;
 
   /**
    * @generated from field: repeated aiserver.v1.LinterErrors multi_file_linter_errors = 14;
@@ -6121,19 +6121,19 @@ export class StreamUnifiedChatRequest extends Message<StreamUnifiedChatRequest> 
   multiFileLinterErrors: LinterErrors[] = [];
 
   /**
-   * @generated from field: aiserver.v1.CurrentFileInfo current_file = 15;
+   * @generated from field: optional aiserver.v1.CurrentFileInfo current_file = 15;
    */
   currentFile?: CurrentFileInfo;
 
   /**
-   * @generated from field: aiserver.v1.StreamUnifiedChatRequest.RecentEdits recent_edits = 16;
+   * @generated from field: optional aiserver.v1.StreamUnifiedChatRequest.RecentEdits recent_edits = 16;
    */
   recentEdits?: StreamUnifiedChatRequest_RecentEdits;
 
   /**
-   * @generated from field: bool use_reference_composer_diff_prompt = 17;
+   * @generated from field: optional bool use_reference_composer_diff_prompt = 17;
    */
-  useReferenceComposerDiffPrompt = false;
+  useReferenceComposerDiffPrompt?: boolean;
 
   /**
    * @generated from field: repeated aiserver.v1.ComposerFileDiffHistory file_diff_histories = 18;
@@ -6141,9 +6141,9 @@ export class StreamUnifiedChatRequest extends Message<StreamUnifiedChatRequest> 
   fileDiffHistories: ComposerFileDiffHistory[] = [];
 
   /**
-   * @generated from field: bool use_new_compression_scheme = 19;
+   * @generated from field: optional bool use_new_compression_scheme = 19;
    */
-  useNewCompressionScheme = false;
+  useNewCompressionScheme?: boolean;
 
   /**
    * @generated from field: repeated aiserver.v1.RankedContext additional_ranked_context = 20;
@@ -6166,7 +6166,7 @@ export class StreamUnifiedChatRequest extends Message<StreamUnifiedChatRequest> 
   conversationId = "";
 
   /**
-   * @generated from field: aiserver.v1.RepositoryInfo repository_info = 24;
+   * @generated from field: optional aiserver.v1.RepositoryInfo repository_info = 24;
    */
   repositoryInfo?: RepositoryInfo;
 
@@ -6176,7 +6176,7 @@ export class StreamUnifiedChatRequest extends Message<StreamUnifiedChatRequest> 
   repositoryInfoShouldQueryStaging = false;
 
   /**
-   * @generated from field: aiserver.v1.EnvironmentInfo environment_info = 26;
+   * @generated from field: optional aiserver.v1.EnvironmentInfo environment_info = 26;
    */
   environmentInfo?: EnvironmentInfo;
 
@@ -6186,7 +6186,7 @@ export class StreamUnifiedChatRequest extends Message<StreamUnifiedChatRequest> 
   isAgentic = false;
 
   /**
-   * @generated from field: aiserver.v1.ConversationSummary conversation_summary = 28;
+   * @generated from field: optional aiserver.v1.ConversationSummary conversation_summary = 28;
    */
   conversationSummary?: ConversationSummary;
 
@@ -6221,24 +6221,24 @@ export class StreamUnifiedChatRequest extends Message<StreamUnifiedChatRequest> 
   mcpTools: MCPParams_Tool[] = [];
 
   /**
-   * @generated from field: bool use_full_inputs_context = 35;
+   * @generated from field: optional bool use_full_inputs_context = 35;
    */
-  useFullInputsContext = false;
+  useFullInputsContext?: boolean;
 
   /**
-   * @generated from field: bool is_resume = 36;
+   * @generated from field: optional bool is_resume = 36;
    */
-  isResume = false;
+  isResume?: boolean;
 
   /**
-   * @generated from field: bool allow_model_fallbacks = 37;
+   * @generated from field: optional bool allow_model_fallbacks = 37;
    */
-  allowModelFallbacks = false;
+  allowModelFallbacks?: boolean;
 
   /**
-   * @generated from field: int32 number_of_times_shown_fallback_model_warning = 38;
+   * @generated from field: optional int32 number_of_times_shown_fallback_model_warning = 38;
    */
-  numberOfTimesShownFallbackModelWarning = 0;
+  numberOfTimesShownFallbackModelWarning?: number;
 
   /**
    * @generated from field: bool repository_info_should_query_prod = 39;
@@ -6246,24 +6246,24 @@ export class StreamUnifiedChatRequest extends Message<StreamUnifiedChatRequest> 
   repositoryInfoShouldQueryProd = false;
 
   /**
-   * @generated from field: string context_bank_session_id = 40;
+   * @generated from field: optional string context_bank_session_id = 40;
    */
-  contextBankSessionId = "";
+  contextBankSessionId?: string;
 
   /**
-   * @generated from field: int32 context_bank_version = 41;
+   * @generated from field: optional int32 context_bank_version = 41;
    */
-  contextBankVersion = 0;
+  contextBankVersion?: number;
 
   /**
-   * @generated from field: aiserver.v1.StreamUnifiedChatRequest.CodeSearchResult uses_codebase_results = 42;
+   * @generated from field: optional aiserver.v1.StreamUnifiedChatRequest.CodeSearchResult uses_codebase_results = 42;
    */
   usesCodebaseResults?: StreamUnifiedChatRequest_CodeSearchResult;
 
   /**
-   * @generated from field: bytes context_bank_encryption_key = 43;
+   * @generated from field: optional bytes context_bank_encryption_key = 43;
    */
-  contextBankEncryptionKey = new Uint8Array(0);
+  contextBankEncryptionKey?: Uint8Array;
 
   /**
    * @generated from field: string repo_query_auth_token = 44;
@@ -6276,9 +6276,9 @@ export class StreamUnifiedChatRequest extends Message<StreamUnifiedChatRequest> 
   isHeadless = false;
 
   /**
-   * @generated from field: aiserver.v1.StreamUnifiedChatRequest.UnifiedMode unified_mode = 46;
+   * @generated from field: optional aiserver.v1.StreamUnifiedChatRequest.UnifiedMode unified_mode = 46;
    */
-  unifiedMode = StreamUnifiedChatRequest_UnifiedMode.UNSPECIFIED;
+  unifiedMode?: StreamUnifiedChatRequest_UnifiedMode;
 
   /**
    * @generated from field: repeated aiserver.v1.ClientSideToolV2 tools_requiring_accepted_return = 47;
@@ -6286,54 +6286,54 @@ export class StreamUnifiedChatRequest extends Message<StreamUnifiedChatRequest> 
   toolsRequiringAcceptedReturn: ClientSideToolV2[] = [];
 
   /**
-   * @generated from field: bool should_disable_tools = 48;
+   * @generated from field: optional bool should_disable_tools = 48;
    */
-  shouldDisableTools = false;
+  shouldDisableTools?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.StreamUnifiedChatRequest.ThinkingLevel thinking_level = 49;
+   * @generated from field: optional aiserver.v1.StreamUnifiedChatRequest.ThinkingLevel thinking_level = 49;
    */
-  thinkingLevel = StreamUnifiedChatRequest_ThinkingLevel.UNSPECIFIED;
+  thinkingLevel?: StreamUnifiedChatRequest_ThinkingLevel;
 
   /**
-   * @generated from field: bool should_use_chat_prompt = 50;
+   * @generated from field: optional bool should_use_chat_prompt = 50;
    */
-  shouldUseChatPrompt = false;
+  shouldUseChatPrompt?: boolean;
 
   /**
-   * @generated from field: bool uses_rules = 51;
+   * @generated from field: optional bool uses_rules = 51;
    */
-  usesRules = false;
+  usesRules?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.QueryOnlyRepoAccess query_only_repo_access = 52;
+   * @generated from field: optional aiserver.v1.QueryOnlyRepoAccess query_only_repo_access = 52;
    */
   queryOnlyRepoAccess?: QueryOnlyRepoAccess;
 
   /**
-   * @generated from field: bool mode_uses_auto_apply = 53;
+   * @generated from field: optional bool mode_uses_auto_apply = 53;
    */
-  modeUsesAutoApply = false;
+  modeUsesAutoApply?: boolean;
 
   /**
-   * @generated from field: string unified_mode_name = 54;
+   * @generated from field: optional string unified_mode_name = 54;
    */
-  unifiedModeName = "";
+  unifiedModeName?: string;
 
   /**
-   * @generated from field: string background_composer_id = 55;
+   * @generated from field: optional string background_composer_id = 55;
    */
-  backgroundComposerId = "";
+  backgroundComposerId?: string;
 
   /**
-   * @generated from field: bool use_generate_rules_prompt = 56;
+   * @generated from field: optional bool use_generate_rules_prompt = 56;
    */
-  useGenerateRulesPrompt = false;
+  useGenerateRulesPrompt?: boolean;
 
   /**
-   * @generated from field: bool edit_tool_supports_search_and_replace = 57;
+   * @generated from field: optional bool edit_tool_supports_search_and_replace = 57;
    */
-  editToolSupportsSearchAndReplace = false;
+  editToolSupportsSearchAndReplace?: boolean;
 
   /**
    * @generated from field: repeated aiserver.v1.ProjectLayout project_layouts = 58;
@@ -6341,37 +6341,37 @@ export class StreamUnifiedChatRequest extends Message<StreamUnifiedChatRequest> 
   projectLayouts: ProjectLayout[] = [];
 
   /**
-   * @generated from field: string repository_name_if_unindexed = 59;
+   * @generated from field: optional string repository_name_if_unindexed = 59;
    */
-  repositoryNameIfUnindexed = "";
+  repositoryNameIfUnindexed?: string;
 
   /**
-   * @generated from field: double indexing_progress = 60;
+   * @generated from field: optional double indexing_progress = 60;
    */
-  indexingProgress = 0;
+  indexingProgress?: number;
 
   /**
-   * @generated from field: aiserver.v1.StreamUnifiedChatRequest.FullFileCmdKOptions full_file_cmd_k_options = 61;
+   * @generated from field: optional aiserver.v1.StreamUnifiedChatRequest.FullFileCmdKOptions full_file_cmd_k_options = 61;
    */
   fullFileCmdKOptions?: StreamUnifiedChatRequest_FullFileCmdKOptions;
 
   /**
-   * @generated from field: string indexing_phase_if_unindexed = 62;
+   * @generated from field: optional string indexing_phase_if_unindexed = 62;
    */
-  indexingPhaseIfUnindexed = "";
+  indexingPhaseIfUnindexed?: string;
 
   /**
-   * @generated from field: bool use_knowledge_base_prompt = 63;
+   * @generated from field: optional bool use_knowledge_base_prompt = 63;
    */
-  useKnowledgeBasePrompt = false;
+  useKnowledgeBasePrompt?: boolean;
 
   /**
-   * @generated from field: int32 indexing_num_files_if_unindexed = 64;
+   * @generated from field: optional int32 indexing_num_files_if_unindexed = 64;
    */
-  indexingNumFilesIfUnindexed = 0;
+  indexingNumFilesIfUnindexed?: number;
 
   /**
-   * @generated from field: aiserver.v1.SubagentInfo subagent_info = 66;
+   * @generated from field: optional aiserver.v1.SubagentInfo subagent_info = 66;
    */
   subagentInfo?: SubagentInfo;
 
@@ -6391,14 +6391,14 @@ export class StreamUnifiedChatRequest extends Message<StreamUnifiedChatRequest> 
   forceIsNotDev = false;
 
   /**
-   * @generated from field: bool disable_edit_file_timeout = 70;
+   * @generated from field: optional bool disable_edit_file_timeout = 70;
    */
-  disableEditFileTimeout = false;
+  disableEditFileTimeout?: boolean;
 
   /**
-   * @generated from field: bool should_attach_linter_errors = 71;
+   * @generated from field: optional bool should_attach_linter_errors = 71;
    */
-  shouldAttachLinterErrors = false;
+  shouldAttachLinterErrors?: boolean;
 
   /**
    * @generated from field: string replying_to_request_id = 72;
@@ -6406,29 +6406,29 @@ export class StreamUnifiedChatRequest extends Message<StreamUnifiedChatRequest> 
   replyingToRequestId = "";
 
   /**
-   * @generated from field: bool should_speculatively_route_gpt5 = 73;
+   * @generated from field: optional bool should_speculatively_route_gpt5 = 73;
    */
-  shouldSpeculativelyRouteGpt5 = false;
+  shouldSpeculativelyRouteGpt5?: boolean;
 
   /**
-   * @generated from field: bool force_terminal_hanging_detection = 74;
+   * @generated from field: optional bool force_terminal_hanging_detection = 74;
    */
-  forceTerminalHangingDetection = false;
+  forceTerminalHangingDetection?: boolean;
 
   /**
-   * @generated from field: bool force_summarization = 75;
+   * @generated from field: optional bool force_summarization = 75;
    */
-  forceSummarization = false;
+  forceSummarization?: boolean;
 
   /**
-   * @generated from field: bool is_quick_search_query = 76;
+   * @generated from field: optional bool is_quick_search_query = 76;
    */
-  isQuickSearchQuery = false;
+  isQuickSearchQuery?: boolean;
 
   /**
-   * @generated from field: bool is_spec_mode = 77;
+   * @generated from field: optional bool is_spec_mode = 77;
    */
-  isSpecMode = false;
+  isSpecMode?: boolean;
 
   /**
    * @generated from field: bool allow_server_side_semantic_search = 78;
@@ -6436,9 +6436,9 @@ export class StreamUnifiedChatRequest extends Message<StreamUnifiedChatRequest> 
   allowServerSideSemanticSearch = false;
 
   /**
-   * @generated from field: bytes speculative_summarization_encryption_key = 79;
+   * @generated from field: optional bytes speculative_summarization_encryption_key = 79;
    */
-  speculativeSummarizationEncryptionKey = new Uint8Array(0);
+  speculativeSummarizationEncryptionKey?: Uint8Array;
 
   /**
    * @generated from field: repeated aiserver.v1.WorkspaceFolder workspace_folders = 81;
@@ -6446,64 +6446,64 @@ export class StreamUnifiedChatRequest extends Message<StreamUnifiedChatRequest> 
   workspaceFolders: WorkspaceFolder[] = [];
 
   /**
-   * @generated from field: bool does_readfile_support_images = 82;
+   * @generated from field: optional bool does_readfile_support_images = 82;
    */
-  doesReadfileSupportImages = false;
+  doesReadfileSupportImages?: boolean;
 
   /**
-   * @generated from field: bool sandboxing_support_enabled = 83;
+   * @generated from field: optional bool sandboxing_support_enabled = 83;
    */
-  sandboxingSupportEnabled = false;
+  sandboxingSupportEnabled?: boolean;
 
   /**
-   * @generated from field: string custom_planning_instructions = 84;
+   * @generated from field: optional string custom_planning_instructions = 84;
    */
-  customPlanningInstructions = "";
+  customPlanningInstructions?: string;
 
   /**
-   * @generated from field: bool enable_terminal_file_persistence = 85;
+   * @generated from field: optional bool enable_terminal_file_persistence = 85;
    */
-  enableTerminalFilePersistence = false;
+  enableTerminalFilePersistence?: boolean;
 
   /**
-   * @generated from field: string terminals_folder = 86;
+   * @generated from field: optional string terminals_folder = 86;
    */
-  terminalsFolder = "";
+  terminalsFolder?: string;
 
   /**
-   * @generated from field: string agent_notes_folder = 87;
+   * @generated from field: optional string agent_notes_folder = 87;
    */
-  agentNotesFolder = "";
+  agentNotesFolder?: string;
 
   /**
-   * @generated from field: string agent_tools_folder = 88;
+   * @generated from field: optional string agent_tools_folder = 88;
    */
-  agentToolsFolder = "";
+  agentToolsFolder?: string;
 
   /**
-   * @generated from field: aiserver.v1.StreamUnifiedChatRequest.CurrentPlan current_plan = 89;
+   * @generated from field: optional aiserver.v1.StreamUnifiedChatRequest.CurrentPlan current_plan = 89;
    */
   currentPlan?: StreamUnifiedChatRequest_CurrentPlan;
 
   /**
-   * @generated from field: bool has_mcp_descriptors = 90;
+   * @generated from field: optional bool has_mcp_descriptors = 90;
    */
-  hasMcpDescriptors = false;
+  hasMcpDescriptors?: boolean;
 
   /**
-   * @generated from field: string best_of_n_group_id = 91;
+   * @generated from field: optional string best_of_n_group_id = 91;
    */
-  bestOfNGroupId = "";
+  bestOfNGroupId?: string;
 
   /**
-   * @generated from field: bool try_use_best_of_n_promotion = 92;
+   * @generated from field: optional bool try_use_best_of_n_promotion = 92;
    */
-  tryUseBestOfNPromotion = false;
+  tryUseBestOfNPromotion?: boolean;
 
   /**
-   * @generated from field: string agent_transcripts_folder = 93;
+   * @generated from field: optional string agent_transcripts_folder = 93;
    */
-  agentTranscriptsFolder = "";
+  agentTranscriptsFolder?: string;
 
   constructor(data?: PartialMessage<StreamUnifiedChatRequest>) {
     super();
@@ -6514,96 +6514,96 @@ export class StreamUnifiedChatRequest extends Message<StreamUnifiedChatRequest> 
   static readonly typeName = "aiserver.v1.StreamUnifiedChatRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "conversation", kind: "message", T: ConversationMessage, repeated: true },
-    { no: 2, name: "allow_long_file_scan", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "explicit_context", kind: "message", T: ExplicitContext },
-    { no: 4, name: "can_handle_filenames_after_language_ids", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "model_details", kind: "message", T: ModelDetails },
-    { no: 6, name: "linter_errors", kind: "message", T: LinterErrors },
+    { no: 2, name: "allow_long_file_scan", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 3, name: "explicit_context", kind: "message", T: ExplicitContext, opt: true },
+    { no: 4, name: "can_handle_filenames_after_language_ids", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 5, name: "model_details", kind: "message", T: ModelDetails, opt: true },
+    { no: 6, name: "linter_errors", kind: "message", T: LinterErrors, opt: true },
     { no: 7, name: "documentation_identifiers", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 8, name: "use_web", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 8, name: "use_web", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 9, name: "external_links", kind: "message", T: ComposerExternalLink, repeated: true },
-    { no: 10, name: "project_context", kind: "message", T: ConversationMessage },
+    { no: 10, name: "project_context", kind: "message", T: ConversationMessage, opt: true },
     { no: 11, name: "diffs_for_compressing_files", kind: "message", T: StreamUnifiedChatRequest_RedDiff, repeated: true },
-    { no: 12, name: "compress_edits", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 13, name: "should_cache", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 12, name: "compress_edits", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 13, name: "should_cache", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 14, name: "multi_file_linter_errors", kind: "message", T: LinterErrors, repeated: true },
-    { no: 15, name: "current_file", kind: "message", T: CurrentFileInfo },
-    { no: 16, name: "recent_edits", kind: "message", T: StreamUnifiedChatRequest_RecentEdits },
-    { no: 17, name: "use_reference_composer_diff_prompt", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 15, name: "current_file", kind: "message", T: CurrentFileInfo, opt: true },
+    { no: 16, name: "recent_edits", kind: "message", T: StreamUnifiedChatRequest_RecentEdits, opt: true },
+    { no: 17, name: "use_reference_composer_diff_prompt", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 18, name: "file_diff_histories", kind: "message", T: ComposerFileDiffHistory, repeated: true },
-    { no: 19, name: "use_new_compression_scheme", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 19, name: "use_new_compression_scheme", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 20, name: "additional_ranked_context", kind: "message", T: RankedContext, repeated: true },
     { no: 21, name: "quotes", kind: "message", T: ChatQuote, repeated: true },
     { no: 22, name: "is_chat", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 23, name: "conversation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 24, name: "repository_info", kind: "message", T: RepositoryInfo },
+    { no: 24, name: "repository_info", kind: "message", T: RepositoryInfo, opt: true },
     { no: 25, name: "repository_info_should_query_staging", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 26, name: "environment_info", kind: "message", T: EnvironmentInfo },
+    { no: 26, name: "environment_info", kind: "message", T: EnvironmentInfo, opt: true },
     { no: 27, name: "is_agentic", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 28, name: "conversation_summary", kind: "message", T: ConversationSummary },
+    { no: 28, name: "conversation_summary", kind: "message", T: ConversationSummary, opt: true },
     { no: 29, name: "supported_tools", kind: "enum", T: proto3.getEnumType(ClientSideToolV2), repeated: true },
     { no: 30, name: "full_conversation_headers_only", kind: "message", T: ConversationMessageHeader, repeated: true },
     { no: 31, name: "enable_yolo_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 32, name: "yolo_prompt", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 33, name: "use_unified_chat_prompt", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 34, name: "mcp_tools", kind: "message", T: MCPParams_Tool, repeated: true },
-    { no: 35, name: "use_full_inputs_context", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 36, name: "is_resume", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 37, name: "allow_model_fallbacks", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 38, name: "number_of_times_shown_fallback_model_warning", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 35, name: "use_full_inputs_context", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 36, name: "is_resume", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 37, name: "allow_model_fallbacks", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 38, name: "number_of_times_shown_fallback_model_warning", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 39, name: "repository_info_should_query_prod", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 40, name: "context_bank_session_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 41, name: "context_bank_version", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 42, name: "uses_codebase_results", kind: "message", T: StreamUnifiedChatRequest_CodeSearchResult },
-    { no: 43, name: "context_bank_encryption_key", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
+    { no: 40, name: "context_bank_session_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 41, name: "context_bank_version", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 42, name: "uses_codebase_results", kind: "message", T: StreamUnifiedChatRequest_CodeSearchResult, opt: true },
+    { no: 43, name: "context_bank_encryption_key", kind: "scalar", T: 12 /* ScalarType.BYTES */, opt: true },
     { no: 44, name: "repo_query_auth_token", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 45, name: "is_headless", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 46, name: "unified_mode", kind: "enum", T: proto3.getEnumType(StreamUnifiedChatRequest_UnifiedMode) },
+    { no: 46, name: "unified_mode", kind: "enum", T: proto3.getEnumType(StreamUnifiedChatRequest_UnifiedMode), opt: true },
     { no: 47, name: "tools_requiring_accepted_return", kind: "enum", T: proto3.getEnumType(ClientSideToolV2), repeated: true },
-    { no: 48, name: "should_disable_tools", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 49, name: "thinking_level", kind: "enum", T: proto3.getEnumType(StreamUnifiedChatRequest_ThinkingLevel) },
-    { no: 50, name: "should_use_chat_prompt", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 51, name: "uses_rules", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 52, name: "query_only_repo_access", kind: "message", T: QueryOnlyRepoAccess },
-    { no: 53, name: "mode_uses_auto_apply", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 54, name: "unified_mode_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 55, name: "background_composer_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 56, name: "use_generate_rules_prompt", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 57, name: "edit_tool_supports_search_and_replace", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 48, name: "should_disable_tools", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 49, name: "thinking_level", kind: "enum", T: proto3.getEnumType(StreamUnifiedChatRequest_ThinkingLevel), opt: true },
+    { no: 50, name: "should_use_chat_prompt", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 51, name: "uses_rules", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 52, name: "query_only_repo_access", kind: "message", T: QueryOnlyRepoAccess, opt: true },
+    { no: 53, name: "mode_uses_auto_apply", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 54, name: "unified_mode_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 55, name: "background_composer_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 56, name: "use_generate_rules_prompt", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 57, name: "edit_tool_supports_search_and_replace", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 58, name: "project_layouts", kind: "message", T: ProjectLayout, repeated: true },
-    { no: 59, name: "repository_name_if_unindexed", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 60, name: "indexing_progress", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 61, name: "full_file_cmd_k_options", kind: "message", T: StreamUnifiedChatRequest_FullFileCmdKOptions },
-    { no: 62, name: "indexing_phase_if_unindexed", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 63, name: "use_knowledge_base_prompt", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 64, name: "indexing_num_files_if_unindexed", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 66, name: "subagent_info", kind: "message", T: SubagentInfo },
+    { no: 59, name: "repository_name_if_unindexed", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 60, name: "indexing_progress", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
+    { no: 61, name: "full_file_cmd_k_options", kind: "message", T: StreamUnifiedChatRequest_FullFileCmdKOptions, opt: true },
+    { no: 62, name: "indexing_phase_if_unindexed", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 63, name: "use_knowledge_base_prompt", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 64, name: "indexing_num_files_if_unindexed", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 66, name: "subagent_info", kind: "message", T: SubagentInfo, opt: true },
     { no: 67, name: "supports_git_index", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 68, name: "is_background_composer", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 69, name: "force_is_not_dev", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 70, name: "disable_edit_file_timeout", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 71, name: "should_attach_linter_errors", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 70, name: "disable_edit_file_timeout", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 71, name: "should_attach_linter_errors", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 72, name: "replying_to_request_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 73, name: "should_speculatively_route_gpt5", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 74, name: "force_terminal_hanging_detection", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 75, name: "force_summarization", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 76, name: "is_quick_search_query", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 77, name: "is_spec_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 73, name: "should_speculatively_route_gpt5", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 74, name: "force_terminal_hanging_detection", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 75, name: "force_summarization", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 76, name: "is_quick_search_query", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 77, name: "is_spec_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 78, name: "allow_server_side_semantic_search", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 79, name: "speculative_summarization_encryption_key", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
+    { no: 79, name: "speculative_summarization_encryption_key", kind: "scalar", T: 12 /* ScalarType.BYTES */, opt: true },
     { no: 81, name: "workspace_folders", kind: "message", T: WorkspaceFolder, repeated: true },
-    { no: 82, name: "does_readfile_support_images", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 83, name: "sandboxing_support_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 84, name: "custom_planning_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 85, name: "enable_terminal_file_persistence", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 86, name: "terminals_folder", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 87, name: "agent_notes_folder", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 88, name: "agent_tools_folder", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 89, name: "current_plan", kind: "message", T: StreamUnifiedChatRequest_CurrentPlan },
-    { no: 90, name: "has_mcp_descriptors", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 91, name: "best_of_n_group_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 92, name: "try_use_best_of_n_promotion", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 93, name: "agent_transcripts_folder", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 82, name: "does_readfile_support_images", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 83, name: "sandboxing_support_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 84, name: "custom_planning_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 85, name: "enable_terminal_file_persistence", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 86, name: "terminals_folder", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 87, name: "agent_notes_folder", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 88, name: "agent_tools_folder", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 89, name: "current_plan", kind: "message", T: StreamUnifiedChatRequest_CurrentPlan, opt: true },
+    { no: 90, name: "has_mcp_descriptors", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 91, name: "best_of_n_group_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 92, name: "try_use_best_of_n_promotion", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 93, name: "agent_transcripts_folder", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StreamUnifiedChatRequest {
@@ -6837,9 +6837,9 @@ export class StreamUnifiedChatRequest_RecentEdits extends Message<StreamUnifiedC
   finalFileValues: StreamUnifiedChatRequest_RecentEdits_FileInfo[] = [];
 
   /**
-   * @generated from field: string edits_belong_to_composer_generation_uuid = 3;
+   * @generated from field: optional string edits_belong_to_composer_generation_uuid = 3;
    */
-  editsBelongToComposerGenerationUuid = "";
+  editsBelongToComposerGenerationUuid?: string;
 
   constructor(data?: PartialMessage<StreamUnifiedChatRequest_RecentEdits>) {
     super();
@@ -6851,7 +6851,7 @@ export class StreamUnifiedChatRequest_RecentEdits extends Message<StreamUnifiedC
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "code_block_info", kind: "message", T: StreamUnifiedChatRequest_RecentEdits_CodeBlockInfo, repeated: true },
     { no: 2, name: "final_file_values", kind: "message", T: StreamUnifiedChatRequest_RecentEdits_FileInfo, repeated: true },
-    { no: 3, name: "edits_belong_to_composer_generation_uuid", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "edits_belong_to_composer_generation_uuid", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StreamUnifiedChatRequest_RecentEdits {
@@ -6881,24 +6881,24 @@ export class StreamUnifiedChatRequest_RecentEdits_CodeBlockInfo extends Message<
   relativeWorkspacePath = "";
 
   /**
-   * @generated from field: string content_before = 2;
+   * @generated from field: optional string content_before = 2;
    */
-  contentBefore = "";
+  contentBefore?: string;
 
   /**
-   * @generated from field: string content_after = 3;
+   * @generated from field: optional string content_after = 3;
    */
-  contentAfter = "";
+  contentAfter?: string;
 
   /**
-   * @generated from field: string generation_uuid = 4;
+   * @generated from field: optional string generation_uuid = 4;
    */
-  generationUuid = "";
+  generationUuid?: string;
 
   /**
-   * @generated from field: int32 version = 5;
+   * @generated from field: optional int32 version = 5;
    */
-  version = 0;
+  version?: number;
 
   constructor(data?: PartialMessage<StreamUnifiedChatRequest_RecentEdits_CodeBlockInfo>) {
     super();
@@ -6909,10 +6909,10 @@ export class StreamUnifiedChatRequest_RecentEdits_CodeBlockInfo extends Message<
   static readonly typeName = "aiserver.v1.StreamUnifiedChatRequest.RecentEdits.CodeBlockInfo";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "content_before", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "content_after", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "generation_uuid", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "version", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 2, name: "content_before", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "content_after", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "generation_uuid", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "version", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StreamUnifiedChatRequest_RecentEdits_CodeBlockInfo {
@@ -7091,14 +7091,14 @@ export class StreamUnifiedChatRequestWithTools extends Message<StreamUnifiedChat
  */
 export class StreamUnifiedChatRequestWithToolsIdempotent extends Message<StreamUnifiedChatRequestWithToolsIdempotent> {
   /**
-   * @generated from field: string idempotency_key = 4;
+   * @generated from field: optional string idempotency_key = 4;
    */
-  idempotencyKey = "";
+  idempotencyKey?: string;
 
   /**
-   * @generated from field: uint32 seqno = 5;
+   * @generated from field: optional uint32 seqno = 5;
    */
-  seqno = 0;
+  seqno?: number;
 
   /**
    * @generated from oneof aiserver.v1.StreamUnifiedChatRequestWithToolsIdempotent.request
@@ -7131,8 +7131,8 @@ export class StreamUnifiedChatRequestWithToolsIdempotent extends Message<StreamU
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.StreamUnifiedChatRequestWithToolsIdempotent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 4, name: "idempotency_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "seqno", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 4, name: "idempotency_key", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "seqno", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
     { no: 1, name: "client_chunk", kind: "message", T: StreamUnifiedChatRequestWithTools, oneof: "request" },
     { no: 2, name: "abort", kind: "message", T: Empty, oneof: "request" },
     { no: 3, name: "close", kind: "message", T: Empty, oneof: "request" },
@@ -7165,184 +7165,184 @@ export class StreamUnifiedChatResponse extends Message<StreamUnifiedChatResponse
   text = "";
 
   /**
-   * @generated from field: string debugging_only_chat_prompt = 2;
+   * @generated from field: optional string debugging_only_chat_prompt = 2;
    */
-  debuggingOnlyChatPrompt = "";
+  debuggingOnlyChatPrompt?: string;
 
   /**
-   * @generated from field: int32 debugging_only_token_count = 3;
+   * @generated from field: optional int32 debugging_only_token_count = 3;
    */
-  debuggingOnlyTokenCount = 0;
+  debuggingOnlyTokenCount?: number;
 
   /**
-   * @generated from field: aiserver.v1.DocumentationCitation document_citation = 4;
+   * @generated from field: optional aiserver.v1.DocumentationCitation document_citation = 4;
    */
   documentCitation?: DocumentationCitation;
 
   /**
-   * @generated from field: string filled_prompt = 5;
+   * @generated from field: optional string filled_prompt = 5;
    */
-  filledPrompt = "";
+  filledPrompt?: string;
 
   /**
-   * @generated from field: bool is_big_file = 6;
+   * @generated from field: optional bool is_big_file = 6;
    */
-  isBigFile = false;
+  isBigFile?: boolean;
 
   /**
-   * @generated from field: string intermediate_text = 7;
+   * @generated from field: optional string intermediate_text = 7;
    */
-  intermediateText = "";
+  intermediateText?: string;
 
   /**
-   * @generated from field: aiserver.v1.StreamUnifiedChatResponse.ChunkIdentity chunk_identity = 8;
+   * @generated from field: optional aiserver.v1.StreamUnifiedChatResponse.ChunkIdentity chunk_identity = 8;
    */
   chunkIdentity?: StreamUnifiedChatResponse_ChunkIdentity;
 
   /**
-   * @generated from field: aiserver.v1.DocsReference docs_reference = 9;
+   * @generated from field: optional aiserver.v1.DocsReference docs_reference = 9;
    */
   docsReference?: DocsReference;
 
   /**
-   * @generated from field: bool is_using_slow_request = 10;
+   * @generated from field: optional bool is_using_slow_request = 10;
    */
-  isUsingSlowRequest = false;
+  isUsingSlowRequest?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.WebCitation web_citation = 11;
+   * @generated from field: optional aiserver.v1.WebCitation web_citation = 11;
    */
   webCitation?: WebCitation;
 
   /**
-   * @generated from field: aiserver.v1.StatusUpdates status_updates = 12;
+   * @generated from field: optional aiserver.v1.StatusUpdates status_updates = 12;
    */
   statusUpdates?: StatusUpdates;
 
   /**
-   * @generated from field: aiserver.v1.StreamedBackToolCall tool_call = 13;
+   * @generated from field: optional aiserver.v1.StreamedBackToolCall tool_call = 13;
    */
   toolCall?: StreamedBackToolCall;
 
   /**
-   * @generated from field: bool should_break_ai_message = 14;
+   * @generated from field: optional bool should_break_ai_message = 14;
    */
-  shouldBreakAiMessage = false;
+  shouldBreakAiMessage?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.StreamedBackPartialToolCall partial_tool_call = 15;
+   * @generated from field: optional aiserver.v1.StreamedBackPartialToolCall partial_tool_call = 15;
    */
   partialToolCall?: StreamedBackPartialToolCall;
 
   /**
-   * @generated from field: aiserver.v1.StreamUnifiedChatResponse.FinalToolResult final_tool_result = 16;
+   * @generated from field: optional aiserver.v1.StreamUnifiedChatResponse.FinalToolResult final_tool_result = 16;
    */
   finalToolResult?: StreamUnifiedChatResponse_FinalToolResult;
 
   /**
-   * @generated from field: aiserver.v1.SymbolLink symbol_link = 17;
+   * @generated from field: optional aiserver.v1.SymbolLink symbol_link = 17;
    */
   symbolLink?: SymbolLink;
 
   /**
-   * @generated from field: aiserver.v1.ConversationSummary conversation_summary = 18;
+   * @generated from field: optional aiserver.v1.ConversationSummary conversation_summary = 18;
    */
   conversationSummary?: ConversationSummary;
 
   /**
-   * @generated from field: aiserver.v1.FileLink file_link = 19;
+   * @generated from field: optional aiserver.v1.FileLink file_link = 19;
    */
   fileLink?: FileLink;
 
   /**
-   * @generated from field: aiserver.v1.ServiceStatusUpdate service_status_update = 20;
+   * @generated from field: optional aiserver.v1.ServiceStatusUpdate service_status_update = 20;
    */
   serviceStatusUpdate?: ServiceStatusUpdate;
 
   /**
-   * @generated from field: aiserver.v1.ViewableGitContext viewable_git_context = 21;
+   * @generated from field: optional aiserver.v1.ViewableGitContext viewable_git_context = 21;
    */
   viewableGitContext?: ViewableGitContext;
 
   /**
-   * @generated from field: string server_bubble_id = 22;
+   * @generated from field: optional string server_bubble_id = 22;
    */
-  serverBubbleId = "";
+  serverBubbleId?: string;
 
   /**
-   * @generated from field: aiserver.v1.ContextPieceUpdate context_piece_update = 23;
+   * @generated from field: optional aiserver.v1.ContextPieceUpdate context_piece_update = 23;
    */
   contextPieceUpdate?: ContextPieceUpdate;
 
   /**
-   * @generated from field: aiserver.v1.StreamUnifiedChatResponse.UsedCode used_code = 24;
+   * @generated from field: optional aiserver.v1.StreamUnifiedChatResponse.UsedCode used_code = 24;
    */
   usedCode?: StreamUnifiedChatResponse_UsedCode;
 
   /**
-   * @generated from field: aiserver.v1.ConversationMessage.Thinking thinking = 25;
+   * @generated from field: optional aiserver.v1.ConversationMessage.Thinking thinking = 25;
    */
   thinking?: ConversationMessage_Thinking;
 
   /**
-   * @generated from field: bool stop_using_dsv3_agentic_model = 26;
+   * @generated from field: optional bool stop_using_dsv3_agentic_model = 26;
    */
-  stopUsingDsv3AgenticModel = false;
+  stopUsingDsv3AgenticModel?: boolean;
 
   /**
-   * @generated from field: string usage_uuid = 27;
+   * @generated from field: optional string usage_uuid = 27;
    */
-  usageUuid = "";
+  usageUuid?: string;
 
   /**
-   * @generated from field: aiserver.v1.ConversationSummaryStarter conversation_summary_starter = 28;
+   * @generated from field: optional aiserver.v1.ConversationSummaryStarter conversation_summary_starter = 28;
    */
   conversationSummaryStarter?: ConversationSummaryStarter;
 
   /**
-   * @generated from field: aiserver.v1.SubagentReturnCall subagent_return = 29;
+   * @generated from field: optional aiserver.v1.SubagentReturnCall subagent_return = 29;
    */
   subagentReturn?: SubagentReturnCall;
 
   /**
-   * @generated from field: aiserver.v1.ContextWindowStatus context_window_status = 30;
+   * @generated from field: optional aiserver.v1.ContextWindowStatus context_window_status = 30;
    */
   contextWindowStatus?: ContextWindowStatus;
 
   /**
-   * @generated from field: aiserver.v1.StreamUnifiedChatResponse.ImageDescription image_description = 31;
+   * @generated from field: optional aiserver.v1.StreamUnifiedChatResponse.ImageDescription image_description = 31;
    */
   imageDescription?: StreamUnifiedChatResponse_ImageDescription;
 
   /**
-   * @generated from field: bool parallel_tool_calls_complete = 32;
+   * @generated from field: optional bool parallel_tool_calls_complete = 32;
    */
-  parallelToolCallsComplete = false;
+  parallelToolCallsComplete?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.AiWebSearchResults ai_web_search_results = 33;
+   * @generated from field: optional aiserver.v1.AiWebSearchResults ai_web_search_results = 33;
    */
   aiWebSearchResults?: AiWebSearchResults;
 
   /**
-   * @generated from field: aiserver.v1.StarsFeedbackRequest stars_feedback_request = 34;
+   * @generated from field: optional aiserver.v1.StarsFeedbackRequest stars_feedback_request = 34;
    */
   starsFeedbackRequest?: StarsFeedbackRequest;
 
   /**
-   * @generated from field: string model_provider_request_json = 35;
+   * @generated from field: optional string model_provider_request_json = 35;
    */
-  modelProviderRequestJson = "";
+  modelProviderRequestJson?: string;
 
   /**
-   * @generated from field: aiserver.v1.StreamedBackToolCallV2 tool_call_v2 = 36;
+   * @generated from field: optional aiserver.v1.StreamedBackToolCallV2 tool_call_v2 = 36;
    */
   toolCallV2?: StreamedBackToolCallV2;
 
   /**
-   * @generated from field: aiserver.v1.ConversationMessage.ThinkingStyle thinking_style = 37;
+   * @generated from field: optional aiserver.v1.ConversationMessage.ThinkingStyle thinking_style = 37;
    */
-  thinkingStyle = ConversationMessage_ThinkingStyle.UNSPECIFIED;
+  thinkingStyle?: ConversationMessage_ThinkingStyle;
 
   constructor(data?: PartialMessage<StreamUnifiedChatResponse>) {
     super();
@@ -7353,42 +7353,42 @@ export class StreamUnifiedChatResponse extends Message<StreamUnifiedChatResponse
   static readonly typeName = "aiserver.v1.StreamUnifiedChatResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "debugging_only_chat_prompt", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "debugging_only_token_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 4, name: "document_citation", kind: "message", T: DocumentationCitation },
-    { no: 5, name: "filled_prompt", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "is_big_file", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 7, name: "intermediate_text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "chunk_identity", kind: "message", T: StreamUnifiedChatResponse_ChunkIdentity },
-    { no: 9, name: "docs_reference", kind: "message", T: DocsReference },
-    { no: 10, name: "is_using_slow_request", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 11, name: "web_citation", kind: "message", T: WebCitation },
-    { no: 12, name: "status_updates", kind: "message", T: StatusUpdates },
-    { no: 13, name: "tool_call", kind: "message", T: StreamedBackToolCall },
-    { no: 14, name: "should_break_ai_message", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 15, name: "partial_tool_call", kind: "message", T: StreamedBackPartialToolCall },
-    { no: 16, name: "final_tool_result", kind: "message", T: StreamUnifiedChatResponse_FinalToolResult },
-    { no: 17, name: "symbol_link", kind: "message", T: SymbolLink },
-    { no: 18, name: "conversation_summary", kind: "message", T: ConversationSummary },
-    { no: 19, name: "file_link", kind: "message", T: FileLink },
-    { no: 20, name: "service_status_update", kind: "message", T: ServiceStatusUpdate },
-    { no: 21, name: "viewable_git_context", kind: "message", T: ViewableGitContext },
-    { no: 22, name: "server_bubble_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 23, name: "context_piece_update", kind: "message", T: ContextPieceUpdate },
-    { no: 24, name: "used_code", kind: "message", T: StreamUnifiedChatResponse_UsedCode },
-    { no: 25, name: "thinking", kind: "message", T: ConversationMessage_Thinking },
-    { no: 26, name: "stop_using_dsv3_agentic_model", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 27, name: "usage_uuid", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 28, name: "conversation_summary_starter", kind: "message", T: ConversationSummaryStarter },
-    { no: 29, name: "subagent_return", kind: "message", T: SubagentReturnCall },
-    { no: 30, name: "context_window_status", kind: "message", T: ContextWindowStatus },
-    { no: 31, name: "image_description", kind: "message", T: StreamUnifiedChatResponse_ImageDescription },
-    { no: 32, name: "parallel_tool_calls_complete", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 33, name: "ai_web_search_results", kind: "message", T: AiWebSearchResults },
-    { no: 34, name: "stars_feedback_request", kind: "message", T: StarsFeedbackRequest },
-    { no: 35, name: "model_provider_request_json", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 36, name: "tool_call_v2", kind: "message", T: StreamedBackToolCallV2 },
-    { no: 37, name: "thinking_style", kind: "enum", T: proto3.getEnumType(ConversationMessage_ThinkingStyle) },
+    { no: 2, name: "debugging_only_chat_prompt", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "debugging_only_token_count", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 4, name: "document_citation", kind: "message", T: DocumentationCitation, opt: true },
+    { no: 5, name: "filled_prompt", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "is_big_file", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 7, name: "intermediate_text", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "chunk_identity", kind: "message", T: StreamUnifiedChatResponse_ChunkIdentity, opt: true },
+    { no: 9, name: "docs_reference", kind: "message", T: DocsReference, opt: true },
+    { no: 10, name: "is_using_slow_request", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 11, name: "web_citation", kind: "message", T: WebCitation, opt: true },
+    { no: 12, name: "status_updates", kind: "message", T: StatusUpdates, opt: true },
+    { no: 13, name: "tool_call", kind: "message", T: StreamedBackToolCall, opt: true },
+    { no: 14, name: "should_break_ai_message", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 15, name: "partial_tool_call", kind: "message", T: StreamedBackPartialToolCall, opt: true },
+    { no: 16, name: "final_tool_result", kind: "message", T: StreamUnifiedChatResponse_FinalToolResult, opt: true },
+    { no: 17, name: "symbol_link", kind: "message", T: SymbolLink, opt: true },
+    { no: 18, name: "conversation_summary", kind: "message", T: ConversationSummary, opt: true },
+    { no: 19, name: "file_link", kind: "message", T: FileLink, opt: true },
+    { no: 20, name: "service_status_update", kind: "message", T: ServiceStatusUpdate, opt: true },
+    { no: 21, name: "viewable_git_context", kind: "message", T: ViewableGitContext, opt: true },
+    { no: 22, name: "server_bubble_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 23, name: "context_piece_update", kind: "message", T: ContextPieceUpdate, opt: true },
+    { no: 24, name: "used_code", kind: "message", T: StreamUnifiedChatResponse_UsedCode, opt: true },
+    { no: 25, name: "thinking", kind: "message", T: ConversationMessage_Thinking, opt: true },
+    { no: 26, name: "stop_using_dsv3_agentic_model", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 27, name: "usage_uuid", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 28, name: "conversation_summary_starter", kind: "message", T: ConversationSummaryStarter, opt: true },
+    { no: 29, name: "subagent_return", kind: "message", T: SubagentReturnCall, opt: true },
+    { no: 30, name: "context_window_status", kind: "message", T: ContextWindowStatus, opt: true },
+    { no: 31, name: "image_description", kind: "message", T: StreamUnifiedChatResponse_ImageDescription, opt: true },
+    { no: 32, name: "parallel_tool_calls_complete", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 33, name: "ai_web_search_results", kind: "message", T: AiWebSearchResults, opt: true },
+    { no: 34, name: "stars_feedback_request", kind: "message", T: StarsFeedbackRequest, opt: true },
+    { no: 35, name: "model_provider_request_json", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 36, name: "tool_call_v2", kind: "message", T: StreamedBackToolCallV2, opt: true },
+    { no: 37, name: "thinking_style", kind: "enum", T: proto3.getEnumType(ConversationMessage_ThinkingStyle), opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StreamUnifiedChatResponse {
@@ -7479,7 +7479,7 @@ export class StreamUnifiedChatResponse_FinalToolResult extends Message<StreamUni
   toolCallId = "";
 
   /**
-   * @generated from field: aiserver.v1.ClientSideToolV2Result result = 2;
+   * @generated from field: optional aiserver.v1.ClientSideToolV2Result result = 2;
    */
   result?: ClientSideToolV2Result;
 
@@ -7492,7 +7492,7 @@ export class StreamUnifiedChatResponse_FinalToolResult extends Message<StreamUni
   static readonly typeName = "aiserver.v1.StreamUnifiedChatResponse.FinalToolResult";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "result", kind: "message", T: ClientSideToolV2Result },
+    { no: 2, name: "result", kind: "message", T: ClientSideToolV2Result, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StreamUnifiedChatResponse_FinalToolResult {
@@ -7597,7 +7597,7 @@ export class StreamUnifiedChatResponse_UsedCode extends Message<StreamUnifiedCha
  */
 export class StreamUnifiedChatResponseWithTools extends Message<StreamUnifiedChatResponseWithTools> {
   /**
-   * @generated from field: aiserver.v1.SpanContext tracing_context = 6;
+   * @generated from field: optional aiserver.v1.SpanContext tracing_context = 6;
    */
   tracingContext?: SpanContext;
 
@@ -7649,7 +7649,7 @@ export class StreamUnifiedChatResponseWithTools extends Message<StreamUnifiedCha
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.StreamUnifiedChatResponseWithTools";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 6, name: "tracing_context", kind: "message", T: SpanContext },
+    { no: 6, name: "tracing_context", kind: "message", T: SpanContext, opt: true },
     { no: 7, name: "event_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 1, name: "client_side_tool_v2_call", kind: "message", T: ClientSideToolV2Call, oneof: "response" },
     { no: 2, name: "stream_unified_chat_response", kind: "message", T: StreamUnifiedChatResponse, oneof: "response" },
@@ -7747,9 +7747,9 @@ export class SubagentInfo extends Message<SubagentInfo> {
   subagentId = "";
 
   /**
-   * @generated from field: string parent_request_id = 5;
+   * @generated from field: optional string parent_request_id = 5;
    */
-  parentRequestId = "";
+  parentRequestId?: string;
 
   /**
    * @generated from oneof aiserver.v1.SubagentInfo.params
@@ -7790,7 +7790,7 @@ export class SubagentInfo extends Message<SubagentInfo> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "subagent_type", kind: "enum", T: proto3.getEnumType(SubagentType) },
     { no: 2, name: "subagent_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "parent_request_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "parent_request_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "deep_search_params", kind: "message", T: DeepSearchSubagentParams, oneof: "params" },
     { no: 4, name: "fix_lints_params", kind: "message", T: FixLintsSubagentParams, oneof: "params" },
     { no: 6, name: "task_params", kind: "message", T: TaskSubagentParams, oneof: "params" },

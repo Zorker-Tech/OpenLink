@@ -12,7 +12,7 @@ import { StartGrindExecutionArgs, StartGrindExecutionError, StartGrindExecutionR
 function toRedactedStartGrindExecutionArgs(msg, privacyMode) {
   return {
     _privacyMode: privacyMode,
-    explanation: createRedactedString(msg.explanation, DataClassification.CODE, "explanation", privacyMode),
+    explanation: msg.explanation !== void 0 ? createRedactedString(msg.explanation, DataClassification.CODE, "explanation", privacyMode) : void 0,
     toolCallId: msg.toolCallId,
   };
 }
@@ -21,7 +21,7 @@ function fromRedactedStartGrindExecutionArgs(msg, purpose, opts) {
   const redactUnallowedFieldsInsteadOfThrowing = opts?.redactUnallowedFieldsInsteadOfThrowing ?? false;
   const enforcing = opts?.enforcing;
   return new StartGrindExecutionArgs({
-    explanation: msg.explanation.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    explanation: msg.explanation?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     toolCallId: msg.toolCallId,
   });
 }

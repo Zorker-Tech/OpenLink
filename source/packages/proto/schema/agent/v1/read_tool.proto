@@ -10,15 +10,15 @@ package agent.v1;
 import "agent/v1/rules.proto";
 
 message ReadToolCall {
-  .agent.v1.ReadToolArgs args = 1 [json_name = "args"];
-  .agent.v1.ReadToolResult result = 2 [json_name = "result"];
+  optional .agent.v1.ReadToolArgs args = 1 [json_name = "args"];
+  optional .agent.v1.ReadToolResult result = 2 [json_name = "result"];
 }
 
 message ReadToolArgs {
   string path = 1 [json_name = "path"];
-  int32 offset = 2 [json_name = "offset"];
-  int32 limit = 3 [json_name = "limit"];
-  bool include_line_numbers = 5 [json_name = "includeLineNumbers"];
+  optional int32 offset = 2 [json_name = "offset"];
+  optional int32 limit = 3 [json_name = "limit"];
+  optional bool include_line_numbers = 5 [json_name = "includeLineNumbers"];
 }
 
 message ReadToolResult {
@@ -34,8 +34,8 @@ message ReadToolSuccess {
   uint32 total_lines = 4 [json_name = "totalLines"];
   uint32 file_size = 5 [json_name = "fileSize"];
   string path = 7 [json_name = "path"];
-  .agent.v1.ReadRange read_range = 8 [json_name = "readRange"];
-  bool include_line_numbers = 11 [json_name = "includeLineNumbers"];
+  optional .agent.v1.ReadRange read_range = 8 [json_name = "readRange"];
+  optional bool include_line_numbers = 11 [json_name = "includeLineNumbers"];
   repeated string related_cursor_rule_paths = 12 [json_name = "relatedCursorRulePaths"];
   repeated .agent.v1.CursorRule related_cursor_rules = 13 [json_name = "relatedCursorRules"];
   oneof output {

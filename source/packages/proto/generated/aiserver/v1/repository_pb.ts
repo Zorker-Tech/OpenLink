@@ -263,19 +263,19 @@ export class RepositoryInfo extends Message<RepositoryInfo> {
   isLocal = false;
 
   /**
-   * @generated from field: int32 num_files = 8;
+   * @generated from field: optional int32 num_files = 8;
    */
-  numFiles = 0;
+  numFiles?: number;
 
   /**
-   * @generated from field: double orthogonal_transform_seed = 9;
+   * @generated from field: optional double orthogonal_transform_seed = 9;
    */
-  orthogonalTransformSeed = 0;
+  orthogonalTransformSeed?: number;
 
   /**
-   * @generated from field: aiserver.v1.EmbeddingModel preferred_embedding_model = 10;
+   * @generated from field: optional aiserver.v1.EmbeddingModel preferred_embedding_model = 10;
    */
-  preferredEmbeddingModel = EmbeddingModel.UNSPECIFIED;
+  preferredEmbeddingModel?: EmbeddingModel;
 
   /**
    * @generated from field: string workspace_uri = 11;
@@ -283,9 +283,9 @@ export class RepositoryInfo extends Message<RepositoryInfo> {
   workspaceUri = "";
 
   /**
-   * @generated from field: aiserver.v1.DatabaseProvider preferred_db_provider = 12;
+   * @generated from field: optional aiserver.v1.DatabaseProvider preferred_db_provider = 12;
    */
-  preferredDbProvider = DatabaseProvider.UNSPECIFIED;
+  preferredDbProvider?: DatabaseProvider;
 
   constructor(data?: PartialMessage<RepositoryInfo>) {
     super();
@@ -302,11 +302,11 @@ export class RepositoryInfo extends Message<RepositoryInfo> {
     { no: 5, name: "repo_owner", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 6, name: "is_tracked", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 7, name: "is_local", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 8, name: "num_files", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 9, name: "orthogonal_transform_seed", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 10, name: "preferred_embedding_model", kind: "enum", T: proto3.getEnumType(EmbeddingModel) },
+    { no: 8, name: "num_files", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 9, name: "orthogonal_transform_seed", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
+    { no: 10, name: "preferred_embedding_model", kind: "enum", T: proto3.getEnumType(EmbeddingModel), opt: true },
     { no: 11, name: "workspace_uri", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 12, name: "preferred_db_provider", kind: "enum", T: proto3.getEnumType(DatabaseProvider) },
+    { no: 12, name: "preferred_db_provider", kind: "enum", T: proto3.getEnumType(DatabaseProvider), opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RepositoryInfo {
@@ -331,7 +331,7 @@ export class RepositoryInfo extends Message<RepositoryInfo> {
  */
 export class CodeResult extends Message<CodeResult> {
   /**
-   * @generated from field: aiserver.v1.CodeBlock code_block = 1;
+   * @generated from field: optional aiserver.v1.CodeBlock code_block = 1;
    */
   codeBlock?: CodeBlock;
 
@@ -348,7 +348,7 @@ export class CodeResult extends Message<CodeResult> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CodeResult";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "code_block", kind: "message", T: CodeBlock },
+    { no: 1, name: "code_block", kind: "message", T: CodeBlock, opt: true },
     { no: 2, name: "score", kind: "scalar", T: 2 /* ScalarType.FLOAT */ },
   ]);
 
@@ -423,12 +423,12 @@ export class SearchRepositoryDeepContextResponse extends Message<SearchRepositor
  */
 export class NodeResult extends Message<NodeResult> {
   /**
-   * @generated from field: aiserver.v1.IndexFileData.NodeData node = 1;
+   * @generated from field: optional aiserver.v1.IndexFileData.NodeData node = 1;
    */
   node?: IndexFileData_NodeData;
 
   /**
-   * @generated from field: aiserver.v1.File file = 2;
+   * @generated from field: optional aiserver.v1.File file = 2;
    */
   file?: File;
 
@@ -445,8 +445,8 @@ export class NodeResult extends Message<NodeResult> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.NodeResult";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "node", kind: "message", T: IndexFileData_NodeData },
-    { no: 2, name: "file", kind: "message", T: File },
+    { no: 1, name: "node", kind: "message", T: IndexFileData_NodeData, opt: true },
+    { no: 2, name: "file", kind: "message", T: File, opt: true },
     { no: 3, name: "score", kind: "scalar", T: 2 /* ScalarType.FLOAT */ },
   ]);
 
@@ -472,7 +472,7 @@ export class NodeResult extends Message<NodeResult> {
  */
 export class ReflectionResult extends Message<ReflectionResult> {
   /**
-   * @generated from field: aiserver.v1.ReflectionData reflection = 1;
+   * @generated from field: optional aiserver.v1.ReflectionData reflection = 1;
    */
   reflection?: ReflectionData;
 
@@ -489,7 +489,7 @@ export class ReflectionResult extends Message<ReflectionResult> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ReflectionResult";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "reflection", kind: "message", T: ReflectionData },
+    { no: 1, name: "reflection", kind: "message", T: ReflectionData, opt: true },
     { no: 2, name: "score", kind: "scalar", T: 2 /* ScalarType.FLOAT */ },
   ]);
 
@@ -515,7 +515,7 @@ export class ReflectionResult extends Message<ReflectionResult> {
  */
 export class FileResult extends Message<FileResult> {
   /**
-   * @generated from field: aiserver.v1.File file = 1;
+   * @generated from field: optional aiserver.v1.File file = 1;
    */
   file?: File;
 
@@ -532,7 +532,7 @@ export class FileResult extends Message<FileResult> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.FileResult";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "file", kind: "message", T: File },
+    { no: 1, name: "file", kind: "message", T: File, opt: true },
     { no: 2, name: "score", kind: "scalar", T: 2 /* ScalarType.FLOAT */ },
   ]);
 
@@ -792,12 +792,12 @@ export class ClientRepositoryInfo extends Message<ClientRepositoryInfo> {
  */
 export class CodeResultWithClassificationInfo extends Message<CodeResultWithClassificationInfo> {
   /**
-   * @generated from field: aiserver.v1.CodeResult code_result = 1;
+   * @generated from field: optional aiserver.v1.CodeResult code_result = 1;
    */
   codeResult?: CodeResult;
 
   /**
-   * @generated from field: aiserver.v1.CodeResultWithClassificationInfo.LineNumberClassification line_number_classification = 2;
+   * @generated from field: optional aiserver.v1.CodeResultWithClassificationInfo.LineNumberClassification line_number_classification = 2;
    */
   lineNumberClassification?: CodeResultWithClassificationInfo_LineNumberClassification;
 
@@ -809,8 +809,8 @@ export class CodeResultWithClassificationInfo extends Message<CodeResultWithClas
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CodeResultWithClassificationInfo";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "code_result", kind: "message", T: CodeResult },
-    { no: 2, name: "line_number_classification", kind: "message", T: CodeResultWithClassificationInfo_LineNumberClassification },
+    { no: 1, name: "code_result", kind: "message", T: CodeResult, opt: true },
+    { no: 2, name: "line_number_classification", kind: "message", T: CodeResultWithClassificationInfo_LineNumberClassification, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CodeResultWithClassificationInfo {
@@ -835,7 +835,7 @@ export class CodeResultWithClassificationInfo extends Message<CodeResultWithClas
  */
 export class CodeResultWithClassificationInfo_LineNumberClassification extends Message<CodeResultWithClassificationInfo_LineNumberClassification> {
   /**
-   * @generated from field: aiserver.v1.DetailedLine detailed_line = 1;
+   * @generated from field: optional aiserver.v1.DetailedLine detailed_line = 1;
    */
   detailedLine?: DetailedLine;
 
@@ -850,7 +850,7 @@ export class CodeResultWithClassificationInfo_LineNumberClassification extends M
   matchedStrings: string[] = [];
 
   /**
-   * @generated from field: aiserver.v1.SimpleRange highlight_range = 4;
+   * @generated from field: optional aiserver.v1.SimpleRange highlight_range = 4;
    */
   highlightRange?: SimpleRange;
 
@@ -862,10 +862,10 @@ export class CodeResultWithClassificationInfo_LineNumberClassification extends M
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CodeResultWithClassificationInfo.LineNumberClassification";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "detailed_line", kind: "message", T: DetailedLine },
+    { no: 1, name: "detailed_line", kind: "message", T: DetailedLine, opt: true },
     { no: 2, name: "query_computed_for", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "matched_strings", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 4, name: "highlight_range", kind: "message", T: SimpleRange },
+    { no: 4, name: "highlight_range", kind: "message", T: SimpleRange, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CodeResultWithClassificationInfo_LineNumberClassification {
@@ -890,7 +890,7 @@ export class CodeResultWithClassificationInfo_LineNumberClassification extends M
  */
 export class EnsureIndexCreatedRequest extends Message<EnsureIndexCreatedRequest> {
   /**
-   * @generated from field: aiserver.v1.RepositoryInfo repository = 1;
+   * @generated from field: optional aiserver.v1.RepositoryInfo repository = 1;
    */
   repository?: RepositoryInfo;
 
@@ -902,7 +902,7 @@ export class EnsureIndexCreatedRequest extends Message<EnsureIndexCreatedRequest
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.EnsureIndexCreatedRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repository", kind: "message", T: RepositoryInfo },
+    { no: 1, name: "repository", kind: "message", T: RepositoryInfo, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): EnsureIndexCreatedRequest {
@@ -958,7 +958,7 @@ export class EnsureIndexCreatedResponse extends Message<EnsureIndexCreatedRespon
  */
 export class FastRepoInitHandshakeRequest extends Message<FastRepoInitHandshakeRequest> {
   /**
-   * @generated from field: aiserver.v1.RepositoryInfo repository = 1;
+   * @generated from field: optional aiserver.v1.RepositoryInfo repository = 1;
    */
   repository?: RepositoryInfo;
 
@@ -980,7 +980,7 @@ export class FastRepoInitHandshakeRequest extends Message<FastRepoInitHandshakeR
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.FastRepoInitHandshakeRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repository", kind: "message", T: RepositoryInfo },
+    { no: 1, name: "repository", kind: "message", T: RepositoryInfo, opt: true },
     { no: 2, name: "root_hash", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "potential_legacy_repo_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
@@ -1088,7 +1088,7 @@ proto3.util.setEnumType(FastRepoInitHandshakeResponse_Status, "aiserver.v1.FastR
  */
 export class FastRepoInitHandshakeV2Request extends Message<FastRepoInitHandshakeV2Request> {
   /**
-   * @generated from field: aiserver.v1.RepositoryInfo repository = 1;
+   * @generated from field: optional aiserver.v1.RepositoryInfo repository = 1;
    */
   repository?: RepositoryInfo;
 
@@ -1128,7 +1128,7 @@ export class FastRepoInitHandshakeV2Request extends Message<FastRepoInitHandshak
   pathKey = "";
 
   /**
-   * @generated from field: aiserver.v1.LocalCodebaseFileInfo local_codebase_root_info = 9;
+   * @generated from field: optional aiserver.v1.LocalCodebaseFileInfo local_codebase_root_info = 9;
    */
   localCodebaseRootInfo?: LocalCodebaseFileInfo;
 
@@ -1145,7 +1145,7 @@ export class FastRepoInitHandshakeV2Request extends Message<FastRepoInitHandshak
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.FastRepoInitHandshakeV2Request";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repository", kind: "message", T: RepositoryInfo },
+    { no: 1, name: "repository", kind: "message", T: RepositoryInfo, opt: true },
     { no: 2, name: "root_hash", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "similarity_metric_type", kind: "enum", T: proto3.getEnumType(SimilarityMetricType) },
     { no: 4, name: "similarity_metric", kind: "scalar", T: 2 /* ScalarType.FLOAT */, repeated: true },
@@ -1153,7 +1153,7 @@ export class FastRepoInitHandshakeV2Request extends Message<FastRepoInitHandshak
     { no: 6, name: "path_key_hash_type", kind: "enum", T: proto3.getEnumType(PathKeyHashType) },
     { no: 7, name: "do_copy", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 8, name: "path_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "local_codebase_root_info", kind: "message", T: LocalCodebaseFileInfo },
+    { no: 9, name: "local_codebase_root_info", kind: "message", T: LocalCodebaseFileInfo, opt: true },
     { no: 10, name: "return_after_background_copy_started", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
@@ -1316,7 +1316,7 @@ export class FastRepoSyncCompleteResponse extends Message<FastRepoSyncCompleteRe
  */
 export class FastUpdateFileRequest extends Message<FastUpdateFileRequest> {
   /**
-   * @generated from field: aiserver.v1.RepositoryInfo repository = 1;
+   * @generated from field: optional aiserver.v1.RepositoryInfo repository = 1;
    */
   repository?: RepositoryInfo;
 
@@ -1355,7 +1355,7 @@ export class FastUpdateFileRequest extends Message<FastUpdateFileRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.FastUpdateFileRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repository", kind: "message", T: RepositoryInfo },
+    { no: 1, name: "repository", kind: "message", T: RepositoryInfo, opt: true },
     { no: 4, name: "ancestor_spline", kind: "message", T: PartialPathItem, repeated: true },
     { no: 5, name: "update_type", kind: "enum", T: proto3.getEnumType(FastUpdateFileRequest_UpdateType) },
     { no: 2, name: "directory", kind: "message", T: PartialPathItem, oneof: "partial_path" },
@@ -1416,7 +1416,7 @@ proto3.util.setEnumType(FastUpdateFileRequest_UpdateType, "aiserver.v1.FastUpdat
  */
 export class FastUpdateFileRequest_LocalFile extends Message<FastUpdateFileRequest_LocalFile> {
   /**
-   * @generated from field: aiserver.v1.File file = 1;
+   * @generated from field: optional aiserver.v1.File file = 1;
    */
   file?: File;
 
@@ -1438,7 +1438,7 @@ export class FastUpdateFileRequest_LocalFile extends Message<FastUpdateFileReque
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.FastUpdateFileRequest.LocalFile";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "file", kind: "message", T: File },
+    { no: 1, name: "file", kind: "message", T: File, opt: true },
     { no: 2, name: "hash", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "unencrypted_relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
@@ -1534,7 +1534,7 @@ proto3.util.setEnumType(FastUpdateFileResponse_Status, "aiserver.v1.FastUpdateFi
  */
 export class FastUpdateFileV2Request extends Message<FastUpdateFileV2Request> {
   /**
-   * @generated from field: aiserver.v1.ClientRepositoryInfo client_repository_info = 1;
+   * @generated from field: optional aiserver.v1.ClientRepositoryInfo client_repository_info = 1;
    */
   clientRepositoryInfo?: ClientRepositoryInfo;
 
@@ -1583,7 +1583,7 @@ export class FastUpdateFileV2Request extends Message<FastUpdateFileV2Request> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.FastUpdateFileV2Request";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "client_repository_info", kind: "message", T: ClientRepositoryInfo },
+    { no: 1, name: "client_repository_info", kind: "message", T: ClientRepositoryInfo, opt: true },
     { no: 2, name: "codebase_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "ancestor_spline", kind: "message", T: PartialPathItem, repeated: true },
     { no: 6, name: "update_type", kind: "enum", T: proto3.getEnumType(FastUpdateFileV2Request_UpdateType) },
@@ -1714,7 +1714,7 @@ export class FastUpdateFileV2Request_FileUpdate extends Message<FastUpdateFileV2
  */
 export class FastUpdateFileV2Request_LocalFile extends Message<FastUpdateFileV2Request_LocalFile> {
   /**
-   * @generated from field: aiserver.v1.File file = 1;
+   * @generated from field: optional aiserver.v1.File file = 1;
    */
   file?: File;
 
@@ -1736,7 +1736,7 @@ export class FastUpdateFileV2Request_LocalFile extends Message<FastUpdateFileV2R
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.FastUpdateFileV2Request.LocalFile";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "file", kind: "message", T: File },
+    { no: 1, name: "file", kind: "message", T: File, opt: true },
     { no: 2, name: "hash", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "unencrypted_relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
@@ -1832,7 +1832,7 @@ proto3.util.setEnumType(FastUpdateFileV2Response_Status, "aiserver.v1.FastUpdate
  */
 export class FinishUpdateRepoRequest extends Message<FinishUpdateRepoRequest> {
   /**
-   * @generated from field: aiserver.v1.RepositoryInfo repository = 1;
+   * @generated from field: optional aiserver.v1.RepositoryInfo repository = 1;
    */
   repository?: RepositoryInfo;
 
@@ -1844,7 +1844,7 @@ export class FinishUpdateRepoRequest extends Message<FinishUpdateRepoRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.FinishUpdateRepoRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repository", kind: "message", T: RepositoryInfo },
+    { no: 1, name: "repository", kind: "message", T: RepositoryInfo, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): FinishUpdateRepoRequest {
@@ -1932,7 +1932,7 @@ proto3.util.setEnumType(FinishUpdateRepoResponse_Status, "aiserver.v1.FinishUpda
  */
 export class FinishUploadRepoRequest extends Message<FinishUploadRepoRequest> {
   /**
-   * @generated from field: aiserver.v1.RepositoryInfo repository = 1;
+   * @generated from field: optional aiserver.v1.RepositoryInfo repository = 1;
    */
   repository?: RepositoryInfo;
 
@@ -1944,7 +1944,7 @@ export class FinishUploadRepoRequest extends Message<FinishUploadRepoRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.FinishUploadRepoRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repository", kind: "message", T: RepositoryInfo },
+    { no: 1, name: "repository", kind: "message", T: RepositoryInfo, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): FinishUploadRepoRequest {
@@ -2032,7 +2032,7 @@ proto3.util.setEnumType(FinishUploadRepoResponse_Status, "aiserver.v1.FinishUplo
  */
 export class GetAvailableChunkingStrategiesRequest extends Message<GetAvailableChunkingStrategiesRequest> {
   /**
-   * @generated from field: aiserver.v1.RepositoryInfo repository = 1;
+   * @generated from field: optional aiserver.v1.RepositoryInfo repository = 1;
    */
   repository?: RepositoryInfo;
 
@@ -2044,7 +2044,7 @@ export class GetAvailableChunkingStrategiesRequest extends Message<GetAvailableC
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetAvailableChunkingStrategiesRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repository", kind: "message", T: RepositoryInfo },
+    { no: 1, name: "repository", kind: "message", T: RepositoryInfo, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetAvailableChunkingStrategiesRequest {
@@ -2164,9 +2164,9 @@ export class GetCopyStatusResponse extends Message<GetCopyStatusResponse> {
   errorMessage = "";
 
   /**
-   * @generated from field: aiserver.v1.GetCopyStatusResponse.CompletedStatus completed_status = 4;
+   * @generated from field: optional aiserver.v1.GetCopyStatusResponse.CompletedStatus completed_status = 4;
    */
-  completedStatus = GetCopyStatusResponse_CompletedStatus.UNSPECIFIED;
+  completedStatus?: GetCopyStatusResponse_CompletedStatus;
 
   constructor(data?: PartialMessage<GetCopyStatusResponse>) {
     super();
@@ -2179,7 +2179,7 @@ export class GetCopyStatusResponse extends Message<GetCopyStatusResponse> {
     { no: 1, name: "phase", kind: "enum", T: proto3.getEnumType(GetCopyStatusResponse_Phase) },
     { no: 2, name: "percent_done", kind: "scalar", T: 2 /* ScalarType.FLOAT */ },
     { no: 3, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "completed_status", kind: "enum", T: proto3.getEnumType(GetCopyStatusResponse_CompletedStatus) },
+    { no: 4, name: "completed_status", kind: "enum", T: proto3.getEnumType(GetCopyStatusResponse_CompletedStatus), opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetCopyStatusResponse {
@@ -2575,7 +2575,7 @@ export class GetLineNumberClassificationsRequest extends Message<GetLineNumberCl
  */
 export class GetLineNumberClassificationsResponse extends Message<GetLineNumberClassificationsResponse> {
   /**
-   * @generated from field: aiserver.v1.CodeResultWithClassificationInfo classified_result = 1;
+   * @generated from field: optional aiserver.v1.CodeResultWithClassificationInfo classified_result = 1;
    */
   classifiedResult?: CodeResultWithClassificationInfo;
 
@@ -2587,7 +2587,7 @@ export class GetLineNumberClassificationsResponse extends Message<GetLineNumberC
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetLineNumberClassificationsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "classified_result", kind: "message", T: CodeResultWithClassificationInfo },
+    { no: 1, name: "classified_result", kind: "message", T: CodeResultWithClassificationInfo, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetLineNumberClassificationsResponse {
@@ -2612,7 +2612,7 @@ export class GetLineNumberClassificationsResponse extends Message<GetLineNumberC
  */
 export class GetNumFilesToSendRequest extends Message<GetNumFilesToSendRequest> {
   /**
-   * @generated from field: aiserver.v1.RepositoryInfo repository = 1;
+   * @generated from field: optional aiserver.v1.RepositoryInfo repository = 1;
    */
   repository?: RepositoryInfo;
 
@@ -2624,7 +2624,7 @@ export class GetNumFilesToSendRequest extends Message<GetNumFilesToSendRequest> 
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetNumFilesToSendRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repository", kind: "message", T: RepositoryInfo },
+    { no: 1, name: "repository", kind: "message", T: RepositoryInfo, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetNumFilesToSendRequest {
@@ -2686,7 +2686,7 @@ export class GetNumFilesToSendResponse extends Message<GetNumFilesToSendResponse
  */
 export class GetPRIndexingStatusRequest extends Message<GetPRIndexingStatusRequest> {
   /**
-   * @generated from field: aiserver.v1.RepositoryInfo repository = 1;
+   * @generated from field: optional aiserver.v1.RepositoryInfo repository = 1;
    */
   repository?: RepositoryInfo;
 
@@ -2698,7 +2698,7 @@ export class GetPRIndexingStatusRequest extends Message<GetPRIndexingStatusReque
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetPRIndexingStatusRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repository", kind: "message", T: RepositoryInfo },
+    { no: 1, name: "repository", kind: "message", T: RepositoryInfo, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetPRIndexingStatusRequest {
@@ -2733,34 +2733,34 @@ export class GetPRIndexingStatusResponse extends Message<GetPRIndexingStatusResp
   syncPercentage = 0;
 
   /**
-   * @generated from field: string last_indexed_commit = 3;
+   * @generated from field: optional string last_indexed_commit = 3;
    */
-  lastIndexedCommit = "";
+  lastIndexedCommit?: string;
 
   /**
-   * @generated from field: uint32 last_indexed_generation = 4;
+   * @generated from field: optional uint32 last_indexed_generation = 4;
    */
-  lastIndexedGeneration = 0;
+  lastIndexedGeneration?: number;
 
   /**
-   * @generated from field: uint32 total_commits = 5;
+   * @generated from field: optional uint32 total_commits = 5;
    */
-  totalCommits = 0;
+  totalCommits?: number;
 
   /**
-   * @generated from field: float indexing_rate = 6;
+   * @generated from field: optional float indexing_rate = 6;
    */
-  indexingRate = 0;
+  indexingRate?: number;
 
   /**
-   * @generated from field: int64 last_updated_timestamp = 7;
+   * @generated from field: optional int64 last_updated_timestamp = 7;
    */
-  lastUpdatedTimestamp = protoInt64.zero;
+  lastUpdatedTimestamp?: bigint;
 
   /**
-   * @generated from field: uint32 index_version = 8;
+   * @generated from field: optional uint32 index_version = 8;
    */
-  indexVersion = 0;
+  indexVersion?: number;
 
   constructor(data?: PartialMessage<GetPRIndexingStatusResponse>) {
     super();
@@ -2772,12 +2772,12 @@ export class GetPRIndexingStatusResponse extends Message<GetPRIndexingStatusResp
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "status", kind: "enum", T: proto3.getEnumType(GetPRIndexingStatusResponse_Status) },
     { no: 2, name: "sync_percentage", kind: "scalar", T: 2 /* ScalarType.FLOAT */ },
-    { no: 3, name: "last_indexed_commit", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "last_indexed_generation", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 5, name: "total_commits", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 6, name: "indexing_rate", kind: "scalar", T: 2 /* ScalarType.FLOAT */ },
-    { no: 7, name: "last_updated_timestamp", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 8, name: "index_version", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 3, name: "last_indexed_commit", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "last_indexed_generation", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
+    { no: 5, name: "total_commits", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
+    { no: 6, name: "indexing_rate", kind: "scalar", T: 2 /* ScalarType.FLOAT */, opt: true },
+    { no: 7, name: "last_updated_timestamp", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
+    { no: 8, name: "index_version", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetPRIndexingStatusResponse {
@@ -2840,7 +2840,7 @@ proto3.util.setEnumType(GetPRIndexingStatusResponse_Status, "aiserver.v1.GetPRIn
  */
 export class GetUploadLimitsRequest extends Message<GetUploadLimitsRequest> {
   /**
-   * @generated from field: aiserver.v1.RepositoryInfo repository = 1;
+   * @generated from field: optional aiserver.v1.RepositoryInfo repository = 1;
    */
   repository?: RepositoryInfo;
 
@@ -2852,7 +2852,7 @@ export class GetUploadLimitsRequest extends Message<GetUploadLimitsRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetUploadLimitsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repository", kind: "message", T: RepositoryInfo },
+    { no: 1, name: "repository", kind: "message", T: RepositoryInfo, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetUploadLimitsRequest {
@@ -2998,14 +2998,14 @@ export class IndexedPullRequest extends Message<IndexedPullRequest> {
   unixTimestamp = protoInt64.zero;
 
   /**
-   * @generated from field: string title = 8;
+   * @generated from field: optional string title = 8;
    */
-  title = "";
+  title?: string;
 
   /**
-   * @generated from field: string author = 9;
+   * @generated from field: optional string author = 9;
    */
-  author = "";
+  author?: string;
 
   constructor(data?: PartialMessage<IndexedPullRequest>) {
     super();
@@ -3022,8 +3022,8 @@ export class IndexedPullRequest extends Message<IndexedPullRequest> {
     { no: 5, name: "generation", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
     { no: 6, name: "commit_secret", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 7, name: "unix_timestamp", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 8, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "author", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 8, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 9, name: "author", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): IndexedPullRequest {
@@ -3131,9 +3131,9 @@ export class LocalCodebaseFileInfo extends Message<LocalCodebaseFileInfo> {
   children: LocalCodebaseFileInfo[] = [];
 
   /**
-   * @generated from field: string separator = 4;
+   * @generated from field: optional string separator = 4;
    */
-  separator = "";
+  separator?: string;
 
   constructor(data?: PartialMessage<LocalCodebaseFileInfo>) {
     super();
@@ -3146,7 +3146,7 @@ export class LocalCodebaseFileInfo extends Message<LocalCodebaseFileInfo> {
     { no: 1, name: "encrypted_relative_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "hash", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "children", kind: "message", T: LocalCodebaseFileInfo, repeated: true },
-    { no: 4, name: "separator", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "separator", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): LocalCodebaseFileInfo {
@@ -3531,12 +3531,12 @@ proto3.util.setEnumType(PollLoginResponse_Status, "aiserver.v1.PollLoginResponse
  */
 export class QueryOnlyRepositoryInfo extends Message<QueryOnlyRepositoryInfo> {
   /**
-   * @generated from field: aiserver.v1.RepositoryInfo repository = 1;
+   * @generated from field: optional aiserver.v1.RepositoryInfo repository = 1;
    */
   repository?: RepositoryInfo;
 
   /**
-   * @generated from field: aiserver.v1.QueryOnlyRepoAccess query_only_repo_access = 2;
+   * @generated from field: optional aiserver.v1.QueryOnlyRepoAccess query_only_repo_access = 2;
    */
   queryOnlyRepoAccess?: QueryOnlyRepoAccess;
 
@@ -3548,8 +3548,8 @@ export class QueryOnlyRepositoryInfo extends Message<QueryOnlyRepositoryInfo> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.QueryOnlyRepositoryInfo";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repository", kind: "message", T: RepositoryInfo },
-    { no: 2, name: "query_only_repo_access", kind: "message", T: QueryOnlyRepoAccess },
+    { no: 1, name: "repository", kind: "message", T: RepositoryInfo, opt: true },
+    { no: 2, name: "query_only_repo_access", kind: "message", T: QueryOnlyRepoAccess, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): QueryOnlyRepositoryInfo {
@@ -3574,7 +3574,7 @@ export class QueryOnlyRepositoryInfo extends Message<QueryOnlyRepositoryInfo> {
  */
 export class RemoveRepoHistoryRequest extends Message<RemoveRepoHistoryRequest> {
   /**
-   * @generated from field: aiserver.v1.RepositoryInfo repository = 1;
+   * @generated from field: optional aiserver.v1.RepositoryInfo repository = 1;
    */
   repository?: RepositoryInfo;
 
@@ -3586,7 +3586,7 @@ export class RemoveRepoHistoryRequest extends Message<RemoveRepoHistoryRequest> 
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.RemoveRepoHistoryRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repository", kind: "message", T: RepositoryInfo },
+    { no: 1, name: "repository", kind: "message", T: RepositoryInfo, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RemoveRepoHistoryRequest {
@@ -3686,7 +3686,7 @@ proto3.util.setEnumType(RemoveRepoHistoryResponse_Status, "aiserver.v1.RemoveRep
  */
 export class RemoveRepositoryRequest extends Message<RemoveRepositoryRequest> {
   /**
-   * @generated from field: aiserver.v1.RepositoryInfo repository = 1;
+   * @generated from field: optional aiserver.v1.RepositoryInfo repository = 1;
    */
   repository?: RepositoryInfo;
 
@@ -3698,7 +3698,7 @@ export class RemoveRepositoryRequest extends Message<RemoveRepositoryRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.RemoveRepositoryRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repository", kind: "message", T: RepositoryInfo },
+    { no: 1, name: "repository", kind: "message", T: RepositoryInfo, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RemoveRepositoryRequest {
@@ -3803,24 +3803,24 @@ export class RepoHistoryInfo extends Message<RepoHistoryInfo> {
   historyId = "";
 
   /**
-   * @generated from field: string branch_name = 2;
+   * @generated from field: optional string branch_name = 2;
    */
-  branchName = "";
+  branchName?: string;
 
   /**
-   * @generated from field: string last_indexed_commit = 3;
+   * @generated from field: optional string last_indexed_commit = 3;
    */
-  lastIndexedCommit = "";
+  lastIndexedCommit?: string;
 
   /**
-   * @generated from field: uint32 last_indexed_commit_generation = 4;
+   * @generated from field: optional uint32 last_indexed_commit_generation = 4;
    */
-  lastIndexedCommitGeneration = 0;
+  lastIndexedCommitGeneration?: number;
 
   /**
-   * @generated from field: bytes sync_bitmap = 5;
+   * @generated from field: optional bytes sync_bitmap = 5;
    */
-  syncBitmap = new Uint8Array(0);
+  syncBitmap?: Uint8Array;
 
   constructor(data?: PartialMessage<RepoHistoryInfo>) {
     super();
@@ -3831,10 +3831,10 @@ export class RepoHistoryInfo extends Message<RepoHistoryInfo> {
   static readonly typeName = "aiserver.v1.RepoHistoryInfo";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "history_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "last_indexed_commit", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "last_indexed_commit_generation", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 5, name: "sync_bitmap", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
+    { no: 2, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "last_indexed_commit", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "last_indexed_commit_generation", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
+    { no: 5, name: "sync_bitmap", kind: "scalar", T: 12 /* ScalarType.BYTES */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RepoHistoryInfo {
@@ -3859,7 +3859,7 @@ export class RepoHistoryInfo extends Message<RepoHistoryInfo> {
  */
 export class RepoHistoryInitHandshakeRequest extends Message<RepoHistoryInitHandshakeRequest> {
   /**
-   * @generated from field: aiserver.v1.RepositoryInfo repository = 1;
+   * @generated from field: optional aiserver.v1.RepositoryInfo repository = 1;
    */
   repository?: RepositoryInfo;
 
@@ -3869,19 +3869,19 @@ export class RepoHistoryInitHandshakeRequest extends Message<RepoHistoryInitHand
   origin = "";
 
   /**
-   * @generated from field: string test_origin_commit = 3;
+   * @generated from field: optional string test_origin_commit = 3;
    */
-  testOriginCommit = "";
+  testOriginCommit?: string;
 
   /**
-   * @generated from field: string test_origin_commit_secret = 4;
+   * @generated from field: optional string test_origin_commit_secret = 4;
    */
-  testOriginCommitSecret = "";
+  testOriginCommitSecret?: string;
 
   /**
-   * @generated from field: bool send_copy_candidates = 5;
+   * @generated from field: optional bool send_copy_candidates = 5;
    */
-  sendCopyCandidates = false;
+  sendCopyCandidates?: boolean;
 
   constructor(data?: PartialMessage<RepoHistoryInitHandshakeRequest>) {
     super();
@@ -3891,11 +3891,11 @@ export class RepoHistoryInitHandshakeRequest extends Message<RepoHistoryInitHand
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.RepoHistoryInitHandshakeRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repository", kind: "message", T: RepositoryInfo },
+    { no: 1, name: "repository", kind: "message", T: RepositoryInfo, opt: true },
     { no: 2, name: "origin", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "test_origin_commit", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "test_origin_commit_secret", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "send_copy_candidates", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 3, name: "test_origin_commit", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "test_origin_commit_secret", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "send_copy_candidates", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RepoHistoryInitHandshakeRequest {
@@ -3930,9 +3930,9 @@ export class RepoHistoryInitHandshakeResponse extends Message<RepoHistoryInitHan
   histories: RepoHistoryInfo[] = [];
 
   /**
-   * @generated from field: string copy_candidate_nonce = 3;
+   * @generated from field: optional string copy_candidate_nonce = 3;
    */
-  copyCandidateNonce = "";
+  copyCandidateNonce?: string;
 
   /**
    * @generated from field: repeated string copy_candidates = 4;
@@ -3940,9 +3940,9 @@ export class RepoHistoryInitHandshakeResponse extends Message<RepoHistoryInitHan
   copyCandidates: string[] = [];
 
   /**
-   * @generated from field: string error_message = 5;
+   * @generated from field: optional string error_message = 5;
    */
-  errorMessage = "";
+  errorMessage?: string;
 
   constructor(data?: PartialMessage<RepoHistoryInitHandshakeResponse>) {
     super();
@@ -3954,9 +3954,9 @@ export class RepoHistoryInitHandshakeResponse extends Message<RepoHistoryInitHan
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "status", kind: "enum", T: proto3.getEnumType(RepoHistoryInitHandshakeResponse_Status) },
     { no: 2, name: "histories", kind: "message", T: RepoHistoryInfo, repeated: true },
-    { no: 3, name: "copy_candidate_nonce", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "copy_candidate_nonce", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 4, name: "copy_candidates", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 5, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RepoHistoryInitHandshakeResponse {
@@ -4104,19 +4104,19 @@ export class RepoHistorySyncCompleteRequest_SyncedHistory extends Message<RepoHi
   status = RepoHistorySyncCompleteRequest_Status.UNSPECIFIED;
 
   /**
-   * @generated from field: string last_indexed_commit = 3;
+   * @generated from field: optional string last_indexed_commit = 3;
    */
-  lastIndexedCommit = "";
+  lastIndexedCommit?: string;
 
   /**
-   * @generated from field: string last_indexed_commit_secret = 4;
+   * @generated from field: optional string last_indexed_commit_secret = 4;
    */
-  lastIndexedCommitSecret = "";
+  lastIndexedCommitSecret?: string;
 
   /**
-   * @generated from field: uint32 last_indexed_commit_generation = 5;
+   * @generated from field: optional uint32 last_indexed_commit_generation = 5;
    */
-  lastIndexedCommitGeneration = 0;
+  lastIndexedCommitGeneration?: number;
 
   constructor(data?: PartialMessage<RepoHistorySyncCompleteRequest_SyncedHistory>) {
     super();
@@ -4128,9 +4128,9 @@ export class RepoHistorySyncCompleteRequest_SyncedHistory extends Message<RepoHi
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "history_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "status", kind: "enum", T: proto3.getEnumType(RepoHistorySyncCompleteRequest_Status) },
-    { no: 3, name: "last_indexed_commit", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "last_indexed_commit_secret", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "last_indexed_commit_generation", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 3, name: "last_indexed_commit", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "last_indexed_commit_secret", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "last_indexed_commit_generation", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RepoHistorySyncCompleteRequest_SyncedHistory {
@@ -4388,7 +4388,7 @@ export class RepositoryCodebaseInfo extends Message<RepositoryCodebaseInfo> {
   status = RepositoryCodebaseInfo_Status.UNSPECIFIED;
 
   /**
-   * @generated from field: aiserver.v1.QueryOnlyRepositoryInfo query_only_similar_repo = 3;
+   * @generated from field: optional aiserver.v1.QueryOnlyRepositoryInfo query_only_similar_repo = 3;
    */
   queryOnlySimilarRepo?: QueryOnlyRepositoryInfo;
 
@@ -4407,7 +4407,7 @@ export class RepositoryCodebaseInfo extends Message<RepositoryCodebaseInfo> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "codebase_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "status", kind: "enum", T: proto3.getEnumType(RepositoryCodebaseInfo_Status) },
-    { no: 3, name: "query_only_similar_repo", kind: "message", T: QueryOnlyRepositoryInfo },
+    { no: 3, name: "query_only_similar_repo", kind: "message", T: QueryOnlyRepositoryInfo, opt: true },
     { no: 4, name: "copy_task_handle", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
@@ -4612,7 +4612,7 @@ proto3.util.setEnumType(RepositoryCodebaseSyncStatus_Status, "aiserver.v1.Reposi
  */
 export class RepositoryStatusRequest extends Message<RepositoryStatusRequest> {
   /**
-   * @generated from field: aiserver.v1.RepositoryInfo repository = 1;
+   * @generated from field: optional aiserver.v1.RepositoryInfo repository = 1;
    */
   repository?: RepositoryInfo;
 
@@ -4624,7 +4624,7 @@ export class RepositoryStatusRequest extends Message<RepositoryStatusRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.RepositoryStatusRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repository", kind: "message", T: RepositoryInfo },
+    { no: 1, name: "repository", kind: "message", T: RepositoryInfo, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RepositoryStatusRequest {
@@ -4649,9 +4649,9 @@ export class RepositoryStatusRequest extends Message<RepositoryStatusRequest> {
  */
 export class RepositoryStatusResponse extends Message<RepositoryStatusResponse> {
   /**
-   * @generated from field: bool is_owner = 9;
+   * @generated from field: optional bool is_owner = 9;
    */
-  isOwner = false;
+  isOwner?: boolean;
 
   /**
    * @generated from oneof aiserver.v1.RepositoryStatusResponse.status
@@ -4726,7 +4726,7 @@ export class RepositoryStatusResponse extends Message<RepositoryStatusResponse> 
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.RepositoryStatusResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 9, name: "is_owner", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 9, name: "is_owner", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 1, name: "not_found", kind: "message", T: RepositoryStatusResponse_NotFound, oneof: "status" },
     { no: 2, name: "uploading", kind: "message", T: RepositoryStatusResponse_Uploading, oneof: "status" },
     { no: 3, name: "syncing", kind: "message", T: RepositoryStatusResponse_Syncing, oneof: "status" },
@@ -5088,7 +5088,7 @@ export class RepositoryStatusResponse_Uploading extends Message<RepositoryStatus
  */
 export class SearchPRHistoryRequest extends Message<SearchPRHistoryRequest> {
   /**
-   * @generated from field: aiserver.v1.RepositoryInfo repository = 1;
+   * @generated from field: optional aiserver.v1.RepositoryInfo repository = 1;
    */
   repository?: RepositoryInfo;
 
@@ -5110,7 +5110,7 @@ export class SearchPRHistoryRequest extends Message<SearchPRHistoryRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SearchPRHistoryRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repository", kind: "message", T: RepositoryInfo },
+    { no: 1, name: "repository", kind: "message", T: RepositoryInfo, opt: true },
     { no: 2, name: "query", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "top_k", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
   ]);
@@ -5142,9 +5142,9 @@ export class SearchPRHistoryResponse extends Message<SearchPRHistoryResponse> {
   results: SearchPRHistoryResponse_PRSearchResult[] = [];
 
   /**
-   * @generated from field: uint32 git_height = 2;
+   * @generated from field: optional uint32 git_height = 2;
    */
-  gitHeight = 0;
+  gitHeight?: number;
 
   constructor(data?: PartialMessage<SearchPRHistoryResponse>) {
     super();
@@ -5155,7 +5155,7 @@ export class SearchPRHistoryResponse extends Message<SearchPRHistoryResponse> {
   static readonly typeName = "aiserver.v1.SearchPRHistoryResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "results", kind: "message", T: SearchPRHistoryResponse_PRSearchResult, repeated: true },
-    { no: 2, name: "git_height", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 2, name: "git_height", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SearchPRHistoryResponse {
@@ -5195,29 +5195,29 @@ export class SearchPRHistoryResponse_PRSearchResult extends Message<SearchPRHist
   diffChunks: PRDiffChunkPointer[] = [];
 
   /**
-   * @generated from field: string title = 4;
+   * @generated from field: optional string title = 4;
    */
-  title = "";
+  title?: string;
 
   /**
-   * @generated from field: string summary = 5;
+   * @generated from field: optional string summary = 5;
    */
-  summary = "";
+  summary?: string;
 
   /**
-   * @generated from field: uint32 pr_number = 6;
+   * @generated from field: optional uint32 pr_number = 6;
    */
-  prNumber = 0;
+  prNumber?: number;
 
   /**
-   * @generated from field: string author = 7;
+   * @generated from field: optional string author = 7;
    */
-  author = "";
+  author?: string;
 
   /**
-   * @generated from field: string date = 8;
+   * @generated from field: optional string date = 8;
    */
-  date = "";
+  date?: string;
 
   /**
    * @generated from field: repeated string changed_files = 9;
@@ -5235,11 +5235,11 @@ export class SearchPRHistoryResponse_PRSearchResult extends Message<SearchPRHist
     { no: 1, name: "commit_hash", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "score", kind: "scalar", T: 2 /* ScalarType.FLOAT */ },
     { no: 3, name: "diff_chunks", kind: "message", T: PRDiffChunkPointer, repeated: true },
-    { no: 4, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "summary", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "pr_number", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 7, name: "author", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "date", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "summary", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "pr_number", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
+    { no: 7, name: "author", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "date", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 9, name: "changed_files", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
 
@@ -5337,7 +5337,7 @@ export class SearchRepositoryRequest extends Message<SearchRepositoryRequest> {
   query = "";
 
   /**
-   * @generated from field: aiserver.v1.RepositoryInfo repository = 2;
+   * @generated from field: optional aiserver.v1.RepositoryInfo repository = 2;
    */
   repository?: RepositoryInfo;
 
@@ -5347,7 +5347,7 @@ export class SearchRepositoryRequest extends Message<SearchRepositoryRequest> {
   topK = 0;
 
   /**
-   * @generated from field: aiserver.v1.ModelDetails model_details = 4;
+   * @generated from field: optional aiserver.v1.ModelDetails model_details = 4;
    */
   modelDetails?: ModelDetails;
 
@@ -5357,27 +5357,27 @@ export class SearchRepositoryRequest extends Message<SearchRepositoryRequest> {
   rerank = false;
 
   /**
-   * @generated from field: bool context_cache_request = 6;
+   * @generated from field: optional bool context_cache_request = 6;
    */
-  contextCacheRequest = false;
+  contextCacheRequest?: boolean;
 
   /**
-   * @generated from field: string glob_filter = 7;
+   * @generated from field: optional string glob_filter = 7;
    */
-  globFilter = "";
+  globFilter?: string;
 
   /**
-   * @generated from field: string not_glob_filter = 8;
+   * @generated from field: optional string not_glob_filter = 8;
    */
-  notGlobFilter = "";
+  notGlobFilter?: string;
 
   /**
-   * @generated from field: int32 race_n_requests = 9;
+   * @generated from field: optional int32 race_n_requests = 9;
    */
-  raceNRequests = 0;
+  raceNRequests?: number;
 
   /**
-   * @generated from field: aiserver.v1.QueryOnlyRepoAccess query_only_repo_access = 10;
+   * @generated from field: optional aiserver.v1.QueryOnlyRepoAccess query_only_repo_access = 10;
    */
   queryOnlyRepoAccess?: QueryOnlyRepoAccess;
 
@@ -5390,15 +5390,15 @@ export class SearchRepositoryRequest extends Message<SearchRepositoryRequest> {
   static readonly typeName = "aiserver.v1.SearchRepositoryRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "query", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "repository", kind: "message", T: RepositoryInfo },
+    { no: 2, name: "repository", kind: "message", T: RepositoryInfo, opt: true },
     { no: 3, name: "top_k", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 4, name: "model_details", kind: "message", T: ModelDetails },
+    { no: 4, name: "model_details", kind: "message", T: ModelDetails, opt: true },
     { no: 5, name: "rerank", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 6, name: "context_cache_request", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 7, name: "glob_filter", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "not_glob_filter", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "race_n_requests", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 10, name: "query_only_repo_access", kind: "message", T: QueryOnlyRepoAccess },
+    { no: 6, name: "context_cache_request", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 7, name: "glob_filter", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "not_glob_filter", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 9, name: "race_n_requests", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 10, name: "query_only_repo_access", kind: "message", T: QueryOnlyRepoAccess, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SearchRepositoryRequest {
@@ -5460,7 +5460,7 @@ export class SearchRepositoryResponse extends Message<SearchRepositoryResponse> 
  */
 export class SemSearchRequest extends Message<SemSearchRequest> {
   /**
-   * @generated from field: aiserver.v1.SearchRepositoryRequest request = 1;
+   * @generated from field: optional aiserver.v1.SearchRepositoryRequest request = 1;
    */
   request?: SearchRepositoryRequest;
 
@@ -5472,7 +5472,7 @@ export class SemSearchRequest extends Message<SemSearchRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SemSearchRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "request", kind: "message", T: SearchRepositoryRequest },
+    { no: 1, name: "request", kind: "message", T: SearchRepositoryRequest, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SemSearchRequest {
@@ -5497,12 +5497,12 @@ export class SemSearchRequest extends Message<SemSearchRequest> {
  */
 export class SemSearchResponse extends Message<SemSearchResponse> {
   /**
-   * @generated from field: aiserver.v1.SearchRepositoryResponse response = 1;
+   * @generated from field: optional aiserver.v1.SearchRepositoryResponse response = 1;
    */
   response?: SearchRepositoryResponse;
 
   /**
-   * @generated from field: aiserver.v1.SemSearchResponse.SemSearchMetadata metadata = 2;
+   * @generated from field: optional aiserver.v1.SemSearchResponse.SemSearchMetadata metadata = 2;
    */
   metadata?: SemSearchResponse_SemSearchMetadata;
 
@@ -5519,8 +5519,8 @@ export class SemSearchResponse extends Message<SemSearchResponse> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SemSearchResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "response", kind: "message", T: SearchRepositoryResponse },
-    { no: 2, name: "metadata", kind: "message", T: SemSearchResponse_SemSearchMetadata },
+    { no: 1, name: "response", kind: "message", T: SearchRepositoryResponse, opt: true },
+    { no: 2, name: "metadata", kind: "message", T: SemSearchResponse_SemSearchMetadata, opt: true },
     { no: 3, name: "code_results", kind: "message", T: CodeResultWithClassificationInfo, repeated: true },
   ]);
 
@@ -5546,24 +5546,24 @@ export class SemSearchResponse extends Message<SemSearchResponse> {
  */
 export class SemSearchResponse_SemSearchMetadata extends Message<SemSearchResponse_SemSearchMetadata> {
   /**
-   * @generated from field: string query_embedding_model = 1;
+   * @generated from field: optional string query_embedding_model = 1;
    */
-  queryEmbeddingModel = "";
+  queryEmbeddingModel?: string;
 
   /**
-   * @generated from field: int32 server_side_latency_ms = 2;
+   * @generated from field: optional int32 server_side_latency_ms = 2;
    */
-  serverSideLatencyMs = 0;
+  serverSideLatencyMs?: number;
 
   /**
-   * @generated from field: int32 embed_latency_ms = 3;
+   * @generated from field: optional int32 embed_latency_ms = 3;
    */
-  embedLatencyMs = 0;
+  embedLatencyMs?: number;
 
   /**
-   * @generated from field: int32 knn_latency_ms = 4;
+   * @generated from field: optional int32 knn_latency_ms = 4;
    */
-  knnLatencyMs = 0;
+  knnLatencyMs?: number;
 
   constructor(data?: PartialMessage<SemSearchResponse_SemSearchMetadata>) {
     super();
@@ -5573,10 +5573,10 @@ export class SemSearchResponse_SemSearchMetadata extends Message<SemSearchRespon
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SemSearchResponse.SemSearchMetadata";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "query_embedding_model", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "server_side_latency_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "embed_latency_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 4, name: "knn_latency_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 1, name: "query_embedding_model", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "server_side_latency_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 3, name: "embed_latency_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 4, name: "knn_latency_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SemSearchResponse_SemSearchMetadata {
@@ -5601,7 +5601,7 @@ export class SemSearchResponse_SemSearchMetadata extends Message<SemSearchRespon
  */
 export class StartUpdateRepoRequest extends Message<StartUpdateRepoRequest> {
   /**
-   * @generated from field: aiserver.v1.RepositoryInfo repository = 1;
+   * @generated from field: optional aiserver.v1.RepositoryInfo repository = 1;
    */
   repository?: RepositoryInfo;
 
@@ -5613,7 +5613,7 @@ export class StartUpdateRepoRequest extends Message<StartUpdateRepoRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.StartUpdateRepoRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repository", kind: "message", T: RepositoryInfo },
+    { no: 1, name: "repository", kind: "message", T: RepositoryInfo, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StartUpdateRepoRequest {
@@ -5713,7 +5713,7 @@ proto3.util.setEnumType(StartUpdateRepoResponse_Status, "aiserver.v1.StartUpdate
  */
 export class StartUploadRepoRequest extends Message<StartUploadRepoRequest> {
   /**
-   * @generated from field: aiserver.v1.RepositoryInfo repository = 1;
+   * @generated from field: optional aiserver.v1.RepositoryInfo repository = 1;
    */
   repository?: RepositoryInfo;
 
@@ -5725,7 +5725,7 @@ export class StartUploadRepoRequest extends Message<StartUploadRepoRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.StartUploadRepoRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repository", kind: "message", T: RepositoryInfo },
+    { no: 1, name: "repository", kind: "message", T: RepositoryInfo, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StartUploadRepoRequest {
@@ -5825,7 +5825,7 @@ proto3.util.setEnumType(StartUploadRepoResponse_Status, "aiserver.v1.StartUpload
  */
 export class SubscribeRepositoryRequest extends Message<SubscribeRepositoryRequest> {
   /**
-   * @generated from field: aiserver.v1.RepositoryInfo repository = 1;
+   * @generated from field: optional aiserver.v1.RepositoryInfo repository = 1;
    */
   repository?: RepositoryInfo;
 
@@ -5837,7 +5837,7 @@ export class SubscribeRepositoryRequest extends Message<SubscribeRepositoryReque
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SubscribeRepositoryRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repository", kind: "message", T: RepositoryInfo },
+    { no: 1, name: "repository", kind: "message", T: RepositoryInfo, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SubscribeRepositoryRequest {
@@ -5937,12 +5937,12 @@ proto3.util.setEnumType(SubscribeRepositoryResponse_Status, "aiserver.v1.Subscri
  */
 export class SyncMerkleSubtreeRequest extends Message<SyncMerkleSubtreeRequest> {
   /**
-   * @generated from field: aiserver.v1.RepositoryInfo repository = 1;
+   * @generated from field: optional aiserver.v1.RepositoryInfo repository = 1;
    */
   repository?: RepositoryInfo;
 
   /**
-   * @generated from field: aiserver.v1.PartialPathItem local_partial_path = 2;
+   * @generated from field: optional aiserver.v1.PartialPathItem local_partial_path = 2;
    */
   localPartialPath?: PartialPathItem;
 
@@ -5954,8 +5954,8 @@ export class SyncMerkleSubtreeRequest extends Message<SyncMerkleSubtreeRequest> 
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SyncMerkleSubtreeRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repository", kind: "message", T: RepositoryInfo },
-    { no: 2, name: "local_partial_path", kind: "message", T: PartialPathItem },
+    { no: 1, name: "repository", kind: "message", T: RepositoryInfo, opt: true },
+    { no: 2, name: "local_partial_path", kind: "message", T: PartialPathItem, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SyncMerkleSubtreeRequest {
@@ -6067,7 +6067,7 @@ export class SyncMerkleSubtreeResponse_Mismatch extends Message<SyncMerkleSubtre
  */
 export class SyncMerkleSubtreeV2Request extends Message<SyncMerkleSubtreeV2Request> {
   /**
-   * @generated from field: aiserver.v1.ClientRepositoryInfo client_repository_info = 1;
+   * @generated from field: optional aiserver.v1.ClientRepositoryInfo client_repository_info = 1;
    */
   clientRepositoryInfo?: ClientRepositoryInfo;
 
@@ -6077,7 +6077,7 @@ export class SyncMerkleSubtreeV2Request extends Message<SyncMerkleSubtreeV2Reque
   codebaseId = "";
 
   /**
-   * @generated from field: aiserver.v1.PartialPathItem local_partial_path = 3;
+   * @generated from field: optional aiserver.v1.PartialPathItem local_partial_path = 3;
    */
   localPartialPath?: PartialPathItem;
 
@@ -6094,9 +6094,9 @@ export class SyncMerkleSubtreeV2Request extends Message<SyncMerkleSubtreeV2Reque
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SyncMerkleSubtreeV2Request";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "client_repository_info", kind: "message", T: ClientRepositoryInfo },
+    { no: 1, name: "client_repository_info", kind: "message", T: ClientRepositoryInfo, opt: true },
     { no: 2, name: "codebase_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "local_partial_path", kind: "message", T: PartialPathItem },
+    { no: 3, name: "local_partial_path", kind: "message", T: PartialPathItem, opt: true },
     { no: 4, name: "local_partial_paths", kind: "message", T: PartialPathItem, repeated: true },
   ]);
 
@@ -6340,7 +6340,7 @@ export class SyncRepositoryResponse extends Message<SyncRepositoryResponse> {
  */
 export class UnsubscribeRepositoryRequest extends Message<UnsubscribeRepositoryRequest> {
   /**
-   * @generated from field: aiserver.v1.RepositoryInfo repository = 1;
+   * @generated from field: optional aiserver.v1.RepositoryInfo repository = 1;
    */
   repository?: RepositoryInfo;
 
@@ -6352,7 +6352,7 @@ export class UnsubscribeRepositoryRequest extends Message<UnsubscribeRepositoryR
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.UnsubscribeRepositoryRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repository", kind: "message", T: RepositoryInfo },
+    { no: 1, name: "repository", kind: "message", T: RepositoryInfo, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UnsubscribeRepositoryRequest {
@@ -6446,19 +6446,19 @@ proto3.util.setEnumType(UnsubscribeRepositoryResponse_Status, "aiserver.v1.Unsub
  */
 export class UpdateFileRequest extends Message<UpdateFileRequest> {
   /**
-   * @generated from field: aiserver.v1.RepositoryInfo repository = 1;
+   * @generated from field: optional aiserver.v1.RepositoryInfo repository = 1;
    */
   repository?: RepositoryInfo;
 
   /**
-   * @generated from field: aiserver.v1.File added_file = 2;
+   * @generated from field: optional aiserver.v1.File added_file = 2;
    */
   addedFile?: File;
 
   /**
-   * @generated from field: string deleted_file_path = 3;
+   * @generated from field: optional string deleted_file_path = 3;
    */
-  deletedFilePath = "";
+  deletedFilePath?: string;
 
   /**
    * @generated from field: string commit_sha = 4;
@@ -6478,9 +6478,9 @@ export class UpdateFileRequest extends Message<UpdateFileRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.UpdateFileRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repository", kind: "message", T: RepositoryInfo },
-    { no: 2, name: "added_file", kind: "message", T: File },
-    { no: 3, name: "deleted_file_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "repository", kind: "message", T: RepositoryInfo, opt: true },
+    { no: 2, name: "added_file", kind: "message", T: File, opt: true },
+    { no: 3, name: "deleted_file_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 4, name: "commit_sha", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "queue_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
@@ -6682,12 +6682,12 @@ proto3.util.setEnumType(UpgradeScopeResponse_Status, "aiserver.v1.UpgradeScopeRe
  */
 export class UploadFileRequest extends Message<UploadFileRequest> {
   /**
-   * @generated from field: aiserver.v1.RepositoryInfo repository = 1;
+   * @generated from field: optional aiserver.v1.RepositoryInfo repository = 1;
    */
   repository?: RepositoryInfo;
 
   /**
-   * @generated from field: aiserver.v1.File file = 2;
+   * @generated from field: optional aiserver.v1.File file = 2;
    */
   file?: File;
 
@@ -6709,8 +6709,8 @@ export class UploadFileRequest extends Message<UploadFileRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.UploadFileRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repository", kind: "message", T: RepositoryInfo },
-    { no: 2, name: "file", kind: "message", T: File },
+    { no: 1, name: "repository", kind: "message", T: RepositoryInfo, opt: true },
+    { no: 2, name: "file", kind: "message", T: File, opt: true },
     { no: 3, name: "commit_sha", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "queue_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
@@ -6812,7 +6812,7 @@ proto3.util.setEnumType(UploadFileResponse_Status, "aiserver.v1.UploadFileRespon
  */
 export class UploadRepositoryRequest extends Message<UploadRepositoryRequest> {
   /**
-   * @generated from field: aiserver.v1.RepositoryInfo repository = 1;
+   * @generated from field: optional aiserver.v1.RepositoryInfo repository = 1;
    */
   repository?: RepositoryInfo;
 
@@ -6824,7 +6824,7 @@ export class UploadRepositoryRequest extends Message<UploadRepositoryRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.UploadRepositoryRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repository", kind: "message", T: RepositoryInfo },
+    { no: 1, name: "repository", kind: "message", T: RepositoryInfo, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UploadRepositoryRequest {

@@ -210,7 +210,7 @@ proto3.util.setEnumType(WaterfallSpanStatusType, "aiserver.v1.WaterfallSpanStatu
  */
 export class WaterfallUpdate extends Message<WaterfallUpdate> {
   /**
-   * @generated from field: google.protobuf.Timestamp timestamp = 1;
+   * @generated from field: optional google.protobuf.Timestamp timestamp = 1;
    */
   timestamp?: Timestamp;
 
@@ -263,7 +263,7 @@ export class WaterfallUpdate extends Message<WaterfallUpdate> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.WaterfallUpdate";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "timestamp", kind: "message", T: Timestamp },
+    { no: 1, name: "timestamp", kind: "message", T: Timestamp, opt: true },
     { no: 2, name: "span_start", kind: "message", T: SpanStart, oneof: "update" },
     { no: 3, name: "span_end", kind: "message", T: SpanEnd, oneof: "update" },
     { no: 4, name: "span_log", kind: "message", T: SpanLog, oneof: "update" },
@@ -299,9 +299,9 @@ export class SpanStart extends Message<SpanStart> {
   spanId = "";
 
   /**
-   * @generated from field: string parent_span_id = 2;
+   * @generated from field: optional string parent_span_id = 2;
    */
-  parentSpanId = "";
+  parentSpanId?: string;
 
   /**
    * @generated from field: aiserver.v1.WaterfallPhaseType phase_type = 5;
@@ -309,9 +309,9 @@ export class SpanStart extends Message<SpanStart> {
   phaseType = WaterfallPhaseType.UNSPECIFIED;
 
   /**
-   * @generated from field: string fallback_phase_label = 6;
+   * @generated from field: optional string fallback_phase_label = 6;
    */
-  fallbackPhaseLabel = "";
+  fallbackPhaseLabel?: string;
 
   /**
    * @generated from oneof aiserver.v1.SpanStart.span_details
@@ -339,9 +339,9 @@ export class SpanStart extends Message<SpanStart> {
   static readonly typeName = "aiserver.v1.SpanStart";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "span_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "parent_span_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "parent_span_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 5, name: "phase_type", kind: "enum", T: proto3.getEnumType(WaterfallPhaseType) },
-    { no: 6, name: "fallback_phase_label", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 6, name: "fallback_phase_label", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "git_repos_setup", kind: "message", T: GitReposSetupSpanDetails, oneof: "span_details" },
     { no: 4, name: "git_repo_setup", kind: "message", T: GitRepoSetupSpanDetails, oneof: "span_details" },
   ]);
@@ -416,7 +416,7 @@ export class SpanLog extends Message<SpanLog> {
   spanId = "";
 
   /**
-   * @generated from field: google.protobuf.Timestamp timestamp = 2;
+   * @generated from field: optional google.protobuf.Timestamp timestamp = 2;
    */
   timestamp?: Timestamp;
 
@@ -439,7 +439,7 @@ export class SpanLog extends Message<SpanLog> {
   static readonly typeName = "aiserver.v1.SpanLog";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "span_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "timestamp", kind: "message", T: Timestamp },
+    { no: 2, name: "timestamp", kind: "message", T: Timestamp, opt: true },
     { no: 3, name: "message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "level", kind: "enum", T: proto3.getEnumType(WaterfallLogLevel) },
   ]);
@@ -471,7 +471,7 @@ export class SpanStatusUpdate extends Message<SpanStatusUpdate> {
   spanId = "";
 
   /**
-   * @generated from field: google.protobuf.Timestamp timestamp = 2;
+   * @generated from field: optional google.protobuf.Timestamp timestamp = 2;
    */
   timestamp?: Timestamp;
 
@@ -486,7 +486,7 @@ export class SpanStatusUpdate extends Message<SpanStatusUpdate> {
   message = "";
 
   /**
-   * @generated from field: aiserver.v1.CallToAction call_to_action = 5;
+   * @generated from field: optional aiserver.v1.CallToAction call_to_action = 5;
    */
   callToAction?: CallToAction;
 
@@ -499,10 +499,10 @@ export class SpanStatusUpdate extends Message<SpanStatusUpdate> {
   static readonly typeName = "aiserver.v1.SpanStatusUpdate";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "span_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "timestamp", kind: "message", T: Timestamp },
+    { no: 2, name: "timestamp", kind: "message", T: Timestamp, opt: true },
     { no: 3, name: "status_type", kind: "enum", T: proto3.getEnumType(WaterfallSpanStatusType) },
     { no: 4, name: "message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "call_to_action", kind: "message", T: CallToAction },
+    { no: 5, name: "call_to_action", kind: "message", T: CallToAction, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SpanStatusUpdate {
@@ -607,7 +607,7 @@ export class SetupWaterfallSentinel extends Message<SetupWaterfallSentinel> {
  */
 export class GenericLogSpanUpdate extends Message<GenericLogSpanUpdate> {
   /**
-   * @generated from field: google.protobuf.Timestamp timestamp = 1;
+   * @generated from field: optional google.protobuf.Timestamp timestamp = 1;
    */
   timestamp?: Timestamp;
 
@@ -629,7 +629,7 @@ export class GenericLogSpanUpdate extends Message<GenericLogSpanUpdate> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GenericLogSpanUpdate";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "timestamp", kind: "message", T: Timestamp },
+    { no: 1, name: "timestamp", kind: "message", T: Timestamp, opt: true },
     { no: 2, name: "message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "level", kind: "enum", T: proto3.getEnumType(WaterfallLogLevel) },
   ]);

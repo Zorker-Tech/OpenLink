@@ -10,7 +10,7 @@ package aiserver.v1;
 import "google/protobuf/timestamp.proto";
 
 message WaterfallUpdate {
-  .google.protobuf.Timestamp timestamp = 1 [json_name = "timestamp"];
+  optional .google.protobuf.Timestamp timestamp = 1 [json_name = "timestamp"];
   oneof update {
     .aiserver.v1.SpanStart span_start = 2 [json_name = "spanStart"];
     .aiserver.v1.SpanEnd span_end = 3 [json_name = "spanEnd"];
@@ -23,9 +23,9 @@ message WaterfallUpdate {
 
 message SpanStart {
   string span_id = 1 [json_name = "spanId"];
-  string parent_span_id = 2 [json_name = "parentSpanId"];
+  optional string parent_span_id = 2 [json_name = "parentSpanId"];
   .aiserver.v1.WaterfallPhaseType phase_type = 5 [json_name = "phaseType"];
-  string fallback_phase_label = 6 [json_name = "fallbackPhaseLabel"];
+  optional string fallback_phase_label = 6 [json_name = "fallbackPhaseLabel"];
   oneof span_details {
     .aiserver.v1.GitReposSetupSpanDetails git_repos_setup = 3 [json_name = "gitReposSetup"];
     .aiserver.v1.GitRepoSetupSpanDetails git_repo_setup = 4 [json_name = "gitRepoSetup"];
@@ -39,17 +39,17 @@ message SpanEnd {
 
 message SpanLog {
   string span_id = 1 [json_name = "spanId"];
-  .google.protobuf.Timestamp timestamp = 2 [json_name = "timestamp"];
+  optional .google.protobuf.Timestamp timestamp = 2 [json_name = "timestamp"];
   string message = 3 [json_name = "message"];
   .aiserver.v1.WaterfallLogLevel level = 4 [json_name = "level"];
 }
 
 message SpanStatusUpdate {
   string span_id = 1 [json_name = "spanId"];
-  .google.protobuf.Timestamp timestamp = 2 [json_name = "timestamp"];
+  optional .google.protobuf.Timestamp timestamp = 2 [json_name = "timestamp"];
   .aiserver.v1.WaterfallSpanStatusType status_type = 3 [json_name = "statusType"];
   string message = 4 [json_name = "message"];
-  .aiserver.v1.CallToAction call_to_action = 5 [json_name = "callToAction"];
+  optional .aiserver.v1.CallToAction call_to_action = 5 [json_name = "callToAction"];
 }
 
 message SpanUpdate {
@@ -63,7 +63,7 @@ message SetupWaterfallSentinel {
 }
 
 message GenericLogSpanUpdate {
-  .google.protobuf.Timestamp timestamp = 1 [json_name = "timestamp"];
+  optional .google.protobuf.Timestamp timestamp = 1 [json_name = "timestamp"];
   string message = 2 [json_name = "message"];
   .aiserver.v1.WaterfallLogLevel level = 3 [json_name = "level"];
 }

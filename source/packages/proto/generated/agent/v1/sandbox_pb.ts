@@ -21,9 +21,9 @@ export class SandboxPolicy extends Message<SandboxPolicy> {
   type = SandboxPolicy_Type.UNSPECIFIED;
 
   /**
-   * @generated from field: bool network_access = 2;
+   * @generated from field: optional bool network_access = 2;
    */
-  networkAccess = false;
+  networkAccess?: boolean;
 
   /**
    * @generated from field: repeated string additional_readwrite_paths = 3;
@@ -36,44 +36,44 @@ export class SandboxPolicy extends Message<SandboxPolicy> {
   additionalReadonlyPaths: string[] = [];
 
   /**
-   * @generated from field: string debug_output_dir = 5;
+   * @generated from field: optional string debug_output_dir = 5;
    */
-  debugOutputDir = "";
+  debugOutputDir?: string;
 
   /**
-   * @generated from field: bool disable_tmp_write = 7;
+   * @generated from field: optional bool disable_tmp_write = 7;
    */
-  disableTmpWrite = false;
+  disableTmpWrite?: boolean;
 
   /**
-   * @generated from field: bool allowlist_escalated = 8;
+   * @generated from field: optional bool allowlist_escalated = 8;
    */
-  allowlistEscalated = false;
+  allowlistEscalated?: boolean;
 
   /**
-   * @generated from field: bool enable_shared_build_cache = 9;
+   * @generated from field: optional bool enable_shared_build_cache = 9;
    */
-  enableSharedBuildCache = false;
+  enableSharedBuildCache?: boolean;
 
   /**
-   * @generated from field: agent.v1.NetworkPolicy network_policy = 10;
+   * @generated from field: optional agent.v1.NetworkPolicy network_policy = 10;
    */
   networkPolicy?: NetworkPolicy;
 
   /**
-   * @generated from field: bool network_policy_strict = 11;
+   * @generated from field: optional bool network_policy_strict = 11;
    */
-  networkPolicyStrict = false;
+  networkPolicyStrict?: boolean;
 
   /**
-   * @generated from field: bool capture_denies = 12;
+   * @generated from field: optional bool capture_denies = 12;
    */
-  captureDenies = false;
+  captureDenies?: boolean;
 
   /**
-   * @generated from field: bool skip_statsig_defaults = 13;
+   * @generated from field: optional bool skip_statsig_defaults = 13;
    */
-  skipStatsigDefaults = false;
+  skipStatsigDefaults?: boolean;
 
   /**
    * @generated from field: agent.v1.SandboxPolicy.ReadBoundaryMode read_boundary = 14;
@@ -94,17 +94,17 @@ export class SandboxPolicy extends Message<SandboxPolicy> {
   static readonly typeName = "agent.v1.SandboxPolicy";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "type", kind: "enum", T: proto3.getEnumType(SandboxPolicy_Type) },
-    { no: 2, name: "network_access", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "network_access", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 3, name: "additional_readwrite_paths", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 4, name: "additional_readonly_paths", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 5, name: "debug_output_dir", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "disable_tmp_write", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 8, name: "allowlist_escalated", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 9, name: "enable_shared_build_cache", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 10, name: "network_policy", kind: "message", T: NetworkPolicy },
-    { no: 11, name: "network_policy_strict", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 12, name: "capture_denies", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 13, name: "skip_statsig_defaults", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 5, name: "debug_output_dir", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "disable_tmp_write", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 8, name: "allowlist_escalated", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 9, name: "enable_shared_build_cache", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 10, name: "network_policy", kind: "message", T: NetworkPolicy, opt: true },
+    { no: 11, name: "network_policy_strict", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 12, name: "capture_denies", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 13, name: "skip_statsig_defaults", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 14, name: "read_boundary", kind: "enum", T: proto3.getEnumType(SandboxPolicy_ReadBoundaryMode) },
     { no: 15, name: "additional_read_paths", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
@@ -195,14 +195,14 @@ proto3.util.setEnumType(SandboxPolicy_Type, "agent.v1.SandboxPolicy.Type", [
  */
 export class NetworkPolicy extends Message<NetworkPolicy> {
   /**
-   * @generated from field: uint32 version = 1;
+   * @generated from field: optional uint32 version = 1;
    */
-  version = 0;
+  version?: number;
 
   /**
-   * @generated from field: agent.v1.NetworkPolicy.DefaultAction default_action = 2;
+   * @generated from field: optional agent.v1.NetworkPolicy.DefaultAction default_action = 2;
    */
-  defaultAction = NetworkPolicy_DefaultAction.UNSPECIFIED;
+  defaultAction?: NetworkPolicy_DefaultAction;
 
   /**
    * @generated from field: repeated string deny = 3;
@@ -215,7 +215,7 @@ export class NetworkPolicy extends Message<NetworkPolicy> {
   allow: string[] = [];
 
   /**
-   * @generated from field: agent.v1.NetworkPolicyLoggingConfig logging = 5;
+   * @generated from field: optional agent.v1.NetworkPolicyLoggingConfig logging = 5;
    */
   logging?: NetworkPolicyLoggingConfig;
 
@@ -227,11 +227,11 @@ export class NetworkPolicy extends Message<NetworkPolicy> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.NetworkPolicy";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "version", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 2, name: "default_action", kind: "enum", T: proto3.getEnumType(NetworkPolicy_DefaultAction) },
+    { no: 1, name: "version", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
+    { no: 2, name: "default_action", kind: "enum", T: proto3.getEnumType(NetworkPolicy_DefaultAction), opt: true },
     { no: 3, name: "deny", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 4, name: "allow", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 5, name: "logging", kind: "message", T: NetworkPolicyLoggingConfig },
+    { no: 5, name: "logging", kind: "message", T: NetworkPolicyLoggingConfig, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): NetworkPolicy {
@@ -282,14 +282,14 @@ proto3.util.setEnumType(NetworkPolicy_DefaultAction, "agent.v1.NetworkPolicy.Def
  */
 export class NetworkPolicyLoggingConfig extends Message<NetworkPolicyLoggingConfig> {
   /**
-   * @generated from field: string decision_log_path = 1;
+   * @generated from field: optional string decision_log_path = 1;
    */
-  decisionLogPath = "";
+  decisionLogPath?: string;
 
   /**
-   * @generated from field: string log_format = 2;
+   * @generated from field: optional string log_format = 2;
    */
-  logFormat = "";
+  logFormat?: string;
 
   constructor(data?: PartialMessage<NetworkPolicyLoggingConfig>) {
     super();
@@ -299,8 +299,8 @@ export class NetworkPolicyLoggingConfig extends Message<NetworkPolicyLoggingConf
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.NetworkPolicyLoggingConfig";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "decision_log_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "log_format", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "decision_log_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "log_format", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): NetworkPolicyLoggingConfig {
@@ -325,17 +325,17 @@ export class NetworkPolicyLoggingConfig extends Message<NetworkPolicyLoggingConf
  */
 export class SandboxPolicyMergeSources extends Message<SandboxPolicyMergeSources> {
   /**
-   * @generated from field: agent.v1.SandboxPolicy per_user = 1;
+   * @generated from field: optional agent.v1.SandboxPolicy per_user = 1;
    */
   perUser?: SandboxPolicy;
 
   /**
-   * @generated from field: agent.v1.SandboxPolicy per_repo = 2;
+   * @generated from field: optional agent.v1.SandboxPolicy per_repo = 2;
    */
   perRepo?: SandboxPolicy;
 
   /**
-   * @generated from field: agent.v1.SandboxPolicy team_admin = 3;
+   * @generated from field: optional agent.v1.SandboxPolicy team_admin = 3;
    */
   teamAdmin?: SandboxPolicy;
 
@@ -347,9 +347,9 @@ export class SandboxPolicyMergeSources extends Message<SandboxPolicyMergeSources
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.SandboxPolicyMergeSources";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "per_user", kind: "message", T: SandboxPolicy },
-    { no: 2, name: "per_repo", kind: "message", T: SandboxPolicy },
-    { no: 3, name: "team_admin", kind: "message", T: SandboxPolicy },
+    { no: 1, name: "per_user", kind: "message", T: SandboxPolicy, opt: true },
+    { no: 2, name: "per_repo", kind: "message", T: SandboxPolicy, opt: true },
+    { no: 3, name: "team_admin", kind: "message", T: SandboxPolicy, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SandboxPolicyMergeSources {

@@ -72,7 +72,7 @@ export class AiAttributionSuccess extends Message<AiAttributionSuccess> {
   attributionText = "";
 
   /**
-   * @generated from field: agent.v1.OutputLocation output_location = 2;
+   * @generated from field: optional agent.v1.OutputLocation output_location = 2;
    */
   outputLocation?: OutputLocation;
 
@@ -85,7 +85,7 @@ export class AiAttributionSuccess extends Message<AiAttributionSuccess> {
   static readonly typeName = "agent.v1.AiAttributionSuccess";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "attribution_text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "output_location", kind: "message", T: OutputLocation },
+    { no: 2, name: "output_location", kind: "message", T: OutputLocation, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AiAttributionSuccess {
@@ -147,12 +147,12 @@ export class AiAttributionError extends Message<AiAttributionError> {
  */
 export class AiAttributionToolCall extends Message<AiAttributionToolCall> {
   /**
-   * @generated from field: agent.v1.AiAttributionArgs args = 1;
+   * @generated from field: optional agent.v1.AiAttributionArgs args = 1;
    */
   args?: AiAttributionArgs;
 
   /**
-   * @generated from field: agent.v1.AiAttributionResult result = 2;
+   * @generated from field: optional agent.v1.AiAttributionResult result = 2;
    */
   result?: AiAttributionResult;
 
@@ -164,8 +164,8 @@ export class AiAttributionToolCall extends Message<AiAttributionToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.AiAttributionToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: AiAttributionArgs },
-    { no: 2, name: "result", kind: "message", T: AiAttributionResult },
+    { no: 1, name: "args", kind: "message", T: AiAttributionArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: AiAttributionResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AiAttributionToolCall {
@@ -190,14 +190,14 @@ export class AiAttributionToolCall extends Message<AiAttributionToolCall> {
  */
 export class AiAttributionArgs extends Message<AiAttributionArgs> {
   /**
-   * @generated from field: int32 start_line = 2;
+   * @generated from field: optional int32 start_line = 2;
    */
-  startLine = 0;
+  startLine?: number;
 
   /**
-   * @generated from field: int32 end_line = 3;
+   * @generated from field: optional int32 end_line = 3;
    */
-  endLine = 0;
+  endLine?: number;
 
   /**
    * @generated from field: repeated string file_paths = 5;
@@ -210,19 +210,19 @@ export class AiAttributionArgs extends Message<AiAttributionArgs> {
   commitHashes: string[] = [];
 
   /**
-   * @generated from field: string output_mode = 7;
+   * @generated from field: optional string output_mode = 7;
    */
-  outputMode = "";
+  outputMode?: string;
 
   /**
-   * @generated from field: int32 max_commits = 9;
+   * @generated from field: optional int32 max_commits = 9;
    */
-  maxCommits = 0;
+  maxCommits?: number;
 
   /**
-   * @generated from field: bool include_line_ranges = 10;
+   * @generated from field: optional bool include_line_ranges = 10;
    */
-  includeLineRanges = false;
+  includeLineRanges?: boolean;
 
   constructor(data?: PartialMessage<AiAttributionArgs>) {
     super();
@@ -232,13 +232,13 @@ export class AiAttributionArgs extends Message<AiAttributionArgs> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.AiAttributionArgs";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 2, name: "start_line", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "end_line", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 2, name: "start_line", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 3, name: "end_line", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 5, name: "file_paths", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 6, name: "commit_hashes", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 7, name: "output_mode", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "max_commits", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 10, name: "include_line_ranges", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 7, name: "output_mode", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 9, name: "max_commits", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 10, name: "include_line_ranges", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AiAttributionArgs {

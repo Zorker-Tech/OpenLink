@@ -21,13 +21,13 @@ message CppFileDiffHistory {
 
 message CppContextItem {
   string contents = 1 [json_name = "contents"];
-  string symbol = 2 [json_name = "symbol"];
+  optional string symbol = 2 [json_name = "symbol"];
   string relative_workspace_path = 3 [json_name = "relativeWorkspacePath"];
   float score = 4 [json_name = "score"];
 }
 
 message BlockDiffPatch {
-  .aiserver.v1.BlockDiffPatch.ModelWindow start_model_window = 1 [json_name = "startModelWindow"];
+  optional .aiserver.v1.BlockDiffPatch.ModelWindow start_model_window = 1 [json_name = "startModelWindow"];
   repeated .aiserver.v1.BlockDiffPatch.Change changes = 3 [json_name = "changes"];
   string relative_path = 4 [json_name = "relativePath"];
   int32 start_from_change_index = 5 [json_name = "startFromChangeIndex"];
@@ -39,13 +39,13 @@ message BlockDiffPatch {
   }
   message Change {
     string text = 1 [json_name = "text"];
-    .aiserver.v1.IRange range = 2 [json_name = "range"];
+    optional .aiserver.v1.IRange range = 2 [json_name = "range"];
   }
 }
 
 message CppParameterHint {
   string label = 1 [json_name = "label"];
-  string documentation = 2 [json_name = "documentation"];
+  optional string documentation = 2 [json_name = "documentation"];
 }
 
 message CppIntentInfo {
@@ -60,8 +60,8 @@ message IRange {
 }
 
 message AcceptCursorPredictionEvent {
-  .aiserver.v1.CursorPrediction cursor_prediction = 1 [json_name = "cursorPrediction"];
-  .aiserver.v1.PointInTimeModel point_in_time_model = 2 [json_name = "pointInTimeModel"];
+  optional .aiserver.v1.CursorPrediction cursor_prediction = 1 [json_name = "cursorPrediction"];
+  optional .aiserver.v1.PointInTimeModel point_in_time_model = 2 [json_name = "pointInTimeModel"];
 }
 
 message AddTabRequestToEvalRequest {
@@ -76,7 +76,7 @@ message AdditionalFile {
   string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
   bool is_open = 2 [json_name = "isOpen"];
   repeated string visible_range_content = 3 [json_name = "visibleRangeContent"];
-  double last_viewed_at = 4 [json_name = "lastViewedAt"];
+  optional double last_viewed_at = 4 [json_name = "lastViewedAt"];
   repeated int32 start_line_number_one_indexed = 5 [json_name = "startLineNumberOneIndexed"];
   repeated .aiserver.v1.LineRange visible_ranges = 6 [json_name = "visibleRanges"];
 }
@@ -110,9 +110,9 @@ message AnythingQuickAccessItem {
     string section = 3 [json_name = "section"];
   }
   message Resource {
-    .aiserver.v1.PointInTimeModel model = 1 [json_name = "model"];
-    .aiserver.v1.IRange range = 2 [json_name = "range"];
-    string uri = 3 [json_name = "uri"];
+    optional .aiserver.v1.PointInTimeModel model = 1 [json_name = "model"];
+    optional .aiserver.v1.IRange range = 2 [json_name = "range"];
+    optional string uri = 3 [json_name = "uri"];
   }
 }
 
@@ -127,7 +127,7 @@ message AvailableCppModelsRequest {
 
 message AvailableCppModelsResponse {
   repeated string models = 1 [json_name = "models"];
-  string default_model = 2 [json_name = "defaultModel"];
+  optional string default_model = 2 [json_name = "defaultModel"];
 }
 
 message BackgroundFilesEvent {
@@ -142,8 +142,8 @@ message BackgroundFilesEvent {
 
 message BeforeAiEditEvent {
   string tool_call_id = 2 [json_name = "toolCallId"];
-  string request_id = 3 [json_name = "requestId"];
-  string tool_name = 4 [json_name = "toolName"];
+  optional string request_id = 3 [json_name = "requestId"];
+  optional string tool_name = 4 [json_name = "toolName"];
   oneof model {
     .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
     string relative_workspace_path = 5 [json_name = "relativeWorkspacePath"];
@@ -160,7 +160,7 @@ message BrowserEvent {
   }
   message Navigation {
     string url = 1 [json_name = "url"];
-    string title = 2 [json_name = "title"];
+    optional string title = 2 [json_name = "title"];
   }
   message TabClosed {
   }
@@ -169,10 +169,10 @@ message BrowserEvent {
   message ToolAction {
     string tool_name = 1 [json_name = "toolName"];
     string args_json = 2 [json_name = "argsJson"];
-    bool success = 3 [json_name = "success"];
-    string post_snapshot_yaml = 4 [json_name = "postSnapshotYaml"];
-    string post_url = 5 [json_name = "postUrl"];
-    string post_title = 6 [json_name = "postTitle"];
+    optional bool success = 3 [json_name = "success"];
+    optional string post_snapshot_yaml = 4 [json_name = "postSnapshotYaml"];
+    optional string post_url = 5 [json_name = "postUrl"];
+    optional string post_title = 6 [json_name = "postTitle"];
     .aiserver.v1.BrowserEvent.ToolAction.Source source = 7 [json_name = "source"];
     enum Source {
       SOURCE_UNSPECIFIED = 0;
@@ -230,11 +230,11 @@ message BugBotEvent {
     string bug_report_id = 1 [json_name = "bugReportId"];
   }
   message PressedOpenInEditor {
-    .aiserver.v1.BugLocation bug_location = 1 [json_name = "bugLocation"];
+    optional .aiserver.v1.BugLocation bug_location = 1 [json_name = "bugLocation"];
     string bug_report_id = 2 [json_name = "bugReportId"];
   }
   message ReportsGenerated {
-    .aiserver.v1.BugReports bug_reports = 1 [json_name = "bugReports"];
+    optional .aiserver.v1.BugReports bug_reports = 1 [json_name = "bugReports"];
   }
   message Started {
   }
@@ -255,7 +255,7 @@ message BugBotEvent {
 
 message BugBotLinterEvent {
   string request_id = 1 [json_name = "requestId"];
-  .aiserver.v1.PointInTimeModel point_in_time_model = 2 [json_name = "pointInTimeModel"];
+  optional .aiserver.v1.PointInTimeModel point_in_time_model = 2 [json_name = "pointInTimeModel"];
   oneof event_type {
     .aiserver.v1.BugBotLinterEvent.LintGenerated lint_generated = 3 [json_name = "lintGenerated"];
     .aiserver.v1.BugBotLinterEvent.LintDismissed lint_dismissed = 4 [json_name = "lintDismissed"];
@@ -269,7 +269,7 @@ message BugBotLinterEvent {
     string bug_report_id = 1 [json_name = "bugReportId"];
   }
   message LintGenerated {
-    .aiserver.v1.BugReport bug_report = 1 [json_name = "bugReport"];
+    optional .aiserver.v1.BugReport bug_report = 1 [json_name = "bugReport"];
   }
   message NotShownBecauseHeuristic {
     .aiserver.v1.BugBotLinterEvent.NotShownBecauseHeuristic.Heuristic heuristic = 1 [json_name = "heuristic"];
@@ -310,9 +310,9 @@ message ChatEvent {
 }
 
 message CmdKEvent {
-  .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
+  optional .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
   string request_id = 2 [json_name = "requestId"];
-  string prompt_bar_id = 20 [json_name = "promptBarId"];
+  optional string prompt_bar_id = 20 [json_name = "promptBarId"];
   oneof event_type {
     .aiserver.v1.CmdKEvent.SubmitPrompt submit_prompt = 3 [json_name = "submitPrompt"];
     .aiserver.v1.CmdKEvent.EndOfGeneration end_of_generation = 4 [json_name = "endOfGeneration"];
@@ -326,7 +326,7 @@ message CmdKEvent {
   message AcceptDiffs {
   }
   message AcceptPartialDiff {
-    .aiserver.v1.IRange green_range = 1 [json_name = "greenRange"];
+    optional .aiserver.v1.IRange green_range = 1 [json_name = "greenRange"];
     repeated string green_lines = 2 [json_name = "greenLines"];
     repeated string red_lines = 3 [json_name = "redLines"];
   }
@@ -337,28 +337,28 @@ message CmdKEvent {
   message InterruptGeneration {
   }
   message RejectDiffs {
-    string actor_request_id = 1 [json_name = "actorRequestId"];
-    bool silent = 2 [json_name = "silent"];
+    optional string actor_request_id = 1 [json_name = "actorRequestId"];
+    optional bool silent = 2 [json_name = "silent"];
   }
   message RejectPartialDiff {
-    .aiserver.v1.IRange green_range = 1 [json_name = "greenRange"];
+    optional .aiserver.v1.IRange green_range = 1 [json_name = "greenRange"];
     repeated string green_lines = 2 [json_name = "greenLines"];
     repeated string red_lines = 3 [json_name = "redLines"];
   }
   message SubmitPrompt {
-    .aiserver.v1.IRange original_range = 1 [json_name = "originalRange"];
+    optional .aiserver.v1.IRange original_range = 1 [json_name = "originalRange"];
     string original_text = 2 [json_name = "originalText"];
     string prompt = 3 [json_name = "prompt"];
   }
 }
 
 message CppAcceptEvent {
-  .aiserver.v1.CppSuggestion cpp_suggestion = 1 [json_name = "cppSuggestion"];
+  optional .aiserver.v1.CppSuggestion cpp_suggestion = 1 [json_name = "cppSuggestion"];
 }
 
 message CppAcceptEventNew {
-  .aiserver.v1.CurrentlyShownCppSuggestion cpp_suggestion = 1 [json_name = "cppSuggestion"];
-  .aiserver.v1.PointInTimeModel point_in_time_model = 7 [json_name = "pointInTimeModel"];
+  optional .aiserver.v1.CurrentlyShownCppSuggestion cpp_suggestion = 1 [json_name = "cppSuggestion"];
+  optional .aiserver.v1.PointInTimeModel point_in_time_model = 7 [json_name = "pointInTimeModel"];
 }
 
 message CppAppendRequest {
@@ -370,25 +370,25 @@ message CppAppendResponse {
 }
 
 message CppChangeQuickActionEvent {
-  .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
+  optional .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
   repeated .aiserver.v1.CppQuickAction added = 2 [json_name = "added"];
   repeated .aiserver.v1.CppQuickAction removed = 3 [json_name = "removed"];
   repeated .aiserver.v1.CppQuickAction actions = 4 [json_name = "actions"];
 }
 
 message CppConfigRequest {
-  bool is_nightly = 1 [json_name = "isNightly"];
+  optional bool is_nightly = 1 [json_name = "isNightly"];
   string model = 2 [json_name = "model"];
-  bool supports_cpt = 3 [json_name = "supportsCpt"];
+  optional bool supports_cpt = 3 [json_name = "supportsCpt"];
 }
 
 message CppConfigResponse {
-  int32 above_radius = 1 [json_name = "aboveRadius"];
-  int32 below_radius = 2 [json_name = "belowRadius"];
-  .aiserver.v1.CppConfigResponse.MergeBehavior merge_behavior = 4 [json_name = "mergeBehavior"];
-  bool is_on = 5 [json_name = "isOn"];
-  bool is_ghost_text = 6 [json_name = "isGhostText"];
-  bool should_let_user_enable_cpp_even_if_not_pro = 7 [json_name = "shouldLetUserEnableCppEvenIfNotPro"];
+  optional int32 above_radius = 1 [json_name = "aboveRadius"];
+  optional int32 below_radius = 2 [json_name = "belowRadius"];
+  optional .aiserver.v1.CppConfigResponse.MergeBehavior merge_behavior = 4 [json_name = "mergeBehavior"];
+  optional bool is_on = 5 [json_name = "isOn"];
+  optional bool is_ghost_text = 6 [json_name = "isGhostText"];
+  optional bool should_let_user_enable_cpp_even_if_not_pro = 7 [json_name = "shouldLetUserEnableCppEvenIfNotPro"];
   repeated .aiserver.v1.CppConfigResponse.Heuristic heuristics = 8 [json_name = "heuristics"];
   repeated string exclude_recently_viewed_files_patterns = 9 [json_name = "excludeRecentlyViewedFilesPatterns"];
   bool enable_rvf_tracking = 10 [json_name = "enableRvfTracking"];
@@ -396,19 +396,19 @@ message CppConfigResponse {
   int32 client_debounce_duration_millis = 12 [json_name = "clientDebounceDurationMillis"];
   string cpp_url = 13 [json_name = "cppUrl"];
   bool use_whitespace_diff_history = 14 [json_name = "useWhitespaceDiffHistory"];
-  .aiserver.v1.CppConfigResponse.ImportPredictionConfig import_prediction_config = 15 [json_name = "importPredictionConfig"];
+  optional .aiserver.v1.CppConfigResponse.ImportPredictionConfig import_prediction_config = 15 [json_name = "importPredictionConfig"];
   bool enable_filesync_debounce_skipping = 16 [json_name = "enableFilesyncDebounceSkipping"];
   float check_filesync_hash_percent = 17 [json_name = "checkFilesyncHashPercent"];
   string geo_cpp_backend_url = 18 [json_name = "geoCppBackendUrl"];
-  .aiserver.v1.CppConfigResponse.RecentlyRejectedEditThresholds recently_rejected_edit_thresholds = 19 [json_name = "recentlyRejectedEditThresholds"];
+  optional .aiserver.v1.CppConfigResponse.RecentlyRejectedEditThresholds recently_rejected_edit_thresholds = 19 [json_name = "recentlyRejectedEditThresholds"];
   bool is_fused_cursor_prediction_model = 20 [json_name = "isFusedCursorPredictionModel"];
   bool include_unchanged_lines = 21 [json_name = "includeUnchangedLines"];
   bool should_fetch_rvf_text = 22 [json_name = "shouldFetchRvfText"];
-  int32 max_number_of_cleared_suggestions_since_last_accept = 23 [json_name = "maxNumberOfClearedSuggestionsSinceLastAccept"];
-  .aiserver.v1.CppConfigResponse.SuggestionHintConfig suggestion_hint_config = 24 [json_name = "suggestionHintConfig"];
+  optional int32 max_number_of_cleared_suggestions_since_last_accept = 23 [json_name = "maxNumberOfClearedSuggestionsSinceLastAccept"];
+  optional .aiserver.v1.CppConfigResponse.SuggestionHintConfig suggestion_hint_config = 24 [json_name = "suggestionHintConfig"];
   bool allows_tab_chunks = 25 [json_name = "allowsTabChunks"];
-  int32 tab_context_refresh_debounce_ms = 26 [json_name = "tabContextRefreshDebounceMs"];
-  int32 tab_context_refresh_editor_change_debounce_ms = 27 [json_name = "tabContextRefreshEditorChangeDebounceMs"];
+  optional int32 tab_context_refresh_debounce_ms = 26 [json_name = "tabContextRefreshDebounceMs"];
+  optional int32 tab_context_refresh_editor_change_debounce_ms = 27 [json_name = "tabContextRefreshEditorChangeDebounceMs"];
   enum Heuristic {
     HEURISTIC_UNSPECIFIED = 0;
     HEURISTIC_LOTS_OF_ADDED_TEXT = 1;
@@ -425,8 +425,8 @@ message CppConfigResponse {
   }
   message MergeBehavior {
     string type = 1 [json_name = "type"];
-    int32 limit = 2 [json_name = "limit"];
-    int32 radius = 3 [json_name = "radius"];
+    optional int32 limit = 2 [json_name = "limit"];
+    optional int32 radius = 3 [json_name = "radius"];
   }
   message RecentlyRejectedEditThresholds {
     int32 hard_reject_threshold = 1 [json_name = "hardRejectThreshold"];
@@ -443,8 +443,8 @@ message CppCopyEvent {
 }
 
 message CppDebouncedCursorMovementEvent {
-  .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
-  .aiserver.v1.OneIndexedPosition cursor_position = 2 [json_name = "cursorPosition"];
+  optional .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
+  optional .aiserver.v1.OneIndexedPosition cursor_position = 2 [json_name = "cursorPosition"];
 }
 
 message CppEditHistoryStatusRequest {
@@ -456,8 +456,8 @@ message CppEditHistoryStatusResponse {
 }
 
 message CppEditorChangedEvent {
-  .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
-  .aiserver.v1.OneIndexedPosition cursor_position = 2 [json_name = "cursorPosition"];
+  optional .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
+  optional .aiserver.v1.OneIndexedPosition cursor_position = 2 [json_name = "cursorPosition"];
   repeated .aiserver.v1.IRange visible_ranges = 3 [json_name = "visibleRanges"];
   string editor_id = 4 [json_name = "editorId"];
 }
@@ -470,7 +470,7 @@ enum CppFate {
 }
 
 message CppHistoryAppendEvent {
-  string final_model_hash = 10 [json_name = "finalModelHash"];
+  optional string final_model_hash = 10 [json_name = "finalModelHash"];
   oneof event {
     .aiserver.v1.ModelChange model_change = 1 [json_name = "modelChange"];
     .aiserver.v1.CppAcceptEvent accept_event = 2 [json_name = "acceptEvent"];
@@ -480,36 +480,36 @@ message CppHistoryAppendEvent {
 }
 
 message CppLinterErrorEvent {
-  .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
+  optional .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
   repeated .aiserver.v1.LinterError added_errors = 2 [json_name = "addedErrors"];
   repeated .aiserver.v1.LinterError removed_errors = 3 [json_name = "removedErrors"];
   repeated .aiserver.v1.LinterError errors = 4 [json_name = "errors"];
 }
 
 message CppManualTriggerEvent {
-  .aiserver.v1.CursorPosition position = 2 [json_name = "position"];
+  optional .aiserver.v1.CursorPosition position = 2 [json_name = "position"];
 }
 
 message CppManualTriggerEventNew {
   int32 line_number_one_indexed = 1 [json_name = "lineNumberOneIndexed"];
   int32 column_number_one_indexed = 2 [json_name = "columnNumberOneIndexed"];
-  .aiserver.v1.PointInTimeModel point_in_time_model = 7 [json_name = "pointInTimeModel"];
+  optional .aiserver.v1.PointInTimeModel point_in_time_model = 7 [json_name = "pointInTimeModel"];
 }
 
 message CppPartialAcceptEvent {
-  .aiserver.v1.CurrentlyShownCppSuggestion cpp_suggestion = 1 [json_name = "cppSuggestion"];
-  .aiserver.v1.Edit edit = 2 [json_name = "edit"];
-  .aiserver.v1.PointInTimeModel point_in_time_model = 3 [json_name = "pointInTimeModel"];
+  optional .aiserver.v1.CurrentlyShownCppSuggestion cpp_suggestion = 1 [json_name = "cppSuggestion"];
+  optional .aiserver.v1.Edit edit = 2 [json_name = "edit"];
+  optional .aiserver.v1.PointInTimeModel point_in_time_model = 3 [json_name = "pointInTimeModel"];
 }
 
 message CppQuickAction {
   string title = 1 [json_name = "title"];
   repeated .aiserver.v1.CppQuickAction.Edit edits = 2 [json_name = "edits"];
-  bool is_preferred = 3 [json_name = "isPreferred"];
-  .aiserver.v1.CppQuickActionCommand command = 4 [json_name = "command"];
+  optional bool is_preferred = 3 [json_name = "isPreferred"];
+  optional .aiserver.v1.CppQuickActionCommand command = 4 [json_name = "command"];
   message Edit {
     string text = 1 [json_name = "text"];
-    .aiserver.v1.IRange range = 2 [json_name = "range"];
+    optional .aiserver.v1.IRange range = 2 [json_name = "range"];
   }
 }
 
@@ -520,7 +520,7 @@ message CppQuickActionCommand {
 }
 
 message CppQuickActionFireEvent {
-  .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
+  optional .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
   oneof action_identifier {
     .aiserver.v1.CppQuickActionCommand quick_action_command = 2 [json_name = "quickActionCommand"];
     .aiserver.v1.CppQuickAction quick_action_event = 3 [json_name = "quickActionEvent"];
@@ -528,22 +528,22 @@ message CppQuickActionFireEvent {
 }
 
 message CppRejectEvent {
-  .aiserver.v1.CppSuggestion cpp_suggestion = 1 [json_name = "cppSuggestion"];
+  optional .aiserver.v1.CppSuggestion cpp_suggestion = 1 [json_name = "cppSuggestion"];
 }
 
 message CppRejectEventNew {
-  .aiserver.v1.CurrentlyShownCppSuggestion cpp_suggestion = 1 [json_name = "cppSuggestion"];
-  .aiserver.v1.PointInTimeModel point_in_time_model = 7 [json_name = "pointInTimeModel"];
+  optional .aiserver.v1.CurrentlyShownCppSuggestion cpp_suggestion = 1 [json_name = "cppSuggestion"];
+  optional .aiserver.v1.PointInTimeModel point_in_time_model = 7 [json_name = "pointInTimeModel"];
 }
 
 message CppSessionEvent {
   double performance_now_timestamp = 5 [json_name = "performanceNowTimestamp"];
-  double performance_time_origin = 25 [json_name = "performanceTimeOrigin"];
-  int64 global_index = 41 [json_name = "globalIndex"];
-  double performance_now_flush_time = 42 [json_name = "performanceNowFlushTime"];
-  int32 event_index = 43 [json_name = "eventIndex"];
-  int32 flush_index = 44 [json_name = "flushIndex"];
-  int32 global_index_v2 = 45 [json_name = "globalIndexV2"];
+  optional double performance_time_origin = 25 [json_name = "performanceTimeOrigin"];
+  optional int64 global_index = 41 [json_name = "globalIndex"];
+  optional double performance_now_flush_time = 42 [json_name = "performanceNowFlushTime"];
+  optional int32 event_index = 43 [json_name = "eventIndex"];
+  optional int32 flush_index = 44 [json_name = "flushIndex"];
+  optional int32 global_index_v2 = 45 [json_name = "globalIndexV2"];
   oneof event {
     .aiserver.v1.CppAcceptEventNew accept_event = 2 [json_name = "acceptEvent"];
     .aiserver.v1.CppRejectEventNew reject_event = 3 [json_name = "rejectEvent"];
@@ -614,17 +614,17 @@ message CppStoppedTrackingModelEvent {
 }
 
 message CppSuggestEvent {
-  .aiserver.v1.CurrentlyShownCppSuggestion cpp_suggestion = 1 [json_name = "cppSuggestion"];
-  .aiserver.v1.PointInTimeModel point_in_time_model = 2 [json_name = "pointInTimeModel"];
-  .aiserver.v1.RecoverableCppData recoverable_cpp_data = 3 [json_name = "recoverableCppData"];
+  optional .aiserver.v1.CurrentlyShownCppSuggestion cpp_suggestion = 1 [json_name = "cppSuggestion"];
+  optional .aiserver.v1.PointInTimeModel point_in_time_model = 2 [json_name = "pointInTimeModel"];
+  optional .aiserver.v1.RecoverableCppData recoverable_cpp_data = 3 [json_name = "recoverableCppData"];
 }
 
 message CppSuggestion {
   string suggestion_text = 1 [json_name = "suggestionText"];
-  .aiserver.v1.IRange range = 2 [json_name = "range"];
+  optional .aiserver.v1.IRange range = 2 [json_name = "range"];
   bool seen = 5 [json_name = "seen"];
-  .aiserver.v1.SelectionWithOrientation editor_selection_before_peek = 6 [json_name = "editorSelectionBeforePeek"];
-  string binding_id = 7 [json_name = "bindingId"];
+  optional .aiserver.v1.SelectionWithOrientation editor_selection_before_peek = 6 [json_name = "editorSelectionBeforePeek"];
+  optional string binding_id = 7 [json_name = "bindingId"];
 }
 
 message CppTimelineEvent {
@@ -636,7 +636,7 @@ message CppTimelineEvent {
   message Change {
     string model_uuid = 1 [json_name = "modelUuid"];
     int32 change_index = 2 [json_name = "changeIndex"];
-    .aiserver.v1.ModelChange change = 3 [json_name = "change"];
+    optional .aiserver.v1.ModelChange change = 3 [json_name = "change"];
     .aiserver.v1.CppTimelineEvent.Change.Status status = 4 [json_name = "status"];
     enum Status {
       STATUS_UNSPECIFIED = 0;
@@ -650,8 +650,8 @@ message CppTimelineEvent {
 message CppTriggerEvent {
   string generation_uuid = 1 [json_name = "generationUuid"];
   int32 model_version = 2 [json_name = "modelVersion"];
-  .aiserver.v1.OneIndexedPosition cursor_position = 3 [json_name = "cursorPosition"];
-  .aiserver.v1.PointInTimeModel point_in_time_model = 4 [json_name = "pointInTimeModel"];
+  optional .aiserver.v1.OneIndexedPosition cursor_position = 3 [json_name = "cursorPosition"];
+  optional .aiserver.v1.PointInTimeModel point_in_time_model = 4 [json_name = "pointInTimeModel"];
   .aiserver.v1.CppSource source = 5 [json_name = "source"];
 }
 
@@ -664,9 +664,9 @@ message CurrentlyShownCppSuggestion {
   int32 suggestion_id = 1 [json_name = "suggestionId"];
   string suggestion_text = 2 [json_name = "suggestionText"];
   int32 model_version_when_the_change_is_first_indicated_to_the_user_but_not_shown_in_the_model = 3 [json_name = "modelVersionWhenTheChangeIsFirstIndicatedToTheUserButNotShownInTheModel"];
-  .aiserver.v1.IRange range_of_suggestion_in_current_model = 4 [json_name = "rangeOfSuggestionInCurrentModel"];
+  optional .aiserver.v1.IRange range_of_suggestion_in_current_model = 4 [json_name = "rangeOfSuggestionInCurrentModel"];
   string original_text = 5 [json_name = "originalText"];
-  string binding_id = 6 [json_name = "bindingId"];
+  optional string binding_id = 6 [json_name = "bindingId"];
 }
 
 message CursorPrediction {
@@ -674,7 +674,7 @@ message CursorPrediction {
   int32 prediction_id = 2 [json_name = "predictionId"];
   int32 line_number = 3 [json_name = "lineNumber"];
   .aiserver.v1.CursorPrediction.CursorPredictionSource source = 4 [json_name = "source"];
-  string binding_id = 5 [json_name = "bindingId"];
+  optional string binding_id = 5 [json_name = "bindingId"];
   enum CursorPredictionSource {
     CURSOR_PREDICTION_SOURCE_UNSPECIFIED = 0;
     CURSOR_PREDICTION_SOURCE_ALWAYS_ON = 1;
@@ -693,20 +693,20 @@ message CursorSelection {
 
 message Edit {
   string text = 1 [json_name = "text"];
-  .aiserver.v1.IRange range = 2 [json_name = "range"];
+  optional .aiserver.v1.IRange range = 2 [json_name = "range"];
 }
 
 message EditHistoryAppendChangesRequest {
   string session_id = 1 [json_name = "sessionId"];
   string model_uuid = 2 [json_name = "modelUuid"];
-  string starting_model_value = 3 [json_name = "startingModelValue"];
+  optional string starting_model_value = 3 [json_name = "startingModelValue"];
   repeated .aiserver.v1.ModelChange changes = 4 [json_name = "changes"];
   string relative_path = 5 [json_name = "relativePath"];
   string client_version = 6 [json_name = "clientVersion"];
   repeated .aiserver.v1.CppHistoryAppendEvent events = 7 [json_name = "events"];
-  string client_commit = 8 [json_name = "clientCommit"];
+  optional string client_commit = 8 [json_name = "clientCommit"];
   repeated .aiserver.v1.CppSessionEvent session_events = 9 [json_name = "sessionEvents"];
-  int32 starting_model_version = 10 [json_name = "startingModelVersion"];
+  optional int32 starting_model_version = 10 [json_name = "startingModelVersion"];
   bool model_changes_may_be_out_of_order = 11 [json_name = "modelChangesMayBeOutOfOrder"];
   .aiserver.v1.EditHistoryAppendChangesRequest.PrivacyModeStatus privacy_mode_status = 12 [json_name = "privacyModeStatus"];
   float time_origin = 13 [json_name = "timeOrigin"];
@@ -735,12 +735,12 @@ message EditorCloseEvent {
 }
 
 message FinishedCppGenerationEvent {
-  .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
-  .aiserver.v1.RecoverableCppData recoverable_cpp_data = 2 [json_name = "recoverableCppData"];
+  optional .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
+  optional .aiserver.v1.RecoverableCppData recoverable_cpp_data = 2 [json_name = "recoverableCppData"];
 }
 
 message GetCppEditClassificationRequest {
-  .aiserver.v1.StreamCppRequest cpp_request = 1 [json_name = "cppRequest"];
+  optional .aiserver.v1.StreamCppRequest cpp_request = 1 [json_name = "cppRequest"];
   repeated .aiserver.v1.SuggestedEdit suggested_edits = 25 [json_name = "suggestedEdits"];
   bool marker_touches_green = 26 [json_name = "markerTouchesGreen"];
   string current_file_contents_for_linter_errors = 27 [json_name = "currentFileContentsForLinterErrors"];
@@ -748,16 +748,16 @@ message GetCppEditClassificationRequest {
 
 message GetCppEditClassificationResponse {
   repeated .aiserver.v1.GetCppEditClassificationResponse.ScoredEdit scored_edits = 1 [json_name = "scoredEdits"];
-  .aiserver.v1.GetCppEditClassificationResponse.ScoredEdit noop_edit = 2 [json_name = "noopEdit"];
-  bool should_noop = 3 [json_name = "shouldNoop"];
-  .aiserver.v1.GetCppEditClassificationResponse.ScoredEdit generation_edit = 4 [json_name = "generationEdit"];
+  optional .aiserver.v1.GetCppEditClassificationResponse.ScoredEdit noop_edit = 2 [json_name = "noopEdit"];
+  optional bool should_noop = 3 [json_name = "shouldNoop"];
+  optional .aiserver.v1.GetCppEditClassificationResponse.ScoredEdit generation_edit = 4 [json_name = "generationEdit"];
   message LogProbs {
     repeated string tokens = 1 [json_name = "tokens"];
     repeated double token_logprobs = 2 [json_name = "tokenLogprobs"];
   }
   message ScoredEdit {
-    .aiserver.v1.SuggestedEdit edit = 1 [json_name = "edit"];
-    .aiserver.v1.GetCppEditClassificationResponse.LogProbs log_probs = 2 [json_name = "logProbs"];
+    optional .aiserver.v1.SuggestedEdit edit = 1 [json_name = "edit"];
+    optional .aiserver.v1.GetCppEditClassificationResponse.LogProbs log_probs = 2 [json_name = "logProbs"];
   }
 }
 
@@ -765,13 +765,13 @@ message GitEvent {
   .aiserver.v1.GitEvent.OperationType operation_type = 1 [json_name = "operationType"];
   string repository_path = 2 [json_name = "repositoryPath"];
   bool operation_success = 3 [json_name = "operationSuccess"];
-  string branch_name = 4 [json_name = "branchName"];
-  string error_message = 5 [json_name = "errorMessage"];
-  bool is_default_branch = 6 [json_name = "isDefaultBranch"];
-  string default_branch_name = 7 [json_name = "defaultBranchName"];
-  string commit_hash = 8 [json_name = "commitHash"];
-  string previous_commit_hash = 9 [json_name = "previousCommitHash"];
-  string remote_url = 10 [json_name = "remoteUrl"];
+  optional string branch_name = 4 [json_name = "branchName"];
+  optional string error_message = 5 [json_name = "errorMessage"];
+  optional bool is_default_branch = 6 [json_name = "isDefaultBranch"];
+  optional string default_branch_name = 7 [json_name = "defaultBranchName"];
+  optional string commit_hash = 8 [json_name = "commitHash"];
+  optional string previous_commit_hash = 9 [json_name = "previousCommitHash"];
+  optional string remote_url = 10 [json_name = "remoteUrl"];
   enum OperationType {
     OPERATION_TYPE_UNSPECIFIED = 0;
     OPERATION_TYPE_COMMIT = 1;
@@ -796,17 +796,17 @@ message LspSuggestion {
 
 message LspSuggestionEvent {
   repeated string suggestions = 1 [json_name = "suggestions"];
-  string request_id = 2 [json_name = "requestId"];
-  string editor_id = 3 [json_name = "editorId"];
-  .aiserver.v1.PointInTimeModel point_in_time_model = 4 [json_name = "pointInTimeModel"];
+  optional string request_id = 2 [json_name = "requestId"];
+  optional string editor_id = 3 [json_name = "editorId"];
+  optional .aiserver.v1.PointInTimeModel point_in_time_model = 4 [json_name = "pointInTimeModel"];
 }
 
 message MarkCppRequest {
   string request_id = 1 [json_name = "requestId"];
   string session_id = 2 [json_name = "sessionId"];
   .aiserver.v1.MarkCppRequest.CppResponseTypes response_type = 3 [json_name = "responseType"];
-  string desired_completion = 4 [json_name = "desiredCompletion"];
-  .aiserver.v1.MarkCppRequest.RangeTransformation range_transformation = 5 [json_name = "rangeTransformation"];
+  optional string desired_completion = 4 [json_name = "desiredCompletion"];
+  optional .aiserver.v1.MarkCppRequest.RangeTransformation range_transformation = 5 [json_name = "rangeTransformation"];
   string model_code_name = 10 [json_name = "modelCodeName"];
   string model_openai_name = 11 [json_name = "modelOpenaiName"];
   double current_performance_now_time = 12 [json_name = "currentPerformanceNowTime"];
@@ -834,14 +834,14 @@ message MarkCppResponse {
 }
 
 message MaybeDefinedPointInTimeModel {
-  string model_uuid = 1 [json_name = "modelUuid"];
+  optional string model_uuid = 1 [json_name = "modelUuid"];
   int32 model_version = 2 [json_name = "modelVersion"];
   string relative_path = 3 [json_name = "relativePath"];
   string model_id = 4 [json_name = "modelId"];
 }
 
 message ModelAddedEvent {
-  .aiserver.v1.MaybeDefinedPointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
+  optional .aiserver.v1.MaybeDefinedPointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
   string full_uri = 2 [json_name = "fullUri"];
   string model_id = 3 [json_name = "modelId"];
   string uri_scheme = 4 [json_name = "uriScheme"];
@@ -852,37 +852,37 @@ message ModelAddedEvent {
 
 message ModelChange {
   string text = 1 [json_name = "text"];
-  .aiserver.v1.IRange range = 2 [json_name = "range"];
-  string final_model_hash = 3 [json_name = "finalModelHash"];
-  int32 model_version_immediately_after_this_change = 4 [json_name = "modelVersionImmediatelyAfterThisChange"];
-  double performance_now_timestamp = 5 [json_name = "performanceNowTimestamp"];
-  bool is_undoing = 7 [json_name = "isUndoing"];
-  bool is_redoing = 8 [json_name = "isRedoing"];
+  optional .aiserver.v1.IRange range = 2 [json_name = "range"];
+  optional string final_model_hash = 3 [json_name = "finalModelHash"];
+  optional int32 model_version_immediately_after_this_change = 4 [json_name = "modelVersionImmediatelyAfterThisChange"];
+  optional double performance_now_timestamp = 5 [json_name = "performanceNowTimestamp"];
+  optional bool is_undoing = 7 [json_name = "isUndoing"];
+  optional bool is_redoing = 8 [json_name = "isRedoing"];
   bool model_is_attached_to_editor = 9 [json_name = "modelIsAttachedToEditor"];
   bool model_is_attached_to_the_active_editor = 10 [json_name = "modelIsAttachedToTheActiveEditor"];
   repeated .aiserver.v1.CursorSelection cursor_selections = 11 [json_name = "cursorSelections"];
   int32 model_version_at_metadata_retrieval_time = 12 [json_name = "modelVersionAtMetadataRetrievalTime"];
-  int64 global_index = 13 [json_name = "globalIndex"];
-  double performance_now_flush_time = 14 [json_name = "performanceNowFlushTime"];
-  int32 change_index = 15 [json_name = "changeIndex"];
-  int32 flush_index = 16 [json_name = "flushIndex"];
-  int32 global_index_v2 = 17 [json_name = "globalIndexV2"];
+  optional int64 global_index = 13 [json_name = "globalIndex"];
+  optional double performance_now_flush_time = 14 [json_name = "performanceNowFlushTime"];
+  optional int32 change_index = 15 [json_name = "changeIndex"];
+  optional int32 flush_index = 16 [json_name = "flushIndex"];
+  optional int32 global_index_v2 = 17 [json_name = "globalIndexV2"];
 }
 
 message ModelOpenedEvent {
-  .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
-  .aiserver.v1.MaybeDefinedPointInTimeModel maybe_defined_point_in_time_model = 2 [json_name = "maybeDefinedPointInTimeModel"];
+  optional .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
+  optional .aiserver.v1.MaybeDefinedPointInTimeModel maybe_defined_point_in_time_model = 2 [json_name = "maybeDefinedPointInTimeModel"];
 }
 
 message ModelWithHistory {
   repeated .aiserver.v1.ModelChange changes = 1 [json_name = "changes"];
   string model_uuid = 2 [json_name = "modelUuid"];
-  .aiserver.v1.StartingModel starting_model = 3 [json_name = "startingModel"];
+  optional .aiserver.v1.StartingModel starting_model = 3 [json_name = "startingModel"];
   int32 num_correct_changes = 4 [json_name = "numCorrectChanges"];
   int32 num_unvalidated_changes = 5 [json_name = "numUnvalidatedChanges"];
   int32 num_incorrect_changes = 6 [json_name = "numIncorrectChanges"];
   repeated .aiserver.v1.ModelChange before_start_model_changes = 7 [json_name = "beforeStartModelChanges"];
-  double starting_performance_now_timestamp = 8 [json_name = "startingPerformanceNowTimestamp"];
+  optional double starting_performance_now_timestamp = 8 [json_name = "startingPerformanceNowTimestamp"];
 }
 
 message NtpEvent {
@@ -917,24 +917,24 @@ message RecordCppFateResponse {
 message RecoverableCppData {
   string request_id = 1 [json_name = "requestId"];
   string suggestion_text = 2 [json_name = "suggestionText"];
-  .aiserver.v1.IRange suggestion_range = 3 [json_name = "suggestionRange"];
-  .aiserver.v1.OneIndexedPosition position = 4 [json_name = "position"];
+  optional .aiserver.v1.IRange suggestion_range = 3 [json_name = "suggestionRange"];
+  optional .aiserver.v1.OneIndexedPosition position = 4 [json_name = "position"];
 }
 
 message RefreshTabContextRequest {
-  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
-  string model_name = 2 [json_name = "modelName"];
-  .aiserver.v1.LinterErrors linter_errors = 3 [json_name = "linterErrors"];
+  optional .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  optional string model_name = 2 [json_name = "modelName"];
+  optional .aiserver.v1.LinterErrors linter_errors = 3 [json_name = "linterErrors"];
   repeated .aiserver.v1.CppFileDiffHistory file_diff_histories = 4 [json_name = "fileDiffHistories"];
   repeated .aiserver.v1.AdditionalFile additional_files = 5 [json_name = "additionalFiles"];
-  double client_time = 6 [json_name = "clientTime"];
+  optional double client_time = 6 [json_name = "clientTime"];
   double time_since_request_start = 7 [json_name = "timeSinceRequestStart"];
   double time_at_request_send = 8 [json_name = "timeAtRequestSend"];
-  bool is_debug = 9 [json_name = "isDebug"];
-  string workspace_id = 10 [json_name = "workspaceId"];
-  bool supports_cpt = 11 [json_name = "supportsCpt"];
-  bool supports_crlf_cpt = 12 [json_name = "supportsCrlfCpt"];
-  .aiserver.v1.RepositoryInfo repository_info = 13 [json_name = "repositoryInfo"];
+  optional bool is_debug = 9 [json_name = "isDebug"];
+  optional string workspace_id = 10 [json_name = "workspaceId"];
+  optional bool supports_cpt = 11 [json_name = "supportsCpt"];
+  optional bool supports_crlf_cpt = 12 [json_name = "supportsCrlfCpt"];
+  optional .aiserver.v1.RepositoryInfo repository_info = 13 [json_name = "repositoryInfo"];
 }
 
 message RefreshTabContextResponse {
@@ -942,8 +942,8 @@ message RefreshTabContextResponse {
 }
 
 message RejectCursorPredictionEvent {
-  .aiserver.v1.CursorPrediction cursor_prediction = 1 [json_name = "cursorPrediction"];
-  .aiserver.v1.PointInTimeModel point_in_time_model = 2 [json_name = "pointInTimeModel"];
+  optional .aiserver.v1.CursorPrediction cursor_prediction = 1 [json_name = "cursorPrediction"];
+  optional .aiserver.v1.PointInTimeModel point_in_time_model = 2 [json_name = "pointInTimeModel"];
 }
 
 message RepoEvent {
@@ -966,11 +966,11 @@ message RepoEvent {
 
 message ReviewChangesOpenedEvent {
   string composer_id = 1 [json_name = "composerId"];
-  string best_of_n_group_id = 2 [json_name = "bestOfNGroupId"];
+  optional string best_of_n_group_id = 2 [json_name = "bestOfNGroupId"];
 }
 
 message ScrollEvent {
-  .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
+  optional .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
   repeated .aiserver.v1.IRange visible_ranges = 2 [json_name = "visibleRanges"];
   string editor_id = 3 [json_name = "editorId"];
 }
@@ -982,8 +982,8 @@ message SearchEvent {
   bool is_regex = 4 [json_name = "isRegex"];
   bool is_case_sensitive = 5 [json_name = "isCaseSensitive"];
   bool is_whole_word = 6 [json_name = "isWholeWord"];
-  string files_to_include = 7 [json_name = "filesToInclude"];
-  string files_to_exclude = 8 [json_name = "filesToExclude"];
+  optional string files_to_include = 7 [json_name = "filesToInclude"];
+  optional string files_to_exclude = 8 [json_name = "filesToExclude"];
   int32 duration_ms = 9 [json_name = "durationMs"];
   repeated .aiserver.v1.SearchResultFile results = 10 [json_name = "results"];
 }
@@ -1010,44 +1010,44 @@ message ShouldTurnOnCppOnboardingResponse {
 message StartingModel {
   string relative_path = 1 [json_name = "relativePath"];
   string starting_contents = 2 [json_name = "startingContents"];
-  int32 starting_model_version = 3 [json_name = "startingModelVersion"];
+  optional int32 starting_model_version = 3 [json_name = "startingModelVersion"];
   repeated .aiserver.v1.ModelChange before_start_model_changes = 4 [json_name = "beforeStartModelChanges"];
   string client_version = 5 [json_name = "clientVersion"];
-  string client_commit = 6 [json_name = "clientCommit"];
+  optional string client_commit = 6 [json_name = "clientCommit"];
   string model_uuid = 7 [json_name = "modelUuid"];
   string session_id = 8 [json_name = "sessionId"];
   string uri = 9 [json_name = "uri"];
 }
 
 message StreamCppRequest {
-  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  optional .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
   repeated string diff_history = 2 [json_name = "diffHistory"];
-  string model_name = 3 [json_name = "modelName"];
-  .aiserver.v1.LinterErrors linter_errors = 4 [json_name = "linterErrors"];
+  optional string model_name = 3 [json_name = "modelName"];
+  optional .aiserver.v1.LinterErrors linter_errors = 4 [json_name = "linterErrors"];
   repeated string diff_history_keys = 5 [json_name = "diffHistoryKeys"];
-  bool give_debug_output = 6 [json_name = "giveDebugOutput"];
+  optional bool give_debug_output = 6 [json_name = "giveDebugOutput"];
   repeated .aiserver.v1.CppFileDiffHistory file_diff_histories = 7 [json_name = "fileDiffHistories"];
   repeated .aiserver.v1.CppFileDiffHistory merged_diff_histories = 8 [json_name = "mergedDiffHistories"];
   repeated .aiserver.v1.BlockDiffPatch block_diff_patches = 9 [json_name = "blockDiffPatches"];
-  bool is_nightly = 10 [json_name = "isNightly"];
-  bool is_debug = 11 [json_name = "isDebug"];
-  bool immediately_ack = 12 [json_name = "immediatelyAck"];
+  optional bool is_nightly = 10 [json_name = "isNightly"];
+  optional bool is_debug = 11 [json_name = "isDebug"];
+  optional bool immediately_ack = 12 [json_name = "immediatelyAck"];
   repeated .aiserver.v1.CppContextItem context_items = 13 [json_name = "contextItems"];
   repeated .aiserver.v1.CppParameterHint parameter_hints = 14 [json_name = "parameterHints"];
   repeated .aiserver.v1.LspSubgraphFullContext lsp_contexts = 15 [json_name = "lspContexts"];
-  .aiserver.v1.CppIntentInfo cpp_intent_info = 16 [json_name = "cppIntentInfo"];
-  bool enable_more_context = 17 [json_name = "enableMoreContext"];
-  string workspace_id = 18 [json_name = "workspaceId"];
+  optional .aiserver.v1.CppIntentInfo cpp_intent_info = 16 [json_name = "cppIntentInfo"];
+  optional bool enable_more_context = 17 [json_name = "enableMoreContext"];
+  optional string workspace_id = 18 [json_name = "workspaceId"];
   repeated .aiserver.v1.AdditionalFile additional_files = 19 [json_name = "additionalFiles"];
-  .aiserver.v1.StreamCppRequest.ControlToken control_token = 20 [json_name = "controlToken"];
-  double client_time = 21 [json_name = "clientTime"];
+  optional .aiserver.v1.StreamCppRequest.ControlToken control_token = 20 [json_name = "controlToken"];
+  optional double client_time = 21 [json_name = "clientTime"];
   repeated .aiserver.v1.FilesyncUpdateWithModelVersion filesync_updates = 22 [json_name = "filesyncUpdates"];
   double time_since_request_start = 23 [json_name = "timeSinceRequestStart"];
   double time_at_request_send = 24 [json_name = "timeAtRequestSend"];
-  double client_timezone_offset = 25 [json_name = "clientTimezoneOffset"];
-  .aiserver.v1.LspSuggestedItems lsp_suggested_items = 26 [json_name = "lspSuggestedItems"];
-  bool supports_cpt = 27 [json_name = "supportsCpt"];
-  bool supports_crlf_cpt = 28 [json_name = "supportsCrlfCpt"];
+  optional double client_timezone_offset = 25 [json_name = "clientTimezoneOffset"];
+  optional .aiserver.v1.LspSuggestedItems lsp_suggested_items = 26 [json_name = "lspSuggestedItems"];
+  optional bool supports_cpt = 27 [json_name = "supportsCpt"];
+  optional bool supports_crlf_cpt = 28 [json_name = "supportsCrlfCpt"];
   repeated .aiserver.v1.CodeResult code_results = 29 [json_name = "codeResults"];
   enum ControlToken {
     CONTROL_TOKEN_UNSPECIFIED = 0;
@@ -1059,22 +1059,22 @@ message StreamCppRequest {
 
 message StreamCppResponse {
   string text = 1 [json_name = "text"];
-  int32 suggestion_start_line = 2 [json_name = "suggestionStartLine"];
-  int32 suggestion_confidence = 3 [json_name = "suggestionConfidence"];
-  bool done_stream = 4 [json_name = "doneStream"];
-  string debug_model_output = 5 [json_name = "debugModelOutput"];
-  string debug_model_input = 6 [json_name = "debugModelInput"];
-  string debug_stream_time = 7 [json_name = "debugStreamTime"];
-  string debug_total_time = 8 [json_name = "debugTotalTime"];
-  string debug_ttft_time = 9 [json_name = "debugTtftTime"];
-  string debug_server_timing = 10 [json_name = "debugServerTiming"];
-  .aiserver.v1.LineRange range_to_replace = 11 [json_name = "rangeToReplace"];
-  .aiserver.v1.StreamCppResponse.CursorPredictionTarget cursor_prediction_target = 12 [json_name = "cursorPredictionTarget"];
-  bool done_edit = 13 [json_name = "doneEdit"];
-  .aiserver.v1.StreamCppResponse.ModelInfo model_info = 14 [json_name = "modelInfo"];
-  bool begin_edit = 15 [json_name = "beginEdit"];
-  bool should_remove_leading_eol = 16 [json_name = "shouldRemoveLeadingEol"];
-  string binding_id = 17 [json_name = "bindingId"];
+  optional int32 suggestion_start_line = 2 [json_name = "suggestionStartLine"];
+  optional int32 suggestion_confidence = 3 [json_name = "suggestionConfidence"];
+  optional bool done_stream = 4 [json_name = "doneStream"];
+  optional string debug_model_output = 5 [json_name = "debugModelOutput"];
+  optional string debug_model_input = 6 [json_name = "debugModelInput"];
+  optional string debug_stream_time = 7 [json_name = "debugStreamTime"];
+  optional string debug_total_time = 8 [json_name = "debugTotalTime"];
+  optional string debug_ttft_time = 9 [json_name = "debugTtftTime"];
+  optional string debug_server_timing = 10 [json_name = "debugServerTiming"];
+  optional .aiserver.v1.LineRange range_to_replace = 11 [json_name = "rangeToReplace"];
+  optional .aiserver.v1.StreamCppResponse.CursorPredictionTarget cursor_prediction_target = 12 [json_name = "cursorPredictionTarget"];
+  optional bool done_edit = 13 [json_name = "doneEdit"];
+  optional .aiserver.v1.StreamCppResponse.ModelInfo model_info = 14 [json_name = "modelInfo"];
+  optional bool begin_edit = 15 [json_name = "beginEdit"];
+  optional bool should_remove_leading_eol = 16 [json_name = "shouldRemoveLeadingEol"];
+  optional string binding_id = 17 [json_name = "bindingId"];
   message CursorPredictionTarget {
     string relative_path = 1 [json_name = "relativePath"];
     int32 line_number_one_indexed = 2 [json_name = "lineNumberOneIndexed"];
@@ -1088,12 +1088,12 @@ message StreamCppResponse {
 }
 
 message StreamHoldCppRequest {
-  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
-  .aiserver.v1.LinterErrors linter_errors = 4 [json_name = "linterErrors"];
+  optional .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  optional .aiserver.v1.LinterErrors linter_errors = 4 [json_name = "linterErrors"];
   repeated .aiserver.v1.CppFileDiffHistory file_diff_histories = 7 [json_name = "fileDiffHistories"];
   repeated .aiserver.v1.CppFileDiffHistory merged_diff_histories = 8 [json_name = "mergedDiffHistories"];
   repeated .aiserver.v1.BlockDiffPatch block_diff_patches = 9 [json_name = "blockDiffPatches"];
-  .aiserver.v1.ModelDetails model_details = 10 [json_name = "modelDetails"];
+  optional .aiserver.v1.ModelDetails model_details = 10 [json_name = "modelDetails"];
   repeated .aiserver.v1.CppContextItem context_items = 13 [json_name = "contextItems"];
 }
 
@@ -1102,17 +1102,17 @@ message StreamHoldCppResponse {
 }
 
 message SuggestCursorPredictionEvent {
-  .aiserver.v1.CursorPrediction cursor_prediction = 1 [json_name = "cursorPrediction"];
-  .aiserver.v1.PointInTimeModel point_in_time_model = 2 [json_name = "pointInTimeModel"];
+  optional .aiserver.v1.CursorPrediction cursor_prediction = 1 [json_name = "cursorPrediction"];
+  optional .aiserver.v1.PointInTimeModel point_in_time_model = 2 [json_name = "pointInTimeModel"];
 }
 
 message SuggestedEdit {
-  .aiserver.v1.SimpleRange edit_range = 1 [json_name = "editRange"];
+  optional .aiserver.v1.SimpleRange edit_range = 1 [json_name = "editRange"];
   string text = 2 [json_name = "text"];
 }
 
 message TabCloseEvent {
-  .aiserver.v1.MaybeDefinedPointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
+  optional .aiserver.v1.MaybeDefinedPointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
 }
 
 message TerminalEvent {
@@ -1124,18 +1124,18 @@ message TerminalEvent {
     .aiserver.v1.TerminalEvent.CommandFinish command_finish = 5 [json_name = "commandFinish"];
   }
   message CommandFinish {
-    .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
-    int32 exit_code = 2 [json_name = "exitCode"];
+    optional .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
+    optional int32 exit_code = 2 [json_name = "exitCode"];
   }
   message CommandStart {
-    .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
-    string cwd = 2 [json_name = "cwd"];
+    optional .aiserver.v1.PointInTimeModel point_in_time_model = 1 [json_name = "pointInTimeModel"];
+    optional string cwd = 2 [json_name = "cwd"];
   }
   message Create {
     bool is_remote = 1 [json_name = "isRemote"];
   }
   message Exit {
-    int32 exit_code = 1 [json_name = "exitCode"];
+    optional int32 exit_code = 1 [json_name = "exitCode"];
   }
 }
 
@@ -1147,14 +1147,14 @@ message ToolCallEvent {
 
 message WorktreeEvent {
   .aiserver.v1.WorktreeEvent.EventType event_type = 1 [json_name = "eventType"];
-  string model_name = 2 [json_name = "modelName"];
-  string best_of_n_group_id = 3 [json_name = "bestOfNGroupId"];
+  optional string model_name = 2 [json_name = "modelName"];
+  optional string best_of_n_group_id = 3 [json_name = "bestOfNGroupId"];
   repeated string all_worktree_paths = 4 [json_name = "allWorktreePaths"];
-  string applied_worktree_path = 5 [json_name = "appliedWorktreePath"];
+  optional string applied_worktree_path = 5 [json_name = "appliedWorktreePath"];
   repeated .aiserver.v1.WorktreeEvent.WorktreeComposerMapping worktree_composer_mappings = 6 [json_name = "worktreeComposerMappings"];
   repeated .aiserver.v1.WorktreeEvent.BackgroundAgentComposerMapping background_agent_composer_mappings = 7 [json_name = "backgroundAgentComposerMappings"];
-  string applied_composer_id = 8 [json_name = "appliedComposerId"];
-  string viewed_composer_id = 9 [json_name = "viewedComposerId"];
+  optional string applied_composer_id = 8 [json_name = "appliedComposerId"];
+  optional string viewed_composer_id = 9 [json_name = "viewedComposerId"];
   message BackgroundAgentComposerMapping {
     string bc_id = 1 [json_name = "bcId"];
     string composer_id = 2 [json_name = "composerId"];

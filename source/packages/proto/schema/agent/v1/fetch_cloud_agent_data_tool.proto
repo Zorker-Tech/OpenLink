@@ -8,8 +8,8 @@ syntax = "proto3";
 package agent.v1;
 
 message FetchCloudAgentDataToolCall {
-  .agent.v1.FetchCloudAgentDataArgs args = 1 [json_name = "args"];
-  .agent.v1.FetchCloudAgentDataResult result = 2 [json_name = "result"];
+  optional .agent.v1.FetchCloudAgentDataArgs args = 1 [json_name = "args"];
+  optional .agent.v1.FetchCloudAgentDataResult result = 2 [json_name = "result"];
 }
 
 message FetchCloudAgentDataArgs {
@@ -18,7 +18,7 @@ message FetchCloudAgentDataArgs {
   repeated string statuses = 7 [json_name = "statuses"];
   bool include_team_wide = 8 [json_name = "includeTeamWide"];
   bool include_archived = 9 [json_name = "includeArchived"];
-  int32 limit = 10 [json_name = "limit"];
+  optional int32 limit = 10 [json_name = "limit"];
   bool include_transcript = 12 [json_name = "includeTranscript"];
   string active_since = 13 [json_name = "activeSince"];
 }

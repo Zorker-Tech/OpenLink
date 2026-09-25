@@ -13,7 +13,7 @@ function toRedactedEditArgs(msg, privacyMode) {
   return {
     _privacyMode: privacyMode,
     path: createRedactedString(msg.path, DataClassification.PATH, "path", privacyMode),
-    streamContent: createRedactedString(msg.streamContent, DataClassification.CODE, "stream_content", privacyMode),
+    streamContent: msg.streamContent !== void 0 ? createRedactedString(msg.streamContent, DataClassification.CODE, "stream_content", privacyMode) : void 0,
   };
 }
 
@@ -22,7 +22,7 @@ function fromRedactedEditArgs(msg, purpose, opts) {
   const enforcing = opts?.enforcing;
   return new EditArgs({
     path: msg.path.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    streamContent: msg.streamContent.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    streamContent: msg.streamContent?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
   });
 }
 
@@ -31,7 +31,7 @@ function toRedactedEditError(msg, privacyMode) {
     _privacyMode: privacyMode,
     path: createRedactedString(msg.path, DataClassification.PATH, "path", privacyMode),
     error: createRedactedString(msg.error, DataClassification.CODE, "error", privacyMode),
-    modelVisibleError: createRedactedString(msg.modelVisibleError, DataClassification.CODE, "model_visible_error", privacyMode),
+    modelVisibleError: msg.modelVisibleError !== void 0 ? createRedactedString(msg.modelVisibleError, DataClassification.CODE, "model_visible_error", privacyMode) : void 0,
   };
 }
 
@@ -41,7 +41,7 @@ function fromRedactedEditError(msg, purpose, opts) {
   return new EditError({
     path: msg.path.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     error: msg.error.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    modelVisibleError: msg.modelVisibleError.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    modelVisibleError: msg.modelVisibleError?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
   });
 }
 
@@ -159,10 +159,10 @@ function toRedactedEditSuccess(msg, privacyMode) {
     path: createRedactedString(msg.path, DataClassification.PATH, "path", privacyMode),
     linesAdded: msg.linesAdded,
     linesRemoved: msg.linesRemoved,
-    diffString: createRedactedString(msg.diffString, DataClassification.CODE, "diff_string", privacyMode),
-    beforeFullFileContent: createRedactedString(msg.beforeFullFileContent, DataClassification.CODE, "before_full_file_content", privacyMode),
+    diffString: msg.diffString !== void 0 ? createRedactedString(msg.diffString, DataClassification.CODE, "diff_string", privacyMode) : void 0,
+    beforeFullFileContent: msg.beforeFullFileContent !== void 0 ? createRedactedString(msg.beforeFullFileContent, DataClassification.CODE, "before_full_file_content", privacyMode) : void 0,
     afterFullFileContent: createRedactedString(msg.afterFullFileContent, DataClassification.CODE, "after_full_file_content", privacyMode),
-    message: createRedactedString(msg.message, DataClassification.CODE, "message", privacyMode),
+    message: msg.message !== void 0 ? createRedactedString(msg.message, DataClassification.CODE, "message", privacyMode) : void 0,
   };
 }
 
@@ -173,10 +173,10 @@ function fromRedactedEditSuccess(msg, purpose, opts) {
     path: msg.path.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     linesAdded: msg.linesAdded,
     linesRemoved: msg.linesRemoved,
-    diffString: msg.diffString.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    beforeFullFileContent: msg.beforeFullFileContent.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    diffString: msg.diffString?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    beforeFullFileContent: msg.beforeFullFileContent?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     afterFullFileContent: msg.afterFullFileContent.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    message: msg.message.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    message: msg.message?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
   });
 }
 

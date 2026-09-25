@@ -215,7 +215,29 @@ function fromRedactedAskQuestionToolCall(msg, purpose, opts) {
   });
 }
 
+function createRedactedAskQuestionArgs(privacyMode, partial) {
+  return {
+    title: createRedactedString("", DataClassification.CODE, "title", privacyMode),
+    questions: [],
+    runAsync: false,
+    asyncOriginalToolCallId: "",
+    ...partial,
+    _privacyMode: privacyMode,
+  };
+}
+
+function createRedactedAskQuestionToolCall(privacyMode, partial) {
+  return {
+    args: void 0,
+    result: void 0,
+    ...partial,
+    _privacyMode: privacyMode,
+  };
+}
+
 export {
+  createRedactedAskQuestionArgs,
+  createRedactedAskQuestionToolCall,
   toRedactedAskQuestionArgs,
   fromRedactedAskQuestionArgs,
   toRedactedAskQuestionArgs_Option,

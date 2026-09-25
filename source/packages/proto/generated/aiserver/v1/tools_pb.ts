@@ -618,24 +618,24 @@ export class ListDirResult_File extends Message<ListDirResult_File> {
   isDirectory = false;
 
   /**
-   * @generated from field: int64 size = 3;
+   * @generated from field: optional int64 size = 3;
    */
-  size = protoInt64.zero;
+  size?: bigint;
 
   /**
-   * @generated from field: google.protobuf.Timestamp last_modified = 4;
+   * @generated from field: optional google.protobuf.Timestamp last_modified = 4;
    */
   lastModified?: Timestamp;
 
   /**
-   * @generated from field: int32 num_children = 5;
+   * @generated from field: optional int32 num_children = 5;
    */
-  numChildren = 0;
+  numChildren?: number;
 
   /**
-   * @generated from field: int32 num_lines = 6;
+   * @generated from field: optional int32 num_lines = 6;
    */
-  numLines = 0;
+  numLines?: number;
 
   constructor(data?: PartialMessage<ListDirResult_File>) {
     super();
@@ -647,10 +647,10 @@ export class ListDirResult_File extends Message<ListDirResult_File> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "is_directory", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "size", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 4, name: "last_modified", kind: "message", T: Timestamp },
-    { no: 5, name: "num_children", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 6, name: "num_lines", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 3, name: "size", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
+    { no: 4, name: "last_modified", kind: "message", T: Timestamp, opt: true },
+    { no: 5, name: "num_children", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 6, name: "num_lines", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListDirResult_File {
@@ -730,7 +730,7 @@ export class TodoItem extends Message<TodoItem> {
  */
 export class ListDirV2Result extends Message<ListDirV2Result> {
   /**
-   * @generated from field: aiserver.v1.ListDirV2Result.DirectoryTreeNode directory_tree_root = 1;
+   * @generated from field: optional aiserver.v1.ListDirV2Result.DirectoryTreeNode directory_tree_root = 1;
    */
   directoryTreeRoot?: ListDirV2Result_DirectoryTreeNode;
 
@@ -742,7 +742,7 @@ export class ListDirV2Result extends Message<ListDirV2Result> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ListDirV2Result";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "directory_tree_root", kind: "message", T: ListDirV2Result_DirectoryTreeNode },
+    { no: 1, name: "directory_tree_root", kind: "message", T: ListDirV2Result_DirectoryTreeNode, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListDirV2Result {
@@ -839,7 +839,7 @@ export class ListDirV2Result_DirectoryTreeNode_File extends Message<ListDirV2Res
   name = "";
 
   /**
-   * @generated from field: agent.v1.TerminalMetadata terminal_metadata = 2;
+   * @generated from field: optional agent.v1.TerminalMetadata terminal_metadata = 2;
    */
   terminalMetadata?: TerminalMetadata;
 
@@ -852,7 +852,7 @@ export class ListDirV2Result_DirectoryTreeNode_File extends Message<ListDirV2Res
   static readonly typeName = "aiserver.v1.ListDirV2Result.DirectoryTreeNode.File";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "terminal_metadata", kind: "message", T: TerminalMetadata },
+    { no: 2, name: "terminal_metadata", kind: "message", T: TerminalMetadata, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListDirV2Result_DirectoryTreeNode_File {
@@ -882,7 +882,7 @@ export class ClientSideToolV2Result extends Message<ClientSideToolV2Result> {
   tool = ClientSideToolV2.UNSPECIFIED;
 
   /**
-   * @generated from field: aiserver.v1.ToolResultError error = 8;
+   * @generated from field: optional aiserver.v1.ToolResultError error = 8;
    */
   error?: ToolResultError;
 
@@ -892,17 +892,17 @@ export class ClientSideToolV2Result extends Message<ClientSideToolV2Result> {
   toolCallId = "";
 
   /**
-   * @generated from field: string model_call_id = 48;
+   * @generated from field: optional string model_call_id = 48;
    */
-  modelCallId = "";
+  modelCallId?: string;
 
   /**
-   * @generated from field: uint32 tool_index = 49;
+   * @generated from field: optional uint32 tool_index = 49;
    */
-  toolIndex = 0;
+  toolIndex?: number;
 
   /**
-   * @generated from field: aiserver.v1.ToolResultAttachments attachments = 50;
+   * @generated from field: optional aiserver.v1.ToolResultAttachments attachments = 50;
    */
   attachments?: ToolResultAttachments;
 
@@ -1226,11 +1226,11 @@ export class ClientSideToolV2Result extends Message<ClientSideToolV2Result> {
   static readonly typeName = "aiserver.v1.ClientSideToolV2Result";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "tool", kind: "enum", T: proto3.getEnumType(ClientSideToolV2) },
-    { no: 8, name: "error", kind: "message", T: ToolResultError },
+    { no: 8, name: "error", kind: "message", T: ToolResultError, opt: true },
     { no: 35, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 48, name: "model_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 49, name: "tool_index", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 50, name: "attachments", kind: "message", T: ToolResultAttachments },
+    { no: 48, name: "model_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 49, name: "tool_index", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
+    { no: 50, name: "attachments", kind: "message", T: ToolResultAttachments, opt: true },
     { no: 2, name: "read_semsearch_files_result", kind: "message", T: ReadSemsearchFilesResult, oneof: "result" },
     { no: 4, name: "ripgrep_search_result", kind: "message", T: RipgrepSearchResult, oneof: "result" },
     { no: 6, name: "read_file_result", kind: "message", T: ReadFileResult, oneof: "result" },
@@ -1316,9 +1316,9 @@ export class ToolResultError extends Message<ToolResultError> {
   modelVisibleErrorMessage = "";
 
   /**
-   * @generated from field: string actual_error_message_only_send_from_client_to_server_never_the_other_way_around_because_that_may_be_a_security_risk = 3;
+   * @generated from field: optional string actual_error_message_only_send_from_client_to_server_never_the_other_way_around_because_that_may_be_a_security_risk = 3;
    */
-  actualErrorMessageOnlySendFromClientToServerNeverTheOtherWayAroundBecauseThatMayBeASecurityRisk = "";
+  actualErrorMessageOnlySendFromClientToServerNeverTheOtherWayAroundBecauseThatMayBeASecurityRisk?: string;
 
   /**
    * @generated from oneof aiserver.v1.ToolResultError.error_details
@@ -1347,7 +1347,7 @@ export class ToolResultError extends Message<ToolResultError> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "client_visible_error_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "model_visible_error_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "actual_error_message_only_send_from_client_to_server_never_the_other_way_around_because_that_may_be_a_security_risk", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "actual_error_message_only_send_from_client_to_server_never_the_other_way_around_because_that_may_be_a_security_risk", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 5, name: "edit_file_error_details", kind: "message", T: ToolResultError_EditFileError, oneof: "error_details" },
     { no: 6, name: "search_replace_error_details", kind: "message", T: ToolResultError_SearchReplaceError, oneof: "error_details" },
   ]);
@@ -1458,9 +1458,9 @@ export class ClientSideToolV2Call extends Message<ClientSideToolV2Call> {
   toolCallId = "";
 
   /**
-   * @generated from field: double timeout_ms = 6;
+   * @generated from field: optional double timeout_ms = 6;
    */
-  timeoutMs = 0;
+  timeoutMs?: number;
 
   /**
    * @generated from field: string name = 9;
@@ -1483,14 +1483,14 @@ export class ClientSideToolV2Call extends Message<ClientSideToolV2Call> {
   isLastMessage = false;
 
   /**
-   * @generated from field: uint32 tool_index = 48;
+   * @generated from field: optional uint32 tool_index = 48;
    */
-  toolIndex = 0;
+  toolIndex?: number;
 
   /**
-   * @generated from field: string model_call_id = 49;
+   * @generated from field: optional string model_call_id = 49;
    */
-  modelCallId = "";
+  modelCallId?: string;
 
   /**
    * @generated from field: bool internal = 51;
@@ -1806,13 +1806,13 @@ export class ClientSideToolV2Call extends Message<ClientSideToolV2Call> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "tool", kind: "enum", T: proto3.getEnumType(ClientSideToolV2) },
     { no: 3, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "timeout_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
+    { no: 6, name: "timeout_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
     { no: 9, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 10, name: "raw_args", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 14, name: "is_streaming", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 15, name: "is_last_message", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 48, name: "tool_index", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 49, name: "model_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 48, name: "tool_index", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
+    { no: 49, name: "model_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 51, name: "internal", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 2, name: "read_semsearch_files_params", kind: "message", T: ReadSemsearchFilesParams, oneof: "params" },
     { no: 5, name: "ripgrep_search_params", kind: "message", T: RipgrepSearchParams, oneof: "params" },
@@ -1887,7 +1887,7 @@ export class ClientSideToolV2Call extends Message<ClientSideToolV2Call> {
  */
 export class ReadSemsearchFilesParams extends Message<ReadSemsearchFilesParams> {
   /**
-   * @generated from field: aiserver.v1.RepositoryInfo repository_info = 1;
+   * @generated from field: optional aiserver.v1.RepositoryInfo repository_info = 1;
    */
   repositoryInfo?: RepositoryInfo;
 
@@ -1907,9 +1907,9 @@ export class ReadSemsearchFilesParams extends Message<ReadSemsearchFilesParams> 
   prReferences: PullRequestReference[] = [];
 
   /**
-   * @generated from field: bool pr_search_on = 5;
+   * @generated from field: optional bool pr_search_on = 5;
    */
-  prSearchOn = false;
+  prSearchOn?: boolean;
 
   constructor(data?: PartialMessage<ReadSemsearchFilesParams>) {
     super();
@@ -1919,11 +1919,11 @@ export class ReadSemsearchFilesParams extends Message<ReadSemsearchFilesParams> 
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ReadSemsearchFilesParams";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repository_info", kind: "message", T: RepositoryInfo },
+    { no: 1, name: "repository_info", kind: "message", T: RepositoryInfo, opt: true },
     { no: 2, name: "code_results", kind: "message", T: CodeResult, repeated: true },
     { no: 3, name: "query", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "pr_references", kind: "message", T: PullRequestReference, repeated: true },
-    { no: 5, name: "pr_search_on", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 5, name: "pr_search_on", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ReadSemsearchFilesParams {
@@ -1948,12 +1948,12 @@ export class ReadSemsearchFilesParams extends Message<ReadSemsearchFilesParams> 
  */
 export class RipgrepSearchParams extends Message<RipgrepSearchParams> {
   /**
-   * @generated from field: aiserver.v1.RipgrepSearchParams.ITextQueryBuilderOptionsProto options = 1;
+   * @generated from field: optional aiserver.v1.RipgrepSearchParams.ITextQueryBuilderOptionsProto options = 1;
    */
   options?: RipgrepSearchParams_ITextQueryBuilderOptionsProto;
 
   /**
-   * @generated from field: aiserver.v1.RipgrepSearchParams.IPatternInfoProto pattern_info = 2;
+   * @generated from field: optional aiserver.v1.RipgrepSearchParams.IPatternInfoProto pattern_info = 2;
    */
   patternInfo?: RipgrepSearchParams_IPatternInfoProto;
 
@@ -1965,8 +1965,8 @@ export class RipgrepSearchParams extends Message<RipgrepSearchParams> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.RipgrepSearchParams";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "options", kind: "message", T: RipgrepSearchParams_ITextQueryBuilderOptionsProto },
-    { no: 2, name: "pattern_info", kind: "message", T: RipgrepSearchParams_IPatternInfoProto },
+    { no: 1, name: "options", kind: "message", T: RipgrepSearchParams_ITextQueryBuilderOptionsProto, opt: true },
+    { no: 2, name: "pattern_info", kind: "message", T: RipgrepSearchParams_IPatternInfoProto, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RipgrepSearchParams {
@@ -1991,102 +1991,102 @@ export class RipgrepSearchParams extends Message<RipgrepSearchParams> {
  */
 export class RipgrepSearchParams_ITextQueryBuilderOptionsProto extends Message<RipgrepSearchParams_ITextQueryBuilderOptionsProto> {
   /**
-   * @generated from field: aiserver.v1.RipgrepSearchParams.ITextQueryBuilderOptionsProto.ITextSearchPreviewOptionsProto preview_options = 1;
+   * @generated from field: optional aiserver.v1.RipgrepSearchParams.ITextQueryBuilderOptionsProto.ITextSearchPreviewOptionsProto preview_options = 1;
    */
   previewOptions?: RipgrepSearchParams_ITextQueryBuilderOptionsProto_ITextSearchPreviewOptionsProto;
 
   /**
-   * @generated from field: string file_encoding = 2;
+   * @generated from field: optional string file_encoding = 2;
    */
-  fileEncoding = "";
+  fileEncoding?: string;
 
   /**
-   * @generated from field: int32 surrounding_context = 3;
+   * @generated from field: optional int32 surrounding_context = 3;
    */
-  surroundingContext = 0;
+  surroundingContext?: number;
 
   /**
-   * @generated from field: bool is_smart_case = 4;
+   * @generated from field: optional bool is_smart_case = 4;
    */
-  isSmartCase = false;
+  isSmartCase?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.RipgrepSearchParams.ITextQueryBuilderOptionsProto.INotebookSearchConfigProto notebook_search_config = 5;
+   * @generated from field: optional aiserver.v1.RipgrepSearchParams.ITextQueryBuilderOptionsProto.INotebookSearchConfigProto notebook_search_config = 5;
    */
   notebookSearchConfig?: RipgrepSearchParams_ITextQueryBuilderOptionsProto_INotebookSearchConfigProto;
 
   /**
-   * @generated from field: aiserver.v1.RipgrepSearchParams.ITextQueryBuilderOptionsProto.ExcludePatternProto exclude_pattern = 6;
+   * @generated from field: optional aiserver.v1.RipgrepSearchParams.ITextQueryBuilderOptionsProto.ExcludePatternProto exclude_pattern = 6;
    */
   excludePattern?: RipgrepSearchParams_ITextQueryBuilderOptionsProto_ExcludePatternProto;
 
   /**
-   * @generated from field: aiserver.v1.RipgrepSearchParams.ITextQueryBuilderOptionsProto.ISearchPathPatternBuilderProto include_pattern = 7;
+   * @generated from field: optional aiserver.v1.RipgrepSearchParams.ITextQueryBuilderOptionsProto.ISearchPathPatternBuilderProto include_pattern = 7;
    */
   includePattern?: RipgrepSearchParams_ITextQueryBuilderOptionsProto_ISearchPathPatternBuilderProto;
 
   /**
-   * @generated from field: bool expand_patterns = 8;
+   * @generated from field: optional bool expand_patterns = 8;
    */
-  expandPatterns = false;
+  expandPatterns?: boolean;
 
   /**
-   * @generated from field: int32 max_results = 9;
+   * @generated from field: optional int32 max_results = 9;
    */
-  maxResults = 0;
+  maxResults?: number;
 
   /**
-   * @generated from field: int32 max_file_size = 10;
+   * @generated from field: optional int32 max_file_size = 10;
    */
-  maxFileSize = 0;
+  maxFileSize?: number;
 
   /**
-   * @generated from field: bool disregard_ignore_files = 11;
+   * @generated from field: optional bool disregard_ignore_files = 11;
    */
-  disregardIgnoreFiles = false;
+  disregardIgnoreFiles?: boolean;
 
   /**
-   * @generated from field: bool disregard_global_ignore_files = 12;
+   * @generated from field: optional bool disregard_global_ignore_files = 12;
    */
-  disregardGlobalIgnoreFiles = false;
+  disregardGlobalIgnoreFiles?: boolean;
 
   /**
-   * @generated from field: bool disregard_parent_ignore_files = 13;
+   * @generated from field: optional bool disregard_parent_ignore_files = 13;
    */
-  disregardParentIgnoreFiles = false;
+  disregardParentIgnoreFiles?: boolean;
 
   /**
-   * @generated from field: bool disregard_exclude_settings = 14;
+   * @generated from field: optional bool disregard_exclude_settings = 14;
    */
-  disregardExcludeSettings = false;
+  disregardExcludeSettings?: boolean;
 
   /**
-   * @generated from field: bool disregard_search_exclude_settings = 15;
+   * @generated from field: optional bool disregard_search_exclude_settings = 15;
    */
-  disregardSearchExcludeSettings = false;
+  disregardSearchExcludeSettings?: boolean;
 
   /**
-   * @generated from field: bool ignore_symlinks = 16;
+   * @generated from field: optional bool ignore_symlinks = 16;
    */
-  ignoreSymlinks = false;
+  ignoreSymlinks?: boolean;
 
   /**
-   * @generated from field: bool only_open_editors = 17;
+   * @generated from field: optional bool only_open_editors = 17;
    */
-  onlyOpenEditors = false;
+  onlyOpenEditors?: boolean;
 
   /**
-   * @generated from field: bool only_file_scheme = 18;
+   * @generated from field: optional bool only_file_scheme = 18;
    */
-  onlyFileScheme = false;
+  onlyFileScheme?: boolean;
 
   /**
-   * @generated from field: string reason = 19;
+   * @generated from field: optional string reason = 19;
    */
-  reason = "";
+  reason?: string;
 
   /**
-   * @generated from field: aiserver.v1.RipgrepSearchParams.ITextQueryBuilderOptionsProto.ExtraFileResourcesProto extra_file_resources = 20;
+   * @generated from field: optional aiserver.v1.RipgrepSearchParams.ITextQueryBuilderOptionsProto.ExtraFileResourcesProto extra_file_resources = 20;
    */
   extraFileResources?: RipgrepSearchParams_ITextQueryBuilderOptionsProto_ExtraFileResourcesProto;
 
@@ -2098,26 +2098,26 @@ export class RipgrepSearchParams_ITextQueryBuilderOptionsProto extends Message<R
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.RipgrepSearchParams.ITextQueryBuilderOptionsProto";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "preview_options", kind: "message", T: RipgrepSearchParams_ITextQueryBuilderOptionsProto_ITextSearchPreviewOptionsProto },
-    { no: 2, name: "file_encoding", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "surrounding_context", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 4, name: "is_smart_case", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "notebook_search_config", kind: "message", T: RipgrepSearchParams_ITextQueryBuilderOptionsProto_INotebookSearchConfigProto },
-    { no: 6, name: "exclude_pattern", kind: "message", T: RipgrepSearchParams_ITextQueryBuilderOptionsProto_ExcludePatternProto },
-    { no: 7, name: "include_pattern", kind: "message", T: RipgrepSearchParams_ITextQueryBuilderOptionsProto_ISearchPathPatternBuilderProto },
-    { no: 8, name: "expand_patterns", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 9, name: "max_results", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 10, name: "max_file_size", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 11, name: "disregard_ignore_files", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 12, name: "disregard_global_ignore_files", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 13, name: "disregard_parent_ignore_files", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 14, name: "disregard_exclude_settings", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 15, name: "disregard_search_exclude_settings", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 16, name: "ignore_symlinks", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 17, name: "only_open_editors", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 18, name: "only_file_scheme", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 19, name: "reason", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 20, name: "extra_file_resources", kind: "message", T: RipgrepSearchParams_ITextQueryBuilderOptionsProto_ExtraFileResourcesProto },
+    { no: 1, name: "preview_options", kind: "message", T: RipgrepSearchParams_ITextQueryBuilderOptionsProto_ITextSearchPreviewOptionsProto, opt: true },
+    { no: 2, name: "file_encoding", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "surrounding_context", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 4, name: "is_smart_case", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 5, name: "notebook_search_config", kind: "message", T: RipgrepSearchParams_ITextQueryBuilderOptionsProto_INotebookSearchConfigProto, opt: true },
+    { no: 6, name: "exclude_pattern", kind: "message", T: RipgrepSearchParams_ITextQueryBuilderOptionsProto_ExcludePatternProto, opt: true },
+    { no: 7, name: "include_pattern", kind: "message", T: RipgrepSearchParams_ITextQueryBuilderOptionsProto_ISearchPathPatternBuilderProto, opt: true },
+    { no: 8, name: "expand_patterns", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 9, name: "max_results", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 10, name: "max_file_size", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 11, name: "disregard_ignore_files", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 12, name: "disregard_global_ignore_files", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 13, name: "disregard_parent_ignore_files", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 14, name: "disregard_exclude_settings", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 15, name: "disregard_search_exclude_settings", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 16, name: "ignore_symlinks", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 17, name: "only_open_editors", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 18, name: "only_file_scheme", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 19, name: "reason", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 20, name: "extra_file_resources", kind: "message", T: RipgrepSearchParams_ITextQueryBuilderOptionsProto_ExtraFileResourcesProto, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RipgrepSearchParams_ITextQueryBuilderOptionsProto {
@@ -2277,9 +2277,9 @@ export class RipgrepSearchParams_ITextQueryBuilderOptionsProto_ExcludePatternPro
  */
 export class RipgrepSearchParams_ITextQueryBuilderOptionsProto_ISearchPathPatternBuilderProto extends Message<RipgrepSearchParams_ITextQueryBuilderOptionsProto_ISearchPathPatternBuilderProto> {
   /**
-   * @generated from field: string pattern = 1;
+   * @generated from field: optional string pattern = 1;
    */
-  pattern = "";
+  pattern?: string;
 
   /**
    * @generated from field: repeated string patterns = 2;
@@ -2294,7 +2294,7 @@ export class RipgrepSearchParams_ITextQueryBuilderOptionsProto_ISearchPathPatter
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.RipgrepSearchParams.ITextQueryBuilderOptionsProto.ISearchPathPatternBuilderProto";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "pattern", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "pattern", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "patterns", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
 
@@ -2357,12 +2357,12 @@ export class RipgrepSearchParams_ITextQueryBuilderOptionsProto_ExtraFileResource
  */
 export class RipgrepSearchParams_ITextQueryBuilderOptionsProto_ISearchPatternBuilderProto extends Message<RipgrepSearchParams_ITextQueryBuilderOptionsProto_ISearchPatternBuilderProto> {
   /**
-   * @generated from field: string uri = 1;
+   * @generated from field: optional string uri = 1;
    */
-  uri = "";
+  uri?: string;
 
   /**
-   * @generated from field: aiserver.v1.RipgrepSearchParams.ITextQueryBuilderOptionsProto.ISearchPathPatternBuilderProto pattern = 2;
+   * @generated from field: optional aiserver.v1.RipgrepSearchParams.ITextQueryBuilderOptionsProto.ISearchPathPatternBuilderProto pattern = 2;
    */
   pattern?: RipgrepSearchParams_ITextQueryBuilderOptionsProto_ISearchPathPatternBuilderProto;
 
@@ -2374,8 +2374,8 @@ export class RipgrepSearchParams_ITextQueryBuilderOptionsProto_ISearchPatternBui
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.RipgrepSearchParams.ITextQueryBuilderOptionsProto.ISearchPatternBuilderProto";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "uri", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "pattern", kind: "message", T: RipgrepSearchParams_ITextQueryBuilderOptionsProto_ISearchPathPatternBuilderProto },
+    { no: 1, name: "uri", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "pattern", kind: "message", T: RipgrepSearchParams_ITextQueryBuilderOptionsProto_ISearchPathPatternBuilderProto, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RipgrepSearchParams_ITextQueryBuilderOptionsProto_ISearchPatternBuilderProto {
@@ -2405,44 +2405,44 @@ export class RipgrepSearchParams_IPatternInfoProto extends Message<RipgrepSearch
   pattern = "";
 
   /**
-   * @generated from field: bool is_reg_exp = 2;
+   * @generated from field: optional bool is_reg_exp = 2;
    */
-  isRegExp = false;
+  isRegExp?: boolean;
 
   /**
-   * @generated from field: bool is_word_match = 3;
+   * @generated from field: optional bool is_word_match = 3;
    */
-  isWordMatch = false;
+  isWordMatch?: boolean;
 
   /**
-   * @generated from field: string word_separators = 4;
+   * @generated from field: optional string word_separators = 4;
    */
-  wordSeparators = "";
+  wordSeparators?: string;
 
   /**
-   * @generated from field: bool is_multiline = 5;
+   * @generated from field: optional bool is_multiline = 5;
    */
-  isMultiline = false;
+  isMultiline?: boolean;
 
   /**
-   * @generated from field: bool is_unicode = 6;
+   * @generated from field: optional bool is_unicode = 6;
    */
-  isUnicode = false;
+  isUnicode?: boolean;
 
   /**
-   * @generated from field: bool is_case_sensitive = 7;
+   * @generated from field: optional bool is_case_sensitive = 7;
    */
-  isCaseSensitive = false;
+  isCaseSensitive?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.RipgrepSearchParams.IPatternInfoProto.INotebookPatternInfoProto notebook_info = 8;
+   * @generated from field: optional aiserver.v1.RipgrepSearchParams.IPatternInfoProto.INotebookPatternInfoProto notebook_info = 8;
    */
   notebookInfo?: RipgrepSearchParams_IPatternInfoProto_INotebookPatternInfoProto;
 
   /**
-   * @generated from field: bool pattern_was_escaped = 9;
+   * @generated from field: optional bool pattern_was_escaped = 9;
    */
-  patternWasEscaped = false;
+  patternWasEscaped?: boolean;
 
   constructor(data?: PartialMessage<RipgrepSearchParams_IPatternInfoProto>) {
     super();
@@ -2453,14 +2453,14 @@ export class RipgrepSearchParams_IPatternInfoProto extends Message<RipgrepSearch
   static readonly typeName = "aiserver.v1.RipgrepSearchParams.IPatternInfoProto";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "pattern", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "is_reg_exp", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "is_word_match", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "word_separators", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "is_multiline", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 6, name: "is_unicode", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 7, name: "is_case_sensitive", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 8, name: "notebook_info", kind: "message", T: RipgrepSearchParams_IPatternInfoProto_INotebookPatternInfoProto },
-    { no: 9, name: "pattern_was_escaped", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "is_reg_exp", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 3, name: "is_word_match", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 4, name: "word_separators", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "is_multiline", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 6, name: "is_unicode", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 7, name: "is_case_sensitive", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 8, name: "notebook_info", kind: "message", T: RipgrepSearchParams_IPatternInfoProto_INotebookPatternInfoProto, opt: true },
+    { no: 9, name: "pattern_was_escaped", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RipgrepSearchParams_IPatternInfoProto {
@@ -2485,24 +2485,24 @@ export class RipgrepSearchParams_IPatternInfoProto extends Message<RipgrepSearch
  */
 export class RipgrepSearchParams_IPatternInfoProto_INotebookPatternInfoProto extends Message<RipgrepSearchParams_IPatternInfoProto_INotebookPatternInfoProto> {
   /**
-   * @generated from field: bool is_in_notebook_markdown_input = 1;
+   * @generated from field: optional bool is_in_notebook_markdown_input = 1;
    */
-  isInNotebookMarkdownInput = false;
+  isInNotebookMarkdownInput?: boolean;
 
   /**
-   * @generated from field: bool is_in_notebook_markdown_preview = 2;
+   * @generated from field: optional bool is_in_notebook_markdown_preview = 2;
    */
-  isInNotebookMarkdownPreview = false;
+  isInNotebookMarkdownPreview?: boolean;
 
   /**
-   * @generated from field: bool is_in_notebook_cell_input = 3;
+   * @generated from field: optional bool is_in_notebook_cell_input = 3;
    */
-  isInNotebookCellInput = false;
+  isInNotebookCellInput?: boolean;
 
   /**
-   * @generated from field: bool is_in_notebook_cell_output = 4;
+   * @generated from field: optional bool is_in_notebook_cell_output = 4;
    */
-  isInNotebookCellOutput = false;
+  isInNotebookCellOutput?: boolean;
 
   constructor(data?: PartialMessage<RipgrepSearchParams_IPatternInfoProto_INotebookPatternInfoProto>) {
     super();
@@ -2512,10 +2512,10 @@ export class RipgrepSearchParams_IPatternInfoProto_INotebookPatternInfoProto ext
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.RipgrepSearchParams.IPatternInfoProto.INotebookPatternInfoProto";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "is_in_notebook_markdown_input", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 2, name: "is_in_notebook_markdown_preview", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "is_in_notebook_cell_input", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "is_in_notebook_cell_output", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 1, name: "is_in_notebook_markdown_input", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 2, name: "is_in_notebook_markdown_preview", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 3, name: "is_in_notebook_cell_input", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 4, name: "is_in_notebook_cell_output", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RipgrepSearchParams_IPatternInfoProto_INotebookPatternInfoProto {
@@ -2550,14 +2550,14 @@ export class ReadFileParams extends Message<ReadFileParams> {
   readEntireFile = false;
 
   /**
-   * @generated from field: int32 start_line_one_indexed = 3;
+   * @generated from field: optional int32 start_line_one_indexed = 3;
    */
-  startLineOneIndexed = 0;
+  startLineOneIndexed?: number;
 
   /**
-   * @generated from field: int32 end_line_one_indexed_inclusive = 4;
+   * @generated from field: optional int32 end_line_one_indexed_inclusive = 4;
    */
-  endLineOneIndexedInclusive = 0;
+  endLineOneIndexedInclusive?: number;
 
   /**
    * @generated from field: bool file_is_allowed_to_be_read_entirely = 5;
@@ -2565,19 +2565,19 @@ export class ReadFileParams extends Message<ReadFileParams> {
   fileIsAllowedToBeReadEntirely = false;
 
   /**
-   * @generated from field: int32 max_lines = 6;
+   * @generated from field: optional int32 max_lines = 6;
    */
-  maxLines = 0;
+  maxLines?: number;
 
   /**
-   * @generated from field: int32 max_chars = 7;
+   * @generated from field: optional int32 max_chars = 7;
    */
-  maxChars = 0;
+  maxChars?: number;
 
   /**
-   * @generated from field: int32 min_lines = 8;
+   * @generated from field: optional int32 min_lines = 8;
    */
-  minLines = 0;
+  minLines?: number;
 
   constructor(data?: PartialMessage<ReadFileParams>) {
     super();
@@ -2589,12 +2589,12 @@ export class ReadFileParams extends Message<ReadFileParams> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "read_entire_file", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "start_line_one_indexed", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 4, name: "end_line_one_indexed_inclusive", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 3, name: "start_line_one_indexed", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 4, name: "end_line_one_indexed_inclusive", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 5, name: "file_is_allowed_to_be_read_entirely", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 6, name: "max_lines", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 7, name: "max_chars", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 8, name: "min_lines", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 6, name: "max_lines", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 7, name: "max_chars", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 8, name: "min_lines", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ReadFileParams {
@@ -2676,24 +2676,24 @@ export class EditFileParams extends Message<EditFileParams> {
   blocking = false;
 
   /**
-   * @generated from field: string instructions = 5;
+   * @generated from field: optional string instructions = 5;
    */
-  instructions = "";
+  instructions?: string;
 
   /**
-   * @generated from field: string old_string = 6;
+   * @generated from field: optional string old_string = 6;
    */
-  oldString = "";
+  oldString?: string;
 
   /**
-   * @generated from field: string new_string = 7;
+   * @generated from field: optional string new_string = 7;
    */
-  newString = "";
+  newString?: string;
 
   /**
-   * @generated from field: bool allow_multiple_matches = 8;
+   * @generated from field: optional bool allow_multiple_matches = 8;
    */
-  allowMultipleMatches = false;
+  allowMultipleMatches?: boolean;
 
   /**
    * @generated from field: repeated aiserver.v1.LineRange line_ranges = 9;
@@ -2701,49 +2701,49 @@ export class EditFileParams extends Message<EditFileParams> {
   lineRanges: LineRange[] = [];
 
   /**
-   * @generated from field: bool use_whitespace_insensitive_fallback = 10;
+   * @generated from field: optional bool use_whitespace_insensitive_fallback = 10;
    */
-  useWhitespaceInsensitiveFallback = false;
+  useWhitespaceInsensitiveFallback?: boolean;
 
   /**
-   * @generated from field: bool use_did_you_mean_fuzzy_match = 11;
+   * @generated from field: optional bool use_did_you_mean_fuzzy_match = 11;
    */
-  useDidYouMeanFuzzyMatch = false;
+  useDidYouMeanFuzzyMatch?: boolean;
 
   /**
-   * @generated from field: bool should_edit_file_fail_for_large_files = 12;
+   * @generated from field: optional bool should_edit_file_fail_for_large_files = 12;
    */
-  shouldEditFileFailForLargeFiles = false;
+  shouldEditFileFailForLargeFiles?: boolean;
 
   /**
-   * @generated from field: int32 notebook_cell_idx = 13;
+   * @generated from field: optional int32 notebook_cell_idx = 13;
    */
-  notebookCellIdx = 0;
+  notebookCellIdx?: number;
 
   /**
-   * @generated from field: bool is_new_cell = 14;
+   * @generated from field: optional bool is_new_cell = 14;
    */
-  isNewCell = false;
+  isNewCell?: boolean;
 
   /**
-   * @generated from field: string cell_language = 15;
+   * @generated from field: optional string cell_language = 15;
    */
-  cellLanguage = "";
+  cellLanguage?: string;
 
   /**
-   * @generated from field: bool gracefully_handle_recoverable_errors = 16;
+   * @generated from field: optional bool gracefully_handle_recoverable_errors = 16;
    */
-  gracefullyHandleRecoverableErrors = false;
+  gracefullyHandleRecoverableErrors?: boolean;
 
   /**
-   * @generated from field: string edit_category = 17;
+   * @generated from field: optional string edit_category = 17;
    */
-  editCategory = "";
+  editCategory?: string;
 
   /**
-   * @generated from field: bool should_eagerly_process_lints = 18;
+   * @generated from field: optional bool should_eagerly_process_lints = 18;
    */
-  shouldEagerlyProcessLints = false;
+  shouldEagerlyProcessLints?: boolean;
 
   constructor(data?: PartialMessage<EditFileParams>) {
     super();
@@ -2757,20 +2757,20 @@ export class EditFileParams extends Message<EditFileParams> {
     { no: 2, name: "language", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "contents", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "blocking", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "instructions", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "old_string", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "new_string", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "allow_multiple_matches", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 5, name: "instructions", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "old_string", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "new_string", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "allow_multiple_matches", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 9, name: "line_ranges", kind: "message", T: LineRange, repeated: true },
-    { no: 10, name: "use_whitespace_insensitive_fallback", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 11, name: "use_did_you_mean_fuzzy_match", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 12, name: "should_edit_file_fail_for_large_files", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 13, name: "notebook_cell_idx", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 14, name: "is_new_cell", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 15, name: "cell_language", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 16, name: "gracefully_handle_recoverable_errors", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 17, name: "edit_category", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 18, name: "should_eagerly_process_lints", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 10, name: "use_whitespace_insensitive_fallback", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 11, name: "use_did_you_mean_fuzzy_match", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 12, name: "should_edit_file_fail_for_large_files", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 13, name: "notebook_cell_idx", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 14, name: "is_new_cell", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 15, name: "cell_language", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 16, name: "gracefully_handle_recoverable_errors", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 17, name: "edit_category", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 18, name: "should_eagerly_process_lints", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): EditFileParams {
@@ -2832,7 +2832,7 @@ export class ToolCallFileSearchParams extends Message<ToolCallFileSearchParams> 
  */
 export class SemanticSearchFullParams extends Message<SemanticSearchFullParams> {
   /**
-   * @generated from field: aiserver.v1.RepositoryInfo repository_info = 1;
+   * @generated from field: optional aiserver.v1.RepositoryInfo repository_info = 1;
    */
   repositoryInfo?: RepositoryInfo;
 
@@ -2842,14 +2842,14 @@ export class SemanticSearchFullParams extends Message<SemanticSearchFullParams> 
   query = "";
 
   /**
-   * @generated from field: string include_pattern = 3;
+   * @generated from field: optional string include_pattern = 3;
    */
-  includePattern = "";
+  includePattern?: string;
 
   /**
-   * @generated from field: string exclude_pattern = 4;
+   * @generated from field: optional string exclude_pattern = 4;
    */
-  excludePattern = "";
+  excludePattern?: string;
 
   /**
    * @generated from field: int32 top_k = 5;
@@ -2862,14 +2862,14 @@ export class SemanticSearchFullParams extends Message<SemanticSearchFullParams> 
   prReferences: PullRequestReference[] = [];
 
   /**
-   * @generated from field: bool pr_search_on = 7;
+   * @generated from field: optional bool pr_search_on = 7;
    */
-  prSearchOn = false;
+  prSearchOn?: boolean;
 
   /**
-   * @generated from field: string explanation = 8;
+   * @generated from field: optional string explanation = 8;
    */
-  explanation = "";
+  explanation?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.CodeResult code_results = 9;
@@ -2884,14 +2884,14 @@ export class SemanticSearchFullParams extends Message<SemanticSearchFullParams> 
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SemanticSearchFullParams";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repository_info", kind: "message", T: RepositoryInfo },
+    { no: 1, name: "repository_info", kind: "message", T: RepositoryInfo, opt: true },
     { no: 2, name: "query", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "include_pattern", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "exclude_pattern", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "include_pattern", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "exclude_pattern", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 5, name: "top_k", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 6, name: "pr_references", kind: "message", T: PullRequestReference, repeated: true },
-    { no: 7, name: "pr_search_on", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 8, name: "explanation", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 7, name: "pr_search_on", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 8, name: "explanation", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 9, name: "code_results", kind: "message", T: CodeResult, repeated: true },
   ]);
 
@@ -2996,17 +2996,17 @@ export class RunTerminalCommandV2Params extends Message<RunTerminalCommandV2Para
   command = "";
 
   /**
-   * @generated from field: string cwd = 2;
+   * @generated from field: optional string cwd = 2;
    */
-  cwd = "";
+  cwd?: string;
 
   /**
-   * @generated from field: bool new_session = 3;
+   * @generated from field: optional bool new_session = 3;
    */
-  newSession = false;
+  newSession?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.RunTerminalCommandV2Params.ExecutionOptions options = 4;
+   * @generated from field: optional aiserver.v1.RunTerminalCommandV2Params.ExecutionOptions options = 4;
    */
   options?: RunTerminalCommandV2Params_ExecutionOptions;
 
@@ -3021,32 +3021,32 @@ export class RunTerminalCommandV2Params extends Message<RunTerminalCommandV2Para
   requireUserApproval = false;
 
   /**
-   * @generated from field: aiserver.v1.ShellCommandParsingResult parsing_result = 7;
+   * @generated from field: optional aiserver.v1.ShellCommandParsingResult parsing_result = 7;
    */
   parsingResult?: ShellCommandParsingResult;
 
   /**
-   * @generated from field: int32 idle_timeout_seconds = 8;
+   * @generated from field: optional int32 idle_timeout_seconds = 8;
    */
-  idleTimeoutSeconds = 0;
+  idleTimeoutSeconds?: number;
 
   /**
-   * @generated from field: agent.v1.SandboxPolicy requested_sandbox_policy = 9;
+   * @generated from field: optional agent.v1.SandboxPolicy requested_sandbox_policy = 9;
    */
   requestedSandboxPolicy?: SandboxPolicy;
 
   /**
-   * @generated from field: int64 file_output_threshold_bytes = 10;
+   * @generated from field: optional int64 file_output_threshold_bytes = 10;
    */
-  fileOutputThresholdBytes = protoInt64.zero;
+  fileOutputThresholdBytes?: bigint;
 
   /**
-   * @generated from field: string command_description = 11;
+   * @generated from field: optional string command_description = 11;
    */
-  commandDescription = "";
+  commandDescription?: string;
 
   /**
-   * @generated from field: agent.v1.CommandClassifierResult classifier_result = 12;
+   * @generated from field: optional agent.v1.CommandClassifierResult classifier_result = 12;
    */
   classifierResult?: CommandClassifierResult;
 
@@ -3059,17 +3059,17 @@ export class RunTerminalCommandV2Params extends Message<RunTerminalCommandV2Para
   static readonly typeName = "aiserver.v1.RunTerminalCommandV2Params";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "command", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "cwd", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "new_session", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "options", kind: "message", T: RunTerminalCommandV2Params_ExecutionOptions },
+    { no: 2, name: "cwd", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "new_session", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 4, name: "options", kind: "message", T: RunTerminalCommandV2Params_ExecutionOptions, opt: true },
     { no: 5, name: "is_background", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 6, name: "require_user_approval", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 7, name: "parsing_result", kind: "message", T: ShellCommandParsingResult },
-    { no: 8, name: "idle_timeout_seconds", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 9, name: "requested_sandbox_policy", kind: "message", T: SandboxPolicy },
-    { no: 10, name: "file_output_threshold_bytes", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 11, name: "command_description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 12, name: "classifier_result", kind: "message", T: CommandClassifierResult },
+    { no: 7, name: "parsing_result", kind: "message", T: ShellCommandParsingResult, opt: true },
+    { no: 8, name: "idle_timeout_seconds", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 9, name: "requested_sandbox_policy", kind: "message", T: SandboxPolicy, opt: true },
+    { no: 10, name: "file_output_threshold_bytes", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
+    { no: 11, name: "command_description", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 12, name: "classifier_result", kind: "message", T: CommandClassifierResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RunTerminalCommandV2Params {
@@ -3094,44 +3094,44 @@ export class RunTerminalCommandV2Params extends Message<RunTerminalCommandV2Para
  */
 export class RunTerminalCommandV2Params_ExecutionOptions extends Message<RunTerminalCommandV2Params_ExecutionOptions> {
   /**
-   * @generated from field: int32 timeout = 1;
+   * @generated from field: optional int32 timeout = 1;
    */
-  timeout = 0;
+  timeout?: number;
 
   /**
-   * @generated from field: bool skip_ai_check = 2;
+   * @generated from field: optional bool skip_ai_check = 2;
    */
-  skipAiCheck = false;
+  skipAiCheck?: boolean;
 
   /**
-   * @generated from field: int32 command_run_timeout_ms = 3;
+   * @generated from field: optional int32 command_run_timeout_ms = 3;
    */
-  commandRunTimeoutMs = 0;
+  commandRunTimeoutMs?: number;
 
   /**
-   * @generated from field: int32 command_change_check_interval_ms = 4;
+   * @generated from field: optional int32 command_change_check_interval_ms = 4;
    */
-  commandChangeCheckIntervalMs = 0;
+  commandChangeCheckIntervalMs?: number;
 
   /**
-   * @generated from field: int32 ai_finish_check_max_attempts = 5;
+   * @generated from field: optional int32 ai_finish_check_max_attempts = 5;
    */
-  aiFinishCheckMaxAttempts = 0;
+  aiFinishCheckMaxAttempts?: number;
 
   /**
-   * @generated from field: int32 ai_finish_check_interval_ms = 6;
+   * @generated from field: optional int32 ai_finish_check_interval_ms = 6;
    */
-  aiFinishCheckIntervalMs = 0;
+  aiFinishCheckIntervalMs?: number;
 
   /**
-   * @generated from field: int32 delayer_interval_ms = 7;
+   * @generated from field: optional int32 delayer_interval_ms = 7;
    */
-  delayerIntervalMs = 0;
+  delayerIntervalMs?: number;
 
   /**
-   * @generated from field: bool ai_check_for_hangs = 8;
+   * @generated from field: optional bool ai_check_for_hangs = 8;
    */
-  aiCheckForHangs = false;
+  aiCheckForHangs?: boolean;
 
   constructor(data?: PartialMessage<RunTerminalCommandV2Params_ExecutionOptions>) {
     super();
@@ -3141,14 +3141,14 @@ export class RunTerminalCommandV2Params_ExecutionOptions extends Message<RunTerm
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.RunTerminalCommandV2Params.ExecutionOptions";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "timeout", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 2, name: "skip_ai_check", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "command_run_timeout_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 4, name: "command_change_check_interval_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 5, name: "ai_finish_check_max_attempts", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 6, name: "ai_finish_check_interval_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 7, name: "delayer_interval_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 8, name: "ai_check_for_hangs", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 1, name: "timeout", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 2, name: "skip_ai_check", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 3, name: "command_run_timeout_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 4, name: "command_change_check_interval_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 5, name: "ai_finish_check_max_attempts", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 6, name: "ai_finish_check_interval_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 7, name: "delayer_interval_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 8, name: "ai_check_for_hangs", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RunTerminalCommandV2Params_ExecutionOptions {
@@ -3252,9 +3252,9 @@ export class MCPParams extends Message<MCPParams> {
   tools: MCPParams_Tool[] = [];
 
   /**
-   * @generated from field: int64 file_output_threshold_bytes = 2;
+   * @generated from field: optional int64 file_output_threshold_bytes = 2;
    */
-  fileOutputThresholdBytes = protoInt64.zero;
+  fileOutputThresholdBytes?: bigint;
 
   constructor(data?: PartialMessage<MCPParams>) {
     super();
@@ -3265,7 +3265,7 @@ export class MCPParams extends Message<MCPParams> {
   static readonly typeName = "aiserver.v1.MCPParams";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "tools", kind: "message", T: MCPParams_Tool, repeated: true },
-    { no: 2, name: "file_output_threshold_bytes", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
+    { no: 2, name: "file_output_threshold_bytes", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): MCPParams {
@@ -3310,7 +3310,7 @@ export class MCPParams_Tool extends Message<MCPParams_Tool> {
   serverName = "";
 
   /**
-   * @generated from field: aiserver.v1.MCPParams.TranscriptDisplay transcript_display = 5;
+   * @generated from field: optional aiserver.v1.MCPParams.TranscriptDisplay transcript_display = 5;
    */
   transcriptDisplay?: MCPParams_TranscriptDisplay;
 
@@ -3326,7 +3326,7 @@ export class MCPParams_Tool extends Message<MCPParams_Tool> {
     { no: 2, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "parameters", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "server_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "transcript_display", kind: "message", T: MCPParams_TranscriptDisplay },
+    { no: 5, name: "transcript_display", kind: "message", T: MCPParams_TranscriptDisplay, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): MCPParams_Tool {
@@ -3545,14 +3545,14 @@ export class KnowledgeBaseParams extends Message<KnowledgeBaseParams> {
   title = "";
 
   /**
-   * @generated from field: string existing_knowledge_id = 3;
+   * @generated from field: optional string existing_knowledge_id = 3;
    */
-  existingKnowledgeId = "";
+  existingKnowledgeId?: string;
 
   /**
-   * @generated from field: string action = 4;
+   * @generated from field: optional string action = 4;
    */
-  action = "";
+  action?: string;
 
   constructor(data?: PartialMessage<KnowledgeBaseParams>) {
     super();
@@ -3564,8 +3564,8 @@ export class KnowledgeBaseParams extends Message<KnowledgeBaseParams> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "knowledge_to_store", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "existing_knowledge_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "action", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "existing_knowledge_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "action", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): KnowledgeBaseParams {
@@ -3595,14 +3595,14 @@ export class FetchPullRequestParams extends Message<FetchPullRequestParams> {
   pullNumberOrCommitHash = "";
 
   /**
-   * @generated from field: string repo = 2;
+   * @generated from field: optional string repo = 2;
    */
-  repo = "";
+  repo?: string;
 
   /**
-   * @generated from field: bool is_github = 3;
+   * @generated from field: optional bool is_github = 3;
    */
-  isGithub = false;
+  isGithub?: boolean;
 
   constructor(data?: PartialMessage<FetchPullRequestParams>) {
     super();
@@ -3613,8 +3613,8 @@ export class FetchPullRequestParams extends Message<FetchPullRequestParams> {
   static readonly typeName = "aiserver.v1.FetchPullRequestParams";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "pull_number_or_commit_hash", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "repo", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "is_github", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "repo", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "is_github", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): FetchPullRequestParams {
@@ -3792,9 +3792,9 @@ export class TaskParams extends Message<TaskParams> {
   taskDescription = "";
 
   /**
-   * @generated from field: bool async = 2;
+   * @generated from field: optional bool async = 2;
    */
-  async = false;
+  async?: boolean;
 
   /**
    * @generated from field: repeated string allowed_write_directories = 3;
@@ -3807,19 +3807,19 @@ export class TaskParams extends Message<TaskParams> {
   taskTitle = "";
 
   /**
-   * @generated from field: string model_override = 5;
+   * @generated from field: optional string model_override = 5;
    */
-  modelOverride = "";
+  modelOverride?: string;
 
   /**
-   * @generated from field: bool max_mode_override = 6;
+   * @generated from field: optional bool max_mode_override = 6;
    */
-  maxModeOverride = false;
+  maxModeOverride?: boolean;
 
   /**
-   * @generated from field: bool default_expanded_while_running = 7;
+   * @generated from field: optional bool default_expanded_while_running = 7;
    */
-  defaultExpandedWhileRunning = false;
+  defaultExpandedWhileRunning?: boolean;
 
   constructor(data?: PartialMessage<TaskParams>) {
     super();
@@ -3830,12 +3830,12 @@ export class TaskParams extends Message<TaskParams> {
   static readonly typeName = "aiserver.v1.TaskParams";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "task_description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "async", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "async", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 3, name: "allowed_write_directories", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 4, name: "task_title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "model_override", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "max_mode_override", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 7, name: "default_expanded_while_running", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 5, name: "model_override", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "max_mode_override", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 7, name: "default_expanded_while_running", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): TaskParams {
@@ -3982,14 +3982,14 @@ export class EditFileV2Params extends Message<EditFileV2Params> {
   relativeWorkspacePath = "";
 
   /**
-   * @generated from field: string contents_after_edit = 2;
+   * @generated from field: optional string contents_after_edit = 2;
    */
-  contentsAfterEdit = "";
+  contentsAfterEdit?: string;
 
   /**
-   * @generated from field: bool waiting_for_file_contents = 3;
+   * @generated from field: optional bool waiting_for_file_contents = 3;
    */
-  waitingForFileContents = false;
+  waitingForFileContents?: boolean;
 
   /**
    * @generated from field: bool should_send_back_linter_errors = 6;
@@ -3997,7 +3997,7 @@ export class EditFileV2Params extends Message<EditFileV2Params> {
   shouldSendBackLinterErrors = false;
 
   /**
-   * @generated from field: aiserver.v1.EditFileResult.FileDiff diff = 7;
+   * @generated from field: optional aiserver.v1.EditFileResult.FileDiff diff = 7;
    */
   diff?: EditFileResult_FileDiff;
 
@@ -4007,19 +4007,19 @@ export class EditFileV2Params extends Message<EditFileV2Params> {
   resultForModel = "";
 
   /**
-   * @generated from field: string streaming_content = 9;
+   * @generated from field: optional string streaming_content = 9;
    */
-  streamingContent = "";
+  streamingContent?: string;
 
   /**
-   * @generated from field: bool no_codeblock = 10;
+   * @generated from field: optional bool no_codeblock = 10;
    */
-  noCodeblock = false;
+  noCodeblock?: boolean;
 
   /**
-   * @generated from field: bool cloud_agent_edit = 11;
+   * @generated from field: optional bool cloud_agent_edit = 11;
    */
-  cloudAgentEdit = false;
+  cloudAgentEdit?: boolean;
 
   /**
    * @generated from oneof aiserver.v1.EditFileV2Params.streaming_edit
@@ -4047,14 +4047,14 @@ export class EditFileV2Params extends Message<EditFileV2Params> {
   static readonly typeName = "aiserver.v1.EditFileV2Params";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "contents_after_edit", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "waiting_for_file_contents", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "contents_after_edit", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "waiting_for_file_contents", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 6, name: "should_send_back_linter_errors", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 7, name: "diff", kind: "message", T: EditFileResult_FileDiff },
+    { no: 7, name: "diff", kind: "message", T: EditFileResult_FileDiff, opt: true },
     { no: 8, name: "result_for_model", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "streaming_content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "no_codeblock", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 11, name: "cloud_agent_edit", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 9, name: "streaming_content", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 10, name: "no_codeblock", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 11, name: "cloud_agent_edit", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 4, name: "text", kind: "message", T: EditFileV2Params_StreamingEditText, oneof: "streaming_edit" },
     { no: 5, name: "code", kind: "message", T: EditFileV2Params_StreamingEditCode, oneof: "streaming_edit" },
   ]);
@@ -4165,9 +4165,9 @@ export class ListDirV2Params extends Message<ListDirV2Params> {
   ignoreGlobs: string[] = [];
 
   /**
-   * @generated from field: bool should_enrich_terminal_metadata = 3;
+   * @generated from field: optional bool should_enrich_terminal_metadata = 3;
    */
-  shouldEnrichTerminalMetadata = false;
+  shouldEnrichTerminalMetadata?: boolean;
 
   constructor(data?: PartialMessage<ListDirV2Params>) {
     super();
@@ -4179,7 +4179,7 @@ export class ListDirV2Params extends Message<ListDirV2Params> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "target_directory", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "ignore_globs", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 3, name: "should_enrich_terminal_metadata", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 3, name: "should_enrich_terminal_metadata", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListDirV2Params {
@@ -4209,14 +4209,14 @@ export class ReadFileV2Params extends Message<ReadFileV2Params> {
   targetFile = "";
 
   /**
-   * @generated from field: int32 offset = 2;
+   * @generated from field: optional int32 offset = 2;
    */
-  offset = 0;
+  offset?: number;
 
   /**
-   * @generated from field: int32 limit = 3;
+   * @generated from field: optional int32 limit = 3;
    */
-  limit = 0;
+  limit?: number;
 
   /**
    * @generated from field: int32 chars_limit = 4;
@@ -4229,9 +4229,9 @@ export class ReadFileV2Params extends Message<ReadFileV2Params> {
   effectiveUri = "";
 
   /**
-   * @generated from field: bool enable_line_numbers = 6;
+   * @generated from field: optional bool enable_line_numbers = 6;
    */
-  enableLineNumbers = false;
+  enableLineNumbers?: boolean;
 
   constructor(data?: PartialMessage<ReadFileV2Params>) {
     super();
@@ -4242,11 +4242,11 @@ export class ReadFileV2Params extends Message<ReadFileV2Params> {
   static readonly typeName = "aiserver.v1.ReadFileV2Params";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "target_file", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "offset", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 2, name: "offset", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 3, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 4, name: "chars_limit", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 5, name: "effective_uri", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "enable_line_numbers", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 6, name: "enable_line_numbers", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ReadFileV2Params {
@@ -4276,64 +4276,64 @@ export class RipgrepRawSearchParams extends Message<RipgrepRawSearchParams> {
   pattern = "";
 
   /**
-   * @generated from field: string path = 2;
+   * @generated from field: optional string path = 2;
    */
-  path = "";
+  path?: string;
 
   /**
-   * @generated from field: string glob = 3;
+   * @generated from field: optional string glob = 3;
    */
-  glob = "";
+  glob?: string;
 
   /**
-   * @generated from field: string output_mode = 4;
+   * @generated from field: optional string output_mode = 4;
    */
-  outputMode = "";
+  outputMode?: string;
 
   /**
-   * @generated from field: int32 context_before = 5;
+   * @generated from field: optional int32 context_before = 5;
    */
-  contextBefore = 0;
+  contextBefore?: number;
 
   /**
-   * @generated from field: int32 context_after = 6;
+   * @generated from field: optional int32 context_after = 6;
    */
-  contextAfter = 0;
+  contextAfter?: number;
 
   /**
-   * @generated from field: int32 context = 7;
+   * @generated from field: optional int32 context = 7;
    */
-  context = 0;
+  context?: number;
 
   /**
-   * @generated from field: bool case_insensitive = 8;
+   * @generated from field: optional bool case_insensitive = 8;
    */
-  caseInsensitive = false;
+  caseInsensitive?: boolean;
 
   /**
-   * @generated from field: string type = 9;
+   * @generated from field: optional string type = 9;
    */
-  type = "";
+  type?: string;
 
   /**
-   * @generated from field: int32 head_limit = 10;
+   * @generated from field: optional int32 head_limit = 10;
    */
-  headLimit = 0;
+  headLimit?: number;
 
   /**
-   * @generated from field: bool multiline = 11;
+   * @generated from field: optional bool multiline = 11;
    */
-  multiline = false;
+  multiline?: boolean;
 
   /**
-   * @generated from field: string sort = 12;
+   * @generated from field: optional string sort = 12;
    */
-  sort = "";
+  sort?: string;
 
   /**
-   * @generated from field: bool sort_ascending = 13;
+   * @generated from field: optional bool sort_ascending = 13;
    */
-  sortAscending = false;
+  sortAscending?: boolean;
 
   /**
    * @generated from field: repeated string ignore_globs = 14;
@@ -4341,9 +4341,9 @@ export class RipgrepRawSearchParams extends Message<RipgrepRawSearchParams> {
   ignoreGlobs: string[] = [];
 
   /**
-   * @generated from field: int32 offset = 15;
+   * @generated from field: optional int32 offset = 15;
    */
-  offset = 0;
+  offset?: number;
 
   constructor(data?: PartialMessage<RipgrepRawSearchParams>) {
     super();
@@ -4354,20 +4354,20 @@ export class RipgrepRawSearchParams extends Message<RipgrepRawSearchParams> {
   static readonly typeName = "aiserver.v1.RipgrepRawSearchParams";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "pattern", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "glob", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "output_mode", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "context_before", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 6, name: "context_after", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 7, name: "context", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 8, name: "case_insensitive", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 9, name: "type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "head_limit", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 11, name: "multiline", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 12, name: "sort", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 13, name: "sort_ascending", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "glob", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "output_mode", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "context_before", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 6, name: "context_after", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 7, name: "context", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 8, name: "case_insensitive", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 9, name: "type", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 10, name: "head_limit", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 11, name: "multiline", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 12, name: "sort", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 13, name: "sort_ascending", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 14, name: "ignore_globs", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 15, name: "offset", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 15, name: "offset", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RipgrepRawSearchParams {
@@ -4538,9 +4538,9 @@ export class CreatePlanParams extends Message<CreatePlanParams> {
  */
 export class ListMcpResourcesParams extends Message<ListMcpResourcesParams> {
   /**
-   * @generated from field: string server = 1;
+   * @generated from field: optional string server = 1;
    */
-  server = "";
+  server?: string;
 
   constructor(data?: PartialMessage<ListMcpResourcesParams>) {
     super();
@@ -4550,7 +4550,7 @@ export class ListMcpResourcesParams extends Message<ListMcpResourcesParams> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ListMcpResourcesParams";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "server", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "server", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListMcpResourcesParams {
@@ -4585,9 +4585,9 @@ export class ReadMcpResourceParams extends Message<ReadMcpResourceParams> {
   uri = "";
 
   /**
-   * @generated from field: string download_path = 3;
+   * @generated from field: optional string download_path = 3;
    */
-  downloadPath = "";
+  downloadPath?: string;
 
   constructor(data?: PartialMessage<ReadMcpResourceParams>) {
     super();
@@ -4599,7 +4599,7 @@ export class ReadMcpResourceParams extends Message<ReadMcpResourceParams> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "server", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "uri", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "download_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "download_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ReadMcpResourceParams {
@@ -4713,9 +4713,9 @@ export class TaskV2Params extends Message<TaskV2Params> {
   subagentType = "";
 
   /**
-   * @generated from field: string model = 4;
+   * @generated from field: optional string model = 4;
    */
-  model = "";
+  model?: string;
 
   /**
    * @generated from field: string name = 5;
@@ -4738,7 +4738,7 @@ export class TaskV2Params extends Message<TaskV2Params> {
     { no: 1, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "prompt", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "subagent_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "model", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "model", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 5, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 6, name: "mode", kind: "enum", T: proto3.getEnumType(TaskMode) },
   ]);
@@ -4775,7 +4775,7 @@ export class CallMcpToolParams extends Message<CallMcpToolParams> {
   toolName = "";
 
   /**
-   * @generated from field: google.protobuf.Struct tool_args = 3;
+   * @generated from field: optional google.protobuf.Struct tool_args = 3;
    */
   toolArgs?: Struct;
 
@@ -4789,7 +4789,7 @@ export class CallMcpToolParams extends Message<CallMcpToolParams> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "server", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "tool_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "tool_args", kind: "message", T: Struct },
+    { no: 3, name: "tool_args", kind: "message", T: Struct, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CallMcpToolParams {
@@ -5008,9 +5008,9 @@ export class SwitchModeParams extends Message<SwitchModeParams> {
   toModeId = "";
 
   /**
-   * @generated from field: string explanation = 3;
+   * @generated from field: optional string explanation = 3;
    */
-  explanation = "";
+  explanation?: string;
 
   constructor(data?: PartialMessage<SwitchModeParams>) {
     super();
@@ -5022,7 +5022,7 @@ export class SwitchModeParams extends Message<SwitchModeParams> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "from_mode_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "to_mode_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "explanation", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "explanation", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SwitchModeParams {
@@ -5201,19 +5201,19 @@ export class McpAuthParams extends Message<McpAuthParams> {
  */
 export class GetMcpToolsParams extends Message<GetMcpToolsParams> {
   /**
-   * @generated from field: string server = 1;
+   * @generated from field: optional string server = 1;
    */
-  server = "";
+  server?: string;
 
   /**
-   * @generated from field: string tool_name = 2;
+   * @generated from field: optional string tool_name = 2;
    */
-  toolName = "";
+  toolName?: string;
 
   /**
-   * @generated from field: string pattern = 3;
+   * @generated from field: optional string pattern = 3;
    */
-  pattern = "";
+  pattern?: string;
 
   constructor(data?: PartialMessage<GetMcpToolsParams>) {
     super();
@@ -5223,9 +5223,9 @@ export class GetMcpToolsParams extends Message<GetMcpToolsParams> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetMcpToolsParams";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "server", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "tool_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "pattern", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "server", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "tool_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "pattern", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetMcpToolsParams {
@@ -5250,7 +5250,7 @@ export class GetMcpToolsParams extends Message<GetMcpToolsParams> {
  */
 export class ConnectScmParams extends Message<ConnectScmParams> {
   /**
-   * @generated from field: aiserver.v1.ConnectScmGithub github = 1;
+   * @generated from field: optional aiserver.v1.ConnectScmGithub github = 1;
    */
   github?: ConnectScmGithub;
 
@@ -5262,7 +5262,7 @@ export class ConnectScmParams extends Message<ConnectScmParams> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ConnectScmParams";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "github", kind: "message", T: ConnectScmGithub },
+    { no: 1, name: "github", kind: "message", T: ConnectScmGithub, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ConnectScmParams {
@@ -5287,14 +5287,14 @@ export class ConnectScmParams extends Message<ConnectScmParams> {
  */
 export class ConnectScmGithub extends Message<ConnectScmGithub> {
   /**
-   * @generated from field: aiserver.v1.ConnectScmGithubRepository repository = 1;
+   * @generated from field: optional aiserver.v1.ConnectScmGithubRepository repository = 1;
    */
   repository?: ConnectScmGithubRepository;
 
   /**
-   * @generated from field: string ghe_application = 2;
+   * @generated from field: optional string ghe_application = 2;
    */
-  gheApplication = "";
+  gheApplication?: string;
 
   constructor(data?: PartialMessage<ConnectScmGithub>) {
     super();
@@ -5304,8 +5304,8 @@ export class ConnectScmGithub extends Message<ConnectScmGithub> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ConnectScmGithub";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repository", kind: "message", T: ConnectScmGithubRepository },
-    { no: 2, name: "ghe_application", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "repository", kind: "message", T: ConnectScmGithubRepository, opt: true },
+    { no: 2, name: "ghe_application", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ConnectScmGithub {
@@ -5546,9 +5546,9 @@ export class ShellCommandParsingResult extends Message<ShellCommandParsingResult
   hasCommandSubstitution = false;
 
   /**
-   * @generated from field: bool all_redirects_are_dev_null = 5;
+   * @generated from field: optional bool all_redirects_are_dev_null = 5;
    */
-  allRedirectsAreDevNull = false;
+  allRedirectsAreDevNull?: boolean;
 
   /**
    * @generated from field: repeated aiserver.v1.ShellCommandParsingResult.Redirect redirects = 6;
@@ -5567,7 +5567,7 @@ export class ShellCommandParsingResult extends Message<ShellCommandParsingResult
     { no: 2, name: "executable_commands", kind: "message", T: ShellCommandParsingResult_ExecutableCommand, repeated: true },
     { no: 3, name: "has_redirects", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 4, name: "has_command_substitution", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "all_redirects_are_dev_null", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 5, name: "all_redirects_are_dev_null", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 6, name: "redirects", kind: "message", T: ShellCommandParsingResult_Redirect, repeated: true },
   ]);
 
@@ -5657,9 +5657,9 @@ export class ShellCommandParsingResult_Redirect extends Message<ShellCommandPars
   targetNodeType = "";
 
   /**
-   * @generated from field: string target_text = 4;
+   * @generated from field: optional string target_text = 4;
    */
-  targetText = "";
+  targetText?: string;
 
   constructor(data?: PartialMessage<ShellCommandParsingResult_Redirect>) {
     super();
@@ -5672,7 +5672,7 @@ export class ShellCommandParsingResult_Redirect extends Message<ShellCommandPars
     { no: 1, name: "operator", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "destination_fds", kind: "scalar", T: 13 /* ScalarType.UINT32 */, repeated: true },
     { no: 3, name: "target_node_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "target_text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "target_text", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ShellCommandParsingResult_Redirect {
@@ -5750,29 +5750,29 @@ export class PullRequestReference extends Message<PullRequestReference> {
   score = 0;
 
   /**
-   * @generated from field: string title = 3;
+   * @generated from field: optional string title = 3;
    */
-  title = "";
+  title?: string;
 
   /**
-   * @generated from field: string summary = 4;
+   * @generated from field: optional string summary = 4;
    */
-  summary = "";
+  summary?: string;
 
   /**
-   * @generated from field: uint32 pr_number = 5;
+   * @generated from field: optional uint32 pr_number = 5;
    */
-  prNumber = 0;
+  prNumber?: number;
 
   /**
-   * @generated from field: string author = 6;
+   * @generated from field: optional string author = 6;
    */
-  author = "";
+  author?: string;
 
   /**
-   * @generated from field: string date = 7;
+   * @generated from field: optional string date = 7;
    */
-  date = "";
+  date?: string;
 
   /**
    * @generated from field: repeated string changed_files = 8;
@@ -5789,11 +5789,11 @@ export class PullRequestReference extends Message<PullRequestReference> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "sha", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "score", kind: "scalar", T: 2 /* ScalarType.FLOAT */ },
-    { no: 3, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "summary", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "pr_number", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 6, name: "author", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "date", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "summary", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "pr_number", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
+    { no: 6, name: "author", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "date", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 8, name: "changed_files", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
 
@@ -5844,14 +5844,14 @@ export class ReadSemsearchFilesResult extends Message<ReadSemsearchFilesResult> 
   prResults: ToolPullRequestResult[] = [];
 
   /**
-   * @generated from field: string git_remote_url = 6;
+   * @generated from field: optional string git_remote_url = 6;
    */
-  gitRemoteUrl = "";
+  gitRemoteUrl?: string;
 
   /**
-   * @generated from field: bool pr_hydration_timed_out = 7;
+   * @generated from field: optional bool pr_hydration_timed_out = 7;
    */
-  prHydrationTimedOut = false;
+  prHydrationTimedOut?: boolean;
 
   constructor(data?: PartialMessage<ReadSemsearchFilesResult>) {
     super();
@@ -5866,8 +5866,8 @@ export class ReadSemsearchFilesResult extends Message<ReadSemsearchFilesResult> 
     { no: 3, name: "missing_files", kind: "message", T: MissingFile, repeated: true },
     { no: 4, name: "knowledge_results", kind: "message", T: Knowledge, repeated: true },
     { no: 5, name: "pr_results", kind: "message", T: ToolPullRequestResult, repeated: true },
-    { no: 6, name: "git_remote_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "pr_hydration_timed_out", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 6, name: "git_remote_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "pr_hydration_timed_out", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ReadSemsearchFilesResult {
@@ -5892,7 +5892,7 @@ export class ReadSemsearchFilesResult extends Message<ReadSemsearchFilesResult> 
  */
 export class RipgrepSearchResult extends Message<RipgrepSearchResult> {
   /**
-   * @generated from field: aiserver.v1.RipgrepSearchResultInternal internal = 1;
+   * @generated from field: optional aiserver.v1.RipgrepSearchResultInternal internal = 1;
    */
   internal?: RipgrepSearchResultInternal;
 
@@ -5904,7 +5904,7 @@ export class RipgrepSearchResult extends Message<RipgrepSearchResult> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.RipgrepSearchResult";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "internal", kind: "message", T: RipgrepSearchResultInternal },
+    { no: 1, name: "internal", kind: "message", T: RipgrepSearchResultInternal, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RipgrepSearchResult {
@@ -5949,24 +5949,24 @@ export class ReadFileResult extends Message<ReadFileResult> {
   didSetDefaultLineRange = false;
 
   /**
-   * @generated from field: string full_file_contents = 5;
+   * @generated from field: optional string full_file_contents = 5;
    */
-  fullFileContents = "";
+  fullFileContents?: string;
 
   /**
-   * @generated from field: string outline = 6;
+   * @generated from field: optional string outline = 6;
    */
-  outline = "";
+  outline?: string;
 
   /**
-   * @generated from field: int32 start_line_one_indexed = 7;
+   * @generated from field: optional int32 start_line_one_indexed = 7;
    */
-  startLineOneIndexed = 0;
+  startLineOneIndexed?: number;
 
   /**
-   * @generated from field: int32 end_line_one_indexed_inclusive = 8;
+   * @generated from field: optional int32 end_line_one_indexed_inclusive = 8;
    */
-  endLineOneIndexedInclusive = 0;
+  endLineOneIndexedInclusive?: number;
 
   /**
    * @generated from field: string relative_workspace_path = 9;
@@ -5979,14 +5979,14 @@ export class ReadFileResult extends Message<ReadFileResult> {
   didShortenCharRange = false;
 
   /**
-   * @generated from field: bool read_full_file = 11;
+   * @generated from field: optional bool read_full_file = 11;
    */
-  readFullFile = false;
+  readFullFile?: boolean;
 
   /**
-   * @generated from field: int32 total_lines = 12;
+   * @generated from field: optional int32 total_lines = 12;
    */
-  totalLines = 0;
+  totalLines?: number;
 
   /**
    * @generated from field: repeated aiserver.v1.CursorRule matching_cursor_rules = 13;
@@ -5994,7 +5994,7 @@ export class ReadFileResult extends Message<ReadFileResult> {
   matchingCursorRules: CursorRule[] = [];
 
   /**
-   * @generated from field: aiserver.v1.FileGit file_git_context = 14;
+   * @generated from field: optional aiserver.v1.FileGit file_git_context = 14;
    */
   fileGitContext?: FileGit;
 
@@ -6010,16 +6010,16 @@ export class ReadFileResult extends Message<ReadFileResult> {
     { no: 2, name: "did_downgrade_to_line_range", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 3, name: "did_shorten_line_range", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 4, name: "did_set_default_line_range", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "full_file_contents", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "outline", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "start_line_one_indexed", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 8, name: "end_line_one_indexed_inclusive", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 5, name: "full_file_contents", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "outline", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "start_line_one_indexed", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 8, name: "end_line_one_indexed_inclusive", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 9, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 10, name: "did_shorten_char_range", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 11, name: "read_full_file", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 12, name: "total_lines", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 11, name: "read_full_file", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 12, name: "total_lines", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 13, name: "matching_cursor_rules", kind: "message", T: CursorRule, repeated: true },
-    { no: 14, name: "file_git_context", kind: "message", T: FileGit },
+    { no: 14, name: "file_git_context", kind: "message", T: FileGit, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ReadFileResult {
@@ -6044,7 +6044,7 @@ export class ReadFileResult extends Message<ReadFileResult> {
  */
 export class EditFileResult extends Message<EditFileResult> {
   /**
-   * @generated from field: aiserver.v1.EditFileResult.FileDiff diff = 1;
+   * @generated from field: optional aiserver.v1.EditFileResult.FileDiff diff = 1;
    */
   diff?: EditFileResult_FileDiff;
 
@@ -6064,69 +6064,69 @@ export class EditFileResult extends Message<EditFileResult> {
   linterErrors: LinterError[] = [];
 
   /**
-   * @generated from field: bool rejected = 5;
+   * @generated from field: optional bool rejected = 5;
    */
-  rejected = false;
+  rejected?: boolean;
 
   /**
-   * @generated from field: int32 num_matches = 6;
+   * @generated from field: optional int32 num_matches = 6;
    */
-  numMatches = 0;
+  numMatches?: number;
 
   /**
-   * @generated from field: bool whitespace_insensitive_fallback_found_match = 7;
+   * @generated from field: optional bool whitespace_insensitive_fallback_found_match = 7;
    */
-  whitespaceInsensitiveFallbackFoundMatch = false;
+  whitespaceInsensitiveFallbackFoundMatch?: boolean;
 
   /**
-   * @generated from field: bool no_match_found_in_line_ranges = 8;
+   * @generated from field: optional bool no_match_found_in_line_ranges = 8;
    */
-  noMatchFoundInLineRanges = false;
+  noMatchFoundInLineRanges?: boolean;
 
   /**
-   * @generated from field: int32 num_lines_in_file = 9;
+   * @generated from field: optional int32 num_lines_in_file = 9;
    */
-  numLinesInFile = 0;
+  numLinesInFile?: number;
 
   /**
-   * @generated from field: bool is_subagent_edit = 10;
+   * @generated from field: optional bool is_subagent_edit = 10;
    */
-  isSubagentEdit = false;
+  isSubagentEdit?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.EditFileResult.RecoverableError recoverable_error = 11;
+   * @generated from field: optional aiserver.v1.EditFileResult.RecoverableError recoverable_error = 11;
    */
   recoverableError?: EditFileResult_RecoverableError;
 
   /**
-   * @generated from field: bool diff_became_no_op_due_to_on_save_fixes = 12;
+   * @generated from field: optional bool diff_became_no_op_due_to_on_save_fixes = 12;
    */
-  diffBecameNoOpDueToOnSaveFixes = false;
+  diffBecameNoOpDueToOnSaveFixes?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.EditFileResult.EditFileHumanReview human_review = 13;
+   * @generated from field: optional aiserver.v1.EditFileResult.EditFileHumanReview human_review = 13;
    */
   humanReview?: EditFileResult_EditFileHumanReview;
 
   /**
-   * @generated from field: aiserver.v1.EditFileResult.HumanFeedback human_feedback = 14;
+   * @generated from field: optional aiserver.v1.EditFileResult.HumanFeedback human_feedback = 14;
    */
   humanFeedback?: EditFileResult_HumanFeedback;
 
   /**
-   * @generated from field: bool should_eagerly_process_lints = 15;
+   * @generated from field: optional bool should_eagerly_process_lints = 15;
    */
-  shouldEagerlyProcessLints = false;
+  shouldEagerlyProcessLints?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.HumanReview human_review_v2 = 16;
+   * @generated from field: optional aiserver.v1.HumanReview human_review_v2 = 16;
    */
   humanReviewV2?: HumanReview;
 
   /**
-   * @generated from field: bool were_all_new_linter_errors_resolved_by_this_edit = 17;
+   * @generated from field: optional bool were_all_new_linter_errors_resolved_by_this_edit = 17;
    */
-  wereAllNewLinterErrorsResolvedByThisEdit = false;
+  wereAllNewLinterErrorsResolvedByThisEdit?: boolean;
 
   constructor(data?: PartialMessage<EditFileResult>) {
     super();
@@ -6136,23 +6136,23 @@ export class EditFileResult extends Message<EditFileResult> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.EditFileResult";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "diff", kind: "message", T: EditFileResult_FileDiff },
+    { no: 1, name: "diff", kind: "message", T: EditFileResult_FileDiff, opt: true },
     { no: 2, name: "is_applied", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 3, name: "apply_failed", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 4, name: "linter_errors", kind: "message", T: LinterError, repeated: true },
-    { no: 5, name: "rejected", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 6, name: "num_matches", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 7, name: "whitespace_insensitive_fallback_found_match", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 8, name: "no_match_found_in_line_ranges", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 9, name: "num_lines_in_file", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 10, name: "is_subagent_edit", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 11, name: "recoverable_error", kind: "message", T: EditFileResult_RecoverableError },
-    { no: 12, name: "diff_became_no_op_due_to_on_save_fixes", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 13, name: "human_review", kind: "message", T: EditFileResult_EditFileHumanReview },
-    { no: 14, name: "human_feedback", kind: "message", T: EditFileResult_HumanFeedback },
-    { no: 15, name: "should_eagerly_process_lints", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 16, name: "human_review_v2", kind: "message", T: HumanReview },
-    { no: 17, name: "were_all_new_linter_errors_resolved_by_this_edit", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 5, name: "rejected", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 6, name: "num_matches", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 7, name: "whitespace_insensitive_fallback_found_match", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 8, name: "no_match_found_in_line_ranges", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 9, name: "num_lines_in_file", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 10, name: "is_subagent_edit", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 11, name: "recoverable_error", kind: "message", T: EditFileResult_RecoverableError, opt: true },
+    { no: 12, name: "diff_became_no_op_due_to_on_save_fixes", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 13, name: "human_review", kind: "message", T: EditFileResult_EditFileHumanReview, opt: true },
+    { no: 14, name: "human_feedback", kind: "message", T: EditFileResult_HumanFeedback, opt: true },
+    { no: 15, name: "should_eagerly_process_lints", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 16, name: "human_review_v2", kind: "message", T: HumanReview, opt: true },
+    { no: 17, name: "were_all_new_linter_errors_resolved_by_this_edit", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): EditFileResult {
@@ -6503,9 +6503,9 @@ export class ToolCallFileSearchResult extends Message<ToolCallFileSearchResult> 
   files: ToolCallFileSearchResult_File[] = [];
 
   /**
-   * @generated from field: bool limit_hit = 2;
+   * @generated from field: optional bool limit_hit = 2;
    */
-  limitHit = false;
+  limitHit?: boolean;
 
   /**
    * @generated from field: int32 num_results = 3;
@@ -6521,7 +6521,7 @@ export class ToolCallFileSearchResult extends Message<ToolCallFileSearchResult> 
   static readonly typeName = "aiserver.v1.ToolCallFileSearchResult";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "files", kind: "message", T: ToolCallFileSearchResult_File, repeated: true },
-    { no: 2, name: "limit_hit", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "limit_hit", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 3, name: "num_results", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
   ]);
 
@@ -6609,14 +6609,14 @@ export class SemanticSearchFullResult extends Message<SemanticSearchFullResult> 
   prResults: ToolPullRequestResult[] = [];
 
   /**
-   * @generated from field: string git_remote_url = 6;
+   * @generated from field: optional string git_remote_url = 6;
    */
-  gitRemoteUrl = "";
+  gitRemoteUrl?: string;
 
   /**
-   * @generated from field: bool pr_hydration_timed_out = 7;
+   * @generated from field: optional bool pr_hydration_timed_out = 7;
    */
-  prHydrationTimedOut = false;
+  prHydrationTimedOut?: boolean;
 
   constructor(data?: PartialMessage<SemanticSearchFullResult>) {
     super();
@@ -6631,8 +6631,8 @@ export class SemanticSearchFullResult extends Message<SemanticSearchFullResult> 
     { no: 3, name: "missing_files", kind: "message", T: MissingFile, repeated: true },
     { no: 4, name: "knowledge_results", kind: "message", T: Knowledge, repeated: true },
     { no: 5, name: "pr_results", kind: "message", T: ToolPullRequestResult, repeated: true },
-    { no: 6, name: "git_remote_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "pr_hydration_timed_out", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 6, name: "git_remote_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "pr_hydration_timed_out", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SemanticSearchFullResult {
@@ -6706,7 +6706,7 @@ export class DeleteFileResult extends Message<DeleteFileResult> {
  */
 export class ReapplyResult extends Message<ReapplyResult> {
   /**
-   * @generated from field: aiserver.v1.EditFileResult.FileDiff diff = 1;
+   * @generated from field: optional aiserver.v1.EditFileResult.FileDiff diff = 1;
    */
   diff?: EditFileResult_FileDiff;
 
@@ -6726,9 +6726,9 @@ export class ReapplyResult extends Message<ReapplyResult> {
   linterErrors: LinterError[] = [];
 
   /**
-   * @generated from field: bool rejected = 5;
+   * @generated from field: optional bool rejected = 5;
    */
-  rejected = false;
+  rejected?: boolean;
 
   constructor(data?: PartialMessage<ReapplyResult>) {
     super();
@@ -6738,11 +6738,11 @@ export class ReapplyResult extends Message<ReapplyResult> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ReapplyResult";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "diff", kind: "message", T: EditFileResult_FileDiff },
+    { no: 1, name: "diff", kind: "message", T: EditFileResult_FileDiff, opt: true },
     { no: 2, name: "is_applied", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 3, name: "apply_failed", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 4, name: "linter_errors", kind: "message", T: LinterError, repeated: true },
-    { no: 5, name: "rejected", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 5, name: "rejected", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ReapplyResult {
@@ -6777,9 +6777,9 @@ export class RunTerminalCommandV2Result extends Message<RunTerminalCommandV2Resu
   exitCode = 0;
 
   /**
-   * @generated from field: bool rejected = 3;
+   * @generated from field: optional bool rejected = 3;
    */
-  rejected = false;
+  rejected?: boolean;
 
   /**
    * @generated from field: bool popped_out_into_background = 4;
@@ -6812,14 +6812,14 @@ export class RunTerminalCommandV2Result extends Message<RunTerminalCommandV2Resu
   endedReason = RunTerminalCommandEndedReason.UNSPECIFIED;
 
   /**
-   * @generated from field: int32 exit_code_v2 = 10;
+   * @generated from field: optional int32 exit_code_v2 = 10;
    */
-  exitCodeV2 = 0;
+  exitCodeV2?: number;
 
   /**
-   * @generated from field: string updated_command = 11;
+   * @generated from field: optional string updated_command = 11;
    */
-  updatedCommand = "";
+  updatedCommand?: string;
 
   /**
    * @generated from field: string output_raw = 12;
@@ -6827,34 +6827,34 @@ export class RunTerminalCommandV2Result extends Message<RunTerminalCommandV2Resu
   outputRaw = "";
 
   /**
-   * @generated from field: aiserver.v1.HumanReview human_review_v2 = 13;
+   * @generated from field: optional aiserver.v1.HumanReview human_review_v2 = 13;
    */
   humanReviewV2?: HumanReview;
 
   /**
-   * @generated from field: agent.v1.SandboxPolicy effective_sandbox_policy = 14;
+   * @generated from field: optional agent.v1.SandboxPolicy effective_sandbox_policy = 14;
    */
   effectiveSandboxPolicy?: SandboxPolicy;
 
   /**
-   * @generated from field: int32 terminal_instance_id = 15;
+   * @generated from field: optional int32 terminal_instance_id = 15;
    */
-  terminalInstanceId = 0;
+  terminalInstanceId?: number;
 
   /**
-   * @generated from field: aiserver.v1.OutputLocation output_location = 16;
+   * @generated from field: optional aiserver.v1.OutputLocation output_location = 16;
    */
   outputLocation?: OutputLocation;
 
   /**
-   * @generated from field: string terminal_instance_path = 17;
+   * @generated from field: optional string terminal_instance_path = 17;
    */
-  terminalInstancePath = "";
+  terminalInstancePath?: string;
 
   /**
-   * @generated from field: uint32 background_shell_id = 18;
+   * @generated from field: optional uint32 background_shell_id = 18;
    */
-  backgroundShellId = 0;
+  backgroundShellId?: number;
 
   constructor(data?: PartialMessage<RunTerminalCommandV2Result>) {
     super();
@@ -6866,22 +6866,22 @@ export class RunTerminalCommandV2Result extends Message<RunTerminalCommandV2Resu
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "output", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "exit_code", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "rejected", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 3, name: "rejected", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 4, name: "popped_out_into_background", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 5, name: "is_running_in_background", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 6, name: "not_interrupted", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 7, name: "resulting_working_directory", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 8, name: "did_user_change", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 9, name: "ended_reason", kind: "enum", T: proto3.getEnumType(RunTerminalCommandEndedReason) },
-    { no: 10, name: "exit_code_v2", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 11, name: "updated_command", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 10, name: "exit_code_v2", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 11, name: "updated_command", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 12, name: "output_raw", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 13, name: "human_review_v2", kind: "message", T: HumanReview },
-    { no: 14, name: "effective_sandbox_policy", kind: "message", T: SandboxPolicy },
-    { no: 15, name: "terminal_instance_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 16, name: "output_location", kind: "message", T: OutputLocation },
-    { no: 17, name: "terminal_instance_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 18, name: "background_shell_id", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 13, name: "human_review_v2", kind: "message", T: HumanReview, opt: true },
+    { no: 14, name: "effective_sandbox_policy", kind: "message", T: SandboxPolicy, opt: true },
+    { no: 15, name: "terminal_instance_id", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 16, name: "output_location", kind: "message", T: OutputLocation, opt: true },
+    { no: 17, name: "terminal_instance_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 18, name: "background_shell_id", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RunTerminalCommandV2Result {
@@ -6948,14 +6948,14 @@ export class WebSearchResult extends Message<WebSearchResult> {
   references: WebSearchResult_WebReference[] = [];
 
   /**
-   * @generated from field: bool is_final = 2;
+   * @generated from field: optional bool is_final = 2;
    */
-  isFinal = false;
+  isFinal?: boolean;
 
   /**
-   * @generated from field: bool rejected = 3;
+   * @generated from field: optional bool rejected = 3;
    */
-  rejected = false;
+  rejected?: boolean;
 
   constructor(data?: PartialMessage<WebSearchResult>) {
     super();
@@ -6966,8 +6966,8 @@ export class WebSearchResult extends Message<WebSearchResult> {
   static readonly typeName = "aiserver.v1.WebSearchResult";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "references", kind: "message", T: WebSearchResult_WebReference, repeated: true },
-    { no: 2, name: "is_final", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "rejected", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "is_final", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 3, name: "rejected", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): WebSearchResult {
@@ -7089,9 +7089,9 @@ export class SearchSymbolsResult extends Message<SearchSymbolsResult> {
   matches: SearchSymbolsResult_SymbolMatch[] = [];
 
   /**
-   * @generated from field: bool rejected = 2;
+   * @generated from field: optional bool rejected = 2;
    */
-  rejected = false;
+  rejected?: boolean;
 
   constructor(data?: PartialMessage<SearchSymbolsResult>) {
     super();
@@ -7102,7 +7102,7 @@ export class SearchSymbolsResult extends Message<SearchSymbolsResult> {
   static readonly typeName = "aiserver.v1.SearchSymbolsResult";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "matches", kind: "message", T: SearchSymbolsResult_SymbolMatch, repeated: true },
-    { no: 2, name: "rejected", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "rejected", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SearchSymbolsResult {
@@ -7137,7 +7137,7 @@ export class SearchSymbolsResult_SymbolMatch extends Message<SearchSymbolsResult
   uri = "";
 
   /**
-   * @generated from field: aiserver.v1.Range range = 3;
+   * @generated from field: optional aiserver.v1.Range range = 3;
    */
   range?: Range;
 
@@ -7171,7 +7171,7 @@ export class SearchSymbolsResult_SymbolMatch extends Message<SearchSymbolsResult
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "uri", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "range", kind: "message", T: Range },
+    { no: 3, name: "range", kind: "message", T: Range, opt: true },
     { no: 4, name: "secondary_text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "label_matches", kind: "message", T: MatchRange, repeated: true },
     { no: 6, name: "description_matches", kind: "message", T: MatchRange, repeated: true },
@@ -7327,19 +7327,19 @@ export class FetchPullRequestResult extends Message<FetchPullRequestResult> {
   diff = "";
 
   /**
-   * @generated from field: string sha = 8;
+   * @generated from field: optional string sha = 8;
    */
-  sha = "";
+  sha?: string;
 
   /**
-   * @generated from field: string external_link = 9;
+   * @generated from field: optional string external_link = 9;
    */
-  externalLink = "";
+  externalLink?: string;
 
   /**
-   * @generated from field: string url = 10;
+   * @generated from field: optional string url = 10;
    */
-  url = "";
+  url?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.IssueComment comments = 11;
@@ -7357,19 +7357,19 @@ export class FetchPullRequestResult extends Message<FetchPullRequestResult> {
   assignees: string[] = [];
 
   /**
-   * @generated from field: bool is_issue = 14;
+   * @generated from field: optional bool is_issue = 14;
    */
-  isIssue = false;
+  isIssue?: boolean;
 
   /**
-   * @generated from field: string state = 15;
+   * @generated from field: optional string state = 15;
    */
-  state = "";
+  state?: string;
 
   /**
-   * @generated from field: bool prompt_connect_github = 16;
+   * @generated from field: optional bool prompt_connect_github = 16;
    */
-  promptConnectGithub = false;
+  promptConnectGithub?: boolean;
 
   constructor(data?: PartialMessage<FetchPullRequestResult>) {
     super();
@@ -7386,15 +7386,15 @@ export class FetchPullRequestResult extends Message<FetchPullRequestResult> {
     { no: 5, name: "author", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 6, name: "date", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 7, name: "diff", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "sha", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "external_link", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 8, name: "sha", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 9, name: "external_link", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 10, name: "url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 11, name: "comments", kind: "message", T: IssueComment, repeated: true },
     { no: 12, name: "labels", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 13, name: "assignees", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 14, name: "is_issue", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 15, name: "state", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 16, name: "prompt_connect_github", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 14, name: "is_issue", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 15, name: "state", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 16, name: "prompt_connect_github", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): FetchPullRequestResult {
@@ -7462,9 +7462,9 @@ export class DeepSearchResult extends Message<DeepSearchResult> {
  */
 export class CreateDiagramResult extends Message<CreateDiagramResult> {
   /**
-   * @generated from field: string error = 1;
+   * @generated from field: optional string error = 1;
    */
-  error = "";
+  error?: string;
 
   constructor(data?: PartialMessage<CreateDiagramResult>) {
     super();
@@ -7474,7 +7474,7 @@ export class CreateDiagramResult extends Message<CreateDiagramResult> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CreateDiagramResult";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CreateDiagramResult {
@@ -7541,7 +7541,7 @@ export class FixLintsResult_FileResult extends Message<FixLintsResult_FileResult
   filePath = "";
 
   /**
-   * @generated from field: aiserver.v1.EditFileResult.FileDiff diff = 2;
+   * @generated from field: optional aiserver.v1.EditFileResult.FileDiff diff = 2;
    */
   diff?: EditFileResult_FileDiff;
 
@@ -7556,9 +7556,9 @@ export class FixLintsResult_FileResult extends Message<FixLintsResult_FileResult
   applyFailed = false;
 
   /**
-   * @generated from field: string error = 5;
+   * @generated from field: optional string error = 5;
    */
-  error = "";
+  error?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.LinterError linter_errors = 6;
@@ -7574,10 +7574,10 @@ export class FixLintsResult_FileResult extends Message<FixLintsResult_FileResult
   static readonly typeName = "aiserver.v1.FixLintsResult.FileResult";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "file_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "diff", kind: "message", T: EditFileResult_FileDiff },
+    { no: 2, name: "diff", kind: "message", T: EditFileResult_FileDiff, opt: true },
     { no: 3, name: "is_applied", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 4, name: "apply_failed", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 6, name: "linter_errors", kind: "message", T: LinterError, repeated: true },
   ]);
 
@@ -7891,7 +7891,7 @@ export class AwaitTaskResult_TaskResultItem extends Message<AwaitTaskResult_Task
   taskId = "";
 
   /**
-   * @generated from field: aiserver.v1.TaskResult.CompletedTaskResult result = 2;
+   * @generated from field: optional aiserver.v1.TaskResult.CompletedTaskResult result = 2;
    */
   result?: TaskResult_CompletedTaskResult;
 
@@ -7904,7 +7904,7 @@ export class AwaitTaskResult_TaskResultItem extends Message<AwaitTaskResult_Task
   static readonly typeName = "aiserver.v1.AwaitTaskResult.TaskResultItem";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "task_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "result", kind: "message", T: TaskResult_CompletedTaskResult },
+    { no: 2, name: "result", kind: "message", T: TaskResult_CompletedTaskResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AwaitTaskResult_TaskResultItem {
@@ -8033,9 +8033,9 @@ export class TodoWriteResult extends Message<TodoWriteResult> {
  */
 export class EditFileV2Result extends Message<EditFileV2Result> {
   /**
-   * @generated from field: string contents_before_edit = 1;
+   * @generated from field: optional string contents_before_edit = 1;
    */
-  contentsBeforeEdit = "";
+  contentsBeforeEdit?: string;
 
   /**
    * @generated from field: bool file_was_created = 2;
@@ -8043,14 +8043,14 @@ export class EditFileV2Result extends Message<EditFileV2Result> {
   fileWasCreated = false;
 
   /**
-   * @generated from field: aiserver.v1.EditFileResult.FileDiff diff = 3;
+   * @generated from field: optional aiserver.v1.EditFileResult.FileDiff diff = 3;
    */
   diff?: EditFileResult_FileDiff;
 
   /**
-   * @generated from field: bool rejected = 4;
+   * @generated from field: optional bool rejected = 4;
    */
-  rejected = false;
+  rejected?: boolean;
 
   /**
    * @generated from field: repeated aiserver.v1.LinterError linter_errors = 5;
@@ -8063,7 +8063,7 @@ export class EditFileV2Result extends Message<EditFileV2Result> {
   sentBackLinterErrors = false;
 
   /**
-   * @generated from field: aiserver.v1.HumanReview human_review_v2 = 7;
+   * @generated from field: optional aiserver.v1.HumanReview human_review_v2 = 7;
    */
   humanReviewV2?: HumanReview;
 
@@ -8073,9 +8073,9 @@ export class EditFileV2Result extends Message<EditFileV2Result> {
   shouldAutoFixLints = false;
 
   /**
-   * @generated from field: string eol_sequence = 9;
+   * @generated from field: optional string eol_sequence = 9;
    */
-  eolSequence = "";
+  eolSequence?: string;
 
   /**
    * @generated from field: string result_for_model = 10;
@@ -8083,19 +8083,19 @@ export class EditFileV2Result extends Message<EditFileV2Result> {
   resultForModel = "";
 
   /**
-   * @generated from field: string detected_language = 11;
+   * @generated from field: optional string detected_language = 11;
    */
-  detectedLanguage = "";
+  detectedLanguage?: string;
 
   /**
-   * @generated from field: string contents_after_edit = 12;
+   * @generated from field: optional string contents_after_edit = 12;
    */
-  contentsAfterEdit = "";
+  contentsAfterEdit?: string;
 
   /**
-   * @generated from field: string before_content_id = 13;
+   * @generated from field: optional string before_content_id = 13;
    */
-  beforeContentId = "";
+  beforeContentId?: string;
 
   /**
    * @generated from field: string after_content_id = 14;
@@ -8110,19 +8110,19 @@ export class EditFileV2Result extends Message<EditFileV2Result> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.EditFileV2Result";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "contents_before_edit", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "contents_before_edit", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "file_was_created", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "diff", kind: "message", T: EditFileResult_FileDiff },
-    { no: 4, name: "rejected", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 3, name: "diff", kind: "message", T: EditFileResult_FileDiff, opt: true },
+    { no: 4, name: "rejected", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 5, name: "linter_errors", kind: "message", T: LinterError, repeated: true },
     { no: 6, name: "sent_back_linter_errors", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 7, name: "human_review_v2", kind: "message", T: HumanReview },
+    { no: 7, name: "human_review_v2", kind: "message", T: HumanReview, opt: true },
     { no: 8, name: "should_auto_fix_lints", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 9, name: "eol_sequence", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 9, name: "eol_sequence", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 10, name: "result_for_model", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 11, name: "detected_language", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 12, name: "contents_after_edit", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 13, name: "before_content_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 11, name: "detected_language", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 12, name: "contents_after_edit", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 13, name: "before_content_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 14, name: "after_content_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
@@ -8148,9 +8148,9 @@ export class EditFileV2Result extends Message<EditFileV2Result> {
  */
 export class ReadFileV2Result extends Message<ReadFileV2Result> {
   /**
-   * @generated from field: string contents = 1;
+   * @generated from field: optional string contents = 1;
    */
-  contents = "";
+  contents?: string;
 
   /**
    * @generated from field: int32 num_characters_in_requested_range = 2;
@@ -8158,14 +8158,14 @@ export class ReadFileV2Result extends Message<ReadFileV2Result> {
   numCharactersInRequestedRange = 0;
 
   /**
-   * @generated from field: bool offset_is_bigger_than_number_of_lines_in_file = 3;
+   * @generated from field: optional bool offset_is_bigger_than_number_of_lines_in_file = 3;
    */
-  offsetIsBiggerThanNumberOfLinesInFile = false;
+  offsetIsBiggerThanNumberOfLinesInFile?: boolean;
 
   /**
-   * @generated from field: int32 total_lines_in_file = 4;
+   * @generated from field: optional int32 total_lines_in_file = 4;
    */
-  totalLinesInFile = 0;
+  totalLinesInFile?: number;
 
   /**
    * @generated from field: repeated aiserver.v1.CursorRule matching_cursor_rules = 5;
@@ -8185,10 +8185,10 @@ export class ReadFileV2Result extends Message<ReadFileV2Result> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ReadFileV2Result";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "contents", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "contents", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "num_characters_in_requested_range", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "offset_is_bigger_than_number_of_lines_in_file", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "total_lines_in_file", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 3, name: "offset_is_bigger_than_number_of_lines_in_file", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 4, name: "total_lines_in_file", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 5, name: "matching_cursor_rules", kind: "message", T: CursorRule, repeated: true },
     { no: 6, name: "images", kind: "message", T: ImageProto, repeated: true },
   ]);
@@ -8610,19 +8610,19 @@ export class ListMcpResourcesResult_MCPResource extends Message<ListMcpResources
   uri = "";
 
   /**
-   * @generated from field: string name = 2;
+   * @generated from field: optional string name = 2;
    */
-  name = "";
+  name?: string;
 
   /**
-   * @generated from field: string description = 3;
+   * @generated from field: optional string description = 3;
    */
-  description = "";
+  description?: string;
 
   /**
-   * @generated from field: string mime_type = 4;
+   * @generated from field: optional string mime_type = 4;
    */
-  mimeType = "";
+  mimeType?: string;
 
   /**
    * @generated from field: string server = 5;
@@ -8643,9 +8643,9 @@ export class ListMcpResourcesResult_MCPResource extends Message<ListMcpResources
   static readonly typeName = "aiserver.v1.ListMcpResourcesResult.MCPResource";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "uri", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "mime_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "mime_type", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 5, name: "server", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 6, name: "annotations", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
   ]);
@@ -8677,19 +8677,19 @@ export class ReadMcpResourceResult extends Message<ReadMcpResourceResult> {
   uri = "";
 
   /**
-   * @generated from field: string name = 2;
+   * @generated from field: optional string name = 2;
    */
-  name = "";
+  name?: string;
 
   /**
-   * @generated from field: string description = 3;
+   * @generated from field: optional string description = 3;
    */
-  description = "";
+  description?: string;
 
   /**
-   * @generated from field: string mime_type = 4;
+   * @generated from field: optional string mime_type = 4;
    */
-  mimeType = "";
+  mimeType?: string;
 
   /**
    * @generated from field: map<string, string> annotations = 7;
@@ -8722,9 +8722,9 @@ export class ReadMcpResourceResult extends Message<ReadMcpResourceResult> {
   static readonly typeName = "aiserver.v1.ReadMcpResourceResult";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "uri", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "mime_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "mime_type", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 7, name: "annotations", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
     { no: 5, name: "text", kind: "scalar", T: 9 /* ScalarType.STRING */, oneof: "content" },
     { no: 6, name: "blob", kind: "scalar", T: 12 /* ScalarType.BYTES */, oneof: "content" },
@@ -8832,9 +8832,9 @@ export class UpdateProjectResult extends Message<UpdateProjectResult> {
  */
 export class TaskV2Result extends Message<TaskV2Result> {
   /**
-   * @generated from field: string agent_id = 1;
+   * @generated from field: optional string agent_id = 1;
    */
-  agentId = "";
+  agentId?: string;
 
   /**
    * @generated from field: bool is_background = 2;
@@ -8842,9 +8842,9 @@ export class TaskV2Result extends Message<TaskV2Result> {
   isBackground = false;
 
   /**
-   * @generated from field: string cloud_agent_bc_id = 3;
+   * @generated from field: optional string cloud_agent_bc_id = 3;
    */
-  cloudAgentBcId = "";
+  cloudAgentBcId?: string;
 
   constructor(data?: PartialMessage<TaskV2Result>) {
     super();
@@ -8854,9 +8854,9 @@ export class TaskV2Result extends Message<TaskV2Result> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.TaskV2Result";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "is_background", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "cloud_agent_bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "cloud_agent_bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): TaskV2Result {
@@ -8891,7 +8891,7 @@ export class CallMcpToolResult extends Message<CallMcpToolResult> {
   toolName = "";
 
   /**
-   * @generated from field: google.protobuf.Struct result = 3;
+   * @generated from field: optional google.protobuf.Struct result = 3;
    */
   result?: Struct;
 
@@ -8905,7 +8905,7 @@ export class CallMcpToolResult extends Message<CallMcpToolResult> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "server", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "tool_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "result", kind: "message", T: Struct },
+    { no: 3, name: "result", kind: "message", T: Struct, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CallMcpToolResult {
@@ -8983,9 +8983,9 @@ export class AskQuestionResult_Answer extends Message<AskQuestionResult_Answer> 
   selectedOptionIds: string[] = [];
 
   /**
-   * @generated from field: string freeform_text = 3;
+   * @generated from field: optional string freeform_text = 3;
    */
-  freeformText = "";
+  freeformText?: string;
 
   constructor(data?: PartialMessage<AskQuestionResult_Answer>) {
     super();
@@ -8997,7 +8997,7 @@ export class AskQuestionResult_Answer extends Message<AskQuestionResult_Answer> 
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "question_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "selected_option_ids", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 3, name: "freeform_text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "freeform_text", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AskQuestionResult_Answer {
@@ -9132,14 +9132,14 @@ export class WebFetchResult extends Message<WebFetchResult> {
   url = "";
 
   /**
-   * @generated from field: string markdown = 2;
+   * @generated from field: optional string markdown = 2;
    */
-  markdown = "";
+  markdown?: string;
 
   /**
-   * @generated from field: string error = 3;
+   * @generated from field: optional string error = 3;
    */
-  error = "";
+  error?: string;
 
   constructor(data?: PartialMessage<WebFetchResult>) {
     super();
@@ -9150,8 +9150,8 @@ export class WebFetchResult extends Message<WebFetchResult> {
   static readonly typeName = "aiserver.v1.WebFetchResult";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "markdown", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "markdown", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): WebFetchResult {
@@ -9274,9 +9274,9 @@ export class GetMcpToolsResult extends Message<GetMcpToolsResult> {
   content = "";
 
   /**
-   * @generated from field: string output_file_path = 2;
+   * @generated from field: optional string output_file_path = 2;
    */
-  outputFilePath = "";
+  outputFilePath?: string;
 
   constructor(data?: PartialMessage<GetMcpToolsResult>) {
     super();
@@ -9287,7 +9287,7 @@ export class GetMcpToolsResult extends Message<GetMcpToolsResult> {
   static readonly typeName = "aiserver.v1.GetMcpToolsResult";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "output_file_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "output_file_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetMcpToolsResult {
@@ -9380,7 +9380,7 @@ export class ToolResultAttachments extends Message<ToolResultAttachments> {
   todoReminderType = ToolResultAttachments_TodoReminderType.UNSPECIFIED;
 
   /**
-   * @generated from field: aiserver.v1.ToolResultAttachments.DiscoveryBudgetReminder discovery_budget_reminder = 6;
+   * @generated from field: optional aiserver.v1.ToolResultAttachments.DiscoveryBudgetReminder discovery_budget_reminder = 6;
    */
   discoveryBudgetReminder?: ToolResultAttachments_DiscoveryBudgetReminder;
 
@@ -9397,7 +9397,7 @@ export class ToolResultAttachments extends Message<ToolResultAttachments> {
     { no: 3, name: "nudge_messages", kind: "message", T: NudgeMessage, repeated: true },
     { no: 4, name: "should_show_todo_write_reminder", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 5, name: "todo_reminder_type", kind: "enum", T: proto3.getEnumType(ToolResultAttachments_TodoReminderType) },
-    { no: 6, name: "discovery_budget_reminder", kind: "message", T: ToolResultAttachments_DiscoveryBudgetReminder },
+    { no: 6, name: "discovery_budget_reminder", kind: "message", T: ToolResultAttachments_DiscoveryBudgetReminder, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ToolResultAttachments {
@@ -9453,9 +9453,9 @@ export class ToolResultAttachments_DiscoveryBudgetReminder extends Message<ToolR
   discoveryRoundsRemaining = 0;
 
   /**
-   * @generated from field: string discovery_effort = 2;
+   * @generated from field: optional string discovery_effort = 2;
    */
-  discoveryEffort = "";
+  discoveryEffort?: string;
 
   constructor(data?: PartialMessage<ToolResultAttachments_DiscoveryBudgetReminder>) {
     super();
@@ -9466,7 +9466,7 @@ export class ToolResultAttachments_DiscoveryBudgetReminder extends Message<ToolR
   static readonly typeName = "aiserver.v1.ToolResultAttachments.DiscoveryBudgetReminder";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "discovery_rounds_remaining", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 2, name: "discovery_effort", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "discovery_effort", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ToolResultAttachments_DiscoveryBudgetReminder {
@@ -9548,7 +9548,7 @@ export class RipgrepRawSearchSuccess extends Message<RipgrepRawSearchSuccess> {
   workspaceResults: { [key: string]: RipgrepRawSearchUnionResult } = {};
 
   /**
-   * @generated from field: aiserver.v1.RipgrepRawSearchUnionResult active_editor_result = 5;
+   * @generated from field: optional aiserver.v1.RipgrepRawSearchUnionResult active_editor_result = 5;
    */
   activeEditorResult?: RipgrepRawSearchUnionResult;
 
@@ -9564,7 +9564,7 @@ export class RipgrepRawSearchSuccess extends Message<RipgrepRawSearchSuccess> {
     { no: 2, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "output_mode", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "workspace_results", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "message", T: RipgrepRawSearchUnionResult} },
-    { no: 5, name: "active_editor_result", kind: "message", T: RipgrepRawSearchUnionResult },
+    { no: 5, name: "active_editor_result", kind: "message", T: RipgrepRawSearchUnionResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RipgrepRawSearchSuccess {
@@ -9708,14 +9708,14 @@ export class RipgrepRawSearchCountResult extends Message<RipgrepRawSearchCountRe
   ripgrepTruncated = false;
 
   /**
-   * @generated from field: int32 head_limit_applied = 6;
+   * @generated from field: optional int32 head_limit_applied = 6;
    */
-  headLimitApplied = 0;
+  headLimitApplied?: number;
 
   /**
-   * @generated from field: int32 offset_applied = 7;
+   * @generated from field: optional int32 offset_applied = 7;
    */
-  offsetApplied = 0;
+  offsetApplied?: number;
 
   constructor(data?: PartialMessage<RipgrepRawSearchCountResult>) {
     super();
@@ -9730,8 +9730,8 @@ export class RipgrepRawSearchCountResult extends Message<RipgrepRawSearchCountRe
     { no: 3, name: "total_matches", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 4, name: "client_truncated", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 5, name: "ripgrep_truncated", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 6, name: "head_limit_applied", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 7, name: "offset_applied", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 6, name: "head_limit_applied", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 7, name: "offset_applied", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RipgrepRawSearchCountResult {
@@ -9781,14 +9781,14 @@ export class RipgrepRawSearchFilesResult extends Message<RipgrepRawSearchFilesRe
   filesWithMeta: RipgrepRawSearchFilesResult_FileEntry[] = [];
 
   /**
-   * @generated from field: int32 head_limit_applied = 6;
+   * @generated from field: optional int32 head_limit_applied = 6;
    */
-  headLimitApplied = 0;
+  headLimitApplied?: number;
 
   /**
-   * @generated from field: int32 offset_applied = 7;
+   * @generated from field: optional int32 offset_applied = 7;
    */
-  offsetApplied = 0;
+  offsetApplied?: number;
 
   constructor(data?: PartialMessage<RipgrepRawSearchFilesResult>) {
     super();
@@ -9803,8 +9803,8 @@ export class RipgrepRawSearchFilesResult extends Message<RipgrepRawSearchFilesRe
     { no: 3, name: "client_truncated", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 4, name: "ripgrep_truncated", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 5, name: "files_with_meta", kind: "message", T: RipgrepRawSearchFilesResult_FileEntry, repeated: true },
-    { no: 6, name: "head_limit_applied", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 7, name: "offset_applied", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 6, name: "head_limit_applied", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 7, name: "offset_applied", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RipgrepRawSearchFilesResult {
@@ -9844,9 +9844,9 @@ export class RipgrepRawSearchFilesResult_FileEntry extends Message<RipgrepRawSea
   isOutOfWorkspace = false;
 
   /**
-   * @generated from field: string absolute_path = 4;
+   * @generated from field: optional string absolute_path = 4;
    */
-  absolutePath = "";
+  absolutePath?: string;
 
   constructor(data?: PartialMessage<RipgrepRawSearchFilesResult_FileEntry>) {
     super();
@@ -9859,7 +9859,7 @@ export class RipgrepRawSearchFilesResult_FileEntry extends Message<RipgrepRawSea
     { no: 1, name: "file", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "is_dirty", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 3, name: "is_out_of_workspace", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "absolute_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "absolute_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RipgrepRawSearchFilesResult_FileEntry {
@@ -9909,14 +9909,14 @@ export class RipgrepRawSearchContentResult extends Message<RipgrepRawSearchConte
   ripgrepTruncated = false;
 
   /**
-   * @generated from field: int32 head_limit_applied = 6;
+   * @generated from field: optional int32 head_limit_applied = 6;
    */
-  headLimitApplied = 0;
+  headLimitApplied?: number;
 
   /**
-   * @generated from field: int32 offset_applied = 7;
+   * @generated from field: optional int32 offset_applied = 7;
    */
-  offsetApplied = 0;
+  offsetApplied?: number;
 
   constructor(data?: PartialMessage<RipgrepRawSearchContentResult>) {
     super();
@@ -9931,8 +9931,8 @@ export class RipgrepRawSearchContentResult extends Message<RipgrepRawSearchConte
     { no: 3, name: "total_matched_lines", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 4, name: "client_truncated", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 5, name: "ripgrep_truncated", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 6, name: "head_limit_applied", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 7, name: "offset_applied", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 6, name: "head_limit_applied", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 7, name: "offset_applied", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RipgrepRawSearchContentResult {
@@ -9967,19 +9967,19 @@ export class RipgrepRawSearchFileMatch extends Message<RipgrepRawSearchFileMatch
   matches: RipgrepRawSearchContentMatch[] = [];
 
   /**
-   * @generated from field: bool is_dirty = 3;
+   * @generated from field: optional bool is_dirty = 3;
    */
-  isDirty = false;
+  isDirty?: boolean;
 
   /**
-   * @generated from field: bool is_out_of_workspace = 4;
+   * @generated from field: optional bool is_out_of_workspace = 4;
    */
-  isOutOfWorkspace = false;
+  isOutOfWorkspace?: boolean;
 
   /**
-   * @generated from field: string absolute_path = 5;
+   * @generated from field: optional string absolute_path = 5;
    */
-  absolutePath = "";
+  absolutePath?: string;
 
   constructor(data?: PartialMessage<RipgrepRawSearchFileMatch>) {
     super();
@@ -9991,9 +9991,9 @@ export class RipgrepRawSearchFileMatch extends Message<RipgrepRawSearchFileMatch
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "file", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "matches", kind: "message", T: RipgrepRawSearchContentMatch, repeated: true },
-    { no: 3, name: "is_dirty", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "is_out_of_workspace", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "absolute_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "is_dirty", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 4, name: "is_out_of_workspace", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 5, name: "absolute_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RipgrepRawSearchFileMatch {
@@ -10083,19 +10083,19 @@ export class RipgrepRawSearchFileCount extends Message<RipgrepRawSearchFileCount
   count = 0;
 
   /**
-   * @generated from field: bool is_dirty = 3;
+   * @generated from field: optional bool is_dirty = 3;
    */
-  isDirty = false;
+  isDirty?: boolean;
 
   /**
-   * @generated from field: bool is_out_of_workspace = 4;
+   * @generated from field: optional bool is_out_of_workspace = 4;
    */
-  isOutOfWorkspace = false;
+  isOutOfWorkspace?: boolean;
 
   /**
-   * @generated from field: string absolute_path = 5;
+   * @generated from field: optional string absolute_path = 5;
    */
-  absolutePath = "";
+  absolutePath?: string;
 
   constructor(data?: PartialMessage<RipgrepRawSearchFileCount>) {
     super();
@@ -10107,9 +10107,9 @@ export class RipgrepRawSearchFileCount extends Message<RipgrepRawSearchFileCount
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "file", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "is_dirty", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "is_out_of_workspace", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "absolute_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "is_dirty", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 4, name: "is_out_of_workspace", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 5, name: "absolute_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RipgrepRawSearchFileCount {
@@ -10194,14 +10194,14 @@ export class GotodefDefinition extends Message<GotodefDefinition> {
   relativeWorkspacePath = "";
 
   /**
-   * @generated from field: string fully_qualified_name = 2;
+   * @generated from field: optional string fully_qualified_name = 2;
    */
-  fullyQualifiedName = "";
+  fullyQualifiedName?: string;
 
   /**
-   * @generated from field: string symbol_kind = 3;
+   * @generated from field: optional string symbol_kind = 3;
    */
-  symbolKind = "";
+  symbolKind?: string;
 
   /**
    * @generated from field: int32 start_line = 4;
@@ -10227,8 +10227,8 @@ export class GotodefDefinition extends Message<GotodefDefinition> {
   static readonly typeName = "aiserver.v1.GotodefDefinition";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "fully_qualified_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "symbol_kind", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "fully_qualified_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "symbol_kind", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 4, name: "start_line", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 5, name: "end_line", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 6, name: "code_context_lines", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
@@ -10266,9 +10266,9 @@ export class IssueComment extends Message<IssueComment> {
   body = "";
 
   /**
-   * @generated from field: string author = 3;
+   * @generated from field: optional string author = 3;
    */
-  author = "";
+  author?: string;
 
   /**
    * @generated from field: string created_at = 4;
@@ -10281,9 +10281,9 @@ export class IssueComment extends Message<IssueComment> {
   updatedAt = "";
 
   /**
-   * @generated from field: string author_association = 6;
+   * @generated from field: optional string author_association = 6;
    */
-  authorAssociation = "";
+  authorAssociation?: string;
 
   constructor(data?: PartialMessage<IssueComment>) {
     super();
@@ -10295,10 +10295,10 @@ export class IssueComment extends Message<IssueComment> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "id", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
     { no: 2, name: "body", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "author", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "author", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 4, name: "created_at", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "updated_at", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "author_association", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 6, name: "author_association", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): IssueComment {
@@ -10480,9 +10480,9 @@ export class MissingFile extends Message<MissingFile> {
   missingReason = MissingFile_MissingReason.UNSPECIFIED;
 
   /**
-   * @generated from field: int32 num_lines = 3;
+   * @generated from field: optional int32 num_lines = 3;
    */
-  numLines = 0;
+  numLines?: number;
 
   constructor(data?: PartialMessage<MissingFile>) {
     super();
@@ -10494,7 +10494,7 @@ export class MissingFile extends Message<MissingFile> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "missing_reason", kind: "enum", T: proto3.getEnumType(MissingFile_MissingReason) },
-    { no: 3, name: "num_lines", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 3, name: "num_lines", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): MissingFile {
@@ -10603,19 +10603,19 @@ export class ToolPullRequestResult extends Message<ToolPullRequestResult> {
   score = 0;
 
   /**
-   * @generated from field: string title = 4;
+   * @generated from field: optional string title = 4;
    */
-  title = "";
+  title?: string;
 
   /**
-   * @generated from field: string summary = 5;
+   * @generated from field: optional string summary = 5;
    */
-  summary = "";
+  summary?: string;
 
   /**
-   * @generated from field: uint32 pr_number = 6;
+   * @generated from field: optional uint32 pr_number = 6;
    */
-  prNumber = 0;
+  prNumber?: number;
 
   /**
    * @generated from field: repeated string changed_files = 7;
@@ -10623,14 +10623,14 @@ export class ToolPullRequestResult extends Message<ToolPullRequestResult> {
   changedFiles: string[] = [];
 
   /**
-   * @generated from field: string author = 8;
+   * @generated from field: optional string author = 8;
    */
-  author = "";
+  author?: string;
 
   /**
-   * @generated from field: string date = 9;
+   * @generated from field: optional string date = 9;
    */
-  date = "";
+  date?: string;
 
   constructor(data?: PartialMessage<ToolPullRequestResult>) {
     super();
@@ -10643,12 +10643,12 @@ export class ToolPullRequestResult extends Message<ToolPullRequestResult> {
     { no: 1, name: "sha", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "full_pr_contents", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "score", kind: "scalar", T: 2 /* ScalarType.FLOAT */ },
-    { no: 4, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "summary", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "pr_number", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 4, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "summary", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "pr_number", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
     { no: 7, name: "changed_files", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 8, name: "author", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "date", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 8, name: "author", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 9, name: "date", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ToolPullRequestResult {
@@ -10678,14 +10678,14 @@ export class RipgrepSearchResultInternal extends Message<RipgrepSearchResultInte
   results: RipgrepSearchResultInternal_IFileMatch[] = [];
 
   /**
-   * @generated from field: aiserver.v1.RipgrepSearchResultInternal.SearchCompletionExitCode exit = 2;
+   * @generated from field: optional aiserver.v1.RipgrepSearchResultInternal.SearchCompletionExitCode exit = 2;
    */
-  exit = RipgrepSearchResultInternal_SearchCompletionExitCode.UNSPECIFIED;
+  exit?: RipgrepSearchResultInternal_SearchCompletionExitCode;
 
   /**
-   * @generated from field: bool limit_hit = 3;
+   * @generated from field: optional bool limit_hit = 3;
    */
-  limitHit = false;
+  limitHit?: boolean;
 
   /**
    * @generated from field: repeated aiserver.v1.RipgrepSearchResultInternal.ITextSearchCompleteMessage messages = 4;
@@ -10718,8 +10718,8 @@ export class RipgrepSearchResultInternal extends Message<RipgrepSearchResultInte
   static readonly typeName = "aiserver.v1.RipgrepSearchResultInternal";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "results", kind: "message", T: RipgrepSearchResultInternal_IFileMatch, repeated: true },
-    { no: 2, name: "exit", kind: "enum", T: proto3.getEnumType(RipgrepSearchResultInternal_SearchCompletionExitCode) },
-    { no: 3, name: "limit_hit", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "exit", kind: "enum", T: proto3.getEnumType(RipgrepSearchResultInternal_SearchCompletionExitCode), opt: true },
+    { no: 3, name: "limit_hit", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 4, name: "messages", kind: "message", T: RipgrepSearchResultInternal_ITextSearchCompleteMessage, repeated: true },
     { no: 5, name: "file_search_stats", kind: "message", T: RipgrepSearchResultInternal_IFileSearchStats, oneof: "stats" },
     { no: 6, name: "text_search_stats", kind: "message", T: RipgrepSearchResultInternal_ITextSearchStats, oneof: "stats" },
@@ -10852,9 +10852,9 @@ export class RipgrepSearchResultInternal_ITextSearchCompleteMessage extends Mess
   type = RipgrepSearchResultInternal_TextSearchCompleteMessageType.UNSPECIFIED;
 
   /**
-   * @generated from field: bool trusted = 3;
+   * @generated from field: optional bool trusted = 3;
    */
-  trusted = false;
+  trusted?: boolean;
 
   constructor(data?: PartialMessage<RipgrepSearchResultInternal_ITextSearchCompleteMessage>) {
     super();
@@ -10866,7 +10866,7 @@ export class RipgrepSearchResultInternal_ITextSearchCompleteMessage extends Mess
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "type", kind: "enum", T: proto3.getEnumType(RipgrepSearchResultInternal_TextSearchCompleteMessageType) },
-    { no: 3, name: "trusted", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 3, name: "trusted", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RipgrepSearchResultInternal_ITextSearchCompleteMessage {
@@ -10906,9 +10906,9 @@ export class RipgrepSearchResultInternal_IFileSearchStats extends Message<Ripgre
   type = RipgrepSearchResultInternal_IFileSearchStats_FileSearchProviderType.UNSPECIFIED;
 
   /**
-   * @generated from field: int32 sorting_time = 7;
+   * @generated from field: optional int32 sorting_time = 7;
    */
-  sortingTime = 0;
+  sortingTime?: number;
 
   /**
    * @generated from oneof aiserver.v1.RipgrepSearchResultInternal.IFileSearchStats.detail_stats
@@ -10944,7 +10944,7 @@ export class RipgrepSearchResultInternal_IFileSearchStats extends Message<Ripgre
     { no: 1, name: "from_cache", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 5, name: "result_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 6, name: "type", kind: "enum", T: proto3.getEnumType(RipgrepSearchResultInternal_IFileSearchStats_FileSearchProviderType) },
-    { no: 7, name: "sorting_time", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 7, name: "sorting_time", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 2, name: "search_engine_stats", kind: "message", T: RipgrepSearchResultInternal_ISearchEngineStats, oneof: "detail_stats" },
     { no: 3, name: "cached_search_stats", kind: "message", T: RipgrepSearchResultInternal_ICachedSearchStats, oneof: "detail_stats" },
     { no: 4, name: "file_search_provider_stats", kind: "message", T: RipgrepSearchResultInternal_IFileSearchProviderStats, oneof: "detail_stats" },
@@ -11087,9 +11087,9 @@ export class RipgrepSearchResultInternal_ISearchEngineStats extends Message<Ripg
   cmdTime = 0;
 
   /**
-   * @generated from field: int32 cmd_result_count = 5;
+   * @generated from field: optional int32 cmd_result_count = 5;
    */
-  cmdResultCount = 0;
+  cmdResultCount?: number;
 
   constructor(data?: PartialMessage<RipgrepSearchResultInternal_ISearchEngineStats>) {
     super();
@@ -11103,7 +11103,7 @@ export class RipgrepSearchResultInternal_ISearchEngineStats extends Message<Ripg
     { no: 2, name: "directories_walked", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 3, name: "files_walked", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 4, name: "cmd_time", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 5, name: "cmd_result_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 5, name: "cmd_result_count", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RipgrepSearchResultInternal_ISearchEngineStats {
@@ -11276,9 +11276,9 @@ export class RipgrepSearchResultInternal_ITextSearchResult extends Message<Ripgr
  */
 export class RipgrepSearchResultInternal_ITextSearchMatch extends Message<RipgrepSearchResultInternal_ITextSearchMatch> {
   /**
-   * @generated from field: string uri = 1;
+   * @generated from field: optional string uri = 1;
    */
-  uri = "";
+  uri?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.RipgrepSearchResultInternal.ISearchRangeSetPairing range_locations = 2;
@@ -11291,14 +11291,14 @@ export class RipgrepSearchResultInternal_ITextSearchMatch extends Message<Ripgre
   previewText = "";
 
   /**
-   * @generated from field: int32 webview_index = 4;
+   * @generated from field: optional int32 webview_index = 4;
    */
-  webviewIndex = 0;
+  webviewIndex?: number;
 
   /**
-   * @generated from field: string cell_fragment = 5;
+   * @generated from field: optional string cell_fragment = 5;
    */
-  cellFragment = "";
+  cellFragment?: string;
 
   constructor(data?: PartialMessage<RipgrepSearchResultInternal_ITextSearchMatch>) {
     super();
@@ -11308,11 +11308,11 @@ export class RipgrepSearchResultInternal_ITextSearchMatch extends Message<Ripgre
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.RipgrepSearchResultInternal.ITextSearchMatch";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "uri", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "uri", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "range_locations", kind: "message", T: RipgrepSearchResultInternal_ISearchRangeSetPairing, repeated: true },
     { no: 3, name: "preview_text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "webview_index", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 5, name: "cell_fragment", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "webview_index", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 5, name: "cell_fragment", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RipgrepSearchResultInternal_ITextSearchMatch {
@@ -11337,9 +11337,9 @@ export class RipgrepSearchResultInternal_ITextSearchMatch extends Message<Ripgre
  */
 export class RipgrepSearchResultInternal_ITextSearchContext extends Message<RipgrepSearchResultInternal_ITextSearchContext> {
   /**
-   * @generated from field: string uri = 1;
+   * @generated from field: optional string uri = 1;
    */
-  uri = "";
+  uri?: string;
 
   /**
    * @generated from field: string text = 2;
@@ -11359,7 +11359,7 @@ export class RipgrepSearchResultInternal_ITextSearchContext extends Message<Ripg
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.RipgrepSearchResultInternal.ITextSearchContext";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "uri", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "uri", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "line_number", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
   ]);
@@ -11386,12 +11386,12 @@ export class RipgrepSearchResultInternal_ITextSearchContext extends Message<Ripg
  */
 export class RipgrepSearchResultInternal_ISearchRangeSetPairing extends Message<RipgrepSearchResultInternal_ISearchRangeSetPairing> {
   /**
-   * @generated from field: aiserver.v1.RipgrepSearchResultInternal.ISearchRange source = 1;
+   * @generated from field: optional aiserver.v1.RipgrepSearchResultInternal.ISearchRange source = 1;
    */
   source?: RipgrepSearchResultInternal_ISearchRange;
 
   /**
-   * @generated from field: aiserver.v1.RipgrepSearchResultInternal.ISearchRange preview = 2;
+   * @generated from field: optional aiserver.v1.RipgrepSearchResultInternal.ISearchRange preview = 2;
    */
   preview?: RipgrepSearchResultInternal_ISearchRange;
 
@@ -11403,8 +11403,8 @@ export class RipgrepSearchResultInternal_ISearchRangeSetPairing extends Message<
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.RipgrepSearchResultInternal.ISearchRangeSetPairing";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "source", kind: "message", T: RipgrepSearchResultInternal_ISearchRange },
-    { no: 2, name: "preview", kind: "message", T: RipgrepSearchResultInternal_ISearchRange },
+    { no: 1, name: "source", kind: "message", T: RipgrepSearchResultInternal_ISearchRange, opt: true },
+    { no: 2, name: "preview", kind: "message", T: RipgrepSearchResultInternal_ISearchRange, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RipgrepSearchResultInternal_ISearchRangeSetPairing {
@@ -12690,14 +12690,14 @@ export class SemanticSearchResult_Item extends Message<SemanticSearchResult_Item
   content = "";
 
   /**
-   * @generated from field: aiserver.v1.SimpleRange range = 4;
+   * @generated from field: optional aiserver.v1.SimpleRange range = 4;
    */
   range?: SimpleRange;
 
   /**
-   * @generated from field: string original_content = 5;
+   * @generated from field: optional string original_content = 5;
    */
-  originalContent = "";
+  originalContent?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.DetailedLine detailed_lines = 6;
@@ -12715,8 +12715,8 @@ export class SemanticSearchResult_Item extends Message<SemanticSearchResult_Item
     { no: 1, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "score", kind: "scalar", T: 2 /* ScalarType.FLOAT */ },
     { no: 3, name: "content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "range", kind: "message", T: SimpleRange },
-    { no: 5, name: "original_content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "range", kind: "message", T: SimpleRange, opt: true },
+    { no: 5, name: "original_content", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 6, name: "detailed_lines", kind: "message", T: DetailedLine, repeated: true },
   ]);
 
@@ -13166,9 +13166,9 @@ export class BuiltinToolCall extends Message<BuiltinToolCall> {
   tool = BuiltinTool.UNSPECIFIED;
 
   /**
-   * @generated from field: string tool_call_id = 22;
+   * @generated from field: optional string tool_call_id = 22;
    */
-  toolCallId = "";
+  toolCallId?: string;
 
   /**
    * @generated from oneof aiserver.v1.BuiltinToolCall.params
@@ -13316,7 +13316,7 @@ export class BuiltinToolCall extends Message<BuiltinToolCall> {
   static readonly typeName = "aiserver.v1.BuiltinToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "tool", kind: "enum", T: proto3.getEnumType(BuiltinTool) },
-    { no: 22, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 22, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "search_params", kind: "message", T: SearchParams, oneof: "params" },
     { no: 3, name: "read_chunk_params", kind: "message", T: ReadChunkParams, oneof: "params" },
     { no: 4, name: "gotodef_params", kind: "message", T: GotodefParams, oneof: "params" },
@@ -13477,9 +13477,9 @@ export class ReadChunkParams extends Message<ReadChunkParams> {
   startLineNumber = 0;
 
   /**
-   * @generated from field: int32 num_lines = 3;
+   * @generated from field: optional int32 num_lines = 3;
    */
-  numLines = 0;
+  numLines?: number;
 
   constructor(data?: PartialMessage<ReadChunkParams>) {
     super();
@@ -13491,7 +13491,7 @@ export class ReadChunkParams extends Message<ReadChunkParams> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "start_line_number", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "num_lines", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 3, name: "num_lines", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ReadChunkParams {
@@ -13521,9 +13521,9 @@ export class EditParams extends Message<EditParams> {
   relativeWorkspacePath = "";
 
   /**
-   * @generated from field: int32 line_number = 2;
+   * @generated from field: optional int32 line_number = 2;
    */
-  lineNumber = 0;
+  lineNumber?: number;
 
   /**
    * @generated from field: int32 replace_num_lines = 3;
@@ -13546,14 +13546,14 @@ export class EditParams extends Message<EditParams> {
   frontendEditType = EditParams_FrontendEditType.UNSPECIFIED;
 
   /**
-   * @generated from field: bool replace_whole_file = 7;
+   * @generated from field: optional bool replace_whole_file = 7;
    */
-  replaceWholeFile = false;
+  replaceWholeFile?: boolean;
 
   /**
-   * @generated from field: bool auto_fix_all_linter_errors_in_file = 8;
+   * @generated from field: optional bool auto_fix_all_linter_errors_in_file = 8;
    */
-  autoFixAllLinterErrorsInFile = false;
+  autoFixAllLinterErrorsInFile?: boolean;
 
   constructor(data?: PartialMessage<EditParams>) {
     super();
@@ -13564,13 +13564,13 @@ export class EditParams extends Message<EditParams> {
   static readonly typeName = "aiserver.v1.EditParams";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "line_number", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 2, name: "line_number", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 3, name: "replace_num_lines", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 4, name: "new_lines", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 5, name: "edit_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 6, name: "frontend_edit_type", kind: "enum", T: proto3.getEnumType(EditParams_FrontendEditType) },
-    { no: 7, name: "replace_whole_file", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 8, name: "auto_fix_all_linter_errors_in_file", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 7, name: "replace_whole_file", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 8, name: "auto_fix_all_linter_errors_in_file", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): EditParams {
@@ -13774,9 +13774,9 @@ export class RunTestParams extends Message<RunTestParams> {
   relativeWorkspacePath = "";
 
   /**
-   * @generated from field: string test_name = 2;
+   * @generated from field: optional string test_name = 2;
    */
-  testName = "";
+  testName?: string;
 
   constructor(data?: PartialMessage<RunTestParams>) {
     super();
@@ -13787,7 +13787,7 @@ export class RunTestParams extends Message<RunTestParams> {
   static readonly typeName = "aiserver.v1.RunTestParams";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "test_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "test_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RunTestParams {
@@ -13817,9 +13817,9 @@ export class DeleteTestParams extends Message<DeleteTestParams> {
   relativeWorkspacePath = "";
 
   /**
-   * @generated from field: string test_name = 2;
+   * @generated from field: optional string test_name = 2;
    */
-  testName = "";
+  testName?: string;
 
   constructor(data?: PartialMessage<DeleteTestParams>) {
     super();
@@ -13830,7 +13830,7 @@ export class DeleteTestParams extends Message<DeleteTestParams> {
   static readonly typeName = "aiserver.v1.DeleteTestParams";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "test_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "test_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DeleteTestParams {
@@ -13934,7 +13934,7 @@ export class GetSymbolsParams extends Message<GetSymbolsParams> {
   relativeWorkspacePath = "";
 
   /**
-   * @generated from field: aiserver.v1.GetSymbolsParams.LineRange line_range = 2;
+   * @generated from field: optional aiserver.v1.GetSymbolsParams.LineRange line_range = 2;
    */
   lineRange?: GetSymbolsParams_LineRange;
 
@@ -13952,7 +13952,7 @@ export class GetSymbolsParams extends Message<GetSymbolsParams> {
   static readonly typeName = "aiserver.v1.GetSymbolsParams";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "line_range", kind: "message", T: GetSymbolsParams_LineRange },
+    { no: 2, name: "line_range", kind: "message", T: GetSymbolsParams_LineRange, opt: true },
     { no: 3, name: "include_children", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
@@ -14026,14 +14026,14 @@ export class SemanticSearchParams extends Message<SemanticSearchParams> {
   query = "";
 
   /**
-   * @generated from field: string include_pattern = 2;
+   * @generated from field: optional string include_pattern = 2;
    */
-  includePattern = "";
+  includePattern?: string;
 
   /**
-   * @generated from field: string exclude_pattern = 3;
+   * @generated from field: optional string exclude_pattern = 3;
    */
-  excludePattern = "";
+  excludePattern?: string;
 
   /**
    * @generated from field: int32 top_k = 4;
@@ -14041,9 +14041,9 @@ export class SemanticSearchParams extends Message<SemanticSearchParams> {
   topK = 0;
 
   /**
-   * @generated from field: string index_id = 5;
+   * @generated from field: optional string index_id = 5;
    */
-  indexId = "";
+  indexId?: string;
 
   /**
    * @generated from field: bool grab_whole_file = 6;
@@ -14059,10 +14059,10 @@ export class SemanticSearchParams extends Message<SemanticSearchParams> {
   static readonly typeName = "aiserver.v1.SemanticSearchParams";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "query", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "include_pattern", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "exclude_pattern", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "include_pattern", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "exclude_pattern", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 4, name: "top_k", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 5, name: "index_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "index_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 6, name: "grab_whole_file", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
@@ -14216,14 +14216,14 @@ export class NewEditParams extends Message<NewEditParams> {
   relativeWorkspacePath = "";
 
   /**
-   * @generated from field: int32 start_line_number = 2;
+   * @generated from field: optional int32 start_line_number = 2;
    */
-  startLineNumber = 0;
+  startLineNumber?: number;
 
   /**
-   * @generated from field: int32 end_line_number = 3;
+   * @generated from field: optional int32 end_line_number = 3;
    */
-  endLineNumber = 0;
+  endLineNumber?: number;
 
   /**
    * @generated from field: string text = 4;
@@ -14249,8 +14249,8 @@ export class NewEditParams extends Message<NewEditParams> {
   static readonly typeName = "aiserver.v1.NewEditParams";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "start_line_number", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "end_line_number", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 2, name: "start_line_number", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 3, name: "end_line_number", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 4, name: "text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "edit_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 6, name: "first_edit", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
@@ -14458,19 +14458,19 @@ export class StreamedBackToolCall extends Message<StreamedBackToolCall> {
   rawArgs = "";
 
   /**
-   * @generated from field: aiserver.v1.ToolResultError error = 10;
+   * @generated from field: optional aiserver.v1.ToolResultError error = 10;
    */
   error?: ToolResultError;
 
   /**
-   * @generated from field: uint32 tool_index = 50;
+   * @generated from field: optional uint32 tool_index = 50;
    */
-  toolIndex = 0;
+  toolIndex?: number;
 
   /**
-   * @generated from field: string model_call_id = 51;
+   * @generated from field: optional string model_call_id = 51;
    */
-  modelCallId = "";
+  modelCallId?: string;
 
   /**
    * @generated from oneof aiserver.v1.StreamedBackToolCall.params
@@ -14765,9 +14765,9 @@ export class StreamedBackToolCall extends Message<StreamedBackToolCall> {
     { no: 2, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 8, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 9, name: "raw_args", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "error", kind: "message", T: ToolResultError },
-    { no: 50, name: "tool_index", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 51, name: "model_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 10, name: "error", kind: "message", T: ToolResultError, opt: true },
+    { no: 50, name: "tool_index", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
+    { no: 51, name: "model_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "read_semsearch_files_stream", kind: "message", T: ReadSemsearchFilesStream, oneof: "params" },
     { no: 5, name: "ripgrep_search_stream", kind: "message", T: RipgrepSearchStream, oneof: "params" },
     { no: 7, name: "read_file_stream", kind: "message", T: ReadFileStream, oneof: "params" },
@@ -15157,17 +15157,17 @@ export class RunTerminalCommandV2Stream extends Message<RunTerminalCommandV2Stre
   isBackground = false;
 
   /**
-   * @generated from field: aiserver.v1.ShellCommandParsingResult parsing_result = 7;
+   * @generated from field: optional aiserver.v1.ShellCommandParsingResult parsing_result = 7;
    */
   parsingResult?: ShellCommandParsingResult;
 
   /**
-   * @generated from field: int32 idle_timeout_seconds = 8;
+   * @generated from field: optional int32 idle_timeout_seconds = 8;
    */
-  idleTimeoutSeconds = 0;
+  idleTimeoutSeconds?: number;
 
   /**
-   * @generated from field: agent.v1.SandboxPolicy requested_sandbox_policy = 9;
+   * @generated from field: optional agent.v1.SandboxPolicy requested_sandbox_policy = 9;
    */
   requestedSandboxPolicy?: SandboxPolicy;
 
@@ -15181,9 +15181,9 @@ export class RunTerminalCommandV2Stream extends Message<RunTerminalCommandV2Stre
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "command", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "is_background", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 7, name: "parsing_result", kind: "message", T: ShellCommandParsingResult },
-    { no: 8, name: "idle_timeout_seconds", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 9, name: "requested_sandbox_policy", kind: "message", T: SandboxPolicy },
+    { no: 7, name: "parsing_result", kind: "message", T: ShellCommandParsingResult, opt: true },
+    { no: 8, name: "idle_timeout_seconds", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 9, name: "requested_sandbox_policy", kind: "message", T: SandboxPolicy, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RunTerminalCommandV2Stream {
@@ -15790,7 +15790,7 @@ export class ListDirV2Stream extends Message<ListDirV2Stream> {
  */
 export class ReadFileV2Stream extends Message<ReadFileV2Stream> {
   /**
-   * @generated from field: aiserver.v1.ReadFileV2Params params = 1;
+   * @generated from field: optional aiserver.v1.ReadFileV2Params params = 1;
    */
   params?: ReadFileV2Params;
 
@@ -15802,7 +15802,7 @@ export class ReadFileV2Stream extends Message<ReadFileV2Stream> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ReadFileV2Stream";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "params", kind: "message", T: ReadFileV2Params },
+    { no: 1, name: "params", kind: "message", T: ReadFileV2Params, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ReadFileV2Stream {
@@ -16112,7 +16112,7 @@ export class CallMcpToolStream extends Message<CallMcpToolStream> {
  */
 export class AskQuestionStream extends Message<AskQuestionStream> {
   /**
-   * @generated from field: aiserver.v1.AskQuestionParams params = 1;
+   * @generated from field: optional aiserver.v1.AskQuestionParams params = 1;
    */
   params?: AskQuestionParams;
 
@@ -16124,7 +16124,7 @@ export class AskQuestionStream extends Message<AskQuestionStream> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.AskQuestionStream";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "params", kind: "message", T: AskQuestionParams },
+    { no: 1, name: "params", kind: "message", T: AskQuestionParams, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AskQuestionStream {
@@ -16149,7 +16149,7 @@ export class AskQuestionStream extends Message<AskQuestionStream> {
  */
 export class SwitchModeStream extends Message<SwitchModeStream> {
   /**
-   * @generated from field: aiserver.v1.SwitchModeParams params = 1;
+   * @generated from field: optional aiserver.v1.SwitchModeParams params = 1;
    */
   params?: SwitchModeParams;
 
@@ -16161,7 +16161,7 @@ export class SwitchModeStream extends Message<SwitchModeStream> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SwitchModeStream";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "params", kind: "message", T: SwitchModeParams },
+    { no: 1, name: "params", kind: "message", T: SwitchModeParams, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SwitchModeStream {
@@ -16186,7 +16186,7 @@ export class SwitchModeStream extends Message<SwitchModeStream> {
  */
 export class ComputerUseStream extends Message<ComputerUseStream> {
   /**
-   * @generated from field: aiserver.v1.ComputerUseParams params = 1;
+   * @generated from field: optional aiserver.v1.ComputerUseParams params = 1;
    */
   params?: ComputerUseParams;
 
@@ -16198,7 +16198,7 @@ export class ComputerUseStream extends Message<ComputerUseStream> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ComputerUseStream";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "params", kind: "message", T: ComputerUseParams },
+    { no: 1, name: "params", kind: "message", T: ComputerUseParams, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ComputerUseStream {
@@ -16223,7 +16223,7 @@ export class ComputerUseStream extends Message<ComputerUseStream> {
  */
 export class WriteShellStdinStream extends Message<WriteShellStdinStream> {
   /**
-   * @generated from field: agent.v1.WriteShellStdinArgs params = 1;
+   * @generated from field: optional agent.v1.WriteShellStdinArgs params = 1;
    */
   params?: WriteShellStdinArgs;
 
@@ -16235,7 +16235,7 @@ export class WriteShellStdinStream extends Message<WriteShellStdinStream> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.WriteShellStdinStream";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "params", kind: "message", T: WriteShellStdinArgs },
+    { no: 1, name: "params", kind: "message", T: WriteShellStdinArgs, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): WriteShellStdinStream {
@@ -16260,7 +16260,7 @@ export class WriteShellStdinStream extends Message<WriteShellStdinStream> {
  */
 export class WebFetchStream extends Message<WebFetchStream> {
   /**
-   * @generated from field: aiserver.v1.WebFetchParams params = 1;
+   * @generated from field: optional aiserver.v1.WebFetchParams params = 1;
    */
   params?: WebFetchParams;
 
@@ -16272,7 +16272,7 @@ export class WebFetchStream extends Message<WebFetchStream> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.WebFetchStream";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "params", kind: "message", T: WebFetchParams },
+    { no: 1, name: "params", kind: "message", T: WebFetchParams, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): WebFetchStream {
@@ -16297,7 +16297,7 @@ export class WebFetchStream extends Message<WebFetchStream> {
  */
 export class ReportBugfixResultsStream extends Message<ReportBugfixResultsStream> {
   /**
-   * @generated from field: aiserver.v1.ReportBugfixResultsParams params = 1;
+   * @generated from field: optional aiserver.v1.ReportBugfixResultsParams params = 1;
    */
   params?: ReportBugfixResultsParams;
 
@@ -16309,7 +16309,7 @@ export class ReportBugfixResultsStream extends Message<ReportBugfixResultsStream
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ReportBugfixResultsStream";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "params", kind: "message", T: ReportBugfixResultsParams },
+    { no: 1, name: "params", kind: "message", T: ReportBugfixResultsParams, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ReportBugfixResultsStream {
@@ -16416,19 +16416,19 @@ export class StreamedBackToolCallV2 extends Message<StreamedBackToolCallV2> {
   rawArgs = "";
 
   /**
-   * @generated from field: aiserver.v1.ToolResultError error = 11;
+   * @generated from field: optional aiserver.v1.ToolResultError error = 11;
    */
   error?: ToolResultError;
 
   /**
-   * @generated from field: uint32 tool_index = 50;
+   * @generated from field: optional uint32 tool_index = 50;
    */
-  toolIndex = 0;
+  toolIndex?: number;
 
   /**
-   * @generated from field: string model_call_id = 51;
+   * @generated from field: optional string model_call_id = 51;
    */
-  modelCallId = "";
+  modelCallId?: string;
 
   /**
    * @generated from oneof aiserver.v1.StreamedBackToolCallV2.params
@@ -16741,9 +16741,9 @@ export class StreamedBackToolCallV2 extends Message<StreamedBackToolCallV2> {
     { no: 2, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 8, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 10, name: "raw_args", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 11, name: "error", kind: "message", T: ToolResultError },
-    { no: 50, name: "tool_index", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 51, name: "model_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 11, name: "error", kind: "message", T: ToolResultError, opt: true },
+    { no: 50, name: "tool_index", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
+    { no: 51, name: "model_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "read_semsearch_files_params", kind: "message", T: ReadSemsearchFilesParams, oneof: "params" },
     { no: 5, name: "ripgrep_search_params", kind: "message", T: RipgrepSearchParams, oneof: "params" },
     { no: 9, name: "read_file_params", kind: "message", T: ReadFileParams, oneof: "params" },
@@ -16832,14 +16832,14 @@ export class StreamedBackPartialToolCall extends Message<StreamedBackPartialTool
   name = "";
 
   /**
-   * @generated from field: uint32 tool_index = 4;
+   * @generated from field: optional uint32 tool_index = 4;
    */
-  toolIndex = 0;
+  toolIndex?: number;
 
   /**
-   * @generated from field: string model_call_id = 5;
+   * @generated from field: optional string model_call_id = 5;
    */
-  modelCallId = "";
+  modelCallId?: string;
 
   constructor(data?: PartialMessage<StreamedBackPartialToolCall>) {
     super();
@@ -16852,8 +16852,8 @@ export class StreamedBackPartialToolCall extends Message<StreamedBackPartialTool
     { no: 1, name: "tool", kind: "enum", T: proto3.getEnumType(ClientSideToolV2) },
     { no: 2, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "tool_index", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 5, name: "model_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "tool_index", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
+    { no: 5, name: "model_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StreamedBackPartialToolCall {

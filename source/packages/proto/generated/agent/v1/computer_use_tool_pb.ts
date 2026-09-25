@@ -211,7 +211,7 @@ export class ComputerUseAction extends Message<ComputerUseAction> {
  */
 export class MouseMoveAction extends Message<MouseMoveAction> {
   /**
-   * @generated from field: agent.v1.Coordinate coordinate = 1;
+   * @generated from field: optional agent.v1.Coordinate coordinate = 1;
    */
   coordinate?: Coordinate;
 
@@ -223,7 +223,7 @@ export class MouseMoveAction extends Message<MouseMoveAction> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.MouseMoveAction";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "coordinate", kind: "message", T: Coordinate },
+    { no: 1, name: "coordinate", kind: "message", T: Coordinate, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): MouseMoveAction {
@@ -248,7 +248,7 @@ export class MouseMoveAction extends Message<MouseMoveAction> {
  */
 export class ClickAction extends Message<ClickAction> {
   /**
-   * @generated from field: agent.v1.Coordinate coordinate = 1;
+   * @generated from field: optional agent.v1.Coordinate coordinate = 1;
    */
   coordinate?: Coordinate;
 
@@ -263,9 +263,9 @@ export class ClickAction extends Message<ClickAction> {
   count = 0;
 
   /**
-   * @generated from field: string modifier_keys = 4;
+   * @generated from field: optional string modifier_keys = 4;
    */
-  modifierKeys = "";
+  modifierKeys?: string;
 
   constructor(data?: PartialMessage<ClickAction>) {
     super();
@@ -275,10 +275,10 @@ export class ClickAction extends Message<ClickAction> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.ClickAction";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "coordinate", kind: "message", T: Coordinate },
+    { no: 1, name: "coordinate", kind: "message", T: Coordinate, opt: true },
     { no: 2, name: "button", kind: "enum", T: proto3.getEnumType(MouseButton) },
     { no: 3, name: "count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 4, name: "modifier_keys", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "modifier_keys", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ClickAction {
@@ -387,9 +387,9 @@ export class DragAction extends Message<DragAction> {
   button = MouseButton.UNSPECIFIED;
 
   /**
-   * @generated from field: string modifier_keys = 3;
+   * @generated from field: optional string modifier_keys = 3;
    */
-  modifierKeys = "";
+  modifierKeys?: string;
 
   constructor(data?: PartialMessage<DragAction>) {
     super();
@@ -401,7 +401,7 @@ export class DragAction extends Message<DragAction> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "path", kind: "message", T: Coordinate, repeated: true },
     { no: 2, name: "button", kind: "enum", T: proto3.getEnumType(MouseButton) },
-    { no: 3, name: "modifier_keys", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "modifier_keys", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DragAction {
@@ -426,7 +426,7 @@ export class DragAction extends Message<DragAction> {
  */
 export class ScrollAction extends Message<ScrollAction> {
   /**
-   * @generated from field: agent.v1.Coordinate coordinate = 1;
+   * @generated from field: optional agent.v1.Coordinate coordinate = 1;
    */
   coordinate?: Coordinate;
 
@@ -441,9 +441,9 @@ export class ScrollAction extends Message<ScrollAction> {
   amount = 0;
 
   /**
-   * @generated from field: string modifier_keys = 4;
+   * @generated from field: optional string modifier_keys = 4;
    */
-  modifierKeys = "";
+  modifierKeys?: string;
 
   constructor(data?: PartialMessage<ScrollAction>) {
     super();
@@ -453,10 +453,10 @@ export class ScrollAction extends Message<ScrollAction> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.ScrollAction";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "coordinate", kind: "message", T: Coordinate },
+    { no: 1, name: "coordinate", kind: "message", T: Coordinate, opt: true },
     { no: 2, name: "direction", kind: "enum", T: proto3.getEnumType(ScrollDirection) },
     { no: 3, name: "amount", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 4, name: "modifier_keys", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "modifier_keys", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ScrollAction {
@@ -523,9 +523,9 @@ export class KeyAction extends Message<KeyAction> {
   key = "";
 
   /**
-   * @generated from field: int32 hold_duration_ms = 2;
+   * @generated from field: optional int32 hold_duration_ms = 2;
    */
-  holdDurationMs = 0;
+  holdDurationMs?: number;
 
   constructor(data?: PartialMessage<KeyAction>) {
     super();
@@ -536,7 +536,7 @@ export class KeyAction extends Message<KeyAction> {
   static readonly typeName = "agent.v1.KeyAction";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "hold_duration_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 2, name: "hold_duration_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): KeyAction {
@@ -713,22 +713,22 @@ export class ComputerUseSuccess extends Message<ComputerUseSuccess> {
   durationMs = 0;
 
   /**
-   * @generated from field: string screenshot = 3;
+   * @generated from field: optional string screenshot = 3;
    */
-  screenshot = "";
+  screenshot?: string;
 
   /**
-   * @generated from field: string log = 4;
+   * @generated from field: optional string log = 4;
    */
-  log = "";
+  log?: string;
 
   /**
-   * @generated from field: string screenshot_path = 5;
+   * @generated from field: optional string screenshot_path = 5;
    */
-  screenshotPath = "";
+  screenshotPath?: string;
 
   /**
-   * @generated from field: agent.v1.Coordinate cursor_position = 6;
+   * @generated from field: optional agent.v1.Coordinate cursor_position = 6;
    */
   cursorPosition?: Coordinate;
 
@@ -742,10 +742,10 @@ export class ComputerUseSuccess extends Message<ComputerUseSuccess> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "action_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 2, name: "duration_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "screenshot", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "log", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "screenshot_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "cursor_position", kind: "message", T: Coordinate },
+    { no: 3, name: "screenshot", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "log", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "screenshot_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "cursor_position", kind: "message", T: Coordinate, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ComputerUseSuccess {
@@ -785,19 +785,19 @@ export class ComputerUseError extends Message<ComputerUseError> {
   durationMs = 0;
 
   /**
-   * @generated from field: string log = 4;
+   * @generated from field: optional string log = 4;
    */
-  log = "";
+  log?: string;
 
   /**
-   * @generated from field: string screenshot = 5;
+   * @generated from field: optional string screenshot = 5;
    */
-  screenshot = "";
+  screenshot?: string;
 
   /**
-   * @generated from field: string screenshot_path = 6;
+   * @generated from field: optional string screenshot_path = 6;
    */
-  screenshotPath = "";
+  screenshotPath?: string;
 
   constructor(data?: PartialMessage<ComputerUseError>) {
     super();
@@ -810,9 +810,9 @@ export class ComputerUseError extends Message<ComputerUseError> {
     { no: 1, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "action_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 3, name: "duration_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 4, name: "log", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "screenshot", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "screenshot_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "log", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "screenshot", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "screenshot_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ComputerUseError {
@@ -847,14 +847,14 @@ export class ComputerUseArgs extends Message<ComputerUseArgs> {
   actions: ComputerUseAction[] = [];
 
   /**
-   * @generated from field: string description = 3;
+   * @generated from field: optional string description = 3;
    */
-  description = "";
+  description?: string;
 
   /**
-   * @generated from field: bool bind_unmapped_characters = 4;
+   * @generated from field: optional bool bind_unmapped_characters = 4;
    */
-  bindUnmappedCharacters = false;
+  bindUnmappedCharacters?: boolean;
 
   constructor(data?: PartialMessage<ComputerUseArgs>) {
     super();
@@ -866,8 +866,8 @@ export class ComputerUseArgs extends Message<ComputerUseArgs> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "actions", kind: "message", T: ComputerUseAction, repeated: true },
-    { no: 3, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "bind_unmapped_characters", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 3, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "bind_unmapped_characters", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ComputerUseArgs {
@@ -942,12 +942,12 @@ export class ComputerUseResult extends Message<ComputerUseResult> {
  */
 export class ComputerUseToolCall extends Message<ComputerUseToolCall> {
   /**
-   * @generated from field: agent.v1.ComputerUseArgs args = 1;
+   * @generated from field: optional agent.v1.ComputerUseArgs args = 1;
    */
   args?: ComputerUseArgs;
 
   /**
-   * @generated from field: agent.v1.ComputerUseResult result = 2;
+   * @generated from field: optional agent.v1.ComputerUseResult result = 2;
    */
   result?: ComputerUseResult;
 
@@ -959,8 +959,8 @@ export class ComputerUseToolCall extends Message<ComputerUseToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.ComputerUseToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: ComputerUseArgs },
-    { no: 2, name: "result", kind: "message", T: ComputerUseResult },
+    { no: 1, name: "args", kind: "message", T: ComputerUseArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: ComputerUseResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ComputerUseToolCall {

@@ -16,12 +16,12 @@ import { Message, proto3 } from "@bufbuild/protobuf";
  */
 export class BlameByFilePathToolCall extends Message<BlameByFilePathToolCall> {
   /**
-   * @generated from field: agent.v1.BlameByFilePathArgs args = 1;
+   * @generated from field: optional agent.v1.BlameByFilePathArgs args = 1;
    */
   args?: BlameByFilePathArgs;
 
   /**
-   * @generated from field: agent.v1.BlameByFilePathResult result = 2;
+   * @generated from field: optional agent.v1.BlameByFilePathResult result = 2;
    */
   result?: BlameByFilePathResult;
 
@@ -33,8 +33,8 @@ export class BlameByFilePathToolCall extends Message<BlameByFilePathToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.BlameByFilePathToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: BlameByFilePathArgs },
-    { no: 2, name: "result", kind: "message", T: BlameByFilePathResult },
+    { no: 1, name: "args", kind: "message", T: BlameByFilePathArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: BlameByFilePathResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BlameByFilePathToolCall {
@@ -64,14 +64,14 @@ export class BlameByFilePathArgs extends Message<BlameByFilePathArgs> {
   filePath = "";
 
   /**
-   * @generated from field: int32 start_line = 2;
+   * @generated from field: optional int32 start_line = 2;
    */
-  startLine = 0;
+  startLine?: number;
 
   /**
-   * @generated from field: int32 end_line = 3;
+   * @generated from field: optional int32 end_line = 3;
    */
-  endLine = 0;
+  endLine?: number;
 
   constructor(data?: PartialMessage<BlameByFilePathArgs>) {
     super();
@@ -82,8 +82,8 @@ export class BlameByFilePathArgs extends Message<BlameByFilePathArgs> {
   static readonly typeName = "agent.v1.BlameByFilePathArgs";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "file_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "start_line", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "end_line", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 2, name: "start_line", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 3, name: "end_line", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BlameByFilePathArgs {

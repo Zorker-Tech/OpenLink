@@ -1,4 +1,4 @@
-// agent.v1 — agent/v1/cursor_packages messages, enums and services.
+// agent.v1 — agent/v1/packages messages, enums and services.
 //
 // Generated from this repository's schema (source/packages/proto/schema) by
 // `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
@@ -12,7 +12,7 @@ message CursorPackage {
   string description = 2 [json_name = "description"];
   string folder_path = 3 [json_name = "folderPath"];
   bool enabled = 4 [json_name = "enabled"];
-  string parse_error = 5 [json_name = "parseError"];
+  optional string parse_error = 5 [json_name = "parseError"];
   repeated .agent.v1.CursorPackagePrompt prompts = 6 [json_name = "prompts"];
   string readme_file_path = 7 [json_name = "readmeFilePath"];
   .agent.v1.PackageType package_type = 8 [json_name = "packageType"];

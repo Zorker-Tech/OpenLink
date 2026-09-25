@@ -16,12 +16,12 @@ import { Message, proto3 } from "@bufbuild/protobuf";
  */
 export class GetMcpToolsToolCall extends Message<GetMcpToolsToolCall> {
   /**
-   * @generated from field: agent.v1.GetMcpToolsArgs args = 1;
+   * @generated from field: optional agent.v1.GetMcpToolsArgs args = 1;
    */
   args?: GetMcpToolsArgs;
 
   /**
-   * @generated from field: agent.v1.GetMcpToolsAgentResult result = 2;
+   * @generated from field: optional agent.v1.GetMcpToolsAgentResult result = 2;
    */
   result?: GetMcpToolsAgentResult;
 
@@ -33,8 +33,8 @@ export class GetMcpToolsToolCall extends Message<GetMcpToolsToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.GetMcpToolsToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: GetMcpToolsArgs },
-    { no: 2, name: "result", kind: "message", T: GetMcpToolsAgentResult },
+    { no: 1, name: "args", kind: "message", T: GetMcpToolsArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: GetMcpToolsAgentResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetMcpToolsToolCall {
@@ -59,19 +59,19 @@ export class GetMcpToolsToolCall extends Message<GetMcpToolsToolCall> {
  */
 export class GetMcpToolsArgs extends Message<GetMcpToolsArgs> {
   /**
-   * @generated from field: string server = 1;
+   * @generated from field: optional string server = 1;
    */
-  server = "";
+  server?: string;
 
   /**
-   * @generated from field: string tool_name = 2;
+   * @generated from field: optional string tool_name = 2;
    */
-  toolName = "";
+  toolName?: string;
 
   /**
-   * @generated from field: string pattern = 3;
+   * @generated from field: optional string pattern = 3;
    */
-  pattern = "";
+  pattern?: string;
 
   /**
    * @generated from field: string tool_call_id = 4;
@@ -86,9 +86,9 @@ export class GetMcpToolsArgs extends Message<GetMcpToolsArgs> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.GetMcpToolsArgs";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "server", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "tool_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "pattern", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "server", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "tool_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "pattern", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 4, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
@@ -169,9 +169,9 @@ export class GetMcpToolsSuccess extends Message<GetMcpToolsSuccess> {
   content = "";
 
   /**
-   * @generated from field: string output_file_path = 2;
+   * @generated from field: optional string output_file_path = 2;
    */
-  outputFilePath = "";
+  outputFilePath?: string;
 
   constructor(data?: PartialMessage<GetMcpToolsSuccess>) {
     super();
@@ -182,7 +182,7 @@ export class GetMcpToolsSuccess extends Message<GetMcpToolsSuccess> {
   static readonly typeName = "agent.v1.GetMcpToolsSuccess";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "output_file_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "output_file_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetMcpToolsSuccess {

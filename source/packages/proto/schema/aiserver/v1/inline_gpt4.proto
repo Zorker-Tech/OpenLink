@@ -11,16 +11,16 @@ import "aiserver/v1/repository.proto";
 import "aiserver/v1/utils.proto";
 
 message InlineGPT4PromptProtoV1 {
-  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  optional .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
 }
 
 message StreamInlineLongCompletionRequest {
-  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  optional .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
   repeated .aiserver.v1.RepositoryInfo repositories = 6 [json_name = "repositories"];
   repeated .aiserver.v1.StreamInlineLongCompletionRequest.ContextBlock context_blocks = 7 [json_name = "contextBlocks"];
-  .aiserver.v1.ExplicitContext explicit_context = 13 [json_name = "explicitContext"];
-  .aiserver.v1.ModelDetails model_details = 14 [json_name = "modelDetails"];
-  .aiserver.v1.LinterErrors linter_errors = 15 [json_name = "linterErrors"];
+  optional .aiserver.v1.ExplicitContext explicit_context = 13 [json_name = "explicitContext"];
+  optional .aiserver.v1.ModelDetails model_details = 14 [json_name = "modelDetails"];
+  optional .aiserver.v1.LinterErrors linter_errors = 15 [json_name = "linterErrors"];
   message ContextBlock {
     .aiserver.v1.StreamInlineLongCompletionRequest.ContextBlock.ContextType context_type = 1 [json_name = "contextType"];
     repeated .aiserver.v1.CodeBlock blocks = 2 [json_name = "blocks"];

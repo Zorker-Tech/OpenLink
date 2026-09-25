@@ -12,7 +12,7 @@ import { GlobToolArgs, GlobToolCall, GlobToolError, GlobToolResult, GlobToolSucc
 function toRedactedGlobToolArgs(msg, privacyMode) {
   return {
     _privacyMode: privacyMode,
-    targetDirectory: createRedactedString(msg.targetDirectory, DataClassification.PATH, "target_directory", privacyMode),
+    targetDirectory: msg.targetDirectory !== void 0 ? createRedactedString(msg.targetDirectory, DataClassification.PATH, "target_directory", privacyMode) : void 0,
     globPattern: createRedactedString(msg.globPattern, DataClassification.PATH, "glob_pattern", privacyMode),
   };
 }
@@ -21,7 +21,7 @@ function fromRedactedGlobToolArgs(msg, purpose, opts) {
   const redactUnallowedFieldsInsteadOfThrowing = opts?.redactUnallowedFieldsInsteadOfThrowing ?? false;
   const enforcing = opts?.enforcing;
   return new GlobToolArgs({
-    targetDirectory: msg.targetDirectory.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    targetDirectory: msg.targetDirectory?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     globPattern: msg.globPattern.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
   });
 }

@@ -102,9 +102,9 @@ export class DocumentationMetadata extends Message<DocumentationMetadata> {
   public = false;
 
   /**
-   * @generated from field: int32 team_id = 6;
+   * @generated from field: optional int32 team_id = 6;
    */
-  teamId = 0;
+  teamId?: number;
 
   constructor(data?: PartialMessage<DocumentationMetadata>) {
     super();
@@ -119,7 +119,7 @@ export class DocumentationMetadata extends Message<DocumentationMetadata> {
     { no: 3, name: "is_different_prefix_origin", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 4, name: "true_prefix_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "public", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 6, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 6, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DocumentationMetadata {

@@ -362,9 +362,9 @@ proto3.util.setEnumType(WorkspaceGitSetupMode, "anyrun.v1.WorkspaceGitSetupMode"
  */
 export class EnvironmentBuildBootInfo extends Message<EnvironmentBuildBootInfo> {
   /**
-   * @generated from field: string build_id = 1;
+   * @generated from field: optional string build_id = 1;
    */
-  buildId = "";
+  buildId?: string;
 
   /**
    * @generated from field: string snapshot_id = 2;
@@ -404,7 +404,7 @@ export class EnvironmentBuildBootInfo extends Message<EnvironmentBuildBootInfo> 
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "anyrun.v1.EnvironmentBuildBootInfo";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "build_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "build_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "snapshot_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "workspace_git_setup_mode", kind: "enum", T: proto3.getEnumType(WorkspaceGitSetupMode) },
     { no: 4, name: "warm_fork_mode", kind: "enum", T: proto3.getEnumType(WarmForkMode) },
@@ -562,7 +562,7 @@ export class AnygressLocalPodDenyRules extends Message<AnygressLocalPodDenyRules
   podId = "";
 
   /**
-   * @generated from field: anyrun.v1.AnygressPerPodDenyRules deny_rules = 3;
+   * @generated from field: optional anyrun.v1.AnygressPerPodDenyRules deny_rules = 3;
    */
   denyRules?: AnygressPerPodDenyRules;
 
@@ -576,7 +576,7 @@ export class AnygressLocalPodDenyRules extends Message<AnygressLocalPodDenyRules
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "version", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
     { no: 2, name: "pod_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "deny_rules", kind: "message", T: AnygressPerPodDenyRules },
+    { no: 3, name: "deny_rules", kind: "message", T: AnygressPerPodDenyRules, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AnygressLocalPodDenyRules {
@@ -850,9 +850,9 @@ export class DevContainerConfig extends Message<DevContainerConfig> {
   ports: PortDefinition[] = [];
 
   /**
-   * @generated from field: string user = 12;
+   * @generated from field: optional string user = 12;
    */
-  user = "";
+  user?: string;
 
   /**
    * @generated from field: repeated anyrun.v1.DevContainerEnv env = 13;
@@ -865,34 +865,34 @@ export class DevContainerConfig extends Message<DevContainerConfig> {
   shell = "";
 
   /**
-   * @generated from field: bool privileged = 17;
+   * @generated from field: optional bool privileged = 17;
    */
-  privileged = false;
+  privileged?: boolean;
 
   /**
-   * @generated from field: bytes prepare_commands_tag = 19;
+   * @generated from field: optional bytes prepare_commands_tag = 19;
    */
-  prepareCommandsTag = new Uint8Array(0);
+  prepareCommandsTag?: Uint8Array;
 
   /**
-   * @generated from field: bytes install_commands_tag = 20;
+   * @generated from field: optional bytes install_commands_tag = 20;
    */
-  installCommandsTag = new Uint8Array(0);
+  installCommandsTag?: Uint8Array;
 
   /**
-   * @generated from field: bytes start_commands_tag = 21;
+   * @generated from field: optional bytes start_commands_tag = 21;
    */
-  startCommandsTag = new Uint8Array(0);
+  startCommandsTag?: Uint8Array;
 
   /**
-   * @generated from field: uint64 checkpoint_threshold_ms = 23;
+   * @generated from field: optional uint64 checkpoint_threshold_ms = 23;
    */
-  checkpointThresholdMs = protoInt64.zero;
+  checkpointThresholdMs?: bigint;
 
   /**
-   * @generated from field: bytes verify_commands_tag = 24;
+   * @generated from field: optional bytes verify_commands_tag = 24;
    */
-  verifyCommandsTag = new Uint8Array(0);
+  verifyCommandsTag?: Uint8Array;
 
   /**
    * @generated from field: repeated anyrun.v1.DevContainerExecCommand verify_commands = 25;
@@ -900,34 +900,34 @@ export class DevContainerConfig extends Message<DevContainerConfig> {
   verifyCommands: DevContainerExecCommand[] = [];
 
   /**
-   * @generated from field: anyrun.v1.DefaultPortConfig default_port_config = 26;
+   * @generated from field: optional anyrun.v1.DefaultPortConfig default_port_config = 26;
    */
   defaultPortConfig?: DefaultPortConfig;
 
   /**
-   * @generated from field: bool build_container = 29;
+   * @generated from field: optional bool build_container = 29;
    */
-  buildContainer = false;
+  buildContainer?: boolean;
 
   /**
-   * @generated from field: bool enable_cgroup_subtree_control = 30;
+   * @generated from field: optional bool enable_cgroup_subtree_control = 30;
    */
-  enableCgroupSubtreeControl = false;
+  enableCgroupSubtreeControl?: boolean;
 
   /**
-   * @generated from field: bool enable_checkpoint_scratch_drive = 34;
+   * @generated from field: optional bool enable_checkpoint_scratch_drive = 34;
    */
-  enableCheckpointScratchDrive = false;
+  enableCheckpointScratchDrive?: boolean;
 
   /**
-   * @generated from field: bool blob_client_resilience_enabled = 35;
+   * @generated from field: optional bool blob_client_resilience_enabled = 35;
    */
-  blobClientResilienceEnabled = false;
+  blobClientResilienceEnabled?: boolean;
 
   /**
-   * @generated from field: bool skip_workspace_source_checkout = 36;
+   * @generated from field: optional bool skip_workspace_source_checkout = 36;
    */
-  skipWorkspaceSourceCheckout = false;
+  skipWorkspaceSourceCheckout?: boolean;
 
   /**
    * @generated from field: anyrun.v1.ContainerRuntime container_runtime = 37;
@@ -1062,22 +1062,22 @@ export class DevContainerConfig extends Message<DevContainerConfig> {
     { no: 9, name: "install_commands", kind: "message", T: DevContainerExecCommand, repeated: true },
     { no: 10, name: "start_commands", kind: "message", T: DevContainerExecCommand, repeated: true },
     { no: 11, name: "ports", kind: "message", T: PortDefinition, repeated: true },
-    { no: 12, name: "user", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 12, name: "user", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 13, name: "env", kind: "message", T: DevContainerEnv, repeated: true },
     { no: 14, name: "shell", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 17, name: "privileged", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 19, name: "prepare_commands_tag", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
-    { no: 20, name: "install_commands_tag", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
-    { no: 21, name: "start_commands_tag", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
-    { no: 23, name: "checkpoint_threshold_ms", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
-    { no: 24, name: "verify_commands_tag", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
+    { no: 17, name: "privileged", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 19, name: "prepare_commands_tag", kind: "scalar", T: 12 /* ScalarType.BYTES */, opt: true },
+    { no: 20, name: "install_commands_tag", kind: "scalar", T: 12 /* ScalarType.BYTES */, opt: true },
+    { no: 21, name: "start_commands_tag", kind: "scalar", T: 12 /* ScalarType.BYTES */, opt: true },
+    { no: 23, name: "checkpoint_threshold_ms", kind: "scalar", T: 4 /* ScalarType.UINT64 */, opt: true },
+    { no: 24, name: "verify_commands_tag", kind: "scalar", T: 12 /* ScalarType.BYTES */, opt: true },
     { no: 25, name: "verify_commands", kind: "message", T: DevContainerExecCommand, repeated: true },
-    { no: 26, name: "default_port_config", kind: "message", T: DefaultPortConfig },
-    { no: 29, name: "build_container", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 30, name: "enable_cgroup_subtree_control", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 34, name: "enable_checkpoint_scratch_drive", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 35, name: "blob_client_resilience_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 36, name: "skip_workspace_source_checkout", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 26, name: "default_port_config", kind: "message", T: DefaultPortConfig, opt: true },
+    { no: 29, name: "build_container", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 30, name: "enable_cgroup_subtree_control", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 34, name: "enable_checkpoint_scratch_drive", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 35, name: "blob_client_resilience_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 36, name: "skip_workspace_source_checkout", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 37, name: "container_runtime", kind: "enum", T: proto3.getEnumType(ContainerRuntime) },
     { no: 39, name: "firecracker_version", kind: "enum", T: proto3.getEnumType(FirecrackerVersion) },
     { no: 4, name: "registry_reference", kind: "scalar", T: 9 /* ScalarType.STRING */, oneof: "image" },
@@ -1145,9 +1145,9 @@ export class DevContainerEnv extends Message<DevContainerEnv> {
   name = "";
 
   /**
-   * @generated from field: string value_hash = 4;
+   * @generated from field: optional string value_hash = 4;
    */
-  valueHash = "";
+  valueHash?: string;
 
   /**
    * @generated from oneof anyrun.v1.DevContainerEnv.value
@@ -1175,7 +1175,7 @@ export class DevContainerEnv extends Message<DevContainerEnv> {
   static readonly typeName = "anyrun.v1.DevContainerEnv";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "value_hash", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "value_hash", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "inline", kind: "scalar", T: 9 /* ScalarType.STRING */, oneof: "value" },
     { no: 3, name: "encrypted", kind: "scalar", T: 9 /* ScalarType.STRING */, oneof: "value" },
   ]);
@@ -1207,9 +1207,9 @@ export class DevContainerExecCommand extends Message<DevContainerExecCommand> {
   name = "";
 
   /**
-   * @generated from field: string user = 2;
+   * @generated from field: optional string user = 2;
    */
-  user = "";
+  user?: string;
 
   /**
    * @generated from field: string command = 3;
@@ -1222,9 +1222,9 @@ export class DevContainerExecCommand extends Message<DevContainerExecCommand> {
   isSystem = false;
 
   /**
-   * @generated from field: string cache_key = 5;
+   * @generated from field: optional string cache_key = 5;
    */
-  cacheKey = "";
+  cacheKey?: string;
 
   /**
    * @generated from field: bool failure_tolerant = 6;
@@ -1242,7 +1242,7 @@ export class DevContainerExecCommand extends Message<DevContainerExecCommand> {
   dependsOnGitCheckout = false;
 
   /**
-   * @generated from field: anyrun.v1.ProcessSupervision supervision = 9;
+   * @generated from field: optional anyrun.v1.ProcessSupervision supervision = 9;
    */
   supervision?: ProcessSupervision;
 
@@ -1260,14 +1260,14 @@ export class DevContainerExecCommand extends Message<DevContainerExecCommand> {
   static readonly typeName = "anyrun.v1.DevContainerExecCommand";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "user", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "user", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "command", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "is_system", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "cache_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "cache_key", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 6, name: "failure_tolerant", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 7, name: "depends_on", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 8, name: "depends_on_git_checkout", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 9, name: "supervision", kind: "message", T: ProcessSupervision },
+    { no: 9, name: "supervision", kind: "message", T: ProcessSupervision, opt: true },
     { no: 10, name: "ignore_failure_for_install_health", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
@@ -1298,9 +1298,9 @@ export class DevContainerSpec extends Message<DevContainerSpec> {
   name = "";
 
   /**
-   * @generated from field: uint64 deletion_timestamp = 6;
+   * @generated from field: optional uint64 deletion_timestamp = 6;
    */
-  deletionTimestamp = protoInt64.zero;
+  deletionTimestamp?: bigint;
 
   /**
    * @generated from field: map<string, string> pod_labels = 7;
@@ -1313,37 +1313,37 @@ export class DevContainerSpec extends Message<DevContainerSpec> {
   nodeLabels: { [key: string]: string } = {};
 
   /**
-   * @generated from field: anyrun.v1.ResourceRequests requests = 9;
+   * @generated from field: optional anyrun.v1.ResourceRequests requests = 9;
    */
   requests?: ResourceRequests;
 
   /**
-   * @generated from field: anyrun.v1.ResourceLimits limits = 10;
+   * @generated from field: optional anyrun.v1.ResourceLimits limits = 10;
    */
   limits?: ResourceLimits;
 
   /**
-   * @generated from field: anyrun.v1.DevContainerConfig config = 12;
+   * @generated from field: optional anyrun.v1.DevContainerConfig config = 12;
    */
   config?: DevContainerConfig;
 
   /**
-   * @generated from field: bool cache = 13;
+   * @generated from field: optional bool cache = 13;
    */
-  cache = false;
+  cache?: boolean;
 
   /**
-   * @generated from field: uint64 hibernation_timestamp = 14;
+   * @generated from field: optional uint64 hibernation_timestamp = 14;
    */
-  hibernationTimestamp = protoInt64.zero;
+  hibernationTimestamp?: bigint;
 
   /**
-   * @generated from field: string cache_tag = 15;
+   * @generated from field: optional string cache_tag = 15;
    */
-  cacheTag = "";
+  cacheTag?: string;
 
   /**
-   * @generated from field: anyrun.v1.ResourceRequests hibernated_requests = 16;
+   * @generated from field: optional anyrun.v1.ResourceRequests hibernated_requests = 16;
    */
   hibernatedRequests?: ResourceRequests;
 
@@ -1353,19 +1353,19 @@ export class DevContainerSpec extends Message<DevContainerSpec> {
   blobStorageFormat = BlobStorageFormat.LEGACY_UNSPECIFIED;
 
   /**
-   * @generated from field: bool enable_checkpoint_read = 18;
+   * @generated from field: optional bool enable_checkpoint_read = 18;
    */
-  enableCheckpointRead = false;
+  enableCheckpointRead?: boolean;
 
   /**
-   * @generated from field: bool enable_checkpoint_write = 19;
+   * @generated from field: optional bool enable_checkpoint_write = 19;
    */
-  enableCheckpointWrite = false;
+  enableCheckpointWrite?: boolean;
 
   /**
-   * @generated from field: bool enable_base_container_cache = 20;
+   * @generated from field: optional bool enable_base_container_cache = 20;
    */
-  enableBaseContainerCache = false;
+  enableBaseContainerCache?: boolean;
 
   /**
    * @generated from field: string workload = 21;
@@ -1373,22 +1373,22 @@ export class DevContainerSpec extends Message<DevContainerSpec> {
   workload = "";
 
   /**
-   * @generated from field: bool persist_config = 22;
+   * @generated from field: optional bool persist_config = 22;
    */
-  persistConfig = false;
+  persistConfig?: boolean;
 
   /**
-   * @generated from field: string platform = 23;
+   * @generated from field: optional string platform = 23;
    */
-  platform = "";
+  platform?: string;
 
   /**
-   * @generated from field: uint32 expected_fork_count = 24;
+   * @generated from field: optional uint32 expected_fork_count = 24;
    */
-  expectedForkCount = 0;
+  expectedForkCount?: number;
 
   /**
-   * @generated from field: anyrun.v1.EgressPolicy egress_policy = 26;
+   * @generated from field: optional anyrun.v1.EgressPolicy egress_policy = 26;
    */
   egressPolicy?: EgressPolicy;
 
@@ -1398,29 +1398,29 @@ export class DevContainerSpec extends Message<DevContainerSpec> {
   lowCardinalityPodLabels: string[] = [];
 
   /**
-   * @generated from field: anyrun.v1.AnygressPerPodDenyRules anygress_per_pod_deny_rules = 28;
+   * @generated from field: optional anyrun.v1.AnygressPerPodDenyRules anygress_per_pod_deny_rules = 28;
    */
   anygressPerPodDenyRules?: AnygressPerPodDenyRules;
 
   /**
-   * @generated from field: anyrun.v1.AntiAffinityTags anti_affinity_tags = 32;
+   * @generated from field: optional anyrun.v1.AntiAffinityTags anti_affinity_tags = 32;
    */
   antiAffinityTags?: AntiAffinityTags;
 
   /**
-   * @generated from field: bool enable_lazy_v3_squashfs_snapshot_load = 34;
+   * @generated from field: optional bool enable_lazy_v3_squashfs_snapshot_load = 34;
    */
-  enableLazyV3SquashfsSnapshotLoad = false;
+  enableLazyV3SquashfsSnapshotLoad?: boolean;
 
   /**
-   * @generated from field: anyrun.v1.V4RootArchiveOptions v4_root_archive_options = 35;
+   * @generated from field: optional anyrun.v1.V4RootArchiveOptions v4_root_archive_options = 35;
    */
   v4RootArchiveOptions?: V4RootArchiveOptions;
 
   /**
-   * @generated from field: bool enable_lazy_v4_load = 36;
+   * @generated from field: optional bool enable_lazy_v4_load = 36;
    */
-  enableLazyV4Load = false;
+  enableLazyV4Load?: boolean;
 
   constructor(data?: PartialMessage<DevContainerSpec>) {
     super();
@@ -1431,31 +1431,31 @@ export class DevContainerSpec extends Message<DevContainerSpec> {
   static readonly typeName = "anyrun.v1.DevContainerSpec";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 5, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "deletion_timestamp", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
+    { no: 6, name: "deletion_timestamp", kind: "scalar", T: 4 /* ScalarType.UINT64 */, opt: true },
     { no: 7, name: "pod_labels", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
     { no: 8, name: "node_labels", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
-    { no: 9, name: "requests", kind: "message", T: ResourceRequests },
-    { no: 10, name: "limits", kind: "message", T: ResourceLimits },
-    { no: 12, name: "config", kind: "message", T: DevContainerConfig },
-    { no: 13, name: "cache", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 14, name: "hibernation_timestamp", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
-    { no: 15, name: "cache_tag", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 16, name: "hibernated_requests", kind: "message", T: ResourceRequests },
+    { no: 9, name: "requests", kind: "message", T: ResourceRequests, opt: true },
+    { no: 10, name: "limits", kind: "message", T: ResourceLimits, opt: true },
+    { no: 12, name: "config", kind: "message", T: DevContainerConfig, opt: true },
+    { no: 13, name: "cache", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 14, name: "hibernation_timestamp", kind: "scalar", T: 4 /* ScalarType.UINT64 */, opt: true },
+    { no: 15, name: "cache_tag", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 16, name: "hibernated_requests", kind: "message", T: ResourceRequests, opt: true },
     { no: 17, name: "blob_storage_format", kind: "enum", T: proto3.getEnumType(BlobStorageFormat) },
-    { no: 18, name: "enable_checkpoint_read", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 19, name: "enable_checkpoint_write", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 20, name: "enable_base_container_cache", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 18, name: "enable_checkpoint_read", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 19, name: "enable_checkpoint_write", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 20, name: "enable_base_container_cache", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 21, name: "workload", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 22, name: "persist_config", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 23, name: "platform", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 24, name: "expected_fork_count", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 26, name: "egress_policy", kind: "message", T: EgressPolicy },
+    { no: 22, name: "persist_config", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 23, name: "platform", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 24, name: "expected_fork_count", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
+    { no: 26, name: "egress_policy", kind: "message", T: EgressPolicy, opt: true },
     { no: 27, name: "low_cardinality_pod_labels", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 28, name: "anygress_per_pod_deny_rules", kind: "message", T: AnygressPerPodDenyRules },
-    { no: 32, name: "anti_affinity_tags", kind: "message", T: AntiAffinityTags },
-    { no: 34, name: "enable_lazy_v3_squashfs_snapshot_load", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 35, name: "v4_root_archive_options", kind: "message", T: V4RootArchiveOptions },
-    { no: 36, name: "enable_lazy_v4_load", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 28, name: "anygress_per_pod_deny_rules", kind: "message", T: AnygressPerPodDenyRules, opt: true },
+    { no: 32, name: "anti_affinity_tags", kind: "message", T: AntiAffinityTags, opt: true },
+    { no: 34, name: "enable_lazy_v3_squashfs_snapshot_load", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 35, name: "v4_root_archive_options", kind: "message", T: V4RootArchiveOptions, opt: true },
+    { no: 36, name: "enable_lazy_v4_load", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DevContainerSpec {
@@ -1490,9 +1490,9 @@ export class DiskUsage extends Message<DiskUsage> {
   bytesTotal = protoInt64.zero;
 
   /**
-   * @generated from field: double busy_percentage = 3;
+   * @generated from field: optional double busy_percentage = 3;
    */
-  busyPercentage = 0;
+  busyPercentage?: number;
 
   constructor(data?: PartialMessage<DiskUsage>) {
     super();
@@ -1504,7 +1504,7 @@ export class DiskUsage extends Message<DiskUsage> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bytes_used", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
     { no: 2, name: "bytes_total", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
-    { no: 3, name: "busy_percentage", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
+    { no: 3, name: "busy_percentage", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DiskUsage {
@@ -1592,7 +1592,7 @@ export class DockerBuildConfig extends Message<DockerBuildConfig> {
   registryCacheRef = "";
 
   /**
-   * @generated from field: anyrun.v1.RegistryCredentials cache_registry_credentials = 5;
+   * @generated from field: optional anyrun.v1.RegistryCredentials cache_registry_credentials = 5;
    */
   cacheRegistryCredentials?: RegistryCredentials;
 
@@ -1618,7 +1618,7 @@ export class DockerBuildConfig extends Message<DockerBuildConfig> {
     { no: 2, name: "context", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "user", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "registry_cache_ref", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "cache_registry_credentials", kind: "message", T: RegistryCredentials },
+    { no: 5, name: "cache_registry_credentials", kind: "message", T: RegistryCredentials, opt: true },
     { no: 6, name: "build_secrets", kind: "message", T: DockerBuildSecretEntry, repeated: true },
     { no: 7, name: "cache_from_refs", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
@@ -1645,7 +1645,7 @@ export class DockerBuildConfig extends Message<DockerBuildConfig> {
  */
 export class DockerBuildResult extends Message<DockerBuildResult> {
   /**
-   * @generated from field: anyrun.v1.DockerImageRef image = 1;
+   * @generated from field: optional anyrun.v1.DockerImageRef image = 1;
    */
   image?: DockerImageRef;
 
@@ -1657,7 +1657,7 @@ export class DockerBuildResult extends Message<DockerBuildResult> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "anyrun.v1.DockerBuildResult";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "image", kind: "message", T: DockerImageRef },
+    { no: 1, name: "image", kind: "message", T: DockerImageRef, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DockerBuildResult {
@@ -1687,9 +1687,9 @@ export class DockerBuildSecretEntry extends Message<DockerBuildSecretEntry> {
   name = "";
 
   /**
-   * @generated from field: string value_hash = 4;
+   * @generated from field: optional string value_hash = 4;
    */
-  valueHash = "";
+  valueHash?: string;
 
   /**
    * @generated from oneof anyrun.v1.DockerBuildSecretEntry.value
@@ -1717,7 +1717,7 @@ export class DockerBuildSecretEntry extends Message<DockerBuildSecretEntry> {
   static readonly typeName = "anyrun.v1.DockerBuildSecretEntry";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "value_hash", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "value_hash", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "inline", kind: "scalar", T: 9 /* ScalarType.STRING */, oneof: "value" },
     { no: 3, name: "encrypted", kind: "scalar", T: 9 /* ScalarType.STRING */, oneof: "value" },
   ]);
@@ -2001,7 +2001,7 @@ export class ExternalSnapshot extends Message<ExternalSnapshot> {
   presignedUrl = "";
 
   /**
-   * @generated from field: anyrun.v1.ImageMetadata image_metadata = 3;
+   * @generated from field: optional anyrun.v1.ImageMetadata image_metadata = 3;
    */
   imageMetadata?: ImageMetadata;
 
@@ -2011,22 +2011,22 @@ export class ExternalSnapshot extends Message<ExternalSnapshot> {
   blobStorageFormat = BlobStorageFormat.LEGACY_UNSPECIFIED;
 
   /**
-   * @generated from field: string node_machine_type = 5;
+   * @generated from field: optional string node_machine_type = 5;
    */
-  nodeMachineType = "";
+  nodeMachineType?: string;
 
   /**
-   * @generated from field: string cpu_baseline_id = 6;
+   * @generated from field: optional string cpu_baseline_id = 6;
    */
-  cpuBaselineId = "";
+  cpuBaselineId?: string;
 
   /**
-   * @generated from field: anyrun.v1.SnapshotUsageStats usage_stats = 7;
+   * @generated from field: optional anyrun.v1.SnapshotUsageStats usage_stats = 7;
    */
   usageStats?: SnapshotUsageStats;
 
   /**
-   * @generated from field: anyrun.v1.V4RootArchiveOptions v4_root_archive_options = 8;
+   * @generated from field: optional anyrun.v1.V4RootArchiveOptions v4_root_archive_options = 8;
    */
   v4RootArchiveOptions?: V4RootArchiveOptions;
 
@@ -2040,12 +2040,12 @@ export class ExternalSnapshot extends Message<ExternalSnapshot> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "snapshot_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "presigned_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "image_metadata", kind: "message", T: ImageMetadata },
+    { no: 3, name: "image_metadata", kind: "message", T: ImageMetadata, opt: true },
     { no: 4, name: "blob_storage_format", kind: "enum", T: proto3.getEnumType(BlobStorageFormat) },
-    { no: 5, name: "node_machine_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "cpu_baseline_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "usage_stats", kind: "message", T: SnapshotUsageStats },
-    { no: 8, name: "v4_root_archive_options", kind: "message", T: V4RootArchiveOptions },
+    { no: 5, name: "node_machine_type", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "cpu_baseline_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "usage_stats", kind: "message", T: SnapshotUsageStats, opt: true },
+    { no: 8, name: "v4_root_archive_options", kind: "message", T: V4RootArchiveOptions, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ExternalSnapshot {
@@ -2090,14 +2090,14 @@ export class GitRepoSourceReference extends Message<GitRepoSourceReference> {
   httpProxy = "";
 
   /**
-   * @generated from field: string mtls_cert_pem = 6;
+   * @generated from field: optional string mtls_cert_pem = 6;
    */
-  mtlsCertPem = "";
+  mtlsCertPem?: string;
 
   /**
-   * @generated from field: string mtls_key_pem = 7;
+   * @generated from field: optional string mtls_key_pem = 7;
    */
-  mtlsKeyPem = "";
+  mtlsKeyPem?: string;
 
   constructor(data?: PartialMessage<GitRepoSourceReference>) {
     super();
@@ -2111,8 +2111,8 @@ export class GitRepoSourceReference extends Message<GitRepoSourceReference> {
     { no: 2, name: "checkout_uri", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "commit_hash", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
     { no: 5, name: "http_proxy", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "mtls_cert_pem", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "mtls_key_pem", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 6, name: "mtls_cert_pem", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "mtls_key_pem", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GitRepoSourceReference {
@@ -2137,9 +2137,9 @@ export class GitRepoSourceReference extends Message<GitRepoSourceReference> {
  */
 export class ImageMetadata extends Message<ImageMetadata> {
   /**
-   * @generated from field: string user = 1;
+   * @generated from field: optional string user = 1;
    */
-  user = "";
+  user?: string;
 
   /**
    * @generated from field: map<string, string> env = 2;
@@ -2147,14 +2147,14 @@ export class ImageMetadata extends Message<ImageMetadata> {
   env: { [key: string]: string } = {};
 
   /**
-   * @generated from field: string working_dir = 3;
+   * @generated from field: optional string working_dir = 3;
    */
-  workingDir = "";
+  workingDir?: string;
 
   /**
-   * @generated from field: string arch = 4;
+   * @generated from field: optional string arch = 4;
    */
-  arch = "";
+  arch?: string;
 
   constructor(data?: PartialMessage<ImageMetadata>) {
     super();
@@ -2164,10 +2164,10 @@ export class ImageMetadata extends Message<ImageMetadata> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "anyrun.v1.ImageMetadata";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "user", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "user", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "env", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
-    { no: 3, name: "working_dir", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "arch", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "working_dir", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "arch", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ImageMetadata {
@@ -2596,24 +2596,24 @@ export class RegistryCredentials extends Message<RegistryCredentials> {
  */
 export class ResourceLimits extends Message<ResourceLimits> {
   /**
-   * @generated from field: uint64 cpu_mcores = 1;
+   * @generated from field: optional uint64 cpu_mcores = 1;
    */
-  cpuMcores = protoInt64.zero;
+  cpuMcores?: bigint;
 
   /**
-   * @generated from field: uint64 memory_mb = 2;
+   * @generated from field: optional uint64 memory_mb = 2;
    */
-  memoryMb = protoInt64.zero;
+  memoryMb?: bigint;
 
   /**
-   * @generated from field: uint64 disk_mb = 3;
+   * @generated from field: optional uint64 disk_mb = 3;
    */
-  diskMb = protoInt64.zero;
+  diskMb?: bigint;
 
   /**
-   * @generated from field: uint64 swap_mb = 4;
+   * @generated from field: optional uint64 swap_mb = 4;
    */
-  swapMb = protoInt64.zero;
+  swapMb?: bigint;
 
   constructor(data?: PartialMessage<ResourceLimits>) {
     super();
@@ -2623,10 +2623,10 @@ export class ResourceLimits extends Message<ResourceLimits> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "anyrun.v1.ResourceLimits";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "cpu_mcores", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
-    { no: 2, name: "memory_mb", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
-    { no: 3, name: "disk_mb", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
-    { no: 4, name: "swap_mb", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
+    { no: 1, name: "cpu_mcores", kind: "scalar", T: 4 /* ScalarType.UINT64 */, opt: true },
+    { no: 2, name: "memory_mb", kind: "scalar", T: 4 /* ScalarType.UINT64 */, opt: true },
+    { no: 3, name: "disk_mb", kind: "scalar", T: 4 /* ScalarType.UINT64 */, opt: true },
+    { no: 4, name: "swap_mb", kind: "scalar", T: 4 /* ScalarType.UINT64 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ResourceLimits {
@@ -2856,9 +2856,9 @@ export class SnapshotUsageStats extends Message<SnapshotUsageStats> {
   lastUpdatedTimestamp = protoInt64.zero;
 
   /**
-   * @generated from field: uint64 max_cache_adjusted_memory_bytes = 5;
+   * @generated from field: optional uint64 max_cache_adjusted_memory_bytes = 5;
    */
-  maxCacheAdjustedMemoryBytes = protoInt64.zero;
+  maxCacheAdjustedMemoryBytes?: bigint;
 
   /**
    * @generated from field: uint32 cache_adjusted_sample_count = 6;
@@ -2877,7 +2877,7 @@ export class SnapshotUsageStats extends Message<SnapshotUsageStats> {
     { no: 2, name: "avg_cpu_mcores", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
     { no: 3, name: "sample_count", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
     { no: 4, name: "last_updated_timestamp", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
-    { no: 5, name: "max_cache_adjusted_memory_bytes", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
+    { no: 5, name: "max_cache_adjusted_memory_bytes", kind: "scalar", T: 4 /* ScalarType.UINT64 */, opt: true },
     { no: 6, name: "cache_adjusted_sample_count", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
   ]);
 
@@ -2994,7 +2994,7 @@ export class V4RootArchiveOptions extends Message<V4RootArchiveOptions> {
   format = RootArchiveFormat.UNSPECIFIED;
 
   /**
-   * @generated from field: anyrun.v1.RootArchivePayloadSummary payload_summary = 2;
+   * @generated from field: optional anyrun.v1.RootArchivePayloadSummary payload_summary = 2;
    */
   payloadSummary?: RootArchivePayloadSummary;
 
@@ -3007,7 +3007,7 @@ export class V4RootArchiveOptions extends Message<V4RootArchiveOptions> {
   static readonly typeName = "anyrun.v1.V4RootArchiveOptions";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "format", kind: "enum", T: proto3.getEnumType(RootArchiveFormat) },
-    { no: 2, name: "payload_summary", kind: "message", T: RootArchivePayloadSummary },
+    { no: 2, name: "payload_summary", kind: "message", T: RootArchivePayloadSummary, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): V4RootArchiveOptions {

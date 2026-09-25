@@ -14,7 +14,7 @@ function toRedactedAwaitArgs(msg, privacyMode) {
     _privacyMode: privacyMode,
     taskId: msg.taskId,
     blockUntilMs: msg.blockUntilMs,
-    regex: createRedactedString(msg.regex, DataClassification.CODE, "regex", privacyMode),
+    regex: msg.regex !== void 0 ? createRedactedString(msg.regex, DataClassification.CODE, "regex", privacyMode) : void 0,
   };
 }
 
@@ -24,7 +24,7 @@ function fromRedactedAwaitArgs(msg, purpose, opts) {
   return new AwaitArgs({
     taskId: msg.taskId,
     blockUntilMs: msg.blockUntilMs,
-    regex: msg.regex.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    regex: msg.regex?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
   });
 }
 
@@ -149,7 +149,7 @@ function toRedactedAwaitTaskComplete(msg, privacyMode) {
     outputFilePath: createRedactedString(msg.outputFilePath, DataClassification.PATH, "output_file_path", privacyMode),
     outputLength: msg.outputLength,
     regexRequested: msg.regexRequested,
-    regexMatch: createRedactedString(msg.regexMatch, DataClassification.CODE, "regex_match", privacyMode),
+    regexMatch: msg.regexMatch !== void 0 ? createRedactedString(msg.regexMatch, DataClassification.CODE, "regex_match", privacyMode) : void 0,
     exitCode: msg.exitCode,
     wakeReason: msg.wakeReason,
   };
@@ -164,7 +164,7 @@ function fromRedactedAwaitTaskComplete(msg, purpose, opts) {
     outputFilePath: msg.outputFilePath.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     outputLength: msg.outputLength,
     regexRequested: msg.regexRequested,
-    regexMatch: msg.regexMatch.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    regexMatch: msg.regexMatch?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     exitCode: msg.exitCode,
     wakeReason: msg.wakeReason,
   });
@@ -178,7 +178,7 @@ function toRedactedAwaitTaskStillRunning(msg, privacyMode) {
     outputFilePath: createRedactedString(msg.outputFilePath, DataClassification.PATH, "output_file_path", privacyMode),
     outputLength: msg.outputLength,
     regexRequested: msg.regexRequested,
-    regexMatch: createRedactedString(msg.regexMatch, DataClassification.CODE, "regex_match", privacyMode),
+    regexMatch: msg.regexMatch !== void 0 ? createRedactedString(msg.regexMatch, DataClassification.CODE, "regex_match", privacyMode) : void 0,
     wakeReason: msg.wakeReason,
   };
 }
@@ -192,7 +192,7 @@ function fromRedactedAwaitTaskStillRunning(msg, purpose, opts) {
     outputFilePath: msg.outputFilePath.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     outputLength: msg.outputLength,
     regexRequested: msg.regexRequested,
-    regexMatch: msg.regexMatch.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    regexMatch: msg.regexMatch?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     wakeReason: msg.wakeReason,
   });
 }

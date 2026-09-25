@@ -12,7 +12,7 @@ import "aiserver/v1/lsp_subgraph.proto";
 import "aiserver/v1/utils.proto";
 
 message ContextItem {
-  .aiserver.v1.ContextIntent intent = 1 [json_name = "intent"];
+  optional .aiserver.v1.ContextIntent intent = 1 [json_name = "intent"];
   oneof item {
     .aiserver.v1.ContextItem.FileChunk file_chunk = 2 [json_name = "fileChunk"];
     .aiserver.v1.ContextItem.OutlineChunk outline_chunk = 3 [json_name = "outlineChunk"];
@@ -44,7 +44,7 @@ message ContextItem {
   message OutlineChunk {
     string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
     string contents = 2 [json_name = "contents"];
-    .aiserver.v1.LineRange full_range = 3 [json_name = "fullRange"];
+    optional .aiserver.v1.LineRange full_range = 3 [json_name = "fullRange"];
   }
   message CmdKSelection {
     repeated string lines = 1 [json_name = "lines"];
@@ -54,7 +54,7 @@ message ContextItem {
     string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
     repeated .aiserver.v1.ContextItem.CmdKImmediateContext.Line lines = 2 [json_name = "lines"];
     int32 total_number_of_lines_in_file = 3 [json_name = "totalNumberOfLinesInFile"];
-    int32 cell_number = 4 [json_name = "cellNumber"];
+    optional int32 cell_number = 4 [json_name = "cellNumber"];
     message Line {
       string line = 1 [json_name = "line"];
       int32 line_number = 2 [json_name = "lineNumber"];
@@ -64,13 +64,13 @@ message ContextItem {
     string query = 1 [json_name = "query"];
   }
   message CmdKQueryHistory {
-    .aiserver.v1.ContextItem.CmdKQuery query = 1 [json_name = "query"];
-    .aiserver.v1.ContextItem.CmdKImmediateContext immediate_context = 2 [json_name = "immediateContext"];
-    .aiserver.v1.ContextItem.CmdKSelection selection = 3 [json_name = "selection"];
-    .aiserver.v1.ContextItem.CmdKQueryHistory query_history = 4 [json_name = "queryHistory"];
+    optional .aiserver.v1.ContextItem.CmdKQuery query = 1 [json_name = "query"];
+    optional .aiserver.v1.ContextItem.CmdKImmediateContext immediate_context = 2 [json_name = "immediateContext"];
+    optional .aiserver.v1.ContextItem.CmdKSelection selection = 3 [json_name = "selection"];
+    optional .aiserver.v1.ContextItem.CmdKQueryHistory query_history = 4 [json_name = "queryHistory"];
     repeated string context_item_hashes = 5 [json_name = "contextItemHashes"];
-    int64 timestamp = 6 [json_name = "timestamp"];
-    double timestamp_double = 7 [json_name = "timestampDouble"];
+    optional int64 timestamp = 6 [json_name = "timestamp"];
+    optional double timestamp_double = 7 [json_name = "timestampDouble"];
   }
   message CustomInstructions {
     string instructions = 1 [json_name = "instructions"];
@@ -80,7 +80,7 @@ message ContextItem {
     string line = 2 [json_name = "line"];
     int32 line_number = 3 [json_name = "lineNumber"];
     int32 column_number = 4 [json_name = "columnNumber"];
-    .aiserver.v1.ContextItem.FileChunk definition_chunk = 5 [json_name = "definitionChunk"];
+    optional .aiserver.v1.ContextItem.FileChunk definition_chunk = 5 [json_name = "definitionChunk"];
   }
   message DocumentationChunk {
     string doc_name = 1 [json_name = "docName"];
@@ -100,10 +100,10 @@ message ContextItem {
   message ChatHistory {
     string user_message = 1 [json_name = "userMessage"];
     string assistant_response = 2 [json_name = "assistantResponse"];
-    .aiserver.v1.ContextItem.ChatHistory chat_history = 3 [json_name = "chatHistory"];
+    optional .aiserver.v1.ContextItem.ChatHistory chat_history = 3 [json_name = "chatHistory"];
     bool active_for_cmd_k = 4 [json_name = "activeForCmdK"];
-    int64 timestamp = 5 [json_name = "timestamp"];
-    double timestamp_double = 6 [json_name = "timestampDouble"];
+    optional int64 timestamp = 5 [json_name = "timestamp"];
+    optional double timestamp_double = 6 [json_name = "timestampDouble"];
   }
   message NotebookCellOutput {
     string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
@@ -115,15 +115,15 @@ message ContextItem {
     bool active_for_cmd_k = 4 [json_name = "activeForCmdK"];
     string cwd_full = 5 [json_name = "cwdFull"];
     string cwd_relative_workspace_path = 6 [json_name = "cwdRelativeWorkspacePath"];
-    int64 timestamp = 7 [json_name = "timestamp"];
-    double timestamp_double = 8 [json_name = "timestampDouble"];
+    optional int64 timestamp = 7 [json_name = "timestamp"];
+    optional double timestamp_double = 8 [json_name = "timestampDouble"];
   }
   message TerminalCmdKQuery {
     string query = 1 [json_name = "query"];
   }
   message TerminalCmdKQueryHistory {
-    .aiserver.v1.ContextItem.TerminalCmdKQuery query = 1 [json_name = "query"];
-    .aiserver.v1.ContextItem.TerminalCmdKQueryHistory query_history = 2 [json_name = "queryHistory"];
+    optional .aiserver.v1.ContextItem.TerminalCmdKQuery query = 1 [json_name = "query"];
+    optional .aiserver.v1.ContextItem.TerminalCmdKQueryHistory query_history = 2 [json_name = "queryHistory"];
     repeated string context_item_hashes = 5 [json_name = "contextItemHashes"];
     string suggested_command = 6 [json_name = "suggestedCommand"];
   }
@@ -131,20 +131,20 @@ message ContextItem {
     string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
     repeated .aiserver.v1.ContextItem.SparseFileChunk.Line lines = 2 [json_name = "lines"];
     int32 total_number_of_lines_in_file = 3 [json_name = "totalNumberOfLinesInFile"];
-    int32 cell_number = 4 [json_name = "cellNumber"];
+    optional int32 cell_number = 4 [json_name = "cellNumber"];
     message Line {
       string line = 1 [json_name = "line"];
       int32 line_number = 2 [json_name = "lineNumber"];
     }
   }
   message LspSubgraphChunk {
-    .aiserver.v1.LspSubgraphFullContext lsp_subgraph_full_context = 1 [json_name = "lspSubgraphFullContext"];
+    optional .aiserver.v1.LspSubgraphFullContext lsp_subgraph_full_context = 1 [json_name = "lspSubgraphFullContext"];
   }
   message CommitNoteChunk {
     string note = 1 [json_name = "note"];
   }
   message FileDiffHistory {
-    .aiserver.v1.CppFileDiffHistory cpp_file_diff_history = 1 [json_name = "cppFileDiffHistory"];
+    optional .aiserver.v1.CppFileDiffHistory cpp_file_diff_history = 1 [json_name = "cppFileDiffHistory"];
     int32 how_many_diffs_ago = 2 [json_name = "howManyDiffsAgo"];
     bool is_very_recent = 3 [json_name = "isVeryRecent"];
   }
@@ -152,12 +152,12 @@ message ContextItem {
     repeated .aiserver.v1.ContextItem.CmdKQueryHistoryInDiffSession.PastCmdKQueryInDiffSession past_cmdk_queries = 1 [json_name = "pastCmdkQueries"];
     double curr_timestamp_double = 3 [json_name = "currTimestampDouble"];
     message PastCmdKQueryInDiffSession {
-      .aiserver.v1.ContextItem.CmdKQuery query = 1 [json_name = "query"];
+      optional .aiserver.v1.ContextItem.CmdKQuery query = 1 [json_name = "query"];
       string relative_workspace_path = 2 [json_name = "relativeWorkspacePath"];
-      bool cmdk_was_accepted = 5 [json_name = "cmdkWasAccepted"];
+      optional bool cmdk_was_accepted = 5 [json_name = "cmdkWasAccepted"];
       double timestamp_double = 6 [json_name = "timestampDouble"];
-      double timestamp_for_diff_interleaving = 7 [json_name = "timestampForDiffInterleaving"];
-      string request_id = 8 [json_name = "requestId"];
+      optional double timestamp_for_diff_interleaving = 7 [json_name = "timestampForDiffInterleaving"];
+      optional string request_id = 8 [json_name = "requestId"];
     }
   }
 }
@@ -196,7 +196,7 @@ message ContextIntent {
   }
   message CodeSelection {
     string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
-    .aiserver.v1.SimpleRange potentially_out_of_date_range = 2 [json_name = "potentiallyOutOfDateRange"];
+    optional .aiserver.v1.SimpleRange potentially_out_of_date_range = 2 [json_name = "potentiallyOutOfDateRange"];
     string text = 3 [json_name = "text"];
   }
   message Lints {
@@ -209,11 +209,11 @@ message ContextIntent {
     }
     message FileScope {
       string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
-      .aiserver.v1.LineRange filter_range = 2 [json_name = "filterRange"];
+      optional .aiserver.v1.LineRange filter_range = 2 [json_name = "filterRange"];
     }
   }
   message RecentLocations {
-    double timestamp = 2 [json_name = "timestamp"];
+    optional double timestamp = 2 [json_name = "timestamp"];
   }
   message CmdKCurrentFile {
   }
@@ -233,7 +233,7 @@ message ContextIntent {
   message TerminalHistory {
     int32 instance_id = 1 [json_name = "instanceId"];
     bool active_for_cmd_k = 2 [json_name = "activeForCmdK"];
-    bool use_active_instance_as_fallback = 3 [json_name = "useActiveInstanceAsFallback"];
+    optional bool use_active_instance_as_fallback = 3 [json_name = "useActiveInstanceAsFallback"];
   }
   message VisibleTabs {
   }
@@ -248,7 +248,7 @@ message ContextIntent {
   message CodebaseChunks {
   }
   message Symbol {
-    .aiserver.v1.DocumentSymbol symbol = 1 [json_name = "symbol"];
+    optional .aiserver.v1.DocumentSymbol symbol = 1 [json_name = "symbol"];
     string relative_workspace_path = 2 [json_name = "relativeWorkspacePath"];
   }
   enum Type {

@@ -153,12 +153,12 @@ export class AdoptResult extends Message<AdoptResult> {
  */
 export class AdoptToolCall extends Message<AdoptToolCall> {
   /**
-   * @generated from field: agent.v1.AdoptArgs args = 1;
+   * @generated from field: optional agent.v1.AdoptArgs args = 1;
    */
   args?: AdoptArgs;
 
   /**
-   * @generated from field: agent.v1.AdoptResult result = 2;
+   * @generated from field: optional agent.v1.AdoptResult result = 2;
    */
   result?: AdoptResult;
 
@@ -170,8 +170,8 @@ export class AdoptToolCall extends Message<AdoptToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.AdoptToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: AdoptArgs },
-    { no: 2, name: "result", kind: "message", T: AdoptResult },
+    { no: 1, name: "args", kind: "message", T: AdoptArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: AdoptResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AdoptToolCall {

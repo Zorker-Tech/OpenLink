@@ -28,30 +28,30 @@ message ComposerCapabilityRequest {
   }
   message LoopOnLintsCapability {
     repeated .aiserver.v1.LinterErrors linter_errors = 1 [json_name = "linterErrors"];
-    string custom_instructions = 2 [json_name = "customInstructions"];
+    optional string custom_instructions = 2 [json_name = "customInstructions"];
   }
   message LoopOnTestsCapability {
     repeated string test_names = 1 [json_name = "testNames"];
-    string custom_instructions = 2 [json_name = "customInstructions"];
+    optional string custom_instructions = 2 [json_name = "customInstructions"];
   }
   message MegaPlannerCapability {
-    string custom_instructions = 1 [json_name = "customInstructions"];
+    optional string custom_instructions = 1 [json_name = "customInstructions"];
   }
   message LoopOnCommandCapability {
     string command = 1 [json_name = "command"];
-    string custom_instructions = 2 [json_name = "customInstructions"];
-    string output = 3 [json_name = "output"];
-    int32 exit_code = 4 [json_name = "exitCode"];
+    optional string custom_instructions = 2 [json_name = "customInstructions"];
+    optional string output = 3 [json_name = "output"];
+    optional int32 exit_code = 4 [json_name = "exitCode"];
   }
   message ToolCallCapability {
-    string custom_instructions = 1 [json_name = "customInstructions"];
+    optional string custom_instructions = 1 [json_name = "customInstructions"];
     repeated .aiserver.v1.ComposerCapabilityRequest.ToolSchema tool_schemas = 2 [json_name = "toolSchemas"];
     repeated string relevant_files = 3 [json_name = "relevantFiles"];
     repeated string files_in_context = 4 [json_name = "filesInContext"];
     repeated string semantic_search_files = 5 [json_name = "semanticSearchFiles"];
   }
   message DiffReviewCapability {
-    string custom_instructions = 1 [json_name = "customInstructions"];
+    optional string custom_instructions = 1 [json_name = "customInstructions"];
     repeated .aiserver.v1.ComposerCapabilityRequest.DiffReviewCapability.SimpleFileDiff diffs = 2 [json_name = "diffs"];
     message SimpleFileDiff {
       string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
@@ -59,37 +59,37 @@ message ComposerCapabilityRequest {
       message Chunk {
         repeated string old_lines = 1 [json_name = "oldLines"];
         repeated string new_lines = 2 [json_name = "newLines"];
-        .aiserver.v1.LineRange old_range = 3 [json_name = "oldRange"];
-        .aiserver.v1.LineRange new_range = 4 [json_name = "newRange"];
+        optional .aiserver.v1.LineRange old_range = 3 [json_name = "oldRange"];
+        optional .aiserver.v1.LineRange new_range = 4 [json_name = "newRange"];
       }
     }
   }
   message ContextPickingCapability {
-    string custom_instructions = 1 [json_name = "customInstructions"];
+    optional string custom_instructions = 1 [json_name = "customInstructions"];
     repeated string potential_context_files = 2 [json_name = "potentialContextFiles"];
     repeated .aiserver.v1.CodeChunk potential_context_code_chunks = 3 [json_name = "potentialContextCodeChunks"];
     repeated string files_in_context = 4 [json_name = "filesInContext"];
   }
   message EditTrailCapability {
-    string custom_instructions = 1 [json_name = "customInstructions"];
+    optional string custom_instructions = 1 [json_name = "customInstructions"];
   }
   message AutoContextCapability {
-    string custom_instructions = 1 [json_name = "customInstructions"];
+    optional string custom_instructions = 1 [json_name = "customInstructions"];
     repeated string additional_files = 2 [json_name = "additionalFiles"];
   }
   message ContextPlannerCapability {
-    string custom_instructions = 1 [json_name = "customInstructions"];
+    optional string custom_instructions = 1 [json_name = "customInstructions"];
     repeated .aiserver.v1.CodeChunk attached_code_chunks = 2 [json_name = "attachedCodeChunks"];
   }
   message RememberThisCapability {
-    string custom_instructions = 1 [json_name = "customInstructions"];
+    optional string custom_instructions = 1 [json_name = "customInstructions"];
     string memory = 2 [json_name = "memory"];
   }
   message DecomposerCapability {
-    string custom_instructions = 1 [json_name = "customInstructions"];
+    optional string custom_instructions = 1 [json_name = "customInstructions"];
   }
   message CursorRulesCapability {
-    string custom_instructions = 1 [json_name = "customInstructions"];
+    optional string custom_instructions = 1 [json_name = "customInstructions"];
   }
   message ToolSchema {
     .aiserver.v1.ComposerCapabilityRequest.ToolType type = 1 [json_name = "type"];
@@ -99,7 +99,7 @@ message ComposerCapabilityRequest {
   }
   message SchemaProperty {
     string type = 1 [json_name = "type"];
-    string description = 2 [json_name = "description"];
+    optional string description = 2 [json_name = "description"];
   }
   enum ComposerCapabilityType {
     COMPOSER_CAPABILITY_TYPE_UNSPECIFIED = 0;
@@ -156,25 +156,25 @@ message ComposerCapabilityContext {
   }
   message SlackIntegrationContext {
     string thread = 1 [json_name = "thread"];
-    string channel_name = 2 [json_name = "channelName"];
-    string channel_purpose = 3 [json_name = "channelPurpose"];
-    string channel_topic = 4 [json_name = "channelTopic"];
-    string sender_name = 5 [json_name = "senderName"];
-    string sender_id = 6 [json_name = "senderId"];
-    string sender_type = 7 [json_name = "senderType"];
-    bool is_directly_addressed = 8 [json_name = "isDirectlyAddressed"];
+    optional string channel_name = 2 [json_name = "channelName"];
+    optional string channel_purpose = 3 [json_name = "channelPurpose"];
+    optional string channel_topic = 4 [json_name = "channelTopic"];
+    optional string sender_name = 5 [json_name = "senderName"];
+    optional string sender_id = 6 [json_name = "senderId"];
+    optional string sender_type = 7 [json_name = "senderType"];
+    optional bool is_directly_addressed = 8 [json_name = "isDirectlyAddressed"];
   }
   message GithubPRContext {
     string title = 1 [json_name = "title"];
     string description = 2 [json_name = "description"];
     string comments = 3 [json_name = "comments"];
-    string ci_failures = 4 [json_name = "ciFailures"];
+    optional string ci_failures = 4 [json_name = "ciFailures"];
   }
   message MicrosoftTeamsIntegrationContext {
     string thread = 1 [json_name = "thread"];
-    string channel_name = 2 [json_name = "channelName"];
-    string team_name = 3 [json_name = "teamName"];
-    string channel_description = 4 [json_name = "channelDescription"];
-    string team_description = 5 [json_name = "teamDescription"];
+    optional string channel_name = 2 [json_name = "channelName"];
+    optional string team_name = 3 [json_name = "teamName"];
+    optional string channel_description = 4 [json_name = "channelDescription"];
+    optional string team_description = 5 [json_name = "teamDescription"];
   }
 }

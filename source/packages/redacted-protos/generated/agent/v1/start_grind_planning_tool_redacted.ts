@@ -12,7 +12,7 @@ import { StartGrindPlanningArgs, StartGrindPlanningError, StartGrindPlanningResu
 function toRedactedStartGrindPlanningArgs(msg, privacyMode) {
   return {
     _privacyMode: privacyMode,
-    explanation: createRedactedString(msg.explanation, DataClassification.CODE, "explanation", privacyMode),
+    explanation: msg.explanation !== void 0 ? createRedactedString(msg.explanation, DataClassification.CODE, "explanation", privacyMode) : void 0,
     toolCallId: msg.toolCallId,
   };
 }
@@ -21,7 +21,7 @@ function fromRedactedStartGrindPlanningArgs(msg, purpose, opts) {
   const redactUnallowedFieldsInsteadOfThrowing = opts?.redactUnallowedFieldsInsteadOfThrowing ?? false;
   const enforcing = opts?.enforcing;
   return new StartGrindPlanningArgs({
-    explanation: msg.explanation.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    explanation: msg.explanation?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     toolCallId: msg.toolCallId,
   });
 }

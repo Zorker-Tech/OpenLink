@@ -8,14 +8,14 @@ syntax = "proto3";
 package agent.v1;
 
 message CommunicateUpdateToolCall {
-  .agent.v1.CommunicateUpdateArgs args = 1 [json_name = "args"];
-  .agent.v1.CommunicateUpdateResult result = 2 [json_name = "result"];
+  optional .agent.v1.CommunicateUpdateArgs args = 1 [json_name = "args"];
+  optional .agent.v1.CommunicateUpdateResult result = 2 [json_name = "result"];
 }
 
 message CommunicateUpdateArgs {
-  string current_step = 1 [json_name = "currentStep"];
-  string final_summary = 3 [json_name = "finalSummary"];
-  string completed_subtitle = 4 [json_name = "completedSubtitle"];
+  optional string current_step = 1 [json_name = "currentStep"];
+  optional string final_summary = 3 [json_name = "finalSummary"];
+  optional string completed_subtitle = 4 [json_name = "completedSubtitle"];
 }
 
 message CommunicateUpdateResult {

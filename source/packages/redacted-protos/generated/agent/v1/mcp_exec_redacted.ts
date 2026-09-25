@@ -96,7 +96,7 @@ function toRedactedListMcpResourcesExecResult_McpResource(msg, privacyMode) {
     _privacyMode: privacyMode,
     uri: createRedactedString(msg.uri, DataClassification.PATH, "uri", privacyMode),
     name: msg.name,
-    description: createRedactedString(msg.description, DataClassification.CODE, "description", privacyMode),
+    description: msg.description !== void 0 ? createRedactedString(msg.description, DataClassification.CODE, "description", privacyMode) : void 0,
     mimeType: msg.mimeType,
     server: msg.server,
     annotations: new Map(Object.entries(msg.annotations).map(([k2, v2]) => [k2, createRedactedString(v2, DataClassification.CODE, "annotations", privacyMode)])),
@@ -109,7 +109,7 @@ function fromRedactedListMcpResourcesExecResult_McpResource(msg, purpose, opts) 
   return new ListMcpResourcesExecResult_McpResource({
     uri: msg.uri.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     name: msg.name,
-    description: msg.description.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    description: msg.description?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     mimeType: msg.mimeType,
     server: msg.server,
     annotations: Object.fromEntries(Array.from(msg.annotations.entries()).map(([k2, v2]) => [k2, v2.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing })])),
@@ -331,7 +331,7 @@ function toRedactedReadMcpResourceExecArgs(msg, privacyMode) {
     _privacyMode: privacyMode,
     server: msg.server,
     uri: createRedactedString(msg.uri, DataClassification.PATH, "uri", privacyMode),
-    downloadPath: createRedactedString(msg.downloadPath, DataClassification.PATH, "download_path", privacyMode),
+    downloadPath: msg.downloadPath !== void 0 ? createRedactedString(msg.downloadPath, DataClassification.PATH, "download_path", privacyMode) : void 0,
     toolCallId: msg.toolCallId,
     smartModeApproval: msg.smartModeApproval !== void 0 ? toRedactedSmartModeApproval(msg.smartModeApproval, privacyMode) : void 0,
   };
@@ -343,7 +343,7 @@ function fromRedactedReadMcpResourceExecArgs(msg, purpose, opts) {
   return new ReadMcpResourceExecArgs({
     server: msg.server,
     uri: msg.uri.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    downloadPath: msg.downloadPath.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    downloadPath: msg.downloadPath?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     toolCallId: msg.toolCallId,
     smartModeApproval: msg.smartModeApproval !== void 0 ? fromRedactedSmartModeApproval(msg.smartModeApproval, purpose, opts) : void 0,
   });
@@ -469,10 +469,10 @@ function toRedactedReadMcpResourceSuccess(msg, privacyMode) {
     _privacyMode: privacyMode,
     uri: createRedactedString(msg.uri, DataClassification.PATH, "uri", privacyMode),
     name: msg.name,
-    description: createRedactedString(msg.description, DataClassification.CODE, "description", privacyMode),
+    description: msg.description !== void 0 ? createRedactedString(msg.description, DataClassification.CODE, "description", privacyMode) : void 0,
     mimeType: msg.mimeType,
     annotations: new Map(Object.entries(msg.annotations).map(([k2, v2]) => [k2, createRedactedString(v2, DataClassification.CODE, "annotations", privacyMode)])),
-    downloadPath: createRedactedString(msg.downloadPath, DataClassification.PATH, "download_path", privacyMode),
+    downloadPath: msg.downloadPath !== void 0 ? createRedactedString(msg.downloadPath, DataClassification.PATH, "download_path", privacyMode) : void 0,
     outputLocation: msg.outputLocation !== void 0 ? toRedactedOutputLocation(msg.outputLocation, privacyMode) : void 0,
     content: toRedactedReadMcpResourceSuccess_content(msg.content, privacyMode),
   };
@@ -484,10 +484,10 @@ function fromRedactedReadMcpResourceSuccess(msg, purpose, opts) {
   return new ReadMcpResourceSuccess({
     uri: msg.uri.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     name: msg.name,
-    description: msg.description.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    description: msg.description?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     mimeType: msg.mimeType,
     annotations: Object.fromEntries(Array.from(msg.annotations.entries()).map(([k2, v2]) => [k2, v2.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing })])),
-    downloadPath: msg.downloadPath.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    downloadPath: msg.downloadPath?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     outputLocation: msg.outputLocation !== void 0 ? fromRedactedOutputLocation(msg.outputLocation, purpose, opts) : void 0,
     content: fromRedactedReadMcpResourceSuccess_content(msg.content, purpose, opts),
   });

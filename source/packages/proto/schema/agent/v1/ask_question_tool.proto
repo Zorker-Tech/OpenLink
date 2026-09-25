@@ -37,8 +37,8 @@ message AskQuestionAsync {
 }
 
 message AskQuestionToolCall {
-  .agent.v1.AskQuestionArgs args = 1 [json_name = "args"];
-  .agent.v1.AskQuestionResult result = 2 [json_name = "result"];
+  optional .agent.v1.AskQuestionArgs args = 1 [json_name = "args"];
+  optional .agent.v1.AskQuestionResult result = 2 [json_name = "result"];
 }
 
 message AskQuestionArgs {

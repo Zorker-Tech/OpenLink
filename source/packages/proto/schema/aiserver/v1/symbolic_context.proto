@@ -86,7 +86,7 @@ message CreateExperimentalIndexResponse {
 }
 
 message ExtractPathsRequest {
-  .aiserver.v1.FileCodeSnippets file_code_snippets = 1 [json_name = "fileCodeSnippets"];
+  optional .aiserver.v1.FileCodeSnippets file_code_snippets = 1 [json_name = "fileCodeSnippets"];
 }
 
 message ExtractPathsResponse {
@@ -136,8 +136,8 @@ message ListenExperimentalIndexResponse {
     .aiserver.v1.ListenExperimentalIndexResponse.ErrorItem error = 6 [json_name = "error"];
   }
   message ChooseItem {
-    .aiserver.v1.ChooseCodeReferencesResponse response = 1 [json_name = "response"];
-    .aiserver.v1.ChooseCodeReferencesRequest request = 2 [json_name = "request"];
+    optional .aiserver.v1.ChooseCodeReferencesResponse response = 1 [json_name = "response"];
+    optional .aiserver.v1.ChooseCodeReferencesRequest request = 2 [json_name = "request"];
     string req_uuid = 3 [json_name = "reqUuid"];
   }
   message ErrorItem {
@@ -152,16 +152,16 @@ message ListenExperimentalIndexResponse {
   }
   message ReadyItem {
     string index_id = 1 [json_name = "indexId"];
-    .aiserver.v1.ListenExperimentalIndexRequest request = 2 [json_name = "request"];
+    optional .aiserver.v1.ListenExperimentalIndexRequest request = 2 [json_name = "request"];
   }
   message RegisterItem {
-    .aiserver.v1.RegisterFileToIndexResponse response = 1 [json_name = "response"];
-    .aiserver.v1.RegisterFileToIndexRequest request = 2 [json_name = "request"];
+    optional .aiserver.v1.RegisterFileToIndexResponse response = 1 [json_name = "response"];
+    optional .aiserver.v1.RegisterFileToIndexRequest request = 2 [json_name = "request"];
     string req_uuid = 3 [json_name = "reqUuid"];
   }
   message SummarizeItem {
-    .aiserver.v1.SummarizeWithReferencesResponse response = 1 [json_name = "response"];
-    .aiserver.v1.SummarizeWithReferencesRequest request = 2 [json_name = "request"];
+    optional .aiserver.v1.SummarizeWithReferencesResponse response = 1 [json_name = "response"];
+    optional .aiserver.v1.SummarizeWithReferencesRequest request = 2 [json_name = "request"];
     string req_uuid = 3 [json_name = "reqUuid"];
   }
 }
@@ -178,7 +178,7 @@ message RegisterCodeReferencesResponse {
 message RegisterFileToIndexRequest {
   string index_id = 1 [json_name = "indexId"];
   string workspace_relative_path = 2 [json_name = "workspaceRelativePath"];
-  .aiserver.v1.SerializedContextNode root_context_node = 3 [json_name = "rootContextNode"];
+  optional .aiserver.v1.SerializedContextNode root_context_node = 3 [json_name = "rootContextNode"];
   repeated string content = 4 [json_name = "content"];
 }
 
@@ -186,7 +186,7 @@ message RegisterFileToIndexResponse {
   string file_id = 1 [json_name = "fileId"];
   string root_context_node_id = 2 [json_name = "rootContextNodeId"];
   repeated .aiserver.v1.URIResolutionAttempt dependency_resolution_attempts = 3 [json_name = "dependencyResolutionAttempts"];
-  .aiserver.v1.IndexFileData file_data = 4 [json_name = "fileData"];
+  optional .aiserver.v1.IndexFileData file_data = 4 [json_name = "fileData"];
 }
 
 message RequestReceivedResponse {
@@ -198,7 +198,7 @@ message SerializedContextNode {
   int32 start_line_number = 2 [json_name = "startLineNumber"];
   int32 end_line_number = 3 [json_name = "endLineNumber"];
   repeated .aiserver.v1.SerializedContextNode children = 4 [json_name = "children"];
-  .aiserver.v1.FileCodeSnippets node_snippets = 5 [json_name = "nodeSnippets"];
+  optional .aiserver.v1.FileCodeSnippets node_snippets = 5 [json_name = "nodeSnippets"];
 }
 
 message SetupIndexDependenciesRequest {
@@ -231,22 +231,22 @@ message SummarizeWithReferencesResponse {
 }
 
 message SymbolActionResultReference {
-  .aiserver.v1.SimpleRange range = 1 [json_name = "range"];
-  .aiserver.v1.FileCodeSnippets reference = 2 [json_name = "reference"];
+  optional .aiserver.v1.SimpleRange range = 1 [json_name = "range"];
+  optional .aiserver.v1.FileCodeSnippets reference = 2 [json_name = "reference"];
 }
 
 message SymbolActionResults {
-  .aiserver.v1.CodeSymbolWithAction action = 1 [json_name = "action"];
+  optional .aiserver.v1.CodeSymbolWithAction action = 1 [json_name = "action"];
   repeated .aiserver.v1.SymbolActionResultReference references = 2 [json_name = "references"];
 }
 
 message URIResolutionAttempt {
   string workspace_relative_path = 1 [json_name = "workspaceRelativePath"];
   string node_id = 2 [json_name = "nodeId"];
-  .aiserver.v1.CodeSymbolWithAction symbol = 3 [json_name = "symbol"];
+  optional .aiserver.v1.CodeSymbolWithAction symbol = 3 [json_name = "symbol"];
 }
 
 message URIResolutionResult {
-  .aiserver.v1.URIResolutionAttempt request = 1 [json_name = "request"];
+  optional .aiserver.v1.URIResolutionAttempt request = 1 [json_name = "request"];
   repeated string resolved_paths = 2 [json_name = "resolvedPaths"];
 }

@@ -21,7 +21,7 @@ import { fromRedactedRange, toRedactedRange } from "./utils_redacted.ts";
 function toRedactedCallFrame(msg, privacyMode) {
   return {
     _privacyMode: privacyMode,
-    functionName: createRedactedString(msg.functionName, DataClassification.CODE, "function_name", privacyMode),
+    functionName: msg.functionName !== void 0 ? createRedactedString(msg.functionName, DataClassification.CODE, "function_name", privacyMode) : void 0,
     url: msg.url,
     lineNumber: msg.lineNumber,
     columnNumber: msg.columnNumber,
@@ -32,7 +32,7 @@ function fromRedactedCallFrame(msg, purpose, opts) {
   const redactUnallowedFieldsInsteadOfThrowing = opts?.redactUnallowedFieldsInsteadOfThrowing ?? false;
   const enforcing = opts?.enforcing;
   return new CallFrame({
-    functionName: msg.functionName.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    functionName: msg.functionName?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     url: msg.url,
     lineNumber: msg.lineNumber,
     columnNumber: msg.columnNumber,
@@ -147,7 +147,7 @@ function toRedactedInvocationContext_GithubPR(msg, privacyMode) {
     title: createRedactedString(msg.title, DataClassification.CODE, "title", privacyMode),
     description: createRedactedString(msg.description, DataClassification.CODE, "description", privacyMode),
     comments: createRedactedString(msg.comments, DataClassification.CODE, "comments", privacyMode),
-    ciFailures: createRedactedString(msg.ciFailures, DataClassification.CODE, "ci_failures", privacyMode),
+    ciFailures: msg.ciFailures !== void 0 ? createRedactedString(msg.ciFailures, DataClassification.CODE, "ci_failures", privacyMode) : void 0,
   };
 }
 
@@ -158,7 +158,7 @@ function fromRedactedInvocationContext_GithubPR(msg, purpose, opts) {
     title: msg.title.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     description: msg.description.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     comments: msg.comments.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    ciFailures: msg.ciFailures.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    ciFailures: msg.ciFailures?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
   });
 }
 
@@ -185,10 +185,10 @@ function toRedactedInvocationContext_IdeState_File(msg, privacyMode) {
   return {
     _privacyMode: privacyMode,
     path: createRedactedString(msg.path, DataClassification.PATH, "path", privacyMode),
-    relativePath: createRedactedString(msg.relativePath, DataClassification.PATH, "relative_path", privacyMode),
+    relativePath: msg.relativePath !== void 0 ? createRedactedString(msg.relativePath, DataClassification.PATH, "relative_path", privacyMode) : void 0,
     cursorPosition: msg.cursorPosition !== void 0 ? toRedactedInvocationContext_IdeState_File_CursorPosition(msg.cursorPosition, privacyMode) : void 0,
     totalLines: msg.totalLines,
-    activeCommand: createRedactedString(msg.activeCommand, DataClassification.CODE, "active_command", privacyMode),
+    activeCommand: msg.activeCommand !== void 0 ? createRedactedString(msg.activeCommand, DataClassification.CODE, "active_command", privacyMode) : void 0,
   };
 }
 
@@ -197,10 +197,10 @@ function fromRedactedInvocationContext_IdeState_File(msg, purpose, opts) {
   const enforcing = opts?.enforcing;
   return new InvocationContext_IdeState_File({
     path: msg.path.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    relativePath: msg.relativePath.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    relativePath: msg.relativePath?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     cursorPosition: msg.cursorPosition !== void 0 ? fromRedactedInvocationContext_IdeState_File_CursorPosition(msg.cursorPosition, purpose, opts) : void 0,
     totalLines: msg.totalLines,
-    activeCommand: msg.activeCommand.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    activeCommand: msg.activeCommand?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
   });
 }
 
@@ -226,10 +226,10 @@ function toRedactedInvocationContext_IdeState_ViewedPullRequest(msg, privacyMode
     _privacyMode: privacyMode,
     number: msg.number,
     url: msg.url,
-    title: createRedactedString(msg.title, DataClassification.CODE, "title", privacyMode),
-    folderPath: createRedactedString(msg.folderPath, DataClassification.PATH, "folder_path", privacyMode),
-    summaryJson: createRedactedString(msg.summaryJson, DataClassification.CODE, "summary_json", privacyMode),
-    description: createRedactedString(msg.description, DataClassification.CODE, "description", privacyMode),
+    title: msg.title !== void 0 ? createRedactedString(msg.title, DataClassification.CODE, "title", privacyMode) : void 0,
+    folderPath: msg.folderPath !== void 0 ? createRedactedString(msg.folderPath, DataClassification.PATH, "folder_path", privacyMode) : void 0,
+    summaryJson: msg.summaryJson !== void 0 ? createRedactedString(msg.summaryJson, DataClassification.CODE, "summary_json", privacyMode) : void 0,
+    description: msg.description !== void 0 ? createRedactedString(msg.description, DataClassification.CODE, "description", privacyMode) : void 0,
   };
 }
 
@@ -239,10 +239,10 @@ function fromRedactedInvocationContext_IdeState_ViewedPullRequest(msg, purpose, 
   return new InvocationContext_IdeState_ViewedPullRequest({
     number: msg.number,
     url: msg.url,
-    title: msg.title.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    folderPath: msg.folderPath.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    summaryJson: msg.summaryJson.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    description: msg.description.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    title: msg.title?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    folderPath: msg.folderPath?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    summaryJson: msg.summaryJson?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    description: msg.description?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
   });
 }
 
@@ -252,8 +252,8 @@ function toRedactedInvocationContext_MicrosoftTeamsThread(msg, privacyMode) {
     thread: createRedactedString(msg.thread, DataClassification.CODE, "thread", privacyMode),
     channelName: msg.channelName,
     teamName: msg.teamName,
-    channelDescription: createRedactedString(msg.channelDescription, DataClassification.CODE, "channel_description", privacyMode),
-    teamDescription: createRedactedString(msg.teamDescription, DataClassification.CODE, "team_description", privacyMode),
+    channelDescription: msg.channelDescription !== void 0 ? createRedactedString(msg.channelDescription, DataClassification.CODE, "channel_description", privacyMode) : void 0,
+    teamDescription: msg.teamDescription !== void 0 ? createRedactedString(msg.teamDescription, DataClassification.CODE, "team_description", privacyMode) : void 0,
   };
 }
 
@@ -264,8 +264,8 @@ function fromRedactedInvocationContext_MicrosoftTeamsThread(msg, purpose, opts) 
     thread: msg.thread.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     channelName: msg.channelName,
     teamName: msg.teamName,
-    channelDescription: msg.channelDescription.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    teamDescription: msg.teamDescription.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    channelDescription: msg.channelDescription?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    teamDescription: msg.teamDescription?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
   });
 }
 
@@ -274,9 +274,9 @@ function toRedactedInvocationContext_SlackThread(msg, privacyMode) {
     _privacyMode: privacyMode,
     thread: createRedactedString(msg.thread, DataClassification.CODE, "thread", privacyMode),
     channelName: msg.channelName,
-    channelPurpose: createRedactedString(msg.channelPurpose, DataClassification.CODE, "channel_purpose", privacyMode),
-    channelTopic: createRedactedString(msg.channelTopic, DataClassification.CODE, "channel_topic", privacyMode),
-    senderName: createRedactedString(msg.senderName, DataClassification.CODE, "sender_name", privacyMode),
+    channelPurpose: msg.channelPurpose !== void 0 ? createRedactedString(msg.channelPurpose, DataClassification.CODE, "channel_purpose", privacyMode) : void 0,
+    channelTopic: msg.channelTopic !== void 0 ? createRedactedString(msg.channelTopic, DataClassification.CODE, "channel_topic", privacyMode) : void 0,
+    senderName: msg.senderName !== void 0 ? createRedactedString(msg.senderName, DataClassification.CODE, "sender_name", privacyMode) : void 0,
     senderId: msg.senderId,
     senderType: msg.senderType,
     isDirectlyAddressed: msg.isDirectlyAddressed,
@@ -289,9 +289,9 @@ function fromRedactedInvocationContext_SlackThread(msg, purpose, opts) {
   return new InvocationContext_SlackThread({
     thread: msg.thread.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     channelName: msg.channelName,
-    channelPurpose: msg.channelPurpose.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    channelTopic: msg.channelTopic.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    senderName: msg.senderName.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    channelPurpose: msg.channelPurpose?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    channelTopic: msg.channelTopic?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    senderName: msg.senderName?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     senderId: msg.senderId,
     senderType: msg.senderType,
     isDirectlyAddressed: msg.isDirectlyAddressed,
@@ -318,7 +318,7 @@ function toRedactedRecentAgent(msg, privacyMode) {
     _privacyMode: privacyMode,
     name: msg.name,
     path: createRedactedString(msg.path, DataClassification.PATH, "path", privacyMode),
-    overview: createRedactedString(msg.overview, DataClassification.CODE, "overview", privacyMode),
+    overview: msg.overview !== void 0 ? createRedactedString(msg.overview, DataClassification.CODE, "overview", privacyMode) : void 0,
   };
 }
 
@@ -328,7 +328,7 @@ function fromRedactedRecentAgent(msg, purpose, opts) {
   return new RecentAgent({
     name: msg.name,
     path: msg.path.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    overview: msg.overview.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    overview: msg.overview?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
   });
 }
 
@@ -425,8 +425,8 @@ function toRedactedSelectedAgenticGitAction(msg, privacyMode) {
   return {
     _privacyMode: privacyMode,
     branchContext: msg.branchContext !== void 0 ? toRedactedSelectedGitBranchContext(msg.branchContext, privacyMode) : void 0,
-    pathToTemplateFile: createRedactedString(msg.pathToTemplateFile, DataClassification.PATH, "path_to_template_file", privacyMode),
-    pathToTemplateDir: createRedactedString(msg.pathToTemplateDir, DataClassification.PATH, "path_to_template_dir", privacyMode),
+    pathToTemplateFile: msg.pathToTemplateFile !== void 0 ? createRedactedString(msg.pathToTemplateFile, DataClassification.PATH, "path_to_template_file", privacyMode) : void 0,
+    pathToTemplateDir: msg.pathToTemplateDir !== void 0 ? createRedactedString(msg.pathToTemplateDir, DataClassification.PATH, "path_to_template_dir", privacyMode) : void 0,
     params: toRedactedSelectedAgenticGitAction_params(msg.params, privacyMode),
   };
 }
@@ -436,8 +436,8 @@ function fromRedactedSelectedAgenticGitAction(msg, purpose, opts) {
   const enforcing = opts?.enforcing;
   return new SelectedAgenticGitAction({
     branchContext: msg.branchContext !== void 0 ? fromRedactedSelectedGitBranchContext(msg.branchContext, purpose, opts) : void 0,
-    pathToTemplateFile: msg.pathToTemplateFile.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    pathToTemplateDir: msg.pathToTemplateDir.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    pathToTemplateFile: msg.pathToTemplateFile?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    pathToTemplateDir: msg.pathToTemplateDir?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     params: fromRedactedSelectedAgenticGitAction_params(msg.params, purpose, opts),
   });
 }
@@ -581,7 +581,7 @@ function toRedactedSelectedBrowser(msg, privacyMode) {
     _privacyMode: privacyMode,
     browserId: msg.browserId,
     url: msg.url,
-    pageTitle: createRedactedString(msg.pageTitle, DataClassification.CODE, "page_title", privacyMode),
+    pageTitle: msg.pageTitle !== void 0 ? createRedactedString(msg.pageTitle, DataClassification.CODE, "page_title", privacyMode) : void 0,
   };
 }
 
@@ -591,7 +591,7 @@ function fromRedactedSelectedBrowser(msg, purpose, opts) {
   return new SelectedBrowser({
     browserId: msg.browserId,
     url: msg.url,
-    pageTitle: msg.pageTitle.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    pageTitle: msg.pageTitle?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
   });
 }
 
@@ -600,7 +600,7 @@ function toRedactedSelectedCodeSelection(msg, privacyMode) {
     _privacyMode: privacyMode,
     content: createRedactedString(msg.content, DataClassification.CODE, "content", privacyMode),
     path: createRedactedString(msg.path, DataClassification.PATH, "path", privacyMode),
-    relativePath: createRedactedString(msg.relativePath, DataClassification.PATH, "relative_path", privacyMode),
+    relativePath: msg.relativePath !== void 0 ? createRedactedString(msg.relativePath, DataClassification.PATH, "relative_path", privacyMode) : void 0,
     range: msg.range !== void 0 ? toRedactedRange(msg.range, privacyMode) : void 0,
   };
 }
@@ -611,7 +611,7 @@ function fromRedactedSelectedCodeSelection(msg, purpose, opts) {
   return new SelectedCodeSelection({
     content: msg.content.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     path: msg.path.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    relativePath: msg.relativePath.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    relativePath: msg.relativePath?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     range: msg.range !== void 0 ? fromRedactedRange(msg.range, purpose, opts) : void 0,
   });
 }
@@ -625,7 +625,7 @@ function toRedactedSelectedConsoleLog(msg, privacyMode) {
     clientName: msg.clientName,
     sessionId: msg.sessionId,
     stackTrace: msg.stackTrace !== void 0 ? toRedactedStackTrace(msg.stackTrace, privacyMode) : void 0,
-    objectDataJson: createRedactedString(msg.objectDataJson, DataClassification.CODE, "object_data_json", privacyMode),
+    objectDataJson: msg.objectDataJson !== void 0 ? createRedactedString(msg.objectDataJson, DataClassification.CODE, "object_data_json", privacyMode) : void 0,
   };
 }
 
@@ -639,7 +639,7 @@ function fromRedactedSelectedConsoleLog(msg, purpose, opts) {
     clientName: msg.clientName,
     sessionId: msg.sessionId,
     stackTrace: msg.stackTrace !== void 0 ? fromRedactedStackTrace(msg.stackTrace, purpose, opts) : void 0,
-    objectDataJson: msg.objectDataJson.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    objectDataJson: msg.objectDataJson?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
   });
 }
 
@@ -718,7 +718,7 @@ function toRedactedSelectedCursorCommand(msg, privacyMode) {
     name: msg.name,
     content: createRedactedString(msg.content, DataClassification.CODE, "content", privacyMode),
     pluginCapability: msg.pluginCapability !== void 0 ? toRedactedSelectedPluginCapabilityRef(msg.pluginCapability, privacyMode) : void 0,
-    fullPath: createRedactedString(msg.fullPath, DataClassification.PATH, "full_path", privacyMode),
+    fullPath: msg.fullPath !== void 0 ? createRedactedString(msg.fullPath, DataClassification.PATH, "full_path", privacyMode) : void 0,
     displayName: msg.displayName,
   };
 }
@@ -730,7 +730,7 @@ function fromRedactedSelectedCursorCommand(msg, purpose, opts) {
     name: msg.name,
     content: msg.content.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     pluginCapability: msg.pluginCapability !== void 0 ? fromRedactedSelectedPluginCapabilityRef(msg.pluginCapability, purpose, opts) : void 0,
-    fullPath: msg.fullPath.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    fullPath: msg.fullPath?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     displayName: msg.displayName,
   });
 }
@@ -850,9 +850,9 @@ function toRedactedSelectedExternalLink(msg, privacyMode) {
     _privacyMode: privacyMode,
     url: msg.url,
     uuid: msg.uuid,
-    pdfContent: createRedactedString(msg.pdfContent, DataClassification.CODE, "pdf_content", privacyMode),
+    pdfContent: msg.pdfContent !== void 0 ? createRedactedString(msg.pdfContent, DataClassification.CODE, "pdf_content", privacyMode) : void 0,
     isPdf: msg.isPdf,
-    filename: createRedactedString(msg.filename, DataClassification.PATH, "filename", privacyMode),
+    filename: msg.filename !== void 0 ? createRedactedString(msg.filename, DataClassification.PATH, "filename", privacyMode) : void 0,
     blobId: msg.blobId,
   };
 }
@@ -863,9 +863,9 @@ function fromRedactedSelectedExternalLink(msg, purpose, opts) {
   return new SelectedExternalLink({
     url: msg.url,
     uuid: msg.uuid,
-    pdfContent: msg.pdfContent.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    pdfContent: msg.pdfContent?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     isPdf: msg.isPdf,
-    filename: msg.filename.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    filename: msg.filename?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     blobId: msg.blobId,
   });
 }
@@ -875,7 +875,7 @@ function toRedactedSelectedFile(msg, privacyMode) {
     _privacyMode: privacyMode,
     content: createRedactedString(msg.content, DataClassification.CODE, "content", privacyMode),
     path: createRedactedString(msg.path, DataClassification.PATH, "path", privacyMode),
-    relativePath: createRedactedString(msg.relativePath, DataClassification.PATH, "relative_path", privacyMode),
+    relativePath: msg.relativePath !== void 0 ? createRedactedString(msg.relativePath, DataClassification.PATH, "relative_path", privacyMode) : void 0,
   };
 }
 
@@ -885,7 +885,7 @@ function fromRedactedSelectedFile(msg, purpose, opts) {
   return new SelectedFile({
     content: msg.content.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     path: msg.path.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    relativePath: msg.relativePath.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    relativePath: msg.relativePath?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
   });
 }
 
@@ -893,7 +893,7 @@ function toRedactedSelectedFolder(msg, privacyMode) {
   return {
     _privacyMode: privacyMode,
     path: createRedactedString(msg.path, DataClassification.PATH, "path", privacyMode),
-    relativePath: createRedactedString(msg.relativePath, DataClassification.PATH, "relative_path", privacyMode),
+    relativePath: msg.relativePath !== void 0 ? createRedactedString(msg.relativePath, DataClassification.PATH, "relative_path", privacyMode) : void 0,
     directoryTree: msg.directoryTree !== void 0 ? toRedactedLsDirectoryTreeNode(msg.directoryTree, privacyMode) : void 0,
   };
 }
@@ -903,7 +903,7 @@ function fromRedactedSelectedFolder(msg, purpose, opts) {
   const enforcing = opts?.enforcing;
   return new SelectedFolder({
     path: msg.path.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    relativePath: msg.relativePath.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    relativePath: msg.relativePath?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     directoryTree: msg.directoryTree !== void 0 ? fromRedactedLsDirectoryTreeNode(msg.directoryTree, purpose, opts) : void 0,
   });
 }
@@ -932,7 +932,7 @@ function toRedactedSelectedGitCommit(msg, privacyMode) {
     _privacyMode: privacyMode,
     sha: msg.sha,
     message: createRedactedString(msg.message, DataClassification.CODE, "message", privacyMode),
-    description: createRedactedString(msg.description, DataClassification.CODE, "description", privacyMode),
+    description: msg.description !== void 0 ? createRedactedString(msg.description, DataClassification.CODE, "description", privacyMode) : void 0,
     diff: createRedactedString(msg.diff, DataClassification.CODE, "diff", privacyMode),
   };
 }
@@ -943,7 +943,7 @@ function fromRedactedSelectedGitCommit(msg, purpose, opts) {
   return new SelectedGitCommit({
     sha: msg.sha,
     message: msg.message.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    description: msg.description.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    description: msg.description?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     diff: msg.diff.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
   });
 }
@@ -989,7 +989,7 @@ function toRedactedSelectedGitPRDiffSelection(msg, privacyMode) {
     filePath: createRedactedString(msg.filePath, DataClassification.PATH, "file_path", privacyMode),
     startLine: msg.startLine,
     endLine: msg.endLine,
-    diffContent: createRedactedString(msg.diffContent, DataClassification.CODE, "diff_content", privacyMode),
+    diffContent: msg.diffContent !== void 0 ? createRedactedString(msg.diffContent, DataClassification.CODE, "diff_content", privacyMode) : void 0,
     blobId: msg.blobId,
   };
 }
@@ -1002,7 +1002,7 @@ function fromRedactedSelectedGitPRDiffSelection(msg, purpose, opts) {
     filePath: msg.filePath.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     startLine: msg.startLine,
     endLine: msg.endLine,
-    diffContent: msg.diffContent.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    diffContent: msg.diffContent?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     blobId: msg.blobId,
   });
 }
@@ -1147,10 +1147,10 @@ function toRedactedSelectedPullRequest(msg, privacyMode) {
     _privacyMode: privacyMode,
     number: msg.number,
     url: msg.url,
-    title: createRedactedString(msg.title, DataClassification.CODE, "title", privacyMode),
+    title: msg.title !== void 0 ? createRedactedString(msg.title, DataClassification.CODE, "title", privacyMode) : void 0,
     folderPath: createRedactedString(msg.folderPath, DataClassification.PATH, "folder_path", privacyMode),
-    summaryJson: createRedactedString(msg.summaryJson, DataClassification.CODE, "summary_json", privacyMode),
-    description: createRedactedString(msg.description, DataClassification.CODE, "description", privacyMode),
+    summaryJson: msg.summaryJson !== void 0 ? createRedactedString(msg.summaryJson, DataClassification.CODE, "summary_json", privacyMode) : void 0,
+    description: msg.description !== void 0 ? createRedactedString(msg.description, DataClassification.CODE, "description", privacyMode) : void 0,
     blobId: msg.blobId,
   };
 }
@@ -1161,10 +1161,10 @@ function fromRedactedSelectedPullRequest(msg, purpose, opts) {
   return new SelectedPullRequest({
     number: msg.number,
     url: msg.url,
-    title: msg.title.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    title: msg.title?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     folderPath: msg.folderPath.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    summaryJson: msg.summaryJson.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    description: msg.description.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    summaryJson: msg.summaryJson?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    description: msg.description?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     blobId: msg.blobId,
   });
 }
@@ -1188,8 +1188,8 @@ function toRedactedSelectedTerminal(msg, privacyMode) {
   return {
     _privacyMode: privacyMode,
     content: createRedactedString(msg.content, DataClassification.CODE, "content", privacyMode),
-    title: createRedactedString(msg.title, DataClassification.CODE, "title", privacyMode),
-    path: createRedactedString(msg.path, DataClassification.PATH, "path", privacyMode),
+    title: msg.title !== void 0 ? createRedactedString(msg.title, DataClassification.CODE, "title", privacyMode) : void 0,
+    path: msg.path !== void 0 ? createRedactedString(msg.path, DataClassification.PATH, "path", privacyMode) : void 0,
   };
 }
 
@@ -1198,8 +1198,8 @@ function fromRedactedSelectedTerminal(msg, purpose, opts) {
   const enforcing = opts?.enforcing;
   return new SelectedTerminal({
     content: msg.content.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    title: msg.title.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    path: msg.path.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    title: msg.title?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    path: msg.path?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
   });
 }
 
@@ -1207,8 +1207,8 @@ function toRedactedSelectedTerminalSelection(msg, privacyMode) {
   return {
     _privacyMode: privacyMode,
     content: createRedactedString(msg.content, DataClassification.CODE, "content", privacyMode),
-    title: createRedactedString(msg.title, DataClassification.CODE, "title", privacyMode),
-    path: createRedactedString(msg.path, DataClassification.PATH, "path", privacyMode),
+    title: msg.title !== void 0 ? createRedactedString(msg.title, DataClassification.CODE, "title", privacyMode) : void 0,
+    path: msg.path !== void 0 ? createRedactedString(msg.path, DataClassification.PATH, "path", privacyMode) : void 0,
     range: msg.range !== void 0 ? toRedactedRange(msg.range, privacyMode) : void 0,
   };
 }
@@ -1218,8 +1218,8 @@ function fromRedactedSelectedTerminalSelection(msg, purpose, opts) {
   const enforcing = opts?.enforcing;
   return new SelectedTerminalSelection({
     content: msg.content.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    title: msg.title.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    path: msg.path.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    title: msg.title?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    path: msg.path?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     range: msg.range !== void 0 ? fromRedactedRange(msg.range, purpose, opts) : void 0,
   });
 }
@@ -1231,8 +1231,8 @@ function toRedactedSelectedUIElement(msg, privacyMode) {
     xpath: createRedactedString(msg.xpath, DataClassification.CODE, "xpath", privacyMode),
     textContent: createRedactedString(msg.textContent, DataClassification.CODE, "text_content", privacyMode),
     extra: createRedactedString(msg.extra, DataClassification.CODE, "extra", privacyMode),
-    component: createRedactedString(msg.component, DataClassification.CODE, "component", privacyMode),
-    componentPropsJson: createRedactedString(msg.componentPropsJson, DataClassification.CODE, "component_props_json", privacyMode),
+    component: msg.component !== void 0 ? createRedactedString(msg.component, DataClassification.CODE, "component", privacyMode) : void 0,
+    componentPropsJson: msg.componentPropsJson !== void 0 ? createRedactedString(msg.componentPropsJson, DataClassification.CODE, "component_props_json", privacyMode) : void 0,
   };
 }
 
@@ -1244,8 +1244,8 @@ function fromRedactedSelectedUIElement(msg, purpose, opts) {
     xpath: msg.xpath.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     textContent: msg.textContent.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     extra: msg.extra.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    component: msg.component.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    componentPropsJson: msg.componentPropsJson.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    component: msg.component?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    componentPropsJson: msg.componentPropsJson?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
   });
 }
 
@@ -1358,7 +1358,7 @@ function toRedactedStackTrace(msg, privacyMode) {
   return {
     _privacyMode: privacyMode,
     callFrames: msg.callFrames.map((v2) => toRedactedCallFrame(v2, privacyMode)),
-    rawStackTrace: createRedactedString(msg.rawStackTrace, DataClassification.CODE, "raw_stack_trace", privacyMode),
+    rawStackTrace: msg.rawStackTrace !== void 0 ? createRedactedString(msg.rawStackTrace, DataClassification.CODE, "raw_stack_trace", privacyMode) : void 0,
   };
 }
 
@@ -1367,7 +1367,7 @@ function fromRedactedStackTrace(msg, purpose, opts) {
   const enforcing = opts?.enforcing;
   return new StackTrace({
     callFrames: msg.callFrames.map((v2) => fromRedactedCallFrame(v2, purpose, opts)),
-    rawStackTrace: msg.rawStackTrace.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    rawStackTrace: msg.rawStackTrace?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
   });
 }
 

@@ -40,9 +40,9 @@ message ActionsPayload {
 }
 
 message AgentOptions {
-  bool skip_install = 1 [json_name = "skipInstall"];
-  .aiserver.v1.AgentPrivateWorkerConfig private_worker = 2 [json_name = "privateWorker"];
-  string environment_public_id = 3 [json_name = "environmentPublicId"];
+  optional bool skip_install = 1 [json_name = "skipInstall"];
+  optional .aiserver.v1.AgentPrivateWorkerConfig private_worker = 2 [json_name = "privateWorker"];
+  optional string environment_public_id = 3 [json_name = "environmentPublicId"];
 }
 
 message AgentPrivateWorkerConfig {
@@ -55,11 +55,11 @@ message AgentPrivateWorkerLabel {
 }
 
 message ApplyAutomationSpecRequest {
-  .aiserver.v1.AutomationDeploySpec spec = 1 [json_name = "spec"];
+  optional .aiserver.v1.AutomationDeploySpec spec = 1 [json_name = "spec"];
 }
 
 message ApplyAutomationSpecResponse {
-  .aiserver.v1.AutomationWithOwner workflow = 1 [json_name = "workflow"];
+  optional .aiserver.v1.AutomationWithOwner workflow = 1 [json_name = "workflow"];
   bool created = 2 [json_name = "created"];
 }
 
@@ -69,20 +69,20 @@ message ApprovePrAction {
 message Automation {
   string name = 2 [json_name = "name"];
   bool enabled = 3 [json_name = "enabled"];
-  .aiserver.v1.Workflow workflow = 4 [json_name = "workflow"];
+  optional .aiserver.v1.Workflow workflow = 4 [json_name = "workflow"];
   int64 created_at = 5 [json_name = "createdAt"];
   int64 updated_at = 6 [json_name = "updatedAt"];
-  string description = 7 [json_name = "description"];
+  optional string description = 7 [json_name = "description"];
   string automation_id = 8 [json_name = "automationId"];
   .aiserver.v1.AutomationScope scope = 9 [json_name = "scope"];
-  string service_account_id = 10 [json_name = "serviceAccountId"];
+  optional string service_account_id = 10 [json_name = "serviceAccountId"];
   .aiserver.v1.AutomationManagedBy managed_by = 11 [json_name = "managedBy"];
-  string deploy_key = 12 [json_name = "deployKey"];
-  int64 deploy_last_applied_at = 13 [json_name = "deployLastAppliedAt"];
-  string deploy_last_apply_error = 14 [json_name = "deployLastApplyError"];
-  string managed_type = 15 [json_name = "managedType"];
-  bool hidden = 16 [json_name = "hidden"];
-  string template_id = 17 [json_name = "templateId"];
+  optional string deploy_key = 12 [json_name = "deployKey"];
+  optional int64 deploy_last_applied_at = 13 [json_name = "deployLastAppliedAt"];
+  optional string deploy_last_apply_error = 14 [json_name = "deployLastApplyError"];
+  optional string managed_type = 15 [json_name = "managedType"];
+  optional bool hidden = 16 [json_name = "hidden"];
+  optional string template_id = 17 [json_name = "templateId"];
 }
 
 enum AutomationCreationSource {
@@ -100,25 +100,25 @@ enum AutomationDefaultTool {
 
 message AutomationDeploySource {
   string kind = 1 [json_name = "kind"];
-  string repo_instance_key = 2 [json_name = "repoInstanceKey"];
-  string repo_node_id = 3 [json_name = "repoNodeId"];
-  string repo_name = 4 [json_name = "repoName"];
-  string path = 5 [json_name = "path"];
-  string ref = 6 [json_name = "ref"];
-  string commit_sha = 7 [json_name = "commitSha"];
-  string tool_version = 8 [json_name = "toolVersion"];
+  optional string repo_instance_key = 2 [json_name = "repoInstanceKey"];
+  optional string repo_node_id = 3 [json_name = "repoNodeId"];
+  optional string repo_name = 4 [json_name = "repoName"];
+  optional string path = 5 [json_name = "path"];
+  optional string ref = 6 [json_name = "ref"];
+  optional string commit_sha = 7 [json_name = "commitSha"];
+  optional string tool_version = 8 [json_name = "toolVersion"];
 }
 
 message AutomationDeploySpec {
   int32 version = 1 [json_name = "version"];
-  .aiserver.v1.AutomationDeploySource source = 2 [json_name = "source"];
+  optional .aiserver.v1.AutomationDeploySource source = 2 [json_name = "source"];
   string key = 3 [json_name = "key"];
   string name = 4 [json_name = "name"];
-  string description = 5 [json_name = "description"];
+  optional string description = 5 [json_name = "description"];
   bool enabled = 6 [json_name = "enabled"];
   .aiserver.v1.AutomationScope scope = 7 [json_name = "scope"];
-  .aiserver.v1.Workflow workflow = 8 [json_name = "workflow"];
-  .aiserver.v1.AutomationManagedBy managed_by = 9 [json_name = "managedBy"];
+  optional .aiserver.v1.Workflow workflow = 8 [json_name = "workflow"];
+  optional .aiserver.v1.AutomationManagedBy managed_by = 9 [json_name = "managedBy"];
 }
 
 enum AutomationFilterDecision {
@@ -136,7 +136,7 @@ enum AutomationManagedBy {
 }
 
 message AutomationMcpAuthState {
-  int64 server_id = 1 [json_name = "serverId"];
+  optional int64 server_id = 1 [json_name = "serverId"];
   string server_name = 2 [json_name = "serverName"];
   .aiserver.v1.McpAuthState auth_state = 3 [json_name = "authState"];
 }
@@ -144,24 +144,24 @@ message AutomationMcpAuthState {
 message AutomationRun {
   string background_composer_id = 3 [json_name = "backgroundComposerId"];
   string namespaced_workflow_id = 4 [json_name = "namespacedWorkflowId"];
-  .aiserver.v1.Workflow workflow = 5 [json_name = "workflow"];
+  optional .aiserver.v1.Workflow workflow = 5 [json_name = "workflow"];
   int64 created_at = 6 [json_name = "createdAt"];
   int64 updated_at = 7 [json_name = "updatedAt"];
-  .aiserver.v1.PlatformActionsPayload platform_actions = 8 [json_name = "platformActions"];
-  .aiserver.v1.TriggerMetadataPayload trigger_metadata = 9 [json_name = "triggerMetadata"];
+  optional .aiserver.v1.PlatformActionsPayload platform_actions = 8 [json_name = "platformActions"];
+  optional .aiserver.v1.TriggerMetadataPayload trigger_metadata = 9 [json_name = "triggerMetadata"];
   string uuid = 10 [json_name = "uuid"];
   string automation_id = 11 [json_name = "automationId"];
   .aiserver.v1.AutomationRunStatus status = 12 [json_name = "status"];
   string error_message = 13 [json_name = "errorMessage"];
-  .aiserver.v1.AutomationRunFailureDetails failure_details = 14 [json_name = "failureDetails"];
-  int64 completed_at = 15 [json_name = "completedAt"];
-  .aiserver.v1.AutomationFilterDecision filter_decision = 16 [json_name = "filterDecision"];
-  string filter_rationale = 17 [json_name = "filterRationale"];
-  string filter_error_message = 18 [json_name = "filterErrorMessage"];
+  optional .aiserver.v1.AutomationRunFailureDetails failure_details = 14 [json_name = "failureDetails"];
+  optional int64 completed_at = 15 [json_name = "completedAt"];
+  optional .aiserver.v1.AutomationFilterDecision filter_decision = 16 [json_name = "filterDecision"];
+  optional string filter_rationale = 17 [json_name = "filterRationale"];
+  optional string filter_error_message = 18 [json_name = "filterErrorMessage"];
   bool can_retry = 19 [json_name = "canRetry"];
-  string retry_ineligible_reason = 20 [json_name = "retryIneligibleReason"];
-  .aiserver.v1.AutomationRunRetryIneligibleReason retry_ineligible_reason_code = 21 [json_name = "retryIneligibleReasonCode"];
-  string skip_reason = 22 [json_name = "skipReason"];
+  optional string retry_ineligible_reason = 20 [json_name = "retryIneligibleReason"];
+  optional .aiserver.v1.AutomationRunRetryIneligibleReason retry_ineligible_reason_code = 21 [json_name = "retryIneligibleReasonCode"];
+  optional string skip_reason = 22 [json_name = "skipReason"];
 }
 
 enum AutomationRunFailureCode {
@@ -195,8 +195,8 @@ message AutomationRunFailureDetails {
   .aiserver.v1.AutomationRunFailureCode code = 1 [json_name = "code"];
   string title = 2 [json_name = "title"];
   string message = 3 [json_name = "message"];
-  string cta_label = 4 [json_name = "ctaLabel"];
-  string cta_path = 5 [json_name = "ctaPath"];
+  optional string cta_label = 4 [json_name = "ctaLabel"];
+  optional string cta_path = 5 [json_name = "ctaPath"];
 }
 
 message AutomationRunLaunchContext {
@@ -211,7 +211,7 @@ message AutomationRunLaunchContext {
 message AutomationRunLaunchStartingRef {
   string repo_url = 1 [json_name = "repoUrl"];
   string ref = 2 [json_name = "ref"];
-  string base_ref = 3 [json_name = "baseRef"];
+  optional string base_ref = 3 [json_name = "baseRef"];
 }
 
 enum AutomationRunListKind {
@@ -244,11 +244,11 @@ enum AutomationScope {
 }
 
 message AutomationWithOwner {
-  .aiserver.v1.Automation workflow = 1 [json_name = "workflow"];
+  optional .aiserver.v1.Automation workflow = 1 [json_name = "workflow"];
   int32 user_id = 2 [json_name = "userId"];
   string owner_name = 3 [json_name = "ownerName"];
   repeated .aiserver.v1.AutomationMcpAuthState mcp_auth_states = 4 [json_name = "mcpAuthStates"];
-  int32 team_id = 5 [json_name = "teamId"];
+  optional int32 team_id = 5 [json_name = "teamId"];
 }
 
 message BuilderCompletionContext {
@@ -268,7 +268,7 @@ message BuilderCompletionMessage {
 
 message BuilderCompletionRequest {
   repeated .aiserver.v1.BuilderCompletionMessage messages = 1 [json_name = "messages"];
-  .aiserver.v1.BuilderCompletionContext context = 2 [json_name = "context"];
+  optional .aiserver.v1.BuilderCompletionContext context = 2 [json_name = "context"];
 }
 
 message BuilderCompletionResponse {
@@ -302,7 +302,7 @@ message ConnectSentryCallbackRequest {
   string code = 1 [json_name = "code"];
   string installation_id = 2 [json_name = "installationId"];
   string state = 3 [json_name = "state"];
-  string organization_slug = 4 [json_name = "organizationSlug"];
+  optional string organization_slug = 4 [json_name = "organizationSlug"];
 }
 
 message ConnectSentryCallbackResponse {
@@ -311,33 +311,33 @@ message ConnectSentryCallbackResponse {
 
 message CreateAutomationRequest {
   string name = 1 [json_name = "name"];
-  .aiserver.v1.Workflow workflow = 2 [json_name = "workflow"];
-  string description = 3 [json_name = "description"];
-  .aiserver.v1.AutomationScope scope = 4 [json_name = "scope"];
-  string template_id = 5 [json_name = "templateId"];
-  string managed_type = 6 [json_name = "managedType"];
-  bool hidden = 7 [json_name = "hidden"];
-  int32 team_id = 8 [json_name = "teamId"];
+  optional .aiserver.v1.Workflow workflow = 2 [json_name = "workflow"];
+  optional string description = 3 [json_name = "description"];
+  optional .aiserver.v1.AutomationScope scope = 4 [json_name = "scope"];
+  optional string template_id = 5 [json_name = "templateId"];
+  optional string managed_type = 6 [json_name = "managedType"];
+  optional bool hidden = 7 [json_name = "hidden"];
+  optional int32 team_id = 8 [json_name = "teamId"];
   .aiserver.v1.AutomationCreationSource creation_source = 9 [json_name = "creationSource"];
-  bool enabled = 10 [json_name = "enabled"];
-  string sand_agent_id = 11 [json_name = "sandAgentId"];
-  string sand_automation_id = 12 [json_name = "sandAutomationId"];
+  optional bool enabled = 10 [json_name = "enabled"];
+  optional string sand_agent_id = 11 [json_name = "sandAgentId"];
+  optional string sand_automation_id = 12 [json_name = "sandAutomationId"];
 }
 
 message CreateAutomationResponse {
-  .aiserver.v1.AutomationWithOwner workflow = 1 [json_name = "workflow"];
+  optional .aiserver.v1.AutomationWithOwner workflow = 1 [json_name = "workflow"];
 }
 
 message CreateWorkflowFromTemplateRequest {
   string template_id = 1 [json_name = "templateId"];
   string name = 2 [json_name = "name"];
-  .aiserver.v1.InputValues input_values = 3 [json_name = "inputValues"];
-  string description = 4 [json_name = "description"];
+  optional .aiserver.v1.InputValues input_values = 3 [json_name = "inputValues"];
+  optional string description = 4 [json_name = "description"];
   .aiserver.v1.AutomationCreationSource creation_source = 5 [json_name = "creationSource"];
 }
 
 message CreateWorkflowFromTemplateResponse {
-  .aiserver.v1.Automation workflow = 1 [json_name = "workflow"];
+  optional .aiserver.v1.Automation workflow = 1 [json_name = "workflow"];
 }
 
 message CronSamplePayload {
@@ -360,7 +360,7 @@ message DeleteAutomationMemoryResponse {
   string file = 1 [json_name = "file"];
   bool conflict = 2 [json_name = "conflict"];
   string content = 3 [json_name = "content"];
-  string version = 4 [json_name = "version"];
+  optional string version = 4 [json_name = "version"];
   repeated string files = 5 [json_name = "files"];
 }
 
@@ -387,8 +387,8 @@ message DisconnectSentryResponse {
 }
 
 message GetApprovalAgentAnalyticsRequest {
-  string automation_id = 1 [json_name = "automationId"];
-  int32 team_id = 2 [json_name = "teamId"];
+  optional string automation_id = 1 [json_name = "automationId"];
+  optional int32 team_id = 2 [json_name = "teamId"];
 }
 
 message GetApprovalAgentAnalyticsResponse {
@@ -406,12 +406,12 @@ message GetAutomationMemoryResponse {
   string file = 1 [json_name = "file"];
   string content = 2 [json_name = "content"];
   bool exists = 3 [json_name = "exists"];
-  string version = 4 [json_name = "version"];
+  optional string version = 4 [json_name = "version"];
 }
 
 message GetAutomationRequest {
   string automation_id = 2 [json_name = "automationId"];
-  int32 team_id = 3 [json_name = "teamId"];
+  optional int32 team_id = 3 [json_name = "teamId"];
 }
 
 message GetAutomationResponse {
@@ -426,7 +426,7 @@ message GetAutomationRunRequest {
 }
 
 message GetAutomationRunResponse {
-  .aiserver.v1.AutomationRun run = 1 [json_name = "run"];
+  optional .aiserver.v1.AutomationRun run = 1 [json_name = "run"];
 }
 
 message GetManagedAutomationTeamSettingsRequest {
@@ -434,12 +434,12 @@ message GetManagedAutomationTeamSettingsRequest {
 }
 
 message GetManagedAutomationTeamSettingsResponse {
-  .aiserver.v1.ManagedAutomationTeamSettings settings = 1 [json_name = "settings"];
+  optional .aiserver.v1.ManagedAutomationTeamSettings settings = 1 [json_name = "settings"];
 }
 
 message GetRunSummaryRequest {
-  string automation_id = 1 [json_name = "automationId"];
-  int32 team_id = 2 [json_name = "teamId"];
+  optional string automation_id = 1 [json_name = "automationId"];
+  optional int32 team_id = 2 [json_name = "teamId"];
   bool owner_only = 3 [json_name = "ownerOnly"];
 }
 
@@ -449,8 +449,8 @@ message GetRunSummaryResponse {
 }
 
 message GetSecuritybotResolutionStatsRequest {
-  string automation_id = 1 [json_name = "automationId"];
-  int32 team_id = 2 [json_name = "teamId"];
+  optional string automation_id = 1 [json_name = "automationId"];
+  optional int32 team_id = 2 [json_name = "teamId"];
 }
 
 message GetSecuritybotResolutionStatsResponse {
@@ -472,7 +472,7 @@ message GetSentryProjectsRequest {
 
 message GetSentryProjectsResponse {
   repeated .aiserver.v1.SentryProject projects = 1 [json_name = "projects"];
-  string organization_slug = 2 [json_name = "organizationSlug"];
+  optional string organization_slug = 2 [json_name = "organizationSlug"];
 }
 
 message GetSentryStatusRequest {
@@ -480,7 +480,7 @@ message GetSentryStatusRequest {
 
 message GetSentryStatusResponse {
   bool is_connected = 1 [json_name = "isConnected"];
-  string organization_slug = 2 [json_name = "organizationSlug"];
+  optional string organization_slug = 2 [json_name = "organizationSlug"];
 }
 
 message GetWorkflowTemplateRequest {
@@ -488,7 +488,7 @@ message GetWorkflowTemplateRequest {
 }
 
 message GetWorkflowTemplateResponse {
-  .aiserver.v1.WorkflowTemplate template = 1 [json_name = "template"];
+  optional .aiserver.v1.WorkflowTemplate template = 1 [json_name = "template"];
 }
 
 message GitCICompletedEvent {
@@ -541,7 +541,7 @@ message GitPrAction {
 }
 
 message GitPrActionPayload {
-  string pr_url = 1 [json_name = "prUrl"];
+  optional string pr_url = 1 [json_name = "prUrl"];
   string repo_url = 2 [json_name = "repoUrl"];
 }
 
@@ -717,17 +717,17 @@ message LinearTriggerPayload {
 }
 
 message ListAllRunsRequest {
-  string automation_id = 1 [json_name = "automationId"];
-  int32 limit = 2 [json_name = "limit"];
-  string cursor = 3 [json_name = "cursor"];
+  optional string automation_id = 1 [json_name = "automationId"];
+  optional int32 limit = 2 [json_name = "limit"];
+  optional string cursor = 3 [json_name = "cursor"];
   .aiserver.v1.AutomationRunListKind run_kind = 4 [json_name = "runKind"];
-  int32 team_id = 5 [json_name = "teamId"];
+  optional int32 team_id = 5 [json_name = "teamId"];
   bool owner_only = 6 [json_name = "ownerOnly"];
 }
 
 message ListAllRunsResponse {
   repeated .aiserver.v1.AutomationRun runs = 1 [json_name = "runs"];
-  string next_cursor = 2 [json_name = "nextCursor"];
+  optional string next_cursor = 2 [json_name = "nextCursor"];
 }
 
 message ListAutomationMemoriesRequest {
@@ -739,19 +739,19 @@ message ListAutomationMemoriesResponse {
 }
 
 message ListAutomationRunsRequest {
-  int32 limit = 2 [json_name = "limit"];
+  optional int32 limit = 2 [json_name = "limit"];
   string automation_id = 3 [json_name = "automationId"];
-  string cursor = 4 [json_name = "cursor"];
+  optional string cursor = 4 [json_name = "cursor"];
   .aiserver.v1.AutomationRunListKind run_kind = 5 [json_name = "runKind"];
 }
 
 message ListAutomationRunsResponse {
   repeated .aiserver.v1.AutomationRun runs = 1 [json_name = "runs"];
-  string next_cursor = 2 [json_name = "nextCursor"];
+  optional string next_cursor = 2 [json_name = "nextCursor"];
 }
 
 message ListAutomationsRequest {
-  int32 team_id = 1 [json_name = "teamId"];
+  optional int32 team_id = 1 [json_name = "teamId"];
 }
 
 message ListAutomationsResponse {
@@ -763,7 +763,7 @@ message ListSandAutomationsRequest {
 }
 
 message ListWorkflowTemplatesRequest {
-  string category = 1 [json_name = "category"];
+  optional string category = 1 [json_name = "category"];
 }
 
 message ListWorkflowTemplatesResponse {
@@ -781,7 +781,7 @@ message ManagedAutomationTeamSettings {
 }
 
 message McpAction {
-  .aiserver.v1.McpServerConfig server = 1 [json_name = "server"];
+  optional .aiserver.v1.McpServerConfig server = 1 [json_name = "server"];
 }
 
 enum McpAuthState {
@@ -793,12 +793,12 @@ enum McpAuthState {
 
 message McpServerConfig {
   string name = 1 [json_name = "name"];
-  int64 id = 4 [json_name = "id"];
+  optional int64 id = 4 [json_name = "id"];
 }
 
 message McpTemplateHint {
   string name = 1 [json_name = "name"];
-  string url = 2 [json_name = "url"];
+  optional string url = 2 [json_name = "url"];
 }
 
 message MicrosoftTeamsAction {
@@ -815,8 +815,8 @@ message MicrosoftTeamsActionPayload {
   string tenant_id = 1 [json_name = "tenantId"];
   string team_id = 2 [json_name = "teamId"];
   string channel_id = 3 [json_name = "channelId"];
-  string triggering_pr_url = 4 [json_name = "triggeringPrUrl"];
-  string reply_root_message_id = 5 [json_name = "replyRootMessageId"];
+  optional string triggering_pr_url = 4 [json_name = "triggeringPrUrl"];
+  optional string reply_root_message_id = 5 [json_name = "replyRootMessageId"];
 }
 
 message MicrosoftTeamsChannelCreatedSamplePayload {
@@ -857,7 +857,7 @@ message MicrosoftTeamsTriggerPayload {
   string message_text = 4 [json_name = "messageText"];
   string aad_object_id = 5 [json_name = "aadObjectId"];
   string activity_id = 6 [json_name = "activityId"];
-  string root_message_id = 7 [json_name = "rootMessageId"];
+  optional string root_message_id = 7 [json_name = "rootMessageId"];
 }
 
 message PagerDutyIncidentAcknowledgedEvent {
@@ -955,16 +955,16 @@ message PrCommentAction {
 message PrCommentActionPayload {
   int32 pr_number = 1 [json_name = "prNumber"];
   string repo_url = 2 [json_name = "repoUrl"];
-  string head_sha = 3 [json_name = "headSha"];
+  optional string head_sha = 3 [json_name = "headSha"];
 }
 
 message Prompt {
   string prompt = 1 [json_name = "prompt"];
   .aiserver.v1.PromptEffortLevel effort_level = 2 [json_name = "effortLevel"];
-  string model = 3 [json_name = "model"];
-  bool is_filter = 4 [json_name = "isFilter"];
-  .aiserver.v1.PromptRunMode run_mode = 5 [json_name = "runMode"];
-  bool suppress_slack_reaction = 6 [json_name = "suppressSlackReaction"];
+  optional string model = 3 [json_name = "model"];
+  optional bool is_filter = 4 [json_name = "isFilter"];
+  optional .aiserver.v1.PromptRunMode run_mode = 5 [json_name = "runMode"];
+  optional bool suppress_slack_reaction = 6 [json_name = "suppressSlackReaction"];
 }
 
 enum PromptEffortLevel {
@@ -1003,7 +1003,7 @@ message ReassignAutomationOwnerRequest {
 }
 
 message ReassignAutomationOwnerResponse {
-  .aiserver.v1.AutomationWithOwner workflow = 1 [json_name = "workflow"];
+  optional .aiserver.v1.AutomationWithOwner workflow = 1 [json_name = "workflow"];
 }
 
 message RequestReviewersAction {
@@ -1103,8 +1103,8 @@ message SlackAction {
 
 message SlackActionPayload {
   string channel = 1 [json_name = "channel"];
-  string triggering_pr_url = 2 [json_name = "triggeringPrUrl"];
-  string reply_thread_ts = 4 [json_name = "replyThreadTs"];
+  optional string triggering_pr_url = 2 [json_name = "triggeringPrUrl"];
+  optional string reply_thread_ts = 4 [json_name = "replyThreadTs"];
 }
 
 message SlackAnyReactionAddedTrigger {
@@ -1159,7 +1159,7 @@ message SlackReactionAddedTriggerPayload {
   string message_text = 2 [json_name = "messageText"];
   string user_id = 3 [json_name = "userId"];
   string message_ts = 4 [json_name = "messageTs"];
-  string thread_ts = 5 [json_name = "threadTs"];
+  optional string thread_ts = 5 [json_name = "threadTs"];
   string emoji_name = 6 [json_name = "emojiName"];
 }
 
@@ -1174,9 +1174,9 @@ message SlackTrigger {
   bool message_contains_is_regex = 4 [json_name = "messageContainsIsRegex"];
   repeated string channels = 5 [json_name = "channels"];
   bool block_unauthenticated_slack_users = 6 [json_name = "blockUnauthenticatedSlackUsers"];
-  .aiserver.v1.SlackCompletionReactionMode slack_completion_reaction_mode = 7 [json_name = "slackCompletionReactionMode"];
-  string slack_completion_reaction_custom_emoji = 8 [json_name = "slackCompletionReactionCustomEmoji"];
-  bool top_level_only = 9 [json_name = "topLevelOnly"];
+  optional .aiserver.v1.SlackCompletionReactionMode slack_completion_reaction_mode = 7 [json_name = "slackCompletionReactionMode"];
+  optional string slack_completion_reaction_custom_emoji = 8 [json_name = "slackCompletionReactionCustomEmoji"];
+  optional bool top_level_only = 9 [json_name = "topLevelOnly"];
 }
 
 message SlackTriggerPayload {
@@ -1184,7 +1184,7 @@ message SlackTriggerPayload {
   string message_text = 2 [json_name = "messageText"];
   string user_id = 3 [json_name = "userId"];
   string message_ts = 4 [json_name = "messageTs"];
-  string thread_ts = 5 [json_name = "threadTs"];
+  optional string thread_ts = 5 [json_name = "threadTs"];
 }
 
 message StringList {
@@ -1193,9 +1193,9 @@ message StringList {
 
 message TestAutomationFilterRequest {
   string automation_id = 1 [json_name = "automationId"];
-  int32 trigger_index = 11 [json_name = "triggerIndex"];
-  string test_repo = 12 [json_name = "testRepo"];
-  string test_branch = 13 [json_name = "testBranch"];
+  optional int32 trigger_index = 11 [json_name = "triggerIndex"];
+  optional string test_repo = 12 [json_name = "testRepo"];
+  optional string test_branch = 13 [json_name = "testBranch"];
   oneof sample_payload {
     .aiserver.v1.CronSamplePayload cron = 2 [json_name = "cron"];
     .aiserver.v1.PullRequestSamplePayload pull_request = 3 [json_name = "pullRequest"];
@@ -1215,15 +1215,15 @@ message TestAutomationFilterRequest {
 
 message TestAutomationFilterResponse {
   .aiserver.v1.AutomationFilterDecision decision = 1 [json_name = "decision"];
-  string rationale = 2 [json_name = "rationale"];
-  string error_message = 3 [json_name = "errorMessage"];
+  optional string rationale = 2 [json_name = "rationale"];
+  optional string error_message = 3 [json_name = "errorMessage"];
 }
 
 message TestAutomationRequest {
   string automation_id = 8 [json_name = "automationId"];
-  int32 trigger_index = 12 [json_name = "triggerIndex"];
-  string test_repo = 13 [json_name = "testRepo"];
-  string test_branch = 14 [json_name = "testBranch"];
+  optional int32 trigger_index = 12 [json_name = "triggerIndex"];
+  optional string test_repo = 13 [json_name = "testRepo"];
+  optional string test_branch = 14 [json_name = "testBranch"];
   oneof sample_payload {
     .aiserver.v1.CronSamplePayload cron = 2 [json_name = "cron"];
     .aiserver.v1.PullRequestSamplePayload pull_request = 3 [json_name = "pullRequest"];
@@ -1243,8 +1243,8 @@ message TestAutomationRequest {
 
 message TestAutomationResponse {
   string message = 1 [json_name = "message"];
-  string background_composer_id = 2 [json_name = "backgroundComposerId"];
-  string run_uuid = 3 [json_name = "runUuid"];
+  optional string background_composer_id = 2 [json_name = "backgroundComposerId"];
+  optional string run_uuid = 3 [json_name = "runUuid"];
 }
 
 message ToolSuggestion {
@@ -1255,7 +1255,7 @@ message ToolSuggestion {
 }
 
 message Trigger {
-  string agentic_filter_prompt = 14 [json_name = "agenticFilterPrompt"];
+  optional string agentic_filter_prompt = 14 [json_name = "agenticFilterPrompt"];
   oneof trigger {
     .aiserver.v1.CronTrigger cron = 1 [json_name = "cron"];
     .aiserver.v1.GitTrigger git = 2 [json_name = "git"];
@@ -1285,11 +1285,11 @@ message TriggerMetadataPayload {
 message UpdateAutomationAuthoringModeRequest {
   string automation_id = 1 [json_name = "automationId"];
   .aiserver.v1.AutomationManagedBy managed_by = 2 [json_name = "managedBy"];
-  string deploy_key = 3 [json_name = "deployKey"];
+  optional string deploy_key = 3 [json_name = "deployKey"];
 }
 
 message UpdateAutomationAuthoringModeResponse {
-  .aiserver.v1.AutomationWithOwner workflow = 1 [json_name = "workflow"];
+  optional .aiserver.v1.AutomationWithOwner workflow = 1 [json_name = "workflow"];
 }
 
 message UpdateAutomationMemoryRequest {
@@ -1305,44 +1305,44 @@ message UpdateAutomationMemoryRequest {
 message UpdateAutomationMemoryResponse {
   string file = 1 [json_name = "file"];
   string content = 2 [json_name = "content"];
-  string version = 3 [json_name = "version"];
+  optional string version = 3 [json_name = "version"];
   bool conflict = 4 [json_name = "conflict"];
 }
 
 message UpdateAutomationRequest {
-  string name = 2 [json_name = "name"];
-  .aiserver.v1.Workflow workflow = 3 [json_name = "workflow"];
-  bool enabled = 4 [json_name = "enabled"];
-  string description = 5 [json_name = "description"];
+  optional string name = 2 [json_name = "name"];
+  optional .aiserver.v1.Workflow workflow = 3 [json_name = "workflow"];
+  optional bool enabled = 4 [json_name = "enabled"];
+  optional string description = 5 [json_name = "description"];
   string automation_id = 6 [json_name = "automationId"];
-  .aiserver.v1.AutomationScope scope = 7 [json_name = "scope"];
-  string managed_type = 8 [json_name = "managedType"];
-  bool hidden = 9 [json_name = "hidden"];
+  optional .aiserver.v1.AutomationScope scope = 7 [json_name = "scope"];
+  optional string managed_type = 8 [json_name = "managedType"];
+  optional bool hidden = 9 [json_name = "hidden"];
 }
 
 message UpdateAutomationResponse {
-  .aiserver.v1.AutomationWithOwner workflow = 1 [json_name = "workflow"];
+  optional .aiserver.v1.AutomationWithOwner workflow = 1 [json_name = "workflow"];
 }
 
 message UpdateManagedAutomationTeamSettingsRequest {
   int32 team_id = 1 [json_name = "teamId"];
   bool security_agent_disabled = 2 [json_name = "securityAgentDisabled"];
   bool approval_agent_disabled = 3 [json_name = "approvalAgentDisabled"];
-  bool security_agent_disabled_patch = 4 [json_name = "securityAgentDisabledPatch"];
-  bool approval_agent_disabled_patch = 5 [json_name = "approvalAgentDisabledPatch"];
+  optional bool security_agent_disabled_patch = 4 [json_name = "securityAgentDisabledPatch"];
+  optional bool approval_agent_disabled_patch = 5 [json_name = "approvalAgentDisabledPatch"];
 }
 
 message UpdateManagedAutomationTeamSettingsResponse {
-  .aiserver.v1.ManagedAutomationTeamSettings settings = 1 [json_name = "settings"];
+  optional .aiserver.v1.ManagedAutomationTeamSettings settings = 1 [json_name = "settings"];
 }
 
 message ValidateAutomationSpecRequest {
-  .aiserver.v1.AutomationDeploySpec spec = 1 [json_name = "spec"];
+  optional .aiserver.v1.AutomationDeploySpec spec = 1 [json_name = "spec"];
 }
 
 message ValidateAutomationSpecResponse {
   bool would_create = 1 [json_name = "wouldCreate"];
-  string automation_id = 2 [json_name = "automationId"];
+  optional string automation_id = 2 [json_name = "automationId"];
 }
 
 message ValidateAutomationToolsRequest {
@@ -1364,16 +1364,16 @@ message WebhookTrigger {
 
 message Workflow {
   repeated .aiserver.v1.Prompt prompts = 3 [json_name = "prompts"];
-  string model = 8 [json_name = "model"];
+  optional string model = 8 [json_name = "model"];
   repeated .aiserver.v1.Trigger triggers = 10 [json_name = "triggers"];
   repeated .aiserver.v1.Action actions = 11 [json_name = "actions"];
-  .aiserver.v1.GitConfig git_config = 12 [json_name = "gitConfig"];
-  .aiserver.v1.AgentOptions agent_options = 13 [json_name = "agentOptions"];
-  bool memory_enabled = 14 [json_name = "memoryEnabled"];
+  optional .aiserver.v1.GitConfig git_config = 12 [json_name = "gitConfig"];
+  optional .aiserver.v1.AgentOptions agent_options = 13 [json_name = "agentOptions"];
+  optional bool memory_enabled = 14 [json_name = "memoryEnabled"];
   repeated string slack_notified_channels = 15 [json_name = "slackNotifiedChannels"];
-  .aiserver.v1.SlackCompletionReactionMode slack_completion_reaction_mode = 16 [json_name = "slackCompletionReactionMode"];
-  string slack_completion_reaction_custom_emoji = 17 [json_name = "slackCompletionReactionCustomEmoji"];
-  .google.protobuf.Struct managed_config = 18 [json_name = "managedConfig"];
+  optional .aiserver.v1.SlackCompletionReactionMode slack_completion_reaction_mode = 16 [json_name = "slackCompletionReactionMode"];
+  optional string slack_completion_reaction_custom_emoji = 17 [json_name = "slackCompletionReactionCustomEmoji"];
+  optional .google.protobuf.Struct managed_config = 18 [json_name = "managedConfig"];
   repeated .aiserver.v1.AutomationDefaultTool disabled_default_tools = 19 [json_name = "disabledDefaultTools"];
 }
 
@@ -1382,10 +1382,10 @@ message WorkflowTemplate {
   string name = 2 [json_name = "name"];
   string description = 3 [json_name = "description"];
   string category = 4 [json_name = "category"];
-  .aiserver.v1.Workflow workflow = 5 [json_name = "workflow"];
-  .aiserver.v1.InputSchema input_schema = 6 [json_name = "inputSchema"];
+  optional .aiserver.v1.Workflow workflow = 5 [json_name = "workflow"];
+  optional .aiserver.v1.InputSchema input_schema = 6 [json_name = "inputSchema"];
   string icon = 7 [json_name = "icon"];
-  int32 featured_index = 8 [json_name = "featuredIndex"];
+  optional int32 featured_index = 8 [json_name = "featuredIndex"];
   repeated .aiserver.v1.McpTemplateHint mcp_hints = 9 [json_name = "mcpHints"];
 }
 

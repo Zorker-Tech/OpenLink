@@ -1,4 +1,4 @@
-// agent.v1 — agent/v1/cursor_rules messages, enums and services.
+// agent.v1 — agent/v1/rules messages, enums and services.
 //
 // Generated from this repository's schema (source/packages/proto/schema) by
 // `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
@@ -52,7 +52,7 @@ export class CursorRule extends Message<CursorRule> {
   content = "";
 
   /**
-   * @generated from field: agent.v1.CursorRuleType type = 3;
+   * @generated from field: optional agent.v1.CursorRuleType type = 3;
    */
   type?: CursorRuleType;
 
@@ -62,14 +62,14 @@ export class CursorRule extends Message<CursorRule> {
   source = CursorRuleSource.UNSPECIFIED;
 
   /**
-   * @generated from field: string git_remote_origin = 5;
+   * @generated from field: optional string git_remote_origin = 5;
    */
-  gitRemoteOrigin = "";
+  gitRemoteOrigin?: string;
 
   /**
-   * @generated from field: string parse_error = 6;
+   * @generated from field: optional string parse_error = 6;
    */
-  parseError = "";
+  parseError?: string;
 
   /**
    * @generated from field: repeated string environments = 7;
@@ -82,24 +82,24 @@ export class CursorRule extends Message<CursorRule> {
   disabledEnvironments: string[] = [];
 
   /**
-   * @generated from field: string plugin = 9;
+   * @generated from field: optional string plugin = 9;
    */
-  plugin = "";
+  plugin?: string;
 
   /**
-   * @generated from field: string marketplace = 10;
+   * @generated from field: optional string marketplace = 10;
    */
-  marketplace = "";
+  marketplace?: string;
 
   /**
-   * @generated from field: string plugin_id = 11;
+   * @generated from field: optional string plugin_id = 11;
    */
-  pluginId = "";
+  pluginId?: string;
 
   /**
-   * @generated from field: string marketplace_id = 12;
+   * @generated from field: optional string marketplace_id = 12;
    */
-  marketplaceId = "";
+  marketplaceId?: string;
 
   /**
    * @generated from field: repeated string scoped_to = 13;
@@ -112,9 +112,9 @@ export class CursorRule extends Message<CursorRule> {
   frontmatter = "";
 
   /**
-   * @generated from field: bool is_required = 15;
+   * @generated from field: optional bool is_required = 15;
    */
-  isRequired = false;
+  isRequired?: boolean;
 
   constructor(data?: PartialMessage<CursorRule>) {
     super();
@@ -126,19 +126,19 @@ export class CursorRule extends Message<CursorRule> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "full_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "type", kind: "message", T: CursorRuleType },
+    { no: 3, name: "type", kind: "message", T: CursorRuleType, opt: true },
     { no: 4, name: "source", kind: "enum", T: proto3.getEnumType(CursorRuleSource) },
-    { no: 5, name: "git_remote_origin", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "parse_error", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "git_remote_origin", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "parse_error", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 7, name: "environments", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 8, name: "disabled_environments", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 9, name: "plugin", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "marketplace", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 11, name: "plugin_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 12, name: "marketplace_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 9, name: "plugin", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 10, name: "marketplace", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 11, name: "plugin_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 12, name: "marketplace_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 13, name: "scoped_to", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 14, name: "frontmatter", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 15, name: "is_required", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 15, name: "is_required", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CursorRule {

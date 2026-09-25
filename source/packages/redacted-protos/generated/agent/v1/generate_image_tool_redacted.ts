@@ -13,7 +13,7 @@ function toRedactedGenerateImageArgs(msg, privacyMode) {
   return {
     _privacyMode: privacyMode,
     description: createRedactedString(msg.description, DataClassification.CODE, "description", privacyMode),
-    filePath: createRedactedString(msg.filePath, DataClassification.PATH, "file_path", privacyMode),
+    filePath: msg.filePath !== void 0 ? createRedactedString(msg.filePath, DataClassification.PATH, "file_path", privacyMode) : void 0,
     referenceImagePaths: msg.referenceImagePaths.map((v2) => createRedactedString(v2, DataClassification.PATH, "reference_image_paths", privacyMode)),
     aspectRatio: msg.aspectRatio,
   };
@@ -24,7 +24,7 @@ function fromRedactedGenerateImageArgs(msg, purpose, opts) {
   const enforcing = opts?.enforcing;
   return new GenerateImageArgs({
     description: msg.description.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    filePath: msg.filePath.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    filePath: msg.filePath?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     referenceImagePaths: msg.referenceImagePaths.map((v2) => v2.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing })),
     aspectRatio: msg.aspectRatio,
   });

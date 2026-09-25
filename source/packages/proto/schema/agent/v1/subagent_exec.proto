@@ -17,18 +17,18 @@ message SubagentArgs {
   string model_id = 3 [json_name = "modelId"];
   string prompt = 4 [json_name = "prompt"];
   bool readonly = 5 [json_name = "readonly"];
-  string resume_agent_id = 6 [json_name = "resumeAgentId"];
-  bool run_in_background = 7 [json_name = "runInBackground"];
-  .agent.v1.ClientContinuationConfig continuation_config = 8 [json_name = "continuationConfig"];
-  string parent_conversation_id = 9 [json_name = "parentConversationId"];
-  bool interrupt = 13 [json_name = "interrupt"];
+  optional string resume_agent_id = 6 [json_name = "resumeAgentId"];
+  optional bool run_in_background = 7 [json_name = "runInBackground"];
+  optional .agent.v1.ClientContinuationConfig continuation_config = 8 [json_name = "continuationConfig"];
+  optional string parent_conversation_id = 9 [json_name = "parentConversationId"];
+  optional bool interrupt = 13 [json_name = "interrupt"];
   .agent.v1.TaskMode mode = 14 [json_name = "mode"];
-  string fork_agent_id = 15 [json_name = "forkAgentId"];
-  string root_parent_conversation_id = 16 [json_name = "rootParentConversationId"];
-  .agent.v1.SelectedContext selected_context = 17 [json_name = "selectedContext"];
-  bool direct_meta_parent_child_subagent = 18 [json_name = "directMetaParentChildSubagent"];
+  optional string fork_agent_id = 15 [json_name = "forkAgentId"];
+  optional string root_parent_conversation_id = 16 [json_name = "rootParentConversationId"];
+  optional .agent.v1.SelectedContext selected_context = 17 [json_name = "selectedContext"];
+  optional bool direct_meta_parent_child_subagent = 18 [json_name = "directMetaParentChildSubagent"];
   .agent.v1.SubagentExecutionEnvironment environment = 19 [json_name = "environment"];
-  string cloud_base_branch = 20 [json_name = "cloudBaseBranch"];
+  optional string cloud_base_branch = 20 [json_name = "cloudBaseBranch"];
   repeated .agent.v1.RequestedModel.ModelParameterValue model_parameters = 21 [json_name = "modelParameters"];
   oneof credentials {
     .agent.v1.ApiKeyCredentials api_key_credentials = 10 [json_name = "apiKeyCredentials"];
@@ -78,14 +78,14 @@ message SubagentAwaitResult {
 
 message SubagentAwaitComplete {
   string agent_id = 1 [json_name = "agentId"];
-  string transcript_path = 2 [json_name = "transcriptPath"];
+  optional string transcript_path = 2 [json_name = "transcriptPath"];
   int32 tool_call_count = 3 [json_name = "toolCallCount"];
-  string final_message = 4 [json_name = "finalMessage"];
+  optional string final_message = 4 [json_name = "finalMessage"];
 }
 
 message SubagentAwaitStillRunning {
   string agent_id = 1 [json_name = "agentId"];
-  string transcript_path = 2 [json_name = "transcriptPath"];
+  optional string transcript_path = 2 [json_name = "transcriptPath"];
 }
 
 message SubagentAwaitNotFound {
@@ -93,20 +93,20 @@ message SubagentAwaitNotFound {
 }
 
 message SubagentAwaitError {
-  string agent_id = 1 [json_name = "agentId"];
+  optional string agent_id = 1 [json_name = "agentId"];
   string error = 2 [json_name = "error"];
 }
 
 message SubagentSuccess {
   string agent_id = 1 [json_name = "agentId"];
-  string final_message = 2 [json_name = "finalMessage"];
+  optional string final_message = 2 [json_name = "finalMessage"];
   int32 tool_call_count = 3 [json_name = "toolCallCount"];
   .agent.v1.SubagentBackgroundReason background_reason = 4 [json_name = "backgroundReason"];
-  string transcript_path = 5 [json_name = "transcriptPath"];
+  optional string transcript_path = 5 [json_name = "transcriptPath"];
 }
 
 message SubagentError {
-  string agent_id = 1 [json_name = "agentId"];
+  optional string agent_id = 1 [json_name = "agentId"];
   string error = 2 [json_name = "error"];
 }
 

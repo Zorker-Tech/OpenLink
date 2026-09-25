@@ -21,10 +21,10 @@ message LspSubgraphPosition {
 }
 
 message LspSubgraphContextItem {
-  string uri = 1 [json_name = "uri"];
+  optional string uri = 1 [json_name = "uri"];
   string type = 2 [json_name = "type"];
   string content = 3 [json_name = "content"];
-  .aiserver.v1.LspSubgraphRange range = 4 [json_name = "range"];
+  optional .aiserver.v1.LspSubgraphRange range = 4 [json_name = "range"];
 }
 
 message LspSubgraphRange {

@@ -8,8 +8,8 @@ syntax = "proto3";
 package agent.v1;
 
 message SendMessageToolCall {
-  .agent.v1.SendMessageArgs args = 1 [json_name = "args"];
-  .agent.v1.SendMessageResult result = 2 [json_name = "result"];
+  optional .agent.v1.SendMessageArgs args = 1 [json_name = "args"];
+  optional .agent.v1.SendMessageResult result = 2 [json_name = "result"];
 }
 
 message SendMessageArgs {
@@ -41,5 +41,5 @@ message SendMessageText {
 
 message SendMessageAttachment {
   string url = 1 [json_name = "url"];
-  string alt = 2 [json_name = "alt"];
+  optional string alt = 2 [json_name = "alt"];
 }

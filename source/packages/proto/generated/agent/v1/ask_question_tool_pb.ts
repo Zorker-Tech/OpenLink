@@ -271,12 +271,12 @@ export class AskQuestionAsync extends Message<AskQuestionAsync> {
  */
 export class AskQuestionToolCall extends Message<AskQuestionToolCall> {
   /**
-   * @generated from field: agent.v1.AskQuestionArgs args = 1;
+   * @generated from field: optional agent.v1.AskQuestionArgs args = 1;
    */
   args?: AskQuestionArgs;
 
   /**
-   * @generated from field: agent.v1.AskQuestionResult result = 2;
+   * @generated from field: optional agent.v1.AskQuestionResult result = 2;
    */
   result?: AskQuestionResult;
 
@@ -288,8 +288,8 @@ export class AskQuestionToolCall extends Message<AskQuestionToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.AskQuestionToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: AskQuestionArgs },
-    { no: 2, name: "result", kind: "message", T: AskQuestionResult },
+    { no: 1, name: "args", kind: "message", T: AskQuestionArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: AskQuestionResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AskQuestionToolCall {

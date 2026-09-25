@@ -41,14 +41,14 @@ export class PiTruncation extends Message<PiTruncation> {
   outputBytes = 0;
 
   /**
-   * @generated from field: uint32 max_lines = 6;
+   * @generated from field: optional uint32 max_lines = 6;
    */
-  maxLines = 0;
+  maxLines?: number;
 
   /**
-   * @generated from field: uint32 max_bytes = 7;
+   * @generated from field: optional uint32 max_bytes = 7;
    */
-  maxBytes = 0;
+  maxBytes?: number;
 
   /**
    * @generated from field: bool first_line_exceeds_limit = 8;
@@ -73,8 +73,8 @@ export class PiTruncation extends Message<PiTruncation> {
     { no: 3, name: "total_lines", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
     { no: 4, name: "output_lines", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
     { no: 5, name: "output_bytes", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 6, name: "max_lines", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 7, name: "max_bytes", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 6, name: "max_lines", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
+    { no: 7, name: "max_bytes", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
     { no: 8, name: "first_line_exceeds_limit", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 9, name: "last_line_partial", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);

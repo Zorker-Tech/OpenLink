@@ -17,8 +17,8 @@ message SetupVmEnvironmentSuccess {
 }
 
 message SetupVmEnvironmentToolCall {
-  .agent.v1.SetupVmEnvironmentArgs args = 1 [json_name = "args"];
-  .agent.v1.SetupVmEnvironmentResult result = 2 [json_name = "result"];
+  optional .agent.v1.SetupVmEnvironmentArgs args = 1 [json_name = "args"];
+  optional .agent.v1.SetupVmEnvironmentResult result = 2 [json_name = "result"];
 }
 
 message SetupVmEnvironmentArgs {

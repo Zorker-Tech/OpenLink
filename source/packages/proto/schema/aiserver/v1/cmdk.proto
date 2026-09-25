@@ -23,18 +23,18 @@ message StreamCmdKResponse {
   message EditStart {
     int32 start_line_number = 1 [json_name = "startLineNumber"];
     int32 edit_id = 2 [json_name = "editId"];
-    int32 max_end_line_number_exclusive = 3 [json_name = "maxEndLineNumberExclusive"];
-    string file_path = 4 [json_name = "filePath"];
+    optional int32 max_end_line_number_exclusive = 3 [json_name = "maxEndLineNumberExclusive"];
+    optional string file_path = 4 [json_name = "filePath"];
   }
   message EditStream {
     string text = 1 [json_name = "text"];
     int32 edit_id = 2 [json_name = "editId"];
-    string file_path = 3 [json_name = "filePath"];
+    optional string file_path = 3 [json_name = "filePath"];
   }
   message EditEnd {
     int32 end_line_number_exclusive = 1 [json_name = "endLineNumberExclusive"];
     int32 edit_id = 2 [json_name = "editId"];
-    string file_path = 3 [json_name = "filePath"];
+    optional string file_path = 3 [json_name = "filePath"];
   }
   message Chat {
     string text = 1 [json_name = "text"];
@@ -45,7 +45,7 @@ message StreamCmdKResponse {
 }
 
 message CmdKLegacyContext {
-  .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
+  optional .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
   repeated string documentation_identifiers = 10 [json_name = "documentationIdentifiers"];
   repeated .aiserver.v1.CodeBlock prompt_code_blocks = 12 [json_name = "promptCodeBlocks"];
 }
@@ -53,10 +53,10 @@ message CmdKLegacyContext {
 message CmdKOptions {
   bool chat_mode = 1 [json_name = "chatMode"];
   bool ada_cmd_k_context = 2 [json_name = "adaCmdKContext"];
-  .aiserver.v1.ModelDetails model_details = 3 [json_name = "modelDetails"];
-  bool use_reranker = 4 [json_name = "useReranker"];
-  bool use_web = 5 [json_name = "useWeb"];
-  bool request_is_for_caching = 6 [json_name = "requestIsForCaching"];
+  optional .aiserver.v1.ModelDetails model_details = 3 [json_name = "modelDetails"];
+  optional bool use_reranker = 4 [json_name = "useReranker"];
+  optional bool use_web = 5 [json_name = "useWeb"];
+  optional bool request_is_for_caching = 6 [json_name = "requestIsForCaching"];
 }
 
 message CmdKPreviousEdit {
@@ -76,10 +76,10 @@ message CmdKUpcomingEdit {
 
 message GetRelevantChunksRequest {
   repeated .aiserver.v1.CodeBlock code_blocks = 1 [json_name = "codeBlocks"];
-  .aiserver.v1.CmdKOptions cmd_k_options = 2 [json_name = "cmdKOptions"];
+  optional .aiserver.v1.CmdKOptions cmd_k_options = 2 [json_name = "cmdKOptions"];
   repeated .aiserver.v1.PotentiallyCachedContextItem context_items = 3 [json_name = "contextItems"];
   string session_id = 4 [json_name = "sessionId"];
-  .aiserver.v1.CmdKLegacyContext legacy_context = 5 [json_name = "legacyContext"];
+  optional .aiserver.v1.CmdKLegacyContext legacy_context = 5 [json_name = "legacyContext"];
 }
 
 message GetRelevantChunksResponse {
@@ -97,12 +97,12 @@ message GetRelevantChunksResponse {
 
 message RerankCmdKContextRequest {
   repeated .aiserver.v1.PotentiallyCachedContextItem context_items = 1 [json_name = "contextItems"];
-  .aiserver.v1.CmdKOptions cmd_k_options = 2 [json_name = "cmdKOptions"];
-  .aiserver.v1.CmdKLegacyContext legacy_context = 3 [json_name = "legacyContext"];
+  optional .aiserver.v1.CmdKOptions cmd_k_options = 2 [json_name = "cmdKOptions"];
+  optional .aiserver.v1.CmdKLegacyContext legacy_context = 3 [json_name = "legacyContext"];
 }
 
 message RerankCmdKContextResponse {
-  bool did_call = 3 [json_name = "didCall"];
+  optional bool did_call = 3 [json_name = "didCall"];
   oneof response {
     .aiserver.v1.ContextStatusUpdate context_status_update = 1 [json_name = "contextStatusUpdate"];
     .aiserver.v1.MissingContextItems missing_context_items = 2 [json_name = "missingContextItems"];
@@ -111,7 +111,7 @@ message RerankCmdKContextResponse {
 
 message RerankTerminalCmdKContextRequest {
   repeated .aiserver.v1.PotentiallyCachedContextItem context_items = 1 [json_name = "contextItems"];
-  .aiserver.v1.TerminalCmdKOptions cmd_k_options = 2 [json_name = "cmdKOptions"];
+  optional .aiserver.v1.TerminalCmdKOptions cmd_k_options = 2 [json_name = "cmdKOptions"];
 }
 
 message RerankTerminalCmdKContextResponse {
@@ -123,19 +123,19 @@ message RerankTerminalCmdKContextResponse {
 
 message StreamCmdKRequest {
   repeated .aiserver.v1.PotentiallyCachedContextItem context_items = 1 [json_name = "contextItems"];
-  .aiserver.v1.CmdKOptions cmd_k_options = 2 [json_name = "cmdKOptions"];
-  .aiserver.v1.CmdKDebugInfo cmd_k_debug_info = 4 [json_name = "cmdKDebugInfo"];
-  .aiserver.v1.CmdKLegacyContext legacy_context = 5 [json_name = "legacyContext"];
+  optional .aiserver.v1.CmdKOptions cmd_k_options = 2 [json_name = "cmdKOptions"];
+  optional .aiserver.v1.CmdKDebugInfo cmd_k_debug_info = 4 [json_name = "cmdKDebugInfo"];
+  optional .aiserver.v1.CmdKLegacyContext legacy_context = 5 [json_name = "legacyContext"];
   string session_id = 6 [json_name = "sessionId"];
-  .aiserver.v1.CmdKPreviousEdit previous_edit = 7 [json_name = "previousEdit"];
+  optional .aiserver.v1.CmdKPreviousEdit previous_edit = 7 [json_name = "previousEdit"];
   repeated .aiserver.v1.CmdKPreviousEdit previous_edits = 8 [json_name = "previousEdits"];
-  bool use_big_cmdk_for_multi_file_edit = 9 [json_name = "useBigCmdkForMultiFileEdit"];
+  optional bool use_big_cmdk_for_multi_file_edit = 9 [json_name = "useBigCmdkForMultiFileEdit"];
   repeated .aiserver.v1.ImageProto images = 10 [json_name = "images"];
   repeated .aiserver.v1.CmdKExternalLink links = 11 [json_name = "links"];
   repeated .aiserver.v1.CmdKUpcomingEdit upcoming_edits = 12 [json_name = "upcomingEdits"];
   repeated .aiserver.v1.CppFileDiffHistory diff_history = 13 [json_name = "diffHistory"];
-  .aiserver.v1.StreamCmdKRequest.BranchDiff diff_to_base_branch = 14 [json_name = "diffToBaseBranch"];
-  .aiserver.v1.TimingInfo timing_info = 15 [json_name = "timingInfo"];
+  optional .aiserver.v1.StreamCmdKRequest.BranchDiff diff_to_base_branch = 14 [json_name = "diffToBaseBranch"];
+  optional .aiserver.v1.TimingInfo timing_info = 15 [json_name = "timingInfo"];
   repeated .aiserver.v1.CursorRule rules = 16 [json_name = "rules"];
   message BranchDiff {
     repeated .aiserver.v1.StreamCmdKRequest.BranchDiff.FileDiff file_diffs = 1 [json_name = "fileDiffs"];
@@ -164,25 +164,25 @@ message StreamGetRelevantChunksResponseContextWrapped {
 
 message StreamHypermodeRequest {
   repeated .aiserver.v1.PotentiallyCachedContextItem context_items = 1 [json_name = "contextItems"];
-  .aiserver.v1.CmdKOptions cmd_k_options = 2 [json_name = "cmdKOptions"];
-  .aiserver.v1.CmdKDebugInfo cmd_k_debug_info = 4 [json_name = "cmdKDebugInfo"];
-  .aiserver.v1.CmdKLegacyContext legacy_context = 5 [json_name = "legacyContext"];
+  optional .aiserver.v1.CmdKOptions cmd_k_options = 2 [json_name = "cmdKOptions"];
+  optional .aiserver.v1.CmdKDebugInfo cmd_k_debug_info = 4 [json_name = "cmdKDebugInfo"];
+  optional .aiserver.v1.CmdKLegacyContext legacy_context = 5 [json_name = "legacyContext"];
   string session_id = 6 [json_name = "sessionId"];
-  .aiserver.v1.CmdKPreviousEdit previous_edit = 7 [json_name = "previousEdit"];
+  optional .aiserver.v1.CmdKPreviousEdit previous_edit = 7 [json_name = "previousEdit"];
   repeated .aiserver.v1.CmdKPreviousEdit previous_edits = 8 [json_name = "previousEdits"];
-  bool use_big_cmdk_for_multi_file_edit = 9 [json_name = "useBigCmdkForMultiFileEdit"];
+  optional bool use_big_cmdk_for_multi_file_edit = 9 [json_name = "useBigCmdkForMultiFileEdit"];
   repeated .aiserver.v1.ImageProto images = 10 [json_name = "images"];
   repeated .aiserver.v1.CmdKExternalLink links = 11 [json_name = "links"];
   repeated .aiserver.v1.CmdKUpcomingEdit upcoming_edits = 12 [json_name = "upcomingEdits"];
   repeated .aiserver.v1.CppFileDiffHistory diff_history = 13 [json_name = "diffHistory"];
-  string hyper_model = 14 [json_name = "hyperModel"];
-  .aiserver.v1.TimingInfo timing_info = 15 [json_name = "timingInfo"];
+  optional string hyper_model = 14 [json_name = "hyperModel"];
+  optional .aiserver.v1.TimingInfo timing_info = 15 [json_name = "timingInfo"];
 }
 
 message StreamTerminalCmdKRequest {
   repeated .aiserver.v1.PotentiallyCachedContextItem context_items = 1 [json_name = "contextItems"];
-  .aiserver.v1.TerminalCmdKOptions cmd_k_options = 2 [json_name = "cmdKOptions"];
-  .aiserver.v1.CmdKLegacyContext legacy_context = 5 [json_name = "legacyContext"];
+  optional .aiserver.v1.TerminalCmdKOptions cmd_k_options = 2 [json_name = "cmdKOptions"];
+  optional .aiserver.v1.CmdKLegacyContext legacy_context = 5 [json_name = "legacyContext"];
   string session_id = 6 [json_name = "sessionId"];
 }
 
@@ -214,8 +214,8 @@ message StreamTerminalCmdKResponseContextWrapped {
 message TerminalCmdKOptions {
   bool chat_mode = 1 [json_name = "chatMode"];
   bool ada_cmd_k_context = 2 [json_name = "adaCmdKContext"];
-  .aiserver.v1.ModelDetails model_details = 3 [json_name = "modelDetails"];
-  bool use_web = 4 [json_name = "useWeb"];
+  optional .aiserver.v1.ModelDetails model_details = 3 [json_name = "modelDetails"];
+  optional bool use_web = 4 [json_name = "useWeb"];
 }
 
 message TimingInfo {

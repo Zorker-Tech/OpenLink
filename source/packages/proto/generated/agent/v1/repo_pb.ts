@@ -51,9 +51,9 @@ export class RepositoryIndexingInfo extends Message<RepositoryIndexingInfo> {
   isLocal = false;
 
   /**
-   * @generated from field: double orthogonal_transform_seed = 8;
+   * @generated from field: optional double orthogonal_transform_seed = 8;
    */
-  orthogonalTransformSeed = 0;
+  orthogonalTransformSeed?: number;
 
   /**
    * @generated from field: string workspace_uri = 9;
@@ -80,7 +80,7 @@ export class RepositoryIndexingInfo extends Message<RepositoryIndexingInfo> {
     { no: 5, name: "repo_owner", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 6, name: "is_tracked", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 7, name: "is_local", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 8, name: "orthogonal_transform_seed", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
+    { no: 8, name: "orthogonal_transform_seed", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
     { no: 9, name: "workspace_uri", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 10, name: "path_encryption_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);

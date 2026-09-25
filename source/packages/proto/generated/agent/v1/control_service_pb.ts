@@ -355,9 +355,9 @@ export class ArtifactUploadDispatchResult extends Message<ArtifactUploadDispatch
   message = "";
 
   /**
-   * @generated from field: string slack_file_id = 4;
+   * @generated from field: optional string slack_file_id = 4;
    */
-  slackFileId = "";
+  slackFileId?: string;
 
   constructor(data?: PartialMessage<ArtifactUploadDispatchResult>) {
     super();
@@ -370,7 +370,7 @@ export class ArtifactUploadDispatchResult extends Message<ArtifactUploadDispatch
     { no: 1, name: "absolute_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "status", kind: "enum", T: proto3.getEnumType(ArtifactUploadDispatchStatus) },
     { no: 3, name: "message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "slack_file_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "slack_file_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ArtifactUploadDispatchResult {
@@ -415,24 +415,24 @@ export class ArtifactUploadInstruction extends Message<ArtifactUploadInstruction
   headers: { [key: string]: string } = {};
 
   /**
-   * @generated from field: string content_type = 5;
+   * @generated from field: optional string content_type = 5;
    */
-  contentType = "";
+  contentType?: string;
 
   /**
-   * @generated from field: string slack_upload_url = 6;
+   * @generated from field: optional string slack_upload_url = 6;
    */
-  slackUploadUrl = "";
+  slackUploadUrl?: string;
 
   /**
-   * @generated from field: string slack_file_id = 7;
+   * @generated from field: optional string slack_file_id = 7;
    */
-  slackFileId = "";
+  slackFileId?: string;
 
   /**
-   * @generated from field: string artifact_relative_path = 8;
+   * @generated from field: optional string artifact_relative_path = 8;
    */
-  artifactRelativePath = "";
+  artifactRelativePath?: string;
 
   constructor(data?: PartialMessage<ArtifactUploadInstruction>) {
     super();
@@ -446,10 +446,10 @@ export class ArtifactUploadInstruction extends Message<ArtifactUploadInstruction
     { no: 2, name: "upload_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "method", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "headers", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
-    { no: 5, name: "content_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "slack_upload_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "slack_file_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "artifact_relative_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "content_type", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "slack_upload_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "slack_file_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "artifact_relative_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ArtifactUploadInstruction {
@@ -524,9 +524,9 @@ export class ArtifactUploadMetadata extends Message<ArtifactUploadMetadata> {
   uploadId = "";
 
   /**
-   * @generated from field: string artifact_relative_path = 11;
+   * @generated from field: optional string artifact_relative_path = 11;
    */
-  artifactRelativePath = "";
+  artifactRelativePath?: string;
 
   constructor(data?: PartialMessage<ArtifactUploadMetadata>) {
     super();
@@ -546,7 +546,7 @@ export class ArtifactUploadMetadata extends Message<ArtifactUploadMetadata> {
     { no: 8, name: "last_started_at_unix_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 9, name: "last_finished_at_unix_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 10, name: "upload_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 11, name: "artifact_relative_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 11, name: "artifact_relative_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ArtifactUploadMetadata {
@@ -614,7 +614,7 @@ export class BatchGetDiffError extends Message<BatchGetDiffError> {
  */
 export class BatchGetDiffItem extends Message<BatchGetDiffItem> {
   /**
-   * @generated from field: aiserver.v1.GetDiffRequest diff_request = 1;
+   * @generated from field: optional aiserver.v1.GetDiffRequest diff_request = 1;
    */
   diffRequest?: GetDiffRequest;
 
@@ -631,7 +631,7 @@ export class BatchGetDiffItem extends Message<BatchGetDiffItem> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.BatchGetDiffItem";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "diff_request", kind: "message", T: GetDiffRequest },
+    { no: 1, name: "diff_request", kind: "message", T: GetDiffRequest, opt: true },
     { no: 2, name: "fetch_branches", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
 
@@ -939,9 +939,9 @@ export class ExecRequest extends Message<ExecRequest> {
   command = "";
 
   /**
-   * @generated from field: string cwd = 2;
+   * @generated from field: optional string cwd = 2;
    */
-  cwd = "";
+  cwd?: string;
 
   /**
    * @generated from field: repeated string args = 3;
@@ -962,7 +962,7 @@ export class ExecRequest extends Message<ExecRequest> {
   static readonly typeName = "agent.v1.ExecRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "command", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "cwd", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "cwd", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "args", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 4, name: "environment", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
   ]);
@@ -1244,14 +1244,14 @@ export class GetCapabilitiesRequest extends Message<GetCapabilitiesRequest> {
  */
 export class GetCapabilitiesResponse extends Message<GetCapabilitiesResponse> {
   /**
-   * @generated from field: bool computer_use_supported = 1;
+   * @generated from field: optional bool computer_use_supported = 1;
    */
-  computerUseSupported = false;
+  computerUseSupported?: boolean;
 
   /**
-   * @generated from field: bool install_plugin_artifact_supported = 2;
+   * @generated from field: optional bool install_plugin_artifact_supported = 2;
    */
-  installPluginArtifactSupported = false;
+  installPluginArtifactSupported?: boolean;
 
   constructor(data?: PartialMessage<GetCapabilitiesResponse>) {
     super();
@@ -1261,8 +1261,8 @@ export class GetCapabilitiesResponse extends Message<GetCapabilitiesResponse> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.GetCapabilitiesResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "computer_use_supported", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 2, name: "install_plugin_artifact_supported", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 1, name: "computer_use_supported", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 2, name: "install_plugin_artifact_supported", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetCapabilitiesResponse {
@@ -1766,9 +1766,9 @@ export class PersistArtifactToAgentStoreInstruction extends Message<PersistArtif
   absolutePath = "";
 
   /**
-   * @generated from field: string artifact_relative_path = 2;
+   * @generated from field: optional string artifact_relative_path = 2;
    */
-  artifactRelativePath = "";
+  artifactRelativePath?: string;
 
   constructor(data?: PartialMessage<PersistArtifactToAgentStoreInstruction>) {
     super();
@@ -1779,7 +1779,7 @@ export class PersistArtifactToAgentStoreInstruction extends Message<PersistArtif
   static readonly typeName = "agent.v1.PersistArtifactToAgentStoreInstruction";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "absolute_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "artifact_relative_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "artifact_relative_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PersistArtifactToAgentStoreInstruction {
@@ -2147,14 +2147,14 @@ export class RefreshGithubAccessTokenRequest extends Message<RefreshGithubAccess
   hostname = "";
 
   /**
-   * @generated from field: string repo_url = 3;
+   * @generated from field: optional string repo_url = 3;
    */
-  repoUrl = "";
+  repoUrl?: string;
 
   /**
-   * @generated from field: string clone_username = 4;
+   * @generated from field: optional string clone_username = 4;
    */
-  cloneUsername = "";
+  cloneUsername?: string;
 
   constructor(data?: PartialMessage<RefreshGithubAccessTokenRequest>) {
     super();
@@ -2166,8 +2166,8 @@ export class RefreshGithubAccessTokenRequest extends Message<RefreshGithubAccess
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "github_access_token", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "hostname", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "clone_username", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "clone_username", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RefreshGithubAccessTokenRequest {
@@ -2368,9 +2368,9 @@ export class RestoreArtifactInstruction extends Message<RestoreArtifactInstructi
   updatedAtUnixMs = protoInt64.zero;
 
   /**
-   * @generated from field: string artifact_relative_path = 4;
+   * @generated from field: optional string artifact_relative_path = 4;
    */
-  artifactRelativePath = "";
+  artifactRelativePath?: string;
 
   constructor(data?: PartialMessage<RestoreArtifactInstruction>) {
     super();
@@ -2383,7 +2383,7 @@ export class RestoreArtifactInstruction extends Message<RestoreArtifactInstructi
     { no: 1, name: "absolute_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "download_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "updated_at_unix_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 4, name: "artifact_relative_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "artifact_relative_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RestoreArtifactInstruction {
@@ -2663,7 +2663,7 @@ export class UpdateEnvironmentVariablesRequest extends Message<UpdateEnvironment
   restorePreviousValues = false;
 
   /**
-   * @generated from field: agent.v1.RunScopedOverlay run_scoped_overlay = 4;
+   * @generated from field: optional agent.v1.RunScopedOverlay run_scoped_overlay = 4;
    */
   runScopedOverlay?: RunScopedOverlay;
 
@@ -2678,7 +2678,7 @@ export class UpdateEnvironmentVariablesRequest extends Message<UpdateEnvironment
     { no: 1, name: "env", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
     { no: 2, name: "replace", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 3, name: "restore_previous_values", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "run_scoped_overlay", kind: "message", T: RunScopedOverlay },
+    { no: 4, name: "run_scoped_overlay", kind: "message", T: RunScopedOverlay, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateEnvironmentVariablesRequest {

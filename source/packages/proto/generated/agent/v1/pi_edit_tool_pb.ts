@@ -59,12 +59,12 @@ export class PiEditReplacement extends Message<PiEditReplacement> {
  */
 export class PiEditToolCall extends Message<PiEditToolCall> {
   /**
-   * @generated from field: agent.v1.PiEditToolArgs args = 1;
+   * @generated from field: optional agent.v1.PiEditToolArgs args = 1;
    */
   args?: PiEditToolArgs;
 
   /**
-   * @generated from field: agent.v1.PiEditToolResult result = 2;
+   * @generated from field: optional agent.v1.PiEditToolResult result = 2;
    */
   result?: PiEditToolResult;
 
@@ -76,8 +76,8 @@ export class PiEditToolCall extends Message<PiEditToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.PiEditToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: PiEditToolArgs },
-    { no: 2, name: "result", kind: "message", T: PiEditToolResult },
+    { no: 1, name: "args", kind: "message", T: PiEditToolArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: PiEditToolResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PiEditToolCall {
@@ -217,9 +217,9 @@ export class PiEditToolSuccess extends Message<PiEditToolSuccess> {
   patch = "";
 
   /**
-   * @generated from field: uint32 first_changed_line = 4;
+   * @generated from field: optional uint32 first_changed_line = 4;
    */
-  firstChangedLine = 0;
+  firstChangedLine?: number;
 
   constructor(data?: PartialMessage<PiEditToolSuccess>) {
     super();
@@ -232,7 +232,7 @@ export class PiEditToolSuccess extends Message<PiEditToolSuccess> {
     { no: 1, name: "output", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "diff", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "patch", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "first_changed_line", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 4, name: "first_changed_line", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PiEditToolSuccess {

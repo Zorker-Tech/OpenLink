@@ -74,7 +74,7 @@ export class GetProjectionSnapshotResponse extends Message<GetProjectionSnapshot
   snapshotVersion = protoInt64.zero;
 
   /**
-   * @generated from field: aiserver.v1.ProjectionScoreSet team = 4;
+   * @generated from field: optional aiserver.v1.ProjectionScoreSet team = 4;
    */
   team?: ProjectionScoreSet;
 
@@ -94,7 +94,7 @@ export class GetProjectionSnapshotResponse extends Message<GetProjectionSnapshot
     { no: 1, name: "policy_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "policy_version", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
     { no: 3, name: "snapshot_version", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
-    { no: 4, name: "team", kind: "message", T: ProjectionScoreSet },
+    { no: 4, name: "team", kind: "message", T: ProjectionScoreSet, opt: true },
     { no: 5, name: "not_modified", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 

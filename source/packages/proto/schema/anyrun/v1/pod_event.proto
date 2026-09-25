@@ -109,7 +109,7 @@ message InternalBuildMessage {
 message InstallCommand {
   string name = 1 [json_name = "name"];
   string command = 2 [json_name = "command"];
-  string user = 3 [json_name = "user"];
+  optional string user = 3 [json_name = "user"];
   bool is_system = 4 [json_name = "isSystem"];
   bool failure_tolerant = 5 [json_name = "failureTolerant"];
 }
@@ -170,8 +170,8 @@ message WaitingForWorkerStatus {
 message SpanStarted {
   string span_id = 1 [json_name = "spanId"];
   string name = 2 [json_name = "name"];
-  string parent_span_id = 3 [json_name = "parentSpanId"];
-  string href = 5 [json_name = "href"];
+  optional string parent_span_id = 3 [json_name = "parentSpanId"];
+  optional string href = 5 [json_name = "href"];
 }
 
 message SpanEnded {

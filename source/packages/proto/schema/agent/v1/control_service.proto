@@ -41,7 +41,7 @@ message ArtifactUploadDispatchResult {
   string absolute_path = 1 [json_name = "absolutePath"];
   .agent.v1.ArtifactUploadDispatchStatus status = 2 [json_name = "status"];
   string message = 3 [json_name = "message"];
-  string slack_file_id = 4 [json_name = "slackFileId"];
+  optional string slack_file_id = 4 [json_name = "slackFileId"];
 }
 
 enum ArtifactUploadDispatchStatus {
@@ -56,10 +56,10 @@ message ArtifactUploadInstruction {
   string upload_url = 2 [json_name = "uploadUrl"];
   string method = 3 [json_name = "method"];
   map<string, string> headers = 4 [json_name = "headers"];
-  string content_type = 5 [json_name = "contentType"];
-  string slack_upload_url = 6 [json_name = "slackUploadUrl"];
-  string slack_file_id = 7 [json_name = "slackFileId"];
-  string artifact_relative_path = 8 [json_name = "artifactRelativePath"];
+  optional string content_type = 5 [json_name = "contentType"];
+  optional string slack_upload_url = 6 [json_name = "slackUploadUrl"];
+  optional string slack_file_id = 7 [json_name = "slackFileId"];
+  optional string artifact_relative_path = 8 [json_name = "artifactRelativePath"];
 }
 
 message ArtifactUploadMetadata {
@@ -73,7 +73,7 @@ message ArtifactUploadMetadata {
   int64 last_started_at_unix_ms = 8 [json_name = "lastStartedAtUnixMs"];
   int64 last_finished_at_unix_ms = 9 [json_name = "lastFinishedAtUnixMs"];
   string upload_id = 10 [json_name = "uploadId"];
-  string artifact_relative_path = 11 [json_name = "artifactRelativePath"];
+  optional string artifact_relative_path = 11 [json_name = "artifactRelativePath"];
 }
 
 enum ArtifactUploadStatus {
@@ -99,7 +99,7 @@ enum BatchGetDiffErrorKind {
 }
 
 message BatchGetDiffItem {
-  .aiserver.v1.GetDiffRequest diff_request = 1 [json_name = "diffRequest"];
+  optional .aiserver.v1.GetDiffRequest diff_request = 1 [json_name = "diffRequest"];
   repeated string fetch_branches = 2 [json_name = "fetchBranches"];
 }
 
@@ -146,7 +146,7 @@ enum EntryType {
 
 message ExecRequest {
   string command = 1 [json_name = "command"];
-  string cwd = 2 [json_name = "cwd"];
+  optional string cwd = 2 [json_name = "cwd"];
   repeated string args = 3 [json_name = "args"];
   map<string, string> environment = 4 [json_name = "environment"];
 }
@@ -183,8 +183,8 @@ message GetCapabilitiesRequest {
 }
 
 message GetCapabilitiesResponse {
-  bool computer_use_supported = 1 [json_name = "computerUseSupported"];
-  bool install_plugin_artifact_supported = 2 [json_name = "installPluginArtifactSupported"];
+  optional bool computer_use_supported = 1 [json_name = "computerUseSupported"];
+  optional bool install_plugin_artifact_supported = 2 [json_name = "installPluginArtifactSupported"];
 }
 
 message GetMcpRefreshTokensRequest {
@@ -242,7 +242,7 @@ message LoadMcpServersResponse {
 
 message PersistArtifactToAgentStoreInstruction {
   string absolute_path = 1 [json_name = "absolutePath"];
-  string artifact_relative_path = 2 [json_name = "artifactRelativePath"];
+  optional string artifact_relative_path = 2 [json_name = "artifactRelativePath"];
 }
 
 message PersistArtifactToAgentStoreResult {
@@ -290,8 +290,8 @@ message ReadTextFileResponse {
 message RefreshGithubAccessTokenRequest {
   string github_access_token = 1 [json_name = "githubAccessToken"];
   string hostname = 2 [json_name = "hostname"];
-  string repo_url = 3 [json_name = "repoUrl"];
-  string clone_username = 4 [json_name = "cloneUsername"];
+  optional string repo_url = 3 [json_name = "repoUrl"];
+  optional string clone_username = 4 [json_name = "cloneUsername"];
 }
 
 message RefreshGithubAccessTokenResponse {
@@ -314,7 +314,7 @@ message RestoreArtifactInstruction {
   string absolute_path = 1 [json_name = "absolutePath"];
   string download_url = 2 [json_name = "downloadUrl"];
   int64 updated_at_unix_ms = 3 [json_name = "updatedAtUnixMs"];
-  string artifact_relative_path = 4 [json_name = "artifactRelativePath"];
+  optional string artifact_relative_path = 4 [json_name = "artifactRelativePath"];
 }
 
 message RestoreArtifactResult {
@@ -348,7 +348,7 @@ message UpdateEnvironmentVariablesRequest {
   map<string, string> env = 1 [json_name = "env"];
   bool replace = 2 [json_name = "replace"];
   bool restore_previous_values = 3 [json_name = "restorePreviousValues"];
-  .agent.v1.RunScopedOverlay run_scoped_overlay = 4 [json_name = "runScopedOverlay"];
+  optional .agent.v1.RunScopedOverlay run_scoped_overlay = 4 [json_name = "runScopedOverlay"];
 }
 
 message UpdateEnvironmentVariablesResponse {

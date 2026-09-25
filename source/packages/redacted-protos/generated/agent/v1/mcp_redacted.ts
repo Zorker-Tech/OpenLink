@@ -14,8 +14,8 @@ function toRedactedMcpDescriptor(msg, privacyMode) {
     _privacyMode: privacyMode,
     serverName: msg.serverName,
     serverIdentifier: msg.serverIdentifier,
-    folderPath: createRedactedString(msg.folderPath, DataClassification.PATH, "folder_path", privacyMode),
-    serverUseInstructions: createRedactedString(msg.serverUseInstructions, DataClassification.CODE, "server_use_instructions", privacyMode),
+    folderPath: msg.folderPath !== void 0 ? createRedactedString(msg.folderPath, DataClassification.PATH, "folder_path", privacyMode) : void 0,
+    serverUseInstructions: msg.serverUseInstructions !== void 0 ? createRedactedString(msg.serverUseInstructions, DataClassification.CODE, "server_use_instructions", privacyMode) : void 0,
     tools: msg.tools.map((v2) => toRedactedMcpToolDescriptor(v2, privacyMode)),
     plugin: msg.plugin,
     marketplace: msg.marketplace,
@@ -30,8 +30,8 @@ function fromRedactedMcpDescriptor(msg, purpose, opts) {
   return new McpDescriptor({
     serverName: msg.serverName,
     serverIdentifier: msg.serverIdentifier,
-    folderPath: msg.folderPath.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    serverUseInstructions: msg.serverUseInstructions.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    folderPath: msg.folderPath?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    serverUseInstructions: msg.serverUseInstructions?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     tools: msg.tools.map((v2) => fromRedactedMcpToolDescriptor(v2, purpose, opts)),
     plugin: msg.plugin,
     marketplace: msg.marketplace,
@@ -124,7 +124,7 @@ function toRedactedMcpToolDescriptor(msg, privacyMode) {
   return {
     _privacyMode: privacyMode,
     toolName: msg.toolName,
-    definitionPath: createRedactedString(msg.definitionPath, DataClassification.PATH, "definition_path", privacyMode),
+    definitionPath: msg.definitionPath !== void 0 ? createRedactedString(msg.definitionPath, DataClassification.PATH, "definition_path", privacyMode) : void 0,
     description: msg.description,
     inputSchema: msg.inputSchema,
     inputSchemaJson: msg.inputSchemaJson,
@@ -137,7 +137,7 @@ function fromRedactedMcpToolDescriptor(msg, purpose, opts) {
   const enforcing = opts?.enforcing;
   return new McpToolDescriptor({
     toolName: msg.toolName,
-    definitionPath: msg.definitionPath.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    definitionPath: msg.definitionPath?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     description: msg.description,
     inputSchema: msg.inputSchema,
     inputSchemaJson: msg.inputSchemaJson,

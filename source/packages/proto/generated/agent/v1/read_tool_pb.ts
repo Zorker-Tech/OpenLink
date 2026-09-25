@@ -17,12 +17,12 @@ import { CursorRule } from "./rules_pb.ts";
  */
 export class ReadToolCall extends Message<ReadToolCall> {
   /**
-   * @generated from field: agent.v1.ReadToolArgs args = 1;
+   * @generated from field: optional agent.v1.ReadToolArgs args = 1;
    */
   args?: ReadToolArgs;
 
   /**
-   * @generated from field: agent.v1.ReadToolResult result = 2;
+   * @generated from field: optional agent.v1.ReadToolResult result = 2;
    */
   result?: ReadToolResult;
 
@@ -34,8 +34,8 @@ export class ReadToolCall extends Message<ReadToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.ReadToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: ReadToolArgs },
-    { no: 2, name: "result", kind: "message", T: ReadToolResult },
+    { no: 1, name: "args", kind: "message", T: ReadToolArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: ReadToolResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ReadToolCall {
@@ -65,19 +65,19 @@ export class ReadToolArgs extends Message<ReadToolArgs> {
   path = "";
 
   /**
-   * @generated from field: int32 offset = 2;
+   * @generated from field: optional int32 offset = 2;
    */
-  offset = 0;
+  offset?: number;
 
   /**
-   * @generated from field: int32 limit = 3;
+   * @generated from field: optional int32 limit = 3;
    */
-  limit = 0;
+  limit?: number;
 
   /**
-   * @generated from field: bool include_line_numbers = 5;
+   * @generated from field: optional bool include_line_numbers = 5;
    */
-  includeLineNumbers = false;
+  includeLineNumbers?: boolean;
 
   constructor(data?: PartialMessage<ReadToolArgs>) {
     super();
@@ -88,9 +88,9 @@ export class ReadToolArgs extends Message<ReadToolArgs> {
   static readonly typeName = "agent.v1.ReadToolArgs";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "offset", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 5, name: "include_line_numbers", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "offset", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 3, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 5, name: "include_line_numbers", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ReadToolArgs {
@@ -190,14 +190,14 @@ export class ReadToolSuccess extends Message<ReadToolSuccess> {
   path = "";
 
   /**
-   * @generated from field: agent.v1.ReadRange read_range = 8;
+   * @generated from field: optional agent.v1.ReadRange read_range = 8;
    */
   readRange?: ReadRange;
 
   /**
-   * @generated from field: bool include_line_numbers = 11;
+   * @generated from field: optional bool include_line_numbers = 11;
    */
-  includeLineNumbers = false;
+  includeLineNumbers?: boolean;
 
   /**
    * @generated from field: repeated string related_cursor_rule_paths = 12;
@@ -251,8 +251,8 @@ export class ReadToolSuccess extends Message<ReadToolSuccess> {
     { no: 4, name: "total_lines", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
     { no: 5, name: "file_size", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
     { no: 7, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "read_range", kind: "message", T: ReadRange },
-    { no: 11, name: "include_line_numbers", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 8, name: "read_range", kind: "message", T: ReadRange, opt: true },
+    { no: 11, name: "include_line_numbers", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 12, name: "related_cursor_rule_paths", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 13, name: "related_cursor_rules", kind: "message", T: CursorRule, repeated: true },
     { no: 1, name: "content", kind: "scalar", T: 9 /* ScalarType.STRING */, oneof: "output" },

@@ -48,7 +48,7 @@ message GetLintsForChangeRequest {
     string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
     string initial_content = 2 [json_name = "initialContent"];
     string final_content = 3 [json_name = "finalContent"];
-    .aiserver.v1.GetLintsForChangeRequest.File.RangeCollection get_all_lints_not_just_delta_lints_for_ranges_in_final_model = 4 [json_name = "getAllLintsNotJustDeltaLintsForRangesInFinalModel"];
+    optional .aiserver.v1.GetLintsForChangeRequest.File.RangeCollection get_all_lints_not_just_delta_lints_for_ranges_in_final_model = 4 [json_name = "getAllLintsNotJustDeltaLintsForRangesInFinalModel"];
     message IRange {
       int32 start_line_number = 1 [json_name = "startLineNumber"];
       int32 start_column = 2 [json_name = "startColumn"];
@@ -68,46 +68,46 @@ message ShadowHealthCheckResponse {
 }
 
 message SwCallClientSideV2ToolRequest {
-  .aiserver.v1.ClientSideToolV2Call tool_call = 1 [json_name = "toolCall"];
+  optional .aiserver.v1.ClientSideToolV2Call tool_call = 1 [json_name = "toolCall"];
   string composer_id = 2 [json_name = "composerId"];
 }
 
 message SwCallClientSideV2ToolResponse {
-  .aiserver.v1.ClientSideToolV2Result tool_result = 1 [json_name = "toolResult"];
+  optional .aiserver.v1.ClientSideToolV2Result tool_result = 1 [json_name = "toolResult"];
 }
 
 message SwCallDiagnosticsExecutorRequest {
-  .agent.v1.DiagnosticsArgs diagnostics_args = 1 [json_name = "diagnosticsArgs"];
+  optional .agent.v1.DiagnosticsArgs diagnostics_args = 1 [json_name = "diagnosticsArgs"];
 }
 
 message SwCallDiagnosticsExecutorResponse {
-  .agent.v1.DiagnosticsResult diagnostics_result = 1 [json_name = "diagnosticsResult"];
+  optional .agent.v1.DiagnosticsResult diagnostics_result = 1 [json_name = "diagnosticsResult"];
 }
 
 message SwCompileRepoIncludeExcludePatternsRequest {
-  string include_pattern = 1 [json_name = "includePattern"];
-  string exclude_pattern = 2 [json_name = "excludePattern"];
+  optional string include_pattern = 1 [json_name = "includePattern"];
+  optional string exclude_pattern = 2 [json_name = "excludePattern"];
   string path_encryption_key = 3 [json_name = "pathEncryptionKey"];
-  .aiserver.v1.RepositoryInfo repository_info = 4 [json_name = "repositoryInfo"];
+  optional .aiserver.v1.RepositoryInfo repository_info = 4 [json_name = "repositoryInfo"];
 }
 
 message SwCompileRepoIncludeExcludePatternsResponse {
-  string glob_filter = 1 [json_name = "globFilter"];
-  string not_glob_filter = 2 [json_name = "notGlobFilter"];
+  optional string glob_filter = 1 [json_name = "globFilter"];
+  optional string not_glob_filter = 2 [json_name = "notGlobFilter"];
 }
 
 message SwGetEnvironmentInfoRequest {
 }
 
 message SwGetEnvironmentInfoResponse {
-  .aiserver.v1.EnvironmentInfo environment_info = 1 [json_name = "environmentInfo"];
+  optional .aiserver.v1.EnvironmentInfo environment_info = 1 [json_name = "environmentInfo"];
 }
 
 message SwGetExplicitContextRequest {
 }
 
 message SwGetExplicitContextResponse {
-  .aiserver.v1.ExplicitContext explicit_context = 1 [json_name = "explicitContext"];
+  optional .aiserver.v1.ExplicitContext explicit_context = 1 [json_name = "explicitContext"];
 }
 
 message SwGetLinterErrorsRequest {
@@ -119,7 +119,7 @@ message SwGetLinterErrorsResponse {
 }
 
 message SwGetMcpToolsRequest {
-  string browser_integration_preference = 1 [json_name = "browserIntegrationPreference"];
+  optional string browser_integration_preference = 1 [json_name = "browserIntegrationPreference"];
 }
 
 message SwGetMcpToolsResponse {
@@ -134,9 +134,9 @@ message SwProvideTemporaryAccessTokenResponse {
 }
 
 message SwSyncIndexRequest {
-  .aiserver.v1.RepositoryInfo repository_info = 1 [json_name = "repositoryInfo"];
+  optional .aiserver.v1.RepositoryInfo repository_info = 1 [json_name = "repositoryInfo"];
   string path_encryption_key = 2 [json_name = "pathEncryptionKey"];
-  double indexing_progress_threshold = 3 [json_name = "indexingProgressThreshold"];
+  optional double indexing_progress_threshold = 3 [json_name = "indexingProgressThreshold"];
 }
 
 message SwSyncIndexResponse {

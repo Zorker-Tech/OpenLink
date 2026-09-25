@@ -16,21 +16,21 @@ message PRCheckStatus {
   int32 skipped_count = 6 [json_name = "skippedCount"];
   int32 total_count = 7 [json_name = "totalCount"];
   repeated .aiserver.v1.PRCheck checks = 8 [json_name = "checks"];
-  int32 required_failure_count = 9 [json_name = "requiredFailureCount"];
-  int32 required_pending_count = 10 [json_name = "requiredPendingCount"];
+  optional int32 required_failure_count = 9 [json_name = "requiredFailureCount"];
+  optional int32 required_pending_count = 10 [json_name = "requiredPendingCount"];
 }
 
 message PRCheck {
   string name = 1 [json_name = "name"];
   string status = 2 [json_name = "status"];
-  string details_url = 3 [json_name = "detailsUrl"];
-  string summary = 4 [json_name = "summary"];
-  string started_at = 5 [json_name = "startedAt"];
-  string completed_at = 6 [json_name = "completedAt"];
-  string provider = 7 [json_name = "provider"];
-  string provider_check_id = 8 [json_name = "providerCheckId"];
+  optional string details_url = 3 [json_name = "detailsUrl"];
+  optional string summary = 4 [json_name = "summary"];
+  optional string started_at = 5 [json_name = "startedAt"];
+  optional string completed_at = 6 [json_name = "completedAt"];
+  optional string provider = 7 [json_name = "provider"];
+  optional string provider_check_id = 8 [json_name = "providerCheckId"];
   bool can_rerun = 9 [json_name = "canRerun"];
-  string rerun_disabled_reason = 10 [json_name = "rerunDisabledReason"];
+  optional string rerun_disabled_reason = 10 [json_name = "rerunDisabledReason"];
   repeated .aiserver.v1.PRCheckAnnotation annotations = 11 [json_name = "annotations"];
   bool annotations_truncated = 12 [json_name = "annotationsTruncated"];
   bool is_required = 13 [json_name = "isRequired"];
@@ -38,10 +38,10 @@ message PRCheck {
 
 message PRCheckAnnotation {
   string path = 1 [json_name = "path"];
-  int32 start_line = 2 [json_name = "startLine"];
-  int32 end_line = 3 [json_name = "endLine"];
-  string annotation_level = 4 [json_name = "annotationLevel"];
-  string title = 5 [json_name = "title"];
+  optional int32 start_line = 2 [json_name = "startLine"];
+  optional int32 end_line = 3 [json_name = "endLine"];
+  optional string annotation_level = 4 [json_name = "annotationLevel"];
+  optional string title = 5 [json_name = "title"];
   string message = 6 [json_name = "message"];
 }
 
@@ -78,7 +78,7 @@ enum CheckLogExcerptStatus {
 message GetBranchComparisonRequest {
   string repo_url = 1 [json_name = "repoUrl"];
   string branch_name = 2 [json_name = "branchName"];
-  string base_branch = 3 [json_name = "baseBranch"];
+  optional string base_branch = 3 [json_name = "baseBranch"];
 }
 
 message GetBranchComparisonResponse {
@@ -92,7 +92,7 @@ message GetPullRequestCheckLogExcerptRequest {
   string pr_url = 1 [json_name = "prUrl"];
   string provider = 2 [json_name = "provider"];
   string provider_check_id = 3 [json_name = "providerCheckId"];
-  uint32 max_bytes = 4 [json_name = "maxBytes"];
+  optional uint32 max_bytes = 4 [json_name = "maxBytes"];
 }
 
 message GetPullRequestCheckLogExcerptResponse {
@@ -109,7 +109,7 @@ message GetPullRequestChecksRequest {
 }
 
 message GetPullRequestChecksResponse {
-  .aiserver.v1.PRCheckStatus check_status = 1 [json_name = "checkStatus"];
+  optional .aiserver.v1.PRCheckStatus check_status = 1 [json_name = "checkStatus"];
 }
 
 message GetPullRequestCodeownersRequest {
@@ -130,15 +130,15 @@ message GetPullRequestDiffResponse {
   repeated .aiserver.v1.SCMPullRequestDiffFile files = 1 [json_name = "files"];
   string base_sha = 2 [json_name = "baseSha"];
   string head_sha = 3 [json_name = "headSha"];
-  string base_ref_name = 4 [json_name = "baseRefName"];
-  string head_ref_name = 5 [json_name = "headRefName"];
+  optional string base_ref_name = 4 [json_name = "baseRefName"];
+  optional string head_ref_name = 5 [json_name = "headRefName"];
 }
 
 message GetPullRequestFileContentsRequest {
   string pr_url = 1 [json_name = "prUrl"];
   string path = 2 [json_name = "path"];
   string ref = 3 [json_name = "ref"];
-  uint32 max_bytes = 4 [json_name = "maxBytes"];
+  optional uint32 max_bytes = 4 [json_name = "maxBytes"];
 }
 
 message GetPullRequestFileContentsResponse {
@@ -153,7 +153,7 @@ message GetPullRequestRequest {
 }
 
 message GetPullRequestResponse {
-  .aiserver.v1.SCMPullRequest pull_request = 1 [json_name = "pullRequest"];
+  optional .aiserver.v1.SCMPullRequest pull_request = 1 [json_name = "pullRequest"];
 }
 
 message GetPullRequestStackRequest {
@@ -161,31 +161,31 @@ message GetPullRequestStackRequest {
 }
 
 message GetPullRequestStackResponse {
-  .aiserver.v1.SCMPullRequestStack stack = 1 [json_name = "stack"];
+  optional .aiserver.v1.SCMPullRequestStack stack = 1 [json_name = "stack"];
 }
 
 message GetSCMPullRequestCommitsRequest {
   string pr_url = 1 [json_name = "prUrl"];
-  string after_cursor = 2 [json_name = "afterCursor"];
+  optional string after_cursor = 2 [json_name = "afterCursor"];
   bool skip_cache = 3 [json_name = "skipCache"];
 }
 
 message GetSCMPullRequestCommitsResponse {
   repeated .aiserver.v1.SCMPullRequestCommit commits = 1 [json_name = "commits"];
   bool has_next_page = 2 [json_name = "hasNextPage"];
-  string end_cursor = 3 [json_name = "endCursor"];
+  optional string end_cursor = 3 [json_name = "endCursor"];
 }
 
 message GetSCMPullRequestTimelineEventsRequest {
   string pr_url = 1 [json_name = "prUrl"];
-  int32 page = 2 [json_name = "page"];
+  optional int32 page = 2 [json_name = "page"];
   bool skip_cache = 3 [json_name = "skipCache"];
 }
 
 message GetSCMPullRequestTimelineEventsResponse {
   repeated .aiserver.v1.SCMPullRequestTimelineEvent events = 1 [json_name = "events"];
   bool has_next_page = 2 [json_name = "hasNextPage"];
-  int32 next_page = 3 [json_name = "nextPage"];
+  optional int32 next_page = 3 [json_name = "nextPage"];
 }
 
 enum PullRequestFileContentsStatus {
@@ -218,7 +218,7 @@ message PullRequestUpdatesHeartbeat {
 
 message SCMBatchGetPullRequestForBranchRequest {
   repeated .aiserver.v1.SCMBranchRef branches = 1 [json_name = "branches"];
-  bool skip_cache = 2 [json_name = "skipCache"];
+  optional bool skip_cache = 2 [json_name = "skipCache"];
 }
 
 message SCMBatchGetPullRequestForBranchResponse {
@@ -260,7 +260,7 @@ message SCMDisablePullRequestAutoMergeRequest {
 message SCMDisablePullRequestAutoMergeResponse {
   bool success = 1 [json_name = "success"];
   string error = 2 [json_name = "error"];
-  string pr_node_id = 3 [json_name = "prNodeId"];
+  optional string pr_node_id = 3 [json_name = "prNodeId"];
 }
 
 message SCMEnablePullRequestAutoMergeRequest {
@@ -271,13 +271,13 @@ message SCMEnablePullRequestAutoMergeRequest {
 message SCMEnablePullRequestAutoMergeResponse {
   bool success = 1 [json_name = "success"];
   string error = 2 [json_name = "error"];
-  string pr_node_id = 3 [json_name = "prNodeId"];
+  optional string pr_node_id = 3 [json_name = "prNodeId"];
 }
 
 message SCMGetPullRequestForBranchRequest {
   string repo_url = 1 [json_name = "repoUrl"];
   string branch_name = 2 [json_name = "branchName"];
-  bool skip_cache = 3 [json_name = "skipCache"];
+  optional bool skip_cache = 3 [json_name = "skipCache"];
 }
 
 message SCMGetPullRequestForBranchResponse {
@@ -308,7 +308,7 @@ message SCMMergePullRequestRequest {
 message SCMMergePullRequestResponse {
   bool success = 1 [json_name = "success"];
   string error = 2 [json_name = "error"];
-  string pr_node_id = 3 [json_name = "prNodeId"];
+  optional string pr_node_id = 3 [json_name = "prNodeId"];
 }
 
 enum SCMMergeability {
@@ -327,53 +327,53 @@ message SCMPullRequest {
   bool is_merged = 6 [json_name = "isMerged"];
   bool is_draft = 7 [json_name = "isDraft"];
   string repository = 8 [json_name = "repository"];
-  string head_ref_name = 9 [json_name = "headRefName"];
-  string base_ref_name = 10 [json_name = "baseRefName"];
+  optional string head_ref_name = 9 [json_name = "headRefName"];
+  optional string base_ref_name = 10 [json_name = "baseRefName"];
   .aiserver.v1.SCMMergeability mergeable = 11 [json_name = "mergeable"];
   string merge_state_status = 12 [json_name = "mergeStateStatus"];
-  string review_decision = 13 [json_name = "reviewDecision"];
+  optional string review_decision = 13 [json_name = "reviewDecision"];
   .aiserver.v1.SCMCiStatus ci_status = 14 [json_name = "ciStatus"];
-  string author_login = 15 [json_name = "authorLogin"];
-  string created_at = 16 [json_name = "createdAt"];
-  string updated_at = 17 [json_name = "updatedAt"];
-  string merged_at = 18 [json_name = "mergedAt"];
-  string closed_at = 19 [json_name = "closedAt"];
+  optional string author_login = 15 [json_name = "authorLogin"];
+  optional string created_at = 16 [json_name = "createdAt"];
+  optional string updated_at = 17 [json_name = "updatedAt"];
+  optional string merged_at = 18 [json_name = "mergedAt"];
+  optional string closed_at = 19 [json_name = "closedAt"];
   bool is_auto_merge_enabled = 20 [json_name = "isAutoMergeEnabled"];
-  bool viewer_can_enable_auto_merge = 21 [json_name = "viewerCanEnableAutoMerge"];
-  string body = 22 [json_name = "body"];
-  int32 commit_count = 23 [json_name = "commitCount"];
-  int32 review_count = 24 [json_name = "reviewCount"];
+  optional bool viewer_can_enable_auto_merge = 21 [json_name = "viewerCanEnableAutoMerge"];
+  optional string body = 22 [json_name = "body"];
+  optional int32 commit_count = 23 [json_name = "commitCount"];
+  optional int32 review_count = 24 [json_name = "reviewCount"];
   repeated .aiserver.v1.SCMPullRequestReviewer reviewers = 25 [json_name = "reviewers"];
   repeated .aiserver.v1.SCMPullRequestRequestedReviewer requested_reviewers = 26 [json_name = "requestedReviewers"];
-  bool merge_status_degraded_by_rate_limit = 27 [json_name = "mergeStatusDegradedByRateLimit"];
+  optional bool merge_status_degraded_by_rate_limit = 27 [json_name = "mergeStatusDegradedByRateLimit"];
 }
 
 message SCMPullRequestCommit {
   string sha = 1 [json_name = "sha"];
   string message = 2 [json_name = "message"];
-  string committed_date = 3 [json_name = "committedDate"];
+  optional string committed_date = 3 [json_name = "committedDate"];
   int32 additions = 4 [json_name = "additions"];
   int32 deletions = 5 [json_name = "deletions"];
-  int32 changed_files = 6 [json_name = "changedFiles"];
-  .aiserver.v1.SCMPullRequestCommitUser author = 7 [json_name = "author"];
-  .aiserver.v1.SCMPullRequestCommitUser committer = 8 [json_name = "committer"];
+  optional int32 changed_files = 6 [json_name = "changedFiles"];
+  optional .aiserver.v1.SCMPullRequestCommitUser author = 7 [json_name = "author"];
+  optional .aiserver.v1.SCMPullRequestCommitUser committer = 8 [json_name = "committer"];
   repeated .aiserver.v1.SCMPullRequestCommitUser authors = 9 [json_name = "authors"];
 }
 
 message SCMPullRequestCommitUser {
-  string name = 1 [json_name = "name"];
-  string email = 2 [json_name = "email"];
-  string avatar_url = 3 [json_name = "avatarUrl"];
+  optional string name = 1 [json_name = "name"];
+  optional string email = 2 [json_name = "email"];
+  optional string avatar_url = 3 [json_name = "avatarUrl"];
 }
 
 message SCMPullRequestDiffFile {
   string filename = 1 [json_name = "filename"];
-  string previous_filename = 2 [json_name = "previousFilename"];
+  optional string previous_filename = 2 [json_name = "previousFilename"];
   .aiserver.v1.SCMPullRequestDiffFileStatus status = 3 [json_name = "status"];
-  string original_contents = 4 [json_name = "originalContents"];
-  string modified_contents = 5 [json_name = "modifiedContents"];
-  string patch = 6 [json_name = "patch"];
-  bool is_generated = 7 [json_name = "isGenerated"];
+  optional string original_contents = 4 [json_name = "originalContents"];
+  optional string modified_contents = 5 [json_name = "modifiedContents"];
+  optional string patch = 6 [json_name = "patch"];
+  optional bool is_generated = 7 [json_name = "isGenerated"];
 }
 
 enum SCMPullRequestDiffFileStatus {
@@ -386,23 +386,23 @@ enum SCMPullRequestDiffFileStatus {
 
 message SCMPullRequestRequestedReviewer {
   string login = 1 [json_name = "login"];
-  string name = 2 [json_name = "name"];
-  string avatar_url = 3 [json_name = "avatarUrl"];
-  string kind = 4 [json_name = "kind"];
+  optional string name = 2 [json_name = "name"];
+  optional string avatar_url = 3 [json_name = "avatarUrl"];
+  optional string kind = 4 [json_name = "kind"];
 }
 
 message SCMPullRequestReviewer {
   string login = 1 [json_name = "login"];
-  string name = 2 [json_name = "name"];
-  string avatar_url = 3 [json_name = "avatarUrl"];
-  string state = 4 [json_name = "state"];
+  optional string name = 2 [json_name = "name"];
+  optional string avatar_url = 3 [json_name = "avatarUrl"];
+  optional string state = 4 [json_name = "state"];
 }
 
 message SCMPullRequestStack {
   .aiserver.v1.SCMPullRequestStackSource source = 1 [json_name = "source"];
   repeated .aiserver.v1.SCMPullRequestStackMember members = 2 [json_name = "members"];
   repeated .aiserver.v1.SCMPullRequestStackEdge edges = 3 [json_name = "edges"];
-  string base_ref_name = 4 [json_name = "baseRefName"];
+  optional string base_ref_name = 4 [json_name = "baseRefName"];
 }
 
 message SCMPullRequestStackEdge {
@@ -411,8 +411,8 @@ message SCMPullRequestStackEdge {
 }
 
 message SCMPullRequestStackMember {
-  .aiserver.v1.SCMPullRequest pull_request = 1 [json_name = "pullRequest"];
-  int32 position = 2 [json_name = "position"];
+  optional .aiserver.v1.SCMPullRequest pull_request = 1 [json_name = "pullRequest"];
+  optional int32 position = 2 [json_name = "position"];
 }
 
 enum SCMPullRequestStackSource {
@@ -434,23 +434,23 @@ message SCMPullRequestStatus {
   .aiserver.v1.SCMPullRequestState state = 2 [json_name = "state"];
   bool is_merged = 3 [json_name = "isMerged"];
   bool is_draft = 4 [json_name = "isDraft"];
-  bool degraded_by_rate_limit = 5 [json_name = "degradedByRateLimit"];
-  string updated_at = 6 [json_name = "updatedAt"];
+  optional bool degraded_by_rate_limit = 5 [json_name = "degradedByRateLimit"];
+  optional string updated_at = 6 [json_name = "updatedAt"];
 }
 
 message SCMPullRequestTimelineActor {
   string login = 1 [json_name = "login"];
-  string avatar_url = 2 [json_name = "avatarUrl"];
-  string name = 3 [json_name = "name"];
+  optional string avatar_url = 2 [json_name = "avatarUrl"];
+  optional string name = 3 [json_name = "name"];
 }
 
 message SCMPullRequestTimelineEvent {
   string id = 1 [json_name = "id"];
   string event_type = 2 [json_name = "eventType"];
   string created_at = 3 [json_name = "createdAt"];
-  .aiserver.v1.SCMPullRequestTimelineActor actor = 4 [json_name = "actor"];
-  string label = 5 [json_name = "label"];
-  string body = 6 [json_name = "body"];
+  optional .aiserver.v1.SCMPullRequestTimelineActor actor = 4 [json_name = "actor"];
+  optional string label = 5 [json_name = "label"];
+  optional string body = 6 [json_name = "body"];
 }
 
 message SCMReopenPullRequestRequest {

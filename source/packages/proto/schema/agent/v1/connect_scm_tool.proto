@@ -24,8 +24,8 @@ message ConnectScmRequestResponse {
 }
 
 message ConnectScmToolCall {
-  .agent.v1.ConnectScmArgs args = 1 [json_name = "args"];
-  .agent.v1.ConnectScmResult result = 2 [json_name = "result"];
+  optional .agent.v1.ConnectScmArgs args = 1 [json_name = "args"];
+  optional .agent.v1.ConnectScmResult result = 2 [json_name = "result"];
 }
 
 message ConnectScmArgs {
@@ -55,8 +55,8 @@ message ConnectScmRejected {
 }
 
 message ConnectScmGithub {
-  .agent.v1.ConnectScmGithubRepository repository = 1 [json_name = "repository"];
-  string ghe_application = 2 [json_name = "gheApplication"];
+  optional .agent.v1.ConnectScmGithubRepository repository = 1 [json_name = "repository"];
+  optional string ghe_application = 2 [json_name = "gheApplication"];
 }
 
 message ConnectScmGithubRepository {
@@ -65,5 +65,5 @@ message ConnectScmGithubRepository {
 }
 
 message ConnectScmRequestQuery {
-  .agent.v1.ConnectScmArgs args = 1 [json_name = "args"];
+  optional .agent.v1.ConnectScmArgs args = 1 [json_name = "args"];
 }

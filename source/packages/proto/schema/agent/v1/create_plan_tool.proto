@@ -10,7 +10,7 @@ package agent.v1;
 import "agent/v1/todo_tool.proto";
 
 message CreatePlanRequestResponse {
-  .agent.v1.CreatePlanResult result = 1 [json_name = "result"];
+  optional .agent.v1.CreatePlanResult result = 1 [json_name = "result"];
 }
 
 message CreatePlanResult {
@@ -29,8 +29,8 @@ message CreatePlanError {
 }
 
 message CreatePlanToolCall {
-  .agent.v1.CreatePlanArgs args = 1 [json_name = "args"];
-  .agent.v1.CreatePlanResult result = 2 [json_name = "result"];
+  optional .agent.v1.CreatePlanArgs args = 1 [json_name = "args"];
+  optional .agent.v1.CreatePlanResult result = 2 [json_name = "result"];
 }
 
 message CreatePlanArgs {
@@ -48,6 +48,6 @@ message Phase {
 }
 
 message CreatePlanRequestQuery {
-  .agent.v1.CreatePlanArgs args = 1 [json_name = "args"];
+  optional .agent.v1.CreatePlanArgs args = 1 [json_name = "args"];
   string tool_call_id = 2 [json_name = "toolCallId"];
 }

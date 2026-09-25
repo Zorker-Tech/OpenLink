@@ -114,24 +114,24 @@ export class CustomSubagent extends Message<CustomSubagent> {
   isBackground = false;
 
   /**
-   * @generated from field: string plugin = 9;
+   * @generated from field: optional string plugin = 9;
    */
-  plugin = "";
+  plugin?: string;
 
   /**
-   * @generated from field: string marketplace = 10;
+   * @generated from field: optional string marketplace = 10;
    */
-  marketplace = "";
+  marketplace?: string;
 
   /**
-   * @generated from field: string plugin_id = 11;
+   * @generated from field: optional string plugin_id = 11;
    */
-  pluginId = "";
+  pluginId?: string;
 
   /**
-   * @generated from field: string marketplace_id = 12;
+   * @generated from field: optional string marketplace_id = 12;
    */
-  marketplaceId = "";
+  marketplaceId?: string;
 
   /**
    * @generated from field: bool force_default_model = 13;
@@ -139,9 +139,9 @@ export class CustomSubagent extends Message<CustomSubagent> {
   forceDefaultModel = false;
 
   /**
-   * @generated from field: string source = 14;
+   * @generated from field: optional string source = 14;
    */
-  source = "";
+  source?: string;
 
   constructor(data?: PartialMessage<CustomSubagent>) {
     super();
@@ -159,12 +159,12 @@ export class CustomSubagent extends Message<CustomSubagent> {
     { no: 6, name: "prompt", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 7, name: "permission_mode", kind: "enum", T: proto3.getEnumType(CustomSubagentPermissionMode) },
     { no: 8, name: "is_background", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 9, name: "plugin", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "marketplace", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 11, name: "plugin_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 12, name: "marketplace_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 9, name: "plugin", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 10, name: "marketplace", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 11, name: "plugin_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 12, name: "marketplace_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 13, name: "force_default_model", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 14, name: "source", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 14, name: "source", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CustomSubagent {

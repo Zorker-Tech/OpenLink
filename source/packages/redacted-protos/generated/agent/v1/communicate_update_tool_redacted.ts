@@ -12,9 +12,9 @@ import { CommunicateUpdateArgs, CommunicateUpdateError, CommunicateUpdateResult,
 function toRedactedCommunicateUpdateArgs(msg, privacyMode) {
   return {
     _privacyMode: privacyMode,
-    currentStep: createRedactedString(msg.currentStep, DataClassification.CODE, "current_step", privacyMode),
-    finalSummary: createRedactedString(msg.finalSummary, DataClassification.CODE, "final_summary", privacyMode),
-    completedSubtitle: createRedactedString(msg.completedSubtitle, DataClassification.CODE, "completed_subtitle", privacyMode),
+    currentStep: msg.currentStep !== void 0 ? createRedactedString(msg.currentStep, DataClassification.CODE, "current_step", privacyMode) : void 0,
+    finalSummary: msg.finalSummary !== void 0 ? createRedactedString(msg.finalSummary, DataClassification.CODE, "final_summary", privacyMode) : void 0,
+    completedSubtitle: msg.completedSubtitle !== void 0 ? createRedactedString(msg.completedSubtitle, DataClassification.CODE, "completed_subtitle", privacyMode) : void 0,
   };
 }
 
@@ -22,9 +22,9 @@ function fromRedactedCommunicateUpdateArgs(msg, purpose, opts) {
   const redactUnallowedFieldsInsteadOfThrowing = opts?.redactUnallowedFieldsInsteadOfThrowing ?? false;
   const enforcing = opts?.enforcing;
   return new CommunicateUpdateArgs({
-    currentStep: msg.currentStep.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    finalSummary: msg.finalSummary.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    completedSubtitle: msg.completedSubtitle.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    currentStep: msg.currentStep?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    finalSummary: msg.finalSummary?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    completedSubtitle: msg.completedSubtitle?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
   });
 }
 

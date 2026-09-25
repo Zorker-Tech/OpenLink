@@ -8,14 +8,14 @@ syntax = "proto3";
 package agent.v1;
 
 message BlameByFilePathToolCall {
-  .agent.v1.BlameByFilePathArgs args = 1 [json_name = "args"];
-  .agent.v1.BlameByFilePathResult result = 2 [json_name = "result"];
+  optional .agent.v1.BlameByFilePathArgs args = 1 [json_name = "args"];
+  optional .agent.v1.BlameByFilePathResult result = 2 [json_name = "result"];
 }
 
 message BlameByFilePathArgs {
   string file_path = 1 [json_name = "filePath"];
-  int32 start_line = 2 [json_name = "startLine"];
-  int32 end_line = 3 [json_name = "endLine"];
+  optional int32 start_line = 2 [json_name = "startLine"];
+  optional int32 end_line = 3 [json_name = "endLine"];
 }
 
 message BlameByFilePathResult {

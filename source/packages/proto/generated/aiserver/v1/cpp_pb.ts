@@ -9,7 +9,7 @@
 // @ts-nocheck
 
 import type { BinaryReadOptions, FieldList, JsonReadOptions, JsonValue, PartialMessage, PlainMessage } from "@bufbuild/protobuf";
-import { Message, proto3, protoInt64 } from "@bufbuild/protobuf";
+import { Message, proto3 } from "@bufbuild/protobuf";
 import { CurrentFileInfo, CursorPosition, LineRange, LinterError, LinterErrors, ModelDetails, SelectionWithOrientation, SimpleRange } from "./utils_pb.ts";
 import { BugLocation, BugReport, BugReports } from "./bugbot_pb.ts";
 import { CodeResult, RepositoryInfo } from "./repository_pb.ts";
@@ -175,9 +175,9 @@ export class CppContextItem extends Message<CppContextItem> {
   contents = "";
 
   /**
-   * @generated from field: string symbol = 2;
+   * @generated from field: optional string symbol = 2;
    */
-  symbol = "";
+  symbol?: string;
 
   /**
    * @generated from field: string relative_workspace_path = 3;
@@ -198,7 +198,7 @@ export class CppContextItem extends Message<CppContextItem> {
   static readonly typeName = "aiserver.v1.CppContextItem";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "contents", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "symbol", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "symbol", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "score", kind: "scalar", T: 2 /* ScalarType.FLOAT */ },
   ]);
@@ -225,7 +225,7 @@ export class CppContextItem extends Message<CppContextItem> {
  */
 export class BlockDiffPatch extends Message<BlockDiffPatch> {
   /**
-   * @generated from field: aiserver.v1.BlockDiffPatch.ModelWindow start_model_window = 1;
+   * @generated from field: optional aiserver.v1.BlockDiffPatch.ModelWindow start_model_window = 1;
    */
   startModelWindow?: BlockDiffPatch_ModelWindow;
 
@@ -257,7 +257,7 @@ export class BlockDiffPatch extends Message<BlockDiffPatch> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.BlockDiffPatch";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "start_model_window", kind: "message", T: BlockDiffPatch_ModelWindow },
+    { no: 1, name: "start_model_window", kind: "message", T: BlockDiffPatch_ModelWindow, opt: true },
     { no: 3, name: "changes", kind: "message", T: BlockDiffPatch_Change, repeated: true },
     { no: 4, name: "relative_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "start_from_change_index", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
@@ -340,7 +340,7 @@ export class BlockDiffPatch_Change extends Message<BlockDiffPatch_Change> {
   text = "";
 
   /**
-   * @generated from field: aiserver.v1.IRange range = 2;
+   * @generated from field: optional aiserver.v1.IRange range = 2;
    */
   range?: IRange;
 
@@ -353,7 +353,7 @@ export class BlockDiffPatch_Change extends Message<BlockDiffPatch_Change> {
   static readonly typeName = "aiserver.v1.BlockDiffPatch.Change";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "range", kind: "message", T: IRange },
+    { no: 2, name: "range", kind: "message", T: IRange, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BlockDiffPatch_Change {
@@ -383,9 +383,9 @@ export class CppParameterHint extends Message<CppParameterHint> {
   label = "";
 
   /**
-   * @generated from field: string documentation = 2;
+   * @generated from field: optional string documentation = 2;
    */
-  documentation = "";
+  documentation?: string;
 
   constructor(data?: PartialMessage<CppParameterHint>) {
     super();
@@ -396,7 +396,7 @@ export class CppParameterHint extends Message<CppParameterHint> {
   static readonly typeName = "aiserver.v1.CppParameterHint";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "label", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "documentation", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "documentation", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CppParameterHint {
@@ -513,12 +513,12 @@ export class IRange extends Message<IRange> {
  */
 export class AcceptCursorPredictionEvent extends Message<AcceptCursorPredictionEvent> {
   /**
-   * @generated from field: aiserver.v1.CursorPrediction cursor_prediction = 1;
+   * @generated from field: optional aiserver.v1.CursorPrediction cursor_prediction = 1;
    */
   cursorPrediction?: CursorPrediction;
 
   /**
-   * @generated from field: aiserver.v1.PointInTimeModel point_in_time_model = 2;
+   * @generated from field: optional aiserver.v1.PointInTimeModel point_in_time_model = 2;
    */
   pointInTimeModel?: PointInTimeModel;
 
@@ -530,8 +530,8 @@ export class AcceptCursorPredictionEvent extends Message<AcceptCursorPredictionE
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.AcceptCursorPredictionEvent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "cursor_prediction", kind: "message", T: CursorPrediction },
-    { no: 2, name: "point_in_time_model", kind: "message", T: PointInTimeModel },
+    { no: 1, name: "cursor_prediction", kind: "message", T: CursorPrediction, opt: true },
+    { no: 2, name: "point_in_time_model", kind: "message", T: PointInTimeModel, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AcceptCursorPredictionEvent {
@@ -645,9 +645,9 @@ export class AdditionalFile extends Message<AdditionalFile> {
   visibleRangeContent: string[] = [];
 
   /**
-   * @generated from field: double last_viewed_at = 4;
+   * @generated from field: optional double last_viewed_at = 4;
    */
-  lastViewedAt = 0;
+  lastViewedAt?: number;
 
   /**
    * @generated from field: repeated int32 start_line_number_one_indexed = 5;
@@ -670,7 +670,7 @@ export class AdditionalFile extends Message<AdditionalFile> {
     { no: 1, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "is_open", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 3, name: "visible_range_content", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 4, name: "last_viewed_at", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
+    { no: 4, name: "last_viewed_at", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
     { no: 5, name: "start_line_number_one_indexed", kind: "scalar", T: 5 /* ScalarType.INT32 */, repeated: true },
     { no: 6, name: "visible_ranges", kind: "message", T: LineRange, repeated: true },
   ]);
@@ -891,19 +891,19 @@ export class AnythingQuickAccessItem extends Message<AnythingQuickAccessItem> {
  */
 export class AnythingQuickAccessItem_Resource extends Message<AnythingQuickAccessItem_Resource> {
   /**
-   * @generated from field: aiserver.v1.PointInTimeModel model = 1;
+   * @generated from field: optional aiserver.v1.PointInTimeModel model = 1;
    */
   model?: PointInTimeModel;
 
   /**
-   * @generated from field: aiserver.v1.IRange range = 2;
+   * @generated from field: optional aiserver.v1.IRange range = 2;
    */
   range?: IRange;
 
   /**
-   * @generated from field: string uri = 3;
+   * @generated from field: optional string uri = 3;
    */
-  uri = "";
+  uri?: string;
 
   constructor(data?: PartialMessage<AnythingQuickAccessItem_Resource>) {
     super();
@@ -913,9 +913,9 @@ export class AnythingQuickAccessItem_Resource extends Message<AnythingQuickAcces
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.AnythingQuickAccessItem.Resource";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "model", kind: "message", T: PointInTimeModel },
-    { no: 2, name: "range", kind: "message", T: IRange },
-    { no: 3, name: "uri", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "model", kind: "message", T: PointInTimeModel, opt: true },
+    { no: 2, name: "range", kind: "message", T: IRange, opt: true },
+    { no: 3, name: "uri", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AnythingQuickAccessItem_Resource {
@@ -1025,9 +1025,9 @@ export class AvailableCppModelsResponse extends Message<AvailableCppModelsRespon
   models: string[] = [];
 
   /**
-   * @generated from field: string default_model = 2;
+   * @generated from field: optional string default_model = 2;
    */
-  defaultModel = "";
+  defaultModel?: string;
 
   constructor(data?: PartialMessage<AvailableCppModelsResponse>) {
     super();
@@ -1038,7 +1038,7 @@ export class AvailableCppModelsResponse extends Message<AvailableCppModelsRespon
   static readonly typeName = "aiserver.v1.AvailableCppModelsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "models", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 2, name: "default_model", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "default_model", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AvailableCppModelsResponse {
@@ -1160,14 +1160,14 @@ export class BeforeAiEditEvent extends Message<BeforeAiEditEvent> {
   toolCallId = "";
 
   /**
-   * @generated from field: string request_id = 3;
+   * @generated from field: optional string request_id = 3;
    */
-  requestId = "";
+  requestId?: string;
 
   /**
-   * @generated from field: string tool_name = 4;
+   * @generated from field: optional string tool_name = 4;
    */
-  toolName = "";
+  toolName?: string;
 
   /**
    * @generated from oneof aiserver.v1.BeforeAiEditEvent.model
@@ -1195,8 +1195,8 @@ export class BeforeAiEditEvent extends Message<BeforeAiEditEvent> {
   static readonly typeName = "aiserver.v1.BeforeAiEditEvent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 2, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "request_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "tool_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "request_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "tool_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 1, name: "point_in_time_model", kind: "message", T: PointInTimeModel, oneof: "model" },
     { no: 5, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */, oneof: "model" },
   ]);
@@ -1298,9 +1298,9 @@ export class BrowserEvent_Navigation extends Message<BrowserEvent_Navigation> {
   url = "";
 
   /**
-   * @generated from field: string title = 2;
+   * @generated from field: optional string title = 2;
    */
-  title = "";
+  title?: string;
 
   constructor(data?: PartialMessage<BrowserEvent_Navigation>) {
     super();
@@ -1311,7 +1311,7 @@ export class BrowserEvent_Navigation extends Message<BrowserEvent_Navigation> {
   static readonly typeName = "aiserver.v1.BrowserEvent.Navigation";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BrowserEvent_Navigation {
@@ -1408,24 +1408,24 @@ export class BrowserEvent_ToolAction extends Message<BrowserEvent_ToolAction> {
   argsJson = "";
 
   /**
-   * @generated from field: bool success = 3;
+   * @generated from field: optional bool success = 3;
    */
-  success = false;
+  success?: boolean;
 
   /**
-   * @generated from field: string post_snapshot_yaml = 4;
+   * @generated from field: optional string post_snapshot_yaml = 4;
    */
-  postSnapshotYaml = "";
+  postSnapshotYaml?: string;
 
   /**
-   * @generated from field: string post_url = 5;
+   * @generated from field: optional string post_url = 5;
    */
-  postUrl = "";
+  postUrl?: string;
 
   /**
-   * @generated from field: string post_title = 6;
+   * @generated from field: optional string post_title = 6;
    */
-  postTitle = "";
+  postTitle?: string;
 
   /**
    * @generated from field: aiserver.v1.BrowserEvent.ToolAction.Source source = 7;
@@ -1442,10 +1442,10 @@ export class BrowserEvent_ToolAction extends Message<BrowserEvent_ToolAction> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "tool_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "args_json", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "success", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "post_snapshot_yaml", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "post_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "post_title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "success", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 4, name: "post_snapshot_yaml", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "post_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "post_title", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 7, name: "source", kind: "enum", T: proto3.getEnumType(BrowserEvent_ToolAction_Source) },
   ]);
 
@@ -1918,7 +1918,7 @@ export class BugBotEvent_PressedFixInComposer extends Message<BugBotEvent_Presse
  */
 export class BugBotEvent_PressedOpenInEditor extends Message<BugBotEvent_PressedOpenInEditor> {
   /**
-   * @generated from field: aiserver.v1.BugLocation bug_location = 1;
+   * @generated from field: optional aiserver.v1.BugLocation bug_location = 1;
    */
   bugLocation?: BugLocation;
 
@@ -1935,7 +1935,7 @@ export class BugBotEvent_PressedOpenInEditor extends Message<BugBotEvent_Pressed
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.BugBotEvent.PressedOpenInEditor";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "bug_location", kind: "message", T: BugLocation },
+    { no: 1, name: "bug_location", kind: "message", T: BugLocation, opt: true },
     { no: 2, name: "bug_report_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
@@ -1961,7 +1961,7 @@ export class BugBotEvent_PressedOpenInEditor extends Message<BugBotEvent_Pressed
  */
 export class BugBotEvent_ReportsGenerated extends Message<BugBotEvent_ReportsGenerated> {
   /**
-   * @generated from field: aiserver.v1.BugReports bug_reports = 1;
+   * @generated from field: optional aiserver.v1.BugReports bug_reports = 1;
    */
   bugReports?: BugReports;
 
@@ -1973,7 +1973,7 @@ export class BugBotEvent_ReportsGenerated extends Message<BugBotEvent_ReportsGen
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.BugBotEvent.ReportsGenerated";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "bug_reports", kind: "message", T: BugReports },
+    { no: 1, name: "bug_reports", kind: "message", T: BugReports, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugBotEvent_ReportsGenerated {
@@ -2169,7 +2169,7 @@ export class BugBotLinterEvent extends Message<BugBotLinterEvent> {
   requestId = "";
 
   /**
-   * @generated from field: aiserver.v1.PointInTimeModel point_in_time_model = 2;
+   * @generated from field: optional aiserver.v1.PointInTimeModel point_in_time_model = 2;
    */
   pointInTimeModel?: PointInTimeModel;
 
@@ -2229,7 +2229,7 @@ export class BugBotLinterEvent extends Message<BugBotLinterEvent> {
   static readonly typeName = "aiserver.v1.BugBotLinterEvent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "request_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "point_in_time_model", kind: "message", T: PointInTimeModel },
+    { no: 2, name: "point_in_time_model", kind: "message", T: PointInTimeModel, opt: true },
     { no: 3, name: "lint_generated", kind: "message", T: BugBotLinterEvent_LintGenerated, oneof: "event_type" },
     { no: 4, name: "lint_dismissed", kind: "message", T: BugBotLinterEvent_LintDismissed, oneof: "event_type" },
     { no: 5, name: "user_feedback", kind: "message", T: BugBotLinterEvent_UserFeedback, oneof: "event_type" },
@@ -2298,7 +2298,7 @@ export class BugBotLinterEvent_LintDismissed extends Message<BugBotLinterEvent_L
  */
 export class BugBotLinterEvent_LintGenerated extends Message<BugBotLinterEvent_LintGenerated> {
   /**
-   * @generated from field: aiserver.v1.BugReport bug_report = 1;
+   * @generated from field: optional aiserver.v1.BugReport bug_report = 1;
    */
   bugReport?: BugReport;
 
@@ -2310,7 +2310,7 @@ export class BugBotLinterEvent_LintGenerated extends Message<BugBotLinterEvent_L
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.BugBotLinterEvent.LintGenerated";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "bug_report", kind: "message", T: BugReport },
+    { no: 1, name: "bug_report", kind: "message", T: BugReport, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugBotLinterEvent_LintGenerated {
@@ -2708,7 +2708,7 @@ export class ChatEvent_SubmitPrompt extends Message<ChatEvent_SubmitPrompt> {
  */
 export class CmdKEvent extends Message<CmdKEvent> {
   /**
-   * @generated from field: aiserver.v1.PointInTimeModel point_in_time_model = 1;
+   * @generated from field: optional aiserver.v1.PointInTimeModel point_in_time_model = 1;
    */
   pointInTimeModel?: PointInTimeModel;
 
@@ -2718,9 +2718,9 @@ export class CmdKEvent extends Message<CmdKEvent> {
   requestId = "";
 
   /**
-   * @generated from field: string prompt_bar_id = 20;
+   * @generated from field: optional string prompt_bar_id = 20;
    */
-  promptBarId = "";
+  promptBarId?: string;
 
   /**
    * @generated from oneof aiserver.v1.CmdKEvent.event_type
@@ -2783,9 +2783,9 @@ export class CmdKEvent extends Message<CmdKEvent> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CmdKEvent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "point_in_time_model", kind: "message", T: PointInTimeModel },
+    { no: 1, name: "point_in_time_model", kind: "message", T: PointInTimeModel, opt: true },
     { no: 2, name: "request_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 20, name: "prompt_bar_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 20, name: "prompt_bar_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "submit_prompt", kind: "message", T: CmdKEvent_SubmitPrompt, oneof: "event_type" },
     { no: 4, name: "end_of_generation", kind: "message", T: CmdKEvent_EndOfGeneration, oneof: "event_type" },
     { no: 5, name: "interrupt_generation", kind: "message", T: CmdKEvent_InterruptGeneration, oneof: "event_type" },
@@ -2849,7 +2849,7 @@ export class CmdKEvent_AcceptDiffs extends Message<CmdKEvent_AcceptDiffs> {
  */
 export class CmdKEvent_AcceptPartialDiff extends Message<CmdKEvent_AcceptPartialDiff> {
   /**
-   * @generated from field: aiserver.v1.IRange green_range = 1;
+   * @generated from field: optional aiserver.v1.IRange green_range = 1;
    */
   greenRange?: IRange;
 
@@ -2871,7 +2871,7 @@ export class CmdKEvent_AcceptPartialDiff extends Message<CmdKEvent_AcceptPartial
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CmdKEvent.AcceptPartialDiff";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "green_range", kind: "message", T: IRange },
+    { no: 1, name: "green_range", kind: "message", T: IRange, opt: true },
     { no: 2, name: "green_lines", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 3, name: "red_lines", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
@@ -2991,14 +2991,14 @@ export class CmdKEvent_InterruptGeneration extends Message<CmdKEvent_InterruptGe
  */
 export class CmdKEvent_RejectDiffs extends Message<CmdKEvent_RejectDiffs> {
   /**
-   * @generated from field: string actor_request_id = 1;
+   * @generated from field: optional string actor_request_id = 1;
    */
-  actorRequestId = "";
+  actorRequestId?: string;
 
   /**
-   * @generated from field: bool silent = 2;
+   * @generated from field: optional bool silent = 2;
    */
-  silent = false;
+  silent?: boolean;
 
   constructor(data?: PartialMessage<CmdKEvent_RejectDiffs>) {
     super();
@@ -3008,8 +3008,8 @@ export class CmdKEvent_RejectDiffs extends Message<CmdKEvent_RejectDiffs> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CmdKEvent.RejectDiffs";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "actor_request_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "silent", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 1, name: "actor_request_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "silent", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CmdKEvent_RejectDiffs {
@@ -3034,7 +3034,7 @@ export class CmdKEvent_RejectDiffs extends Message<CmdKEvent_RejectDiffs> {
  */
 export class CmdKEvent_RejectPartialDiff extends Message<CmdKEvent_RejectPartialDiff> {
   /**
-   * @generated from field: aiserver.v1.IRange green_range = 1;
+   * @generated from field: optional aiserver.v1.IRange green_range = 1;
    */
   greenRange?: IRange;
 
@@ -3056,7 +3056,7 @@ export class CmdKEvent_RejectPartialDiff extends Message<CmdKEvent_RejectPartial
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CmdKEvent.RejectPartialDiff";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "green_range", kind: "message", T: IRange },
+    { no: 1, name: "green_range", kind: "message", T: IRange, opt: true },
     { no: 2, name: "green_lines", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 3, name: "red_lines", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
@@ -3083,7 +3083,7 @@ export class CmdKEvent_RejectPartialDiff extends Message<CmdKEvent_RejectPartial
  */
 export class CmdKEvent_SubmitPrompt extends Message<CmdKEvent_SubmitPrompt> {
   /**
-   * @generated from field: aiserver.v1.IRange original_range = 1;
+   * @generated from field: optional aiserver.v1.IRange original_range = 1;
    */
   originalRange?: IRange;
 
@@ -3105,7 +3105,7 @@ export class CmdKEvent_SubmitPrompt extends Message<CmdKEvent_SubmitPrompt> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CmdKEvent.SubmitPrompt";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "original_range", kind: "message", T: IRange },
+    { no: 1, name: "original_range", kind: "message", T: IRange, opt: true },
     { no: 2, name: "original_text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "prompt", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
@@ -3132,7 +3132,7 @@ export class CmdKEvent_SubmitPrompt extends Message<CmdKEvent_SubmitPrompt> {
  */
 export class CppAcceptEvent extends Message<CppAcceptEvent> {
   /**
-   * @generated from field: aiserver.v1.CppSuggestion cpp_suggestion = 1;
+   * @generated from field: optional aiserver.v1.CppSuggestion cpp_suggestion = 1;
    */
   cppSuggestion?: CppSuggestion;
 
@@ -3144,7 +3144,7 @@ export class CppAcceptEvent extends Message<CppAcceptEvent> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CppAcceptEvent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "cpp_suggestion", kind: "message", T: CppSuggestion },
+    { no: 1, name: "cpp_suggestion", kind: "message", T: CppSuggestion, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CppAcceptEvent {
@@ -3169,12 +3169,12 @@ export class CppAcceptEvent extends Message<CppAcceptEvent> {
  */
 export class CppAcceptEventNew extends Message<CppAcceptEventNew> {
   /**
-   * @generated from field: aiserver.v1.CurrentlyShownCppSuggestion cpp_suggestion = 1;
+   * @generated from field: optional aiserver.v1.CurrentlyShownCppSuggestion cpp_suggestion = 1;
    */
   cppSuggestion?: CurrentlyShownCppSuggestion;
 
   /**
-   * @generated from field: aiserver.v1.PointInTimeModel point_in_time_model = 7;
+   * @generated from field: optional aiserver.v1.PointInTimeModel point_in_time_model = 7;
    */
   pointInTimeModel?: PointInTimeModel;
 
@@ -3186,8 +3186,8 @@ export class CppAcceptEventNew extends Message<CppAcceptEventNew> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CppAcceptEventNew";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "cpp_suggestion", kind: "message", T: CurrentlyShownCppSuggestion },
-    { no: 7, name: "point_in_time_model", kind: "message", T: PointInTimeModel },
+    { no: 1, name: "cpp_suggestion", kind: "message", T: CurrentlyShownCppSuggestion, opt: true },
+    { no: 7, name: "point_in_time_model", kind: "message", T: PointInTimeModel, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CppAcceptEventNew {
@@ -3286,7 +3286,7 @@ export class CppAppendResponse extends Message<CppAppendResponse> {
  */
 export class CppChangeQuickActionEvent extends Message<CppChangeQuickActionEvent> {
   /**
-   * @generated from field: aiserver.v1.PointInTimeModel point_in_time_model = 1;
+   * @generated from field: optional aiserver.v1.PointInTimeModel point_in_time_model = 1;
    */
   pointInTimeModel?: PointInTimeModel;
 
@@ -3313,7 +3313,7 @@ export class CppChangeQuickActionEvent extends Message<CppChangeQuickActionEvent
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CppChangeQuickActionEvent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "point_in_time_model", kind: "message", T: PointInTimeModel },
+    { no: 1, name: "point_in_time_model", kind: "message", T: PointInTimeModel, opt: true },
     { no: 2, name: "added", kind: "message", T: CppQuickAction, repeated: true },
     { no: 3, name: "removed", kind: "message", T: CppQuickAction, repeated: true },
     { no: 4, name: "actions", kind: "message", T: CppQuickAction, repeated: true },
@@ -3341,9 +3341,9 @@ export class CppChangeQuickActionEvent extends Message<CppChangeQuickActionEvent
  */
 export class CppConfigRequest extends Message<CppConfigRequest> {
   /**
-   * @generated from field: bool is_nightly = 1;
+   * @generated from field: optional bool is_nightly = 1;
    */
-  isNightly = false;
+  isNightly?: boolean;
 
   /**
    * @generated from field: string model = 2;
@@ -3351,9 +3351,9 @@ export class CppConfigRequest extends Message<CppConfigRequest> {
   model = "";
 
   /**
-   * @generated from field: bool supports_cpt = 3;
+   * @generated from field: optional bool supports_cpt = 3;
    */
-  supportsCpt = false;
+  supportsCpt?: boolean;
 
   constructor(data?: PartialMessage<CppConfigRequest>) {
     super();
@@ -3363,9 +3363,9 @@ export class CppConfigRequest extends Message<CppConfigRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CppConfigRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "is_nightly", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 1, name: "is_nightly", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 2, name: "model", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "supports_cpt", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 3, name: "supports_cpt", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CppConfigRequest {
@@ -3390,34 +3390,34 @@ export class CppConfigRequest extends Message<CppConfigRequest> {
  */
 export class CppConfigResponse extends Message<CppConfigResponse> {
   /**
-   * @generated from field: int32 above_radius = 1;
+   * @generated from field: optional int32 above_radius = 1;
    */
-  aboveRadius = 0;
+  aboveRadius?: number;
 
   /**
-   * @generated from field: int32 below_radius = 2;
+   * @generated from field: optional int32 below_radius = 2;
    */
-  belowRadius = 0;
+  belowRadius?: number;
 
   /**
-   * @generated from field: aiserver.v1.CppConfigResponse.MergeBehavior merge_behavior = 4;
+   * @generated from field: optional aiserver.v1.CppConfigResponse.MergeBehavior merge_behavior = 4;
    */
   mergeBehavior?: CppConfigResponse_MergeBehavior;
 
   /**
-   * @generated from field: bool is_on = 5;
+   * @generated from field: optional bool is_on = 5;
    */
-  isOn = false;
+  isOn?: boolean;
 
   /**
-   * @generated from field: bool is_ghost_text = 6;
+   * @generated from field: optional bool is_ghost_text = 6;
    */
-  isGhostText = false;
+  isGhostText?: boolean;
 
   /**
-   * @generated from field: bool should_let_user_enable_cpp_even_if_not_pro = 7;
+   * @generated from field: optional bool should_let_user_enable_cpp_even_if_not_pro = 7;
    */
-  shouldLetUserEnableCppEvenIfNotPro = false;
+  shouldLetUserEnableCppEvenIfNotPro?: boolean;
 
   /**
    * @generated from field: repeated aiserver.v1.CppConfigResponse.Heuristic heuristics = 8;
@@ -3455,7 +3455,7 @@ export class CppConfigResponse extends Message<CppConfigResponse> {
   useWhitespaceDiffHistory = false;
 
   /**
-   * @generated from field: aiserver.v1.CppConfigResponse.ImportPredictionConfig import_prediction_config = 15;
+   * @generated from field: optional aiserver.v1.CppConfigResponse.ImportPredictionConfig import_prediction_config = 15;
    */
   importPredictionConfig?: CppConfigResponse_ImportPredictionConfig;
 
@@ -3475,7 +3475,7 @@ export class CppConfigResponse extends Message<CppConfigResponse> {
   geoCppBackendUrl = "";
 
   /**
-   * @generated from field: aiserver.v1.CppConfigResponse.RecentlyRejectedEditThresholds recently_rejected_edit_thresholds = 19;
+   * @generated from field: optional aiserver.v1.CppConfigResponse.RecentlyRejectedEditThresholds recently_rejected_edit_thresholds = 19;
    */
   recentlyRejectedEditThresholds?: CppConfigResponse_RecentlyRejectedEditThresholds;
 
@@ -3495,12 +3495,12 @@ export class CppConfigResponse extends Message<CppConfigResponse> {
   shouldFetchRvfText = false;
 
   /**
-   * @generated from field: int32 max_number_of_cleared_suggestions_since_last_accept = 23;
+   * @generated from field: optional int32 max_number_of_cleared_suggestions_since_last_accept = 23;
    */
-  maxNumberOfClearedSuggestionsSinceLastAccept = 0;
+  maxNumberOfClearedSuggestionsSinceLastAccept?: number;
 
   /**
-   * @generated from field: aiserver.v1.CppConfigResponse.SuggestionHintConfig suggestion_hint_config = 24;
+   * @generated from field: optional aiserver.v1.CppConfigResponse.SuggestionHintConfig suggestion_hint_config = 24;
    */
   suggestionHintConfig?: CppConfigResponse_SuggestionHintConfig;
 
@@ -3510,14 +3510,14 @@ export class CppConfigResponse extends Message<CppConfigResponse> {
   allowsTabChunks = false;
 
   /**
-   * @generated from field: int32 tab_context_refresh_debounce_ms = 26;
+   * @generated from field: optional int32 tab_context_refresh_debounce_ms = 26;
    */
-  tabContextRefreshDebounceMs = 0;
+  tabContextRefreshDebounceMs?: number;
 
   /**
-   * @generated from field: int32 tab_context_refresh_editor_change_debounce_ms = 27;
+   * @generated from field: optional int32 tab_context_refresh_editor_change_debounce_ms = 27;
    */
-  tabContextRefreshEditorChangeDebounceMs = 0;
+  tabContextRefreshEditorChangeDebounceMs?: number;
 
   constructor(data?: PartialMessage<CppConfigResponse>) {
     super();
@@ -3527,12 +3527,12 @@ export class CppConfigResponse extends Message<CppConfigResponse> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CppConfigResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "above_radius", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 2, name: "below_radius", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 4, name: "merge_behavior", kind: "message", T: CppConfigResponse_MergeBehavior },
-    { no: 5, name: "is_on", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 6, name: "is_ghost_text", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 7, name: "should_let_user_enable_cpp_even_if_not_pro", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 1, name: "above_radius", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 2, name: "below_radius", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 4, name: "merge_behavior", kind: "message", T: CppConfigResponse_MergeBehavior, opt: true },
+    { no: 5, name: "is_on", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 6, name: "is_ghost_text", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 7, name: "should_let_user_enable_cpp_even_if_not_pro", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 8, name: "heuristics", kind: "enum", T: proto3.getEnumType(CppConfigResponse_Heuristic), repeated: true },
     { no: 9, name: "exclude_recently_viewed_files_patterns", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 10, name: "enable_rvf_tracking", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
@@ -3540,19 +3540,19 @@ export class CppConfigResponse extends Message<CppConfigResponse> {
     { no: 12, name: "client_debounce_duration_millis", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 13, name: "cpp_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 14, name: "use_whitespace_diff_history", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 15, name: "import_prediction_config", kind: "message", T: CppConfigResponse_ImportPredictionConfig },
+    { no: 15, name: "import_prediction_config", kind: "message", T: CppConfigResponse_ImportPredictionConfig, opt: true },
     { no: 16, name: "enable_filesync_debounce_skipping", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 17, name: "check_filesync_hash_percent", kind: "scalar", T: 2 /* ScalarType.FLOAT */ },
     { no: 18, name: "geo_cpp_backend_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 19, name: "recently_rejected_edit_thresholds", kind: "message", T: CppConfigResponse_RecentlyRejectedEditThresholds },
+    { no: 19, name: "recently_rejected_edit_thresholds", kind: "message", T: CppConfigResponse_RecentlyRejectedEditThresholds, opt: true },
     { no: 20, name: "is_fused_cursor_prediction_model", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 21, name: "include_unchanged_lines", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 22, name: "should_fetch_rvf_text", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 23, name: "max_number_of_cleared_suggestions_since_last_accept", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 24, name: "suggestion_hint_config", kind: "message", T: CppConfigResponse_SuggestionHintConfig },
+    { no: 23, name: "max_number_of_cleared_suggestions_since_last_accept", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 24, name: "suggestion_hint_config", kind: "message", T: CppConfigResponse_SuggestionHintConfig, opt: true },
     { no: 25, name: "allows_tab_chunks", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 26, name: "tab_context_refresh_debounce_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 27, name: "tab_context_refresh_editor_change_debounce_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 26, name: "tab_context_refresh_debounce_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 27, name: "tab_context_refresh_editor_change_debounce_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CppConfigResponse {
@@ -3681,14 +3681,14 @@ export class CppConfigResponse_MergeBehavior extends Message<CppConfigResponse_M
   type = "";
 
   /**
-   * @generated from field: int32 limit = 2;
+   * @generated from field: optional int32 limit = 2;
    */
-  limit = 0;
+  limit?: number;
 
   /**
-   * @generated from field: int32 radius = 3;
+   * @generated from field: optional int32 radius = 3;
    */
-  radius = 0;
+  radius?: number;
 
   constructor(data?: PartialMessage<CppConfigResponse_MergeBehavior>) {
     super();
@@ -3699,8 +3699,8 @@ export class CppConfigResponse_MergeBehavior extends Message<CppConfigResponse_M
   static readonly typeName = "aiserver.v1.CppConfigResponse.MergeBehavior";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "radius", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 2, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 3, name: "radius", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CppConfigResponse_MergeBehavior {
@@ -3848,12 +3848,12 @@ export class CppCopyEvent extends Message<CppCopyEvent> {
  */
 export class CppDebouncedCursorMovementEvent extends Message<CppDebouncedCursorMovementEvent> {
   /**
-   * @generated from field: aiserver.v1.PointInTimeModel point_in_time_model = 1;
+   * @generated from field: optional aiserver.v1.PointInTimeModel point_in_time_model = 1;
    */
   pointInTimeModel?: PointInTimeModel;
 
   /**
-   * @generated from field: aiserver.v1.OneIndexedPosition cursor_position = 2;
+   * @generated from field: optional aiserver.v1.OneIndexedPosition cursor_position = 2;
    */
   cursorPosition?: OneIndexedPosition;
 
@@ -3865,8 +3865,8 @@ export class CppDebouncedCursorMovementEvent extends Message<CppDebouncedCursorM
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CppDebouncedCursorMovementEvent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "point_in_time_model", kind: "message", T: PointInTimeModel },
-    { no: 2, name: "cursor_position", kind: "message", T: OneIndexedPosition },
+    { no: 1, name: "point_in_time_model", kind: "message", T: PointInTimeModel, opt: true },
+    { no: 2, name: "cursor_position", kind: "message", T: OneIndexedPosition, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CppDebouncedCursorMovementEvent {
@@ -3965,12 +3965,12 @@ export class CppEditHistoryStatusResponse extends Message<CppEditHistoryStatusRe
  */
 export class CppEditorChangedEvent extends Message<CppEditorChangedEvent> {
   /**
-   * @generated from field: aiserver.v1.PointInTimeModel point_in_time_model = 1;
+   * @generated from field: optional aiserver.v1.PointInTimeModel point_in_time_model = 1;
    */
   pointInTimeModel?: PointInTimeModel;
 
   /**
-   * @generated from field: aiserver.v1.OneIndexedPosition cursor_position = 2;
+   * @generated from field: optional aiserver.v1.OneIndexedPosition cursor_position = 2;
    */
   cursorPosition?: OneIndexedPosition;
 
@@ -3992,8 +3992,8 @@ export class CppEditorChangedEvent extends Message<CppEditorChangedEvent> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CppEditorChangedEvent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "point_in_time_model", kind: "message", T: PointInTimeModel },
-    { no: 2, name: "cursor_position", kind: "message", T: OneIndexedPosition },
+    { no: 1, name: "point_in_time_model", kind: "message", T: PointInTimeModel, opt: true },
+    { no: 2, name: "cursor_position", kind: "message", T: OneIndexedPosition, opt: true },
     { no: 3, name: "visible_ranges", kind: "message", T: IRange, repeated: true },
     { no: 4, name: "editor_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
@@ -4020,9 +4020,9 @@ export class CppEditorChangedEvent extends Message<CppEditorChangedEvent> {
  */
 export class CppHistoryAppendEvent extends Message<CppHistoryAppendEvent> {
   /**
-   * @generated from field: string final_model_hash = 10;
+   * @generated from field: optional string final_model_hash = 10;
    */
-  finalModelHash = "";
+  finalModelHash?: string;
 
   /**
    * @generated from oneof aiserver.v1.CppHistoryAppendEvent.event
@@ -4061,7 +4061,7 @@ export class CppHistoryAppendEvent extends Message<CppHistoryAppendEvent> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CppHistoryAppendEvent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 10, name: "final_model_hash", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 10, name: "final_model_hash", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 1, name: "model_change", kind: "message", T: ModelChange, oneof: "event" },
     { no: 2, name: "accept_event", kind: "message", T: CppAcceptEvent, oneof: "event" },
     { no: 3, name: "reject_event", kind: "message", T: CppRejectEvent, oneof: "event" },
@@ -4090,7 +4090,7 @@ export class CppHistoryAppendEvent extends Message<CppHistoryAppendEvent> {
  */
 export class CppLinterErrorEvent extends Message<CppLinterErrorEvent> {
   /**
-   * @generated from field: aiserver.v1.PointInTimeModel point_in_time_model = 1;
+   * @generated from field: optional aiserver.v1.PointInTimeModel point_in_time_model = 1;
    */
   pointInTimeModel?: PointInTimeModel;
 
@@ -4117,7 +4117,7 @@ export class CppLinterErrorEvent extends Message<CppLinterErrorEvent> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CppLinterErrorEvent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "point_in_time_model", kind: "message", T: PointInTimeModel },
+    { no: 1, name: "point_in_time_model", kind: "message", T: PointInTimeModel, opt: true },
     { no: 2, name: "added_errors", kind: "message", T: LinterError, repeated: true },
     { no: 3, name: "removed_errors", kind: "message", T: LinterError, repeated: true },
     { no: 4, name: "errors", kind: "message", T: LinterError, repeated: true },
@@ -4145,7 +4145,7 @@ export class CppLinterErrorEvent extends Message<CppLinterErrorEvent> {
  */
 export class CppManualTriggerEvent extends Message<CppManualTriggerEvent> {
   /**
-   * @generated from field: aiserver.v1.CursorPosition position = 2;
+   * @generated from field: optional aiserver.v1.CursorPosition position = 2;
    */
   position?: CursorPosition;
 
@@ -4157,7 +4157,7 @@ export class CppManualTriggerEvent extends Message<CppManualTriggerEvent> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CppManualTriggerEvent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 2, name: "position", kind: "message", T: CursorPosition },
+    { no: 2, name: "position", kind: "message", T: CursorPosition, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CppManualTriggerEvent {
@@ -4192,7 +4192,7 @@ export class CppManualTriggerEventNew extends Message<CppManualTriggerEventNew> 
   columnNumberOneIndexed = 0;
 
   /**
-   * @generated from field: aiserver.v1.PointInTimeModel point_in_time_model = 7;
+   * @generated from field: optional aiserver.v1.PointInTimeModel point_in_time_model = 7;
    */
   pointInTimeModel?: PointInTimeModel;
 
@@ -4206,7 +4206,7 @@ export class CppManualTriggerEventNew extends Message<CppManualTriggerEventNew> 
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "line_number_one_indexed", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 2, name: "column_number_one_indexed", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 7, name: "point_in_time_model", kind: "message", T: PointInTimeModel },
+    { no: 7, name: "point_in_time_model", kind: "message", T: PointInTimeModel, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CppManualTriggerEventNew {
@@ -4231,17 +4231,17 @@ export class CppManualTriggerEventNew extends Message<CppManualTriggerEventNew> 
  */
 export class CppPartialAcceptEvent extends Message<CppPartialAcceptEvent> {
   /**
-   * @generated from field: aiserver.v1.CurrentlyShownCppSuggestion cpp_suggestion = 1;
+   * @generated from field: optional aiserver.v1.CurrentlyShownCppSuggestion cpp_suggestion = 1;
    */
   cppSuggestion?: CurrentlyShownCppSuggestion;
 
   /**
-   * @generated from field: aiserver.v1.Edit edit = 2;
+   * @generated from field: optional aiserver.v1.Edit edit = 2;
    */
   edit?: Edit;
 
   /**
-   * @generated from field: aiserver.v1.PointInTimeModel point_in_time_model = 3;
+   * @generated from field: optional aiserver.v1.PointInTimeModel point_in_time_model = 3;
    */
   pointInTimeModel?: PointInTimeModel;
 
@@ -4253,9 +4253,9 @@ export class CppPartialAcceptEvent extends Message<CppPartialAcceptEvent> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CppPartialAcceptEvent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "cpp_suggestion", kind: "message", T: CurrentlyShownCppSuggestion },
-    { no: 2, name: "edit", kind: "message", T: Edit },
-    { no: 3, name: "point_in_time_model", kind: "message", T: PointInTimeModel },
+    { no: 1, name: "cpp_suggestion", kind: "message", T: CurrentlyShownCppSuggestion, opt: true },
+    { no: 2, name: "edit", kind: "message", T: Edit, opt: true },
+    { no: 3, name: "point_in_time_model", kind: "message", T: PointInTimeModel, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CppPartialAcceptEvent {
@@ -4290,12 +4290,12 @@ export class CppQuickAction extends Message<CppQuickAction> {
   edits: CppQuickAction_Edit[] = [];
 
   /**
-   * @generated from field: bool is_preferred = 3;
+   * @generated from field: optional bool is_preferred = 3;
    */
-  isPreferred = false;
+  isPreferred?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.CppQuickActionCommand command = 4;
+   * @generated from field: optional aiserver.v1.CppQuickActionCommand command = 4;
    */
   command?: CppQuickActionCommand;
 
@@ -4309,8 +4309,8 @@ export class CppQuickAction extends Message<CppQuickAction> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "edits", kind: "message", T: CppQuickAction_Edit, repeated: true },
-    { no: 3, name: "is_preferred", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "command", kind: "message", T: CppQuickActionCommand },
+    { no: 3, name: "is_preferred", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 4, name: "command", kind: "message", T: CppQuickActionCommand, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CppQuickAction {
@@ -4340,7 +4340,7 @@ export class CppQuickAction_Edit extends Message<CppQuickAction_Edit> {
   text = "";
 
   /**
-   * @generated from field: aiserver.v1.IRange range = 2;
+   * @generated from field: optional aiserver.v1.IRange range = 2;
    */
   range?: IRange;
 
@@ -4353,7 +4353,7 @@ export class CppQuickAction_Edit extends Message<CppQuickAction_Edit> {
   static readonly typeName = "aiserver.v1.CppQuickAction.Edit";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "range", kind: "message", T: IRange },
+    { no: 2, name: "range", kind: "message", T: IRange, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CppQuickAction_Edit {
@@ -4427,7 +4427,7 @@ export class CppQuickActionCommand extends Message<CppQuickActionCommand> {
  */
 export class CppQuickActionFireEvent extends Message<CppQuickActionFireEvent> {
   /**
-   * @generated from field: aiserver.v1.PointInTimeModel point_in_time_model = 1;
+   * @generated from field: optional aiserver.v1.PointInTimeModel point_in_time_model = 1;
    */
   pointInTimeModel?: PointInTimeModel;
 
@@ -4456,7 +4456,7 @@ export class CppQuickActionFireEvent extends Message<CppQuickActionFireEvent> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CppQuickActionFireEvent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "point_in_time_model", kind: "message", T: PointInTimeModel },
+    { no: 1, name: "point_in_time_model", kind: "message", T: PointInTimeModel, opt: true },
     { no: 2, name: "quick_action_command", kind: "message", T: CppQuickActionCommand, oneof: "action_identifier" },
     { no: 3, name: "quick_action_event", kind: "message", T: CppQuickAction, oneof: "action_identifier" },
   ]);
@@ -4483,7 +4483,7 @@ export class CppQuickActionFireEvent extends Message<CppQuickActionFireEvent> {
  */
 export class CppRejectEvent extends Message<CppRejectEvent> {
   /**
-   * @generated from field: aiserver.v1.CppSuggestion cpp_suggestion = 1;
+   * @generated from field: optional aiserver.v1.CppSuggestion cpp_suggestion = 1;
    */
   cppSuggestion?: CppSuggestion;
 
@@ -4495,7 +4495,7 @@ export class CppRejectEvent extends Message<CppRejectEvent> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CppRejectEvent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "cpp_suggestion", kind: "message", T: CppSuggestion },
+    { no: 1, name: "cpp_suggestion", kind: "message", T: CppSuggestion, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CppRejectEvent {
@@ -4520,12 +4520,12 @@ export class CppRejectEvent extends Message<CppRejectEvent> {
  */
 export class CppRejectEventNew extends Message<CppRejectEventNew> {
   /**
-   * @generated from field: aiserver.v1.CurrentlyShownCppSuggestion cpp_suggestion = 1;
+   * @generated from field: optional aiserver.v1.CurrentlyShownCppSuggestion cpp_suggestion = 1;
    */
   cppSuggestion?: CurrentlyShownCppSuggestion;
 
   /**
-   * @generated from field: aiserver.v1.PointInTimeModel point_in_time_model = 7;
+   * @generated from field: optional aiserver.v1.PointInTimeModel point_in_time_model = 7;
    */
   pointInTimeModel?: PointInTimeModel;
 
@@ -4537,8 +4537,8 @@ export class CppRejectEventNew extends Message<CppRejectEventNew> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CppRejectEventNew";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "cpp_suggestion", kind: "message", T: CurrentlyShownCppSuggestion },
-    { no: 7, name: "point_in_time_model", kind: "message", T: PointInTimeModel },
+    { no: 1, name: "cpp_suggestion", kind: "message", T: CurrentlyShownCppSuggestion, opt: true },
+    { no: 7, name: "point_in_time_model", kind: "message", T: PointInTimeModel, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CppRejectEventNew {
@@ -4568,34 +4568,34 @@ export class CppSessionEvent extends Message<CppSessionEvent> {
   performanceNowTimestamp = 0;
 
   /**
-   * @generated from field: double performance_time_origin = 25;
+   * @generated from field: optional double performance_time_origin = 25;
    */
-  performanceTimeOrigin = 0;
+  performanceTimeOrigin?: number;
 
   /**
-   * @generated from field: int64 global_index = 41;
+   * @generated from field: optional int64 global_index = 41;
    */
-  globalIndex = protoInt64.zero;
+  globalIndex?: bigint;
 
   /**
-   * @generated from field: double performance_now_flush_time = 42;
+   * @generated from field: optional double performance_now_flush_time = 42;
    */
-  performanceNowFlushTime = 0;
+  performanceNowFlushTime?: number;
 
   /**
-   * @generated from field: int32 event_index = 43;
+   * @generated from field: optional int32 event_index = 43;
    */
-  eventIndex = 0;
+  eventIndex?: number;
 
   /**
-   * @generated from field: int32 flush_index = 44;
+   * @generated from field: optional int32 flush_index = 44;
    */
-  flushIndex = 0;
+  flushIndex?: number;
 
   /**
-   * @generated from field: int32 global_index_v2 = 45;
+   * @generated from field: optional int32 global_index_v2 = 45;
    */
-  globalIndexV2 = 0;
+  globalIndexV2?: number;
 
   /**
    * @generated from oneof aiserver.v1.CppSessionEvent.event
@@ -4851,12 +4851,12 @@ export class CppSessionEvent extends Message<CppSessionEvent> {
   static readonly typeName = "aiserver.v1.CppSessionEvent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 5, name: "performance_now_timestamp", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 25, name: "performance_time_origin", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 41, name: "global_index", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 42, name: "performance_now_flush_time", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 43, name: "event_index", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 44, name: "flush_index", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 45, name: "global_index_v2", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 25, name: "performance_time_origin", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
+    { no: 41, name: "global_index", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
+    { no: 42, name: "performance_now_flush_time", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
+    { no: 43, name: "event_index", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 44, name: "flush_index", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 45, name: "global_index_v2", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 2, name: "accept_event", kind: "message", T: CppAcceptEventNew, oneof: "event" },
     { no: 3, name: "reject_event", kind: "message", T: CppRejectEventNew, oneof: "event" },
     { no: 4, name: "manual_trigger_event", kind: "message", T: CppManualTriggerEventNew, oneof: "event" },
@@ -5002,17 +5002,17 @@ proto3.util.setEnumType(CppStoppedTrackingModelEvent_StoppedTrackingModelReason,
  */
 export class CppSuggestEvent extends Message<CppSuggestEvent> {
   /**
-   * @generated from field: aiserver.v1.CurrentlyShownCppSuggestion cpp_suggestion = 1;
+   * @generated from field: optional aiserver.v1.CurrentlyShownCppSuggestion cpp_suggestion = 1;
    */
   cppSuggestion?: CurrentlyShownCppSuggestion;
 
   /**
-   * @generated from field: aiserver.v1.PointInTimeModel point_in_time_model = 2;
+   * @generated from field: optional aiserver.v1.PointInTimeModel point_in_time_model = 2;
    */
   pointInTimeModel?: PointInTimeModel;
 
   /**
-   * @generated from field: aiserver.v1.RecoverableCppData recoverable_cpp_data = 3;
+   * @generated from field: optional aiserver.v1.RecoverableCppData recoverable_cpp_data = 3;
    */
   recoverableCppData?: RecoverableCppData;
 
@@ -5024,9 +5024,9 @@ export class CppSuggestEvent extends Message<CppSuggestEvent> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CppSuggestEvent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "cpp_suggestion", kind: "message", T: CurrentlyShownCppSuggestion },
-    { no: 2, name: "point_in_time_model", kind: "message", T: PointInTimeModel },
-    { no: 3, name: "recoverable_cpp_data", kind: "message", T: RecoverableCppData },
+    { no: 1, name: "cpp_suggestion", kind: "message", T: CurrentlyShownCppSuggestion, opt: true },
+    { no: 2, name: "point_in_time_model", kind: "message", T: PointInTimeModel, opt: true },
+    { no: 3, name: "recoverable_cpp_data", kind: "message", T: RecoverableCppData, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CppSuggestEvent {
@@ -5056,7 +5056,7 @@ export class CppSuggestion extends Message<CppSuggestion> {
   suggestionText = "";
 
   /**
-   * @generated from field: aiserver.v1.IRange range = 2;
+   * @generated from field: optional aiserver.v1.IRange range = 2;
    */
   range?: IRange;
 
@@ -5066,14 +5066,14 @@ export class CppSuggestion extends Message<CppSuggestion> {
   seen = false;
 
   /**
-   * @generated from field: aiserver.v1.SelectionWithOrientation editor_selection_before_peek = 6;
+   * @generated from field: optional aiserver.v1.SelectionWithOrientation editor_selection_before_peek = 6;
    */
   editorSelectionBeforePeek?: SelectionWithOrientation;
 
   /**
-   * @generated from field: string binding_id = 7;
+   * @generated from field: optional string binding_id = 7;
    */
-  bindingId = "";
+  bindingId?: string;
 
   constructor(data?: PartialMessage<CppSuggestion>) {
     super();
@@ -5084,10 +5084,10 @@ export class CppSuggestion extends Message<CppSuggestion> {
   static readonly typeName = "aiserver.v1.CppSuggestion";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "suggestion_text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "range", kind: "message", T: IRange },
+    { no: 2, name: "range", kind: "message", T: IRange, opt: true },
     { no: 5, name: "seen", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 6, name: "editor_selection_before_peek", kind: "message", T: SelectionWithOrientation },
-    { no: 7, name: "binding_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 6, name: "editor_selection_before_peek", kind: "message", T: SelectionWithOrientation, opt: true },
+    { no: 7, name: "binding_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CppSuggestion {
@@ -5178,7 +5178,7 @@ export class CppTimelineEvent_Change extends Message<CppTimelineEvent_Change> {
   changeIndex = 0;
 
   /**
-   * @generated from field: aiserver.v1.ModelChange change = 3;
+   * @generated from field: optional aiserver.v1.ModelChange change = 3;
    */
   change?: ModelChange;
 
@@ -5197,7 +5197,7 @@ export class CppTimelineEvent_Change extends Message<CppTimelineEvent_Change> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "model_uuid", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "change_index", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "change", kind: "message", T: ModelChange },
+    { no: 3, name: "change", kind: "message", T: ModelChange, opt: true },
     { no: 4, name: "status", kind: "enum", T: proto3.getEnumType(CppTimelineEvent_Change_Status) },
   ]);
 
@@ -5265,12 +5265,12 @@ export class CppTriggerEvent extends Message<CppTriggerEvent> {
   modelVersion = 0;
 
   /**
-   * @generated from field: aiserver.v1.OneIndexedPosition cursor_position = 3;
+   * @generated from field: optional aiserver.v1.OneIndexedPosition cursor_position = 3;
    */
   cursorPosition?: OneIndexedPosition;
 
   /**
-   * @generated from field: aiserver.v1.PointInTimeModel point_in_time_model = 4;
+   * @generated from field: optional aiserver.v1.PointInTimeModel point_in_time_model = 4;
    */
   pointInTimeModel?: PointInTimeModel;
 
@@ -5289,8 +5289,8 @@ export class CppTriggerEvent extends Message<CppTriggerEvent> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "generation_uuid", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "model_version", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "cursor_position", kind: "message", T: OneIndexedPosition },
-    { no: 4, name: "point_in_time_model", kind: "message", T: PointInTimeModel },
+    { no: 3, name: "cursor_position", kind: "message", T: OneIndexedPosition, opt: true },
+    { no: 4, name: "point_in_time_model", kind: "message", T: PointInTimeModel, opt: true },
     { no: 5, name: "source", kind: "enum", T: proto3.getEnumType(CppSource) },
   ]);
 
@@ -5374,7 +5374,7 @@ export class CurrentlyShownCppSuggestion extends Message<CurrentlyShownCppSugges
   modelVersionWhenTheChangeIsFirstIndicatedToTheUserButNotShownInTheModel = 0;
 
   /**
-   * @generated from field: aiserver.v1.IRange range_of_suggestion_in_current_model = 4;
+   * @generated from field: optional aiserver.v1.IRange range_of_suggestion_in_current_model = 4;
    */
   rangeOfSuggestionInCurrentModel?: IRange;
 
@@ -5384,9 +5384,9 @@ export class CurrentlyShownCppSuggestion extends Message<CurrentlyShownCppSugges
   originalText = "";
 
   /**
-   * @generated from field: string binding_id = 6;
+   * @generated from field: optional string binding_id = 6;
    */
-  bindingId = "";
+  bindingId?: string;
 
   constructor(data?: PartialMessage<CurrentlyShownCppSuggestion>) {
     super();
@@ -5399,9 +5399,9 @@ export class CurrentlyShownCppSuggestion extends Message<CurrentlyShownCppSugges
     { no: 1, name: "suggestion_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 2, name: "suggestion_text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "model_version_when_the_change_is_first_indicated_to_the_user_but_not_shown_in_the_model", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 4, name: "range_of_suggestion_in_current_model", kind: "message", T: IRange },
+    { no: 4, name: "range_of_suggestion_in_current_model", kind: "message", T: IRange, opt: true },
     { no: 5, name: "original_text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "binding_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 6, name: "binding_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CurrentlyShownCppSuggestion {
@@ -5446,9 +5446,9 @@ export class CursorPrediction extends Message<CursorPrediction> {
   source = CursorPrediction_CursorPredictionSource.UNSPECIFIED;
 
   /**
-   * @generated from field: string binding_id = 5;
+   * @generated from field: optional string binding_id = 5;
    */
-  bindingId = "";
+  bindingId?: string;
 
   constructor(data?: PartialMessage<CursorPrediction>) {
     super();
@@ -5462,7 +5462,7 @@ export class CursorPrediction extends Message<CursorPrediction> {
     { no: 2, name: "prediction_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 3, name: "line_number", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 4, name: "source", kind: "enum", T: proto3.getEnumType(CursorPrediction_CursorPredictionSource) },
-    { no: 5, name: "binding_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "binding_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CursorPrediction {
@@ -5585,7 +5585,7 @@ export class Edit extends Message<Edit> {
   text = "";
 
   /**
-   * @generated from field: aiserver.v1.IRange range = 2;
+   * @generated from field: optional aiserver.v1.IRange range = 2;
    */
   range?: IRange;
 
@@ -5598,7 +5598,7 @@ export class Edit extends Message<Edit> {
   static readonly typeName = "aiserver.v1.Edit";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "range", kind: "message", T: IRange },
+    { no: 2, name: "range", kind: "message", T: IRange, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Edit {
@@ -5633,9 +5633,9 @@ export class EditHistoryAppendChangesRequest extends Message<EditHistoryAppendCh
   modelUuid = "";
 
   /**
-   * @generated from field: string starting_model_value = 3;
+   * @generated from field: optional string starting_model_value = 3;
    */
-  startingModelValue = "";
+  startingModelValue?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.ModelChange changes = 4;
@@ -5658,9 +5658,9 @@ export class EditHistoryAppendChangesRequest extends Message<EditHistoryAppendCh
   events: CppHistoryAppendEvent[] = [];
 
   /**
-   * @generated from field: string client_commit = 8;
+   * @generated from field: optional string client_commit = 8;
    */
-  clientCommit = "";
+  clientCommit?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.CppSessionEvent session_events = 9;
@@ -5668,9 +5668,9 @@ export class EditHistoryAppendChangesRequest extends Message<EditHistoryAppendCh
   sessionEvents: CppSessionEvent[] = [];
 
   /**
-   * @generated from field: int32 starting_model_version = 10;
+   * @generated from field: optional int32 starting_model_version = 10;
    */
-  startingModelVersion = 0;
+  startingModelVersion?: number;
 
   /**
    * @generated from field: bool model_changes_may_be_out_of_order = 11;
@@ -5702,14 +5702,14 @@ export class EditHistoryAppendChangesRequest extends Message<EditHistoryAppendCh
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "session_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "model_uuid", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "starting_model_value", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "starting_model_value", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 4, name: "changes", kind: "message", T: ModelChange, repeated: true },
     { no: 5, name: "relative_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 6, name: "client_version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 7, name: "events", kind: "message", T: CppHistoryAppendEvent, repeated: true },
-    { no: 8, name: "client_commit", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 8, name: "client_commit", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 9, name: "session_events", kind: "message", T: CppSessionEvent, repeated: true },
-    { no: 10, name: "starting_model_version", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 10, name: "starting_model_version", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 11, name: "model_changes_may_be_out_of_order", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 12, name: "privacy_mode_status", kind: "enum", T: proto3.getEnumType(EditHistoryAppendChangesRequest_PrivacyModeStatus) },
     { no: 13, name: "time_origin", kind: "scalar", T: 2 /* ScalarType.FLOAT */ },
@@ -5899,12 +5899,12 @@ export class EditorCloseEvent extends Message<EditorCloseEvent> {
  */
 export class FinishedCppGenerationEvent extends Message<FinishedCppGenerationEvent> {
   /**
-   * @generated from field: aiserver.v1.PointInTimeModel point_in_time_model = 1;
+   * @generated from field: optional aiserver.v1.PointInTimeModel point_in_time_model = 1;
    */
   pointInTimeModel?: PointInTimeModel;
 
   /**
-   * @generated from field: aiserver.v1.RecoverableCppData recoverable_cpp_data = 2;
+   * @generated from field: optional aiserver.v1.RecoverableCppData recoverable_cpp_data = 2;
    */
   recoverableCppData?: RecoverableCppData;
 
@@ -5916,8 +5916,8 @@ export class FinishedCppGenerationEvent extends Message<FinishedCppGenerationEve
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.FinishedCppGenerationEvent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "point_in_time_model", kind: "message", T: PointInTimeModel },
-    { no: 2, name: "recoverable_cpp_data", kind: "message", T: RecoverableCppData },
+    { no: 1, name: "point_in_time_model", kind: "message", T: PointInTimeModel, opt: true },
+    { no: 2, name: "recoverable_cpp_data", kind: "message", T: RecoverableCppData, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): FinishedCppGenerationEvent {
@@ -5942,7 +5942,7 @@ export class FinishedCppGenerationEvent extends Message<FinishedCppGenerationEve
  */
 export class GetCppEditClassificationRequest extends Message<GetCppEditClassificationRequest> {
   /**
-   * @generated from field: aiserver.v1.StreamCppRequest cpp_request = 1;
+   * @generated from field: optional aiserver.v1.StreamCppRequest cpp_request = 1;
    */
   cppRequest?: StreamCppRequest;
 
@@ -5969,7 +5969,7 @@ export class GetCppEditClassificationRequest extends Message<GetCppEditClassific
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetCppEditClassificationRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "cpp_request", kind: "message", T: StreamCppRequest },
+    { no: 1, name: "cpp_request", kind: "message", T: StreamCppRequest, opt: true },
     { no: 25, name: "suggested_edits", kind: "message", T: SuggestedEdit, repeated: true },
     { no: 26, name: "marker_touches_green", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 27, name: "current_file_contents_for_linter_errors", kind: "scalar", T: 9 /* ScalarType.STRING */ },
@@ -6002,17 +6002,17 @@ export class GetCppEditClassificationResponse extends Message<GetCppEditClassifi
   scoredEdits: GetCppEditClassificationResponse_ScoredEdit[] = [];
 
   /**
-   * @generated from field: aiserver.v1.GetCppEditClassificationResponse.ScoredEdit noop_edit = 2;
+   * @generated from field: optional aiserver.v1.GetCppEditClassificationResponse.ScoredEdit noop_edit = 2;
    */
   noopEdit?: GetCppEditClassificationResponse_ScoredEdit;
 
   /**
-   * @generated from field: bool should_noop = 3;
+   * @generated from field: optional bool should_noop = 3;
    */
-  shouldNoop = false;
+  shouldNoop?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.GetCppEditClassificationResponse.ScoredEdit generation_edit = 4;
+   * @generated from field: optional aiserver.v1.GetCppEditClassificationResponse.ScoredEdit generation_edit = 4;
    */
   generationEdit?: GetCppEditClassificationResponse_ScoredEdit;
 
@@ -6025,9 +6025,9 @@ export class GetCppEditClassificationResponse extends Message<GetCppEditClassifi
   static readonly typeName = "aiserver.v1.GetCppEditClassificationResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "scored_edits", kind: "message", T: GetCppEditClassificationResponse_ScoredEdit, repeated: true },
-    { no: 2, name: "noop_edit", kind: "message", T: GetCppEditClassificationResponse_ScoredEdit },
-    { no: 3, name: "should_noop", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "generation_edit", kind: "message", T: GetCppEditClassificationResponse_ScoredEdit },
+    { no: 2, name: "noop_edit", kind: "message", T: GetCppEditClassificationResponse_ScoredEdit, opt: true },
+    { no: 3, name: "should_noop", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 4, name: "generation_edit", kind: "message", T: GetCppEditClassificationResponse_ScoredEdit, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetCppEditClassificationResponse {
@@ -6095,12 +6095,12 @@ export class GetCppEditClassificationResponse_LogProbs extends Message<GetCppEdi
  */
 export class GetCppEditClassificationResponse_ScoredEdit extends Message<GetCppEditClassificationResponse_ScoredEdit> {
   /**
-   * @generated from field: aiserver.v1.SuggestedEdit edit = 1;
+   * @generated from field: optional aiserver.v1.SuggestedEdit edit = 1;
    */
   edit?: SuggestedEdit;
 
   /**
-   * @generated from field: aiserver.v1.GetCppEditClassificationResponse.LogProbs log_probs = 2;
+   * @generated from field: optional aiserver.v1.GetCppEditClassificationResponse.LogProbs log_probs = 2;
    */
   logProbs?: GetCppEditClassificationResponse_LogProbs;
 
@@ -6112,8 +6112,8 @@ export class GetCppEditClassificationResponse_ScoredEdit extends Message<GetCppE
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetCppEditClassificationResponse.ScoredEdit";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "edit", kind: "message", T: SuggestedEdit },
-    { no: 2, name: "log_probs", kind: "message", T: GetCppEditClassificationResponse_LogProbs },
+    { no: 1, name: "edit", kind: "message", T: SuggestedEdit, opt: true },
+    { no: 2, name: "log_probs", kind: "message", T: GetCppEditClassificationResponse_LogProbs, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetCppEditClassificationResponse_ScoredEdit {
@@ -6153,39 +6153,39 @@ export class GitEvent extends Message<GitEvent> {
   operationSuccess = false;
 
   /**
-   * @generated from field: string branch_name = 4;
+   * @generated from field: optional string branch_name = 4;
    */
-  branchName = "";
+  branchName?: string;
 
   /**
-   * @generated from field: string error_message = 5;
+   * @generated from field: optional string error_message = 5;
    */
-  errorMessage = "";
+  errorMessage?: string;
 
   /**
-   * @generated from field: bool is_default_branch = 6;
+   * @generated from field: optional bool is_default_branch = 6;
    */
-  isDefaultBranch = false;
+  isDefaultBranch?: boolean;
 
   /**
-   * @generated from field: string default_branch_name = 7;
+   * @generated from field: optional string default_branch_name = 7;
    */
-  defaultBranchName = "";
+  defaultBranchName?: string;
 
   /**
-   * @generated from field: string commit_hash = 8;
+   * @generated from field: optional string commit_hash = 8;
    */
-  commitHash = "";
+  commitHash?: string;
 
   /**
-   * @generated from field: string previous_commit_hash = 9;
+   * @generated from field: optional string previous_commit_hash = 9;
    */
-  previousCommitHash = "";
+  previousCommitHash?: string;
 
   /**
-   * @generated from field: string remote_url = 10;
+   * @generated from field: optional string remote_url = 10;
    */
-  remoteUrl = "";
+  remoteUrl?: string;
 
   constructor(data?: PartialMessage<GitEvent>) {
     super();
@@ -6198,13 +6198,13 @@ export class GitEvent extends Message<GitEvent> {
     { no: 1, name: "operation_type", kind: "enum", T: proto3.getEnumType(GitEvent_OperationType) },
     { no: 2, name: "repository_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "operation_success", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "is_default_branch", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 7, name: "default_branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "commit_hash", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "previous_commit_hash", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "remote_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "is_default_branch", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 7, name: "default_branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "commit_hash", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 9, name: "previous_commit_hash", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 10, name: "remote_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GitEvent {
@@ -6376,17 +6376,17 @@ export class LspSuggestionEvent extends Message<LspSuggestionEvent> {
   suggestions: string[] = [];
 
   /**
-   * @generated from field: string request_id = 2;
+   * @generated from field: optional string request_id = 2;
    */
-  requestId = "";
+  requestId?: string;
 
   /**
-   * @generated from field: string editor_id = 3;
+   * @generated from field: optional string editor_id = 3;
    */
-  editorId = "";
+  editorId?: string;
 
   /**
-   * @generated from field: aiserver.v1.PointInTimeModel point_in_time_model = 4;
+   * @generated from field: optional aiserver.v1.PointInTimeModel point_in_time_model = 4;
    */
   pointInTimeModel?: PointInTimeModel;
 
@@ -6399,9 +6399,9 @@ export class LspSuggestionEvent extends Message<LspSuggestionEvent> {
   static readonly typeName = "aiserver.v1.LspSuggestionEvent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "suggestions", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 2, name: "request_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "editor_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "point_in_time_model", kind: "message", T: PointInTimeModel },
+    { no: 2, name: "request_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "editor_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "point_in_time_model", kind: "message", T: PointInTimeModel, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): LspSuggestionEvent {
@@ -6441,12 +6441,12 @@ export class MarkCppRequest extends Message<MarkCppRequest> {
   responseType = MarkCppRequest_CppResponseTypes.UNSPECIFIED;
 
   /**
-   * @generated from field: string desired_completion = 4;
+   * @generated from field: optional string desired_completion = 4;
    */
-  desiredCompletion = "";
+  desiredCompletion?: string;
 
   /**
-   * @generated from field: aiserver.v1.MarkCppRequest.RangeTransformation range_transformation = 5;
+   * @generated from field: optional aiserver.v1.MarkCppRequest.RangeTransformation range_transformation = 5;
    */
   rangeTransformation?: MarkCppRequest_RangeTransformation;
 
@@ -6481,8 +6481,8 @@ export class MarkCppRequest extends Message<MarkCppRequest> {
     { no: 1, name: "request_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "session_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "response_type", kind: "enum", T: proto3.getEnumType(MarkCppRequest_CppResponseTypes) },
-    { no: 4, name: "desired_completion", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "range_transformation", kind: "message", T: MarkCppRequest_RangeTransformation },
+    { no: 4, name: "desired_completion", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "range_transformation", kind: "message", T: MarkCppRequest_RangeTransformation, opt: true },
     { no: 10, name: "model_code_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 11, name: "model_openai_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 12, name: "current_performance_now_time", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
@@ -6659,9 +6659,9 @@ export class MarkCppResponse extends Message<MarkCppResponse> {
  */
 export class MaybeDefinedPointInTimeModel extends Message<MaybeDefinedPointInTimeModel> {
   /**
-   * @generated from field: string model_uuid = 1;
+   * @generated from field: optional string model_uuid = 1;
    */
-  modelUuid = "";
+  modelUuid?: string;
 
   /**
    * @generated from field: int32 model_version = 2;
@@ -6686,7 +6686,7 @@ export class MaybeDefinedPointInTimeModel extends Message<MaybeDefinedPointInTim
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.MaybeDefinedPointInTimeModel";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "model_uuid", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "model_uuid", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "model_version", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 3, name: "relative_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "model_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
@@ -6714,7 +6714,7 @@ export class MaybeDefinedPointInTimeModel extends Message<MaybeDefinedPointInTim
  */
 export class ModelAddedEvent extends Message<ModelAddedEvent> {
   /**
-   * @generated from field: aiserver.v1.MaybeDefinedPointInTimeModel point_in_time_model = 1;
+   * @generated from field: optional aiserver.v1.MaybeDefinedPointInTimeModel point_in_time_model = 1;
    */
   pointInTimeModel?: MaybeDefinedPointInTimeModel;
 
@@ -6756,7 +6756,7 @@ export class ModelAddedEvent extends Message<ModelAddedEvent> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ModelAddedEvent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "point_in_time_model", kind: "message", T: MaybeDefinedPointInTimeModel },
+    { no: 1, name: "point_in_time_model", kind: "message", T: MaybeDefinedPointInTimeModel, opt: true },
     { no: 2, name: "full_uri", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "model_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "uri_scheme", kind: "scalar", T: 9 /* ScalarType.STRING */ },
@@ -6792,34 +6792,34 @@ export class ModelChange extends Message<ModelChange> {
   text = "";
 
   /**
-   * @generated from field: aiserver.v1.IRange range = 2;
+   * @generated from field: optional aiserver.v1.IRange range = 2;
    */
   range?: IRange;
 
   /**
-   * @generated from field: string final_model_hash = 3;
+   * @generated from field: optional string final_model_hash = 3;
    */
-  finalModelHash = "";
+  finalModelHash?: string;
 
   /**
-   * @generated from field: int32 model_version_immediately_after_this_change = 4;
+   * @generated from field: optional int32 model_version_immediately_after_this_change = 4;
    */
-  modelVersionImmediatelyAfterThisChange = 0;
+  modelVersionImmediatelyAfterThisChange?: number;
 
   /**
-   * @generated from field: double performance_now_timestamp = 5;
+   * @generated from field: optional double performance_now_timestamp = 5;
    */
-  performanceNowTimestamp = 0;
+  performanceNowTimestamp?: number;
 
   /**
-   * @generated from field: bool is_undoing = 7;
+   * @generated from field: optional bool is_undoing = 7;
    */
-  isUndoing = false;
+  isUndoing?: boolean;
 
   /**
-   * @generated from field: bool is_redoing = 8;
+   * @generated from field: optional bool is_redoing = 8;
    */
-  isRedoing = false;
+  isRedoing?: boolean;
 
   /**
    * @generated from field: bool model_is_attached_to_editor = 9;
@@ -6842,29 +6842,29 @@ export class ModelChange extends Message<ModelChange> {
   modelVersionAtMetadataRetrievalTime = 0;
 
   /**
-   * @generated from field: int64 global_index = 13;
+   * @generated from field: optional int64 global_index = 13;
    */
-  globalIndex = protoInt64.zero;
+  globalIndex?: bigint;
 
   /**
-   * @generated from field: double performance_now_flush_time = 14;
+   * @generated from field: optional double performance_now_flush_time = 14;
    */
-  performanceNowFlushTime = 0;
+  performanceNowFlushTime?: number;
 
   /**
-   * @generated from field: int32 change_index = 15;
+   * @generated from field: optional int32 change_index = 15;
    */
-  changeIndex = 0;
+  changeIndex?: number;
 
   /**
-   * @generated from field: int32 flush_index = 16;
+   * @generated from field: optional int32 flush_index = 16;
    */
-  flushIndex = 0;
+  flushIndex?: number;
 
   /**
-   * @generated from field: int32 global_index_v2 = 17;
+   * @generated from field: optional int32 global_index_v2 = 17;
    */
-  globalIndexV2 = 0;
+  globalIndexV2?: number;
 
   constructor(data?: PartialMessage<ModelChange>) {
     super();
@@ -6875,21 +6875,21 @@ export class ModelChange extends Message<ModelChange> {
   static readonly typeName = "aiserver.v1.ModelChange";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "range", kind: "message", T: IRange },
-    { no: 3, name: "final_model_hash", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "model_version_immediately_after_this_change", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 5, name: "performance_now_timestamp", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 7, name: "is_undoing", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 8, name: "is_redoing", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "range", kind: "message", T: IRange, opt: true },
+    { no: 3, name: "final_model_hash", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "model_version_immediately_after_this_change", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 5, name: "performance_now_timestamp", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
+    { no: 7, name: "is_undoing", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 8, name: "is_redoing", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 9, name: "model_is_attached_to_editor", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 10, name: "model_is_attached_to_the_active_editor", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 11, name: "cursor_selections", kind: "message", T: CursorSelection, repeated: true },
     { no: 12, name: "model_version_at_metadata_retrieval_time", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 13, name: "global_index", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 14, name: "performance_now_flush_time", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 15, name: "change_index", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 16, name: "flush_index", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 17, name: "global_index_v2", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 13, name: "global_index", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
+    { no: 14, name: "performance_now_flush_time", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
+    { no: 15, name: "change_index", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 16, name: "flush_index", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 17, name: "global_index_v2", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ModelChange {
@@ -6914,12 +6914,12 @@ export class ModelChange extends Message<ModelChange> {
  */
 export class ModelOpenedEvent extends Message<ModelOpenedEvent> {
   /**
-   * @generated from field: aiserver.v1.PointInTimeModel point_in_time_model = 1;
+   * @generated from field: optional aiserver.v1.PointInTimeModel point_in_time_model = 1;
    */
   pointInTimeModel?: PointInTimeModel;
 
   /**
-   * @generated from field: aiserver.v1.MaybeDefinedPointInTimeModel maybe_defined_point_in_time_model = 2;
+   * @generated from field: optional aiserver.v1.MaybeDefinedPointInTimeModel maybe_defined_point_in_time_model = 2;
    */
   maybeDefinedPointInTimeModel?: MaybeDefinedPointInTimeModel;
 
@@ -6931,8 +6931,8 @@ export class ModelOpenedEvent extends Message<ModelOpenedEvent> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ModelOpenedEvent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "point_in_time_model", kind: "message", T: PointInTimeModel },
-    { no: 2, name: "maybe_defined_point_in_time_model", kind: "message", T: MaybeDefinedPointInTimeModel },
+    { no: 1, name: "point_in_time_model", kind: "message", T: PointInTimeModel, opt: true },
+    { no: 2, name: "maybe_defined_point_in_time_model", kind: "message", T: MaybeDefinedPointInTimeModel, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ModelOpenedEvent {
@@ -6967,7 +6967,7 @@ export class ModelWithHistory extends Message<ModelWithHistory> {
   modelUuid = "";
 
   /**
-   * @generated from field: aiserver.v1.StartingModel starting_model = 3;
+   * @generated from field: optional aiserver.v1.StartingModel starting_model = 3;
    */
   startingModel?: StartingModel;
 
@@ -6992,9 +6992,9 @@ export class ModelWithHistory extends Message<ModelWithHistory> {
   beforeStartModelChanges: ModelChange[] = [];
 
   /**
-   * @generated from field: double starting_performance_now_timestamp = 8;
+   * @generated from field: optional double starting_performance_now_timestamp = 8;
    */
-  startingPerformanceNowTimestamp = 0;
+  startingPerformanceNowTimestamp?: number;
 
   constructor(data?: PartialMessage<ModelWithHistory>) {
     super();
@@ -7006,12 +7006,12 @@ export class ModelWithHistory extends Message<ModelWithHistory> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "changes", kind: "message", T: ModelChange, repeated: true },
     { no: 2, name: "model_uuid", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "starting_model", kind: "message", T: StartingModel },
+    { no: 3, name: "starting_model", kind: "message", T: StartingModel, opt: true },
     { no: 4, name: "num_correct_changes", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 5, name: "num_unvalidated_changes", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 6, name: "num_incorrect_changes", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 7, name: "before_start_model_changes", kind: "message", T: ModelChange, repeated: true },
-    { no: 8, name: "starting_performance_now_timestamp", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
+    { no: 8, name: "starting_performance_now_timestamp", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ModelWithHistory {
@@ -7285,12 +7285,12 @@ export class RecoverableCppData extends Message<RecoverableCppData> {
   suggestionText = "";
 
   /**
-   * @generated from field: aiserver.v1.IRange suggestion_range = 3;
+   * @generated from field: optional aiserver.v1.IRange suggestion_range = 3;
    */
   suggestionRange?: IRange;
 
   /**
-   * @generated from field: aiserver.v1.OneIndexedPosition position = 4;
+   * @generated from field: optional aiserver.v1.OneIndexedPosition position = 4;
    */
   position?: OneIndexedPosition;
 
@@ -7304,8 +7304,8 @@ export class RecoverableCppData extends Message<RecoverableCppData> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "request_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "suggestion_text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "suggestion_range", kind: "message", T: IRange },
-    { no: 4, name: "position", kind: "message", T: OneIndexedPosition },
+    { no: 3, name: "suggestion_range", kind: "message", T: IRange, opt: true },
+    { no: 4, name: "position", kind: "message", T: OneIndexedPosition, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RecoverableCppData {
@@ -7330,17 +7330,17 @@ export class RecoverableCppData extends Message<RecoverableCppData> {
  */
 export class RefreshTabContextRequest extends Message<RefreshTabContextRequest> {
   /**
-   * @generated from field: aiserver.v1.CurrentFileInfo current_file = 1;
+   * @generated from field: optional aiserver.v1.CurrentFileInfo current_file = 1;
    */
   currentFile?: CurrentFileInfo;
 
   /**
-   * @generated from field: string model_name = 2;
+   * @generated from field: optional string model_name = 2;
    */
-  modelName = "";
+  modelName?: string;
 
   /**
-   * @generated from field: aiserver.v1.LinterErrors linter_errors = 3;
+   * @generated from field: optional aiserver.v1.LinterErrors linter_errors = 3;
    */
   linterErrors?: LinterErrors;
 
@@ -7355,9 +7355,9 @@ export class RefreshTabContextRequest extends Message<RefreshTabContextRequest> 
   additionalFiles: AdditionalFile[] = [];
 
   /**
-   * @generated from field: double client_time = 6;
+   * @generated from field: optional double client_time = 6;
    */
-  clientTime = 0;
+  clientTime?: number;
 
   /**
    * @generated from field: double time_since_request_start = 7;
@@ -7370,27 +7370,27 @@ export class RefreshTabContextRequest extends Message<RefreshTabContextRequest> 
   timeAtRequestSend = 0;
 
   /**
-   * @generated from field: bool is_debug = 9;
+   * @generated from field: optional bool is_debug = 9;
    */
-  isDebug = false;
+  isDebug?: boolean;
 
   /**
-   * @generated from field: string workspace_id = 10;
+   * @generated from field: optional string workspace_id = 10;
    */
-  workspaceId = "";
+  workspaceId?: string;
 
   /**
-   * @generated from field: bool supports_cpt = 11;
+   * @generated from field: optional bool supports_cpt = 11;
    */
-  supportsCpt = false;
+  supportsCpt?: boolean;
 
   /**
-   * @generated from field: bool supports_crlf_cpt = 12;
+   * @generated from field: optional bool supports_crlf_cpt = 12;
    */
-  supportsCrlfCpt = false;
+  supportsCrlfCpt?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.RepositoryInfo repository_info = 13;
+   * @generated from field: optional aiserver.v1.RepositoryInfo repository_info = 13;
    */
   repositoryInfo?: RepositoryInfo;
 
@@ -7402,19 +7402,19 @@ export class RefreshTabContextRequest extends Message<RefreshTabContextRequest> 
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.RefreshTabContextRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "current_file", kind: "message", T: CurrentFileInfo },
-    { no: 2, name: "model_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "linter_errors", kind: "message", T: LinterErrors },
+    { no: 1, name: "current_file", kind: "message", T: CurrentFileInfo, opt: true },
+    { no: 2, name: "model_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "linter_errors", kind: "message", T: LinterErrors, opt: true },
     { no: 4, name: "file_diff_histories", kind: "message", T: CppFileDiffHistory, repeated: true },
     { no: 5, name: "additional_files", kind: "message", T: AdditionalFile, repeated: true },
-    { no: 6, name: "client_time", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
+    { no: 6, name: "client_time", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
     { no: 7, name: "time_since_request_start", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
     { no: 8, name: "time_at_request_send", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 9, name: "is_debug", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 10, name: "workspace_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 11, name: "supports_cpt", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 12, name: "supports_crlf_cpt", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 13, name: "repository_info", kind: "message", T: RepositoryInfo },
+    { no: 9, name: "is_debug", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 10, name: "workspace_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 11, name: "supports_cpt", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 12, name: "supports_crlf_cpt", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 13, name: "repository_info", kind: "message", T: RepositoryInfo, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RefreshTabContextRequest {
@@ -7476,12 +7476,12 @@ export class RefreshTabContextResponse extends Message<RefreshTabContextResponse
  */
 export class RejectCursorPredictionEvent extends Message<RejectCursorPredictionEvent> {
   /**
-   * @generated from field: aiserver.v1.CursorPrediction cursor_prediction = 1;
+   * @generated from field: optional aiserver.v1.CursorPrediction cursor_prediction = 1;
    */
   cursorPrediction?: CursorPrediction;
 
   /**
-   * @generated from field: aiserver.v1.PointInTimeModel point_in_time_model = 2;
+   * @generated from field: optional aiserver.v1.PointInTimeModel point_in_time_model = 2;
    */
   pointInTimeModel?: PointInTimeModel;
 
@@ -7493,8 +7493,8 @@ export class RejectCursorPredictionEvent extends Message<RejectCursorPredictionE
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.RejectCursorPredictionEvent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "cursor_prediction", kind: "message", T: CursorPrediction },
-    { no: 2, name: "point_in_time_model", kind: "message", T: PointInTimeModel },
+    { no: 1, name: "cursor_prediction", kind: "message", T: CursorPrediction, opt: true },
+    { no: 2, name: "point_in_time_model", kind: "message", T: PointInTimeModel, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RejectCursorPredictionEvent {
@@ -7641,9 +7641,9 @@ export class ReviewChangesOpenedEvent extends Message<ReviewChangesOpenedEvent> 
   composerId = "";
 
   /**
-   * @generated from field: string best_of_n_group_id = 2;
+   * @generated from field: optional string best_of_n_group_id = 2;
    */
-  bestOfNGroupId = "";
+  bestOfNGroupId?: string;
 
   constructor(data?: PartialMessage<ReviewChangesOpenedEvent>) {
     super();
@@ -7654,7 +7654,7 @@ export class ReviewChangesOpenedEvent extends Message<ReviewChangesOpenedEvent> 
   static readonly typeName = "aiserver.v1.ReviewChangesOpenedEvent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "composer_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "best_of_n_group_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "best_of_n_group_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ReviewChangesOpenedEvent {
@@ -7679,7 +7679,7 @@ export class ReviewChangesOpenedEvent extends Message<ReviewChangesOpenedEvent> 
  */
 export class ScrollEvent extends Message<ScrollEvent> {
   /**
-   * @generated from field: aiserver.v1.PointInTimeModel point_in_time_model = 1;
+   * @generated from field: optional aiserver.v1.PointInTimeModel point_in_time_model = 1;
    */
   pointInTimeModel?: PointInTimeModel;
 
@@ -7701,7 +7701,7 @@ export class ScrollEvent extends Message<ScrollEvent> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ScrollEvent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "point_in_time_model", kind: "message", T: PointInTimeModel },
+    { no: 1, name: "point_in_time_model", kind: "message", T: PointInTimeModel, opt: true },
     { no: 2, name: "visible_ranges", kind: "message", T: IRange, repeated: true },
     { no: 3, name: "editor_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
@@ -7758,14 +7758,14 @@ export class SearchEvent extends Message<SearchEvent> {
   isWholeWord = false;
 
   /**
-   * @generated from field: string files_to_include = 7;
+   * @generated from field: optional string files_to_include = 7;
    */
-  filesToInclude = "";
+  filesToInclude?: string;
 
   /**
-   * @generated from field: string files_to_exclude = 8;
+   * @generated from field: optional string files_to_exclude = 8;
    */
-  filesToExclude = "";
+  filesToExclude?: string;
 
   /**
    * @generated from field: int32 duration_ms = 9;
@@ -7791,8 +7791,8 @@ export class SearchEvent extends Message<SearchEvent> {
     { no: 4, name: "is_regex", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 5, name: "is_case_sensitive", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 6, name: "is_whole_word", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 7, name: "files_to_include", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "files_to_exclude", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 7, name: "files_to_include", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "files_to_exclude", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 9, name: "duration_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 10, name: "results", kind: "message", T: SearchResultFile, repeated: true },
   ]);
@@ -7995,9 +7995,9 @@ export class StartingModel extends Message<StartingModel> {
   startingContents = "";
 
   /**
-   * @generated from field: int32 starting_model_version = 3;
+   * @generated from field: optional int32 starting_model_version = 3;
    */
-  startingModelVersion = 0;
+  startingModelVersion?: number;
 
   /**
    * @generated from field: repeated aiserver.v1.ModelChange before_start_model_changes = 4;
@@ -8010,9 +8010,9 @@ export class StartingModel extends Message<StartingModel> {
   clientVersion = "";
 
   /**
-   * @generated from field: string client_commit = 6;
+   * @generated from field: optional string client_commit = 6;
    */
-  clientCommit = "";
+  clientCommit?: string;
 
   /**
    * @generated from field: string model_uuid = 7;
@@ -8039,10 +8039,10 @@ export class StartingModel extends Message<StartingModel> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "relative_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "starting_contents", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "starting_model_version", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 3, name: "starting_model_version", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 4, name: "before_start_model_changes", kind: "message", T: ModelChange, repeated: true },
     { no: 5, name: "client_version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "client_commit", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 6, name: "client_commit", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 7, name: "model_uuid", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 8, name: "session_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 9, name: "uri", kind: "scalar", T: 9 /* ScalarType.STRING */ },
@@ -8070,7 +8070,7 @@ export class StartingModel extends Message<StartingModel> {
  */
 export class StreamCppRequest extends Message<StreamCppRequest> {
   /**
-   * @generated from field: aiserver.v1.CurrentFileInfo current_file = 1;
+   * @generated from field: optional aiserver.v1.CurrentFileInfo current_file = 1;
    */
   currentFile?: CurrentFileInfo;
 
@@ -8080,12 +8080,12 @@ export class StreamCppRequest extends Message<StreamCppRequest> {
   diffHistory: string[] = [];
 
   /**
-   * @generated from field: string model_name = 3;
+   * @generated from field: optional string model_name = 3;
    */
-  modelName = "";
+  modelName?: string;
 
   /**
-   * @generated from field: aiserver.v1.LinterErrors linter_errors = 4;
+   * @generated from field: optional aiserver.v1.LinterErrors linter_errors = 4;
    */
   linterErrors?: LinterErrors;
 
@@ -8095,9 +8095,9 @@ export class StreamCppRequest extends Message<StreamCppRequest> {
   diffHistoryKeys: string[] = [];
 
   /**
-   * @generated from field: bool give_debug_output = 6;
+   * @generated from field: optional bool give_debug_output = 6;
    */
-  giveDebugOutput = false;
+  giveDebugOutput?: boolean;
 
   /**
    * @generated from field: repeated aiserver.v1.CppFileDiffHistory file_diff_histories = 7;
@@ -8115,19 +8115,19 @@ export class StreamCppRequest extends Message<StreamCppRequest> {
   blockDiffPatches: BlockDiffPatch[] = [];
 
   /**
-   * @generated from field: bool is_nightly = 10;
+   * @generated from field: optional bool is_nightly = 10;
    */
-  isNightly = false;
+  isNightly?: boolean;
 
   /**
-   * @generated from field: bool is_debug = 11;
+   * @generated from field: optional bool is_debug = 11;
    */
-  isDebug = false;
+  isDebug?: boolean;
 
   /**
-   * @generated from field: bool immediately_ack = 12;
+   * @generated from field: optional bool immediately_ack = 12;
    */
-  immediatelyAck = false;
+  immediatelyAck?: boolean;
 
   /**
    * @generated from field: repeated aiserver.v1.CppContextItem context_items = 13;
@@ -8145,19 +8145,19 @@ export class StreamCppRequest extends Message<StreamCppRequest> {
   lspContexts: LspSubgraphFullContext[] = [];
 
   /**
-   * @generated from field: aiserver.v1.CppIntentInfo cpp_intent_info = 16;
+   * @generated from field: optional aiserver.v1.CppIntentInfo cpp_intent_info = 16;
    */
   cppIntentInfo?: CppIntentInfo;
 
   /**
-   * @generated from field: bool enable_more_context = 17;
+   * @generated from field: optional bool enable_more_context = 17;
    */
-  enableMoreContext = false;
+  enableMoreContext?: boolean;
 
   /**
-   * @generated from field: string workspace_id = 18;
+   * @generated from field: optional string workspace_id = 18;
    */
-  workspaceId = "";
+  workspaceId?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.AdditionalFile additional_files = 19;
@@ -8165,14 +8165,14 @@ export class StreamCppRequest extends Message<StreamCppRequest> {
   additionalFiles: AdditionalFile[] = [];
 
   /**
-   * @generated from field: aiserver.v1.StreamCppRequest.ControlToken control_token = 20;
+   * @generated from field: optional aiserver.v1.StreamCppRequest.ControlToken control_token = 20;
    */
-  controlToken = StreamCppRequest_ControlToken.UNSPECIFIED;
+  controlToken?: StreamCppRequest_ControlToken;
 
   /**
-   * @generated from field: double client_time = 21;
+   * @generated from field: optional double client_time = 21;
    */
-  clientTime = 0;
+  clientTime?: number;
 
   /**
    * @generated from field: repeated aiserver.v1.FilesyncUpdateWithModelVersion filesync_updates = 22;
@@ -8190,24 +8190,24 @@ export class StreamCppRequest extends Message<StreamCppRequest> {
   timeAtRequestSend = 0;
 
   /**
-   * @generated from field: double client_timezone_offset = 25;
+   * @generated from field: optional double client_timezone_offset = 25;
    */
-  clientTimezoneOffset = 0;
+  clientTimezoneOffset?: number;
 
   /**
-   * @generated from field: aiserver.v1.LspSuggestedItems lsp_suggested_items = 26;
+   * @generated from field: optional aiserver.v1.LspSuggestedItems lsp_suggested_items = 26;
    */
   lspSuggestedItems?: LspSuggestedItems;
 
   /**
-   * @generated from field: bool supports_cpt = 27;
+   * @generated from field: optional bool supports_cpt = 27;
    */
-  supportsCpt = false;
+  supportsCpt?: boolean;
 
   /**
-   * @generated from field: bool supports_crlf_cpt = 28;
+   * @generated from field: optional bool supports_crlf_cpt = 28;
    */
-  supportsCrlfCpt = false;
+  supportsCrlfCpt?: boolean;
 
   /**
    * @generated from field: repeated aiserver.v1.CodeResult code_results = 29;
@@ -8222,34 +8222,34 @@ export class StreamCppRequest extends Message<StreamCppRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.StreamCppRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "current_file", kind: "message", T: CurrentFileInfo },
+    { no: 1, name: "current_file", kind: "message", T: CurrentFileInfo, opt: true },
     { no: 2, name: "diff_history", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 3, name: "model_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "linter_errors", kind: "message", T: LinterErrors },
+    { no: 3, name: "model_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "linter_errors", kind: "message", T: LinterErrors, opt: true },
     { no: 5, name: "diff_history_keys", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 6, name: "give_debug_output", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 6, name: "give_debug_output", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 7, name: "file_diff_histories", kind: "message", T: CppFileDiffHistory, repeated: true },
     { no: 8, name: "merged_diff_histories", kind: "message", T: CppFileDiffHistory, repeated: true },
     { no: 9, name: "block_diff_patches", kind: "message", T: BlockDiffPatch, repeated: true },
-    { no: 10, name: "is_nightly", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 11, name: "is_debug", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 12, name: "immediately_ack", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 10, name: "is_nightly", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 11, name: "is_debug", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 12, name: "immediately_ack", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 13, name: "context_items", kind: "message", T: CppContextItem, repeated: true },
     { no: 14, name: "parameter_hints", kind: "message", T: CppParameterHint, repeated: true },
     { no: 15, name: "lsp_contexts", kind: "message", T: LspSubgraphFullContext, repeated: true },
-    { no: 16, name: "cpp_intent_info", kind: "message", T: CppIntentInfo },
-    { no: 17, name: "enable_more_context", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 18, name: "workspace_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 16, name: "cpp_intent_info", kind: "message", T: CppIntentInfo, opt: true },
+    { no: 17, name: "enable_more_context", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 18, name: "workspace_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 19, name: "additional_files", kind: "message", T: AdditionalFile, repeated: true },
-    { no: 20, name: "control_token", kind: "enum", T: proto3.getEnumType(StreamCppRequest_ControlToken) },
-    { no: 21, name: "client_time", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
+    { no: 20, name: "control_token", kind: "enum", T: proto3.getEnumType(StreamCppRequest_ControlToken), opt: true },
+    { no: 21, name: "client_time", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
     { no: 22, name: "filesync_updates", kind: "message", T: FilesyncUpdateWithModelVersion, repeated: true },
     { no: 23, name: "time_since_request_start", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
     { no: 24, name: "time_at_request_send", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 25, name: "client_timezone_offset", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 26, name: "lsp_suggested_items", kind: "message", T: LspSuggestedItems },
-    { no: 27, name: "supports_cpt", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 28, name: "supports_crlf_cpt", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 25, name: "client_timezone_offset", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
+    { no: 26, name: "lsp_suggested_items", kind: "message", T: LspSuggestedItems, opt: true },
+    { no: 27, name: "supports_cpt", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 28, name: "supports_crlf_cpt", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 29, name: "code_results", kind: "message", T: CodeResult, repeated: true },
   ]);
 
@@ -8312,84 +8312,84 @@ export class StreamCppResponse extends Message<StreamCppResponse> {
   text = "";
 
   /**
-   * @generated from field: int32 suggestion_start_line = 2;
+   * @generated from field: optional int32 suggestion_start_line = 2;
    */
-  suggestionStartLine = 0;
+  suggestionStartLine?: number;
 
   /**
-   * @generated from field: int32 suggestion_confidence = 3;
+   * @generated from field: optional int32 suggestion_confidence = 3;
    */
-  suggestionConfidence = 0;
+  suggestionConfidence?: number;
 
   /**
-   * @generated from field: bool done_stream = 4;
+   * @generated from field: optional bool done_stream = 4;
    */
-  doneStream = false;
+  doneStream?: boolean;
 
   /**
-   * @generated from field: string debug_model_output = 5;
+   * @generated from field: optional string debug_model_output = 5;
    */
-  debugModelOutput = "";
+  debugModelOutput?: string;
 
   /**
-   * @generated from field: string debug_model_input = 6;
+   * @generated from field: optional string debug_model_input = 6;
    */
-  debugModelInput = "";
+  debugModelInput?: string;
 
   /**
-   * @generated from field: string debug_stream_time = 7;
+   * @generated from field: optional string debug_stream_time = 7;
    */
-  debugStreamTime = "";
+  debugStreamTime?: string;
 
   /**
-   * @generated from field: string debug_total_time = 8;
+   * @generated from field: optional string debug_total_time = 8;
    */
-  debugTotalTime = "";
+  debugTotalTime?: string;
 
   /**
-   * @generated from field: string debug_ttft_time = 9;
+   * @generated from field: optional string debug_ttft_time = 9;
    */
-  debugTtftTime = "";
+  debugTtftTime?: string;
 
   /**
-   * @generated from field: string debug_server_timing = 10;
+   * @generated from field: optional string debug_server_timing = 10;
    */
-  debugServerTiming = "";
+  debugServerTiming?: string;
 
   /**
-   * @generated from field: aiserver.v1.LineRange range_to_replace = 11;
+   * @generated from field: optional aiserver.v1.LineRange range_to_replace = 11;
    */
   rangeToReplace?: LineRange;
 
   /**
-   * @generated from field: aiserver.v1.StreamCppResponse.CursorPredictionTarget cursor_prediction_target = 12;
+   * @generated from field: optional aiserver.v1.StreamCppResponse.CursorPredictionTarget cursor_prediction_target = 12;
    */
   cursorPredictionTarget?: StreamCppResponse_CursorPredictionTarget;
 
   /**
-   * @generated from field: bool done_edit = 13;
+   * @generated from field: optional bool done_edit = 13;
    */
-  doneEdit = false;
+  doneEdit?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.StreamCppResponse.ModelInfo model_info = 14;
+   * @generated from field: optional aiserver.v1.StreamCppResponse.ModelInfo model_info = 14;
    */
   modelInfo?: StreamCppResponse_ModelInfo;
 
   /**
-   * @generated from field: bool begin_edit = 15;
+   * @generated from field: optional bool begin_edit = 15;
    */
-  beginEdit = false;
+  beginEdit?: boolean;
 
   /**
-   * @generated from field: bool should_remove_leading_eol = 16;
+   * @generated from field: optional bool should_remove_leading_eol = 16;
    */
-  shouldRemoveLeadingEol = false;
+  shouldRemoveLeadingEol?: boolean;
 
   /**
-   * @generated from field: string binding_id = 17;
+   * @generated from field: optional string binding_id = 17;
    */
-  bindingId = "";
+  bindingId?: string;
 
   constructor(data?: PartialMessage<StreamCppResponse>) {
     super();
@@ -8400,22 +8400,22 @@ export class StreamCppResponse extends Message<StreamCppResponse> {
   static readonly typeName = "aiserver.v1.StreamCppResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "suggestion_start_line", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "suggestion_confidence", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 4, name: "done_stream", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "debug_model_output", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "debug_model_input", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "debug_stream_time", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "debug_total_time", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "debug_ttft_time", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "debug_server_timing", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 11, name: "range_to_replace", kind: "message", T: LineRange },
-    { no: 12, name: "cursor_prediction_target", kind: "message", T: StreamCppResponse_CursorPredictionTarget },
-    { no: 13, name: "done_edit", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 14, name: "model_info", kind: "message", T: StreamCppResponse_ModelInfo },
-    { no: 15, name: "begin_edit", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 16, name: "should_remove_leading_eol", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 17, name: "binding_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "suggestion_start_line", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 3, name: "suggestion_confidence", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 4, name: "done_stream", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 5, name: "debug_model_output", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "debug_model_input", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "debug_stream_time", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "debug_total_time", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 9, name: "debug_ttft_time", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 10, name: "debug_server_timing", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 11, name: "range_to_replace", kind: "message", T: LineRange, opt: true },
+    { no: 12, name: "cursor_prediction_target", kind: "message", T: StreamCppResponse_CursorPredictionTarget, opt: true },
+    { no: 13, name: "done_edit", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 14, name: "model_info", kind: "message", T: StreamCppResponse_ModelInfo, opt: true },
+    { no: 15, name: "begin_edit", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 16, name: "should_remove_leading_eol", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 17, name: "binding_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StreamCppResponse {
@@ -8538,12 +8538,12 @@ export class StreamCppResponse_ModelInfo extends Message<StreamCppResponse_Model
  */
 export class StreamHoldCppRequest extends Message<StreamHoldCppRequest> {
   /**
-   * @generated from field: aiserver.v1.CurrentFileInfo current_file = 1;
+   * @generated from field: optional aiserver.v1.CurrentFileInfo current_file = 1;
    */
   currentFile?: CurrentFileInfo;
 
   /**
-   * @generated from field: aiserver.v1.LinterErrors linter_errors = 4;
+   * @generated from field: optional aiserver.v1.LinterErrors linter_errors = 4;
    */
   linterErrors?: LinterErrors;
 
@@ -8563,7 +8563,7 @@ export class StreamHoldCppRequest extends Message<StreamHoldCppRequest> {
   blockDiffPatches: BlockDiffPatch[] = [];
 
   /**
-   * @generated from field: aiserver.v1.ModelDetails model_details = 10;
+   * @generated from field: optional aiserver.v1.ModelDetails model_details = 10;
    */
   modelDetails?: ModelDetails;
 
@@ -8580,12 +8580,12 @@ export class StreamHoldCppRequest extends Message<StreamHoldCppRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.StreamHoldCppRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "current_file", kind: "message", T: CurrentFileInfo },
-    { no: 4, name: "linter_errors", kind: "message", T: LinterErrors },
+    { no: 1, name: "current_file", kind: "message", T: CurrentFileInfo, opt: true },
+    { no: 4, name: "linter_errors", kind: "message", T: LinterErrors, opt: true },
     { no: 7, name: "file_diff_histories", kind: "message", T: CppFileDiffHistory, repeated: true },
     { no: 8, name: "merged_diff_histories", kind: "message", T: CppFileDiffHistory, repeated: true },
     { no: 9, name: "block_diff_patches", kind: "message", T: BlockDiffPatch, repeated: true },
-    { no: 10, name: "model_details", kind: "message", T: ModelDetails },
+    { no: 10, name: "model_details", kind: "message", T: ModelDetails, opt: true },
     { no: 13, name: "context_items", kind: "message", T: CppContextItem, repeated: true },
   ]);
 
@@ -8648,12 +8648,12 @@ export class StreamHoldCppResponse extends Message<StreamHoldCppResponse> {
  */
 export class SuggestCursorPredictionEvent extends Message<SuggestCursorPredictionEvent> {
   /**
-   * @generated from field: aiserver.v1.CursorPrediction cursor_prediction = 1;
+   * @generated from field: optional aiserver.v1.CursorPrediction cursor_prediction = 1;
    */
   cursorPrediction?: CursorPrediction;
 
   /**
-   * @generated from field: aiserver.v1.PointInTimeModel point_in_time_model = 2;
+   * @generated from field: optional aiserver.v1.PointInTimeModel point_in_time_model = 2;
    */
   pointInTimeModel?: PointInTimeModel;
 
@@ -8665,8 +8665,8 @@ export class SuggestCursorPredictionEvent extends Message<SuggestCursorPredictio
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SuggestCursorPredictionEvent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "cursor_prediction", kind: "message", T: CursorPrediction },
-    { no: 2, name: "point_in_time_model", kind: "message", T: PointInTimeModel },
+    { no: 1, name: "cursor_prediction", kind: "message", T: CursorPrediction, opt: true },
+    { no: 2, name: "point_in_time_model", kind: "message", T: PointInTimeModel, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SuggestCursorPredictionEvent {
@@ -8691,7 +8691,7 @@ export class SuggestCursorPredictionEvent extends Message<SuggestCursorPredictio
  */
 export class SuggestedEdit extends Message<SuggestedEdit> {
   /**
-   * @generated from field: aiserver.v1.SimpleRange edit_range = 1;
+   * @generated from field: optional aiserver.v1.SimpleRange edit_range = 1;
    */
   editRange?: SimpleRange;
 
@@ -8708,7 +8708,7 @@ export class SuggestedEdit extends Message<SuggestedEdit> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SuggestedEdit";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "edit_range", kind: "message", T: SimpleRange },
+    { no: 1, name: "edit_range", kind: "message", T: SimpleRange, opt: true },
     { no: 2, name: "text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
@@ -8734,7 +8734,7 @@ export class SuggestedEdit extends Message<SuggestedEdit> {
  */
 export class TabCloseEvent extends Message<TabCloseEvent> {
   /**
-   * @generated from field: aiserver.v1.MaybeDefinedPointInTimeModel point_in_time_model = 1;
+   * @generated from field: optional aiserver.v1.MaybeDefinedPointInTimeModel point_in_time_model = 1;
    */
   pointInTimeModel?: MaybeDefinedPointInTimeModel;
 
@@ -8746,7 +8746,7 @@ export class TabCloseEvent extends Message<TabCloseEvent> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.TabCloseEvent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "point_in_time_model", kind: "message", T: MaybeDefinedPointInTimeModel },
+    { no: 1, name: "point_in_time_model", kind: "message", T: MaybeDefinedPointInTimeModel, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): TabCloseEvent {
@@ -8841,14 +8841,14 @@ export class TerminalEvent extends Message<TerminalEvent> {
  */
 export class TerminalEvent_CommandFinish extends Message<TerminalEvent_CommandFinish> {
   /**
-   * @generated from field: aiserver.v1.PointInTimeModel point_in_time_model = 1;
+   * @generated from field: optional aiserver.v1.PointInTimeModel point_in_time_model = 1;
    */
   pointInTimeModel?: PointInTimeModel;
 
   /**
-   * @generated from field: int32 exit_code = 2;
+   * @generated from field: optional int32 exit_code = 2;
    */
-  exitCode = 0;
+  exitCode?: number;
 
   constructor(data?: PartialMessage<TerminalEvent_CommandFinish>) {
     super();
@@ -8858,8 +8858,8 @@ export class TerminalEvent_CommandFinish extends Message<TerminalEvent_CommandFi
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.TerminalEvent.CommandFinish";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "point_in_time_model", kind: "message", T: PointInTimeModel },
-    { no: 2, name: "exit_code", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 1, name: "point_in_time_model", kind: "message", T: PointInTimeModel, opt: true },
+    { no: 2, name: "exit_code", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): TerminalEvent_CommandFinish {
@@ -8884,14 +8884,14 @@ export class TerminalEvent_CommandFinish extends Message<TerminalEvent_CommandFi
  */
 export class TerminalEvent_CommandStart extends Message<TerminalEvent_CommandStart> {
   /**
-   * @generated from field: aiserver.v1.PointInTimeModel point_in_time_model = 1;
+   * @generated from field: optional aiserver.v1.PointInTimeModel point_in_time_model = 1;
    */
   pointInTimeModel?: PointInTimeModel;
 
   /**
-   * @generated from field: string cwd = 2;
+   * @generated from field: optional string cwd = 2;
    */
-  cwd = "";
+  cwd?: string;
 
   constructor(data?: PartialMessage<TerminalEvent_CommandStart>) {
     super();
@@ -8901,8 +8901,8 @@ export class TerminalEvent_CommandStart extends Message<TerminalEvent_CommandSta
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.TerminalEvent.CommandStart";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "point_in_time_model", kind: "message", T: PointInTimeModel },
-    { no: 2, name: "cwd", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "point_in_time_model", kind: "message", T: PointInTimeModel, opt: true },
+    { no: 2, name: "cwd", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): TerminalEvent_CommandStart {
@@ -8964,9 +8964,9 @@ export class TerminalEvent_Create extends Message<TerminalEvent_Create> {
  */
 export class TerminalEvent_Exit extends Message<TerminalEvent_Exit> {
   /**
-   * @generated from field: int32 exit_code = 1;
+   * @generated from field: optional int32 exit_code = 1;
    */
-  exitCode = 0;
+  exitCode?: number;
 
   constructor(data?: PartialMessage<TerminalEvent_Exit>) {
     super();
@@ -8976,7 +8976,7 @@ export class TerminalEvent_Exit extends Message<TerminalEvent_Exit> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.TerminalEvent.Exit";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "exit_code", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 1, name: "exit_code", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): TerminalEvent_Exit {
@@ -9055,14 +9055,14 @@ export class WorktreeEvent extends Message<WorktreeEvent> {
   eventType = WorktreeEvent_EventType.UNSPECIFIED;
 
   /**
-   * @generated from field: string model_name = 2;
+   * @generated from field: optional string model_name = 2;
    */
-  modelName = "";
+  modelName?: string;
 
   /**
-   * @generated from field: string best_of_n_group_id = 3;
+   * @generated from field: optional string best_of_n_group_id = 3;
    */
-  bestOfNGroupId = "";
+  bestOfNGroupId?: string;
 
   /**
    * @generated from field: repeated string all_worktree_paths = 4;
@@ -9070,9 +9070,9 @@ export class WorktreeEvent extends Message<WorktreeEvent> {
   allWorktreePaths: string[] = [];
 
   /**
-   * @generated from field: string applied_worktree_path = 5;
+   * @generated from field: optional string applied_worktree_path = 5;
    */
-  appliedWorktreePath = "";
+  appliedWorktreePath?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.WorktreeEvent.WorktreeComposerMapping worktree_composer_mappings = 6;
@@ -9085,14 +9085,14 @@ export class WorktreeEvent extends Message<WorktreeEvent> {
   backgroundAgentComposerMappings: WorktreeEvent_BackgroundAgentComposerMapping[] = [];
 
   /**
-   * @generated from field: string applied_composer_id = 8;
+   * @generated from field: optional string applied_composer_id = 8;
    */
-  appliedComposerId = "";
+  appliedComposerId?: string;
 
   /**
-   * @generated from field: string viewed_composer_id = 9;
+   * @generated from field: optional string viewed_composer_id = 9;
    */
-  viewedComposerId = "";
+  viewedComposerId?: string;
 
   constructor(data?: PartialMessage<WorktreeEvent>) {
     super();
@@ -9103,14 +9103,14 @@ export class WorktreeEvent extends Message<WorktreeEvent> {
   static readonly typeName = "aiserver.v1.WorktreeEvent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "event_type", kind: "enum", T: proto3.getEnumType(WorktreeEvent_EventType) },
-    { no: 2, name: "model_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "best_of_n_group_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "model_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "best_of_n_group_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 4, name: "all_worktree_paths", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 5, name: "applied_worktree_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "applied_worktree_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 6, name: "worktree_composer_mappings", kind: "message", T: WorktreeEvent_WorktreeComposerMapping, repeated: true },
     { no: 7, name: "background_agent_composer_mappings", kind: "message", T: WorktreeEvent_BackgroundAgentComposerMapping, repeated: true },
-    { no: 8, name: "applied_composer_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "viewed_composer_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 8, name: "applied_composer_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 9, name: "viewed_composer_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): WorktreeEvent {

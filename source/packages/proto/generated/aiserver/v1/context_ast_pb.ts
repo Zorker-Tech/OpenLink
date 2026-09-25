@@ -220,9 +220,9 @@ export class ContainerTreeNode_Container extends Message<ContainerTreeNode_Conta
  */
 export class ContainerTreeNode_Blob extends Message<ContainerTreeNode_Blob> {
   /**
-   * @generated from field: string value = 1;
+   * @generated from field: optional string value = 1;
    */
-  value = "";
+  value?: string;
 
   constructor(data?: PartialMessage<ContainerTreeNode_Blob>) {
     super();
@@ -232,7 +232,7 @@ export class ContainerTreeNode_Blob extends Message<ContainerTreeNode_Blob> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ContainerTreeNode.Blob";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "value", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "value", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ContainerTreeNode_Blob {

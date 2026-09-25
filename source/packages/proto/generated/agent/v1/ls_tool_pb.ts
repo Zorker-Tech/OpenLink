@@ -17,12 +17,12 @@ import { LsArgs, LsResult } from "./ls_exec_pb.ts";
  */
 export class LsToolCall extends Message<LsToolCall> {
   /**
-   * @generated from field: agent.v1.LsArgs args = 1;
+   * @generated from field: optional agent.v1.LsArgs args = 1;
    */
   args?: LsArgs;
 
   /**
-   * @generated from field: agent.v1.LsResult result = 2;
+   * @generated from field: optional agent.v1.LsResult result = 2;
    */
   result?: LsResult;
 
@@ -34,8 +34,8 @@ export class LsToolCall extends Message<LsToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.LsToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: LsArgs },
-    { no: 2, name: "result", kind: "message", T: LsResult },
+    { no: 1, name: "args", kind: "message", T: LsArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: LsResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): LsToolCall {

@@ -22,64 +22,64 @@ export class GrepArgs extends Message<GrepArgs> {
   pattern = "";
 
   /**
-   * @generated from field: string path = 2;
+   * @generated from field: optional string path = 2;
    */
-  path = "";
+  path?: string;
 
   /**
-   * @generated from field: string glob = 3;
+   * @generated from field: optional string glob = 3;
    */
-  glob = "";
+  glob?: string;
 
   /**
-   * @generated from field: string output_mode = 4;
+   * @generated from field: optional string output_mode = 4;
    */
-  outputMode = "";
+  outputMode?: string;
 
   /**
-   * @generated from field: int32 context_before = 5;
+   * @generated from field: optional int32 context_before = 5;
    */
-  contextBefore = 0;
+  contextBefore?: number;
 
   /**
-   * @generated from field: int32 context_after = 6;
+   * @generated from field: optional int32 context_after = 6;
    */
-  contextAfter = 0;
+  contextAfter?: number;
 
   /**
-   * @generated from field: int32 context = 7;
+   * @generated from field: optional int32 context = 7;
    */
-  context = 0;
+  context?: number;
 
   /**
-   * @generated from field: bool case_insensitive = 8;
+   * @generated from field: optional bool case_insensitive = 8;
    */
-  caseInsensitive = false;
+  caseInsensitive?: boolean;
 
   /**
-   * @generated from field: string type = 9;
+   * @generated from field: optional string type = 9;
    */
-  type = "";
+  type?: string;
 
   /**
-   * @generated from field: int32 head_limit = 10;
+   * @generated from field: optional int32 head_limit = 10;
    */
-  headLimit = 0;
+  headLimit?: number;
 
   /**
-   * @generated from field: bool multiline = 11;
+   * @generated from field: optional bool multiline = 11;
    */
-  multiline = false;
+  multiline?: boolean;
 
   /**
-   * @generated from field: string sort = 12;
+   * @generated from field: optional string sort = 12;
    */
-  sort = "";
+  sort?: string;
 
   /**
-   * @generated from field: bool sort_ascending = 13;
+   * @generated from field: optional bool sort_ascending = 13;
    */
-  sortAscending = false;
+  sortAscending?: boolean;
 
   /**
    * @generated from field: string tool_call_id = 14;
@@ -87,14 +87,14 @@ export class GrepArgs extends Message<GrepArgs> {
   toolCallId = "";
 
   /**
-   * @generated from field: agent.v1.SandboxPolicy sandbox_policy = 15;
+   * @generated from field: optional agent.v1.SandboxPolicy sandbox_policy = 15;
    */
   sandboxPolicy?: SandboxPolicy;
 
   /**
-   * @generated from field: int32 offset = 16;
+   * @generated from field: optional int32 offset = 16;
    */
-  offset = 0;
+  offset?: number;
 
   constructor(data?: PartialMessage<GrepArgs>) {
     super();
@@ -105,21 +105,21 @@ export class GrepArgs extends Message<GrepArgs> {
   static readonly typeName = "agent.v1.GrepArgs";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "pattern", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "glob", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "output_mode", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "context_before", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 6, name: "context_after", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 7, name: "context", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 8, name: "case_insensitive", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 9, name: "type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "head_limit", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 11, name: "multiline", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 12, name: "sort", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 13, name: "sort_ascending", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "glob", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "output_mode", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "context_before", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 6, name: "context_after", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 7, name: "context", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 8, name: "case_insensitive", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 9, name: "type", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 10, name: "head_limit", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 11, name: "multiline", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 12, name: "sort", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 13, name: "sort_ascending", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 14, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 15, name: "sandbox_policy", kind: "message", T: SandboxPolicy },
-    { no: 16, name: "offset", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 15, name: "sandbox_policy", kind: "message", T: SandboxPolicy, opt: true },
+    { no: 16, name: "offset", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GrepArgs {
@@ -214,7 +214,7 @@ export class GrepSuccess extends Message<GrepSuccess> {
   workspaceResults: { [key: string]: GrepUnionResult } = {};
 
   /**
-   * @generated from field: agent.v1.GrepUnionResult active_editor_result = 5;
+   * @generated from field: optional agent.v1.GrepUnionResult active_editor_result = 5;
    */
   activeEditorResult?: GrepUnionResult;
 
@@ -230,7 +230,7 @@ export class GrepSuccess extends Message<GrepSuccess> {
     { no: 2, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "output_mode", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "workspace_results", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "message", T: GrepUnionResult} },
-    { no: 5, name: "active_editor_result", kind: "message", T: GrepUnionResult },
+    { no: 5, name: "active_editor_result", kind: "message", T: GrepUnionResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GrepSuccess {
@@ -374,14 +374,14 @@ export class GrepCountResult extends Message<GrepCountResult> {
   ripgrepTruncated = false;
 
   /**
-   * @generated from field: int32 head_limit_applied = 6;
+   * @generated from field: optional int32 head_limit_applied = 6;
    */
-  headLimitApplied = 0;
+  headLimitApplied?: number;
 
   /**
-   * @generated from field: int32 offset_applied = 7;
+   * @generated from field: optional int32 offset_applied = 7;
    */
-  offsetApplied = 0;
+  offsetApplied?: number;
 
   constructor(data?: PartialMessage<GrepCountResult>) {
     super();
@@ -396,8 +396,8 @@ export class GrepCountResult extends Message<GrepCountResult> {
     { no: 3, name: "total_matches", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 4, name: "client_truncated", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 5, name: "ripgrep_truncated", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 6, name: "head_limit_applied", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 7, name: "offset_applied", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 6, name: "head_limit_applied", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 7, name: "offset_applied", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GrepCountResult {
@@ -442,14 +442,14 @@ export class GrepFilesResult extends Message<GrepFilesResult> {
   ripgrepTruncated = false;
 
   /**
-   * @generated from field: int32 head_limit_applied = 5;
+   * @generated from field: optional int32 head_limit_applied = 5;
    */
-  headLimitApplied = 0;
+  headLimitApplied?: number;
 
   /**
-   * @generated from field: int32 offset_applied = 6;
+   * @generated from field: optional int32 offset_applied = 6;
    */
-  offsetApplied = 0;
+  offsetApplied?: number;
 
   constructor(data?: PartialMessage<GrepFilesResult>) {
     super();
@@ -463,8 +463,8 @@ export class GrepFilesResult extends Message<GrepFilesResult> {
     { no: 2, name: "total_files", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 3, name: "client_truncated", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 4, name: "ripgrep_truncated", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "head_limit_applied", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 6, name: "offset_applied", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 5, name: "head_limit_applied", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 6, name: "offset_applied", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GrepFilesResult {
@@ -514,14 +514,14 @@ export class GrepContentResult extends Message<GrepContentResult> {
   ripgrepTruncated = false;
 
   /**
-   * @generated from field: int32 head_limit_applied = 6;
+   * @generated from field: optional int32 head_limit_applied = 6;
    */
-  headLimitApplied = 0;
+  headLimitApplied?: number;
 
   /**
-   * @generated from field: int32 offset_applied = 7;
+   * @generated from field: optional int32 offset_applied = 7;
    */
-  offsetApplied = 0;
+  offsetApplied?: number;
 
   constructor(data?: PartialMessage<GrepContentResult>) {
     super();
@@ -536,8 +536,8 @@ export class GrepContentResult extends Message<GrepContentResult> {
     { no: 3, name: "total_matched_lines", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 4, name: "client_truncated", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 5, name: "ripgrep_truncated", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 6, name: "head_limit_applied", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 7, name: "offset_applied", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 6, name: "head_limit_applied", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 7, name: "offset_applied", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GrepContentResult {

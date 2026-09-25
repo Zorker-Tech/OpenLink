@@ -10,6 +10,6 @@ package agent.v1;
 import "agent/v1/grep_exec.proto";
 
 message GrepToolCall {
-  .agent.v1.GrepArgs args = 1 [json_name = "args"];
-  .agent.v1.GrepResult result = 2 [json_name = "result"];
+  optional .agent.v1.GrepArgs args = 1 [json_name = "args"];
+  optional .agent.v1.GrepResult result = 2 [json_name = "result"];
 }

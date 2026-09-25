@@ -8,12 +8,12 @@ syntax = "proto3";
 package agent.v1;
 
 message GlobToolCall {
-  .agent.v1.GlobToolArgs args = 1 [json_name = "args"];
-  .agent.v1.GlobToolResult result = 2 [json_name = "result"];
+  optional .agent.v1.GlobToolArgs args = 1 [json_name = "args"];
+  optional .agent.v1.GlobToolResult result = 2 [json_name = "result"];
 }
 
 message GlobToolArgs {
-  string target_directory = 1 [json_name = "targetDirectory"];
+  optional string target_directory = 1 [json_name = "targetDirectory"];
   string glob_pattern = 2 [json_name = "globPattern"];
 }
 

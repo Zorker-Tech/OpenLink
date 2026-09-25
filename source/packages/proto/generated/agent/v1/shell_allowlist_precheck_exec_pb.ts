@@ -27,19 +27,19 @@ export class ShellAllowlistPrecheckArgs extends Message<ShellAllowlistPrecheckAr
   workingDirectory = "";
 
   /**
-   * @generated from field: agent.v1.ShellCommandParsingResult parsing_result = 3;
+   * @generated from field: optional agent.v1.ShellCommandParsingResult parsing_result = 3;
    */
   parsingResult?: ShellCommandParsingResult;
 
   /**
-   * @generated from field: agent.v1.CommandClassifierResult classifier_result = 4;
+   * @generated from field: optional agent.v1.CommandClassifierResult classifier_result = 4;
    */
   classifierResult?: CommandClassifierResult;
 
   /**
-   * @generated from field: string tool_call_id = 5;
+   * @generated from field: optional string tool_call_id = 5;
    */
-  toolCallId = "";
+  toolCallId?: string;
 
   constructor(data?: PartialMessage<ShellAllowlistPrecheckArgs>) {
     super();
@@ -51,9 +51,9 @@ export class ShellAllowlistPrecheckArgs extends Message<ShellAllowlistPrecheckAr
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "command", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "working_directory", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "parsing_result", kind: "message", T: ShellCommandParsingResult },
-    { no: 4, name: "classifier_result", kind: "message", T: CommandClassifierResult },
-    { no: 5, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "parsing_result", kind: "message", T: ShellCommandParsingResult, opt: true },
+    { no: 4, name: "classifier_result", kind: "message", T: CommandClassifierResult, opt: true },
+    { no: 5, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ShellAllowlistPrecheckArgs {

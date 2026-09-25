@@ -10,6 +10,6 @@ package agent.v1;
 import "agent/v1/delete_exec.proto";
 
 message DeleteToolCall {
-  .agent.v1.DeleteArgs args = 1 [json_name = "args"];
-  .agent.v1.DeleteResult result = 2 [json_name = "result"];
+  optional .agent.v1.DeleteArgs args = 1 [json_name = "args"];
+  optional .agent.v1.DeleteResult result = 2 [json_name = "result"];
 }

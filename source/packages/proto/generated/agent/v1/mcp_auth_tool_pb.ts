@@ -134,12 +134,12 @@ export class McpAuthRequestResponse_Rejected extends Message<McpAuthRequestRespo
  */
 export class McpAuthToolCall extends Message<McpAuthToolCall> {
   /**
-   * @generated from field: agent.v1.McpAuthArgs args = 1;
+   * @generated from field: optional agent.v1.McpAuthArgs args = 1;
    */
   args?: McpAuthArgs;
 
   /**
-   * @generated from field: agent.v1.McpAuthResult result = 2;
+   * @generated from field: optional agent.v1.McpAuthResult result = 2;
    */
   result?: McpAuthResult;
 
@@ -151,8 +151,8 @@ export class McpAuthToolCall extends Message<McpAuthToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.McpAuthToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: McpAuthArgs },
-    { no: 2, name: "result", kind: "message", T: McpAuthResult },
+    { no: 1, name: "args", kind: "message", T: McpAuthArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: McpAuthResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): McpAuthToolCall {
@@ -388,7 +388,7 @@ export class McpAuthRejected extends Message<McpAuthRejected> {
  */
 export class McpAuthRequestQuery extends Message<McpAuthRequestQuery> {
   /**
-   * @generated from field: agent.v1.McpAuthArgs args = 1;
+   * @generated from field: optional agent.v1.McpAuthArgs args = 1;
    */
   args?: McpAuthArgs;
 
@@ -400,7 +400,7 @@ export class McpAuthRequestQuery extends Message<McpAuthRequestQuery> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.McpAuthRequestQuery";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: McpAuthArgs },
+    { no: 1, name: "args", kind: "message", T: McpAuthArgs, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): McpAuthRequestQuery {

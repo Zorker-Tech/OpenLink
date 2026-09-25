@@ -20,8 +20,8 @@ message WebSearchRequestResponse {
 }
 
 message WebSearchToolCall {
-  .agent.v1.WebSearchArgs args = 1 [json_name = "args"];
-  .agent.v1.WebSearchResult result = 2 [json_name = "result"];
+  optional .agent.v1.WebSearchArgs args = 1 [json_name = "args"];
+  optional .agent.v1.WebSearchResult result = 2 [json_name = "result"];
 }
 
 message WebSearchArgs {
@@ -56,5 +56,5 @@ message WebSearchReference {
 }
 
 message WebSearchRequestQuery {
-  .agent.v1.WebSearchArgs args = 1 [json_name = "args"];
+  optional .agent.v1.WebSearchArgs args = 1 [json_name = "args"];
 }

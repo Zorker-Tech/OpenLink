@@ -354,14 +354,14 @@ export class PRCheckStatus extends Message<PRCheckStatus> {
   checks: PRCheck[] = [];
 
   /**
-   * @generated from field: int32 required_failure_count = 9;
+   * @generated from field: optional int32 required_failure_count = 9;
    */
-  requiredFailureCount = 0;
+  requiredFailureCount?: number;
 
   /**
-   * @generated from field: int32 required_pending_count = 10;
+   * @generated from field: optional int32 required_pending_count = 10;
    */
-  requiredPendingCount = 0;
+  requiredPendingCount?: number;
 
   constructor(data?: PartialMessage<PRCheckStatus>) {
     super();
@@ -379,8 +379,8 @@ export class PRCheckStatus extends Message<PRCheckStatus> {
     { no: 6, name: "skipped_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 7, name: "total_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 8, name: "checks", kind: "message", T: PRCheck, repeated: true },
-    { no: 9, name: "required_failure_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 10, name: "required_pending_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 9, name: "required_failure_count", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 10, name: "required_pending_count", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PRCheckStatus {
@@ -415,34 +415,34 @@ export class PRCheck extends Message<PRCheck> {
   status = "";
 
   /**
-   * @generated from field: string details_url = 3;
+   * @generated from field: optional string details_url = 3;
    */
-  detailsUrl = "";
+  detailsUrl?: string;
 
   /**
-   * @generated from field: string summary = 4;
+   * @generated from field: optional string summary = 4;
    */
-  summary = "";
+  summary?: string;
 
   /**
-   * @generated from field: string started_at = 5;
+   * @generated from field: optional string started_at = 5;
    */
-  startedAt = "";
+  startedAt?: string;
 
   /**
-   * @generated from field: string completed_at = 6;
+   * @generated from field: optional string completed_at = 6;
    */
-  completedAt = "";
+  completedAt?: string;
 
   /**
-   * @generated from field: string provider = 7;
+   * @generated from field: optional string provider = 7;
    */
-  provider = "";
+  provider?: string;
 
   /**
-   * @generated from field: string provider_check_id = 8;
+   * @generated from field: optional string provider_check_id = 8;
    */
-  providerCheckId = "";
+  providerCheckId?: string;
 
   /**
    * @generated from field: bool can_rerun = 9;
@@ -450,9 +450,9 @@ export class PRCheck extends Message<PRCheck> {
   canRerun = false;
 
   /**
-   * @generated from field: string rerun_disabled_reason = 10;
+   * @generated from field: optional string rerun_disabled_reason = 10;
    */
-  rerunDisabledReason = "";
+  rerunDisabledReason?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.PRCheckAnnotation annotations = 11;
@@ -479,14 +479,14 @@ export class PRCheck extends Message<PRCheck> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "status", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "details_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "summary", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "started_at", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "completed_at", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "provider", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "provider_check_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "details_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "summary", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "started_at", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "completed_at", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "provider", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "provider_check_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 9, name: "can_rerun", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 10, name: "rerun_disabled_reason", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 10, name: "rerun_disabled_reason", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 11, name: "annotations", kind: "message", T: PRCheckAnnotation, repeated: true },
     { no: 12, name: "annotations_truncated", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 13, name: "is_required", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
@@ -519,24 +519,24 @@ export class PRCheckAnnotation extends Message<PRCheckAnnotation> {
   path = "";
 
   /**
-   * @generated from field: int32 start_line = 2;
+   * @generated from field: optional int32 start_line = 2;
    */
-  startLine = 0;
+  startLine?: number;
 
   /**
-   * @generated from field: int32 end_line = 3;
+   * @generated from field: optional int32 end_line = 3;
    */
-  endLine = 0;
+  endLine?: number;
 
   /**
-   * @generated from field: string annotation_level = 4;
+   * @generated from field: optional string annotation_level = 4;
    */
-  annotationLevel = "";
+  annotationLevel?: string;
 
   /**
-   * @generated from field: string title = 5;
+   * @generated from field: optional string title = 5;
    */
-  title = "";
+  title?: string;
 
   /**
    * @generated from field: string message = 6;
@@ -552,10 +552,10 @@ export class PRCheckAnnotation extends Message<PRCheckAnnotation> {
   static readonly typeName = "aiserver.v1.PRCheckAnnotation";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "start_line", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "end_line", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 4, name: "annotation_level", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "start_line", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 3, name: "end_line", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 4, name: "annotation_level", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 6, name: "message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
@@ -763,9 +763,9 @@ export class GetBranchComparisonRequest extends Message<GetBranchComparisonReque
   branchName = "";
 
   /**
-   * @generated from field: string base_branch = 3;
+   * @generated from field: optional string base_branch = 3;
    */
-  baseBranch = "";
+  baseBranch?: string;
 
   constructor(data?: PartialMessage<GetBranchComparisonRequest>) {
     super();
@@ -777,7 +777,7 @@ export class GetBranchComparisonRequest extends Message<GetBranchComparisonReque
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBranchComparisonRequest {
@@ -872,9 +872,9 @@ export class GetPullRequestCheckLogExcerptRequest extends Message<GetPullRequest
   providerCheckId = "";
 
   /**
-   * @generated from field: uint32 max_bytes = 4;
+   * @generated from field: optional uint32 max_bytes = 4;
    */
-  maxBytes = 0;
+  maxBytes?: number;
 
   constructor(data?: PartialMessage<GetPullRequestCheckLogExcerptRequest>) {
     super();
@@ -887,7 +887,7 @@ export class GetPullRequestCheckLogExcerptRequest extends Message<GetPullRequest
     { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "provider", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "provider_check_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "max_bytes", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 4, name: "max_bytes", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetPullRequestCheckLogExcerptRequest {
@@ -1016,7 +1016,7 @@ export class GetPullRequestChecksRequest extends Message<GetPullRequestChecksReq
  */
 export class GetPullRequestChecksResponse extends Message<GetPullRequestChecksResponse> {
   /**
-   * @generated from field: aiserver.v1.PRCheckStatus check_status = 1;
+   * @generated from field: optional aiserver.v1.PRCheckStatus check_status = 1;
    */
   checkStatus?: PRCheckStatus;
 
@@ -1028,7 +1028,7 @@ export class GetPullRequestChecksResponse extends Message<GetPullRequestChecksRe
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetPullRequestChecksResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "check_status", kind: "message", T: PRCheckStatus },
+    { no: 1, name: "check_status", kind: "message", T: PRCheckStatus, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetPullRequestChecksResponse {
@@ -1191,14 +1191,14 @@ export class GetPullRequestDiffResponse extends Message<GetPullRequestDiffRespon
   headSha = "";
 
   /**
-   * @generated from field: string base_ref_name = 4;
+   * @generated from field: optional string base_ref_name = 4;
    */
-  baseRefName = "";
+  baseRefName?: string;
 
   /**
-   * @generated from field: string head_ref_name = 5;
+   * @generated from field: optional string head_ref_name = 5;
    */
-  headRefName = "";
+  headRefName?: string;
 
   constructor(data?: PartialMessage<GetPullRequestDiffResponse>) {
     super();
@@ -1211,8 +1211,8 @@ export class GetPullRequestDiffResponse extends Message<GetPullRequestDiffRespon
     { no: 1, name: "files", kind: "message", T: SCMPullRequestDiffFile, repeated: true },
     { no: 2, name: "base_sha", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "head_sha", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "base_ref_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "head_ref_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "base_ref_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "head_ref_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetPullRequestDiffResponse {
@@ -1252,9 +1252,9 @@ export class GetPullRequestFileContentsRequest extends Message<GetPullRequestFil
   ref = "";
 
   /**
-   * @generated from field: uint32 max_bytes = 4;
+   * @generated from field: optional uint32 max_bytes = 4;
    */
-  maxBytes = 0;
+  maxBytes?: number;
 
   constructor(data?: PartialMessage<GetPullRequestFileContentsRequest>) {
     super();
@@ -1267,7 +1267,7 @@ export class GetPullRequestFileContentsRequest extends Message<GetPullRequestFil
     { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "ref", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "max_bytes", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 4, name: "max_bytes", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetPullRequestFileContentsRequest {
@@ -1384,7 +1384,7 @@ export class GetPullRequestRequest extends Message<GetPullRequestRequest> {
  */
 export class GetPullRequestResponse extends Message<GetPullRequestResponse> {
   /**
-   * @generated from field: aiserver.v1.SCMPullRequest pull_request = 1;
+   * @generated from field: optional aiserver.v1.SCMPullRequest pull_request = 1;
    */
   pullRequest?: SCMPullRequest;
 
@@ -1396,7 +1396,7 @@ export class GetPullRequestResponse extends Message<GetPullRequestResponse> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetPullRequestResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "pull_request", kind: "message", T: SCMPullRequest },
+    { no: 1, name: "pull_request", kind: "message", T: SCMPullRequest, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetPullRequestResponse {
@@ -1458,7 +1458,7 @@ export class GetPullRequestStackRequest extends Message<GetPullRequestStackReque
  */
 export class GetPullRequestStackResponse extends Message<GetPullRequestStackResponse> {
   /**
-   * @generated from field: aiserver.v1.SCMPullRequestStack stack = 1;
+   * @generated from field: optional aiserver.v1.SCMPullRequestStack stack = 1;
    */
   stack?: SCMPullRequestStack;
 
@@ -1470,7 +1470,7 @@ export class GetPullRequestStackResponse extends Message<GetPullRequestStackResp
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetPullRequestStackResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "stack", kind: "message", T: SCMPullRequestStack },
+    { no: 1, name: "stack", kind: "message", T: SCMPullRequestStack, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetPullRequestStackResponse {
@@ -1500,9 +1500,9 @@ export class GetSCMPullRequestCommitsRequest extends Message<GetSCMPullRequestCo
   prUrl = "";
 
   /**
-   * @generated from field: string after_cursor = 2;
+   * @generated from field: optional string after_cursor = 2;
    */
-  afterCursor = "";
+  afterCursor?: string;
 
   /**
    * @generated from field: bool skip_cache = 3;
@@ -1518,7 +1518,7 @@ export class GetSCMPullRequestCommitsRequest extends Message<GetSCMPullRequestCo
   static readonly typeName = "aiserver.v1.GetSCMPullRequestCommitsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "after_cursor", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "after_cursor", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "skip_cache", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
@@ -1554,9 +1554,9 @@ export class GetSCMPullRequestCommitsResponse extends Message<GetSCMPullRequestC
   hasNextPage = false;
 
   /**
-   * @generated from field: string end_cursor = 3;
+   * @generated from field: optional string end_cursor = 3;
    */
-  endCursor = "";
+  endCursor?: string;
 
   constructor(data?: PartialMessage<GetSCMPullRequestCommitsResponse>) {
     super();
@@ -1568,7 +1568,7 @@ export class GetSCMPullRequestCommitsResponse extends Message<GetSCMPullRequestC
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "commits", kind: "message", T: SCMPullRequestCommit, repeated: true },
     { no: 2, name: "has_next_page", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "end_cursor", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "end_cursor", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetSCMPullRequestCommitsResponse {
@@ -1598,9 +1598,9 @@ export class GetSCMPullRequestTimelineEventsRequest extends Message<GetSCMPullRe
   prUrl = "";
 
   /**
-   * @generated from field: int32 page = 2;
+   * @generated from field: optional int32 page = 2;
    */
-  page = 0;
+  page?: number;
 
   /**
    * @generated from field: bool skip_cache = 3;
@@ -1616,7 +1616,7 @@ export class GetSCMPullRequestTimelineEventsRequest extends Message<GetSCMPullRe
   static readonly typeName = "aiserver.v1.GetSCMPullRequestTimelineEventsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "page", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 2, name: "page", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 3, name: "skip_cache", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
@@ -1652,9 +1652,9 @@ export class GetSCMPullRequestTimelineEventsResponse extends Message<GetSCMPullR
   hasNextPage = false;
 
   /**
-   * @generated from field: int32 next_page = 3;
+   * @generated from field: optional int32 next_page = 3;
    */
-  nextPage = 0;
+  nextPage?: number;
 
   constructor(data?: PartialMessage<GetSCMPullRequestTimelineEventsResponse>) {
     super();
@@ -1666,7 +1666,7 @@ export class GetSCMPullRequestTimelineEventsResponse extends Message<GetSCMPullR
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "events", kind: "message", T: SCMPullRequestTimelineEvent, repeated: true },
     { no: 2, name: "has_next_page", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "next_page", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 3, name: "next_page", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetSCMPullRequestTimelineEventsResponse {
@@ -1857,9 +1857,9 @@ export class SCMBatchGetPullRequestForBranchRequest extends Message<SCMBatchGetP
   branches: SCMBranchRef[] = [];
 
   /**
-   * @generated from field: bool skip_cache = 2;
+   * @generated from field: optional bool skip_cache = 2;
    */
-  skipCache = false;
+  skipCache?: boolean;
 
   constructor(data?: PartialMessage<SCMBatchGetPullRequestForBranchRequest>) {
     super();
@@ -1870,7 +1870,7 @@ export class SCMBatchGetPullRequestForBranchRequest extends Message<SCMBatchGetP
   static readonly typeName = "aiserver.v1.SCMBatchGetPullRequestForBranchRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "branches", kind: "message", T: SCMBranchRef, repeated: true },
-    { no: 2, name: "skip_cache", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "skip_cache", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SCMBatchGetPullRequestForBranchRequest {
@@ -2151,9 +2151,9 @@ export class SCMDisablePullRequestAutoMergeResponse extends Message<SCMDisablePu
   error = "";
 
   /**
-   * @generated from field: string pr_node_id = 3;
+   * @generated from field: optional string pr_node_id = 3;
    */
-  prNodeId = "";
+  prNodeId?: string;
 
   constructor(data?: PartialMessage<SCMDisablePullRequestAutoMergeResponse>) {
     super();
@@ -2165,7 +2165,7 @@ export class SCMDisablePullRequestAutoMergeResponse extends Message<SCMDisablePu
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "success", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 2, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "pr_node_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "pr_node_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SCMDisablePullRequestAutoMergeResponse {
@@ -2243,9 +2243,9 @@ export class SCMEnablePullRequestAutoMergeResponse extends Message<SCMEnablePull
   error = "";
 
   /**
-   * @generated from field: string pr_node_id = 3;
+   * @generated from field: optional string pr_node_id = 3;
    */
-  prNodeId = "";
+  prNodeId?: string;
 
   constructor(data?: PartialMessage<SCMEnablePullRequestAutoMergeResponse>) {
     super();
@@ -2257,7 +2257,7 @@ export class SCMEnablePullRequestAutoMergeResponse extends Message<SCMEnablePull
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "success", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 2, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "pr_node_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "pr_node_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SCMEnablePullRequestAutoMergeResponse {
@@ -2292,9 +2292,9 @@ export class SCMGetPullRequestForBranchRequest extends Message<SCMGetPullRequest
   branchName = "";
 
   /**
-   * @generated from field: bool skip_cache = 3;
+   * @generated from field: optional bool skip_cache = 3;
    */
-  skipCache = false;
+  skipCache?: boolean;
 
   constructor(data?: PartialMessage<SCMGetPullRequestForBranchRequest>) {
     super();
@@ -2306,7 +2306,7 @@ export class SCMGetPullRequestForBranchRequest extends Message<SCMGetPullRequest
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "skip_cache", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 3, name: "skip_cache", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SCMGetPullRequestForBranchRequest {
@@ -2501,9 +2501,9 @@ export class SCMMergePullRequestResponse extends Message<SCMMergePullRequestResp
   error = "";
 
   /**
-   * @generated from field: string pr_node_id = 3;
+   * @generated from field: optional string pr_node_id = 3;
    */
-  prNodeId = "";
+  prNodeId?: string;
 
   constructor(data?: PartialMessage<SCMMergePullRequestResponse>) {
     super();
@@ -2515,7 +2515,7 @@ export class SCMMergePullRequestResponse extends Message<SCMMergePullRequestResp
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "success", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 2, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "pr_node_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "pr_node_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SCMMergePullRequestResponse {
@@ -2580,14 +2580,14 @@ export class SCMPullRequest extends Message<SCMPullRequest> {
   repository = "";
 
   /**
-   * @generated from field: string head_ref_name = 9;
+   * @generated from field: optional string head_ref_name = 9;
    */
-  headRefName = "";
+  headRefName?: string;
 
   /**
-   * @generated from field: string base_ref_name = 10;
+   * @generated from field: optional string base_ref_name = 10;
    */
-  baseRefName = "";
+  baseRefName?: string;
 
   /**
    * @generated from field: aiserver.v1.SCMMergeability mergeable = 11;
@@ -2600,9 +2600,9 @@ export class SCMPullRequest extends Message<SCMPullRequest> {
   mergeStateStatus = "";
 
   /**
-   * @generated from field: string review_decision = 13;
+   * @generated from field: optional string review_decision = 13;
    */
-  reviewDecision = "";
+  reviewDecision?: string;
 
   /**
    * @generated from field: aiserver.v1.SCMCiStatus ci_status = 14;
@@ -2610,29 +2610,29 @@ export class SCMPullRequest extends Message<SCMPullRequest> {
   ciStatus = SCMCiStatus.SCM_CI_STATUS_UNSPECIFIED;
 
   /**
-   * @generated from field: string author_login = 15;
+   * @generated from field: optional string author_login = 15;
    */
-  authorLogin = "";
+  authorLogin?: string;
 
   /**
-   * @generated from field: string created_at = 16;
+   * @generated from field: optional string created_at = 16;
    */
-  createdAt = "";
+  createdAt?: string;
 
   /**
-   * @generated from field: string updated_at = 17;
+   * @generated from field: optional string updated_at = 17;
    */
-  updatedAt = "";
+  updatedAt?: string;
 
   /**
-   * @generated from field: string merged_at = 18;
+   * @generated from field: optional string merged_at = 18;
    */
-  mergedAt = "";
+  mergedAt?: string;
 
   /**
-   * @generated from field: string closed_at = 19;
+   * @generated from field: optional string closed_at = 19;
    */
-  closedAt = "";
+  closedAt?: string;
 
   /**
    * @generated from field: bool is_auto_merge_enabled = 20;
@@ -2640,24 +2640,24 @@ export class SCMPullRequest extends Message<SCMPullRequest> {
   isAutoMergeEnabled = false;
 
   /**
-   * @generated from field: bool viewer_can_enable_auto_merge = 21;
+   * @generated from field: optional bool viewer_can_enable_auto_merge = 21;
    */
-  viewerCanEnableAutoMerge = false;
+  viewerCanEnableAutoMerge?: boolean;
 
   /**
-   * @generated from field: string body = 22;
+   * @generated from field: optional string body = 22;
    */
-  body = "";
+  body?: string;
 
   /**
-   * @generated from field: int32 commit_count = 23;
+   * @generated from field: optional int32 commit_count = 23;
    */
-  commitCount = 0;
+  commitCount?: number;
 
   /**
-   * @generated from field: int32 review_count = 24;
+   * @generated from field: optional int32 review_count = 24;
    */
-  reviewCount = 0;
+  reviewCount?: number;
 
   /**
    * @generated from field: repeated aiserver.v1.SCMPullRequestReviewer reviewers = 25;
@@ -2670,9 +2670,9 @@ export class SCMPullRequest extends Message<SCMPullRequest> {
   requestedReviewers: SCMPullRequestRequestedReviewer[] = [];
 
   /**
-   * @generated from field: bool merge_status_degraded_by_rate_limit = 27;
+   * @generated from field: optional bool merge_status_degraded_by_rate_limit = 27;
    */
-  mergeStatusDegradedByRateLimit = false;
+  mergeStatusDegradedByRateLimit?: boolean;
 
   constructor(data?: PartialMessage<SCMPullRequest>) {
     super();
@@ -2690,25 +2690,25 @@ export class SCMPullRequest extends Message<SCMPullRequest> {
     { no: 6, name: "is_merged", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 7, name: "is_draft", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 8, name: "repository", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "head_ref_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "base_ref_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 9, name: "head_ref_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 10, name: "base_ref_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 11, name: "mergeable", kind: "enum", T: proto3.getEnumType(SCMMergeability) },
     { no: 12, name: "merge_state_status", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 13, name: "review_decision", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 13, name: "review_decision", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 14, name: "ci_status", kind: "enum", T: proto3.getEnumType(SCMCiStatus) },
-    { no: 15, name: "author_login", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 16, name: "created_at", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 17, name: "updated_at", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 18, name: "merged_at", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 19, name: "closed_at", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 15, name: "author_login", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 16, name: "created_at", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 17, name: "updated_at", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 18, name: "merged_at", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 19, name: "closed_at", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 20, name: "is_auto_merge_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 21, name: "viewer_can_enable_auto_merge", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 22, name: "body", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 23, name: "commit_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 24, name: "review_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 21, name: "viewer_can_enable_auto_merge", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 22, name: "body", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 23, name: "commit_count", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 24, name: "review_count", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 25, name: "reviewers", kind: "message", T: SCMPullRequestReviewer, repeated: true },
     { no: 26, name: "requested_reviewers", kind: "message", T: SCMPullRequestRequestedReviewer, repeated: true },
-    { no: 27, name: "merge_status_degraded_by_rate_limit", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 27, name: "merge_status_degraded_by_rate_limit", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SCMPullRequest {
@@ -2743,9 +2743,9 @@ export class SCMPullRequestCommit extends Message<SCMPullRequestCommit> {
   message = "";
 
   /**
-   * @generated from field: string committed_date = 3;
+   * @generated from field: optional string committed_date = 3;
    */
-  committedDate = "";
+  committedDate?: string;
 
   /**
    * @generated from field: int32 additions = 4;
@@ -2758,17 +2758,17 @@ export class SCMPullRequestCommit extends Message<SCMPullRequestCommit> {
   deletions = 0;
 
   /**
-   * @generated from field: int32 changed_files = 6;
+   * @generated from field: optional int32 changed_files = 6;
    */
-  changedFiles = 0;
+  changedFiles?: number;
 
   /**
-   * @generated from field: aiserver.v1.SCMPullRequestCommitUser author = 7;
+   * @generated from field: optional aiserver.v1.SCMPullRequestCommitUser author = 7;
    */
   author?: SCMPullRequestCommitUser;
 
   /**
-   * @generated from field: aiserver.v1.SCMPullRequestCommitUser committer = 8;
+   * @generated from field: optional aiserver.v1.SCMPullRequestCommitUser committer = 8;
    */
   committer?: SCMPullRequestCommitUser;
 
@@ -2787,12 +2787,12 @@ export class SCMPullRequestCommit extends Message<SCMPullRequestCommit> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "sha", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "committed_date", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "committed_date", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 4, name: "additions", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 5, name: "deletions", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 6, name: "changed_files", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 7, name: "author", kind: "message", T: SCMPullRequestCommitUser },
-    { no: 8, name: "committer", kind: "message", T: SCMPullRequestCommitUser },
+    { no: 6, name: "changed_files", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 7, name: "author", kind: "message", T: SCMPullRequestCommitUser, opt: true },
+    { no: 8, name: "committer", kind: "message", T: SCMPullRequestCommitUser, opt: true },
     { no: 9, name: "authors", kind: "message", T: SCMPullRequestCommitUser, repeated: true },
   ]);
 
@@ -2818,19 +2818,19 @@ export class SCMPullRequestCommit extends Message<SCMPullRequestCommit> {
  */
 export class SCMPullRequestCommitUser extends Message<SCMPullRequestCommitUser> {
   /**
-   * @generated from field: string name = 1;
+   * @generated from field: optional string name = 1;
    */
-  name = "";
+  name?: string;
 
   /**
-   * @generated from field: string email = 2;
+   * @generated from field: optional string email = 2;
    */
-  email = "";
+  email?: string;
 
   /**
-   * @generated from field: string avatar_url = 3;
+   * @generated from field: optional string avatar_url = 3;
    */
-  avatarUrl = "";
+  avatarUrl?: string;
 
   constructor(data?: PartialMessage<SCMPullRequestCommitUser>) {
     super();
@@ -2840,9 +2840,9 @@ export class SCMPullRequestCommitUser extends Message<SCMPullRequestCommitUser> 
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SCMPullRequestCommitUser";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "email", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "avatar_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "email", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "avatar_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SCMPullRequestCommitUser {
@@ -2872,9 +2872,9 @@ export class SCMPullRequestDiffFile extends Message<SCMPullRequestDiffFile> {
   filename = "";
 
   /**
-   * @generated from field: string previous_filename = 2;
+   * @generated from field: optional string previous_filename = 2;
    */
-  previousFilename = "";
+  previousFilename?: string;
 
   /**
    * @generated from field: aiserver.v1.SCMPullRequestDiffFileStatus status = 3;
@@ -2882,24 +2882,24 @@ export class SCMPullRequestDiffFile extends Message<SCMPullRequestDiffFile> {
   status = SCMPullRequestDiffFileStatus.SCM_PULL_REQUEST_DIFF_FILE_STATUS_UNSPECIFIED;
 
   /**
-   * @generated from field: string original_contents = 4;
+   * @generated from field: optional string original_contents = 4;
    */
-  originalContents = "";
+  originalContents?: string;
 
   /**
-   * @generated from field: string modified_contents = 5;
+   * @generated from field: optional string modified_contents = 5;
    */
-  modifiedContents = "";
+  modifiedContents?: string;
 
   /**
-   * @generated from field: string patch = 6;
+   * @generated from field: optional string patch = 6;
    */
-  patch = "";
+  patch?: string;
 
   /**
-   * @generated from field: bool is_generated = 7;
+   * @generated from field: optional bool is_generated = 7;
    */
-  isGenerated = false;
+  isGenerated?: boolean;
 
   constructor(data?: PartialMessage<SCMPullRequestDiffFile>) {
     super();
@@ -2910,12 +2910,12 @@ export class SCMPullRequestDiffFile extends Message<SCMPullRequestDiffFile> {
   static readonly typeName = "aiserver.v1.SCMPullRequestDiffFile";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "filename", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "previous_filename", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "previous_filename", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "status", kind: "enum", T: proto3.getEnumType(SCMPullRequestDiffFileStatus) },
-    { no: 4, name: "original_contents", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "modified_contents", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "patch", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "is_generated", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 4, name: "original_contents", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "modified_contents", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "patch", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "is_generated", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SCMPullRequestDiffFile {
@@ -2945,19 +2945,19 @@ export class SCMPullRequestRequestedReviewer extends Message<SCMPullRequestReque
   login = "";
 
   /**
-   * @generated from field: string name = 2;
+   * @generated from field: optional string name = 2;
    */
-  name = "";
+  name?: string;
 
   /**
-   * @generated from field: string avatar_url = 3;
+   * @generated from field: optional string avatar_url = 3;
    */
-  avatarUrl = "";
+  avatarUrl?: string;
 
   /**
-   * @generated from field: string kind = 4;
+   * @generated from field: optional string kind = 4;
    */
-  kind = "";
+  kind?: string;
 
   constructor(data?: PartialMessage<SCMPullRequestRequestedReviewer>) {
     super();
@@ -2968,9 +2968,9 @@ export class SCMPullRequestRequestedReviewer extends Message<SCMPullRequestReque
   static readonly typeName = "aiserver.v1.SCMPullRequestRequestedReviewer";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "login", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "avatar_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "kind", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "avatar_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "kind", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SCMPullRequestRequestedReviewer {
@@ -3000,19 +3000,19 @@ export class SCMPullRequestReviewer extends Message<SCMPullRequestReviewer> {
   login = "";
 
   /**
-   * @generated from field: string name = 2;
+   * @generated from field: optional string name = 2;
    */
-  name = "";
+  name?: string;
 
   /**
-   * @generated from field: string avatar_url = 3;
+   * @generated from field: optional string avatar_url = 3;
    */
-  avatarUrl = "";
+  avatarUrl?: string;
 
   /**
-   * @generated from field: string state = 4;
+   * @generated from field: optional string state = 4;
    */
-  state = "";
+  state?: string;
 
   constructor(data?: PartialMessage<SCMPullRequestReviewer>) {
     super();
@@ -3023,9 +3023,9 @@ export class SCMPullRequestReviewer extends Message<SCMPullRequestReviewer> {
   static readonly typeName = "aiserver.v1.SCMPullRequestReviewer";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "login", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "avatar_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "state", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "avatar_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "state", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SCMPullRequestReviewer {
@@ -3065,9 +3065,9 @@ export class SCMPullRequestStack extends Message<SCMPullRequestStack> {
   edges: SCMPullRequestStackEdge[] = [];
 
   /**
-   * @generated from field: string base_ref_name = 4;
+   * @generated from field: optional string base_ref_name = 4;
    */
-  baseRefName = "";
+  baseRefName?: string;
 
   constructor(data?: PartialMessage<SCMPullRequestStack>) {
     super();
@@ -3080,7 +3080,7 @@ export class SCMPullRequestStack extends Message<SCMPullRequestStack> {
     { no: 1, name: "source", kind: "enum", T: proto3.getEnumType(SCMPullRequestStackSource) },
     { no: 2, name: "members", kind: "message", T: SCMPullRequestStackMember, repeated: true },
     { no: 3, name: "edges", kind: "message", T: SCMPullRequestStackEdge, repeated: true },
-    { no: 4, name: "base_ref_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "base_ref_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SCMPullRequestStack {
@@ -3148,14 +3148,14 @@ export class SCMPullRequestStackEdge extends Message<SCMPullRequestStackEdge> {
  */
 export class SCMPullRequestStackMember extends Message<SCMPullRequestStackMember> {
   /**
-   * @generated from field: aiserver.v1.SCMPullRequest pull_request = 1;
+   * @generated from field: optional aiserver.v1.SCMPullRequest pull_request = 1;
    */
   pullRequest?: SCMPullRequest;
 
   /**
-   * @generated from field: int32 position = 2;
+   * @generated from field: optional int32 position = 2;
    */
-  position = 0;
+  position?: number;
 
   constructor(data?: PartialMessage<SCMPullRequestStackMember>) {
     super();
@@ -3165,8 +3165,8 @@ export class SCMPullRequestStackMember extends Message<SCMPullRequestStackMember
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SCMPullRequestStackMember";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "pull_request", kind: "message", T: SCMPullRequest },
-    { no: 2, name: "position", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 1, name: "pull_request", kind: "message", T: SCMPullRequest, opt: true },
+    { no: 2, name: "position", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SCMPullRequestStackMember {
@@ -3211,14 +3211,14 @@ export class SCMPullRequestStatus extends Message<SCMPullRequestStatus> {
   isDraft = false;
 
   /**
-   * @generated from field: bool degraded_by_rate_limit = 5;
+   * @generated from field: optional bool degraded_by_rate_limit = 5;
    */
-  degradedByRateLimit = false;
+  degradedByRateLimit?: boolean;
 
   /**
-   * @generated from field: string updated_at = 6;
+   * @generated from field: optional string updated_at = 6;
    */
-  updatedAt = "";
+  updatedAt?: string;
 
   constructor(data?: PartialMessage<SCMPullRequestStatus>) {
     super();
@@ -3232,8 +3232,8 @@ export class SCMPullRequestStatus extends Message<SCMPullRequestStatus> {
     { no: 2, name: "state", kind: "enum", T: proto3.getEnumType(SCMPullRequestState) },
     { no: 3, name: "is_merged", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 4, name: "is_draft", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "degraded_by_rate_limit", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 6, name: "updated_at", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "degraded_by_rate_limit", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 6, name: "updated_at", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SCMPullRequestStatus {
@@ -3263,14 +3263,14 @@ export class SCMPullRequestTimelineActor extends Message<SCMPullRequestTimelineA
   login = "";
 
   /**
-   * @generated from field: string avatar_url = 2;
+   * @generated from field: optional string avatar_url = 2;
    */
-  avatarUrl = "";
+  avatarUrl?: string;
 
   /**
-   * @generated from field: string name = 3;
+   * @generated from field: optional string name = 3;
    */
-  name = "";
+  name?: string;
 
   constructor(data?: PartialMessage<SCMPullRequestTimelineActor>) {
     super();
@@ -3281,8 +3281,8 @@ export class SCMPullRequestTimelineActor extends Message<SCMPullRequestTimelineA
   static readonly typeName = "aiserver.v1.SCMPullRequestTimelineActor";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "login", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "avatar_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "avatar_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SCMPullRequestTimelineActor {
@@ -3322,19 +3322,19 @@ export class SCMPullRequestTimelineEvent extends Message<SCMPullRequestTimelineE
   createdAt = "";
 
   /**
-   * @generated from field: aiserver.v1.SCMPullRequestTimelineActor actor = 4;
+   * @generated from field: optional aiserver.v1.SCMPullRequestTimelineActor actor = 4;
    */
   actor?: SCMPullRequestTimelineActor;
 
   /**
-   * @generated from field: string label = 5;
+   * @generated from field: optional string label = 5;
    */
-  label = "";
+  label?: string;
 
   /**
-   * @generated from field: string body = 6;
+   * @generated from field: optional string body = 6;
    */
-  body = "";
+  body?: string;
 
   constructor(data?: PartialMessage<SCMPullRequestTimelineEvent>) {
     super();
@@ -3347,9 +3347,9 @@ export class SCMPullRequestTimelineEvent extends Message<SCMPullRequestTimelineE
     { no: 1, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "event_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "created_at", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "actor", kind: "message", T: SCMPullRequestTimelineActor },
-    { no: 5, name: "label", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "body", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "actor", kind: "message", T: SCMPullRequestTimelineActor, opt: true },
+    { no: 5, name: "label", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "body", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SCMPullRequestTimelineEvent {

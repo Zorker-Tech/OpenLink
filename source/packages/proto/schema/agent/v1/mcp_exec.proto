@@ -17,22 +17,22 @@ message McpArgs {
   string tool_call_id = 3 [json_name = "toolCallId"];
   string provider_identifier = 4 [json_name = "providerIdentifier"];
   string tool_name = 5 [json_name = "toolName"];
-  .agent.v1.SmartModeApproval smart_mode_approval = 6 [json_name = "smartModeApproval"];
+  optional .agent.v1.SmartModeApproval smart_mode_approval = 6 [json_name = "smartModeApproval"];
   bool smart_mode_approval_only = 7 [json_name = "smartModeApprovalOnly"];
   bool skip_approval = 8 [json_name = "skipApproval"];
   string server_identifier = 9 [json_name = "serverIdentifier"];
 }
 
 message ListMcpResourcesExecArgs {
-  string server = 1 [json_name = "server"];
+  optional string server = 1 [json_name = "server"];
 }
 
 message ReadMcpResourceExecArgs {
   string server = 1 [json_name = "server"];
   string uri = 2 [json_name = "uri"];
-  string download_path = 3 [json_name = "downloadPath"];
+  optional string download_path = 3 [json_name = "downloadPath"];
   string tool_call_id = 4 [json_name = "toolCallId"];
-  .agent.v1.SmartModeApproval smart_mode_approval = 5 [json_name = "smartModeApproval"];
+  optional .agent.v1.SmartModeApproval smart_mode_approval = 5 [json_name = "smartModeApproval"];
 }
 
 message McpStateExecArgs {
@@ -60,9 +60,9 @@ message ListMcpResourcesExecResult {
   }
   message McpResource {
     string uri = 1 [json_name = "uri"];
-    string name = 2 [json_name = "name"];
-    string description = 3 [json_name = "description"];
-    string mime_type = 4 [json_name = "mimeType"];
+    optional string name = 2 [json_name = "name"];
+    optional string description = 3 [json_name = "description"];
+    optional string mime_type = 4 [json_name = "mimeType"];
     string server = 5 [json_name = "server"];
     map<string, string> annotations = 6 [json_name = "annotations"];
   }
@@ -100,22 +100,22 @@ message McpStateRejected {
 message McpStateServer {
   string server_name = 1 [json_name = "serverName"];
   string server_identifier = 2 [json_name = "serverIdentifier"];
-  string plugin = 3 [json_name = "plugin"];
-  string marketplace = 4 [json_name = "marketplace"];
+  optional string plugin = 3 [json_name = "plugin"];
+  optional string marketplace = 4 [json_name = "marketplace"];
   repeated .agent.v1.McpToolDefinition tools = 5 [json_name = "tools"];
   repeated .agent.v1.McpInstructions instructions = 6 [json_name = "instructions"];
-  string status = 7 [json_name = "status"];
-  string error_message = 8 [json_name = "errorMessage"];
+  optional string status = 7 [json_name = "status"];
+  optional string error_message = 8 [json_name = "errorMessage"];
 }
 
 message ReadMcpResourceSuccess {
   string uri = 1 [json_name = "uri"];
-  string name = 2 [json_name = "name"];
-  string description = 3 [json_name = "description"];
-  string mime_type = 4 [json_name = "mimeType"];
+  optional string name = 2 [json_name = "name"];
+  optional string description = 3 [json_name = "description"];
+  optional string mime_type = 4 [json_name = "mimeType"];
   map<string, string> annotations = 7 [json_name = "annotations"];
-  string download_path = 8 [json_name = "downloadPath"];
-  .agent.v1.OutputLocation output_location = 9 [json_name = "outputLocation"];
+  optional string download_path = 8 [json_name = "downloadPath"];
+  optional .agent.v1.OutputLocation output_location = 9 [json_name = "outputLocation"];
   oneof content {
     string text = 5 [json_name = "text"];
     bytes blob = 6 [json_name = "blob"];
@@ -151,7 +151,7 @@ message ListMcpResourcesRejected {
 message McpSuccess {
   repeated .agent.v1.McpToolResultContentItem content = 1 [json_name = "content"];
   bool is_error = 2 [json_name = "isError"];
-  .google.protobuf.Struct structured_content = 3 [json_name = "structuredContent"];
+  optional .google.protobuf.Struct structured_content = 3 [json_name = "structuredContent"];
 }
 
 message McpError {
@@ -190,7 +190,7 @@ message McpToolResultContentItem {
 
 message McpTextContent {
   string text = 1 [json_name = "text"];
-  .agent.v1.OutputLocation output_location = 2 [json_name = "outputLocation"];
+  optional .agent.v1.OutputLocation output_location = 2 [json_name = "outputLocation"];
 }
 
 message McpImageContent {

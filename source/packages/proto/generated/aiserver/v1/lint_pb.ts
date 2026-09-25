@@ -139,7 +139,7 @@ export class AiLintBug extends Message<AiLintBug> {
   message = "";
 
   /**
-   * @generated from field: aiserver.v1.SimpleRange replace_range = 3;
+   * @generated from field: optional aiserver.v1.SimpleRange replace_range = 3;
    */
   replaceRange?: SimpleRange;
 
@@ -154,7 +154,7 @@ export class AiLintBug extends Message<AiLintBug> {
   replaceInitialText = "";
 
   /**
-   * @generated from field: aiserver.v1.SimpleRange reevaluate_range = 6;
+   * @generated from field: optional aiserver.v1.SimpleRange reevaluate_range = 6;
    */
   reevaluateRange?: SimpleRange;
 
@@ -179,7 +179,7 @@ export class AiLintBug extends Message<AiLintBug> {
   discriminatorResults: LintDiscriminatorResult[] = [];
 
   /**
-   * @generated from field: aiserver.v1.LogprobsLintPayload logprobs_payload = 11;
+   * @generated from field: optional aiserver.v1.LogprobsLintPayload logprobs_payload = 11;
    */
   logprobsPayload?: LogprobsLintPayload;
 
@@ -193,15 +193,15 @@ export class AiLintBug extends Message<AiLintBug> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "replace_range", kind: "message", T: SimpleRange },
+    { no: 3, name: "replace_range", kind: "message", T: SimpleRange, opt: true },
     { no: 4, name: "replace_text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "replace_initial_text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "reevaluate_range", kind: "message", T: SimpleRange },
+    { no: 6, name: "reevaluate_range", kind: "message", T: SimpleRange, opt: true },
     { no: 7, name: "reevaluate_initial_text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 8, name: "uuid", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 9, name: "generator", kind: "enum", T: proto3.getEnumType(LintGenerator) },
     { no: 10, name: "discriminator_results", kind: "message", T: LintDiscriminatorResult, repeated: true },
-    { no: 11, name: "logprobs_payload", kind: "message", T: LogprobsLintPayload },
+    { no: 11, name: "logprobs_payload", kind: "message", T: LogprobsLintPayload, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AiLintBug {
@@ -394,7 +394,7 @@ export class AiLintInlineSuggestion extends Message<AiLintInlineSuggestion> {
   lineNumber = 0;
 
   /**
-   * @generated from field: aiserver.v1.SimpleRange reevaluate_range = 4;
+   * @generated from field: optional aiserver.v1.SimpleRange reevaluate_range = 4;
    */
   reevaluateRange?: SimpleRange;
 
@@ -419,7 +419,7 @@ export class AiLintInlineSuggestion extends Message<AiLintInlineSuggestion> {
     { no: 1, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "line_number", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 4, name: "reevaluate_range", kind: "message", T: SimpleRange },
+    { no: 4, name: "reevaluate_range", kind: "message", T: SimpleRange, opt: true },
     { no: 5, name: "reevaluate_initial_text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 8, name: "uuid", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
@@ -549,14 +549,14 @@ export class LintChunkRequest extends Message<LintChunkRequest> {
   relativeFilePath = "";
 
   /**
-   * @generated from field: aiserver.v1.LintChunk chunk = 2;
+   * @generated from field: optional aiserver.v1.LintChunk chunk = 2;
    */
   chunk?: LintChunk;
 
   /**
-   * @generated from field: bool use_speculative_linter = 3;
+   * @generated from field: optional bool use_speculative_linter = 3;
    */
-  useSpeculativeLinter = false;
+  useSpeculativeLinter?: boolean;
 
   constructor(data?: PartialMessage<LintChunkRequest>) {
     super();
@@ -567,8 +567,8 @@ export class LintChunkRequest extends Message<LintChunkRequest> {
   static readonly typeName = "aiserver.v1.LintChunkRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "relative_file_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "chunk", kind: "message", T: LintChunk },
-    { no: 3, name: "use_speculative_linter", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "chunk", kind: "message", T: LintChunk, opt: true },
+    { no: 3, name: "use_speculative_linter", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): LintChunkRequest {
@@ -635,7 +635,7 @@ export class LintExplanationRequest extends Message<LintExplanationRequest> {
   relativeFilePath = "";
 
   /**
-   * @generated from field: aiserver.v1.LintChunk chunk = 2;
+   * @generated from field: optional aiserver.v1.LintChunk chunk = 2;
    */
   chunk?: LintChunk;
 
@@ -673,7 +673,7 @@ export class LintExplanationRequest extends Message<LintExplanationRequest> {
   static readonly typeName = "aiserver.v1.LintExplanationRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "relative_file_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "chunk", kind: "message", T: LintChunk },
+    { no: 2, name: "chunk", kind: "message", T: LintChunk, opt: true },
     { no: 3, name: "line_selection", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "token_start_index", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 5, name: "token_end_index", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
@@ -868,17 +868,17 @@ export class LintFimChunkRequest extends Message<LintFimChunkRequest> {
   relativeFilePath = "";
 
   /**
-   * @generated from field: aiserver.v1.LintChunk prefix = 2;
+   * @generated from field: optional aiserver.v1.LintChunk prefix = 2;
    */
   prefix?: LintChunk;
 
   /**
-   * @generated from field: aiserver.v1.LintChunk suffix = 3;
+   * @generated from field: optional aiserver.v1.LintChunk suffix = 3;
    */
   suffix?: LintChunk;
 
   /**
-   * @generated from field: aiserver.v1.LintChunk middle = 4;
+   * @generated from field: optional aiserver.v1.LintChunk middle = 4;
    */
   middle?: LintChunk;
 
@@ -891,9 +891,9 @@ export class LintFimChunkRequest extends Message<LintFimChunkRequest> {
   static readonly typeName = "aiserver.v1.LintFimChunkRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "relative_file_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "prefix", kind: "message", T: LintChunk },
-    { no: 3, name: "suffix", kind: "message", T: LintChunk },
-    { no: 4, name: "middle", kind: "message", T: LintChunk },
+    { no: 2, name: "prefix", kind: "message", T: LintChunk, opt: true },
+    { no: 3, name: "suffix", kind: "message", T: LintChunk, opt: true },
+    { no: 4, name: "middle", kind: "message", T: LintChunk, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): LintFimChunkRequest {

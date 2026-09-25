@@ -11,8 +11,8 @@ import "agent/v1/pi_common.proto";
 
 message PiFindExecArgs {
   string pattern = 1 [json_name = "pattern"];
-  string path = 2 [json_name = "path"];
-  int32 limit = 3 [json_name = "limit"];
+  optional string path = 2 [json_name = "path"];
+  optional int32 limit = 3 [json_name = "limit"];
 }
 
 message PiFindExecResult {
@@ -24,8 +24,8 @@ message PiFindExecResult {
 
 message PiFindExecSuccess {
   string output = 1 [json_name = "output"];
-  .agent.v1.PiTruncation truncation = 2 [json_name = "truncation"];
-  uint32 result_limit_reached = 3 [json_name = "resultLimitReached"];
+  optional .agent.v1.PiTruncation truncation = 2 [json_name = "truncation"];
+  optional uint32 result_limit_reached = 3 [json_name = "resultLimitReached"];
 }
 
 message PiFindExecError {

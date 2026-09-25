@@ -22,7 +22,7 @@ export class KvServerMessage extends Message<KvServerMessage> {
   id = 0;
 
   /**
-   * @generated from field: agent.v1.SpanContext span_context = 4;
+   * @generated from field: optional agent.v1.SpanContext span_context = 4;
    */
   spanContext?: SpanContext;
 
@@ -52,7 +52,7 @@ export class KvServerMessage extends Message<KvServerMessage> {
   static readonly typeName = "agent.v1.KvServerMessage";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "id", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 4, name: "span_context", kind: "message", T: SpanContext },
+    { no: 4, name: "span_context", kind: "message", T: SpanContext, opt: true },
     { no: 2, name: "get_blob_args", kind: "message", T: GetBlobArgs, oneof: "message" },
     { no: 3, name: "set_blob_args", kind: "message", T: SetBlobArgs, oneof: "message" },
   ]);
@@ -215,12 +215,12 @@ export class KvClientMessage extends Message<KvClientMessage> {
  */
 export class GetBlobResult extends Message<GetBlobResult> {
   /**
-   * @generated from field: bytes blob_data = 1;
+   * @generated from field: optional bytes blob_data = 1;
    */
-  blobData = new Uint8Array(0);
+  blobData?: Uint8Array;
 
   /**
-   * @generated from field: agent.v1.Error error = 2;
+   * @generated from field: optional agent.v1.Error error = 2;
    */
   error?: Error;
 
@@ -232,8 +232,8 @@ export class GetBlobResult extends Message<GetBlobResult> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.GetBlobResult";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "blob_data", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
-    { no: 2, name: "error", kind: "message", T: Error },
+    { no: 1, name: "blob_data", kind: "scalar", T: 12 /* ScalarType.BYTES */, opt: true },
+    { no: 2, name: "error", kind: "message", T: Error, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBlobResult {
@@ -258,7 +258,7 @@ export class GetBlobResult extends Message<GetBlobResult> {
  */
 export class SetBlobResult extends Message<SetBlobResult> {
   /**
-   * @generated from field: agent.v1.Error error = 1;
+   * @generated from field: optional agent.v1.Error error = 1;
    */
   error?: Error;
 
@@ -270,7 +270,7 @@ export class SetBlobResult extends Message<SetBlobResult> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.SetBlobResult";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "error", kind: "message", T: Error },
+    { no: 1, name: "error", kind: "message", T: Error, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SetBlobResult {

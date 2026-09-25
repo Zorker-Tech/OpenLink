@@ -171,39 +171,39 @@ export class BugReport extends Message<BugReport> {
   description = "";
 
   /**
-   * @generated from field: float confidence = 4;
+   * @generated from field: optional float confidence = 4;
    */
-  confidence = 0;
+  confidence?: number;
 
   /**
-   * @generated from field: string category = 5;
+   * @generated from field: optional string category = 5;
    */
-  category = "";
+  category?: string;
 
   /**
-   * @generated from field: string severity = 6;
+   * @generated from field: optional string severity = 6;
    */
-  severity = "";
+  severity?: string;
 
   /**
-   * @generated from field: string title = 7;
+   * @generated from field: optional string title = 7;
    */
-  title = "";
+  title?: string;
 
   /**
-   * @generated from field: string rationale = 9;
+   * @generated from field: optional string rationale = 9;
    */
-  rationale = "";
+  rationale?: string;
 
   /**
-   * @generated from field: string triggered_by_rule_id = 10;
+   * @generated from field: optional string triggered_by_rule_id = 10;
    */
-  triggeredByRuleId = "";
+  triggeredByRuleId?: string;
 
   /**
-   * @generated from field: float model_confidence = 11;
+   * @generated from field: optional float model_confidence = 11;
    */
-  modelConfidence = 0;
+  modelConfidence?: number;
 
   constructor(data?: PartialMessage<BugReport>) {
     super();
@@ -216,13 +216,13 @@ export class BugReport extends Message<BugReport> {
     { no: 1, name: "locations", kind: "message", T: BugLocation, repeated: true },
     { no: 2, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "confidence", kind: "scalar", T: 2 /* ScalarType.FLOAT */ },
-    { no: 5, name: "category", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "severity", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "rationale", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "triggered_by_rule_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 11, name: "model_confidence", kind: "scalar", T: 2 /* ScalarType.FLOAT */ },
+    { no: 4, name: "confidence", kind: "scalar", T: 2 /* ScalarType.FLOAT */, opt: true },
+    { no: 5, name: "category", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "severity", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 9, name: "rationale", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 10, name: "triggered_by_rule_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 11, name: "model_confidence", kind: "scalar", T: 2 /* ScalarType.FLOAT */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReport {
@@ -302,29 +302,29 @@ export class BugLocation extends Message<BugLocation> {
  */
 export class StreamBugBotRequest extends Message<StreamBugBotRequest> {
   /**
-   * @generated from field: aiserver.v1.GitDiff git_diff = 1;
+   * @generated from field: optional aiserver.v1.GitDiff git_diff = 1;
    */
   gitDiff?: GitDiff;
 
   /**
-   * @generated from field: aiserver.v1.ModelDetails model_details = 2;
+   * @generated from field: optional aiserver.v1.ModelDetails model_details = 2;
    */
   modelDetails?: ModelDetails;
 
   /**
-   * @generated from field: string user_instructions = 3;
+   * @generated from field: optional string user_instructions = 3;
    */
-  userInstructions = "";
+  userInstructions?: string;
 
   /**
-   * @generated from field: string bug_detection_guidelines = 4;
+   * @generated from field: optional string bug_detection_guidelines = 4;
    */
-  bugDetectionGuidelines = "";
+  bugDetectionGuidelines?: string;
 
   /**
-   * @generated from field: int32 iterations = 5;
+   * @generated from field: optional int32 iterations = 5;
    */
-  iterations = 0;
+  iterations?: number;
 
   /**
    * @generated from field: bool in_background_subsidized = 6;
@@ -332,14 +332,14 @@ export class StreamBugBotRequest extends Message<StreamBugBotRequest> {
   inBackgroundSubsidized = false;
 
   /**
-   * @generated from field: string session_id = 7;
+   * @generated from field: optional string session_id = 7;
    */
-  sessionId = "";
+  sessionId?: string;
 
   /**
-   * @generated from field: string price_id = 8;
+   * @generated from field: optional string price_id = 8;
    */
-  priceId = "";
+  priceId?: string;
 
   /**
    * @generated from field: bool has_telemetry = 9;
@@ -347,19 +347,19 @@ export class StreamBugBotRequest extends Message<StreamBugBotRequest> {
   hasTelemetry = false;
 
   /**
-   * @generated from field: string constrain_to_file = 10;
+   * @generated from field: optional string constrain_to_file = 10;
    */
-  constrainToFile = "";
+  constrainToFile?: string;
 
   /**
-   * @generated from field: aiserver.v1.StreamBugBotRequest.Range constrain_to_range = 11;
+   * @generated from field: optional aiserver.v1.StreamBugBotRequest.Range constrain_to_range = 11;
    */
   constrainToRange?: StreamBugBotRequest_Range;
 
   /**
-   * @generated from field: int32 unified_context_lines = 12;
+   * @generated from field: optional int32 unified_context_lines = 12;
    */
-  unifiedContextLines = 0;
+  unifiedContextLines?: number;
 
   /**
    * @generated from field: repeated aiserver.v1.CodeBlock context_files = 13;
@@ -367,9 +367,9 @@ export class StreamBugBotRequest extends Message<StreamBugBotRequest> {
   contextFiles: CodeBlock[] = [];
 
   /**
-   * @generated from field: bool deep_review = 14;
+   * @generated from field: optional bool deep_review = 14;
    */
-  deepReview = false;
+  deepReview?: boolean;
 
   constructor(data?: PartialMessage<StreamBugBotRequest>) {
     super();
@@ -379,20 +379,20 @@ export class StreamBugBotRequest extends Message<StreamBugBotRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.StreamBugBotRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "git_diff", kind: "message", T: GitDiff },
-    { no: 2, name: "model_details", kind: "message", T: ModelDetails },
-    { no: 3, name: "user_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "bug_detection_guidelines", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "iterations", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 1, name: "git_diff", kind: "message", T: GitDiff, opt: true },
+    { no: 2, name: "model_details", kind: "message", T: ModelDetails, opt: true },
+    { no: 3, name: "user_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "bug_detection_guidelines", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "iterations", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 6, name: "in_background_subsidized", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 7, name: "session_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "price_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 7, name: "session_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "price_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 9, name: "has_telemetry", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 10, name: "constrain_to_file", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 11, name: "constrain_to_range", kind: "message", T: StreamBugBotRequest_Range },
-    { no: 12, name: "unified_context_lines", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 10, name: "constrain_to_file", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 11, name: "constrain_to_range", kind: "message", T: StreamBugBotRequest_Range, opt: true },
+    { no: 12, name: "unified_context_lines", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 13, name: "context_files", kind: "message", T: CodeBlock, repeated: true },
-    { no: 14, name: "deep_review", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 14, name: "deep_review", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StreamBugBotRequest {
@@ -470,9 +470,9 @@ export class AddBugbotFeedbackRequest extends Message<AddBugbotFeedbackRequest> 
   reaction = BugbotFeedbackReaction.UNSPECIFIED;
 
   /**
-   * @generated from field: string feedback = 3;
+   * @generated from field: optional string feedback = 3;
    */
-  feedback = "";
+  feedback?: string;
 
   constructor(data?: PartialMessage<AddBugbotFeedbackRequest>) {
     super();
@@ -484,7 +484,7 @@ export class AddBugbotFeedbackRequest extends Message<AddBugbotFeedbackRequest> 
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "comment_id", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 2, name: "reaction", kind: "enum", T: proto3.getEnumType(BugbotFeedbackReaction) },
-    { no: 3, name: "feedback", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "feedback", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AddBugbotFeedbackRequest {
@@ -546,12 +546,12 @@ export class AddBugbotFeedbackResponse extends Message<AddBugbotFeedbackResponse
  */
 export class BugBotDiscriminatorPromptProps extends Message<BugBotDiscriminatorPromptProps> {
   /**
-   * @generated from field: aiserver.v1.StreamBugBotRequest req = 1;
+   * @generated from field: optional aiserver.v1.StreamBugBotRequest req = 1;
    */
   req?: StreamBugBotRequest;
 
   /**
-   * @generated from field: aiserver.v1.BugReport bug = 2;
+   * @generated from field: optional aiserver.v1.BugReport bug = 2;
    */
   bug?: BugReport;
 
@@ -573,8 +573,8 @@ export class BugBotDiscriminatorPromptProps extends Message<BugBotDiscriminatorP
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.BugBotDiscriminatorPromptProps";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "req", kind: "message", T: StreamBugBotRequest },
-    { no: 2, name: "bug", kind: "message", T: BugReport },
+    { no: 1, name: "req", kind: "message", T: StreamBugBotRequest, opt: true },
+    { no: 2, name: "bug", kind: "message", T: BugReport, opt: true },
     { no: 3, name: "date", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "seed", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
@@ -601,7 +601,7 @@ export class BugBotDiscriminatorPromptProps extends Message<BugBotDiscriminatorP
  */
 export class BugBotDiscriminatorTrainingPromptProps extends Message<BugBotDiscriminatorTrainingPromptProps> {
   /**
-   * @generated from field: aiserver.v1.BugBotDiscriminatorPromptProps props = 1;
+   * @generated from field: optional aiserver.v1.BugBotDiscriminatorPromptProps props = 1;
    */
   props?: BugBotDiscriminatorPromptProps;
 
@@ -618,7 +618,7 @@ export class BugBotDiscriminatorTrainingPromptProps extends Message<BugBotDiscri
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.BugBotDiscriminatorTrainingPromptProps";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "props", kind: "message", T: BugBotDiscriminatorPromptProps },
+    { no: 1, name: "props", kind: "message", T: BugBotDiscriminatorPromptProps, opt: true },
     { no: 2, name: "is_real_bug", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
@@ -644,14 +644,14 @@ export class BugBotDiscriminatorTrainingPromptProps extends Message<BugBotDiscri
  */
 export class FileAndOutline extends Message<FileAndOutline> {
   /**
-   * @generated from field: aiserver.v1.CodeBlock file = 1;
+   * @generated from field: optional aiserver.v1.CodeBlock file = 1;
    */
   file?: CodeBlock;
 
   /**
-   * @generated from field: string outline = 2;
+   * @generated from field: optional string outline = 2;
    */
-  outline = "";
+  outline?: string;
 
   constructor(data?: PartialMessage<FileAndOutline>) {
     super();
@@ -661,8 +661,8 @@ export class FileAndOutline extends Message<FileAndOutline> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.FileAndOutline";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "file", kind: "message", T: CodeBlock },
-    { no: 2, name: "outline", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "file", kind: "message", T: CodeBlock, opt: true },
+    { no: 2, name: "outline", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): FileAndOutline {
@@ -741,9 +741,9 @@ export class GetBugBotRunEtaResponse extends Message<GetBugBotRunEtaResponse> {
   status = BugBotRunStatus.UNSPECIFIED;
 
   /**
-   * @generated from field: int64 estimated_completion_time_ms = 2;
+   * @generated from field: optional int64 estimated_completion_time_ms = 2;
    */
-  estimatedCompletionTimeMs = protoInt64.zero;
+  estimatedCompletionTimeMs?: bigint;
 
   constructor(data?: PartialMessage<GetBugBotRunEtaResponse>) {
     super();
@@ -754,7 +754,7 @@ export class GetBugBotRunEtaResponse extends Message<GetBugBotRunEtaResponse> {
   static readonly typeName = "aiserver.v1.GetBugBotRunEtaResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "status", kind: "enum", T: proto3.getEnumType(BugBotRunStatus) },
-    { no: 2, name: "estimated_completion_time_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
+    { no: 2, name: "estimated_completion_time_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugBotRunEtaResponse {
@@ -902,7 +902,7 @@ export class GetEncryptedBugDataRequest extends Message<GetEncryptedBugDataReque
  */
 export class GetEncryptedBugDataResponse extends Message<GetEncryptedBugDataResponse> {
   /**
-   * @generated from field: aiserver.v1.BugReport bug_report = 1;
+   * @generated from field: optional aiserver.v1.BugReport bug_report = 1;
    */
   bugReport?: BugReport;
 
@@ -914,7 +914,7 @@ export class GetEncryptedBugDataResponse extends Message<GetEncryptedBugDataResp
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetEncryptedBugDataResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "bug_report", kind: "message", T: BugReport },
+    { no: 1, name: "bug_report", kind: "message", T: BugReport, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetEncryptedBugDataResponse {
@@ -949,9 +949,9 @@ export class LogDeeplinkEventRequest extends Message<LogDeeplinkEventRequest> {
   bugId = "";
 
   /**
-   * @generated from field: int64 comment_id = 3;
+   * @generated from field: optional int64 comment_id = 3;
    */
-  commentId = protoInt64.zero;
+  commentId?: bigint;
 
   /**
    * @generated from field: aiserver.v1.BugbotDeeplinkEventKind event = 4;
@@ -968,7 +968,7 @@ export class LogDeeplinkEventRequest extends Message<LogDeeplinkEventRequest> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "user_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 2, name: "bug_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "comment_id", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
+    { no: 3, name: "comment_id", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
     { no: 4, name: "event", kind: "enum", T: proto3.getEnumType(BugbotDeeplinkEventKind) },
   ]);
 
@@ -1031,7 +1031,7 @@ export class LogDeeplinkEventResponse extends Message<LogDeeplinkEventResponse> 
  */
 export class RunBugBotPromptProps extends Message<RunBugBotPromptProps> {
   /**
-   * @generated from field: aiserver.v1.StreamBugBotRequest req = 1;
+   * @generated from field: optional aiserver.v1.StreamBugBotRequest req = 1;
    */
   req?: StreamBugBotRequest;
 
@@ -1051,9 +1051,9 @@ export class RunBugBotPromptProps extends Message<RunBugBotPromptProps> {
   contextFiles: FileAndOutline[] = [];
 
   /**
-   * @generated from field: string file_content_source = 5;
+   * @generated from field: optional string file_content_source = 5;
    */
-  fileContentSource = "";
+  fileContentSource?: string;
 
   constructor(data?: PartialMessage<RunBugBotPromptProps>) {
     super();
@@ -1063,11 +1063,11 @@ export class RunBugBotPromptProps extends Message<RunBugBotPromptProps> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.RunBugBotPromptProps";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "req", kind: "message", T: StreamBugBotRequest },
+    { no: 1, name: "req", kind: "message", T: StreamBugBotRequest, opt: true },
     { no: 2, name: "seed", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "date", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "context_files", kind: "message", T: FileAndOutline, repeated: true },
-    { no: 5, name: "file_content_source", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "file_content_source", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RunBugBotPromptProps {

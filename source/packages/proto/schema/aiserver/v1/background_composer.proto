@@ -49,15 +49,15 @@ message AbortPromptUploadResponse {
 message AcquireAgentStoreFileLockRequest {
   string store_id = 1 [json_name = "storeId"];
   string rel_path = 2 [json_name = "relPath"];
-  .aiserver.v1.AgentStoreFileLockHolder holder = 3 [json_name = "holder"];
+  optional .aiserver.v1.AgentStoreFileLockHolder holder = 3 [json_name = "holder"];
   string acquisition_id = 4 [json_name = "acquisitionId"];
-  int64 ttl_seconds = 5 [json_name = "ttlSeconds"];
+  optional int64 ttl_seconds = 5 [json_name = "ttlSeconds"];
 }
 
 message AcquireAgentStoreFileLockResponse {
   bool acquired = 1 [json_name = "acquired"];
-  string lock_token = 2 [json_name = "lockToken"];
-  .aiserver.v1.AgentStoreFileLockHolder current_holder = 3 [json_name = "currentHolder"];
+  optional string lock_token = 2 [json_name = "lockToken"];
+  optional .aiserver.v1.AgentStoreFileLockHolder current_holder = 3 [json_name = "currentHolder"];
   int64 expires_at_ms = 4 [json_name = "expiresAtMs"];
 }
 
@@ -66,24 +66,24 @@ message AddAsyncFollowupBackgroundComposerRequest {
   string followup = 2 [json_name = "followup"];
   bool synchronous = 3 [json_name = "synchronous"];
   string rich_followup = 4 [json_name = "richFollowup"];
-  .aiserver.v1.ConversationMessage followup_message = 5 [json_name = "followupMessage"];
-  .aiserver.v1.ModelDetails model_details = 6 [json_name = "modelDetails"];
-  .aiserver.v1.BackgroundComposerSource followup_source = 7 [json_name = "followupSource"];
-  bool continue_rebase = 8 [json_name = "continueRebase"];
-  .aiserver.v1.PlanFollowupType plan_followup_type = 9 [json_name = "planFollowupType"];
-  .agent.v1.ConversationAction followup_conversation_action = 10 [json_name = "followupConversationAction"];
-  string followup_id = 11 [json_name = "followupId"];
-  int64 time_budget_ms = 12 [json_name = "timeBudgetMs"];
-  int64 time_budget_seconds = 13 [json_name = "timeBudgetSeconds"];
-  string followup_system_reminder = 14 [json_name = "followupSystemReminder"];
-  .agent.v1.RequestedModel requested_model = 15 [json_name = "requestedModel"];
-  string mcp_config_json = 16 [json_name = "mcpConfigJson"];
+  optional .aiserver.v1.ConversationMessage followup_message = 5 [json_name = "followupMessage"];
+  optional .aiserver.v1.ModelDetails model_details = 6 [json_name = "modelDetails"];
+  optional .aiserver.v1.BackgroundComposerSource followup_source = 7 [json_name = "followupSource"];
+  optional bool continue_rebase = 8 [json_name = "continueRebase"];
+  optional .aiserver.v1.PlanFollowupType plan_followup_type = 9 [json_name = "planFollowupType"];
+  optional .agent.v1.ConversationAction followup_conversation_action = 10 [json_name = "followupConversationAction"];
+  optional string followup_id = 11 [json_name = "followupId"];
+  optional int64 time_budget_ms = 12 [json_name = "timeBudgetMs"];
+  optional int64 time_budget_seconds = 13 [json_name = "timeBudgetSeconds"];
+  optional string followup_system_reminder = 14 [json_name = "followupSystemReminder"];
+  optional .agent.v1.RequestedModel requested_model = 15 [json_name = "requestedModel"];
+  optional string mcp_config_json = 16 [json_name = "mcpConfigJson"];
   repeated string requested_additional_store_ids = 17 [json_name = "requestedAdditionalStoreIds"];
   map<string, string> run_env_vars = 18 [json_name = "runEnvVars"];
   repeated .aiserver.v1.AgentStoreMount store_mounts = 19 [json_name = "storeMounts"];
-  string resubmit_from_message_id = 20 [json_name = "resubmitFromMessageId"];
-  bool use_experimental_model_opt_out = 21 [json_name = "useExperimentalModelOptOut"];
-  string coalescing_key = 22 [json_name = "coalescingKey"];
+  optional string resubmit_from_message_id = 20 [json_name = "resubmitFromMessageId"];
+  optional bool use_experimental_model_opt_out = 21 [json_name = "useExperimentalModelOptOut"];
+  optional string coalescing_key = 22 [json_name = "coalescingKey"];
 }
 
 message AddAsyncFollowupBackgroundComposerResponse {
@@ -95,13 +95,13 @@ message AddPullRequestReviewCommentRequest {
   string path = 2 [json_name = "path"];
   string body = 3 [json_name = "body"];
   int32 line = 4 [json_name = "line"];
-  int32 start_line = 5 [json_name = "startLine"];
-  string diff_side = 6 [json_name = "diffSide"];
-  string commit_oid = 7 [json_name = "commitOid"];
+  optional int32 start_line = 5 [json_name = "startLine"];
+  optional string diff_side = 6 [json_name = "diffSide"];
+  optional string commit_oid = 7 [json_name = "commitOid"];
 }
 
 message AddPullRequestReviewCommentResponse {
-  .aiserver.v1.PRReviewThread thread = 1 [json_name = "thread"];
+  optional .aiserver.v1.PRReviewThread thread = 1 [json_name = "thread"];
 }
 
 message AdminDeleteNamedAgentRequest {
@@ -123,9 +123,9 @@ message AdminListTeamNamedAgentsResponse {
 }
 
 message AdminListUserPrivateWorkersRequest {
-  string auth_id = 1 [json_name = "authId"];
-  int32 user_id = 2 [json_name = "userId"];
-  string email = 3 [json_name = "email"];
+  optional string auth_id = 1 [json_name = "authId"];
+  optional int32 user_id = 2 [json_name = "userId"];
+  optional string email = 3 [json_name = "email"];
 }
 
 message AdminListUserPrivateWorkersResponse {
@@ -140,10 +140,10 @@ message AdminListUserPrivateWorkersResponse {
 
 message AdminNamedAgent {
   string named_agent_id = 1 [json_name = "namedAgentId"];
-  string name = 2 [json_name = "name"];
-  string profile_picture_url = 3 [json_name = "profilePictureUrl"];
-  int32 owning_user = 4 [json_name = "owningUser"];
-  int32 owning_team = 5 [json_name = "owningTeam"];
+  optional string name = 2 [json_name = "name"];
+  optional string profile_picture_url = 3 [json_name = "profilePictureUrl"];
+  optional int32 owning_user = 4 [json_name = "owningUser"];
+  optional int32 owning_team = 5 [json_name = "owningTeam"];
   string created_at = 6 [json_name = "createdAt"];
   string updated_at = 7 [json_name = "updatedAt"];
   repeated .aiserver.v1.AdminNamedAgentSession sessions = 8 [json_name = "sessions"];
@@ -158,16 +158,16 @@ message AdminNamedAgentSession {
 message AdmittedCustomModeState {
   string id = 1 [json_name = "id"];
   string label = 2 [json_name = "label"];
-  string icon = 3 [json_name = "icon"];
-  string color = 4 [json_name = "color"];
+  optional string icon = 3 [json_name = "icon"];
+  optional string color = 4 [json_name = "color"];
   .agent.v1.CustomModeSource source = 5 [json_name = "source"];
-  string source_path = 6 [json_name = "sourcePath"];
-  string source_hash = 7 [json_name = "sourceHash"];
+  optional string source_path = 6 [json_name = "sourcePath"];
+  optional string source_hash = 7 [json_name = "sourceHash"];
   string active_reminder = 8 [json_name = "activeReminder"];
   string admitted_by_turn_id = 9 [json_name = "admittedByTurnId"];
-  string description = 10 [json_name = "description"];
-  string managed_skill_id = 11 [json_name = "managedSkillId"];
-  string plugin_id = 12 [json_name = "pluginId"];
+  optional string description = 10 [json_name = "description"];
+  optional string managed_skill_id = 11 [json_name = "managedSkillId"];
+  optional string plugin_id = 12 [json_name = "pluginId"];
 }
 
 message AgentStore {
@@ -177,10 +177,10 @@ message AgentStore {
   repeated string repo_urls = 8 [json_name = "repoUrls"];
   repeated .aiserver.v1.SharedAgentStoreInfo shares = 9 [json_name = "shares"];
   .aiserver.v1.AgentStoreKind kind = 10 [json_name = "kind"];
-  double last_file_write_at_ms = 11 [json_name = "lastFileWriteAtMs"];
+  optional double last_file_write_at_ms = 11 [json_name = "lastFileWriteAtMs"];
   string source_id = 12 [json_name = "sourceId"];
-  string source_display_name = 13 [json_name = "sourceDisplayName"];
-  .aiserver.v1.AgentStoreSourceRef source = 14 [json_name = "source"];
+  optional string source_display_name = 13 [json_name = "sourceDisplayName"];
+  optional .aiserver.v1.AgentStoreSourceRef source = 14 [json_name = "source"];
 }
 
 message AgentStoreConflictWriteInstruction {
@@ -188,20 +188,20 @@ message AgentStoreConflictWriteInstruction {
   string url = 2 [json_name = "url"];
   map<string, string> headers = 3 [json_name = "headers"];
   int64 expires_at_ms = 4 [json_name = "expiresAtMs"];
-  .aiserver.v1.AgentStoreMultipartWriteInstruction multipart = 5 [json_name = "multipart"];
+  optional .aiserver.v1.AgentStoreMultipartWriteInstruction multipart = 5 [json_name = "multipart"];
 }
 
 message AgentStoreDeleteFileEntry {
   string rel_path = 1 [json_name = "relPath"];
   string base_etag = 2 [json_name = "baseEtag"];
-  string mutation_id = 3 [json_name = "mutationId"];
+  optional string mutation_id = 3 [json_name = "mutationId"];
 }
 
 message AgentStoreDeleteFileResult {
   string rel_path = 1 [json_name = "relPath"];
   .aiserver.v1.AgentStoreDeleteFileStatus status = 2 [json_name = "status"];
   string tombstone_etag = 3 [json_name = "tombstoneEtag"];
-  string current_etag = 4 [json_name = "currentEtag"];
+  optional string current_etag = 4 [json_name = "currentEtag"];
 }
 
 enum AgentStoreDeleteFileStatus {
@@ -221,8 +221,8 @@ message AgentStoreEntry {
   string name = 1 [json_name = "name"];
   string relative_path = 2 [json_name = "relativePath"];
   .aiserver.v1.AgentStoreEntryKind kind = 3 [json_name = "kind"];
-  int64 size_bytes = 4 [json_name = "sizeBytes"];
-  double updated_at_ms = 5 [json_name = "updatedAtMs"];
+  optional int64 size_bytes = 4 [json_name = "sizeBytes"];
+  optional double updated_at_ms = 5 [json_name = "updatedAtMs"];
 }
 
 enum AgentStoreEntryKind {
@@ -254,13 +254,13 @@ enum AgentStoreKind {
 }
 
 message AgentStoreLockRedirect {
-  .aiserver.v1.AgentStoreFileLockHolder holder = 1 [json_name = "holder"];
+  optional .aiserver.v1.AgentStoreFileLockHolder holder = 1 [json_name = "holder"];
   string conflict_rel_path = 2 [json_name = "conflictRelPath"];
   int64 lock_expires_at_ms = 3 [json_name = "lockExpiresAtMs"];
 }
 
 message AgentStoreMount {
-  string mount_name = 1 [json_name = "mountName"];
+  optional string mount_name = 1 [json_name = "mountName"];
   bool server_generated = 5 [json_name = "serverGenerated"];
   oneof target {
     .aiserver.v1.AgentStoreSourceRef source = 2 [json_name = "source"];
@@ -333,16 +333,16 @@ message AgentStoreMultipartUploadedPart {
 }
 
 message AgentStoreMultipartWriteAbort {
-  .aiserver.v1.AgentStoreMultipartUploadContext context = 1 [json_name = "context"];
+  optional .aiserver.v1.AgentStoreMultipartUploadContext context = 1 [json_name = "context"];
 }
 
 message AgentStoreMultipartWriteCompletion {
-  .aiserver.v1.AgentStoreMultipartUploadContext context = 1 [json_name = "context"];
+  optional .aiserver.v1.AgentStoreMultipartUploadContext context = 1 [json_name = "context"];
   repeated .aiserver.v1.AgentStoreMultipartUploadedPart parts = 2 [json_name = "parts"];
 }
 
 message AgentStoreMultipartWriteInstruction {
-  .aiserver.v1.AgentStoreMultipartUploadContext context = 1 [json_name = "context"];
+  optional .aiserver.v1.AgentStoreMultipartUploadContext context = 1 [json_name = "context"];
   repeated .aiserver.v1.AgentStoreMultipartUploadPartInstruction parts = 2 [json_name = "parts"];
   int64 part_urls_expires_at_ms = 3 [json_name = "partUrlsExpiresAtMs"];
 }
@@ -409,20 +409,20 @@ message AgentStoreWriteInstruction {
   string url = 2 [json_name = "url"];
   map<string, string> headers = 3 [json_name = "headers"];
   int64 expires_at_ms = 4 [json_name = "expiresAtMs"];
-  .aiserver.v1.AgentStoreConflictWriteInstruction conflict = 5 [json_name = "conflict"];
-  .aiserver.v1.AgentStoreLockRedirect lock_redirect = 6 [json_name = "lockRedirect"];
-  .aiserver.v1.AgentStoreMultipartWriteInstruction multipart = 7 [json_name = "multipart"];
+  optional .aiserver.v1.AgentStoreConflictWriteInstruction conflict = 5 [json_name = "conflict"];
+  optional .aiserver.v1.AgentStoreLockRedirect lock_redirect = 6 [json_name = "lockRedirect"];
+  optional .aiserver.v1.AgentStoreMultipartWriteInstruction multipart = 7 [json_name = "multipart"];
   bool primary_precondition_failed = 8 [json_name = "primaryPreconditionFailed"];
 }
 
 message AgentWorkspaceBinding {
   string id = 1 [json_name = "id"];
   string display_name = 2 [json_name = "displayName"];
-  .aiserver.v1.PrivateWorkspaceIdentifier private_workspace_identifier = 3 [json_name = "privateWorkspaceIdentifier"];
+  optional .aiserver.v1.PrivateWorkspaceIdentifier private_workspace_identifier = 3 [json_name = "privateWorkspaceIdentifier"];
 }
 
 message AggregateCloudAgentRunsForDashboardRequest {
-  .aiserver.v1.CloudAgentDashboardRunFilter filter = 1 [json_name = "filter"];
+  optional .aiserver.v1.CloudAgentDashboardRunFilter filter = 1 [json_name = "filter"];
   int32 tz_offset_minutes = 2 [json_name = "tzOffsetMinutes"];
 }
 
@@ -435,7 +435,7 @@ message ArchiveBackgroundComposerRequest {
   bool unarchive = 2 [json_name = "unarchive"];
   bool only_notify_runner = 3 [json_name = "onlyNotifyRunner"];
   .aiserver.v1.BackgroundComposerSource source = 4 [json_name = "source"];
-  bool close_pull_request = 5 [json_name = "closePullRequest"];
+  optional bool close_pull_request = 5 [json_name = "closePullRequest"];
 }
 
 message ArchiveBackgroundComposerResponse {
@@ -444,7 +444,7 @@ message ArchiveBackgroundComposerResponse {
 
 message ArchiveRepoBackgroundComposersRequest {
   repeated string repo_urls = 1 [json_name = "repoUrls"];
-  int32 team_id = 2 [json_name = "teamId"];
+  optional int32 team_id = 2 [json_name = "teamId"];
   .aiserver.v1.BackgroundComposerSource source = 3 [json_name = "source"];
   bool dry_run = 4 [json_name = "dryRun"];
   bool remove_repo_environment_json = 5 [json_name = "removeRepoEnvironmentJson"];
@@ -461,57 +461,57 @@ message ArchiveRepoBackgroundComposersResponse {
 
 message AttachAgentStartupTraceRequest {
   string bc_id = 1 [json_name = "bcId"];
-  string last_event_id = 2 [json_name = "lastEventId"];
+  optional string last_event_id = 2 [json_name = "lastEventId"];
 }
 
 message AttachAgentStartupTraceResponse {
   string event_id = 1 [json_name = "eventId"];
-  .aiserver.v1.AgentStartupTraceEvent trace_event = 3 [json_name = "traceEvent"];
+  optional .aiserver.v1.AgentStartupTraceEvent trace_event = 3 [json_name = "traceEvent"];
 }
 
 message AttachBackgroundComposerLogsRequest {
   string bc_id = 1 [json_name = "bcId"];
-  string last_event_id = 2 [json_name = "lastEventId"];
-  uint32 worker_index = 3 [json_name = "workerIndex"];
-  string last_docker_build_event_id = 4 [json_name = "lastDockerBuildEventId"];
-  string last_setup_event_id = 5 [json_name = "lastSetupEventId"];
-  string associated_pod_key = 6 [json_name = "associatedPodKey"];
+  optional string last_event_id = 2 [json_name = "lastEventId"];
+  optional uint32 worker_index = 3 [json_name = "workerIndex"];
+  optional string last_docker_build_event_id = 4 [json_name = "lastDockerBuildEventId"];
+  optional string last_setup_event_id = 5 [json_name = "lastSetupEventId"];
+  optional string associated_pod_key = 6 [json_name = "associatedPodKey"];
 }
 
 message AttachBackgroundComposerLogsResponse {
-  .aiserver.v1.AttachBackgroundComposerLogsResponse.Event event = 1 [json_name = "event"];
-  .anyrun.v1.PodStatus updated_status = 2 [json_name = "updatedStatus"];
-  .aiserver.v1.ErrorDetails start_error = 3 [json_name = "startError"];
+  optional .aiserver.v1.AttachBackgroundComposerLogsResponse.Event event = 1 [json_name = "event"];
+  optional .anyrun.v1.PodStatus updated_status = 2 [json_name = "updatedStatus"];
+  optional .aiserver.v1.ErrorDetails start_error = 3 [json_name = "startError"];
   message Event {
     string event_id = 1 [json_name = "eventId"];
-    .anyrun.v1.PodEvent event = 2 [json_name = "event"];
-    .aiserver.v1.WaterfallUpdate waterfall_update = 3 [json_name = "waterfallUpdate"];
+    optional .anyrun.v1.PodEvent event = 2 [json_name = "event"];
+    optional .aiserver.v1.WaterfallUpdate waterfall_update = 3 [json_name = "waterfallUpdate"];
   }
 }
 
 message AttachBackgroundComposerPodRequest {
   string pod_id = 1 [json_name = "podId"];
-  string last_event_id = 2 [json_name = "lastEventId"];
+  optional string last_event_id = 2 [json_name = "lastEventId"];
 }
 
 message AttachBackgroundComposerPodResponse {
-  .aiserver.v1.AttachBackgroundComposerPodResponse.Event event = 1 [json_name = "event"];
-  .anyrun.v1.PodStatus updated_status = 2 [json_name = "updatedStatus"];
+  optional .aiserver.v1.AttachBackgroundComposerPodResponse.Event event = 1 [json_name = "event"];
+  optional .anyrun.v1.PodStatus updated_status = 2 [json_name = "updatedStatus"];
   message Event {
     string event_id = 1 [json_name = "eventId"];
-    .anyrun.v1.PodEvent event = 2 [json_name = "event"];
+    optional .anyrun.v1.PodEvent event = 2 [json_name = "event"];
   }
 }
 
 message AttachBackgroundComposerRequest {
   string bc_id = 1 [json_name = "bcId"];
-  int32 starting_index = 2 [json_name = "startingIndex"];
+  optional int32 starting_index = 2 [json_name = "startingIndex"];
 }
 
 message AttachBackgroundComposerResponse {
-  .aiserver.v1.HeadlessAgenticComposerResponse headless_agentic_composer_response = 1 [json_name = "headlessAgenticComposerResponse"];
-  .aiserver.v1.HeadlessAgenticComposerPrompt prompt = 2 [json_name = "prompt"];
-  .aiserver.v1.GitDiff diff_since_start = 3 [json_name = "diffSinceStart"];
+  optional .aiserver.v1.HeadlessAgenticComposerResponse headless_agentic_composer_response = 1 [json_name = "headlessAgenticComposerResponse"];
+  optional .aiserver.v1.HeadlessAgenticComposerPrompt prompt = 2 [json_name = "prompt"];
+  optional .aiserver.v1.GitDiff diff_since_start = 3 [json_name = "diffSinceStart"];
   string starting_commit = 4 [json_name = "startingCommit"];
   string base_branch = 5 [json_name = "baseBranch"];
   .aiserver.v1.BackgroundComposerStatus status_update = 6 [json_name = "statusUpdate"];
@@ -519,7 +519,7 @@ message AttachBackgroundComposerResponse {
 
 message AttachEnvironmentBuildLogRequest {
   string build_id = 1 [json_name = "buildId"];
-  string cursor = 2 [json_name = "cursor"];
+  optional string cursor = 2 [json_name = "cursor"];
 }
 
 message AttachEnvironmentBuildLogResponse {
@@ -561,39 +561,39 @@ message BackgroundComposer {
   string pr_url = 22 [json_name = "prUrl"];
   bool is_pr_merged = 23 [json_name = "isPrMerged"];
   string github_issue_id = 24 [json_name = "githubIssueId"];
-  int32 lines_added = 25 [json_name = "linesAdded"];
-  int32 lines_removed = 26 [json_name = "linesRemoved"];
-  int32 files_changed = 27 [json_name = "filesChanged"];
-  .aiserver.v1.ModelDetails model_details = 28 [json_name = "modelDetails"];
+  optional int32 lines_added = 25 [json_name = "linesAdded"];
+  optional int32 lines_removed = 26 [json_name = "linesRemoved"];
+  optional int32 files_changed = 27 [json_name = "filesChanged"];
+  optional .aiserver.v1.ModelDetails model_details = 28 [json_name = "modelDetails"];
   string triggered_principal_type = 29 [json_name = "triggeredPrincipalType"];
   string triggered_principal_id = 30 [json_name = "triggeredPrincipalId"];
   string visibility = 31 [json_name = "visibility"];
   .aiserver.v1.EnsembleStatus ensemble_status = 32 [json_name = "ensembleStatus"];
-  string workflow_id = 33 [json_name = "workflowId"];
-  string agent_session_id = 34 [json_name = "agentSessionId"];
-  string kickoff_message_id = 35 [json_name = "kickoffMessageId"];
-  string grind_phase = 36 [json_name = "grindPhase"];
-  int32 commit_count = 37 [json_name = "commitCount"];
-  string latest_commit_sha = 38 [json_name = "latestCommitSha"];
-  string latest_commit_message = 39 [json_name = "latestCommitMessage"];
-  double last_message_activity_at_ms = 40 [json_name = "lastMessageActivityAtMs"];
-  string owning_service_account = 41 [json_name = "owningServiceAccount"];
-  string owning_service_account_name = 42 [json_name = "owningServiceAccountName"];
-  .aiserver.v1.PRStatus pr_status = 43 [json_name = "prStatus"];
+  optional string workflow_id = 33 [json_name = "workflowId"];
+  optional string agent_session_id = 34 [json_name = "agentSessionId"];
+  optional string kickoff_message_id = 35 [json_name = "kickoffMessageId"];
+  optional string grind_phase = 36 [json_name = "grindPhase"];
+  optional int32 commit_count = 37 [json_name = "commitCount"];
+  optional string latest_commit_sha = 38 [json_name = "latestCommitSha"];
+  optional string latest_commit_message = 39 [json_name = "latestCommitMessage"];
+  optional double last_message_activity_at_ms = 40 [json_name = "lastMessageActivityAtMs"];
+  optional string owning_service_account = 41 [json_name = "owningServiceAccount"];
+  optional string owning_service_account_name = 42 [json_name = "owningServiceAccountName"];
+  optional .aiserver.v1.PRStatus pr_status = 43 [json_name = "prStatus"];
   repeated int32 participant_user_ids = 45 [json_name = "participantUserIds"];
-  .aiserver.v1.ExternalSourceMetadata external_source_metadata = 57 [json_name = "externalSourceMetadata"];
-  string worker_id = 58 [json_name = "workerId"];
-  .agent.v1.RequestedModel requested_model = 59 [json_name = "requestedModel"];
-  bool use_private_worker = 60 [json_name = "usePrivateWorker"];
-  .aiserver.v1.CloudSubagentParentReference cloud_subagent_parent = 61 [json_name = "cloudSubagentParent"];
+  optional .aiserver.v1.ExternalSourceMetadata external_source_metadata = 57 [json_name = "externalSourceMetadata"];
+  optional string worker_id = 58 [json_name = "workerId"];
+  optional .agent.v1.RequestedModel requested_model = 59 [json_name = "requestedModel"];
+  optional bool use_private_worker = 60 [json_name = "usePrivateWorker"];
+  optional .aiserver.v1.CloudSubagentParentReference cloud_subagent_parent = 61 [json_name = "cloudSubagentParent"];
   repeated string repo_urls = 62 [json_name = "repoUrls"];
-  string environment_name = 63 [json_name = "environmentName"];
-  .aiserver.v1.PrivateWorkspaceIdentifier private_workspace_identifier = 64 [json_name = "privateWorkspaceIdentifier"];
-  string private_worker_display_name = 65 [json_name = "privateWorkerDisplayName"];
-  .aiserver.v1.AgentWorkspaceBinding workspace_binding = 66 [json_name = "workspaceBinding"];
-  bool use_experimental_model_opt_out = 67 [json_name = "useExperimentalModelOptOut"];
-  .aiserver.v1.SideChatInfo side_chat_info = 68 [json_name = "sideChatInfo"];
-  string manager_agent_id = 69 [json_name = "managerAgentId"];
+  optional string environment_name = 63 [json_name = "environmentName"];
+  optional .aiserver.v1.PrivateWorkspaceIdentifier private_workspace_identifier = 64 [json_name = "privateWorkspaceIdentifier"];
+  optional string private_worker_display_name = 65 [json_name = "privateWorkerDisplayName"];
+  optional .aiserver.v1.AgentWorkspaceBinding workspace_binding = 66 [json_name = "workspaceBinding"];
+  optional bool use_experimental_model_opt_out = 67 [json_name = "useExperimentalModelOptOut"];
+  optional .aiserver.v1.SideChatInfo side_chat_info = 68 [json_name = "sideChatInfo"];
+  optional string manager_agent_id = 69 [json_name = "managerAgentId"];
   bool initiated_env_setup = 70 [json_name = "initiatedEnvSetup"];
 }
 
@@ -605,8 +605,8 @@ message BackgroundComposerArtifact {
 
 message BackgroundComposerCachedDetailsProto {
   string diff_changes_hash = 1 [json_name = "diffChangesHash"];
-  .aiserver.v1.GetDiffResponse detailed_diff = 2 [json_name = "detailedDiff"];
-  .aiserver.v1.DetailedBackgroundComposer bc = 3 [json_name = "bc"];
+  optional .aiserver.v1.GetDiffResponse detailed_diff = 2 [json_name = "detailedDiff"];
+  optional .aiserver.v1.DetailedBackgroundComposer bc = 3 [json_name = "bc"];
 }
 
 message BackgroundComposerCommit {
@@ -618,8 +618,8 @@ message BackgroundComposerCommit {
 }
 
 message BackgroundComposerDefaultEnvironmentSetting {
-  .aiserver.v1.EnvironmentRepoConfig repo_config = 1 [json_name = "repoConfig"];
-  string environment_public_id = 2 [json_name = "environmentPublicId"];
+  optional .aiserver.v1.EnvironmentRepoConfig repo_config = 1 [json_name = "repoConfig"];
+  optional string environment_public_id = 2 [json_name = "environmentPublicId"];
 }
 
 message BackgroundComposerFollowupContent {
@@ -631,27 +631,27 @@ message BackgroundComposerFullDiff {
   string path = 1 [json_name = "path"];
   string original_content = 2 [json_name = "originalContent"];
   string modified_content = 3 [json_name = "modifiedContent"];
-  string submodule_path = 4 [json_name = "submodulePath"];
-  .aiserver.v1.GitDiff git_diff = 5 [json_name = "gitDiff"];
+  optional string submodule_path = 4 [json_name = "submodulePath"];
+  optional .aiserver.v1.GitDiff git_diff = 5 [json_name = "gitDiff"];
   string full_path = 6 [json_name = "fullPath"];
   string base_ref = 7 [json_name = "baseRef"];
 }
 
 message BackgroundComposerParticipant {
   int32 user_id = 1 [json_name = "userId"];
-  string display_name = 2 [json_name = "displayName"];
-  string email = 3 [json_name = "email"];
-  string profile_picture_url = 4 [json_name = "profilePictureUrl"];
+  optional string display_name = 2 [json_name = "displayName"];
+  optional string email = 3 [json_name = "email"];
+  optional string profile_picture_url = 4 [json_name = "profilePictureUrl"];
 }
 
 message BackgroundComposerPr {
   string branch_name = 1 [json_name = "branchName"];
   string base_branch = 2 [json_name = "baseBranch"];
-  string scm_repo_node_id = 3 [json_name = "scmRepoNodeId"];
-  int32 pull_number = 4 [json_name = "pullNumber"];
-  .aiserver.v1.PRStatus pr_status = 5 [json_name = "prStatus"];
-  string pr_url = 6 [json_name = "prUrl"];
-  string scm_provider = 7 [json_name = "scmProvider"];
+  optional string scm_repo_node_id = 3 [json_name = "scmRepoNodeId"];
+  optional int32 pull_number = 4 [json_name = "pullNumber"];
+  optional .aiserver.v1.PRStatus pr_status = 5 [json_name = "prStatus"];
+  optional string pr_url = 6 [json_name = "prUrl"];
+  optional string scm_provider = 7 [json_name = "scmProvider"];
 }
 
 enum BackgroundComposerQuickActionExecutionMode {
@@ -663,7 +663,7 @@ enum BackgroundComposerQuickActionExecutionMode {
 message BackgroundComposerQuickActionSettings {
   repeated .aiserver.v1.BackgroundComposerQuickActionSubagentSlot quick_action_subagent_slots = 1 [json_name = "quickActionSubagentSlots"];
   bool quick_action_subagent_slots_explicitly_set = 2 [json_name = "quickActionSubagentSlotsExplicitlySet"];
-  uint32 quick_action_subagent_catalog_version = 3 [json_name = "quickActionSubagentCatalogVersion"];
+  optional uint32 quick_action_subagent_catalog_version = 3 [json_name = "quickActionSubagentCatalogVersion"];
   repeated .aiserver.v1.BackgroundComposerQuickActionSubagentTemplate quick_action_subagent_templates = 4 [json_name = "quickActionSubagentTemplates"];
   repeated .aiserver.v1.BackgroundComposerQuickActionSubagentTemplateMutation quick_action_subagent_template_mutations = 5 [json_name = "quickActionSubagentTemplateMutations"];
 }
@@ -683,16 +683,16 @@ message BackgroundComposerQuickActionSubagentTemplate {
   string label = 2 [json_name = "label"];
   string description = 3 [json_name = "description"];
   string subagent_type = 4 [json_name = "subagentType"];
-  string prompt = 5 [json_name = "prompt"];
+  optional string prompt = 5 [json_name = "prompt"];
   .aiserver.v1.BackgroundComposerQuickActionSubagentTemplateScope scope = 6 [json_name = "scope"];
   bool can_edit = 7 [json_name = "canEdit"];
   bool can_delete = 8 [json_name = "canDelete"];
-  string icon_name = 9 [json_name = "iconName"];
+  optional string icon_name = 9 [json_name = "iconName"];
 }
 
 message BackgroundComposerQuickActionSubagentTemplateMutation {
   .aiserver.v1.BackgroundComposerQuickActionSubagentTemplateOperation operation = 1 [json_name = "operation"];
-  .aiserver.v1.BackgroundComposerQuickActionSubagentTemplate template = 2 [json_name = "template"];
+  optional .aiserver.v1.BackgroundComposerQuickActionSubagentTemplate template = 2 [json_name = "template"];
 }
 
 enum BackgroundComposerQuickActionSubagentTemplateOperation {
@@ -717,16 +717,16 @@ message BackgroundComposerSharedArtifact {
   string title = 5 [json_name = "title"];
   string content_type = 6 [json_name = "contentType"];
   string share_source = 7 [json_name = "shareSource"];
-  int64 revoked_at_ms = 8 [json_name = "revokedAtMs"];
+  optional int64 revoked_at_ms = 8 [json_name = "revokedAtMs"];
   int64 created_at_ms = 9 [json_name = "createdAtMs"];
   int64 updated_at_ms = 10 [json_name = "updatedAtMs"];
 }
 
 message BackgroundComposerSnapshotStatusByBcId {
   string bc_id = 1 [json_name = "bcId"];
-  string snapshot_id = 2 [json_name = "snapshotId"];
-  .aiserver.v1.ChangeBackgroundComposerSnapshotVisibilityRequest.Visibility visibility = 3 [json_name = "visibility"];
-  double created_at_ms = 4 [json_name = "createdAtMs"];
+  optional string snapshot_id = 2 [json_name = "snapshotId"];
+  optional .aiserver.v1.ChangeBackgroundComposerSnapshotVisibilityRequest.Visibility visibility = 3 [json_name = "visibility"];
+  optional double created_at_ms = 4 [json_name = "createdAtMs"];
 }
 
 message BackgroundComposerSnapshotSummary {
@@ -809,7 +809,7 @@ message CancelEnvironmentBuildRequest {
 }
 
 message CancelEnvironmentBuildResponse {
-  .aiserver.v1.EnvironmentBuildRow row = 1 [json_name = "row"];
+  optional .aiserver.v1.EnvironmentBuildRow row = 1 [json_name = "row"];
 }
 
 message CancelModelRoutingLoadTestRequest {
@@ -843,7 +843,7 @@ message CheckPullRequestMergeabilityRequest {
 message CheckPullRequestMergeabilityResponse {
   bool can_merge = 1 [json_name = "canMerge"];
   string error = 2 [json_name = "error"];
-  string mergeable_state = 3 [json_name = "mergeableState"];
+  optional string mergeable_state = 3 [json_name = "mergeableState"];
 }
 
 message ClaimPendingPrivateWorkerRequestRequest {
@@ -882,10 +882,10 @@ message CloudAgentAnyrunVmInfo {
   string pod_id = 2 [json_name = "podId"];
   string anyrun_cluster = 3 [json_name = "anyrunCluster"];
   string workspace_root_path = 4 [json_name = "workspaceRootPath"];
-  string docker_build_events_redis_stream_key = 5 [json_name = "dockerBuildEventsRedisStreamKey"];
-  string setup_events_redis_stream_key = 6 [json_name = "setupEventsRedisStreamKey"];
-  string prewarm_workflow_id = 7 [json_name = "prewarmWorkflowId"];
-  .anyrun.v1.EnvironmentBuildBootInfo environment_build_boot_info = 8 [json_name = "environmentBuildBootInfo"];
+  optional string docker_build_events_redis_stream_key = 5 [json_name = "dockerBuildEventsRedisStreamKey"];
+  optional string setup_events_redis_stream_key = 6 [json_name = "setupEventsRedisStreamKey"];
+  optional string prewarm_workflow_id = 7 [json_name = "prewarmWorkflowId"];
+  optional .anyrun.v1.EnvironmentBuildBootInfo environment_build_boot_info = 8 [json_name = "environmentBuildBootInfo"];
 }
 
 message CloudAgentDashboardRunDayBucket {
@@ -896,23 +896,23 @@ message CloudAgentDashboardRunDayBucket {
 }
 
 message CloudAgentDashboardRunFilter {
-  string team_id = 1 [json_name = "teamId"];
+  optional string team_id = 1 [json_name = "teamId"];
   int64 created_after_ms = 2 [json_name = "createdAfterMs"];
   int64 created_before_ms = 3 [json_name = "createdBeforeMs"];
   repeated .aiserver.v1.CloudAgentSourceCategory triggers = 4 [json_name = "triggers"];
   repeated .aiserver.v1.CloudAgentDashboardRunStatus statuses = 5 [json_name = "statuses"];
-  int64 created_by_user_id = 6 [json_name = "createdByUserId"];
+  optional int64 created_by_user_id = 6 [json_name = "createdByUserId"];
 }
 
 message CloudAgentDashboardRunRow {
   string bc_id = 1 [json_name = "bcId"];
   int64 created_at_ms = 2 [json_name = "createdAtMs"];
   .aiserver.v1.CloudAgentSourceCategory trigger = 3 [json_name = "trigger"];
-  int64 created_by_user_id = 4 [json_name = "createdByUserId"];
-  string created_by_display = 5 [json_name = "createdByDisplay"];
-  string environment_name = 6 [json_name = "environmentName"];
-  string environment_public_id = 7 [json_name = "environmentPublicId"];
-  string repo_url = 8 [json_name = "repoUrl"];
+  optional int64 created_by_user_id = 4 [json_name = "createdByUserId"];
+  optional string created_by_display = 5 [json_name = "createdByDisplay"];
+  optional string environment_name = 6 [json_name = "environmentName"];
+  optional string environment_public_id = 7 [json_name = "environmentPublicId"];
+  optional string repo_url = 8 [json_name = "repoUrl"];
   .aiserver.v1.CloudAgentDashboardRunStatus status = 9 [json_name = "status"];
 }
 
@@ -943,13 +943,13 @@ enum CloudAgentDashboardRunStatus {
 message CloudAgentErrorDetails {
   string error_message = 1 [json_name = "errorMessage"];
   string error_code = 2 [json_name = "errorCode"];
-  string dev_only_message = 3 [json_name = "devOnlyMessage"];
-  .aiserver.v1.ErrorDetails error_details = 4 [json_name = "errorDetails"];
+  optional string dev_only_message = 3 [json_name = "devOnlyMessage"];
+  optional .aiserver.v1.ErrorDetails error_details = 4 [json_name = "errorDetails"];
 }
 
 message CloudAgentMemoryDbLogEntry {
   .aiserver.v1.CloudAgentMemoryDbLogSource source = 2 [json_name = "source"];
-  uint32 worker_index = 3 [json_name = "workerIndex"];
+  optional uint32 worker_index = 3 [json_name = "workerIndex"];
   oneof log {
     .anyrun.v1.PodEvent event = 4 [json_name = "event"];
     .aiserver.v1.WaterfallUpdate waterfall_update = 5 [json_name = "waterfallUpdate"];
@@ -969,8 +969,8 @@ message CloudAgentRunEvent {
   .aiserver.v1.CloudAgentRunEventLogLevel log_level = 4 [json_name = "logLevel"];
   string kind = 5 [json_name = "kind"];
   string title = 6 [json_name = "title"];
-  string detail = 7 [json_name = "detail"];
-  string link_url = 8 [json_name = "linkUrl"];
+  optional string detail = 7 [json_name = "detail"];
+  optional string link_url = 8 [json_name = "linkUrl"];
 }
 
 enum CloudAgentRunEventCategory {
@@ -1007,7 +1007,7 @@ enum CloudAgentStartupWarningType {
 }
 
 message CloudAgentState {
-  .agent.v1.ConversationStateStructure conversation_state = 1 [json_name = "conversationState"];
+  optional .agent.v1.ConversationStateStructure conversation_state = 1 [json_name = "conversationState"];
   uint32 num_prior_interaction_updates = 2 [json_name = "numPriorInteractionUpdates"];
   bytes pr_body = 3 [json_name = "prBody"];
   bytes summary = 4 [json_name = "summary"];
@@ -1015,52 +1015,52 @@ message CloudAgentState {
   bytes pr_url = 6 [json_name = "prUrl"];
   string last_interaction_update_offset_key = 7 [json_name = "lastInteractionUpdateOffsetKey"];
   bytes agent_name = 8 [json_name = "agentName"];
-  string starting_commit = 9 [json_name = "startingCommit"];
-  string base_branch = 10 [json_name = "baseBranch"];
+  optional string starting_commit = 9 [json_name = "startingCommit"];
+  optional string base_branch = 10 [json_name = "baseBranch"];
   bytes config = 11 [json_name = "config"];
-  string local_state_branch = 12 [json_name = "localStateBranch"];
+  optional string local_state_branch = 12 [json_name = "localStateBranch"];
   bytes original_prompt_blob_id = 13 [json_name = "originalPromptBlobId"];
   bytes repository_info_blob_id = 14 [json_name = "repositoryInfoBlobId"];
   bytes original_conversation_action_blob_id = 15 [json_name = "originalConversationActionBlobId"];
   bytes video_annotations_blob_id = 16 [json_name = "videoAnnotationsBlobId"];
-  string last_user_turn_commit = 17 [json_name = "lastUserTurnCommit"];
-  .aiserver.v1.BackgroundComposerSource last_followup_source = 18 [json_name = "lastFollowupSource"];
-  bool continue_rebase = 19 [json_name = "continueRebase"];
+  optional string last_user_turn_commit = 17 [json_name = "lastUserTurnCommit"];
+  optional .aiserver.v1.BackgroundComposerSource last_followup_source = 18 [json_name = "lastFollowupSource"];
+  optional bool continue_rebase = 19 [json_name = "continueRebase"];
   repeated string turn_start_todo_ids = 20 [json_name = "turnStartTodoIds"];
-  int64 original_request_start_unix_ms = 21 [json_name = "originalRequestStartUnixMs"];
-  bool initial_turn_latency_reported = 22 [json_name = "initialTurnLatencyReported"];
-  string agent_session_id = 23 [json_name = "agentSessionId"];
-  string kickoff_message_id = 24 [json_name = "kickoffMessageId"];
-  .aiserver.v1.GrindModeConfig grind_mode_config = 25 [json_name = "grindModeConfig"];
+  optional int64 original_request_start_unix_ms = 21 [json_name = "originalRequestStartUnixMs"];
+  optional bool initial_turn_latency_reported = 22 [json_name = "initialTurnLatencyReported"];
+  optional string agent_session_id = 23 [json_name = "agentSessionId"];
+  optional string kickoff_message_id = 24 [json_name = "kickoffMessageId"];
+  optional .aiserver.v1.GrindModeConfig grind_mode_config = 25 [json_name = "grindModeConfig"];
   repeated .aiserver.v1.BackgroundComposerCommit commits = 26 [json_name = "commits"];
-  int32 commit_count = 27 [json_name = "commitCount"];
-  .aiserver.v1.CloudAgentErrorDetails user_facing_error_details = 28 [json_name = "userFacingErrorDetails"];
-  .aiserver.v1.BackgroundComposerSource initial_source = 29 [json_name = "initialSource"];
+  optional int32 commit_count = 27 [json_name = "commitCount"];
+  optional .aiserver.v1.CloudAgentErrorDetails user_facing_error_details = 28 [json_name = "userFacingErrorDetails"];
+  optional .aiserver.v1.BackgroundComposerSource initial_source = 29 [json_name = "initialSource"];
   uint32 num_completed_turns = 30 [json_name = "numCompletedTurns"];
-  .aiserver.v1.SynthesisSubagentConfig synthesis_subagent_config = 31 [json_name = "synthesisSubagentConfig"];
+  optional .aiserver.v1.SynthesisSubagentConfig synthesis_subagent_config = 31 [json_name = "synthesisSubagentConfig"];
   bytes start_request_blob_id = 32 [json_name = "startRequestBlobId"];
   bytes commit_reminder_state_blob_id = 33 [json_name = "commitReminderStateBlobId"];
   bytes grind_mode_tracking_state_blob_id = 34 [json_name = "grindModeTrackingStateBlobId"];
   bytes workflow_control_state_blob_id = 35 [json_name = "workflowControlStateBlobId"];
   repeated .aiserver.v1.WorkerCreation worker_creations = 36 [json_name = "workerCreations"];
-  bool is_time_limit_expired = 37 [json_name = "isTimeLimitExpired"];
+  optional bool is_time_limit_expired = 37 [json_name = "isTimeLimitExpired"];
   bytes resolved_egress_policy_blob_id = 38 [json_name = "resolvedEgressPolicyBlobId"];
-  .aiserver.v1.OptimizedDiffState optimized_diff = 39 [json_name = "optimizedDiff"];
+  optional .aiserver.v1.OptimizedDiffState optimized_diff = 39 [json_name = "optimizedDiff"];
   bytes pending_pr_blob_id = 40 [json_name = "pendingPrBlobId"];
-  bool is_pod_finalized = 41 [json_name = "isPodFinalized"];
+  optional bool is_pod_finalized = 41 [json_name = "isPodFinalized"];
   bytes next_turn_system_reminders_blob_id = 42 [json_name = "nextTurnSystemRemindersBlobId"];
   bytes cloud_plugin_manifest_blob_id = 43 [json_name = "cloudPluginManifestBlobId"];
   map<string, .aiserver.v1.OptimizedDiffState> per_branch_optimized_diffs = 44 [json_name = "perBranchOptimizedDiffs"];
   repeated .aiserver.v1.CloudAgentStartupWarning startup_warnings = 45 [json_name = "startupWarnings"];
-  .aiserver.v1.PrivateWorkspaceIdentifier private_workspace_identifier = 46 [json_name = "privateWorkspaceIdentifier"];
-  bool uses_first_class_subagents = 48 [json_name = "usesFirstClassSubagents"];
-  uint32 conversation_rewind_epoch = 49 [json_name = "conversationRewindEpoch"];
+  optional .aiserver.v1.PrivateWorkspaceIdentifier private_workspace_identifier = 46 [json_name = "privateWorkspaceIdentifier"];
+  optional bool uses_first_class_subagents = 48 [json_name = "usesFirstClassSubagents"];
+  optional uint32 conversation_rewind_epoch = 49 [json_name = "conversationRewindEpoch"];
   bytes pending_summarization_state_blob_id = 50 [json_name = "pendingSummarizationStateBlobId"];
   bytes pending_summarization_snapshot_blob_id = 51 [json_name = "pendingSummarizationSnapshotBlobId"];
   bytes admitted_custom_mode_state_blob_id = 52 [json_name = "admittedCustomModeStateBlobId"];
-  bool agent_store_artifacts_symlink_enabled = 53 [json_name = "agentStoreArtifactsSymlinkEnabled"];
-  .agent.v1.ProjectDetails project_details = 54 [json_name = "projectDetails"];
-  bool uses_coordinator_membership = 55 [json_name = "usesCoordinatorMembership"];
+  optional bool agent_store_artifacts_symlink_enabled = 53 [json_name = "agentStoreArtifactsSymlinkEnabled"];
+  optional .agent.v1.ProjectDetails project_details = 54 [json_name = "projectDetails"];
+  optional bool uses_coordinator_membership = 55 [json_name = "usesCoordinatorMembership"];
 }
 
 message CloudAgentStatePersistedMetadata {
@@ -1088,7 +1088,7 @@ message CloudAgentSyntheticsScenarioInput {
 message CloudAgentTimingEvent {
   double timestamp_ms = 1 [json_name = "timestampMs"];
   .aiserver.v1.CloudAgentTimingEventType event = 2 [json_name = "event"];
-  uint32 turn_number = 3 [json_name = "turnNumber"];
+  optional uint32 turn_number = 3 [json_name = "turnNumber"];
 }
 
 enum CloudAgentTimingEventType {
@@ -1108,8 +1108,8 @@ message CloudAgentVmHistory {
 message CloudAgentVmHistoryEntry {
   int32 worker_index = 1 [json_name = "workerIndex"];
   bool is_current_worker = 2 [json_name = "isCurrentWorker"];
-  int64 environment_version_id = 3 [json_name = "environmentVersionId"];
-  int64 replaced_at_unix_ms = 4 [json_name = "replacedAtUnixMs"];
+  optional int64 environment_version_id = 3 [json_name = "environmentVersionId"];
+  optional int64 replaced_at_unix_ms = 4 [json_name = "replacedAtUnixMs"];
   oneof info {
     .aiserver.v1.CloudAgentAnyrunVmInfo anyrun = 5 [json_name = "anyrun"];
     .aiserver.v1.CloudAgentAnyrunPendingDockerBuildVmInfo anyrun_pending_docker_build = 6 [json_name = "anyrunPendingDockerBuild"];
@@ -1129,13 +1129,13 @@ message CloudAgentWorkflowControlState {
   repeated .agent.v1.ConversationAction skipped_input_actions = 10 [json_name = "skippedInputActions"];
   repeated .aiserver.v1.CompletedMakePRRequest completed_make_pr_requests = 11 [json_name = "completedMakePrRequests"];
   repeated .aiserver.v1.CompletedOpenPRRequest completed_open_pr_requests = 12 [json_name = "completedOpenPrRequests"];
-  .aiserver.v1.PausedInteractionStep paused_interaction_step = 13 [json_name = "pausedInteractionStep"];
+  optional .aiserver.v1.PausedInteractionStep paused_interaction_step = 13 [json_name = "pausedInteractionStep"];
   repeated .aiserver.v1.QueuedInteractionResponse pending_interaction_responses = 14 [json_name = "pendingInteractionResponses"];
   repeated uint32 completed_interaction_query_ids = 15 [json_name = "completedInteractionQueryIds"];
   repeated .aiserver.v1.PendingIdleFollowup pending_idle_followups = 16 [json_name = "pendingIdleFollowups"];
   repeated .aiserver.v1.ConversationActionReference skipped_input_action_refs = 17 [json_name = "skippedInputActionRefs"];
-  string last_completed_resubmit_followup_id = 18 [json_name = "lastCompletedResubmitFollowupId"];
-  uint32 async_subagent_completion_epoch = 19 [json_name = "asyncSubagentCompletionEpoch"];
+  optional string last_completed_resubmit_followup_id = 18 [json_name = "lastCompletedResubmitFollowupId"];
+  optional uint32 async_subagent_completion_epoch = 19 [json_name = "asyncSubagentCompletionEpoch"];
   repeated .aiserver.v1.PendingContextInjection pending_context_injections = 20 [json_name = "pendingContextInjections"];
   repeated string completed_injection_ids = 21 [json_name = "completedInjectionIds"];
   repeated string completed_delivery_batch_ids = 22 [json_name = "completedDeliveryBatchIds"];
@@ -1163,9 +1163,9 @@ message CloudSubagentParentReference {
   string parent_agent_id = 1 [json_name = "parentAgentId"];
   string parent_tool_call_id = 2 [json_name = "parentToolCallId"];
   .aiserver.v1.CloudSubagentParentAgentType parent_agent_type = 3 [json_name = "parentAgentType"];
-  string subagent_type_name = 5 [json_name = "subagentTypeName"];
-  .aiserver.v1.CloudSubagentParentSpawnKind parent_spawn_kind = 6 [json_name = "parentSpawnKind"];
-  string parent_spawn_id = 7 [json_name = "parentSpawnId"];
+  optional string subagent_type_name = 5 [json_name = "subagentTypeName"];
+  optional .aiserver.v1.CloudSubagentParentSpawnKind parent_spawn_kind = 6 [json_name = "parentSpawnKind"];
+  optional string parent_spawn_id = 7 [json_name = "parentSpawnId"];
   oneof lineage {
     .aiserver.v1.CloudSubagentTaskLineage task = 8 [json_name = "task"];
     .aiserver.v1.CloudSubagentSubscriptionResourceLineage subscription_resource = 9 [json_name = "subscriptionResource"];
@@ -1219,21 +1219,21 @@ message CompletePromptUploadResponse {
 message CompletedMakePRRequest {
   string request_id = 1 [json_name = "requestId"];
   int64 completed_at_ms = 2 [json_name = "completedAtMs"];
-  .aiserver.v1.MakePRBackgroundComposerResponse response = 3 [json_name = "response"];
-  string error_message = 4 [json_name = "errorMessage"];
-  string error_code = 5 [json_name = "errorCode"];
+  optional .aiserver.v1.MakePRBackgroundComposerResponse response = 3 [json_name = "response"];
+  optional string error_message = 4 [json_name = "errorMessage"];
+  optional string error_code = 5 [json_name = "errorCode"];
 }
 
 message CompletedOpenPRRequest {
   string request_id = 1 [json_name = "requestId"];
   int64 completed_at_ms = 2 [json_name = "completedAtMs"];
-  .aiserver.v1.OpenPRBackgroundComposerResponse response = 3 [json_name = "response"];
-  string error_message = 4 [json_name = "errorMessage"];
-  string error_code = 5 [json_name = "errorCode"];
+  optional .aiserver.v1.OpenPRBackgroundComposerResponse response = 3 [json_name = "response"];
+  optional string error_message = 4 [json_name = "errorMessage"];
+  optional string error_code = 5 [json_name = "errorCode"];
 }
 
 message ConversationActionReference {
-  .agent.v1.ConversationAction conversation_action = 1 [json_name = "conversationAction"];
+  optional .agent.v1.ConversationAction conversation_action = 1 [json_name = "conversationAction"];
   bytes conversation_action_blob_id = 2 [json_name = "conversationActionBlobId"];
 }
 
@@ -1253,7 +1253,7 @@ message ConversationStreamMessage {
 
 message ConvertPullRequestFromDraftRequest {
   string bc_id = 1 [json_name = "bcId"];
-  string pr_url = 2 [json_name = "prUrl"];
+  optional string pr_url = 2 [json_name = "prUrl"];
 }
 
 message ConvertPullRequestFromDraftResponse {
@@ -1271,12 +1271,12 @@ message CreateAgentShareResponse {
 }
 
 message CreateBackgroundComposerPodRequest {
-  .aiserver.v1.DevcontainerStartingPoint devcontainer_starting_point = 1 [json_name = "devcontainerStartingPoint"];
+  optional .aiserver.v1.DevcontainerStartingPoint devcontainer_starting_point = 1 [json_name = "devcontainerStartingPoint"];
   bool include_secrets = 2 [json_name = "includeSecrets"];
-  string force_cluster = 3 [json_name = "forceCluster"];
-  string force_machine_template = 4 [json_name = "forceMachineTemplate"];
+  optional string force_cluster = 3 [json_name = "forceCluster"];
+  optional string force_machine_template = 4 [json_name = "forceMachineTemplate"];
   bool optimistic_prewarming = 5 [json_name = "optimisticPrewarming"];
-  string client_ip = 32 [json_name = "clientIp"];
+  optional string client_ip = 32 [json_name = "clientIp"];
 }
 
 message CreateBackgroundComposerPodResponse {
@@ -1287,7 +1287,7 @@ message CreateBackgroundComposerPodResponse {
 message CreateBackgroundComposerPodSnapshotRequest {
   string pod_id = 1 [json_name = "podId"];
   .aiserver.v1.ChangeBackgroundComposerSnapshotVisibilityRequest.Visibility visibility = 2 [json_name = "visibility"];
-  string bc_id = 3 [json_name = "bcId"];
+  optional string bc_id = 3 [json_name = "bcId"];
 }
 
 message CreateBackgroundComposerPodSnapshotResponse {
@@ -1295,7 +1295,7 @@ message CreateBackgroundComposerPodSnapshotResponse {
 }
 
 message DeleteAgentStoreFilesRequest {
-  string store_id = 1 [json_name = "storeId"];
+  optional string store_id = 1 [json_name = "storeId"];
   repeated .aiserver.v1.AgentStoreDeleteFileEntry files = 2 [json_name = "files"];
 }
 
@@ -1330,7 +1330,7 @@ message DeletePendingFollowupResponse {
 
 message DeletePersonalEnvironmentJsonRequest {
   int64 id = 1 [json_name = "id"];
-  string environment_public_id = 2 [json_name = "environmentPublicId"];
+  optional string environment_public_id = 2 [json_name = "environmentPublicId"];
 }
 
 message DeletePersonalEnvironmentJsonResponse {
@@ -1339,7 +1339,7 @@ message DeletePersonalEnvironmentJsonResponse {
 message DeletePullRequestReviewCommentRequest {
   string pr_url = 1 [json_name = "prUrl"];
   string comment_id = 2 [json_name = "commentId"];
-  string comment_kind = 3 [json_name = "commentKind"];
+  optional string comment_kind = 3 [json_name = "commentKind"];
 }
 
 message DeletePullRequestReviewCommentResponse {
@@ -1356,7 +1356,7 @@ message DeletePushNotificationTokenResponse {
 
 message DeleteTeamEnvironmentRequest {
   int64 id = 1 [json_name = "id"];
-  string environment_public_id = 2 [json_name = "environmentPublicId"];
+  optional string environment_public_id = 2 [json_name = "environmentPublicId"];
 }
 
 message DeleteTeamEnvironmentResponse {
@@ -1365,8 +1365,8 @@ message DeleteTeamEnvironmentResponse {
 message DeregisterPrivateWorkerPoolRequest {
   .aiserver.v1.PrivateWorkerPoolScope scope = 1 [json_name = "scope"];
   string pool_name = 2 [json_name = "poolName"];
-  string repo_owner = 3 [json_name = "repoOwner"];
-  string repo_name = 4 [json_name = "repoName"];
+  optional string repo_owner = 3 [json_name = "repoOwner"];
+  optional string repo_name = 4 [json_name = "repoName"];
 }
 
 message DeregisterPrivateWorkerPoolResponse {
@@ -1374,37 +1374,37 @@ message DeregisterPrivateWorkerPoolResponse {
 }
 
 message DetailedBackgroundComposer {
-  .aiserver.v1.BackgroundComposer composer = 1 [json_name = "composer"];
+  optional .aiserver.v1.BackgroundComposer composer = 1 [json_name = "composer"];
   string starting_commit = 2 [json_name = "startingCommit"];
   string base_branch = 3 [json_name = "baseBranch"];
-  .aiserver.v1.HeadlessAgenticComposerPrompt prompt = 4 [json_name = "prompt"];
+  optional .aiserver.v1.HeadlessAgenticComposerPrompt prompt = 4 [json_name = "prompt"];
   .aiserver.v1.BackgroundComposerStatus status = 5 [json_name = "status"];
-  .aiserver.v1.GitDiff diff_since_start = 6 [json_name = "diffSinceStart"];
-  .aiserver.v1.ErrorDetails start_error = 7 [json_name = "startError"];
-  .aiserver.v1.ModelDetails model_details = 8 [json_name = "modelDetails"];
+  optional .aiserver.v1.GitDiff diff_since_start = 6 [json_name = "diffSinceStart"];
+  optional .aiserver.v1.ErrorDetails start_error = 7 [json_name = "startError"];
+  optional .aiserver.v1.ModelDetails model_details = 8 [json_name = "modelDetails"];
   bool unread = 9 [json_name = "unread"];
-  string summary = 10 [json_name = "summary"];
+  optional string summary = 10 [json_name = "summary"];
   repeated .aiserver.v1.EnvironmentPort environment_ports = 11 [json_name = "environmentPorts"];
-  bool auto_create_pr = 12 [json_name = "autoCreatePr"];
-  bool open_as_cursor_github_app = 13 [json_name = "openAsCursorGithubApp"];
-  bool skip_reviewer_request = 14 [json_name = "skipReviewerRequest"];
-  string local_state_branch = 15 [json_name = "localStateBranch"];
-  .aiserver.v1.ErrorDetails permanent_error = 16 [json_name = "permanentError"];
+  optional bool auto_create_pr = 12 [json_name = "autoCreatePr"];
+  optional bool open_as_cursor_github_app = 13 [json_name = "openAsCursorGithubApp"];
+  optional bool skip_reviewer_request = 14 [json_name = "skipReviewerRequest"];
+  optional string local_state_branch = 15 [json_name = "localStateBranch"];
+  optional .aiserver.v1.ErrorDetails permanent_error = 16 [json_name = "permanentError"];
   repeated .aiserver.v1.VideoAnnotationEntry video_annotations = 18 [json_name = "videoAnnotations"];
-  bool auto_branch = 19 [json_name = "autoBranch"];
+  optional bool auto_branch = 19 [json_name = "autoBranch"];
   repeated .aiserver.v1.BackgroundComposerPr prs = 20 [json_name = "prs"];
   repeated .aiserver.v1.VmProvisionedSkill vm_provisioned_skills = 21 [json_name = "vmProvisionedSkills"];
-  .agent.v1.ConversationAction original_conversation_action = 22 [json_name = "originalConversationAction"];
-  .aiserver.v1.EnvironmentRepoConfig repo_config = 23 [json_name = "repoConfig"];
-  string environment_name = 24 [json_name = "environmentName"];
-  bool use_private_worker = 25 [json_name = "usePrivateWorker"];
+  optional .agent.v1.ConversationAction original_conversation_action = 22 [json_name = "originalConversationAction"];
+  optional .aiserver.v1.EnvironmentRepoConfig repo_config = 23 [json_name = "repoConfig"];
+  optional string environment_name = 24 [json_name = "environmentName"];
+  optional bool use_private_worker = 25 [json_name = "usePrivateWorker"];
   repeated .aiserver.v1.PrivateWorkerLabel labels = 26 [json_name = "labels"];
-  .aiserver.v1.EnvironmentVersionSummary used_environment_version = 27 [json_name = "usedEnvironmentVersion"];
-  .agent.v1.RequestedModel requested_model = 28 [json_name = "requestedModel"];
-  .aiserver.v1.CloudSubagentParentReference cloud_subagent_parent = 29 [json_name = "cloudSubagentParent"];
+  optional .aiserver.v1.EnvironmentVersionSummary used_environment_version = 27 [json_name = "usedEnvironmentVersion"];
+  optional .agent.v1.RequestedModel requested_model = 28 [json_name = "requestedModel"];
+  optional .aiserver.v1.CloudSubagentParentReference cloud_subagent_parent = 29 [json_name = "cloudSubagentParent"];
   repeated .aiserver.v1.CloudAgentStartupWarning startup_warnings = 30 [json_name = "startupWarnings"];
-  .aiserver.v1.UsedEnvironmentBuildInfo used_environment_build = 31 [json_name = "usedEnvironmentBuild"];
-  bool use_experimental_model_opt_out = 34 [json_name = "useExperimentalModelOptOut"];
+  optional .aiserver.v1.UsedEnvironmentBuildInfo used_environment_build = 31 [json_name = "usedEnvironmentBuild"];
+  optional bool use_experimental_model_opt_out = 34 [json_name = "useExperimentalModelOptOut"];
 }
 
 message DevcontainerStartingPoint {
@@ -1413,14 +1413,14 @@ message DevcontainerStartingPoint {
   repeated string user_extensions = 4 [json_name = "userExtensions"];
   string cursor_server_commit = 5 [json_name = "cursorServerCommit"];
   string environment_json_override = 6 [json_name = "environmentJsonOverride"];
-  .aiserver.v1.GitDiff git_diff_to_apply = 8 [json_name = "gitDiffToApply"];
+  optional .aiserver.v1.GitDiff git_diff_to_apply = 8 [json_name = "gitDiffToApply"];
   bool dont_allow_reading_environment_json_from_database = 9 [json_name = "dontAllowReadingEnvironmentJsonFromDatabase"];
   bool skip_build_caches = 10 [json_name = "skipBuildCaches"];
-  .aiserver.v1.EnvironmentRepoConfig repo_config = 11 [json_name = "repoConfig"];
-  string environment_name = 12 [json_name = "environmentName"];
-  int64 environment_id = 13 [json_name = "environmentId"];
+  optional .aiserver.v1.EnvironmentRepoConfig repo_config = 11 [json_name = "repoConfig"];
+  optional string environment_name = 12 [json_name = "environmentName"];
+  optional int64 environment_id = 13 [json_name = "environmentId"];
   repeated .aiserver.v1.RepoStartingRef starting_refs = 14 [json_name = "startingRefs"];
-  string environment_public_id = 15 [json_name = "environmentPublicId"];
+  optional string environment_public_id = 15 [json_name = "environmentPublicId"];
 }
 
 message DisablePullRequestAutoMergeRequest {
@@ -1430,18 +1430,18 @@ message DisablePullRequestAutoMergeRequest {
 message DisablePullRequestAutoMergeResponse {
   bool success = 1 [json_name = "success"];
   string error = 2 [json_name = "error"];
-  string pr_node_id = 3 [json_name = "prNodeId"];
+  optional string pr_node_id = 3 [json_name = "prNodeId"];
 }
 
 message EnablePullRequestAutoMergeRequest {
   string pr_url = 1 [json_name = "prUrl"];
-  string merge_method = 2 [json_name = "mergeMethod"];
+  optional string merge_method = 2 [json_name = "mergeMethod"];
 }
 
 message EnablePullRequestAutoMergeResponse {
   bool success = 1 [json_name = "success"];
   string error = 2 [json_name = "error"];
-  string pr_node_id = 3 [json_name = "prNodeId"];
+  optional string pr_node_id = 3 [json_name = "prNodeId"];
 }
 
 enum EnsembleStatus {
@@ -1470,19 +1470,19 @@ message EnvironmentBuildRow {
   .aiserver.v1.EnvironmentBuildRowStatus status = 3 [json_name = "status"];
   .aiserver.v1.EnvironmentBuildRowTriggerType trigger_type = 4 [json_name = "triggerType"];
   .aiserver.v1.EnvironmentBuildRowSource source = 5 [json_name = "source"];
-  .aiserver.v1.EnvironmentBuildRowFailureType failure_type = 6 [json_name = "failureType"];
-  int64 environment_version_id = 7 [json_name = "environmentVersionId"];
-  string user_facing_snapshot_id = 8 [json_name = "userFacingSnapshotId"];
+  optional .aiserver.v1.EnvironmentBuildRowFailureType failure_type = 6 [json_name = "failureType"];
+  optional int64 environment_version_id = 7 [json_name = "environmentVersionId"];
+  optional string user_facing_snapshot_id = 8 [json_name = "userFacingSnapshotId"];
   int64 created_at_ms = 9 [json_name = "createdAtMs"];
   int64 updated_at_ms = 10 [json_name = "updatedAtMs"];
-  int64 completed_at_ms = 11 [json_name = "completedAtMs"];
+  optional int64 completed_at_ms = 11 [json_name = "completedAtMs"];
   bool is_draft = 12 [json_name = "isDraft"];
   bool has_ref_overrides = 13 [json_name = "hasRefOverrides"];
   repeated .aiserver.v1.RepoStartingRef requested_refs = 14 [json_name = "requestedRefs"];
   repeated .aiserver.v1.EnvironmentBuildRepoCommit repo_commits = 15 [json_name = "repoCommits"];
-  string created_by_display = 16 [json_name = "createdByDisplay"];
+  optional string created_by_display = 16 [json_name = "createdByDisplay"];
   bool will_adopt_environment_settings_on_activate = 17 [json_name = "willAdoptEnvironmentSettingsOnActivate"];
-  string source_bc_id = 18 [json_name = "sourceBcId"];
+  optional string source_bc_id = 18 [json_name = "sourceBcId"];
 }
 
 enum EnvironmentBuildRowFailureType {
@@ -1516,9 +1516,9 @@ enum EnvironmentBuildRowTriggerType {
 }
 
 message EnvironmentBuildSettings {
-  bool fast_forward_default_branch = 1 [json_name = "fastForwardDefaultBranch"];
-  bool builds_enabled = 2 [json_name = "buildsEnabled"];
-  int32 auto_fast_forward_staleness_hours = 3 [json_name = "autoFastForwardStalenessHours"];
+  optional bool fast_forward_default_branch = 1 [json_name = "fastForwardDefaultBranch"];
+  optional bool builds_enabled = 2 [json_name = "buildsEnabled"];
+  optional int32 auto_fast_forward_staleness_hours = 3 [json_name = "autoFastForwardStalenessHours"];
 }
 
 message EnvironmentBuildsCursor {
@@ -1533,12 +1533,12 @@ message EnvironmentEffectiveHistoryEvent {
   .aiserver.v1.EnvironmentUpdateEventKind event_kind = 4 [json_name = "eventKind"];
   string title = 5 [json_name = "title"];
   string description = 6 [json_name = "description"];
-  .aiserver.v1.EnvironmentVersionSummary version = 7 [json_name = "version"];
-  .aiserver.v1.EnvironmentVersionSummary fallback_version = 8 [json_name = "fallbackVersion"];
-  .aiserver.v1.EnvironmentSetupRunLink setup_run = 9 [json_name = "setupRun"];
-  string environment_public_id = 10 [json_name = "environmentPublicId"];
-  string environment_name = 11 [json_name = "environmentName"];
-  .aiserver.v1.EnvironmentVersionRestoreMetadata restore_metadata = 12 [json_name = "restoreMetadata"];
+  optional .aiserver.v1.EnvironmentVersionSummary version = 7 [json_name = "version"];
+  optional .aiserver.v1.EnvironmentVersionSummary fallback_version = 8 [json_name = "fallbackVersion"];
+  optional .aiserver.v1.EnvironmentSetupRunLink setup_run = 9 [json_name = "setupRun"];
+  optional string environment_public_id = 10 [json_name = "environmentPublicId"];
+  optional string environment_name = 11 [json_name = "environmentName"];
+  optional .aiserver.v1.EnvironmentVersionRestoreMetadata restore_metadata = 12 [json_name = "restoreMetadata"];
 }
 
 message EnvironmentHistoryLifecycleEvent {
@@ -1547,20 +1547,20 @@ message EnvironmentHistoryLifecycleEvent {
   .aiserver.v1.EnvironmentVersionSourceKind source_kind = 3 [json_name = "sourceKind"];
   string recorded_via = 4 [json_name = "recordedVia"];
   int64 created_at_ms = 5 [json_name = "createdAtMs"];
-  .aiserver.v1.EnvironmentVersionSummary version = 6 [json_name = "version"];
-  .aiserver.v1.EnvironmentSetupRunLink setup_run = 7 [json_name = "setupRun"];
-  .aiserver.v1.EnvironmentVersionRestoreMetadata restore_metadata = 8 [json_name = "restoreMetadata"];
+  optional .aiserver.v1.EnvironmentVersionSummary version = 6 [json_name = "version"];
+  optional .aiserver.v1.EnvironmentSetupRunLink setup_run = 7 [json_name = "setupRun"];
+  optional .aiserver.v1.EnvironmentVersionRestoreMetadata restore_metadata = 8 [json_name = "restoreMetadata"];
 }
 
 message EnvironmentHistoryObject {
-  .aiserver.v1.LogicalEnvironment environment = 1 [json_name = "environment"];
+  optional .aiserver.v1.LogicalEnvironment environment = 1 [json_name = "environment"];
   repeated .aiserver.v1.EnvironmentHistoryVersion versions = 2 [json_name = "versions"];
   repeated .aiserver.v1.EnvironmentHistoryLifecycleEvent lifecycle_events = 3 [json_name = "lifecycleEvents"];
 }
 
 message EnvironmentHistoryVersion {
-  .aiserver.v1.EnvironmentVersionSummary version = 1 [json_name = "version"];
-  .aiserver.v1.EnvironmentSetupRunLink setup_run = 2 [json_name = "setupRun"];
+  optional .aiserver.v1.EnvironmentVersionSummary version = 1 [json_name = "version"];
+  optional .aiserver.v1.EnvironmentSetupRunLink setup_run = 2 [json_name = "setupRun"];
 }
 
 message EnvironmentJsonFileLocation {
@@ -1575,26 +1575,26 @@ message EnvironmentPort {
 
 message EnvironmentRepoConfig {
   repeated .aiserver.v1.EnvironmentRepoEntry repos = 1 [json_name = "repos"];
-  .aiserver.v1.EnvironmentJsonFileLocation environment_json_location = 2 [json_name = "environmentJsonLocation"];
+  optional .aiserver.v1.EnvironmentJsonFileLocation environment_json_location = 2 [json_name = "environmentJsonLocation"];
 }
 
 message EnvironmentRepoEntry {
   string repo_url = 1 [json_name = "repoUrl"];
   string scm_repo_node_id = 2 [json_name = "scmRepoNodeId"];
-  string git_enterprise_uuid = 3 [json_name = "gitEnterpriseUuid"];
+  optional string git_enterprise_uuid = 3 [json_name = "gitEnterpriseUuid"];
 }
 
 message EnvironmentSetupRunLink {
   string bc_id = 1 [json_name = "bcId"];
-  string status = 2 [json_name = "status"];
+  optional string status = 2 [json_name = "status"];
   int64 created_at_ms = 3 [json_name = "createdAtMs"];
-  string snapshot_id = 4 [json_name = "snapshotId"];
+  optional string snapshot_id = 4 [json_name = "snapshotId"];
 }
 
 message EnvironmentSetupRunStartedMetadata {
   string setup_session_id = 1 [json_name = "setupSessionId"];
-  string surface = 2 [json_name = "surface"];
-  string entrypoint = 3 [json_name = "entrypoint"];
+  optional string surface = 2 [json_name = "surface"];
+  optional string entrypoint = 3 [json_name = "entrypoint"];
   bool resumed_session = 4 [json_name = "resumedSession"];
 }
 
@@ -1615,9 +1615,9 @@ enum EnvironmentUpdateEventKind {
 message EnvironmentVersionRestoreMetadata {
   string restored_from_environment_version_public_id = 1 [json_name = "restoredFromEnvironmentVersionPublicId"];
   .aiserver.v1.EnvironmentVersionSourceKind restored_from_source_kind = 2 [json_name = "restoredFromSourceKind"];
-  string restored_from_environment_public_id = 3 [json_name = "restoredFromEnvironmentPublicId"];
-  string restored_from_environment_name = 4 [json_name = "restoredFromEnvironmentName"];
-  string restored_from_snapshot_id = 5 [json_name = "restoredFromSnapshotId"];
+  optional string restored_from_environment_public_id = 3 [json_name = "restoredFromEnvironmentPublicId"];
+  optional string restored_from_environment_name = 4 [json_name = "restoredFromEnvironmentName"];
+  optional string restored_from_snapshot_id = 5 [json_name = "restoredFromSnapshotId"];
 }
 
 enum EnvironmentVersionSourceKind {
@@ -1631,15 +1631,15 @@ enum EnvironmentVersionSourceKind {
 message EnvironmentVersionSummary {
   string public_id = 1 [json_name = "publicId"];
   .aiserver.v1.EnvironmentVersionSourceKind source_kind = 2 [json_name = "sourceKind"];
-  string commit_hash = 3 [json_name = "commitHash"];
-  string environment_public_id = 4 [json_name = "environmentPublicId"];
-  .aiserver.v1.RepoConfigSummary repo_config = 5 [json_name = "repoConfig"];
+  optional string commit_hash = 3 [json_name = "commitHash"];
+  optional string environment_public_id = 4 [json_name = "environmentPublicId"];
+  optional .aiserver.v1.RepoConfigSummary repo_config = 5 [json_name = "repoConfig"];
   int64 created_at_ms = 6 [json_name = "createdAtMs"];
-  string environment_json = 7 [json_name = "environmentJson"];
-  string environment_name = 8 [json_name = "environmentName"];
-  string snapshot_id = 9 [json_name = "snapshotId"];
-  string recorded_via = 10 [json_name = "recordedVia"];
-  string update_script = 11 [json_name = "updateScript"];
+  optional string environment_json = 7 [json_name = "environmentJson"];
+  optional string environment_name = 8 [json_name = "environmentName"];
+  optional string snapshot_id = 9 [json_name = "snapshotId"];
+  optional string recorded_via = 10 [json_name = "recordedVia"];
+  optional string update_script = 11 [json_name = "updateScript"];
 }
 
 enum EnvironmentWriteSource {
@@ -1654,24 +1654,24 @@ message EventSubscription {
   string subscription_id = 1 [json_name = "subscriptionId"];
   string subscription_type = 2 [json_name = "subscriptionType"];
   string subscription_args_json = 3 [json_name = "subscriptionArgsJson"];
-  string subscription_metadata_json = 4 [json_name = "subscriptionMetadataJson"];
+  optional string subscription_metadata_json = 4 [json_name = "subscriptionMetadataJson"];
   double open_time_ms = 10 [json_name = "openTimeMs"];
   double expires_at_ms = 11 [json_name = "expiresAtMs"];
-  double last_delivered_at_ms = 12 [json_name = "lastDeliveredAtMs"];
+  optional double last_delivered_at_ms = 12 [json_name = "lastDeliveredAtMs"];
   int32 delivery_count = 13 [json_name = "deliveryCount"];
 }
 
 message ExternalSourceMetadata {
-  .aiserver.v1.SlackSourceMetadata slack = 1 [json_name = "slack"];
-  .aiserver.v1.LinearSourceMetadata linear = 2 [json_name = "linear"];
-  .aiserver.v1.GithubSourceMetadata github = 3 [json_name = "github"];
-  .aiserver.v1.GitlabSourceMetadata gitlab = 4 [json_name = "gitlab"];
+  optional .aiserver.v1.SlackSourceMetadata slack = 1 [json_name = "slack"];
+  optional .aiserver.v1.LinearSourceMetadata linear = 2 [json_name = "linear"];
+  optional .aiserver.v1.GithubSourceMetadata github = 3 [json_name = "github"];
+  optional .aiserver.v1.GitlabSourceMetadata gitlab = 4 [json_name = "gitlab"];
 }
 
 message FetchBackgroundComposerRequest {
   string bc_id = 1 [json_name = "bcId"];
   int32 start_index = 2 [json_name = "startIndex"];
-  int32 limit = 3 [json_name = "limit"];
+  optional int32 limit = 3 [json_name = "limit"];
 }
 
 message FetchBackgroundComposerResponse {
@@ -1688,34 +1688,34 @@ enum ForkBackgroundComposerMode {
 message ForkBackgroundComposerRequest {
   string source_bc_id = 1 [json_name = "sourceBcId"];
   .aiserver.v1.ForkBackgroundComposerMode mode = 2 [json_name = "mode"];
-  string name = 3 [json_name = "name"];
-  uint32 turn_count = 4 [json_name = "turnCount"];
+  optional string name = 3 [json_name = "name"];
+  optional uint32 turn_count = 4 [json_name = "turnCount"];
 }
 
 message ForkBackgroundComposerResponse {
-  .aiserver.v1.BackgroundComposer composer = 1 [json_name = "composer"];
+  optional .aiserver.v1.BackgroundComposer composer = 1 [json_name = "composer"];
   string bc_id = 2 [json_name = "bcId"];
   string source_bc_id = 3 [json_name = "sourceBcId"];
   .aiserver.v1.ForkBackgroundComposerMode mode = 4 [json_name = "mode"];
-  string initial_run_id = 5 [json_name = "initialRunId"];
+  optional string initial_run_id = 5 [json_name = "initialRunId"];
 }
 
 message GetAgentSharePreviewRequest {
   string share_id = 1 [json_name = "shareId"];
-  bool include_preview_image = 2 [json_name = "includePreviewImage"];
+  optional bool include_preview_image = 2 [json_name = "includePreviewImage"];
 }
 
 message GetAgentSharePreviewResponse {
   string share_id = 1 [json_name = "shareId"];
   string bc_id = 2 [json_name = "bcId"];
-  string name = 3 [json_name = "name"];
-  string summary = 4 [json_name = "summary"];
-  string status = 5 [json_name = "status"];
-  string error_message = 6 [json_name = "errorMessage"];
-  string repo_url = 7 [json_name = "repoUrl"];
-  string branch_name = 8 [json_name = "branchName"];
-  string artifact_image_url = 9 [json_name = "artifactImageUrl"];
-  bytes preview_image_png = 10 [json_name = "previewImagePng"];
+  optional string name = 3 [json_name = "name"];
+  optional string summary = 4 [json_name = "summary"];
+  optional string status = 5 [json_name = "status"];
+  optional string error_message = 6 [json_name = "errorMessage"];
+  optional string repo_url = 7 [json_name = "repoUrl"];
+  optional string branch_name = 8 [json_name = "branchName"];
+  optional string artifact_image_url = 9 [json_name = "artifactImageUrl"];
+  optional bytes preview_image_png = 10 [json_name = "previewImagePng"];
 }
 
 message GetAgentStoreFileLockRequest {
@@ -1725,7 +1725,7 @@ message GetAgentStoreFileLockRequest {
 
 message GetAgentStoreFileLockResponse {
   bool held = 1 [json_name = "held"];
-  .aiserver.v1.AgentStoreFileLockHolder holder = 2 [json_name = "holder"];
+  optional .aiserver.v1.AgentStoreFileLockHolder holder = 2 [json_name = "holder"];
   int64 expires_at_ms = 3 [json_name = "expiresAtMs"];
 }
 
@@ -1751,7 +1751,7 @@ message GetBackgroundComposerArtifactResponse {
 
 message GetBackgroundComposerChangesHashRequest {
   string bc_id = 1 [json_name = "bcId"];
-  string branch_name = 2 [json_name = "branchName"];
+  optional string branch_name = 2 [json_name = "branchName"];
 }
 
 message GetBackgroundComposerChangesHashResponse {
@@ -1768,8 +1768,8 @@ message GetBackgroundComposerConversationResponse {
 
 message GetBackgroundComposerDiffDetailsRequest {
   string bc_id = 1 [json_name = "bcId"];
-  string branch_name = 2 [json_name = "branchName"];
-  string repo_url = 3 [json_name = "repoUrl"];
+  optional string branch_name = 2 [json_name = "branchName"];
+  optional string repo_url = 3 [json_name = "repoUrl"];
 }
 
 message GetBackgroundComposerDiffDetailsResponse {
@@ -1794,7 +1794,7 @@ message GetBackgroundComposerInfoRequest {
 }
 
 message GetBackgroundComposerInfoResponse {
-  .aiserver.v1.DetailedBackgroundComposer composer = 1 [json_name = "composer"];
+  optional .aiserver.v1.DetailedBackgroundComposer composer = 1 [json_name = "composer"];
 }
 
 message GetBackgroundComposerNameRequest {
@@ -1810,7 +1810,7 @@ message GetBackgroundComposerPromptRequest {
 }
 
 message GetBackgroundComposerPromptResponse {
-  .aiserver.v1.ConversationMessage prompt = 1 [json_name = "prompt"];
+  optional .aiserver.v1.ConversationMessage prompt = 1 [json_name = "prompt"];
 }
 
 message GetBackgroundComposerPullRequestRequest {
@@ -1826,9 +1826,9 @@ message GetBackgroundComposerRepositoryInfoRequest {
 }
 
 message GetBackgroundComposerRepositoryInfoResponse {
-  .aiserver.v1.RepositoryInfo repository_info = 1 [json_name = "repositoryInfo"];
-  string path_encryption_key = 2 [json_name = "pathEncryptionKey"];
-  .aiserver.v1.QueryOnlyRepoAccess query_only_repo_access = 3 [json_name = "queryOnlyRepoAccess"];
+  optional .aiserver.v1.RepositoryInfo repository_info = 1 [json_name = "repositoryInfo"];
+  optional string path_encryption_key = 2 [json_name = "pathEncryptionKey"];
+  optional .aiserver.v1.QueryOnlyRepoAccess query_only_repo_access = 3 [json_name = "queryOnlyRepoAccess"];
 }
 
 message GetBackgroundComposerSnapshotInfoRequest {
@@ -1849,7 +1849,7 @@ message GetBackgroundComposerSnapshotStateRequest {
 message GetBackgroundComposerSnapshotStateResponse {
   string snapshot_id = 1 [json_name = "snapshotId"];
   .anyrun.v1.SnapshotState state = 2 [json_name = "state"];
-  string error_message = 3 [json_name = "errorMessage"];
+  optional string error_message = 3 [json_name = "errorMessage"];
 }
 
 message GetBackgroundComposerStatusRequest {
@@ -1873,25 +1873,25 @@ message GetBackgroundComposerUserSettingsRequest {
 }
 
 message GetBackgroundComposerUserSettingsResponse {
-  string model_name = 1 [json_name = "modelName"];
-  bool slack_notifications_for_web_enabled = 2 [json_name = "slackNotificationsForWebEnabled"];
-  bool ci_failure_followup_enabled = 3 [json_name = "ciFailureFollowupEnabled"];
-  bool browser_use_enabled = 4 [json_name = "browserUseEnabled"];
-  .aiserver.v1.AutoCreatePrSetting auto_create_pr_setting = 5 [json_name = "autoCreatePrSetting"];
-  .aiserver.v1.PrReviewOpenDestinationMode pr_review_open_destination = 6 [json_name = "prReviewOpenDestination"];
-  .aiserver.v1.GithubArtifactPostingMode github_artifact_posting = 7 [json_name = "githubArtifactPosting"];
-  .aiserver.v1.CloudAgentEgressProtectionMode egress_protection_mode = 8 [json_name = "egressProtectionMode"];
-  .aiserver.v1.BackgroundComposerUserEgressPolicy egress_policy = 9 [json_name = "egressPolicy"];
-  string branch_prefix = 10 [json_name = "branchPrefix"];
-  .aiserver.v1.BackgroundComposerQuickActionSettings quick_action_settings = 11 [json_name = "quickActionSettings"];
-  bool allow_private_workers = 12 [json_name = "allowPrivateWorkers"];
-  string default_environment_public_id = 13 [json_name = "defaultEnvironmentPublicId"];
+  optional string model_name = 1 [json_name = "modelName"];
+  optional bool slack_notifications_for_web_enabled = 2 [json_name = "slackNotificationsForWebEnabled"];
+  optional bool ci_failure_followup_enabled = 3 [json_name = "ciFailureFollowupEnabled"];
+  optional bool browser_use_enabled = 4 [json_name = "browserUseEnabled"];
+  optional .aiserver.v1.AutoCreatePrSetting auto_create_pr_setting = 5 [json_name = "autoCreatePrSetting"];
+  optional .aiserver.v1.PrReviewOpenDestinationMode pr_review_open_destination = 6 [json_name = "prReviewOpenDestination"];
+  optional .aiserver.v1.GithubArtifactPostingMode github_artifact_posting = 7 [json_name = "githubArtifactPosting"];
+  optional .aiserver.v1.CloudAgentEgressProtectionMode egress_protection_mode = 8 [json_name = "egressProtectionMode"];
+  optional .aiserver.v1.BackgroundComposerUserEgressPolicy egress_policy = 9 [json_name = "egressPolicy"];
+  optional string branch_prefix = 10 [json_name = "branchPrefix"];
+  optional .aiserver.v1.BackgroundComposerQuickActionSettings quick_action_settings = 11 [json_name = "quickActionSettings"];
+  optional bool allow_private_workers = 12 [json_name = "allowPrivateWorkers"];
+  optional string default_environment_public_id = 13 [json_name = "defaultEnvironmentPublicId"];
   repeated .aiserver.v1.BackgroundComposerDefaultEnvironmentSetting default_environment_settings = 14 [json_name = "defaultEnvironmentSettings"];
-  bool remote_control_enabled = 15 [json_name = "remoteControlEnabled"];
-  .aiserver.v1.PrReviewOpenSurfaceMode pr_review_open_surface = 16 [json_name = "prReviewOpenSurface"];
+  optional bool remote_control_enabled = 15 [json_name = "remoteControlEnabled"];
+  optional .aiserver.v1.PrReviewOpenSurfaceMode pr_review_open_surface = 16 [json_name = "prReviewOpenSurface"];
   repeated string sidebar_named_agent_ids = 17 [json_name = "sidebarNamedAgentIds"];
-  .aiserver.v1.CloudAgentModelSelection default_model_selection = 18 [json_name = "defaultModelSelection"];
-  int32 ask_question_auto_answer_timeout_minutes = 19 [json_name = "askQuestionAutoAnswerTimeoutMinutes"];
+  optional .aiserver.v1.CloudAgentModelSelection default_model_selection = 18 [json_name = "defaultModelSelection"];
+  optional int32 ask_question_auto_answer_timeout_minutes = 19 [json_name = "askQuestionAutoAnswerTimeoutMinutes"];
 }
 
 message GetBackgroundComposerVmUsageRequest {
@@ -1913,22 +1913,22 @@ message GetBlobForAgentKVResponse {
 
 message GetCloudAgentDebugDetailsRequest {
   string bc_id = 1 [json_name = "bcId"];
-  bytes agent_blob_id = 2 [json_name = "agentBlobId"];
-  bytes blob_id = 3 [json_name = "blobId"];
+  optional bytes agent_blob_id = 2 [json_name = "agentBlobId"];
+  optional bytes blob_id = 3 [json_name = "blobId"];
 }
 
 message GetCloudAgentDebugDetailsResponse {
   bytes cloud_agent_state_blob_id = 1 [json_name = "cloudAgentStateBlobId"];
-  .aiserver.v1.CloudAgentState cloud_agent_state = 2 [json_name = "cloudAgentState"];
+  optional .aiserver.v1.CloudAgentState cloud_agent_state = 2 [json_name = "cloudAgentState"];
   repeated .aiserver.v1.StreamConversationResponse stream_messages = 3 [json_name = "streamMessages"];
   repeated .aiserver.v1.PreFetchedBlob pre_fetched_blobs = 4 [json_name = "preFetchedBlobs"];
-  .aiserver.v1.CloudAgentVmHistory vm_history = 5 [json_name = "vmHistory"];
+  optional .aiserver.v1.CloudAgentVmHistory vm_history = 5 [json_name = "vmHistory"];
 }
 
 message GetCloudAgentMemoryDbLogsRequest {
   string bc_id = 1 [json_name = "bcId"];
-  uint32 worker_index = 2 [json_name = "workerIndex"];
-  int32 limit = 3 [json_name = "limit"];
+  optional uint32 worker_index = 2 [json_name = "workerIndex"];
+  optional int32 limit = 3 [json_name = "limit"];
 }
 
 message GetCloudAgentMemoryDbLogsResponse {
@@ -1941,14 +1941,14 @@ message GetCloudAgentRunForDashboardRequest {
 }
 
 message GetCloudAgentRunForDashboardResponse {
-  .aiserver.v1.CloudAgentDashboardRunRow row = 1 [json_name = "row"];
+  optional .aiserver.v1.CloudAgentDashboardRunRow row = 1 [json_name = "row"];
   string name = 2 [json_name = "name"];
 }
 
 message GetCursorServerUrlRequest {
   string bc_id = 1 [json_name = "bcId"];
   string commit = 2 [json_name = "commit"];
-  string connection_token = 3 [json_name = "connectionToken"];
+  optional string connection_token = 3 [json_name = "connectionToken"];
 }
 
 message GetCursorServerUrlResponse {
@@ -1964,7 +1964,7 @@ message GetCursorServerUrlResponse {
 
 message GetDetailedPullRequestStatusRequest {
   string pr_url = 1 [json_name = "prUrl"];
-  int32 cache_expiration_seconds = 2 [json_name = "cacheExpirationSeconds"];
+  optional int32 cache_expiration_seconds = 2 [json_name = "cacheExpirationSeconds"];
 }
 
 message GetDetailedPullRequestStatusResponse {
@@ -1977,17 +1977,17 @@ message GetDetailedPullRequestStatusResponse {
   string base_branch = 7 [json_name = "baseBranch"];
   int32 behind_by = 8 [json_name = "behindBy"];
   bool can_update_branch = 9 [json_name = "canUpdateBranch"];
-  .aiserver.v1.PRCheckStatus check_status = 10 [json_name = "checkStatus"];
-  string review_decision = 11 [json_name = "reviewDecision"];
+  optional .aiserver.v1.PRCheckStatus check_status = 10 [json_name = "checkStatus"];
+  optional string review_decision = 11 [json_name = "reviewDecision"];
   bool is_auto_merge_enabled = 12 [json_name = "isAutoMergeEnabled"];
-  string head_sha = 13 [json_name = "headSha"];
-  string base_sha = 14 [json_name = "baseSha"];
-  bool viewer_can_enable_auto_merge = 15 [json_name = "viewerCanEnableAutoMerge"];
+  optional string head_sha = 13 [json_name = "headSha"];
+  optional string base_sha = 14 [json_name = "baseSha"];
+  optional bool viewer_can_enable_auto_merge = 15 [json_name = "viewerCanEnableAutoMerge"];
   repeated .aiserver.v1.PRDeploymentPreview deployment_previews = 16 [json_name = "deploymentPreviews"];
-  int32 additions = 17 [json_name = "additions"];
-  int32 deletions = 18 [json_name = "deletions"];
-  int32 commit_count = 19 [json_name = "commitCount"];
-  int32 review_count = 20 [json_name = "reviewCount"];
+  optional int32 additions = 17 [json_name = "additions"];
+  optional int32 deletions = 18 [json_name = "deletions"];
+  optional int32 commit_count = 19 [json_name = "commitCount"];
+  optional int32 review_count = 20 [json_name = "reviewCount"];
   repeated .aiserver.v1.PRReviewSummary reviewers = 21 [json_name = "reviewers"];
   repeated .aiserver.v1.PRRequestedReviewer requested_reviewers = 22 [json_name = "requestedReviewers"];
 }
@@ -1997,7 +1997,7 @@ message GetEnvironmentActiveBuildRequest {
 }
 
 message GetEnvironmentActiveBuildResponse {
-  .aiserver.v1.EnvironmentBuildRow row = 1 [json_name = "row"];
+  optional .aiserver.v1.EnvironmentBuildRow row = 1 [json_name = "row"];
 }
 
 message GetEnvironmentBuildRequest {
@@ -2005,7 +2005,7 @@ message GetEnvironmentBuildRequest {
 }
 
 message GetEnvironmentBuildResponse {
-  .aiserver.v1.EnvironmentBuildRow row = 1 [json_name = "row"];
+  optional .aiserver.v1.EnvironmentBuildRow row = 1 [json_name = "row"];
 }
 
 message GetEnvironmentBuildSettingsRequest {
@@ -2013,14 +2013,14 @@ message GetEnvironmentBuildSettingsRequest {
 }
 
 message GetEnvironmentBuildSettingsResponse {
-  .aiserver.v1.EnvironmentBuildSettings settings = 1 [json_name = "settings"];
+  optional .aiserver.v1.EnvironmentBuildSettings settings = 1 [json_name = "settings"];
 }
 
 message GetEnvironmentHistoryRequest {
-  .aiserver.v1.EnvironmentRepoConfig repo_config = 1 [json_name = "repoConfig"];
+  optional .aiserver.v1.EnvironmentRepoConfig repo_config = 1 [json_name = "repoConfig"];
   repeated string environment_public_ids = 2 [json_name = "environmentPublicIds"];
-  int32 limit = 3 [json_name = "limit"];
-  string dashboard_scope_id = 4 [json_name = "dashboardScopeId"];
+  optional int32 limit = 3 [json_name = "limit"];
+  optional string dashboard_scope_id = 4 [json_name = "dashboardScopeId"];
 }
 
 message GetEnvironmentHistoryResponse {
@@ -2036,9 +2036,9 @@ message GetEnvironmentJsonCandidatesRequest {
 }
 
 message GetEnvironmentJsonCandidatesResponse {
-  string repo_environment_json = 1 [json_name = "repoEnvironmentJson"];
-  string personal_environment_json = 2 [json_name = "personalEnvironmentJson"];
-  string team_environment_json = 3 [json_name = "teamEnvironmentJson"];
+  optional string repo_environment_json = 1 [json_name = "repoEnvironmentJson"];
+  optional string personal_environment_json = 2 [json_name = "personalEnvironmentJson"];
+  optional string team_environment_json = 3 [json_name = "teamEnvironmentJson"];
 }
 
 message GetEnvironmentPersistentRecurringBuildFailuresRequest {
@@ -2046,34 +2046,34 @@ message GetEnvironmentPersistentRecurringBuildFailuresRequest {
 }
 
 message GetEnvironmentPersistentRecurringBuildFailuresResponse {
-  .aiserver.v1.PersistentRecurringBuildFailure failure = 1 [json_name = "failure"];
+  optional .aiserver.v1.PersistentRecurringBuildFailure failure = 1 [json_name = "failure"];
 }
 
 message GetEnvironmentRequest {
   string public_id = 1 [json_name = "publicId"];
-  bool include_environment_json = 2 [json_name = "includeEnvironmentJson"];
+  optional bool include_environment_json = 2 [json_name = "includeEnvironmentJson"];
 }
 
 message GetEnvironmentResponse {
-  .aiserver.v1.LogicalEnvironment environment = 1 [json_name = "environment"];
+  optional .aiserver.v1.LogicalEnvironment environment = 1 [json_name = "environment"];
 }
 
 message GetGithubAccessTokenForReposRequest {
   repeated string mandatory_repo_urls = 1 [json_name = "mandatoryRepoUrls"];
   repeated string optional_repo_urls = 2 [json_name = "optionalRepoUrls"];
-  bool skip_cache = 3 [json_name = "skipCache"];
+  optional bool skip_cache = 3 [json_name = "skipCache"];
 }
 
 message GetGithubAccessTokenForReposResponse {
-  bool has_access = 1 [json_name = "hasAccess"];
-  string error = 2 [json_name = "error"];
+  optional bool has_access = 1 [json_name = "hasAccess"];
+  optional string error = 2 [json_name = "error"];
   repeated .aiserver.v1.GetGithubAccessTokenForReposResponse.Status repo_url_statuses = 3 [json_name = "repoUrlStatuses"];
   .aiserver.v1.GithubAccessErrorType error_type = 4 [json_name = "errorType"];
-  string github_redirect_url = 5 [json_name = "githubRedirectUrl"];
+  optional string github_redirect_url = 5 [json_name = "githubRedirectUrl"];
   message Status {
     string repo_url = 1 [json_name = "repoUrl"];
     bool has_access = 2 [json_name = "hasAccess"];
-    string error = 3 [json_name = "error"];
+    optional string error = 3 [json_name = "error"];
   }
 }
 
@@ -2082,7 +2082,7 @@ message GetLatestAgentConversationStateRequest {
 }
 
 message GetLatestAgentConversationStateResponse {
-  .aiserver.v1.LatestAgentConversationState latest_conversation_state = 1 [json_name = "latestConversationState"];
+  optional .aiserver.v1.LatestAgentConversationState latest_conversation_state = 1 [json_name = "latestConversationState"];
   repeated .aiserver.v1.PreFetchedBlob pre_fetched_blobs = 2 [json_name = "preFetchedBlobs"];
 }
 
@@ -2091,23 +2091,23 @@ message GetMachineRequest {
 }
 
 message GetMachineResponse {
-  .aiserver.v1.MachineReference machine = 1 [json_name = "machine"];
+  optional .aiserver.v1.MachineReference machine = 1 [json_name = "machine"];
 }
 
 message GetOptimizedDiffDetailsRequest {
   string bc_id = 1 [json_name = "bcId"];
   bool exclude_before_after_diffs = 2 [json_name = "excludeBeforeAfterDiffs"];
   bool committed_only = 3 [json_name = "committedOnly"];
-  string branch_name = 4 [json_name = "branchName"];
-  string repo_url = 5 [json_name = "repoUrl"];
+  optional string branch_name = 4 [json_name = "branchName"];
+  optional string repo_url = 5 [json_name = "repoUrl"];
 }
 
 message GetOptimizedDiffDetailsResponse {
-  .aiserver.v1.GitDiff diff = 1 [json_name = "diff"];
+  optional .aiserver.v1.GitDiff diff = 1 [json_name = "diff"];
   repeated .aiserver.v1.GetOptimizedDiffDetailsResponse.SubmoduleDiff submodule_diffs = 2 [json_name = "submoduleDiffs"];
   message SubmoduleDiff {
     string relative_path = 1 [json_name = "relativePath"];
-    .aiserver.v1.GitDiff diff = 2 [json_name = "diff"];
+    optional .aiserver.v1.GitDiff diff = 2 [json_name = "diff"];
     bool errored = 3 [json_name = "errored"];
   }
 }
@@ -2126,16 +2126,16 @@ message GetPrivateWorkerRequest {
 }
 
 message GetPrivateWorkerResponse {
-  .aiserver.v1.PrivateWorker worker = 1 [json_name = "worker"];
+  optional .aiserver.v1.PrivateWorker worker = 1 [json_name = "worker"];
 }
 
 message GetPrivateWorkersSummaryRequest {
 }
 
 message GetPrivateWorkersSummaryResponse {
-  .aiserver.v1.UserWorkerSummary user_summary = 1 [json_name = "userSummary"];
-  .aiserver.v1.TeamWorkerSummary team_summary = 2 [json_name = "teamSummary"];
-  .aiserver.v1.TeamWorkerLimitSummary team_limit_summary = 3 [json_name = "teamLimitSummary"];
+  optional .aiserver.v1.UserWorkerSummary user_summary = 1 [json_name = "userSummary"];
+  optional .aiserver.v1.TeamWorkerSummary team_summary = 2 [json_name = "teamSummary"];
+  optional .aiserver.v1.TeamWorkerLimitSummary team_limit_summary = 3 [json_name = "teamLimitSummary"];
 }
 
 message GetPublicBackgroundComposerArtifactRequest {
@@ -2145,34 +2145,34 @@ message GetPublicBackgroundComposerArtifactRequest {
 message GetPublicBackgroundComposerArtifactResponse {
   string url = 1 [json_name = "url"];
   string content_type = 2 [json_name = "contentType"];
-  string title = 3 [json_name = "title"];
+  optional string title = 3 [json_name = "title"];
 }
 
 message GetPullRequestCommitsRequest {
   string pr_url = 1 [json_name = "prUrl"];
-  string after_cursor = 2 [json_name = "afterCursor"];
+  optional string after_cursor = 2 [json_name = "afterCursor"];
 }
 
 message GetPullRequestCommitsResponse {
   repeated .aiserver.v1.PRCommit commits = 1 [json_name = "commits"];
   bool has_next_page = 2 [json_name = "hasNextPage"];
-  string end_cursor = 3 [json_name = "endCursor"];
+  optional string end_cursor = 3 [json_name = "endCursor"];
 }
 
 message GetPullRequestDiscussionsRequest {
   string pr_url = 1 [json_name = "prUrl"];
-  bool skip_cache = 2 [json_name = "skipCache"];
+  optional bool skip_cache = 2 [json_name = "skipCache"];
 }
 
 message GetPullRequestDiscussionsResponse {
   repeated .aiserver.v1.PRReviewThread threads = 1 [json_name = "threads"];
   repeated .aiserver.v1.PRTopLevelComment top_level_comments = 2 [json_name = "topLevelComments"];
-  .aiserver.v1.PRCheckStatus check_status = 3 [json_name = "checkStatus"];
+  optional .aiserver.v1.PRCheckStatus check_status = 3 [json_name = "checkStatus"];
 }
 
 message GetPullRequestMergeStatusRequest {
   string pr_url = 1 [json_name = "prUrl"];
-  bool include_behind_count = 2 [json_name = "includeBehindCount"];
+  optional bool include_behind_count = 2 [json_name = "includeBehindCount"];
 }
 
 message GetPullRequestMergeStatusResponse {
@@ -2186,26 +2186,26 @@ message GetPullRequestMergeStatusResponse {
   int32 behind_by = 8 [json_name = "behindBy"];
   bool can_update_branch = 9 [json_name = "canUpdateBranch"];
   bool is_auto_merge_enabled = 10 [json_name = "isAutoMergeEnabled"];
-  bool viewer_can_enable_auto_merge = 11 [json_name = "viewerCanEnableAutoMerge"];
+  optional bool viewer_can_enable_auto_merge = 11 [json_name = "viewerCanEnableAutoMerge"];
 }
 
 message GetPullRequestTimelineEventsRequest {
   string pr_url = 1 [json_name = "prUrl"];
-  int32 page = 2 [json_name = "page"];
+  optional int32 page = 2 [json_name = "page"];
 }
 
 message GetPullRequestTimelineEventsResponse {
   repeated .aiserver.v1.PRTimelineEvent events = 1 [json_name = "events"];
   bool has_next_page = 2 [json_name = "hasNextPage"];
-  int32 next_page = 3 [json_name = "nextPage"];
+  optional int32 next_page = 3 [json_name = "nextPage"];
 }
 
 message GetRepositoryBranchesRequest {
   string repo_url = 1 [json_name = "repoUrl"];
-  int32 page = 2 [json_name = "page"];
-  string query = 3 [json_name = "query"];
-  bool only_user_branches = 4 [json_name = "onlyUserBranches"];
-  int32 team_id = 5 [json_name = "teamId"];
+  optional int32 page = 2 [json_name = "page"];
+  optional string query = 3 [json_name = "query"];
+  optional bool only_user_branches = 4 [json_name = "onlyUserBranches"];
+  optional int32 team_id = 5 [json_name = "teamId"];
 }
 
 message GetRepositoryBranchesResponse {
@@ -2222,7 +2222,7 @@ message GetRepositoryBranchesResponse {
 
 message GetTurnSummaryBackgroundComposerRequest {
   string bc_id = 1 [json_name = "bcId"];
-  .aiserver.v1.BackgroundComposerSource source_type = 2 [json_name = "sourceType"];
+  optional .aiserver.v1.BackgroundComposerSource source_type = 2 [json_name = "sourceType"];
 }
 
 message GetTurnSummaryBackgroundComposerResponse {
@@ -2240,26 +2240,26 @@ enum GithubAccessErrorType {
 }
 
 message GithubSourceMetadata {
-  string issue_id = 1 [json_name = "issueId"];
-  int32 pr_number = 2 [json_name = "prNumber"];
-  string pr_title = 3 [json_name = "prTitle"];
-  string issue_title = 4 [json_name = "issueTitle"];
-  string issue_url = 5 [json_name = "issueUrl"];
+  optional string issue_id = 1 [json_name = "issueId"];
+  optional int32 pr_number = 2 [json_name = "prNumber"];
+  optional string pr_title = 3 [json_name = "prTitle"];
+  optional string issue_title = 4 [json_name = "issueTitle"];
+  optional string issue_url = 5 [json_name = "issueUrl"];
 }
 
 message GitlabSourceMetadata {
-  int32 mr_iid = 1 [json_name = "mrIid"];
-  string mr_title = 2 [json_name = "mrTitle"];
-  string mr_web_url = 3 [json_name = "mrWebUrl"];
+  optional int32 mr_iid = 1 [json_name = "mrIid"];
+  optional string mr_title = 2 [json_name = "mrTitle"];
+  optional string mr_web_url = 3 [json_name = "mrWebUrl"];
 }
 
 message GrindModeConfig {
   int64 time_budget_ms = 1 [json_name = "timeBudgetMs"];
-  int64 start_time_unix_ms = 2 [json_name = "startTimeUnixMs"];
+  optional int64 start_time_unix_ms = 2 [json_name = "startTimeUnixMs"];
   .aiserver.v1.GrindModeConfig.Phase phase = 3 [json_name = "phase"];
-  bool auto_proceed_after_planning = 4 [json_name = "autoProceedAfterPlanning"];
-  int64 time_budget_seconds = 5 [json_name = "timeBudgetSeconds"];
-  bool grind_prompt_calibrate_effort = 6 [json_name = "grindPromptCalibrateEffort"];
+  optional bool auto_proceed_after_planning = 4 [json_name = "autoProceedAfterPlanning"];
+  optional int64 time_budget_seconds = 5 [json_name = "timeBudgetSeconds"];
+  optional bool grind_prompt_calibrate_effort = 6 [json_name = "grindPromptCalibrateEffort"];
   enum Phase {
     PHASE_UNSPECIFIED = 0;
     PHASE_PLANNING = 1;
@@ -2270,39 +2270,39 @@ message GrindModeConfig {
 
 message GrindModeTrackingState {
   int32 no_tool_turn_streak = 1 [json_name = "noToolTurnStreak"];
-  string pending_done_token = 2 [json_name = "pendingDoneToken"];
+  optional string pending_done_token = 2 [json_name = "pendingDoneToken"];
   bool final_summary_requested = 3 [json_name = "finalSummaryRequested"];
-  int64 start_time_unix_ms = 4 [json_name = "startTimeUnixMs"];
+  optional int64 start_time_unix_ms = 4 [json_name = "startTimeUnixMs"];
 }
 
 message HeadlessAgenticComposerConfig {
   string chat_model_name = 2 [json_name = "chatModelName"];
   bool auto_commit = 4 [json_name = "autoCommit"];
-  .aiserver.v1.ModelDetails chat_model_details = 5 [json_name = "chatModelDetails"];
+  optional .aiserver.v1.ModelDetails chat_model_details = 5 [json_name = "chatModelDetails"];
   bool is_background = 6 [json_name = "isBackground"];
-  bool auto_create_pr = 7 [json_name = "autoCreatePr"];
-  .aiserver.v1.BackgroundComposerSource background_agent_source = 8 [json_name = "backgroundAgentSource"];
-  bool open_as_cursor_github_app = 9 [json_name = "openAsCursorGithubApp"];
-  bool skip_reviewer_request = 10 [json_name = "skipReviewerRequest"];
-  bool enable_cloud_testing = 11 [json_name = "enableCloudTesting"];
-  bool enable_setup_vm_environment_tool = 12 [json_name = "enableSetupVmEnvironmentTool"];
+  optional bool auto_create_pr = 7 [json_name = "autoCreatePr"];
+  optional .aiserver.v1.BackgroundComposerSource background_agent_source = 8 [json_name = "backgroundAgentSource"];
+  optional bool open_as_cursor_github_app = 9 [json_name = "openAsCursorGithubApp"];
+  optional bool skip_reviewer_request = 10 [json_name = "skipReviewerRequest"];
+  optional bool enable_cloud_testing = 11 [json_name = "enableCloudTesting"];
+  optional bool enable_setup_vm_environment_tool = 12 [json_name = "enableSetupVmEnvironmentTool"];
   repeated .aiserver.v1.ModelDetails additional_model_details = 13 [json_name = "additionalModelDetails"];
-  bool should_synthesize = 14 [json_name = "shouldSynthesize"];
-  bool show_onboarding_setup_note_for_manual_testing = 15 [json_name = "showOnboardingSetupNoteForManualTesting"];
-  .agent.v1.RequestedModel requested_model = 16 [json_name = "requestedModel"];
-  .aiserver.v1.CloudSubagentParentReference cloud_subagent_parent = 17 [json_name = "cloudSubagentParent"];
-  bool enable_computer_use = 18 [json_name = "enableComputerUse"];
-  bool is_slack_v2 = 19 [json_name = "isSlackV2"];
-  string named_agent_id = 20 [json_name = "namedAgentId"];
-  string named_agent_session_key = 21 [json_name = "namedAgentSessionKey"];
-  string named_agent_session_kind = 22 [json_name = "namedAgentSessionKind"];
-  string initiating_client_version = 23 [json_name = "initiatingClientVersion"];
-  string initiating_client_commit = 24 [json_name = "initiatingClientCommit"];
-  bool is_slack_v1_5 = 25 [json_name = "isSlackV15"];
-  bool use_experimental_model_opt_out = 26 [json_name = "useExperimentalModelOptOut"];
-  bool disable_computer_use_reflect = 27 [json_name = "disableComputerUseReflect"];
-  bool disable_pr_management_tool = 28 [json_name = "disablePrManagementTool"];
-  bool supports_managed_review_agents = 29 [json_name = "supportsManagedReviewAgents"];
+  optional bool should_synthesize = 14 [json_name = "shouldSynthesize"];
+  optional bool show_onboarding_setup_note_for_manual_testing = 15 [json_name = "showOnboardingSetupNoteForManualTesting"];
+  optional .agent.v1.RequestedModel requested_model = 16 [json_name = "requestedModel"];
+  optional .aiserver.v1.CloudSubagentParentReference cloud_subagent_parent = 17 [json_name = "cloudSubagentParent"];
+  optional bool enable_computer_use = 18 [json_name = "enableComputerUse"];
+  optional bool is_slack_v2 = 19 [json_name = "isSlackV2"];
+  optional string named_agent_id = 20 [json_name = "namedAgentId"];
+  optional string named_agent_session_key = 21 [json_name = "namedAgentSessionKey"];
+  optional string named_agent_session_kind = 22 [json_name = "namedAgentSessionKind"];
+  optional string initiating_client_version = 23 [json_name = "initiatingClientVersion"];
+  optional string initiating_client_commit = 24 [json_name = "initiatingClientCommit"];
+  optional bool is_slack_v1_5 = 25 [json_name = "isSlackV15"];
+  optional bool use_experimental_model_opt_out = 26 [json_name = "useExperimentalModelOptOut"];
+  optional bool disable_computer_use_reflect = 27 [json_name = "disableComputerUseReflect"];
+  optional bool disable_pr_management_tool = 28 [json_name = "disablePrManagementTool"];
+  optional bool supports_managed_review_agents = 29 [json_name = "supportsManagedReviewAgents"];
 }
 
 message HeadlessAgenticComposerPrompt {
@@ -2310,11 +2310,11 @@ message HeadlessAgenticComposerPrompt {
   repeated .aiserver.v1.HeadlessAgenticComposerPrompt.FileSelection file_selections = 2 [json_name = "fileSelections"];
   repeated .aiserver.v1.HeadlessAgenticComposerPrompt.FileAttachment file_attachments = 3 [json_name = "fileAttachments"];
   repeated .aiserver.v1.ImageProto images = 4 [json_name = "images"];
-  .aiserver.v1.ConversationMessage base_conversation_message = 5 [json_name = "baseConversationMessage"];
+  optional .aiserver.v1.ConversationMessage base_conversation_message = 5 [json_name = "baseConversationMessage"];
   string rich_text = 6 [json_name = "richText"];
   repeated .aiserver.v1.ConversationMessage conversation_history = 7 [json_name = "conversationHistory"];
   repeated string documentation_identifiers = 8 [json_name = "documentationIdentifiers"];
-  bool use_web = 9 [json_name = "useWeb"];
+  optional bool use_web = 9 [json_name = "useWeb"];
   repeated .aiserver.v1.ComposerExternalLink external_links = 10 [json_name = "externalLinks"];
   repeated .internapi.v1.BlobDataPerMessage blob_data_per_message = 11 [json_name = "blobDataPerMessage"];
   message FileAttachment {
@@ -2327,35 +2327,35 @@ message HeadlessAgenticComposerPrompt {
 }
 
 message HeadlessAgenticComposerRepositoryInfo {
-  .aiserver.v1.RepositoryInfo repository_info = 1 [json_name = "repositoryInfo"];
+  optional .aiserver.v1.RepositoryInfo repository_info = 1 [json_name = "repositoryInfo"];
   string path_encryption_key = 2 [json_name = "pathEncryptionKey"];
   bool repository_info_should_query_staging = 3 [json_name = "repositoryInfoShouldQueryStaging"];
   bool repository_info_should_query_prod = 4 [json_name = "repositoryInfoShouldQueryProd"];
   string repo_query_auth_token = 5 [json_name = "repoQueryAuthToken"];
   bool should_sync_index = 6 [json_name = "shouldSyncIndex"];
-  .aiserver.v1.QueryOnlyRepoAccess query_only_repo_access = 7 [json_name = "queryOnlyRepoAccess"];
+  optional .aiserver.v1.QueryOnlyRepoAccess query_only_repo_access = 7 [json_name = "queryOnlyRepoAccess"];
 }
 
 message HeadlessAgenticComposerResponse {
   string text = 1 [json_name = "text"];
-  .aiserver.v1.ClientSideToolV2Call tool_call = 2 [json_name = "toolCall"];
-  .aiserver.v1.HeadlessAgenticComposerResponse.FinalToolResult final_tool_result = 3 [json_name = "finalToolResult"];
-  .aiserver.v1.HeadlessAgenticComposerResponse.UserMessage user_message = 4 [json_name = "userMessage"];
+  optional .aiserver.v1.ClientSideToolV2Call tool_call = 2 [json_name = "toolCall"];
+  optional .aiserver.v1.HeadlessAgenticComposerResponse.FinalToolResult final_tool_result = 3 [json_name = "finalToolResult"];
+  optional .aiserver.v1.HeadlessAgenticComposerResponse.UserMessage user_message = 4 [json_name = "userMessage"];
   bool is_message_done = 5 [json_name = "isMessageDone"];
-  .aiserver.v1.StreamedBackToolCall streamed_back_tool_call = 6 [json_name = "streamedBackToolCall"];
-  .aiserver.v1.HeadlessAgenticComposerResponse.Error error = 7 [json_name = "error"];
-  .aiserver.v1.ConversationMessage human_message = 8 [json_name = "humanMessage"];
-  .aiserver.v1.ConversationMessage.Thinking thinking = 9 [json_name = "thinking"];
-  int32 thinking_duration_ms = 10 [json_name = "thinkingDurationMs"];
-  .aiserver.v1.HeadlessAgenticComposerResponse.Status status = 11 [json_name = "status"];
-  .aiserver.v1.ConversationMessage.ThinkingStyle thinking_style = 12 [json_name = "thinkingStyle"];
+  optional .aiserver.v1.StreamedBackToolCall streamed_back_tool_call = 6 [json_name = "streamedBackToolCall"];
+  optional .aiserver.v1.HeadlessAgenticComposerResponse.Error error = 7 [json_name = "error"];
+  optional .aiserver.v1.ConversationMessage human_message = 8 [json_name = "humanMessage"];
+  optional .aiserver.v1.ConversationMessage.Thinking thinking = 9 [json_name = "thinking"];
+  optional int32 thinking_duration_ms = 10 [json_name = "thinkingDurationMs"];
+  optional .aiserver.v1.HeadlessAgenticComposerResponse.Status status = 11 [json_name = "status"];
+  optional .aiserver.v1.ConversationMessage.ThinkingStyle thinking_style = 12 [json_name = "thinkingStyle"];
   message Error {
     string message = 1 [json_name = "message"];
-    .aiserver.v1.ErrorDetails error_details = 2 [json_name = "errorDetails"];
+    optional .aiserver.v1.ErrorDetails error_details = 2 [json_name = "errorDetails"];
   }
   message FinalToolResult {
     string tool_call_id = 1 [json_name = "toolCallId"];
-    .aiserver.v1.ClientSideToolV2Result result = 2 [json_name = "result"];
+    optional .aiserver.v1.ClientSideToolV2Result result = 2 [json_name = "result"];
   }
   message Status {
     .aiserver.v1.HeadlessAgenticComposerResponse.Status.StatusType type = 1 [json_name = "type"];
@@ -2375,9 +2375,9 @@ message HeadlessAgenticComposerResponse {
 
 message InjectBackgroundComposerContextRequest {
   string bc_id = 1 [json_name = "bcId"];
-  .agent.v1.InjectContextAction inject_context_action = 2 [json_name = "injectContextAction"];
+  optional .agent.v1.InjectContextAction inject_context_action = 2 [json_name = "injectContextAction"];
   .aiserver.v1.BackgroundComposerSource source = 3 [json_name = "source"];
-  .aiserver.v1.ConversationMessage followup_message = 4 [json_name = "followupMessage"];
+  optional .aiserver.v1.ConversationMessage followup_message = 4 [json_name = "followupMessage"];
   string promote_followup_id = 5 [json_name = "promoteFollowupId"];
 }
 
@@ -2392,21 +2392,21 @@ message InjectBackgroundComposerContextResponse {
 }
 
 message LatestAgentConversationState {
-  .agent.v1.ConversationStateStructure conversation_state = 1 [json_name = "conversationState"];
+  optional .agent.v1.ConversationStateStructure conversation_state = 1 [json_name = "conversationState"];
   uint32 num_prior_interaction_updates = 2 [json_name = "numPriorInteractionUpdates"];
-  uint32 conversation_rewind_epoch = 3 [json_name = "conversationRewindEpoch"];
+  optional uint32 conversation_rewind_epoch = 3 [json_name = "conversationRewindEpoch"];
 }
 
 message LinearSourceMetadata {
-  string issue_id = 1 [json_name = "issueId"];
-  string org_id = 2 [json_name = "orgId"];
-  string issue_identifier = 3 [json_name = "issueIdentifier"];
-  string issue_title = 4 [json_name = "issueTitle"];
+  optional string issue_id = 1 [json_name = "issueId"];
+  optional string org_id = 2 [json_name = "orgId"];
+  optional string issue_identifier = 3 [json_name = "issueIdentifier"];
+  optional string issue_title = 4 [json_name = "issueTitle"];
 }
 
 message ListAgentStoreDirectoryRequest {
-  string store_id = 1 [json_name = "storeId"];
-  string share_id = 2 [json_name = "shareId"];
+  optional string store_id = 1 [json_name = "storeId"];
+  optional string share_id = 2 [json_name = "shareId"];
   string relative_path = 3 [json_name = "relativePath"];
   int32 page_size = 4 [json_name = "pageSize"];
   string page_token = 5 [json_name = "pageToken"];
@@ -2424,7 +2424,7 @@ message ListAgentStoreDirectoryResponse {
 message ListAgentStoreEntriesRequest {
   string store_id = 1 [json_name = "storeId"];
   string relative_path = 2 [json_name = "relativePath"];
-  string share_id = 3 [json_name = "shareId"];
+  optional string share_id = 3 [json_name = "shareId"];
 }
 
 message ListAgentStoreEntriesResponse {
@@ -2434,8 +2434,8 @@ message ListAgentStoreEntriesResponse {
 
 message ListAgentStoreFilesRequest {
   string agent_id = 1 [json_name = "agentId"];
-  string share_id = 2 [json_name = "shareId"];
-  string store_id = 3 [json_name = "storeId"];
+  optional string share_id = 2 [json_name = "shareId"];
+  optional string store_id = 3 [json_name = "storeId"];
 }
 
 message ListAgentStoreFilesResponse {
@@ -2446,13 +2446,13 @@ message ListAgentStoreFilesResponse {
 
 message ListAgentStoresRequest {
   int32 n = 1 [json_name = "n"];
-  string page_token = 5 [json_name = "pageToken"];
+  optional string page_token = 5 [json_name = "pageToken"];
 }
 
 message ListAgentStoresResponse {
   repeated .aiserver.v1.AgentStore stores = 1 [json_name = "stores"];
   bool has_more = 2 [json_name = "hasMore"];
-  string next_page_token = 4 [json_name = "nextPageToken"];
+  optional string next_page_token = 4 [json_name = "nextPageToken"];
 }
 
 message ListBackgroundComposerArtifactsRequest {
@@ -2473,7 +2473,7 @@ message ListBackgroundComposerChildrenResponse {
 
 message ListBackgroundComposerSnapshotStatusesByBcIdsRequest {
   repeated string bc_ids = 1 [json_name = "bcIds"];
-  bool use_primary = 2 [json_name = "usePrimary"];
+  optional bool use_primary = 2 [json_name = "usePrimary"];
 }
 
 message ListBackgroundComposerSnapshotStatusesByBcIdsResponse {
@@ -2482,8 +2482,8 @@ message ListBackgroundComposerSnapshotStatusesByBcIdsResponse {
 
 message ListBackgroundComposerSnapshotsByBcIdRequest {
   string bc_id = 1 [json_name = "bcId"];
-  bool use_primary = 2 [json_name = "usePrimary"];
-  uint32 limit = 3 [json_name = "limit"];
+  optional bool use_primary = 2 [json_name = "usePrimary"];
+  optional uint32 limit = 3 [json_name = "limit"];
 }
 
 message ListBackgroundComposerSnapshotsByBcIdResponse {
@@ -2493,26 +2493,26 @@ message ListBackgroundComposerSnapshotsByBcIdResponse {
 message ListBackgroundComposersRequest {
   int32 n = 1 [json_name = "n"];
   bool include_team_wide = 2 [json_name = "includeTeamWide"];
-  string bc_id = 3 [json_name = "bcId"];
-  string preferred_repo_url = 4 [json_name = "preferredRepoUrl"];
+  optional string bc_id = 3 [json_name = "bcId"];
+  optional string preferred_repo_url = 4 [json_name = "preferredRepoUrl"];
   repeated string additional_repo_urls = 5 [json_name = "additionalRepoUrls"];
   bool include_status = 6 [json_name = "includeStatus"];
   repeated .aiserver.v1.BackgroundComposerSource include_sources = 7 [json_name = "includeSources"];
-  .aiserver.v1.OwnerFilter owner_filter = 8 [json_name = "ownerFilter"];
-  double last_message_activity_at_ms_offset = 9 [json_name = "lastMessageActivityAtMsOffset"];
-  bool include_archived = 10 [json_name = "includeArchived"];
-  bool should_include_collaborators = 11 [json_name = "shouldIncludeCollaborators"];
-  int32 team_id = 12 [json_name = "teamId"];
+  optional .aiserver.v1.OwnerFilter owner_filter = 8 [json_name = "ownerFilter"];
+  optional double last_message_activity_at_ms_offset = 9 [json_name = "lastMessageActivityAtMsOffset"];
+  optional bool include_archived = 10 [json_name = "includeArchived"];
+  optional bool should_include_collaborators = 11 [json_name = "shouldIncludeCollaborators"];
+  optional int32 team_id = 12 [json_name = "teamId"];
   repeated .aiserver.v1.BackgroundComposerSource include_hidden_sources = 13 [json_name = "includeHiddenSources"];
-  string preferred_workspace_binding_id = 14 [json_name = "preferredWorkspaceBindingId"];
-  bool include_pinned_state = 15 [json_name = "includePinnedState"];
+  optional string preferred_workspace_binding_id = 14 [json_name = "preferredWorkspaceBindingId"];
+  optional bool include_pinned_state = 15 [json_name = "includePinnedState"];
 }
 
 message ListBackgroundComposersResponse {
   repeated .aiserver.v1.BackgroundComposer composers = 1 [json_name = "composers"];
   bool did_load_status = 2 [json_name = "didLoadStatus"];
   bool has_more = 3 [json_name = "hasMore"];
-  double next_page_offset = 4 [json_name = "nextPageOffset"];
+  optional double next_page_offset = 4 [json_name = "nextPageOffset"];
   repeated .aiserver.v1.BackgroundComposerParticipant participants = 5 [json_name = "participants"];
   repeated string pinned_bc_ids = 6 [json_name = "pinnedBcIds"];
   bool did_load_pinned_state = 7 [json_name = "didLoadPinnedState"];
@@ -2527,28 +2527,28 @@ message ListCloudAgentRunEventsForDashboardResponse {
 }
 
 message ListCloudAgentRunsForDashboardRequest {
-  .aiserver.v1.CloudAgentDashboardRunFilter filter = 1 [json_name = "filter"];
-  .aiserver.v1.CloudAgentDashboardRunSort sort = 2 [json_name = "sort"];
-  .aiserver.v1.CloudAgentRunsCursor cursor = 3 [json_name = "cursor"];
+  optional .aiserver.v1.CloudAgentDashboardRunFilter filter = 1 [json_name = "filter"];
+  optional .aiserver.v1.CloudAgentDashboardRunSort sort = 2 [json_name = "sort"];
+  optional .aiserver.v1.CloudAgentRunsCursor cursor = 3 [json_name = "cursor"];
 }
 
 message ListCloudAgentRunsForDashboardResponse {
   repeated .aiserver.v1.CloudAgentDashboardRunRow rows = 1 [json_name = "rows"];
   bool has_more = 2 [json_name = "hasMore"];
-  .aiserver.v1.CloudAgentRunsCursor next_cursor = 3 [json_name = "nextCursor"];
+  optional .aiserver.v1.CloudAgentRunsCursor next_cursor = 3 [json_name = "nextCursor"];
 }
 
 message ListDetailedBackgroundComposersRequest {
   bool include_team_wide = 1 [json_name = "includeTeamWide"];
-  string bc_id = 2 [json_name = "bcId"];
-  int32 n = 3 [json_name = "n"];
+  optional string bc_id = 2 [json_name = "bcId"];
+  optional int32 n = 3 [json_name = "n"];
   bool include_diff = 4 [json_name = "includeDiff"];
-  string cursor = 5 [json_name = "cursor"];
+  optional string cursor = 5 [json_name = "cursor"];
   repeated string bc_ids = 6 [json_name = "bcIds"];
-  .aiserver.v1.OwnerFilter owner_filter = 7 [json_name = "ownerFilter"];
-  string repo_url_prefix = 8 [json_name = "repoUrlPrefix"];
-  string pr_url = 9 [json_name = "prUrl"];
-  bool include_archived = 10 [json_name = "includeArchived"];
+  optional .aiserver.v1.OwnerFilter owner_filter = 7 [json_name = "ownerFilter"];
+  optional string repo_url_prefix = 8 [json_name = "repoUrlPrefix"];
+  optional string pr_url = 9 [json_name = "prUrl"];
+  optional bool include_archived = 10 [json_name = "includeArchived"];
 }
 
 message ListDetailedBackgroundComposersResponse {
@@ -2558,26 +2558,26 @@ message ListDetailedBackgroundComposersResponse {
 
 message ListEnvironmentBuildsRequest {
   string environment_public_id = 1 [json_name = "environmentPublicId"];
-  .aiserver.v1.EnvironmentBuildsCursor cursor = 2 [json_name = "cursor"];
+  optional .aiserver.v1.EnvironmentBuildsCursor cursor = 2 [json_name = "cursor"];
 }
 
 message ListEnvironmentBuildsResponse {
   repeated .aiserver.v1.EnvironmentBuildRow rows = 1 [json_name = "rows"];
   bool has_more = 2 [json_name = "hasMore"];
-  .aiserver.v1.EnvironmentBuildsCursor next_cursor = 3 [json_name = "nextCursor"];
-  string latest_boot_build_id = 4 [json_name = "latestBootBuildId"];
+  optional .aiserver.v1.EnvironmentBuildsCursor next_cursor = 3 [json_name = "nextCursor"];
+  optional string latest_boot_build_id = 4 [json_name = "latestBootBuildId"];
 }
 
 message ListEnvironmentsRequest {
-  int32 limit = 1 [json_name = "limit"];
-  bool include_environment_json = 2 [json_name = "includeEnvironmentJson"];
+  optional int32 limit = 1 [json_name = "limit"];
+  optional bool include_environment_json = 2 [json_name = "includeEnvironmentJson"];
   repeated string repository_scope_repo_urls = 3 [json_name = "repositoryScopeRepoUrls"];
-  bool include_repository_scope_environments = 4 [json_name = "includeRepositoryScopeEnvironments"];
+  optional bool include_repository_scope_environments = 4 [json_name = "includeRepositoryScopeEnvironments"];
 }
 
 message ListEnvironmentsResponse {
   repeated .aiserver.v1.LogicalEnvironment environments = 1 [json_name = "environments"];
-  string dashboard_scope_id = 2 [json_name = "dashboardScopeId"];
+  optional string dashboard_scope_id = 2 [json_name = "dashboardScopeId"];
 }
 
 message ListEventSubscriptionsRequest {
@@ -2599,13 +2599,13 @@ message ListGrindModeComposersResponse {
 
 message ListNamedAgentSessionsRequest {
   string named_agent_id = 1 [json_name = "namedAgentId"];
-  int32 page_size = 2 [json_name = "pageSize"];
-  string page_token = 3 [json_name = "pageToken"];
+  optional int32 page_size = 2 [json_name = "pageSize"];
+  optional string page_token = 3 [json_name = "pageToken"];
 }
 
 message ListNamedAgentSessionsResponse {
   repeated .aiserver.v1.NamedAgentSession sessions = 1 [json_name = "sessions"];
-  string next_page_token = 2 [json_name = "nextPageToken"];
+  optional string next_page_token = 2 [json_name = "nextPageToken"];
 }
 
 message ListNamedAgentsRequest {
@@ -2625,8 +2625,8 @@ message ListPendingFollowupsResponse {
 
 message ListPendingPrivateWorkerRequestsRequest {
   int32 page_size = 1 [json_name = "pageSize"];
-  string page_token = 2 [json_name = "pageToken"];
-  string repository = 3 [json_name = "repository"];
+  optional string page_token = 2 [json_name = "pageToken"];
+  optional string repository = 3 [json_name = "repository"];
 }
 
 message ListPendingPrivateWorkerRequestsResponse {
@@ -2636,7 +2636,7 @@ message ListPendingPrivateWorkerRequestsResponse {
 }
 
 message ListPersonalEnvironmentsRequest {
-  int32 limit = 1 [json_name = "limit"];
+  optional int32 limit = 1 [json_name = "limit"];
 }
 
 message ListPersonalEnvironmentsResponse {
@@ -2645,7 +2645,7 @@ message ListPersonalEnvironmentsResponse {
 
 message ListPrCodeTourRevisionsRequest {
   string bc_id = 1 [json_name = "bcId"];
-  bool include_markdown = 2 [json_name = "includeMarkdown"];
+  optional bool include_markdown = 2 [json_name = "includeMarkdown"];
 }
 
 message ListPrCodeTourRevisionsResponse {
@@ -2664,7 +2664,7 @@ message ListPrivateWorkerPoolsResponse {
 message ListPrivateWorkersRequest {
   .aiserver.v1.PrivateWorkerStatusFilter status_filter = 1 [json_name = "statusFilter"];
   int32 page_size = 2 [json_name = "pageSize"];
-  string page_token = 3 [json_name = "pageToken"];
+  optional string page_token = 3 [json_name = "pageToken"];
   .aiserver.v1.PrivateWorkerListScope list_scope = 4 [json_name = "listScope"];
 }
 
@@ -2683,18 +2683,18 @@ message ListReposWithLocalEnvironmentResponse {
 
 message ListSharedAgentStoresRequest {
   int32 limit = 1 [json_name = "limit"];
-  double created_before_ms = 2 [json_name = "createdBeforeMs"];
-  int32 owning_user_id = 3 [json_name = "owningUserId"];
-  string search_query = 4 [json_name = "searchQuery"];
-  .aiserver.v1.ListSharedAgentStoresScope scope = 5 [json_name = "scope"];
-  string created_before_share_id = 6 [json_name = "createdBeforeShareId"];
+  optional double created_before_ms = 2 [json_name = "createdBeforeMs"];
+  optional int32 owning_user_id = 3 [json_name = "owningUserId"];
+  optional string search_query = 4 [json_name = "searchQuery"];
+  optional .aiserver.v1.ListSharedAgentStoresScope scope = 5 [json_name = "scope"];
+  optional string created_before_share_id = 6 [json_name = "createdBeforeShareId"];
 }
 
 message ListSharedAgentStoresResponse {
   repeated .aiserver.v1.SharedAgentStoreListing listings = 1 [json_name = "listings"];
   bool has_more = 2 [json_name = "hasMore"];
-  double next_created_before_ms = 3 [json_name = "nextCreatedBeforeMs"];
-  string next_created_before_share_id = 4 [json_name = "nextCreatedBeforeShareId"];
+  optional double next_created_before_ms = 3 [json_name = "nextCreatedBeforeMs"];
+  optional string next_created_before_share_id = 4 [json_name = "nextCreatedBeforeShareId"];
 }
 
 enum ListSharedAgentStoresScope {
@@ -2712,7 +2712,7 @@ message ListSharedBackgroundComposerArtifactsResponse {
 }
 
 message ListTeamEnvironmentsRequest {
-  int32 limit = 1 [json_name = "limit"];
+  optional int32 limit = 1 [json_name = "limit"];
 }
 
 message ListTeamEnvironmentsResponse {
@@ -2732,13 +2732,13 @@ message LiveActivityAgentEntry {
   string title = 2 [json_name = "title"];
   .aiserver.v1.BackgroundComposerStatus status = 3 [json_name = "status"];
   int64 started_at_epoch_seconds = 4 [json_name = "startedAtEpochSeconds"];
-  string repo_label = 5 [json_name = "repoLabel"];
-  string branch_name = 6 [json_name = "branchName"];
-  int64 finished_at_epoch_seconds = 7 [json_name = "finishedAtEpochSeconds"];
-  string result_type = 8 [json_name = "resultType"];
-  int32 lines_added = 9 [json_name = "linesAdded"];
-  int32 lines_removed = 10 [json_name = "linesRemoved"];
-  int32 changed_files = 11 [json_name = "changedFiles"];
+  optional string repo_label = 5 [json_name = "repoLabel"];
+  optional string branch_name = 6 [json_name = "branchName"];
+  optional int64 finished_at_epoch_seconds = 7 [json_name = "finishedAtEpochSeconds"];
+  optional string result_type = 8 [json_name = "resultType"];
+  optional int32 lines_added = 9 [json_name = "linesAdded"];
+  optional int32 lines_removed = 10 [json_name = "linesRemoved"];
+  optional int32 changed_files = 11 [json_name = "changedFiles"];
 }
 
 message LiveActivityContentState {
@@ -2761,13 +2761,13 @@ message LogicalEnvironment {
   string public_id = 2 [json_name = "publicId"];
   string name = 3 [json_name = "name"];
   .aiserver.v1.LogicalEnvironmentScope scope = 4 [json_name = "scope"];
-  int32 owning_team = 5 [json_name = "owningTeam"];
-  int32 owning_user = 6 [json_name = "owningUser"];
-  .aiserver.v1.EnvironmentRepoConfig repo_config = 7 [json_name = "repoConfig"];
+  optional int32 owning_team = 5 [json_name = "owningTeam"];
+  optional int32 owning_user = 6 [json_name = "owningUser"];
+  optional .aiserver.v1.EnvironmentRepoConfig repo_config = 7 [json_name = "repoConfig"];
   int64 created_at_ms = 8 [json_name = "createdAtMs"];
   int64 updated_at_ms = 9 [json_name = "updatedAtMs"];
-  string environment_json = 10 [json_name = "environmentJson"];
-  string latest_environment_version_public_id = 11 [json_name = "latestEnvironmentVersionPublicId"];
+  optional string environment_json = 10 [json_name = "environmentJson"];
+  optional string latest_environment_version_public_id = 11 [json_name = "latestEnvironmentVersionPublicId"];
 }
 
 enum LogicalEnvironmentScope {
@@ -2787,12 +2787,12 @@ message MachineReference {
 message MakeGithubRequestRequest {
   string method = 1 [json_name = "method"];
   string path = 2 [json_name = "path"];
-  string body_json = 3 [json_name = "bodyJson"];
+  optional string body_json = 3 [json_name = "bodyJson"];
   string github_user_token = 4 [json_name = "githubUserToken"];
   string caller = 5 [json_name = "caller"];
-  string host = 6 [json_name = "host"];
-  string path_template = 7 [json_name = "pathTemplate"];
-  string accept_header = 8 [json_name = "acceptHeader"];
+  optional string host = 6 [json_name = "host"];
+  optional string path_template = 7 [json_name = "pathTemplate"];
+  optional string accept_header = 8 [json_name = "acceptHeader"];
 }
 
 message MakeGithubRequestResponse {
@@ -2804,16 +2804,16 @@ message MakeGithubRequestResponse {
 
 message MakePRBackgroundComposerRequest {
   string bc_id = 1 [json_name = "bcId"];
-  string workflow_id = 2 [json_name = "workflowId"];
-  string branch_name = 3 [json_name = "branchName"];
+  optional string workflow_id = 2 [json_name = "workflowId"];
+  optional string branch_name = 3 [json_name = "branchName"];
 }
 
 message MakePRBackgroundComposerResponse {
   string pr_url = 1 [json_name = "prUrl"];
   string branch_name = 2 [json_name = "branchName"];
   bool has_commits = 3 [json_name = "hasCommits"];
-  string owner = 4 [json_name = "owner"];
-  string repo = 5 [json_name = "repo"];
+  optional string owner = 4 [json_name = "owner"];
+  optional string repo = 5 [json_name = "repo"];
 }
 
 enum ManagerSpawnKind {
@@ -2839,7 +2839,7 @@ message MarkBackgroundComposerUnreadResponse {
 message MarkFollowupEditingRequest {
   string bc_id = 1 [json_name = "bcId"];
   string followup_id = 2 [json_name = "followupId"];
-  bool editing = 3 [json_name = "editing"];
+  optional bool editing = 3 [json_name = "editing"];
 }
 
 message MarkFollowupEditingResponse {
@@ -2849,20 +2849,20 @@ message MarkFollowupEditingResponse {
 
 message MergePullRequestRequest {
   string pr_url = 1 [json_name = "prUrl"];
-  string merge_method = 2 [json_name = "mergeMethod"];
+  optional string merge_method = 2 [json_name = "mergeMethod"];
 }
 
 message MergePullRequestResponse {
   bool success = 1 [json_name = "success"];
   string error = 2 [json_name = "error"];
-  string pr_node_id = 3 [json_name = "prNodeId"];
+  optional string pr_node_id = 3 [json_name = "prNodeId"];
 }
 
 message MintAgentStoreTokenRequest {
   string agent_id = 1 [json_name = "agentId"];
-  string share_id = 2 [json_name = "shareId"];
-  string store_id = 3 [json_name = "storeId"];
-  .aiserver.v1.AgentStoreSourceRef source = 4 [json_name = "source"];
+  optional string share_id = 2 [json_name = "shareId"];
+  optional string store_id = 3 [json_name = "storeId"];
+  optional .aiserver.v1.AgentStoreSourceRef source = 4 [json_name = "source"];
 }
 
 message MintAgentStoreTokenResponse {
@@ -2900,15 +2900,15 @@ message NamedAgent {
   string named_agent_id = 1 [json_name = "namedAgentId"];
   string home_bc_id = 2 [json_name = "homeBcId"];
   string name = 3 [json_name = "name"];
-  .aiserver.v1.BackgroundComposerParticipant creator = 4 [json_name = "creator"];
+  optional .aiserver.v1.BackgroundComposerParticipant creator = 4 [json_name = "creator"];
   double created_at_ms = 5 [json_name = "createdAtMs"];
   double updated_at_ms = 6 [json_name = "updatedAtMs"];
   bool pinned = 7 [json_name = "pinned"];
-  .aiserver.v1.NamedAgentProfile profile = 8 [json_name = "profile"];
+  optional .aiserver.v1.NamedAgentProfile profile = 8 [json_name = "profile"];
 }
 
 message NamedAgentProfile {
-  string profile_picture_url = 1 [json_name = "profilePictureUrl"];
+  optional string profile_picture_url = 1 [json_name = "profilePictureUrl"];
 }
 
 message NamedAgentSession {
@@ -2918,10 +2918,10 @@ message NamedAgentSession {
   string session_kind = 4 [json_name = "sessionKind"];
   double created_at_ms = 10 [json_name = "createdAtMs"];
   double updated_at_ms = 11 [json_name = "updatedAtMs"];
-  double last_awakened_at_ms = 12 [json_name = "lastAwakenedAtMs"];
-  string slack_channel_id = 13 [json_name = "slackChannelId"];
-  string slack_channel_name = 14 [json_name = "slackChannelName"];
-  string slack_permalink = 15 [json_name = "slackPermalink"];
+  optional double last_awakened_at_ms = 12 [json_name = "lastAwakenedAtMs"];
+  optional string slack_channel_id = 13 [json_name = "slackChannelId"];
+  optional string slack_channel_name = 14 [json_name = "slackChannelName"];
+  optional string slack_permalink = 15 [json_name = "slackPermalink"];
 }
 
 message NextTurnSystemReminderEntry {
@@ -2948,16 +2948,16 @@ message NotifyBackgroundComposerShownResponse {
 
 message OpenPRBackgroundComposerRequest {
   string bc_id = 1 [json_name = "bcId"];
-  string title = 2 [json_name = "title"];
-  string body = 3 [json_name = "body"];
-  string base_branch = 4 [json_name = "baseBranch"];
-  bool draft = 5 [json_name = "draft"];
-  bool open_as_cursor_github_app = 6 [json_name = "openAsCursorGithubApp"];
-  bool skip_reviewer_request = 7 [json_name = "skipReviewerRequest"];
+  optional string title = 2 [json_name = "title"];
+  optional string body = 3 [json_name = "body"];
+  optional string base_branch = 4 [json_name = "baseBranch"];
+  optional bool draft = 5 [json_name = "draft"];
+  optional bool open_as_cursor_github_app = 6 [json_name = "openAsCursorGithubApp"];
+  optional bool skip_reviewer_request = 7 [json_name = "skipReviewerRequest"];
   bytes agent_state_blob_id = 8 [json_name = "agentStateBlobId"];
-  string workflow_id = 9 [json_name = "workflowId"];
-  string branch_name = 10 [json_name = "branchName"];
-  string repo_url = 11 [json_name = "repoUrl"];
+  optional string workflow_id = 9 [json_name = "workflowId"];
+  optional string branch_name = 10 [json_name = "branchName"];
+  optional string repo_url = 11 [json_name = "repoUrl"];
 }
 
 message OpenPRBackgroundComposerResponse {
@@ -2966,13 +2966,13 @@ message OpenPRBackgroundComposerResponse {
   string branch_name = 3 [json_name = "branchName"];
   string base_branch = 4 [json_name = "baseBranch"];
   bool success = 5 [json_name = "success"];
-  string error = 6 [json_name = "error"];
+  optional string error = 6 [json_name = "error"];
 }
 
 message OptimizedDiffState {
-  string branch_name = 3 [json_name = "branchName"];
-  string base_branch = 4 [json_name = "baseBranch"];
-  string repo_url = 5 [json_name = "repoUrl"];
+  optional string branch_name = 3 [json_name = "branchName"];
+  optional string base_branch = 4 [json_name = "baseBranch"];
+  optional string repo_url = 5 [json_name = "repoUrl"];
   oneof state {
     .google.protobuf.Empty pending = 1 [json_name = "pending"];
     bytes diff_blob_id = 2 [json_name = "diffBlobId"];
@@ -3000,22 +3000,22 @@ message PRCommit {
   string committed_date = 3 [json_name = "committedDate"];
   int32 additions = 4 [json_name = "additions"];
   int32 deletions = 5 [json_name = "deletions"];
-  int32 changed_files = 6 [json_name = "changedFiles"];
-  .aiserver.v1.PRCommitUser author = 7 [json_name = "author"];
-  .aiserver.v1.PRCommitUser committer = 8 [json_name = "committer"];
+  optional int32 changed_files = 6 [json_name = "changedFiles"];
+  optional .aiserver.v1.PRCommitUser author = 7 [json_name = "author"];
+  optional .aiserver.v1.PRCommitUser committer = 8 [json_name = "committer"];
   repeated .aiserver.v1.PRCommitUser authors = 9 [json_name = "authors"];
 }
 
 message PRCommitUser {
-  string name = 1 [json_name = "name"];
-  string email = 2 [json_name = "email"];
-  string avatar_url = 3 [json_name = "avatarUrl"];
+  optional string name = 1 [json_name = "name"];
+  optional string email = 2 [json_name = "email"];
+  optional string avatar_url = 3 [json_name = "avatarUrl"];
 }
 
 message PRDeploymentPreview {
   string environment = 1 [json_name = "environment"];
   .aiserver.v1.PRDeploymentState state = 2 [json_name = "state"];
-  .aiserver.v1.PRDeploymentPreviewStatus latest_status = 3 [json_name = "latestStatus"];
+  optional .aiserver.v1.PRDeploymentPreviewStatus latest_status = 3 [json_name = "latestStatus"];
 }
 
 message PRDeploymentPreviewStatus {
@@ -3059,9 +3059,9 @@ enum PRDeploymentStatusState {
 
 message PRRequestedReviewer {
   string login = 1 [json_name = "login"];
-  string name = 2 [json_name = "name"];
-  string avatar_url = 3 [json_name = "avatarUrl"];
-  string kind = 4 [json_name = "kind"];
+  optional string name = 2 [json_name = "name"];
+  optional string avatar_url = 3 [json_name = "avatarUrl"];
+  optional string kind = 4 [json_name = "kind"];
 }
 
 message PRReviewComment {
@@ -3070,30 +3070,30 @@ message PRReviewComment {
   string avatar_url = 3 [json_name = "avatarUrl"];
   string body = 4 [json_name = "body"];
   string created_at = 5 [json_name = "createdAt"];
-  string diff_hunk = 6 [json_name = "diffHunk"];
-  string body_html = 7 [json_name = "bodyHtml"];
-  string author_name = 8 [json_name = "authorName"];
+  optional string diff_hunk = 6 [json_name = "diffHunk"];
+  optional string body_html = 7 [json_name = "bodyHtml"];
+  optional string author_name = 8 [json_name = "authorName"];
 }
 
 message PRReviewSummary {
   string author_login = 1 [json_name = "authorLogin"];
-  string author_name = 2 [json_name = "authorName"];
-  string author_avatar_url = 3 [json_name = "authorAvatarUrl"];
-  string state = 4 [json_name = "state"];
+  optional string author_name = 2 [json_name = "authorName"];
+  optional string author_avatar_url = 3 [json_name = "authorAvatarUrl"];
+  optional string state = 4 [json_name = "state"];
 }
 
 message PRReviewThread {
   string id = 1 [json_name = "id"];
   string path = 2 [json_name = "path"];
-  int32 line = 3 [json_name = "line"];
-  int32 start_line = 4 [json_name = "startLine"];
-  int32 original_line = 5 [json_name = "originalLine"];
-  int32 original_start_line = 6 [json_name = "originalStartLine"];
+  optional int32 line = 3 [json_name = "line"];
+  optional int32 start_line = 4 [json_name = "startLine"];
+  optional int32 original_line = 5 [json_name = "originalLine"];
+  optional int32 original_start_line = 6 [json_name = "originalStartLine"];
   string diff_side = 7 [json_name = "diffSide"];
   bool is_resolved = 8 [json_name = "isResolved"];
   bool is_outdated = 9 [json_name = "isOutdated"];
   repeated .aiserver.v1.PRReviewComment comments = 10 [json_name = "comments"];
-  string pull_request_review_id = 11 [json_name = "pullRequestReviewId"];
+  optional string pull_request_review_id = 11 [json_name = "pullRequestReviewId"];
 }
 
 enum PRStatus {
@@ -3106,17 +3106,17 @@ enum PRStatus {
 
 message PRTimelineActor {
   string login = 1 [json_name = "login"];
-  string avatar_url = 2 [json_name = "avatarUrl"];
-  string name = 3 [json_name = "name"];
+  optional string avatar_url = 2 [json_name = "avatarUrl"];
+  optional string name = 3 [json_name = "name"];
 }
 
 message PRTimelineEvent {
   string id = 1 [json_name = "id"];
   string event_type = 2 [json_name = "eventType"];
   string created_at = 3 [json_name = "createdAt"];
-  .aiserver.v1.PRTimelineActor actor = 4 [json_name = "actor"];
-  string label = 5 [json_name = "label"];
-  string body = 6 [json_name = "body"];
+  optional .aiserver.v1.PRTimelineActor actor = 4 [json_name = "actor"];
+  optional string label = 5 [json_name = "label"];
+  optional string body = 6 [json_name = "body"];
 }
 
 message PRTopLevelComment {
@@ -3125,14 +3125,14 @@ message PRTopLevelComment {
   string avatar_url = 3 [json_name = "avatarUrl"];
   string body = 4 [json_name = "body"];
   string created_at = 5 [json_name = "createdAt"];
-  string body_html = 6 [json_name = "bodyHtml"];
-  string author_name = 7 [json_name = "authorName"];
+  optional string body_html = 6 [json_name = "bodyHtml"];
+  optional string author_name = 7 [json_name = "authorName"];
 }
 
 message PauseBackgroundComposerRequest {
   string bc_id = 1 [json_name = "bcId"];
   .aiserver.v1.BackgroundComposerSource source = 3 [json_name = "source"];
-  string run_id = 4 [json_name = "runId"];
+  optional string run_id = 4 [json_name = "runId"];
 }
 
 message PauseBackgroundComposerResponse {
@@ -3156,8 +3156,8 @@ message PendingContextInjection {
   string expected_run_id = 2 [json_name = "expectedRunId"];
   int64 created_at_ms = 3 [json_name = "createdAtMs"];
   .aiserver.v1.BackgroundComposerSource source = 4 [json_name = "source"];
-  .aiserver.v1.ConversationActionReference conversation_action_ref = 5 [json_name = "conversationActionRef"];
-  string delivery_batch_id = 6 [json_name = "deliveryBatchId"];
+  optional .aiserver.v1.ConversationActionReference conversation_action_ref = 5 [json_name = "conversationActionRef"];
+  optional string delivery_batch_id = 6 [json_name = "deliveryBatchId"];
 }
 
 message PendingFollowup {
@@ -3170,33 +3170,33 @@ message PendingFollowup {
   bool cursor_commands_explicitly_set = 7 [json_name = "cursorCommandsExplicitlySet"];
   repeated .agent.v1.SelectedPastChat past_chats = 8 [json_name = "pastChats"];
   bool past_chats_explicitly_set = 9 [json_name = "pastChatsExplicitlySet"];
-  .agent.v1.ConversationAction conversation_action = 10 [json_name = "conversationAction"];
+  optional .agent.v1.ConversationAction conversation_action = 10 [json_name = "conversationAction"];
   repeated .internapi.v1.BlobData blob_data = 11 [json_name = "blobData"];
-  bool use_experimental_model_opt_out = 12 [json_name = "useExperimentalModelOptOut"];
+  optional bool use_experimental_model_opt_out = 12 [json_name = "useExperimentalModelOptOut"];
 }
 
 message PendingIdleFollowup {
   string grouping_identifier = 1 [json_name = "groupingIdentifier"];
   string followup_id = 2 [json_name = "followupId"];
   .aiserver.v1.BackgroundComposerSource source = 3 [json_name = "source"];
-  .agent.v1.ConversationAction conversation_action = 4 [json_name = "conversationAction"];
+  optional .agent.v1.ConversationAction conversation_action = 4 [json_name = "conversationAction"];
   repeated string merged_followup_ids = 5 [json_name = "mergedFollowupIds"];
 }
 
 message PendingPrivateWorkerRequest {
   string bc_id = 1 [json_name = "bcId"];
   int32 user_id = 2 [json_name = "userId"];
-  string service_account_id = 3 [json_name = "serviceAccountId"];
-  string repo_owner = 4 [json_name = "repoOwner"];
-  string repo_name = 5 [json_name = "repoName"];
-  string repo_url = 6 [json_name = "repoUrl"];
+  optional string service_account_id = 3 [json_name = "serviceAccountId"];
+  optional string repo_owner = 4 [json_name = "repoOwner"];
+  optional string repo_name = 5 [json_name = "repoName"];
+  optional string repo_url = 6 [json_name = "repoUrl"];
   repeated .aiserver.v1.PrivateWorkerLabel labels = 7 [json_name = "labels"];
   double created_at_ms = 8 [json_name = "createdAtMs"];
 }
 
 message PendingPromotion {
   string followup_id = 1 [json_name = "followupId"];
-  string expected_run_id = 2 [json_name = "expectedRunId"];
+  optional string expected_run_id = 2 [json_name = "expectedRunId"];
   int64 created_at_ms = 3 [json_name = "createdAtMs"];
 }
 
@@ -3204,7 +3204,7 @@ message PendingPullRequestData {
   string title = 1 [json_name = "title"];
   string body = 2 [json_name = "body"];
   string branch_name = 3 [json_name = "branchName"];
-  string base_branch = 4 [json_name = "baseBranch"];
+  optional string base_branch = 4 [json_name = "baseBranch"];
 }
 
 message PersistentRecurringBuildFailure {
@@ -3220,7 +3220,7 @@ message PersonalEnvironment {
   int64 created_at_ms = 3 [json_name = "createdAtMs"];
   int64 updated_at_ms = 4 [json_name = "updatedAtMs"];
   int64 id = 5 [json_name = "id"];
-  string environment_public_id = 6 [json_name = "environmentPublicId"];
+  optional string environment_public_id = 6 [json_name = "environmentPublicId"];
 }
 
 message PinBackgroundComposersRequest {
@@ -3241,8 +3241,8 @@ message PodReference {
   string tenant_id = 2 [json_name = "tenantId"];
   string network_token = 3 [json_name = "networkToken"];
   string cluster = 4 [json_name = "cluster"];
-  string exec_daemon_auth_token = 5 [json_name = "execDaemonAuthToken"];
-  string pty_auth_token = 6 [json_name = "ptyAuthToken"];
+  optional string exec_daemon_auth_token = 5 [json_name = "execDaemonAuthToken"];
+  optional string pty_auth_token = 6 [json_name = "ptyAuthToken"];
 }
 
 message PrCodeTourRevisionInfo {
@@ -3285,7 +3285,7 @@ message PreFetchedBlobFilter {
 }
 
 message PreWarmPodRequest {
-  .aiserver.v1.StartBackgroundComposerFromSnapshotRequest start_request = 1 [json_name = "startRequest"];
+  optional .aiserver.v1.StartBackgroundComposerFromSnapshotRequest start_request = 1 [json_name = "startRequest"];
 }
 
 message PreWarmPodResponse {
@@ -3294,8 +3294,8 @@ message PreWarmPodResponse {
 message PresignAgentStoreReadsRequest {
   string agent_id = 1 [json_name = "agentId"];
   repeated string rel_paths = 2 [json_name = "relPaths"];
-  string share_id = 3 [json_name = "shareId"];
-  string store_id = 4 [json_name = "storeId"];
+  optional string share_id = 3 [json_name = "shareId"];
+  optional string store_id = 4 [json_name = "storeId"];
 }
 
 message PresignAgentStoreReadsResponse {
@@ -3305,9 +3305,9 @@ message PresignAgentStoreReadsResponse {
 message PresignAgentStoreWritesRequest {
   string agent_id = 1 [json_name = "agentId"];
   repeated .aiserver.v1.AgentStoreWriteFileEntry files = 2 [json_name = "files"];
-  string store_id = 3 [json_name = "storeId"];
-  string lock_token = 4 [json_name = "lockToken"];
-  string lock_client_uuid = 5 [json_name = "lockClientUuid"];
+  optional string store_id = 3 [json_name = "storeId"];
+  optional string lock_token = 4 [json_name = "lockToken"];
+  optional string lock_client_uuid = 5 [json_name = "lockClientUuid"];
 }
 
 message PresignAgentStoreWritesResponse {
@@ -3318,7 +3318,7 @@ message PresignPromptUploadRequest {
   string filename = 1 [json_name = "filename"];
   string mime_type = 2 [json_name = "mimeType"];
   int64 content_length_bytes = 3 [json_name = "contentLengthBytes"];
-  int32 team_id = 4 [json_name = "teamId"];
+  optional int32 team_id = 4 [json_name = "teamId"];
 }
 
 message PresignPromptUploadResponse {
@@ -3341,15 +3341,15 @@ message PrivateWorker {
   string workspace_root_path = 4 [json_name = "workspaceRootPath"];
   double connected_at_ms = 5 [json_name = "connectedAtMs"];
   int32 user_id = 6 [json_name = "userId"];
-  int32 team_id = 7 [json_name = "teamId"];
-  string service_account_id = 8 [json_name = "serviceAccountId"];
+  optional int32 team_id = 7 [json_name = "teamId"];
+  optional string service_account_id = 8 [json_name = "serviceAccountId"];
   bool is_in_use = 9 [json_name = "isInUse"];
-  string active_bc_id = 10 [json_name = "activeBcId"];
+  optional string active_bc_id = 10 [json_name = "activeBcId"];
   repeated .aiserver.v1.PrivateWorkerLabel labels = 11 [json_name = "labels"];
-  string repo_url = 12 [json_name = "repoUrl"];
-  string display_name = 13 [json_name = "displayName"];
-  string machine_id = 14 [json_name = "machineId"];
-  string machine_display_name = 15 [json_name = "machineDisplayName"];
+  optional string repo_url = 12 [json_name = "repoUrl"];
+  optional string display_name = 13 [json_name = "displayName"];
+  optional string machine_id = 14 [json_name = "machineId"];
+  optional string machine_display_name = 15 [json_name = "machineDisplayName"];
   repeated .aiserver.v1.PrivateWorkerRepo repos = 16 [json_name = "repos"];
 }
 
@@ -3373,9 +3373,9 @@ message PrivateWorkerPool {
   .aiserver.v1.PrivateWorkerPoolScope scope = 1 [json_name = "scope"];
   int32 owner_id = 2 [json_name = "ownerId"];
   string pool_name = 3 [json_name = "poolName"];
-  string repo_owner = 4 [json_name = "repoOwner"];
-  string repo_name = 5 [json_name = "repoName"];
-  string repo_url = 6 [json_name = "repoUrl"];
+  optional string repo_owner = 4 [json_name = "repoOwner"];
+  optional string repo_name = 5 [json_name = "repoName"];
+  optional string repo_url = 6 [json_name = "repoUrl"];
   int32 connected_worker_count = 7 [json_name = "connectedWorkerCount"];
   int32 in_use_worker_count = 8 [json_name = "inUseWorkerCount"];
   double first_seen_at_ms = 9 [json_name = "firstSeenAtMs"];
@@ -3456,7 +3456,7 @@ message PublishEnvironmentResponse {
   bool success = 1 [json_name = "success"];
   string pr_url = 2 [json_name = "prUrl"];
   string branch_name = 3 [json_name = "branchName"];
-  string error = 4 [json_name = "error"];
+  optional string error = 4 [json_name = "error"];
 }
 
 message PublishPersonalEnvironmentRequest {
@@ -3467,7 +3467,7 @@ message PublishPersonalEnvironmentResponse {
   bool success = 1 [json_name = "success"];
   string pr_url = 2 [json_name = "prUrl"];
   string branch_name = 3 [json_name = "branchName"];
-  string error = 4 [json_name = "error"];
+  optional string error = 4 [json_name = "error"];
 }
 
 enum PushPlatform {
@@ -3485,28 +3485,28 @@ message QueuedFollowup {
   bool synchronous = 5 [json_name = "synchronous"];
   repeated .agent.v1.SelectedCursorCommand cursor_commands = 6 [json_name = "cursorCommands"];
   bool cursor_commands_explicitly_set = 7 [json_name = "cursorCommandsExplicitlySet"];
-  .agent.v1.ConversationAction conversation_action = 8 [json_name = "conversationAction"];
+  optional .agent.v1.ConversationAction conversation_action = 8 [json_name = "conversationAction"];
   repeated .internapi.v1.BlobData blob_data = 9 [json_name = "blobData"];
-  .aiserver.v1.ModelDetails model_details = 10 [json_name = "modelDetails"];
-  int64 editing_started_at_ms = 11 [json_name = "editingStartedAtMs"];
-  string run_id = 12 [json_name = "runId"];
-  .agent.v1.RequestedModel requested_model = 13 [json_name = "requestedModel"];
-  int64 turn_start_unix_ms = 14 [json_name = "turnStartUnixMs"];
-  int64 not_before_unix_ms = 15 [json_name = "notBeforeUnixMs"];
+  optional .aiserver.v1.ModelDetails model_details = 10 [json_name = "modelDetails"];
+  optional int64 editing_started_at_ms = 11 [json_name = "editingStartedAtMs"];
+  optional string run_id = 12 [json_name = "runId"];
+  optional .agent.v1.RequestedModel requested_model = 13 [json_name = "requestedModel"];
+  optional int64 turn_start_unix_ms = 14 [json_name = "turnStartUnixMs"];
+  optional int64 not_before_unix_ms = 15 [json_name = "notBeforeUnixMs"];
   bytes conversation_action_blob_id = 16 [json_name = "conversationActionBlobId"];
-  string request_id = 17 [json_name = "requestId"];
-  .aiserver.v1.StopHookContinuation stop_hook_continuation = 18 [json_name = "stopHookContinuation"];
-  string resubmit_from_message_id = 19 [json_name = "resubmitFromMessageId"];
-  bool use_experimental_model_opt_out = 20 [json_name = "useExperimentalModelOptOut"];
+  optional string request_id = 17 [json_name = "requestId"];
+  optional .aiserver.v1.StopHookContinuation stop_hook_continuation = 18 [json_name = "stopHookContinuation"];
+  optional string resubmit_from_message_id = 19 [json_name = "resubmitFromMessageId"];
+  optional bool use_experimental_model_opt_out = 20 [json_name = "useExperimentalModelOptOut"];
   string coalescing_key = 21 [json_name = "coalescingKey"];
   repeated string merged_followup_ids = 22 [json_name = "mergedFollowupIds"];
   repeated .aiserver.v1.ConversationActionReference merged_action_refs = 23 [json_name = "mergedActionRefs"];
-  int64 coalesce_not_before_unix_ms = 24 [json_name = "coalesceNotBeforeUnixMs"];
+  optional int64 coalesce_not_before_unix_ms = 24 [json_name = "coalesceNotBeforeUnixMs"];
 }
 
 message QueuedInteractionResponse {
   uint32 query_id = 1 [json_name = "queryId"];
-  .agent.v1.InteractionResponse interaction_response = 2 [json_name = "interactionResponse"];
+  optional .agent.v1.InteractionResponse interaction_response = 2 [json_name = "interactionResponse"];
   int64 submitted_at_ms = 3 [json_name = "submittedAtMs"];
 }
 
@@ -3525,7 +3525,7 @@ message QueuedOpenPRRequest {
 message ReadAgentStoreFileRequest {
   string store_id = 1 [json_name = "storeId"];
   string relative_path = 2 [json_name = "relativePath"];
-  string share_id = 3 [json_name = "shareId"];
+  optional string share_id = 3 [json_name = "shareId"];
 }
 
 message ReadAgentStoreFileResponse {
@@ -3560,9 +3560,9 @@ message RefreshGithubAccessTokenInBackgroundComposerResponse {
 message RegisterPrivateWorkerPoolRequest {
   .aiserver.v1.PrivateWorkerPoolScope scope = 1 [json_name = "scope"];
   string pool_name = 2 [json_name = "poolName"];
-  string repo_owner = 3 [json_name = "repoOwner"];
-  string repo_name = 4 [json_name = "repoName"];
-  string repo_url = 5 [json_name = "repoUrl"];
+  optional string repo_owner = 3 [json_name = "repoOwner"];
+  optional string repo_name = 4 [json_name = "repoName"];
+  optional string repo_url = 5 [json_name = "repoUrl"];
 }
 
 message RegisterPrivateWorkerPoolResponse {
@@ -3606,7 +3606,7 @@ message RenameBackgroundComposerResponse {
 
 message RenameEnvironmentRequest {
   string public_id = 1 [json_name = "publicId"];
-  string name = 2 [json_name = "name"];
+  optional string name = 2 [json_name = "name"];
 }
 
 message RenameEnvironmentResponse {
@@ -3652,12 +3652,12 @@ message ReplyToReviewThreadRequest {
 }
 
 message ReplyToReviewThreadResponse {
-  .aiserver.v1.PRReviewThread thread = 1 [json_name = "thread"];
+  optional .aiserver.v1.PRReviewThread thread = 1 [json_name = "thread"];
 }
 
 message RepoConfigSummary {
   repeated string repo_urls = 1 [json_name = "repoUrls"];
-  string environment_json_path = 2 [json_name = "environmentJsonPath"];
+  optional string environment_json_path = 2 [json_name = "environmentJsonPath"];
 }
 
 message RepoStartingRef {
@@ -3676,16 +3676,16 @@ message ResolveOrCreateDraftEnvironmentRequest {
   string bc_id = 1 [json_name = "bcId"];
   .aiserver.v1.LogicalEnvironmentScope target_scope = 2 [json_name = "targetScope"];
   string repo_url = 3 [json_name = "repoUrl"];
-  .aiserver.v1.EnvironmentRepoConfig repo_config = 4 [json_name = "repoConfig"];
+  optional .aiserver.v1.EnvironmentRepoConfig repo_config = 4 [json_name = "repoConfig"];
 }
 
 message ResolveOrCreateDraftEnvironmentResponse {
-  .aiserver.v1.LogicalEnvironment environment = 1 [json_name = "environment"];
+  optional .aiserver.v1.LogicalEnvironment environment = 1 [json_name = "environment"];
   bool created = 2 [json_name = "created"];
 }
 
 message ResolveOrCreateMultiRepoEnvironmentRequest {
-  .aiserver.v1.EnvironmentRepoConfig repo_config = 4 [json_name = "repoConfig"];
+  optional .aiserver.v1.EnvironmentRepoConfig repo_config = 4 [json_name = "repoConfig"];
   .aiserver.v1.EnvironmentWriteSource write_source = 5 [json_name = "writeSource"];
   .aiserver.v1.MultiRepoEnvironmentReusePolicy reuse_policy = 6 [json_name = "reusePolicy"];
   oneof owner_id {
@@ -3696,7 +3696,7 @@ message ResolveOrCreateMultiRepoEnvironmentRequest {
 }
 
 message ResolveOrCreateMultiRepoEnvironmentResponse {
-  .aiserver.v1.LogicalEnvironment environment = 1 [json_name = "environment"];
+  optional .aiserver.v1.LogicalEnvironment environment = 1 [json_name = "environment"];
   bool created = 2 [json_name = "created"];
 }
 
@@ -3712,12 +3712,12 @@ message ResolveReviewThreadResponse {
 message RestoreEnvironmentVersionRequest {
   string environment_version_public_id = 1 [json_name = "environmentVersionPublicId"];
   .aiserver.v1.LogicalEnvironmentScope target_scope = 2 [json_name = "targetScope"];
-  string target_environment_public_id = 3 [json_name = "targetEnvironmentPublicId"];
-  string delete_personal_environment_public_id = 4 [json_name = "deletePersonalEnvironmentPublicId"];
+  optional string target_environment_public_id = 3 [json_name = "targetEnvironmentPublicId"];
+  optional string delete_personal_environment_public_id = 4 [json_name = "deletePersonalEnvironmentPublicId"];
 }
 
 message RestoreEnvironmentVersionResponse {
-  .aiserver.v1.LogicalEnvironment environment = 1 [json_name = "environment"];
+  optional .aiserver.v1.LogicalEnvironment environment = 1 [json_name = "environment"];
 }
 
 message ResumeBackgroundComposerRequest {
@@ -3731,43 +3731,43 @@ message SetPersonalEnvironmentJsonRequest {
   string environment_json = 1 [json_name = "environmentJson"];
   string repo_url = 2 [json_name = "repoUrl"];
   .aiserver.v1.EnvironmentWriteSource write_source = 3 [json_name = "writeSource"];
-  string source_bc_id = 4 [json_name = "sourceBcId"];
-  string environment_name = 5 [json_name = "environmentName"];
-  .aiserver.v1.EnvironmentRepoConfig repo_config = 6 [json_name = "repoConfig"];
-  int64 environment_id = 7 [json_name = "environmentId"];
-  string environment_public_id = 8 [json_name = "environmentPublicId"];
+  optional string source_bc_id = 4 [json_name = "sourceBcId"];
+  optional string environment_name = 5 [json_name = "environmentName"];
+  optional .aiserver.v1.EnvironmentRepoConfig repo_config = 6 [json_name = "repoConfig"];
+  optional int64 environment_id = 7 [json_name = "environmentId"];
+  optional string environment_public_id = 8 [json_name = "environmentPublicId"];
 }
 
 message SetPersonalEnvironmentJsonResponse {
-  .aiserver.v1.LogicalEnvironment environment = 1 [json_name = "environment"];
-  .aiserver.v1.LiveEgressReapplyResult live_egress_reapply = 2 [json_name = "liveEgressReapply"];
+  optional .aiserver.v1.LogicalEnvironment environment = 1 [json_name = "environment"];
+  optional .aiserver.v1.LiveEgressReapplyResult live_egress_reapply = 2 [json_name = "liveEgressReapply"];
 }
 
 message SetTeamEnvironmentJsonRequest {
   string environment_json = 1 [json_name = "environmentJson"];
   string repo_url = 2 [json_name = "repoUrl"];
   string scm_repo_node_id = 3 [json_name = "scmRepoNodeId"];
-  string git_enterprise_uuid = 4 [json_name = "gitEnterpriseUuid"];
+  optional string git_enterprise_uuid = 4 [json_name = "gitEnterpriseUuid"];
   bool delete_personal_environment = 5 [json_name = "deletePersonalEnvironment"];
   .aiserver.v1.EnvironmentWriteSource write_source = 6 [json_name = "writeSource"];
-  string source_bc_id = 7 [json_name = "sourceBcId"];
-  string environment_name = 8 [json_name = "environmentName"];
-  .aiserver.v1.EnvironmentRepoConfig repo_config = 9 [json_name = "repoConfig"];
-  int64 environment_id = 10 [json_name = "environmentId"];
-  string environment_public_id = 11 [json_name = "environmentPublicId"];
-  string delete_personal_environment_public_id = 12 [json_name = "deletePersonalEnvironmentPublicId"];
+  optional string source_bc_id = 7 [json_name = "sourceBcId"];
+  optional string environment_name = 8 [json_name = "environmentName"];
+  optional .aiserver.v1.EnvironmentRepoConfig repo_config = 9 [json_name = "repoConfig"];
+  optional int64 environment_id = 10 [json_name = "environmentId"];
+  optional string environment_public_id = 11 [json_name = "environmentPublicId"];
+  optional string delete_personal_environment_public_id = 12 [json_name = "deletePersonalEnvironmentPublicId"];
 }
 
 message SetTeamEnvironmentJsonResponse {
-  .aiserver.v1.LogicalEnvironment environment = 1 [json_name = "environment"];
-  .aiserver.v1.LiveEgressReapplyResult live_egress_reapply = 2 [json_name = "liveEgressReapply"];
+  optional .aiserver.v1.LogicalEnvironment environment = 1 [json_name = "environment"];
+  optional .aiserver.v1.LiveEgressReapplyResult live_egress_reapply = 2 [json_name = "liveEgressReapply"];
 }
 
 message SetWorkerManagerRequest {
   string worker_bc_id = 1 [json_name = "workerBcId"];
   string manager_bc_id = 2 [json_name = "managerBcId"];
   .aiserver.v1.ManagerSpawnKind spawn_kind = 3 [json_name = "spawnKind"];
-  string tool_call_id = 4 [json_name = "toolCallId"];
+  optional string tool_call_id = 4 [json_name = "toolCallId"];
 }
 
 message SetWorkerManagerResponse {
@@ -3776,8 +3776,8 @@ message SetWorkerManagerResponse {
 message ShareAgentStoreRequest {
   string agent_id = 1 [json_name = "agentId"];
   string path_prefix = 2 [json_name = "pathPrefix"];
-  string store_id = 4 [json_name = "storeId"];
-  .aiserver.v1.AgentStoreSourceRef source = 5 [json_name = "source"];
+  optional string store_id = 4 [json_name = "storeId"];
+  optional .aiserver.v1.AgentStoreSourceRef source = 5 [json_name = "source"];
 }
 
 message ShareAgentStoreResponse {
@@ -3788,11 +3788,11 @@ message ShareAgentStoreResponse {
 message ShareBackgroundComposerArtifactRequest {
   string bc_id = 1 [json_name = "bcId"];
   string absolute_path = 2 [json_name = "absolutePath"];
-  string title = 3 [json_name = "title"];
+  optional string title = 3 [json_name = "title"];
 }
 
 message ShareBackgroundComposerArtifactResponse {
-  .aiserver.v1.BackgroundComposerSharedArtifact artifact = 1 [json_name = "artifact"];
+  optional .aiserver.v1.BackgroundComposerSharedArtifact artifact = 1 [json_name = "artifact"];
 }
 
 message SharedAgentStoreInfo {
@@ -3800,7 +3800,7 @@ message SharedAgentStoreInfo {
   string path_prefix = 2 [json_name = "pathPrefix"];
   .aiserver.v1.AgentStoreShareVisibility visibility = 3 [json_name = "visibility"];
   double created_at_ms = 4 [json_name = "createdAtMs"];
-  double revoked_at_ms = 5 [json_name = "revokedAtMs"];
+  optional double revoked_at_ms = 5 [json_name = "revokedAtMs"];
 }
 
 message SharedAgentStoreListing {
@@ -3810,13 +3810,13 @@ message SharedAgentStoreListing {
   string path_prefix = 4 [json_name = "pathPrefix"];
   .aiserver.v1.AgentStoreShareVisibility visibility = 5 [json_name = "visibility"];
   double created_at_ms = 6 [json_name = "createdAtMs"];
-  double revoked_at_ms = 7 [json_name = "revokedAtMs"];
-  int32 owning_user_id = 8 [json_name = "owningUserId"];
-  int32 owning_team_id = 9 [json_name = "owningTeamId"];
+  optional double revoked_at_ms = 7 [json_name = "revokedAtMs"];
+  optional int32 owning_user_id = 8 [json_name = "owningUserId"];
+  optional int32 owning_team_id = 9 [json_name = "owningTeamId"];
   string owner_display_name = 10 [json_name = "ownerDisplayName"];
   string store_kind = 11 [json_name = "storeKind"];
   .aiserver.v1.AgentStoreKind kind = 12 [json_name = "kind"];
-  .aiserver.v1.AgentStoreSourceRef source = 13 [json_name = "source"];
+  optional .aiserver.v1.AgentStoreSourceRef source = 13 [json_name = "source"];
 }
 
 message SideChatInfo {
@@ -3825,27 +3825,27 @@ message SideChatInfo {
 }
 
 message SlackSourceMetadata {
-  string channel_id = 1 [json_name = "channelId"];
-  string channel_name = 2 [json_name = "channelName"];
-  string team_id = 3 [json_name = "teamId"];
-  string message_timestamp = 4 [json_name = "messageTimestamp"];
-  string message_permalink = 5 [json_name = "messagePermalink"];
+  optional string channel_id = 1 [json_name = "channelId"];
+  optional string channel_name = 2 [json_name = "channelName"];
+  optional string team_id = 3 [json_name = "teamId"];
+  optional string message_timestamp = 4 [json_name = "messageTimestamp"];
+  optional string message_permalink = 5 [json_name = "messagePermalink"];
 }
 
 message SnapshotAndSaveEnvironmentRequest {
   .aiserver.v1.SnapshotAndSaveEnvironmentRequest.Target target = 1 [json_name = "target"];
   string bc_id = 2 [json_name = "bcId"];
   string repo_url = 3 [json_name = "repoUrl"];
-  string install_command = 4 [json_name = "installCommand"];
-  string existing_snapshot_id = 5 [json_name = "existingSnapshotId"];
-  string scm_repo_node_id = 6 [json_name = "scmRepoNodeId"];
-  string git_enterprise_uuid = 7 [json_name = "gitEnterpriseUuid"];
-  string environment_name = 8 [json_name = "environmentName"];
-  .aiserver.v1.EnvironmentRepoConfig repo_config = 9 [json_name = "repoConfig"];
-  string environment_public_id = 10 [json_name = "environmentPublicId"];
-  .aiserver.v1.SnapshotAndSaveEnvironmentRequest.EgressConfig egress_config = 11 [json_name = "egressConfig"];
-  string start_command = 12 [json_name = "startCommand"];
-  string environment_build_id = 13 [json_name = "environmentBuildId"];
+  optional string install_command = 4 [json_name = "installCommand"];
+  optional string existing_snapshot_id = 5 [json_name = "existingSnapshotId"];
+  optional string scm_repo_node_id = 6 [json_name = "scmRepoNodeId"];
+  optional string git_enterprise_uuid = 7 [json_name = "gitEnterpriseUuid"];
+  optional string environment_name = 8 [json_name = "environmentName"];
+  optional .aiserver.v1.EnvironmentRepoConfig repo_config = 9 [json_name = "repoConfig"];
+  optional string environment_public_id = 10 [json_name = "environmentPublicId"];
+  optional .aiserver.v1.SnapshotAndSaveEnvironmentRequest.EgressConfig egress_config = 11 [json_name = "egressConfig"];
+  optional string start_command = 12 [json_name = "startCommand"];
+  optional string environment_build_id = 13 [json_name = "environmentBuildId"];
   message EgressConfig {
     .aiserver.v1.CloudAgentEgressProtectionMode mode = 1 [json_name = "mode"];
     repeated string allowlist = 2 [json_name = "allowlist"];
@@ -3865,115 +3865,115 @@ message StartBackgroundComposerFromSnapshotRequest {
   string snapshot_name_or_id = 1 [json_name = "snapshotNameOrId"];
   string prompt = 2 [json_name = "prompt"];
   repeated .aiserver.v1.StartBackgroundComposerFromSnapshotRequest.File files = 3 [json_name = "files"];
-  .aiserver.v1.ModelDetails model_details = 4 [json_name = "modelDetails"];
-  .aiserver.v1.HeadlessAgenticComposerRepositoryInfo repository_info = 5 [json_name = "repositoryInfo"];
+  optional .aiserver.v1.ModelDetails model_details = 4 [json_name = "modelDetails"];
+  optional .aiserver.v1.HeadlessAgenticComposerRepositoryInfo repository_info = 5 [json_name = "repositoryInfo"];
   string snapshot_workspace_root_path = 6 [json_name = "snapshotWorkspaceRootPath"];
   string start_for_auth_id_on_team = 8 [json_name = "startForAuthIdOnTeam"];
   bool auto_branch = 9 [json_name = "autoBranch"];
   bool return_immediately = 10 [json_name = "returnImmediately"];
-  .aiserver.v1.DevcontainerStartingPoint devcontainer_starting_point = 11 [json_name = "devcontainerStartingPoint"];
-  string force_vm_backend = 12 [json_name = "forceVmBackend"];
+  optional .aiserver.v1.DevcontainerStartingPoint devcontainer_starting_point = 11 [json_name = "devcontainerStartingPoint"];
+  optional string force_vm_backend = 12 [json_name = "forceVmBackend"];
   repeated .aiserver.v1.ImageProto images = 13 [json_name = "images"];
-  string repo_url = 14 [json_name = "repoUrl"];
-  string force_cluster = 15 [json_name = "forceCluster"];
+  optional string repo_url = 14 [json_name = "repoUrl"];
+  optional string force_cluster = 15 [json_name = "forceCluster"];
   repeated .aiserver.v1.ModelDetails additional_model_details = 16 [json_name = "additionalModelDetails"];
   string rich_prompt = 17 [json_name = "richPrompt"];
   repeated .aiserver.v1.ConversationMessage conversation_history = 18 [json_name = "conversationHistory"];
   repeated string documentation_identifiers = 19 [json_name = "documentationIdentifiers"];
-  bool use_web = 20 [json_name = "useWeb"];
+  optional bool use_web = 20 [json_name = "useWeb"];
   repeated .aiserver.v1.ComposerExternalLink external_links = 21 [json_name = "externalLinks"];
   string bc_id = 22 [json_name = "bcId"];
-  .aiserver.v1.BackgroundComposerSource source = 23 [json_name = "source"];
-  string slack_channel_id = 24 [json_name = "slackChannelId"];
-  string slack_message_timestamp = 25 [json_name = "slackMessageTimestamp"];
-  bool add_initial_message_to_responses = 26 [json_name = "addInitialMessageToResponses"];
-  string slack_team_id = 27 [json_name = "slackTeamId"];
-  string linear_issue_id = 28 [json_name = "linearIssueId"];
-  string force_machine_template = 29 [json_name = "forceMachineTemplate"];
-  string linear_org_id = 30 [json_name = "linearOrgId"];
-  string base_branch = 31 [json_name = "baseBranch"];
-  string client_ip = 32 [json_name = "clientIp"];
-  string linear_issue_identifier = 33 [json_name = "linearIssueIdentifier"];
-  string prompt_group_id = 34 [json_name = "promptGroupId"];
-  string pod_id = 35 [json_name = "podId"];
-  bool wait_on_branch_name = 36 [json_name = "waitOnBranchName"];
-  bool auto_create_pr = 37 [json_name = "autoCreatePr"];
-  string custom_branch_name = 38 [json_name = "customBranchName"];
-  .aiserver.v1.StartBackgroundComposerFromSnapshotRequest.WebhookConfig webhook_config = 39 [json_name = "webhookConfig"];
-  string github_issue_id = 40 [json_name = "githubIssueId"];
-  .aiserver.v1.StartingMessageType starting_message_type = 41 [json_name = "startingMessageType"];
-  bool open_as_cursor_github_app = 42 [json_name = "openAsCursorGithubApp"];
-  bool skip_reviewer_request = 43 [json_name = "skipReviewerRequest"];
-  .agent.v1.ConversationAction conversation_action = 44 [json_name = "conversationAction"];
-  bool test_mode_enabled = 45 [json_name = "testModeEnabled"];
-  string agent_session_id = 46 [json_name = "agentSessionId"];
-  .agent.v1.ConversationStateStructure conversation_state = 47 [json_name = "conversationState"];
+  optional .aiserver.v1.BackgroundComposerSource source = 23 [json_name = "source"];
+  optional string slack_channel_id = 24 [json_name = "slackChannelId"];
+  optional string slack_message_timestamp = 25 [json_name = "slackMessageTimestamp"];
+  optional bool add_initial_message_to_responses = 26 [json_name = "addInitialMessageToResponses"];
+  optional string slack_team_id = 27 [json_name = "slackTeamId"];
+  optional string linear_issue_id = 28 [json_name = "linearIssueId"];
+  optional string force_machine_template = 29 [json_name = "forceMachineTemplate"];
+  optional string linear_org_id = 30 [json_name = "linearOrgId"];
+  optional string base_branch = 31 [json_name = "baseBranch"];
+  optional string client_ip = 32 [json_name = "clientIp"];
+  optional string linear_issue_identifier = 33 [json_name = "linearIssueIdentifier"];
+  optional string prompt_group_id = 34 [json_name = "promptGroupId"];
+  optional string pod_id = 35 [json_name = "podId"];
+  optional bool wait_on_branch_name = 36 [json_name = "waitOnBranchName"];
+  optional bool auto_create_pr = 37 [json_name = "autoCreatePr"];
+  optional string custom_branch_name = 38 [json_name = "customBranchName"];
+  optional .aiserver.v1.StartBackgroundComposerFromSnapshotRequest.WebhookConfig webhook_config = 39 [json_name = "webhookConfig"];
+  optional string github_issue_id = 40 [json_name = "githubIssueId"];
+  optional .aiserver.v1.StartingMessageType starting_message_type = 41 [json_name = "startingMessageType"];
+  optional bool open_as_cursor_github_app = 42 [json_name = "openAsCursorGithubApp"];
+  optional bool skip_reviewer_request = 43 [json_name = "skipReviewerRequest"];
+  optional .agent.v1.ConversationAction conversation_action = 44 [json_name = "conversationAction"];
+  optional bool test_mode_enabled = 45 [json_name = "testModeEnabled"];
+  optional string agent_session_id = 46 [json_name = "agentSessionId"];
+  optional .agent.v1.ConversationStateStructure conversation_state = 47 [json_name = "conversationState"];
   repeated .aiserver.v1.PreFetchedBlob pre_fetched_blobs = 48 [json_name = "preFetchedBlobs"];
-  string kickoff_message_id = 49 [json_name = "kickoffMessageId"];
-  string name = 50 [json_name = "name"];
-  bool enable_setup_vm_environment_tool = 51 [json_name = "enableSetupVmEnvironmentTool"];
-  .aiserver.v1.GrindModeConfig grind_mode_config = 52 [json_name = "grindModeConfig"];
-  bool should_synthesize = 53 [json_name = "shouldSynthesize"];
-  bool use_private_worker = 55 [json_name = "usePrivateWorker"];
-  bool force_non_chargeable = 56 [json_name = "forceNonChargeable"];
-  string pr_url = 57 [json_name = "prUrl"];
+  optional string kickoff_message_id = 49 [json_name = "kickoffMessageId"];
+  optional string name = 50 [json_name = "name"];
+  optional bool enable_setup_vm_environment_tool = 51 [json_name = "enableSetupVmEnvironmentTool"];
+  optional .aiserver.v1.GrindModeConfig grind_mode_config = 52 [json_name = "grindModeConfig"];
+  optional bool should_synthesize = 53 [json_name = "shouldSynthesize"];
+  optional bool use_private_worker = 55 [json_name = "usePrivateWorker"];
+  optional bool force_non_chargeable = 56 [json_name = "forceNonChargeable"];
+  optional string pr_url = 57 [json_name = "prUrl"];
   repeated .agent.v1.RequestedModel requested_models = 58 [json_name = "requestedModels"];
   repeated .aiserver.v1.PrivateWorkerLabel labels = 59 [json_name = "labels"];
-  bool skip_user_install_commands_and_cloud_testing = 60 [json_name = "skipUserInstallCommandsAndCloudTesting"];
-  string automation_id = 73 [json_name = "automationId"];
-  .aiserver.v1.CloudAgentEffortMode effort_mode = 75 [json_name = "effortMode"];
-  bool auto_proceed_after_planning = 76 [json_name = "autoProceedAfterPlanning"];
-  int64 time_budget_seconds = 77 [json_name = "timeBudgetSeconds"];
-  int64 time_budget_ms = 78 [json_name = "timeBudgetMs"];
-  bool init_empty_repo = 79 [json_name = "initEmptyRepo"];
+  optional bool skip_user_install_commands_and_cloud_testing = 60 [json_name = "skipUserInstallCommandsAndCloudTesting"];
+  optional string automation_id = 73 [json_name = "automationId"];
+  optional .aiserver.v1.CloudAgentEffortMode effort_mode = 75 [json_name = "effortMode"];
+  optional bool auto_proceed_after_planning = 76 [json_name = "autoProceedAfterPlanning"];
+  optional int64 time_budget_seconds = 77 [json_name = "timeBudgetSeconds"];
+  optional int64 time_budget_ms = 78 [json_name = "timeBudgetMs"];
+  optional bool init_empty_repo = 79 [json_name = "initEmptyRepo"];
   repeated .agent.v1.AgentSkill skills = 80 [json_name = "skills"];
-  string cloud_plugin_manifest_json = 81 [json_name = "cloudPluginManifestJson"];
-  string cloud_plugin_snapshot_token = 82 [json_name = "cloudPluginSnapshotToken"];
-  .aiserver.v1.ExternalSourceMetadata external_source_metadata = 94 [json_name = "externalSourceMetadata"];
-  string mcp_config_json = 95 [json_name = "mcpConfigJson"];
+  optional string cloud_plugin_manifest_json = 81 [json_name = "cloudPluginManifestJson"];
+  optional string cloud_plugin_snapshot_token = 82 [json_name = "cloudPluginSnapshotToken"];
+  optional .aiserver.v1.ExternalSourceMetadata external_source_metadata = 94 [json_name = "externalSourceMetadata"];
+  optional string mcp_config_json = 95 [json_name = "mcpConfigJson"];
   repeated .agent.v1.CustomSubagent custom_subagents = 96 [json_name = "customSubagents"];
-  .aiserver.v1.PrivateWorkerOwnerFilter private_worker_owner_filter = 97 [json_name = "privateWorkerOwnerFilter"];
-  int32 team_id = 98 [json_name = "teamId"];
-  .aiserver.v1.CloudSubagentParentReference cloud_subagent_parent = 99 [json_name = "cloudSubagentParent"];
-  .aiserver.v1.PrivateWorkspaceIdentifier private_workspace_identifier = 100 [json_name = "privateWorkspaceIdentifier"];
+  optional .aiserver.v1.PrivateWorkerOwnerFilter private_worker_owner_filter = 97 [json_name = "privateWorkerOwnerFilter"];
+  optional int32 team_id = 98 [json_name = "teamId"];
+  optional .aiserver.v1.CloudSubagentParentReference cloud_subagent_parent = 99 [json_name = "cloudSubagentParent"];
+  optional .aiserver.v1.PrivateWorkspaceIdentifier private_workspace_identifier = 100 [json_name = "privateWorkspaceIdentifier"];
   repeated string requested_additional_store_ids = 101 [json_name = "requestedAdditionalStoreIds"];
-  bool is_slack_v2 = 104 [json_name = "isSlackV2"];
-  string named_agent_id = 105 [json_name = "namedAgentId"];
-  string named_agent_session_key = 106 [json_name = "namedAgentSessionKey"];
-  string named_agent_session_kind = 107 [json_name = "namedAgentSessionKind"];
+  optional bool is_slack_v2 = 104 [json_name = "isSlackV2"];
+  optional string named_agent_id = 105 [json_name = "namedAgentId"];
+  optional string named_agent_session_key = 106 [json_name = "namedAgentSessionKey"];
+  optional string named_agent_session_kind = 107 [json_name = "namedAgentSessionKind"];
   repeated .aiserver.v1.AgentStoreMount store_mounts = 108 [json_name = "storeMounts"];
-  .aiserver.v1.NamedAgentProfile named_agent_profile = 109 [json_name = "namedAgentProfile"];
-  .aiserver.v1.AgentWorkspaceBinding workspace_binding = 110 [json_name = "workspaceBinding"];
+  optional .aiserver.v1.NamedAgentProfile named_agent_profile = 109 [json_name = "namedAgentProfile"];
+  optional .aiserver.v1.AgentWorkspaceBinding workspace_binding = 110 [json_name = "workspaceBinding"];
   map<string, string> run_env_vars = 111 [json_name = "runEnvVars"];
-  string selected_private_worker_id = 112 [json_name = "selectedPrivateWorkerId"];
-  bool is_slack_v1_5 = 113 [json_name = "isSlackV15"];
-  bool use_experimental_model_opt_out = 114 [json_name = "useExperimentalModelOptOut"];
-  string forked_from_bc_id = 115 [json_name = "forkedFromBcId"];
-  string requested_environment_build_id = 116 [json_name = "requestedEnvironmentBuildId"];
+  optional string selected_private_worker_id = 112 [json_name = "selectedPrivateWorkerId"];
+  optional bool is_slack_v1_5 = 113 [json_name = "isSlackV15"];
+  optional bool use_experimental_model_opt_out = 114 [json_name = "useExperimentalModelOptOut"];
+  optional string forked_from_bc_id = 115 [json_name = "forkedFromBcId"];
+  optional string requested_environment_build_id = 116 [json_name = "requestedEnvironmentBuildId"];
   map<string, string> external_metadata = 117 [json_name = "externalMetadata"];
-  .aiserver.v1.EnvironmentSetupRunStartedMetadata environment_setup_run_started_metadata = 118 [json_name = "environmentSetupRunStartedMetadata"];
-  .agent.v1.ProjectDetails project_details = 119 [json_name = "projectDetails"];
-  bool disable_pr_management_tool = 120 [json_name = "disablePrManagementTool"];
-  .agent.v1.SystemPromptSpec system_prompt_spec = 121 [json_name = "systemPromptSpec"];
+  optional .aiserver.v1.EnvironmentSetupRunStartedMetadata environment_setup_run_started_metadata = 118 [json_name = "environmentSetupRunStartedMetadata"];
+  optional .agent.v1.ProjectDetails project_details = 119 [json_name = "projectDetails"];
+  optional bool disable_pr_management_tool = 120 [json_name = "disablePrManagementTool"];
+  optional .agent.v1.SystemPromptSpec system_prompt_spec = 121 [json_name = "systemPromptSpec"];
   message File {
     string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
     string contents = 2 [json_name = "contents"];
   }
   message WebhookConfig {
     string url = 1 [json_name = "url"];
-    string secret = 2 [json_name = "secret"];
+    optional string secret = 2 [json_name = "secret"];
   }
 }
 
 message StartBackgroundComposerFromSnapshotResponse {
-  .aiserver.v1.BackgroundComposer composer = 1 [json_name = "composer"];
-  bool was_swapped_to_default = 2 [json_name = "wasSwappedToDefault"];
-  string initial_run_id = 3 [json_name = "initialRunId"];
+  optional .aiserver.v1.BackgroundComposer composer = 1 [json_name = "composer"];
+  optional bool was_swapped_to_default = 2 [json_name = "wasSwappedToDefault"];
+  optional string initial_run_id = 3 [json_name = "initialRunId"];
 }
 
 message StartCloudAgentLoadTestRequest {
   string scenario_name = 1 [json_name = "scenarioName"];
-  .aiserver.v1.CloudAgentSyntheticsScenarioInput custom_scenario = 2 [json_name = "customScenario"];
+  optional .aiserver.v1.CloudAgentSyntheticsScenarioInput custom_scenario = 2 [json_name = "customScenario"];
   string pool_id = 3 [json_name = "poolId"];
   uint32 count = 4 [json_name = "count"];
   uint32 per_identity_create_per_min = 5 [json_name = "perIdentityCreatePerMin"];
@@ -4003,13 +4003,13 @@ message StartLinearStreamingForFollowupResponse {
 
 message StartSideChatBackgroundComposerRequest {
   string parent_bc_id = 1 [json_name = "parentBcId"];
-  string name = 2 [json_name = "name"];
+  optional string name = 2 [json_name = "name"];
   .aiserver.v1.BackgroundComposerSource creation_source = 3 [json_name = "creationSource"];
-  string creation_id = 4 [json_name = "creationId"];
+  optional string creation_id = 4 [json_name = "creationId"];
 }
 
 message StartSideChatBackgroundComposerResponse {
-  .aiserver.v1.BackgroundComposer composer = 1 [json_name = "composer"];
+  optional .aiserver.v1.BackgroundComposer composer = 1 [json_name = "composer"];
 }
 
 message StartSlackStreamingForFollowupRequest {
@@ -4050,17 +4050,17 @@ enum StreamConversationPurpose {
 
 message StreamConversationRequest {
   string bc_id = 1 [json_name = "bcId"];
-  string offset_key = 2 [json_name = "offsetKey"];
-  bool filter_heavy_step_data = 3 [json_name = "filterHeavyStepData"];
+  optional string offset_key = 2 [json_name = "offsetKey"];
+  optional bool filter_heavy_step_data = 3 [json_name = "filterHeavyStepData"];
   bool should_send_prefetched_blobs_first = 4 [json_name = "shouldSendPrefetchedBlobsFirst"];
   repeated bytes pre_fetched_blob_ids = 5 [json_name = "preFetchedBlobIds"];
-  bool prefetch_only_last_step_per_turn = 6 [json_name = "prefetchOnlyLastStepPerTurn"];
-  bool send_stream_signal_after_prefetch = 7 [json_name = "sendStreamSignalAfterPrefetch"];
-  uint32 max_blobs_after_prefetch = 8 [json_name = "maxBlobsAfterPrefetch"];
-  bool allow_streaming_when_terminal_status = 9 [json_name = "allowStreamingWhenTerminalStatus"];
-  .aiserver.v1.PreFetchedBlobFilter pre_fetched_blob_filter = 10 [json_name = "preFetchedBlobFilter"];
-  bool include_stream_heartbeats = 11 [json_name = "includeStreamHeartbeats"];
-  .aiserver.v1.StreamConversationPurpose purpose = 12 [json_name = "purpose"];
+  optional bool prefetch_only_last_step_per_turn = 6 [json_name = "prefetchOnlyLastStepPerTurn"];
+  optional bool send_stream_signal_after_prefetch = 7 [json_name = "sendStreamSignalAfterPrefetch"];
+  optional uint32 max_blobs_after_prefetch = 8 [json_name = "maxBlobsAfterPrefetch"];
+  optional bool allow_streaming_when_terminal_status = 9 [json_name = "allowStreamingWhenTerminalStatus"];
+  optional .aiserver.v1.PreFetchedBlobFilter pre_fetched_blob_filter = 10 [json_name = "preFetchedBlobFilter"];
+  optional bool include_stream_heartbeats = 11 [json_name = "includeStreamHeartbeats"];
+  optional .aiserver.v1.StreamConversationPurpose purpose = 12 [json_name = "purpose"];
 }
 
 message StreamConversationResponse {
@@ -4081,7 +4081,7 @@ message StreamConversationResponse {
   message CloudAgentStateWithIdAndOffset {
     string offset_key = 1 [json_name = "offsetKey"];
     bytes blob_id = 2 [json_name = "blobId"];
-    .aiserver.v1.CloudAgentState cloud_agent_state = 3 [json_name = "cloudAgentState"];
+    optional .aiserver.v1.CloudAgentState cloud_agent_state = 3 [json_name = "cloudAgentState"];
     repeated .aiserver.v1.PreFetchedBlob pre_fetched_blobs = 4 [json_name = "preFetchedBlobs"];
     repeated .agent.v1.UserDisplayInfo user_display_infos = 5 [json_name = "userDisplayInfos"];
   }
@@ -4090,18 +4090,18 @@ message StreamConversationResponse {
   }
   message InitialState {
     bytes blob_id = 1 [json_name = "blobId"];
-    .aiserver.v1.CloudAgentState cloud_agent_state = 2 [json_name = "cloudAgentState"];
+    optional .aiserver.v1.CloudAgentState cloud_agent_state = 2 [json_name = "cloudAgentState"];
     repeated .aiserver.v1.PreFetchedBlob pre_fetched_blobs = 4 [json_name = "preFetchedBlobs"];
     .aiserver.v1.CloudAgentWorkflowStatus workflow_status = 5 [json_name = "workflowStatus"];
     repeated .agent.v1.UserDisplayInfo user_display_infos = 6 [json_name = "userDisplayInfos"];
   }
   message InteractionQueryWithOffset {
     string offset_key = 1 [json_name = "offsetKey"];
-    .agent.v1.InteractionQuery interaction_query = 2 [json_name = "interactionQuery"];
+    optional .agent.v1.InteractionQuery interaction_query = 2 [json_name = "interactionQuery"];
   }
   message InteractionUpdateWithOffset {
     string offset_key = 1 [json_name = "offsetKey"];
-    .agent.v1.InteractionUpdate interaction_update = 2 [json_name = "interactionUpdate"];
+    optional .agent.v1.InteractionUpdate interaction_update = 2 [json_name = "interactionUpdate"];
     repeated .agent.v1.UserDisplayInfo user_display_infos = 3 [json_name = "userDisplayInfos"];
   }
   message PrefetchedBlobs {
@@ -4109,7 +4109,7 @@ message StreamConversationResponse {
   }
   message ReadOnlySharedPodLifecycleEventWithOffset {
     string offset_key = 1 [json_name = "offsetKey"];
-    .aiserver.v1.ReadOnlySharedPodLifecycleEvent read_only_shared_pod_lifecycle_event = 2 [json_name = "readOnlySharedPodLifecycleEvent"];
+    optional .aiserver.v1.ReadOnlySharedPodLifecycleEvent read_only_shared_pod_lifecycle_event = 2 [json_name = "readOnlySharedPodLifecycleEvent"];
   }
   message StreamHeartbeat {
   }
@@ -4119,11 +4119,11 @@ message StreamConversationResponse {
   }
   message TransientErrorWithOffset {
     string offset_key = 1 [json_name = "offsetKey"];
-    .aiserver.v1.TransientError transient_error = 2 [json_name = "transientError"];
+    optional .aiserver.v1.TransientError transient_error = 2 [json_name = "transientError"];
   }
   message WorkerLifecycleEventWithOffset {
     string offset_key = 1 [json_name = "offsetKey"];
-    .aiserver.v1.WorkerLifecycleEvent worker_lifecycle_event = 2 [json_name = "workerLifecycleEvent"];
+    optional .aiserver.v1.WorkerLifecycleEvent worker_lifecycle_event = 2 [json_name = "workerLifecycleEvent"];
   }
   message WorkflowStatusWithOffset {
     string offset_key = 1 [json_name = "offsetKey"];
@@ -4133,8 +4133,8 @@ message StreamConversationResponse {
 
 message SubmitInteractionResponseBackgroundComposerRequest {
   string bc_id = 1 [json_name = "bcId"];
-  .agent.v1.InteractionResponse interaction_response = 2 [json_name = "interactionResponse"];
-  string ask_question_tool_call_id = 3 [json_name = "askQuestionToolCallId"];
+  optional .agent.v1.InteractionResponse interaction_response = 2 [json_name = "interactionResponse"];
+  optional string ask_question_tool_call_id = 3 [json_name = "askQuestionToolCallId"];
 }
 
 message SubmitInteractionResponseBackgroundComposerResponse {
@@ -4161,7 +4161,7 @@ message SyncLiveActivityRequest {
   string device_id = 1 [json_name = "deviceId"];
   .aiserver.v1.PushPlatform platform = 2 [json_name = "platform"];
   string activity_push_token = 3 [json_name = "activityPushToken"];
-  .aiserver.v1.LiveActivityContentState content_state = 4 [json_name = "contentState"];
+  optional .aiserver.v1.LiveActivityContentState content_state = 4 [json_name = "contentState"];
   uint64 state_version = 5 [json_name = "stateVersion"];
   string bundle_id = 6 [json_name = "bundleId"];
 }
@@ -4183,8 +4183,8 @@ message TeamEnvironment {
   int64 created_at_ms = 6 [json_name = "createdAtMs"];
   int64 updated_at_ms = 7 [json_name = "updatedAtMs"];
   string scm_repo_node_id = 8 [json_name = "scmRepoNodeId"];
-  string git_enterprise_uuid = 9 [json_name = "gitEnterpriseUuid"];
-  string environment_public_id = 10 [json_name = "environmentPublicId"];
+  optional string git_enterprise_uuid = 9 [json_name = "gitEnterpriseUuid"];
+  optional string environment_public_id = 10 [json_name = "environmentPublicId"];
 }
 
 message TeamWorkerLimitSummary {
@@ -4203,7 +4203,7 @@ message TransientError {
 
 message TriggerEnvironmentBuildRequest {
   string environment_public_id = 1 [json_name = "environmentPublicId"];
-  bool is_draft = 2 [json_name = "isDraft"];
+  optional bool is_draft = 2 [json_name = "isDraft"];
   repeated .aiserver.v1.RepoStartingRef refs = 3 [json_name = "refs"];
 }
 
@@ -4239,7 +4239,7 @@ message UnshareBackgroundComposerArtifactRequest {
 }
 
 message UnshareBackgroundComposerArtifactResponse {
-  .aiserver.v1.BackgroundComposerSharedArtifact artifact = 1 [json_name = "artifact"];
+  optional .aiserver.v1.BackgroundComposerSharedArtifact artifact = 1 [json_name = "artifact"];
 }
 
 message UpdateBackgroundComposerEnvironmentRequest {
@@ -4261,27 +4261,27 @@ message UpdateBackgroundComposerExperimentalModelOptOutResponse {
 }
 
 message UpdateBackgroundComposerUserSettingsRequest {
-  string model_name = 1 [json_name = "modelName"];
-  bool slack_notifications_for_web_enabled = 2 [json_name = "slackNotificationsForWebEnabled"];
-  bool ci_failure_followup_enabled = 3 [json_name = "ciFailureFollowupEnabled"];
-  bool browser_use_enabled = 4 [json_name = "browserUseEnabled"];
-  .aiserver.v1.AutoCreatePrSetting auto_create_pr_setting = 5 [json_name = "autoCreatePrSetting"];
-  .aiserver.v1.PrReviewOpenDestinationMode pr_review_open_destination = 6 [json_name = "prReviewOpenDestination"];
-  .aiserver.v1.GithubArtifactPostingMode github_artifact_posting = 7 [json_name = "githubArtifactPosting"];
-  .aiserver.v1.CloudAgentEgressProtectionMode egress_protection_mode = 8 [json_name = "egressProtectionMode"];
-  .aiserver.v1.BackgroundComposerUserEgressPolicy egress_policy = 9 [json_name = "egressPolicy"];
-  string branch_prefix = 10 [json_name = "branchPrefix"];
-  .aiserver.v1.BackgroundComposerQuickActionSettings quick_action_settings = 11 [json_name = "quickActionSettings"];
-  bool allow_private_workers = 12 [json_name = "allowPrivateWorkers"];
-  string bc_id = 13 [json_name = "bcId"];
-  string default_environment_public_id = 14 [json_name = "defaultEnvironmentPublicId"];
+  optional string model_name = 1 [json_name = "modelName"];
+  optional bool slack_notifications_for_web_enabled = 2 [json_name = "slackNotificationsForWebEnabled"];
+  optional bool ci_failure_followup_enabled = 3 [json_name = "ciFailureFollowupEnabled"];
+  optional bool browser_use_enabled = 4 [json_name = "browserUseEnabled"];
+  optional .aiserver.v1.AutoCreatePrSetting auto_create_pr_setting = 5 [json_name = "autoCreatePrSetting"];
+  optional .aiserver.v1.PrReviewOpenDestinationMode pr_review_open_destination = 6 [json_name = "prReviewOpenDestination"];
+  optional .aiserver.v1.GithubArtifactPostingMode github_artifact_posting = 7 [json_name = "githubArtifactPosting"];
+  optional .aiserver.v1.CloudAgentEgressProtectionMode egress_protection_mode = 8 [json_name = "egressProtectionMode"];
+  optional .aiserver.v1.BackgroundComposerUserEgressPolicy egress_policy = 9 [json_name = "egressPolicy"];
+  optional string branch_prefix = 10 [json_name = "branchPrefix"];
+  optional .aiserver.v1.BackgroundComposerQuickActionSettings quick_action_settings = 11 [json_name = "quickActionSettings"];
+  optional bool allow_private_workers = 12 [json_name = "allowPrivateWorkers"];
+  optional string bc_id = 13 [json_name = "bcId"];
+  optional string default_environment_public_id = 14 [json_name = "defaultEnvironmentPublicId"];
   repeated .aiserver.v1.BackgroundComposerDefaultEnvironmentSetting default_environment_settings = 15 [json_name = "defaultEnvironmentSettings"];
-  bool remote_control_enabled = 16 [json_name = "remoteControlEnabled"];
-  .aiserver.v1.PrReviewOpenSurfaceMode pr_review_open_surface = 17 [json_name = "prReviewOpenSurface"];
+  optional bool remote_control_enabled = 16 [json_name = "remoteControlEnabled"];
+  optional .aiserver.v1.PrReviewOpenSurfaceMode pr_review_open_surface = 17 [json_name = "prReviewOpenSurface"];
   repeated string sidebar_named_agent_ids = 18 [json_name = "sidebarNamedAgentIds"];
-  bool sidebar_named_agent_ids_explicitly_set = 19 [json_name = "sidebarNamedAgentIdsExplicitlySet"];
-  .aiserver.v1.CloudAgentModelSelection default_model_selection = 20 [json_name = "defaultModelSelection"];
-  int32 ask_question_auto_answer_timeout_minutes = 21 [json_name = "askQuestionAutoAnswerTimeoutMinutes"];
+  optional bool sidebar_named_agent_ids_explicitly_set = 19 [json_name = "sidebarNamedAgentIdsExplicitlySet"];
+  optional .aiserver.v1.CloudAgentModelSelection default_model_selection = 20 [json_name = "defaultModelSelection"];
+  optional int32 ask_question_auto_answer_timeout_minutes = 21 [json_name = "askQuestionAutoAnswerTimeoutMinutes"];
 }
 
 message UpdateBackgroundComposerUserSettingsResponse {
@@ -4289,31 +4289,31 @@ message UpdateBackgroundComposerUserSettingsResponse {
 
 message UpdateEnvironmentBuildRequest {
   string build_id = 1 [json_name = "buildId"];
-  bool is_draft = 2 [json_name = "isDraft"];
+  optional bool is_draft = 2 [json_name = "isDraft"];
 }
 
 message UpdateEnvironmentBuildResponse {
-  .aiserver.v1.EnvironmentBuildRow row = 1 [json_name = "row"];
+  optional .aiserver.v1.EnvironmentBuildRow row = 1 [json_name = "row"];
 }
 
 message UpdateEnvironmentBuildSettingsRequest {
   string environment_public_id = 1 [json_name = "environmentPublicId"];
-  bool fast_forward_default_branch = 2 [json_name = "fastForwardDefaultBranch"];
+  optional bool fast_forward_default_branch = 2 [json_name = "fastForwardDefaultBranch"];
   bool clear_fast_forward_default_branch = 3 [json_name = "clearFastForwardDefaultBranch"];
-  bool builds_enabled = 4 [json_name = "buildsEnabled"];
+  optional bool builds_enabled = 4 [json_name = "buildsEnabled"];
   bool clear_builds_enabled = 5 [json_name = "clearBuildsEnabled"];
-  int32 auto_fast_forward_staleness_hours = 6 [json_name = "autoFastForwardStalenessHours"];
+  optional int32 auto_fast_forward_staleness_hours = 6 [json_name = "autoFastForwardStalenessHours"];
   bool clear_auto_fast_forward_staleness_hours = 7 [json_name = "clearAutoFastForwardStalenessHours"];
 }
 
 message UpdateEnvironmentBuildSettingsResponse {
-  .aiserver.v1.EnvironmentBuildSettings settings = 1 [json_name = "settings"];
+  optional .aiserver.v1.EnvironmentBuildSettings settings = 1 [json_name = "settings"];
 }
 
 message UpdatePendingFollowupRequest {
   string bc_id = 1 [json_name = "bcId"];
   string followup_id = 2 [json_name = "followupId"];
-  .aiserver.v1.ConversationMessage updated_message = 3 [json_name = "updatedMessage"];
+  optional .aiserver.v1.ConversationMessage updated_message = 3 [json_name = "updatedMessage"];
 }
 
 message UpdatePendingFollowupResponse {
@@ -4328,11 +4328,11 @@ message UpdatePullRequestBranchRequest {
 message UpdatePullRequestBranchResponse {
   bool success = 1 [json_name = "success"];
   string error = 2 [json_name = "error"];
-  string new_head_sha = 3 [json_name = "newHeadSha"];
+  optional string new_head_sha = 3 [json_name = "newHeadSha"];
 }
 
 message UsedEnvironmentBuildInfo {
-  .anyrun.v1.EnvironmentBuildBootInfo boot_info = 1 [json_name = "bootInfo"];
+  optional .anyrun.v1.EnvironmentBuildBootInfo boot_info = 1 [json_name = "bootInfo"];
 }
 
 message UserWorkerSummary {
@@ -4352,14 +4352,14 @@ message VerifyBackgroundComposerAccessResponse {
 
 message VideoAnnotation {
   repeated .aiserver.v1.VideoChapter labeled_chapters = 1 [json_name = "labeledChapters"];
-  .aiserver.v1.VideoTimestamp thumbnail_timestamp = 2 [json_name = "thumbnailTimestamp"];
-  double trim_start_seconds = 3 [json_name = "trimStartSeconds"];
-  double trim_end_seconds = 4 [json_name = "trimEndSeconds"];
+  optional .aiserver.v1.VideoTimestamp thumbnail_timestamp = 2 [json_name = "thumbnailTimestamp"];
+  optional double trim_start_seconds = 3 [json_name = "trimStartSeconds"];
+  optional double trim_end_seconds = 4 [json_name = "trimEndSeconds"];
 }
 
 message VideoAnnotationEntry {
   string artifact_path = 1 [json_name = "artifactPath"];
-  .aiserver.v1.VideoAnnotation annotation = 2 [json_name = "annotation"];
+  optional .aiserver.v1.VideoAnnotation annotation = 2 [json_name = "annotation"];
 }
 
 message VideoAnnotationsWrapper {
@@ -4367,7 +4367,7 @@ message VideoAnnotationsWrapper {
 }
 
 message VideoChapter {
-  .aiserver.v1.VideoTimestamp start_time = 1 [json_name = "startTime"];
+  optional .aiserver.v1.VideoTimestamp start_time = 1 [json_name = "startTime"];
   string label = 3 [json_name = "label"];
   bool should_hide = 4 [json_name = "shouldHide"];
 }
@@ -4387,10 +4387,10 @@ message VmProvisionedSkill {
   string description = 2 [json_name = "description"];
   repeated string environments = 3 [json_name = "environments"];
   repeated string disabled_environments = 4 [json_name = "disabledEnvironments"];
-  .agent.v1.CustomModeDescriptor custom_mode = 5 [json_name = "customMode"];
-  string display_name = 6 [json_name = "displayName"];
-  string icon = 7 [json_name = "icon"];
-  string color = 8 [json_name = "color"];
+  optional .agent.v1.CustomModeDescriptor custom_mode = 5 [json_name = "customMode"];
+  optional string display_name = 6 [json_name = "displayName"];
+  optional string icon = 7 [json_name = "icon"];
+  optional string color = 8 [json_name = "color"];
 }
 
 enum WakeBackgroundComposerReason {
@@ -4423,7 +4423,7 @@ message WatchBackgroundComposerSnapshotStateRequest {
 message WatchBackgroundComposerSnapshotStateResponse {
   string snapshot_id = 1 [json_name = "snapshotId"];
   .anyrun.v1.SnapshotState state = 2 [json_name = "state"];
-  string error_message = 3 [json_name = "errorMessage"];
+  optional string error_message = 3 [json_name = "errorMessage"];
 }
 
 message WorkerCreation {

@@ -183,24 +183,24 @@ export class AgentStartupTraceEvent_SpanStarted extends Message<AgentStartupTrac
   name = "";
 
   /**
-   * @generated from field: string parent_span_id = 3;
+   * @generated from field: optional string parent_span_id = 3;
    */
-  parentSpanId = "";
+  parentSpanId?: string;
 
   /**
-   * @generated from field: string href = 4;
+   * @generated from field: optional string href = 4;
    */
-  href = "";
+  href?: string;
 
   /**
-   * @generated from field: string temporal_run_id = 5;
+   * @generated from field: optional string temporal_run_id = 5;
    */
-  temporalRunId = "";
+  temporalRunId?: string;
 
   /**
-   * @generated from field: string temporal_activity_id = 6;
+   * @generated from field: optional string temporal_activity_id = 6;
    */
-  temporalActivityId = "";
+  temporalActivityId?: string;
 
   constructor(data?: PartialMessage<AgentStartupTraceEvent_SpanStarted>) {
     super();
@@ -212,10 +212,10 @@ export class AgentStartupTraceEvent_SpanStarted extends Message<AgentStartupTrac
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "span_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "parent_span_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "href", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "temporal_run_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "temporal_activity_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "parent_span_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "href", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "temporal_run_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "temporal_activity_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AgentStartupTraceEvent_SpanStarted {

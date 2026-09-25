@@ -9,7 +9,7 @@ package aiserver.v1;
 
 message BidiAppendRequest {
   string data = 1 [json_name = "data"];
-  .aiserver.v1.BidiRequestId request_id = 2 [json_name = "requestId"];
+  optional .aiserver.v1.BidiRequestId request_id = 2 [json_name = "requestId"];
   int64 append_seqno = 3 [json_name = "appendSeqno"];
   bytes data_binary = 4 [json_name = "dataBinary"];
 }
@@ -18,14 +18,14 @@ message BidiAppendResponse {
 }
 
 message BidiPollRequest {
-  .aiserver.v1.BidiRequestId request_id = 1 [json_name = "requestId"];
-  bool start_request = 2 [json_name = "startRequest"];
+  optional .aiserver.v1.BidiRequestId request_id = 1 [json_name = "requestId"];
+  optional bool start_request = 2 [json_name = "startRequest"];
 }
 
 message BidiPollResponse {
   int64 seqno = 1 [json_name = "seqno"];
   string data = 2 [json_name = "data"];
-  bool eof = 3 [json_name = "eof"];
+  optional bool eof = 3 [json_name = "eof"];
 }
 
 message BidiRequestId {

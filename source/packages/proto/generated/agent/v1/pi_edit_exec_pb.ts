@@ -132,9 +132,9 @@ export class PiEditExecSuccess extends Message<PiEditExecSuccess> {
   patch = "";
 
   /**
-   * @generated from field: uint32 first_changed_line = 4;
+   * @generated from field: optional uint32 first_changed_line = 4;
    */
-  firstChangedLine = 0;
+  firstChangedLine?: number;
 
   constructor(data?: PartialMessage<PiEditExecSuccess>) {
     super();
@@ -147,7 +147,7 @@ export class PiEditExecSuccess extends Message<PiEditExecSuccess> {
     { no: 1, name: "output", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "diff", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "patch", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "first_changed_line", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 4, name: "first_changed_line", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PiEditExecSuccess {

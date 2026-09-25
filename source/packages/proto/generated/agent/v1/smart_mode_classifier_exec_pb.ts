@@ -47,12 +47,12 @@ export class SmartModeClassifierArgs extends Message<SmartModeClassifierArgs> {
   toolCallId = "";
 
   /**
-   * @generated from field: string parent_conversation_id = 2;
+   * @generated from field: optional string parent_conversation_id = 2;
    */
-  parentConversationId = "";
+  parentConversationId?: string;
 
   /**
-   * @generated from field: agent.v1.SmartModeRiskTarget target = 3;
+   * @generated from field: optional agent.v1.SmartModeRiskTarget target = 3;
    */
   target?: SmartModeRiskTarget;
 
@@ -70,8 +70,8 @@ export class SmartModeClassifierArgs extends Message<SmartModeClassifierArgs> {
   static readonly typeName = "agent.v1.SmartModeClassifierArgs";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "parent_conversation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "target", kind: "message", T: SmartModeRiskTarget },
+    { no: 2, name: "parent_conversation_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "target", kind: "message", T: SmartModeRiskTarget, opt: true },
     { no: 4, name: "conversation_context", kind: "message", T: SmartModeClassifierConversationMessage, repeated: true },
   ]);
 
@@ -102,7 +102,7 @@ export class SmartModeRiskTarget extends Message<SmartModeRiskTarget> {
   action = "";
 
   /**
-   * @generated from field: google.protobuf.Struct arguments = 2;
+   * @generated from field: optional google.protobuf.Struct arguments = 2;
    */
   arguments?: Struct;
 
@@ -115,7 +115,7 @@ export class SmartModeRiskTarget extends Message<SmartModeRiskTarget> {
   static readonly typeName = "agent.v1.SmartModeRiskTarget";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "action", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "arguments", kind: "message", T: Struct },
+    { no: 2, name: "arguments", kind: "message", T: Struct, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SmartModeRiskTarget {
@@ -238,14 +238,14 @@ export class SmartModeClassifierSuccess extends Message<SmartModeClassifierSucce
   decision = SmartModeClassifierDecision.UNSPECIFIED;
 
   /**
-   * @generated from field: string block_reason = 2;
+   * @generated from field: optional string block_reason = 2;
    */
-  blockReason = "";
+  blockReason?: string;
 
   /**
-   * @generated from field: string proposed_allow_rule = 3;
+   * @generated from field: optional string proposed_allow_rule = 3;
    */
-  proposedAllowRule = "";
+  proposedAllowRule?: string;
 
   constructor(data?: PartialMessage<SmartModeClassifierSuccess>) {
     super();
@@ -256,8 +256,8 @@ export class SmartModeClassifierSuccess extends Message<SmartModeClassifierSucce
   static readonly typeName = "agent.v1.SmartModeClassifierSuccess";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "decision", kind: "enum", T: proto3.getEnumType(SmartModeClassifierDecision) },
-    { no: 2, name: "block_reason", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "proposed_allow_rule", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "block_reason", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "proposed_allow_rule", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SmartModeClassifierSuccess {

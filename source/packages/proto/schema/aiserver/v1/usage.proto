@@ -10,11 +10,11 @@ package aiserver.v1;
 import "google/protobuf/empty.proto";
 
 message UsageEventDetails {
-  int32 override_num_requests_counted = 13 [json_name = "overrideNumRequestsCounted"];
-  int32 override_num_requests_counted_millis = 16 [json_name = "overrideNumRequestsCountedMillis"];
-  string routed_model = 17 [json_name = "routedModel"];
-  .aiserver.v1.ModelSelectionSnapshot requested_model_selection = 18 [json_name = "requestedModelSelection"];
-  .aiserver.v1.ModelSelectionSnapshot effective_model_selection = 19 [json_name = "effectiveModelSelection"];
+  optional int32 override_num_requests_counted = 13 [json_name = "overrideNumRequestsCounted"];
+  optional int32 override_num_requests_counted_millis = 16 [json_name = "overrideNumRequestsCountedMillis"];
+  optional string routed_model = 17 [json_name = "routedModel"];
+  optional .aiserver.v1.ModelSelectionSnapshot requested_model_selection = 18 [json_name = "requestedModelSelection"];
+  optional .aiserver.v1.ModelSelectionSnapshot effective_model_selection = 19 [json_name = "effectiveModelSelection"];
   oneof feature {
     .aiserver.v1.UsageEventDetails.Chat chat = 1 [json_name = "chat"];
     .aiserver.v1.UsageEventDetails.ContextChat context_chat = 2 [json_name = "contextChat"];
@@ -33,52 +33,52 @@ message UsageEventDetails {
   }
   message Chat {
     string model_intent = 1 [json_name = "modelIntent"];
-    int32 override_num_requests_counted = 2 [json_name = "overrideNumRequestsCounted"];
-    bool is_token_based_call = 3 [json_name = "isTokenBasedCall"];
-    .aiserver.v1.TokenUsage token_usage = 4 [json_name = "tokenUsage"];
-    bool max_mode = 5 [json_name = "maxMode"];
+    optional int32 override_num_requests_counted = 2 [json_name = "overrideNumRequestsCounted"];
+    optional bool is_token_based_call = 3 [json_name = "isTokenBasedCall"];
+    optional .aiserver.v1.TokenUsage token_usage = 4 [json_name = "tokenUsage"];
+    optional bool max_mode = 5 [json_name = "maxMode"];
   }
   message ContextChat {
     string model_intent = 1 [json_name = "modelIntent"];
-    int32 override_num_requests_counted = 2 [json_name = "overrideNumRequestsCounted"];
-    bool is_token_based_call = 3 [json_name = "isTokenBasedCall"];
-    .aiserver.v1.TokenUsage token_usage = 4 [json_name = "tokenUsage"];
-    bool max_mode = 5 [json_name = "maxMode"];
+    optional int32 override_num_requests_counted = 2 [json_name = "overrideNumRequestsCounted"];
+    optional bool is_token_based_call = 3 [json_name = "isTokenBasedCall"];
+    optional .aiserver.v1.TokenUsage token_usage = 4 [json_name = "tokenUsage"];
+    optional bool max_mode = 5 [json_name = "maxMode"];
   }
   message CmdK {
     string model_intent = 1 [json_name = "modelIntent"];
-    int32 override_num_requests_counted = 2 [json_name = "overrideNumRequestsCounted"];
-    bool is_token_based_call = 3 [json_name = "isTokenBasedCall"];
-    .aiserver.v1.TokenUsage token_usage = 4 [json_name = "tokenUsage"];
-    bool max_mode = 5 [json_name = "maxMode"];
+    optional int32 override_num_requests_counted = 2 [json_name = "overrideNumRequestsCounted"];
+    optional bool is_token_based_call = 3 [json_name = "isTokenBasedCall"];
+    optional .aiserver.v1.TokenUsage token_usage = 4 [json_name = "tokenUsage"];
+    optional bool max_mode = 5 [json_name = "maxMode"];
   }
   message TerminalCmdK {
     string model_intent = 1 [json_name = "modelIntent"];
-    int32 override_num_requests_counted = 2 [json_name = "overrideNumRequestsCounted"];
-    bool is_token_based_call = 3 [json_name = "isTokenBasedCall"];
-    .aiserver.v1.TokenUsage token_usage = 4 [json_name = "tokenUsage"];
-    bool max_mode = 5 [json_name = "maxMode"];
+    optional int32 override_num_requests_counted = 2 [json_name = "overrideNumRequestsCounted"];
+    optional bool is_token_based_call = 3 [json_name = "isTokenBasedCall"];
+    optional .aiserver.v1.TokenUsage token_usage = 4 [json_name = "tokenUsage"];
+    optional bool max_mode = 5 [json_name = "maxMode"];
   }
   message AiReviewAcceptedComment {
   }
   message InterpreterChat {
     string model_intent = 1 [json_name = "modelIntent"];
-    int32 override_num_requests_counted = 2 [json_name = "overrideNumRequestsCounted"];
-    bool is_token_based_call = 3 [json_name = "isTokenBasedCall"];
-    .aiserver.v1.TokenUsage token_usage = 4 [json_name = "tokenUsage"];
-    bool max_mode = 5 [json_name = "maxMode"];
+    optional int32 override_num_requests_counted = 2 [json_name = "overrideNumRequestsCounted"];
+    optional bool is_token_based_call = 3 [json_name = "isTokenBasedCall"];
+    optional .aiserver.v1.TokenUsage token_usage = 4 [json_name = "tokenUsage"];
+    optional bool max_mode = 5 [json_name = "maxMode"];
   }
   message SlashEdit {
     string model_intent = 1 [json_name = "modelIntent"];
-    bool max_mode = 2 [json_name = "maxMode"];
+    optional bool max_mode = 2 [json_name = "maxMode"];
   }
   message Composer {
     string model_intent = 1 [json_name = "modelIntent"];
-    int32 override_num_requests_counted = 2 [json_name = "overrideNumRequestsCounted"];
-    bool is_headless = 3 [json_name = "isHeadless"];
-    bool is_token_based_call = 4 [json_name = "isTokenBasedCall"];
-    .aiserver.v1.TokenUsage token_usage = 5 [json_name = "tokenUsage"];
-    bool max_mode = 6 [json_name = "maxMode"];
+    optional int32 override_num_requests_counted = 2 [json_name = "overrideNumRequestsCounted"];
+    optional bool is_headless = 3 [json_name = "isHeadless"];
+    optional bool is_token_based_call = 4 [json_name = "isTokenBasedCall"];
+    optional .aiserver.v1.TokenUsage token_usage = 5 [json_name = "tokenUsage"];
+    optional bool max_mode = 6 [json_name = "maxMode"];
   }
   message FastApply {
     bool is_optimistic = 1 [json_name = "isOptimistic"];
@@ -86,7 +86,7 @@ message UsageEventDetails {
   }
   message WarmComposer {
     string model_intent = 1 [json_name = "modelIntent"];
-    bool max_mode = 2 [json_name = "maxMode"];
+    optional bool max_mode = 2 [json_name = "maxMode"];
   }
   message BugFinderTriggerV1 {
     bool in_background_subsidized = 1 [json_name = "inBackgroundSubsidized"];
@@ -95,15 +95,15 @@ message UsageEventDetails {
   }
   message ToolCallComposer {
     string model_intent = 1 [json_name = "modelIntent"];
-    int32 override_num_requests_counted = 2 [json_name = "overrideNumRequestsCounted"];
-    bool is_headless = 3 [json_name = "isHeadless"];
-    bool is_token_based_call = 4 [json_name = "isTokenBasedCall"];
-    .aiserver.v1.TokenUsage token_usage = 5 [json_name = "tokenUsage"];
-    bool max_mode = 6 [json_name = "maxMode"];
+    optional int32 override_num_requests_counted = 2 [json_name = "overrideNumRequestsCounted"];
+    optional bool is_headless = 3 [json_name = "isHeadless"];
+    optional bool is_token_based_call = 4 [json_name = "isTokenBasedCall"];
+    optional .aiserver.v1.TokenUsage token_usage = 5 [json_name = "tokenUsage"];
+    optional bool max_mode = 6 [json_name = "maxMode"];
   }
   message BugBot {
     string model_intent = 1 [json_name = "modelIntent"];
-    .aiserver.v1.TokenUsage token_usage = 2 [json_name = "tokenUsage"];
+    optional .aiserver.v1.TokenUsage token_usage = 2 [json_name = "tokenUsage"];
     bool is_token_based_call = 3 [json_name = "isTokenBasedCall"];
     bool max_mode = 4 [json_name = "maxMode"];
     string billing_mode = 7 [json_name = "billingMode"];
@@ -114,9 +114,9 @@ message UsageEventDetails {
   }
   message PromptHook {
     string model_intent = 1 [json_name = "modelIntent"];
-    .aiserver.v1.TokenUsage token_usage = 2 [json_name = "tokenUsage"];
-    bool max_mode = 3 [json_name = "maxMode"];
-    bool is_token_based_call = 4 [json_name = "isTokenBasedCall"];
+    optional .aiserver.v1.TokenUsage token_usage = 2 [json_name = "tokenUsage"];
+    optional bool max_mode = 3 [json_name = "maxMode"];
+    optional bool is_token_based_call = 4 [json_name = "isTokenBasedCall"];
   }
 }
 
@@ -136,48 +136,48 @@ message TokenUsage {
   int32 cache_write_tokens = 3 [json_name = "cacheWriteTokens"];
   int32 cache_read_tokens = 4 [json_name = "cacheReadTokens"];
   float total_cents = 5 [json_name = "totalCents"];
-  int32 discount_percent_off = 6 [json_name = "discountPercentOff"];
-  float enterprise_usage_discount_percent = 7 [json_name = "enterpriseUsageDiscountPercent"];
+  optional int32 discount_percent_off = 6 [json_name = "discountPercentOff"];
+  optional float enterprise_usage_discount_percent = 7 [json_name = "enterpriseUsageDiscountPercent"];
 }
 
 message UsageEvent {
   int64 timestamp = 1 [json_name = "timestamp"];
-  .aiserver.v1.UsageEventDetails details = 2 [json_name = "details"];
-  string subscription_product_id = 3 [json_name = "subscriptionProductId"];
-  string usage_price_id = 4 [json_name = "usagePriceId"];
+  optional .aiserver.v1.UsageEventDetails details = 2 [json_name = "details"];
+  optional string subscription_product_id = 3 [json_name = "subscriptionProductId"];
+  optional string usage_price_id = 4 [json_name = "usagePriceId"];
   bool is_slow = 5 [json_name = "isSlow"];
   string status = 6 [json_name = "status"];
-  string owning_user = 7 [json_name = "owningUser"];
-  string owning_team = 8 [json_name = "owningTeam"];
-  float price_cents = 9 [json_name = "priceCents"];
-  string team_membership_type = 10 [json_name = "teamMembershipType"];
+  optional string owning_user = 7 [json_name = "owningUser"];
+  optional string owning_team = 8 [json_name = "owningTeam"];
+  optional float price_cents = 9 [json_name = "priceCents"];
+  optional string team_membership_type = 10 [json_name = "teamMembershipType"];
 }
 
 message UsageEventDisplay {
   int64 timestamp = 1 [json_name = "timestamp"];
   string model = 2 [json_name = "model"];
   .aiserver.v1.UsageEventKind kind = 3 [json_name = "kind"];
-  string custom_subscription_name = 4 [json_name = "customSubscriptionName"];
+  optional string custom_subscription_name = 4 [json_name = "customSubscriptionName"];
   bool max_mode = 5 [json_name = "maxMode"];
   float requests_costs = 6 [json_name = "requestsCosts"];
-  string usage_based_costs = 7 [json_name = "usageBasedCosts"];
-  bool is_token_based_call = 8 [json_name = "isTokenBasedCall"];
-  .aiserver.v1.TokenUsage token_usage = 9 [json_name = "tokenUsage"];
-  string owning_user = 10 [json_name = "owningUser"];
-  string owning_team = 11 [json_name = "owningTeam"];
-  string user_email = 12 [json_name = "userEmail"];
-  float cursor_token_fee = 13 [json_name = "cursorTokenFee"];
-  bool is_chargeable = 14 [json_name = "isChargeable"];
-  string service_account_name = 15 [json_name = "serviceAccountName"];
-  string service_account_id = 16 [json_name = "serviceAccountId"];
-  bool is_headless = 17 [json_name = "isHeadless"];
-  float charged_cents = 18 [json_name = "chargedCents"];
-  string cloud_agent_id = 19 [json_name = "cloudAgentId"];
-  string automation_id = 20 [json_name = "automationId"];
-  string automation_managed_type = 21 [json_name = "automationManagedType"];
-  string client_type = 22 [json_name = "clientType"];
-  string conversation_id = 23 [json_name = "conversationId"];
-  string subscription_product_id = 24 [json_name = "subscriptionProductId"];
+  optional string usage_based_costs = 7 [json_name = "usageBasedCosts"];
+  optional bool is_token_based_call = 8 [json_name = "isTokenBasedCall"];
+  optional .aiserver.v1.TokenUsage token_usage = 9 [json_name = "tokenUsage"];
+  optional string owning_user = 10 [json_name = "owningUser"];
+  optional string owning_team = 11 [json_name = "owningTeam"];
+  optional string user_email = 12 [json_name = "userEmail"];
+  optional float cursor_token_fee = 13 [json_name = "cursorTokenFee"];
+  optional bool is_chargeable = 14 [json_name = "isChargeable"];
+  optional string service_account_name = 15 [json_name = "serviceAccountName"];
+  optional string service_account_id = 16 [json_name = "serviceAccountId"];
+  optional bool is_headless = 17 [json_name = "isHeadless"];
+  optional float charged_cents = 18 [json_name = "chargedCents"];
+  optional string cloud_agent_id = 19 [json_name = "cloudAgentId"];
+  optional string automation_id = 20 [json_name = "automationId"];
+  optional string automation_managed_type = 21 [json_name = "automationManagedType"];
+  optional string client_type = 22 [json_name = "clientType"];
+  optional string conversation_id = 23 [json_name = "conversationId"];
+  optional string subscription_product_id = 24 [json_name = "subscriptionProductId"];
 }
 
 enum UsageEventKind {

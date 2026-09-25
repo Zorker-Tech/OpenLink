@@ -16,12 +16,12 @@ import { Message, proto3 } from "@bufbuild/protobuf";
  */
 export class PiWriteToolCall extends Message<PiWriteToolCall> {
   /**
-   * @generated from field: agent.v1.PiWriteToolArgs args = 1;
+   * @generated from field: optional agent.v1.PiWriteToolArgs args = 1;
    */
   args?: PiWriteToolArgs;
 
   /**
-   * @generated from field: agent.v1.PiWriteToolResult result = 2;
+   * @generated from field: optional agent.v1.PiWriteToolResult result = 2;
    */
   result?: PiWriteToolResult;
 
@@ -33,8 +33,8 @@ export class PiWriteToolCall extends Message<PiWriteToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.PiWriteToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: PiWriteToolArgs },
-    { no: 2, name: "result", kind: "message", T: PiWriteToolResult },
+    { no: 1, name: "args", kind: "message", T: PiWriteToolArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: PiWriteToolResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PiWriteToolCall {

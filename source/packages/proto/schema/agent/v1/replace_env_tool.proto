@@ -24,13 +24,13 @@ message ReplaceEnvFailure {
 }
 
 message ReplaceEnvToolCall {
-  .agent.v1.ReplaceEnvArgs args = 1 [json_name = "args"];
-  .agent.v1.ReplaceEnvResult result = 2 [json_name = "result"];
+  optional .agent.v1.ReplaceEnvArgs args = 1 [json_name = "args"];
+  optional .agent.v1.ReplaceEnvResult result = 2 [json_name = "result"];
   string associated_pod_key = 3 [json_name = "associatedPodKey"];
 }
 
 message ReplaceEnvArgs {
-  .agent.v1.ReplaceEnvConfig config = 1 [json_name = "config"];
+  optional .agent.v1.ReplaceEnvConfig config = 1 [json_name = "config"];
   .agent.v1.ReplaceEnvMode mode = 2 [json_name = "mode"];
   repeated .agent.v1.RepoCheckoutRefOverride checkout_ref_overrides = 3 [json_name = "checkoutRefOverrides"];
 }

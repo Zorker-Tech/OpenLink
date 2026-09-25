@@ -35,6 +35,28 @@ const functionSuffix = typeName => {
 }
 
 const camelCase = value => value.replace(/_([a-z0-9])/g, (_, letter) => letter.toUpperCase())
+/**
+ * Which properties a message declares as optional, per message: proto3 `optional` (explicit
+ * presence) appears as an optional property inside that message's class body, and the same property
+ * name can be optional in one message and not in another.
+ */
+function optionalPropertiesByClass(source) {
+  const result = new Map()
+  let current
+  for (const line of source.split("\n")) {
+    const header = line.match(/(?:^|\s)class\s+(_?\w+)\s+extends\s+Message/)
+    if (header) {
+      current = header[1].replace(/^_/, "")
+      result.set(current, new Set())
+      continue
+    }
+    const optional = line.match(/^\s*(?:declare\s+)?([A-Za-z0-9_]+)\?\s*:/)
+    if (current !== undefined && optional) result.get(current).add(optional[1])
+    if (line.startsWith("}")) current = undefined
+  }
+  return result
+}
+
 
 async function loadSchema() {
   const messages = new Map()
@@ -43,7 +65,12 @@ async function loadSchema() {
     const directory = path.join(protoRoot, namespace, "v1")
     const entries = (await readdir(directory)).filter(name => name.endsWith("_pb.ts")).sort()
     for (const entry of entries) {
-      const module = await import(pathToFileURL(path.join(directory, entry)).href)
+      const modulePath = path.join(directory, entry)
+      const module = await import(pathToFileURL(modulePath).href)
+      // Which fields are proto3 `optional` is written in the generated class declarations
+      // (`declare x?:`) and nowhere in the runtime descriptors.
+      const source = await readFile(modulePath, "utf8")
+      const optionalByClass = optionalPropertiesByClass(source)
       const protoName = `${namespace}/v1/${entry}`
       modules.set(protoName, { protoName, messages: [] })
       for (const value of Object.values(module)) {
@@ -54,6 +81,9 @@ async function loadSchema() {
           name: field.name,
           property: field.jsonName ?? camelCase(field.name),
           kind: field.kind,
+          scalar: typeof field.T === "number" ? field.T : undefined,
+          optional: field.optional === true ||
+            optionalByClass.get(functionSuffix(typeName))?.has(field.jsonName ?? camelCase(field.name)) === true,
           repeated: field.repeated === true,
           oneof: field.oneof !== undefined && field.oneof !== null && field.oneof.kind === "oneof"
             ? field.oneof.name
@@ -92,6 +122,49 @@ function closureOf(annotations, messages) {
 }
 
 const isRedacted = (annotations, typeName, field) => annotations[typeName]?.[field.name]
+
+/** The value a redacted field starts from: what protoc-gen-es uses for the same field on the message. */
+function fieldDefault(message, field, annotations) {
+  const entry = isRedacted(annotations, message.typeName, field)
+  const annotation = entry?.classification === undefined ? undefined : entry
+  // A field that can be absent is absent by default, whatever it would hold if present.
+  if (field.optional && annotation === undefined && entry === undefined) return "void 0"
+  if (annotation !== undefined) return wrapRedacted(annotation, annotation.bytes === true ? "new Uint8Array()" : '""', field)
+  const valueAnnotation = entry?.value
+  if (valueAnnotation !== undefined && field.kind === "map") {
+    return `new Map([[${wrapRedacted(valueAnnotation, '""', field)}, ${wrapRedacted(valueAnnotation, '""', field)}]])`
+  }
+  if (field.kind === "map") return "new Map()"
+  if (field.repeated) return "[]"
+  if (field.oneof !== undefined) return "{ case: void 0, value: void 0 }"
+  if (field.kind === "message") return "void 0"
+  if (field.kind === "enum") return "0"
+  switch (field.scalar) {
+    case 8: return "false"
+    case 9: return '""'
+    case 12: return "new Uint8Array()"
+    case 3: case 4: case 16: case 18: return "0n"
+    default: return "0"
+  }
+}
+
+/** `createRedactedX(privacyMode, partial)`: a redacted value built from defaults plus what was given. */
+function renderFactory(message, annotations, lines) {
+  const suffix = functionSuffix(message.typeName)
+  lines.push(`function createRedacted${suffix}(privacyMode, partial) {`)
+  lines.push("  return {")
+  for (const field of message.fields) {
+    if (field.oneof !== undefined) continue
+    lines.push(`    ${field.property}: ${fieldDefault(message, field, annotations)},`)
+  }
+  for (const oneofName of new Set(message.fields.filter(field => field.oneof !== undefined).map(field => field.oneof))) {
+    lines.push(`    ${camelCase(oneofName)}: { case: void 0, value: void 0 },`)
+  }
+  lines.push("    ...partial,")
+  lines.push("    _privacyMode: privacyMode,")
+  lines.push("  };")
+  lines.push("}")
+}
 
 /** `createRedactedString(expression, DataClassification.X, "field_name", privacyMode)`. */
 function wrapRedacted(annotation, expression, field) {
@@ -146,6 +219,14 @@ function renderField(message, field, annotations, direction, lines, indent) {
     return
   }
   if (annotation !== undefined) {
+    // An optional field is only wrapped when it is present; an absent one stays absent.
+    if (field.optional && !field.repeated) {
+      const wrapped = direction === "to" ? wrapRedacted(annotation, ts, field) : `${unwrapRedacted(ts)}`
+      lines.push(direction === "to"
+        ? `${indent}${field.property}: ${ts} !== void 0 ? ${wrapped} : void 0,`
+        : `${indent}${field.property}: ${ts}?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),`)
+      return
+    }
     if (field.repeated) {
       const entry = direction === "to" ? wrapRedacted(annotation, "v2", field) : unwrapRedacted("v2")
       lines.push(`${indent}${field.property}: ${ts}.map((v2) => ${entry}),`)
@@ -342,7 +423,14 @@ function renderModule(module, messages, annotations, needed) {
     renderMessage(message, annotations, "from", lines)
     lines.push("")
   }
-  const exports = declared.flatMap(typeName => {
+  for (const factorySuffix of factoriesByModule.get(module.protoName) ?? []) {
+    const typeName = resolveSuffix(module.protoName.split("/")[0], factorySuffix, suffixIndex)
+    if (typeName === undefined) continue
+    renderFactory(messages.get(typeName), annotations, lines)
+    lines.push("")
+  }
+  const factoryNames = (factoriesByModule.get(module.protoName) ?? []).map(suffix => `createRedacted${suffix}`)
+  const exports = [...factoryNames, ...declared.flatMap(typeName => {
     const message = messages.get(typeName)
     const names = [
       `toRedacted${functionSuffix(typeName)}`,
@@ -354,7 +442,7 @@ function renderModule(module, messages, annotations, needed) {
       names.push(`toRedacted${oneofSuffix}`, `fromRedacted${oneofSuffix}`)
     }
     return [...new Set(names)]
-  })
+  })]
   lines.push("export {")
   for (const name of exports) lines.push(`  ${name},`)
   lines.push("};")
@@ -426,9 +514,12 @@ for (const typeName of messages.keys()) {
 
 /** What each module emits: exactly the surface the manifest lists, resolved against the schema. */
 const emittedByModule = new Map()
+const factoriesByModule = new Map()
 const needed = new Set()
 let unresolvedSurface = 0
-for (const [listedName, suffixes] of Object.entries(surface)) {
+for (const [listedName, entry] of Object.entries(surface)) {
+  const suffixes = entry.messages ?? entry
+  const factories = entry.factories ?? []
   // The manifest names modules as the baseline did; our schema files are named after the platform.
   const protoName = listedName
     .replace(/cursor_rules_pb\.ts$/, "rules_pb.ts")
@@ -447,6 +538,7 @@ for (const [listedName, suffixes] of Object.entries(surface)) {
     needed.add(typeName)
   }
   emittedByModule.set(protoName, typeNames)
+  factoriesByModule.set(protoName, factories)
 }
 void closureOf
 

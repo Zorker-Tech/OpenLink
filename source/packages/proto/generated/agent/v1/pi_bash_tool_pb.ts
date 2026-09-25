@@ -17,12 +17,12 @@ import { PiTruncation } from "./pi_common_pb.ts";
  */
 export class PiBashToolCall extends Message<PiBashToolCall> {
   /**
-   * @generated from field: agent.v1.PiBashToolArgs args = 1;
+   * @generated from field: optional agent.v1.PiBashToolArgs args = 1;
    */
   args?: PiBashToolArgs;
 
   /**
-   * @generated from field: agent.v1.PiBashToolResult result = 2;
+   * @generated from field: optional agent.v1.PiBashToolResult result = 2;
    */
   result?: PiBashToolResult;
 
@@ -34,8 +34,8 @@ export class PiBashToolCall extends Message<PiBashToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.PiBashToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: PiBashToolArgs },
-    { no: 2, name: "result", kind: "message", T: PiBashToolResult },
+    { no: 1, name: "args", kind: "message", T: PiBashToolArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: PiBashToolResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PiBashToolCall {
@@ -65,9 +65,9 @@ export class PiBashToolArgs extends Message<PiBashToolArgs> {
   command = "";
 
   /**
-   * @generated from field: double timeout = 2;
+   * @generated from field: optional double timeout = 2;
    */
-  timeout = 0;
+  timeout?: number;
 
   constructor(data?: PartialMessage<PiBashToolArgs>) {
     super();
@@ -78,7 +78,7 @@ export class PiBashToolArgs extends Message<PiBashToolArgs> {
   static readonly typeName = "agent.v1.PiBashToolArgs";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "command", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "timeout", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
+    { no: 2, name: "timeout", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PiBashToolArgs {
@@ -158,14 +158,14 @@ export class PiBashToolSuccess extends Message<PiBashToolSuccess> {
   output = "";
 
   /**
-   * @generated from field: agent.v1.PiTruncation truncation = 2;
+   * @generated from field: optional agent.v1.PiTruncation truncation = 2;
    */
   truncation?: PiTruncation;
 
   /**
-   * @generated from field: string full_output_path = 3;
+   * @generated from field: optional string full_output_path = 3;
    */
-  fullOutputPath = "";
+  fullOutputPath?: string;
 
   constructor(data?: PartialMessage<PiBashToolSuccess>) {
     super();
@@ -176,8 +176,8 @@ export class PiBashToolSuccess extends Message<PiBashToolSuccess> {
   static readonly typeName = "agent.v1.PiBashToolSuccess";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "output", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "truncation", kind: "message", T: PiTruncation },
-    { no: 3, name: "full_output_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "truncation", kind: "message", T: PiTruncation, opt: true },
+    { no: 3, name: "full_output_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PiBashToolSuccess {
@@ -207,14 +207,14 @@ export class PiBashToolError extends Message<PiBashToolError> {
   error = "";
 
   /**
-   * @generated from field: agent.v1.PiTruncation truncation = 2;
+   * @generated from field: optional agent.v1.PiTruncation truncation = 2;
    */
   truncation?: PiTruncation;
 
   /**
-   * @generated from field: string full_output_path = 3;
+   * @generated from field: optional string full_output_path = 3;
    */
-  fullOutputPath = "";
+  fullOutputPath?: string;
 
   constructor(data?: PartialMessage<PiBashToolError>) {
     super();
@@ -225,8 +225,8 @@ export class PiBashToolError extends Message<PiBashToolError> {
   static readonly typeName = "agent.v1.PiBashToolError";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "truncation", kind: "message", T: PiTruncation },
-    { no: 3, name: "full_output_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "truncation", kind: "message", T: PiTruncation, opt: true },
+    { no: 3, name: "full_output_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PiBashToolError {

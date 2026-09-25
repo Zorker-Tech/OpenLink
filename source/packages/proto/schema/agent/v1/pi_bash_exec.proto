@@ -11,7 +11,7 @@ import "agent/v1/pi_common.proto";
 
 message PiBashExecArgs {
   string command = 1 [json_name = "command"];
-  double timeout = 2 [json_name = "timeout"];
+  optional double timeout = 2 [json_name = "timeout"];
 }
 
 message PiBashExecResult {
@@ -23,12 +23,12 @@ message PiBashExecResult {
 
 message PiBashExecSuccess {
   string output = 1 [json_name = "output"];
-  .agent.v1.PiTruncation truncation = 2 [json_name = "truncation"];
-  string full_output_path = 3 [json_name = "fullOutputPath"];
+  optional .agent.v1.PiTruncation truncation = 2 [json_name = "truncation"];
+  optional string full_output_path = 3 [json_name = "fullOutputPath"];
 }
 
 message PiBashExecError {
   string error = 1 [json_name = "error"];
-  .agent.v1.PiTruncation truncation = 2 [json_name = "truncation"];
-  string full_output_path = 3 [json_name = "fullOutputPath"];
+  optional .agent.v1.PiTruncation truncation = 2 [json_name = "truncation"];
+  optional string full_output_path = 3 [json_name = "fullOutputPath"];
 }

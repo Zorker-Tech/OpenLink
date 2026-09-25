@@ -10,8 +10,8 @@ package agent.v1;
 import "aiserver/v1/repository.proto";
 
 message SemSearchToolCall {
-  .agent.v1.SemSearchToolArgs args = 1 [json_name = "args"];
-  .agent.v1.SemSearchToolResult result = 2 [json_name = "result"];
+  optional .agent.v1.SemSearchToolArgs args = 1 [json_name = "args"];
+  optional .agent.v1.SemSearchToolResult result = 2 [json_name = "result"];
 }
 
 message SemSearchToolArgs {

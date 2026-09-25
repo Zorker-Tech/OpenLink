@@ -1,4 +1,4 @@
-// agent.v1 — agent/v1/cursor_packages messages, enums and services.
+// agent.v1 — agent/v1/packages messages, enums and services.
 //
 // Generated from this repository's schema (source/packages/proto/schema) by
 // `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
@@ -74,9 +74,9 @@ export class CursorPackage extends Message<CursorPackage> {
   enabled = false;
 
   /**
-   * @generated from field: string parse_error = 5;
+   * @generated from field: optional string parse_error = 5;
    */
-  parseError = "";
+  parseError?: string;
 
   /**
    * @generated from field: repeated agent.v1.CursorPackagePrompt prompts = 6;
@@ -105,7 +105,7 @@ export class CursorPackage extends Message<CursorPackage> {
     { no: 2, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "folder_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "parse_error", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "parse_error", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 6, name: "prompts", kind: "message", T: CursorPackagePrompt, repeated: true },
     { no: 7, name: "readme_file_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 8, name: "package_type", kind: "enum", T: proto3.getEnumType(PackageType) },

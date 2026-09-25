@@ -37,7 +37,7 @@ message AgentClientMessage {
 }
 
 message AgentServerMessage {
-  .agent.v1.TtftBreakdown ttft_breakdown = 8 [json_name = "ttftBreakdown"];
+  optional .agent.v1.TtftBreakdown ttft_breakdown = 8 [json_name = "ttftBreakdown"];
   oneof message {
     .agent.v1.InteractionUpdate interaction_update = 1 [json_name = "interactionUpdate"];
     .agent.v1.ExecServerMessage exec_server_message = 2 [json_name = "execServerMessage"];
@@ -75,7 +75,7 @@ message GetDefaultModelForCliRequest {
 }
 
 message GetDefaultModelForCliResponse {
-  .agent.v1.ModelDetails model = 1 [json_name = "model"];
+  optional .agent.v1.ModelDetails model = 1 [json_name = "model"];
 }
 
 message GetNewChatNudgeLegacyModelPickerRequest {
@@ -84,15 +84,15 @@ message GetNewChatNudgeLegacyModelPickerRequest {
 }
 
 message GetNewChatNudgeLegacyModelPickerResponse {
-  .agent.v1.NewChatNudge nudge = 1 [json_name = "nudge"];
+  optional .agent.v1.NewChatNudge nudge = 1 [json_name = "nudge"];
 }
 
 message GetNewChatNudgeParameterizedModelPickerRequest {
-  .agent.v1.RequestedModel current_model = 1 [json_name = "currentModel"];
+  optional .agent.v1.RequestedModel current_model = 1 [json_name = "currentModel"];
 }
 
 message GetNewChatNudgeParameterizedModelPickerResponse {
-  .agent.v1.NewChatNudgeV2 nudge = 1 [json_name = "nudge"];
+  optional .agent.v1.NewChatNudgeV2 nudge = 1 [json_name = "nudge"];
 }
 
 message GetPromptContextUsageRequest {
@@ -101,14 +101,14 @@ message GetPromptContextUsageRequest {
 }
 
 message GetPromptContextUsageResponse {
-  .agent.v1.PromptContextUsageSnapshot snapshot = 1 [json_name = "snapshot"];
+  optional .agent.v1.PromptContextUsageSnapshot snapshot = 1 [json_name = "snapshot"];
 }
 
 message GetSignedUrlForAttachedMediaRequest {
-  string key = 1 [json_name = "key"];
-  string mime_type = 2 [json_name = "mimeType"];
+  optional string key = 1 [json_name = "key"];
+  optional string mime_type = 2 [json_name = "mimeType"];
   string conversation_id = 3 [json_name = "conversationId"];
-  int64 content_length_bytes = 4 [json_name = "contentLengthBytes"];
+  optional int64 content_length_bytes = 4 [json_name = "contentLengthBytes"];
 }
 
 message GetSignedUrlForAttachedMediaResponse {
@@ -132,10 +132,10 @@ message GetUsableModelsResponse {
 message IdeEditorsStateFile {
   string relative_path = 1 [json_name = "relativePath"];
   string absolute_path = 2 [json_name = "absolutePath"];
-  bool is_currently_focused = 3 [json_name = "isCurrentlyFocused"];
-  int32 current_line_number = 4 [json_name = "currentLineNumber"];
-  string current_line_text = 5 [json_name = "currentLineText"];
-  int32 line_count = 6 [json_name = "lineCount"];
+  optional bool is_currently_focused = 3 [json_name = "isCurrentlyFocused"];
+  optional int32 current_line_number = 4 [json_name = "currentLineNumber"];
+  optional string current_line_text = 5 [json_name = "currentLineText"];
+  optional int32 line_count = 6 [json_name = "lineCount"];
 }
 
 message IdeEditorsStateLite {
@@ -157,8 +157,8 @@ message LocalPromptQualityInvocation {
   int64 prompt_tokens = 12 [json_name = "promptTokens"];
   int64 completion_tokens = 13 [json_name = "completionTokens"];
   int64 total_tokens = 14 [json_name = "totalTokens"];
-  int64 token_limit = 15 [json_name = "tokenLimit"];
-  string error_message = 16 [json_name = "errorMessage"];
+  optional int64 token_limit = 15 [json_name = "tokenLimit"];
+  optional string error_message = 16 [json_name = "errorMessage"];
 }
 
 enum LocalPromptQualityInvocationStatus {
@@ -189,7 +189,7 @@ message NewChatNudge {
 
 message NewChatNudgeV2 {
   string nudge_id = 1 [json_name = "nudgeId"];
-  .agent.v1.RequestedModel target_model = 2 [json_name = "targetModel"];
+  optional .agent.v1.RequestedModel target_model = 2 [json_name = "targetModel"];
   string experiment_name = 3 [json_name = "experimentName"];
   oneof variant {
     .agent.v1.NudgeBumpVariant bump = 4 [json_name = "bump"];
@@ -220,47 +220,47 @@ message NudgeSilentSwitchVariant {
 }
 
 message PrewarmRequest {
-  .agent.v1.ModelDetails model_details = 1 [json_name = "modelDetails"];
-  string conversation_id = 2 [json_name = "conversationId"];
-  .agent.v1.ConversationStateStructure conversation_state = 3 [json_name = "conversationState"];
-  .agent.v1.McpTools mcp_tools = 4 [json_name = "mcpTools"];
-  .agent.v1.McpFileSystemOptions mcp_file_system_options = 5 [json_name = "mcpFileSystemOptions"];
-  string best_of_n_group_id = 6 [json_name = "bestOfNGroupId"];
-  bool try_use_best_of_n_promotion = 7 [json_name = "tryUseBestOfNPromotion"];
-  string custom_system_prompt = 8 [json_name = "customSystemPrompt"];
-  .agent.v1.RequestedModel requested_model = 9 [json_name = "requestedModel"];
-  bool suggest_next_prompt = 10 [json_name = "suggestNextPrompt"];
-  string subagent_type_name = 11 [json_name = "subagentTypeName"];
-  bool exclude_workspace_context = 12 [json_name = "excludeWorkspaceContext"];
-  string harness = 13 [json_name = "harness"];
+  optional .agent.v1.ModelDetails model_details = 1 [json_name = "modelDetails"];
+  optional string conversation_id = 2 [json_name = "conversationId"];
+  optional .agent.v1.ConversationStateStructure conversation_state = 3 [json_name = "conversationState"];
+  optional .agent.v1.McpTools mcp_tools = 4 [json_name = "mcpTools"];
+  optional .agent.v1.McpFileSystemOptions mcp_file_system_options = 5 [json_name = "mcpFileSystemOptions"];
+  optional string best_of_n_group_id = 6 [json_name = "bestOfNGroupId"];
+  optional bool try_use_best_of_n_promotion = 7 [json_name = "tryUseBestOfNPromotion"];
+  optional string custom_system_prompt = 8 [json_name = "customSystemPrompt"];
+  optional .agent.v1.RequestedModel requested_model = 9 [json_name = "requestedModel"];
+  optional bool suggest_next_prompt = 10 [json_name = "suggestNextPrompt"];
+  optional string subagent_type_name = 11 [json_name = "subagentTypeName"];
+  optional bool exclude_workspace_context = 12 [json_name = "excludeWorkspaceContext"];
+  optional string harness = 13 [json_name = "harness"];
   repeated .agent.v1.RequestedModel selected_subagent_models = 14 [json_name = "selectedSubagentModels"];
   repeated .agent.v1.ModelDetails selected_subagent_model_details = 15 [json_name = "selectedSubagentModelDetails"];
-  string conversation_group_id = 16 [json_name = "conversationGroupId"];
+  optional string conversation_group_id = 16 [json_name = "conversationGroupId"];
   repeated .agent.v1.PreFetchedBlob pre_fetched_blobs = 17 [json_name = "preFetchedBlobs"];
-  bool client_supports_inline_images = 18 [json_name = "clientSupportsInlineImages"];
+  optional bool client_supports_inline_images = 18 [json_name = "clientSupportsInlineImages"];
   repeated .agent.v1.SubagentModelOverride subagent_model_overrides = 19 [json_name = "subagentModelOverrides"];
-  bool can_create_cloud_subagents = 20 [json_name = "canCreateCloudSubagents"];
-  bool suppress_subagent_progress_update_tool = 21 [json_name = "suppressSubagentProgressUpdateTool"];
-  bool client_supports_send_to_user = 22 [json_name = "clientSupportsSendToUser"];
-  string computer_use_coordinate_mode = 23 [json_name = "computerUseCoordinateMode"];
-  string agent_session_id = 24 [json_name = "agentSessionId"];
-  bool client_supports_prompt_context_usage_rpc = 25 [json_name = "clientSupportsPromptContextUsageRpc"];
-  bool client_supports_routed_model_update = 26 [json_name = "clientSupportsRoutedModelUpdate"];
-  .agent.v1.ClientLlmGatewayCredential client_llm_gateway_credential = 27 [json_name = "clientLlmGatewayCredential"];
+  optional bool can_create_cloud_subagents = 20 [json_name = "canCreateCloudSubagents"];
+  optional bool suppress_subagent_progress_update_tool = 21 [json_name = "suppressSubagentProgressUpdateTool"];
+  optional bool client_supports_send_to_user = 22 [json_name = "clientSupportsSendToUser"];
+  optional string computer_use_coordinate_mode = 23 [json_name = "computerUseCoordinateMode"];
+  optional string agent_session_id = 24 [json_name = "agentSessionId"];
+  optional bool client_supports_prompt_context_usage_rpc = 25 [json_name = "clientSupportsPromptContextUsageRpc"];
+  optional bool client_supports_routed_model_update = 26 [json_name = "clientSupportsRoutedModelUpdate"];
+  optional .agent.v1.ClientLlmGatewayCredential client_llm_gateway_credential = 27 [json_name = "clientLlmGatewayCredential"];
 }
 
 message TtftBreakdown {
   double server_first_token_ms = 1 [json_name = "serverFirstTokenMs"];
   double pre_stream_setup_ms = 2 [json_name = "preStreamSetupMs"];
   double wait_for_first_event_ms = 3 [json_name = "waitForFirstEventMs"];
-  double provider_ttft_ms = 4 [json_name = "providerTtftMs"];
+  optional double provider_ttft_ms = 4 [json_name = "providerTtftMs"];
   double slow_pool_wait_ms = 5 [json_name = "slowPoolWaitMs"];
 }
 
 message UpdateConversationMetadataRequest {
   string conversation_id = 1 [json_name = "conversationId"];
-  string name = 2 [json_name = "name"];
-  bool only_set_name_if_empty = 3 [json_name = "onlySetNameIfEmpty"];
+  optional string name = 2 [json_name = "name"];
+  optional bool only_set_name_if_empty = 3 [json_name = "onlySetNameIfEmpty"];
   repeated string workspace_paths = 4 [json_name = "workspacePaths"];
 }
 

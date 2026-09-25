@@ -17,19 +17,19 @@ import { McpArgs, McpPermissionDenied, McpRejected, McpSuccess } from "./mcp_exe
  */
 export class McpToolCall extends Message<McpToolCall> {
   /**
-   * @generated from field: agent.v1.McpArgs args = 1;
+   * @generated from field: optional agent.v1.McpArgs args = 1;
    */
   args?: McpArgs;
 
   /**
-   * @generated from field: agent.v1.McpToolResult result = 2;
+   * @generated from field: optional agent.v1.McpToolResult result = 2;
    */
   result?: McpToolResult;
 
   /**
-   * @generated from field: string description = 3;
+   * @generated from field: optional string description = 3;
    */
-  description = "";
+  description?: string;
 
   constructor(data?: PartialMessage<McpToolCall>) {
     super();
@@ -39,9 +39,9 @@ export class McpToolCall extends Message<McpToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.McpToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: McpArgs },
-    { no: 2, name: "result", kind: "message", T: McpToolResult },
-    { no: 3, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "args", kind: "message", T: McpArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: McpToolResult, opt: true },
+    { no: 3, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): McpToolCall {

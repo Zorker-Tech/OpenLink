@@ -16,12 +16,12 @@ import { Message, proto3, protoInt64 } from "@bufbuild/protobuf";
  */
 export class GetAgentStatusToolCall extends Message<GetAgentStatusToolCall> {
   /**
-   * @generated from field: agent.v1.GetAgentStatusArgs args = 1;
+   * @generated from field: optional agent.v1.GetAgentStatusArgs args = 1;
    */
   args?: GetAgentStatusArgs;
 
   /**
-   * @generated from field: agent.v1.GetAgentStatusResult result = 2;
+   * @generated from field: optional agent.v1.GetAgentStatusResult result = 2;
    */
   result?: GetAgentStatusResult;
 
@@ -33,8 +33,8 @@ export class GetAgentStatusToolCall extends Message<GetAgentStatusToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.GetAgentStatusToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: GetAgentStatusArgs },
-    { no: 2, name: "result", kind: "message", T: GetAgentStatusResult },
+    { no: 1, name: "args", kind: "message", T: GetAgentStatusArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: GetAgentStatusResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetAgentStatusToolCall {
@@ -59,12 +59,12 @@ export class GetAgentStatusToolCall extends Message<GetAgentStatusToolCall> {
  */
 export class SendToAgentToolCall extends Message<SendToAgentToolCall> {
   /**
-   * @generated from field: agent.v1.SendToAgentArgs args = 1;
+   * @generated from field: optional agent.v1.SendToAgentArgs args = 1;
    */
   args?: SendToAgentArgs;
 
   /**
-   * @generated from field: agent.v1.SendToAgentResult result = 2;
+   * @generated from field: optional agent.v1.SendToAgentResult result = 2;
    */
   result?: SendToAgentResult;
 
@@ -76,8 +76,8 @@ export class SendToAgentToolCall extends Message<SendToAgentToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.SendToAgentToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: SendToAgentArgs },
-    { no: 2, name: "result", kind: "message", T: SendToAgentResult },
+    { no: 1, name: "args", kind: "message", T: SendToAgentArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: SendToAgentResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SendToAgentToolCall {
@@ -102,12 +102,12 @@ export class SendToAgentToolCall extends Message<SendToAgentToolCall> {
  */
 export class ReadAgentTranscriptToolCall extends Message<ReadAgentTranscriptToolCall> {
   /**
-   * @generated from field: agent.v1.ReadAgentTranscriptArgs args = 1;
+   * @generated from field: optional agent.v1.ReadAgentTranscriptArgs args = 1;
    */
   args?: ReadAgentTranscriptArgs;
 
   /**
-   * @generated from field: agent.v1.ReadAgentTranscriptResult result = 2;
+   * @generated from field: optional agent.v1.ReadAgentTranscriptResult result = 2;
    */
   result?: ReadAgentTranscriptResult;
 
@@ -119,8 +119,8 @@ export class ReadAgentTranscriptToolCall extends Message<ReadAgentTranscriptTool
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.ReadAgentTranscriptToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: ReadAgentTranscriptArgs },
-    { no: 2, name: "result", kind: "message", T: ReadAgentTranscriptResult },
+    { no: 1, name: "args", kind: "message", T: ReadAgentTranscriptArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: ReadAgentTranscriptResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ReadAgentTranscriptToolCall {
@@ -145,12 +145,12 @@ export class ReadAgentTranscriptToolCall extends Message<ReadAgentTranscriptTool
  */
 export class CreateAgentToolCall extends Message<CreateAgentToolCall> {
   /**
-   * @generated from field: agent.v1.CreateAgentArgs args = 1;
+   * @generated from field: optional agent.v1.CreateAgentArgs args = 1;
    */
   args?: CreateAgentArgs;
 
   /**
-   * @generated from field: agent.v1.CreateAgentResult result = 2;
+   * @generated from field: optional agent.v1.CreateAgentResult result = 2;
    */
   result?: CreateAgentResult;
 
@@ -162,8 +162,8 @@ export class CreateAgentToolCall extends Message<CreateAgentToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.CreateAgentToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: CreateAgentArgs },
-    { no: 2, name: "result", kind: "message", T: CreateAgentResult },
+    { no: 1, name: "args", kind: "message", T: CreateAgentArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: CreateAgentResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CreateAgentToolCall {
@@ -188,12 +188,12 @@ export class CreateAgentToolCall extends Message<CreateAgentToolCall> {
  */
 export class StopAgentToolCall extends Message<StopAgentToolCall> {
   /**
-   * @generated from field: agent.v1.StopAgentArgs args = 1;
+   * @generated from field: optional agent.v1.StopAgentArgs args = 1;
    */
   args?: StopAgentArgs;
 
   /**
-   * @generated from field: agent.v1.StopAgentResult result = 2;
+   * @generated from field: optional agent.v1.StopAgentResult result = 2;
    */
   result?: StopAgentResult;
 
@@ -205,8 +205,8 @@ export class StopAgentToolCall extends Message<StopAgentToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.StopAgentToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: StopAgentArgs },
-    { no: 2, name: "result", kind: "message", T: StopAgentResult },
+    { no: 1, name: "args", kind: "message", T: StopAgentArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: StopAgentResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StopAgentToolCall {
@@ -414,34 +414,34 @@ export class CreateAgentArgs extends Message<CreateAgentArgs> {
   prompt = "";
 
   /**
-   * @generated from field: string name = 3;
+   * @generated from field: optional string name = 3;
    */
-  name = "";
+  name?: string;
 
   /**
-   * @generated from field: string model = 4;
+   * @generated from field: optional string model = 4;
    */
-  model = "";
+  model?: string;
 
   /**
-   * @generated from field: string base_branch = 5;
+   * @generated from field: optional string base_branch = 5;
    */
-  baseBranch = "";
+  baseBranch?: string;
 
   /**
-   * @generated from field: string machine_type = 6;
+   * @generated from field: optional string machine_type = 6;
    */
-  machineType = "";
+  machineType?: string;
 
   /**
-   * @generated from field: string worker_id = 7;
+   * @generated from field: optional string worker_id = 7;
    */
-  workerId = "";
+  workerId?: string;
 
   /**
-   * @generated from field: string pool = 8;
+   * @generated from field: optional string pool = 8;
    */
-  pool = "";
+  pool?: string;
 
   /**
    * @generated from field: map<string, string> labels = 9;
@@ -449,9 +449,9 @@ export class CreateAgentArgs extends Message<CreateAgentArgs> {
   labels: { [key: string]: string } = {};
 
   /**
-   * @generated from field: string environment_build_id = 10;
+   * @generated from field: optional string environment_build_id = 10;
    */
-  environmentBuildId = "";
+  environmentBuildId?: string;
 
   constructor(data?: PartialMessage<CreateAgentArgs>) {
     super();
@@ -463,14 +463,14 @@ export class CreateAgentArgs extends Message<CreateAgentArgs> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "prompt", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "model", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "machine_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "worker_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "pool", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "model", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "machine_type", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "worker_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "pool", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 9, name: "labels", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
-    { no: 10, name: "environment_build_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 10, name: "environment_build_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CreateAgentArgs {

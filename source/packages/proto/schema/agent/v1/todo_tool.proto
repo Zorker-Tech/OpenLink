@@ -8,13 +8,13 @@ syntax = "proto3";
 package agent.v1;
 
 message UpdateTodosToolCall {
-  .agent.v1.UpdateTodosArgs args = 1 [json_name = "args"];
-  .agent.v1.UpdateTodosResult result = 2 [json_name = "result"];
+  optional .agent.v1.UpdateTodosArgs args = 1 [json_name = "args"];
+  optional .agent.v1.UpdateTodosResult result = 2 [json_name = "result"];
 }
 
 message ReadTodosToolCall {
-  .agent.v1.ReadTodosArgs args = 1 [json_name = "args"];
-  .agent.v1.ReadTodosResult result = 2 [json_name = "result"];
+  optional .agent.v1.ReadTodosArgs args = 1 [json_name = "args"];
+  optional .agent.v1.ReadTodosResult result = 2 [json_name = "result"];
 }
 
 message TodoItem {

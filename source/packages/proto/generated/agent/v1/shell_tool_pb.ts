@@ -17,19 +17,19 @@ import { ShellArgs, ShellResult } from "./shell_exec_pb.ts";
  */
 export class ShellToolCall extends Message<ShellToolCall> {
   /**
-   * @generated from field: agent.v1.ShellArgs args = 1;
+   * @generated from field: optional agent.v1.ShellArgs args = 1;
    */
   args?: ShellArgs;
 
   /**
-   * @generated from field: agent.v1.ShellResult result = 2;
+   * @generated from field: optional agent.v1.ShellResult result = 2;
    */
   result?: ShellResult;
 
   /**
-   * @generated from field: string description = 3;
+   * @generated from field: optional string description = 3;
    */
-  description = "";
+  description?: string;
 
   constructor(data?: PartialMessage<ShellToolCall>) {
     super();
@@ -39,9 +39,9 @@ export class ShellToolCall extends Message<ShellToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.ShellToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: ShellArgs },
-    { no: 2, name: "result", kind: "message", T: ShellResult },
-    { no: 3, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "args", kind: "message", T: ShellArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: ShellResult, opt: true },
+    { no: 3, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ShellToolCall {

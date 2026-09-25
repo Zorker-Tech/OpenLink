@@ -17,12 +17,12 @@ import { GrepArgs, GrepResult } from "./grep_exec_pb.ts";
  */
 export class GrepToolCall extends Message<GrepToolCall> {
   /**
-   * @generated from field: agent.v1.GrepArgs args = 1;
+   * @generated from field: optional agent.v1.GrepArgs args = 1;
    */
   args?: GrepArgs;
 
   /**
-   * @generated from field: agent.v1.GrepResult result = 2;
+   * @generated from field: optional agent.v1.GrepResult result = 2;
    */
   result?: GrepResult;
 
@@ -34,8 +34,8 @@ export class GrepToolCall extends Message<GrepToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.GrepToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: GrepArgs },
-    { no: 2, name: "result", kind: "message", T: GrepResult },
+    { no: 1, name: "args", kind: "message", T: GrepArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: GrepResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GrepToolCall {

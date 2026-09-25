@@ -11,8 +11,8 @@ import "agent/v1/diagnostics_exec.proto";
 import "agent/v1/utils.proto";
 
 message ReadLintsToolCall {
-  .agent.v1.ReadLintsToolArgs args = 1 [json_name = "args"];
-  .agent.v1.ReadLintsToolResult result = 2 [json_name = "result"];
+  optional .agent.v1.ReadLintsToolArgs args = 1 [json_name = "args"];
+  optional .agent.v1.ReadLintsToolResult result = 2 [json_name = "result"];
 }
 
 message ReadLintsToolArgs {
@@ -44,7 +44,7 @@ message FileDiagnostics {
 
 message DiagnosticItem {
   .agent.v1.DiagnosticSeverity severity = 1 [json_name = "severity"];
-  .agent.v1.DiagnosticRange range = 2 [json_name = "range"];
+  optional .agent.v1.DiagnosticRange range = 2 [json_name = "range"];
   string message = 3 [json_name = "message"];
   string source = 4 [json_name = "source"];
   string code = 5 [json_name = "code"];
@@ -52,6 +52,6 @@ message DiagnosticItem {
 }
 
 message DiagnosticRange {
-  .agent.v1.Position start = 1 [json_name = "start"];
-  .agent.v1.Position end = 2 [json_name = "end"];
+  optional .agent.v1.Position start = 1 [json_name = "start"];
+  optional .agent.v1.Position end = 2 [json_name = "end"];
 }

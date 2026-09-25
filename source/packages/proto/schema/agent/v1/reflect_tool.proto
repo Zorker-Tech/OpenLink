@@ -8,8 +8,8 @@ syntax = "proto3";
 package agent.v1;
 
 message ReflectToolCall {
-  .agent.v1.ReflectArgs args = 1 [json_name = "args"];
-  .agent.v1.ReflectResult result = 2 [json_name = "result"];
+  optional .agent.v1.ReflectArgs args = 1 [json_name = "args"];
+  optional .agent.v1.ReflectResult result = 2 [json_name = "result"];
 }
 
 message ReflectArgs {

@@ -16,12 +16,12 @@ import { Message, proto3 } from "@bufbuild/protobuf";
  */
 export class FetchCloudAgentDataToolCall extends Message<FetchCloudAgentDataToolCall> {
   /**
-   * @generated from field: agent.v1.FetchCloudAgentDataArgs args = 1;
+   * @generated from field: optional agent.v1.FetchCloudAgentDataArgs args = 1;
    */
   args?: FetchCloudAgentDataArgs;
 
   /**
-   * @generated from field: agent.v1.FetchCloudAgentDataResult result = 2;
+   * @generated from field: optional agent.v1.FetchCloudAgentDataResult result = 2;
    */
   result?: FetchCloudAgentDataResult;
 
@@ -33,8 +33,8 @@ export class FetchCloudAgentDataToolCall extends Message<FetchCloudAgentDataTool
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.FetchCloudAgentDataToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: FetchCloudAgentDataArgs },
-    { no: 2, name: "result", kind: "message", T: FetchCloudAgentDataResult },
+    { no: 1, name: "args", kind: "message", T: FetchCloudAgentDataArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: FetchCloudAgentDataResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): FetchCloudAgentDataToolCall {
@@ -84,9 +84,9 @@ export class FetchCloudAgentDataArgs extends Message<FetchCloudAgentDataArgs> {
   includeArchived = false;
 
   /**
-   * @generated from field: int32 limit = 10;
+   * @generated from field: optional int32 limit = 10;
    */
-  limit = 0;
+  limit?: number;
 
   /**
    * @generated from field: bool include_transcript = 12;
@@ -111,7 +111,7 @@ export class FetchCloudAgentDataArgs extends Message<FetchCloudAgentDataArgs> {
     { no: 7, name: "statuses", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 8, name: "include_team_wide", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 9, name: "include_archived", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 10, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 10, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 12, name: "include_transcript", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 13, name: "active_since", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);

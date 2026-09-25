@@ -13,19 +13,19 @@ function toRedactedRecordCiInvestigationFinding(msg, privacyMode) {
   return {
     _privacyMode: privacyMode,
     checkName: msg.checkName,
-    detailsUrl: createRedactedString(msg.detailsUrl, DataClassification.PATH, "details_url", privacyMode),
+    detailsUrl: msg.detailsUrl !== void 0 ? createRedactedString(msg.detailsUrl, DataClassification.PATH, "details_url", privacyMode) : void 0,
     tldr: createRedactedString(msg.tldr, DataClassification.CODE, "tldr", privacyMode),
-    rootCause: createRedactedString(msg.rootCause, DataClassification.CODE, "root_cause", privacyMode),
-    failingSignal: createRedactedString(msg.failingSignal, DataClassification.CODE, "failing_signal", privacyMode),
-    suggestedNextStep: createRedactedString(msg.suggestedNextStep, DataClassification.CODE, "suggested_next_step", privacyMode),
+    rootCause: msg.rootCause !== void 0 ? createRedactedString(msg.rootCause, DataClassification.CODE, "root_cause", privacyMode) : void 0,
+    failingSignal: msg.failingSignal !== void 0 ? createRedactedString(msg.failingSignal, DataClassification.CODE, "failing_signal", privacyMode) : void 0,
+    suggestedNextStep: msg.suggestedNextStep !== void 0 ? createRedactedString(msg.suggestedNextStep, DataClassification.CODE, "suggested_next_step", privacyMode) : void 0,
     diffRelation: msg.diffRelation,
-    diffRelationEvidence: createRedactedString(msg.diffRelationEvidence, DataClassification.CODE, "diff_relation_evidence", privacyMode),
+    diffRelationEvidence: msg.diffRelationEvidence !== void 0 ? createRedactedString(msg.diffRelationEvidence, DataClassification.CODE, "diff_relation_evidence", privacyMode) : void 0,
     flakeAssessment: msg.flakeAssessment,
-    flakeEvidence: createRedactedString(msg.flakeEvidence, DataClassification.CODE, "flake_evidence", privacyMode),
+    flakeEvidence: msg.flakeEvidence !== void 0 ? createRedactedString(msg.flakeEvidence, DataClassification.CODE, "flake_evidence", privacyMode) : void 0,
     rerunAvailable: msg.rerunAvailable,
-    rerunEvidence: createRedactedString(msg.rerunEvidence, DataClassification.CODE, "rerun_evidence", privacyMode),
+    rerunEvidence: msg.rerunEvidence !== void 0 ? createRedactedString(msg.rerunEvidence, DataClassification.CODE, "rerun_evidence", privacyMode) : void 0,
     recommendedAction: msg.recommendedAction,
-    recommendedActionEvidence: createRedactedString(msg.recommendedActionEvidence, DataClassification.CODE, "recommended_action_evidence", privacyMode),
+    recommendedActionEvidence: msg.recommendedActionEvidence !== void 0 ? createRedactedString(msg.recommendedActionEvidence, DataClassification.CODE, "recommended_action_evidence", privacyMode) : void 0,
     confidence: msg.confidence,
   };
 }
@@ -35,19 +35,19 @@ function fromRedactedRecordCiInvestigationFinding(msg, purpose, opts) {
   const enforcing = opts?.enforcing;
   return new RecordCiInvestigationFinding({
     checkName: msg.checkName,
-    detailsUrl: msg.detailsUrl.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    detailsUrl: msg.detailsUrl?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     tldr: msg.tldr.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    rootCause: msg.rootCause.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    failingSignal: msg.failingSignal.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    suggestedNextStep: msg.suggestedNextStep.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    rootCause: msg.rootCause?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    failingSignal: msg.failingSignal?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    suggestedNextStep: msg.suggestedNextStep?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     diffRelation: msg.diffRelation,
-    diffRelationEvidence: msg.diffRelationEvidence.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    diffRelationEvidence: msg.diffRelationEvidence?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     flakeAssessment: msg.flakeAssessment,
-    flakeEvidence: msg.flakeEvidence.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    flakeEvidence: msg.flakeEvidence?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     rerunAvailable: msg.rerunAvailable,
-    rerunEvidence: msg.rerunEvidence.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    rerunEvidence: msg.rerunEvidence?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     recommendedAction: msg.recommendedAction,
-    recommendedActionEvidence: msg.recommendedActionEvidence.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    recommendedActionEvidence: msg.recommendedActionEvidence?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     confidence: msg.confidence,
   });
 }
@@ -169,7 +169,7 @@ function toRedactedRecordCiInvestigationOverall(msg, privacyMode) {
     summary: createRedactedString(msg.summary, DataClassification.CODE, "summary", privacyMode),
     themes: msg.themes.map((v2) => createRedactedString(v2, DataClassification.CODE, "themes", privacyMode)),
     recommendedAction: msg.recommendedAction,
-    recommendedActionEvidence: createRedactedString(msg.recommendedActionEvidence, DataClassification.CODE, "recommended_action_evidence", privacyMode),
+    recommendedActionEvidence: msg.recommendedActionEvidence !== void 0 ? createRedactedString(msg.recommendedActionEvidence, DataClassification.CODE, "recommended_action_evidence", privacyMode) : void 0,
     checkKeys: msg.checkKeys,
   };
 }
@@ -181,7 +181,7 @@ function fromRedactedRecordCiInvestigationOverall(msg, purpose, opts) {
     summary: msg.summary.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     themes: msg.themes.map((v2) => v2.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing })),
     recommendedAction: msg.recommendedAction,
-    recommendedActionEvidence: msg.recommendedActionEvidence.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    recommendedActionEvidence: msg.recommendedActionEvidence?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     checkKeys: msg.checkKeys,
   });
 }

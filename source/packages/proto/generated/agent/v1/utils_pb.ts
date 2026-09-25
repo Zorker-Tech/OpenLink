@@ -65,12 +65,12 @@ export class OutputLocation extends Message<OutputLocation> {
  */
 export class Range extends Message<Range> {
   /**
-   * @generated from field: agent.v1.Position start = 1;
+   * @generated from field: optional agent.v1.Position start = 1;
    */
   start?: Position;
 
   /**
-   * @generated from field: agent.v1.Position end = 2;
+   * @generated from field: optional agent.v1.Position end = 2;
    */
   end?: Position;
 
@@ -82,8 +82,8 @@ export class Range extends Message<Range> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.Range";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "start", kind: "message", T: Position },
-    { no: 2, name: "end", kind: "message", T: Position },
+    { no: 1, name: "start", kind: "message", T: Position, opt: true },
+    { no: 2, name: "end", kind: "message", T: Position, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Range {

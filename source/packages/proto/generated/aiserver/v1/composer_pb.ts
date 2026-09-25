@@ -417,9 +417,9 @@ export class ComposerCapabilityRequest_LoopOnLintsCapability extends Message<Com
   linterErrors: LinterErrors[] = [];
 
   /**
-   * @generated from field: string custom_instructions = 2;
+   * @generated from field: optional string custom_instructions = 2;
    */
-  customInstructions = "";
+  customInstructions?: string;
 
   constructor(data?: PartialMessage<ComposerCapabilityRequest_LoopOnLintsCapability>) {
     super();
@@ -430,7 +430,7 @@ export class ComposerCapabilityRequest_LoopOnLintsCapability extends Message<Com
   static readonly typeName = "aiserver.v1.ComposerCapabilityRequest.LoopOnLintsCapability";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "linter_errors", kind: "message", T: LinterErrors, repeated: true },
-    { no: 2, name: "custom_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "custom_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ComposerCapabilityRequest_LoopOnLintsCapability {
@@ -460,9 +460,9 @@ export class ComposerCapabilityRequest_LoopOnTestsCapability extends Message<Com
   testNames: string[] = [];
 
   /**
-   * @generated from field: string custom_instructions = 2;
+   * @generated from field: optional string custom_instructions = 2;
    */
-  customInstructions = "";
+  customInstructions?: string;
 
   constructor(data?: PartialMessage<ComposerCapabilityRequest_LoopOnTestsCapability>) {
     super();
@@ -473,7 +473,7 @@ export class ComposerCapabilityRequest_LoopOnTestsCapability extends Message<Com
   static readonly typeName = "aiserver.v1.ComposerCapabilityRequest.LoopOnTestsCapability";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "test_names", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 2, name: "custom_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "custom_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ComposerCapabilityRequest_LoopOnTestsCapability {
@@ -498,9 +498,9 @@ export class ComposerCapabilityRequest_LoopOnTestsCapability extends Message<Com
  */
 export class ComposerCapabilityRequest_MegaPlannerCapability extends Message<ComposerCapabilityRequest_MegaPlannerCapability> {
   /**
-   * @generated from field: string custom_instructions = 1;
+   * @generated from field: optional string custom_instructions = 1;
    */
-  customInstructions = "";
+  customInstructions?: string;
 
   constructor(data?: PartialMessage<ComposerCapabilityRequest_MegaPlannerCapability>) {
     super();
@@ -510,7 +510,7 @@ export class ComposerCapabilityRequest_MegaPlannerCapability extends Message<Com
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ComposerCapabilityRequest.MegaPlannerCapability";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "custom_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "custom_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ComposerCapabilityRequest_MegaPlannerCapability {
@@ -540,19 +540,19 @@ export class ComposerCapabilityRequest_LoopOnCommandCapability extends Message<C
   command = "";
 
   /**
-   * @generated from field: string custom_instructions = 2;
+   * @generated from field: optional string custom_instructions = 2;
    */
-  customInstructions = "";
+  customInstructions?: string;
 
   /**
-   * @generated from field: string output = 3;
+   * @generated from field: optional string output = 3;
    */
-  output = "";
+  output?: string;
 
   /**
-   * @generated from field: int32 exit_code = 4;
+   * @generated from field: optional int32 exit_code = 4;
    */
-  exitCode = 0;
+  exitCode?: number;
 
   constructor(data?: PartialMessage<ComposerCapabilityRequest_LoopOnCommandCapability>) {
     super();
@@ -563,9 +563,9 @@ export class ComposerCapabilityRequest_LoopOnCommandCapability extends Message<C
   static readonly typeName = "aiserver.v1.ComposerCapabilityRequest.LoopOnCommandCapability";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "command", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "custom_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "output", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "exit_code", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 2, name: "custom_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "output", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "exit_code", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ComposerCapabilityRequest_LoopOnCommandCapability {
@@ -590,9 +590,9 @@ export class ComposerCapabilityRequest_LoopOnCommandCapability extends Message<C
  */
 export class ComposerCapabilityRequest_ToolCallCapability extends Message<ComposerCapabilityRequest_ToolCallCapability> {
   /**
-   * @generated from field: string custom_instructions = 1;
+   * @generated from field: optional string custom_instructions = 1;
    */
-  customInstructions = "";
+  customInstructions?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.ComposerCapabilityRequest.ToolSchema tool_schemas = 2;
@@ -622,7 +622,7 @@ export class ComposerCapabilityRequest_ToolCallCapability extends Message<Compos
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ComposerCapabilityRequest.ToolCallCapability";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "custom_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "custom_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "tool_schemas", kind: "message", T: ComposerCapabilityRequest_ToolSchema, repeated: true },
     { no: 3, name: "relevant_files", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 4, name: "files_in_context", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
@@ -651,9 +651,9 @@ export class ComposerCapabilityRequest_ToolCallCapability extends Message<Compos
  */
 export class ComposerCapabilityRequest_DiffReviewCapability extends Message<ComposerCapabilityRequest_DiffReviewCapability> {
   /**
-   * @generated from field: string custom_instructions = 1;
+   * @generated from field: optional string custom_instructions = 1;
    */
-  customInstructions = "";
+  customInstructions?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.ComposerCapabilityRequest.DiffReviewCapability.SimpleFileDiff diffs = 2;
@@ -668,7 +668,7 @@ export class ComposerCapabilityRequest_DiffReviewCapability extends Message<Comp
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ComposerCapabilityRequest.DiffReviewCapability";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "custom_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "custom_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "diffs", kind: "message", T: ComposerCapabilityRequest_DiffReviewCapability_SimpleFileDiff, repeated: true },
   ]);
 
@@ -747,12 +747,12 @@ export class ComposerCapabilityRequest_DiffReviewCapability_SimpleFileDiff_Chunk
   newLines: string[] = [];
 
   /**
-   * @generated from field: aiserver.v1.LineRange old_range = 3;
+   * @generated from field: optional aiserver.v1.LineRange old_range = 3;
    */
   oldRange?: LineRange;
 
   /**
-   * @generated from field: aiserver.v1.LineRange new_range = 4;
+   * @generated from field: optional aiserver.v1.LineRange new_range = 4;
    */
   newRange?: LineRange;
 
@@ -766,8 +766,8 @@ export class ComposerCapabilityRequest_DiffReviewCapability_SimpleFileDiff_Chunk
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "old_lines", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 2, name: "new_lines", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 3, name: "old_range", kind: "message", T: LineRange },
-    { no: 4, name: "new_range", kind: "message", T: LineRange },
+    { no: 3, name: "old_range", kind: "message", T: LineRange, opt: true },
+    { no: 4, name: "new_range", kind: "message", T: LineRange, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ComposerCapabilityRequest_DiffReviewCapability_SimpleFileDiff_Chunk {
@@ -792,9 +792,9 @@ export class ComposerCapabilityRequest_DiffReviewCapability_SimpleFileDiff_Chunk
  */
 export class ComposerCapabilityRequest_ContextPickingCapability extends Message<ComposerCapabilityRequest_ContextPickingCapability> {
   /**
-   * @generated from field: string custom_instructions = 1;
+   * @generated from field: optional string custom_instructions = 1;
    */
-  customInstructions = "";
+  customInstructions?: string;
 
   /**
    * @generated from field: repeated string potential_context_files = 2;
@@ -819,7 +819,7 @@ export class ComposerCapabilityRequest_ContextPickingCapability extends Message<
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ComposerCapabilityRequest.ContextPickingCapability";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "custom_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "custom_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "potential_context_files", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 3, name: "potential_context_code_chunks", kind: "message", T: CodeChunk, repeated: true },
     { no: 4, name: "files_in_context", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
@@ -847,9 +847,9 @@ export class ComposerCapabilityRequest_ContextPickingCapability extends Message<
  */
 export class ComposerCapabilityRequest_EditTrailCapability extends Message<ComposerCapabilityRequest_EditTrailCapability> {
   /**
-   * @generated from field: string custom_instructions = 1;
+   * @generated from field: optional string custom_instructions = 1;
    */
-  customInstructions = "";
+  customInstructions?: string;
 
   constructor(data?: PartialMessage<ComposerCapabilityRequest_EditTrailCapability>) {
     super();
@@ -859,7 +859,7 @@ export class ComposerCapabilityRequest_EditTrailCapability extends Message<Compo
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ComposerCapabilityRequest.EditTrailCapability";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "custom_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "custom_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ComposerCapabilityRequest_EditTrailCapability {
@@ -884,9 +884,9 @@ export class ComposerCapabilityRequest_EditTrailCapability extends Message<Compo
  */
 export class ComposerCapabilityRequest_AutoContextCapability extends Message<ComposerCapabilityRequest_AutoContextCapability> {
   /**
-   * @generated from field: string custom_instructions = 1;
+   * @generated from field: optional string custom_instructions = 1;
    */
-  customInstructions = "";
+  customInstructions?: string;
 
   /**
    * @generated from field: repeated string additional_files = 2;
@@ -901,7 +901,7 @@ export class ComposerCapabilityRequest_AutoContextCapability extends Message<Com
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ComposerCapabilityRequest.AutoContextCapability";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "custom_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "custom_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "additional_files", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
 
@@ -927,9 +927,9 @@ export class ComposerCapabilityRequest_AutoContextCapability extends Message<Com
  */
 export class ComposerCapabilityRequest_ContextPlannerCapability extends Message<ComposerCapabilityRequest_ContextPlannerCapability> {
   /**
-   * @generated from field: string custom_instructions = 1;
+   * @generated from field: optional string custom_instructions = 1;
    */
-  customInstructions = "";
+  customInstructions?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.CodeChunk attached_code_chunks = 2;
@@ -944,7 +944,7 @@ export class ComposerCapabilityRequest_ContextPlannerCapability extends Message<
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ComposerCapabilityRequest.ContextPlannerCapability";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "custom_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "custom_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "attached_code_chunks", kind: "message", T: CodeChunk, repeated: true },
   ]);
 
@@ -970,9 +970,9 @@ export class ComposerCapabilityRequest_ContextPlannerCapability extends Message<
  */
 export class ComposerCapabilityRequest_RememberThisCapability extends Message<ComposerCapabilityRequest_RememberThisCapability> {
   /**
-   * @generated from field: string custom_instructions = 1;
+   * @generated from field: optional string custom_instructions = 1;
    */
-  customInstructions = "";
+  customInstructions?: string;
 
   /**
    * @generated from field: string memory = 2;
@@ -987,7 +987,7 @@ export class ComposerCapabilityRequest_RememberThisCapability extends Message<Co
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ComposerCapabilityRequest.RememberThisCapability";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "custom_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "custom_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "memory", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
@@ -1013,9 +1013,9 @@ export class ComposerCapabilityRequest_RememberThisCapability extends Message<Co
  */
 export class ComposerCapabilityRequest_DecomposerCapability extends Message<ComposerCapabilityRequest_DecomposerCapability> {
   /**
-   * @generated from field: string custom_instructions = 1;
+   * @generated from field: optional string custom_instructions = 1;
    */
-  customInstructions = "";
+  customInstructions?: string;
 
   constructor(data?: PartialMessage<ComposerCapabilityRequest_DecomposerCapability>) {
     super();
@@ -1025,7 +1025,7 @@ export class ComposerCapabilityRequest_DecomposerCapability extends Message<Comp
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ComposerCapabilityRequest.DecomposerCapability";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "custom_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "custom_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ComposerCapabilityRequest_DecomposerCapability {
@@ -1050,9 +1050,9 @@ export class ComposerCapabilityRequest_DecomposerCapability extends Message<Comp
  */
 export class ComposerCapabilityRequest_CursorRulesCapability extends Message<ComposerCapabilityRequest_CursorRulesCapability> {
   /**
-   * @generated from field: string custom_instructions = 1;
+   * @generated from field: optional string custom_instructions = 1;
    */
-  customInstructions = "";
+  customInstructions?: string;
 
   constructor(data?: PartialMessage<ComposerCapabilityRequest_CursorRulesCapability>) {
     super();
@@ -1062,7 +1062,7 @@ export class ComposerCapabilityRequest_CursorRulesCapability extends Message<Com
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ComposerCapabilityRequest.CursorRulesCapability";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "custom_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "custom_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ComposerCapabilityRequest_CursorRulesCapability {
@@ -1147,9 +1147,9 @@ export class ComposerCapabilityRequest_SchemaProperty extends Message<ComposerCa
   type = "";
 
   /**
-   * @generated from field: string description = 2;
+   * @generated from field: optional string description = 2;
    */
-  description = "";
+  description?: string;
 
   constructor(data?: PartialMessage<ComposerCapabilityRequest_SchemaProperty>) {
     super();
@@ -1160,7 +1160,7 @@ export class ComposerCapabilityRequest_SchemaProperty extends Message<ComposerCa
   static readonly typeName = "aiserver.v1.ComposerCapabilityRequest.SchemaProperty";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ComposerCapabilityRequest_SchemaProperty {
@@ -1247,39 +1247,39 @@ export class ComposerCapabilityContext_SlackIntegrationContext extends Message<C
   thread = "";
 
   /**
-   * @generated from field: string channel_name = 2;
+   * @generated from field: optional string channel_name = 2;
    */
-  channelName = "";
+  channelName?: string;
 
   /**
-   * @generated from field: string channel_purpose = 3;
+   * @generated from field: optional string channel_purpose = 3;
    */
-  channelPurpose = "";
+  channelPurpose?: string;
 
   /**
-   * @generated from field: string channel_topic = 4;
+   * @generated from field: optional string channel_topic = 4;
    */
-  channelTopic = "";
+  channelTopic?: string;
 
   /**
-   * @generated from field: string sender_name = 5;
+   * @generated from field: optional string sender_name = 5;
    */
-  senderName = "";
+  senderName?: string;
 
   /**
-   * @generated from field: string sender_id = 6;
+   * @generated from field: optional string sender_id = 6;
    */
-  senderId = "";
+  senderId?: string;
 
   /**
-   * @generated from field: string sender_type = 7;
+   * @generated from field: optional string sender_type = 7;
    */
-  senderType = "";
+  senderType?: string;
 
   /**
-   * @generated from field: bool is_directly_addressed = 8;
+   * @generated from field: optional bool is_directly_addressed = 8;
    */
-  isDirectlyAddressed = false;
+  isDirectlyAddressed?: boolean;
 
   constructor(data?: PartialMessage<ComposerCapabilityContext_SlackIntegrationContext>) {
     super();
@@ -1290,13 +1290,13 @@ export class ComposerCapabilityContext_SlackIntegrationContext extends Message<C
   static readonly typeName = "aiserver.v1.ComposerCapabilityContext.SlackIntegrationContext";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "thread", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "channel_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "channel_purpose", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "channel_topic", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "sender_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "sender_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "sender_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "is_directly_addressed", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "channel_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "channel_purpose", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "channel_topic", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "sender_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "sender_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "sender_type", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "is_directly_addressed", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ComposerCapabilityContext_SlackIntegrationContext {
@@ -1336,9 +1336,9 @@ export class ComposerCapabilityContext_GithubPRContext extends Message<ComposerC
   comments = "";
 
   /**
-   * @generated from field: string ci_failures = 4;
+   * @generated from field: optional string ci_failures = 4;
    */
-  ciFailures = "";
+  ciFailures?: string;
 
   constructor(data?: PartialMessage<ComposerCapabilityContext_GithubPRContext>) {
     super();
@@ -1351,7 +1351,7 @@ export class ComposerCapabilityContext_GithubPRContext extends Message<ComposerC
     { no: 1, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "comments", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "ci_failures", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "ci_failures", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ComposerCapabilityContext_GithubPRContext {
@@ -1381,24 +1381,24 @@ export class ComposerCapabilityContext_MicrosoftTeamsIntegrationContext extends 
   thread = "";
 
   /**
-   * @generated from field: string channel_name = 2;
+   * @generated from field: optional string channel_name = 2;
    */
-  channelName = "";
+  channelName?: string;
 
   /**
-   * @generated from field: string team_name = 3;
+   * @generated from field: optional string team_name = 3;
    */
-  teamName = "";
+  teamName?: string;
 
   /**
-   * @generated from field: string channel_description = 4;
+   * @generated from field: optional string channel_description = 4;
    */
-  channelDescription = "";
+  channelDescription?: string;
 
   /**
-   * @generated from field: string team_description = 5;
+   * @generated from field: optional string team_description = 5;
    */
-  teamDescription = "";
+  teamDescription?: string;
 
   constructor(data?: PartialMessage<ComposerCapabilityContext_MicrosoftTeamsIntegrationContext>) {
     super();
@@ -1409,10 +1409,10 @@ export class ComposerCapabilityContext_MicrosoftTeamsIntegrationContext extends 
   static readonly typeName = "aiserver.v1.ComposerCapabilityContext.MicrosoftTeamsIntegrationContext";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "thread", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "channel_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "team_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "channel_description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "team_description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "channel_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "team_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "channel_description", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "team_description", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ComposerCapabilityContext_MicrosoftTeamsIntegrationContext {

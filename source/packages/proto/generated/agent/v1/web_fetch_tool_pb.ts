@@ -135,12 +135,12 @@ export class WebFetchRequestResponse_Rejected extends Message<WebFetchRequestRes
  */
 export class WebFetchToolCall extends Message<WebFetchToolCall> {
   /**
-   * @generated from field: agent.v1.WebFetchArgs args = 1;
+   * @generated from field: optional agent.v1.WebFetchArgs args = 1;
    */
   args?: WebFetchArgs;
 
   /**
-   * @generated from field: agent.v1.WebFetchResult result = 2;
+   * @generated from field: optional agent.v1.WebFetchResult result = 2;
    */
   result?: WebFetchResult;
 
@@ -152,8 +152,8 @@ export class WebFetchToolCall extends Message<WebFetchToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.WebFetchToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: WebFetchArgs },
-    { no: 2, name: "result", kind: "message", T: WebFetchResult },
+    { no: 1, name: "args", kind: "message", T: WebFetchArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: WebFetchResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): WebFetchToolCall {
@@ -288,7 +288,7 @@ export class WebFetchSuccess extends Message<WebFetchSuccess> {
   markdown = "";
 
   /**
-   * @generated from field: agent.v1.OutputLocation output_location = 3;
+   * @generated from field: optional agent.v1.OutputLocation output_location = 3;
    */
   outputLocation?: OutputLocation;
 
@@ -302,7 +302,7 @@ export class WebFetchSuccess extends Message<WebFetchSuccess> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "markdown", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "output_location", kind: "message", T: OutputLocation },
+    { no: 3, name: "output_location", kind: "message", T: OutputLocation, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): WebFetchSuccess {
@@ -407,7 +407,7 @@ export class WebFetchRejected extends Message<WebFetchRejected> {
  */
 export class WebFetchRequestQuery extends Message<WebFetchRequestQuery> {
   /**
-   * @generated from field: agent.v1.WebFetchArgs args = 1;
+   * @generated from field: optional agent.v1.WebFetchArgs args = 1;
    */
   args?: WebFetchArgs;
 
@@ -417,7 +417,7 @@ export class WebFetchRequestQuery extends Message<WebFetchRequestQuery> {
   skipApproval = false;
 
   /**
-   * @generated from field: agent.v1.SmartModeApproval smart_mode_approval = 3;
+   * @generated from field: optional agent.v1.SmartModeApproval smart_mode_approval = 3;
    */
   smartModeApproval?: SmartModeApproval;
 
@@ -429,9 +429,9 @@ export class WebFetchRequestQuery extends Message<WebFetchRequestQuery> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.WebFetchRequestQuery";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: WebFetchArgs },
+    { no: 1, name: "args", kind: "message", T: WebFetchArgs, opt: true },
     { no: 2, name: "skip_approval", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "smart_mode_approval", kind: "message", T: SmartModeApproval },
+    { no: 3, name: "smart_mode_approval", kind: "message", T: SmartModeApproval, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): WebFetchRequestQuery {

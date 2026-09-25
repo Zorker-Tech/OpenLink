@@ -21,7 +21,7 @@ export class BidiAppendRequest extends Message<BidiAppendRequest> {
   data = "";
 
   /**
-   * @generated from field: aiserver.v1.BidiRequestId request_id = 2;
+   * @generated from field: optional aiserver.v1.BidiRequestId request_id = 2;
    */
   requestId?: BidiRequestId;
 
@@ -44,7 +44,7 @@ export class BidiAppendRequest extends Message<BidiAppendRequest> {
   static readonly typeName = "aiserver.v1.BidiAppendRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "data", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "request_id", kind: "message", T: BidiRequestId },
+    { no: 2, name: "request_id", kind: "message", T: BidiRequestId, opt: true },
     { no: 3, name: "append_seqno", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 4, name: "data_binary", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
   ]);
@@ -102,14 +102,14 @@ export class BidiAppendResponse extends Message<BidiAppendResponse> {
  */
 export class BidiPollRequest extends Message<BidiPollRequest> {
   /**
-   * @generated from field: aiserver.v1.BidiRequestId request_id = 1;
+   * @generated from field: optional aiserver.v1.BidiRequestId request_id = 1;
    */
   requestId?: BidiRequestId;
 
   /**
-   * @generated from field: bool start_request = 2;
+   * @generated from field: optional bool start_request = 2;
    */
-  startRequest = false;
+  startRequest?: boolean;
 
   constructor(data?: PartialMessage<BidiPollRequest>) {
     super();
@@ -119,8 +119,8 @@ export class BidiPollRequest extends Message<BidiPollRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.BidiPollRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "request_id", kind: "message", T: BidiRequestId },
-    { no: 2, name: "start_request", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 1, name: "request_id", kind: "message", T: BidiRequestId, opt: true },
+    { no: 2, name: "start_request", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BidiPollRequest {
@@ -155,9 +155,9 @@ export class BidiPollResponse extends Message<BidiPollResponse> {
   data = "";
 
   /**
-   * @generated from field: bool eof = 3;
+   * @generated from field: optional bool eof = 3;
    */
-  eof = false;
+  eof?: boolean;
 
   constructor(data?: PartialMessage<BidiPollResponse>) {
     super();
@@ -169,7 +169,7 @@ export class BidiPollResponse extends Message<BidiPollResponse> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "seqno", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 2, name: "data", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "eof", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 3, name: "eof", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BidiPollResponse {

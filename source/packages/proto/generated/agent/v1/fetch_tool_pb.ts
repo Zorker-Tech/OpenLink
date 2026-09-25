@@ -17,12 +17,12 @@ import { FetchArgs, FetchResult } from "./fetch_exec_pb.ts";
  */
 export class FetchToolCall extends Message<FetchToolCall> {
   /**
-   * @generated from field: agent.v1.FetchArgs args = 1;
+   * @generated from field: optional agent.v1.FetchArgs args = 1;
    */
   args?: FetchArgs;
 
   /**
-   * @generated from field: agent.v1.FetchResult result = 2;
+   * @generated from field: optional agent.v1.FetchResult result = 2;
    */
   result?: FetchResult;
 
@@ -34,8 +34,8 @@ export class FetchToolCall extends Message<FetchToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.FetchToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: FetchArgs },
-    { no: 2, name: "result", kind: "message", T: FetchResult },
+    { no: 1, name: "args", kind: "message", T: FetchArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: FetchResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): FetchToolCall {

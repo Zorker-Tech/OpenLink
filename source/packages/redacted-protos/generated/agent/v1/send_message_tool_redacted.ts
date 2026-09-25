@@ -58,7 +58,7 @@ function toRedactedSendMessageAttachment(msg, privacyMode) {
   return {
     _privacyMode: privacyMode,
     url: createRedactedString(msg.url, DataClassification.PATH, "url", privacyMode),
-    alt: createRedactedString(msg.alt, DataClassification.CODE, "alt", privacyMode),
+    alt: msg.alt !== void 0 ? createRedactedString(msg.alt, DataClassification.CODE, "alt", privacyMode) : void 0,
   };
 }
 
@@ -67,7 +67,7 @@ function fromRedactedSendMessageAttachment(msg, purpose, opts) {
   const enforcing = opts?.enforcing;
   return new SendMessageAttachment({
     url: msg.url.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    alt: msg.alt.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    alt: msg.alt?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
   });
 }
 

@@ -10,6 +10,6 @@ package agent.v1;
 import "agent/v1/record_screen_exec.proto";
 
 message RecordScreenToolCall {
-  .agent.v1.RecordScreenArgs args = 1 [json_name = "args"];
-  .agent.v1.RecordScreenResult result = 2 [json_name = "result"];
+  optional .agent.v1.RecordScreenArgs args = 1 [json_name = "args"];
+  optional .agent.v1.RecordScreenResult result = 2 [json_name = "result"];
 }

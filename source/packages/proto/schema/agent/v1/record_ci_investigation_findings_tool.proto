@@ -8,13 +8,13 @@ syntax = "proto3";
 package agent.v1;
 
 message RecordCiInvestigationFindingsToolCall {
-  .agent.v1.RecordCiInvestigationFindingsArgs args = 1 [json_name = "args"];
-  .agent.v1.RecordCiInvestigationFindingsResult result = 2 [json_name = "result"];
+  optional .agent.v1.RecordCiInvestigationFindingsArgs args = 1 [json_name = "args"];
+  optional .agent.v1.RecordCiInvestigationFindingsResult result = 2 [json_name = "result"];
 }
 
 message RecordCiInvestigationFindingsArgs {
   repeated .agent.v1.RecordCiInvestigationFinding findings = 1 [json_name = "findings"];
-  .agent.v1.RecordCiInvestigationOverall overall = 2 [json_name = "overall"];
+  optional .agent.v1.RecordCiInvestigationOverall overall = 2 [json_name = "overall"];
   string tool_call_id = 3 [json_name = "toolCallId"];
 }
 
@@ -35,26 +35,26 @@ message RecordCiInvestigationFindingsError {
 
 message RecordCiInvestigationFinding {
   string check_name = 1 [json_name = "checkName"];
-  string details_url = 2 [json_name = "detailsUrl"];
+  optional string details_url = 2 [json_name = "detailsUrl"];
   string tldr = 3 [json_name = "tldr"];
-  string root_cause = 4 [json_name = "rootCause"];
-  string failing_signal = 5 [json_name = "failingSignal"];
-  string suggested_next_step = 6 [json_name = "suggestedNextStep"];
-  string diff_relation = 7 [json_name = "diffRelation"];
-  string diff_relation_evidence = 8 [json_name = "diffRelationEvidence"];
-  string flake_assessment = 9 [json_name = "flakeAssessment"];
-  string flake_evidence = 10 [json_name = "flakeEvidence"];
-  bool rerun_available = 11 [json_name = "rerunAvailable"];
-  string rerun_evidence = 12 [json_name = "rerunEvidence"];
-  string recommended_action = 13 [json_name = "recommendedAction"];
-  string recommended_action_evidence = 14 [json_name = "recommendedActionEvidence"];
-  string confidence = 15 [json_name = "confidence"];
+  optional string root_cause = 4 [json_name = "rootCause"];
+  optional string failing_signal = 5 [json_name = "failingSignal"];
+  optional string suggested_next_step = 6 [json_name = "suggestedNextStep"];
+  optional string diff_relation = 7 [json_name = "diffRelation"];
+  optional string diff_relation_evidence = 8 [json_name = "diffRelationEvidence"];
+  optional string flake_assessment = 9 [json_name = "flakeAssessment"];
+  optional string flake_evidence = 10 [json_name = "flakeEvidence"];
+  optional bool rerun_available = 11 [json_name = "rerunAvailable"];
+  optional string rerun_evidence = 12 [json_name = "rerunEvidence"];
+  optional string recommended_action = 13 [json_name = "recommendedAction"];
+  optional string recommended_action_evidence = 14 [json_name = "recommendedActionEvidence"];
+  optional string confidence = 15 [json_name = "confidence"];
 }
 
 message RecordCiInvestigationOverall {
   string summary = 1 [json_name = "summary"];
   repeated string themes = 2 [json_name = "themes"];
-  string recommended_action = 3 [json_name = "recommendedAction"];
-  string recommended_action_evidence = 4 [json_name = "recommendedActionEvidence"];
+  optional string recommended_action = 3 [json_name = "recommendedAction"];
+  optional string recommended_action_evidence = 4 [json_name = "recommendedActionEvidence"];
   repeated string check_keys = 5 [json_name = "checkKeys"];
 }

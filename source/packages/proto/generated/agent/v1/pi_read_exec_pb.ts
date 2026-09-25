@@ -22,14 +22,14 @@ export class PiReadExecArgs extends Message<PiReadExecArgs> {
   path = "";
 
   /**
-   * @generated from field: int32 offset = 2;
+   * @generated from field: optional int32 offset = 2;
    */
-  offset = 0;
+  offset?: number;
 
   /**
-   * @generated from field: int32 limit = 3;
+   * @generated from field: optional int32 limit = 3;
    */
-  limit = 0;
+  limit?: number;
 
   constructor(data?: PartialMessage<PiReadExecArgs>) {
     super();
@@ -40,8 +40,8 @@ export class PiReadExecArgs extends Message<PiReadExecArgs> {
   static readonly typeName = "agent.v1.PiReadExecArgs";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "offset", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 2, name: "offset", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 3, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PiReadExecArgs {
@@ -121,7 +121,7 @@ export class PiReadExecSuccess extends Message<PiReadExecSuccess> {
   output = "";
 
   /**
-   * @generated from field: agent.v1.PiTruncation truncation = 2;
+   * @generated from field: optional agent.v1.PiTruncation truncation = 2;
    */
   truncation?: PiTruncation;
 
@@ -134,7 +134,7 @@ export class PiReadExecSuccess extends Message<PiReadExecSuccess> {
   static readonly typeName = "agent.v1.PiReadExecSuccess";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "output", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "truncation", kind: "message", T: PiTruncation },
+    { no: 2, name: "truncation", kind: "message", T: PiTruncation, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PiReadExecSuccess {

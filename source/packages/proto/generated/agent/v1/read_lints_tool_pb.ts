@@ -18,12 +18,12 @@ import { Position } from "./utils_pb.ts";
  */
 export class ReadLintsToolCall extends Message<ReadLintsToolCall> {
   /**
-   * @generated from field: agent.v1.ReadLintsToolArgs args = 1;
+   * @generated from field: optional agent.v1.ReadLintsToolArgs args = 1;
    */
   args?: ReadLintsToolArgs;
 
   /**
-   * @generated from field: agent.v1.ReadLintsToolResult result = 2;
+   * @generated from field: optional agent.v1.ReadLintsToolResult result = 2;
    */
   result?: ReadLintsToolResult;
 
@@ -35,8 +35,8 @@ export class ReadLintsToolCall extends Message<ReadLintsToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.ReadLintsToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: ReadLintsToolArgs },
-    { no: 2, name: "result", kind: "message", T: ReadLintsToolResult },
+    { no: 1, name: "args", kind: "message", T: ReadLintsToolArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: ReadLintsToolResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ReadLintsToolCall {
@@ -288,7 +288,7 @@ export class DiagnosticItem extends Message<DiagnosticItem> {
   severity = DiagnosticSeverity.UNSPECIFIED;
 
   /**
-   * @generated from field: agent.v1.DiagnosticRange range = 2;
+   * @generated from field: optional agent.v1.DiagnosticRange range = 2;
    */
   range?: DiagnosticRange;
 
@@ -321,7 +321,7 @@ export class DiagnosticItem extends Message<DiagnosticItem> {
   static readonly typeName = "agent.v1.DiagnosticItem";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "severity", kind: "enum", T: proto3.getEnumType(DiagnosticSeverity) },
-    { no: 2, name: "range", kind: "message", T: DiagnosticRange },
+    { no: 2, name: "range", kind: "message", T: DiagnosticRange, opt: true },
     { no: 3, name: "message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "source", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "code", kind: "scalar", T: 9 /* ScalarType.STRING */ },
@@ -350,12 +350,12 @@ export class DiagnosticItem extends Message<DiagnosticItem> {
  */
 export class DiagnosticRange extends Message<DiagnosticRange> {
   /**
-   * @generated from field: agent.v1.Position start = 1;
+   * @generated from field: optional agent.v1.Position start = 1;
    */
   start?: Position;
 
   /**
-   * @generated from field: agent.v1.Position end = 2;
+   * @generated from field: optional agent.v1.Position end = 2;
    */
   end?: Position;
 
@@ -367,8 +367,8 @@ export class DiagnosticRange extends Message<DiagnosticRange> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.DiagnosticRange";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "start", kind: "message", T: Position },
-    { no: 2, name: "end", kind: "message", T: Position },
+    { no: 1, name: "start", kind: "message", T: Position, opt: true },
+    { no: 2, name: "end", kind: "message", T: Position, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DiagnosticRange {

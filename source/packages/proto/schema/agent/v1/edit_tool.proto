@@ -8,13 +8,13 @@ syntax = "proto3";
 package agent.v1;
 
 message EditToolCall {
-  .agent.v1.EditArgs args = 1 [json_name = "args"];
-  .agent.v1.EditResult result = 2 [json_name = "result"];
+  optional .agent.v1.EditArgs args = 1 [json_name = "args"];
+  optional .agent.v1.EditResult result = 2 [json_name = "result"];
 }
 
 message EditArgs {
   string path = 1 [json_name = "path"];
-  string stream_content = 6 [json_name = "streamContent"];
+  optional string stream_content = 6 [json_name = "streamContent"];
 }
 
 message EditResult {
@@ -30,12 +30,12 @@ message EditResult {
 
 message EditSuccess {
   string path = 1 [json_name = "path"];
-  int32 lines_added = 3 [json_name = "linesAdded"];
-  int32 lines_removed = 4 [json_name = "linesRemoved"];
-  string diff_string = 5 [json_name = "diffString"];
-  string before_full_file_content = 6 [json_name = "beforeFullFileContent"];
+  optional int32 lines_added = 3 [json_name = "linesAdded"];
+  optional int32 lines_removed = 4 [json_name = "linesRemoved"];
+  optional string diff_string = 5 [json_name = "diffString"];
+  optional string before_full_file_content = 6 [json_name = "beforeFullFileContent"];
   string after_full_file_content = 7 [json_name = "afterFullFileContent"];
-  string message = 8 [json_name = "message"];
+  optional string message = 8 [json_name = "message"];
 }
 
 message EditFileNotFound {
@@ -60,7 +60,7 @@ message EditRejected {
 message EditError {
   string path = 1 [json_name = "path"];
   string error = 2 [json_name = "error"];
-  string model_visible_error = 5 [json_name = "modelVisibleError"];
+  optional string model_visible_error = 5 [json_name = "modelVisibleError"];
 }
 
 message EditToolCallDelta {

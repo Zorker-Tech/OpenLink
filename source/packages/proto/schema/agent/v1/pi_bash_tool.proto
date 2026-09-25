@@ -10,13 +10,13 @@ package agent.v1;
 import "agent/v1/pi_common.proto";
 
 message PiBashToolCall {
-  .agent.v1.PiBashToolArgs args = 1 [json_name = "args"];
-  .agent.v1.PiBashToolResult result = 2 [json_name = "result"];
+  optional .agent.v1.PiBashToolArgs args = 1 [json_name = "args"];
+  optional .agent.v1.PiBashToolResult result = 2 [json_name = "result"];
 }
 
 message PiBashToolArgs {
   string command = 1 [json_name = "command"];
-  double timeout = 2 [json_name = "timeout"];
+  optional double timeout = 2 [json_name = "timeout"];
 }
 
 message PiBashToolResult {
@@ -28,12 +28,12 @@ message PiBashToolResult {
 
 message PiBashToolSuccess {
   string output = 1 [json_name = "output"];
-  .agent.v1.PiTruncation truncation = 2 [json_name = "truncation"];
-  string full_output_path = 3 [json_name = "fullOutputPath"];
+  optional .agent.v1.PiTruncation truncation = 2 [json_name = "truncation"];
+  optional string full_output_path = 3 [json_name = "fullOutputPath"];
 }
 
 message PiBashToolError {
   string error = 1 [json_name = "error"];
-  .agent.v1.PiTruncation truncation = 2 [json_name = "truncation"];
-  string full_output_path = 3 [json_name = "fullOutputPath"];
+  optional .agent.v1.PiTruncation truncation = 2 [json_name = "truncation"];
+  optional string full_output_path = 3 [json_name = "fullOutputPath"];
 }

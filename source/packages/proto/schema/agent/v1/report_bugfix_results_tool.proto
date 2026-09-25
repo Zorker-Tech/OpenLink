@@ -12,7 +12,7 @@ message BugfixResultItem {
   string bug_title = 2 [json_name = "bugTitle"];
   .agent.v1.BugfixVerdict verdict = 3 [json_name = "verdict"];
   string explanation = 4 [json_name = "explanation"];
-  string severity = 5 [json_name = "severity"];
+  optional string severity = 5 [json_name = "severity"];
 }
 
 message ReportBugfixResultsSuccess {
@@ -24,8 +24,8 @@ message ReportBugfixResultsError {
 }
 
 message ReportBugfixResultsToolCall {
-  .agent.v1.ReportBugfixResultsArgs args = 1 [json_name = "args"];
-  .agent.v1.ReportBugfixResultsResult result = 2 [json_name = "result"];
+  optional .agent.v1.ReportBugfixResultsArgs args = 1 [json_name = "args"];
+  optional .agent.v1.ReportBugfixResultsResult result = 2 [json_name = "result"];
 }
 
 message ReportBugfixResultsArgs {

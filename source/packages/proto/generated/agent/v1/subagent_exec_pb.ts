@@ -70,29 +70,29 @@ export class SubagentArgs extends Message<SubagentArgs> {
   readonly = false;
 
   /**
-   * @generated from field: string resume_agent_id = 6;
+   * @generated from field: optional string resume_agent_id = 6;
    */
-  resumeAgentId = "";
+  resumeAgentId?: string;
 
   /**
-   * @generated from field: bool run_in_background = 7;
+   * @generated from field: optional bool run_in_background = 7;
    */
-  runInBackground = false;
+  runInBackground?: boolean;
 
   /**
-   * @generated from field: agent.v1.ClientContinuationConfig continuation_config = 8;
+   * @generated from field: optional agent.v1.ClientContinuationConfig continuation_config = 8;
    */
   continuationConfig?: ClientContinuationConfig;
 
   /**
-   * @generated from field: string parent_conversation_id = 9;
+   * @generated from field: optional string parent_conversation_id = 9;
    */
-  parentConversationId = "";
+  parentConversationId?: string;
 
   /**
-   * @generated from field: bool interrupt = 13;
+   * @generated from field: optional bool interrupt = 13;
    */
-  interrupt = false;
+  interrupt?: boolean;
 
   /**
    * @generated from field: agent.v1.TaskMode mode = 14;
@@ -100,24 +100,24 @@ export class SubagentArgs extends Message<SubagentArgs> {
   mode = TaskMode.UNSPECIFIED;
 
   /**
-   * @generated from field: string fork_agent_id = 15;
+   * @generated from field: optional string fork_agent_id = 15;
    */
-  forkAgentId = "";
+  forkAgentId?: string;
 
   /**
-   * @generated from field: string root_parent_conversation_id = 16;
+   * @generated from field: optional string root_parent_conversation_id = 16;
    */
-  rootParentConversationId = "";
+  rootParentConversationId?: string;
 
   /**
-   * @generated from field: agent.v1.SelectedContext selected_context = 17;
+   * @generated from field: optional agent.v1.SelectedContext selected_context = 17;
    */
   selectedContext?: SelectedContext;
 
   /**
-   * @generated from field: bool direct_meta_parent_child_subagent = 18;
+   * @generated from field: optional bool direct_meta_parent_child_subagent = 18;
    */
-  directMetaParentChildSubagent = false;
+  directMetaParentChildSubagent?: boolean;
 
   /**
    * @generated from field: agent.v1.SubagentExecutionEnvironment environment = 19;
@@ -125,9 +125,9 @@ export class SubagentArgs extends Message<SubagentArgs> {
   environment = SubagentExecutionEnvironment.UNSPECIFIED;
 
   /**
-   * @generated from field: string cloud_base_branch = 20;
+   * @generated from field: optional string cloud_base_branch = 20;
    */
-  cloudBaseBranch = "";
+  cloudBaseBranch?: string;
 
   /**
    * @generated from field: repeated agent.v1.RequestedModel.ModelParameterValue model_parameters = 21;
@@ -170,18 +170,18 @@ export class SubagentArgs extends Message<SubagentArgs> {
     { no: 3, name: "model_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "prompt", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "readonly", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 6, name: "resume_agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "run_in_background", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 8, name: "continuation_config", kind: "message", T: ClientContinuationConfig },
-    { no: 9, name: "parent_conversation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 13, name: "interrupt", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 6, name: "resume_agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "run_in_background", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 8, name: "continuation_config", kind: "message", T: ClientContinuationConfig, opt: true },
+    { no: 9, name: "parent_conversation_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 13, name: "interrupt", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 14, name: "mode", kind: "enum", T: proto3.getEnumType(TaskMode) },
-    { no: 15, name: "fork_agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 16, name: "root_parent_conversation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 17, name: "selected_context", kind: "message", T: SelectedContext },
-    { no: 18, name: "direct_meta_parent_child_subagent", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 15, name: "fork_agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 16, name: "root_parent_conversation_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 17, name: "selected_context", kind: "message", T: SelectedContext, opt: true },
+    { no: 18, name: "direct_meta_parent_child_subagent", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 19, name: "environment", kind: "enum", T: proto3.getEnumType(SubagentExecutionEnvironment) },
-    { no: 20, name: "cloud_base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 20, name: "cloud_base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 21, name: "model_parameters", kind: "message", T: RequestedModel_ModelParameterValue, repeated: true },
     { no: 10, name: "api_key_credentials", kind: "message", T: ApiKeyCredentials, oneof: "credentials" },
     { no: 11, name: "azure_credentials", kind: "message", T: AzureCredentials, oneof: "credentials" },
@@ -519,9 +519,9 @@ export class SubagentAwaitComplete extends Message<SubagentAwaitComplete> {
   agentId = "";
 
   /**
-   * @generated from field: string transcript_path = 2;
+   * @generated from field: optional string transcript_path = 2;
    */
-  transcriptPath = "";
+  transcriptPath?: string;
 
   /**
    * @generated from field: int32 tool_call_count = 3;
@@ -529,9 +529,9 @@ export class SubagentAwaitComplete extends Message<SubagentAwaitComplete> {
   toolCallCount = 0;
 
   /**
-   * @generated from field: string final_message = 4;
+   * @generated from field: optional string final_message = 4;
    */
-  finalMessage = "";
+  finalMessage?: string;
 
   constructor(data?: PartialMessage<SubagentAwaitComplete>) {
     super();
@@ -542,9 +542,9 @@ export class SubagentAwaitComplete extends Message<SubagentAwaitComplete> {
   static readonly typeName = "agent.v1.SubagentAwaitComplete";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "transcript_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "transcript_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "tool_call_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 4, name: "final_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "final_message", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SubagentAwaitComplete {
@@ -574,9 +574,9 @@ export class SubagentAwaitStillRunning extends Message<SubagentAwaitStillRunning
   agentId = "";
 
   /**
-   * @generated from field: string transcript_path = 2;
+   * @generated from field: optional string transcript_path = 2;
    */
-  transcriptPath = "";
+  transcriptPath?: string;
 
   constructor(data?: PartialMessage<SubagentAwaitStillRunning>) {
     super();
@@ -587,7 +587,7 @@ export class SubagentAwaitStillRunning extends Message<SubagentAwaitStillRunning
   static readonly typeName = "agent.v1.SubagentAwaitStillRunning";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "transcript_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "transcript_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SubagentAwaitStillRunning {
@@ -649,9 +649,9 @@ export class SubagentAwaitNotFound extends Message<SubagentAwaitNotFound> {
  */
 export class SubagentAwaitError extends Message<SubagentAwaitError> {
   /**
-   * @generated from field: string agent_id = 1;
+   * @generated from field: optional string agent_id = 1;
    */
-  agentId = "";
+  agentId?: string;
 
   /**
    * @generated from field: string error = 2;
@@ -666,7 +666,7 @@ export class SubagentAwaitError extends Message<SubagentAwaitError> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.SubagentAwaitError";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
@@ -697,9 +697,9 @@ export class SubagentSuccess extends Message<SubagentSuccess> {
   agentId = "";
 
   /**
-   * @generated from field: string final_message = 2;
+   * @generated from field: optional string final_message = 2;
    */
-  finalMessage = "";
+  finalMessage?: string;
 
   /**
    * @generated from field: int32 tool_call_count = 3;
@@ -712,9 +712,9 @@ export class SubagentSuccess extends Message<SubagentSuccess> {
   backgroundReason = SubagentBackgroundReason.UNSPECIFIED;
 
   /**
-   * @generated from field: string transcript_path = 5;
+   * @generated from field: optional string transcript_path = 5;
    */
-  transcriptPath = "";
+  transcriptPath?: string;
 
   constructor(data?: PartialMessage<SubagentSuccess>) {
     super();
@@ -725,10 +725,10 @@ export class SubagentSuccess extends Message<SubagentSuccess> {
   static readonly typeName = "agent.v1.SubagentSuccess";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "final_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "final_message", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "tool_call_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 4, name: "background_reason", kind: "enum", T: proto3.getEnumType(SubagentBackgroundReason) },
-    { no: 5, name: "transcript_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "transcript_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SubagentSuccess {
@@ -753,9 +753,9 @@ export class SubagentSuccess extends Message<SubagentSuccess> {
  */
 export class SubagentError extends Message<SubagentError> {
   /**
-   * @generated from field: string agent_id = 1;
+   * @generated from field: optional string agent_id = 1;
    */
-  agentId = "";
+  agentId?: string;
 
   /**
    * @generated from field: string error = 2;
@@ -770,7 +770,7 @@ export class SubagentError extends Message<SubagentError> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.SubagentError";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 

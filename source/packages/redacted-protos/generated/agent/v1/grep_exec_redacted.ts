@@ -15,8 +15,8 @@ function toRedactedGrepArgs(msg, privacyMode) {
   return {
     _privacyMode: privacyMode,
     pattern: createRedactedString(msg.pattern, DataClassification.CODE, "pattern", privacyMode),
-    path: createRedactedString(msg.path, DataClassification.PATH, "path", privacyMode),
-    glob: createRedactedString(msg.glob, DataClassification.PATH, "glob", privacyMode),
+    path: msg.path !== void 0 ? createRedactedString(msg.path, DataClassification.PATH, "path", privacyMode) : void 0,
+    glob: msg.glob !== void 0 ? createRedactedString(msg.glob, DataClassification.PATH, "glob", privacyMode) : void 0,
     outputMode: msg.outputMode,
     contextBefore: msg.contextBefore,
     contextAfter: msg.contextAfter,
@@ -38,8 +38,8 @@ function fromRedactedGrepArgs(msg, purpose, opts) {
   const enforcing = opts?.enforcing;
   return new GrepArgs({
     pattern: msg.pattern.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    path: msg.path.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    glob: msg.glob.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    path: msg.path?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    glob: msg.glob?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     outputMode: msg.outputMode,
     contextBefore: msg.contextBefore,
     contextAfter: msg.contextAfter,

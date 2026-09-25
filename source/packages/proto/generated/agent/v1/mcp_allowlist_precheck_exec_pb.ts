@@ -26,9 +26,9 @@ export class McpAllowlistPrecheckArgs extends Message<McpAllowlistPrecheckArgs> 
   toolName = "";
 
   /**
-   * @generated from field: string tool_call_id = 3;
+   * @generated from field: optional string tool_call_id = 3;
    */
-  toolCallId = "";
+  toolCallId?: string;
 
   constructor(data?: PartialMessage<McpAllowlistPrecheckArgs>) {
     super();
@@ -40,7 +40,7 @@ export class McpAllowlistPrecheckArgs extends Message<McpAllowlistPrecheckArgs> 
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "provider_identifier", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "tool_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): McpAllowlistPrecheckArgs {

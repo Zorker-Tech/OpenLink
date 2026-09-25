@@ -17,12 +17,12 @@ import { CodeResult } from "../../aiserver/v1/repository_pb.ts";
  */
 export class SemSearchToolCall extends Message<SemSearchToolCall> {
   /**
-   * @generated from field: agent.v1.SemSearchToolArgs args = 1;
+   * @generated from field: optional agent.v1.SemSearchToolArgs args = 1;
    */
   args?: SemSearchToolArgs;
 
   /**
-   * @generated from field: agent.v1.SemSearchToolResult result = 2;
+   * @generated from field: optional agent.v1.SemSearchToolResult result = 2;
    */
   result?: SemSearchToolResult;
 
@@ -34,8 +34,8 @@ export class SemSearchToolCall extends Message<SemSearchToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.SemSearchToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: SemSearchToolArgs },
-    { no: 2, name: "result", kind: "message", T: SemSearchToolResult },
+    { no: 1, name: "args", kind: "message", T: SemSearchToolArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: SemSearchToolResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SemSearchToolCall {

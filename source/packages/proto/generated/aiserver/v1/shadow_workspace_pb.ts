@@ -322,7 +322,7 @@ export class GetLintsForChangeRequest_File extends Message<GetLintsForChangeRequ
   finalContent = "";
 
   /**
-   * @generated from field: aiserver.v1.GetLintsForChangeRequest.File.RangeCollection get_all_lints_not_just_delta_lints_for_ranges_in_final_model = 4;
+   * @generated from field: optional aiserver.v1.GetLintsForChangeRequest.File.RangeCollection get_all_lints_not_just_delta_lints_for_ranges_in_final_model = 4;
    */
   getAllLintsNotJustDeltaLintsForRangesInFinalModel?: GetLintsForChangeRequest_File_RangeCollection;
 
@@ -337,7 +337,7 @@ export class GetLintsForChangeRequest_File extends Message<GetLintsForChangeRequ
     { no: 1, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "initial_content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "final_content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "get_all_lints_not_just_delta_lints_for_ranges_in_final_model", kind: "message", T: GetLintsForChangeRequest_File_RangeCollection },
+    { no: 4, name: "get_all_lints_not_just_delta_lints_for_ranges_in_final_model", kind: "message", T: GetLintsForChangeRequest_File_RangeCollection, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetLintsForChangeRequest_File {
@@ -516,7 +516,7 @@ export class ShadowHealthCheckResponse extends Message<ShadowHealthCheckResponse
  */
 export class SwCallClientSideV2ToolRequest extends Message<SwCallClientSideV2ToolRequest> {
   /**
-   * @generated from field: aiserver.v1.ClientSideToolV2Call tool_call = 1;
+   * @generated from field: optional aiserver.v1.ClientSideToolV2Call tool_call = 1;
    */
   toolCall?: ClientSideToolV2Call;
 
@@ -533,7 +533,7 @@ export class SwCallClientSideV2ToolRequest extends Message<SwCallClientSideV2Too
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SwCallClientSideV2ToolRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "tool_call", kind: "message", T: ClientSideToolV2Call },
+    { no: 1, name: "tool_call", kind: "message", T: ClientSideToolV2Call, opt: true },
     { no: 2, name: "composer_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
@@ -559,7 +559,7 @@ export class SwCallClientSideV2ToolRequest extends Message<SwCallClientSideV2Too
  */
 export class SwCallClientSideV2ToolResponse extends Message<SwCallClientSideV2ToolResponse> {
   /**
-   * @generated from field: aiserver.v1.ClientSideToolV2Result tool_result = 1;
+   * @generated from field: optional aiserver.v1.ClientSideToolV2Result tool_result = 1;
    */
   toolResult?: ClientSideToolV2Result;
 
@@ -571,7 +571,7 @@ export class SwCallClientSideV2ToolResponse extends Message<SwCallClientSideV2To
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SwCallClientSideV2ToolResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "tool_result", kind: "message", T: ClientSideToolV2Result },
+    { no: 1, name: "tool_result", kind: "message", T: ClientSideToolV2Result, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SwCallClientSideV2ToolResponse {
@@ -596,7 +596,7 @@ export class SwCallClientSideV2ToolResponse extends Message<SwCallClientSideV2To
  */
 export class SwCallDiagnosticsExecutorRequest extends Message<SwCallDiagnosticsExecutorRequest> {
   /**
-   * @generated from field: agent.v1.DiagnosticsArgs diagnostics_args = 1;
+   * @generated from field: optional agent.v1.DiagnosticsArgs diagnostics_args = 1;
    */
   diagnosticsArgs?: DiagnosticsArgs;
 
@@ -608,7 +608,7 @@ export class SwCallDiagnosticsExecutorRequest extends Message<SwCallDiagnosticsE
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SwCallDiagnosticsExecutorRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "diagnostics_args", kind: "message", T: DiagnosticsArgs },
+    { no: 1, name: "diagnostics_args", kind: "message", T: DiagnosticsArgs, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SwCallDiagnosticsExecutorRequest {
@@ -633,7 +633,7 @@ export class SwCallDiagnosticsExecutorRequest extends Message<SwCallDiagnosticsE
  */
 export class SwCallDiagnosticsExecutorResponse extends Message<SwCallDiagnosticsExecutorResponse> {
   /**
-   * @generated from field: agent.v1.DiagnosticsResult diagnostics_result = 1;
+   * @generated from field: optional agent.v1.DiagnosticsResult diagnostics_result = 1;
    */
   diagnosticsResult?: DiagnosticsResult;
 
@@ -645,7 +645,7 @@ export class SwCallDiagnosticsExecutorResponse extends Message<SwCallDiagnostics
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SwCallDiagnosticsExecutorResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "diagnostics_result", kind: "message", T: DiagnosticsResult },
+    { no: 1, name: "diagnostics_result", kind: "message", T: DiagnosticsResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SwCallDiagnosticsExecutorResponse {
@@ -670,14 +670,14 @@ export class SwCallDiagnosticsExecutorResponse extends Message<SwCallDiagnostics
  */
 export class SwCompileRepoIncludeExcludePatternsRequest extends Message<SwCompileRepoIncludeExcludePatternsRequest> {
   /**
-   * @generated from field: string include_pattern = 1;
+   * @generated from field: optional string include_pattern = 1;
    */
-  includePattern = "";
+  includePattern?: string;
 
   /**
-   * @generated from field: string exclude_pattern = 2;
+   * @generated from field: optional string exclude_pattern = 2;
    */
-  excludePattern = "";
+  excludePattern?: string;
 
   /**
    * @generated from field: string path_encryption_key = 3;
@@ -685,7 +685,7 @@ export class SwCompileRepoIncludeExcludePatternsRequest extends Message<SwCompil
   pathEncryptionKey = "";
 
   /**
-   * @generated from field: aiserver.v1.RepositoryInfo repository_info = 4;
+   * @generated from field: optional aiserver.v1.RepositoryInfo repository_info = 4;
    */
   repositoryInfo?: RepositoryInfo;
 
@@ -697,10 +697,10 @@ export class SwCompileRepoIncludeExcludePatternsRequest extends Message<SwCompil
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SwCompileRepoIncludeExcludePatternsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "include_pattern", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "exclude_pattern", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "include_pattern", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "exclude_pattern", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "path_encryption_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "repository_info", kind: "message", T: RepositoryInfo },
+    { no: 4, name: "repository_info", kind: "message", T: RepositoryInfo, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SwCompileRepoIncludeExcludePatternsRequest {
@@ -725,14 +725,14 @@ export class SwCompileRepoIncludeExcludePatternsRequest extends Message<SwCompil
  */
 export class SwCompileRepoIncludeExcludePatternsResponse extends Message<SwCompileRepoIncludeExcludePatternsResponse> {
   /**
-   * @generated from field: string glob_filter = 1;
+   * @generated from field: optional string glob_filter = 1;
    */
-  globFilter = "";
+  globFilter?: string;
 
   /**
-   * @generated from field: string not_glob_filter = 2;
+   * @generated from field: optional string not_glob_filter = 2;
    */
-  notGlobFilter = "";
+  notGlobFilter?: string;
 
   constructor(data?: PartialMessage<SwCompileRepoIncludeExcludePatternsResponse>) {
     super();
@@ -742,8 +742,8 @@ export class SwCompileRepoIncludeExcludePatternsResponse extends Message<SwCompi
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SwCompileRepoIncludeExcludePatternsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "glob_filter", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "not_glob_filter", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "glob_filter", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "not_glob_filter", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SwCompileRepoIncludeExcludePatternsResponse {
@@ -799,7 +799,7 @@ export class SwGetEnvironmentInfoRequest extends Message<SwGetEnvironmentInfoReq
  */
 export class SwGetEnvironmentInfoResponse extends Message<SwGetEnvironmentInfoResponse> {
   /**
-   * @generated from field: aiserver.v1.EnvironmentInfo environment_info = 1;
+   * @generated from field: optional aiserver.v1.EnvironmentInfo environment_info = 1;
    */
   environmentInfo?: EnvironmentInfo;
 
@@ -811,7 +811,7 @@ export class SwGetEnvironmentInfoResponse extends Message<SwGetEnvironmentInfoRe
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SwGetEnvironmentInfoResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "environment_info", kind: "message", T: EnvironmentInfo },
+    { no: 1, name: "environment_info", kind: "message", T: EnvironmentInfo, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SwGetEnvironmentInfoResponse {
@@ -867,7 +867,7 @@ export class SwGetExplicitContextRequest extends Message<SwGetExplicitContextReq
  */
 export class SwGetExplicitContextResponse extends Message<SwGetExplicitContextResponse> {
   /**
-   * @generated from field: aiserver.v1.ExplicitContext explicit_context = 1;
+   * @generated from field: optional aiserver.v1.ExplicitContext explicit_context = 1;
    */
   explicitContext?: ExplicitContext;
 
@@ -879,7 +879,7 @@ export class SwGetExplicitContextResponse extends Message<SwGetExplicitContextRe
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SwGetExplicitContextResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "explicit_context", kind: "message", T: ExplicitContext },
+    { no: 1, name: "explicit_context", kind: "message", T: ExplicitContext, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SwGetExplicitContextResponse {
@@ -978,9 +978,9 @@ export class SwGetLinterErrorsResponse extends Message<SwGetLinterErrorsResponse
  */
 export class SwGetMcpToolsRequest extends Message<SwGetMcpToolsRequest> {
   /**
-   * @generated from field: string browser_integration_preference = 1;
+   * @generated from field: optional string browser_integration_preference = 1;
    */
-  browserIntegrationPreference = "";
+  browserIntegrationPreference?: string;
 
   constructor(data?: PartialMessage<SwGetMcpToolsRequest>) {
     super();
@@ -990,7 +990,7 @@ export class SwGetMcpToolsRequest extends Message<SwGetMcpToolsRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SwGetMcpToolsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "browser_integration_preference", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "browser_integration_preference", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SwGetMcpToolsRequest {
@@ -1120,7 +1120,7 @@ export class SwProvideTemporaryAccessTokenResponse extends Message<SwProvideTemp
  */
 export class SwSyncIndexRequest extends Message<SwSyncIndexRequest> {
   /**
-   * @generated from field: aiserver.v1.RepositoryInfo repository_info = 1;
+   * @generated from field: optional aiserver.v1.RepositoryInfo repository_info = 1;
    */
   repositoryInfo?: RepositoryInfo;
 
@@ -1130,9 +1130,9 @@ export class SwSyncIndexRequest extends Message<SwSyncIndexRequest> {
   pathEncryptionKey = "";
 
   /**
-   * @generated from field: double indexing_progress_threshold = 3;
+   * @generated from field: optional double indexing_progress_threshold = 3;
    */
-  indexingProgressThreshold = 0;
+  indexingProgressThreshold?: number;
 
   constructor(data?: PartialMessage<SwSyncIndexRequest>) {
     super();
@@ -1142,9 +1142,9 @@ export class SwSyncIndexRequest extends Message<SwSyncIndexRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SwSyncIndexRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repository_info", kind: "message", T: RepositoryInfo },
+    { no: 1, name: "repository_info", kind: "message", T: RepositoryInfo, opt: true },
     { no: 2, name: "path_encryption_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "indexing_progress_threshold", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
+    { no: 3, name: "indexing_progress_threshold", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SwSyncIndexRequest {

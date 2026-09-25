@@ -20,8 +20,8 @@ message McpAuthRequestResponse {
 }
 
 message McpAuthToolCall {
-  .agent.v1.McpAuthArgs args = 1 [json_name = "args"];
-  .agent.v1.McpAuthResult result = 2 [json_name = "result"];
+  optional .agent.v1.McpAuthArgs args = 1 [json_name = "args"];
+  optional .agent.v1.McpAuthResult result = 2 [json_name = "result"];
 }
 
 message McpAuthArgs {
@@ -50,5 +50,5 @@ message McpAuthRejected {
 }
 
 message McpAuthRequestQuery {
-  .agent.v1.McpAuthArgs args = 1 [json_name = "args"];
+  optional .agent.v1.McpAuthArgs args = 1 [json_name = "args"];
 }

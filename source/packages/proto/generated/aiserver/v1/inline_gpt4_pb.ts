@@ -18,7 +18,7 @@ import { RepositoryInfo } from "./repository_pb.ts";
  */
 export class InlineGPT4PromptProtoV1 extends Message<InlineGPT4PromptProtoV1> {
   /**
-   * @generated from field: aiserver.v1.CurrentFileInfo current_file = 1;
+   * @generated from field: optional aiserver.v1.CurrentFileInfo current_file = 1;
    */
   currentFile?: CurrentFileInfo;
 
@@ -30,7 +30,7 @@ export class InlineGPT4PromptProtoV1 extends Message<InlineGPT4PromptProtoV1> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.InlineGPT4PromptProtoV1";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "current_file", kind: "message", T: CurrentFileInfo },
+    { no: 1, name: "current_file", kind: "message", T: CurrentFileInfo, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): InlineGPT4PromptProtoV1 {
@@ -55,7 +55,7 @@ export class InlineGPT4PromptProtoV1 extends Message<InlineGPT4PromptProtoV1> {
  */
 export class StreamInlineLongCompletionRequest extends Message<StreamInlineLongCompletionRequest> {
   /**
-   * @generated from field: aiserver.v1.CurrentFileInfo current_file = 1;
+   * @generated from field: optional aiserver.v1.CurrentFileInfo current_file = 1;
    */
   currentFile?: CurrentFileInfo;
 
@@ -70,17 +70,17 @@ export class StreamInlineLongCompletionRequest extends Message<StreamInlineLongC
   contextBlocks: StreamInlineLongCompletionRequest_ContextBlock[] = [];
 
   /**
-   * @generated from field: aiserver.v1.ExplicitContext explicit_context = 13;
+   * @generated from field: optional aiserver.v1.ExplicitContext explicit_context = 13;
    */
   explicitContext?: ExplicitContext;
 
   /**
-   * @generated from field: aiserver.v1.ModelDetails model_details = 14;
+   * @generated from field: optional aiserver.v1.ModelDetails model_details = 14;
    */
   modelDetails?: ModelDetails;
 
   /**
-   * @generated from field: aiserver.v1.LinterErrors linter_errors = 15;
+   * @generated from field: optional aiserver.v1.LinterErrors linter_errors = 15;
    */
   linterErrors?: LinterErrors;
 
@@ -92,12 +92,12 @@ export class StreamInlineLongCompletionRequest extends Message<StreamInlineLongC
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.StreamInlineLongCompletionRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "current_file", kind: "message", T: CurrentFileInfo },
+    { no: 1, name: "current_file", kind: "message", T: CurrentFileInfo, opt: true },
     { no: 6, name: "repositories", kind: "message", T: RepositoryInfo, repeated: true },
     { no: 7, name: "context_blocks", kind: "message", T: StreamInlineLongCompletionRequest_ContextBlock, repeated: true },
-    { no: 13, name: "explicit_context", kind: "message", T: ExplicitContext },
-    { no: 14, name: "model_details", kind: "message", T: ModelDetails },
-    { no: 15, name: "linter_errors", kind: "message", T: LinterErrors },
+    { no: 13, name: "explicit_context", kind: "message", T: ExplicitContext, opt: true },
+    { no: 14, name: "model_details", kind: "message", T: ModelDetails, opt: true },
+    { no: 15, name: "linter_errors", kind: "message", T: LinterErrors, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StreamInlineLongCompletionRequest {

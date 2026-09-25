@@ -26,7 +26,7 @@ export class McpToolDefinition extends Message<McpToolDefinition> {
   description = "";
 
   /**
-   * @generated from field: google.protobuf.Value input_schema = 3;
+   * @generated from field: optional google.protobuf.Value input_schema = 3;
    */
   inputSchema?: Value;
 
@@ -41,9 +41,9 @@ export class McpToolDefinition extends Message<McpToolDefinition> {
   toolName = "";
 
   /**
-   * @generated from field: string input_schema_json = 6;
+   * @generated from field: optional string input_schema_json = 6;
    */
-  inputSchemaJson = "";
+  inputSchemaJson?: string;
 
   constructor(data?: PartialMessage<McpToolDefinition>) {
     super();
@@ -55,10 +55,10 @@ export class McpToolDefinition extends Message<McpToolDefinition> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "input_schema", kind: "message", T: Value },
+    { no: 3, name: "input_schema", kind: "message", T: Value, opt: true },
     { no: 4, name: "provider_identifier", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "tool_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "input_schema_json", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 6, name: "input_schema_json", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): McpToolDefinition {
@@ -234,14 +234,14 @@ export class McpDescriptor extends Message<McpDescriptor> {
   serverIdentifier = "";
 
   /**
-   * @generated from field: string folder_path = 3;
+   * @generated from field: optional string folder_path = 3;
    */
-  folderPath = "";
+  folderPath?: string;
 
   /**
-   * @generated from field: string server_use_instructions = 4;
+   * @generated from field: optional string server_use_instructions = 4;
    */
-  serverUseInstructions = "";
+  serverUseInstructions?: string;
 
   /**
    * @generated from field: repeated agent.v1.McpToolDescriptor tools = 5;
@@ -249,24 +249,24 @@ export class McpDescriptor extends Message<McpDescriptor> {
   tools: McpToolDescriptor[] = [];
 
   /**
-   * @generated from field: string plugin = 7;
+   * @generated from field: optional string plugin = 7;
    */
-  plugin = "";
+  plugin?: string;
 
   /**
-   * @generated from field: string marketplace = 8;
+   * @generated from field: optional string marketplace = 8;
    */
-  marketplace = "";
+  marketplace?: string;
 
   /**
-   * @generated from field: string plugin_db_id = 9;
+   * @generated from field: optional string plugin_db_id = 9;
    */
-  pluginDbId = "";
+  pluginDbId?: string;
 
   /**
-   * @generated from field: string marketplace_id = 10;
+   * @generated from field: optional string marketplace_id = 10;
    */
-  marketplaceId = "";
+  marketplaceId?: string;
 
   constructor(data?: PartialMessage<McpDescriptor>) {
     super();
@@ -278,13 +278,13 @@ export class McpDescriptor extends Message<McpDescriptor> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "server_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "server_identifier", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "folder_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "server_use_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "folder_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "server_use_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 5, name: "tools", kind: "message", T: McpToolDescriptor, repeated: true },
-    { no: 7, name: "plugin", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "marketplace", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "plugin_db_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "marketplace_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 7, name: "plugin", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "marketplace", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 9, name: "plugin_db_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 10, name: "marketplace_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): McpDescriptor {
@@ -314,29 +314,29 @@ export class McpToolDescriptor extends Message<McpToolDescriptor> {
   toolName = "";
 
   /**
-   * @generated from field: string definition_path = 2;
+   * @generated from field: optional string definition_path = 2;
    */
-  definitionPath = "";
+  definitionPath?: string;
 
   /**
-   * @generated from field: string description = 3;
+   * @generated from field: optional string description = 3;
    */
-  description = "";
+  description?: string;
 
   /**
-   * @generated from field: google.protobuf.Value input_schema = 4;
+   * @generated from field: optional google.protobuf.Value input_schema = 4;
    */
   inputSchema?: Value;
 
   /**
-   * @generated from field: string input_schema_json = 5;
+   * @generated from field: optional string input_schema_json = 5;
    */
-  inputSchemaJson = "";
+  inputSchemaJson?: string;
 
   /**
-   * @generated from field: string annotations_json = 6;
+   * @generated from field: optional string annotations_json = 6;
    */
-  annotationsJson = "";
+  annotationsJson?: string;
 
   constructor(data?: PartialMessage<McpToolDescriptor>) {
     super();
@@ -347,11 +347,11 @@ export class McpToolDescriptor extends Message<McpToolDescriptor> {
   static readonly typeName = "agent.v1.McpToolDescriptor";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "tool_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "definition_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "input_schema", kind: "message", T: Value },
-    { no: 5, name: "input_schema_json", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "annotations_json", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "definition_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "input_schema", kind: "message", T: Value, opt: true },
+    { no: 5, name: "input_schema_json", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "annotations_json", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): McpToolDescriptor {

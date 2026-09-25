@@ -16,9 +16,9 @@ import { Message, proto3 } from "@bufbuild/protobuf";
  */
 export class McpOAuthStoredData extends Message<McpOAuthStoredData> {
   /**
-   * @generated from field: string refresh_token = 1;
+   * @generated from field: optional string refresh_token = 1;
    */
-  refreshToken = "";
+  refreshToken?: string;
 
   /**
    * @generated from field: string client_id = 2;
@@ -26,9 +26,9 @@ export class McpOAuthStoredData extends Message<McpOAuthStoredData> {
   clientId = "";
 
   /**
-   * @generated from field: string client_secret = 3;
+   * @generated from field: optional string client_secret = 3;
    */
-  clientSecret = "";
+  clientSecret?: string;
 
   /**
    * @generated from field: repeated string redirect_uris = 4;
@@ -36,9 +36,9 @@ export class McpOAuthStoredData extends Message<McpOAuthStoredData> {
   redirectUris: string[] = [];
 
   /**
-   * @generated from field: string access_token = 5;
+   * @generated from field: optional string access_token = 5;
    */
-  accessToken = "";
+  accessToken?: string;
 
   constructor(data?: PartialMessage<McpOAuthStoredData>) {
     super();
@@ -48,11 +48,11 @@ export class McpOAuthStoredData extends Message<McpOAuthStoredData> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.McpOAuthStoredData";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "refresh_token", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "refresh_token", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "client_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "client_secret", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "client_secret", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 4, name: "redirect_uris", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 5, name: "access_token", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "access_token", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): McpOAuthStoredData {
@@ -211,7 +211,7 @@ export class MCPServerRegistration extends Message<MCPServerRegistration> {
   domains: string[] = [];
 
   /**
-   * @generated from field: aiserver.v1.MCPKnownServerInfo info = 2;
+   * @generated from field: optional aiserver.v1.MCPKnownServerInfo info = 2;
    */
   info?: MCPKnownServerInfo;
 
@@ -224,7 +224,7 @@ export class MCPServerRegistration extends Message<MCPServerRegistration> {
   static readonly typeName = "aiserver.v1.MCPServerRegistration";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "domains", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 2, name: "info", kind: "message", T: MCPKnownServerInfo },
+    { no: 2, name: "info", kind: "message", T: MCPKnownServerInfo, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): MCPServerRegistration {
@@ -254,9 +254,9 @@ export class McpOAuthStoredClientInfo extends Message<McpOAuthStoredClientInfo> 
   clientId = "";
 
   /**
-   * @generated from field: string client_secret = 2;
+   * @generated from field: optional string client_secret = 2;
    */
-  clientSecret = "";
+  clientSecret?: string;
 
   /**
    * @generated from field: repeated string redirect_uris = 3;
@@ -272,7 +272,7 @@ export class McpOAuthStoredClientInfo extends Message<McpOAuthStoredClientInfo> 
   static readonly typeName = "aiserver.v1.McpOAuthStoredClientInfo";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "client_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "client_secret", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "client_secret", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "redirect_uris", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
 

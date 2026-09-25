@@ -58,14 +58,14 @@ export class ExecServerMessage extends Message<ExecServerMessage> {
   execId = "";
 
   /**
-   * @generated from field: agent.v1.SpanContext span_context = 19;
+   * @generated from field: optional agent.v1.SpanContext span_context = 19;
    */
   spanContext?: SpanContext;
 
   /**
-   * @generated from field: bool accept_hook_additional_contexts = 55;
+   * @generated from field: optional bool accept_hook_additional_contexts = 55;
    */
-  acceptHookAdditionalContexts = false;
+  acceptHookAdditionalContexts?: boolean;
 
   /**
    * @generated from oneof agent.v1.ExecServerMessage.message
@@ -328,8 +328,8 @@ export class ExecServerMessage extends Message<ExecServerMessage> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "id", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
     { no: 15, name: "exec_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 19, name: "span_context", kind: "message", T: SpanContext },
-    { no: 55, name: "accept_hook_additional_contexts", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 19, name: "span_context", kind: "message", T: SpanContext, opt: true },
+    { no: 55, name: "accept_hook_additional_contexts", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 2, name: "shell_args", kind: "message", T: ShellArgs, oneof: "message" },
     { no: 3, name: "write_args", kind: "message", T: WriteArgs, oneof: "message" },
     { no: 4, name: "delete_args", kind: "message", T: DeleteArgs, oneof: "message" },
@@ -395,7 +395,7 @@ export class ExecServerMessage extends Message<ExecServerMessage> {
  */
 export class ExecuteHookArgs extends Message<ExecuteHookArgs> {
   /**
-   * @generated from field: agent.v1.ExecuteHookRequest request = 1;
+   * @generated from field: optional agent.v1.ExecuteHookRequest request = 1;
    */
   request?: ExecuteHookRequest;
 
@@ -407,7 +407,7 @@ export class ExecuteHookArgs extends Message<ExecuteHookArgs> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.ExecuteHookArgs";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "request", kind: "message", T: ExecuteHookRequest },
+    { no: 1, name: "request", kind: "message", T: ExecuteHookRequest, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ExecuteHookArgs {
@@ -442,14 +442,14 @@ export class SpanContext extends Message<SpanContext> {
   spanId = "";
 
   /**
-   * @generated from field: uint32 trace_flags = 3;
+   * @generated from field: optional uint32 trace_flags = 3;
    */
-  traceFlags = 0;
+  traceFlags?: number;
 
   /**
-   * @generated from field: string trace_state = 4;
+   * @generated from field: optional string trace_state = 4;
    */
-  traceState = "";
+  traceState?: string;
 
   constructor(data?: PartialMessage<SpanContext>) {
     super();
@@ -461,8 +461,8 @@ export class SpanContext extends Message<SpanContext> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "trace_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "span_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "trace_flags", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 4, name: "trace_state", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "trace_flags", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
+    { no: 4, name: "trace_state", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SpanContext {
@@ -603,9 +603,9 @@ export class ExecClientMessage extends Message<ExecClientMessage> {
   execId = "";
 
   /**
-   * @generated from field: int32 local_execution_time_ms = 39;
+   * @generated from field: optional int32 local_execution_time_ms = 39;
    */
-  localExecutionTimeMs = 0;
+  localExecutionTimeMs?: number;
 
   /**
    * @generated from field: repeated agent.v1.HookAdditionalContext hook_additional_contexts = 45;
@@ -873,7 +873,7 @@ export class ExecClientMessage extends Message<ExecClientMessage> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "id", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
     { no: 15, name: "exec_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 39, name: "local_execution_time_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 39, name: "local_execution_time_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 45, name: "hook_additional_contexts", kind: "message", T: HookAdditionalContext, repeated: true },
     { no: 2, name: "shell_result", kind: "message", T: ShellResult, oneof: "message" },
     { no: 3, name: "write_result", kind: "message", T: WriteResult, oneof: "message" },
@@ -1044,14 +1044,14 @@ export class ExecClientThrow extends Message<ExecClientThrow> {
   error = "";
 
   /**
-   * @generated from field: string stack_trace = 3;
+   * @generated from field: optional string stack_trace = 3;
    */
-  stackTrace = "";
+  stackTrace?: string;
 
   /**
-   * @generated from field: string error_code = 4;
+   * @generated from field: optional string error_code = 4;
    */
-  errorCode = "";
+  errorCode?: string;
 
   constructor(data?: PartialMessage<ExecClientThrow>) {
     super();
@@ -1063,8 +1063,8 @@ export class ExecClientThrow extends Message<ExecClientThrow> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "id", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
     { no: 2, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "stack_trace", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "error_code", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "stack_trace", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "error_code", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ExecClientThrow {
@@ -1126,7 +1126,7 @@ export class ExecClientHeartbeat extends Message<ExecClientHeartbeat> {
  */
 export class ExecuteHookResult extends Message<ExecuteHookResult> {
   /**
-   * @generated from field: agent.v1.ExecuteHookResponse response = 1;
+   * @generated from field: optional agent.v1.ExecuteHookResponse response = 1;
    */
   response?: ExecuteHookResponse;
 
@@ -1138,7 +1138,7 @@ export class ExecuteHookResult extends Message<ExecuteHookResult> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.ExecuteHookResult";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "response", kind: "message", T: ExecuteHookResponse },
+    { no: 1, name: "response", kind: "message", T: ExecuteHookResponse, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ExecuteHookResult {

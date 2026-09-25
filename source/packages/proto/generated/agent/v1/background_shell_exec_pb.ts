@@ -207,12 +207,12 @@ export class BackgroundShellSpawnArgs extends Message<BackgroundShellSpawnArgs> 
   toolCallId = "";
 
   /**
-   * @generated from field: agent.v1.ShellCommandParsingResult parsing_result = 4;
+   * @generated from field: optional agent.v1.ShellCommandParsingResult parsing_result = 4;
    */
   parsingResult?: ShellCommandParsingResult;
 
   /**
-   * @generated from field: agent.v1.SandboxPolicy sandbox_policy = 5;
+   * @generated from field: optional agent.v1.SandboxPolicy sandbox_policy = 5;
    */
   sandboxPolicy?: SandboxPolicy;
 
@@ -222,27 +222,27 @@ export class BackgroundShellSpawnArgs extends Message<BackgroundShellSpawnArgs> 
   enableWriteShellStdinTool = false;
 
   /**
-   * @generated from field: string description = 7;
+   * @generated from field: optional string description = 7;
    */
-  description = "";
+  description?: string;
 
   /**
-   * @generated from field: agent.v1.CommandClassifierResult classifier_result = 8;
+   * @generated from field: optional agent.v1.CommandClassifierResult classifier_result = 8;
    */
   classifierResult?: CommandClassifierResult;
 
   /**
-   * @generated from field: agent.v1.ShellOutputNotificationConfig output_notification = 9;
+   * @generated from field: optional agent.v1.ShellOutputNotificationConfig output_notification = 9;
    */
   outputNotification?: ShellOutputNotificationConfig;
 
   /**
-   * @generated from field: agent.v1.SmartModeApproval smart_mode_approval = 10;
+   * @generated from field: optional agent.v1.SmartModeApproval smart_mode_approval = 10;
    */
   smartModeApproval?: SmartModeApproval;
 
   /**
-   * @generated from field: agent.v1.ShellHookApprovalRequirement hook_approval_requirement = 11;
+   * @generated from field: optional agent.v1.ShellHookApprovalRequirement hook_approval_requirement = 11;
    */
   hookApprovalRequirement?: ShellHookApprovalRequirement;
 
@@ -252,9 +252,9 @@ export class BackgroundShellSpawnArgs extends Message<BackgroundShellSpawnArgs> 
   skipApproval = false;
 
   /**
-   * @generated from field: string conversation_id = 13;
+   * @generated from field: optional string conversation_id = 13;
    */
-  conversationId = "";
+  conversationId?: string;
 
   /**
    * @generated from field: repeated string admin_command_denylist = 14;
@@ -272,16 +272,16 @@ export class BackgroundShellSpawnArgs extends Message<BackgroundShellSpawnArgs> 
     { no: 1, name: "command", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "working_directory", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "parsing_result", kind: "message", T: ShellCommandParsingResult },
-    { no: 5, name: "sandbox_policy", kind: "message", T: SandboxPolicy },
+    { no: 4, name: "parsing_result", kind: "message", T: ShellCommandParsingResult, opt: true },
+    { no: 5, name: "sandbox_policy", kind: "message", T: SandboxPolicy, opt: true },
     { no: 6, name: "enable_write_shell_stdin_tool", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 7, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "classifier_result", kind: "message", T: CommandClassifierResult },
-    { no: 9, name: "output_notification", kind: "message", T: ShellOutputNotificationConfig },
-    { no: 10, name: "smart_mode_approval", kind: "message", T: SmartModeApproval },
-    { no: 11, name: "hook_approval_requirement", kind: "message", T: ShellHookApprovalRequirement },
+    { no: 7, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "classifier_result", kind: "message", T: CommandClassifierResult, opt: true },
+    { no: 9, name: "output_notification", kind: "message", T: ShellOutputNotificationConfig, opt: true },
+    { no: 10, name: "smart_mode_approval", kind: "message", T: SmartModeApproval, opt: true },
+    { no: 11, name: "hook_approval_requirement", kind: "message", T: ShellHookApprovalRequirement, opt: true },
     { no: 12, name: "skip_approval", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 13, name: "conversation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 13, name: "conversation_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 14, name: "admin_command_denylist", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
 
@@ -393,9 +393,9 @@ export class BackgroundShellSpawnSuccess extends Message<BackgroundShellSpawnSuc
   workingDirectory = "";
 
   /**
-   * @generated from field: uint32 pid = 4;
+   * @generated from field: optional uint32 pid = 4;
    */
-  pid = 0;
+  pid?: number;
 
   constructor(data?: PartialMessage<BackgroundShellSpawnSuccess>) {
     super();
@@ -408,7 +408,7 @@ export class BackgroundShellSpawnSuccess extends Message<BackgroundShellSpawnSuc
     { no: 1, name: "shell_id", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
     { no: 2, name: "command", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "working_directory", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "pid", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 4, name: "pid", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BackgroundShellSpawnSuccess {

@@ -270,12 +270,12 @@ export class GenerateImageRequestResponse_Rejected extends Message<GenerateImage
  */
 export class GenerateImageToolCall extends Message<GenerateImageToolCall> {
   /**
-   * @generated from field: agent.v1.GenerateImageArgs args = 1;
+   * @generated from field: optional agent.v1.GenerateImageArgs args = 1;
    */
   args?: GenerateImageArgs;
 
   /**
-   * @generated from field: agent.v1.GenerateImageResult result = 2;
+   * @generated from field: optional agent.v1.GenerateImageResult result = 2;
    */
   result?: GenerateImageResult;
 
@@ -287,8 +287,8 @@ export class GenerateImageToolCall extends Message<GenerateImageToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.GenerateImageToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: GenerateImageArgs },
-    { no: 2, name: "result", kind: "message", T: GenerateImageResult },
+    { no: 1, name: "args", kind: "message", T: GenerateImageArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: GenerateImageResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GenerateImageToolCall {
@@ -318,9 +318,9 @@ export class GenerateImageArgs extends Message<GenerateImageArgs> {
   description = "";
 
   /**
-   * @generated from field: string file_path = 2;
+   * @generated from field: optional string file_path = 2;
    */
-  filePath = "";
+  filePath?: string;
 
   /**
    * @generated from field: repeated string reference_image_paths = 5;
@@ -328,9 +328,9 @@ export class GenerateImageArgs extends Message<GenerateImageArgs> {
   referenceImagePaths: string[] = [];
 
   /**
-   * @generated from field: string aspect_ratio = 6;
+   * @generated from field: optional string aspect_ratio = 6;
    */
-  aspectRatio = "";
+  aspectRatio?: string;
 
   constructor(data?: PartialMessage<GenerateImageArgs>) {
     super();
@@ -341,9 +341,9 @@ export class GenerateImageArgs extends Message<GenerateImageArgs> {
   static readonly typeName = "agent.v1.GenerateImageArgs";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "file_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "file_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 5, name: "reference_image_paths", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 6, name: "aspect_ratio", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 6, name: "aspect_ratio", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GenerateImageArgs {
@@ -368,7 +368,7 @@ export class GenerateImageArgs extends Message<GenerateImageArgs> {
  */
 export class GenerateImageRequestQuery extends Message<GenerateImageRequestQuery> {
   /**
-   * @generated from field: agent.v1.GenerateImageArgs args = 1;
+   * @generated from field: optional agent.v1.GenerateImageArgs args = 1;
    */
   args?: GenerateImageArgs;
 
@@ -385,7 +385,7 @@ export class GenerateImageRequestQuery extends Message<GenerateImageRequestQuery
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.GenerateImageRequestQuery";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: GenerateImageArgs },
+    { no: 1, name: "args", kind: "message", T: GenerateImageArgs, opt: true },
     { no: 2, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 

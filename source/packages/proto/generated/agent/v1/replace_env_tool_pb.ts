@@ -178,12 +178,12 @@ export class ReplaceEnvFailure extends Message<ReplaceEnvFailure> {
  */
 export class ReplaceEnvToolCall extends Message<ReplaceEnvToolCall> {
   /**
-   * @generated from field: agent.v1.ReplaceEnvArgs args = 1;
+   * @generated from field: optional agent.v1.ReplaceEnvArgs args = 1;
    */
   args?: ReplaceEnvArgs;
 
   /**
-   * @generated from field: agent.v1.ReplaceEnvResult result = 2;
+   * @generated from field: optional agent.v1.ReplaceEnvResult result = 2;
    */
   result?: ReplaceEnvResult;
 
@@ -200,8 +200,8 @@ export class ReplaceEnvToolCall extends Message<ReplaceEnvToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.ReplaceEnvToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: ReplaceEnvArgs },
-    { no: 2, name: "result", kind: "message", T: ReplaceEnvResult },
+    { no: 1, name: "args", kind: "message", T: ReplaceEnvArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: ReplaceEnvResult, opt: true },
     { no: 3, name: "associated_pod_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
@@ -227,7 +227,7 @@ export class ReplaceEnvToolCall extends Message<ReplaceEnvToolCall> {
  */
 export class ReplaceEnvArgs extends Message<ReplaceEnvArgs> {
   /**
-   * @generated from field: agent.v1.ReplaceEnvConfig config = 1;
+   * @generated from field: optional agent.v1.ReplaceEnvConfig config = 1;
    */
   config?: ReplaceEnvConfig;
 
@@ -249,7 +249,7 @@ export class ReplaceEnvArgs extends Message<ReplaceEnvArgs> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.ReplaceEnvArgs";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "config", kind: "message", T: ReplaceEnvConfig },
+    { no: 1, name: "config", kind: "message", T: ReplaceEnvConfig, opt: true },
     { no: 2, name: "mode", kind: "enum", T: proto3.getEnumType(ReplaceEnvMode) },
     { no: 3, name: "checkout_ref_overrides", kind: "message", T: RepoCheckoutRefOverride, repeated: true },
   ]);

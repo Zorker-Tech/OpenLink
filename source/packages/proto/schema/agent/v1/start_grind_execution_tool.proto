@@ -8,12 +8,12 @@ syntax = "proto3";
 package agent.v1;
 
 message StartGrindExecutionToolCall {
-  .agent.v1.StartGrindExecutionArgs args = 1 [json_name = "args"];
-  .agent.v1.StartGrindExecutionResult result = 2 [json_name = "result"];
+  optional .agent.v1.StartGrindExecutionArgs args = 1 [json_name = "args"];
+  optional .agent.v1.StartGrindExecutionResult result = 2 [json_name = "result"];
 }
 
 message StartGrindExecutionArgs {
-  string explanation = 1 [json_name = "explanation"];
+  optional string explanation = 1 [json_name = "explanation"];
   string tool_call_id = 2 [json_name = "toolCallId"];
 }
 
