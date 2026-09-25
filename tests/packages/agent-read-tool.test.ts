@@ -435,7 +435,7 @@ test("the rules that belong to the file are attached to the result and shown wit
   assert.equal(result.result.value.relatedCursorRules[0]?.fullPath, "/repo/.cursor/rules/typescript.md")
   assert.deepEqual(result.result.value.relatedCursorRulePaths, ["/repo/.cursor/rules/typescript.md"])
   const rendered = textOf(await tool.render(createContext(), result))
-  assert.match(rendered, /The following cursor rule files are relevant to the files you just read:/)
+  assert.match(rendered, /The following rule files are relevant to the files you just read:/)
   assert.match(rendered, /Always use strict types\./)
   assert.match(rendered, /Consider these rules if they affect your changes\./)
   assert.doesNotMatch(rendered, /Not about this file\./)

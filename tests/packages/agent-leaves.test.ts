@@ -254,7 +254,7 @@ test("search results are presented as known, and citations are asked for", () =>
 
 test("a saved command is fenced with its own name", () => {
   const rendered = renderSelectedCursorCommands([{ name: "commit", content: "do it" }])
-  assert.match(rendered!.text, /--- Cursor Command: commit ---/)
+  assert.match(rendered!.text, /--- Command: commit ---/)
   assert.match(rendered!.text, /--- End Command ---/)
 })
 

@@ -149,7 +149,7 @@ export function buildMcpCallSchemas({
   // A dynamic namespace carries the call's metadata in a side object; a first-party call carries it flat.
   const parametersSchema = useDynamicToolNamespaces
     ? modelIdentityParametersSchema.extend({
-      mcpDetails: mcpDetailsParametersSchema.optional().describe("MCP-specific call metadata. Set this only when invoking a tool from an external MCP namespace; omit it for first-party tools in the cursor namespace."),
+      mcpDetails: mcpDetailsParametersSchema.optional().describe("MCP-specific call metadata. Set this only when invoking a tool from an external MCP namespace; omit it for first-party tools in the slate namespace."),
       arguments: argumentsParameterSchema,
     })
     : modelIdentityParametersSchema.extend({
