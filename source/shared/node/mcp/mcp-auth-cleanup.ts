@@ -1,0 +1,10 @@
+/**
+ * Removing the credentials an earlier version kept beside the MCP configuration.
+ *
+ * The file is a leftover: a root that never had one is reported as not found, one that had them is cleaned and says how
+ * many were removed, and a removal that failed is reported as an error rather than as a clean sweep.
+ */
+import { readdir, rm } from "node:fs/promises"; import { join } from "node:path"; import { findSystemErrno } from "../../system-errno.ts";
+export const LEGACY_MCP_AUTH_FILENAME = "mcp-auth.json";
+export const isLegacyMcpAuthFile = (name: string): boolean => name === LEGACY_MCP_AUTH_FILENAME || name.startsWith(`${LEGACY_MCP_AUTH_FILENAME}.`);
+export async function cleanupLegacyMcpAuthCredentials(rootDir: string): Promise<{ outcome: "not_found" | "error" | "deleted"; removedCount: number }> { let entries: string[]; try { entries = await readdir(rootDir); } catch (error) { return { outcome: findSystemErrno(error) === "ENOENT" ? "not_found" : "error", removedCount: 0 }; } const files = entries.filter(isLegacyMcpAuthFile); if (files.length === 0) return { outcome: "not_found", removedCount: 0 }; let removedCount = 0, sawError = false; for (const name of files) { try { await rm(join(rootDir, name), { force: true }); removedCount += 1; } catch { sawError = true; } } return { outcome: sawError ? "error" : "deleted", removedCount }; }
