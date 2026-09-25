@@ -23,13 +23,13 @@ export function renderSelectedCursorCommands(
   if (cursorCommands.length === 0) return undefined
   const commandsText = cursorCommands.map(command => `
 
---- Cursor Command: ${command.name} ---
+--- Command: ${command.name} ---
 ${command.content}
 --- End Command ---`).join("\n")
   if (!commandsText) return undefined
   return {
     type: "text",
-    text: `<cursor_commands>${commandsText}
-</cursor_commands>`,
+    text: `<slate_commands>${commandsText}
+</slate_commands>`,
   }
 }
