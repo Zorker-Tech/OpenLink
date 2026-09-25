@@ -7,7 +7,7 @@ syntax = "proto3";
 
 package agent.v1;
 
-import "agent/v1/cursor_rules.proto";
+import "agent/v1/rules.proto";
 
 message ReadToolCall {
   .agent.v1.ReadToolArgs args = 1 [json_name = "args"];
