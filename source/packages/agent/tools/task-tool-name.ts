@@ -1,0 +1,22 @@
+/**
+ * What the tool that spawns a subagent is called, per model.
+ *
+ * The name is not a platform preference: it is what the model was trained to call, and a model asked to
+ * use a tool it has never seen will not use it. One family reaches it through the MCP route instead, and
+ * another was trained on a prompt version whose tool is named differently again.
+ */
+
+import { isCodexPromptVersion } from "./tool-support.ts"
+
+export interface TaskToolModelInfo {
+  readonly isComposer1?: boolean | undefined
+  readonly isComposer15?: boolean | undefined
+  readonly promptVersion: string
+}
+
+export function getTaskToolName(parentModelInfo: TaskToolModelInfo): string {
+  const isComposer = parentModelInfo.isComposer1 || parentModelInfo.isComposer15
+  if (isComposer) return "mcp_task"
+  if (isCodexPromptVersion(parentModelInfo.promptVersion)) return "Subagent"
+  return "Task"
+}
