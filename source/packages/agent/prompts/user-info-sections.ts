@@ -12,7 +12,7 @@
 
 import { jsx, type PromptNode } from "../../prompt-jsx/index.ts"
 
-function formatMetaAgentNotesDirectoryInstruction(notesDirectory: string): string {
+export function formatMetaAgentNotesDirectoryInstruction(notesDirectory: string): string {
   return `Write notes which may be useful for other agents working on the same problem to the ${notesDirectory}. If relevant note files already exist, read them and consider extending them.
 
 Use informatively named files to make the notes easily navigable. Group notes about similar concepts underneath the same directories. Focus on information related to the design or functionality of the system which is likely to be helpful to other agents in the future.
