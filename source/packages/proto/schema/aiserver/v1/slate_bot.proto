@@ -7,7 +7,7 @@ syntax = "proto3";
 
 package aiserver.v1;
 
-import "aiserver/v1/sand_box.proto";
+import "aiserver/v1/sandbox.proto";
 
 service GrokBotService {
   rpc EnsureSandBox(.aiserver.v1.EnsureSandBoxRequest) returns (.aiserver.v1.EnsureSandBoxResponse);

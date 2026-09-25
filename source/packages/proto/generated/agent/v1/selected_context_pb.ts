@@ -13,7 +13,7 @@ import { Message, proto3, protoInt64 } from "@bufbuild/protobuf";
 import { AgentSkill } from "./agent_skills_pb.ts";
 import { Range } from "./utils_pb.ts";
 import { LsDirectoryTreeNode } from "./ls_exec_pb.ts";
-import { CursorRule } from "./cursor_rules_pb.ts";
+import { CursorRule } from "./rules_pb.ts";
 
 /**
  * @generated from enum agent.v1.SelectedPluginCapabilityType

@@ -10,7 +10,7 @@
 
 import type { BinaryReadOptions, FieldList, JsonReadOptions, JsonValue, PartialMessage, PlainMessage } from "@bufbuild/protobuf";
 import { Message, proto3 } from "@bufbuild/protobuf";
-import { CursorRule } from "./cursor_rules_pb.ts";
+import { CursorRule } from "./rules_pb.ts";
 
 /**
  * @generated from message agent.v1.ReadToolCall

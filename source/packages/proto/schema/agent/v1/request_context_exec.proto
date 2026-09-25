@@ -8,8 +8,8 @@ syntax = "proto3";
 package agent.v1;
 
 import "agent/v1/agent_skills.proto";
-import "agent/v1/cursor_packages.proto";
-import "agent/v1/cursor_rules.proto";
+import "agent/v1/packages.proto";
+import "agent/v1/rules.proto";
 import "agent/v1/ls_exec.proto";
 import "agent/v1/mcp.proto";
 import "agent/v1/repo.proto";
