@@ -1,0 +1,2737 @@
+{
+  "agent.v1.ActiveBranchChange": {
+    "path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.AdoptResult_result": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.AgentSkill": {
+    "content": {
+      "classification": "code"
+    },
+    "description": {
+      "classification": "code"
+    },
+    "full_path": {
+      "classification": "path"
+    },
+    "git_remote_origin": {
+      "classification": "path"
+    },
+    "globs": {
+      "value": {
+        "classification": "path"
+      }
+    },
+    "parse_error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.AiAttributionArgs": {
+    "file_paths": {
+      "value": {
+        "classification": "path"
+      }
+    }
+  },
+  "agent.v1.AiAttributionError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.AiAttributionSuccess": {
+    "attribution_text": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.AppliedAgentChange": {
+    "after_content": {
+      "classification": "code"
+    },
+    "before_content": {
+      "classification": "code"
+    },
+    "error": {
+      "classification": "code"
+    },
+    "message_for_model": {
+      "classification": "code"
+    },
+    "path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.ApplyAgentDiffError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.AskQuestionArgs": {
+    "title": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.AskQuestionArgs_Option": {
+    "label": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.AskQuestionArgs_Question": {
+    "prompt": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.AskQuestionError": {
+    "error_message": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.AskQuestionRejected": {
+    "reason": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.AskQuestionSuccess_Answer": {
+    "freeform_text": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.AssistantMessage2": {
+    "text": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.AwaitArgs": {
+    "regex": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.AwaitError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.AwaitTaskComplete": {
+    "output_file_path": {
+      "classification": "path"
+    },
+    "regex_match": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.AwaitTaskStillRunning": {
+    "output_file_path": {
+      "classification": "path"
+    },
+    "regex_match": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.BackgroundTaskCompletion": {
+    "detail": {
+      "classification": "code"
+    },
+    "output_path": {
+      "classification": "path"
+    },
+    "title": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.BlameByFilePathArgs": {
+    "file_path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.BlameByFilePathError": {
+    "error_message": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.BlameByFilePathSuccess": {
+    "content": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.BugfixResultItem": {
+    "bug_title": {
+      "classification": "code"
+    },
+    "explanation": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.CallFrame": {
+    "function_name": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.CancelAction": {
+    "reason": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.CloudSubagentReference": {
+    "transcript_path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.CommandClassifierResult_ClassifiedCommand": {
+    "arguments": {
+      "value": {
+        "classification": "code"
+      }
+    },
+    "name": {
+      "classification": "code"
+    },
+    "subcommand_tokens": {
+      "value": {
+        "classification": "code"
+      }
+    },
+    "suggested_allowlist_entry": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.CommunicateUpdateArgs": {
+    "completed_subtitle": {
+      "classification": "code"
+    },
+    "current_step": {
+      "classification": "code"
+    },
+    "final_summary": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.CommunicateUpdateError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.CommunicateUpdateHistoryEntry": {
+    "step": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.CommunicateUpdateSuccess": {
+    "current_step": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.CommunicateUpdateTurnState": {
+    "completed_subtitle": {
+      "classification": "code"
+    },
+    "final_summary": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ComputerUseArgs": {
+    "description": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ComputerUseError": {
+    "error": {
+      "classification": "code"
+    },
+    "log": {
+      "classification": "code"
+    },
+    "screenshot": {
+      "classification": "code"
+    },
+    "screenshot_path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.ComputerUseSuccess": {
+    "log": {
+      "classification": "code"
+    },
+    "screenshot": {
+      "classification": "code"
+    },
+    "screenshot_path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.ConnectScmError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ConnectScmRejected": {
+    "reason": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ConnectScmRequestResponse_Failed": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ConnectScmRequestResponse_Rejected": {
+    "reason": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ConversationHistoryImageContent": {
+    "data": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ConversationHistoryReasoningContent": {
+    "signature": {
+      "classification": "code"
+    },
+    "text": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ConversationHistoryRedactedReasoningContent": {
+    "data": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ConversationHistoryTextContent": {
+    "text": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ConversationHistoryToolCall": {
+    "args_json": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ConversationPlan": {
+    "plan": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ConversationSearchArgs": {
+    "query": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ConversationSearchError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ConversationSearchHit": {
+    "snippet": {
+      "classification": "code"
+    },
+    "title": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ConversationStateStructure": {
+    "communicate_update_completed_subtitle": {
+      "classification": "code"
+    },
+    "communicate_update_final_summary": {
+      "classification": "code"
+    },
+    "file_states": {
+      "key": {
+        "classification": "path"
+      }
+    },
+    "file_states_v2": {
+      "key": {
+        "classification": "path"
+      }
+    },
+    "pending_tool_calls": {
+      "value": {
+        "classification": "code"
+      }
+    },
+    "previous_workspace_uris": {
+      "value": {
+        "classification": "path"
+      }
+    },
+    "read_paths": {
+      "value": {
+        "classification": "path"
+      }
+    }
+  },
+  "agent.v1.ConversationSummary": {
+    "summary": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ConversationSummaryArchive": {
+    "summary": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.CreateAgentArgs": {
+    "base_branch": {
+      "classification": "code"
+    },
+    "labels": {
+      "key": {
+        "classification": "code"
+      },
+      "value": {
+        "classification": "code"
+      }
+    },
+    "name": {
+      "classification": "code"
+    },
+    "pool": {
+      "classification": "code"
+    },
+    "prompt": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.CreateAgentError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.CreateAgentSuccess": {
+    "message": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.CreateGoalArgs": {
+    "objective": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.CreatePlanArgs": {
+    "name": {
+      "classification": "code"
+    },
+    "overview": {
+      "classification": "code"
+    },
+    "plan": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.CreatePlanError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.CreatePlanResult": {
+    "plan_uri": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.CreatePrAction": {
+    "add_labels": {
+      "value": {
+        "classification": "path"
+      }
+    },
+    "base_branch": {
+      "classification": "path"
+    },
+    "body": {
+      "classification": "code"
+    },
+    "branch_name": {
+      "classification": "path"
+    },
+    "repo_url": {
+      "classification": "path"
+    },
+    "title": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.CursorRule": {
+    "content": {
+      "classification": "code"
+    },
+    "frontmatter": {
+      "classification": "code"
+    },
+    "full_path": {
+      "classification": "path"
+    },
+    "git_remote_origin": {
+      "classification": "path"
+    },
+    "parse_error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.CursorRuleTypeAgentFetched": {
+    "description": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.CursorRuleTypeFileGlobs": {
+    "globs": {
+      "value": {
+        "classification": "path"
+      }
+    }
+  },
+  "agent.v1.CustomSubagent": {
+    "description": {
+      "classification": "code"
+    },
+    "full_path": {
+      "classification": "path"
+    },
+    "prompt": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.DebugModeConfig": {
+    "log_path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.DeleteArgs": {
+    "path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.DeleteError": {
+    "error": {
+      "classification": "code"
+    },
+    "path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.DeleteFileBusy": {
+    "path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.DeleteFileNotFound": {
+    "path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.DeleteNotFile": {
+    "path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.DeletePermissionDenied": {
+    "client_visible_error": {
+      "classification": "code"
+    },
+    "path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.DeleteRejected": {
+    "path": {
+      "classification": "path"
+    },
+    "reason": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.DeleteSuccess": {
+    "deleted_file": {
+      "classification": "path"
+    },
+    "path": {
+      "classification": "path"
+    },
+    "prev_content": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.DiagnosticItem": {
+    "message": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.EditArgs": {
+    "path": {
+      "classification": "path"
+    },
+    "stream_content": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.EditError": {
+    "error": {
+      "classification": "code"
+    },
+    "model_visible_error": {
+      "classification": "code"
+    },
+    "path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.EditFileNotFound": {
+    "path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.EditPrLabelsArgs": {
+    "add_labels": {
+      "value": {
+        "classification": "path"
+      }
+    },
+    "remove_labels": {
+      "value": {
+        "classification": "path"
+      }
+    }
+  },
+  "agent.v1.EditPrLabelsError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.EditPrLabelsSuccess": {
+    "message": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.EditReadPermissionDenied": {
+    "path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.EditRejected": {
+    "path": {
+      "classification": "path"
+    },
+    "reason": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.EditSuccess": {
+    "after_full_file_content": {
+      "classification": "code"
+    },
+    "before_full_file_content": {
+      "classification": "code"
+    },
+    "diff_string": {
+      "classification": "code"
+    },
+    "message": {
+      "classification": "code"
+    },
+    "path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.EditToolCallDelta": {
+    "stream_content_delta": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.EditWritePermissionDenied": {
+    "error": {
+      "classification": "code"
+    },
+    "path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.ExecutePlanAction": {
+    "plan_file_content": {
+      "classification": "code"
+    },
+    "plan_file_path": {
+      "classification": "path"
+    },
+    "plan_file_uri": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.ExtraContextEntry_data_or_blob_id": {
+    "data": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.FetchCloudAgentDataError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.FetchCloudAgentDataSuccess": {
+    "summary": {
+      "classification": "code"
+    },
+    "written_paths": {
+      "value": {
+        "classification": "path"
+      }
+    }
+  },
+  "agent.v1.FetchError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.FetchSuccess": {
+    "content": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.FileDiagnostics": {
+    "path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.FileStateStructure": {
+    "content": {
+      "classification": "code",
+      "bytes": true
+    },
+    "initial_content": {
+      "classification": "code",
+      "bytes": true
+    }
+  },
+  "agent.v1.GenerateImageArgs": {
+    "description": {
+      "classification": "code"
+    },
+    "file_path": {
+      "classification": "path"
+    },
+    "reference_image_paths": {
+      "value": {
+        "classification": "path"
+      }
+    }
+  },
+  "agent.v1.GenerateImageError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.GenerateImageRequestResponse_Approved": {
+    "description": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.GenerateImageRequestResponse_Rejected": {
+    "reason": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.GenerateImageSuccess": {
+    "file_path": {
+      "classification": "path"
+    },
+    "image_data": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.GetAgentStatusError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.GetAgentStatusSuccess": {
+    "message": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.GetAgentStatusWorker": {
+    "name": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.GetCiStatusAction": {
+    "branch_name": {
+      "classification": "path"
+    },
+    "repo_url": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.GetMcpToolsError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.GetMcpToolsSuccess": {
+    "content": {
+      "classification": "code"
+    },
+    "output_file_path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.GitRepoInfo": {
+    "branch_name": {
+      "classification": "path"
+    },
+    "path": {
+      "classification": "path"
+    },
+    "remote_url": {
+      "classification": "path"
+    },
+    "status": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.GlobToolArgs": {
+    "glob_pattern": {
+      "classification": "path"
+    },
+    "target_directory": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.GlobToolError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.GlobToolSuccess": {
+    "files": {
+      "value": {
+        "classification": "path"
+      }
+    },
+    "path": {
+      "classification": "path"
+    },
+    "pattern": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.GoalError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.GoalState": {
+    "objective": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.GrepArgs": {
+    "glob": {
+      "classification": "path"
+    },
+    "path": {
+      "classification": "path"
+    },
+    "pattern": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.GrepContentMatch": {
+    "content": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.GrepError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.GrepFileCount": {
+    "file": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.GrepFileMatch": {
+    "file": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.GrepFilesResult": {
+    "files": {
+      "value": {
+        "classification": "path"
+      }
+    }
+  },
+  "agent.v1.GrepSuccess": {
+    "path": {
+      "classification": "path"
+    },
+    "pattern": {
+      "classification": "code"
+    },
+    "workspace_results": {
+      "key": {
+        "classification": "path"
+      }
+    }
+  },
+  "agent.v1.HookAdditionalContext": {
+    "content": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.InvocationContext_GithubPR": {
+    "ci_failures": {
+      "classification": "code"
+    },
+    "comments": {
+      "classification": "code"
+    },
+    "description": {
+      "classification": "code"
+    },
+    "title": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.InvocationContext_IdeState_File": {
+    "active_command": {
+      "classification": "code"
+    },
+    "path": {
+      "classification": "path"
+    },
+    "relative_path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.InvocationContext_IdeState_File_CursorPosition": {
+    "text": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.InvocationContext_IdeState_ViewedPullRequest": {
+    "description": {
+      "classification": "code"
+    },
+    "folder_path": {
+      "classification": "path"
+    },
+    "summary_json": {
+      "classification": "code"
+    },
+    "title": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.InvocationContext_MicrosoftTeamsThread": {
+    "channel_description": {
+      "classification": "code"
+    },
+    "team_description": {
+      "classification": "code"
+    },
+    "thread": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.InvocationContext_SlackThread": {
+    "channel_purpose": {
+      "classification": "code"
+    },
+    "channel_topic": {
+      "classification": "code"
+    },
+    "sender_name": {
+      "classification": "code"
+    },
+    "thread": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ListMcpResourcesError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ListMcpResourcesExecResult_McpResource": {
+    "annotations": {
+      "value": {
+        "classification": "code"
+      }
+    },
+    "description": {
+      "classification": "code"
+    },
+    "uri": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.ListMcpResourcesRejected": {
+    "reason": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.LsArgs": {
+    "ignore": {
+      "value": {
+        "classification": "path"
+      }
+    },
+    "path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.LsDirectoryTreeNode": {
+    "abs_path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.LsDirectoryTreeNode_File": {
+    "name": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.LsError": {
+    "error": {
+      "classification": "code"
+    },
+    "path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.LsRejected": {
+    "path": {
+      "classification": "path"
+    },
+    "reason": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.MatchedInstalledPlugin": {
+    "description": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.McpAuthError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.McpAuthRejected": {
+    "reason": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.McpAuthRequestResponse_Rejected": {
+    "reason": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.McpDescriptor": {
+    "folder_path": {
+      "classification": "path"
+    },
+    "server_use_instructions": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.McpFileSystemOptions": {
+    "workspace_project_dir": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.McpImageContent": {
+    "data": {
+      "classification": "code",
+      "bytes": true
+    }
+  },
+  "agent.v1.McpInstructions": {
+    "instructions": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.McpPermissionDenied": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.McpRejected": {
+    "reason": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.McpTextContent": {
+    "text": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.McpToolDefinition": {
+    "description": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.McpToolDescriptor": {
+    "definition_path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.McpToolError": {
+    "error": {
+      "classification": "code"
+    },
+    "read_tool_def_reminder": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.MountedAgentStore": {
+    "alias": {
+      "classification": "path"
+    },
+    "path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.NetworkPolicyLoggingConfig": {
+    "decision_log_path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.OutputLocation": {
+    "file_path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.PartialToolCallUpdate": {
+    "args_text_delta": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.PermissionsAutoRunInstructions": {
+    "allow_instructions": {
+      "value": {
+        "classification": "code"
+      }
+    },
+    "block_instructions": {
+      "value": {
+        "classification": "code"
+      }
+    }
+  },
+  "agent.v1.Phase": {
+    "name": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.PiBashToolArgs": {
+    "command": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.PiBashToolError": {
+    "error": {
+      "classification": "code"
+    },
+    "full_output_path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.PiBashToolSuccess": {
+    "full_output_path": {
+      "classification": "path"
+    },
+    "output": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.PiEditReplacement": {
+    "new_text": {
+      "classification": "code"
+    },
+    "old_text": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.PiEditToolArgs": {
+    "path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.PiEditToolError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.PiEditToolRejected": {
+    "reason": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.PiEditToolSuccess": {
+    "diff": {
+      "classification": "code"
+    },
+    "output": {
+      "classification": "code"
+    },
+    "patch": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.PiFindToolArgs": {
+    "path": {
+      "classification": "path"
+    },
+    "pattern": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.PiFindToolError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.PiFindToolSuccess": {
+    "output": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.PiGrepToolArgs": {
+    "glob": {
+      "classification": "path"
+    },
+    "path": {
+      "classification": "path"
+    },
+    "pattern": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.PiGrepToolError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.PiGrepToolSuccess": {
+    "output": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.PiLsToolArgs": {
+    "path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.PiLsToolError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.PiLsToolSuccess": {
+    "output": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.PiReadToolArgs": {
+    "path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.PiReadToolError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.PiReadToolSuccess": {
+    "output": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.PiWriteToolArgs": {
+    "content": {
+      "classification": "code"
+    },
+    "path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.PiWriteToolError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.PiWriteToolRejected": {
+    "reason": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.PiWriteToolSuccess": {
+    "output": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.PlanRegistryEntry": {
+    "path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.PostCommentAction": {
+    "body": {
+      "classification": "code"
+    },
+    "branch_name": {
+      "classification": "path"
+    },
+    "path": {
+      "classification": "path"
+    },
+    "repo_url": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.PrecomputedHumanChange": {
+    "path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.PrecomputedHumanChangeRenderedDiff": {
+    "added_lines": {
+      "value": {
+        "classification": "code"
+      }
+    },
+    "after_context_lines": {
+      "value": {
+        "classification": "code"
+      }
+    },
+    "before_context_lines": {
+      "value": {
+        "classification": "code"
+      }
+    },
+    "removed_lines": {
+      "value": {
+        "classification": "code"
+      }
+    }
+  },
+  "agent.v1.PrManagementError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.PrManagementNeedsConfirmation": {
+    "branch_name": {
+      "classification": "path"
+    },
+    "discovered_pr_title": {
+      "classification": "code"
+    },
+    "message": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.PrManagementRegistered": {
+    "base_branch": {
+      "classification": "path"
+    },
+    "body": {
+      "classification": "code"
+    },
+    "branch_name": {
+      "classification": "path"
+    },
+    "message": {
+      "classification": "code"
+    },
+    "title": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.PrManagementRejected": {
+    "reason": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.PrManagementSuccess": {
+    "message": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ProjectDetails": {
+    "name": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ProjectSideChatDetails": {
+    "store_dir": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ProjectSubagentDetails": {
+    "store_dir": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.PromptContextNode": {
+    "inline_content": {
+      "classification": "code"
+    },
+    "label": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.PromptSuggestionUpdate": {
+    "suggestion": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ReadAgentTranscriptError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ReadAgentTranscriptSuccess": {
+    "transcript": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ReadLintsToolArgs": {
+    "paths": {
+      "value": {
+        "classification": "path"
+      }
+    }
+  },
+  "agent.v1.ReadLintsToolError": {
+    "error_message": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ReadMcpResourceError": {
+    "error": {
+      "classification": "code"
+    },
+    "uri": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.ReadMcpResourceExecArgs": {
+    "download_path": {
+      "classification": "path"
+    },
+    "uri": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.ReadMcpResourceNotFound": {
+    "uri": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.ReadMcpResourceRejected": {
+    "reason": {
+      "classification": "code"
+    },
+    "uri": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.ReadMcpResourceSuccess": {
+    "annotations": {
+      "value": {
+        "classification": "code"
+      }
+    },
+    "description": {
+      "classification": "code"
+    },
+    "download_path": {
+      "classification": "path"
+    },
+    "uri": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.ReadMcpResourceSuccess_content": {
+    "blob": {
+      "classification": "code",
+      "bytes": true
+    },
+    "text": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ReadTodosError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ReadToolArgs": {
+    "path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.ReadToolError": {
+    "error_message": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ReadToolSuccess": {
+    "path": {
+      "classification": "path"
+    },
+    "related_cursor_rule_paths": {
+      "value": {
+        "classification": "path"
+      }
+    }
+  },
+  "agent.v1.ReadToolSuccess_output": {
+    "content": {
+      "classification": "code"
+    },
+    "data": {
+      "classification": "code",
+      "bytes": true
+    }
+  },
+  "agent.v1.RecentAgent": {
+    "overview": {
+      "classification": "code"
+    },
+    "path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.RecentlyAddedPlugin": {
+    "description": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.RecentlyAddedPlugin_CapabilityDescriptor": {
+    "description": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.RecordCiInvestigationFinding": {
+    "details_url": {
+      "classification": "path"
+    },
+    "diff_relation_evidence": {
+      "classification": "code"
+    },
+    "failing_signal": {
+      "classification": "code"
+    },
+    "flake_evidence": {
+      "classification": "code"
+    },
+    "recommended_action_evidence": {
+      "classification": "code"
+    },
+    "rerun_evidence": {
+      "classification": "code"
+    },
+    "root_cause": {
+      "classification": "code"
+    },
+    "suggested_next_step": {
+      "classification": "code"
+    },
+    "tldr": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.RecordCiInvestigationFindingsError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.RecordCiInvestigationFindingsSuccess": {
+    "message": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.RecordCiInvestigationOverall": {
+    "recommended_action_evidence": {
+      "classification": "code"
+    },
+    "summary": {
+      "classification": "code"
+    },
+    "themes": {
+      "value": {
+        "classification": "code"
+      }
+    }
+  },
+  "agent.v1.RecordScreenArgs": {
+    "save_as_filename": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.RecordScreenFailure": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.RecordScreenSaveSuccess": {
+    "path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.ReflectArgs": {
+    "critical_synthesis": {
+      "classification": "code"
+    },
+    "next_steps": {
+      "classification": "code"
+    },
+    "relevant_instructions": {
+      "classification": "code"
+    },
+    "scenario_analysis": {
+      "classification": "code"
+    },
+    "unexpected_action_outcomes": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ReflectError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ReplaceEnvConfig": {
+    "dockerfile_contents": {
+      "classification": "code"
+    },
+    "install_script": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ReplaceEnvFailure": {
+    "error_message": {
+      "classification": "code"
+    },
+    "setup_logs": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ReplaceEnvSuccess": {
+    "setup_logs": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.RepoCheckoutRefOverride": {
+    "ref": {
+      "classification": "path"
+    },
+    "repo_url": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.ReportBugArgs": {
+    "description": {
+      "classification": "code"
+    },
+    "file": {
+      "classification": "path"
+    },
+    "rationale": {
+      "classification": "code"
+    },
+    "title": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ReportBugError": {
+    "error_message": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ReportBugfixResultsArgs": {
+    "summary": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ReportBugfixResultsError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ReportBugSuccess": {
+    "output": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.RepositoryIndexingInfo": {
+    "path_encryption_key": {
+      "classification": "credentials"
+    },
+    "relative_workspace_path": {
+      "classification": "path"
+    },
+    "remote_names": {
+      "value": {
+        "classification": "path"
+      }
+    },
+    "remote_urls": {
+      "value": {
+        "classification": "path"
+      }
+    },
+    "repo_name": {
+      "classification": "path"
+    },
+    "repo_owner": {
+      "classification": "path"
+    },
+    "workspace_uri": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.RequestContext": {
+    "admin_command_denylist": {
+      "value": {
+        "classification": "code"
+      }
+    },
+    "cloud_rule": {
+      "classification": "code"
+    },
+    "commit_attribution_message": {
+      "classification": "code"
+    },
+    "conversation_notes_listing": {
+      "classification": "code"
+    },
+    "disabled_team_rules": {
+      "value": {
+        "classification": "path"
+      }
+    },
+    "file_contents": {
+      "key": {
+        "classification": "path"
+      },
+      "value": {
+        "classification": "code"
+      }
+    },
+    "hooks_additional_context": {
+      "classification": "code"
+    },
+    "pr_attribution_message": {
+      "classification": "code"
+    },
+    "shared_notes_listing": {
+      "classification": "code"
+    },
+    "user_intent_summary": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.RequestContextEnv": {
+    "agent_conversation_notes_folder": {
+      "classification": "path"
+    },
+    "agent_shared_notes_folder": {
+      "classification": "path"
+    },
+    "agent_transcripts_folder": {
+      "classification": "path"
+    },
+    "artifacts_folder": {
+      "classification": "path"
+    },
+    "dev_delay_next_smart_mode_classifier_token": {
+      "classification": "credentials"
+    },
+    "dev_force_next_smart_mode_classifier_block_token": {
+      "classification": "credentials"
+    },
+    "process_working_directory": {
+      "classification": "path"
+    },
+    "project_folder": {
+      "classification": "path"
+    },
+    "terminals_folder": {
+      "classification": "path"
+    },
+    "workspace_paths": {
+      "value": {
+        "classification": "path"
+      }
+    }
+  },
+  "agent.v1.ResolveCommentAction": {
+    "branch_name": {
+      "classification": "path"
+    },
+    "repo_url": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.ResponseComparisonStarted": {
+    "parent_response": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ResponseComparisonTextDelta": {
+    "text": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SandboxPolicy": {
+    "additional_read_paths": {
+      "value": {
+        "classification": "path"
+      }
+    },
+    "additional_readonly_paths": {
+      "value": {
+        "classification": "path"
+      }
+    },
+    "additional_readwrite_paths": {
+      "value": {
+        "classification": "path"
+      }
+    },
+    "debug_output_dir": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.SelectedAgenticGitAction": {
+    "path_to_template_dir": {
+      "classification": "path"
+    },
+    "path_to_template_file": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.SelectedAgenticGitActionCommitParams": {
+    "files_to_commit": {
+      "value": {
+        "classification": "path"
+      }
+    },
+    "files_to_exclude_from_commit": {
+      "value": {
+        "classification": "path"
+      }
+    }
+  },
+  "agent.v1.SelectedAgenticGitActionPushParams": {
+    "files_to_push": {
+      "value": {
+        "classification": "path"
+      }
+    }
+  },
+  "agent.v1.SelectedAgenticGitFileWithStatus": {
+    "path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.SelectedBrowser": {
+    "page_title": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SelectedCodeSelection": {
+    "content": {
+      "classification": "code"
+    },
+    "path": {
+      "classification": "path"
+    },
+    "relative_path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.SelectedConsoleLog": {
+    "message": {
+      "classification": "code"
+    },
+    "object_data_json": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SelectedContext": {
+    "extra_context": {
+      "value": {
+        "classification": "code"
+      }
+    }
+  },
+  "agent.v1.SelectedCursorCommand": {
+    "content": {
+      "classification": "code"
+    },
+    "full_path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.SelectedDocument": {
+    "filename": {
+      "classification": "path"
+    },
+    "path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.SelectedDocument_BlobIdWithData": {
+    "data": {
+      "classification": "code",
+      "bytes": true
+    }
+  },
+  "agent.v1.SelectedDocument_data_or_blob_id": {
+    "data": {
+      "classification": "code",
+      "bytes": true
+    }
+  },
+  "agent.v1.SelectedExternalLink": {
+    "filename": {
+      "classification": "path"
+    },
+    "pdf_content": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SelectedFile": {
+    "content": {
+      "classification": "code"
+    },
+    "path": {
+      "classification": "path"
+    },
+    "relative_path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.SelectedFolder": {
+    "path": {
+      "classification": "path"
+    },
+    "relative_path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.SelectedGitCommit": {
+    "description": {
+      "classification": "code"
+    },
+    "diff": {
+      "classification": "code"
+    },
+    "message": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SelectedGitDiff": {
+    "content": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SelectedGitDiffFromBranchToMain": {
+    "content": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SelectedGitPRDiffSelection": {
+    "diff_content": {
+      "classification": "code"
+    },
+    "file_path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.SelectedImage": {
+    "path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.SelectedImage_BlobIdWithData": {
+    "data": {
+      "classification": "code",
+      "bytes": true
+    }
+  },
+  "agent.v1.SelectedImage_data_or_blob_id": {
+    "data": {
+      "classification": "code",
+      "bytes": true
+    }
+  },
+  "agent.v1.SelectedPluginCapabilityRef": {
+    "snapshot_token": {
+      "classification": "credentials"
+    },
+    "source_path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.SelectedPullRequest": {
+    "description": {
+      "classification": "code"
+    },
+    "folder_path": {
+      "classification": "path"
+    },
+    "summary_json": {
+      "classification": "code"
+    },
+    "title": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SelectedTerminal": {
+    "content": {
+      "classification": "code"
+    },
+    "path": {
+      "classification": "path"
+    },
+    "title": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SelectedTerminalSelection": {
+    "content": {
+      "classification": "code"
+    },
+    "path": {
+      "classification": "path"
+    },
+    "title": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SelectedUIElement": {
+    "component": {
+      "classification": "code"
+    },
+    "component_props_json": {
+      "classification": "code"
+    },
+    "element": {
+      "classification": "code"
+    },
+    "extra": {
+      "classification": "code"
+    },
+    "text_content": {
+      "classification": "code"
+    },
+    "xpath": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SelectedVideo": {
+    "filename": {
+      "classification": "path"
+    },
+    "path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.SelectedVideo_BlobIdWithData": {
+    "data": {
+      "classification": "code",
+      "bytes": true
+    }
+  },
+  "agent.v1.SelectedVideo_data_or_blob_id": {
+    "data": {
+      "classification": "code",
+      "bytes": true
+    }
+  },
+  "agent.v1.SelectedVideo_SignedUrl": {
+    "url": {
+      "classification": "credentials"
+    }
+  },
+  "agent.v1.SemSearchToolArgs": {
+    "explanation": {
+      "classification": "code"
+    },
+    "query": {
+      "classification": "code"
+    },
+    "target_directories": {
+      "value": {
+        "classification": "path"
+      }
+    }
+  },
+  "agent.v1.SemSearchToolError": {
+    "error_message": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SemSearchToolSuccess": {
+    "results": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SendFinalSummaryArgs": {
+    "final_summary": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SendFinalSummaryError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SendFinalSummarySuccess": {
+    "final_summary": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SendMessageAttachment": {
+    "alt": {
+      "classification": "code"
+    },
+    "url": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.SendMessageError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SendMessageText": {
+    "content": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SendToAgentArgs": {
+    "message": {
+      "classification": "code"
+    },
+    "title": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SendToAgentError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SendToAgentSuccess": {
+    "message": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SendToUserArgs": {
+    "message": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SendToUserError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SetActiveBranchArgs": {
+    "path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.SetActiveBranchError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SetPrStatusAction": {
+    "branch_name": {
+      "classification": "path"
+    },
+    "repo_url": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.SetupVmEnvironmentArgs": {
+    "dockerfile_contents": {
+      "classification": "code"
+    },
+    "install_command": {
+      "classification": "code"
+    },
+    "start_command": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ShellArgs": {
+    "admin_command_denylist": {
+      "value": {
+        "classification": "code"
+      }
+    },
+    "command": {
+      "classification": "code"
+    },
+    "simple_commands": {
+      "value": {
+        "classification": "code"
+      }
+    },
+    "working_directory": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.ShellCommand": {
+    "command": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ShellCommandParsingResult_ExecutableCommand": {
+    "full_text": {
+      "classification": "code"
+    },
+    "name": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ShellCommandParsingResult_ExecutableCommandArg": {
+    "value": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ShellCommandParsingResult_Redirect": {
+    "target_text": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.ShellFailure": {
+    "command": {
+      "classification": "code"
+    },
+    "interleaved_output": {
+      "classification": "code"
+    },
+    "output_head": {
+      "classification": "code"
+    },
+    "output_tail": {
+      "classification": "code"
+    },
+    "stderr": {
+      "classification": "code"
+    },
+    "stdout": {
+      "classification": "code"
+    },
+    "working_directory": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.ShellHookApprovalRequirement": {
+    "reason": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ShellOutput": {
+    "stderr": {
+      "classification": "code"
+    },
+    "stdout": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ShellOutputNotificationConfig": {
+    "pattern": {
+      "classification": "code"
+    },
+    "reason": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ShellPermissionDenied": {
+    "command": {
+      "classification": "code"
+    },
+    "error": {
+      "classification": "code"
+    },
+    "working_directory": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.ShellRejected": {
+    "command": {
+      "classification": "code"
+    },
+    "reason": {
+      "classification": "code"
+    },
+    "working_directory": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.ShellResult": {
+    "terminals_folder": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.ShellSandboxUnsupported": {
+    "command": {
+      "classification": "code"
+    },
+    "reason": {
+      "classification": "code"
+    },
+    "working_directory": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.ShellSpawnError": {
+    "command": {
+      "classification": "code"
+    },
+    "error": {
+      "classification": "code"
+    },
+    "working_directory": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.ShellStreamBackgrounded": {
+    "command": {
+      "classification": "code"
+    },
+    "working_directory": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.ShellStreamExit": {
+    "cwd": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.ShellStreamStderr": {
+    "data": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ShellStreamStdout": {
+    "data": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ShellSuccess": {
+    "command": {
+      "classification": "code"
+    },
+    "interleaved_output": {
+      "classification": "code"
+    },
+    "output_head": {
+      "classification": "code"
+    },
+    "output_tail": {
+      "classification": "code"
+    },
+    "stderr": {
+      "classification": "code"
+    },
+    "stdout": {
+      "classification": "code"
+    },
+    "working_directory": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.ShellTimeout": {
+    "command": {
+      "classification": "code"
+    },
+    "working_directory": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.ShellToolCallStderrDelta": {
+    "content": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ShellToolCallStdoutDelta": {
+    "content": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SkillDescriptor": {
+    "description": {
+      "classification": "code"
+    },
+    "folder_path": {
+      "classification": "path"
+    },
+    "parse_error": {
+      "classification": "code"
+    },
+    "readme_file_path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.SmartModeApproval": {
+    "reason": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.StackTrace": {
+    "raw_stack_trace": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.StartGrindExecutionArgs": {
+    "explanation": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.StartGrindExecutionError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.StartGrindPlanningArgs": {
+    "explanation": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.StartGrindPlanningError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.StopAgentError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.StopAgentSuccess": {
+    "message": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SubagentRunState": {
+    "detail": {
+      "classification": "code"
+    },
+    "output_path": {
+      "classification": "path"
+    },
+    "title": {
+      "classification": "code"
+    },
+    "transcript_path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.SubmittedCustomMode": {
+    "id": {
+      "classification": "path"
+    },
+    "plugin_snapshot_token": {
+      "classification": "credentials"
+    },
+    "source_path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.SubmittedExitedCustomMode": {
+    "id": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.SubscriptionEventDisplay": {
+    "display_label": {
+      "classification": "code"
+    },
+    "resource_url": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SummaryCompletedUpdate": {
+    "hook_message": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SummaryUpdate": {
+    "summary": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SwitchModeArgs": {
+    "explanation": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SwitchModeError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SwitchModeRejected": {
+    "reason": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SwitchModeRequestResponse_Rejected": {
+    "reason": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SystemContextInjection": {
+    "content": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.SystemPromptSpec_spec": {
+    "append": {
+      "classification": "code"
+    },
+    "replace": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.TaskArgs": {
+    "attachments": {
+      "value": {
+        "classification": "path"
+      }
+    },
+    "description": {
+      "classification": "code"
+    },
+    "prompt": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.TaskError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.TaskSuccess": {
+    "result_suffix": {
+      "classification": "code"
+    },
+    "transcript_path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.TerminalMetadata": {
+    "cwd": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.TerminalMetadata_Command": {
+    "command": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.TextDeltaUpdate": {
+    "text": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ThinkingDeltaUpdate": {
+    "text": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.ThinkingMessage": {
+    "text": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.TodoItem": {
+    "content": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.TrackedGitRepo": {
+    "repo_path": {
+      "classification": "path"
+    }
+  },
+  "agent.v1.TruncatedToolCallError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.TypeAction": {
+    "text": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.UpdatePrAction": {
+    "add_labels": {
+      "value": {
+        "classification": "path"
+      }
+    },
+    "base_branch": {
+      "classification": "path"
+    },
+    "body": {
+      "classification": "code"
+    },
+    "branch_name": {
+      "classification": "path"
+    },
+    "remove_labels": {
+      "value": {
+        "classification": "path"
+      }
+    },
+    "repo_url": {
+      "classification": "path"
+    },
+    "title": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.UpdatePrCodeTourArgs": {
+    "feedback": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.UpdatePrCodeTourError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.UpdatePrCodeTourSuccess": {
+    "message": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.UpdateTodosError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.UserMessage_SimulatedMessageMetadata": {
+    "title": {
+      "classification": "code"
+    },
+    "url": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.UserMessage2": {
+    "rich_text": {
+      "classification": "code"
+    },
+    "subagent_system_reminder": {
+      "classification": "code"
+    },
+    "text": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.WebFetchError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.WebFetchRejected": {
+    "reason": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.WebFetchRequestResponse_Rejected": {
+    "reason": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.WebFetchSuccess": {
+    "markdown": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.WebSearchArgs": {
+    "search_term": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.WebSearchError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.WebSearchReference": {
+    "chunk": {
+      "classification": "code"
+    },
+    "title": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.WebSearchRejected": {
+    "reason": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.WebSearchRequestResponse_Rejected": {
+    "reason": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.WriteShellStdinArgs": {
+    "chars": {
+      "classification": "code"
+    }
+  },
+  "agent.v1.WriteShellStdinError": {
+    "error": {
+      "classification": "code"
+    }
+  },
+  "aiserver.v1.CodeBlock": {
+    "contents": {
+      "classification": "code"
+    },
+    "file_contents": {
+      "classification": "code"
+    },
+    "original_contents": {
+      "classification": "code"
+    },
+    "override_contents": {
+      "classification": "code"
+    },
+    "relative_workspace_path": {
+      "classification": "path"
+    }
+  },
+  "aiserver.v1.DetailedLine": {
+    "text": {
+      "classification": "code"
+    }
+  },
+  "aiserver.v1.GitCommit": {
+    "message": {
+      "classification": "code"
+    }
+  }
+}
