@@ -1,0 +1,2 @@
+/** How much of a feedback report is kept: the message, the conversation, the account, and the event ids. */
+export const SLATE_FEEDBACK_MESSAGE_MAX_CHARS = 10_000; export const SLATE_FEEDBACK_CONVERSATION_ID_MAX_CHARS = 512; export const SLATE_FEEDBACK_ACCOUNT_SLOT_MAX_CHARS = 512; export const SLATE_FEEDBACK_SENTRY_EVENT_ID_MAX_COUNT = 5; export const SLATE_FEEDBACK_SENTRY_EVENT_ID_PATTERN = /^[0-9a-f]{32}$/;
