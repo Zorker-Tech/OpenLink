@@ -68,11 +68,14 @@ test("file, line and context helpers answer the questions the prompt assembly as
 })
 
 test("a skill's source decides whether the user may change it", () => {
-  assert.equal(getSkillSourceFromPath("/home/u/.slate/skills-builtin/x/SKILL.md"), "builtin")
-  assert.equal(getSkillSourceFromPath("/home/u/.slate/plugins/p/x/SKILL.md"), "plugin")
-  assert.equal(getSkillSourceFromPath("/home/u/.slate/skills/x/SKILL.md"), "workspace")
+  // The directories are the ones that exist on disk, including another tool's.
+  assert.equal(getSkillSourceFromPath("/home/u/.cursor/skills-cursor/x/SKILL.md"), "builtin")
+  assert.equal(getSkillSourceFromPath("/home/u/.cursor/plugins/p/x/SKILL.md"), "plugin")
+  assert.equal(getSkillSourceFromPath("/home/u/.claude/plugins/p/x/SKILL.md"), "plugin")
+  assert.equal(getSkillSourceFromPath("/home/u/.claude/skills/x/SKILL.md"), "other-tool")
+  assert.equal(getSkillSourceFromPath("/home/u/.cursor/skills/x/SKILL.md"), "workspace")
   assert.equal(getSkillSourceFromPath("/home/u/.agents/skills/x/SKILL.md"), "workspace")
-  assert.equal(getSkillSourceFromPath("/home/u/.slate/skills-builtin\\x\\SKILL.md"), "builtin")
+  assert.equal(getSkillSourceFromPath("/home/u/.cursor/skills-cursor\\x\\SKILL.md"), "builtin")
   assert.equal(getSkillSourceFromPath("/home/u/random/SKILL.md"), "unknown")
 })
 
@@ -350,12 +353,12 @@ test("the project conversation is decided by its newest boundary", async () => {
 test("a rule is file-scoped when it is attached to files or nested below the workspace root", () => {
   const workspace = "/repo"
   assert.equal(isFileScopedRule({ type: { type: { case: "fileGlobbed" } } }, [workspace]), true)
-  assert.equal(isFileScopedRule({ type: { type: { case: "global" } }, fullPath: "/repo/.slate/rules/a.mdc" }, [workspace]), false)
+  assert.equal(isFileScopedRule({ type: { type: { case: "global" } }, fullPath: "/repo/.cursor/rules/a.mdc" }, [workspace]), false)
   assert.equal(
-    isFileScopedRule({ type: { type: { case: "global" } }, fullPath: "/repo/pkg/.slate/rules/a.mdc" }, [workspace]),
+    isFileScopedRule({ type: { type: { case: "global" } }, fullPath: "/repo/pkg/.cursor/rules/a.mdc" }, [workspace]),
     true,
     "a global rule below the root belongs to its subtree",
   )
-  assert.equal(isFileScopedRule({ type: { type: { case: "other" } }, fullPath: "/repo/.slate/rules/a.mdc" }, [workspace]), false)
+  assert.equal(isFileScopedRule({ type: { type: { case: "other" } }, fullPath: "/repo/.cursor/rules/a.mdc" }, [workspace]), false)
   assert.equal(isFileScopedRule({}, [workspace]), false)
 })

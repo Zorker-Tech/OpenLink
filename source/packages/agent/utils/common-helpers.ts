@@ -33,17 +33,21 @@ export function getContextUsageInfo(tokenDetails: {
   return { contextWindowSize, contextTokens, contextUsagePercent }
 }
 
-export type SkillSource = "builtin" | "plugin" | "workspace" | "unknown"
+export type SkillSource = "builtin" | "plugin" | "other-tool" | "workspace" | "unknown"
 
 /**
- * Where a skill lives decides who may change it: ours (builtin), installed as a package (plugin), or
- * the user's own workspace.
+ * Where a skill lives decides who may change it: one we ship, one installed as a package, one another
+ * tool put there, or one in the user's own workspace.
+ *
+ * The directories are the ones that exist on disk rather than our own convention: a workspace is read as
+ * it is, and a skill written for another tool still works here.
  */
 export function getSkillSourceFromPath(fullPath: string): SkillSource {
   const normalizedPath = fullPath.replace(/\\/g, "/")
-  if (normalizedPath.includes("/.slate/skills-builtin/")) return "builtin"
-  if (normalizedPath.includes("/.slate/plugins/")) return "plugin"
-  if (normalizedPath.includes("/.slate/skills/") || normalizedPath.includes("/.agents/skills/")) return "workspace"
+  if (normalizedPath.includes("/.cursor/skills-cursor/")) return "builtin"
+  if (normalizedPath.includes("/.cursor/plugins/") || normalizedPath.includes("/.claude/plugins/")) return "plugin"
+  if (normalizedPath.includes("/.claude/skills/")) return "other-tool"
+  if (normalizedPath.includes("/.cursor/skills/") || normalizedPath.includes("/.agents/skills/")) return "workspace"
   return "unknown"
 }
 
