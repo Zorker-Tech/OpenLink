@@ -83,7 +83,7 @@ async function run(
 
 const argsOf = (call: ToolCall) => {
   assert.equal(call.tool.case, "shellToolCall")
-  return (call.tool as { value: { args: Record<string, unknown> } }).value.args
+  return (call.tool as unknown as { value: { args: Record<string, unknown> } }).value.args
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -350,12 +350,12 @@ test("every way a command can fail has its own result shape", () => {
   for (const [error, expected] of cases) {
     const call = serialize(error)
     assert.equal(call.tool.case, "shellToolCall")
-    const value = (call.tool as { value: { result: { result: { case?: string; value?: Record<string, unknown> } } } }).value
+    const value = (call.tool as unknown as { value: { result: { result: { case?: string; value?: Record<string, unknown> } } } }).value
     assert.equal(value.result.result?.case, expected, expected)
   }
   // A timeout keeps the command and the time it was given.
   const timeout = serialize(new ShellToolTimeoutError("sleep 100", "/repo", 1_000))
-  const timeoutValue = (timeout.tool as { value: { result: { result: { value: { timeoutMs: number; command: string } } } } }).value.result.result.value
+  const timeoutValue = (timeout.tool as unknown as { value: { result: { result: { value: { timeoutMs: number; command: string } } } } }).value.result.result.value
   assert.equal(timeoutValue.timeoutMs, 1_000)
   assert.equal(timeoutValue.command, "sleep 100")
 })

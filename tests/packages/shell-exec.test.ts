@@ -57,6 +57,19 @@ import {
   spawnWithSandboxHelper,
   spawnWithSandboxHelperPolicy,
 } from "../../source/packages/shell-exec/sandbox/helper-support.ts"
+import { spawnInSandbox } from "../../source/packages/shell-exec/sandbox/sandbox.ts"
+import { createContext } from "../../source/packages/context/context.ts"
+import { createDefaultTerminalExecutor, createNaiveTerminalExecutor, getSuggestedShell } from "../../source/packages/shell-exec/naive.ts"
+import { initZshState } from "../../source/packages/shell-exec/zsh.ts"
+import { initZshLightState } from "../../source/packages/shell-exec/zsh-light.ts"
+import { initBashState } from "../../source/packages/shell-exec/bash.ts"
+import { LazyTerminalExecutor } from "../../source/packages/shell-exec/lazy.ts"
+import { initPowerShellState } from "../../source/packages/shell-exec/powershell.ts"
+import { createShellExitEvent, parseShellStateOutput, splitPwdAndState } from "../../source/packages/shell-exec/core.ts"
+import { BASH_STATE_END_MARKER, BASH_STATE_START_MARKER, default as dumpBashState } from "../../source/packages/shell-exec/dump_bash_state.ts"
+import { ZSH_STATE_END_MARKER, ZSH_STATE_START_MARKER, default as dumpZshState } from "../../source/packages/shell-exec/dump_zsh_state.ts"
+import { ZSH_STATE_LIGHT_MARKER, default as dumpZshLightState } from "../../source/packages/shell-exec/dump_zsh_state_light.ts"
+import { default as powershellWrapperScript } from "../../source/packages/shell-exec/dump_powershell_state.ts"
 
 // ---------------------------------------------------------------------------------------------
 // rewriting a command so sudo does not stop to ask
@@ -815,5 +828,224 @@ test("a policy the helper cannot run is refused rather than run without a sandbo
   assert.throws(
     () => spawnWithSandboxHelperPolicy(process.execPath, [], {}, { type: "insecure_none" } as never),
     /Expected workspace_readwrite or workspace_readonly policy/,
+  )
+})
+
+// ---------------------------------------------------------------------------------------------
+// the shells themselves
+// ---------------------------------------------------------------------------------------------
+
+test("a shell is chosen from what the user's terminal says they are in", () => {
+  // The hint is what the user is actually using, so it wins over what the machine happens to have.
+  assert.equal(getSuggestedShell("zsh"), KnownShellExecutor.Zsh)
+  assert.equal(getSuggestedShell("zsh-light"), KnownShellExecutor.ZshLight)
+  assert.equal(getSuggestedShell("/bin/bash"), KnownShellExecutor.Bash)
+  assert.equal(getSuggestedShell("pwsh"), KnownShellExecutor.PowerShell)
+})
+
+test("a shell nobody has falls back to running commands plainly", () => {
+  const original = process.env.SHELL
+  const originalPath = process.env.PATH
+  process.env.SHELL = "/bin/nonesuch"
+  process.env.PATH = "/nonexistent-directory"
+  try {
+    assert.equal(getSuggestedShell(""), KnownShellExecutor.Naive)
+  } finally {
+    if (original === undefined) delete process.env.SHELL
+    else process.env.SHELL = original
+    if (originalPath === undefined) delete process.env.PATH
+    else process.env.PATH = originalPath
+  }
+})
+
+test("a shell is built once for everyone who asks for it", async () => {
+  let builds = 0
+  const executor = new LazyTerminalExecutor(async () => {
+    builds += 1
+    return createNaiveTerminalExecutor({ shell: "/bin/sh", shellArgs: [] })
+  })
+  const [first, second] = await Promise.all([executor.getCwd(), executor.getCwd()])
+  assert.equal(builds, 1)
+  assert.equal(first, process.cwd())
+  assert.equal(second, process.cwd())
+})
+
+test("a shell that has not been used yet is not built", async () => {
+  let builds = 0
+  const executor = new LazyTerminalExecutor(async () => {
+    builds += 1
+    return createNaiveTerminalExecutor({ shell: "/bin/sh", shellArgs: [] })
+  })
+  const clone = executor.clone("/repo")
+  assert.equal(builds, 0)
+  assert.equal(await clone.getCwd(), "/repo")
+  assert.equal(builds, 1)
+})
+
+test("a stateful shell the caller supplies is the one that is used", async () => {
+  let builds = 0
+  const executor = createDefaultTerminalExecutor({
+    userTerminalHint: "zsh",
+    statefulFactories: {
+      [KnownShellExecutor.Zsh]: async () => {
+        builds += 1
+        return createNaiveTerminalExecutor({ shell: "/bin/sh", shellArgs: [] })
+      },
+    },
+  })
+  assert.equal(builds, 0)
+  assert.equal(await executor.getCwd(), process.cwd())
+  assert.equal(builds, 1)
+})
+
+test("the executor that comes back is the one that matches the machine", () => {
+  const chosen = createDefaultTerminalExecutor({ userTerminalHint: "zsh" })
+  // Whatever is chosen, it is an executor: it can be asked where it is and can be cloned.
+  assert.equal(typeof chosen.getCwd, "function")
+  assert.equal(typeof chosen.clone, "function")
+  const clone = chosen.clone("/tmp")
+  assert.equal(typeof clone.execute, "function")
+})
+
+test("a plain executor runs a command and reports its output and its end", async () => {
+  const executor = createNaiveTerminalExecutor({ shell: "/bin/sh", shellArgs: [] })
+  const events: Array<Record<string, unknown>> = []
+  for await (const event of executor.execute(createContext(), "printf hello")) {
+    events.push(event as Record<string, unknown>)
+  }
+  const output = events.filter(event => event.type === "stdout").map(event => (event.data as Buffer).toString()).join("")
+  assert.equal(output, "hello")
+  const ended = events.find(event => event.type === "exit")
+  assert.equal(ended?.code, 0)
+  assert.equal(ended?.aborted, false)
+})
+
+test("a plain executor reports the directory it was cloned into", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "slate-shell-cwd-"))
+  try {
+    const executor = createNaiveTerminalExecutor({ shell: "/bin/sh", shellArgs: [] }).clone(dir)
+    assert.equal(await executor.getCwd(), dir)
+    assert.equal(await executor.clone("/").getCwd(), "/")
+    // The command itself goes to the process's own directory; the directory the executor carries is what the
+    // sandbox policy is resolved against and what the next clone starts from.
+    let output = ""
+    for await (const event of executor.execute(createContext(), "pwd")) {
+      if (event.type === "stdout") output += event.data.toString()
+    }
+    assert.equal(fs.realpathSync(output.trim()), fs.realpathSync(process.cwd()))
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("a command that fails reports the code it failed with", async () => {
+  const executor = createNaiveTerminalExecutor({ shell: "/bin/sh", shellArgs: [] })
+  let code: number | null | undefined
+  for await (const event of executor.execute(createContext(), "exit 3")) {
+    if (event.type === "exit") code = event.code
+  }
+  assert.equal(code, 3)
+})
+
+test("a command that was already aborted is not run", async () => {
+  const controller = new AbortController()
+  controller.abort()
+  const executor = createNaiveTerminalExecutor({ shell: "/bin/sh", shellArgs: [] })
+  const events: Array<Record<string, unknown>> = []
+  await assert.rejects(async () => {
+    for await (const event of executor.execute(createContext(), "printf hello", { signal: controller.signal })) {
+      events.push(event as Record<string, unknown>)
+    }
+  }, (error: Error) => error.name === "AbortError")
+  // Nothing of the command reaches the caller: the stream carries the abort in place of its output.
+  assert.equal(events.length, 0)
+})
+
+test("a zsh is driven as the user's own shell", async () => {
+  const executor = await initZshState({ env: { ...process.env, PS1: "" } })
+  // The shell's startup dump arrives behind a marker line, which the snapshot check does not skip, so the
+  // shell starts from the process's directory with no state carried into it. Commands still run, in the
+  // user's own zsh, and the executor can be pointed somewhere else.
+  assert.equal(await executor.getCwd(), process.cwd())
+  let output = ""
+  for await (const event of executor.execute(createContext(), "printf zsh-ran")) {
+    if (event.type === "stdout") output += event.data.toString()
+  }
+  assert.equal(output, "zsh-ran")
+  assert.equal(await executor.clone("/").getCwd(), "/")
+})
+
+test("the light zsh is driven the same way", async () => {
+  const executor = await initZshLightState({ env: { ...process.env, PS1: "" } })
+  let output = ""
+  for await (const event of executor.execute(createContext(), "printf light-ran")) {
+    if (event.type === "stdout") output += event.data.toString()
+  }
+  assert.equal(output, "light-ran")
+})
+
+test("a bash carries the working directory and the exported variables between commands", async () => {
+  const executor = await initBashState({ env: { ...process.env, PS1: "" } })
+  for await (const event of executor.execute(createContext(), "cd /tmp && export SLATE_SHELL_TEST=carried")) {
+    void event
+  }
+  assert.equal(await executor.getCwd(), "/tmp")
+  let output = ""
+  for await (const event of executor.execute(createContext(), "printf \"[$SLATE_SHELL_TEST]\" && pwd")) {
+    if (event.type === "stdout") output += event.data.toString()
+  }
+  // The second command runs in the shell the first one left behind: same directory, same variables.
+  assert.match(output, /^\[carried\]/)
+  assert.match(output, /\/tmp\n$/)
+})
+
+test("the powershell executor starts where the process is and can be pointed elsewhere", async () => {
+  const executor = await initPowerShellState()
+  assert.equal(await executor.getCwd(), process.cwd())
+  assert.equal(await executor.clone("/repo").getCwd(), "/repo")
+})
+
+test("a shell's state is split into where it is and everything else", () => {
+  const split = splitPwdAndState("/repo\n# a dump\nrest")
+  assert.equal(split.cwd, "/repo")
+  assert.equal(split.rest, "\n# a dump\nrest")
+})
+
+test("a state dump is read from after its marker", () => {
+  const output = "the shell's own chatter\n__SLATE_STATE_MARKER__\n/repo\nrest"
+  assert.equal(parseShellStateOutput(output, "__SLATE_STATE_MARKER__"), "/repo\nrest")
+  // A dump whose marker never arrived is handed over as it is, since the caller can still look at it.
+  assert.equal(parseShellStateOutput("nothing here", "__SLATE_STATE_MARKER__"), "nothing here")
+})
+
+test("a shell exit event says how it ended and whether it was stopped", () => {
+  assert.deepEqual(createShellExitEvent(0, false), { type: "exit", code: 0, data: "", aborted: false })
+  assert.deepEqual(createShellExitEvent(null, true), { type: "exit", code: null, data: "", aborted: true })
+})
+
+test("the terminal markers of a state dump are the ones its script writes", () => {
+  assert.equal(ZSH_STATE_START_MARKER, "__SLATE_ZSH_STATE_START__")
+  assert.equal(ZSH_STATE_END_MARKER, "__SLATE_ZSH_STATE_END__")
+  assert.equal(ZSH_STATE_LIGHT_MARKER, "__SLATE_ZSH_STATE_LIGHT_VALID__")
+  assert.equal(BASH_STATE_START_MARKER, "__SLATE_BASH_STATE_START__")
+  assert.equal(BASH_STATE_END_MARKER, "__SLATE_BASH_STATE_END__")
+  // Each script says where it is, and each ends with a marker rather than at the end of its output.
+  assert.match(dumpZshState, /dump_zsh_state\(\)/)
+  assert.match(dumpZshState, new RegExp(ZSH_STATE_END_MARKER))
+  assert.match(dumpZshLightState, new RegExp(ZSH_STATE_LIGHT_MARKER))
+  assert.match(dumpBashState, new RegExp(BASH_STATE_END_MARKER))
+  assert.match(powershellWrapperScript("state", "/repo", "echo hi", "/tmp/state.txt"), /Dump-PowerShellState/)
+})
+
+test("a sandbox that this machine cannot enforce stops the command rather than running it", () => {
+  assert.throws(
+    () => spawnInSandbox(process.execPath, ["-e", "0"], {}, { type: "workspace_readwrite" }),
+    (error: unknown) => {
+      assert.equal(error instanceof SandboxUnsupportedError, true)
+      // The reason the helper is unavailable travels with the error, so the caller can say why.
+      assert.match((error as Error).message, /not supported on this system/)
+      assert.notEqual((error as SandboxUnsupportedError).reason, undefined)
+      return true
+    },
   )
 })
