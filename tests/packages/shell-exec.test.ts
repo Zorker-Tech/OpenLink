@@ -50,6 +50,13 @@ import {
   projectSandboxCommand,
 } from "../../source/packages/shell-exec/sandbox/helper-protocol.ts"
 import { buildNativeSandboxPolicy } from "../../source/packages/shell-exec/sandbox/native-policy.ts"
+import { getSandboxPolicyType, resolveSandboxPolicyForWorkspace } from "../../source/packages/shell-exec/sandbox/policy-merge.ts"
+import {
+  getLastSandboxFailureReason,
+  isSandboxHelperSupported,
+  spawnWithSandboxHelper,
+  spawnWithSandboxHelperPolicy,
+} from "../../source/packages/shell-exec/sandbox/helper-support.ts"
 
 // ---------------------------------------------------------------------------------------------
 // rewriting a command so sudo does not stop to ask
@@ -575,4 +582,238 @@ test("a policy that allows the network says so", () => {
   } finally {
     fs.rmSync(dir, { recursive: true, force: true })
   }
+})
+
+// ---------------------------------------------------------------------------------------------
+// one policy from several
+// ---------------------------------------------------------------------------------------------
+
+const policyDir = () => fs.mkdtempSync(path.join(os.tmpdir(), "slate-policy-merge-"))
+
+test("a workspace with no policies at all is not sandboxed", async () => {
+  const dir = policyDir()
+  try {
+    const { policy } = await resolveSandboxPolicyForWorkspace(dir, undefined)
+    assert.deepEqual(policy, { type: "insecure_none" })
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("the strictest source decides whether there is a sandbox at all", () => {
+  assert.equal(getSandboxPolicyType({}), "insecure_none")
+  assert.equal(getSandboxPolicyType({ perUser: { type: "workspace_readonly" } }), "workspace_readonly")
+  // The organization speaks last, then the repository, then the person.
+  assert.equal(getSandboxPolicyType({
+    perUser: { type: "insecure_none" },
+    perRepo: { type: "workspace_readonly" },
+    teamAdmin: { type: "workspace_readwrite" },
+  }), "workspace_readwrite")
+})
+
+test("sources that disagree about the kind of sandbox are not a policy", async () => {
+  const dir = policyDir()
+  try {
+    await assert.rejects(
+      () => resolveSandboxPolicyForWorkspace(dir, { perUser: { type: "workspace_readwrite" }, perRepo: { type: "insecure_none" } }),
+      /Cannot merge policies of different types/,
+    )
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("what may be written is the union of what each source allowed", async () => {
+  const dir = policyDir()
+  try {
+    const { policy } = await resolveSandboxPolicyForWorkspace(dir, {
+      perUser: { type: "workspace_readwrite", additionalReadwritePaths: ["/a"] },
+      perRepo: { type: "workspace_readwrite", additionalReadwritePaths: ["/b"] },
+    })
+    assert.deepEqual((policy.additionalReadwritePaths as string[]).sort(), ["/a", "/b"])
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("a policy that may not write is not given anywhere to write", async () => {
+  const dir = policyDir()
+  try {
+    const { policy } = await resolveSandboxPolicyForWorkspace(dir, {
+      perRepo: { type: "workspace_readonly", additionalReadwritePaths: ["/a"] },
+    })
+    assert.equal(policy.type, "workspace_readonly")
+    assert.equal("additionalReadwritePaths" in policy, false)
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("the read boundary is the strictest one named", async () => {
+  const dir = policyDir()
+  try {
+    const confined = await resolveSandboxPolicyForWorkspace(dir, {
+      perUser: { type: "workspace_readwrite", readBoundary: "system" },
+      perRepo: { type: "workspace_readwrite", readBoundary: "workspace", additionalReadPaths: ["/srv", "/var"] },
+    })
+    assert.equal(confined.policy.readBoundary, "workspace")
+    // Only the paths the confining source named are readable, and only while it is the boundary.
+    assert.deepEqual(confined.policy.additionalReadPaths, ["/srv", "/var"])
+    const open = await resolveSandboxPolicyForWorkspace(dir, {
+      perRepo: { type: "workspace_readwrite", readBoundary: "workspace", additionalReadPaths: ["/srv"] },
+      teamAdmin: { type: "workspace_readwrite", readBoundary: "system" },
+    })
+    // The boundary is still the strictest, so the paths are still the ones that came with it.
+    assert.equal(open.policy.readBoundary, "workspace")
+    assert.deepEqual(open.policy.additionalReadPaths, ["/srv"])
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("what is read-only is everything anyone said was", async () => {
+  const dir = policyDir()
+  try {
+    const { policy } = await resolveSandboxPolicyForWorkspace(dir, {
+      perUser: { type: "workspace_readwrite", additionalReadonlyPaths: ["/secrets"] },
+      perRepo: { type: "workspace_readwrite", additionalReadonlyPaths: ["/etc/ssl"] },
+    })
+    const readonly = policy.additionalReadonlyPaths as string[]
+    assert.equal(readonly.includes("/secrets"), true)
+    assert.equal(readonly.includes("/etc/ssl"), true)
+    // The platform's own protections are in there as well, since a policy is never less than the baseline.
+    assert.equal(readonly.some(entry => entry.endsWith("sandbox-policies")), true)
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("a boolean that tightens the sandbox is true if anyone said so", async () => {
+  const dir = policyDir()
+  try {
+    const { policy } = await resolveSandboxPolicyForWorkspace(dir, {
+      perRepo: { type: "workspace_readwrite", disableTmpWrite: true },
+    })
+    assert.equal(policy.disableTmpWrite, true)
+    assert.equal(policy.networkPolicyStrict, true)
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("a choice rather than a restriction comes from the highest priority source", async () => {
+  const dir = policyDir()
+  try {
+    const { policy } = await resolveSandboxPolicyForWorkspace(dir, {
+      perUser: { type: "workspace_readwrite", debugOutputDir: "/user", enableSharedBuildCache: false },
+      perRepo: { type: "workspace_readwrite", debugOutputDir: "/repo" },
+      teamAdmin: { type: "workspace_readwrite", debugOutputDir: "/org" },
+    })
+    assert.equal(policy.debugOutputDir, "/org")
+    assert.equal(policy.enableSharedBuildCache, false)
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("a network policy denies if anyone denied, and allows what anyone allowed", async () => {
+  const dir = policyDir()
+  try {
+    const { policy } = await resolveSandboxPolicyForWorkspace(dir, {
+      perUser: { type: "workspace_readwrite", networkPolicy: { version: 1, default: "allow", allow: ["a.example"], deny: ["bad.example"] } },
+      perRepo: { type: "workspace_readwrite", networkPolicy: { version: 1, default: "allow", allow: ["b.example"] } },
+    })
+    const network = policy.networkPolicy as { default: string; allow: string[]; deny: string[] }
+    // Nobody denied by default, so the default stays what it was; the deny list is still the union.
+    assert.equal(network.default, "allow")
+    assert.deepEqual([...network.allow].sort(), ["a.example", "b.example"])
+    assert.deepEqual(network.deny, ["bad.example"])
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("the organization's allowlist replaces what the others allowed", async () => {
+  const dir = policyDir()
+  try {
+    const { policy } = await resolveSandboxPolicyForWorkspace(dir, {
+      perUser: { type: "workspace_readwrite", networkPolicy: { version: 1, default: "allow", allow: ["mine.example"] } },
+      teamAdmin: { type: "workspace_readwrite", networkPolicy: { version: 1, default: "allow", allow: ["org.example"] } },
+    })
+    assert.deepEqual((policy.networkPolicy as { allow: string[] }).allow, ["org.example"])
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("a policy that names nothing about the network denies it", async () => {
+  const dir = policyDir()
+  try {
+    const { policy } = await resolveSandboxPolicyForWorkspace(dir, { perRepo: { type: "workspace_readwrite" } })
+    assert.deepEqual(policy.networkPolicy, { version: 1, default: "deny" })
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("a policy denies the network by default when a source says so", async () => {
+  const dir = policyDir()
+  try {
+    const { policy } = await resolveSandboxPolicyForWorkspace(dir, {
+      perUser: { type: "workspace_readwrite", networkPolicy: { version: 1, default: "allow" } },
+      perRepo: { type: "workspace_readwrite", networkPolicy: { version: 1, default: "deny" } },
+    })
+    assert.equal((policy.networkPolicy as { default: string }).default, "deny")
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("a policy that is not sandboxed still merges what it was told", async () => {
+  const dir = policyDir()
+  try {
+    const { policy } = await resolveSandboxPolicyForWorkspace(dir, {
+      perUser: { type: "insecure_none", captureDenies: true, enableSharedBuildCache: true },
+    })
+    assert.equal(policy.type, "insecure_none")
+    assert.equal(policy.captureDenies, true)
+    assert.equal(policy.enableSharedBuildCache, true)
+    // Nothing else is carried, since a policy that does not sandbox has nothing to configure.
+    assert.equal("writeProtectionMapping" in policy, false)
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+// ---------------------------------------------------------------------------------------------
+// the sandbox helper
+// ---------------------------------------------------------------------------------------------
+
+test("the sandbox is reported as unsupported when no helper is configured", () => {
+  // Nothing is configured in a test process, and the answer is remembered rather than probed again.
+  assert.equal(isSandboxHelperSupported(), false)
+  assert.match(getLastSandboxFailureReason() ?? "", /not configured/)
+})
+
+test("a spawn is refused before anything is run when there is no helper", () => {
+  // The helper is looked for before the policy is read, so a spawn without one is refused whatever the
+  // policy says rather than quietly running the command unsandboxed.
+  assert.throws(
+    () => spawnWithSandboxHelper(process.execPath, ["-e", "process.exit(0)"], {}, { type: "insecure_none" }),
+    /Sandbox binary not available/,
+  )
+})
+
+test("a command that is sandboxed is refused when there is no helper to run it", () => {
+  assert.throws(
+    () => spawnWithSandboxHelper(process.execPath, [], {}, { type: "workspace_readwrite" }),
+    /Sandbox binary not available/,
+  )
+})
+
+test("a policy the helper cannot run is refused rather than run without a sandbox", () => {
+  assert.throws(
+    () => spawnWithSandboxHelperPolicy(process.execPath, [], {}, { type: "insecure_none" } as never),
+    /Expected workspace_readwrite or workspace_readonly policy/,
+  )
 })
