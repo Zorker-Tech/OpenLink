@@ -22,7 +22,7 @@ import {
 import { createContext, createKey, type Context } from "./context.ts"
 
 /** Span identity in a form that can cross a process boundary and be restored later. */
-interface SerializableSpanContext {
+export interface SerializableSpanContext {
   traceId: string
   spanId: string
   traceFlags: number
