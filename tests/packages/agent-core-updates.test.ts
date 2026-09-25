@@ -3,6 +3,7 @@ import assert from "node:assert/strict"
 
 import { createRedactedString } from "../../source/packages/redaction/create.ts"
 import { DataClassification } from "../../source/packages/redaction/classification.ts"
+import { createContext } from "../../source/packages/context/context.ts"
 import { PrivacyMode } from "../../source/packages/redaction/privacy-mode.ts"
 import {
   FeedbackRequestCategory,
@@ -187,8 +188,9 @@ test("redacted feedback categories carry the mode with each entry", () => {
 
 test("a conversation with no queue behind it reports nothing queued", async () => {
   const receiver = new agentCore.NoopConversationActionReceiver()
-  assert.equal(await receiver.peek({}), undefined)
-  assert.equal(await receiver.pop({}), undefined)
+  const context = createContext()
+  assert.equal(await receiver.peek(context), undefined)
+  assert.equal(await receiver.pop(context), undefined)
 })
 
 test("the module's surface is reachable from one place", () => {
