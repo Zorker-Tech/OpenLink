@@ -24,7 +24,8 @@
     "iconv-lite": "^0.7.0",
     "jschardet": "^3.1.4",
     "lru-cache": "^11.5.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@bufbuild/buf": "^1.73.0",
