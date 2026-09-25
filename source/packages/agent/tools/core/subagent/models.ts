@@ -1,0 +1,54 @@
+/**
+ * Which models a subagent may be given, and how the model is told about them.
+ *
+ * The list is what the session can actually reach — a blocked model is left out rather than listed and
+ * then refused — and the description of it is written as an instruction rather than a menu: a model asked
+ * to use a slug it was not offered tends to substitute one, which produces a subagent running on
+ * something nobody chose. So the description says to skip the launch and tell the user instead.
+ *
+ * The inherit option is offered only where inheriting is meaningful, and it is worded as the default,
+ * because the common case is a subagent that should keep the parent's model.
+ */
+
+import { SubagentModelId } from "../../subagent-model-ids.ts"
+
+type ModelDefinition = { readonly slug: string }
+
+export interface SubagentModels {
+  readonly modelsBySlug: Map<string, ModelDefinition>
+}
+
+export const DEFAULT_SUBAGENT_SLUG = SubagentModelId.standard
+
+export function createSubagentModels(
+  models: Record<string, ModelDefinition>,
+  isModelBlocked?: (slug: string) => boolean,
+): SubagentModels {
+  const modelsBySlug = new Map<string, ModelDefinition>()
+  for (const definition of Object.values(models)) {
+    if (isModelBlocked?.(definition.slug)) continue
+    modelsBySlug.set(definition.slug, definition)
+  }
+  return { modelsBySlug }
+}
+
+export function buildAvailableModelsDescription(
+  subagentModels: SubagentModels,
+  includeInheritOption = false,
+): string {
+  if (subagentModels.modelsBySlug.size === 0) {
+    return "No alternative models are available. Subagents will inherit the parent model."
+  }
+  const inheritOption = includeInheritOption
+    ? "- inherit (default; required unless the user explicitly requested another model)\n"
+    : ""
+  const slugList = [...subagentModels.modelsBySlug.keys()].sort().map(slug => `- ${slug}`).join("\n")
+  return `If the user explicitly asks for the model of a subagent/task, you may ONLY use model slugs from this list:
+${inheritOption}${slugList}
+
+If the user isn't asking for a specific version, prefer the latest version of the model family. As an example, if the user just says "gpt" or "claude", use the latest available version of GPT or Claude.
+
+IMPORTANT: If the user requests a model that is NOT in the list above, do NOT substitute a different model or guess. Instead, skip launching the subagent with that model and tell the user which model was unavailable and which models are available.
+
+When speaking to the USER about which model you selected for a subagent, do NOT use the kebab-case model names unless the user requested the model using that format. Ue the same naming scheme the user used to discuss the model when they requested it.`
+}
