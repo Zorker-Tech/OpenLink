@@ -22,6 +22,7 @@
     "@jimp/plugin-resize": "^1.6.0",
     "@opentelemetry/api": "^1.9.0",
     "@slate/work-protocol": "workspace:*",
+    "@streamparser/json": "^0.0.22",
     "ai": "^4.3.17",
     "diff": "^8.0.4",
     "gray-matter": "^4.0.3",
