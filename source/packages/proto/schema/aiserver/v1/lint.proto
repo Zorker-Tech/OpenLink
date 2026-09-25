@@ -12,15 +12,15 @@ import "aiserver/v1/utils.proto";
 message AiLintBug {
   string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
   string message = 2 [json_name = "message"];
-  .aiserver.v1.SimpleRange replace_range = 3 [json_name = "replaceRange"];
+  optional .aiserver.v1.SimpleRange replace_range = 3 [json_name = "replaceRange"];
   string replace_text = 4 [json_name = "replaceText"];
   string replace_initial_text = 5 [json_name = "replaceInitialText"];
-  .aiserver.v1.SimpleRange reevaluate_range = 6 [json_name = "reevaluateRange"];
+  optional .aiserver.v1.SimpleRange reevaluate_range = 6 [json_name = "reevaluateRange"];
   string reevaluate_initial_text = 7 [json_name = "reevaluateInitialText"];
   string uuid = 8 [json_name = "uuid"];
   .aiserver.v1.LintGenerator generator = 9 [json_name = "generator"];
   repeated .aiserver.v1.LintDiscriminatorResult discriminator_results = 10 [json_name = "discriminatorResults"];
-  .aiserver.v1.LogprobsLintPayload logprobs_payload = 11 [json_name = "logprobsPayload"];
+  optional .aiserver.v1.LogprobsLintPayload logprobs_payload = 11 [json_name = "logprobsPayload"];
 }
 
 message LintDiscriminatorResult {
@@ -46,7 +46,7 @@ message AiLintInlineSuggestion {
   string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
   string message = 2 [json_name = "message"];
   int32 line_number = 3 [json_name = "lineNumber"];
-  .aiserver.v1.SimpleRange reevaluate_range = 4 [json_name = "reevaluateRange"];
+  optional .aiserver.v1.SimpleRange reevaluate_range = 4 [json_name = "reevaluateRange"];
   string reevaluate_initial_text = 5 [json_name = "reevaluateInitialText"];
   string uuid = 8 [json_name = "uuid"];
 }
@@ -65,8 +65,8 @@ message LintChunk {
 
 message LintChunkRequest {
   string relative_file_path = 1 [json_name = "relativeFilePath"];
-  .aiserver.v1.LintChunk chunk = 2 [json_name = "chunk"];
-  bool use_speculative_linter = 3 [json_name = "useSpeculativeLinter"];
+  optional .aiserver.v1.LintChunk chunk = 2 [json_name = "chunk"];
+  optional bool use_speculative_linter = 3 [json_name = "useSpeculativeLinter"];
 }
 
 message LintChunkResponse {
@@ -89,7 +89,7 @@ enum LintDiscriminator {
 
 message LintExplanationRequest {
   string relative_file_path = 1 [json_name = "relativeFilePath"];
-  .aiserver.v1.LintChunk chunk = 2 [json_name = "chunk"];
+  optional .aiserver.v1.LintChunk chunk = 2 [json_name = "chunk"];
   string line_selection = 3 [json_name = "lineSelection"];
   int32 token_start_index = 4 [json_name = "tokenStartIndex"];
   int32 token_end_index = 5 [json_name = "tokenEndIndex"];
@@ -117,9 +117,9 @@ message LintFileResponse {
 
 message LintFimChunkRequest {
   string relative_file_path = 1 [json_name = "relativeFilePath"];
-  .aiserver.v1.LintChunk prefix = 2 [json_name = "prefix"];
-  .aiserver.v1.LintChunk suffix = 3 [json_name = "suffix"];
-  .aiserver.v1.LintChunk middle = 4 [json_name = "middle"];
+  optional .aiserver.v1.LintChunk prefix = 2 [json_name = "prefix"];
+  optional .aiserver.v1.LintChunk suffix = 3 [json_name = "suffix"];
+  optional .aiserver.v1.LintChunk middle = 4 [json_name = "middle"];
 }
 
 message LintFimChunkResponse {

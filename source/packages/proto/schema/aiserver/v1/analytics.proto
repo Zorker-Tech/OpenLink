@@ -10,7 +10,7 @@ package aiserver.v1;
 import "google/protobuf/struct.proto";
 
 message AnalyticsContext {
-  .aiserver.v1.ClientInfo client = 1 [json_name = "client"];
+  optional .aiserver.v1.ClientInfo client = 1 [json_name = "client"];
 }
 
 message AnalyticsEvent {
@@ -21,12 +21,12 @@ message AnalyticsEvent {
 
 message BatchEvent {
   string event = 1 [json_name = "event"];
-  .google.protobuf.Struct properties = 2 [json_name = "properties"];
+  optional .google.protobuf.Struct properties = 2 [json_name = "properties"];
   int64 timestamp = 3 [json_name = "timestamp"];
-  string user_id = 4 [json_name = "userId"];
-  string anonymous_id = 5 [json_name = "anonymousId"];
-  string message_id = 6 [json_name = "messageId"];
-  .aiserver.v1.AnalyticsContext context = 7 [json_name = "context"];
+  optional string user_id = 4 [json_name = "userId"];
+  optional string anonymous_id = 5 [json_name = "anonymousId"];
+  optional string message_id = 6 [json_name = "messageId"];
+  optional .aiserver.v1.AnalyticsContext context = 7 [json_name = "context"];
 }
 
 message BatchRequest {
@@ -37,14 +37,14 @@ message BatchResponse {
 }
 
 message BootstrapStatsigRequest {
-  bool ignore_dev_status = 1 [json_name = "ignoreDevStatus"];
-  .aiserver.v1.ClientOS operating_system = 2 [json_name = "operatingSystem"];
-  string device_model = 3 [json_name = "deviceModel"];
-  string os_version = 4 [json_name = "osVersion"];
-  string form_factor = 5 [json_name = "formFactor"];
-  string stable_id = 6 [json_name = "stableId"];
-  string client_channel = 7 [json_name = "clientChannel"];
-  string bundle_id = 8 [json_name = "bundleId"];
+  optional bool ignore_dev_status = 1 [json_name = "ignoreDevStatus"];
+  optional .aiserver.v1.ClientOS operating_system = 2 [json_name = "operatingSystem"];
+  optional string device_model = 3 [json_name = "deviceModel"];
+  optional string os_version = 4 [json_name = "osVersion"];
+  optional string form_factor = 5 [json_name = "formFactor"];
+  optional string stable_id = 6 [json_name = "stableId"];
+  optional string client_channel = 7 [json_name = "clientChannel"];
+  optional string bundle_id = 8 [json_name = "bundleId"];
 }
 
 message BootstrapStatsigResponse {
@@ -53,11 +53,11 @@ message BootstrapStatsigResponse {
 }
 
 message ClientInfo {
-  string os = 1 [json_name = "os"];
-  string arch = 2 [json_name = "arch"];
-  string os_version = 3 [json_name = "osVersion"];
-  string version = 4 [json_name = "version"];
-  string layout = 5 [json_name = "layout"];
+  optional string os = 1 [json_name = "os"];
+  optional string arch = 2 [json_name = "arch"];
+  optional string os_version = 3 [json_name = "osVersion"];
+  optional string version = 4 [json_name = "version"];
+  optional string layout = 5 [json_name = "layout"];
 }
 
 message ClientLogEntry {
@@ -65,8 +65,8 @@ message ClientLogEntry {
   string message = 2 [json_name = "message"];
   map<string, string> metadata = 3 [json_name = "metadata"];
   int64 timestamp = 4 [json_name = "timestamp"];
-  string error_message = 5 [json_name = "errorMessage"];
-  string error_stack = 6 [json_name = "errorStack"];
+  optional string error_message = 5 [json_name = "errorMessage"];
+  optional string error_stack = 6 [json_name = "errorStack"];
   string key = 7 [json_name = "key"];
 }
 
@@ -107,7 +107,7 @@ message EventData {
 }
 
 message GetFirstWindowStatsigDecisionRequest {
-  .aiserver.v1.ClientOS operating_system = 1 [json_name = "operatingSystem"];
+  optional .aiserver.v1.ClientOS operating_system = 1 [json_name = "operatingSystem"];
 }
 
 message GetFirstWindowStatsigDecisionResponse {
@@ -118,17 +118,17 @@ message GetFirstWindowStatsigDecisionResponse {
 message IngestConversationRequest {
   string conversation_id = 1 [json_name = "conversationId"];
   string transcript = 2 [json_name = "transcript"];
-  string transcript_json = 3 [json_name = "transcriptJson"];
-  string mode = 4 [json_name = "mode"];
-  string model = 5 [json_name = "model"];
+  optional string transcript_json = 3 [json_name = "transcriptJson"];
+  optional string mode = 4 [json_name = "mode"];
+  optional string model = 5 [json_name = "model"];
   int64 last_updated_at = 6 [json_name = "lastUpdatedAt"];
 }
 
 message IngestConversationResponse {
   bool success = 1 [json_name = "success"];
-  string summary = 2 [json_name = "summary"];
-  string detailed_summary = 3 [json_name = "detailedSummary"];
-  string error_message = 4 [json_name = "errorMessage"];
+  optional string summary = 2 [json_name = "summary"];
+  optional string detailed_summary = 3 [json_name = "detailedSummary"];
+  optional string error_message = 4 [json_name = "errorMessage"];
 }
 
 message SubmitLogsRequest {
@@ -137,7 +137,7 @@ message SubmitLogsRequest {
 
 message SubmitLogsResponse {
   bool success = 1 [json_name = "success"];
-  string error_message = 2 [json_name = "errorMessage"];
+  optional string error_message = 2 [json_name = "errorMessage"];
   uint32 logs_processed = 3 [json_name = "logsProcessed"];
   uint32 logs_dropped = 4 [json_name = "logsDropped"];
 }

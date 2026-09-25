@@ -15,7 +15,7 @@ message RepositoryIndexingInfo {
   string repo_owner = 5 [json_name = "repoOwner"];
   bool is_tracked = 6 [json_name = "isTracked"];
   bool is_local = 7 [json_name = "isLocal"];
-  double orthogonal_transform_seed = 8 [json_name = "orthogonalTransformSeed"];
+  optional double orthogonal_transform_seed = 8 [json_name = "orthogonalTransformSeed"];
   string workspace_uri = 9 [json_name = "workspaceUri"];
   string path_encryption_key = 10 [json_name = "pathEncryptionKey"];
 }

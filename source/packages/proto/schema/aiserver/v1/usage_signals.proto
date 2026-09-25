@@ -16,7 +16,7 @@ message GetProjectionSnapshotResponse {
   string policy_id = 1 [json_name = "policyId"];
   uint32 policy_version = 2 [json_name = "policyVersion"];
   uint64 snapshot_version = 3 [json_name = "snapshotVersion"];
-  .aiserver.v1.ProjectionScoreSet team = 4 [json_name = "team"];
+  optional .aiserver.v1.ProjectionScoreSet team = 4 [json_name = "team"];
   bool not_modified = 5 [json_name = "notModified"];
 }
 

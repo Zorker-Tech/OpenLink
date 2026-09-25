@@ -652,7 +652,7 @@ export class CreateExperimentalIndexResponse extends Message<CreateExperimentalI
  */
 export class ExtractPathsRequest extends Message<ExtractPathsRequest> {
   /**
-   * @generated from field: aiserver.v1.FileCodeSnippets file_code_snippets = 1;
+   * @generated from field: optional aiserver.v1.FileCodeSnippets file_code_snippets = 1;
    */
   fileCodeSnippets?: FileCodeSnippets;
 
@@ -664,7 +664,7 @@ export class ExtractPathsRequest extends Message<ExtractPathsRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ExtractPathsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "file_code_snippets", kind: "message", T: FileCodeSnippets },
+    { no: 1, name: "file_code_snippets", kind: "message", T: FileCodeSnippets, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ExtractPathsRequest {
@@ -1085,12 +1085,12 @@ export class ListenExperimentalIndexResponse extends Message<ListenExperimentalI
  */
 export class ListenExperimentalIndexResponse_ChooseItem extends Message<ListenExperimentalIndexResponse_ChooseItem> {
   /**
-   * @generated from field: aiserver.v1.ChooseCodeReferencesResponse response = 1;
+   * @generated from field: optional aiserver.v1.ChooseCodeReferencesResponse response = 1;
    */
   response?: ChooseCodeReferencesResponse;
 
   /**
-   * @generated from field: aiserver.v1.ChooseCodeReferencesRequest request = 2;
+   * @generated from field: optional aiserver.v1.ChooseCodeReferencesRequest request = 2;
    */
   request?: ChooseCodeReferencesRequest;
 
@@ -1107,8 +1107,8 @@ export class ListenExperimentalIndexResponse_ChooseItem extends Message<ListenEx
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ListenExperimentalIndexResponse.ChooseItem";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "response", kind: "message", T: ChooseCodeReferencesResponse },
-    { no: 2, name: "request", kind: "message", T: ChooseCodeReferencesRequest },
+    { no: 1, name: "response", kind: "message", T: ChooseCodeReferencesResponse, opt: true },
+    { no: 2, name: "request", kind: "message", T: ChooseCodeReferencesRequest, opt: true },
     { no: 3, name: "req_uuid", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
@@ -1214,7 +1214,7 @@ export class ListenExperimentalIndexResponse_ReadyItem extends Message<ListenExp
   indexId = "";
 
   /**
-   * @generated from field: aiserver.v1.ListenExperimentalIndexRequest request = 2;
+   * @generated from field: optional aiserver.v1.ListenExperimentalIndexRequest request = 2;
    */
   request?: ListenExperimentalIndexRequest;
 
@@ -1227,7 +1227,7 @@ export class ListenExperimentalIndexResponse_ReadyItem extends Message<ListenExp
   static readonly typeName = "aiserver.v1.ListenExperimentalIndexResponse.ReadyItem";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "index_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "request", kind: "message", T: ListenExperimentalIndexRequest },
+    { no: 2, name: "request", kind: "message", T: ListenExperimentalIndexRequest, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListenExperimentalIndexResponse_ReadyItem {
@@ -1252,12 +1252,12 @@ export class ListenExperimentalIndexResponse_ReadyItem extends Message<ListenExp
  */
 export class ListenExperimentalIndexResponse_RegisterItem extends Message<ListenExperimentalIndexResponse_RegisterItem> {
   /**
-   * @generated from field: aiserver.v1.RegisterFileToIndexResponse response = 1;
+   * @generated from field: optional aiserver.v1.RegisterFileToIndexResponse response = 1;
    */
   response?: RegisterFileToIndexResponse;
 
   /**
-   * @generated from field: aiserver.v1.RegisterFileToIndexRequest request = 2;
+   * @generated from field: optional aiserver.v1.RegisterFileToIndexRequest request = 2;
    */
   request?: RegisterFileToIndexRequest;
 
@@ -1274,8 +1274,8 @@ export class ListenExperimentalIndexResponse_RegisterItem extends Message<Listen
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ListenExperimentalIndexResponse.RegisterItem";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "response", kind: "message", T: RegisterFileToIndexResponse },
-    { no: 2, name: "request", kind: "message", T: RegisterFileToIndexRequest },
+    { no: 1, name: "response", kind: "message", T: RegisterFileToIndexResponse, opt: true },
+    { no: 2, name: "request", kind: "message", T: RegisterFileToIndexRequest, opt: true },
     { no: 3, name: "req_uuid", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
@@ -1301,12 +1301,12 @@ export class ListenExperimentalIndexResponse_RegisterItem extends Message<Listen
  */
 export class ListenExperimentalIndexResponse_SummarizeItem extends Message<ListenExperimentalIndexResponse_SummarizeItem> {
   /**
-   * @generated from field: aiserver.v1.SummarizeWithReferencesResponse response = 1;
+   * @generated from field: optional aiserver.v1.SummarizeWithReferencesResponse response = 1;
    */
   response?: SummarizeWithReferencesResponse;
 
   /**
-   * @generated from field: aiserver.v1.SummarizeWithReferencesRequest request = 2;
+   * @generated from field: optional aiserver.v1.SummarizeWithReferencesRequest request = 2;
    */
   request?: SummarizeWithReferencesRequest;
 
@@ -1323,8 +1323,8 @@ export class ListenExperimentalIndexResponse_SummarizeItem extends Message<Liste
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ListenExperimentalIndexResponse.SummarizeItem";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "response", kind: "message", T: SummarizeWithReferencesResponse },
-    { no: 2, name: "request", kind: "message", T: SummarizeWithReferencesRequest },
+    { no: 1, name: "response", kind: "message", T: SummarizeWithReferencesResponse, opt: true },
+    { no: 2, name: "request", kind: "message", T: SummarizeWithReferencesRequest, opt: true },
     { no: 3, name: "req_uuid", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
@@ -1440,7 +1440,7 @@ export class RegisterFileToIndexRequest extends Message<RegisterFileToIndexReque
   workspaceRelativePath = "";
 
   /**
-   * @generated from field: aiserver.v1.SerializedContextNode root_context_node = 3;
+   * @generated from field: optional aiserver.v1.SerializedContextNode root_context_node = 3;
    */
   rootContextNode?: SerializedContextNode;
 
@@ -1459,7 +1459,7 @@ export class RegisterFileToIndexRequest extends Message<RegisterFileToIndexReque
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "index_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "workspace_relative_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "root_context_node", kind: "message", T: SerializedContextNode },
+    { no: 3, name: "root_context_node", kind: "message", T: SerializedContextNode, opt: true },
     { no: 4, name: "content", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
 
@@ -1500,7 +1500,7 @@ export class RegisterFileToIndexResponse extends Message<RegisterFileToIndexResp
   dependencyResolutionAttempts: URIResolutionAttempt[] = [];
 
   /**
-   * @generated from field: aiserver.v1.IndexFileData file_data = 4;
+   * @generated from field: optional aiserver.v1.IndexFileData file_data = 4;
    */
   fileData?: IndexFileData;
 
@@ -1515,7 +1515,7 @@ export class RegisterFileToIndexResponse extends Message<RegisterFileToIndexResp
     { no: 1, name: "file_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "root_context_node_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "dependency_resolution_attempts", kind: "message", T: URIResolutionAttempt, repeated: true },
-    { no: 4, name: "file_data", kind: "message", T: IndexFileData },
+    { no: 4, name: "file_data", kind: "message", T: IndexFileData, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RegisterFileToIndexResponse {
@@ -1597,7 +1597,7 @@ export class SerializedContextNode extends Message<SerializedContextNode> {
   children: SerializedContextNode[] = [];
 
   /**
-   * @generated from field: aiserver.v1.FileCodeSnippets node_snippets = 5;
+   * @generated from field: optional aiserver.v1.FileCodeSnippets node_snippets = 5;
    */
   nodeSnippets?: FileCodeSnippets;
 
@@ -1613,7 +1613,7 @@ export class SerializedContextNode extends Message<SerializedContextNode> {
     { no: 2, name: "start_line_number", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 3, name: "end_line_number", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 4, name: "children", kind: "message", T: SerializedContextNode, repeated: true },
-    { no: 5, name: "node_snippets", kind: "message", T: FileCodeSnippets },
+    { no: 5, name: "node_snippets", kind: "message", T: FileCodeSnippets, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SerializedContextNode {
@@ -1897,12 +1897,12 @@ export class SummarizeWithReferencesResponse_Success extends Message<SummarizeWi
  */
 export class SymbolActionResultReference extends Message<SymbolActionResultReference> {
   /**
-   * @generated from field: aiserver.v1.SimpleRange range = 1;
+   * @generated from field: optional aiserver.v1.SimpleRange range = 1;
    */
   range?: SimpleRange;
 
   /**
-   * @generated from field: aiserver.v1.FileCodeSnippets reference = 2;
+   * @generated from field: optional aiserver.v1.FileCodeSnippets reference = 2;
    */
   reference?: FileCodeSnippets;
 
@@ -1914,8 +1914,8 @@ export class SymbolActionResultReference extends Message<SymbolActionResultRefer
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SymbolActionResultReference";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "range", kind: "message", T: SimpleRange },
-    { no: 2, name: "reference", kind: "message", T: FileCodeSnippets },
+    { no: 1, name: "range", kind: "message", T: SimpleRange, opt: true },
+    { no: 2, name: "reference", kind: "message", T: FileCodeSnippets, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SymbolActionResultReference {
@@ -1940,7 +1940,7 @@ export class SymbolActionResultReference extends Message<SymbolActionResultRefer
  */
 export class SymbolActionResults extends Message<SymbolActionResults> {
   /**
-   * @generated from field: aiserver.v1.CodeSymbolWithAction action = 1;
+   * @generated from field: optional aiserver.v1.CodeSymbolWithAction action = 1;
    */
   action?: CodeSymbolWithAction;
 
@@ -1957,7 +1957,7 @@ export class SymbolActionResults extends Message<SymbolActionResults> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SymbolActionResults";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "action", kind: "message", T: CodeSymbolWithAction },
+    { no: 1, name: "action", kind: "message", T: CodeSymbolWithAction, opt: true },
     { no: 2, name: "references", kind: "message", T: SymbolActionResultReference, repeated: true },
   ]);
 
@@ -1993,7 +1993,7 @@ export class URIResolutionAttempt extends Message<URIResolutionAttempt> {
   nodeId = "";
 
   /**
-   * @generated from field: aiserver.v1.CodeSymbolWithAction symbol = 3;
+   * @generated from field: optional aiserver.v1.CodeSymbolWithAction symbol = 3;
    */
   symbol?: CodeSymbolWithAction;
 
@@ -2007,7 +2007,7 @@ export class URIResolutionAttempt extends Message<URIResolutionAttempt> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "workspace_relative_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "node_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "symbol", kind: "message", T: CodeSymbolWithAction },
+    { no: 3, name: "symbol", kind: "message", T: CodeSymbolWithAction, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): URIResolutionAttempt {
@@ -2032,7 +2032,7 @@ export class URIResolutionAttempt extends Message<URIResolutionAttempt> {
  */
 export class URIResolutionResult extends Message<URIResolutionResult> {
   /**
-   * @generated from field: aiserver.v1.URIResolutionAttempt request = 1;
+   * @generated from field: optional aiserver.v1.URIResolutionAttempt request = 1;
    */
   request?: URIResolutionAttempt;
 
@@ -2049,7 +2049,7 @@ export class URIResolutionResult extends Message<URIResolutionResult> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.URIResolutionResult";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "request", kind: "message", T: URIResolutionAttempt },
+    { no: 1, name: "request", kind: "message", T: URIResolutionAttempt, opt: true },
     { no: 2, name: "resolved_paths", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
 

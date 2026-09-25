@@ -17,13 +17,13 @@ message BugReport {
   repeated .aiserver.v1.BugLocation locations = 1 [json_name = "locations"];
   string id = 2 [json_name = "id"];
   string description = 3 [json_name = "description"];
-  float confidence = 4 [json_name = "confidence"];
-  string category = 5 [json_name = "category"];
-  string severity = 6 [json_name = "severity"];
-  string title = 7 [json_name = "title"];
-  string rationale = 9 [json_name = "rationale"];
-  string triggered_by_rule_id = 10 [json_name = "triggeredByRuleId"];
-  float model_confidence = 11 [json_name = "modelConfidence"];
+  optional float confidence = 4 [json_name = "confidence"];
+  optional string category = 5 [json_name = "category"];
+  optional string severity = 6 [json_name = "severity"];
+  optional string title = 7 [json_name = "title"];
+  optional string rationale = 9 [json_name = "rationale"];
+  optional string triggered_by_rule_id = 10 [json_name = "triggeredByRuleId"];
+  optional float model_confidence = 11 [json_name = "modelConfidence"];
 }
 
 message BugLocation {
@@ -34,20 +34,20 @@ message BugLocation {
 }
 
 message StreamBugBotRequest {
-  .aiserver.v1.GitDiff git_diff = 1 [json_name = "gitDiff"];
-  .aiserver.v1.ModelDetails model_details = 2 [json_name = "modelDetails"];
-  string user_instructions = 3 [json_name = "userInstructions"];
-  string bug_detection_guidelines = 4 [json_name = "bugDetectionGuidelines"];
-  int32 iterations = 5 [json_name = "iterations"];
+  optional .aiserver.v1.GitDiff git_diff = 1 [json_name = "gitDiff"];
+  optional .aiserver.v1.ModelDetails model_details = 2 [json_name = "modelDetails"];
+  optional string user_instructions = 3 [json_name = "userInstructions"];
+  optional string bug_detection_guidelines = 4 [json_name = "bugDetectionGuidelines"];
+  optional int32 iterations = 5 [json_name = "iterations"];
   bool in_background_subsidized = 6 [json_name = "inBackgroundSubsidized"];
-  string session_id = 7 [json_name = "sessionId"];
-  string price_id = 8 [json_name = "priceId"];
+  optional string session_id = 7 [json_name = "sessionId"];
+  optional string price_id = 8 [json_name = "priceId"];
   bool has_telemetry = 9 [json_name = "hasTelemetry"];
-  string constrain_to_file = 10 [json_name = "constrainToFile"];
-  .aiserver.v1.StreamBugBotRequest.Range constrain_to_range = 11 [json_name = "constrainToRange"];
-  int32 unified_context_lines = 12 [json_name = "unifiedContextLines"];
+  optional string constrain_to_file = 10 [json_name = "constrainToFile"];
+  optional .aiserver.v1.StreamBugBotRequest.Range constrain_to_range = 11 [json_name = "constrainToRange"];
+  optional int32 unified_context_lines = 12 [json_name = "unifiedContextLines"];
   repeated .aiserver.v1.CodeBlock context_files = 13 [json_name = "contextFiles"];
-  bool deep_review = 14 [json_name = "deepReview"];
+  optional bool deep_review = 14 [json_name = "deepReview"];
   message Range {
     int32 start_line = 1 [json_name = "startLine"];
     int32 end_line_inclusive = 2 [json_name = "endLineInclusive"];
@@ -57,7 +57,7 @@ message StreamBugBotRequest {
 message AddBugbotFeedbackRequest {
   int64 comment_id = 1 [json_name = "commentId"];
   .aiserver.v1.BugbotFeedbackReaction reaction = 2 [json_name = "reaction"];
-  string feedback = 3 [json_name = "feedback"];
+  optional string feedback = 3 [json_name = "feedback"];
 }
 
 message AddBugbotFeedbackResponse {
@@ -65,14 +65,14 @@ message AddBugbotFeedbackResponse {
 }
 
 message BugBotDiscriminatorPromptProps {
-  .aiserver.v1.StreamBugBotRequest req = 1 [json_name = "req"];
-  .aiserver.v1.BugReport bug = 2 [json_name = "bug"];
+  optional .aiserver.v1.StreamBugBotRequest req = 1 [json_name = "req"];
+  optional .aiserver.v1.BugReport bug = 2 [json_name = "bug"];
   string date = 3 [json_name = "date"];
   string seed = 4 [json_name = "seed"];
 }
 
 message BugBotDiscriminatorTrainingPromptProps {
-  .aiserver.v1.BugBotDiscriminatorPromptProps props = 1 [json_name = "props"];
+  optional .aiserver.v1.BugBotDiscriminatorPromptProps props = 1 [json_name = "props"];
   bool is_real_bug = 2 [json_name = "isRealBug"];
 }
 
@@ -99,8 +99,8 @@ enum BugbotFeedbackReaction {
 }
 
 message FileAndOutline {
-  .aiserver.v1.CodeBlock file = 1 [json_name = "file"];
-  string outline = 2 [json_name = "outline"];
+  optional .aiserver.v1.CodeBlock file = 1 [json_name = "file"];
+  optional string outline = 2 [json_name = "outline"];
 }
 
 message GetBugBotRunEtaRequest {
@@ -111,7 +111,7 @@ message GetBugBotRunEtaRequest {
 
 message GetBugBotRunEtaResponse {
   .aiserver.v1.BugBotRunStatus status = 1 [json_name = "status"];
-  int64 estimated_completion_time_ms = 2 [json_name = "estimatedCompletionTimeMs"];
+  optional int64 estimated_completion_time_ms = 2 [json_name = "estimatedCompletionTimeMs"];
 }
 
 message GetEncryptedBugDataMultipleRequest {
@@ -129,13 +129,13 @@ message GetEncryptedBugDataRequest {
 }
 
 message GetEncryptedBugDataResponse {
-  .aiserver.v1.BugReport bug_report = 1 [json_name = "bugReport"];
+  optional .aiserver.v1.BugReport bug_report = 1 [json_name = "bugReport"];
 }
 
 message LogDeeplinkEventRequest {
   int32 user_id = 1 [json_name = "userId"];
   string bug_id = 2 [json_name = "bugId"];
-  int64 comment_id = 3 [json_name = "commentId"];
+  optional int64 comment_id = 3 [json_name = "commentId"];
   .aiserver.v1.BugbotDeeplinkEventKind event = 4 [json_name = "event"];
 }
 
@@ -144,9 +144,9 @@ message LogDeeplinkEventResponse {
 }
 
 message RunBugBotPromptProps {
-  .aiserver.v1.StreamBugBotRequest req = 1 [json_name = "req"];
+  optional .aiserver.v1.StreamBugBotRequest req = 1 [json_name = "req"];
   string seed = 2 [json_name = "seed"];
   string date = 3 [json_name = "date"];
   repeated .aiserver.v1.FileAndOutline context_files = 4 [json_name = "contextFiles"];
-  string file_content_source = 5 [json_name = "fileContentSource"];
+  optional string file_content_source = 5 [json_name = "fileContentSource"];
 }

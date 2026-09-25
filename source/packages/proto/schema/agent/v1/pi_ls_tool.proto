@@ -10,13 +10,13 @@ package agent.v1;
 import "agent/v1/pi_common.proto";
 
 message PiLsToolCall {
-  .agent.v1.PiLsToolArgs args = 1 [json_name = "args"];
-  .agent.v1.PiLsToolResult result = 2 [json_name = "result"];
+  optional .agent.v1.PiLsToolArgs args = 1 [json_name = "args"];
+  optional .agent.v1.PiLsToolResult result = 2 [json_name = "result"];
 }
 
 message PiLsToolArgs {
-  string path = 1 [json_name = "path"];
-  int32 limit = 2 [json_name = "limit"];
+  optional string path = 1 [json_name = "path"];
+  optional int32 limit = 2 [json_name = "limit"];
 }
 
 message PiLsToolResult {
@@ -28,8 +28,8 @@ message PiLsToolResult {
 
 message PiLsToolSuccess {
   string output = 1 [json_name = "output"];
-  .agent.v1.PiTruncation truncation = 2 [json_name = "truncation"];
-  uint32 entry_limit_reached = 3 [json_name = "entryLimitReached"];
+  optional .agent.v1.PiTruncation truncation = 2 [json_name = "truncation"];
+  optional uint32 entry_limit_reached = 3 [json_name = "entryLimitReached"];
 }
 
 message PiLsToolError {

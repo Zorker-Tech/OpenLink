@@ -38,7 +38,7 @@ message ConversationMessage {
   repeated string relevant_files = 17 [json_name = "relevantFiles"];
   repeated .aiserver.v1.ConversationMessage.ToolResult tool_results = 18 [json_name = "toolResults"];
   repeated .aiserver.v1.ConversationMessage.NotepadContext notepads = 19 [json_name = "notepads"];
-  bool is_capability_iteration = 20 [json_name = "isCapabilityIteration"];
+  optional bool is_capability_iteration = 20 [json_name = "isCapabilityIteration"];
   repeated .aiserver.v1.ComposerCapabilityRequest capabilities = 21 [json_name = "capabilities"];
   repeated .aiserver.v1.ConversationMessage.EditTrailContext edit_trail_contexts = 22 [json_name = "editTrailContexts"];
   repeated .aiserver.v1.SuggestedCodeBlock suggested_code_blocks = 23 [json_name = "suggestedCodeBlocks"];
@@ -49,86 +49,86 @@ message ConversationMessage {
   repeated .aiserver.v1.ConversationMessage.RecentLocation recent_locations_history = 28 [json_name = "recentLocationsHistory"];
   bool is_agentic = 29 [json_name = "isAgentic"];
   repeated .aiserver.v1.ComposerFileDiffHistory file_diff_trajectories = 30 [json_name = "fileDiffTrajectories"];
-  .aiserver.v1.ConversationSummary conversation_summary = 31 [json_name = "conversationSummary"];
-  string server_bubble_id = 32 [json_name = "serverBubbleId"];
+  optional .aiserver.v1.ConversationSummary conversation_summary = 31 [json_name = "conversationSummary"];
+  optional string server_bubble_id = 32 [json_name = "serverBubbleId"];
   bool existed_subsequent_terminal_command = 33 [json_name = "existedSubsequentTerminalCommand"];
   bool existed_previous_terminal_command = 34 [json_name = "existedPreviousTerminalCommand"];
   repeated .aiserver.v1.DocsReference docs_references = 35 [json_name = "docsReferences"];
   repeated .aiserver.v1.WebReference web_references = 36 [json_name = "webReferences"];
-  .aiserver.v1.ViewableGitContext git_context = 37 [json_name = "gitContext"];
+  optional .aiserver.v1.ViewableGitContext git_context = 37 [json_name = "gitContext"];
   repeated .aiserver.v1.ListDirResult attached_folders_list_dir_results = 38 [json_name = "attachedFoldersListDirResults"];
-  .aiserver.v1.ConversationSummary cached_conversation_summary = 39 [json_name = "cachedConversationSummary"];
+  optional .aiserver.v1.ConversationSummary cached_conversation_summary = 39 [json_name = "cachedConversationSummary"];
   repeated .aiserver.v1.ConversationMessage.HumanChange human_changes = 40 [json_name = "humanChanges"];
   bool attached_human_changes = 41 [json_name = "attachedHumanChanges"];
   repeated .aiserver.v1.ConversationMessage.ComposerContext summarized_composers = 42 [json_name = "summarizedComposers"];
   repeated .aiserver.v1.CursorRule cursor_rules = 43 [json_name = "cursorRules"];
   repeated .aiserver.v1.ContextPiece context_pieces = 44 [json_name = "contextPieces"];
-  .aiserver.v1.ConversationMessage.Thinking thinking = 45 [json_name = "thinking"];
+  optional .aiserver.v1.ConversationMessage.Thinking thinking = 45 [json_name = "thinking"];
   repeated .aiserver.v1.ConversationMessage.Thinking all_thinking_blocks = 46 [json_name = "allThinkingBlocks"];
-  .aiserver.v1.StreamUnifiedChatRequest.UnifiedMode unified_mode = 47 [json_name = "unifiedMode"];
+  optional .aiserver.v1.StreamUnifiedChatRequest.UnifiedMode unified_mode = 47 [json_name = "unifiedMode"];
   repeated .aiserver.v1.ConversationMessage.DiffSinceLastApply diffs_since_last_apply = 48 [json_name = "diffsSinceLastApply"];
   repeated .aiserver.v1.ConversationMessage.DeletedFile deleted_files = 49 [json_name = "deletedFiles"];
-  string usage_uuid = 50 [json_name = "usageUuid"];
+  optional string usage_uuid = 50 [json_name = "usageUuid"];
   repeated .aiserver.v1.ClientSideToolV2 supported_tools = 51 [json_name = "supportedTools"];
-  .aiserver.v1.CurrentFileLocationData current_file_location_data = 52 [json_name = "currentFileLocationData"];
-  bool edit_tool_supports_search_and_replace = 53 [json_name = "editToolSupportsSearchAndReplace"];
-  string last_terminal_cwd = 54 [json_name = "lastTerminalCwd"];
-  bool user_explicitly_asked_to_generate_cursor_rules = 55 [json_name = "userExplicitlyAskedToGenerateCursorRules"];
+  optional .aiserver.v1.CurrentFileLocationData current_file_location_data = 52 [json_name = "currentFileLocationData"];
+  optional bool edit_tool_supports_search_and_replace = 53 [json_name = "editToolSupportsSearchAndReplace"];
+  optional string last_terminal_cwd = 54 [json_name = "lastTerminalCwd"];
+  optional bool user_explicitly_asked_to_generate_cursor_rules = 55 [json_name = "userExplicitlyAskedToGenerateCursorRules"];
   repeated .aiserver.v1.RCPLogEntry console_logs = 56 [json_name = "consoleLogs"];
-  string rich_text = 57 [json_name = "richText"];
+  optional string rich_text = 57 [json_name = "richText"];
   repeated .aiserver.v1.ConversationMessage.KnowledgeItem knowledge_items = 58 [json_name = "knowledgeItems"];
   repeated .aiserver.v1.RCPUIElementPicked ui_element_picked = 59 [json_name = "uiElementPicked"];
-  bool user_explicitly_asked_to_add_to_knowledge_base = 60 [json_name = "userExplicitlyAskedToAddToKnowledgeBase"];
+  optional bool user_explicitly_asked_to_add_to_knowledge_base = 60 [json_name = "userExplicitlyAskedToAddToKnowledgeBase"];
   repeated .aiserver.v1.ConversationMessage.DocumentationSelection documentation_selections = 61 [json_name = "documentationSelections"];
   repeated .aiserver.v1.ComposerExternalLink external_links = 62 [json_name = "externalLinks"];
-  bool use_web = 63 [json_name = "useWeb"];
+  optional bool use_web = 63 [json_name = "useWeb"];
   repeated .aiserver.v1.ProjectLayout project_layouts = 64 [json_name = "projectLayouts"];
-  int32 thinking_duration_ms = 65 [json_name = "thinkingDurationMs"];
-  .aiserver.v1.SubagentReturnCall subagent_return = 66 [json_name = "subagentReturn"];
-  bool is_simple_looping_message = 67 [json_name = "isSimpleLoopingMessage"];
+  optional int32 thinking_duration_ms = 65 [json_name = "thinkingDurationMs"];
+  optional .aiserver.v1.SubagentReturnCall subagent_return = 66 [json_name = "subagentReturn"];
+  optional bool is_simple_looping_message = 67 [json_name = "isSimpleLoopingMessage"];
   repeated .aiserver.v1.ComposerCapabilityContext capability_contexts = 68 [json_name = "capabilityContexts"];
-  string checkpoint_commit_hash = 69 [json_name = "checkpointCommitHash"];
-  string git_status_raw = 70 [json_name = "gitStatusRaw"];
+  optional string checkpoint_commit_hash = 69 [json_name = "checkpointCommitHash"];
+  optional string git_status_raw = 70 [json_name = "gitStatusRaw"];
   repeated .aiserver.v1.TodoItem todos = 71 [json_name = "todos"];
-  bool is_review_edits_followup = 72 [json_name = "isReviewEditsFollowup"];
-  .aiserver.v1.ConversationMessage.IdeEditorsState ide_editors_state = 73 [json_name = "ideEditorsState"];
+  optional bool is_review_edits_followup = 72 [json_name = "isReviewEditsFollowup"];
+  optional .aiserver.v1.ConversationMessage.IdeEditorsState ide_editors_state = 73 [json_name = "ideEditorsState"];
   string request_id = 74 [json_name = "requestId"];
   repeated .aiserver.v1.AiWebSearchResult ai_web_search_results = 75 [json_name = "aiWebSearchResults"];
-  .aiserver.v1.ContextWindowStatus context_window_status = 76 [json_name = "contextWindowStatus"];
-  bool is_plan_execution = 77 [json_name = "isPlanExecution"];
+  optional .aiserver.v1.ContextWindowStatus context_window_status = 76 [json_name = "contextWindowStatus"];
+  optional bool is_plan_execution = 77 [json_name = "isPlanExecution"];
   string created_at = 78 [json_name = "createdAt"];
-  .aiserver.v1.ModelInfo model_info = 79 [json_name = "modelInfo"];
-  bool is_quick_search_query = 80 [json_name = "isQuickSearchQuery"];
-  .aiserver.v1.ConversationMessage.PlanUpdate plan_update = 81 [json_name = "planUpdate"];
-  bool is_simulated_msg = 82 [json_name = "isSimulatedMsg"];
+  optional .aiserver.v1.ModelInfo model_info = 79 [json_name = "modelInfo"];
+  optional bool is_quick_search_query = 80 [json_name = "isQuickSearchQuery"];
+  optional .aiserver.v1.ConversationMessage.PlanUpdate plan_update = 81 [json_name = "planUpdate"];
+  optional bool is_simulated_msg = 82 [json_name = "isSimulatedMsg"];
   repeated .aiserver.v1.ConversationMessage.McpDescriptor mcp_descriptors = 83 [json_name = "mcpDescriptors"];
-  string workspace_project_dir = 84 [json_name = "workspaceProjectDir"];
-  .aiserver.v1.ConversationMessage.ThinkingStyle thinking_style = 85 [json_name = "thinkingStyle"];
-  .agent.v1.DebugModeConfig debug_mode_config = 86 [json_name = "debugModeConfig"];
+  optional string workspace_project_dir = 84 [json_name = "workspaceProjectDir"];
+  optional .aiserver.v1.ConversationMessage.ThinkingStyle thinking_style = 85 [json_name = "thinkingStyle"];
+  optional .agent.v1.DebugModeConfig debug_mode_config = 86 [json_name = "debugModeConfig"];
   repeated string workspace_uris = 87 [json_name = "workspaceUris"];
-  int32 step_duration_ms = 88 [json_name = "stepDurationMs"];
-  bytes text_blob_id = 89 [json_name = "textBlobId"];
-  bytes rich_text_blob_id = 90 [json_name = "richTextBlobId"];
+  optional int32 step_duration_ms = 88 [json_name = "stepDurationMs"];
+  optional bytes text_blob_id = 89 [json_name = "textBlobId"];
+  optional bytes rich_text_blob_id = 90 [json_name = "richTextBlobId"];
   repeated .agent.v1.SelectedCursorCommand cursor_commands = 91 [json_name = "cursorCommands"];
   bool cursor_commands_explicitly_set = 92 [json_name = "cursorCommandsExplicitlySet"];
   repeated .agent.v1.SelectedPastChat past_chats = 93 [json_name = "pastChats"];
   bool past_chats_explicitly_set = 94 [json_name = "pastChatsExplicitlySet"];
-  .agent.v1.SimulatedMsgReason simulated_msg_reason = 95 [json_name = "simulatedMsgReason"];
-  .agent.v1.TriggeringUserInfo triggering_user_info = 96 [json_name = "triggeringUserInfo"];
-  .aiserver.v1.ConversationMessage.SimulatedMessageMetadata simulated_message_metadata = 97 [json_name = "simulatedMessageMetadata"];
-  .agent.v1.AgentMode agent_mode = 98 [json_name = "agentMode"];
+  optional .agent.v1.SimulatedMsgReason simulated_msg_reason = 95 [json_name = "simulatedMsgReason"];
+  optional .agent.v1.TriggeringUserInfo triggering_user_info = 96 [json_name = "triggeringUserInfo"];
+  optional .aiserver.v1.ConversationMessage.SimulatedMessageMetadata simulated_message_metadata = 97 [json_name = "simulatedMessageMetadata"];
+  optional .agent.v1.AgentMode agent_mode = 98 [json_name = "agentMode"];
   message CodeChunk {
     string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
     int32 start_line_number = 2 [json_name = "startLineNumber"];
     repeated string lines = 3 [json_name = "lines"];
-    .aiserver.v1.ConversationMessage.CodeChunk.SummarizationStrategy summarization_strategy = 4 [json_name = "summarizationStrategy"];
+    optional .aiserver.v1.ConversationMessage.CodeChunk.SummarizationStrategy summarization_strategy = 4 [json_name = "summarizationStrategy"];
     string language_identifier = 5 [json_name = "languageIdentifier"];
-    .aiserver.v1.ConversationMessage.CodeChunk.Intent intent = 6 [json_name = "intent"];
-    bool is_final_version = 7 [json_name = "isFinalVersion"];
-    bool is_first_version = 8 [json_name = "isFirstVersion"];
-    bool contents_are_missing = 9 [json_name = "contentsAreMissing"];
-    bool is_only_included_from_folder = 10 [json_name = "isOnlyIncludedFromFolder"];
-    .aiserver.v1.ConversationMessage.CodeChunk.CodeChunkGitContext code_chunk_git_context = 11 [json_name = "codeChunkGitContext"];
+    optional .aiserver.v1.ConversationMessage.CodeChunk.Intent intent = 6 [json_name = "intent"];
+    optional bool is_final_version = 7 [json_name = "isFinalVersion"];
+    optional bool is_first_version = 8 [json_name = "isFirstVersion"];
+    optional bool contents_are_missing = 9 [json_name = "contentsAreMissing"];
+    optional bool is_only_included_from_folder = 10 [json_name = "isOnlyIncludedFromFolder"];
+    optional .aiserver.v1.ConversationMessage.CodeChunk.CodeChunkGitContext code_chunk_git_context = 11 [json_name = "codeChunkGitContext"];
     message CodeChunkGitContext {
       repeated .aiserver.v1.ConversationMessage.CodeChunk.CodeChunkGitContext.CodeChunkGitInfo git_info = 1 [json_name = "gitInfo"];
       message CodeChunkGitInfo {
@@ -165,7 +165,7 @@ message ConversationMessage {
     int32 end_column = 6 [json_name = "endColumn"];
   }
   message Lints {
-    .aiserver.v1.GetLintsForChangeResponse lints = 1 [json_name = "lints"];
+    optional .aiserver.v1.GetLintsForChangeResponse lints = 1 [json_name = "lints"];
     string chat_codeblock_model_value = 2 [json_name = "chatCodeblockModelValue"];
   }
   message ToolResult {
@@ -175,14 +175,14 @@ message ConversationMessage {
     string args = 4 [json_name = "args"];
     string raw_args = 5 [json_name = "rawArgs"];
     repeated .aiserver.v1.ConversationMessage.CodeChunk attached_code_chunks = 6 [json_name = "attachedCodeChunks"];
-    string content = 7 [json_name = "content"];
-    .aiserver.v1.ClientSideToolV2Result result = 8 [json_name = "result"];
-    .aiserver.v1.ToolResultError error = 9 [json_name = "error"];
+    optional string content = 7 [json_name = "content"];
+    optional .aiserver.v1.ClientSideToolV2Result result = 8 [json_name = "result"];
+    optional .aiserver.v1.ToolResultError error = 9 [json_name = "error"];
     repeated .aiserver.v1.ImageProto images = 10 [json_name = "images"];
-    .aiserver.v1.ClientSideToolV2Call tool_call = 11 [json_name = "toolCall"];
-    string model_call_id = 12 [json_name = "modelCallId"];
-    uint64 started_at_ms = 13 [json_name = "startedAtMs"];
-    uint64 completed_at_ms = 14 [json_name = "completedAtMs"];
+    optional .aiserver.v1.ClientSideToolV2Call tool_call = 11 [json_name = "toolCall"];
+    optional string model_call_id = 12 [json_name = "modelCallId"];
+    optional uint64 started_at_ms = 13 [json_name = "startedAtMs"];
+    optional uint64 completed_at_ms = 14 [json_name = "completedAtMs"];
   }
   message NotepadContext {
     string name = 1 [json_name = "name"];
@@ -208,7 +208,7 @@ message ConversationMessage {
   }
   message ComposerContext {
     string name = 1 [json_name = "name"];
-    .aiserver.v1.ConversationSummary conversation_summary = 2 [json_name = "conversationSummary"];
+    optional .aiserver.v1.ConversationSummary conversation_summary = 2 [json_name = "conversationSummary"];
   }
   message Thinking {
     string text = 1 [json_name = "text"];
@@ -218,10 +218,10 @@ message ConversationMessage {
   }
   message DiffSinceLastApply {
     string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
-    .aiserver.v1.EditFileResult.FileDiff diff = 2 [json_name = "diff"];
-    bool is_accepted = 4 [json_name = "isAccepted"];
-    bool is_rejected = 5 [json_name = "isRejected"];
-    int32 last_apply_chained_from_n_human_messages_ago = 6 [json_name = "lastApplyChainedFromNHumanMessagesAgo"];
+    optional .aiserver.v1.EditFileResult.FileDiff diff = 2 [json_name = "diff"];
+    optional bool is_accepted = 4 [json_name = "isAccepted"];
+    optional bool is_rejected = 5 [json_name = "isRejected"];
+    optional int32 last_apply_chained_from_n_human_messages_ago = 6 [json_name = "lastApplyChainedFromNHumanMessagesAgo"];
   }
   message DeletedFile {
     string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
@@ -244,11 +244,11 @@ message ConversationMessage {
     repeated .aiserver.v1.ConversationMessage.IdeEditorsState.File recently_viewed_files = 5 [json_name = "recentlyViewedFiles"];
     message File {
       string relative_path = 1 [json_name = "relativePath"];
-      bool is_currently_focused = 2 [json_name = "isCurrentlyFocused"];
-      int32 current_line_number = 3 [json_name = "currentLineNumber"];
-      string current_line_text = 4 [json_name = "currentLineText"];
-      int32 line_count = 5 [json_name = "lineCount"];
-      string absolute_path = 6 [json_name = "absolutePath"];
+      optional bool is_currently_focused = 2 [json_name = "isCurrentlyFocused"];
+      optional int32 current_line_number = 3 [json_name = "currentLineNumber"];
+      optional string current_line_text = 4 [json_name = "currentLineText"];
+      optional int32 line_count = 5 [json_name = "lineCount"];
+      optional string absolute_path = 6 [json_name = "absolutePath"];
     }
   }
   message PlanUpdate {
@@ -256,21 +256,21 @@ message ConversationMessage {
     bool is_first_time_seen = 2 [json_name = "isFirstTimeSeen"];
   }
   message SimulatedMessageMetadata {
-    string title = 1 [json_name = "title"];
-    string task_id = 2 [json_name = "taskId"];
-    string fsd_finding_action = 3 [json_name = "fsdFindingAction"];
-    string url = 4 [json_name = "url"];
-    .agent.v1.SubscriptionSource subscription_source = 5 [json_name = "subscriptionSource"];
-    .agent.v1.SubscriptionEventDisplay subscription_event_display = 6 [json_name = "subscriptionEventDisplay"];
+    optional string title = 1 [json_name = "title"];
+    optional string task_id = 2 [json_name = "taskId"];
+    optional string fsd_finding_action = 3 [json_name = "fsdFindingAction"];
+    optional string url = 4 [json_name = "url"];
+    optional .agent.v1.SubscriptionSource subscription_source = 5 [json_name = "subscriptionSource"];
+    optional .agent.v1.SubscriptionEventDisplay subscription_event_display = 6 [json_name = "subscriptionEventDisplay"];
   }
   message McpDescriptor {
     string folder_path = 1 [json_name = "folderPath"];
-    string server_name = 2 [json_name = "serverName"];
+    optional string server_name = 2 [json_name = "serverName"];
     repeated .aiserver.v1.ConversationMessage.McpDescriptor.Tool tools = 3 [json_name = "tools"];
-    string server_use_instructions = 4 [json_name = "serverUseInstructions"];
+    optional string server_use_instructions = 4 [json_name = "serverUseInstructions"];
     message Tool {
       string tool_name = 1 [json_name = "toolName"];
-      string description = 2 [json_name = "description"];
+      optional string description = 2 [json_name = "description"];
     }
   }
   message RenderedDiff {
@@ -283,11 +283,11 @@ message ConversationMessage {
   }
   message EditLocation {
     string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
-    .aiserver.v1.SimplestRange range = 3 [json_name = "range"];
-    .aiserver.v1.SimplestRange initial_range = 4 [json_name = "initialRange"];
+    optional .aiserver.v1.SimplestRange range = 3 [json_name = "range"];
+    optional .aiserver.v1.SimplestRange initial_range = 4 [json_name = "initialRange"];
     string context_lines = 5 [json_name = "contextLines"];
     string text = 6 [json_name = "text"];
-    .aiserver.v1.SimplestRange text_range = 7 [json_name = "textRange"];
+    optional .aiserver.v1.SimplestRange text_range = 7 [json_name = "textRange"];
   }
   enum MessageType {
     MESSAGE_TYPE_UNSPECIFIED = 0;
@@ -299,7 +299,7 @@ message ConversationMessage {
     string content = 2 [json_name = "content"];
     string relative_workspace_path = 3 [json_name = "relativeWorkspacePath"];
     message RangeWithPriority {
-      .aiserver.v1.SimplestRange range = 1 [json_name = "range"];
+      optional .aiserver.v1.SimplestRange range = 1 [json_name = "range"];
       double priority = 2 [json_name = "priority"];
     }
   }
@@ -334,8 +334,8 @@ message SimpleFileDiff {
   message Chunk {
     repeated string old_lines = 1 [json_name = "oldLines"];
     repeated string new_lines = 2 [json_name = "newLines"];
-    .aiserver.v1.LineRange old_range = 3 [json_name = "oldRange"];
-    .aiserver.v1.LineRange new_range = 4 [json_name = "newRange"];
+    optional .aiserver.v1.LineRange old_range = 3 [json_name = "oldRange"];
+    optional .aiserver.v1.LineRange new_range = 4 [json_name = "newRange"];
   }
 }
 
@@ -352,7 +352,7 @@ message FolderInfo {
 message UserResponseToSuggestedCodeBlock {
   .aiserver.v1.UserResponseToSuggestedCodeBlock.UserResponseType user_response_type = 1 [json_name = "userResponseType"];
   string file_path = 2 [json_name = "filePath"];
-  .aiserver.v1.FileDiff user_modifications_to_suggested_code_blocks = 3 [json_name = "userModificationsToSuggestedCodeBlocks"];
+  optional .aiserver.v1.FileDiff user_modifications_to_suggested_code_blocks = 3 [json_name = "userModificationsToSuggestedCodeBlocks"];
   enum UserResponseType {
     USER_RESPONSE_TYPE_UNSPECIFIED = 0;
     USER_RESPONSE_TYPE_ACCEPT = 1;
@@ -378,7 +378,7 @@ message DiffHistoryData {
   repeated .aiserver.v1.ComposerFileDiff diffs = 2 [json_name = "diffs"];
   double timestamp = 3 [json_name = "timestamp"];
   string unique_id = 4 [json_name = "uniqueId"];
-  .aiserver.v1.ComposerFileDiff start_to_end_diff = 5 [json_name = "startToEndDiff"];
+  optional .aiserver.v1.ComposerFileDiff start_to_end_diff = 5 [json_name = "startToEndDiff"];
 }
 
 message ComposerFileDiffHistory {
@@ -415,8 +415,8 @@ message AiWebSearchResult {
 }
 
 message ViewableGitContext {
-  .aiserver.v1.ViewableCommitProps commit_data = 1 [json_name = "commitData"];
-  .aiserver.v1.ViewablePRProps pull_request_data = 2 [json_name = "pullRequestData"];
+  optional .aiserver.v1.ViewableCommitProps commit_data = 1 [json_name = "commitData"];
+  optional .aiserver.v1.ViewablePRProps pull_request_data = 2 [json_name = "pullRequestData"];
   repeated .aiserver.v1.ViewableDiffProps diff_data = 3 [json_name = "diffData"];
 }
 
@@ -434,8 +434,8 @@ message CurrentFileLocationData {
 
 message ProjectLayout {
   string root_path = 1 [json_name = "rootPath"];
-  .aiserver.v1.ProjectLayoutDirectoryContent content = 2 [json_name = "content"];
-  .aiserver.v1.ListDirV2Result list_dir_v2_result = 3 [json_name = "listDirV2Result"];
+  optional .aiserver.v1.ProjectLayoutDirectoryContent content = 2 [json_name = "content"];
+  optional .aiserver.v1.ListDirV2Result list_dir_v2_result = 3 [json_name = "listDirV2Result"];
 }
 
 message SubagentReturnCall {
@@ -450,16 +450,16 @@ message SubagentReturnCall {
 
 message ContextWindowStatus {
   int32 percentage_remaining = 1 [json_name = "percentageRemaining"];
-  int32 tokens_used = 2 [json_name = "tokensUsed"];
-  int32 token_limit = 3 [json_name = "tokenLimit"];
-  float percentage_remaining_float = 4 [json_name = "percentageRemainingFloat"];
+  optional int32 tokens_used = 2 [json_name = "tokensUsed"];
+  optional int32 token_limit = 3 [json_name = "tokenLimit"];
+  optional float percentage_remaining_float = 4 [json_name = "percentageRemainingFloat"];
 }
 
 message DeepSearchSubagentReturnValue {
   repeated .aiserver.v1.DeepSearchSubagentReturnValue.ContextItem context_items = 1 [json_name = "contextItems"];
   message ContextItem {
     string file = 1 [json_name = "file"];
-    .aiserver.v1.LineRange line_range = 2 [json_name = "lineRange"];
+    optional .aiserver.v1.LineRange line_range = 2 [json_name = "lineRange"];
     string explanation = 3 [json_name = "explanation"];
   }
 }
@@ -484,14 +484,14 @@ message StringReplacement {
 message ProjectLayoutDirectoryContent {
   repeated .aiserver.v1.ProjectLayoutDirectory directories = 1 [json_name = "directories"];
   repeated .aiserver.v1.ProjectLayoutFile files = 2 [json_name = "files"];
-  int32 total_files = 3 [json_name = "totalFiles"];
-  int32 total_subfolders = 4 [json_name = "totalSubfolders"];
+  optional int32 total_files = 3 [json_name = "totalFiles"];
+  optional int32 total_subfolders = 4 [json_name = "totalSubfolders"];
   repeated .aiserver.v1.ProjectLayoutFile hidden_files = 5 [json_name = "hiddenFiles"];
 }
 
 message ProjectLayoutDirectory {
   string name = 1 [json_name = "name"];
-  .aiserver.v1.ProjectLayoutDirectoryContent content = 2 [json_name = "content"];
+  optional .aiserver.v1.ProjectLayoutDirectoryContent content = 2 [json_name = "content"];
 }
 
 message ProjectLayoutFile {
@@ -574,25 +574,25 @@ message FileLink {
 message ServiceStatusUpdate {
   string message = 1 [json_name = "message"];
   string codicon = 2 [json_name = "codicon"];
-  bool allow_command_links_potentially_unsafe_please_only_use_for_handwritten_trusted_markdown = 3 [json_name = "allowCommandLinksPotentiallyUnsafePleaseOnlyUseForHandwrittenTrustedMarkdown"];
-  string action_to_run_on_status_update = 4 [json_name = "actionToRunOnStatusUpdate"];
+  optional bool allow_command_links_potentially_unsafe_please_only_use_for_handwritten_trusted_markdown = 3 [json_name = "allowCommandLinksPotentiallyUnsafePleaseOnlyUseForHandwrittenTrustedMarkdown"];
+  optional string action_to_run_on_status_update = 4 [json_name = "actionToRunOnStatusUpdate"];
 }
 
 message StatusUpdate {
   string message = 1 [json_name = "message"];
-  string metadata = 2 [json_name = "metadata"];
+  optional string metadata = 2 [json_name = "metadata"];
 }
 
 message RankedContext {
-  .aiserver.v1.ContextToRank context = 1 [json_name = "context"];
+  optional .aiserver.v1.ContextToRank context = 1 [json_name = "context"];
   float score = 2 [json_name = "score"];
 }
 
 message ContextToRank {
   string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
   string contents = 2 [json_name = "contents"];
-  .aiserver.v1.LineRange line_range = 3 [json_name = "lineRange"];
-  .aiserver.v1.CodeBlock code_block = 4 [json_name = "codeBlock"];
+  optional .aiserver.v1.LineRange line_range = 3 [json_name = "lineRange"];
+  optional .aiserver.v1.CodeBlock code_block = 4 [json_name = "codeBlock"];
 }
 
 message ContextRerankingCandidateFile {
@@ -618,11 +618,11 @@ message CodeChunkContextInclusionInfo {
   .aiserver.v1.CodeChunkContextInclusionInfo.InclusionType inclusion_type = 4 [json_name = "inclusionType"];
   int32 full_file_token_count = 5 [json_name = "fullFileTokenCount"];
   int32 prompt_token_count = 6 [json_name = "promptTokenCount"];
-  string exclusion_tooltip = 7 [json_name = "exclusionTooltip"];
+  optional string exclusion_tooltip = 7 [json_name = "exclusionTooltip"];
   .aiserver.v1.CodeChunkContextInclusionInfo.Intent intent = 8 [json_name = "intent"];
   bool chunk_is_from_last_user_message = 9 [json_name = "chunkIsFromLastUserMessage"];
   bool is_compressed = 10 [json_name = "isCompressed"];
-  .aiserver.v1.CodeChunkContextInclusionInfo.TokenCount full_file_tokens_count = 11 [json_name = "fullFileTokensCount"];
+  optional .aiserver.v1.CodeChunkContextInclusionInfo.TokenCount full_file_tokens_count = 11 [json_name = "fullFileTokensCount"];
   enum InclusionType {
     INCLUSION_TYPE_UNSPECIFIED = 0;
     INCLUSION_TYPE_FULL = 1;
@@ -645,11 +645,11 @@ message CodeChunkContextInclusionInfoV2 {
   int32 start_line_number = 2 [json_name = "startLineNumber"];
   int32 end_line_number_inclusive = 3 [json_name = "endLineNumberInclusive"];
   .aiserver.v1.CodeChunkContextInclusionInfoV2.Intent intent = 4 [json_name = "intent"];
-  string detail_text = 5 [json_name = "detailText"];
-  string tooltip_text = 6 [json_name = "tooltipText"];
-  string codicon_name = 7 [json_name = "codiconName"];
-  string pill_sub_codicon_name = 8 [json_name = "pillSubCodiconName"];
-  bool pill_is_dashed = 9 [json_name = "pillIsDashed"];
+  optional string detail_text = 5 [json_name = "detailText"];
+  optional string tooltip_text = 6 [json_name = "tooltipText"];
+  optional string codicon_name = 7 [json_name = "codiconName"];
+  optional string pill_sub_codicon_name = 8 [json_name = "pillSubCodiconName"];
+  optional bool pill_is_dashed = 9 [json_name = "pillIsDashed"];
   .aiserver.v1.CodeChunkContextInclusionInfoV2.InclusionType inclusion_type = 10 [json_name = "inclusionType"];
   enum InclusionType {
     INCLUSION_TYPE_UNSPECIFIED = 0;
@@ -670,7 +670,7 @@ message ContextPieceUpdate {
 
 message ConversationMessageHeader {
   string bubble_id = 1 [json_name = "bubbleId"];
-  string server_bubble_id = 2 [json_name = "serverBubbleId"];
+  optional string server_bubble_id = 2 [json_name = "serverBubbleId"];
   .aiserver.v1.ConversationMessage.MessageType type = 3 [json_name = "type"];
 }
 
@@ -684,18 +684,18 @@ message ConversationSummaryStrategy {
     .aiserver.v1.ConversationSummaryStrategy.ArbitrarySummaryPlusToolResultTruncation arbitrary_summary_plus_tool_result_truncation = 2 [json_name = "arbitrarySummaryPlusToolResultTruncation"];
   }
   message ArbitrarySummaryPlusToolResultTruncation {
-    .aiserver.v1.ConversationSummary arbitrary_summary = 1 [json_name = "arbitrarySummary"];
+    optional .aiserver.v1.ConversationSummary arbitrary_summary = 1 [json_name = "arbitrarySummary"];
     int32 tool_result_truncation_length = 2 [json_name = "toolResultTruncationLength"];
   }
 }
 
 message ConvertOALToNALRequest {
-  .aiserver.v1.StreamUnifiedChatRequest request = 1 [json_name = "request"];
+  optional .aiserver.v1.StreamUnifiedChatRequest request = 1 [json_name = "request"];
   map<string, .agent.v1.FileState> file_states = 2 [json_name = "fileStates"];
 }
 
 message ConvertOALToNALResponse {
-  .agent.v1.ConversationStateStructure conversation_state = 1 [json_name = "conversationState"];
+  optional .agent.v1.ConversationStateStructure conversation_state = 1 [json_name = "conversationState"];
   map<string, bytes> blobs = 2 [json_name = "blobs"];
   map<string, .agent.v1.ConversationStateStructure> bubble_checkpoints = 3 [json_name = "bubbleCheckpoints"];
 }
@@ -721,15 +721,15 @@ message GetPromptDryRunResponse {
   repeated .aiserver.v1.CodeChunkContextInclusionInfo code_chunks = 1 [json_name = "codeChunks"];
   string folder_exclusion_tooltip = 2 [json_name = "folderExclusionTooltip"];
   int32 user_message_token_limit = 3 [json_name = "userMessageTokenLimit"];
-  .aiserver.v1.GetPromptDryRunResponse.TokenCount user_message_token_count = 4 [json_name = "userMessageTokenCount"];
-  .aiserver.v1.GetPromptDryRunResponse.TokenCount full_conversation_token_count = 5 [json_name = "fullConversationTokenCount"];
+  optional .aiserver.v1.GetPromptDryRunResponse.TokenCount user_message_token_count = 4 [json_name = "userMessageTokenCount"];
+  optional .aiserver.v1.GetPromptDryRunResponse.TokenCount full_conversation_token_count = 5 [json_name = "fullConversationTokenCount"];
   repeated .aiserver.v1.CodeChunkContextInclusionInfoV2 code_chunks_v2 = 6 [json_name = "codeChunksV2"];
   float bar_fraction = 7 [json_name = "barFraction"];
   bool did_bar_overflow = 8 [json_name = "didBarOverflow"];
   bool should_show_new_chat_hint = 9 [json_name = "shouldShowNewChatHint"];
   message TokenCount {
     bool is_over_token_limit = 1 [json_name = "isOverTokenLimit"];
-    int32 num_tokens = 2 [json_name = "numTokens"];
+    optional int32 num_tokens = 2 [json_name = "numTokens"];
   }
 }
 
@@ -755,8 +755,8 @@ message SearchInfo {
 message SpanContext {
   string trace_id = 1 [json_name = "traceId"];
   string span_id = 2 [json_name = "spanId"];
-  uint32 trace_flags = 3 [json_name = "traceFlags"];
-  string trace_state = 4 [json_name = "traceState"];
+  optional uint32 trace_flags = 3 [json_name = "traceFlags"];
+  optional string trace_state = 4 [json_name = "traceState"];
 }
 
 message SpecSubagentParams {
@@ -770,7 +770,7 @@ message StarsFeedbackRequest {
 
 message StreamReplayChatRequest {
   string request_id = 1 [json_name = "requestId"];
-  double tokens_per_second = 3 [json_name = "tokensPerSecond"];
+  optional double tokens_per_second = 3 [json_name = "tokensPerSecond"];
 }
 
 message StreamStart {
@@ -779,96 +779,96 @@ message StreamStart {
 
 message StreamUnifiedChatRequest {
   repeated .aiserver.v1.ConversationMessage conversation = 1 [json_name = "conversation"];
-  bool allow_long_file_scan = 2 [json_name = "allowLongFileScan"];
-  .aiserver.v1.ExplicitContext explicit_context = 3 [json_name = "explicitContext"];
-  bool can_handle_filenames_after_language_ids = 4 [json_name = "canHandleFilenamesAfterLanguageIds"];
-  .aiserver.v1.ModelDetails model_details = 5 [json_name = "modelDetails"];
-  .aiserver.v1.LinterErrors linter_errors = 6 [json_name = "linterErrors"];
+  optional bool allow_long_file_scan = 2 [json_name = "allowLongFileScan"];
+  optional .aiserver.v1.ExplicitContext explicit_context = 3 [json_name = "explicitContext"];
+  optional bool can_handle_filenames_after_language_ids = 4 [json_name = "canHandleFilenamesAfterLanguageIds"];
+  optional .aiserver.v1.ModelDetails model_details = 5 [json_name = "modelDetails"];
+  optional .aiserver.v1.LinterErrors linter_errors = 6 [json_name = "linterErrors"];
   repeated string documentation_identifiers = 7 [json_name = "documentationIdentifiers"];
-  string use_web = 8 [json_name = "useWeb"];
+  optional string use_web = 8 [json_name = "useWeb"];
   repeated .aiserver.v1.ComposerExternalLink external_links = 9 [json_name = "externalLinks"];
-  .aiserver.v1.ConversationMessage project_context = 10 [json_name = "projectContext"];
+  optional .aiserver.v1.ConversationMessage project_context = 10 [json_name = "projectContext"];
   repeated .aiserver.v1.StreamUnifiedChatRequest.RedDiff diffs_for_compressing_files = 11 [json_name = "diffsForCompressingFiles"];
-  bool compress_edits = 12 [json_name = "compressEdits"];
-  bool should_cache = 13 [json_name = "shouldCache"];
+  optional bool compress_edits = 12 [json_name = "compressEdits"];
+  optional bool should_cache = 13 [json_name = "shouldCache"];
   repeated .aiserver.v1.LinterErrors multi_file_linter_errors = 14 [json_name = "multiFileLinterErrors"];
-  .aiserver.v1.CurrentFileInfo current_file = 15 [json_name = "currentFile"];
-  .aiserver.v1.StreamUnifiedChatRequest.RecentEdits recent_edits = 16 [json_name = "recentEdits"];
-  bool use_reference_composer_diff_prompt = 17 [json_name = "useReferenceComposerDiffPrompt"];
+  optional .aiserver.v1.CurrentFileInfo current_file = 15 [json_name = "currentFile"];
+  optional .aiserver.v1.StreamUnifiedChatRequest.RecentEdits recent_edits = 16 [json_name = "recentEdits"];
+  optional bool use_reference_composer_diff_prompt = 17 [json_name = "useReferenceComposerDiffPrompt"];
   repeated .aiserver.v1.ComposerFileDiffHistory file_diff_histories = 18 [json_name = "fileDiffHistories"];
-  bool use_new_compression_scheme = 19 [json_name = "useNewCompressionScheme"];
+  optional bool use_new_compression_scheme = 19 [json_name = "useNewCompressionScheme"];
   repeated .aiserver.v1.RankedContext additional_ranked_context = 20 [json_name = "additionalRankedContext"];
   repeated .aiserver.v1.ChatQuote quotes = 21 [json_name = "quotes"];
   bool is_chat = 22 [json_name = "isChat"];
   string conversation_id = 23 [json_name = "conversationId"];
-  .aiserver.v1.RepositoryInfo repository_info = 24 [json_name = "repositoryInfo"];
+  optional .aiserver.v1.RepositoryInfo repository_info = 24 [json_name = "repositoryInfo"];
   bool repository_info_should_query_staging = 25 [json_name = "repositoryInfoShouldQueryStaging"];
-  .aiserver.v1.EnvironmentInfo environment_info = 26 [json_name = "environmentInfo"];
+  optional .aiserver.v1.EnvironmentInfo environment_info = 26 [json_name = "environmentInfo"];
   bool is_agentic = 27 [json_name = "isAgentic"];
-  .aiserver.v1.ConversationSummary conversation_summary = 28 [json_name = "conversationSummary"];
+  optional .aiserver.v1.ConversationSummary conversation_summary = 28 [json_name = "conversationSummary"];
   repeated .aiserver.v1.ClientSideToolV2 supported_tools = 29 [json_name = "supportedTools"];
   repeated .aiserver.v1.ConversationMessageHeader full_conversation_headers_only = 30 [json_name = "fullConversationHeadersOnly"];
   bool enable_yolo_mode = 31 [json_name = "enableYoloMode"];
   string yolo_prompt = 32 [json_name = "yoloPrompt"];
   bool use_unified_chat_prompt = 33 [json_name = "useUnifiedChatPrompt"];
   repeated .aiserver.v1.MCPParams.Tool mcp_tools = 34 [json_name = "mcpTools"];
-  bool use_full_inputs_context = 35 [json_name = "useFullInputsContext"];
-  bool is_resume = 36 [json_name = "isResume"];
-  bool allow_model_fallbacks = 37 [json_name = "allowModelFallbacks"];
-  int32 number_of_times_shown_fallback_model_warning = 38 [json_name = "numberOfTimesShownFallbackModelWarning"];
+  optional bool use_full_inputs_context = 35 [json_name = "useFullInputsContext"];
+  optional bool is_resume = 36 [json_name = "isResume"];
+  optional bool allow_model_fallbacks = 37 [json_name = "allowModelFallbacks"];
+  optional int32 number_of_times_shown_fallback_model_warning = 38 [json_name = "numberOfTimesShownFallbackModelWarning"];
   bool repository_info_should_query_prod = 39 [json_name = "repositoryInfoShouldQueryProd"];
-  string context_bank_session_id = 40 [json_name = "contextBankSessionId"];
-  int32 context_bank_version = 41 [json_name = "contextBankVersion"];
-  .aiserver.v1.StreamUnifiedChatRequest.CodeSearchResult uses_codebase_results = 42 [json_name = "usesCodebaseResults"];
-  bytes context_bank_encryption_key = 43 [json_name = "contextBankEncryptionKey"];
+  optional string context_bank_session_id = 40 [json_name = "contextBankSessionId"];
+  optional int32 context_bank_version = 41 [json_name = "contextBankVersion"];
+  optional .aiserver.v1.StreamUnifiedChatRequest.CodeSearchResult uses_codebase_results = 42 [json_name = "usesCodebaseResults"];
+  optional bytes context_bank_encryption_key = 43 [json_name = "contextBankEncryptionKey"];
   string repo_query_auth_token = 44 [json_name = "repoQueryAuthToken"];
   bool is_headless = 45 [json_name = "isHeadless"];
-  .aiserver.v1.StreamUnifiedChatRequest.UnifiedMode unified_mode = 46 [json_name = "unifiedMode"];
+  optional .aiserver.v1.StreamUnifiedChatRequest.UnifiedMode unified_mode = 46 [json_name = "unifiedMode"];
   repeated .aiserver.v1.ClientSideToolV2 tools_requiring_accepted_return = 47 [json_name = "toolsRequiringAcceptedReturn"];
-  bool should_disable_tools = 48 [json_name = "shouldDisableTools"];
-  .aiserver.v1.StreamUnifiedChatRequest.ThinkingLevel thinking_level = 49 [json_name = "thinkingLevel"];
-  bool should_use_chat_prompt = 50 [json_name = "shouldUseChatPrompt"];
-  bool uses_rules = 51 [json_name = "usesRules"];
-  .aiserver.v1.QueryOnlyRepoAccess query_only_repo_access = 52 [json_name = "queryOnlyRepoAccess"];
-  bool mode_uses_auto_apply = 53 [json_name = "modeUsesAutoApply"];
-  string unified_mode_name = 54 [json_name = "unifiedModeName"];
-  string background_composer_id = 55 [json_name = "backgroundComposerId"];
-  bool use_generate_rules_prompt = 56 [json_name = "useGenerateRulesPrompt"];
-  bool edit_tool_supports_search_and_replace = 57 [json_name = "editToolSupportsSearchAndReplace"];
+  optional bool should_disable_tools = 48 [json_name = "shouldDisableTools"];
+  optional .aiserver.v1.StreamUnifiedChatRequest.ThinkingLevel thinking_level = 49 [json_name = "thinkingLevel"];
+  optional bool should_use_chat_prompt = 50 [json_name = "shouldUseChatPrompt"];
+  optional bool uses_rules = 51 [json_name = "usesRules"];
+  optional .aiserver.v1.QueryOnlyRepoAccess query_only_repo_access = 52 [json_name = "queryOnlyRepoAccess"];
+  optional bool mode_uses_auto_apply = 53 [json_name = "modeUsesAutoApply"];
+  optional string unified_mode_name = 54 [json_name = "unifiedModeName"];
+  optional string background_composer_id = 55 [json_name = "backgroundComposerId"];
+  optional bool use_generate_rules_prompt = 56 [json_name = "useGenerateRulesPrompt"];
+  optional bool edit_tool_supports_search_and_replace = 57 [json_name = "editToolSupportsSearchAndReplace"];
   repeated .aiserver.v1.ProjectLayout project_layouts = 58 [json_name = "projectLayouts"];
-  string repository_name_if_unindexed = 59 [json_name = "repositoryNameIfUnindexed"];
-  double indexing_progress = 60 [json_name = "indexingProgress"];
-  .aiserver.v1.StreamUnifiedChatRequest.FullFileCmdKOptions full_file_cmd_k_options = 61 [json_name = "fullFileCmdKOptions"];
-  string indexing_phase_if_unindexed = 62 [json_name = "indexingPhaseIfUnindexed"];
-  bool use_knowledge_base_prompt = 63 [json_name = "useKnowledgeBasePrompt"];
-  int32 indexing_num_files_if_unindexed = 64 [json_name = "indexingNumFilesIfUnindexed"];
-  .aiserver.v1.SubagentInfo subagent_info = 66 [json_name = "subagentInfo"];
+  optional string repository_name_if_unindexed = 59 [json_name = "repositoryNameIfUnindexed"];
+  optional double indexing_progress = 60 [json_name = "indexingProgress"];
+  optional .aiserver.v1.StreamUnifiedChatRequest.FullFileCmdKOptions full_file_cmd_k_options = 61 [json_name = "fullFileCmdKOptions"];
+  optional string indexing_phase_if_unindexed = 62 [json_name = "indexingPhaseIfUnindexed"];
+  optional bool use_knowledge_base_prompt = 63 [json_name = "useKnowledgeBasePrompt"];
+  optional int32 indexing_num_files_if_unindexed = 64 [json_name = "indexingNumFilesIfUnindexed"];
+  optional .aiserver.v1.SubagentInfo subagent_info = 66 [json_name = "subagentInfo"];
   bool supports_git_index = 67 [json_name = "supportsGitIndex"];
   bool is_background_composer = 68 [json_name = "isBackgroundComposer"];
   bool force_is_not_dev = 69 [json_name = "forceIsNotDev"];
-  bool disable_edit_file_timeout = 70 [json_name = "disableEditFileTimeout"];
-  bool should_attach_linter_errors = 71 [json_name = "shouldAttachLinterErrors"];
+  optional bool disable_edit_file_timeout = 70 [json_name = "disableEditFileTimeout"];
+  optional bool should_attach_linter_errors = 71 [json_name = "shouldAttachLinterErrors"];
   string replying_to_request_id = 72 [json_name = "replyingToRequestId"];
-  bool should_speculatively_route_gpt5 = 73 [json_name = "shouldSpeculativelyRouteGpt5"];
-  bool force_terminal_hanging_detection = 74 [json_name = "forceTerminalHangingDetection"];
-  bool force_summarization = 75 [json_name = "forceSummarization"];
-  bool is_quick_search_query = 76 [json_name = "isQuickSearchQuery"];
-  bool is_spec_mode = 77 [json_name = "isSpecMode"];
+  optional bool should_speculatively_route_gpt5 = 73 [json_name = "shouldSpeculativelyRouteGpt5"];
+  optional bool force_terminal_hanging_detection = 74 [json_name = "forceTerminalHangingDetection"];
+  optional bool force_summarization = 75 [json_name = "forceSummarization"];
+  optional bool is_quick_search_query = 76 [json_name = "isQuickSearchQuery"];
+  optional bool is_spec_mode = 77 [json_name = "isSpecMode"];
   bool allow_server_side_semantic_search = 78 [json_name = "allowServerSideSemanticSearch"];
-  bytes speculative_summarization_encryption_key = 79 [json_name = "speculativeSummarizationEncryptionKey"];
+  optional bytes speculative_summarization_encryption_key = 79 [json_name = "speculativeSummarizationEncryptionKey"];
   repeated .aiserver.v1.WorkspaceFolder workspace_folders = 81 [json_name = "workspaceFolders"];
-  bool does_readfile_support_images = 82 [json_name = "doesReadfileSupportImages"];
-  bool sandboxing_support_enabled = 83 [json_name = "sandboxingSupportEnabled"];
-  string custom_planning_instructions = 84 [json_name = "customPlanningInstructions"];
-  bool enable_terminal_file_persistence = 85 [json_name = "enableTerminalFilePersistence"];
-  string terminals_folder = 86 [json_name = "terminalsFolder"];
-  string agent_notes_folder = 87 [json_name = "agentNotesFolder"];
-  string agent_tools_folder = 88 [json_name = "agentToolsFolder"];
-  .aiserver.v1.StreamUnifiedChatRequest.CurrentPlan current_plan = 89 [json_name = "currentPlan"];
-  bool has_mcp_descriptors = 90 [json_name = "hasMcpDescriptors"];
-  string best_of_n_group_id = 91 [json_name = "bestOfNGroupId"];
-  bool try_use_best_of_n_promotion = 92 [json_name = "tryUseBestOfNPromotion"];
-  string agent_transcripts_folder = 93 [json_name = "agentTranscriptsFolder"];
+  optional bool does_readfile_support_images = 82 [json_name = "doesReadfileSupportImages"];
+  optional bool sandboxing_support_enabled = 83 [json_name = "sandboxingSupportEnabled"];
+  optional string custom_planning_instructions = 84 [json_name = "customPlanningInstructions"];
+  optional bool enable_terminal_file_persistence = 85 [json_name = "enableTerminalFilePersistence"];
+  optional string terminals_folder = 86 [json_name = "terminalsFolder"];
+  optional string agent_notes_folder = 87 [json_name = "agentNotesFolder"];
+  optional string agent_tools_folder = 88 [json_name = "agentToolsFolder"];
+  optional .aiserver.v1.StreamUnifiedChatRequest.CurrentPlan current_plan = 89 [json_name = "currentPlan"];
+  optional bool has_mcp_descriptors = 90 [json_name = "hasMcpDescriptors"];
+  optional string best_of_n_group_id = 91 [json_name = "bestOfNGroupId"];
+  optional bool try_use_best_of_n_promotion = 92 [json_name = "tryUseBestOfNPromotion"];
+  optional string agent_transcripts_folder = 93 [json_name = "agentTranscriptsFolder"];
   message CodeSearchResult {
     repeated .aiserver.v1.CodeResult results = 1 [json_name = "results"];
     repeated .aiserver.v1.File all_files = 2 [json_name = "allFiles"];
@@ -883,13 +883,13 @@ message StreamUnifiedChatRequest {
   message RecentEdits {
     repeated .aiserver.v1.StreamUnifiedChatRequest.RecentEdits.CodeBlockInfo code_block_info = 1 [json_name = "codeBlockInfo"];
     repeated .aiserver.v1.StreamUnifiedChatRequest.RecentEdits.FileInfo final_file_values = 2 [json_name = "finalFileValues"];
-    string edits_belong_to_composer_generation_uuid = 3 [json_name = "editsBelongToComposerGenerationUuid"];
+    optional string edits_belong_to_composer_generation_uuid = 3 [json_name = "editsBelongToComposerGenerationUuid"];
     message CodeBlockInfo {
       string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
-      string content_before = 2 [json_name = "contentBefore"];
-      string content_after = 3 [json_name = "contentAfter"];
-      string generation_uuid = 4 [json_name = "generationUuid"];
-      int32 version = 5 [json_name = "version"];
+      optional string content_before = 2 [json_name = "contentBefore"];
+      optional string content_after = 3 [json_name = "contentAfter"];
+      optional string generation_uuid = 4 [json_name = "generationUuid"];
+      optional int32 version = 5 [json_name = "version"];
     }
     message FileInfo {
       string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
@@ -927,8 +927,8 @@ message StreamUnifiedChatRequestWithTools {
 }
 
 message StreamUnifiedChatRequestWithToolsIdempotent {
-  string idempotency_key = 4 [json_name = "idempotencyKey"];
-  uint32 seqno = 5 [json_name = "seqno"];
+  optional string idempotency_key = 4 [json_name = "idempotencyKey"];
+  optional uint32 seqno = 5 [json_name = "seqno"];
   oneof request {
     .aiserver.v1.StreamUnifiedChatRequestWithTools client_chunk = 1 [json_name = "clientChunk"];
     .google.protobuf.Empty abort = 2 [json_name = "abort"];
@@ -938,42 +938,42 @@ message StreamUnifiedChatRequestWithToolsIdempotent {
 
 message StreamUnifiedChatResponse {
   string text = 1 [json_name = "text"];
-  string debugging_only_chat_prompt = 2 [json_name = "debuggingOnlyChatPrompt"];
-  int32 debugging_only_token_count = 3 [json_name = "debuggingOnlyTokenCount"];
-  .aiserver.v1.DocumentationCitation document_citation = 4 [json_name = "documentCitation"];
-  string filled_prompt = 5 [json_name = "filledPrompt"];
-  bool is_big_file = 6 [json_name = "isBigFile"];
-  string intermediate_text = 7 [json_name = "intermediateText"];
-  .aiserver.v1.StreamUnifiedChatResponse.ChunkIdentity chunk_identity = 8 [json_name = "chunkIdentity"];
-  .aiserver.v1.DocsReference docs_reference = 9 [json_name = "docsReference"];
-  bool is_using_slow_request = 10 [json_name = "isUsingSlowRequest"];
-  .aiserver.v1.WebCitation web_citation = 11 [json_name = "webCitation"];
-  .aiserver.v1.StatusUpdates status_updates = 12 [json_name = "statusUpdates"];
-  .aiserver.v1.StreamedBackToolCall tool_call = 13 [json_name = "toolCall"];
-  bool should_break_ai_message = 14 [json_name = "shouldBreakAiMessage"];
-  .aiserver.v1.StreamedBackPartialToolCall partial_tool_call = 15 [json_name = "partialToolCall"];
-  .aiserver.v1.StreamUnifiedChatResponse.FinalToolResult final_tool_result = 16 [json_name = "finalToolResult"];
-  .aiserver.v1.SymbolLink symbol_link = 17 [json_name = "symbolLink"];
-  .aiserver.v1.ConversationSummary conversation_summary = 18 [json_name = "conversationSummary"];
-  .aiserver.v1.FileLink file_link = 19 [json_name = "fileLink"];
-  .aiserver.v1.ServiceStatusUpdate service_status_update = 20 [json_name = "serviceStatusUpdate"];
-  .aiserver.v1.ViewableGitContext viewable_git_context = 21 [json_name = "viewableGitContext"];
-  string server_bubble_id = 22 [json_name = "serverBubbleId"];
-  .aiserver.v1.ContextPieceUpdate context_piece_update = 23 [json_name = "contextPieceUpdate"];
-  .aiserver.v1.StreamUnifiedChatResponse.UsedCode used_code = 24 [json_name = "usedCode"];
-  .aiserver.v1.ConversationMessage.Thinking thinking = 25 [json_name = "thinking"];
-  bool stop_using_dsv3_agentic_model = 26 [json_name = "stopUsingDsv3AgenticModel"];
-  string usage_uuid = 27 [json_name = "usageUuid"];
-  .aiserver.v1.ConversationSummaryStarter conversation_summary_starter = 28 [json_name = "conversationSummaryStarter"];
-  .aiserver.v1.SubagentReturnCall subagent_return = 29 [json_name = "subagentReturn"];
-  .aiserver.v1.ContextWindowStatus context_window_status = 30 [json_name = "contextWindowStatus"];
-  .aiserver.v1.StreamUnifiedChatResponse.ImageDescription image_description = 31 [json_name = "imageDescription"];
-  bool parallel_tool_calls_complete = 32 [json_name = "parallelToolCallsComplete"];
-  .aiserver.v1.AiWebSearchResults ai_web_search_results = 33 [json_name = "aiWebSearchResults"];
-  .aiserver.v1.StarsFeedbackRequest stars_feedback_request = 34 [json_name = "starsFeedbackRequest"];
-  string model_provider_request_json = 35 [json_name = "modelProviderRequestJson"];
-  .aiserver.v1.StreamedBackToolCallV2 tool_call_v2 = 36 [json_name = "toolCallV2"];
-  .aiserver.v1.ConversationMessage.ThinkingStyle thinking_style = 37 [json_name = "thinkingStyle"];
+  optional string debugging_only_chat_prompt = 2 [json_name = "debuggingOnlyChatPrompt"];
+  optional int32 debugging_only_token_count = 3 [json_name = "debuggingOnlyTokenCount"];
+  optional .aiserver.v1.DocumentationCitation document_citation = 4 [json_name = "documentCitation"];
+  optional string filled_prompt = 5 [json_name = "filledPrompt"];
+  optional bool is_big_file = 6 [json_name = "isBigFile"];
+  optional string intermediate_text = 7 [json_name = "intermediateText"];
+  optional .aiserver.v1.StreamUnifiedChatResponse.ChunkIdentity chunk_identity = 8 [json_name = "chunkIdentity"];
+  optional .aiserver.v1.DocsReference docs_reference = 9 [json_name = "docsReference"];
+  optional bool is_using_slow_request = 10 [json_name = "isUsingSlowRequest"];
+  optional .aiserver.v1.WebCitation web_citation = 11 [json_name = "webCitation"];
+  optional .aiserver.v1.StatusUpdates status_updates = 12 [json_name = "statusUpdates"];
+  optional .aiserver.v1.StreamedBackToolCall tool_call = 13 [json_name = "toolCall"];
+  optional bool should_break_ai_message = 14 [json_name = "shouldBreakAiMessage"];
+  optional .aiserver.v1.StreamedBackPartialToolCall partial_tool_call = 15 [json_name = "partialToolCall"];
+  optional .aiserver.v1.StreamUnifiedChatResponse.FinalToolResult final_tool_result = 16 [json_name = "finalToolResult"];
+  optional .aiserver.v1.SymbolLink symbol_link = 17 [json_name = "symbolLink"];
+  optional .aiserver.v1.ConversationSummary conversation_summary = 18 [json_name = "conversationSummary"];
+  optional .aiserver.v1.FileLink file_link = 19 [json_name = "fileLink"];
+  optional .aiserver.v1.ServiceStatusUpdate service_status_update = 20 [json_name = "serviceStatusUpdate"];
+  optional .aiserver.v1.ViewableGitContext viewable_git_context = 21 [json_name = "viewableGitContext"];
+  optional string server_bubble_id = 22 [json_name = "serverBubbleId"];
+  optional .aiserver.v1.ContextPieceUpdate context_piece_update = 23 [json_name = "contextPieceUpdate"];
+  optional .aiserver.v1.StreamUnifiedChatResponse.UsedCode used_code = 24 [json_name = "usedCode"];
+  optional .aiserver.v1.ConversationMessage.Thinking thinking = 25 [json_name = "thinking"];
+  optional bool stop_using_dsv3_agentic_model = 26 [json_name = "stopUsingDsv3AgenticModel"];
+  optional string usage_uuid = 27 [json_name = "usageUuid"];
+  optional .aiserver.v1.ConversationSummaryStarter conversation_summary_starter = 28 [json_name = "conversationSummaryStarter"];
+  optional .aiserver.v1.SubagentReturnCall subagent_return = 29 [json_name = "subagentReturn"];
+  optional .aiserver.v1.ContextWindowStatus context_window_status = 30 [json_name = "contextWindowStatus"];
+  optional .aiserver.v1.StreamUnifiedChatResponse.ImageDescription image_description = 31 [json_name = "imageDescription"];
+  optional bool parallel_tool_calls_complete = 32 [json_name = "parallelToolCallsComplete"];
+  optional .aiserver.v1.AiWebSearchResults ai_web_search_results = 33 [json_name = "aiWebSearchResults"];
+  optional .aiserver.v1.StarsFeedbackRequest stars_feedback_request = 34 [json_name = "starsFeedbackRequest"];
+  optional string model_provider_request_json = 35 [json_name = "modelProviderRequestJson"];
+  optional .aiserver.v1.StreamedBackToolCallV2 tool_call_v2 = 36 [json_name = "toolCallV2"];
+  optional .aiserver.v1.ConversationMessage.ThinkingStyle thinking_style = 37 [json_name = "thinkingStyle"];
   message ChunkIdentity {
     string file_name = 1 [json_name = "fileName"];
     int32 start_line = 2 [json_name = "startLine"];
@@ -983,7 +983,7 @@ message StreamUnifiedChatResponse {
   }
   message FinalToolResult {
     string tool_call_id = 1 [json_name = "toolCallId"];
-    .aiserver.v1.ClientSideToolV2Result result = 2 [json_name = "result"];
+    optional .aiserver.v1.ClientSideToolV2Result result = 2 [json_name = "result"];
   }
   message ImageDescription {
     string description = 1 [json_name = "description"];
@@ -995,7 +995,7 @@ message StreamUnifiedChatResponse {
 }
 
 message StreamUnifiedChatResponseWithTools {
-  .aiserver.v1.SpanContext tracing_context = 6 [json_name = "tracingContext"];
+  optional .aiserver.v1.SpanContext tracing_context = 6 [json_name = "tracingContext"];
   string event_id = 7 [json_name = "eventId"];
   oneof response {
     .aiserver.v1.ClientSideToolV2Call client_side_tool_v2_call = 1 [json_name = "clientSideToolV2Call"];
@@ -1017,7 +1017,7 @@ message StreamUnifiedChatResponseWithToolsIdempotent {
 message SubagentInfo {
   .aiserver.v1.SubagentType subagent_type = 1 [json_name = "subagentType"];
   string subagent_id = 2 [json_name = "subagentId"];
-  string parent_request_id = 5 [json_name = "parentRequestId"];
+  optional string parent_request_id = 5 [json_name = "parentRequestId"];
   oneof params {
     .aiserver.v1.DeepSearchSubagentParams deep_search_params = 3 [json_name = "deepSearchParams"];
     .aiserver.v1.FixLintsSubagentParams fix_lints_params = 4 [json_name = "fixLintsParams"];

@@ -93,19 +93,19 @@ export class ReportEditFateRequest extends Message<ReportEditFateRequest> {
   requestId = "";
 
   /**
-   * @generated from field: aiserver.v1.EditFate fate = 2;
+   * @generated from field: optional aiserver.v1.EditFate fate = 2;
    */
-  fate = EditFate.UNSPECIFIED;
+  fate?: EditFate;
 
   /**
-   * @generated from field: int32 num_accepted_partial_diffs = 3;
+   * @generated from field: optional int32 num_accepted_partial_diffs = 3;
    */
-  numAcceptedPartialDiffs = 0;
+  numAcceptedPartialDiffs?: number;
 
   /**
-   * @generated from field: int32 num_rejected_partial_diffs = 4;
+   * @generated from field: optional int32 num_rejected_partial_diffs = 4;
    */
-  numRejectedPartialDiffs = 0;
+  numRejectedPartialDiffs?: number;
 
   constructor(data?: PartialMessage<ReportEditFateRequest>) {
     super();
@@ -116,9 +116,9 @@ export class ReportEditFateRequest extends Message<ReportEditFateRequest> {
   static readonly typeName = "aiserver.v1.ReportEditFateRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "request_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "fate", kind: "enum", T: proto3.getEnumType(EditFate) },
-    { no: 3, name: "num_accepted_partial_diffs", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 4, name: "num_rejected_partial_diffs", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 2, name: "fate", kind: "enum", T: proto3.getEnumType(EditFate), opt: true },
+    { no: 3, name: "num_accepted_partial_diffs", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 4, name: "num_rejected_partial_diffs", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ReportEditFateRequest {
@@ -174,7 +174,7 @@ export class ReportEditFateResponse extends Message<ReportEditFateResponse> {
  */
 export class WarmApplyRequest extends Message<WarmApplyRequest> {
   /**
-   * @generated from field: aiserver.v1.CurrentFileInfo current_file = 2;
+   * @generated from field: optional aiserver.v1.CurrentFileInfo current_file = 2;
    */
   currentFile?: CurrentFileInfo;
 
@@ -184,7 +184,7 @@ export class WarmApplyRequest extends Message<WarmApplyRequest> {
   conversation: ConversationMessage[] = [];
 
   /**
-   * @generated from field: aiserver.v1.ExplicitContext explicit_context = 4;
+   * @generated from field: optional aiserver.v1.ExplicitContext explicit_context = 4;
    */
   explicitContext?: ExplicitContext;
 
@@ -206,9 +206,9 @@ export class WarmApplyRequest extends Message<WarmApplyRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.WarmApplyRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 2, name: "current_file", kind: "message", T: CurrentFileInfo },
+    { no: 2, name: "current_file", kind: "message", T: CurrentFileInfo, opt: true },
     { no: 3, name: "conversation", kind: "message", T: ConversationMessage, repeated: true },
-    { no: 4, name: "explicit_context", kind: "message", T: ExplicitContext },
+    { no: 4, name: "explicit_context", kind: "message", T: ExplicitContext, opt: true },
     { no: 5, name: "source", kind: "enum", T: proto3.getEnumType(FastApplySource) },
     { no: 6, name: "willing_to_pay_extra_for_speed", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);

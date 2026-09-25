@@ -14,8 +14,8 @@ message OutputLocation {
 }
 
 message Range {
-  .agent.v1.Position start = 1 [json_name = "start"];
-  .agent.v1.Position end = 2 [json_name = "end"];
+  optional .agent.v1.Position start = 1 [json_name = "start"];
+  optional .agent.v1.Position end = 2 [json_name = "end"];
 }
 
 message Position {

@@ -39,7 +39,7 @@ function toRedactedCommandClassifierResult_ClassifiedCommand(msg, privacyMode) {
     _privacyMode: privacyMode,
     name: createRedactedString(msg.name, DataClassification.CODE, "name", privacyMode),
     arguments: msg.arguments.map((v2) => createRedactedString(v2, DataClassification.CODE, "arguments", privacyMode)),
-    suggestedAllowlistEntry: createRedactedString(msg.suggestedAllowlistEntry, DataClassification.CODE, "suggested_allowlist_entry", privacyMode),
+    suggestedAllowlistEntry: msg.suggestedAllowlistEntry !== void 0 ? createRedactedString(msg.suggestedAllowlistEntry, DataClassification.CODE, "suggested_allowlist_entry", privacyMode) : void 0,
     subcommandTokens: msg.subcommandTokens.map((v2) => createRedactedString(v2, DataClassification.CODE, "subcommand_tokens", privacyMode)),
   };
 }
@@ -50,7 +50,7 @@ function fromRedactedCommandClassifierResult_ClassifiedCommand(msg, purpose, opt
   return new CommandClassifierResult_ClassifiedCommand({
     name: msg.name.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     arguments: msg.arguments.map((v2) => v2.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing })),
-    suggestedAllowlistEntry: msg.suggestedAllowlistEntry.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    suggestedAllowlistEntry: msg.suggestedAllowlistEntry?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     subcommandTokens: msg.subcommandTokens.map((v2) => v2.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing })),
   });
 }
@@ -179,7 +179,7 @@ function toRedactedShellCommandParsingResult_Redirect(msg, privacyMode) {
     operator: msg.operator,
     destinationFds: msg.destinationFds,
     targetNodeType: msg.targetNodeType,
-    targetText: createRedactedString(msg.targetText, DataClassification.PATH, "target_text", privacyMode),
+    targetText: msg.targetText !== void 0 ? createRedactedString(msg.targetText, DataClassification.PATH, "target_text", privacyMode) : void 0,
   };
 }
 
@@ -190,7 +190,7 @@ function fromRedactedShellCommandParsingResult_Redirect(msg, purpose, opts) {
     operator: msg.operator,
     destinationFds: msg.destinationFds,
     targetNodeType: msg.targetNodeType,
-    targetText: msg.targetText.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    targetText: msg.targetText?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
   });
 }
 
@@ -205,12 +205,12 @@ function toRedactedShellFailure(msg, privacyMode) {
     stderr: createRedactedString(msg.stderr, DataClassification.CODE, "stderr", privacyMode),
     executionTime: msg.executionTime,
     outputLocation: msg.outputLocation !== void 0 ? toRedactedOutputLocation(msg.outputLocation, privacyMode) : void 0,
-    interleavedOutput: createRedactedString(msg.interleavedOutput, DataClassification.CODE, "interleaved_output", privacyMode),
+    interleavedOutput: msg.interleavedOutput !== void 0 ? createRedactedString(msg.interleavedOutput, DataClassification.CODE, "interleaved_output", privacyMode) : void 0,
     abortReason: msg.abortReason,
     aborted: msg.aborted,
     localExecutionTimeMs: msg.localExecutionTimeMs,
-    outputHead: createRedactedString(msg.outputHead, DataClassification.CODE, "output_head", privacyMode),
-    outputTail: createRedactedString(msg.outputTail, DataClassification.CODE, "output_tail", privacyMode),
+    outputHead: msg.outputHead !== void 0 ? createRedactedString(msg.outputHead, DataClassification.CODE, "output_head", privacyMode) : void 0,
+    outputTail: msg.outputTail !== void 0 ? createRedactedString(msg.outputTail, DataClassification.CODE, "output_tail", privacyMode) : void 0,
     elidedChars: msg.elidedChars,
   };
 }
@@ -227,12 +227,12 @@ function fromRedactedShellFailure(msg, purpose, opts) {
     stderr: msg.stderr.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     executionTime: msg.executionTime,
     outputLocation: msg.outputLocation !== void 0 ? fromRedactedOutputLocation(msg.outputLocation, purpose, opts) : void 0,
-    interleavedOutput: msg.interleavedOutput.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    interleavedOutput: msg.interleavedOutput?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     abortReason: msg.abortReason,
     aborted: msg.aborted,
     localExecutionTimeMs: msg.localExecutionTimeMs,
-    outputHead: msg.outputHead.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    outputTail: msg.outputTail.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    outputHead: msg.outputHead?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    outputTail: msg.outputTail?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     elidedChars: msg.elidedChars,
   });
 }
@@ -241,7 +241,7 @@ function toRedactedShellHookApprovalRequirement(msg, privacyMode) {
   return {
     _privacyMode: privacyMode,
     kind: msg.kind,
-    reason: createRedactedString(msg.reason, DataClassification.CODE, "reason", privacyMode),
+    reason: msg.reason !== void 0 ? createRedactedString(msg.reason, DataClassification.CODE, "reason", privacyMode) : void 0,
   };
 }
 
@@ -250,7 +250,7 @@ function fromRedactedShellHookApprovalRequirement(msg, purpose, opts) {
   const enforcing = opts?.enforcing;
   return new ShellHookApprovalRequirement({
     kind: msg.kind,
-    reason: msg.reason.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    reason: msg.reason?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
   });
 }
 
@@ -368,7 +368,7 @@ function toRedactedShellResult(msg, privacyMode) {
     _privacyMode: privacyMode,
     sandboxPolicy: msg.sandboxPolicy !== void 0 ? toRedactedSandboxPolicy(msg.sandboxPolicy, privacyMode) : void 0,
     isBackground: msg.isBackground,
-    terminalsFolder: createRedactedString(msg.terminalsFolder, DataClassification.PATH, "terminals_folder", privacyMode),
+    terminalsFolder: msg.terminalsFolder !== void 0 ? createRedactedString(msg.terminalsFolder, DataClassification.PATH, "terminals_folder", privacyMode) : void 0,
     pid: msg.pid,
     result: toRedactedShellResult_result(msg.result, privacyMode),
   };
@@ -380,7 +380,7 @@ function fromRedactedShellResult(msg, purpose, opts) {
   return new ShellResult({
     sandboxPolicy: msg.sandboxPolicy !== void 0 ? fromRedactedSandboxPolicy(msg.sandboxPolicy, purpose, opts) : void 0,
     isBackground: msg.isBackground,
-    terminalsFolder: msg.terminalsFolder.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    terminalsFolder: msg.terminalsFolder?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     pid: msg.pid,
     result: fromRedactedShellResult_result(msg.result, purpose, opts),
   });
@@ -623,13 +623,13 @@ function toRedactedShellSuccess(msg, privacyMode) {
     executionTime: msg.executionTime,
     outputLocation: msg.outputLocation !== void 0 ? toRedactedOutputLocation(msg.outputLocation, privacyMode) : void 0,
     shellId: msg.shellId,
-    interleavedOutput: createRedactedString(msg.interleavedOutput, DataClassification.CODE, "interleaved_output", privacyMode),
+    interleavedOutput: msg.interleavedOutput !== void 0 ? createRedactedString(msg.interleavedOutput, DataClassification.CODE, "interleaved_output", privacyMode) : void 0,
     pid: msg.pid,
     msToWait: msg.msToWait,
     localExecutionTimeMs: msg.localExecutionTimeMs,
     backgroundReason: msg.backgroundReason,
-    outputHead: createRedactedString(msg.outputHead, DataClassification.CODE, "output_head", privacyMode),
-    outputTail: createRedactedString(msg.outputTail, DataClassification.CODE, "output_tail", privacyMode),
+    outputHead: msg.outputHead !== void 0 ? createRedactedString(msg.outputHead, DataClassification.CODE, "output_head", privacyMode) : void 0,
+    outputTail: msg.outputTail !== void 0 ? createRedactedString(msg.outputTail, DataClassification.CODE, "output_tail", privacyMode) : void 0,
     elidedChars: msg.elidedChars,
   };
 }
@@ -647,13 +647,13 @@ function fromRedactedShellSuccess(msg, purpose, opts) {
     executionTime: msg.executionTime,
     outputLocation: msg.outputLocation !== void 0 ? fromRedactedOutputLocation(msg.outputLocation, purpose, opts) : void 0,
     shellId: msg.shellId,
-    interleavedOutput: msg.interleavedOutput.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    interleavedOutput: msg.interleavedOutput?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     pid: msg.pid,
     msToWait: msg.msToWait,
     localExecutionTimeMs: msg.localExecutionTimeMs,
     backgroundReason: msg.backgroundReason,
-    outputHead: msg.outputHead.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    outputTail: msg.outputTail.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    outputHead: msg.outputHead?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    outputTail: msg.outputTail?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     elidedChars: msg.elidedChars,
   });
 }
@@ -677,7 +677,92 @@ function fromRedactedShellTimeout(msg, purpose, opts) {
   });
 }
 
+function createRedactedShellArgs(privacyMode, partial) {
+  return {
+    command: createRedactedString("", DataClassification.CODE, "command", privacyMode),
+    workingDirectory: createRedactedString("", DataClassification.PATH, "working_directory", privacyMode),
+    timeout: 0,
+    toolCallId: "",
+    simpleCommands: [],
+    hasInputRedirect: false,
+    hasOutputRedirect: false,
+    parsingResult: void 0,
+    requestedSandboxPolicy: void 0,
+    fileOutputThresholdBytes: void 0,
+    isBackground: false,
+    skipApproval: false,
+    timeoutBehavior: 0,
+    hardTimeout: void 0,
+    description: void 0,
+    classifierResult: void 0,
+    closeStdin: false,
+    outputNotification: void 0,
+    smartModeApproval: void 0,
+    hookApprovalRequirement: void 0,
+    conversationId: void 0,
+    adminCommandDenylist: [],
+    ...partial,
+    _privacyMode: privacyMode,
+  };
+}
+
+function createRedactedShellCommandParsingResult(privacyMode, partial) {
+  return {
+    parsingFailed: false,
+    executableCommands: [],
+    hasRedirects: false,
+    hasCommandSubstitution: false,
+    allRedirectsAreDevNull: void 0,
+    redirects: [],
+    ...partial,
+    _privacyMode: privacyMode,
+  };
+}
+
+function createRedactedShellStreamExit(privacyMode, partial) {
+  return {
+    code: 0,
+    cwd: createRedactedString("", DataClassification.PATH, "cwd", privacyMode),
+    outputLocation: void 0,
+    aborted: false,
+    abortReason: void 0,
+    localExecutionTimeMs: void 0,
+    ...partial,
+    _privacyMode: privacyMode,
+  };
+}
+
+function createRedactedShellStreamStart(privacyMode, partial) {
+  return {
+    sandboxPolicy: void 0,
+    ...partial,
+    _privacyMode: privacyMode,
+  };
+}
+
+function createRedactedShellStreamStderr(privacyMode, partial) {
+  return {
+    data: createRedactedString("", DataClassification.CODE, "data", privacyMode),
+    ...partial,
+    _privacyMode: privacyMode,
+  };
+}
+
+function createRedactedShellStreamStdout(privacyMode, partial) {
+  return {
+    data: createRedactedString("", DataClassification.CODE, "data", privacyMode),
+    ...partial,
+    _privacyMode: privacyMode,
+  };
+}
+
 export {
+  createRedactedShellArgs,
+  createRedactedShellCommandParsingResult,
+  createRedactedShellStreamExit,
+  createRedactedShellStreamStart,
+  createRedactedShellStreamStderr,
+  createRedactedShellStreamStdout,
   toRedactedCommandClassifierResult,
   fromRedactedCommandClassifierResult,
   toRedactedCommandClassifierResult_ClassifiedCommand,

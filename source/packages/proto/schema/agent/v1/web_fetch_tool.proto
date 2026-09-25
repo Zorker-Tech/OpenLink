@@ -22,8 +22,8 @@ message WebFetchRequestResponse {
 }
 
 message WebFetchToolCall {
-  .agent.v1.WebFetchArgs args = 1 [json_name = "args"];
-  .agent.v1.WebFetchResult result = 2 [json_name = "result"];
+  optional .agent.v1.WebFetchArgs args = 1 [json_name = "args"];
+  optional .agent.v1.WebFetchResult result = 2 [json_name = "result"];
 }
 
 message WebFetchArgs {
@@ -42,7 +42,7 @@ message WebFetchResult {
 message WebFetchSuccess {
   string url = 1 [json_name = "url"];
   string markdown = 2 [json_name = "markdown"];
-  .agent.v1.OutputLocation output_location = 3 [json_name = "outputLocation"];
+  optional .agent.v1.OutputLocation output_location = 3 [json_name = "outputLocation"];
 }
 
 message WebFetchError {
@@ -55,7 +55,7 @@ message WebFetchRejected {
 }
 
 message WebFetchRequestQuery {
-  .agent.v1.WebFetchArgs args = 1 [json_name = "args"];
+  optional .agent.v1.WebFetchArgs args = 1 [json_name = "args"];
   bool skip_approval = 2 [json_name = "skipApproval"];
-  .agent.v1.SmartModeApproval smart_mode_approval = 3 [json_name = "smartModeApproval"];
+  optional .agent.v1.SmartModeApproval smart_mode_approval = 3 [json_name = "smartModeApproval"];
 }

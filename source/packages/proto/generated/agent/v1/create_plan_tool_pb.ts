@@ -17,7 +17,7 @@ import { TodoItem } from "./todo_tool_pb.ts";
  */
 export class CreatePlanRequestResponse extends Message<CreatePlanRequestResponse> {
   /**
-   * @generated from field: agent.v1.CreatePlanResult result = 1;
+   * @generated from field: optional agent.v1.CreatePlanResult result = 1;
    */
   result?: CreatePlanResult;
 
@@ -29,7 +29,7 @@ export class CreatePlanRequestResponse extends Message<CreatePlanRequestResponse
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.CreatePlanRequestResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "result", kind: "message", T: CreatePlanResult },
+    { no: 1, name: "result", kind: "message", T: CreatePlanResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CreatePlanRequestResponse {
@@ -178,12 +178,12 @@ export class CreatePlanError extends Message<CreatePlanError> {
  */
 export class CreatePlanToolCall extends Message<CreatePlanToolCall> {
   /**
-   * @generated from field: agent.v1.CreatePlanArgs args = 1;
+   * @generated from field: optional agent.v1.CreatePlanArgs args = 1;
    */
   args?: CreatePlanArgs;
 
   /**
-   * @generated from field: agent.v1.CreatePlanResult result = 2;
+   * @generated from field: optional agent.v1.CreatePlanResult result = 2;
    */
   result?: CreatePlanResult;
 
@@ -195,8 +195,8 @@ export class CreatePlanToolCall extends Message<CreatePlanToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.CreatePlanToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: CreatePlanArgs },
-    { no: 2, name: "result", kind: "message", T: CreatePlanResult },
+    { no: 1, name: "args", kind: "message", T: CreatePlanArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: CreatePlanResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CreatePlanToolCall {
@@ -331,7 +331,7 @@ export class Phase extends Message<Phase> {
  */
 export class CreatePlanRequestQuery extends Message<CreatePlanRequestQuery> {
   /**
-   * @generated from field: agent.v1.CreatePlanArgs args = 1;
+   * @generated from field: optional agent.v1.CreatePlanArgs args = 1;
    */
   args?: CreatePlanArgs;
 
@@ -348,7 +348,7 @@ export class CreatePlanRequestQuery extends Message<CreatePlanRequestQuery> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.CreatePlanRequestQuery";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: CreatePlanArgs },
+    { no: 1, name: "args", kind: "message", T: CreatePlanArgs, opt: true },
     { no: 2, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 

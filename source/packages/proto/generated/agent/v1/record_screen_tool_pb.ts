@@ -17,12 +17,12 @@ import { RecordScreenArgs, RecordScreenResult } from "./record_screen_exec_pb.ts
  */
 export class RecordScreenToolCall extends Message<RecordScreenToolCall> {
   /**
-   * @generated from field: agent.v1.RecordScreenArgs args = 1;
+   * @generated from field: optional agent.v1.RecordScreenArgs args = 1;
    */
   args?: RecordScreenArgs;
 
   /**
-   * @generated from field: agent.v1.RecordScreenResult result = 2;
+   * @generated from field: optional agent.v1.RecordScreenResult result = 2;
    */
   result?: RecordScreenResult;
 
@@ -34,8 +34,8 @@ export class RecordScreenToolCall extends Message<RecordScreenToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.RecordScreenToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: RecordScreenArgs },
-    { no: 2, name: "result", kind: "message", T: RecordScreenResult },
+    { no: 1, name: "args", kind: "message", T: RecordScreenArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: RecordScreenResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RecordScreenToolCall {

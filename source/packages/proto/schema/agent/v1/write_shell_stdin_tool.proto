@@ -10,6 +10,6 @@ package agent.v1;
 import "agent/v1/background_shell_exec.proto";
 
 message WriteShellStdinToolCall {
-  .agent.v1.WriteShellStdinArgs args = 1 [json_name = "args"];
-  .agent.v1.WriteShellStdinResult result = 2 [json_name = "result"];
+  optional .agent.v1.WriteShellStdinArgs args = 1 [json_name = "args"];
+  optional .agent.v1.WriteShellStdinResult result = 2 [json_name = "result"];
 }

@@ -156,24 +156,24 @@ export class AppliedAgentChange extends Message<AppliedAgentChange> {
   changeType = AppliedAgentChange_ChangeType.UNSPECIFIED;
 
   /**
-   * @generated from field: string before_content = 3;
+   * @generated from field: optional string before_content = 3;
    */
-  beforeContent = "";
+  beforeContent?: string;
 
   /**
-   * @generated from field: string after_content = 4;
+   * @generated from field: optional string after_content = 4;
    */
-  afterContent = "";
+  afterContent?: string;
 
   /**
-   * @generated from field: string error = 5;
+   * @generated from field: optional string error = 5;
    */
-  error = "";
+  error?: string;
 
   /**
-   * @generated from field: string message_for_model = 6;
+   * @generated from field: optional string message_for_model = 6;
    */
-  messageForModel = "";
+  messageForModel?: string;
 
   constructor(data?: PartialMessage<AppliedAgentChange>) {
     super();
@@ -185,10 +185,10 @@ export class AppliedAgentChange extends Message<AppliedAgentChange> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "change_type", kind: "enum", T: proto3.getEnumType(AppliedAgentChange_ChangeType) },
-    { no: 3, name: "before_content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "after_content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "message_for_model", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "before_content", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "after_content", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "message_for_model", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AppliedAgentChange {
@@ -245,12 +245,12 @@ proto3.util.setEnumType(AppliedAgentChange_ChangeType, "agent.v1.AppliedAgentCha
  */
 export class ApplyAgentDiffToolCall extends Message<ApplyAgentDiffToolCall> {
   /**
-   * @generated from field: agent.v1.ApplyAgentDiffArgs args = 1;
+   * @generated from field: optional agent.v1.ApplyAgentDiffArgs args = 1;
    */
   args?: ApplyAgentDiffArgs;
 
   /**
-   * @generated from field: agent.v1.ApplyAgentDiffResult result = 2;
+   * @generated from field: optional agent.v1.ApplyAgentDiffResult result = 2;
    */
   result?: ApplyAgentDiffResult;
 
@@ -262,8 +262,8 @@ export class ApplyAgentDiffToolCall extends Message<ApplyAgentDiffToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.ApplyAgentDiffToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: ApplyAgentDiffArgs },
-    { no: 2, name: "result", kind: "message", T: ApplyAgentDiffResult },
+    { no: 1, name: "args", kind: "message", T: ApplyAgentDiffArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: ApplyAgentDiffResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ApplyAgentDiffToolCall {

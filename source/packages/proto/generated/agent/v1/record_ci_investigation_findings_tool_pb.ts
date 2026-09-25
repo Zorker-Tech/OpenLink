@@ -16,12 +16,12 @@ import { Message, proto3 } from "@bufbuild/protobuf";
  */
 export class RecordCiInvestigationFindingsToolCall extends Message<RecordCiInvestigationFindingsToolCall> {
   /**
-   * @generated from field: agent.v1.RecordCiInvestigationFindingsArgs args = 1;
+   * @generated from field: optional agent.v1.RecordCiInvestigationFindingsArgs args = 1;
    */
   args?: RecordCiInvestigationFindingsArgs;
 
   /**
-   * @generated from field: agent.v1.RecordCiInvestigationFindingsResult result = 2;
+   * @generated from field: optional agent.v1.RecordCiInvestigationFindingsResult result = 2;
    */
   result?: RecordCiInvestigationFindingsResult;
 
@@ -33,8 +33,8 @@ export class RecordCiInvestigationFindingsToolCall extends Message<RecordCiInves
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.RecordCiInvestigationFindingsToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: RecordCiInvestigationFindingsArgs },
-    { no: 2, name: "result", kind: "message", T: RecordCiInvestigationFindingsResult },
+    { no: 1, name: "args", kind: "message", T: RecordCiInvestigationFindingsArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: RecordCiInvestigationFindingsResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RecordCiInvestigationFindingsToolCall {
@@ -64,7 +64,7 @@ export class RecordCiInvestigationFindingsArgs extends Message<RecordCiInvestiga
   findings: RecordCiInvestigationFinding[] = [];
 
   /**
-   * @generated from field: agent.v1.RecordCiInvestigationOverall overall = 2;
+   * @generated from field: optional agent.v1.RecordCiInvestigationOverall overall = 2;
    */
   overall?: RecordCiInvestigationOverall;
 
@@ -82,7 +82,7 @@ export class RecordCiInvestigationFindingsArgs extends Message<RecordCiInvestiga
   static readonly typeName = "agent.v1.RecordCiInvestigationFindingsArgs";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "findings", kind: "message", T: RecordCiInvestigationFinding, repeated: true },
-    { no: 2, name: "overall", kind: "message", T: RecordCiInvestigationOverall },
+    { no: 2, name: "overall", kind: "message", T: RecordCiInvestigationOverall, opt: true },
     { no: 3, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
@@ -237,9 +237,9 @@ export class RecordCiInvestigationFinding extends Message<RecordCiInvestigationF
   checkName = "";
 
   /**
-   * @generated from field: string details_url = 2;
+   * @generated from field: optional string details_url = 2;
    */
-  detailsUrl = "";
+  detailsUrl?: string;
 
   /**
    * @generated from field: string tldr = 3;
@@ -247,64 +247,64 @@ export class RecordCiInvestigationFinding extends Message<RecordCiInvestigationF
   tldr = "";
 
   /**
-   * @generated from field: string root_cause = 4;
+   * @generated from field: optional string root_cause = 4;
    */
-  rootCause = "";
+  rootCause?: string;
 
   /**
-   * @generated from field: string failing_signal = 5;
+   * @generated from field: optional string failing_signal = 5;
    */
-  failingSignal = "";
+  failingSignal?: string;
 
   /**
-   * @generated from field: string suggested_next_step = 6;
+   * @generated from field: optional string suggested_next_step = 6;
    */
-  suggestedNextStep = "";
+  suggestedNextStep?: string;
 
   /**
-   * @generated from field: string diff_relation = 7;
+   * @generated from field: optional string diff_relation = 7;
    */
-  diffRelation = "";
+  diffRelation?: string;
 
   /**
-   * @generated from field: string diff_relation_evidence = 8;
+   * @generated from field: optional string diff_relation_evidence = 8;
    */
-  diffRelationEvidence = "";
+  diffRelationEvidence?: string;
 
   /**
-   * @generated from field: string flake_assessment = 9;
+   * @generated from field: optional string flake_assessment = 9;
    */
-  flakeAssessment = "";
+  flakeAssessment?: string;
 
   /**
-   * @generated from field: string flake_evidence = 10;
+   * @generated from field: optional string flake_evidence = 10;
    */
-  flakeEvidence = "";
+  flakeEvidence?: string;
 
   /**
-   * @generated from field: bool rerun_available = 11;
+   * @generated from field: optional bool rerun_available = 11;
    */
-  rerunAvailable = false;
+  rerunAvailable?: boolean;
 
   /**
-   * @generated from field: string rerun_evidence = 12;
+   * @generated from field: optional string rerun_evidence = 12;
    */
-  rerunEvidence = "";
+  rerunEvidence?: string;
 
   /**
-   * @generated from field: string recommended_action = 13;
+   * @generated from field: optional string recommended_action = 13;
    */
-  recommendedAction = "";
+  recommendedAction?: string;
 
   /**
-   * @generated from field: string recommended_action_evidence = 14;
+   * @generated from field: optional string recommended_action_evidence = 14;
    */
-  recommendedActionEvidence = "";
+  recommendedActionEvidence?: string;
 
   /**
-   * @generated from field: string confidence = 15;
+   * @generated from field: optional string confidence = 15;
    */
-  confidence = "";
+  confidence?: string;
 
   constructor(data?: PartialMessage<RecordCiInvestigationFinding>) {
     super();
@@ -315,20 +315,20 @@ export class RecordCiInvestigationFinding extends Message<RecordCiInvestigationF
   static readonly typeName = "agent.v1.RecordCiInvestigationFinding";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "check_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "details_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "details_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "tldr", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "root_cause", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "failing_signal", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "suggested_next_step", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "diff_relation", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "diff_relation_evidence", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "flake_assessment", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "flake_evidence", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 11, name: "rerun_available", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 12, name: "rerun_evidence", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 13, name: "recommended_action", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 14, name: "recommended_action_evidence", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 15, name: "confidence", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "root_cause", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "failing_signal", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "suggested_next_step", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "diff_relation", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "diff_relation_evidence", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 9, name: "flake_assessment", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 10, name: "flake_evidence", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 11, name: "rerun_available", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 12, name: "rerun_evidence", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 13, name: "recommended_action", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 14, name: "recommended_action_evidence", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 15, name: "confidence", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RecordCiInvestigationFinding {
@@ -363,14 +363,14 @@ export class RecordCiInvestigationOverall extends Message<RecordCiInvestigationO
   themes: string[] = [];
 
   /**
-   * @generated from field: string recommended_action = 3;
+   * @generated from field: optional string recommended_action = 3;
    */
-  recommendedAction = "";
+  recommendedAction?: string;
 
   /**
-   * @generated from field: string recommended_action_evidence = 4;
+   * @generated from field: optional string recommended_action_evidence = 4;
    */
-  recommendedActionEvidence = "";
+  recommendedActionEvidence?: string;
 
   /**
    * @generated from field: repeated string check_keys = 5;
@@ -387,8 +387,8 @@ export class RecordCiInvestigationOverall extends Message<RecordCiInvestigationO
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "summary", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "themes", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 3, name: "recommended_action", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "recommended_action_evidence", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "recommended_action", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "recommended_action_evidence", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 5, name: "check_keys", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
 

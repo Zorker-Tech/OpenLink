@@ -10,8 +10,8 @@ package agent.v1;
 import "agent/v1/pi_common.proto";
 
 message PiLsExecArgs {
-  string path = 1 [json_name = "path"];
-  int32 limit = 2 [json_name = "limit"];
+  optional string path = 1 [json_name = "path"];
+  optional int32 limit = 2 [json_name = "limit"];
 }
 
 message PiLsExecResult {
@@ -23,8 +23,8 @@ message PiLsExecResult {
 
 message PiLsExecSuccess {
   string output = 1 [json_name = "output"];
-  .agent.v1.PiTruncation truncation = 2 [json_name = "truncation"];
-  uint32 entry_limit_reached = 3 [json_name = "entryLimitReached"];
+  optional .agent.v1.PiTruncation truncation = 2 [json_name = "truncation"];
+  optional uint32 entry_limit_reached = 3 [json_name = "entryLimitReached"];
 }
 
 message PiLsExecError {

@@ -17,12 +17,12 @@ import { ListMcpResourcesExecArgs, ListMcpResourcesExecResult, ReadMcpResourceEx
  */
 export class ListMcpResourcesToolCall extends Message<ListMcpResourcesToolCall> {
   /**
-   * @generated from field: agent.v1.ListMcpResourcesExecArgs args = 1;
+   * @generated from field: optional agent.v1.ListMcpResourcesExecArgs args = 1;
    */
   args?: ListMcpResourcesExecArgs;
 
   /**
-   * @generated from field: agent.v1.ListMcpResourcesExecResult result = 2;
+   * @generated from field: optional agent.v1.ListMcpResourcesExecResult result = 2;
    */
   result?: ListMcpResourcesExecResult;
 
@@ -34,8 +34,8 @@ export class ListMcpResourcesToolCall extends Message<ListMcpResourcesToolCall> 
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.ListMcpResourcesToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: ListMcpResourcesExecArgs },
-    { no: 2, name: "result", kind: "message", T: ListMcpResourcesExecResult },
+    { no: 1, name: "args", kind: "message", T: ListMcpResourcesExecArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: ListMcpResourcesExecResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListMcpResourcesToolCall {
@@ -60,12 +60,12 @@ export class ListMcpResourcesToolCall extends Message<ListMcpResourcesToolCall> 
  */
 export class ReadMcpResourceToolCall extends Message<ReadMcpResourceToolCall> {
   /**
-   * @generated from field: agent.v1.ReadMcpResourceExecArgs args = 1;
+   * @generated from field: optional agent.v1.ReadMcpResourceExecArgs args = 1;
    */
   args?: ReadMcpResourceExecArgs;
 
   /**
-   * @generated from field: agent.v1.ReadMcpResourceExecResult result = 2;
+   * @generated from field: optional agent.v1.ReadMcpResourceExecResult result = 2;
    */
   result?: ReadMcpResourceExecResult;
 
@@ -77,8 +77,8 @@ export class ReadMcpResourceToolCall extends Message<ReadMcpResourceToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.ReadMcpResourceToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: ReadMcpResourceExecArgs },
-    { no: 2, name: "result", kind: "message", T: ReadMcpResourceExecResult },
+    { no: 1, name: "args", kind: "message", T: ReadMcpResourceExecArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: ReadMcpResourceExecResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ReadMcpResourceToolCall {

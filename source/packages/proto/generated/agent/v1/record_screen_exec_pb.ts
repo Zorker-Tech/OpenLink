@@ -78,9 +78,9 @@ export class RecordScreenArgs extends Message<RecordScreenArgs> {
   toolCallId = "";
 
   /**
-   * @generated from field: string save_as_filename = 3;
+   * @generated from field: optional string save_as_filename = 3;
    */
-  saveAsFilename = "";
+  saveAsFilename?: string;
 
   constructor(data?: PartialMessage<RecordScreenArgs>) {
     super();
@@ -92,7 +92,7 @@ export class RecordScreenArgs extends Message<RecordScreenArgs> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "mode", kind: "enum", T: proto3.getEnumType(RecordingMode) },
     { no: 2, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "save_as_filename", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "save_as_filename", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RecordScreenArgs {
@@ -234,9 +234,9 @@ export class RecordScreenSaveSuccess extends Message<RecordScreenSaveSuccess> {
   recordingDurationMs = protoInt64.zero;
 
   /**
-   * @generated from field: agent.v1.RequestedFilePathRejectedReason requested_file_path_rejected_reason = 3;
+   * @generated from field: optional agent.v1.RequestedFilePathRejectedReason requested_file_path_rejected_reason = 3;
    */
-  requestedFilePathRejectedReason = RequestedFilePathRejectedReason.UNSPECIFIED;
+  requestedFilePathRejectedReason?: RequestedFilePathRejectedReason;
 
   constructor(data?: PartialMessage<RecordScreenSaveSuccess>) {
     super();
@@ -248,7 +248,7 @@ export class RecordScreenSaveSuccess extends Message<RecordScreenSaveSuccess> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "recording_duration_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 3, name: "requested_file_path_rejected_reason", kind: "enum", T: proto3.getEnumType(RequestedFilePathRejectedReason) },
+    { no: 3, name: "requested_file_path_rejected_reason", kind: "enum", T: proto3.getEnumType(RequestedFilePathRejectedReason), opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RecordScreenSaveSuccess {

@@ -10,9 +10,9 @@ package agent.v1;
 message ReadArgs {
   string path = 1 [json_name = "path"];
   string tool_call_id = 2 [json_name = "toolCallId"];
-  int32 offset = 4 [json_name = "offset"];
-  uint32 limit = 5 [json_name = "limit"];
-  string encoding_hint = 6 [json_name = "encodingHint"];
+  optional int32 offset = 4 [json_name = "offset"];
+  optional uint32 limit = 5 [json_name = "limit"];
+  optional string encoding_hint = 6 [json_name = "encodingHint"];
 }
 
 message ReadResult {
@@ -31,7 +31,7 @@ message ReadSuccess {
   int32 total_lines = 3 [json_name = "totalLines"];
   int64 file_size = 4 [json_name = "fileSize"];
   bool truncated = 6 [json_name = "truncated"];
-  bytes output_blob_id = 7 [json_name = "outputBlobId"];
+  optional bytes output_blob_id = 7 [json_name = "outputBlobId"];
   bool range_applied = 8 [json_name = "rangeApplied"];
   oneof output {
     string content = 2 [json_name = "content"];

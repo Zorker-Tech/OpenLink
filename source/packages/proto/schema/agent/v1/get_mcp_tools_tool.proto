@@ -8,14 +8,14 @@ syntax = "proto3";
 package agent.v1;
 
 message GetMcpToolsToolCall {
-  .agent.v1.GetMcpToolsArgs args = 1 [json_name = "args"];
-  .agent.v1.GetMcpToolsAgentResult result = 2 [json_name = "result"];
+  optional .agent.v1.GetMcpToolsArgs args = 1 [json_name = "args"];
+  optional .agent.v1.GetMcpToolsAgentResult result = 2 [json_name = "result"];
 }
 
 message GetMcpToolsArgs {
-  string server = 1 [json_name = "server"];
-  string tool_name = 2 [json_name = "toolName"];
-  string pattern = 3 [json_name = "pattern"];
+  optional string server = 1 [json_name = "server"];
+  optional string tool_name = 2 [json_name = "toolName"];
+  optional string pattern = 3 [json_name = "pattern"];
   string tool_call_id = 4 [json_name = "toolCallId"];
 }
 
@@ -28,7 +28,7 @@ message GetMcpToolsAgentResult {
 
 message GetMcpToolsSuccess {
   string content = 1 [json_name = "content"];
-  string output_file_path = 2 [json_name = "outputFilePath"];
+  optional string output_file_path = 2 [json_name = "outputFilePath"];
 }
 
 message GetMcpToolsError {

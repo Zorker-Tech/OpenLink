@@ -2334,7 +2334,7 @@ export class AcquireAgentStoreFileLockRequest extends Message<AcquireAgentStoreF
   relPath = "";
 
   /**
-   * @generated from field: aiserver.v1.AgentStoreFileLockHolder holder = 3;
+   * @generated from field: optional aiserver.v1.AgentStoreFileLockHolder holder = 3;
    */
   holder?: AgentStoreFileLockHolder;
 
@@ -2344,9 +2344,9 @@ export class AcquireAgentStoreFileLockRequest extends Message<AcquireAgentStoreF
   acquisitionId = "";
 
   /**
-   * @generated from field: int64 ttl_seconds = 5;
+   * @generated from field: optional int64 ttl_seconds = 5;
    */
-  ttlSeconds = protoInt64.zero;
+  ttlSeconds?: bigint;
 
   constructor(data?: PartialMessage<AcquireAgentStoreFileLockRequest>) {
     super();
@@ -2358,9 +2358,9 @@ export class AcquireAgentStoreFileLockRequest extends Message<AcquireAgentStoreF
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "store_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "rel_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "holder", kind: "message", T: AgentStoreFileLockHolder },
+    { no: 3, name: "holder", kind: "message", T: AgentStoreFileLockHolder, opt: true },
     { no: 4, name: "acquisition_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "ttl_seconds", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
+    { no: 5, name: "ttl_seconds", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AcquireAgentStoreFileLockRequest {
@@ -2390,12 +2390,12 @@ export class AcquireAgentStoreFileLockResponse extends Message<AcquireAgentStore
   acquired = false;
 
   /**
-   * @generated from field: string lock_token = 2;
+   * @generated from field: optional string lock_token = 2;
    */
-  lockToken = "";
+  lockToken?: string;
 
   /**
-   * @generated from field: aiserver.v1.AgentStoreFileLockHolder current_holder = 3;
+   * @generated from field: optional aiserver.v1.AgentStoreFileLockHolder current_holder = 3;
    */
   currentHolder?: AgentStoreFileLockHolder;
 
@@ -2413,8 +2413,8 @@ export class AcquireAgentStoreFileLockResponse extends Message<AcquireAgentStore
   static readonly typeName = "aiserver.v1.AcquireAgentStoreFileLockResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "acquired", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 2, name: "lock_token", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "current_holder", kind: "message", T: AgentStoreFileLockHolder },
+    { no: 2, name: "lock_token", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "current_holder", kind: "message", T: AgentStoreFileLockHolder, opt: true },
     { no: 4, name: "expires_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
   ]);
 
@@ -2460,64 +2460,64 @@ export class AddAsyncFollowupBackgroundComposerRequest extends Message<AddAsyncF
   richFollowup = "";
 
   /**
-   * @generated from field: aiserver.v1.ConversationMessage followup_message = 5;
+   * @generated from field: optional aiserver.v1.ConversationMessage followup_message = 5;
    */
   followupMessage?: ConversationMessage;
 
   /**
-   * @generated from field: aiserver.v1.ModelDetails model_details = 6;
+   * @generated from field: optional aiserver.v1.ModelDetails model_details = 6;
    */
   modelDetails?: ModelDetails;
 
   /**
-   * @generated from field: aiserver.v1.BackgroundComposerSource followup_source = 7;
+   * @generated from field: optional aiserver.v1.BackgroundComposerSource followup_source = 7;
    */
-  followupSource = BackgroundComposerSource.UNSPECIFIED;
+  followupSource?: BackgroundComposerSource;
 
   /**
-   * @generated from field: bool continue_rebase = 8;
+   * @generated from field: optional bool continue_rebase = 8;
    */
-  continueRebase = false;
+  continueRebase?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.PlanFollowupType plan_followup_type = 9;
+   * @generated from field: optional aiserver.v1.PlanFollowupType plan_followup_type = 9;
    */
-  planFollowupType = PlanFollowupType.UNSPECIFIED;
+  planFollowupType?: PlanFollowupType;
 
   /**
-   * @generated from field: agent.v1.ConversationAction followup_conversation_action = 10;
+   * @generated from field: optional agent.v1.ConversationAction followup_conversation_action = 10;
    */
   followupConversationAction?: ConversationAction;
 
   /**
-   * @generated from field: string followup_id = 11;
+   * @generated from field: optional string followup_id = 11;
    */
-  followupId = "";
+  followupId?: string;
 
   /**
-   * @generated from field: int64 time_budget_ms = 12;
+   * @generated from field: optional int64 time_budget_ms = 12;
    */
-  timeBudgetMs = protoInt64.zero;
+  timeBudgetMs?: bigint;
 
   /**
-   * @generated from field: int64 time_budget_seconds = 13;
+   * @generated from field: optional int64 time_budget_seconds = 13;
    */
-  timeBudgetSeconds = protoInt64.zero;
+  timeBudgetSeconds?: bigint;
 
   /**
-   * @generated from field: string followup_system_reminder = 14;
+   * @generated from field: optional string followup_system_reminder = 14;
    */
-  followupSystemReminder = "";
+  followupSystemReminder?: string;
 
   /**
-   * @generated from field: agent.v1.RequestedModel requested_model = 15;
+   * @generated from field: optional agent.v1.RequestedModel requested_model = 15;
    */
   requestedModel?: RequestedModel;
 
   /**
-   * @generated from field: string mcp_config_json = 16;
+   * @generated from field: optional string mcp_config_json = 16;
    */
-  mcpConfigJson = "";
+  mcpConfigJson?: string;
 
   /**
    * @generated from field: repeated string requested_additional_store_ids = 17;
@@ -2535,19 +2535,19 @@ export class AddAsyncFollowupBackgroundComposerRequest extends Message<AddAsyncF
   storeMounts: AgentStoreMount[] = [];
 
   /**
-   * @generated from field: string resubmit_from_message_id = 20;
+   * @generated from field: optional string resubmit_from_message_id = 20;
    */
-  resubmitFromMessageId = "";
+  resubmitFromMessageId?: string;
 
   /**
-   * @generated from field: bool use_experimental_model_opt_out = 21;
+   * @generated from field: optional bool use_experimental_model_opt_out = 21;
    */
-  useExperimentalModelOptOut = false;
+  useExperimentalModelOptOut?: boolean;
 
   /**
-   * @generated from field: string coalescing_key = 22;
+   * @generated from field: optional string coalescing_key = 22;
    */
-  coalescingKey = "";
+  coalescingKey?: string;
 
   constructor(data?: PartialMessage<AddAsyncFollowupBackgroundComposerRequest>) {
     super();
@@ -2561,24 +2561,24 @@ export class AddAsyncFollowupBackgroundComposerRequest extends Message<AddAsyncF
     { no: 2, name: "followup", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "synchronous", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 4, name: "rich_followup", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "followup_message", kind: "message", T: ConversationMessage },
-    { no: 6, name: "model_details", kind: "message", T: ModelDetails },
-    { no: 7, name: "followup_source", kind: "enum", T: proto3.getEnumType(BackgroundComposerSource) },
-    { no: 8, name: "continue_rebase", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 9, name: "plan_followup_type", kind: "enum", T: proto3.getEnumType(PlanFollowupType) },
-    { no: 10, name: "followup_conversation_action", kind: "message", T: ConversationAction },
-    { no: 11, name: "followup_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 12, name: "time_budget_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 13, name: "time_budget_seconds", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 14, name: "followup_system_reminder", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 15, name: "requested_model", kind: "message", T: RequestedModel },
-    { no: 16, name: "mcp_config_json", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "followup_message", kind: "message", T: ConversationMessage, opt: true },
+    { no: 6, name: "model_details", kind: "message", T: ModelDetails, opt: true },
+    { no: 7, name: "followup_source", kind: "enum", T: proto3.getEnumType(BackgroundComposerSource), opt: true },
+    { no: 8, name: "continue_rebase", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 9, name: "plan_followup_type", kind: "enum", T: proto3.getEnumType(PlanFollowupType), opt: true },
+    { no: 10, name: "followup_conversation_action", kind: "message", T: ConversationAction, opt: true },
+    { no: 11, name: "followup_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 12, name: "time_budget_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
+    { no: 13, name: "time_budget_seconds", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
+    { no: 14, name: "followup_system_reminder", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 15, name: "requested_model", kind: "message", T: RequestedModel, opt: true },
+    { no: 16, name: "mcp_config_json", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 17, name: "requested_additional_store_ids", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 18, name: "run_env_vars", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
     { no: 19, name: "store_mounts", kind: "message", T: AgentStoreMount, repeated: true },
-    { no: 20, name: "resubmit_from_message_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 21, name: "use_experimental_model_opt_out", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 22, name: "coalescing_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 20, name: "resubmit_from_message_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 21, name: "use_experimental_model_opt_out", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 22, name: "coalescing_key", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AddAsyncFollowupBackgroundComposerRequest {
@@ -2660,19 +2660,19 @@ export class AddPullRequestReviewCommentRequest extends Message<AddPullRequestRe
   line = 0;
 
   /**
-   * @generated from field: int32 start_line = 5;
+   * @generated from field: optional int32 start_line = 5;
    */
-  startLine = 0;
+  startLine?: number;
 
   /**
-   * @generated from field: string diff_side = 6;
+   * @generated from field: optional string diff_side = 6;
    */
-  diffSide = "";
+  diffSide?: string;
 
   /**
-   * @generated from field: string commit_oid = 7;
+   * @generated from field: optional string commit_oid = 7;
    */
-  commitOid = "";
+  commitOid?: string;
 
   constructor(data?: PartialMessage<AddPullRequestReviewCommentRequest>) {
     super();
@@ -2686,9 +2686,9 @@ export class AddPullRequestReviewCommentRequest extends Message<AddPullRequestRe
     { no: 2, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "body", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "line", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 5, name: "start_line", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 6, name: "diff_side", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "commit_oid", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "start_line", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 6, name: "diff_side", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "commit_oid", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AddPullRequestReviewCommentRequest {
@@ -2713,7 +2713,7 @@ export class AddPullRequestReviewCommentRequest extends Message<AddPullRequestRe
  */
 export class AddPullRequestReviewCommentResponse extends Message<AddPullRequestReviewCommentResponse> {
   /**
-   * @generated from field: aiserver.v1.PRReviewThread thread = 1;
+   * @generated from field: optional aiserver.v1.PRReviewThread thread = 1;
    */
   thread?: PRReviewThread;
 
@@ -2725,7 +2725,7 @@ export class AddPullRequestReviewCommentResponse extends Message<AddPullRequestR
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.AddPullRequestReviewCommentResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "thread", kind: "message", T: PRReviewThread },
+    { no: 1, name: "thread", kind: "message", T: PRReviewThread, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AddPullRequestReviewCommentResponse {
@@ -2910,19 +2910,19 @@ export class AdminListTeamNamedAgentsResponse extends Message<AdminListTeamNamed
  */
 export class AdminListUserPrivateWorkersRequest extends Message<AdminListUserPrivateWorkersRequest> {
   /**
-   * @generated from field: string auth_id = 1;
+   * @generated from field: optional string auth_id = 1;
    */
-  authId = "";
+  authId?: string;
 
   /**
-   * @generated from field: int32 user_id = 2;
+   * @generated from field: optional int32 user_id = 2;
    */
-  userId = 0;
+  userId?: number;
 
   /**
-   * @generated from field: string email = 3;
+   * @generated from field: optional string email = 3;
    */
-  email = "";
+  email?: string;
 
   constructor(data?: PartialMessage<AdminListUserPrivateWorkersRequest>) {
     super();
@@ -2932,9 +2932,9 @@ export class AdminListUserPrivateWorkersRequest extends Message<AdminListUserPri
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.AdminListUserPrivateWorkersRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "auth_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "user_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "email", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "auth_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "user_id", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 3, name: "email", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AdminListUserPrivateWorkersRequest {
@@ -3037,24 +3037,24 @@ export class AdminNamedAgent extends Message<AdminNamedAgent> {
   namedAgentId = "";
 
   /**
-   * @generated from field: string name = 2;
+   * @generated from field: optional string name = 2;
    */
-  name = "";
+  name?: string;
 
   /**
-   * @generated from field: string profile_picture_url = 3;
+   * @generated from field: optional string profile_picture_url = 3;
    */
-  profilePictureUrl = "";
+  profilePictureUrl?: string;
 
   /**
-   * @generated from field: int32 owning_user = 4;
+   * @generated from field: optional int32 owning_user = 4;
    */
-  owningUser = 0;
+  owningUser?: number;
 
   /**
-   * @generated from field: int32 owning_team = 5;
+   * @generated from field: optional int32 owning_team = 5;
    */
-  owningTeam = 0;
+  owningTeam?: number;
 
   /**
    * @generated from field: string created_at = 6;
@@ -3080,10 +3080,10 @@ export class AdminNamedAgent extends Message<AdminNamedAgent> {
   static readonly typeName = "aiserver.v1.AdminNamedAgent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "named_agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "profile_picture_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "owning_user", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 5, name: "owning_team", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "profile_picture_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "owning_user", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 5, name: "owning_team", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 6, name: "created_at", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 7, name: "updated_at", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 8, name: "sessions", kind: "message", T: AdminNamedAgentSession, repeated: true },
@@ -3170,14 +3170,14 @@ export class AdmittedCustomModeState extends Message<AdmittedCustomModeState> {
   label = "";
 
   /**
-   * @generated from field: string icon = 3;
+   * @generated from field: optional string icon = 3;
    */
-  icon = "";
+  icon?: string;
 
   /**
-   * @generated from field: string color = 4;
+   * @generated from field: optional string color = 4;
    */
-  color = "";
+  color?: string;
 
   /**
    * @generated from field: agent.v1.CustomModeSource source = 5;
@@ -3185,14 +3185,14 @@ export class AdmittedCustomModeState extends Message<AdmittedCustomModeState> {
   source = CustomModeSource.UNSPECIFIED;
 
   /**
-   * @generated from field: string source_path = 6;
+   * @generated from field: optional string source_path = 6;
    */
-  sourcePath = "";
+  sourcePath?: string;
 
   /**
-   * @generated from field: string source_hash = 7;
+   * @generated from field: optional string source_hash = 7;
    */
-  sourceHash = "";
+  sourceHash?: string;
 
   /**
    * @generated from field: string active_reminder = 8;
@@ -3205,19 +3205,19 @@ export class AdmittedCustomModeState extends Message<AdmittedCustomModeState> {
   admittedByTurnId = "";
 
   /**
-   * @generated from field: string description = 10;
+   * @generated from field: optional string description = 10;
    */
-  description = "";
+  description?: string;
 
   /**
-   * @generated from field: string managed_skill_id = 11;
+   * @generated from field: optional string managed_skill_id = 11;
    */
-  managedSkillId = "";
+  managedSkillId?: string;
 
   /**
-   * @generated from field: string plugin_id = 12;
+   * @generated from field: optional string plugin_id = 12;
    */
-  pluginId = "";
+  pluginId?: string;
 
   constructor(data?: PartialMessage<AdmittedCustomModeState>) {
     super();
@@ -3229,16 +3229,16 @@ export class AdmittedCustomModeState extends Message<AdmittedCustomModeState> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "label", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "icon", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "color", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "icon", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "color", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 5, name: "source", kind: "enum", T: proto3.getEnumType(CustomModeSource) },
-    { no: 6, name: "source_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "source_hash", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 6, name: "source_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "source_hash", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 8, name: "active_reminder", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 9, name: "admitted_by_turn_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 11, name: "managed_skill_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 12, name: "plugin_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 10, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 11, name: "managed_skill_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 12, name: "plugin_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AdmittedCustomModeState {
@@ -3293,9 +3293,9 @@ export class AgentStore extends Message<AgentStore> {
   kind = AgentStoreKind.UNSPECIFIED;
 
   /**
-   * @generated from field: double last_file_write_at_ms = 11;
+   * @generated from field: optional double last_file_write_at_ms = 11;
    */
-  lastFileWriteAtMs = 0;
+  lastFileWriteAtMs?: number;
 
   /**
    * @generated from field: string source_id = 12;
@@ -3303,12 +3303,12 @@ export class AgentStore extends Message<AgentStore> {
   sourceId = "";
 
   /**
-   * @generated from field: string source_display_name = 13;
+   * @generated from field: optional string source_display_name = 13;
    */
-  sourceDisplayName = "";
+  sourceDisplayName?: string;
 
   /**
-   * @generated from field: aiserver.v1.AgentStoreSourceRef source = 14;
+   * @generated from field: optional aiserver.v1.AgentStoreSourceRef source = 14;
    */
   source?: AgentStoreSourceRef;
 
@@ -3326,10 +3326,10 @@ export class AgentStore extends Message<AgentStore> {
     { no: 8, name: "repo_urls", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 9, name: "shares", kind: "message", T: SharedAgentStoreInfo, repeated: true },
     { no: 10, name: "kind", kind: "enum", T: proto3.getEnumType(AgentStoreKind) },
-    { no: 11, name: "last_file_write_at_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
+    { no: 11, name: "last_file_write_at_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
     { no: 12, name: "source_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 13, name: "source_display_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 14, name: "source", kind: "message", T: AgentStoreSourceRef },
+    { no: 13, name: "source_display_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 14, name: "source", kind: "message", T: AgentStoreSourceRef, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AgentStore {
@@ -3374,7 +3374,7 @@ export class AgentStoreConflictWriteInstruction extends Message<AgentStoreConfli
   expiresAtMs = protoInt64.zero;
 
   /**
-   * @generated from field: aiserver.v1.AgentStoreMultipartWriteInstruction multipart = 5;
+   * @generated from field: optional aiserver.v1.AgentStoreMultipartWriteInstruction multipart = 5;
    */
   multipart?: AgentStoreMultipartWriteInstruction;
 
@@ -3390,7 +3390,7 @@ export class AgentStoreConflictWriteInstruction extends Message<AgentStoreConfli
     { no: 2, name: "url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "headers", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
     { no: 4, name: "expires_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 5, name: "multipart", kind: "message", T: AgentStoreMultipartWriteInstruction },
+    { no: 5, name: "multipart", kind: "message", T: AgentStoreMultipartWriteInstruction, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AgentStoreConflictWriteInstruction {
@@ -3425,9 +3425,9 @@ export class AgentStoreDeleteFileEntry extends Message<AgentStoreDeleteFileEntry
   baseEtag = "";
 
   /**
-   * @generated from field: string mutation_id = 3;
+   * @generated from field: optional string mutation_id = 3;
    */
-  mutationId = "";
+  mutationId?: string;
 
   constructor(data?: PartialMessage<AgentStoreDeleteFileEntry>) {
     super();
@@ -3439,7 +3439,7 @@ export class AgentStoreDeleteFileEntry extends Message<AgentStoreDeleteFileEntry
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "rel_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "base_etag", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "mutation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "mutation_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AgentStoreDeleteFileEntry {
@@ -3479,9 +3479,9 @@ export class AgentStoreDeleteFileResult extends Message<AgentStoreDeleteFileResu
   tombstoneEtag = "";
 
   /**
-   * @generated from field: string current_etag = 4;
+   * @generated from field: optional string current_etag = 4;
    */
-  currentEtag = "";
+  currentEtag?: string;
 
   constructor(data?: PartialMessage<AgentStoreDeleteFileResult>) {
     super();
@@ -3494,7 +3494,7 @@ export class AgentStoreDeleteFileResult extends Message<AgentStoreDeleteFileResu
     { no: 1, name: "rel_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "status", kind: "enum", T: proto3.getEnumType(AgentStoreDeleteFileStatus) },
     { no: 3, name: "tombstone_etag", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "current_etag", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "current_etag", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AgentStoreDeleteFileResult {
@@ -3534,14 +3534,14 @@ export class AgentStoreEntry extends Message<AgentStoreEntry> {
   kind = AgentStoreEntryKind.UNSPECIFIED;
 
   /**
-   * @generated from field: int64 size_bytes = 4;
+   * @generated from field: optional int64 size_bytes = 4;
    */
-  sizeBytes = protoInt64.zero;
+  sizeBytes?: bigint;
 
   /**
-   * @generated from field: double updated_at_ms = 5;
+   * @generated from field: optional double updated_at_ms = 5;
    */
-  updatedAtMs = 0;
+  updatedAtMs?: number;
 
   constructor(data?: PartialMessage<AgentStoreEntry>) {
     super();
@@ -3554,8 +3554,8 @@ export class AgentStoreEntry extends Message<AgentStoreEntry> {
     { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "relative_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "kind", kind: "enum", T: proto3.getEnumType(AgentStoreEntryKind) },
-    { no: 4, name: "size_bytes", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 5, name: "updated_at_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
+    { no: 4, name: "size_bytes", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
+    { no: 5, name: "updated_at_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AgentStoreEntry {
@@ -3678,7 +3678,7 @@ export class AgentStoreFileLockHolder extends Message<AgentStoreFileLockHolder> 
  */
 export class AgentStoreLockRedirect extends Message<AgentStoreLockRedirect> {
   /**
-   * @generated from field: aiserver.v1.AgentStoreFileLockHolder holder = 1;
+   * @generated from field: optional aiserver.v1.AgentStoreFileLockHolder holder = 1;
    */
   holder?: AgentStoreFileLockHolder;
 
@@ -3700,7 +3700,7 @@ export class AgentStoreLockRedirect extends Message<AgentStoreLockRedirect> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.AgentStoreLockRedirect";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "holder", kind: "message", T: AgentStoreFileLockHolder },
+    { no: 1, name: "holder", kind: "message", T: AgentStoreFileLockHolder, opt: true },
     { no: 2, name: "conflict_rel_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "lock_expires_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
   ]);
@@ -3727,9 +3727,9 @@ export class AgentStoreLockRedirect extends Message<AgentStoreLockRedirect> {
  */
 export class AgentStoreMount extends Message<AgentStoreMount> {
   /**
-   * @generated from field: string mount_name = 1;
+   * @generated from field: optional string mount_name = 1;
    */
-  mountName = "";
+  mountName?: string;
 
   /**
    * @generated from field: bool server_generated = 5;
@@ -3767,7 +3767,7 @@ export class AgentStoreMount extends Message<AgentStoreMount> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.AgentStoreMount";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "mount_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "mount_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 5, name: "server_generated", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 2, name: "source", kind: "message", T: AgentStoreSourceRef, oneof: "target" },
     { no: 3, name: "store_id", kind: "scalar", T: 9 /* ScalarType.STRING */, oneof: "target" },
@@ -4189,7 +4189,7 @@ export class AgentStoreMultipartUploadedPart extends Message<AgentStoreMultipart
  */
 export class AgentStoreMultipartWriteAbort extends Message<AgentStoreMultipartWriteAbort> {
   /**
-   * @generated from field: aiserver.v1.AgentStoreMultipartUploadContext context = 1;
+   * @generated from field: optional aiserver.v1.AgentStoreMultipartUploadContext context = 1;
    */
   context?: AgentStoreMultipartUploadContext;
 
@@ -4201,7 +4201,7 @@ export class AgentStoreMultipartWriteAbort extends Message<AgentStoreMultipartWr
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.AgentStoreMultipartWriteAbort";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "context", kind: "message", T: AgentStoreMultipartUploadContext },
+    { no: 1, name: "context", kind: "message", T: AgentStoreMultipartUploadContext, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AgentStoreMultipartWriteAbort {
@@ -4226,7 +4226,7 @@ export class AgentStoreMultipartWriteAbort extends Message<AgentStoreMultipartWr
  */
 export class AgentStoreMultipartWriteCompletion extends Message<AgentStoreMultipartWriteCompletion> {
   /**
-   * @generated from field: aiserver.v1.AgentStoreMultipartUploadContext context = 1;
+   * @generated from field: optional aiserver.v1.AgentStoreMultipartUploadContext context = 1;
    */
   context?: AgentStoreMultipartUploadContext;
 
@@ -4243,7 +4243,7 @@ export class AgentStoreMultipartWriteCompletion extends Message<AgentStoreMultip
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.AgentStoreMultipartWriteCompletion";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "context", kind: "message", T: AgentStoreMultipartUploadContext },
+    { no: 1, name: "context", kind: "message", T: AgentStoreMultipartUploadContext, opt: true },
     { no: 2, name: "parts", kind: "message", T: AgentStoreMultipartUploadedPart, repeated: true },
   ]);
 
@@ -4269,7 +4269,7 @@ export class AgentStoreMultipartWriteCompletion extends Message<AgentStoreMultip
  */
 export class AgentStoreMultipartWriteInstruction extends Message<AgentStoreMultipartWriteInstruction> {
   /**
-   * @generated from field: aiserver.v1.AgentStoreMultipartUploadContext context = 1;
+   * @generated from field: optional aiserver.v1.AgentStoreMultipartUploadContext context = 1;
    */
   context?: AgentStoreMultipartUploadContext;
 
@@ -4291,7 +4291,7 @@ export class AgentStoreMultipartWriteInstruction extends Message<AgentStoreMulti
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.AgentStoreMultipartWriteInstruction";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "context", kind: "message", T: AgentStoreMultipartUploadContext },
+    { no: 1, name: "context", kind: "message", T: AgentStoreMultipartUploadContext, opt: true },
     { no: 2, name: "parts", kind: "message", T: AgentStoreMultipartUploadPartInstruction, repeated: true },
     { no: 3, name: "part_urls_expires_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
   ]);
@@ -4652,17 +4652,17 @@ export class AgentStoreWriteInstruction extends Message<AgentStoreWriteInstructi
   expiresAtMs = protoInt64.zero;
 
   /**
-   * @generated from field: aiserver.v1.AgentStoreConflictWriteInstruction conflict = 5;
+   * @generated from field: optional aiserver.v1.AgentStoreConflictWriteInstruction conflict = 5;
    */
   conflict?: AgentStoreConflictWriteInstruction;
 
   /**
-   * @generated from field: aiserver.v1.AgentStoreLockRedirect lock_redirect = 6;
+   * @generated from field: optional aiserver.v1.AgentStoreLockRedirect lock_redirect = 6;
    */
   lockRedirect?: AgentStoreLockRedirect;
 
   /**
-   * @generated from field: aiserver.v1.AgentStoreMultipartWriteInstruction multipart = 7;
+   * @generated from field: optional aiserver.v1.AgentStoreMultipartWriteInstruction multipart = 7;
    */
   multipart?: AgentStoreMultipartWriteInstruction;
 
@@ -4683,9 +4683,9 @@ export class AgentStoreWriteInstruction extends Message<AgentStoreWriteInstructi
     { no: 2, name: "url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "headers", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
     { no: 4, name: "expires_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 5, name: "conflict", kind: "message", T: AgentStoreConflictWriteInstruction },
-    { no: 6, name: "lock_redirect", kind: "message", T: AgentStoreLockRedirect },
-    { no: 7, name: "multipart", kind: "message", T: AgentStoreMultipartWriteInstruction },
+    { no: 5, name: "conflict", kind: "message", T: AgentStoreConflictWriteInstruction, opt: true },
+    { no: 6, name: "lock_redirect", kind: "message", T: AgentStoreLockRedirect, opt: true },
+    { no: 7, name: "multipart", kind: "message", T: AgentStoreMultipartWriteInstruction, opt: true },
     { no: 8, name: "primary_precondition_failed", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
@@ -4721,7 +4721,7 @@ export class AgentWorkspaceBinding extends Message<AgentWorkspaceBinding> {
   displayName = "";
 
   /**
-   * @generated from field: aiserver.v1.PrivateWorkspaceIdentifier private_workspace_identifier = 3;
+   * @generated from field: optional aiserver.v1.PrivateWorkspaceIdentifier private_workspace_identifier = 3;
    */
   privateWorkspaceIdentifier?: PrivateWorkspaceIdentifier;
 
@@ -4735,7 +4735,7 @@ export class AgentWorkspaceBinding extends Message<AgentWorkspaceBinding> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "display_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "private_workspace_identifier", kind: "message", T: PrivateWorkspaceIdentifier },
+    { no: 3, name: "private_workspace_identifier", kind: "message", T: PrivateWorkspaceIdentifier, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AgentWorkspaceBinding {
@@ -4760,7 +4760,7 @@ export class AgentWorkspaceBinding extends Message<AgentWorkspaceBinding> {
  */
 export class AggregateCloudAgentRunsForDashboardRequest extends Message<AggregateCloudAgentRunsForDashboardRequest> {
   /**
-   * @generated from field: aiserver.v1.CloudAgentDashboardRunFilter filter = 1;
+   * @generated from field: optional aiserver.v1.CloudAgentDashboardRunFilter filter = 1;
    */
   filter?: CloudAgentDashboardRunFilter;
 
@@ -4777,7 +4777,7 @@ export class AggregateCloudAgentRunsForDashboardRequest extends Message<Aggregat
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.AggregateCloudAgentRunsForDashboardRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "filter", kind: "message", T: CloudAgentDashboardRunFilter },
+    { no: 1, name: "filter", kind: "message", T: CloudAgentDashboardRunFilter, opt: true },
     { no: 2, name: "tz_offset_minutes", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
   ]);
 
@@ -4860,9 +4860,9 @@ export class ArchiveBackgroundComposerRequest extends Message<ArchiveBackgroundC
   source = BackgroundComposerSource.UNSPECIFIED;
 
   /**
-   * @generated from field: bool close_pull_request = 5;
+   * @generated from field: optional bool close_pull_request = 5;
    */
-  closePullRequest = false;
+  closePullRequest?: boolean;
 
   constructor(data?: PartialMessage<ArchiveBackgroundComposerRequest>) {
     super();
@@ -4876,7 +4876,7 @@ export class ArchiveBackgroundComposerRequest extends Message<ArchiveBackgroundC
     { no: 2, name: "unarchive", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 3, name: "only_notify_runner", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 4, name: "source", kind: "enum", T: proto3.getEnumType(BackgroundComposerSource) },
-    { no: 5, name: "close_pull_request", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 5, name: "close_pull_request", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ArchiveBackgroundComposerRequest {
@@ -4943,9 +4943,9 @@ export class ArchiveRepoBackgroundComposersRequest extends Message<ArchiveRepoBa
   repoUrls: string[] = [];
 
   /**
-   * @generated from field: int32 team_id = 2;
+   * @generated from field: optional int32 team_id = 2;
    */
-  teamId = 0;
+  teamId?: number;
 
   /**
    * @generated from field: aiserver.v1.BackgroundComposerSource source = 3;
@@ -4971,7 +4971,7 @@ export class ArchiveRepoBackgroundComposersRequest extends Message<ArchiveRepoBa
   static readonly typeName = "aiserver.v1.ArchiveRepoBackgroundComposersRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "repo_urls", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 2, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 2, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 3, name: "source", kind: "enum", T: proto3.getEnumType(BackgroundComposerSource) },
     { no: 4, name: "dry_run", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 5, name: "remove_repo_environment_json", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
@@ -5071,9 +5071,9 @@ export class AttachAgentStartupTraceRequest extends Message<AttachAgentStartupTr
   bcId = "";
 
   /**
-   * @generated from field: string last_event_id = 2;
+   * @generated from field: optional string last_event_id = 2;
    */
-  lastEventId = "";
+  lastEventId?: string;
 
   constructor(data?: PartialMessage<AttachAgentStartupTraceRequest>) {
     super();
@@ -5084,7 +5084,7 @@ export class AttachAgentStartupTraceRequest extends Message<AttachAgentStartupTr
   static readonly typeName = "aiserver.v1.AttachAgentStartupTraceRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "last_event_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "last_event_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AttachAgentStartupTraceRequest {
@@ -5114,7 +5114,7 @@ export class AttachAgentStartupTraceResponse extends Message<AttachAgentStartupT
   eventId = "";
 
   /**
-   * @generated from field: aiserver.v1.AgentStartupTraceEvent trace_event = 3;
+   * @generated from field: optional aiserver.v1.AgentStartupTraceEvent trace_event = 3;
    */
   traceEvent?: AgentStartupTraceEvent;
 
@@ -5127,7 +5127,7 @@ export class AttachAgentStartupTraceResponse extends Message<AttachAgentStartupT
   static readonly typeName = "aiserver.v1.AttachAgentStartupTraceResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "event_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "trace_event", kind: "message", T: AgentStartupTraceEvent },
+    { no: 3, name: "trace_event", kind: "message", T: AgentStartupTraceEvent, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AttachAgentStartupTraceResponse {
@@ -5157,29 +5157,29 @@ export class AttachBackgroundComposerLogsRequest extends Message<AttachBackgroun
   bcId = "";
 
   /**
-   * @generated from field: string last_event_id = 2;
+   * @generated from field: optional string last_event_id = 2;
    */
-  lastEventId = "";
+  lastEventId?: string;
 
   /**
-   * @generated from field: uint32 worker_index = 3;
+   * @generated from field: optional uint32 worker_index = 3;
    */
-  workerIndex = 0;
+  workerIndex?: number;
 
   /**
-   * @generated from field: string last_docker_build_event_id = 4;
+   * @generated from field: optional string last_docker_build_event_id = 4;
    */
-  lastDockerBuildEventId = "";
+  lastDockerBuildEventId?: string;
 
   /**
-   * @generated from field: string last_setup_event_id = 5;
+   * @generated from field: optional string last_setup_event_id = 5;
    */
-  lastSetupEventId = "";
+  lastSetupEventId?: string;
 
   /**
-   * @generated from field: string associated_pod_key = 6;
+   * @generated from field: optional string associated_pod_key = 6;
    */
-  associatedPodKey = "";
+  associatedPodKey?: string;
 
   constructor(data?: PartialMessage<AttachBackgroundComposerLogsRequest>) {
     super();
@@ -5190,11 +5190,11 @@ export class AttachBackgroundComposerLogsRequest extends Message<AttachBackgroun
   static readonly typeName = "aiserver.v1.AttachBackgroundComposerLogsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "last_event_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "worker_index", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 4, name: "last_docker_build_event_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "last_setup_event_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "associated_pod_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "last_event_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "worker_index", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
+    { no: 4, name: "last_docker_build_event_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "last_setup_event_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "associated_pod_key", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AttachBackgroundComposerLogsRequest {
@@ -5219,17 +5219,17 @@ export class AttachBackgroundComposerLogsRequest extends Message<AttachBackgroun
  */
 export class AttachBackgroundComposerLogsResponse extends Message<AttachBackgroundComposerLogsResponse> {
   /**
-   * @generated from field: aiserver.v1.AttachBackgroundComposerLogsResponse.Event event = 1;
+   * @generated from field: optional aiserver.v1.AttachBackgroundComposerLogsResponse.Event event = 1;
    */
   event?: AttachBackgroundComposerLogsResponse_Event;
 
   /**
-   * @generated from field: anyrun.v1.PodStatus updated_status = 2;
+   * @generated from field: optional anyrun.v1.PodStatus updated_status = 2;
    */
   updatedStatus?: PodStatus;
 
   /**
-   * @generated from field: aiserver.v1.ErrorDetails start_error = 3;
+   * @generated from field: optional aiserver.v1.ErrorDetails start_error = 3;
    */
   startError?: ErrorDetails;
 
@@ -5241,9 +5241,9 @@ export class AttachBackgroundComposerLogsResponse extends Message<AttachBackgrou
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.AttachBackgroundComposerLogsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "event", kind: "message", T: AttachBackgroundComposerLogsResponse_Event },
-    { no: 2, name: "updated_status", kind: "message", T: PodStatus },
-    { no: 3, name: "start_error", kind: "message", T: ErrorDetails },
+    { no: 1, name: "event", kind: "message", T: AttachBackgroundComposerLogsResponse_Event, opt: true },
+    { no: 2, name: "updated_status", kind: "message", T: PodStatus, opt: true },
+    { no: 3, name: "start_error", kind: "message", T: ErrorDetails, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AttachBackgroundComposerLogsResponse {
@@ -5273,12 +5273,12 @@ export class AttachBackgroundComposerLogsResponse_Event extends Message<AttachBa
   eventId = "";
 
   /**
-   * @generated from field: anyrun.v1.PodEvent event = 2;
+   * @generated from field: optional anyrun.v1.PodEvent event = 2;
    */
   event?: PodEvent;
 
   /**
-   * @generated from field: aiserver.v1.WaterfallUpdate waterfall_update = 3;
+   * @generated from field: optional aiserver.v1.WaterfallUpdate waterfall_update = 3;
    */
   waterfallUpdate?: WaterfallUpdate;
 
@@ -5291,8 +5291,8 @@ export class AttachBackgroundComposerLogsResponse_Event extends Message<AttachBa
   static readonly typeName = "aiserver.v1.AttachBackgroundComposerLogsResponse.Event";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "event_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "event", kind: "message", T: PodEvent },
-    { no: 3, name: "waterfall_update", kind: "message", T: WaterfallUpdate },
+    { no: 2, name: "event", kind: "message", T: PodEvent, opt: true },
+    { no: 3, name: "waterfall_update", kind: "message", T: WaterfallUpdate, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AttachBackgroundComposerLogsResponse_Event {
@@ -5322,9 +5322,9 @@ export class AttachBackgroundComposerPodRequest extends Message<AttachBackground
   podId = "";
 
   /**
-   * @generated from field: string last_event_id = 2;
+   * @generated from field: optional string last_event_id = 2;
    */
-  lastEventId = "";
+  lastEventId?: string;
 
   constructor(data?: PartialMessage<AttachBackgroundComposerPodRequest>) {
     super();
@@ -5335,7 +5335,7 @@ export class AttachBackgroundComposerPodRequest extends Message<AttachBackground
   static readonly typeName = "aiserver.v1.AttachBackgroundComposerPodRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "pod_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "last_event_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "last_event_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AttachBackgroundComposerPodRequest {
@@ -5360,12 +5360,12 @@ export class AttachBackgroundComposerPodRequest extends Message<AttachBackground
  */
 export class AttachBackgroundComposerPodResponse extends Message<AttachBackgroundComposerPodResponse> {
   /**
-   * @generated from field: aiserver.v1.AttachBackgroundComposerPodResponse.Event event = 1;
+   * @generated from field: optional aiserver.v1.AttachBackgroundComposerPodResponse.Event event = 1;
    */
   event?: AttachBackgroundComposerPodResponse_Event;
 
   /**
-   * @generated from field: anyrun.v1.PodStatus updated_status = 2;
+   * @generated from field: optional anyrun.v1.PodStatus updated_status = 2;
    */
   updatedStatus?: PodStatus;
 
@@ -5377,8 +5377,8 @@ export class AttachBackgroundComposerPodResponse extends Message<AttachBackgroun
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.AttachBackgroundComposerPodResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "event", kind: "message", T: AttachBackgroundComposerPodResponse_Event },
-    { no: 2, name: "updated_status", kind: "message", T: PodStatus },
+    { no: 1, name: "event", kind: "message", T: AttachBackgroundComposerPodResponse_Event, opt: true },
+    { no: 2, name: "updated_status", kind: "message", T: PodStatus, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AttachBackgroundComposerPodResponse {
@@ -5408,7 +5408,7 @@ export class AttachBackgroundComposerPodResponse_Event extends Message<AttachBac
   eventId = "";
 
   /**
-   * @generated from field: anyrun.v1.PodEvent event = 2;
+   * @generated from field: optional anyrun.v1.PodEvent event = 2;
    */
   event?: PodEvent;
 
@@ -5421,7 +5421,7 @@ export class AttachBackgroundComposerPodResponse_Event extends Message<AttachBac
   static readonly typeName = "aiserver.v1.AttachBackgroundComposerPodResponse.Event";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "event_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "event", kind: "message", T: PodEvent },
+    { no: 2, name: "event", kind: "message", T: PodEvent, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AttachBackgroundComposerPodResponse_Event {
@@ -5451,9 +5451,9 @@ export class AttachBackgroundComposerRequest extends Message<AttachBackgroundCom
   bcId = "";
 
   /**
-   * @generated from field: int32 starting_index = 2;
+   * @generated from field: optional int32 starting_index = 2;
    */
-  startingIndex = 0;
+  startingIndex?: number;
 
   constructor(data?: PartialMessage<AttachBackgroundComposerRequest>) {
     super();
@@ -5464,7 +5464,7 @@ export class AttachBackgroundComposerRequest extends Message<AttachBackgroundCom
   static readonly typeName = "aiserver.v1.AttachBackgroundComposerRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "starting_index", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 2, name: "starting_index", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AttachBackgroundComposerRequest {
@@ -5489,17 +5489,17 @@ export class AttachBackgroundComposerRequest extends Message<AttachBackgroundCom
  */
 export class AttachBackgroundComposerResponse extends Message<AttachBackgroundComposerResponse> {
   /**
-   * @generated from field: aiserver.v1.HeadlessAgenticComposerResponse headless_agentic_composer_response = 1;
+   * @generated from field: optional aiserver.v1.HeadlessAgenticComposerResponse headless_agentic_composer_response = 1;
    */
   headlessAgenticComposerResponse?: HeadlessAgenticComposerResponse;
 
   /**
-   * @generated from field: aiserver.v1.HeadlessAgenticComposerPrompt prompt = 2;
+   * @generated from field: optional aiserver.v1.HeadlessAgenticComposerPrompt prompt = 2;
    */
   prompt?: HeadlessAgenticComposerPrompt;
 
   /**
-   * @generated from field: aiserver.v1.GitDiff diff_since_start = 3;
+   * @generated from field: optional aiserver.v1.GitDiff diff_since_start = 3;
    */
   diffSinceStart?: GitDiff;
 
@@ -5526,9 +5526,9 @@ export class AttachBackgroundComposerResponse extends Message<AttachBackgroundCo
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.AttachBackgroundComposerResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "headless_agentic_composer_response", kind: "message", T: HeadlessAgenticComposerResponse },
-    { no: 2, name: "prompt", kind: "message", T: HeadlessAgenticComposerPrompt },
-    { no: 3, name: "diff_since_start", kind: "message", T: GitDiff },
+    { no: 1, name: "headless_agentic_composer_response", kind: "message", T: HeadlessAgenticComposerResponse, opt: true },
+    { no: 2, name: "prompt", kind: "message", T: HeadlessAgenticComposerPrompt, opt: true },
+    { no: 3, name: "diff_since_start", kind: "message", T: GitDiff, opt: true },
     { no: 4, name: "starting_commit", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 6, name: "status_update", kind: "enum", T: proto3.getEnumType(BackgroundComposerStatus) },
@@ -5561,9 +5561,9 @@ export class AttachEnvironmentBuildLogRequest extends Message<AttachEnvironmentB
   buildId = "";
 
   /**
-   * @generated from field: string cursor = 2;
+   * @generated from field: optional string cursor = 2;
    */
-  cursor = "";
+  cursor?: string;
 
   constructor(data?: PartialMessage<AttachEnvironmentBuildLogRequest>) {
     super();
@@ -5574,7 +5574,7 @@ export class AttachEnvironmentBuildLogRequest extends Message<AttachEnvironmentB
   static readonly typeName = "aiserver.v1.AttachEnvironmentBuildLogRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "build_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "cursor", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "cursor", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AttachEnvironmentBuildLogRequest {
@@ -5774,22 +5774,22 @@ export class BackgroundComposer extends Message<BackgroundComposer> {
   githubIssueId = "";
 
   /**
-   * @generated from field: int32 lines_added = 25;
+   * @generated from field: optional int32 lines_added = 25;
    */
-  linesAdded = 0;
+  linesAdded?: number;
 
   /**
-   * @generated from field: int32 lines_removed = 26;
+   * @generated from field: optional int32 lines_removed = 26;
    */
-  linesRemoved = 0;
+  linesRemoved?: number;
 
   /**
-   * @generated from field: int32 files_changed = 27;
+   * @generated from field: optional int32 files_changed = 27;
    */
-  filesChanged = 0;
+  filesChanged?: number;
 
   /**
-   * @generated from field: aiserver.v1.ModelDetails model_details = 28;
+   * @generated from field: optional aiserver.v1.ModelDetails model_details = 28;
    */
   modelDetails?: ModelDetails;
 
@@ -5814,59 +5814,59 @@ export class BackgroundComposer extends Message<BackgroundComposer> {
   ensembleStatus = EnsembleStatus.UNSPECIFIED;
 
   /**
-   * @generated from field: string workflow_id = 33;
+   * @generated from field: optional string workflow_id = 33;
    */
-  workflowId = "";
+  workflowId?: string;
 
   /**
-   * @generated from field: string agent_session_id = 34;
+   * @generated from field: optional string agent_session_id = 34;
    */
-  agentSessionId = "";
+  agentSessionId?: string;
 
   /**
-   * @generated from field: string kickoff_message_id = 35;
+   * @generated from field: optional string kickoff_message_id = 35;
    */
-  kickoffMessageId = "";
+  kickoffMessageId?: string;
 
   /**
-   * @generated from field: string grind_phase = 36;
+   * @generated from field: optional string grind_phase = 36;
    */
-  grindPhase = "";
+  grindPhase?: string;
 
   /**
-   * @generated from field: int32 commit_count = 37;
+   * @generated from field: optional int32 commit_count = 37;
    */
-  commitCount = 0;
+  commitCount?: number;
 
   /**
-   * @generated from field: string latest_commit_sha = 38;
+   * @generated from field: optional string latest_commit_sha = 38;
    */
-  latestCommitSha = "";
+  latestCommitSha?: string;
 
   /**
-   * @generated from field: string latest_commit_message = 39;
+   * @generated from field: optional string latest_commit_message = 39;
    */
-  latestCommitMessage = "";
+  latestCommitMessage?: string;
 
   /**
-   * @generated from field: double last_message_activity_at_ms = 40;
+   * @generated from field: optional double last_message_activity_at_ms = 40;
    */
-  lastMessageActivityAtMs = 0;
+  lastMessageActivityAtMs?: number;
 
   /**
-   * @generated from field: string owning_service_account = 41;
+   * @generated from field: optional string owning_service_account = 41;
    */
-  owningServiceAccount = "";
+  owningServiceAccount?: string;
 
   /**
-   * @generated from field: string owning_service_account_name = 42;
+   * @generated from field: optional string owning_service_account_name = 42;
    */
-  owningServiceAccountName = "";
+  owningServiceAccountName?: string;
 
   /**
-   * @generated from field: aiserver.v1.PRStatus pr_status = 43;
+   * @generated from field: optional aiserver.v1.PRStatus pr_status = 43;
    */
-  prStatus = PRStatus.PR_STATUS_UNSPECIFIED;
+  prStatus?: PRStatus;
 
   /**
    * @generated from field: repeated int32 participant_user_ids = 45;
@@ -5874,27 +5874,27 @@ export class BackgroundComposer extends Message<BackgroundComposer> {
   participantUserIds: number[] = [];
 
   /**
-   * @generated from field: aiserver.v1.ExternalSourceMetadata external_source_metadata = 57;
+   * @generated from field: optional aiserver.v1.ExternalSourceMetadata external_source_metadata = 57;
    */
   externalSourceMetadata?: ExternalSourceMetadata;
 
   /**
-   * @generated from field: string worker_id = 58;
+   * @generated from field: optional string worker_id = 58;
    */
-  workerId = "";
+  workerId?: string;
 
   /**
-   * @generated from field: agent.v1.RequestedModel requested_model = 59;
+   * @generated from field: optional agent.v1.RequestedModel requested_model = 59;
    */
   requestedModel?: RequestedModel;
 
   /**
-   * @generated from field: bool use_private_worker = 60;
+   * @generated from field: optional bool use_private_worker = 60;
    */
-  usePrivateWorker = false;
+  usePrivateWorker?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.CloudSubagentParentReference cloud_subagent_parent = 61;
+   * @generated from field: optional aiserver.v1.CloudSubagentParentReference cloud_subagent_parent = 61;
    */
   cloudSubagentParent?: CloudSubagentParentReference;
 
@@ -5904,39 +5904,39 @@ export class BackgroundComposer extends Message<BackgroundComposer> {
   repoUrls: string[] = [];
 
   /**
-   * @generated from field: string environment_name = 63;
+   * @generated from field: optional string environment_name = 63;
    */
-  environmentName = "";
+  environmentName?: string;
 
   /**
-   * @generated from field: aiserver.v1.PrivateWorkspaceIdentifier private_workspace_identifier = 64;
+   * @generated from field: optional aiserver.v1.PrivateWorkspaceIdentifier private_workspace_identifier = 64;
    */
   privateWorkspaceIdentifier?: PrivateWorkspaceIdentifier;
 
   /**
-   * @generated from field: string private_worker_display_name = 65;
+   * @generated from field: optional string private_worker_display_name = 65;
    */
-  privateWorkerDisplayName = "";
+  privateWorkerDisplayName?: string;
 
   /**
-   * @generated from field: aiserver.v1.AgentWorkspaceBinding workspace_binding = 66;
+   * @generated from field: optional aiserver.v1.AgentWorkspaceBinding workspace_binding = 66;
    */
   workspaceBinding?: AgentWorkspaceBinding;
 
   /**
-   * @generated from field: bool use_experimental_model_opt_out = 67;
+   * @generated from field: optional bool use_experimental_model_opt_out = 67;
    */
-  useExperimentalModelOptOut = false;
+  useExperimentalModelOptOut?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.SideChatInfo side_chat_info = 68;
+   * @generated from field: optional aiserver.v1.SideChatInfo side_chat_info = 68;
    */
   sideChatInfo?: SideChatInfo;
 
   /**
-   * @generated from field: string manager_agent_id = 69;
+   * @generated from field: optional string manager_agent_id = 69;
    */
-  managerAgentId = "";
+  managerAgentId?: string;
 
   /**
    * @generated from field: bool initiated_env_setup = 70;
@@ -5975,39 +5975,39 @@ export class BackgroundComposer extends Message<BackgroundComposer> {
     { no: 22, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 23, name: "is_pr_merged", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 24, name: "github_issue_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 25, name: "lines_added", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 26, name: "lines_removed", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 27, name: "files_changed", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 28, name: "model_details", kind: "message", T: ModelDetails },
+    { no: 25, name: "lines_added", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 26, name: "lines_removed", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 27, name: "files_changed", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 28, name: "model_details", kind: "message", T: ModelDetails, opt: true },
     { no: 29, name: "triggered_principal_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 30, name: "triggered_principal_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 31, name: "visibility", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 32, name: "ensemble_status", kind: "enum", T: proto3.getEnumType(EnsembleStatus) },
-    { no: 33, name: "workflow_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 34, name: "agent_session_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 35, name: "kickoff_message_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 36, name: "grind_phase", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 37, name: "commit_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 38, name: "latest_commit_sha", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 39, name: "latest_commit_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 40, name: "last_message_activity_at_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 41, name: "owning_service_account", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 42, name: "owning_service_account_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 43, name: "pr_status", kind: "enum", T: proto3.getEnumType(PRStatus) },
+    { no: 33, name: "workflow_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 34, name: "agent_session_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 35, name: "kickoff_message_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 36, name: "grind_phase", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 37, name: "commit_count", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 38, name: "latest_commit_sha", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 39, name: "latest_commit_message", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 40, name: "last_message_activity_at_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
+    { no: 41, name: "owning_service_account", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 42, name: "owning_service_account_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 43, name: "pr_status", kind: "enum", T: proto3.getEnumType(PRStatus), opt: true },
     { no: 45, name: "participant_user_ids", kind: "scalar", T: 5 /* ScalarType.INT32 */, repeated: true },
-    { no: 57, name: "external_source_metadata", kind: "message", T: ExternalSourceMetadata },
-    { no: 58, name: "worker_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 59, name: "requested_model", kind: "message", T: RequestedModel },
-    { no: 60, name: "use_private_worker", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 61, name: "cloud_subagent_parent", kind: "message", T: CloudSubagentParentReference },
+    { no: 57, name: "external_source_metadata", kind: "message", T: ExternalSourceMetadata, opt: true },
+    { no: 58, name: "worker_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 59, name: "requested_model", kind: "message", T: RequestedModel, opt: true },
+    { no: 60, name: "use_private_worker", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 61, name: "cloud_subagent_parent", kind: "message", T: CloudSubagentParentReference, opt: true },
     { no: 62, name: "repo_urls", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 63, name: "environment_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 64, name: "private_workspace_identifier", kind: "message", T: PrivateWorkspaceIdentifier },
-    { no: 65, name: "private_worker_display_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 66, name: "workspace_binding", kind: "message", T: AgentWorkspaceBinding },
-    { no: 67, name: "use_experimental_model_opt_out", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 68, name: "side_chat_info", kind: "message", T: SideChatInfo },
-    { no: 69, name: "manager_agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 63, name: "environment_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 64, name: "private_workspace_identifier", kind: "message", T: PrivateWorkspaceIdentifier, opt: true },
+    { no: 65, name: "private_worker_display_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 66, name: "workspace_binding", kind: "message", T: AgentWorkspaceBinding, opt: true },
+    { no: 67, name: "use_experimental_model_opt_out", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 68, name: "side_chat_info", kind: "message", T: SideChatInfo, opt: true },
+    { no: 69, name: "manager_agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 70, name: "initiated_env_setup", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
@@ -6087,12 +6087,12 @@ export class BackgroundComposerCachedDetailsProto extends Message<BackgroundComp
   diffChangesHash = "";
 
   /**
-   * @generated from field: aiserver.v1.GetDiffResponse detailed_diff = 2;
+   * @generated from field: optional aiserver.v1.GetDiffResponse detailed_diff = 2;
    */
   detailedDiff?: GetDiffResponse;
 
   /**
-   * @generated from field: aiserver.v1.DetailedBackgroundComposer bc = 3;
+   * @generated from field: optional aiserver.v1.DetailedBackgroundComposer bc = 3;
    */
   bc?: DetailedBackgroundComposer;
 
@@ -6105,8 +6105,8 @@ export class BackgroundComposerCachedDetailsProto extends Message<BackgroundComp
   static readonly typeName = "aiserver.v1.BackgroundComposerCachedDetailsProto";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "diff_changes_hash", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "detailed_diff", kind: "message", T: GetDiffResponse },
-    { no: 3, name: "bc", kind: "message", T: DetailedBackgroundComposer },
+    { no: 2, name: "detailed_diff", kind: "message", T: GetDiffResponse, opt: true },
+    { no: 3, name: "bc", kind: "message", T: DetailedBackgroundComposer, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BackgroundComposerCachedDetailsProto {
@@ -6192,14 +6192,14 @@ export class BackgroundComposerCommit extends Message<BackgroundComposerCommit> 
  */
 export class BackgroundComposerDefaultEnvironmentSetting extends Message<BackgroundComposerDefaultEnvironmentSetting> {
   /**
-   * @generated from field: aiserver.v1.EnvironmentRepoConfig repo_config = 1;
+   * @generated from field: optional aiserver.v1.EnvironmentRepoConfig repo_config = 1;
    */
   repoConfig?: EnvironmentRepoConfig;
 
   /**
-   * @generated from field: string environment_public_id = 2;
+   * @generated from field: optional string environment_public_id = 2;
    */
-  environmentPublicId = "";
+  environmentPublicId?: string;
 
   constructor(data?: PartialMessage<BackgroundComposerDefaultEnvironmentSetting>) {
     super();
@@ -6209,8 +6209,8 @@ export class BackgroundComposerDefaultEnvironmentSetting extends Message<Backgro
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.BackgroundComposerDefaultEnvironmentSetting";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repo_config", kind: "message", T: EnvironmentRepoConfig },
-    { no: 2, name: "environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "repo_config", kind: "message", T: EnvironmentRepoConfig, opt: true },
+    { no: 2, name: "environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BackgroundComposerDefaultEnvironmentSetting {
@@ -6293,12 +6293,12 @@ export class BackgroundComposerFullDiff extends Message<BackgroundComposerFullDi
   modifiedContent = "";
 
   /**
-   * @generated from field: string submodule_path = 4;
+   * @generated from field: optional string submodule_path = 4;
    */
-  submodulePath = "";
+  submodulePath?: string;
 
   /**
-   * @generated from field: aiserver.v1.GitDiff git_diff = 5;
+   * @generated from field: optional aiserver.v1.GitDiff git_diff = 5;
    */
   gitDiff?: GitDiff;
 
@@ -6323,8 +6323,8 @@ export class BackgroundComposerFullDiff extends Message<BackgroundComposerFullDi
     { no: 1, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "original_content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "modified_content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "submodule_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "git_diff", kind: "message", T: GitDiff },
+    { no: 4, name: "submodule_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "git_diff", kind: "message", T: GitDiff, opt: true },
     { no: 6, name: "full_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 7, name: "base_ref", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
@@ -6356,19 +6356,19 @@ export class BackgroundComposerParticipant extends Message<BackgroundComposerPar
   userId = 0;
 
   /**
-   * @generated from field: string display_name = 2;
+   * @generated from field: optional string display_name = 2;
    */
-  displayName = "";
+  displayName?: string;
 
   /**
-   * @generated from field: string email = 3;
+   * @generated from field: optional string email = 3;
    */
-  email = "";
+  email?: string;
 
   /**
-   * @generated from field: string profile_picture_url = 4;
+   * @generated from field: optional string profile_picture_url = 4;
    */
-  profilePictureUrl = "";
+  profilePictureUrl?: string;
 
   constructor(data?: PartialMessage<BackgroundComposerParticipant>) {
     super();
@@ -6379,9 +6379,9 @@ export class BackgroundComposerParticipant extends Message<BackgroundComposerPar
   static readonly typeName = "aiserver.v1.BackgroundComposerParticipant";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "user_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 2, name: "display_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "email", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "profile_picture_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "display_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "email", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "profile_picture_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BackgroundComposerParticipant {
@@ -6416,29 +6416,29 @@ export class BackgroundComposerPr extends Message<BackgroundComposerPr> {
   baseBranch = "";
 
   /**
-   * @generated from field: string scm_repo_node_id = 3;
+   * @generated from field: optional string scm_repo_node_id = 3;
    */
-  scmRepoNodeId = "";
+  scmRepoNodeId?: string;
 
   /**
-   * @generated from field: int32 pull_number = 4;
+   * @generated from field: optional int32 pull_number = 4;
    */
-  pullNumber = 0;
+  pullNumber?: number;
 
   /**
-   * @generated from field: aiserver.v1.PRStatus pr_status = 5;
+   * @generated from field: optional aiserver.v1.PRStatus pr_status = 5;
    */
-  prStatus = PRStatus.PR_STATUS_UNSPECIFIED;
+  prStatus?: PRStatus;
 
   /**
-   * @generated from field: string pr_url = 6;
+   * @generated from field: optional string pr_url = 6;
    */
-  prUrl = "";
+  prUrl?: string;
 
   /**
-   * @generated from field: string scm_provider = 7;
+   * @generated from field: optional string scm_provider = 7;
    */
-  scmProvider = "";
+  scmProvider?: string;
 
   constructor(data?: PartialMessage<BackgroundComposerPr>) {
     super();
@@ -6450,11 +6450,11 @@ export class BackgroundComposerPr extends Message<BackgroundComposerPr> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "scm_repo_node_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "pull_number", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 5, name: "pr_status", kind: "enum", T: proto3.getEnumType(PRStatus) },
-    { no: 6, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "scm_provider", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "scm_repo_node_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "pull_number", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 5, name: "pr_status", kind: "enum", T: proto3.getEnumType(PRStatus), opt: true },
+    { no: 6, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "scm_provider", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BackgroundComposerPr {
@@ -6489,9 +6489,9 @@ export class BackgroundComposerQuickActionSettings extends Message<BackgroundCom
   quickActionSubagentSlotsExplicitlySet = false;
 
   /**
-   * @generated from field: uint32 quick_action_subagent_catalog_version = 3;
+   * @generated from field: optional uint32 quick_action_subagent_catalog_version = 3;
    */
-  quickActionSubagentCatalogVersion = 0;
+  quickActionSubagentCatalogVersion?: number;
 
   /**
    * @generated from field: repeated aiserver.v1.BackgroundComposerQuickActionSubagentTemplate quick_action_subagent_templates = 4;
@@ -6513,7 +6513,7 @@ export class BackgroundComposerQuickActionSettings extends Message<BackgroundCom
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "quick_action_subagent_slots", kind: "message", T: BackgroundComposerQuickActionSubagentSlot, repeated: true },
     { no: 2, name: "quick_action_subagent_slots_explicitly_set", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "quick_action_subagent_catalog_version", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 3, name: "quick_action_subagent_catalog_version", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
     { no: 4, name: "quick_action_subagent_templates", kind: "message", T: BackgroundComposerQuickActionSubagentTemplate, repeated: true },
     { no: 5, name: "quick_action_subagent_template_mutations", kind: "message", T: BackgroundComposerQuickActionSubagentTemplateMutation, repeated: true },
   ]);
@@ -6633,9 +6633,9 @@ export class BackgroundComposerQuickActionSubagentTemplate extends Message<Backg
   subagentType = "";
 
   /**
-   * @generated from field: string prompt = 5;
+   * @generated from field: optional string prompt = 5;
    */
-  prompt = "";
+  prompt?: string;
 
   /**
    * @generated from field: aiserver.v1.BackgroundComposerQuickActionSubagentTemplateScope scope = 6;
@@ -6653,9 +6653,9 @@ export class BackgroundComposerQuickActionSubagentTemplate extends Message<Backg
   canDelete = false;
 
   /**
-   * @generated from field: string icon_name = 9;
+   * @generated from field: optional string icon_name = 9;
    */
-  iconName = "";
+  iconName?: string;
 
   constructor(data?: PartialMessage<BackgroundComposerQuickActionSubagentTemplate>) {
     super();
@@ -6669,11 +6669,11 @@ export class BackgroundComposerQuickActionSubagentTemplate extends Message<Backg
     { no: 2, name: "label", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "subagent_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "prompt", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "prompt", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 6, name: "scope", kind: "enum", T: proto3.getEnumType(BackgroundComposerQuickActionSubagentTemplateScope) },
     { no: 7, name: "can_edit", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 8, name: "can_delete", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 9, name: "icon_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 9, name: "icon_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BackgroundComposerQuickActionSubagentTemplate {
@@ -6703,7 +6703,7 @@ export class BackgroundComposerQuickActionSubagentTemplateMutation extends Messa
   operation = BackgroundComposerQuickActionSubagentTemplateOperation.UNSPECIFIED;
 
   /**
-   * @generated from field: aiserver.v1.BackgroundComposerQuickActionSubagentTemplate template = 2;
+   * @generated from field: optional aiserver.v1.BackgroundComposerQuickActionSubagentTemplate template = 2;
    */
   template?: BackgroundComposerQuickActionSubagentTemplate;
 
@@ -6716,7 +6716,7 @@ export class BackgroundComposerQuickActionSubagentTemplateMutation extends Messa
   static readonly typeName = "aiserver.v1.BackgroundComposerQuickActionSubagentTemplateMutation";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "operation", kind: "enum", T: proto3.getEnumType(BackgroundComposerQuickActionSubagentTemplateOperation) },
-    { no: 2, name: "template", kind: "message", T: BackgroundComposerQuickActionSubagentTemplate },
+    { no: 2, name: "template", kind: "message", T: BackgroundComposerQuickActionSubagentTemplate, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BackgroundComposerQuickActionSubagentTemplateMutation {
@@ -6776,9 +6776,9 @@ export class BackgroundComposerSharedArtifact extends Message<BackgroundComposer
   shareSource = "";
 
   /**
-   * @generated from field: int64 revoked_at_ms = 8;
+   * @generated from field: optional int64 revoked_at_ms = 8;
    */
-  revokedAtMs = protoInt64.zero;
+  revokedAtMs?: bigint;
 
   /**
    * @generated from field: int64 created_at_ms = 9;
@@ -6805,7 +6805,7 @@ export class BackgroundComposerSharedArtifact extends Message<BackgroundComposer
     { no: 5, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 6, name: "content_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 7, name: "share_source", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "revoked_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
+    { no: 8, name: "revoked_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
     { no: 9, name: "created_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 10, name: "updated_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
   ]);
@@ -6837,19 +6837,19 @@ export class BackgroundComposerSnapshotStatusByBcId extends Message<BackgroundCo
   bcId = "";
 
   /**
-   * @generated from field: string snapshot_id = 2;
+   * @generated from field: optional string snapshot_id = 2;
    */
-  snapshotId = "";
+  snapshotId?: string;
 
   /**
-   * @generated from field: aiserver.v1.ChangeBackgroundComposerSnapshotVisibilityRequest.Visibility visibility = 3;
+   * @generated from field: optional aiserver.v1.ChangeBackgroundComposerSnapshotVisibilityRequest.Visibility visibility = 3;
    */
-  visibility = ChangeBackgroundComposerSnapshotVisibilityRequest_Visibility.UNSPECIFIED;
+  visibility?: ChangeBackgroundComposerSnapshotVisibilityRequest_Visibility;
 
   /**
-   * @generated from field: double created_at_ms = 4;
+   * @generated from field: optional double created_at_ms = 4;
    */
-  createdAtMs = 0;
+  createdAtMs?: number;
 
   constructor(data?: PartialMessage<BackgroundComposerSnapshotStatusByBcId>) {
     super();
@@ -6860,9 +6860,9 @@ export class BackgroundComposerSnapshotStatusByBcId extends Message<BackgroundCo
   static readonly typeName = "aiserver.v1.BackgroundComposerSnapshotStatusByBcId";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "snapshot_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "visibility", kind: "enum", T: proto3.getEnumType(ChangeBackgroundComposerSnapshotVisibilityRequest_Visibility) },
-    { no: 4, name: "created_at_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
+    { no: 2, name: "snapshot_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "visibility", kind: "enum", T: proto3.getEnumType(ChangeBackgroundComposerSnapshotVisibilityRequest_Visibility), opt: true },
+    { no: 4, name: "created_at_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BackgroundComposerSnapshotStatusByBcId {
@@ -7176,7 +7176,7 @@ export class CancelEnvironmentBuildRequest extends Message<CancelEnvironmentBuil
  */
 export class CancelEnvironmentBuildResponse extends Message<CancelEnvironmentBuildResponse> {
   /**
-   * @generated from field: aiserver.v1.EnvironmentBuildRow row = 1;
+   * @generated from field: optional aiserver.v1.EnvironmentBuildRow row = 1;
    */
   row?: EnvironmentBuildRow;
 
@@ -7188,7 +7188,7 @@ export class CancelEnvironmentBuildResponse extends Message<CancelEnvironmentBui
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CancelEnvironmentBuildResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "row", kind: "message", T: EnvironmentBuildRow },
+    { no: 1, name: "row", kind: "message", T: EnvironmentBuildRow, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CancelEnvironmentBuildResponse {
@@ -7452,9 +7452,9 @@ export class CheckPullRequestMergeabilityResponse extends Message<CheckPullReque
   error = "";
 
   /**
-   * @generated from field: string mergeable_state = 3;
+   * @generated from field: optional string mergeable_state = 3;
    */
-  mergeableState = "";
+  mergeableState?: string;
 
   constructor(data?: PartialMessage<CheckPullRequestMergeabilityResponse>) {
     super();
@@ -7466,7 +7466,7 @@ export class CheckPullRequestMergeabilityResponse extends Message<CheckPullReque
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "can_merge", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 2, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "mergeable_state", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "mergeable_state", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CheckPullRequestMergeabilityResponse {
@@ -7788,22 +7788,22 @@ export class CloudAgentAnyrunVmInfo extends Message<CloudAgentAnyrunVmInfo> {
   workspaceRootPath = "";
 
   /**
-   * @generated from field: string docker_build_events_redis_stream_key = 5;
+   * @generated from field: optional string docker_build_events_redis_stream_key = 5;
    */
-  dockerBuildEventsRedisStreamKey = "";
+  dockerBuildEventsRedisStreamKey?: string;
 
   /**
-   * @generated from field: string setup_events_redis_stream_key = 6;
+   * @generated from field: optional string setup_events_redis_stream_key = 6;
    */
-  setupEventsRedisStreamKey = "";
+  setupEventsRedisStreamKey?: string;
 
   /**
-   * @generated from field: string prewarm_workflow_id = 7;
+   * @generated from field: optional string prewarm_workflow_id = 7;
    */
-  prewarmWorkflowId = "";
+  prewarmWorkflowId?: string;
 
   /**
-   * @generated from field: anyrun.v1.EnvironmentBuildBootInfo environment_build_boot_info = 8;
+   * @generated from field: optional anyrun.v1.EnvironmentBuildBootInfo environment_build_boot_info = 8;
    */
   environmentBuildBootInfo?: EnvironmentBuildBootInfo;
 
@@ -7819,10 +7819,10 @@ export class CloudAgentAnyrunVmInfo extends Message<CloudAgentAnyrunVmInfo> {
     { no: 2, name: "pod_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "anyrun_cluster", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "workspace_root_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "docker_build_events_redis_stream_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "setup_events_redis_stream_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "prewarm_workflow_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "environment_build_boot_info", kind: "message", T: EnvironmentBuildBootInfo },
+    { no: 5, name: "docker_build_events_redis_stream_key", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "setup_events_redis_stream_key", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "prewarm_workflow_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "environment_build_boot_info", kind: "message", T: EnvironmentBuildBootInfo, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CloudAgentAnyrunVmInfo {
@@ -7902,9 +7902,9 @@ export class CloudAgentDashboardRunDayBucket extends Message<CloudAgentDashboard
  */
 export class CloudAgentDashboardRunFilter extends Message<CloudAgentDashboardRunFilter> {
   /**
-   * @generated from field: string team_id = 1;
+   * @generated from field: optional string team_id = 1;
    */
-  teamId = "";
+  teamId?: string;
 
   /**
    * @generated from field: int64 created_after_ms = 2;
@@ -7927,9 +7927,9 @@ export class CloudAgentDashboardRunFilter extends Message<CloudAgentDashboardRun
   statuses: CloudAgentDashboardRunStatus[] = [];
 
   /**
-   * @generated from field: int64 created_by_user_id = 6;
+   * @generated from field: optional int64 created_by_user_id = 6;
    */
-  createdByUserId = protoInt64.zero;
+  createdByUserId?: bigint;
 
   constructor(data?: PartialMessage<CloudAgentDashboardRunFilter>) {
     super();
@@ -7939,12 +7939,12 @@ export class CloudAgentDashboardRunFilter extends Message<CloudAgentDashboardRun
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CloudAgentDashboardRunFilter";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "team_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "team_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "created_after_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 3, name: "created_before_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 4, name: "triggers", kind: "enum", T: proto3.getEnumType(CloudAgentSourceCategory), repeated: true },
     { no: 5, name: "statuses", kind: "enum", T: proto3.getEnumType(CloudAgentDashboardRunStatus), repeated: true },
-    { no: 6, name: "created_by_user_id", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
+    { no: 6, name: "created_by_user_id", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CloudAgentDashboardRunFilter {
@@ -7984,29 +7984,29 @@ export class CloudAgentDashboardRunRow extends Message<CloudAgentDashboardRunRow
   trigger = CloudAgentSourceCategory.UNSPECIFIED;
 
   /**
-   * @generated from field: int64 created_by_user_id = 4;
+   * @generated from field: optional int64 created_by_user_id = 4;
    */
-  createdByUserId = protoInt64.zero;
+  createdByUserId?: bigint;
 
   /**
-   * @generated from field: string created_by_display = 5;
+   * @generated from field: optional string created_by_display = 5;
    */
-  createdByDisplay = "";
+  createdByDisplay?: string;
 
   /**
-   * @generated from field: string environment_name = 6;
+   * @generated from field: optional string environment_name = 6;
    */
-  environmentName = "";
+  environmentName?: string;
 
   /**
-   * @generated from field: string environment_public_id = 7;
+   * @generated from field: optional string environment_public_id = 7;
    */
-  environmentPublicId = "";
+  environmentPublicId?: string;
 
   /**
-   * @generated from field: string repo_url = 8;
+   * @generated from field: optional string repo_url = 8;
    */
-  repoUrl = "";
+  repoUrl?: string;
 
   /**
    * @generated from field: aiserver.v1.CloudAgentDashboardRunStatus status = 9;
@@ -8024,11 +8024,11 @@ export class CloudAgentDashboardRunRow extends Message<CloudAgentDashboardRunRow
     { no: 1, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "created_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 3, name: "trigger", kind: "enum", T: proto3.getEnumType(CloudAgentSourceCategory) },
-    { no: 4, name: "created_by_user_id", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 5, name: "created_by_display", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "environment_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "created_by_user_id", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
+    { no: 5, name: "created_by_display", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "environment_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 9, name: "status", kind: "enum", T: proto3.getEnumType(CloudAgentDashboardRunStatus) },
   ]);
 
@@ -8107,12 +8107,12 @@ export class CloudAgentErrorDetails extends Message<CloudAgentErrorDetails> {
   errorCode = "";
 
   /**
-   * @generated from field: string dev_only_message = 3;
+   * @generated from field: optional string dev_only_message = 3;
    */
-  devOnlyMessage = "";
+  devOnlyMessage?: string;
 
   /**
-   * @generated from field: aiserver.v1.ErrorDetails error_details = 4;
+   * @generated from field: optional aiserver.v1.ErrorDetails error_details = 4;
    */
   errorDetails?: ErrorDetails;
 
@@ -8126,8 +8126,8 @@ export class CloudAgentErrorDetails extends Message<CloudAgentErrorDetails> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "error_code", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "dev_only_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "error_details", kind: "message", T: ErrorDetails },
+    { no: 3, name: "dev_only_message", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "error_details", kind: "message", T: ErrorDetails, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CloudAgentErrorDetails {
@@ -8157,9 +8157,9 @@ export class CloudAgentMemoryDbLogEntry extends Message<CloudAgentMemoryDbLogEnt
   source = CloudAgentMemoryDbLogSource.UNSPECIFIED;
 
   /**
-   * @generated from field: uint32 worker_index = 3;
+   * @generated from field: optional uint32 worker_index = 3;
    */
-  workerIndex = 0;
+  workerIndex?: number;
 
   /**
    * @generated from oneof aiserver.v1.CloudAgentMemoryDbLogEntry.log
@@ -8187,7 +8187,7 @@ export class CloudAgentMemoryDbLogEntry extends Message<CloudAgentMemoryDbLogEnt
   static readonly typeName = "aiserver.v1.CloudAgentMemoryDbLogEntry";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 2, name: "source", kind: "enum", T: proto3.getEnumType(CloudAgentMemoryDbLogSource) },
-    { no: 3, name: "worker_index", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 3, name: "worker_index", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
     { no: 4, name: "event", kind: "message", T: PodEvent, oneof: "log" },
     { no: 5, name: "waterfall_update", kind: "message", T: WaterfallUpdate, oneof: "log" },
   ]);
@@ -8244,14 +8244,14 @@ export class CloudAgentRunEvent extends Message<CloudAgentRunEvent> {
   title = "";
 
   /**
-   * @generated from field: string detail = 7;
+   * @generated from field: optional string detail = 7;
    */
-  detail = "";
+  detail?: string;
 
   /**
-   * @generated from field: string link_url = 8;
+   * @generated from field: optional string link_url = 8;
    */
-  linkUrl = "";
+  linkUrl?: string;
 
   constructor(data?: PartialMessage<CloudAgentRunEvent>) {
     super();
@@ -8267,8 +8267,8 @@ export class CloudAgentRunEvent extends Message<CloudAgentRunEvent> {
     { no: 4, name: "log_level", kind: "enum", T: proto3.getEnumType(CloudAgentRunEventLogLevel) },
     { no: 5, name: "kind", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 6, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "detail", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "link_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 7, name: "detail", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "link_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CloudAgentRunEvent {
@@ -8385,7 +8385,7 @@ export class CloudAgentStartupWarning extends Message<CloudAgentStartupWarning> 
  */
 export class CloudAgentState extends Message<CloudAgentState> {
   /**
-   * @generated from field: agent.v1.ConversationStateStructure conversation_state = 1;
+   * @generated from field: optional agent.v1.ConversationStateStructure conversation_state = 1;
    */
   conversationState?: ConversationStateStructure;
 
@@ -8425,14 +8425,14 @@ export class CloudAgentState extends Message<CloudAgentState> {
   agentName = new Uint8Array(0);
 
   /**
-   * @generated from field: string starting_commit = 9;
+   * @generated from field: optional string starting_commit = 9;
    */
-  startingCommit = "";
+  startingCommit?: string;
 
   /**
-   * @generated from field: string base_branch = 10;
+   * @generated from field: optional string base_branch = 10;
    */
-  baseBranch = "";
+  baseBranch?: string;
 
   /**
    * @generated from field: bytes config = 11;
@@ -8440,9 +8440,9 @@ export class CloudAgentState extends Message<CloudAgentState> {
   config = new Uint8Array(0);
 
   /**
-   * @generated from field: string local_state_branch = 12;
+   * @generated from field: optional string local_state_branch = 12;
    */
-  localStateBranch = "";
+  localStateBranch?: string;
 
   /**
    * @generated from field: bytes original_prompt_blob_id = 13;
@@ -8465,19 +8465,19 @@ export class CloudAgentState extends Message<CloudAgentState> {
   videoAnnotationsBlobId = new Uint8Array(0);
 
   /**
-   * @generated from field: string last_user_turn_commit = 17;
+   * @generated from field: optional string last_user_turn_commit = 17;
    */
-  lastUserTurnCommit = "";
+  lastUserTurnCommit?: string;
 
   /**
-   * @generated from field: aiserver.v1.BackgroundComposerSource last_followup_source = 18;
+   * @generated from field: optional aiserver.v1.BackgroundComposerSource last_followup_source = 18;
    */
-  lastFollowupSource = BackgroundComposerSource.UNSPECIFIED;
+  lastFollowupSource?: BackgroundComposerSource;
 
   /**
-   * @generated from field: bool continue_rebase = 19;
+   * @generated from field: optional bool continue_rebase = 19;
    */
-  continueRebase = false;
+  continueRebase?: boolean;
 
   /**
    * @generated from field: repeated string turn_start_todo_ids = 20;
@@ -8485,27 +8485,27 @@ export class CloudAgentState extends Message<CloudAgentState> {
   turnStartTodoIds: string[] = [];
 
   /**
-   * @generated from field: int64 original_request_start_unix_ms = 21;
+   * @generated from field: optional int64 original_request_start_unix_ms = 21;
    */
-  originalRequestStartUnixMs = protoInt64.zero;
+  originalRequestStartUnixMs?: bigint;
 
   /**
-   * @generated from field: bool initial_turn_latency_reported = 22;
+   * @generated from field: optional bool initial_turn_latency_reported = 22;
    */
-  initialTurnLatencyReported = false;
+  initialTurnLatencyReported?: boolean;
 
   /**
-   * @generated from field: string agent_session_id = 23;
+   * @generated from field: optional string agent_session_id = 23;
    */
-  agentSessionId = "";
+  agentSessionId?: string;
 
   /**
-   * @generated from field: string kickoff_message_id = 24;
+   * @generated from field: optional string kickoff_message_id = 24;
    */
-  kickoffMessageId = "";
+  kickoffMessageId?: string;
 
   /**
-   * @generated from field: aiserver.v1.GrindModeConfig grind_mode_config = 25;
+   * @generated from field: optional aiserver.v1.GrindModeConfig grind_mode_config = 25;
    */
   grindModeConfig?: GrindModeConfig;
 
@@ -8515,19 +8515,19 @@ export class CloudAgentState extends Message<CloudAgentState> {
   commits: BackgroundComposerCommit[] = [];
 
   /**
-   * @generated from field: int32 commit_count = 27;
+   * @generated from field: optional int32 commit_count = 27;
    */
-  commitCount = 0;
+  commitCount?: number;
 
   /**
-   * @generated from field: aiserver.v1.CloudAgentErrorDetails user_facing_error_details = 28;
+   * @generated from field: optional aiserver.v1.CloudAgentErrorDetails user_facing_error_details = 28;
    */
   userFacingErrorDetails?: CloudAgentErrorDetails;
 
   /**
-   * @generated from field: aiserver.v1.BackgroundComposerSource initial_source = 29;
+   * @generated from field: optional aiserver.v1.BackgroundComposerSource initial_source = 29;
    */
-  initialSource = BackgroundComposerSource.UNSPECIFIED;
+  initialSource?: BackgroundComposerSource;
 
   /**
    * @generated from field: uint32 num_completed_turns = 30;
@@ -8535,7 +8535,7 @@ export class CloudAgentState extends Message<CloudAgentState> {
   numCompletedTurns = 0;
 
   /**
-   * @generated from field: aiserver.v1.SynthesisSubagentConfig synthesis_subagent_config = 31;
+   * @generated from field: optional aiserver.v1.SynthesisSubagentConfig synthesis_subagent_config = 31;
    */
   synthesisSubagentConfig?: SynthesisSubagentConfig;
 
@@ -8565,9 +8565,9 @@ export class CloudAgentState extends Message<CloudAgentState> {
   workerCreations: WorkerCreation[] = [];
 
   /**
-   * @generated from field: bool is_time_limit_expired = 37;
+   * @generated from field: optional bool is_time_limit_expired = 37;
    */
-  isTimeLimitExpired = false;
+  isTimeLimitExpired?: boolean;
 
   /**
    * @generated from field: bytes resolved_egress_policy_blob_id = 38;
@@ -8575,7 +8575,7 @@ export class CloudAgentState extends Message<CloudAgentState> {
   resolvedEgressPolicyBlobId = new Uint8Array(0);
 
   /**
-   * @generated from field: aiserver.v1.OptimizedDiffState optimized_diff = 39;
+   * @generated from field: optional aiserver.v1.OptimizedDiffState optimized_diff = 39;
    */
   optimizedDiff?: OptimizedDiffState;
 
@@ -8585,9 +8585,9 @@ export class CloudAgentState extends Message<CloudAgentState> {
   pendingPrBlobId = new Uint8Array(0);
 
   /**
-   * @generated from field: bool is_pod_finalized = 41;
+   * @generated from field: optional bool is_pod_finalized = 41;
    */
-  isPodFinalized = false;
+  isPodFinalized?: boolean;
 
   /**
    * @generated from field: bytes next_turn_system_reminders_blob_id = 42;
@@ -8610,19 +8610,19 @@ export class CloudAgentState extends Message<CloudAgentState> {
   startupWarnings: CloudAgentStartupWarning[] = [];
 
   /**
-   * @generated from field: aiserver.v1.PrivateWorkspaceIdentifier private_workspace_identifier = 46;
+   * @generated from field: optional aiserver.v1.PrivateWorkspaceIdentifier private_workspace_identifier = 46;
    */
   privateWorkspaceIdentifier?: PrivateWorkspaceIdentifier;
 
   /**
-   * @generated from field: bool uses_first_class_subagents = 48;
+   * @generated from field: optional bool uses_first_class_subagents = 48;
    */
-  usesFirstClassSubagents = false;
+  usesFirstClassSubagents?: boolean;
 
   /**
-   * @generated from field: uint32 conversation_rewind_epoch = 49;
+   * @generated from field: optional uint32 conversation_rewind_epoch = 49;
    */
-  conversationRewindEpoch = 0;
+  conversationRewindEpoch?: number;
 
   /**
    * @generated from field: bytes pending_summarization_state_blob_id = 50;
@@ -8640,19 +8640,19 @@ export class CloudAgentState extends Message<CloudAgentState> {
   admittedCustomModeStateBlobId = new Uint8Array(0);
 
   /**
-   * @generated from field: bool agent_store_artifacts_symlink_enabled = 53;
+   * @generated from field: optional bool agent_store_artifacts_symlink_enabled = 53;
    */
-  agentStoreArtifactsSymlinkEnabled = false;
+  agentStoreArtifactsSymlinkEnabled?: boolean;
 
   /**
-   * @generated from field: agent.v1.ProjectDetails project_details = 54;
+   * @generated from field: optional agent.v1.ProjectDetails project_details = 54;
    */
   projectDetails?: ProjectDetails;
 
   /**
-   * @generated from field: bool uses_coordinator_membership = 55;
+   * @generated from field: optional bool uses_coordinator_membership = 55;
    */
-  usesCoordinatorMembership = false;
+  usesCoordinatorMembership?: boolean;
 
   constructor(data?: PartialMessage<CloudAgentState>) {
     super();
@@ -8662,7 +8662,7 @@ export class CloudAgentState extends Message<CloudAgentState> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CloudAgentState";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "conversation_state", kind: "message", T: ConversationStateStructure },
+    { no: 1, name: "conversation_state", kind: "message", T: ConversationStateStructure, opt: true },
     { no: 2, name: "num_prior_interaction_updates", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
     { no: 3, name: "pr_body", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
     { no: 4, name: "summary", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
@@ -8670,52 +8670,52 @@ export class CloudAgentState extends Message<CloudAgentState> {
     { no: 6, name: "pr_url", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
     { no: 7, name: "last_interaction_update_offset_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 8, name: "agent_name", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
-    { no: 9, name: "starting_commit", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 9, name: "starting_commit", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 10, name: "base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 11, name: "config", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
-    { no: 12, name: "local_state_branch", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 12, name: "local_state_branch", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 13, name: "original_prompt_blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
     { no: 14, name: "repository_info_blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
     { no: 15, name: "original_conversation_action_blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
     { no: 16, name: "video_annotations_blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
-    { no: 17, name: "last_user_turn_commit", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 18, name: "last_followup_source", kind: "enum", T: proto3.getEnumType(BackgroundComposerSource) },
-    { no: 19, name: "continue_rebase", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 17, name: "last_user_turn_commit", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 18, name: "last_followup_source", kind: "enum", T: proto3.getEnumType(BackgroundComposerSource), opt: true },
+    { no: 19, name: "continue_rebase", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 20, name: "turn_start_todo_ids", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 21, name: "original_request_start_unix_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 22, name: "initial_turn_latency_reported", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 23, name: "agent_session_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 24, name: "kickoff_message_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 25, name: "grind_mode_config", kind: "message", T: GrindModeConfig },
+    { no: 21, name: "original_request_start_unix_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
+    { no: 22, name: "initial_turn_latency_reported", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 23, name: "agent_session_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 24, name: "kickoff_message_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 25, name: "grind_mode_config", kind: "message", T: GrindModeConfig, opt: true },
     { no: 26, name: "commits", kind: "message", T: BackgroundComposerCommit, repeated: true },
-    { no: 27, name: "commit_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 28, name: "user_facing_error_details", kind: "message", T: CloudAgentErrorDetails },
-    { no: 29, name: "initial_source", kind: "enum", T: proto3.getEnumType(BackgroundComposerSource) },
+    { no: 27, name: "commit_count", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 28, name: "user_facing_error_details", kind: "message", T: CloudAgentErrorDetails, opt: true },
+    { no: 29, name: "initial_source", kind: "enum", T: proto3.getEnumType(BackgroundComposerSource), opt: true },
     { no: 30, name: "num_completed_turns", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 31, name: "synthesis_subagent_config", kind: "message", T: SynthesisSubagentConfig },
+    { no: 31, name: "synthesis_subagent_config", kind: "message", T: SynthesisSubagentConfig, opt: true },
     { no: 32, name: "start_request_blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
     { no: 33, name: "commit_reminder_state_blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
     { no: 34, name: "grind_mode_tracking_state_blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
     { no: 35, name: "workflow_control_state_blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
     { no: 36, name: "worker_creations", kind: "message", T: WorkerCreation, repeated: true },
-    { no: 37, name: "is_time_limit_expired", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 37, name: "is_time_limit_expired", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 38, name: "resolved_egress_policy_blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
-    { no: 39, name: "optimized_diff", kind: "message", T: OptimizedDiffState },
+    { no: 39, name: "optimized_diff", kind: "message", T: OptimizedDiffState, opt: true },
     { no: 40, name: "pending_pr_blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
-    { no: 41, name: "is_pod_finalized", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 41, name: "is_pod_finalized", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 42, name: "next_turn_system_reminders_blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
     { no: 43, name: "cloud_plugin_manifest_blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
     { no: 44, name: "per_branch_optimized_diffs", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "message", T: OptimizedDiffState} },
     { no: 45, name: "startup_warnings", kind: "message", T: CloudAgentStartupWarning, repeated: true },
-    { no: 46, name: "private_workspace_identifier", kind: "message", T: PrivateWorkspaceIdentifier },
-    { no: 48, name: "uses_first_class_subagents", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 49, name: "conversation_rewind_epoch", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 46, name: "private_workspace_identifier", kind: "message", T: PrivateWorkspaceIdentifier, opt: true },
+    { no: 48, name: "uses_first_class_subagents", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 49, name: "conversation_rewind_epoch", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
     { no: 50, name: "pending_summarization_state_blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
     { no: 51, name: "pending_summarization_snapshot_blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
     { no: 52, name: "admitted_custom_mode_state_blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
-    { no: 53, name: "agent_store_artifacts_symlink_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 54, name: "project_details", kind: "message", T: ProjectDetails },
-    { no: 55, name: "uses_coordinator_membership", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 53, name: "agent_store_artifacts_symlink_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 54, name: "project_details", kind: "message", T: ProjectDetails, opt: true },
+    { no: 55, name: "uses_coordinator_membership", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CloudAgentState {
@@ -8904,9 +8904,9 @@ export class CloudAgentTimingEvent extends Message<CloudAgentTimingEvent> {
   event = CloudAgentTimingEventType.UNSPECIFIED;
 
   /**
-   * @generated from field: uint32 turn_number = 3;
+   * @generated from field: optional uint32 turn_number = 3;
    */
-  turnNumber = 0;
+  turnNumber?: number;
 
   constructor(data?: PartialMessage<CloudAgentTimingEvent>) {
     super();
@@ -8918,7 +8918,7 @@ export class CloudAgentTimingEvent extends Message<CloudAgentTimingEvent> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "timestamp_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
     { no: 2, name: "event", kind: "enum", T: proto3.getEnumType(CloudAgentTimingEventType) },
-    { no: 3, name: "turn_number", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 3, name: "turn_number", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CloudAgentTimingEvent {
@@ -8990,14 +8990,14 @@ export class CloudAgentVmHistoryEntry extends Message<CloudAgentVmHistoryEntry> 
   isCurrentWorker = false;
 
   /**
-   * @generated from field: int64 environment_version_id = 3;
+   * @generated from field: optional int64 environment_version_id = 3;
    */
-  environmentVersionId = protoInt64.zero;
+  environmentVersionId?: bigint;
 
   /**
-   * @generated from field: int64 replaced_at_unix_ms = 4;
+   * @generated from field: optional int64 replaced_at_unix_ms = 4;
    */
-  replacedAtUnixMs = protoInt64.zero;
+  replacedAtUnixMs?: bigint;
 
   /**
    * @generated from oneof aiserver.v1.CloudAgentVmHistoryEntry.info
@@ -9026,8 +9026,8 @@ export class CloudAgentVmHistoryEntry extends Message<CloudAgentVmHistoryEntry> 
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "worker_index", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 2, name: "is_current_worker", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "environment_version_id", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 4, name: "replaced_at_unix_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
+    { no: 3, name: "environment_version_id", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
+    { no: 4, name: "replaced_at_unix_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
     { no: 5, name: "anyrun", kind: "message", T: CloudAgentAnyrunVmInfo, oneof: "info" },
     { no: 6, name: "anyrun_pending_docker_build", kind: "message", T: CloudAgentAnyrunPendingDockerBuildVmInfo, oneof: "info" },
   ]);
@@ -9114,7 +9114,7 @@ export class CloudAgentWorkflowControlState extends Message<CloudAgentWorkflowCo
   completedOpenPrRequests: CompletedOpenPRRequest[] = [];
 
   /**
-   * @generated from field: aiserver.v1.PausedInteractionStep paused_interaction_step = 13;
+   * @generated from field: optional aiserver.v1.PausedInteractionStep paused_interaction_step = 13;
    */
   pausedInteractionStep?: PausedInteractionStep;
 
@@ -9139,14 +9139,14 @@ export class CloudAgentWorkflowControlState extends Message<CloudAgentWorkflowCo
   skippedInputActionRefs: ConversationActionReference[] = [];
 
   /**
-   * @generated from field: string last_completed_resubmit_followup_id = 18;
+   * @generated from field: optional string last_completed_resubmit_followup_id = 18;
    */
-  lastCompletedResubmitFollowupId = "";
+  lastCompletedResubmitFollowupId?: string;
 
   /**
-   * @generated from field: uint32 async_subagent_completion_epoch = 19;
+   * @generated from field: optional uint32 async_subagent_completion_epoch = 19;
    */
-  asyncSubagentCompletionEpoch = 0;
+  asyncSubagentCompletionEpoch?: number;
 
   /**
    * @generated from field: repeated aiserver.v1.PendingContextInjection pending_context_injections = 20;
@@ -9188,13 +9188,13 @@ export class CloudAgentWorkflowControlState extends Message<CloudAgentWorkflowCo
     { no: 10, name: "skipped_input_actions", kind: "message", T: ConversationAction, repeated: true },
     { no: 11, name: "completed_make_pr_requests", kind: "message", T: CompletedMakePRRequest, repeated: true },
     { no: 12, name: "completed_open_pr_requests", kind: "message", T: CompletedOpenPRRequest, repeated: true },
-    { no: 13, name: "paused_interaction_step", kind: "message", T: PausedInteractionStep },
+    { no: 13, name: "paused_interaction_step", kind: "message", T: PausedInteractionStep, opt: true },
     { no: 14, name: "pending_interaction_responses", kind: "message", T: QueuedInteractionResponse, repeated: true },
     { no: 15, name: "completed_interaction_query_ids", kind: "scalar", T: 13 /* ScalarType.UINT32 */, repeated: true },
     { no: 16, name: "pending_idle_followups", kind: "message", T: PendingIdleFollowup, repeated: true },
     { no: 17, name: "skipped_input_action_refs", kind: "message", T: ConversationActionReference, repeated: true },
-    { no: 18, name: "last_completed_resubmit_followup_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 19, name: "async_subagent_completion_epoch", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 18, name: "last_completed_resubmit_followup_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 19, name: "async_subagent_completion_epoch", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
     { no: 20, name: "pending_context_injections", kind: "message", T: PendingContextInjection, repeated: true },
     { no: 21, name: "completed_injection_ids", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 22, name: "completed_delivery_batch_ids", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
@@ -9238,19 +9238,19 @@ export class CloudSubagentParentReference extends Message<CloudSubagentParentRef
   parentAgentType = CloudSubagentParentAgentType.UNSPECIFIED;
 
   /**
-   * @generated from field: string subagent_type_name = 5;
+   * @generated from field: optional string subagent_type_name = 5;
    */
-  subagentTypeName = "";
+  subagentTypeName?: string;
 
   /**
-   * @generated from field: aiserver.v1.CloudSubagentParentSpawnKind parent_spawn_kind = 6;
+   * @generated from field: optional aiserver.v1.CloudSubagentParentSpawnKind parent_spawn_kind = 6;
    */
-  parentSpawnKind = CloudSubagentParentSpawnKind.UNSPECIFIED;
+  parentSpawnKind?: CloudSubagentParentSpawnKind;
 
   /**
-   * @generated from field: string parent_spawn_id = 7;
+   * @generated from field: optional string parent_spawn_id = 7;
    */
-  parentSpawnId = "";
+  parentSpawnId?: string;
 
   /**
    * @generated from oneof aiserver.v1.CloudSubagentParentReference.lineage
@@ -9280,9 +9280,9 @@ export class CloudSubagentParentReference extends Message<CloudSubagentParentRef
     { no: 1, name: "parent_agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "parent_tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "parent_agent_type", kind: "enum", T: proto3.getEnumType(CloudSubagentParentAgentType) },
-    { no: 5, name: "subagent_type_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "parent_spawn_kind", kind: "enum", T: proto3.getEnumType(CloudSubagentParentSpawnKind) },
-    { no: 7, name: "parent_spawn_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "subagent_type_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "parent_spawn_kind", kind: "enum", T: proto3.getEnumType(CloudSubagentParentSpawnKind), opt: true },
+    { no: 7, name: "parent_spawn_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 8, name: "task", kind: "message", T: CloudSubagentTaskLineage, oneof: "lineage" },
     { no: 9, name: "subscription_resource", kind: "message", T: CloudSubagentSubscriptionResourceLineage, oneof: "lineage" },
   ]);
@@ -9645,19 +9645,19 @@ export class CompletedMakePRRequest extends Message<CompletedMakePRRequest> {
   completedAtMs = protoInt64.zero;
 
   /**
-   * @generated from field: aiserver.v1.MakePRBackgroundComposerResponse response = 3;
+   * @generated from field: optional aiserver.v1.MakePRBackgroundComposerResponse response = 3;
    */
   response?: MakePRBackgroundComposerResponse;
 
   /**
-   * @generated from field: string error_message = 4;
+   * @generated from field: optional string error_message = 4;
    */
-  errorMessage = "";
+  errorMessage?: string;
 
   /**
-   * @generated from field: string error_code = 5;
+   * @generated from field: optional string error_code = 5;
    */
-  errorCode = "";
+  errorCode?: string;
 
   constructor(data?: PartialMessage<CompletedMakePRRequest>) {
     super();
@@ -9669,9 +9669,9 @@ export class CompletedMakePRRequest extends Message<CompletedMakePRRequest> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "request_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "completed_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 3, name: "response", kind: "message", T: MakePRBackgroundComposerResponse },
-    { no: 4, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "error_code", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "response", kind: "message", T: MakePRBackgroundComposerResponse, opt: true },
+    { no: 4, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "error_code", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CompletedMakePRRequest {
@@ -9706,19 +9706,19 @@ export class CompletedOpenPRRequest extends Message<CompletedOpenPRRequest> {
   completedAtMs = protoInt64.zero;
 
   /**
-   * @generated from field: aiserver.v1.OpenPRBackgroundComposerResponse response = 3;
+   * @generated from field: optional aiserver.v1.OpenPRBackgroundComposerResponse response = 3;
    */
   response?: OpenPRBackgroundComposerResponse;
 
   /**
-   * @generated from field: string error_message = 4;
+   * @generated from field: optional string error_message = 4;
    */
-  errorMessage = "";
+  errorMessage?: string;
 
   /**
-   * @generated from field: string error_code = 5;
+   * @generated from field: optional string error_code = 5;
    */
-  errorCode = "";
+  errorCode?: string;
 
   constructor(data?: PartialMessage<CompletedOpenPRRequest>) {
     super();
@@ -9730,9 +9730,9 @@ export class CompletedOpenPRRequest extends Message<CompletedOpenPRRequest> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "request_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "completed_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 3, name: "response", kind: "message", T: OpenPRBackgroundComposerResponse },
-    { no: 4, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "error_code", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "response", kind: "message", T: OpenPRBackgroundComposerResponse, opt: true },
+    { no: 4, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "error_code", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CompletedOpenPRRequest {
@@ -9757,7 +9757,7 @@ export class CompletedOpenPRRequest extends Message<CompletedOpenPRRequest> {
  */
 export class ConversationActionReference extends Message<ConversationActionReference> {
   /**
-   * @generated from field: agent.v1.ConversationAction conversation_action = 1;
+   * @generated from field: optional agent.v1.ConversationAction conversation_action = 1;
    */
   conversationAction?: ConversationAction;
 
@@ -9774,7 +9774,7 @@ export class ConversationActionReference extends Message<ConversationActionRefer
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ConversationActionReference";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "conversation_action", kind: "message", T: ConversationAction },
+    { no: 1, name: "conversation_action", kind: "message", T: ConversationAction, opt: true },
     { no: 2, name: "conversation_action_blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
   ]);
 
@@ -9904,9 +9904,9 @@ export class ConvertPullRequestFromDraftRequest extends Message<ConvertPullReque
   bcId = "";
 
   /**
-   * @generated from field: string pr_url = 2;
+   * @generated from field: optional string pr_url = 2;
    */
-  prUrl = "";
+  prUrl?: string;
 
   constructor(data?: PartialMessage<ConvertPullRequestFromDraftRequest>) {
     super();
@@ -9917,7 +9917,7 @@ export class ConvertPullRequestFromDraftRequest extends Message<ConvertPullReque
   static readonly typeName = "aiserver.v1.ConvertPullRequestFromDraftRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ConvertPullRequestFromDraftRequest {
@@ -10065,7 +10065,7 @@ export class CreateAgentShareResponse extends Message<CreateAgentShareResponse> 
  */
 export class CreateBackgroundComposerPodRequest extends Message<CreateBackgroundComposerPodRequest> {
   /**
-   * @generated from field: aiserver.v1.DevcontainerStartingPoint devcontainer_starting_point = 1;
+   * @generated from field: optional aiserver.v1.DevcontainerStartingPoint devcontainer_starting_point = 1;
    */
   devcontainerStartingPoint?: DevcontainerStartingPoint;
 
@@ -10075,14 +10075,14 @@ export class CreateBackgroundComposerPodRequest extends Message<CreateBackground
   includeSecrets = false;
 
   /**
-   * @generated from field: string force_cluster = 3;
+   * @generated from field: optional string force_cluster = 3;
    */
-  forceCluster = "";
+  forceCluster?: string;
 
   /**
-   * @generated from field: string force_machine_template = 4;
+   * @generated from field: optional string force_machine_template = 4;
    */
-  forceMachineTemplate = "";
+  forceMachineTemplate?: string;
 
   /**
    * @generated from field: bool optimistic_prewarming = 5;
@@ -10090,9 +10090,9 @@ export class CreateBackgroundComposerPodRequest extends Message<CreateBackground
   optimisticPrewarming = false;
 
   /**
-   * @generated from field: string client_ip = 32;
+   * @generated from field: optional string client_ip = 32;
    */
-  clientIp = "";
+  clientIp?: string;
 
   constructor(data?: PartialMessage<CreateBackgroundComposerPodRequest>) {
     super();
@@ -10102,12 +10102,12 @@ export class CreateBackgroundComposerPodRequest extends Message<CreateBackground
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CreateBackgroundComposerPodRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "devcontainer_starting_point", kind: "message", T: DevcontainerStartingPoint },
+    { no: 1, name: "devcontainer_starting_point", kind: "message", T: DevcontainerStartingPoint, opt: true },
     { no: 2, name: "include_secrets", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "force_cluster", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "force_machine_template", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "force_cluster", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "force_machine_template", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 5, name: "optimistic_prewarming", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 32, name: "client_ip", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 32, name: "client_ip", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CreateBackgroundComposerPodRequest {
@@ -10185,9 +10185,9 @@ export class CreateBackgroundComposerPodSnapshotRequest extends Message<CreateBa
   visibility = ChangeBackgroundComposerSnapshotVisibilityRequest_Visibility.UNSPECIFIED;
 
   /**
-   * @generated from field: string bc_id = 3;
+   * @generated from field: optional string bc_id = 3;
    */
-  bcId = "";
+  bcId?: string;
 
   constructor(data?: PartialMessage<CreateBackgroundComposerPodSnapshotRequest>) {
     super();
@@ -10199,7 +10199,7 @@ export class CreateBackgroundComposerPodSnapshotRequest extends Message<CreateBa
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "pod_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "visibility", kind: "enum", T: proto3.getEnumType(ChangeBackgroundComposerSnapshotVisibilityRequest_Visibility) },
-    { no: 3, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CreateBackgroundComposerPodSnapshotRequest {
@@ -10261,9 +10261,9 @@ export class CreateBackgroundComposerPodSnapshotResponse extends Message<CreateB
  */
 export class DeleteAgentStoreFilesRequest extends Message<DeleteAgentStoreFilesRequest> {
   /**
-   * @generated from field: string store_id = 1;
+   * @generated from field: optional string store_id = 1;
    */
-  storeId = "";
+  storeId?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.AgentStoreDeleteFileEntry files = 2;
@@ -10278,7 +10278,7 @@ export class DeleteAgentStoreFilesRequest extends Message<DeleteAgentStoreFilesR
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.DeleteAgentStoreFilesRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "store_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "store_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "files", kind: "message", T: AgentStoreDeleteFileEntry, repeated: true },
   ]);
 
@@ -10574,9 +10574,9 @@ export class DeletePersonalEnvironmentJsonRequest extends Message<DeletePersonal
   id = protoInt64.zero;
 
   /**
-   * @generated from field: string environment_public_id = 2;
+   * @generated from field: optional string environment_public_id = 2;
    */
-  environmentPublicId = "";
+  environmentPublicId?: string;
 
   constructor(data?: PartialMessage<DeletePersonalEnvironmentJsonRequest>) {
     super();
@@ -10587,7 +10587,7 @@ export class DeletePersonalEnvironmentJsonRequest extends Message<DeletePersonal
   static readonly typeName = "aiserver.v1.DeletePersonalEnvironmentJsonRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "id", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 2, name: "environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DeletePersonalEnvironmentJsonRequest {
@@ -10653,9 +10653,9 @@ export class DeletePullRequestReviewCommentRequest extends Message<DeletePullReq
   commentId = "";
 
   /**
-   * @generated from field: string comment_kind = 3;
+   * @generated from field: optional string comment_kind = 3;
    */
-  commentKind = "";
+  commentKind?: string;
 
   constructor(data?: PartialMessage<DeletePullRequestReviewCommentRequest>) {
     super();
@@ -10667,7 +10667,7 @@ export class DeletePullRequestReviewCommentRequest extends Message<DeletePullReq
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "comment_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "comment_kind", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "comment_kind", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DeletePullRequestReviewCommentRequest {
@@ -10808,9 +10808,9 @@ export class DeleteTeamEnvironmentRequest extends Message<DeleteTeamEnvironmentR
   id = protoInt64.zero;
 
   /**
-   * @generated from field: string environment_public_id = 2;
+   * @generated from field: optional string environment_public_id = 2;
    */
-  environmentPublicId = "";
+  environmentPublicId?: string;
 
   constructor(data?: PartialMessage<DeleteTeamEnvironmentRequest>) {
     super();
@@ -10821,7 +10821,7 @@ export class DeleteTeamEnvironmentRequest extends Message<DeleteTeamEnvironmentR
   static readonly typeName = "aiserver.v1.DeleteTeamEnvironmentRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "id", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 2, name: "environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DeleteTeamEnvironmentRequest {
@@ -10887,14 +10887,14 @@ export class DeregisterPrivateWorkerPoolRequest extends Message<DeregisterPrivat
   poolName = "";
 
   /**
-   * @generated from field: string repo_owner = 3;
+   * @generated from field: optional string repo_owner = 3;
    */
-  repoOwner = "";
+  repoOwner?: string;
 
   /**
-   * @generated from field: string repo_name = 4;
+   * @generated from field: optional string repo_name = 4;
    */
-  repoName = "";
+  repoName?: string;
 
   constructor(data?: PartialMessage<DeregisterPrivateWorkerPoolRequest>) {
     super();
@@ -10906,8 +10906,8 @@ export class DeregisterPrivateWorkerPoolRequest extends Message<DeregisterPrivat
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "scope", kind: "enum", T: proto3.getEnumType(PrivateWorkerPoolScope) },
     { no: 2, name: "pool_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "repo_owner", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "repo_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "repo_owner", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "repo_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DeregisterPrivateWorkerPoolRequest {
@@ -10969,7 +10969,7 @@ export class DeregisterPrivateWorkerPoolResponse extends Message<DeregisterPriva
  */
 export class DetailedBackgroundComposer extends Message<DetailedBackgroundComposer> {
   /**
-   * @generated from field: aiserver.v1.BackgroundComposer composer = 1;
+   * @generated from field: optional aiserver.v1.BackgroundComposer composer = 1;
    */
   composer?: BackgroundComposer;
 
@@ -10984,7 +10984,7 @@ export class DetailedBackgroundComposer extends Message<DetailedBackgroundCompos
   baseBranch = "";
 
   /**
-   * @generated from field: aiserver.v1.HeadlessAgenticComposerPrompt prompt = 4;
+   * @generated from field: optional aiserver.v1.HeadlessAgenticComposerPrompt prompt = 4;
    */
   prompt?: HeadlessAgenticComposerPrompt;
 
@@ -10994,17 +10994,17 @@ export class DetailedBackgroundComposer extends Message<DetailedBackgroundCompos
   status = BackgroundComposerStatus.UNSPECIFIED;
 
   /**
-   * @generated from field: aiserver.v1.GitDiff diff_since_start = 6;
+   * @generated from field: optional aiserver.v1.GitDiff diff_since_start = 6;
    */
   diffSinceStart?: GitDiff;
 
   /**
-   * @generated from field: aiserver.v1.ErrorDetails start_error = 7;
+   * @generated from field: optional aiserver.v1.ErrorDetails start_error = 7;
    */
   startError?: ErrorDetails;
 
   /**
-   * @generated from field: aiserver.v1.ModelDetails model_details = 8;
+   * @generated from field: optional aiserver.v1.ModelDetails model_details = 8;
    */
   modelDetails?: ModelDetails;
 
@@ -11014,9 +11014,9 @@ export class DetailedBackgroundComposer extends Message<DetailedBackgroundCompos
   unread = false;
 
   /**
-   * @generated from field: string summary = 10;
+   * @generated from field: optional string summary = 10;
    */
-  summary = "";
+  summary?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.EnvironmentPort environment_ports = 11;
@@ -11024,27 +11024,27 @@ export class DetailedBackgroundComposer extends Message<DetailedBackgroundCompos
   environmentPorts: EnvironmentPort[] = [];
 
   /**
-   * @generated from field: bool auto_create_pr = 12;
+   * @generated from field: optional bool auto_create_pr = 12;
    */
-  autoCreatePr = false;
+  autoCreatePr?: boolean;
 
   /**
-   * @generated from field: bool open_as_cursor_github_app = 13;
+   * @generated from field: optional bool open_as_cursor_github_app = 13;
    */
-  openAsCursorGithubApp = false;
+  openAsCursorGithubApp?: boolean;
 
   /**
-   * @generated from field: bool skip_reviewer_request = 14;
+   * @generated from field: optional bool skip_reviewer_request = 14;
    */
-  skipReviewerRequest = false;
+  skipReviewerRequest?: boolean;
 
   /**
-   * @generated from field: string local_state_branch = 15;
+   * @generated from field: optional string local_state_branch = 15;
    */
-  localStateBranch = "";
+  localStateBranch?: string;
 
   /**
-   * @generated from field: aiserver.v1.ErrorDetails permanent_error = 16;
+   * @generated from field: optional aiserver.v1.ErrorDetails permanent_error = 16;
    */
   permanentError?: ErrorDetails;
 
@@ -11054,9 +11054,9 @@ export class DetailedBackgroundComposer extends Message<DetailedBackgroundCompos
   videoAnnotations: VideoAnnotationEntry[] = [];
 
   /**
-   * @generated from field: bool auto_branch = 19;
+   * @generated from field: optional bool auto_branch = 19;
    */
-  autoBranch = false;
+  autoBranch?: boolean;
 
   /**
    * @generated from field: repeated aiserver.v1.BackgroundComposerPr prs = 20;
@@ -11069,24 +11069,24 @@ export class DetailedBackgroundComposer extends Message<DetailedBackgroundCompos
   vmProvisionedSkills: VmProvisionedSkill[] = [];
 
   /**
-   * @generated from field: agent.v1.ConversationAction original_conversation_action = 22;
+   * @generated from field: optional agent.v1.ConversationAction original_conversation_action = 22;
    */
   originalConversationAction?: ConversationAction;
 
   /**
-   * @generated from field: aiserver.v1.EnvironmentRepoConfig repo_config = 23;
+   * @generated from field: optional aiserver.v1.EnvironmentRepoConfig repo_config = 23;
    */
   repoConfig?: EnvironmentRepoConfig;
 
   /**
-   * @generated from field: string environment_name = 24;
+   * @generated from field: optional string environment_name = 24;
    */
-  environmentName = "";
+  environmentName?: string;
 
   /**
-   * @generated from field: bool use_private_worker = 25;
+   * @generated from field: optional bool use_private_worker = 25;
    */
-  usePrivateWorker = false;
+  usePrivateWorker?: boolean;
 
   /**
    * @generated from field: repeated aiserver.v1.PrivateWorkerLabel labels = 26;
@@ -11094,17 +11094,17 @@ export class DetailedBackgroundComposer extends Message<DetailedBackgroundCompos
   labels: PrivateWorkerLabel[] = [];
 
   /**
-   * @generated from field: aiserver.v1.EnvironmentVersionSummary used_environment_version = 27;
+   * @generated from field: optional aiserver.v1.EnvironmentVersionSummary used_environment_version = 27;
    */
   usedEnvironmentVersion?: EnvironmentVersionSummary;
 
   /**
-   * @generated from field: agent.v1.RequestedModel requested_model = 28;
+   * @generated from field: optional agent.v1.RequestedModel requested_model = 28;
    */
   requestedModel?: RequestedModel;
 
   /**
-   * @generated from field: aiserver.v1.CloudSubagentParentReference cloud_subagent_parent = 29;
+   * @generated from field: optional aiserver.v1.CloudSubagentParentReference cloud_subagent_parent = 29;
    */
   cloudSubagentParent?: CloudSubagentParentReference;
 
@@ -11114,14 +11114,14 @@ export class DetailedBackgroundComposer extends Message<DetailedBackgroundCompos
   startupWarnings: CloudAgentStartupWarning[] = [];
 
   /**
-   * @generated from field: aiserver.v1.UsedEnvironmentBuildInfo used_environment_build = 31;
+   * @generated from field: optional aiserver.v1.UsedEnvironmentBuildInfo used_environment_build = 31;
    */
   usedEnvironmentBuild?: UsedEnvironmentBuildInfo;
 
   /**
-   * @generated from field: bool use_experimental_model_opt_out = 34;
+   * @generated from field: optional bool use_experimental_model_opt_out = 34;
    */
-  useExperimentalModelOptOut = false;
+  useExperimentalModelOptOut?: boolean;
 
   constructor(data?: PartialMessage<DetailedBackgroundComposer>) {
     super();
@@ -11131,37 +11131,37 @@ export class DetailedBackgroundComposer extends Message<DetailedBackgroundCompos
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.DetailedBackgroundComposer";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "composer", kind: "message", T: BackgroundComposer },
+    { no: 1, name: "composer", kind: "message", T: BackgroundComposer, opt: true },
     { no: 2, name: "starting_commit", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "prompt", kind: "message", T: HeadlessAgenticComposerPrompt },
+    { no: 4, name: "prompt", kind: "message", T: HeadlessAgenticComposerPrompt, opt: true },
     { no: 5, name: "status", kind: "enum", T: proto3.getEnumType(BackgroundComposerStatus) },
-    { no: 6, name: "diff_since_start", kind: "message", T: GitDiff },
-    { no: 7, name: "start_error", kind: "message", T: ErrorDetails },
-    { no: 8, name: "model_details", kind: "message", T: ModelDetails },
+    { no: 6, name: "diff_since_start", kind: "message", T: GitDiff, opt: true },
+    { no: 7, name: "start_error", kind: "message", T: ErrorDetails, opt: true },
+    { no: 8, name: "model_details", kind: "message", T: ModelDetails, opt: true },
     { no: 9, name: "unread", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 10, name: "summary", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 10, name: "summary", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 11, name: "environment_ports", kind: "message", T: EnvironmentPort, repeated: true },
-    { no: 12, name: "auto_create_pr", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 13, name: "open_as_cursor_github_app", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 14, name: "skip_reviewer_request", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 15, name: "local_state_branch", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 16, name: "permanent_error", kind: "message", T: ErrorDetails },
+    { no: 12, name: "auto_create_pr", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 13, name: "open_as_cursor_github_app", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 14, name: "skip_reviewer_request", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 15, name: "local_state_branch", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 16, name: "permanent_error", kind: "message", T: ErrorDetails, opt: true },
     { no: 18, name: "video_annotations", kind: "message", T: VideoAnnotationEntry, repeated: true },
-    { no: 19, name: "auto_branch", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 19, name: "auto_branch", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 20, name: "prs", kind: "message", T: BackgroundComposerPr, repeated: true },
     { no: 21, name: "vm_provisioned_skills", kind: "message", T: VmProvisionedSkill, repeated: true },
-    { no: 22, name: "original_conversation_action", kind: "message", T: ConversationAction },
-    { no: 23, name: "repo_config", kind: "message", T: EnvironmentRepoConfig },
-    { no: 24, name: "environment_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 25, name: "use_private_worker", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 22, name: "original_conversation_action", kind: "message", T: ConversationAction, opt: true },
+    { no: 23, name: "repo_config", kind: "message", T: EnvironmentRepoConfig, opt: true },
+    { no: 24, name: "environment_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 25, name: "use_private_worker", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 26, name: "labels", kind: "message", T: PrivateWorkerLabel, repeated: true },
-    { no: 27, name: "used_environment_version", kind: "message", T: EnvironmentVersionSummary },
-    { no: 28, name: "requested_model", kind: "message", T: RequestedModel },
-    { no: 29, name: "cloud_subagent_parent", kind: "message", T: CloudSubagentParentReference },
+    { no: 27, name: "used_environment_version", kind: "message", T: EnvironmentVersionSummary, opt: true },
+    { no: 28, name: "requested_model", kind: "message", T: RequestedModel, opt: true },
+    { no: 29, name: "cloud_subagent_parent", kind: "message", T: CloudSubagentParentReference, opt: true },
     { no: 30, name: "startup_warnings", kind: "message", T: CloudAgentStartupWarning, repeated: true },
-    { no: 31, name: "used_environment_build", kind: "message", T: UsedEnvironmentBuildInfo },
-    { no: 34, name: "use_experimental_model_opt_out", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 31, name: "used_environment_build", kind: "message", T: UsedEnvironmentBuildInfo, opt: true },
+    { no: 34, name: "use_experimental_model_opt_out", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DetailedBackgroundComposer {
@@ -11211,7 +11211,7 @@ export class DevcontainerStartingPoint extends Message<DevcontainerStartingPoint
   environmentJsonOverride = "";
 
   /**
-   * @generated from field: aiserver.v1.GitDiff git_diff_to_apply = 8;
+   * @generated from field: optional aiserver.v1.GitDiff git_diff_to_apply = 8;
    */
   gitDiffToApply?: GitDiff;
 
@@ -11226,19 +11226,19 @@ export class DevcontainerStartingPoint extends Message<DevcontainerStartingPoint
   skipBuildCaches = false;
 
   /**
-   * @generated from field: aiserver.v1.EnvironmentRepoConfig repo_config = 11;
+   * @generated from field: optional aiserver.v1.EnvironmentRepoConfig repo_config = 11;
    */
   repoConfig?: EnvironmentRepoConfig;
 
   /**
-   * @generated from field: string environment_name = 12;
+   * @generated from field: optional string environment_name = 12;
    */
-  environmentName = "";
+  environmentName?: string;
 
   /**
-   * @generated from field: int64 environment_id = 13;
+   * @generated from field: optional int64 environment_id = 13;
    */
-  environmentId = protoInt64.zero;
+  environmentId?: bigint;
 
   /**
    * @generated from field: repeated aiserver.v1.RepoStartingRef starting_refs = 14;
@@ -11246,9 +11246,9 @@ export class DevcontainerStartingPoint extends Message<DevcontainerStartingPoint
   startingRefs: RepoStartingRef[] = [];
 
   /**
-   * @generated from field: string environment_public_id = 15;
+   * @generated from field: optional string environment_public_id = 15;
    */
-  environmentPublicId = "";
+  environmentPublicId?: string;
 
   constructor(data?: PartialMessage<DevcontainerStartingPoint>) {
     super();
@@ -11263,14 +11263,14 @@ export class DevcontainerStartingPoint extends Message<DevcontainerStartingPoint
     { no: 4, name: "user_extensions", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 5, name: "cursor_server_commit", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 6, name: "environment_json_override", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "git_diff_to_apply", kind: "message", T: GitDiff },
+    { no: 8, name: "git_diff_to_apply", kind: "message", T: GitDiff, opt: true },
     { no: 9, name: "dont_allow_reading_environment_json_from_database", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 10, name: "skip_build_caches", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 11, name: "repo_config", kind: "message", T: EnvironmentRepoConfig },
-    { no: 12, name: "environment_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 13, name: "environment_id", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
+    { no: 11, name: "repo_config", kind: "message", T: EnvironmentRepoConfig, opt: true },
+    { no: 12, name: "environment_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 13, name: "environment_id", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
     { no: 14, name: "starting_refs", kind: "message", T: RepoStartingRef, repeated: true },
-    { no: 15, name: "environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 15, name: "environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DevcontainerStartingPoint {
@@ -11342,9 +11342,9 @@ export class DisablePullRequestAutoMergeResponse extends Message<DisablePullRequ
   error = "";
 
   /**
-   * @generated from field: string pr_node_id = 3;
+   * @generated from field: optional string pr_node_id = 3;
    */
-  prNodeId = "";
+  prNodeId?: string;
 
   constructor(data?: PartialMessage<DisablePullRequestAutoMergeResponse>) {
     super();
@@ -11356,7 +11356,7 @@ export class DisablePullRequestAutoMergeResponse extends Message<DisablePullRequ
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "success", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 2, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "pr_node_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "pr_node_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DisablePullRequestAutoMergeResponse {
@@ -11386,9 +11386,9 @@ export class EnablePullRequestAutoMergeRequest extends Message<EnablePullRequest
   prUrl = "";
 
   /**
-   * @generated from field: string merge_method = 2;
+   * @generated from field: optional string merge_method = 2;
    */
-  mergeMethod = "";
+  mergeMethod?: string;
 
   constructor(data?: PartialMessage<EnablePullRequestAutoMergeRequest>) {
     super();
@@ -11399,7 +11399,7 @@ export class EnablePullRequestAutoMergeRequest extends Message<EnablePullRequest
   static readonly typeName = "aiserver.v1.EnablePullRequestAutoMergeRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "merge_method", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "merge_method", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): EnablePullRequestAutoMergeRequest {
@@ -11434,9 +11434,9 @@ export class EnablePullRequestAutoMergeResponse extends Message<EnablePullReques
   error = "";
 
   /**
-   * @generated from field: string pr_node_id = 3;
+   * @generated from field: optional string pr_node_id = 3;
    */
-  prNodeId = "";
+  prNodeId?: string;
 
   constructor(data?: PartialMessage<EnablePullRequestAutoMergeResponse>) {
     super();
@@ -11448,7 +11448,7 @@ export class EnablePullRequestAutoMergeResponse extends Message<EnablePullReques
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "success", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 2, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "pr_node_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "pr_node_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): EnablePullRequestAutoMergeResponse {
@@ -11621,19 +11621,19 @@ export class EnvironmentBuildRow extends Message<EnvironmentBuildRow> {
   source = EnvironmentBuildRowSource.UNSPECIFIED;
 
   /**
-   * @generated from field: aiserver.v1.EnvironmentBuildRowFailureType failure_type = 6;
+   * @generated from field: optional aiserver.v1.EnvironmentBuildRowFailureType failure_type = 6;
    */
-  failureType = EnvironmentBuildRowFailureType.UNSPECIFIED;
+  failureType?: EnvironmentBuildRowFailureType;
 
   /**
-   * @generated from field: int64 environment_version_id = 7;
+   * @generated from field: optional int64 environment_version_id = 7;
    */
-  environmentVersionId = protoInt64.zero;
+  environmentVersionId?: bigint;
 
   /**
-   * @generated from field: string user_facing_snapshot_id = 8;
+   * @generated from field: optional string user_facing_snapshot_id = 8;
    */
-  userFacingSnapshotId = "";
+  userFacingSnapshotId?: string;
 
   /**
    * @generated from field: int64 created_at_ms = 9;
@@ -11646,9 +11646,9 @@ export class EnvironmentBuildRow extends Message<EnvironmentBuildRow> {
   updatedAtMs = protoInt64.zero;
 
   /**
-   * @generated from field: int64 completed_at_ms = 11;
+   * @generated from field: optional int64 completed_at_ms = 11;
    */
-  completedAtMs = protoInt64.zero;
+  completedAtMs?: bigint;
 
   /**
    * @generated from field: bool is_draft = 12;
@@ -11671,9 +11671,9 @@ export class EnvironmentBuildRow extends Message<EnvironmentBuildRow> {
   repoCommits: EnvironmentBuildRepoCommit[] = [];
 
   /**
-   * @generated from field: string created_by_display = 16;
+   * @generated from field: optional string created_by_display = 16;
    */
-  createdByDisplay = "";
+  createdByDisplay?: string;
 
   /**
    * @generated from field: bool will_adopt_environment_settings_on_activate = 17;
@@ -11681,9 +11681,9 @@ export class EnvironmentBuildRow extends Message<EnvironmentBuildRow> {
   willAdoptEnvironmentSettingsOnActivate = false;
 
   /**
-   * @generated from field: string source_bc_id = 18;
+   * @generated from field: optional string source_bc_id = 18;
    */
-  sourceBcId = "";
+  sourceBcId?: string;
 
   constructor(data?: PartialMessage<EnvironmentBuildRow>) {
     super();
@@ -11698,19 +11698,19 @@ export class EnvironmentBuildRow extends Message<EnvironmentBuildRow> {
     { no: 3, name: "status", kind: "enum", T: proto3.getEnumType(EnvironmentBuildRowStatus) },
     { no: 4, name: "trigger_type", kind: "enum", T: proto3.getEnumType(EnvironmentBuildRowTriggerType) },
     { no: 5, name: "source", kind: "enum", T: proto3.getEnumType(EnvironmentBuildRowSource) },
-    { no: 6, name: "failure_type", kind: "enum", T: proto3.getEnumType(EnvironmentBuildRowFailureType) },
-    { no: 7, name: "environment_version_id", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 8, name: "user_facing_snapshot_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 6, name: "failure_type", kind: "enum", T: proto3.getEnumType(EnvironmentBuildRowFailureType), opt: true },
+    { no: 7, name: "environment_version_id", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
+    { no: 8, name: "user_facing_snapshot_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 9, name: "created_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 10, name: "updated_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 11, name: "completed_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
+    { no: 11, name: "completed_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
     { no: 12, name: "is_draft", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 13, name: "has_ref_overrides", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 14, name: "requested_refs", kind: "message", T: RepoStartingRef, repeated: true },
     { no: 15, name: "repo_commits", kind: "message", T: EnvironmentBuildRepoCommit, repeated: true },
-    { no: 16, name: "created_by_display", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 16, name: "created_by_display", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 17, name: "will_adopt_environment_settings_on_activate", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 18, name: "source_bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 18, name: "source_bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): EnvironmentBuildRow {
@@ -11735,19 +11735,19 @@ export class EnvironmentBuildRow extends Message<EnvironmentBuildRow> {
  */
 export class EnvironmentBuildSettings extends Message<EnvironmentBuildSettings> {
   /**
-   * @generated from field: bool fast_forward_default_branch = 1;
+   * @generated from field: optional bool fast_forward_default_branch = 1;
    */
-  fastForwardDefaultBranch = false;
+  fastForwardDefaultBranch?: boolean;
 
   /**
-   * @generated from field: bool builds_enabled = 2;
+   * @generated from field: optional bool builds_enabled = 2;
    */
-  buildsEnabled = false;
+  buildsEnabled?: boolean;
 
   /**
-   * @generated from field: int32 auto_fast_forward_staleness_hours = 3;
+   * @generated from field: optional int32 auto_fast_forward_staleness_hours = 3;
    */
-  autoFastForwardStalenessHours = 0;
+  autoFastForwardStalenessHours?: number;
 
   constructor(data?: PartialMessage<EnvironmentBuildSettings>) {
     super();
@@ -11757,9 +11757,9 @@ export class EnvironmentBuildSettings extends Message<EnvironmentBuildSettings> 
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.EnvironmentBuildSettings";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "fast_forward_default_branch", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 2, name: "builds_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "auto_fast_forward_staleness_hours", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 1, name: "fast_forward_default_branch", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 2, name: "builds_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 3, name: "auto_fast_forward_staleness_hours", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): EnvironmentBuildSettings {
@@ -11857,32 +11857,32 @@ export class EnvironmentEffectiveHistoryEvent extends Message<EnvironmentEffecti
   description = "";
 
   /**
-   * @generated from field: aiserver.v1.EnvironmentVersionSummary version = 7;
+   * @generated from field: optional aiserver.v1.EnvironmentVersionSummary version = 7;
    */
   version?: EnvironmentVersionSummary;
 
   /**
-   * @generated from field: aiserver.v1.EnvironmentVersionSummary fallback_version = 8;
+   * @generated from field: optional aiserver.v1.EnvironmentVersionSummary fallback_version = 8;
    */
   fallbackVersion?: EnvironmentVersionSummary;
 
   /**
-   * @generated from field: aiserver.v1.EnvironmentSetupRunLink setup_run = 9;
+   * @generated from field: optional aiserver.v1.EnvironmentSetupRunLink setup_run = 9;
    */
   setupRun?: EnvironmentSetupRunLink;
 
   /**
-   * @generated from field: string environment_public_id = 10;
+   * @generated from field: optional string environment_public_id = 10;
    */
-  environmentPublicId = "";
+  environmentPublicId?: string;
 
   /**
-   * @generated from field: string environment_name = 11;
+   * @generated from field: optional string environment_name = 11;
    */
-  environmentName = "";
+  environmentName?: string;
 
   /**
-   * @generated from field: aiserver.v1.EnvironmentVersionRestoreMetadata restore_metadata = 12;
+   * @generated from field: optional aiserver.v1.EnvironmentVersionRestoreMetadata restore_metadata = 12;
    */
   restoreMetadata?: EnvironmentVersionRestoreMetadata;
 
@@ -11900,12 +11900,12 @@ export class EnvironmentEffectiveHistoryEvent extends Message<EnvironmentEffecti
     { no: 4, name: "event_kind", kind: "enum", T: proto3.getEnumType(EnvironmentUpdateEventKind) },
     { no: 5, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 6, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "version", kind: "message", T: EnvironmentVersionSummary },
-    { no: 8, name: "fallback_version", kind: "message", T: EnvironmentVersionSummary },
-    { no: 9, name: "setup_run", kind: "message", T: EnvironmentSetupRunLink },
-    { no: 10, name: "environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 11, name: "environment_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 12, name: "restore_metadata", kind: "message", T: EnvironmentVersionRestoreMetadata },
+    { no: 7, name: "version", kind: "message", T: EnvironmentVersionSummary, opt: true },
+    { no: 8, name: "fallback_version", kind: "message", T: EnvironmentVersionSummary, opt: true },
+    { no: 9, name: "setup_run", kind: "message", T: EnvironmentSetupRunLink, opt: true },
+    { no: 10, name: "environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 11, name: "environment_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 12, name: "restore_metadata", kind: "message", T: EnvironmentVersionRestoreMetadata, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): EnvironmentEffectiveHistoryEvent {
@@ -11955,17 +11955,17 @@ export class EnvironmentHistoryLifecycleEvent extends Message<EnvironmentHistory
   createdAtMs = protoInt64.zero;
 
   /**
-   * @generated from field: aiserver.v1.EnvironmentVersionSummary version = 6;
+   * @generated from field: optional aiserver.v1.EnvironmentVersionSummary version = 6;
    */
   version?: EnvironmentVersionSummary;
 
   /**
-   * @generated from field: aiserver.v1.EnvironmentSetupRunLink setup_run = 7;
+   * @generated from field: optional aiserver.v1.EnvironmentSetupRunLink setup_run = 7;
    */
   setupRun?: EnvironmentSetupRunLink;
 
   /**
-   * @generated from field: aiserver.v1.EnvironmentVersionRestoreMetadata restore_metadata = 8;
+   * @generated from field: optional aiserver.v1.EnvironmentVersionRestoreMetadata restore_metadata = 8;
    */
   restoreMetadata?: EnvironmentVersionRestoreMetadata;
 
@@ -11982,9 +11982,9 @@ export class EnvironmentHistoryLifecycleEvent extends Message<EnvironmentHistory
     { no: 3, name: "source_kind", kind: "enum", T: proto3.getEnumType(EnvironmentVersionSourceKind) },
     { no: 4, name: "recorded_via", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "created_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 6, name: "version", kind: "message", T: EnvironmentVersionSummary },
-    { no: 7, name: "setup_run", kind: "message", T: EnvironmentSetupRunLink },
-    { no: 8, name: "restore_metadata", kind: "message", T: EnvironmentVersionRestoreMetadata },
+    { no: 6, name: "version", kind: "message", T: EnvironmentVersionSummary, opt: true },
+    { no: 7, name: "setup_run", kind: "message", T: EnvironmentSetupRunLink, opt: true },
+    { no: 8, name: "restore_metadata", kind: "message", T: EnvironmentVersionRestoreMetadata, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): EnvironmentHistoryLifecycleEvent {
@@ -12009,7 +12009,7 @@ export class EnvironmentHistoryLifecycleEvent extends Message<EnvironmentHistory
  */
 export class EnvironmentHistoryObject extends Message<EnvironmentHistoryObject> {
   /**
-   * @generated from field: aiserver.v1.LogicalEnvironment environment = 1;
+   * @generated from field: optional aiserver.v1.LogicalEnvironment environment = 1;
    */
   environment?: LogicalEnvironment;
 
@@ -12031,7 +12031,7 @@ export class EnvironmentHistoryObject extends Message<EnvironmentHistoryObject> 
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.EnvironmentHistoryObject";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "environment", kind: "message", T: LogicalEnvironment },
+    { no: 1, name: "environment", kind: "message", T: LogicalEnvironment, opt: true },
     { no: 2, name: "versions", kind: "message", T: EnvironmentHistoryVersion, repeated: true },
     { no: 3, name: "lifecycle_events", kind: "message", T: EnvironmentHistoryLifecycleEvent, repeated: true },
   ]);
@@ -12058,12 +12058,12 @@ export class EnvironmentHistoryObject extends Message<EnvironmentHistoryObject> 
  */
 export class EnvironmentHistoryVersion extends Message<EnvironmentHistoryVersion> {
   /**
-   * @generated from field: aiserver.v1.EnvironmentVersionSummary version = 1;
+   * @generated from field: optional aiserver.v1.EnvironmentVersionSummary version = 1;
    */
   version?: EnvironmentVersionSummary;
 
   /**
-   * @generated from field: aiserver.v1.EnvironmentSetupRunLink setup_run = 2;
+   * @generated from field: optional aiserver.v1.EnvironmentSetupRunLink setup_run = 2;
    */
   setupRun?: EnvironmentSetupRunLink;
 
@@ -12075,8 +12075,8 @@ export class EnvironmentHistoryVersion extends Message<EnvironmentHistoryVersion
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.EnvironmentHistoryVersion";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "version", kind: "message", T: EnvironmentVersionSummary },
-    { no: 2, name: "setup_run", kind: "message", T: EnvironmentSetupRunLink },
+    { no: 1, name: "version", kind: "message", T: EnvironmentVersionSummary, opt: true },
+    { no: 2, name: "setup_run", kind: "message", T: EnvironmentSetupRunLink, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): EnvironmentHistoryVersion {
@@ -12192,7 +12192,7 @@ export class EnvironmentRepoConfig extends Message<EnvironmentRepoConfig> {
   repos: EnvironmentRepoEntry[] = [];
 
   /**
-   * @generated from field: aiserver.v1.EnvironmentJsonFileLocation environment_json_location = 2;
+   * @generated from field: optional aiserver.v1.EnvironmentJsonFileLocation environment_json_location = 2;
    */
   environmentJsonLocation?: EnvironmentJsonFileLocation;
 
@@ -12205,7 +12205,7 @@ export class EnvironmentRepoConfig extends Message<EnvironmentRepoConfig> {
   static readonly typeName = "aiserver.v1.EnvironmentRepoConfig";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "repos", kind: "message", T: EnvironmentRepoEntry, repeated: true },
-    { no: 2, name: "environment_json_location", kind: "message", T: EnvironmentJsonFileLocation },
+    { no: 2, name: "environment_json_location", kind: "message", T: EnvironmentJsonFileLocation, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): EnvironmentRepoConfig {
@@ -12240,9 +12240,9 @@ export class EnvironmentRepoEntry extends Message<EnvironmentRepoEntry> {
   scmRepoNodeId = "";
 
   /**
-   * @generated from field: string git_enterprise_uuid = 3;
+   * @generated from field: optional string git_enterprise_uuid = 3;
    */
-  gitEnterpriseUuid = "";
+  gitEnterpriseUuid?: string;
 
   constructor(data?: PartialMessage<EnvironmentRepoEntry>) {
     super();
@@ -12254,7 +12254,7 @@ export class EnvironmentRepoEntry extends Message<EnvironmentRepoEntry> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "scm_repo_node_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "git_enterprise_uuid", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "git_enterprise_uuid", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): EnvironmentRepoEntry {
@@ -12284,9 +12284,9 @@ export class EnvironmentSetupRunLink extends Message<EnvironmentSetupRunLink> {
   bcId = "";
 
   /**
-   * @generated from field: string status = 2;
+   * @generated from field: optional string status = 2;
    */
-  status = "";
+  status?: string;
 
   /**
    * @generated from field: int64 created_at_ms = 3;
@@ -12294,9 +12294,9 @@ export class EnvironmentSetupRunLink extends Message<EnvironmentSetupRunLink> {
   createdAtMs = protoInt64.zero;
 
   /**
-   * @generated from field: string snapshot_id = 4;
+   * @generated from field: optional string snapshot_id = 4;
    */
-  snapshotId = "";
+  snapshotId?: string;
 
   constructor(data?: PartialMessage<EnvironmentSetupRunLink>) {
     super();
@@ -12307,9 +12307,9 @@ export class EnvironmentSetupRunLink extends Message<EnvironmentSetupRunLink> {
   static readonly typeName = "aiserver.v1.EnvironmentSetupRunLink";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "status", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "status", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "created_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 4, name: "snapshot_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "snapshot_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): EnvironmentSetupRunLink {
@@ -12339,14 +12339,14 @@ export class EnvironmentSetupRunStartedMetadata extends Message<EnvironmentSetup
   setupSessionId = "";
 
   /**
-   * @generated from field: string surface = 2;
+   * @generated from field: optional string surface = 2;
    */
-  surface = "";
+  surface?: string;
 
   /**
-   * @generated from field: string entrypoint = 3;
+   * @generated from field: optional string entrypoint = 3;
    */
-  entrypoint = "";
+  entrypoint?: string;
 
   /**
    * @generated from field: bool resumed_session = 4;
@@ -12362,8 +12362,8 @@ export class EnvironmentSetupRunStartedMetadata extends Message<EnvironmentSetup
   static readonly typeName = "aiserver.v1.EnvironmentSetupRunStartedMetadata";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "setup_session_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "surface", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "entrypoint", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "surface", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "entrypoint", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 4, name: "resumed_session", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
@@ -12399,19 +12399,19 @@ export class EnvironmentVersionRestoreMetadata extends Message<EnvironmentVersio
   restoredFromSourceKind = EnvironmentVersionSourceKind.UNSPECIFIED;
 
   /**
-   * @generated from field: string restored_from_environment_public_id = 3;
+   * @generated from field: optional string restored_from_environment_public_id = 3;
    */
-  restoredFromEnvironmentPublicId = "";
+  restoredFromEnvironmentPublicId?: string;
 
   /**
-   * @generated from field: string restored_from_environment_name = 4;
+   * @generated from field: optional string restored_from_environment_name = 4;
    */
-  restoredFromEnvironmentName = "";
+  restoredFromEnvironmentName?: string;
 
   /**
-   * @generated from field: string restored_from_snapshot_id = 5;
+   * @generated from field: optional string restored_from_snapshot_id = 5;
    */
-  restoredFromSnapshotId = "";
+  restoredFromSnapshotId?: string;
 
   constructor(data?: PartialMessage<EnvironmentVersionRestoreMetadata>) {
     super();
@@ -12423,9 +12423,9 @@ export class EnvironmentVersionRestoreMetadata extends Message<EnvironmentVersio
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "restored_from_environment_version_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "restored_from_source_kind", kind: "enum", T: proto3.getEnumType(EnvironmentVersionSourceKind) },
-    { no: 3, name: "restored_from_environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "restored_from_environment_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "restored_from_snapshot_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "restored_from_environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "restored_from_environment_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "restored_from_snapshot_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): EnvironmentVersionRestoreMetadata {
@@ -12460,17 +12460,17 @@ export class EnvironmentVersionSummary extends Message<EnvironmentVersionSummary
   sourceKind = EnvironmentVersionSourceKind.UNSPECIFIED;
 
   /**
-   * @generated from field: string commit_hash = 3;
+   * @generated from field: optional string commit_hash = 3;
    */
-  commitHash = "";
+  commitHash?: string;
 
   /**
-   * @generated from field: string environment_public_id = 4;
+   * @generated from field: optional string environment_public_id = 4;
    */
-  environmentPublicId = "";
+  environmentPublicId?: string;
 
   /**
-   * @generated from field: aiserver.v1.RepoConfigSummary repo_config = 5;
+   * @generated from field: optional aiserver.v1.RepoConfigSummary repo_config = 5;
    */
   repoConfig?: RepoConfigSummary;
 
@@ -12480,29 +12480,29 @@ export class EnvironmentVersionSummary extends Message<EnvironmentVersionSummary
   createdAtMs = protoInt64.zero;
 
   /**
-   * @generated from field: string environment_json = 7;
+   * @generated from field: optional string environment_json = 7;
    */
-  environmentJson = "";
+  environmentJson?: string;
 
   /**
-   * @generated from field: string environment_name = 8;
+   * @generated from field: optional string environment_name = 8;
    */
-  environmentName = "";
+  environmentName?: string;
 
   /**
-   * @generated from field: string snapshot_id = 9;
+   * @generated from field: optional string snapshot_id = 9;
    */
-  snapshotId = "";
+  snapshotId?: string;
 
   /**
-   * @generated from field: string recorded_via = 10;
+   * @generated from field: optional string recorded_via = 10;
    */
-  recordedVia = "";
+  recordedVia?: string;
 
   /**
-   * @generated from field: string update_script = 11;
+   * @generated from field: optional string update_script = 11;
    */
-  updateScript = "";
+  updateScript?: string;
 
   constructor(data?: PartialMessage<EnvironmentVersionSummary>) {
     super();
@@ -12514,15 +12514,15 @@ export class EnvironmentVersionSummary extends Message<EnvironmentVersionSummary
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "public_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "source_kind", kind: "enum", T: proto3.getEnumType(EnvironmentVersionSourceKind) },
-    { no: 3, name: "commit_hash", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "repo_config", kind: "message", T: RepoConfigSummary },
+    { no: 3, name: "commit_hash", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "repo_config", kind: "message", T: RepoConfigSummary, opt: true },
     { no: 6, name: "created_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 7, name: "environment_json", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "environment_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "snapshot_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "recorded_via", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 11, name: "update_script", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 7, name: "environment_json", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "environment_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 9, name: "snapshot_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 10, name: "recorded_via", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 11, name: "update_script", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): EnvironmentVersionSummary {
@@ -12562,9 +12562,9 @@ export class EventSubscription extends Message<EventSubscription> {
   subscriptionArgsJson = "";
 
   /**
-   * @generated from field: string subscription_metadata_json = 4;
+   * @generated from field: optional string subscription_metadata_json = 4;
    */
-  subscriptionMetadataJson = "";
+  subscriptionMetadataJson?: string;
 
   /**
    * @generated from field: double open_time_ms = 10;
@@ -12577,9 +12577,9 @@ export class EventSubscription extends Message<EventSubscription> {
   expiresAtMs = 0;
 
   /**
-   * @generated from field: double last_delivered_at_ms = 12;
+   * @generated from field: optional double last_delivered_at_ms = 12;
    */
-  lastDeliveredAtMs = 0;
+  lastDeliveredAtMs?: number;
 
   /**
    * @generated from field: int32 delivery_count = 13;
@@ -12597,10 +12597,10 @@ export class EventSubscription extends Message<EventSubscription> {
     { no: 1, name: "subscription_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "subscription_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "subscription_args_json", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "subscription_metadata_json", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "subscription_metadata_json", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 10, name: "open_time_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
     { no: 11, name: "expires_at_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 12, name: "last_delivered_at_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
+    { no: 12, name: "last_delivered_at_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
     { no: 13, name: "delivery_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
   ]);
 
@@ -12626,22 +12626,22 @@ export class EventSubscription extends Message<EventSubscription> {
  */
 export class ExternalSourceMetadata extends Message<ExternalSourceMetadata> {
   /**
-   * @generated from field: aiserver.v1.SlackSourceMetadata slack = 1;
+   * @generated from field: optional aiserver.v1.SlackSourceMetadata slack = 1;
    */
   slack?: SlackSourceMetadata;
 
   /**
-   * @generated from field: aiserver.v1.LinearSourceMetadata linear = 2;
+   * @generated from field: optional aiserver.v1.LinearSourceMetadata linear = 2;
    */
   linear?: LinearSourceMetadata;
 
   /**
-   * @generated from field: aiserver.v1.GithubSourceMetadata github = 3;
+   * @generated from field: optional aiserver.v1.GithubSourceMetadata github = 3;
    */
   github?: GithubSourceMetadata;
 
   /**
-   * @generated from field: aiserver.v1.GitlabSourceMetadata gitlab = 4;
+   * @generated from field: optional aiserver.v1.GitlabSourceMetadata gitlab = 4;
    */
   gitlab?: GitlabSourceMetadata;
 
@@ -12653,10 +12653,10 @@ export class ExternalSourceMetadata extends Message<ExternalSourceMetadata> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ExternalSourceMetadata";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "slack", kind: "message", T: SlackSourceMetadata },
-    { no: 2, name: "linear", kind: "message", T: LinearSourceMetadata },
-    { no: 3, name: "github", kind: "message", T: GithubSourceMetadata },
-    { no: 4, name: "gitlab", kind: "message", T: GitlabSourceMetadata },
+    { no: 1, name: "slack", kind: "message", T: SlackSourceMetadata, opt: true },
+    { no: 2, name: "linear", kind: "message", T: LinearSourceMetadata, opt: true },
+    { no: 3, name: "github", kind: "message", T: GithubSourceMetadata, opt: true },
+    { no: 4, name: "gitlab", kind: "message", T: GitlabSourceMetadata, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ExternalSourceMetadata {
@@ -12691,9 +12691,9 @@ export class FetchBackgroundComposerRequest extends Message<FetchBackgroundCompo
   startIndex = 0;
 
   /**
-   * @generated from field: int32 limit = 3;
+   * @generated from field: optional int32 limit = 3;
    */
-  limit = 0;
+  limit?: number;
 
   constructor(data?: PartialMessage<FetchBackgroundComposerRequest>) {
     super();
@@ -12705,7 +12705,7 @@ export class FetchBackgroundComposerRequest extends Message<FetchBackgroundCompo
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "start_index", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 3, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): FetchBackgroundComposerRequest {
@@ -12783,14 +12783,14 @@ export class ForkBackgroundComposerRequest extends Message<ForkBackgroundCompose
   mode = ForkBackgroundComposerMode.UNSPECIFIED;
 
   /**
-   * @generated from field: string name = 3;
+   * @generated from field: optional string name = 3;
    */
-  name = "";
+  name?: string;
 
   /**
-   * @generated from field: uint32 turn_count = 4;
+   * @generated from field: optional uint32 turn_count = 4;
    */
-  turnCount = 0;
+  turnCount?: number;
 
   constructor(data?: PartialMessage<ForkBackgroundComposerRequest>) {
     super();
@@ -12802,8 +12802,8 @@ export class ForkBackgroundComposerRequest extends Message<ForkBackgroundCompose
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "source_bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "mode", kind: "enum", T: proto3.getEnumType(ForkBackgroundComposerMode) },
-    { no: 3, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "turn_count", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 3, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "turn_count", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ForkBackgroundComposerRequest {
@@ -12828,7 +12828,7 @@ export class ForkBackgroundComposerRequest extends Message<ForkBackgroundCompose
  */
 export class ForkBackgroundComposerResponse extends Message<ForkBackgroundComposerResponse> {
   /**
-   * @generated from field: aiserver.v1.BackgroundComposer composer = 1;
+   * @generated from field: optional aiserver.v1.BackgroundComposer composer = 1;
    */
   composer?: BackgroundComposer;
 
@@ -12848,9 +12848,9 @@ export class ForkBackgroundComposerResponse extends Message<ForkBackgroundCompos
   mode = ForkBackgroundComposerMode.UNSPECIFIED;
 
   /**
-   * @generated from field: string initial_run_id = 5;
+   * @generated from field: optional string initial_run_id = 5;
    */
-  initialRunId = "";
+  initialRunId?: string;
 
   constructor(data?: PartialMessage<ForkBackgroundComposerResponse>) {
     super();
@@ -12860,11 +12860,11 @@ export class ForkBackgroundComposerResponse extends Message<ForkBackgroundCompos
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ForkBackgroundComposerResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "composer", kind: "message", T: BackgroundComposer },
+    { no: 1, name: "composer", kind: "message", T: BackgroundComposer, opt: true },
     { no: 2, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "source_bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "mode", kind: "enum", T: proto3.getEnumType(ForkBackgroundComposerMode) },
-    { no: 5, name: "initial_run_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "initial_run_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ForkBackgroundComposerResponse {
@@ -12894,9 +12894,9 @@ export class GetAgentSharePreviewRequest extends Message<GetAgentSharePreviewReq
   shareId = "";
 
   /**
-   * @generated from field: bool include_preview_image = 2;
+   * @generated from field: optional bool include_preview_image = 2;
    */
-  includePreviewImage = false;
+  includePreviewImage?: boolean;
 
   constructor(data?: PartialMessage<GetAgentSharePreviewRequest>) {
     super();
@@ -12907,7 +12907,7 @@ export class GetAgentSharePreviewRequest extends Message<GetAgentSharePreviewReq
   static readonly typeName = "aiserver.v1.GetAgentSharePreviewRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "share_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "include_preview_image", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "include_preview_image", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetAgentSharePreviewRequest {
@@ -12942,44 +12942,44 @@ export class GetAgentSharePreviewResponse extends Message<GetAgentSharePreviewRe
   bcId = "";
 
   /**
-   * @generated from field: string name = 3;
+   * @generated from field: optional string name = 3;
    */
-  name = "";
+  name?: string;
 
   /**
-   * @generated from field: string summary = 4;
+   * @generated from field: optional string summary = 4;
    */
-  summary = "";
+  summary?: string;
 
   /**
-   * @generated from field: string status = 5;
+   * @generated from field: optional string status = 5;
    */
-  status = "";
+  status?: string;
 
   /**
-   * @generated from field: string error_message = 6;
+   * @generated from field: optional string error_message = 6;
    */
-  errorMessage = "";
+  errorMessage?: string;
 
   /**
-   * @generated from field: string repo_url = 7;
+   * @generated from field: optional string repo_url = 7;
    */
-  repoUrl = "";
+  repoUrl?: string;
 
   /**
-   * @generated from field: string branch_name = 8;
+   * @generated from field: optional string branch_name = 8;
    */
-  branchName = "";
+  branchName?: string;
 
   /**
-   * @generated from field: string artifact_image_url = 9;
+   * @generated from field: optional string artifact_image_url = 9;
    */
-  artifactImageUrl = "";
+  artifactImageUrl?: string;
 
   /**
-   * @generated from field: bytes preview_image_png = 10;
+   * @generated from field: optional bytes preview_image_png = 10;
    */
-  previewImagePng = new Uint8Array(0);
+  previewImagePng?: Uint8Array;
 
   constructor(data?: PartialMessage<GetAgentSharePreviewResponse>) {
     super();
@@ -12991,14 +12991,14 @@ export class GetAgentSharePreviewResponse extends Message<GetAgentSharePreviewRe
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "share_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "summary", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "status", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "artifact_image_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "preview_image_png", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
+    { no: 3, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "summary", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "status", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 9, name: "artifact_image_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 10, name: "preview_image_png", kind: "scalar", T: 12 /* ScalarType.BYTES */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetAgentSharePreviewResponse {
@@ -13071,7 +13071,7 @@ export class GetAgentStoreFileLockResponse extends Message<GetAgentStoreFileLock
   held = false;
 
   /**
-   * @generated from field: aiserver.v1.AgentStoreFileLockHolder holder = 2;
+   * @generated from field: optional aiserver.v1.AgentStoreFileLockHolder holder = 2;
    */
   holder?: AgentStoreFileLockHolder;
 
@@ -13089,7 +13089,7 @@ export class GetAgentStoreFileLockResponse extends Message<GetAgentStoreFileLock
   static readonly typeName = "aiserver.v1.GetAgentStoreFileLockResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "held", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 2, name: "holder", kind: "message", T: AgentStoreFileLockHolder },
+    { no: 2, name: "holder", kind: "message", T: AgentStoreFileLockHolder, opt: true },
     { no: 3, name: "expires_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
   ]);
 
@@ -13292,9 +13292,9 @@ export class GetBackgroundComposerChangesHashRequest extends Message<GetBackgrou
   bcId = "";
 
   /**
-   * @generated from field: string branch_name = 2;
+   * @generated from field: optional string branch_name = 2;
    */
-  branchName = "";
+  branchName?: string;
 
   constructor(data?: PartialMessage<GetBackgroundComposerChangesHashRequest>) {
     super();
@@ -13305,7 +13305,7 @@ export class GetBackgroundComposerChangesHashRequest extends Message<GetBackgrou
   static readonly typeName = "aiserver.v1.GetBackgroundComposerChangesHashRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBackgroundComposerChangesHashRequest {
@@ -13446,14 +13446,14 @@ export class GetBackgroundComposerDiffDetailsRequest extends Message<GetBackgrou
   bcId = "";
 
   /**
-   * @generated from field: string branch_name = 2;
+   * @generated from field: optional string branch_name = 2;
    */
-  branchName = "";
+  branchName?: string;
 
   /**
-   * @generated from field: string repo_url = 3;
+   * @generated from field: optional string repo_url = 3;
    */
-  repoUrl = "";
+  repoUrl?: string;
 
   constructor(data?: PartialMessage<GetBackgroundComposerDiffDetailsRequest>) {
     super();
@@ -13464,8 +13464,8 @@ export class GetBackgroundComposerDiffDetailsRequest extends Message<GetBackgrou
   static readonly typeName = "aiserver.v1.GetBackgroundComposerDiffDetailsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBackgroundComposerDiffDetailsRequest {
@@ -13668,7 +13668,7 @@ export class GetBackgroundComposerInfoRequest extends Message<GetBackgroundCompo
  */
 export class GetBackgroundComposerInfoResponse extends Message<GetBackgroundComposerInfoResponse> {
   /**
-   * @generated from field: aiserver.v1.DetailedBackgroundComposer composer = 1;
+   * @generated from field: optional aiserver.v1.DetailedBackgroundComposer composer = 1;
    */
   composer?: DetailedBackgroundComposer;
 
@@ -13680,7 +13680,7 @@ export class GetBackgroundComposerInfoResponse extends Message<GetBackgroundComp
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetBackgroundComposerInfoResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "composer", kind: "message", T: DetailedBackgroundComposer },
+    { no: 1, name: "composer", kind: "message", T: DetailedBackgroundComposer, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBackgroundComposerInfoResponse {
@@ -13816,7 +13816,7 @@ export class GetBackgroundComposerPromptRequest extends Message<GetBackgroundCom
  */
 export class GetBackgroundComposerPromptResponse extends Message<GetBackgroundComposerPromptResponse> {
   /**
-   * @generated from field: aiserver.v1.ConversationMessage prompt = 1;
+   * @generated from field: optional aiserver.v1.ConversationMessage prompt = 1;
    */
   prompt?: ConversationMessage;
 
@@ -13828,7 +13828,7 @@ export class GetBackgroundComposerPromptResponse extends Message<GetBackgroundCo
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetBackgroundComposerPromptResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "prompt", kind: "message", T: ConversationMessage },
+    { no: 1, name: "prompt", kind: "message", T: ConversationMessage, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBackgroundComposerPromptResponse {
@@ -13964,17 +13964,17 @@ export class GetBackgroundComposerRepositoryInfoRequest extends Message<GetBackg
  */
 export class GetBackgroundComposerRepositoryInfoResponse extends Message<GetBackgroundComposerRepositoryInfoResponse> {
   /**
-   * @generated from field: aiserver.v1.RepositoryInfo repository_info = 1;
+   * @generated from field: optional aiserver.v1.RepositoryInfo repository_info = 1;
    */
   repositoryInfo?: RepositoryInfo;
 
   /**
-   * @generated from field: string path_encryption_key = 2;
+   * @generated from field: optional string path_encryption_key = 2;
    */
-  pathEncryptionKey = "";
+  pathEncryptionKey?: string;
 
   /**
-   * @generated from field: aiserver.v1.QueryOnlyRepoAccess query_only_repo_access = 3;
+   * @generated from field: optional aiserver.v1.QueryOnlyRepoAccess query_only_repo_access = 3;
    */
   queryOnlyRepoAccess?: QueryOnlyRepoAccess;
 
@@ -13986,9 +13986,9 @@ export class GetBackgroundComposerRepositoryInfoResponse extends Message<GetBack
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetBackgroundComposerRepositoryInfoResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repository_info", kind: "message", T: RepositoryInfo },
-    { no: 2, name: "path_encryption_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "query_only_repo_access", kind: "message", T: QueryOnlyRepoAccess },
+    { no: 1, name: "repository_info", kind: "message", T: RepositoryInfo, opt: true },
+    { no: 2, name: "path_encryption_key", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "query_only_repo_access", kind: "message", T: QueryOnlyRepoAccess, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBackgroundComposerRepositoryInfoResponse {
@@ -14152,9 +14152,9 @@ export class GetBackgroundComposerSnapshotStateResponse extends Message<GetBackg
   state = SnapshotState.UNSPECIFIED;
 
   /**
-   * @generated from field: string error_message = 3;
+   * @generated from field: optional string error_message = 3;
    */
-  errorMessage = "";
+  errorMessage?: string;
 
   constructor(data?: PartialMessage<GetBackgroundComposerSnapshotStateResponse>) {
     super();
@@ -14166,7 +14166,7 @@ export class GetBackgroundComposerSnapshotStateResponse extends Message<GetBackg
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "snapshot_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "state", kind: "enum", T: proto3.getEnumType(SnapshotState) },
-    { no: 3, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBackgroundComposerSnapshotStateResponse {
@@ -14376,69 +14376,69 @@ export class GetBackgroundComposerUserSettingsRequest extends Message<GetBackgro
  */
 export class GetBackgroundComposerUserSettingsResponse extends Message<GetBackgroundComposerUserSettingsResponse> {
   /**
-   * @generated from field: string model_name = 1;
+   * @generated from field: optional string model_name = 1;
    */
-  modelName = "";
+  modelName?: string;
 
   /**
-   * @generated from field: bool slack_notifications_for_web_enabled = 2;
+   * @generated from field: optional bool slack_notifications_for_web_enabled = 2;
    */
-  slackNotificationsForWebEnabled = false;
+  slackNotificationsForWebEnabled?: boolean;
 
   /**
-   * @generated from field: bool ci_failure_followup_enabled = 3;
+   * @generated from field: optional bool ci_failure_followup_enabled = 3;
    */
-  ciFailureFollowupEnabled = false;
+  ciFailureFollowupEnabled?: boolean;
 
   /**
-   * @generated from field: bool browser_use_enabled = 4;
+   * @generated from field: optional bool browser_use_enabled = 4;
    */
-  browserUseEnabled = false;
+  browserUseEnabled?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.AutoCreatePrSetting auto_create_pr_setting = 5;
+   * @generated from field: optional aiserver.v1.AutoCreatePrSetting auto_create_pr_setting = 5;
    */
-  autoCreatePrSetting = AutoCreatePrSetting.UNSPECIFIED;
+  autoCreatePrSetting?: AutoCreatePrSetting;
 
   /**
-   * @generated from field: aiserver.v1.PrReviewOpenDestinationMode pr_review_open_destination = 6;
+   * @generated from field: optional aiserver.v1.PrReviewOpenDestinationMode pr_review_open_destination = 6;
    */
-  prReviewOpenDestination = PrReviewOpenDestinationMode.UNSPECIFIED;
+  prReviewOpenDestination?: PrReviewOpenDestinationMode;
 
   /**
-   * @generated from field: aiserver.v1.GithubArtifactPostingMode github_artifact_posting = 7;
+   * @generated from field: optional aiserver.v1.GithubArtifactPostingMode github_artifact_posting = 7;
    */
-  githubArtifactPosting = GithubArtifactPostingMode.UNSPECIFIED;
+  githubArtifactPosting?: GithubArtifactPostingMode;
 
   /**
-   * @generated from field: aiserver.v1.CloudAgentEgressProtectionMode egress_protection_mode = 8;
+   * @generated from field: optional aiserver.v1.CloudAgentEgressProtectionMode egress_protection_mode = 8;
    */
-  egressProtectionMode = CloudAgentEgressProtectionMode.UNSPECIFIED;
+  egressProtectionMode?: CloudAgentEgressProtectionMode;
 
   /**
-   * @generated from field: aiserver.v1.BackgroundComposerUserEgressPolicy egress_policy = 9;
+   * @generated from field: optional aiserver.v1.BackgroundComposerUserEgressPolicy egress_policy = 9;
    */
   egressPolicy?: BackgroundComposerUserEgressPolicy;
 
   /**
-   * @generated from field: string branch_prefix = 10;
+   * @generated from field: optional string branch_prefix = 10;
    */
-  branchPrefix = "";
+  branchPrefix?: string;
 
   /**
-   * @generated from field: aiserver.v1.BackgroundComposerQuickActionSettings quick_action_settings = 11;
+   * @generated from field: optional aiserver.v1.BackgroundComposerQuickActionSettings quick_action_settings = 11;
    */
   quickActionSettings?: BackgroundComposerQuickActionSettings;
 
   /**
-   * @generated from field: bool allow_private_workers = 12;
+   * @generated from field: optional bool allow_private_workers = 12;
    */
-  allowPrivateWorkers = false;
+  allowPrivateWorkers?: boolean;
 
   /**
-   * @generated from field: string default_environment_public_id = 13;
+   * @generated from field: optional string default_environment_public_id = 13;
    */
-  defaultEnvironmentPublicId = "";
+  defaultEnvironmentPublicId?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.BackgroundComposerDefaultEnvironmentSetting default_environment_settings = 14;
@@ -14446,14 +14446,14 @@ export class GetBackgroundComposerUserSettingsResponse extends Message<GetBackgr
   defaultEnvironmentSettings: BackgroundComposerDefaultEnvironmentSetting[] = [];
 
   /**
-   * @generated from field: bool remote_control_enabled = 15;
+   * @generated from field: optional bool remote_control_enabled = 15;
    */
-  remoteControlEnabled = false;
+  remoteControlEnabled?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.PrReviewOpenSurfaceMode pr_review_open_surface = 16;
+   * @generated from field: optional aiserver.v1.PrReviewOpenSurfaceMode pr_review_open_surface = 16;
    */
-  prReviewOpenSurface = PrReviewOpenSurfaceMode.UNSPECIFIED;
+  prReviewOpenSurface?: PrReviewOpenSurfaceMode;
 
   /**
    * @generated from field: repeated string sidebar_named_agent_ids = 17;
@@ -14461,14 +14461,14 @@ export class GetBackgroundComposerUserSettingsResponse extends Message<GetBackgr
   sidebarNamedAgentIds: string[] = [];
 
   /**
-   * @generated from field: aiserver.v1.CloudAgentModelSelection default_model_selection = 18;
+   * @generated from field: optional aiserver.v1.CloudAgentModelSelection default_model_selection = 18;
    */
   defaultModelSelection?: CloudAgentModelSelection;
 
   /**
-   * @generated from field: int32 ask_question_auto_answer_timeout_minutes = 19;
+   * @generated from field: optional int32 ask_question_auto_answer_timeout_minutes = 19;
    */
-  askQuestionAutoAnswerTimeoutMinutes = 0;
+  askQuestionAutoAnswerTimeoutMinutes?: number;
 
   constructor(data?: PartialMessage<GetBackgroundComposerUserSettingsResponse>) {
     super();
@@ -14478,25 +14478,25 @@ export class GetBackgroundComposerUserSettingsResponse extends Message<GetBackgr
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetBackgroundComposerUserSettingsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "model_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "slack_notifications_for_web_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "ci_failure_followup_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "browser_use_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "auto_create_pr_setting", kind: "enum", T: proto3.getEnumType(AutoCreatePrSetting) },
-    { no: 6, name: "pr_review_open_destination", kind: "enum", T: proto3.getEnumType(PrReviewOpenDestinationMode) },
-    { no: 7, name: "github_artifact_posting", kind: "enum", T: proto3.getEnumType(GithubArtifactPostingMode) },
-    { no: 8, name: "egress_protection_mode", kind: "enum", T: proto3.getEnumType(CloudAgentEgressProtectionMode) },
-    { no: 9, name: "egress_policy", kind: "message", T: BackgroundComposerUserEgressPolicy },
-    { no: 10, name: "branch_prefix", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 11, name: "quick_action_settings", kind: "message", T: BackgroundComposerQuickActionSettings },
-    { no: 12, name: "allow_private_workers", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 13, name: "default_environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "model_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "slack_notifications_for_web_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 3, name: "ci_failure_followup_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 4, name: "browser_use_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 5, name: "auto_create_pr_setting", kind: "enum", T: proto3.getEnumType(AutoCreatePrSetting), opt: true },
+    { no: 6, name: "pr_review_open_destination", kind: "enum", T: proto3.getEnumType(PrReviewOpenDestinationMode), opt: true },
+    { no: 7, name: "github_artifact_posting", kind: "enum", T: proto3.getEnumType(GithubArtifactPostingMode), opt: true },
+    { no: 8, name: "egress_protection_mode", kind: "enum", T: proto3.getEnumType(CloudAgentEgressProtectionMode), opt: true },
+    { no: 9, name: "egress_policy", kind: "message", T: BackgroundComposerUserEgressPolicy, opt: true },
+    { no: 10, name: "branch_prefix", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 11, name: "quick_action_settings", kind: "message", T: BackgroundComposerQuickActionSettings, opt: true },
+    { no: 12, name: "allow_private_workers", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 13, name: "default_environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 14, name: "default_environment_settings", kind: "message", T: BackgroundComposerDefaultEnvironmentSetting, repeated: true },
-    { no: 15, name: "remote_control_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 16, name: "pr_review_open_surface", kind: "enum", T: proto3.getEnumType(PrReviewOpenSurfaceMode) },
+    { no: 15, name: "remote_control_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 16, name: "pr_review_open_surface", kind: "enum", T: proto3.getEnumType(PrReviewOpenSurfaceMode), opt: true },
     { no: 17, name: "sidebar_named_agent_ids", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 18, name: "default_model_selection", kind: "message", T: CloudAgentModelSelection },
-    { no: 19, name: "ask_question_auto_answer_timeout_minutes", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 18, name: "default_model_selection", kind: "message", T: CloudAgentModelSelection, opt: true },
+    { no: 19, name: "ask_question_auto_answer_timeout_minutes", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBackgroundComposerUserSettingsResponse {
@@ -14680,14 +14680,14 @@ export class GetCloudAgentDebugDetailsRequest extends Message<GetCloudAgentDebug
   bcId = "";
 
   /**
-   * @generated from field: bytes agent_blob_id = 2;
+   * @generated from field: optional bytes agent_blob_id = 2;
    */
-  agentBlobId = new Uint8Array(0);
+  agentBlobId?: Uint8Array;
 
   /**
-   * @generated from field: bytes blob_id = 3;
+   * @generated from field: optional bytes blob_id = 3;
    */
-  blobId = new Uint8Array(0);
+  blobId?: Uint8Array;
 
   constructor(data?: PartialMessage<GetCloudAgentDebugDetailsRequest>) {
     super();
@@ -14698,8 +14698,8 @@ export class GetCloudAgentDebugDetailsRequest extends Message<GetCloudAgentDebug
   static readonly typeName = "aiserver.v1.GetCloudAgentDebugDetailsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "agent_blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
-    { no: 3, name: "blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
+    { no: 2, name: "agent_blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */, opt: true },
+    { no: 3, name: "blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetCloudAgentDebugDetailsRequest {
@@ -14729,7 +14729,7 @@ export class GetCloudAgentDebugDetailsResponse extends Message<GetCloudAgentDebu
   cloudAgentStateBlobId = new Uint8Array(0);
 
   /**
-   * @generated from field: aiserver.v1.CloudAgentState cloud_agent_state = 2;
+   * @generated from field: optional aiserver.v1.CloudAgentState cloud_agent_state = 2;
    */
   cloudAgentState?: CloudAgentState;
 
@@ -14744,7 +14744,7 @@ export class GetCloudAgentDebugDetailsResponse extends Message<GetCloudAgentDebu
   preFetchedBlobs: PreFetchedBlob[] = [];
 
   /**
-   * @generated from field: aiserver.v1.CloudAgentVmHistory vm_history = 5;
+   * @generated from field: optional aiserver.v1.CloudAgentVmHistory vm_history = 5;
    */
   vmHistory?: CloudAgentVmHistory;
 
@@ -14757,10 +14757,10 @@ export class GetCloudAgentDebugDetailsResponse extends Message<GetCloudAgentDebu
   static readonly typeName = "aiserver.v1.GetCloudAgentDebugDetailsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "cloud_agent_state_blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
-    { no: 2, name: "cloud_agent_state", kind: "message", T: CloudAgentState },
+    { no: 2, name: "cloud_agent_state", kind: "message", T: CloudAgentState, opt: true },
     { no: 3, name: "stream_messages", kind: "message", T: StreamConversationResponse, repeated: true },
     { no: 4, name: "pre_fetched_blobs", kind: "message", T: PreFetchedBlob, repeated: true },
-    { no: 5, name: "vm_history", kind: "message", T: CloudAgentVmHistory },
+    { no: 5, name: "vm_history", kind: "message", T: CloudAgentVmHistory, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetCloudAgentDebugDetailsResponse {
@@ -14790,14 +14790,14 @@ export class GetCloudAgentMemoryDbLogsRequest extends Message<GetCloudAgentMemor
   bcId = "";
 
   /**
-   * @generated from field: uint32 worker_index = 2;
+   * @generated from field: optional uint32 worker_index = 2;
    */
-  workerIndex = 0;
+  workerIndex?: number;
 
   /**
-   * @generated from field: int32 limit = 3;
+   * @generated from field: optional int32 limit = 3;
    */
-  limit = 0;
+  limit?: number;
 
   constructor(data?: PartialMessage<GetCloudAgentMemoryDbLogsRequest>) {
     super();
@@ -14808,8 +14808,8 @@ export class GetCloudAgentMemoryDbLogsRequest extends Message<GetCloudAgentMemor
   static readonly typeName = "aiserver.v1.GetCloudAgentMemoryDbLogsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "worker_index", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 3, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 2, name: "worker_index", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
+    { no: 3, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetCloudAgentMemoryDbLogsRequest {
@@ -14914,7 +14914,7 @@ export class GetCloudAgentRunForDashboardRequest extends Message<GetCloudAgentRu
  */
 export class GetCloudAgentRunForDashboardResponse extends Message<GetCloudAgentRunForDashboardResponse> {
   /**
-   * @generated from field: aiserver.v1.CloudAgentDashboardRunRow row = 1;
+   * @generated from field: optional aiserver.v1.CloudAgentDashboardRunRow row = 1;
    */
   row?: CloudAgentDashboardRunRow;
 
@@ -14931,7 +14931,7 @@ export class GetCloudAgentRunForDashboardResponse extends Message<GetCloudAgentR
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetCloudAgentRunForDashboardResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "row", kind: "message", T: CloudAgentDashboardRunRow },
+    { no: 1, name: "row", kind: "message", T: CloudAgentDashboardRunRow, opt: true },
     { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
@@ -14967,9 +14967,9 @@ export class GetCursorServerUrlRequest extends Message<GetCursorServerUrlRequest
   commit = "";
 
   /**
-   * @generated from field: string connection_token = 3;
+   * @generated from field: optional string connection_token = 3;
    */
-  connectionToken = "";
+  connectionToken?: string;
 
   constructor(data?: PartialMessage<GetCursorServerUrlRequest>) {
     super();
@@ -14981,7 +14981,7 @@ export class GetCursorServerUrlRequest extends Message<GetCursorServerUrlRequest
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "commit", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "connection_token", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "connection_token", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetCursorServerUrlRequest {
@@ -15109,9 +15109,9 @@ export class GetDetailedPullRequestStatusRequest extends Message<GetDetailedPull
   prUrl = "";
 
   /**
-   * @generated from field: int32 cache_expiration_seconds = 2;
+   * @generated from field: optional int32 cache_expiration_seconds = 2;
    */
-  cacheExpirationSeconds = 0;
+  cacheExpirationSeconds?: number;
 
   constructor(data?: PartialMessage<GetDetailedPullRequestStatusRequest>) {
     super();
@@ -15122,7 +15122,7 @@ export class GetDetailedPullRequestStatusRequest extends Message<GetDetailedPull
   static readonly typeName = "aiserver.v1.GetDetailedPullRequestStatusRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "cache_expiration_seconds", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 2, name: "cache_expiration_seconds", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetDetailedPullRequestStatusRequest {
@@ -15192,14 +15192,14 @@ export class GetDetailedPullRequestStatusResponse extends Message<GetDetailedPul
   canUpdateBranch = false;
 
   /**
-   * @generated from field: aiserver.v1.PRCheckStatus check_status = 10;
+   * @generated from field: optional aiserver.v1.PRCheckStatus check_status = 10;
    */
   checkStatus?: PRCheckStatus;
 
   /**
-   * @generated from field: string review_decision = 11;
+   * @generated from field: optional string review_decision = 11;
    */
-  reviewDecision = "";
+  reviewDecision?: string;
 
   /**
    * @generated from field: bool is_auto_merge_enabled = 12;
@@ -15207,19 +15207,19 @@ export class GetDetailedPullRequestStatusResponse extends Message<GetDetailedPul
   isAutoMergeEnabled = false;
 
   /**
-   * @generated from field: string head_sha = 13;
+   * @generated from field: optional string head_sha = 13;
    */
-  headSha = "";
+  headSha?: string;
 
   /**
-   * @generated from field: string base_sha = 14;
+   * @generated from field: optional string base_sha = 14;
    */
-  baseSha = "";
+  baseSha?: string;
 
   /**
-   * @generated from field: bool viewer_can_enable_auto_merge = 15;
+   * @generated from field: optional bool viewer_can_enable_auto_merge = 15;
    */
-  viewerCanEnableAutoMerge = false;
+  viewerCanEnableAutoMerge?: boolean;
 
   /**
    * @generated from field: repeated aiserver.v1.PRDeploymentPreview deployment_previews = 16;
@@ -15227,24 +15227,24 @@ export class GetDetailedPullRequestStatusResponse extends Message<GetDetailedPul
   deploymentPreviews: PRDeploymentPreview[] = [];
 
   /**
-   * @generated from field: int32 additions = 17;
+   * @generated from field: optional int32 additions = 17;
    */
-  additions = 0;
+  additions?: number;
 
   /**
-   * @generated from field: int32 deletions = 18;
+   * @generated from field: optional int32 deletions = 18;
    */
-  deletions = 0;
+  deletions?: number;
 
   /**
-   * @generated from field: int32 commit_count = 19;
+   * @generated from field: optional int32 commit_count = 19;
    */
-  commitCount = 0;
+  commitCount?: number;
 
   /**
-   * @generated from field: int32 review_count = 20;
+   * @generated from field: optional int32 review_count = 20;
    */
-  reviewCount = 0;
+  reviewCount?: number;
 
   /**
    * @generated from field: repeated aiserver.v1.PRReviewSummary reviewers = 21;
@@ -15273,17 +15273,17 @@ export class GetDetailedPullRequestStatusResponse extends Message<GetDetailedPul
     { no: 7, name: "base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 8, name: "behind_by", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 9, name: "can_update_branch", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 10, name: "check_status", kind: "message", T: PRCheckStatus },
-    { no: 11, name: "review_decision", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 10, name: "check_status", kind: "message", T: PRCheckStatus, opt: true },
+    { no: 11, name: "review_decision", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 12, name: "is_auto_merge_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 13, name: "head_sha", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 14, name: "base_sha", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 15, name: "viewer_can_enable_auto_merge", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 13, name: "head_sha", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 14, name: "base_sha", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 15, name: "viewer_can_enable_auto_merge", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 16, name: "deployment_previews", kind: "message", T: PRDeploymentPreview, repeated: true },
-    { no: 17, name: "additions", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 18, name: "deletions", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 19, name: "commit_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 20, name: "review_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 17, name: "additions", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 18, name: "deletions", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 19, name: "commit_count", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 20, name: "review_count", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 21, name: "reviewers", kind: "message", T: PRReviewSummary, repeated: true },
     { no: 22, name: "requested_reviewers", kind: "message", T: PRRequestedReviewer, repeated: true },
   ]);
@@ -15347,7 +15347,7 @@ export class GetEnvironmentActiveBuildRequest extends Message<GetEnvironmentActi
  */
 export class GetEnvironmentActiveBuildResponse extends Message<GetEnvironmentActiveBuildResponse> {
   /**
-   * @generated from field: aiserver.v1.EnvironmentBuildRow row = 1;
+   * @generated from field: optional aiserver.v1.EnvironmentBuildRow row = 1;
    */
   row?: EnvironmentBuildRow;
 
@@ -15359,7 +15359,7 @@ export class GetEnvironmentActiveBuildResponse extends Message<GetEnvironmentAct
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetEnvironmentActiveBuildResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "row", kind: "message", T: EnvironmentBuildRow },
+    { no: 1, name: "row", kind: "message", T: EnvironmentBuildRow, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetEnvironmentActiveBuildResponse {
@@ -15421,7 +15421,7 @@ export class GetEnvironmentBuildRequest extends Message<GetEnvironmentBuildReque
  */
 export class GetEnvironmentBuildResponse extends Message<GetEnvironmentBuildResponse> {
   /**
-   * @generated from field: aiserver.v1.EnvironmentBuildRow row = 1;
+   * @generated from field: optional aiserver.v1.EnvironmentBuildRow row = 1;
    */
   row?: EnvironmentBuildRow;
 
@@ -15433,7 +15433,7 @@ export class GetEnvironmentBuildResponse extends Message<GetEnvironmentBuildResp
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetEnvironmentBuildResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "row", kind: "message", T: EnvironmentBuildRow },
+    { no: 1, name: "row", kind: "message", T: EnvironmentBuildRow, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetEnvironmentBuildResponse {
@@ -15495,7 +15495,7 @@ export class GetEnvironmentBuildSettingsRequest extends Message<GetEnvironmentBu
  */
 export class GetEnvironmentBuildSettingsResponse extends Message<GetEnvironmentBuildSettingsResponse> {
   /**
-   * @generated from field: aiserver.v1.EnvironmentBuildSettings settings = 1;
+   * @generated from field: optional aiserver.v1.EnvironmentBuildSettings settings = 1;
    */
   settings?: EnvironmentBuildSettings;
 
@@ -15507,7 +15507,7 @@ export class GetEnvironmentBuildSettingsResponse extends Message<GetEnvironmentB
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetEnvironmentBuildSettingsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "settings", kind: "message", T: EnvironmentBuildSettings },
+    { no: 1, name: "settings", kind: "message", T: EnvironmentBuildSettings, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetEnvironmentBuildSettingsResponse {
@@ -15532,7 +15532,7 @@ export class GetEnvironmentBuildSettingsResponse extends Message<GetEnvironmentB
  */
 export class GetEnvironmentHistoryRequest extends Message<GetEnvironmentHistoryRequest> {
   /**
-   * @generated from field: aiserver.v1.EnvironmentRepoConfig repo_config = 1;
+   * @generated from field: optional aiserver.v1.EnvironmentRepoConfig repo_config = 1;
    */
   repoConfig?: EnvironmentRepoConfig;
 
@@ -15542,14 +15542,14 @@ export class GetEnvironmentHistoryRequest extends Message<GetEnvironmentHistoryR
   environmentPublicIds: string[] = [];
 
   /**
-   * @generated from field: int32 limit = 3;
+   * @generated from field: optional int32 limit = 3;
    */
-  limit = 0;
+  limit?: number;
 
   /**
-   * @generated from field: string dashboard_scope_id = 4;
+   * @generated from field: optional string dashboard_scope_id = 4;
    */
-  dashboardScopeId = "";
+  dashboardScopeId?: string;
 
   constructor(data?: PartialMessage<GetEnvironmentHistoryRequest>) {
     super();
@@ -15559,10 +15559,10 @@ export class GetEnvironmentHistoryRequest extends Message<GetEnvironmentHistoryR
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetEnvironmentHistoryRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repo_config", kind: "message", T: EnvironmentRepoConfig },
+    { no: 1, name: "repo_config", kind: "message", T: EnvironmentRepoConfig, opt: true },
     { no: 2, name: "environment_public_ids", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 3, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 4, name: "dashboard_scope_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 4, name: "dashboard_scope_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetEnvironmentHistoryRequest {
@@ -15685,19 +15685,19 @@ export class GetEnvironmentJsonCandidatesRequest extends Message<GetEnvironmentJ
  */
 export class GetEnvironmentJsonCandidatesResponse extends Message<GetEnvironmentJsonCandidatesResponse> {
   /**
-   * @generated from field: string repo_environment_json = 1;
+   * @generated from field: optional string repo_environment_json = 1;
    */
-  repoEnvironmentJson = "";
+  repoEnvironmentJson?: string;
 
   /**
-   * @generated from field: string personal_environment_json = 2;
+   * @generated from field: optional string personal_environment_json = 2;
    */
-  personalEnvironmentJson = "";
+  personalEnvironmentJson?: string;
 
   /**
-   * @generated from field: string team_environment_json = 3;
+   * @generated from field: optional string team_environment_json = 3;
    */
-  teamEnvironmentJson = "";
+  teamEnvironmentJson?: string;
 
   constructor(data?: PartialMessage<GetEnvironmentJsonCandidatesResponse>) {
     super();
@@ -15707,9 +15707,9 @@ export class GetEnvironmentJsonCandidatesResponse extends Message<GetEnvironment
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetEnvironmentJsonCandidatesResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repo_environment_json", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "personal_environment_json", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "team_environment_json", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "repo_environment_json", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "personal_environment_json", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "team_environment_json", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetEnvironmentJsonCandidatesResponse {
@@ -15771,7 +15771,7 @@ export class GetEnvironmentPersistentRecurringBuildFailuresRequest extends Messa
  */
 export class GetEnvironmentPersistentRecurringBuildFailuresResponse extends Message<GetEnvironmentPersistentRecurringBuildFailuresResponse> {
   /**
-   * @generated from field: aiserver.v1.PersistentRecurringBuildFailure failure = 1;
+   * @generated from field: optional aiserver.v1.PersistentRecurringBuildFailure failure = 1;
    */
   failure?: PersistentRecurringBuildFailure;
 
@@ -15783,7 +15783,7 @@ export class GetEnvironmentPersistentRecurringBuildFailuresResponse extends Mess
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetEnvironmentPersistentRecurringBuildFailuresResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "failure", kind: "message", T: PersistentRecurringBuildFailure },
+    { no: 1, name: "failure", kind: "message", T: PersistentRecurringBuildFailure, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetEnvironmentPersistentRecurringBuildFailuresResponse {
@@ -15813,9 +15813,9 @@ export class GetEnvironmentRequest extends Message<GetEnvironmentRequest> {
   publicId = "";
 
   /**
-   * @generated from field: bool include_environment_json = 2;
+   * @generated from field: optional bool include_environment_json = 2;
    */
-  includeEnvironmentJson = false;
+  includeEnvironmentJson?: boolean;
 
   constructor(data?: PartialMessage<GetEnvironmentRequest>) {
     super();
@@ -15826,7 +15826,7 @@ export class GetEnvironmentRequest extends Message<GetEnvironmentRequest> {
   static readonly typeName = "aiserver.v1.GetEnvironmentRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "public_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "include_environment_json", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "include_environment_json", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetEnvironmentRequest {
@@ -15851,7 +15851,7 @@ export class GetEnvironmentRequest extends Message<GetEnvironmentRequest> {
  */
 export class GetEnvironmentResponse extends Message<GetEnvironmentResponse> {
   /**
-   * @generated from field: aiserver.v1.LogicalEnvironment environment = 1;
+   * @generated from field: optional aiserver.v1.LogicalEnvironment environment = 1;
    */
   environment?: LogicalEnvironment;
 
@@ -15863,7 +15863,7 @@ export class GetEnvironmentResponse extends Message<GetEnvironmentResponse> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetEnvironmentResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "environment", kind: "message", T: LogicalEnvironment },
+    { no: 1, name: "environment", kind: "message", T: LogicalEnvironment, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetEnvironmentResponse {
@@ -15898,9 +15898,9 @@ export class GetGithubAccessTokenForReposRequest extends Message<GetGithubAccess
   optionalRepoUrls: string[] = [];
 
   /**
-   * @generated from field: bool skip_cache = 3;
+   * @generated from field: optional bool skip_cache = 3;
    */
-  skipCache = false;
+  skipCache?: boolean;
 
   constructor(data?: PartialMessage<GetGithubAccessTokenForReposRequest>) {
     super();
@@ -15912,7 +15912,7 @@ export class GetGithubAccessTokenForReposRequest extends Message<GetGithubAccess
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "mandatory_repo_urls", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 2, name: "optional_repo_urls", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 3, name: "skip_cache", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 3, name: "skip_cache", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetGithubAccessTokenForReposRequest {
@@ -15937,14 +15937,14 @@ export class GetGithubAccessTokenForReposRequest extends Message<GetGithubAccess
  */
 export class GetGithubAccessTokenForReposResponse extends Message<GetGithubAccessTokenForReposResponse> {
   /**
-   * @generated from field: bool has_access = 1;
+   * @generated from field: optional bool has_access = 1;
    */
-  hasAccess = false;
+  hasAccess?: boolean;
 
   /**
-   * @generated from field: string error = 2;
+   * @generated from field: optional string error = 2;
    */
-  error = "";
+  error?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.GetGithubAccessTokenForReposResponse.Status repo_url_statuses = 3;
@@ -15957,9 +15957,9 @@ export class GetGithubAccessTokenForReposResponse extends Message<GetGithubAcces
   errorType = GithubAccessErrorType.UNSPECIFIED;
 
   /**
-   * @generated from field: string github_redirect_url = 5;
+   * @generated from field: optional string github_redirect_url = 5;
    */
-  githubRedirectUrl = "";
+  githubRedirectUrl?: string;
 
   constructor(data?: PartialMessage<GetGithubAccessTokenForReposResponse>) {
     super();
@@ -15969,11 +15969,11 @@ export class GetGithubAccessTokenForReposResponse extends Message<GetGithubAcces
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetGithubAccessTokenForReposResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "has_access", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 2, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "has_access", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 2, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "repo_url_statuses", kind: "message", T: GetGithubAccessTokenForReposResponse_Status, repeated: true },
     { no: 4, name: "error_type", kind: "enum", T: proto3.getEnumType(GithubAccessErrorType) },
-    { no: 5, name: "github_redirect_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "github_redirect_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetGithubAccessTokenForReposResponse {
@@ -16008,9 +16008,9 @@ export class GetGithubAccessTokenForReposResponse_Status extends Message<GetGith
   hasAccess = false;
 
   /**
-   * @generated from field: string error = 3;
+   * @generated from field: optional string error = 3;
    */
-  error = "";
+  error?: string;
 
   constructor(data?: PartialMessage<GetGithubAccessTokenForReposResponse_Status>) {
     super();
@@ -16022,7 +16022,7 @@ export class GetGithubAccessTokenForReposResponse_Status extends Message<GetGith
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "has_access", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetGithubAccessTokenForReposResponse_Status {
@@ -16084,7 +16084,7 @@ export class GetLatestAgentConversationStateRequest extends Message<GetLatestAge
  */
 export class GetLatestAgentConversationStateResponse extends Message<GetLatestAgentConversationStateResponse> {
   /**
-   * @generated from field: aiserver.v1.LatestAgentConversationState latest_conversation_state = 1;
+   * @generated from field: optional aiserver.v1.LatestAgentConversationState latest_conversation_state = 1;
    */
   latestConversationState?: LatestAgentConversationState;
 
@@ -16101,7 +16101,7 @@ export class GetLatestAgentConversationStateResponse extends Message<GetLatestAg
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetLatestAgentConversationStateResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "latest_conversation_state", kind: "message", T: LatestAgentConversationState },
+    { no: 1, name: "latest_conversation_state", kind: "message", T: LatestAgentConversationState, opt: true },
     { no: 2, name: "pre_fetched_blobs", kind: "message", T: PreFetchedBlob, repeated: true },
   ]);
 
@@ -16164,7 +16164,7 @@ export class GetMachineRequest extends Message<GetMachineRequest> {
  */
 export class GetMachineResponse extends Message<GetMachineResponse> {
   /**
-   * @generated from field: aiserver.v1.MachineReference machine = 1;
+   * @generated from field: optional aiserver.v1.MachineReference machine = 1;
    */
   machine?: MachineReference;
 
@@ -16176,7 +16176,7 @@ export class GetMachineResponse extends Message<GetMachineResponse> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetMachineResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "machine", kind: "message", T: MachineReference },
+    { no: 1, name: "machine", kind: "message", T: MachineReference, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetMachineResponse {
@@ -16216,14 +16216,14 @@ export class GetOptimizedDiffDetailsRequest extends Message<GetOptimizedDiffDeta
   committedOnly = false;
 
   /**
-   * @generated from field: string branch_name = 4;
+   * @generated from field: optional string branch_name = 4;
    */
-  branchName = "";
+  branchName?: string;
 
   /**
-   * @generated from field: string repo_url = 5;
+   * @generated from field: optional string repo_url = 5;
    */
-  repoUrl = "";
+  repoUrl?: string;
 
   constructor(data?: PartialMessage<GetOptimizedDiffDetailsRequest>) {
     super();
@@ -16236,8 +16236,8 @@ export class GetOptimizedDiffDetailsRequest extends Message<GetOptimizedDiffDeta
     { no: 1, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "exclude_before_after_diffs", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 3, name: "committed_only", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetOptimizedDiffDetailsRequest {
@@ -16262,7 +16262,7 @@ export class GetOptimizedDiffDetailsRequest extends Message<GetOptimizedDiffDeta
  */
 export class GetOptimizedDiffDetailsResponse extends Message<GetOptimizedDiffDetailsResponse> {
   /**
-   * @generated from field: aiserver.v1.GitDiff diff = 1;
+   * @generated from field: optional aiserver.v1.GitDiff diff = 1;
    */
   diff?: GitDiff;
 
@@ -16279,7 +16279,7 @@ export class GetOptimizedDiffDetailsResponse extends Message<GetOptimizedDiffDet
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetOptimizedDiffDetailsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "diff", kind: "message", T: GitDiff },
+    { no: 1, name: "diff", kind: "message", T: GitDiff, opt: true },
     { no: 2, name: "submodule_diffs", kind: "message", T: GetOptimizedDiffDetailsResponse_SubmoduleDiff, repeated: true },
   ]);
 
@@ -16310,7 +16310,7 @@ export class GetOptimizedDiffDetailsResponse_SubmoduleDiff extends Message<GetOp
   relativePath = "";
 
   /**
-   * @generated from field: aiserver.v1.GitDiff diff = 2;
+   * @generated from field: optional aiserver.v1.GitDiff diff = 2;
    */
   diff?: GitDiff;
 
@@ -16328,7 +16328,7 @@ export class GetOptimizedDiffDetailsResponse_SubmoduleDiff extends Message<GetOp
   static readonly typeName = "aiserver.v1.GetOptimizedDiffDetailsResponse.SubmoduleDiff";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "relative_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "diff", kind: "message", T: GitDiff },
+    { no: 2, name: "diff", kind: "message", T: GitDiff, opt: true },
     { no: 3, name: "errored", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
@@ -16471,7 +16471,7 @@ export class GetPrivateWorkerRequest extends Message<GetPrivateWorkerRequest> {
  */
 export class GetPrivateWorkerResponse extends Message<GetPrivateWorkerResponse> {
   /**
-   * @generated from field: aiserver.v1.PrivateWorker worker = 1;
+   * @generated from field: optional aiserver.v1.PrivateWorker worker = 1;
    */
   worker?: PrivateWorker;
 
@@ -16483,7 +16483,7 @@ export class GetPrivateWorkerResponse extends Message<GetPrivateWorkerResponse> 
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetPrivateWorkerResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "worker", kind: "message", T: PrivateWorker },
+    { no: 1, name: "worker", kind: "message", T: PrivateWorker, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetPrivateWorkerResponse {
@@ -16539,17 +16539,17 @@ export class GetPrivateWorkersSummaryRequest extends Message<GetPrivateWorkersSu
  */
 export class GetPrivateWorkersSummaryResponse extends Message<GetPrivateWorkersSummaryResponse> {
   /**
-   * @generated from field: aiserver.v1.UserWorkerSummary user_summary = 1;
+   * @generated from field: optional aiserver.v1.UserWorkerSummary user_summary = 1;
    */
   userSummary?: UserWorkerSummary;
 
   /**
-   * @generated from field: aiserver.v1.TeamWorkerSummary team_summary = 2;
+   * @generated from field: optional aiserver.v1.TeamWorkerSummary team_summary = 2;
    */
   teamSummary?: TeamWorkerSummary;
 
   /**
-   * @generated from field: aiserver.v1.TeamWorkerLimitSummary team_limit_summary = 3;
+   * @generated from field: optional aiserver.v1.TeamWorkerLimitSummary team_limit_summary = 3;
    */
   teamLimitSummary?: TeamWorkerLimitSummary;
 
@@ -16561,9 +16561,9 @@ export class GetPrivateWorkersSummaryResponse extends Message<GetPrivateWorkersS
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetPrivateWorkersSummaryResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "user_summary", kind: "message", T: UserWorkerSummary },
-    { no: 2, name: "team_summary", kind: "message", T: TeamWorkerSummary },
-    { no: 3, name: "team_limit_summary", kind: "message", T: TeamWorkerLimitSummary },
+    { no: 1, name: "user_summary", kind: "message", T: UserWorkerSummary, opt: true },
+    { no: 2, name: "team_summary", kind: "message", T: TeamWorkerSummary, opt: true },
+    { no: 3, name: "team_limit_summary", kind: "message", T: TeamWorkerLimitSummary, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetPrivateWorkersSummaryResponse {
@@ -16635,9 +16635,9 @@ export class GetPublicBackgroundComposerArtifactResponse extends Message<GetPubl
   contentType = "";
 
   /**
-   * @generated from field: string title = 3;
+   * @generated from field: optional string title = 3;
    */
-  title = "";
+  title?: string;
 
   constructor(data?: PartialMessage<GetPublicBackgroundComposerArtifactResponse>) {
     super();
@@ -16649,7 +16649,7 @@ export class GetPublicBackgroundComposerArtifactResponse extends Message<GetPubl
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "content_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetPublicBackgroundComposerArtifactResponse {
@@ -16679,9 +16679,9 @@ export class GetPullRequestCommitsRequest extends Message<GetPullRequestCommitsR
   prUrl = "";
 
   /**
-   * @generated from field: string after_cursor = 2;
+   * @generated from field: optional string after_cursor = 2;
    */
-  afterCursor = "";
+  afterCursor?: string;
 
   constructor(data?: PartialMessage<GetPullRequestCommitsRequest>) {
     super();
@@ -16692,7 +16692,7 @@ export class GetPullRequestCommitsRequest extends Message<GetPullRequestCommitsR
   static readonly typeName = "aiserver.v1.GetPullRequestCommitsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "after_cursor", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "after_cursor", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetPullRequestCommitsRequest {
@@ -16727,9 +16727,9 @@ export class GetPullRequestCommitsResponse extends Message<GetPullRequestCommits
   hasNextPage = false;
 
   /**
-   * @generated from field: string end_cursor = 3;
+   * @generated from field: optional string end_cursor = 3;
    */
-  endCursor = "";
+  endCursor?: string;
 
   constructor(data?: PartialMessage<GetPullRequestCommitsResponse>) {
     super();
@@ -16741,7 +16741,7 @@ export class GetPullRequestCommitsResponse extends Message<GetPullRequestCommits
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "commits", kind: "message", T: PRCommit, repeated: true },
     { no: 2, name: "has_next_page", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "end_cursor", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "end_cursor", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetPullRequestCommitsResponse {
@@ -16771,9 +16771,9 @@ export class GetPullRequestDiscussionsRequest extends Message<GetPullRequestDisc
   prUrl = "";
 
   /**
-   * @generated from field: bool skip_cache = 2;
+   * @generated from field: optional bool skip_cache = 2;
    */
-  skipCache = false;
+  skipCache?: boolean;
 
   constructor(data?: PartialMessage<GetPullRequestDiscussionsRequest>) {
     super();
@@ -16784,7 +16784,7 @@ export class GetPullRequestDiscussionsRequest extends Message<GetPullRequestDisc
   static readonly typeName = "aiserver.v1.GetPullRequestDiscussionsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "skip_cache", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "skip_cache", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetPullRequestDiscussionsRequest {
@@ -16819,7 +16819,7 @@ export class GetPullRequestDiscussionsResponse extends Message<GetPullRequestDis
   topLevelComments: PRTopLevelComment[] = [];
 
   /**
-   * @generated from field: aiserver.v1.PRCheckStatus check_status = 3;
+   * @generated from field: optional aiserver.v1.PRCheckStatus check_status = 3;
    */
   checkStatus?: PRCheckStatus;
 
@@ -16833,7 +16833,7 @@ export class GetPullRequestDiscussionsResponse extends Message<GetPullRequestDis
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "threads", kind: "message", T: PRReviewThread, repeated: true },
     { no: 2, name: "top_level_comments", kind: "message", T: PRTopLevelComment, repeated: true },
-    { no: 3, name: "check_status", kind: "message", T: PRCheckStatus },
+    { no: 3, name: "check_status", kind: "message", T: PRCheckStatus, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetPullRequestDiscussionsResponse {
@@ -16863,9 +16863,9 @@ export class GetPullRequestMergeStatusRequest extends Message<GetPullRequestMerg
   prUrl = "";
 
   /**
-   * @generated from field: bool include_behind_count = 2;
+   * @generated from field: optional bool include_behind_count = 2;
    */
-  includeBehindCount = false;
+  includeBehindCount?: boolean;
 
   constructor(data?: PartialMessage<GetPullRequestMergeStatusRequest>) {
     super();
@@ -16876,7 +16876,7 @@ export class GetPullRequestMergeStatusRequest extends Message<GetPullRequestMerg
   static readonly typeName = "aiserver.v1.GetPullRequestMergeStatusRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "include_behind_count", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "include_behind_count", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetPullRequestMergeStatusRequest {
@@ -16951,9 +16951,9 @@ export class GetPullRequestMergeStatusResponse extends Message<GetPullRequestMer
   isAutoMergeEnabled = false;
 
   /**
-   * @generated from field: bool viewer_can_enable_auto_merge = 11;
+   * @generated from field: optional bool viewer_can_enable_auto_merge = 11;
    */
-  viewerCanEnableAutoMerge = false;
+  viewerCanEnableAutoMerge?: boolean;
 
   constructor(data?: PartialMessage<GetPullRequestMergeStatusResponse>) {
     super();
@@ -16973,7 +16973,7 @@ export class GetPullRequestMergeStatusResponse extends Message<GetPullRequestMer
     { no: 8, name: "behind_by", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 9, name: "can_update_branch", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 10, name: "is_auto_merge_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 11, name: "viewer_can_enable_auto_merge", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 11, name: "viewer_can_enable_auto_merge", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetPullRequestMergeStatusResponse {
@@ -17003,9 +17003,9 @@ export class GetPullRequestTimelineEventsRequest extends Message<GetPullRequestT
   prUrl = "";
 
   /**
-   * @generated from field: int32 page = 2;
+   * @generated from field: optional int32 page = 2;
    */
-  page = 0;
+  page?: number;
 
   constructor(data?: PartialMessage<GetPullRequestTimelineEventsRequest>) {
     super();
@@ -17016,7 +17016,7 @@ export class GetPullRequestTimelineEventsRequest extends Message<GetPullRequestT
   static readonly typeName = "aiserver.v1.GetPullRequestTimelineEventsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "page", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 2, name: "page", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetPullRequestTimelineEventsRequest {
@@ -17051,9 +17051,9 @@ export class GetPullRequestTimelineEventsResponse extends Message<GetPullRequest
   hasNextPage = false;
 
   /**
-   * @generated from field: int32 next_page = 3;
+   * @generated from field: optional int32 next_page = 3;
    */
-  nextPage = 0;
+  nextPage?: number;
 
   constructor(data?: PartialMessage<GetPullRequestTimelineEventsResponse>) {
     super();
@@ -17065,7 +17065,7 @@ export class GetPullRequestTimelineEventsResponse extends Message<GetPullRequest
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "events", kind: "message", T: PRTimelineEvent, repeated: true },
     { no: 2, name: "has_next_page", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "next_page", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 3, name: "next_page", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetPullRequestTimelineEventsResponse {
@@ -17095,24 +17095,24 @@ export class GetRepositoryBranchesRequest extends Message<GetRepositoryBranchesR
   repoUrl = "";
 
   /**
-   * @generated from field: int32 page = 2;
+   * @generated from field: optional int32 page = 2;
    */
-  page = 0;
+  page?: number;
 
   /**
-   * @generated from field: string query = 3;
+   * @generated from field: optional string query = 3;
    */
-  query = "";
+  query?: string;
 
   /**
-   * @generated from field: bool only_user_branches = 4;
+   * @generated from field: optional bool only_user_branches = 4;
    */
-  onlyUserBranches = false;
+  onlyUserBranches?: boolean;
 
   /**
-   * @generated from field: int32 team_id = 5;
+   * @generated from field: optional int32 team_id = 5;
    */
-  teamId = 0;
+  teamId?: number;
 
   constructor(data?: PartialMessage<GetRepositoryBranchesRequest>) {
     super();
@@ -17123,10 +17123,10 @@ export class GetRepositoryBranchesRequest extends Message<GetRepositoryBranchesR
   static readonly typeName = "aiserver.v1.GetRepositoryBranchesRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "page", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "query", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "only_user_branches", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 2, name: "page", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 3, name: "query", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "only_user_branches", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 5, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetRepositoryBranchesRequest {
@@ -17260,9 +17260,9 @@ export class GetTurnSummaryBackgroundComposerRequest extends Message<GetTurnSumm
   bcId = "";
 
   /**
-   * @generated from field: aiserver.v1.BackgroundComposerSource source_type = 2;
+   * @generated from field: optional aiserver.v1.BackgroundComposerSource source_type = 2;
    */
-  sourceType = BackgroundComposerSource.UNSPECIFIED;
+  sourceType?: BackgroundComposerSource;
 
   constructor(data?: PartialMessage<GetTurnSummaryBackgroundComposerRequest>) {
     super();
@@ -17273,7 +17273,7 @@ export class GetTurnSummaryBackgroundComposerRequest extends Message<GetTurnSumm
   static readonly typeName = "aiserver.v1.GetTurnSummaryBackgroundComposerRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "source_type", kind: "enum", T: proto3.getEnumType(BackgroundComposerSource) },
+    { no: 2, name: "source_type", kind: "enum", T: proto3.getEnumType(BackgroundComposerSource), opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetTurnSummaryBackgroundComposerRequest {
@@ -17335,29 +17335,29 @@ export class GetTurnSummaryBackgroundComposerResponse extends Message<GetTurnSum
  */
 export class GithubSourceMetadata extends Message<GithubSourceMetadata> {
   /**
-   * @generated from field: string issue_id = 1;
+   * @generated from field: optional string issue_id = 1;
    */
-  issueId = "";
+  issueId?: string;
 
   /**
-   * @generated from field: int32 pr_number = 2;
+   * @generated from field: optional int32 pr_number = 2;
    */
-  prNumber = 0;
+  prNumber?: number;
 
   /**
-   * @generated from field: string pr_title = 3;
+   * @generated from field: optional string pr_title = 3;
    */
-  prTitle = "";
+  prTitle?: string;
 
   /**
-   * @generated from field: string issue_title = 4;
+   * @generated from field: optional string issue_title = 4;
    */
-  issueTitle = "";
+  issueTitle?: string;
 
   /**
-   * @generated from field: string issue_url = 5;
+   * @generated from field: optional string issue_url = 5;
    */
-  issueUrl = "";
+  issueUrl?: string;
 
   constructor(data?: PartialMessage<GithubSourceMetadata>) {
     super();
@@ -17367,11 +17367,11 @@ export class GithubSourceMetadata extends Message<GithubSourceMetadata> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GithubSourceMetadata";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "issue_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "pr_number", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "pr_title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "issue_title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "issue_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "issue_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "pr_number", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 3, name: "pr_title", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "issue_title", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "issue_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GithubSourceMetadata {
@@ -17396,19 +17396,19 @@ export class GithubSourceMetadata extends Message<GithubSourceMetadata> {
  */
 export class GitlabSourceMetadata extends Message<GitlabSourceMetadata> {
   /**
-   * @generated from field: int32 mr_iid = 1;
+   * @generated from field: optional int32 mr_iid = 1;
    */
-  mrIid = 0;
+  mrIid?: number;
 
   /**
-   * @generated from field: string mr_title = 2;
+   * @generated from field: optional string mr_title = 2;
    */
-  mrTitle = "";
+  mrTitle?: string;
 
   /**
-   * @generated from field: string mr_web_url = 3;
+   * @generated from field: optional string mr_web_url = 3;
    */
-  mrWebUrl = "";
+  mrWebUrl?: string;
 
   constructor(data?: PartialMessage<GitlabSourceMetadata>) {
     super();
@@ -17418,9 +17418,9 @@ export class GitlabSourceMetadata extends Message<GitlabSourceMetadata> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GitlabSourceMetadata";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "mr_iid", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 2, name: "mr_title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "mr_web_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "mr_iid", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 2, name: "mr_title", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "mr_web_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GitlabSourceMetadata {
@@ -17450,9 +17450,9 @@ export class GrindModeConfig extends Message<GrindModeConfig> {
   timeBudgetMs = protoInt64.zero;
 
   /**
-   * @generated from field: int64 start_time_unix_ms = 2;
+   * @generated from field: optional int64 start_time_unix_ms = 2;
    */
-  startTimeUnixMs = protoInt64.zero;
+  startTimeUnixMs?: bigint;
 
   /**
    * @generated from field: aiserver.v1.GrindModeConfig.Phase phase = 3;
@@ -17460,19 +17460,19 @@ export class GrindModeConfig extends Message<GrindModeConfig> {
   phase = GrindModeConfig_Phase.UNSPECIFIED;
 
   /**
-   * @generated from field: bool auto_proceed_after_planning = 4;
+   * @generated from field: optional bool auto_proceed_after_planning = 4;
    */
-  autoProceedAfterPlanning = false;
+  autoProceedAfterPlanning?: boolean;
 
   /**
-   * @generated from field: int64 time_budget_seconds = 5;
+   * @generated from field: optional int64 time_budget_seconds = 5;
    */
-  timeBudgetSeconds = protoInt64.zero;
+  timeBudgetSeconds?: bigint;
 
   /**
-   * @generated from field: bool grind_prompt_calibrate_effort = 6;
+   * @generated from field: optional bool grind_prompt_calibrate_effort = 6;
    */
-  grindPromptCalibrateEffort = false;
+  grindPromptCalibrateEffort?: boolean;
 
   constructor(data?: PartialMessage<GrindModeConfig>) {
     super();
@@ -17483,11 +17483,11 @@ export class GrindModeConfig extends Message<GrindModeConfig> {
   static readonly typeName = "aiserver.v1.GrindModeConfig";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "time_budget_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 2, name: "start_time_unix_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
+    { no: 2, name: "start_time_unix_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
     { no: 3, name: "phase", kind: "enum", T: proto3.getEnumType(GrindModeConfig_Phase) },
-    { no: 4, name: "auto_proceed_after_planning", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "time_budget_seconds", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 6, name: "grind_prompt_calibrate_effort", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 4, name: "auto_proceed_after_planning", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 5, name: "time_budget_seconds", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
+    { no: 6, name: "grind_prompt_calibrate_effort", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GrindModeConfig {
@@ -17549,9 +17549,9 @@ export class GrindModeTrackingState extends Message<GrindModeTrackingState> {
   noToolTurnStreak = 0;
 
   /**
-   * @generated from field: string pending_done_token = 2;
+   * @generated from field: optional string pending_done_token = 2;
    */
-  pendingDoneToken = "";
+  pendingDoneToken?: string;
 
   /**
    * @generated from field: bool final_summary_requested = 3;
@@ -17559,9 +17559,9 @@ export class GrindModeTrackingState extends Message<GrindModeTrackingState> {
   finalSummaryRequested = false;
 
   /**
-   * @generated from field: int64 start_time_unix_ms = 4;
+   * @generated from field: optional int64 start_time_unix_ms = 4;
    */
-  startTimeUnixMs = protoInt64.zero;
+  startTimeUnixMs?: bigint;
 
   constructor(data?: PartialMessage<GrindModeTrackingState>) {
     super();
@@ -17572,9 +17572,9 @@ export class GrindModeTrackingState extends Message<GrindModeTrackingState> {
   static readonly typeName = "aiserver.v1.GrindModeTrackingState";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "no_tool_turn_streak", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 2, name: "pending_done_token", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "pending_done_token", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "final_summary_requested", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "start_time_unix_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
+    { no: 4, name: "start_time_unix_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GrindModeTrackingState {
@@ -17609,7 +17609,7 @@ export class HeadlessAgenticComposerConfig extends Message<HeadlessAgenticCompos
   autoCommit = false;
 
   /**
-   * @generated from field: aiserver.v1.ModelDetails chat_model_details = 5;
+   * @generated from field: optional aiserver.v1.ModelDetails chat_model_details = 5;
    */
   chatModelDetails?: ModelDetails;
 
@@ -17619,34 +17619,34 @@ export class HeadlessAgenticComposerConfig extends Message<HeadlessAgenticCompos
   isBackground = false;
 
   /**
-   * @generated from field: bool auto_create_pr = 7;
+   * @generated from field: optional bool auto_create_pr = 7;
    */
-  autoCreatePr = false;
+  autoCreatePr?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.BackgroundComposerSource background_agent_source = 8;
+   * @generated from field: optional aiserver.v1.BackgroundComposerSource background_agent_source = 8;
    */
-  backgroundAgentSource = BackgroundComposerSource.UNSPECIFIED;
+  backgroundAgentSource?: BackgroundComposerSource;
 
   /**
-   * @generated from field: bool open_as_cursor_github_app = 9;
+   * @generated from field: optional bool open_as_cursor_github_app = 9;
    */
-  openAsCursorGithubApp = false;
+  openAsCursorGithubApp?: boolean;
 
   /**
-   * @generated from field: bool skip_reviewer_request = 10;
+   * @generated from field: optional bool skip_reviewer_request = 10;
    */
-  skipReviewerRequest = false;
+  skipReviewerRequest?: boolean;
 
   /**
-   * @generated from field: bool enable_cloud_testing = 11;
+   * @generated from field: optional bool enable_cloud_testing = 11;
    */
-  enableCloudTesting = false;
+  enableCloudTesting?: boolean;
 
   /**
-   * @generated from field: bool enable_setup_vm_environment_tool = 12;
+   * @generated from field: optional bool enable_setup_vm_environment_tool = 12;
    */
-  enableSetupVmEnvironmentTool = false;
+  enableSetupVmEnvironmentTool?: boolean;
 
   /**
    * @generated from field: repeated aiserver.v1.ModelDetails additional_model_details = 13;
@@ -17654,84 +17654,84 @@ export class HeadlessAgenticComposerConfig extends Message<HeadlessAgenticCompos
   additionalModelDetails: ModelDetails[] = [];
 
   /**
-   * @generated from field: bool should_synthesize = 14;
+   * @generated from field: optional bool should_synthesize = 14;
    */
-  shouldSynthesize = false;
+  shouldSynthesize?: boolean;
 
   /**
-   * @generated from field: bool show_onboarding_setup_note_for_manual_testing = 15;
+   * @generated from field: optional bool show_onboarding_setup_note_for_manual_testing = 15;
    */
-  showOnboardingSetupNoteForManualTesting = false;
+  showOnboardingSetupNoteForManualTesting?: boolean;
 
   /**
-   * @generated from field: agent.v1.RequestedModel requested_model = 16;
+   * @generated from field: optional agent.v1.RequestedModel requested_model = 16;
    */
   requestedModel?: RequestedModel;
 
   /**
-   * @generated from field: aiserver.v1.CloudSubagentParentReference cloud_subagent_parent = 17;
+   * @generated from field: optional aiserver.v1.CloudSubagentParentReference cloud_subagent_parent = 17;
    */
   cloudSubagentParent?: CloudSubagentParentReference;
 
   /**
-   * @generated from field: bool enable_computer_use = 18;
+   * @generated from field: optional bool enable_computer_use = 18;
    */
-  enableComputerUse = false;
+  enableComputerUse?: boolean;
 
   /**
-   * @generated from field: bool is_slack_v2 = 19;
+   * @generated from field: optional bool is_slack_v2 = 19;
    */
-  isSlackV2 = false;
+  isSlackV2?: boolean;
 
   /**
-   * @generated from field: string named_agent_id = 20;
+   * @generated from field: optional string named_agent_id = 20;
    */
-  namedAgentId = "";
+  namedAgentId?: string;
 
   /**
-   * @generated from field: string named_agent_session_key = 21;
+   * @generated from field: optional string named_agent_session_key = 21;
    */
-  namedAgentSessionKey = "";
+  namedAgentSessionKey?: string;
 
   /**
-   * @generated from field: string named_agent_session_kind = 22;
+   * @generated from field: optional string named_agent_session_kind = 22;
    */
-  namedAgentSessionKind = "";
+  namedAgentSessionKind?: string;
 
   /**
-   * @generated from field: string initiating_client_version = 23;
+   * @generated from field: optional string initiating_client_version = 23;
    */
-  initiatingClientVersion = "";
+  initiatingClientVersion?: string;
 
   /**
-   * @generated from field: string initiating_client_commit = 24;
+   * @generated from field: optional string initiating_client_commit = 24;
    */
-  initiatingClientCommit = "";
+  initiatingClientCommit?: string;
 
   /**
-   * @generated from field: bool is_slack_v1_5 = 25;
+   * @generated from field: optional bool is_slack_v1_5 = 25;
    */
-  isSlackV15 = false;
+  isSlackV15?: boolean;
 
   /**
-   * @generated from field: bool use_experimental_model_opt_out = 26;
+   * @generated from field: optional bool use_experimental_model_opt_out = 26;
    */
-  useExperimentalModelOptOut = false;
+  useExperimentalModelOptOut?: boolean;
 
   /**
-   * @generated from field: bool disable_computer_use_reflect = 27;
+   * @generated from field: optional bool disable_computer_use_reflect = 27;
    */
-  disableComputerUseReflect = false;
+  disableComputerUseReflect?: boolean;
 
   /**
-   * @generated from field: bool disable_pr_management_tool = 28;
+   * @generated from field: optional bool disable_pr_management_tool = 28;
    */
-  disablePrManagementTool = false;
+  disablePrManagementTool?: boolean;
 
   /**
-   * @generated from field: bool supports_managed_review_agents = 29;
+   * @generated from field: optional bool supports_managed_review_agents = 29;
    */
-  supportsManagedReviewAgents = false;
+  supportsManagedReviewAgents?: boolean;
 
   constructor(data?: PartialMessage<HeadlessAgenticComposerConfig>) {
     super();
@@ -17743,31 +17743,31 @@ export class HeadlessAgenticComposerConfig extends Message<HeadlessAgenticCompos
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 2, name: "chat_model_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "auto_commit", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "chat_model_details", kind: "message", T: ModelDetails },
+    { no: 5, name: "chat_model_details", kind: "message", T: ModelDetails, opt: true },
     { no: 6, name: "is_background", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 7, name: "auto_create_pr", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 8, name: "background_agent_source", kind: "enum", T: proto3.getEnumType(BackgroundComposerSource) },
-    { no: 9, name: "open_as_cursor_github_app", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 10, name: "skip_reviewer_request", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 11, name: "enable_cloud_testing", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 12, name: "enable_setup_vm_environment_tool", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 7, name: "auto_create_pr", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 8, name: "background_agent_source", kind: "enum", T: proto3.getEnumType(BackgroundComposerSource), opt: true },
+    { no: 9, name: "open_as_cursor_github_app", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 10, name: "skip_reviewer_request", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 11, name: "enable_cloud_testing", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 12, name: "enable_setup_vm_environment_tool", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 13, name: "additional_model_details", kind: "message", T: ModelDetails, repeated: true },
-    { no: 14, name: "should_synthesize", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 15, name: "show_onboarding_setup_note_for_manual_testing", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 16, name: "requested_model", kind: "message", T: RequestedModel },
-    { no: 17, name: "cloud_subagent_parent", kind: "message", T: CloudSubagentParentReference },
-    { no: 18, name: "enable_computer_use", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 19, name: "is_slack_v2", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 20, name: "named_agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 21, name: "named_agent_session_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 22, name: "named_agent_session_kind", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 23, name: "initiating_client_version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 24, name: "initiating_client_commit", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 25, name: "is_slack_v1_5", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 26, name: "use_experimental_model_opt_out", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 27, name: "disable_computer_use_reflect", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 28, name: "disable_pr_management_tool", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 29, name: "supports_managed_review_agents", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 14, name: "should_synthesize", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 15, name: "show_onboarding_setup_note_for_manual_testing", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 16, name: "requested_model", kind: "message", T: RequestedModel, opt: true },
+    { no: 17, name: "cloud_subagent_parent", kind: "message", T: CloudSubagentParentReference, opt: true },
+    { no: 18, name: "enable_computer_use", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 19, name: "is_slack_v2", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 20, name: "named_agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 21, name: "named_agent_session_key", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 22, name: "named_agent_session_kind", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 23, name: "initiating_client_version", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 24, name: "initiating_client_commit", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 25, name: "is_slack_v1_5", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 26, name: "use_experimental_model_opt_out", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 27, name: "disable_computer_use_reflect", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 28, name: "disable_pr_management_tool", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 29, name: "supports_managed_review_agents", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): HeadlessAgenticComposerConfig {
@@ -17812,7 +17812,7 @@ export class HeadlessAgenticComposerPrompt extends Message<HeadlessAgenticCompos
   images: ImageProto[] = [];
 
   /**
-   * @generated from field: aiserver.v1.ConversationMessage base_conversation_message = 5;
+   * @generated from field: optional aiserver.v1.ConversationMessage base_conversation_message = 5;
    */
   baseConversationMessage?: ConversationMessage;
 
@@ -17832,9 +17832,9 @@ export class HeadlessAgenticComposerPrompt extends Message<HeadlessAgenticCompos
   documentationIdentifiers: string[] = [];
 
   /**
-   * @generated from field: bool use_web = 9;
+   * @generated from field: optional bool use_web = 9;
    */
-  useWeb = false;
+  useWeb?: boolean;
 
   /**
    * @generated from field: repeated aiserver.v1.ComposerExternalLink external_links = 10;
@@ -17858,11 +17858,11 @@ export class HeadlessAgenticComposerPrompt extends Message<HeadlessAgenticCompos
     { no: 2, name: "file_selections", kind: "message", T: HeadlessAgenticComposerPrompt_FileSelection, repeated: true },
     { no: 3, name: "file_attachments", kind: "message", T: HeadlessAgenticComposerPrompt_FileAttachment, repeated: true },
     { no: 4, name: "images", kind: "message", T: ImageProto, repeated: true },
-    { no: 5, name: "base_conversation_message", kind: "message", T: ConversationMessage },
+    { no: 5, name: "base_conversation_message", kind: "message", T: ConversationMessage, opt: true },
     { no: 6, name: "rich_text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 7, name: "conversation_history", kind: "message", T: ConversationMessage, repeated: true },
     { no: 8, name: "documentation_identifiers", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 9, name: "use_web", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 9, name: "use_web", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 10, name: "external_links", kind: "message", T: ComposerExternalLink, repeated: true },
     { no: 11, name: "blob_data_per_message", kind: "message", T: BlobDataPerMessage, repeated: true },
   ]);
@@ -17969,7 +17969,7 @@ export class HeadlessAgenticComposerPrompt_FileSelection extends Message<Headles
  */
 export class HeadlessAgenticComposerRepositoryInfo extends Message<HeadlessAgenticComposerRepositoryInfo> {
   /**
-   * @generated from field: aiserver.v1.RepositoryInfo repository_info = 1;
+   * @generated from field: optional aiserver.v1.RepositoryInfo repository_info = 1;
    */
   repositoryInfo?: RepositoryInfo;
 
@@ -17999,7 +17999,7 @@ export class HeadlessAgenticComposerRepositoryInfo extends Message<HeadlessAgent
   shouldSyncIndex = false;
 
   /**
-   * @generated from field: aiserver.v1.QueryOnlyRepoAccess query_only_repo_access = 7;
+   * @generated from field: optional aiserver.v1.QueryOnlyRepoAccess query_only_repo_access = 7;
    */
   queryOnlyRepoAccess?: QueryOnlyRepoAccess;
 
@@ -18011,13 +18011,13 @@ export class HeadlessAgenticComposerRepositoryInfo extends Message<HeadlessAgent
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.HeadlessAgenticComposerRepositoryInfo";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repository_info", kind: "message", T: RepositoryInfo },
+    { no: 1, name: "repository_info", kind: "message", T: RepositoryInfo, opt: true },
     { no: 2, name: "path_encryption_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "repository_info_should_query_staging", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 4, name: "repository_info_should_query_prod", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 5, name: "repo_query_auth_token", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 6, name: "should_sync_index", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 7, name: "query_only_repo_access", kind: "message", T: QueryOnlyRepoAccess },
+    { no: 7, name: "query_only_repo_access", kind: "message", T: QueryOnlyRepoAccess, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): HeadlessAgenticComposerRepositoryInfo {
@@ -18047,17 +18047,17 @@ export class HeadlessAgenticComposerResponse extends Message<HeadlessAgenticComp
   text = "";
 
   /**
-   * @generated from field: aiserver.v1.ClientSideToolV2Call tool_call = 2;
+   * @generated from field: optional aiserver.v1.ClientSideToolV2Call tool_call = 2;
    */
   toolCall?: ClientSideToolV2Call;
 
   /**
-   * @generated from field: aiserver.v1.HeadlessAgenticComposerResponse.FinalToolResult final_tool_result = 3;
+   * @generated from field: optional aiserver.v1.HeadlessAgenticComposerResponse.FinalToolResult final_tool_result = 3;
    */
   finalToolResult?: HeadlessAgenticComposerResponse_FinalToolResult;
 
   /**
-   * @generated from field: aiserver.v1.HeadlessAgenticComposerResponse.UserMessage user_message = 4;
+   * @generated from field: optional aiserver.v1.HeadlessAgenticComposerResponse.UserMessage user_message = 4;
    */
   userMessage?: HeadlessAgenticComposerResponse_UserMessage;
 
@@ -18067,39 +18067,39 @@ export class HeadlessAgenticComposerResponse extends Message<HeadlessAgenticComp
   isMessageDone = false;
 
   /**
-   * @generated from field: aiserver.v1.StreamedBackToolCall streamed_back_tool_call = 6;
+   * @generated from field: optional aiserver.v1.StreamedBackToolCall streamed_back_tool_call = 6;
    */
   streamedBackToolCall?: StreamedBackToolCall;
 
   /**
-   * @generated from field: aiserver.v1.HeadlessAgenticComposerResponse.Error error = 7;
+   * @generated from field: optional aiserver.v1.HeadlessAgenticComposerResponse.Error error = 7;
    */
   error?: HeadlessAgenticComposerResponse_Error;
 
   /**
-   * @generated from field: aiserver.v1.ConversationMessage human_message = 8;
+   * @generated from field: optional aiserver.v1.ConversationMessage human_message = 8;
    */
   humanMessage?: ConversationMessage;
 
   /**
-   * @generated from field: aiserver.v1.ConversationMessage.Thinking thinking = 9;
+   * @generated from field: optional aiserver.v1.ConversationMessage.Thinking thinking = 9;
    */
   thinking?: ConversationMessage_Thinking;
 
   /**
-   * @generated from field: int32 thinking_duration_ms = 10;
+   * @generated from field: optional int32 thinking_duration_ms = 10;
    */
-  thinkingDurationMs = 0;
+  thinkingDurationMs?: number;
 
   /**
-   * @generated from field: aiserver.v1.HeadlessAgenticComposerResponse.Status status = 11;
+   * @generated from field: optional aiserver.v1.HeadlessAgenticComposerResponse.Status status = 11;
    */
   status?: HeadlessAgenticComposerResponse_Status;
 
   /**
-   * @generated from field: aiserver.v1.ConversationMessage.ThinkingStyle thinking_style = 12;
+   * @generated from field: optional aiserver.v1.ConversationMessage.ThinkingStyle thinking_style = 12;
    */
-  thinkingStyle = ConversationMessage_ThinkingStyle.UNSPECIFIED;
+  thinkingStyle?: ConversationMessage_ThinkingStyle;
 
   constructor(data?: PartialMessage<HeadlessAgenticComposerResponse>) {
     super();
@@ -18110,17 +18110,17 @@ export class HeadlessAgenticComposerResponse extends Message<HeadlessAgenticComp
   static readonly typeName = "aiserver.v1.HeadlessAgenticComposerResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "tool_call", kind: "message", T: ClientSideToolV2Call },
-    { no: 3, name: "final_tool_result", kind: "message", T: HeadlessAgenticComposerResponse_FinalToolResult },
-    { no: 4, name: "user_message", kind: "message", T: HeadlessAgenticComposerResponse_UserMessage },
+    { no: 2, name: "tool_call", kind: "message", T: ClientSideToolV2Call, opt: true },
+    { no: 3, name: "final_tool_result", kind: "message", T: HeadlessAgenticComposerResponse_FinalToolResult, opt: true },
+    { no: 4, name: "user_message", kind: "message", T: HeadlessAgenticComposerResponse_UserMessage, opt: true },
     { no: 5, name: "is_message_done", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 6, name: "streamed_back_tool_call", kind: "message", T: StreamedBackToolCall },
-    { no: 7, name: "error", kind: "message", T: HeadlessAgenticComposerResponse_Error },
-    { no: 8, name: "human_message", kind: "message", T: ConversationMessage },
-    { no: 9, name: "thinking", kind: "message", T: ConversationMessage_Thinking },
-    { no: 10, name: "thinking_duration_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 11, name: "status", kind: "message", T: HeadlessAgenticComposerResponse_Status },
-    { no: 12, name: "thinking_style", kind: "enum", T: proto3.getEnumType(ConversationMessage_ThinkingStyle) },
+    { no: 6, name: "streamed_back_tool_call", kind: "message", T: StreamedBackToolCall, opt: true },
+    { no: 7, name: "error", kind: "message", T: HeadlessAgenticComposerResponse_Error, opt: true },
+    { no: 8, name: "human_message", kind: "message", T: ConversationMessage, opt: true },
+    { no: 9, name: "thinking", kind: "message", T: ConversationMessage_Thinking, opt: true },
+    { no: 10, name: "thinking_duration_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 11, name: "status", kind: "message", T: HeadlessAgenticComposerResponse_Status, opt: true },
+    { no: 12, name: "thinking_style", kind: "enum", T: proto3.getEnumType(ConversationMessage_ThinkingStyle), opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): HeadlessAgenticComposerResponse {
@@ -18150,7 +18150,7 @@ export class HeadlessAgenticComposerResponse_Error extends Message<HeadlessAgent
   message = "";
 
   /**
-   * @generated from field: aiserver.v1.ErrorDetails error_details = 2;
+   * @generated from field: optional aiserver.v1.ErrorDetails error_details = 2;
    */
   errorDetails?: ErrorDetails;
 
@@ -18163,7 +18163,7 @@ export class HeadlessAgenticComposerResponse_Error extends Message<HeadlessAgent
   static readonly typeName = "aiserver.v1.HeadlessAgenticComposerResponse.Error";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "error_details", kind: "message", T: ErrorDetails },
+    { no: 2, name: "error_details", kind: "message", T: ErrorDetails, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): HeadlessAgenticComposerResponse_Error {
@@ -18193,7 +18193,7 @@ export class HeadlessAgenticComposerResponse_FinalToolResult extends Message<Hea
   toolCallId = "";
 
   /**
-   * @generated from field: aiserver.v1.ClientSideToolV2Result result = 2;
+   * @generated from field: optional aiserver.v1.ClientSideToolV2Result result = 2;
    */
   result?: ClientSideToolV2Result;
 
@@ -18206,7 +18206,7 @@ export class HeadlessAgenticComposerResponse_FinalToolResult extends Message<Hea
   static readonly typeName = "aiserver.v1.HeadlessAgenticComposerResponse.FinalToolResult";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "result", kind: "message", T: ClientSideToolV2Result },
+    { no: 2, name: "result", kind: "message", T: ClientSideToolV2Result, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): HeadlessAgenticComposerResponse_FinalToolResult {
@@ -18354,7 +18354,7 @@ export class InjectBackgroundComposerContextRequest extends Message<InjectBackgr
   bcId = "";
 
   /**
-   * @generated from field: agent.v1.InjectContextAction inject_context_action = 2;
+   * @generated from field: optional agent.v1.InjectContextAction inject_context_action = 2;
    */
   injectContextAction?: InjectContextAction;
 
@@ -18364,7 +18364,7 @@ export class InjectBackgroundComposerContextRequest extends Message<InjectBackgr
   source = BackgroundComposerSource.UNSPECIFIED;
 
   /**
-   * @generated from field: aiserver.v1.ConversationMessage followup_message = 4;
+   * @generated from field: optional aiserver.v1.ConversationMessage followup_message = 4;
    */
   followupMessage?: ConversationMessage;
 
@@ -18382,9 +18382,9 @@ export class InjectBackgroundComposerContextRequest extends Message<InjectBackgr
   static readonly typeName = "aiserver.v1.InjectBackgroundComposerContextRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "inject_context_action", kind: "message", T: InjectContextAction },
+    { no: 2, name: "inject_context_action", kind: "message", T: InjectContextAction, opt: true },
     { no: 3, name: "source", kind: "enum", T: proto3.getEnumType(BackgroundComposerSource) },
-    { no: 4, name: "followup_message", kind: "message", T: ConversationMessage },
+    { no: 4, name: "followup_message", kind: "message", T: ConversationMessage, opt: true },
     { no: 5, name: "promote_followup_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
@@ -18479,7 +18479,7 @@ proto3.util.setEnumType(InjectBackgroundComposerContextResponse_Outcome, "aiserv
  */
 export class LatestAgentConversationState extends Message<LatestAgentConversationState> {
   /**
-   * @generated from field: agent.v1.ConversationStateStructure conversation_state = 1;
+   * @generated from field: optional agent.v1.ConversationStateStructure conversation_state = 1;
    */
   conversationState?: ConversationStateStructure;
 
@@ -18489,9 +18489,9 @@ export class LatestAgentConversationState extends Message<LatestAgentConversatio
   numPriorInteractionUpdates = 0;
 
   /**
-   * @generated from field: uint32 conversation_rewind_epoch = 3;
+   * @generated from field: optional uint32 conversation_rewind_epoch = 3;
    */
-  conversationRewindEpoch = 0;
+  conversationRewindEpoch?: number;
 
   constructor(data?: PartialMessage<LatestAgentConversationState>) {
     super();
@@ -18501,9 +18501,9 @@ export class LatestAgentConversationState extends Message<LatestAgentConversatio
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.LatestAgentConversationState";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "conversation_state", kind: "message", T: ConversationStateStructure },
+    { no: 1, name: "conversation_state", kind: "message", T: ConversationStateStructure, opt: true },
     { no: 2, name: "num_prior_interaction_updates", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 3, name: "conversation_rewind_epoch", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 3, name: "conversation_rewind_epoch", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): LatestAgentConversationState {
@@ -18528,24 +18528,24 @@ export class LatestAgentConversationState extends Message<LatestAgentConversatio
  */
 export class LinearSourceMetadata extends Message<LinearSourceMetadata> {
   /**
-   * @generated from field: string issue_id = 1;
+   * @generated from field: optional string issue_id = 1;
    */
-  issueId = "";
+  issueId?: string;
 
   /**
-   * @generated from field: string org_id = 2;
+   * @generated from field: optional string org_id = 2;
    */
-  orgId = "";
+  orgId?: string;
 
   /**
-   * @generated from field: string issue_identifier = 3;
+   * @generated from field: optional string issue_identifier = 3;
    */
-  issueIdentifier = "";
+  issueIdentifier?: string;
 
   /**
-   * @generated from field: string issue_title = 4;
+   * @generated from field: optional string issue_title = 4;
    */
-  issueTitle = "";
+  issueTitle?: string;
 
   constructor(data?: PartialMessage<LinearSourceMetadata>) {
     super();
@@ -18555,10 +18555,10 @@ export class LinearSourceMetadata extends Message<LinearSourceMetadata> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.LinearSourceMetadata";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "issue_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "org_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "issue_identifier", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "issue_title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "issue_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "org_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "issue_identifier", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "issue_title", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): LinearSourceMetadata {
@@ -18583,14 +18583,14 @@ export class LinearSourceMetadata extends Message<LinearSourceMetadata> {
  */
 export class ListAgentStoreDirectoryRequest extends Message<ListAgentStoreDirectoryRequest> {
   /**
-   * @generated from field: string store_id = 1;
+   * @generated from field: optional string store_id = 1;
    */
-  storeId = "";
+  storeId?: string;
 
   /**
-   * @generated from field: string share_id = 2;
+   * @generated from field: optional string share_id = 2;
    */
-  shareId = "";
+  shareId?: string;
 
   /**
    * @generated from field: string relative_path = 3;
@@ -18620,8 +18620,8 @@ export class ListAgentStoreDirectoryRequest extends Message<ListAgentStoreDirect
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ListAgentStoreDirectoryRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "store_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "share_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "store_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "share_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "relative_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "page_size", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 5, name: "page_token", kind: "scalar", T: 9 /* ScalarType.STRING */ },
@@ -18721,9 +18721,9 @@ export class ListAgentStoreEntriesRequest extends Message<ListAgentStoreEntriesR
   relativePath = "";
 
   /**
-   * @generated from field: string share_id = 3;
+   * @generated from field: optional string share_id = 3;
    */
-  shareId = "";
+  shareId?: string;
 
   constructor(data?: PartialMessage<ListAgentStoreEntriesRequest>) {
     super();
@@ -18735,7 +18735,7 @@ export class ListAgentStoreEntriesRequest extends Message<ListAgentStoreEntriesR
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "store_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "relative_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "share_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "share_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListAgentStoreEntriesRequest {
@@ -18808,14 +18808,14 @@ export class ListAgentStoreFilesRequest extends Message<ListAgentStoreFilesReque
   agentId = "";
 
   /**
-   * @generated from field: string share_id = 2;
+   * @generated from field: optional string share_id = 2;
    */
-  shareId = "";
+  shareId?: string;
 
   /**
-   * @generated from field: string store_id = 3;
+   * @generated from field: optional string store_id = 3;
    */
-  storeId = "";
+  storeId?: string;
 
   constructor(data?: PartialMessage<ListAgentStoreFilesRequest>) {
     super();
@@ -18826,8 +18826,8 @@ export class ListAgentStoreFilesRequest extends Message<ListAgentStoreFilesReque
   static readonly typeName = "aiserver.v1.ListAgentStoreFilesRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "share_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "store_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "share_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "store_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListAgentStoreFilesRequest {
@@ -18906,9 +18906,9 @@ export class ListAgentStoresRequest extends Message<ListAgentStoresRequest> {
   n = 0;
 
   /**
-   * @generated from field: string page_token = 5;
+   * @generated from field: optional string page_token = 5;
    */
-  pageToken = "";
+  pageToken?: string;
 
   constructor(data?: PartialMessage<ListAgentStoresRequest>) {
     super();
@@ -18919,7 +18919,7 @@ export class ListAgentStoresRequest extends Message<ListAgentStoresRequest> {
   static readonly typeName = "aiserver.v1.ListAgentStoresRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "n", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 5, name: "page_token", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "page_token", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListAgentStoresRequest {
@@ -18954,9 +18954,9 @@ export class ListAgentStoresResponse extends Message<ListAgentStoresResponse> {
   hasMore = false;
 
   /**
-   * @generated from field: string next_page_token = 4;
+   * @generated from field: optional string next_page_token = 4;
    */
-  nextPageToken = "";
+  nextPageToken?: string;
 
   constructor(data?: PartialMessage<ListAgentStoresResponse>) {
     super();
@@ -18968,7 +18968,7 @@ export class ListAgentStoresResponse extends Message<ListAgentStoresResponse> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "stores", kind: "message", T: AgentStore, repeated: true },
     { no: 2, name: "has_more", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "next_page_token", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "next_page_token", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListAgentStoresResponse {
@@ -19146,9 +19146,9 @@ export class ListBackgroundComposerSnapshotStatusesByBcIdsRequest extends Messag
   bcIds: string[] = [];
 
   /**
-   * @generated from field: bool use_primary = 2;
+   * @generated from field: optional bool use_primary = 2;
    */
-  usePrimary = false;
+  usePrimary?: boolean;
 
   constructor(data?: PartialMessage<ListBackgroundComposerSnapshotStatusesByBcIdsRequest>) {
     super();
@@ -19159,7 +19159,7 @@ export class ListBackgroundComposerSnapshotStatusesByBcIdsRequest extends Messag
   static readonly typeName = "aiserver.v1.ListBackgroundComposerSnapshotStatusesByBcIdsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bc_ids", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 2, name: "use_primary", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "use_primary", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListBackgroundComposerSnapshotStatusesByBcIdsRequest {
@@ -19226,14 +19226,14 @@ export class ListBackgroundComposerSnapshotsByBcIdRequest extends Message<ListBa
   bcId = "";
 
   /**
-   * @generated from field: bool use_primary = 2;
+   * @generated from field: optional bool use_primary = 2;
    */
-  usePrimary = false;
+  usePrimary?: boolean;
 
   /**
-   * @generated from field: uint32 limit = 3;
+   * @generated from field: optional uint32 limit = 3;
    */
-  limit = 0;
+  limit?: number;
 
   constructor(data?: PartialMessage<ListBackgroundComposerSnapshotsByBcIdRequest>) {
     super();
@@ -19244,8 +19244,8 @@ export class ListBackgroundComposerSnapshotsByBcIdRequest extends Message<ListBa
   static readonly typeName = "aiserver.v1.ListBackgroundComposerSnapshotsByBcIdRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "use_primary", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "limit", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 2, name: "use_primary", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 3, name: "limit", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListBackgroundComposerSnapshotsByBcIdRequest {
@@ -19317,14 +19317,14 @@ export class ListBackgroundComposersRequest extends Message<ListBackgroundCompos
   includeTeamWide = false;
 
   /**
-   * @generated from field: string bc_id = 3;
+   * @generated from field: optional string bc_id = 3;
    */
-  bcId = "";
+  bcId?: string;
 
   /**
-   * @generated from field: string preferred_repo_url = 4;
+   * @generated from field: optional string preferred_repo_url = 4;
    */
-  preferredRepoUrl = "";
+  preferredRepoUrl?: string;
 
   /**
    * @generated from field: repeated string additional_repo_urls = 5;
@@ -19342,29 +19342,29 @@ export class ListBackgroundComposersRequest extends Message<ListBackgroundCompos
   includeSources: BackgroundComposerSource[] = [];
 
   /**
-   * @generated from field: aiserver.v1.OwnerFilter owner_filter = 8;
+   * @generated from field: optional aiserver.v1.OwnerFilter owner_filter = 8;
    */
   ownerFilter?: OwnerFilter;
 
   /**
-   * @generated from field: double last_message_activity_at_ms_offset = 9;
+   * @generated from field: optional double last_message_activity_at_ms_offset = 9;
    */
-  lastMessageActivityAtMsOffset = 0;
+  lastMessageActivityAtMsOffset?: number;
 
   /**
-   * @generated from field: bool include_archived = 10;
+   * @generated from field: optional bool include_archived = 10;
    */
-  includeArchived = false;
+  includeArchived?: boolean;
 
   /**
-   * @generated from field: bool should_include_collaborators = 11;
+   * @generated from field: optional bool should_include_collaborators = 11;
    */
-  shouldIncludeCollaborators = false;
+  shouldIncludeCollaborators?: boolean;
 
   /**
-   * @generated from field: int32 team_id = 12;
+   * @generated from field: optional int32 team_id = 12;
    */
-  teamId = 0;
+  teamId?: number;
 
   /**
    * @generated from field: repeated aiserver.v1.BackgroundComposerSource include_hidden_sources = 13;
@@ -19372,14 +19372,14 @@ export class ListBackgroundComposersRequest extends Message<ListBackgroundCompos
   includeHiddenSources: BackgroundComposerSource[] = [];
 
   /**
-   * @generated from field: string preferred_workspace_binding_id = 14;
+   * @generated from field: optional string preferred_workspace_binding_id = 14;
    */
-  preferredWorkspaceBindingId = "";
+  preferredWorkspaceBindingId?: string;
 
   /**
-   * @generated from field: bool include_pinned_state = 15;
+   * @generated from field: optional bool include_pinned_state = 15;
    */
-  includePinnedState = false;
+  includePinnedState?: boolean;
 
   constructor(data?: PartialMessage<ListBackgroundComposersRequest>) {
     super();
@@ -19391,19 +19391,19 @@ export class ListBackgroundComposersRequest extends Message<ListBackgroundCompos
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "n", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 2, name: "include_team_wide", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "preferred_repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "preferred_repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 5, name: "additional_repo_urls", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 6, name: "include_status", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 7, name: "include_sources", kind: "enum", T: proto3.getEnumType(BackgroundComposerSource), repeated: true },
-    { no: 8, name: "owner_filter", kind: "message", T: OwnerFilter },
-    { no: 9, name: "last_message_activity_at_ms_offset", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 10, name: "include_archived", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 11, name: "should_include_collaborators", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 12, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 8, name: "owner_filter", kind: "message", T: OwnerFilter, opt: true },
+    { no: 9, name: "last_message_activity_at_ms_offset", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
+    { no: 10, name: "include_archived", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 11, name: "should_include_collaborators", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 12, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 13, name: "include_hidden_sources", kind: "enum", T: proto3.getEnumType(BackgroundComposerSource), repeated: true },
-    { no: 14, name: "preferred_workspace_binding_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 15, name: "include_pinned_state", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 14, name: "preferred_workspace_binding_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 15, name: "include_pinned_state", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListBackgroundComposersRequest {
@@ -19443,9 +19443,9 @@ export class ListBackgroundComposersResponse extends Message<ListBackgroundCompo
   hasMore = false;
 
   /**
-   * @generated from field: double next_page_offset = 4;
+   * @generated from field: optional double next_page_offset = 4;
    */
-  nextPageOffset = 0;
+  nextPageOffset?: number;
 
   /**
    * @generated from field: repeated aiserver.v1.BackgroundComposerParticipant participants = 5;
@@ -19473,7 +19473,7 @@ export class ListBackgroundComposersResponse extends Message<ListBackgroundCompo
     { no: 1, name: "composers", kind: "message", T: BackgroundComposer, repeated: true },
     { no: 2, name: "did_load_status", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 3, name: "has_more", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "next_page_offset", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
+    { no: 4, name: "next_page_offset", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
     { no: 5, name: "participants", kind: "message", T: BackgroundComposerParticipant, repeated: true },
     { no: 6, name: "pinned_bc_ids", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 7, name: "did_load_pinned_state", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
@@ -19575,17 +19575,17 @@ export class ListCloudAgentRunEventsForDashboardResponse extends Message<ListClo
  */
 export class ListCloudAgentRunsForDashboardRequest extends Message<ListCloudAgentRunsForDashboardRequest> {
   /**
-   * @generated from field: aiserver.v1.CloudAgentDashboardRunFilter filter = 1;
+   * @generated from field: optional aiserver.v1.CloudAgentDashboardRunFilter filter = 1;
    */
   filter?: CloudAgentDashboardRunFilter;
 
   /**
-   * @generated from field: aiserver.v1.CloudAgentDashboardRunSort sort = 2;
+   * @generated from field: optional aiserver.v1.CloudAgentDashboardRunSort sort = 2;
    */
   sort?: CloudAgentDashboardRunSort;
 
   /**
-   * @generated from field: aiserver.v1.CloudAgentRunsCursor cursor = 3;
+   * @generated from field: optional aiserver.v1.CloudAgentRunsCursor cursor = 3;
    */
   cursor?: CloudAgentRunsCursor;
 
@@ -19597,9 +19597,9 @@ export class ListCloudAgentRunsForDashboardRequest extends Message<ListCloudAgen
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ListCloudAgentRunsForDashboardRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "filter", kind: "message", T: CloudAgentDashboardRunFilter },
-    { no: 2, name: "sort", kind: "message", T: CloudAgentDashboardRunSort },
-    { no: 3, name: "cursor", kind: "message", T: CloudAgentRunsCursor },
+    { no: 1, name: "filter", kind: "message", T: CloudAgentDashboardRunFilter, opt: true },
+    { no: 2, name: "sort", kind: "message", T: CloudAgentDashboardRunSort, opt: true },
+    { no: 3, name: "cursor", kind: "message", T: CloudAgentRunsCursor, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListCloudAgentRunsForDashboardRequest {
@@ -19634,7 +19634,7 @@ export class ListCloudAgentRunsForDashboardResponse extends Message<ListCloudAge
   hasMore = false;
 
   /**
-   * @generated from field: aiserver.v1.CloudAgentRunsCursor next_cursor = 3;
+   * @generated from field: optional aiserver.v1.CloudAgentRunsCursor next_cursor = 3;
    */
   nextCursor?: CloudAgentRunsCursor;
 
@@ -19648,7 +19648,7 @@ export class ListCloudAgentRunsForDashboardResponse extends Message<ListCloudAge
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "rows", kind: "message", T: CloudAgentDashboardRunRow, repeated: true },
     { no: 2, name: "has_more", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "next_cursor", kind: "message", T: CloudAgentRunsCursor },
+    { no: 3, name: "next_cursor", kind: "message", T: CloudAgentRunsCursor, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListCloudAgentRunsForDashboardResponse {
@@ -19678,14 +19678,14 @@ export class ListDetailedBackgroundComposersRequest extends Message<ListDetailed
   includeTeamWide = false;
 
   /**
-   * @generated from field: string bc_id = 2;
+   * @generated from field: optional string bc_id = 2;
    */
-  bcId = "";
+  bcId?: string;
 
   /**
-   * @generated from field: int32 n = 3;
+   * @generated from field: optional int32 n = 3;
    */
-  n = 0;
+  n?: number;
 
   /**
    * @generated from field: bool include_diff = 4;
@@ -19693,9 +19693,9 @@ export class ListDetailedBackgroundComposersRequest extends Message<ListDetailed
   includeDiff = false;
 
   /**
-   * @generated from field: string cursor = 5;
+   * @generated from field: optional string cursor = 5;
    */
-  cursor = "";
+  cursor?: string;
 
   /**
    * @generated from field: repeated string bc_ids = 6;
@@ -19703,24 +19703,24 @@ export class ListDetailedBackgroundComposersRequest extends Message<ListDetailed
   bcIds: string[] = [];
 
   /**
-   * @generated from field: aiserver.v1.OwnerFilter owner_filter = 7;
+   * @generated from field: optional aiserver.v1.OwnerFilter owner_filter = 7;
    */
   ownerFilter?: OwnerFilter;
 
   /**
-   * @generated from field: string repo_url_prefix = 8;
+   * @generated from field: optional string repo_url_prefix = 8;
    */
-  repoUrlPrefix = "";
+  repoUrlPrefix?: string;
 
   /**
-   * @generated from field: string pr_url = 9;
+   * @generated from field: optional string pr_url = 9;
    */
-  prUrl = "";
+  prUrl?: string;
 
   /**
-   * @generated from field: bool include_archived = 10;
+   * @generated from field: optional bool include_archived = 10;
    */
-  includeArchived = false;
+  includeArchived?: boolean;
 
   constructor(data?: PartialMessage<ListDetailedBackgroundComposersRequest>) {
     super();
@@ -19731,15 +19731,15 @@ export class ListDetailedBackgroundComposersRequest extends Message<ListDetailed
   static readonly typeName = "aiserver.v1.ListDetailedBackgroundComposersRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "include_team_wide", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 2, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "n", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 2, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "n", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 4, name: "include_diff", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "cursor", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "cursor", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 6, name: "bc_ids", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 7, name: "owner_filter", kind: "message", T: OwnerFilter },
-    { no: 8, name: "repo_url_prefix", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "include_archived", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 7, name: "owner_filter", kind: "message", T: OwnerFilter, opt: true },
+    { no: 8, name: "repo_url_prefix", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 9, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 10, name: "include_archived", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListDetailedBackgroundComposersRequest {
@@ -19812,7 +19812,7 @@ export class ListEnvironmentBuildsRequest extends Message<ListEnvironmentBuildsR
   environmentPublicId = "";
 
   /**
-   * @generated from field: aiserver.v1.EnvironmentBuildsCursor cursor = 2;
+   * @generated from field: optional aiserver.v1.EnvironmentBuildsCursor cursor = 2;
    */
   cursor?: EnvironmentBuildsCursor;
 
@@ -19825,7 +19825,7 @@ export class ListEnvironmentBuildsRequest extends Message<ListEnvironmentBuildsR
   static readonly typeName = "aiserver.v1.ListEnvironmentBuildsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "cursor", kind: "message", T: EnvironmentBuildsCursor },
+    { no: 2, name: "cursor", kind: "message", T: EnvironmentBuildsCursor, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListEnvironmentBuildsRequest {
@@ -19860,14 +19860,14 @@ export class ListEnvironmentBuildsResponse extends Message<ListEnvironmentBuilds
   hasMore = false;
 
   /**
-   * @generated from field: aiserver.v1.EnvironmentBuildsCursor next_cursor = 3;
+   * @generated from field: optional aiserver.v1.EnvironmentBuildsCursor next_cursor = 3;
    */
   nextCursor?: EnvironmentBuildsCursor;
 
   /**
-   * @generated from field: string latest_boot_build_id = 4;
+   * @generated from field: optional string latest_boot_build_id = 4;
    */
-  latestBootBuildId = "";
+  latestBootBuildId?: string;
 
   constructor(data?: PartialMessage<ListEnvironmentBuildsResponse>) {
     super();
@@ -19879,8 +19879,8 @@ export class ListEnvironmentBuildsResponse extends Message<ListEnvironmentBuilds
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "rows", kind: "message", T: EnvironmentBuildRow, repeated: true },
     { no: 2, name: "has_more", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "next_cursor", kind: "message", T: EnvironmentBuildsCursor },
-    { no: 4, name: "latest_boot_build_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "next_cursor", kind: "message", T: EnvironmentBuildsCursor, opt: true },
+    { no: 4, name: "latest_boot_build_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListEnvironmentBuildsResponse {
@@ -19905,14 +19905,14 @@ export class ListEnvironmentBuildsResponse extends Message<ListEnvironmentBuilds
  */
 export class ListEnvironmentsRequest extends Message<ListEnvironmentsRequest> {
   /**
-   * @generated from field: int32 limit = 1;
+   * @generated from field: optional int32 limit = 1;
    */
-  limit = 0;
+  limit?: number;
 
   /**
-   * @generated from field: bool include_environment_json = 2;
+   * @generated from field: optional bool include_environment_json = 2;
    */
-  includeEnvironmentJson = false;
+  includeEnvironmentJson?: boolean;
 
   /**
    * @generated from field: repeated string repository_scope_repo_urls = 3;
@@ -19920,9 +19920,9 @@ export class ListEnvironmentsRequest extends Message<ListEnvironmentsRequest> {
   repositoryScopeRepoUrls: string[] = [];
 
   /**
-   * @generated from field: bool include_repository_scope_environments = 4;
+   * @generated from field: optional bool include_repository_scope_environments = 4;
    */
-  includeRepositoryScopeEnvironments = false;
+  includeRepositoryScopeEnvironments?: boolean;
 
   constructor(data?: PartialMessage<ListEnvironmentsRequest>) {
     super();
@@ -19932,10 +19932,10 @@ export class ListEnvironmentsRequest extends Message<ListEnvironmentsRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ListEnvironmentsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 2, name: "include_environment_json", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 1, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 2, name: "include_environment_json", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 3, name: "repository_scope_repo_urls", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 4, name: "include_repository_scope_environments", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 4, name: "include_repository_scope_environments", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListEnvironmentsRequest {
@@ -19965,9 +19965,9 @@ export class ListEnvironmentsResponse extends Message<ListEnvironmentsResponse> 
   environments: LogicalEnvironment[] = [];
 
   /**
-   * @generated from field: string dashboard_scope_id = 2;
+   * @generated from field: optional string dashboard_scope_id = 2;
    */
-  dashboardScopeId = "";
+  dashboardScopeId?: string;
 
   constructor(data?: PartialMessage<ListEnvironmentsResponse>) {
     super();
@@ -19978,7 +19978,7 @@ export class ListEnvironmentsResponse extends Message<ListEnvironmentsResponse> 
   static readonly typeName = "aiserver.v1.ListEnvironmentsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "environments", kind: "message", T: LogicalEnvironment, repeated: true },
-    { no: 2, name: "dashboard_scope_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "dashboard_scope_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListEnvironmentsResponse {
@@ -20162,14 +20162,14 @@ export class ListNamedAgentSessionsRequest extends Message<ListNamedAgentSession
   namedAgentId = "";
 
   /**
-   * @generated from field: int32 page_size = 2;
+   * @generated from field: optional int32 page_size = 2;
    */
-  pageSize = 0;
+  pageSize?: number;
 
   /**
-   * @generated from field: string page_token = 3;
+   * @generated from field: optional string page_token = 3;
    */
-  pageToken = "";
+  pageToken?: string;
 
   constructor(data?: PartialMessage<ListNamedAgentSessionsRequest>) {
     super();
@@ -20180,8 +20180,8 @@ export class ListNamedAgentSessionsRequest extends Message<ListNamedAgentSession
   static readonly typeName = "aiserver.v1.ListNamedAgentSessionsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "named_agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "page_size", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "page_token", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "page_size", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 3, name: "page_token", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListNamedAgentSessionsRequest {
@@ -20211,9 +20211,9 @@ export class ListNamedAgentSessionsResponse extends Message<ListNamedAgentSessio
   sessions: NamedAgentSession[] = [];
 
   /**
-   * @generated from field: string next_page_token = 2;
+   * @generated from field: optional string next_page_token = 2;
    */
-  nextPageToken = "";
+  nextPageToken?: string;
 
   constructor(data?: PartialMessage<ListNamedAgentSessionsResponse>) {
     super();
@@ -20224,7 +20224,7 @@ export class ListNamedAgentSessionsResponse extends Message<ListNamedAgentSessio
   static readonly typeName = "aiserver.v1.ListNamedAgentSessionsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "sessions", kind: "message", T: NamedAgentSession, repeated: true },
-    { no: 2, name: "next_page_token", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "next_page_token", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListNamedAgentSessionsResponse {
@@ -20396,14 +20396,14 @@ export class ListPendingPrivateWorkerRequestsRequest extends Message<ListPending
   pageSize = 0;
 
   /**
-   * @generated from field: string page_token = 2;
+   * @generated from field: optional string page_token = 2;
    */
-  pageToken = "";
+  pageToken?: string;
 
   /**
-   * @generated from field: string repository = 3;
+   * @generated from field: optional string repository = 3;
    */
-  repository = "";
+  repository?: string;
 
   constructor(data?: PartialMessage<ListPendingPrivateWorkerRequestsRequest>) {
     super();
@@ -20414,8 +20414,8 @@ export class ListPendingPrivateWorkerRequestsRequest extends Message<ListPending
   static readonly typeName = "aiserver.v1.ListPendingPrivateWorkerRequestsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "page_size", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 2, name: "page_token", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "repository", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "page_token", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "repository", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListPendingPrivateWorkerRequestsRequest {
@@ -20489,9 +20489,9 @@ export class ListPendingPrivateWorkerRequestsResponse extends Message<ListPendin
  */
 export class ListPersonalEnvironmentsRequest extends Message<ListPersonalEnvironmentsRequest> {
   /**
-   * @generated from field: int32 limit = 1;
+   * @generated from field: optional int32 limit = 1;
    */
-  limit = 0;
+  limit?: number;
 
   constructor(data?: PartialMessage<ListPersonalEnvironmentsRequest>) {
     super();
@@ -20501,7 +20501,7 @@ export class ListPersonalEnvironmentsRequest extends Message<ListPersonalEnviron
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ListPersonalEnvironmentsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 1, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListPersonalEnvironmentsRequest {
@@ -20568,9 +20568,9 @@ export class ListPrCodeTourRevisionsRequest extends Message<ListPrCodeTourRevisi
   bcId = "";
 
   /**
-   * @generated from field: bool include_markdown = 2;
+   * @generated from field: optional bool include_markdown = 2;
    */
-  includeMarkdown = false;
+  includeMarkdown?: boolean;
 
   constructor(data?: PartialMessage<ListPrCodeTourRevisionsRequest>) {
     super();
@@ -20581,7 +20581,7 @@ export class ListPrCodeTourRevisionsRequest extends Message<ListPrCodeTourRevisi
   static readonly typeName = "aiserver.v1.ListPrCodeTourRevisionsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "include_markdown", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "include_markdown", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListPrCodeTourRevisionsRequest {
@@ -20733,9 +20733,9 @@ export class ListPrivateWorkersRequest extends Message<ListPrivateWorkersRequest
   pageSize = 0;
 
   /**
-   * @generated from field: string page_token = 3;
+   * @generated from field: optional string page_token = 3;
    */
-  pageToken = "";
+  pageToken?: string;
 
   /**
    * @generated from field: aiserver.v1.PrivateWorkerListScope list_scope = 4;
@@ -20752,7 +20752,7 @@ export class ListPrivateWorkersRequest extends Message<ListPrivateWorkersRequest
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "status_filter", kind: "enum", T: proto3.getEnumType(PrivateWorkerStatusFilter) },
     { no: 2, name: "page_size", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "page_token", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "page_token", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 4, name: "list_scope", kind: "enum", T: proto3.getEnumType(PrivateWorkerListScope) },
   ]);
 
@@ -20900,29 +20900,29 @@ export class ListSharedAgentStoresRequest extends Message<ListSharedAgentStoresR
   limit = 0;
 
   /**
-   * @generated from field: double created_before_ms = 2;
+   * @generated from field: optional double created_before_ms = 2;
    */
-  createdBeforeMs = 0;
+  createdBeforeMs?: number;
 
   /**
-   * @generated from field: int32 owning_user_id = 3;
+   * @generated from field: optional int32 owning_user_id = 3;
    */
-  owningUserId = 0;
+  owningUserId?: number;
 
   /**
-   * @generated from field: string search_query = 4;
+   * @generated from field: optional string search_query = 4;
    */
-  searchQuery = "";
+  searchQuery?: string;
 
   /**
-   * @generated from field: aiserver.v1.ListSharedAgentStoresScope scope = 5;
+   * @generated from field: optional aiserver.v1.ListSharedAgentStoresScope scope = 5;
    */
-  scope = ListSharedAgentStoresScope.UNSPECIFIED;
+  scope?: ListSharedAgentStoresScope;
 
   /**
-   * @generated from field: string created_before_share_id = 6;
+   * @generated from field: optional string created_before_share_id = 6;
    */
-  createdBeforeShareId = "";
+  createdBeforeShareId?: string;
 
   constructor(data?: PartialMessage<ListSharedAgentStoresRequest>) {
     super();
@@ -20933,11 +20933,11 @@ export class ListSharedAgentStoresRequest extends Message<ListSharedAgentStoresR
   static readonly typeName = "aiserver.v1.ListSharedAgentStoresRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 2, name: "created_before_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 3, name: "owning_user_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 4, name: "search_query", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "scope", kind: "enum", T: proto3.getEnumType(ListSharedAgentStoresScope) },
-    { no: 6, name: "created_before_share_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "created_before_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
+    { no: 3, name: "owning_user_id", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 4, name: "search_query", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "scope", kind: "enum", T: proto3.getEnumType(ListSharedAgentStoresScope), opt: true },
+    { no: 6, name: "created_before_share_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListSharedAgentStoresRequest {
@@ -20972,14 +20972,14 @@ export class ListSharedAgentStoresResponse extends Message<ListSharedAgentStores
   hasMore = false;
 
   /**
-   * @generated from field: double next_created_before_ms = 3;
+   * @generated from field: optional double next_created_before_ms = 3;
    */
-  nextCreatedBeforeMs = 0;
+  nextCreatedBeforeMs?: number;
 
   /**
-   * @generated from field: string next_created_before_share_id = 4;
+   * @generated from field: optional string next_created_before_share_id = 4;
    */
-  nextCreatedBeforeShareId = "";
+  nextCreatedBeforeShareId?: string;
 
   constructor(data?: PartialMessage<ListSharedAgentStoresResponse>) {
     super();
@@ -20991,8 +20991,8 @@ export class ListSharedAgentStoresResponse extends Message<ListSharedAgentStores
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "listings", kind: "message", T: SharedAgentStoreListing, repeated: true },
     { no: 2, name: "has_more", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "next_created_before_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 4, name: "next_created_before_share_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "next_created_before_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
+    { no: 4, name: "next_created_before_share_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListSharedAgentStoresResponse {
@@ -21091,9 +21091,9 @@ export class ListSharedBackgroundComposerArtifactsResponse extends Message<ListS
  */
 export class ListTeamEnvironmentsRequest extends Message<ListTeamEnvironmentsRequest> {
   /**
-   * @generated from field: int32 limit = 1;
+   * @generated from field: optional int32 limit = 1;
    */
-  limit = 0;
+  limit?: number;
 
   constructor(data?: PartialMessage<ListTeamEnvironmentsRequest>) {
     super();
@@ -21103,7 +21103,7 @@ export class ListTeamEnvironmentsRequest extends Message<ListTeamEnvironmentsReq
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ListTeamEnvironmentsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 1, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListTeamEnvironmentsRequest {
@@ -21259,39 +21259,39 @@ export class LiveActivityAgentEntry extends Message<LiveActivityAgentEntry> {
   startedAtEpochSeconds = protoInt64.zero;
 
   /**
-   * @generated from field: string repo_label = 5;
+   * @generated from field: optional string repo_label = 5;
    */
-  repoLabel = "";
+  repoLabel?: string;
 
   /**
-   * @generated from field: string branch_name = 6;
+   * @generated from field: optional string branch_name = 6;
    */
-  branchName = "";
+  branchName?: string;
 
   /**
-   * @generated from field: int64 finished_at_epoch_seconds = 7;
+   * @generated from field: optional int64 finished_at_epoch_seconds = 7;
    */
-  finishedAtEpochSeconds = protoInt64.zero;
+  finishedAtEpochSeconds?: bigint;
 
   /**
-   * @generated from field: string result_type = 8;
+   * @generated from field: optional string result_type = 8;
    */
-  resultType = "";
+  resultType?: string;
 
   /**
-   * @generated from field: int32 lines_added = 9;
+   * @generated from field: optional int32 lines_added = 9;
    */
-  linesAdded = 0;
+  linesAdded?: number;
 
   /**
-   * @generated from field: int32 lines_removed = 10;
+   * @generated from field: optional int32 lines_removed = 10;
    */
-  linesRemoved = 0;
+  linesRemoved?: number;
 
   /**
-   * @generated from field: int32 changed_files = 11;
+   * @generated from field: optional int32 changed_files = 11;
    */
-  changedFiles = 0;
+  changedFiles?: number;
 
   constructor(data?: PartialMessage<LiveActivityAgentEntry>) {
     super();
@@ -21305,13 +21305,13 @@ export class LiveActivityAgentEntry extends Message<LiveActivityAgentEntry> {
     { no: 2, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "status", kind: "enum", T: proto3.getEnumType(BackgroundComposerStatus) },
     { no: 4, name: "started_at_epoch_seconds", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 5, name: "repo_label", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "finished_at_epoch_seconds", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 8, name: "result_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "lines_added", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 10, name: "lines_removed", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 11, name: "changed_files", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 5, name: "repo_label", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "finished_at_epoch_seconds", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
+    { no: 8, name: "result_type", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 9, name: "lines_added", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 10, name: "lines_removed", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 11, name: "changed_files", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): LiveActivityAgentEntry {
@@ -21468,17 +21468,17 @@ export class LogicalEnvironment extends Message<LogicalEnvironment> {
   scope = LogicalEnvironmentScope.UNSPECIFIED;
 
   /**
-   * @generated from field: int32 owning_team = 5;
+   * @generated from field: optional int32 owning_team = 5;
    */
-  owningTeam = 0;
+  owningTeam?: number;
 
   /**
-   * @generated from field: int32 owning_user = 6;
+   * @generated from field: optional int32 owning_user = 6;
    */
-  owningUser = 0;
+  owningUser?: number;
 
   /**
-   * @generated from field: aiserver.v1.EnvironmentRepoConfig repo_config = 7;
+   * @generated from field: optional aiserver.v1.EnvironmentRepoConfig repo_config = 7;
    */
   repoConfig?: EnvironmentRepoConfig;
 
@@ -21493,14 +21493,14 @@ export class LogicalEnvironment extends Message<LogicalEnvironment> {
   updatedAtMs = protoInt64.zero;
 
   /**
-   * @generated from field: string environment_json = 10;
+   * @generated from field: optional string environment_json = 10;
    */
-  environmentJson = "";
+  environmentJson?: string;
 
   /**
-   * @generated from field: string latest_environment_version_public_id = 11;
+   * @generated from field: optional string latest_environment_version_public_id = 11;
    */
-  latestEnvironmentVersionPublicId = "";
+  latestEnvironmentVersionPublicId?: string;
 
   constructor(data?: PartialMessage<LogicalEnvironment>) {
     super();
@@ -21514,13 +21514,13 @@ export class LogicalEnvironment extends Message<LogicalEnvironment> {
     { no: 2, name: "public_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "scope", kind: "enum", T: proto3.getEnumType(LogicalEnvironmentScope) },
-    { no: 5, name: "owning_team", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 6, name: "owning_user", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 7, name: "repo_config", kind: "message", T: EnvironmentRepoConfig },
+    { no: 5, name: "owning_team", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 6, name: "owning_user", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 7, name: "repo_config", kind: "message", T: EnvironmentRepoConfig, opt: true },
     { no: 8, name: "created_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 9, name: "updated_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 10, name: "environment_json", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 11, name: "latest_environment_version_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 10, name: "environment_json", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 11, name: "latest_environment_version_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): LogicalEnvironment {
@@ -21605,9 +21605,9 @@ export class MakeGithubRequestRequest extends Message<MakeGithubRequestRequest> 
   path = "";
 
   /**
-   * @generated from field: string body_json = 3;
+   * @generated from field: optional string body_json = 3;
    */
-  bodyJson = "";
+  bodyJson?: string;
 
   /**
    * @generated from field: string github_user_token = 4;
@@ -21620,19 +21620,19 @@ export class MakeGithubRequestRequest extends Message<MakeGithubRequestRequest> 
   caller = "";
 
   /**
-   * @generated from field: string host = 6;
+   * @generated from field: optional string host = 6;
    */
-  host = "";
+  host?: string;
 
   /**
-   * @generated from field: string path_template = 7;
+   * @generated from field: optional string path_template = 7;
    */
-  pathTemplate = "";
+  pathTemplate?: string;
 
   /**
-   * @generated from field: string accept_header = 8;
+   * @generated from field: optional string accept_header = 8;
    */
-  acceptHeader = "";
+  acceptHeader?: string;
 
   constructor(data?: PartialMessage<MakeGithubRequestRequest>) {
     super();
@@ -21644,12 +21644,12 @@ export class MakeGithubRequestRequest extends Message<MakeGithubRequestRequest> 
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "method", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "body_json", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "body_json", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 4, name: "github_user_token", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "caller", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "host", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "path_template", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "accept_header", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 6, name: "host", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "path_template", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "accept_header", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): MakeGithubRequestRequest {
@@ -21734,14 +21734,14 @@ export class MakePRBackgroundComposerRequest extends Message<MakePRBackgroundCom
   bcId = "";
 
   /**
-   * @generated from field: string workflow_id = 2;
+   * @generated from field: optional string workflow_id = 2;
    */
-  workflowId = "";
+  workflowId?: string;
 
   /**
-   * @generated from field: string branch_name = 3;
+   * @generated from field: optional string branch_name = 3;
    */
-  branchName = "";
+  branchName?: string;
 
   constructor(data?: PartialMessage<MakePRBackgroundComposerRequest>) {
     super();
@@ -21752,8 +21752,8 @@ export class MakePRBackgroundComposerRequest extends Message<MakePRBackgroundCom
   static readonly typeName = "aiserver.v1.MakePRBackgroundComposerRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "workflow_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "workflow_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): MakePRBackgroundComposerRequest {
@@ -21793,14 +21793,14 @@ export class MakePRBackgroundComposerResponse extends Message<MakePRBackgroundCo
   hasCommits = false;
 
   /**
-   * @generated from field: string owner = 4;
+   * @generated from field: optional string owner = 4;
    */
-  owner = "";
+  owner?: string;
 
   /**
-   * @generated from field: string repo = 5;
+   * @generated from field: optional string repo = 5;
    */
-  repo = "";
+  repo?: string;
 
   constructor(data?: PartialMessage<MakePRBackgroundComposerResponse>) {
     super();
@@ -21813,8 +21813,8 @@ export class MakePRBackgroundComposerResponse extends Message<MakePRBackgroundCo
     { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "has_commits", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "owner", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "repo", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "owner", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "repo", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): MakePRBackgroundComposerResponse {
@@ -21985,9 +21985,9 @@ export class MarkFollowupEditingRequest extends Message<MarkFollowupEditingReque
   followupId = "";
 
   /**
-   * @generated from field: bool editing = 3;
+   * @generated from field: optional bool editing = 3;
    */
-  editing = false;
+  editing?: boolean;
 
   constructor(data?: PartialMessage<MarkFollowupEditingRequest>) {
     super();
@@ -21999,7 +21999,7 @@ export class MarkFollowupEditingRequest extends Message<MarkFollowupEditingReque
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "followup_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "editing", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 3, name: "editing", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): MarkFollowupEditingRequest {
@@ -22072,9 +22072,9 @@ export class MergePullRequestRequest extends Message<MergePullRequestRequest> {
   prUrl = "";
 
   /**
-   * @generated from field: string merge_method = 2;
+   * @generated from field: optional string merge_method = 2;
    */
-  mergeMethod = "";
+  mergeMethod?: string;
 
   constructor(data?: PartialMessage<MergePullRequestRequest>) {
     super();
@@ -22085,7 +22085,7 @@ export class MergePullRequestRequest extends Message<MergePullRequestRequest> {
   static readonly typeName = "aiserver.v1.MergePullRequestRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "merge_method", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "merge_method", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): MergePullRequestRequest {
@@ -22120,9 +22120,9 @@ export class MergePullRequestResponse extends Message<MergePullRequestResponse> 
   error = "";
 
   /**
-   * @generated from field: string pr_node_id = 3;
+   * @generated from field: optional string pr_node_id = 3;
    */
-  prNodeId = "";
+  prNodeId?: string;
 
   constructor(data?: PartialMessage<MergePullRequestResponse>) {
     super();
@@ -22134,7 +22134,7 @@ export class MergePullRequestResponse extends Message<MergePullRequestResponse> 
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "success", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 2, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "pr_node_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "pr_node_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): MergePullRequestResponse {
@@ -22164,17 +22164,17 @@ export class MintAgentStoreTokenRequest extends Message<MintAgentStoreTokenReque
   agentId = "";
 
   /**
-   * @generated from field: string share_id = 2;
+   * @generated from field: optional string share_id = 2;
    */
-  shareId = "";
+  shareId?: string;
 
   /**
-   * @generated from field: string store_id = 3;
+   * @generated from field: optional string store_id = 3;
    */
-  storeId = "";
+  storeId?: string;
 
   /**
-   * @generated from field: aiserver.v1.AgentStoreSourceRef source = 4;
+   * @generated from field: optional aiserver.v1.AgentStoreSourceRef source = 4;
    */
   source?: AgentStoreSourceRef;
 
@@ -22187,9 +22187,9 @@ export class MintAgentStoreTokenRequest extends Message<MintAgentStoreTokenReque
   static readonly typeName = "aiserver.v1.MintAgentStoreTokenRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "share_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "store_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "source", kind: "message", T: AgentStoreSourceRef },
+    { no: 2, name: "share_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "store_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "source", kind: "message", T: AgentStoreSourceRef, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): MintAgentStoreTokenRequest {
@@ -22376,7 +22376,7 @@ export class NamedAgent extends Message<NamedAgent> {
   name = "";
 
   /**
-   * @generated from field: aiserver.v1.BackgroundComposerParticipant creator = 4;
+   * @generated from field: optional aiserver.v1.BackgroundComposerParticipant creator = 4;
    */
   creator?: BackgroundComposerParticipant;
 
@@ -22396,7 +22396,7 @@ export class NamedAgent extends Message<NamedAgent> {
   pinned = false;
 
   /**
-   * @generated from field: aiserver.v1.NamedAgentProfile profile = 8;
+   * @generated from field: optional aiserver.v1.NamedAgentProfile profile = 8;
    */
   profile?: NamedAgentProfile;
 
@@ -22411,11 +22411,11 @@ export class NamedAgent extends Message<NamedAgent> {
     { no: 1, name: "named_agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "home_bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "creator", kind: "message", T: BackgroundComposerParticipant },
+    { no: 4, name: "creator", kind: "message", T: BackgroundComposerParticipant, opt: true },
     { no: 5, name: "created_at_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
     { no: 6, name: "updated_at_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
     { no: 7, name: "pinned", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 8, name: "profile", kind: "message", T: NamedAgentProfile },
+    { no: 8, name: "profile", kind: "message", T: NamedAgentProfile, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): NamedAgent {
@@ -22440,9 +22440,9 @@ export class NamedAgent extends Message<NamedAgent> {
  */
 export class NamedAgentProfile extends Message<NamedAgentProfile> {
   /**
-   * @generated from field: string profile_picture_url = 1;
+   * @generated from field: optional string profile_picture_url = 1;
    */
-  profilePictureUrl = "";
+  profilePictureUrl?: string;
 
   constructor(data?: PartialMessage<NamedAgentProfile>) {
     super();
@@ -22452,7 +22452,7 @@ export class NamedAgentProfile extends Message<NamedAgentProfile> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.NamedAgentProfile";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "profile_picture_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "profile_picture_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): NamedAgentProfile {
@@ -22507,24 +22507,24 @@ export class NamedAgentSession extends Message<NamedAgentSession> {
   updatedAtMs = 0;
 
   /**
-   * @generated from field: double last_awakened_at_ms = 12;
+   * @generated from field: optional double last_awakened_at_ms = 12;
    */
-  lastAwakenedAtMs = 0;
+  lastAwakenedAtMs?: number;
 
   /**
-   * @generated from field: string slack_channel_id = 13;
+   * @generated from field: optional string slack_channel_id = 13;
    */
-  slackChannelId = "";
+  slackChannelId?: string;
 
   /**
-   * @generated from field: string slack_channel_name = 14;
+   * @generated from field: optional string slack_channel_name = 14;
    */
-  slackChannelName = "";
+  slackChannelName?: string;
 
   /**
-   * @generated from field: string slack_permalink = 15;
+   * @generated from field: optional string slack_permalink = 15;
    */
-  slackPermalink = "";
+  slackPermalink?: string;
 
   constructor(data?: PartialMessage<NamedAgentSession>) {
     super();
@@ -22540,10 +22540,10 @@ export class NamedAgentSession extends Message<NamedAgentSession> {
     { no: 4, name: "session_kind", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 10, name: "created_at_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
     { no: 11, name: "updated_at_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 12, name: "last_awakened_at_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 13, name: "slack_channel_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 14, name: "slack_channel_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 15, name: "slack_permalink", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 12, name: "last_awakened_at_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
+    { no: 13, name: "slack_channel_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 14, name: "slack_channel_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 15, name: "slack_permalink", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): NamedAgentSession {
@@ -22721,34 +22721,34 @@ export class OpenPRBackgroundComposerRequest extends Message<OpenPRBackgroundCom
   bcId = "";
 
   /**
-   * @generated from field: string title = 2;
+   * @generated from field: optional string title = 2;
    */
-  title = "";
+  title?: string;
 
   /**
-   * @generated from field: string body = 3;
+   * @generated from field: optional string body = 3;
    */
-  body = "";
+  body?: string;
 
   /**
-   * @generated from field: string base_branch = 4;
+   * @generated from field: optional string base_branch = 4;
    */
-  baseBranch = "";
+  baseBranch?: string;
 
   /**
-   * @generated from field: bool draft = 5;
+   * @generated from field: optional bool draft = 5;
    */
-  draft = false;
+  draft?: boolean;
 
   /**
-   * @generated from field: bool open_as_cursor_github_app = 6;
+   * @generated from field: optional bool open_as_cursor_github_app = 6;
    */
-  openAsCursorGithubApp = false;
+  openAsCursorGithubApp?: boolean;
 
   /**
-   * @generated from field: bool skip_reviewer_request = 7;
+   * @generated from field: optional bool skip_reviewer_request = 7;
    */
-  skipReviewerRequest = false;
+  skipReviewerRequest?: boolean;
 
   /**
    * @generated from field: bytes agent_state_blob_id = 8;
@@ -22756,19 +22756,19 @@ export class OpenPRBackgroundComposerRequest extends Message<OpenPRBackgroundCom
   agentStateBlobId = new Uint8Array(0);
 
   /**
-   * @generated from field: string workflow_id = 9;
+   * @generated from field: optional string workflow_id = 9;
    */
-  workflowId = "";
+  workflowId?: string;
 
   /**
-   * @generated from field: string branch_name = 10;
+   * @generated from field: optional string branch_name = 10;
    */
-  branchName = "";
+  branchName?: string;
 
   /**
-   * @generated from field: string repo_url = 11;
+   * @generated from field: optional string repo_url = 11;
    */
-  repoUrl = "";
+  repoUrl?: string;
 
   constructor(data?: PartialMessage<OpenPRBackgroundComposerRequest>) {
     super();
@@ -22779,16 +22779,16 @@ export class OpenPRBackgroundComposerRequest extends Message<OpenPRBackgroundCom
   static readonly typeName = "aiserver.v1.OpenPRBackgroundComposerRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "body", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "draft", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 6, name: "open_as_cursor_github_app", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 7, name: "skip_reviewer_request", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "body", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "draft", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 6, name: "open_as_cursor_github_app", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 7, name: "skip_reviewer_request", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 8, name: "agent_state_blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
-    { no: 9, name: "workflow_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 11, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 9, name: "workflow_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 10, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 11, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): OpenPRBackgroundComposerRequest {
@@ -22838,9 +22838,9 @@ export class OpenPRBackgroundComposerResponse extends Message<OpenPRBackgroundCo
   success = false;
 
   /**
-   * @generated from field: string error = 6;
+   * @generated from field: optional string error = 6;
    */
-  error = "";
+  error?: string;
 
   constructor(data?: PartialMessage<OpenPRBackgroundComposerResponse>) {
     super();
@@ -22855,7 +22855,7 @@ export class OpenPRBackgroundComposerResponse extends Message<OpenPRBackgroundCo
     { no: 3, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "success", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 6, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 6, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): OpenPRBackgroundComposerResponse {
@@ -22880,19 +22880,19 @@ export class OpenPRBackgroundComposerResponse extends Message<OpenPRBackgroundCo
  */
 export class OptimizedDiffState extends Message<OptimizedDiffState> {
   /**
-   * @generated from field: string branch_name = 3;
+   * @generated from field: optional string branch_name = 3;
    */
-  branchName = "";
+  branchName?: string;
 
   /**
-   * @generated from field: string base_branch = 4;
+   * @generated from field: optional string base_branch = 4;
    */
-  baseBranch = "";
+  baseBranch?: string;
 
   /**
-   * @generated from field: string repo_url = 5;
+   * @generated from field: optional string repo_url = 5;
    */
-  repoUrl = "";
+  repoUrl?: string;
 
   /**
    * @generated from oneof aiserver.v1.OptimizedDiffState.state
@@ -22919,9 +22919,9 @@ export class OptimizedDiffState extends Message<OptimizedDiffState> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.OptimizedDiffState";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 3, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 1, name: "pending", kind: "message", T: Empty, oneof: "state" },
     { no: 2, name: "diff_blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */, oneof: "state" },
   ]);
@@ -23053,17 +23053,17 @@ export class PRCommit extends Message<PRCommit> {
   deletions = 0;
 
   /**
-   * @generated from field: int32 changed_files = 6;
+   * @generated from field: optional int32 changed_files = 6;
    */
-  changedFiles = 0;
+  changedFiles?: number;
 
   /**
-   * @generated from field: aiserver.v1.PRCommitUser author = 7;
+   * @generated from field: optional aiserver.v1.PRCommitUser author = 7;
    */
   author?: PRCommitUser;
 
   /**
-   * @generated from field: aiserver.v1.PRCommitUser committer = 8;
+   * @generated from field: optional aiserver.v1.PRCommitUser committer = 8;
    */
   committer?: PRCommitUser;
 
@@ -23085,9 +23085,9 @@ export class PRCommit extends Message<PRCommit> {
     { no: 3, name: "committed_date", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "additions", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 5, name: "deletions", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 6, name: "changed_files", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 7, name: "author", kind: "message", T: PRCommitUser },
-    { no: 8, name: "committer", kind: "message", T: PRCommitUser },
+    { no: 6, name: "changed_files", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 7, name: "author", kind: "message", T: PRCommitUser, opt: true },
+    { no: 8, name: "committer", kind: "message", T: PRCommitUser, opt: true },
     { no: 9, name: "authors", kind: "message", T: PRCommitUser, repeated: true },
   ]);
 
@@ -23113,19 +23113,19 @@ export class PRCommit extends Message<PRCommit> {
  */
 export class PRCommitUser extends Message<PRCommitUser> {
   /**
-   * @generated from field: string name = 1;
+   * @generated from field: optional string name = 1;
    */
-  name = "";
+  name?: string;
 
   /**
-   * @generated from field: string email = 2;
+   * @generated from field: optional string email = 2;
    */
-  email = "";
+  email?: string;
 
   /**
-   * @generated from field: string avatar_url = 3;
+   * @generated from field: optional string avatar_url = 3;
    */
-  avatarUrl = "";
+  avatarUrl?: string;
 
   constructor(data?: PartialMessage<PRCommitUser>) {
     super();
@@ -23135,9 +23135,9 @@ export class PRCommitUser extends Message<PRCommitUser> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.PRCommitUser";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "email", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "avatar_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "email", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "avatar_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PRCommitUser {
@@ -23172,7 +23172,7 @@ export class PRDeploymentPreview extends Message<PRDeploymentPreview> {
   state = PRDeploymentState.PR_DEPLOYMENT_STATE_UNSPECIFIED;
 
   /**
-   * @generated from field: aiserver.v1.PRDeploymentPreviewStatus latest_status = 3;
+   * @generated from field: optional aiserver.v1.PRDeploymentPreviewStatus latest_status = 3;
    */
   latestStatus?: PRDeploymentPreviewStatus;
 
@@ -23186,7 +23186,7 @@ export class PRDeploymentPreview extends Message<PRDeploymentPreview> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "environment", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "state", kind: "enum", T: proto3.getEnumType(PRDeploymentState) },
-    { no: 3, name: "latest_status", kind: "message", T: PRDeploymentPreviewStatus },
+    { no: 3, name: "latest_status", kind: "message", T: PRDeploymentPreviewStatus, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PRDeploymentPreview {
@@ -23265,19 +23265,19 @@ export class PRRequestedReviewer extends Message<PRRequestedReviewer> {
   login = "";
 
   /**
-   * @generated from field: string name = 2;
+   * @generated from field: optional string name = 2;
    */
-  name = "";
+  name?: string;
 
   /**
-   * @generated from field: string avatar_url = 3;
+   * @generated from field: optional string avatar_url = 3;
    */
-  avatarUrl = "";
+  avatarUrl?: string;
 
   /**
-   * @generated from field: string kind = 4;
+   * @generated from field: optional string kind = 4;
    */
-  kind = "";
+  kind?: string;
 
   constructor(data?: PartialMessage<PRRequestedReviewer>) {
     super();
@@ -23288,9 +23288,9 @@ export class PRRequestedReviewer extends Message<PRRequestedReviewer> {
   static readonly typeName = "aiserver.v1.PRRequestedReviewer";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "login", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "avatar_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "kind", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "avatar_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "kind", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PRRequestedReviewer {
@@ -23340,19 +23340,19 @@ export class PRReviewComment extends Message<PRReviewComment> {
   createdAt = "";
 
   /**
-   * @generated from field: string diff_hunk = 6;
+   * @generated from field: optional string diff_hunk = 6;
    */
-  diffHunk = "";
+  diffHunk?: string;
 
   /**
-   * @generated from field: string body_html = 7;
+   * @generated from field: optional string body_html = 7;
    */
-  bodyHtml = "";
+  bodyHtml?: string;
 
   /**
-   * @generated from field: string author_name = 8;
+   * @generated from field: optional string author_name = 8;
    */
-  authorName = "";
+  authorName?: string;
 
   constructor(data?: PartialMessage<PRReviewComment>) {
     super();
@@ -23367,9 +23367,9 @@ export class PRReviewComment extends Message<PRReviewComment> {
     { no: 3, name: "avatar_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "body", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "created_at", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "diff_hunk", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "body_html", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "author_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 6, name: "diff_hunk", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "body_html", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "author_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PRReviewComment {
@@ -23399,19 +23399,19 @@ export class PRReviewSummary extends Message<PRReviewSummary> {
   authorLogin = "";
 
   /**
-   * @generated from field: string author_name = 2;
+   * @generated from field: optional string author_name = 2;
    */
-  authorName = "";
+  authorName?: string;
 
   /**
-   * @generated from field: string author_avatar_url = 3;
+   * @generated from field: optional string author_avatar_url = 3;
    */
-  authorAvatarUrl = "";
+  authorAvatarUrl?: string;
 
   /**
-   * @generated from field: string state = 4;
+   * @generated from field: optional string state = 4;
    */
-  state = "";
+  state?: string;
 
   constructor(data?: PartialMessage<PRReviewSummary>) {
     super();
@@ -23422,9 +23422,9 @@ export class PRReviewSummary extends Message<PRReviewSummary> {
   static readonly typeName = "aiserver.v1.PRReviewSummary";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "author_login", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "author_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "author_avatar_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "state", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "author_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "author_avatar_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "state", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PRReviewSummary {
@@ -23459,24 +23459,24 @@ export class PRReviewThread extends Message<PRReviewThread> {
   path = "";
 
   /**
-   * @generated from field: int32 line = 3;
+   * @generated from field: optional int32 line = 3;
    */
-  line = 0;
+  line?: number;
 
   /**
-   * @generated from field: int32 start_line = 4;
+   * @generated from field: optional int32 start_line = 4;
    */
-  startLine = 0;
+  startLine?: number;
 
   /**
-   * @generated from field: int32 original_line = 5;
+   * @generated from field: optional int32 original_line = 5;
    */
-  originalLine = 0;
+  originalLine?: number;
 
   /**
-   * @generated from field: int32 original_start_line = 6;
+   * @generated from field: optional int32 original_start_line = 6;
    */
-  originalStartLine = 0;
+  originalStartLine?: number;
 
   /**
    * @generated from field: string diff_side = 7;
@@ -23499,9 +23499,9 @@ export class PRReviewThread extends Message<PRReviewThread> {
   comments: PRReviewComment[] = [];
 
   /**
-   * @generated from field: string pull_request_review_id = 11;
+   * @generated from field: optional string pull_request_review_id = 11;
    */
-  pullRequestReviewId = "";
+  pullRequestReviewId?: string;
 
   constructor(data?: PartialMessage<PRReviewThread>) {
     super();
@@ -23513,15 +23513,15 @@ export class PRReviewThread extends Message<PRReviewThread> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "line", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 4, name: "start_line", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 5, name: "original_line", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 6, name: "original_start_line", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 3, name: "line", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 4, name: "start_line", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 5, name: "original_line", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 6, name: "original_start_line", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 7, name: "diff_side", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 8, name: "is_resolved", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 9, name: "is_outdated", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 10, name: "comments", kind: "message", T: PRReviewComment, repeated: true },
-    { no: 11, name: "pull_request_review_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 11, name: "pull_request_review_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PRReviewThread {
@@ -23551,14 +23551,14 @@ export class PRTimelineActor extends Message<PRTimelineActor> {
   login = "";
 
   /**
-   * @generated from field: string avatar_url = 2;
+   * @generated from field: optional string avatar_url = 2;
    */
-  avatarUrl = "";
+  avatarUrl?: string;
 
   /**
-   * @generated from field: string name = 3;
+   * @generated from field: optional string name = 3;
    */
-  name = "";
+  name?: string;
 
   constructor(data?: PartialMessage<PRTimelineActor>) {
     super();
@@ -23569,8 +23569,8 @@ export class PRTimelineActor extends Message<PRTimelineActor> {
   static readonly typeName = "aiserver.v1.PRTimelineActor";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "login", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "avatar_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "avatar_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PRTimelineActor {
@@ -23610,19 +23610,19 @@ export class PRTimelineEvent extends Message<PRTimelineEvent> {
   createdAt = "";
 
   /**
-   * @generated from field: aiserver.v1.PRTimelineActor actor = 4;
+   * @generated from field: optional aiserver.v1.PRTimelineActor actor = 4;
    */
   actor?: PRTimelineActor;
 
   /**
-   * @generated from field: string label = 5;
+   * @generated from field: optional string label = 5;
    */
-  label = "";
+  label?: string;
 
   /**
-   * @generated from field: string body = 6;
+   * @generated from field: optional string body = 6;
    */
-  body = "";
+  body?: string;
 
   constructor(data?: PartialMessage<PRTimelineEvent>) {
     super();
@@ -23635,9 +23635,9 @@ export class PRTimelineEvent extends Message<PRTimelineEvent> {
     { no: 1, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "event_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "created_at", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "actor", kind: "message", T: PRTimelineActor },
-    { no: 5, name: "label", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "body", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "actor", kind: "message", T: PRTimelineActor, opt: true },
+    { no: 5, name: "label", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "body", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PRTimelineEvent {
@@ -23687,14 +23687,14 @@ export class PRTopLevelComment extends Message<PRTopLevelComment> {
   createdAt = "";
 
   /**
-   * @generated from field: string body_html = 6;
+   * @generated from field: optional string body_html = 6;
    */
-  bodyHtml = "";
+  bodyHtml?: string;
 
   /**
-   * @generated from field: string author_name = 7;
+   * @generated from field: optional string author_name = 7;
    */
-  authorName = "";
+  authorName?: string;
 
   constructor(data?: PartialMessage<PRTopLevelComment>) {
     super();
@@ -23709,8 +23709,8 @@ export class PRTopLevelComment extends Message<PRTopLevelComment> {
     { no: 3, name: "avatar_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "body", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "created_at", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "body_html", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "author_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 6, name: "body_html", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "author_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PRTopLevelComment {
@@ -23745,9 +23745,9 @@ export class PauseBackgroundComposerRequest extends Message<PauseBackgroundCompo
   source = BackgroundComposerSource.UNSPECIFIED;
 
   /**
-   * @generated from field: string run_id = 4;
+   * @generated from field: optional string run_id = 4;
    */
-  runId = "";
+  runId?: string;
 
   constructor(data?: PartialMessage<PauseBackgroundComposerRequest>) {
     super();
@@ -23759,7 +23759,7 @@ export class PauseBackgroundComposerRequest extends Message<PauseBackgroundCompo
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "source", kind: "enum", T: proto3.getEnumType(BackgroundComposerSource) },
-    { no: 4, name: "run_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "run_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PauseBackgroundComposerRequest {
@@ -23926,14 +23926,14 @@ export class PendingContextInjection extends Message<PendingContextInjection> {
   source = BackgroundComposerSource.UNSPECIFIED;
 
   /**
-   * @generated from field: aiserver.v1.ConversationActionReference conversation_action_ref = 5;
+   * @generated from field: optional aiserver.v1.ConversationActionReference conversation_action_ref = 5;
    */
   conversationActionRef?: ConversationActionReference;
 
   /**
-   * @generated from field: string delivery_batch_id = 6;
+   * @generated from field: optional string delivery_batch_id = 6;
    */
-  deliveryBatchId = "";
+  deliveryBatchId?: string;
 
   constructor(data?: PartialMessage<PendingContextInjection>) {
     super();
@@ -23947,8 +23947,8 @@ export class PendingContextInjection extends Message<PendingContextInjection> {
     { no: 2, name: "expected_run_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "created_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 4, name: "source", kind: "enum", T: proto3.getEnumType(BackgroundComposerSource) },
-    { no: 5, name: "conversation_action_ref", kind: "message", T: ConversationActionReference },
-    { no: 6, name: "delivery_batch_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "conversation_action_ref", kind: "message", T: ConversationActionReference, opt: true },
+    { no: 6, name: "delivery_batch_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PendingContextInjection {
@@ -24018,7 +24018,7 @@ export class PendingFollowup extends Message<PendingFollowup> {
   pastChatsExplicitlySet = false;
 
   /**
-   * @generated from field: agent.v1.ConversationAction conversation_action = 10;
+   * @generated from field: optional agent.v1.ConversationAction conversation_action = 10;
    */
   conversationAction?: ConversationAction;
 
@@ -24028,9 +24028,9 @@ export class PendingFollowup extends Message<PendingFollowup> {
   blobData: BlobData[] = [];
 
   /**
-   * @generated from field: bool use_experimental_model_opt_out = 12;
+   * @generated from field: optional bool use_experimental_model_opt_out = 12;
    */
-  useExperimentalModelOptOut = false;
+  useExperimentalModelOptOut?: boolean;
 
   constructor(data?: PartialMessage<PendingFollowup>) {
     super();
@@ -24049,9 +24049,9 @@ export class PendingFollowup extends Message<PendingFollowup> {
     { no: 7, name: "cursor_commands_explicitly_set", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 8, name: "past_chats", kind: "message", T: SelectedPastChat, repeated: true },
     { no: 9, name: "past_chats_explicitly_set", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 10, name: "conversation_action", kind: "message", T: ConversationAction },
+    { no: 10, name: "conversation_action", kind: "message", T: ConversationAction, opt: true },
     { no: 11, name: "blob_data", kind: "message", T: BlobData, repeated: true },
-    { no: 12, name: "use_experimental_model_opt_out", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 12, name: "use_experimental_model_opt_out", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PendingFollowup {
@@ -24091,7 +24091,7 @@ export class PendingIdleFollowup extends Message<PendingIdleFollowup> {
   source = BackgroundComposerSource.UNSPECIFIED;
 
   /**
-   * @generated from field: agent.v1.ConversationAction conversation_action = 4;
+   * @generated from field: optional agent.v1.ConversationAction conversation_action = 4;
    */
   conversationAction?: ConversationAction;
 
@@ -24111,7 +24111,7 @@ export class PendingIdleFollowup extends Message<PendingIdleFollowup> {
     { no: 1, name: "grouping_identifier", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "followup_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "source", kind: "enum", T: proto3.getEnumType(BackgroundComposerSource) },
-    { no: 4, name: "conversation_action", kind: "message", T: ConversationAction },
+    { no: 4, name: "conversation_action", kind: "message", T: ConversationAction, opt: true },
     { no: 5, name: "merged_followup_ids", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
 
@@ -24147,24 +24147,24 @@ export class PendingPrivateWorkerRequest extends Message<PendingPrivateWorkerReq
   userId = 0;
 
   /**
-   * @generated from field: string service_account_id = 3;
+   * @generated from field: optional string service_account_id = 3;
    */
-  serviceAccountId = "";
+  serviceAccountId?: string;
 
   /**
-   * @generated from field: string repo_owner = 4;
+   * @generated from field: optional string repo_owner = 4;
    */
-  repoOwner = "";
+  repoOwner?: string;
 
   /**
-   * @generated from field: string repo_name = 5;
+   * @generated from field: optional string repo_name = 5;
    */
-  repoName = "";
+  repoName?: string;
 
   /**
-   * @generated from field: string repo_url = 6;
+   * @generated from field: optional string repo_url = 6;
    */
-  repoUrl = "";
+  repoUrl?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.PrivateWorkerLabel labels = 7;
@@ -24186,10 +24186,10 @@ export class PendingPrivateWorkerRequest extends Message<PendingPrivateWorkerReq
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "user_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "service_account_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "repo_owner", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "repo_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "service_account_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "repo_owner", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "repo_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 7, name: "labels", kind: "message", T: PrivateWorkerLabel, repeated: true },
     { no: 8, name: "created_at_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
   ]);
@@ -24221,9 +24221,9 @@ export class PendingPromotion extends Message<PendingPromotion> {
   followupId = "";
 
   /**
-   * @generated from field: string expected_run_id = 2;
+   * @generated from field: optional string expected_run_id = 2;
    */
-  expectedRunId = "";
+  expectedRunId?: string;
 
   /**
    * @generated from field: int64 created_at_ms = 3;
@@ -24239,7 +24239,7 @@ export class PendingPromotion extends Message<PendingPromotion> {
   static readonly typeName = "aiserver.v1.PendingPromotion";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "followup_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "expected_run_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "expected_run_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "created_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
   ]);
 
@@ -24280,9 +24280,9 @@ export class PendingPullRequestData extends Message<PendingPullRequestData> {
   branchName = "";
 
   /**
-   * @generated from field: string base_branch = 4;
+   * @generated from field: optional string base_branch = 4;
    */
-  baseBranch = "";
+  baseBranch?: string;
 
   constructor(data?: PartialMessage<PendingPullRequestData>) {
     super();
@@ -24295,7 +24295,7 @@ export class PendingPullRequestData extends Message<PendingPullRequestData> {
     { no: 1, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "body", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PendingPullRequestData {
@@ -24400,9 +24400,9 @@ export class PersonalEnvironment extends Message<PersonalEnvironment> {
   id = protoInt64.zero;
 
   /**
-   * @generated from field: string environment_public_id = 6;
+   * @generated from field: optional string environment_public_id = 6;
    */
-  environmentPublicId = "";
+  environmentPublicId?: string;
 
   constructor(data?: PartialMessage<PersonalEnvironment>) {
     super();
@@ -24417,7 +24417,7 @@ export class PersonalEnvironment extends Message<PersonalEnvironment> {
     { no: 3, name: "created_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 4, name: "updated_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 5, name: "id", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 6, name: "environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 6, name: "environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PersonalEnvironment {
@@ -24530,14 +24530,14 @@ export class PodReference extends Message<PodReference> {
   cluster = "";
 
   /**
-   * @generated from field: string exec_daemon_auth_token = 5;
+   * @generated from field: optional string exec_daemon_auth_token = 5;
    */
-  execDaemonAuthToken = "";
+  execDaemonAuthToken?: string;
 
   /**
-   * @generated from field: string pty_auth_token = 6;
+   * @generated from field: optional string pty_auth_token = 6;
    */
-  ptyAuthToken = "";
+  ptyAuthToken?: string;
 
   constructor(data?: PartialMessage<PodReference>) {
     super();
@@ -24551,8 +24551,8 @@ export class PodReference extends Message<PodReference> {
     { no: 2, name: "tenant_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "network_token", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "cluster", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "exec_daemon_auth_token", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "pty_auth_token", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "exec_daemon_auth_token", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "pty_auth_token", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PodReference {
@@ -24778,7 +24778,7 @@ export class PreFetchedBlobFilter extends Message<PreFetchedBlobFilter> {
  */
 export class PreWarmPodRequest extends Message<PreWarmPodRequest> {
   /**
-   * @generated from field: aiserver.v1.StartBackgroundComposerFromSnapshotRequest start_request = 1;
+   * @generated from field: optional aiserver.v1.StartBackgroundComposerFromSnapshotRequest start_request = 1;
    */
   startRequest?: StartBackgroundComposerFromSnapshotRequest;
 
@@ -24790,7 +24790,7 @@ export class PreWarmPodRequest extends Message<PreWarmPodRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.PreWarmPodRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "start_request", kind: "message", T: StartBackgroundComposerFromSnapshotRequest },
+    { no: 1, name: "start_request", kind: "message", T: StartBackgroundComposerFromSnapshotRequest, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PreWarmPodRequest {
@@ -24856,14 +24856,14 @@ export class PresignAgentStoreReadsRequest extends Message<PresignAgentStoreRead
   relPaths: string[] = [];
 
   /**
-   * @generated from field: string share_id = 3;
+   * @generated from field: optional string share_id = 3;
    */
-  shareId = "";
+  shareId?: string;
 
   /**
-   * @generated from field: string store_id = 4;
+   * @generated from field: optional string store_id = 4;
    */
-  storeId = "";
+  storeId?: string;
 
   constructor(data?: PartialMessage<PresignAgentStoreReadsRequest>) {
     super();
@@ -24875,8 +24875,8 @@ export class PresignAgentStoreReadsRequest extends Message<PresignAgentStoreRead
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "rel_paths", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 3, name: "share_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "store_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "share_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "store_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PresignAgentStoreReadsRequest {
@@ -24948,19 +24948,19 @@ export class PresignAgentStoreWritesRequest extends Message<PresignAgentStoreWri
   files: AgentStoreWriteFileEntry[] = [];
 
   /**
-   * @generated from field: string store_id = 3;
+   * @generated from field: optional string store_id = 3;
    */
-  storeId = "";
+  storeId?: string;
 
   /**
-   * @generated from field: string lock_token = 4;
+   * @generated from field: optional string lock_token = 4;
    */
-  lockToken = "";
+  lockToken?: string;
 
   /**
-   * @generated from field: string lock_client_uuid = 5;
+   * @generated from field: optional string lock_client_uuid = 5;
    */
-  lockClientUuid = "";
+  lockClientUuid?: string;
 
   constructor(data?: PartialMessage<PresignAgentStoreWritesRequest>) {
     super();
@@ -24972,9 +24972,9 @@ export class PresignAgentStoreWritesRequest extends Message<PresignAgentStoreWri
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "files", kind: "message", T: AgentStoreWriteFileEntry, repeated: true },
-    { no: 3, name: "store_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "lock_token", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "lock_client_uuid", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "store_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "lock_token", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "lock_client_uuid", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PresignAgentStoreWritesRequest {
@@ -25051,9 +25051,9 @@ export class PresignPromptUploadRequest extends Message<PresignPromptUploadReque
   contentLengthBytes = protoInt64.zero;
 
   /**
-   * @generated from field: int32 team_id = 4;
+   * @generated from field: optional int32 team_id = 4;
    */
-  teamId = 0;
+  teamId?: number;
 
   constructor(data?: PartialMessage<PresignPromptUploadRequest>) {
     super();
@@ -25066,7 +25066,7 @@ export class PresignPromptUploadRequest extends Message<PresignPromptUploadReque
     { no: 1, name: "filename", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "mime_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "content_length_bytes", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 4, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 4, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PresignPromptUploadRequest {
@@ -25225,14 +25225,14 @@ export class PrivateWorker extends Message<PrivateWorker> {
   userId = 0;
 
   /**
-   * @generated from field: int32 team_id = 7;
+   * @generated from field: optional int32 team_id = 7;
    */
-  teamId = 0;
+  teamId?: number;
 
   /**
-   * @generated from field: string service_account_id = 8;
+   * @generated from field: optional string service_account_id = 8;
    */
-  serviceAccountId = "";
+  serviceAccountId?: string;
 
   /**
    * @generated from field: bool is_in_use = 9;
@@ -25240,9 +25240,9 @@ export class PrivateWorker extends Message<PrivateWorker> {
   isInUse = false;
 
   /**
-   * @generated from field: string active_bc_id = 10;
+   * @generated from field: optional string active_bc_id = 10;
    */
-  activeBcId = "";
+  activeBcId?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.PrivateWorkerLabel labels = 11;
@@ -25250,24 +25250,24 @@ export class PrivateWorker extends Message<PrivateWorker> {
   labels: PrivateWorkerLabel[] = [];
 
   /**
-   * @generated from field: string repo_url = 12;
+   * @generated from field: optional string repo_url = 12;
    */
-  repoUrl = "";
+  repoUrl?: string;
 
   /**
-   * @generated from field: string display_name = 13;
+   * @generated from field: optional string display_name = 13;
    */
-  displayName = "";
+  displayName?: string;
 
   /**
-   * @generated from field: string machine_id = 14;
+   * @generated from field: optional string machine_id = 14;
    */
-  machineId = "";
+  machineId?: string;
 
   /**
-   * @generated from field: string machine_display_name = 15;
+   * @generated from field: optional string machine_display_name = 15;
    */
-  machineDisplayName = "";
+  machineDisplayName?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.PrivateWorkerRepo repos = 16;
@@ -25288,15 +25288,15 @@ export class PrivateWorker extends Message<PrivateWorker> {
     { no: 4, name: "workspace_root_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "connected_at_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
     { no: 6, name: "user_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 7, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 8, name: "service_account_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 7, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 8, name: "service_account_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 9, name: "is_in_use", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 10, name: "active_bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 10, name: "active_bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 11, name: "labels", kind: "message", T: PrivateWorkerLabel, repeated: true },
-    { no: 12, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 13, name: "display_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 14, name: "machine_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 15, name: "machine_display_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 12, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 13, name: "display_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 14, name: "machine_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 15, name: "machine_display_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 16, name: "repos", kind: "message", T: PrivateWorkerRepo, repeated: true },
   ]);
 
@@ -25417,19 +25417,19 @@ export class PrivateWorkerPool extends Message<PrivateWorkerPool> {
   poolName = "";
 
   /**
-   * @generated from field: string repo_owner = 4;
+   * @generated from field: optional string repo_owner = 4;
    */
-  repoOwner = "";
+  repoOwner?: string;
 
   /**
-   * @generated from field: string repo_name = 5;
+   * @generated from field: optional string repo_name = 5;
    */
-  repoName = "";
+  repoName?: string;
 
   /**
-   * @generated from field: string repo_url = 6;
+   * @generated from field: optional string repo_url = 6;
    */
-  repoUrl = "";
+  repoUrl?: string;
 
   /**
    * @generated from field: int32 connected_worker_count = 7;
@@ -25467,9 +25467,9 @@ export class PrivateWorkerPool extends Message<PrivateWorkerPool> {
     { no: 1, name: "scope", kind: "enum", T: proto3.getEnumType(PrivateWorkerPoolScope) },
     { no: 2, name: "owner_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 3, name: "pool_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "repo_owner", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "repo_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "repo_owner", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "repo_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 7, name: "connected_worker_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 8, name: "in_use_worker_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 9, name: "first_seen_at_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
@@ -25887,9 +25887,9 @@ export class PublishEnvironmentResponse extends Message<PublishEnvironmentRespon
   branchName = "";
 
   /**
-   * @generated from field: string error = 4;
+   * @generated from field: optional string error = 4;
    */
-  error = "";
+  error?: string;
 
   constructor(data?: PartialMessage<PublishEnvironmentResponse>) {
     super();
@@ -25902,7 +25902,7 @@ export class PublishEnvironmentResponse extends Message<PublishEnvironmentRespon
     { no: 1, name: "success", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 2, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PublishEnvironmentResponse {
@@ -25979,9 +25979,9 @@ export class PublishPersonalEnvironmentResponse extends Message<PublishPersonalE
   branchName = "";
 
   /**
-   * @generated from field: string error = 4;
+   * @generated from field: optional string error = 4;
    */
-  error = "";
+  error?: string;
 
   constructor(data?: PartialMessage<PublishPersonalEnvironmentResponse>) {
     super();
@@ -25994,7 +25994,7 @@ export class PublishPersonalEnvironmentResponse extends Message<PublishPersonalE
     { no: 1, name: "success", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 2, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PublishPersonalEnvironmentResponse {
@@ -26054,7 +26054,7 @@ export class QueuedFollowup extends Message<QueuedFollowup> {
   cursorCommandsExplicitlySet = false;
 
   /**
-   * @generated from field: agent.v1.ConversationAction conversation_action = 8;
+   * @generated from field: optional agent.v1.ConversationAction conversation_action = 8;
    */
   conversationAction?: ConversationAction;
 
@@ -26064,34 +26064,34 @@ export class QueuedFollowup extends Message<QueuedFollowup> {
   blobData: BlobData[] = [];
 
   /**
-   * @generated from field: aiserver.v1.ModelDetails model_details = 10;
+   * @generated from field: optional aiserver.v1.ModelDetails model_details = 10;
    */
   modelDetails?: ModelDetails;
 
   /**
-   * @generated from field: int64 editing_started_at_ms = 11;
+   * @generated from field: optional int64 editing_started_at_ms = 11;
    */
-  editingStartedAtMs = protoInt64.zero;
+  editingStartedAtMs?: bigint;
 
   /**
-   * @generated from field: string run_id = 12;
+   * @generated from field: optional string run_id = 12;
    */
-  runId = "";
+  runId?: string;
 
   /**
-   * @generated from field: agent.v1.RequestedModel requested_model = 13;
+   * @generated from field: optional agent.v1.RequestedModel requested_model = 13;
    */
   requestedModel?: RequestedModel;
 
   /**
-   * @generated from field: int64 turn_start_unix_ms = 14;
+   * @generated from field: optional int64 turn_start_unix_ms = 14;
    */
-  turnStartUnixMs = protoInt64.zero;
+  turnStartUnixMs?: bigint;
 
   /**
-   * @generated from field: int64 not_before_unix_ms = 15;
+   * @generated from field: optional int64 not_before_unix_ms = 15;
    */
-  notBeforeUnixMs = protoInt64.zero;
+  notBeforeUnixMs?: bigint;
 
   /**
    * @generated from field: bytes conversation_action_blob_id = 16;
@@ -26099,24 +26099,24 @@ export class QueuedFollowup extends Message<QueuedFollowup> {
   conversationActionBlobId = new Uint8Array(0);
 
   /**
-   * @generated from field: string request_id = 17;
+   * @generated from field: optional string request_id = 17;
    */
-  requestId = "";
+  requestId?: string;
 
   /**
-   * @generated from field: aiserver.v1.StopHookContinuation stop_hook_continuation = 18;
+   * @generated from field: optional aiserver.v1.StopHookContinuation stop_hook_continuation = 18;
    */
   stopHookContinuation?: StopHookContinuation;
 
   /**
-   * @generated from field: string resubmit_from_message_id = 19;
+   * @generated from field: optional string resubmit_from_message_id = 19;
    */
-  resubmitFromMessageId = "";
+  resubmitFromMessageId?: string;
 
   /**
-   * @generated from field: bool use_experimental_model_opt_out = 20;
+   * @generated from field: optional bool use_experimental_model_opt_out = 20;
    */
-  useExperimentalModelOptOut = false;
+  useExperimentalModelOptOut?: boolean;
 
   /**
    * @generated from field: string coalescing_key = 21;
@@ -26134,9 +26134,9 @@ export class QueuedFollowup extends Message<QueuedFollowup> {
   mergedActionRefs: ConversationActionReference[] = [];
 
   /**
-   * @generated from field: int64 coalesce_not_before_unix_ms = 24;
+   * @generated from field: optional int64 coalesce_not_before_unix_ms = 24;
    */
-  coalesceNotBeforeUnixMs = protoInt64.zero;
+  coalesceNotBeforeUnixMs?: bigint;
 
   constructor(data?: PartialMessage<QueuedFollowup>) {
     super();
@@ -26153,23 +26153,23 @@ export class QueuedFollowup extends Message<QueuedFollowup> {
     { no: 5, name: "synchronous", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 6, name: "cursor_commands", kind: "message", T: SelectedCursorCommand, repeated: true },
     { no: 7, name: "cursor_commands_explicitly_set", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 8, name: "conversation_action", kind: "message", T: ConversationAction },
+    { no: 8, name: "conversation_action", kind: "message", T: ConversationAction, opt: true },
     { no: 9, name: "blob_data", kind: "message", T: BlobData, repeated: true },
-    { no: 10, name: "model_details", kind: "message", T: ModelDetails },
-    { no: 11, name: "editing_started_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 12, name: "run_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 13, name: "requested_model", kind: "message", T: RequestedModel },
-    { no: 14, name: "turn_start_unix_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 15, name: "not_before_unix_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
+    { no: 10, name: "model_details", kind: "message", T: ModelDetails, opt: true },
+    { no: 11, name: "editing_started_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
+    { no: 12, name: "run_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 13, name: "requested_model", kind: "message", T: RequestedModel, opt: true },
+    { no: 14, name: "turn_start_unix_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
+    { no: 15, name: "not_before_unix_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
     { no: 16, name: "conversation_action_blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
-    { no: 17, name: "request_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 18, name: "stop_hook_continuation", kind: "message", T: StopHookContinuation },
-    { no: 19, name: "resubmit_from_message_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 20, name: "use_experimental_model_opt_out", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 17, name: "request_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 18, name: "stop_hook_continuation", kind: "message", T: StopHookContinuation, opt: true },
+    { no: 19, name: "resubmit_from_message_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 20, name: "use_experimental_model_opt_out", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 21, name: "coalescing_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 22, name: "merged_followup_ids", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 23, name: "merged_action_refs", kind: "message", T: ConversationActionReference, repeated: true },
-    { no: 24, name: "coalesce_not_before_unix_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
+    { no: 24, name: "coalesce_not_before_unix_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): QueuedFollowup {
@@ -26199,7 +26199,7 @@ export class QueuedInteractionResponse extends Message<QueuedInteractionResponse
   queryId = 0;
 
   /**
-   * @generated from field: agent.v1.InteractionResponse interaction_response = 2;
+   * @generated from field: optional agent.v1.InteractionResponse interaction_response = 2;
    */
   interactionResponse?: InteractionResponse;
 
@@ -26217,7 +26217,7 @@ export class QueuedInteractionResponse extends Message<QueuedInteractionResponse
   static readonly typeName = "aiserver.v1.QueuedInteractionResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "query_id", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 2, name: "interaction_response", kind: "message", T: InteractionResponse },
+    { no: 2, name: "interaction_response", kind: "message", T: InteractionResponse, opt: true },
     { no: 3, name: "submitted_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
   ]);
 
@@ -26351,9 +26351,9 @@ export class ReadAgentStoreFileRequest extends Message<ReadAgentStoreFileRequest
   relativePath = "";
 
   /**
-   * @generated from field: string share_id = 3;
+   * @generated from field: optional string share_id = 3;
    */
-  shareId = "";
+  shareId?: string;
 
   constructor(data?: PartialMessage<ReadAgentStoreFileRequest>) {
     super();
@@ -26365,7 +26365,7 @@ export class ReadAgentStoreFileRequest extends Message<ReadAgentStoreFileRequest
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "store_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "relative_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "share_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "share_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ReadAgentStoreFileRequest {
@@ -26648,19 +26648,19 @@ export class RegisterPrivateWorkerPoolRequest extends Message<RegisterPrivateWor
   poolName = "";
 
   /**
-   * @generated from field: string repo_owner = 3;
+   * @generated from field: optional string repo_owner = 3;
    */
-  repoOwner = "";
+  repoOwner?: string;
 
   /**
-   * @generated from field: string repo_name = 4;
+   * @generated from field: optional string repo_name = 4;
    */
-  repoName = "";
+  repoName?: string;
 
   /**
-   * @generated from field: string repo_url = 5;
+   * @generated from field: optional string repo_url = 5;
    */
-  repoUrl = "";
+  repoUrl?: string;
 
   constructor(data?: PartialMessage<RegisterPrivateWorkerPoolRequest>) {
     super();
@@ -26672,9 +26672,9 @@ export class RegisterPrivateWorkerPoolRequest extends Message<RegisterPrivateWor
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "scope", kind: "enum", T: proto3.getEnumType(PrivateWorkerPoolScope) },
     { no: 2, name: "pool_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "repo_owner", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "repo_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "repo_owner", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "repo_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RegisterPrivateWorkerPoolRequest {
@@ -27055,9 +27055,9 @@ export class RenameEnvironmentRequest extends Message<RenameEnvironmentRequest> 
   publicId = "";
 
   /**
-   * @generated from field: string name = 2;
+   * @generated from field: optional string name = 2;
    */
-  name = "";
+  name?: string;
 
   constructor(data?: PartialMessage<RenameEnvironmentRequest>) {
     super();
@@ -27068,7 +27068,7 @@ export class RenameEnvironmentRequest extends Message<RenameEnvironmentRequest> 
   static readonly typeName = "aiserver.v1.RenameEnvironmentRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "public_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RenameEnvironmentRequest {
@@ -27449,7 +27449,7 @@ export class ReplyToReviewThreadRequest extends Message<ReplyToReviewThreadReque
  */
 export class ReplyToReviewThreadResponse extends Message<ReplyToReviewThreadResponse> {
   /**
-   * @generated from field: aiserver.v1.PRReviewThread thread = 1;
+   * @generated from field: optional aiserver.v1.PRReviewThread thread = 1;
    */
   thread?: PRReviewThread;
 
@@ -27461,7 +27461,7 @@ export class ReplyToReviewThreadResponse extends Message<ReplyToReviewThreadResp
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ReplyToReviewThreadResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "thread", kind: "message", T: PRReviewThread },
+    { no: 1, name: "thread", kind: "message", T: PRReviewThread, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ReplyToReviewThreadResponse {
@@ -27491,9 +27491,9 @@ export class RepoConfigSummary extends Message<RepoConfigSummary> {
   repoUrls: string[] = [];
 
   /**
-   * @generated from field: string environment_json_path = 2;
+   * @generated from field: optional string environment_json_path = 2;
    */
-  environmentJsonPath = "";
+  environmentJsonPath?: string;
 
   constructor(data?: PartialMessage<RepoConfigSummary>) {
     super();
@@ -27504,7 +27504,7 @@ export class RepoConfigSummary extends Message<RepoConfigSummary> {
   static readonly typeName = "aiserver.v1.RepoConfigSummary";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "repo_urls", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 2, name: "environment_json_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "environment_json_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RepoConfigSummary {
@@ -27642,7 +27642,7 @@ export class ResolveOrCreateDraftEnvironmentRequest extends Message<ResolveOrCre
   repoUrl = "";
 
   /**
-   * @generated from field: aiserver.v1.EnvironmentRepoConfig repo_config = 4;
+   * @generated from field: optional aiserver.v1.EnvironmentRepoConfig repo_config = 4;
    */
   repoConfig?: EnvironmentRepoConfig;
 
@@ -27657,7 +27657,7 @@ export class ResolveOrCreateDraftEnvironmentRequest extends Message<ResolveOrCre
     { no: 1, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "target_scope", kind: "enum", T: proto3.getEnumType(LogicalEnvironmentScope) },
     { no: 3, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "repo_config", kind: "message", T: EnvironmentRepoConfig },
+    { no: 4, name: "repo_config", kind: "message", T: EnvironmentRepoConfig, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ResolveOrCreateDraftEnvironmentRequest {
@@ -27682,7 +27682,7 @@ export class ResolveOrCreateDraftEnvironmentRequest extends Message<ResolveOrCre
  */
 export class ResolveOrCreateDraftEnvironmentResponse extends Message<ResolveOrCreateDraftEnvironmentResponse> {
   /**
-   * @generated from field: aiserver.v1.LogicalEnvironment environment = 1;
+   * @generated from field: optional aiserver.v1.LogicalEnvironment environment = 1;
    */
   environment?: LogicalEnvironment;
 
@@ -27699,7 +27699,7 @@ export class ResolveOrCreateDraftEnvironmentResponse extends Message<ResolveOrCr
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ResolveOrCreateDraftEnvironmentResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "environment", kind: "message", T: LogicalEnvironment },
+    { no: 1, name: "environment", kind: "message", T: LogicalEnvironment, opt: true },
     { no: 2, name: "created", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
@@ -27725,7 +27725,7 @@ export class ResolveOrCreateDraftEnvironmentResponse extends Message<ResolveOrCr
  */
 export class ResolveOrCreateMultiRepoEnvironmentRequest extends Message<ResolveOrCreateMultiRepoEnvironmentRequest> {
   /**
-   * @generated from field: aiserver.v1.EnvironmentRepoConfig repo_config = 4;
+   * @generated from field: optional aiserver.v1.EnvironmentRepoConfig repo_config = 4;
    */
   repoConfig?: EnvironmentRepoConfig;
 
@@ -27770,7 +27770,7 @@ export class ResolveOrCreateMultiRepoEnvironmentRequest extends Message<ResolveO
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ResolveOrCreateMultiRepoEnvironmentRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 4, name: "repo_config", kind: "message", T: EnvironmentRepoConfig },
+    { no: 4, name: "repo_config", kind: "message", T: EnvironmentRepoConfig, opt: true },
     { no: 5, name: "write_source", kind: "enum", T: proto3.getEnumType(EnvironmentWriteSource) },
     { no: 6, name: "reuse_policy", kind: "enum", T: proto3.getEnumType(MultiRepoEnvironmentReusePolicy) },
     { no: 1, name: "user_id", kind: "scalar", T: 5 /* ScalarType.INT32 */, oneof: "owner_id" },
@@ -27800,7 +27800,7 @@ export class ResolveOrCreateMultiRepoEnvironmentRequest extends Message<ResolveO
  */
 export class ResolveOrCreateMultiRepoEnvironmentResponse extends Message<ResolveOrCreateMultiRepoEnvironmentResponse> {
   /**
-   * @generated from field: aiserver.v1.LogicalEnvironment environment = 1;
+   * @generated from field: optional aiserver.v1.LogicalEnvironment environment = 1;
    */
   environment?: LogicalEnvironment;
 
@@ -27817,7 +27817,7 @@ export class ResolveOrCreateMultiRepoEnvironmentResponse extends Message<Resolve
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ResolveOrCreateMultiRepoEnvironmentResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "environment", kind: "message", T: LogicalEnvironment },
+    { no: 1, name: "environment", kind: "message", T: LogicalEnvironment, opt: true },
     { no: 2, name: "created", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
@@ -27933,14 +27933,14 @@ export class RestoreEnvironmentVersionRequest extends Message<RestoreEnvironment
   targetScope = LogicalEnvironmentScope.UNSPECIFIED;
 
   /**
-   * @generated from field: string target_environment_public_id = 3;
+   * @generated from field: optional string target_environment_public_id = 3;
    */
-  targetEnvironmentPublicId = "";
+  targetEnvironmentPublicId?: string;
 
   /**
-   * @generated from field: string delete_personal_environment_public_id = 4;
+   * @generated from field: optional string delete_personal_environment_public_id = 4;
    */
-  deletePersonalEnvironmentPublicId = "";
+  deletePersonalEnvironmentPublicId?: string;
 
   constructor(data?: PartialMessage<RestoreEnvironmentVersionRequest>) {
     super();
@@ -27952,8 +27952,8 @@ export class RestoreEnvironmentVersionRequest extends Message<RestoreEnvironment
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "environment_version_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "target_scope", kind: "enum", T: proto3.getEnumType(LogicalEnvironmentScope) },
-    { no: 3, name: "target_environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "delete_personal_environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "target_environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "delete_personal_environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RestoreEnvironmentVersionRequest {
@@ -27978,7 +27978,7 @@ export class RestoreEnvironmentVersionRequest extends Message<RestoreEnvironment
  */
 export class RestoreEnvironmentVersionResponse extends Message<RestoreEnvironmentVersionResponse> {
   /**
-   * @generated from field: aiserver.v1.LogicalEnvironment environment = 1;
+   * @generated from field: optional aiserver.v1.LogicalEnvironment environment = 1;
    */
   environment?: LogicalEnvironment;
 
@@ -27990,7 +27990,7 @@ export class RestoreEnvironmentVersionResponse extends Message<RestoreEnvironmen
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.RestoreEnvironmentVersionResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "environment", kind: "message", T: LogicalEnvironment },
+    { no: 1, name: "environment", kind: "message", T: LogicalEnvironment, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RestoreEnvironmentVersionResponse {
@@ -28098,29 +28098,29 @@ export class SetPersonalEnvironmentJsonRequest extends Message<SetPersonalEnviro
   writeSource = EnvironmentWriteSource.UNSPECIFIED;
 
   /**
-   * @generated from field: string source_bc_id = 4;
+   * @generated from field: optional string source_bc_id = 4;
    */
-  sourceBcId = "";
+  sourceBcId?: string;
 
   /**
-   * @generated from field: string environment_name = 5;
+   * @generated from field: optional string environment_name = 5;
    */
-  environmentName = "";
+  environmentName?: string;
 
   /**
-   * @generated from field: aiserver.v1.EnvironmentRepoConfig repo_config = 6;
+   * @generated from field: optional aiserver.v1.EnvironmentRepoConfig repo_config = 6;
    */
   repoConfig?: EnvironmentRepoConfig;
 
   /**
-   * @generated from field: int64 environment_id = 7;
+   * @generated from field: optional int64 environment_id = 7;
    */
-  environmentId = protoInt64.zero;
+  environmentId?: bigint;
 
   /**
-   * @generated from field: string environment_public_id = 8;
+   * @generated from field: optional string environment_public_id = 8;
    */
-  environmentPublicId = "";
+  environmentPublicId?: string;
 
   constructor(data?: PartialMessage<SetPersonalEnvironmentJsonRequest>) {
     super();
@@ -28133,11 +28133,11 @@ export class SetPersonalEnvironmentJsonRequest extends Message<SetPersonalEnviro
     { no: 1, name: "environment_json", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "write_source", kind: "enum", T: proto3.getEnumType(EnvironmentWriteSource) },
-    { no: 4, name: "source_bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "environment_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "repo_config", kind: "message", T: EnvironmentRepoConfig },
-    { no: 7, name: "environment_id", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 8, name: "environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "source_bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "environment_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "repo_config", kind: "message", T: EnvironmentRepoConfig, opt: true },
+    { no: 7, name: "environment_id", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
+    { no: 8, name: "environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SetPersonalEnvironmentJsonRequest {
@@ -28162,12 +28162,12 @@ export class SetPersonalEnvironmentJsonRequest extends Message<SetPersonalEnviro
  */
 export class SetPersonalEnvironmentJsonResponse extends Message<SetPersonalEnvironmentJsonResponse> {
   /**
-   * @generated from field: aiserver.v1.LogicalEnvironment environment = 1;
+   * @generated from field: optional aiserver.v1.LogicalEnvironment environment = 1;
    */
   environment?: LogicalEnvironment;
 
   /**
-   * @generated from field: aiserver.v1.LiveEgressReapplyResult live_egress_reapply = 2;
+   * @generated from field: optional aiserver.v1.LiveEgressReapplyResult live_egress_reapply = 2;
    */
   liveEgressReapply?: LiveEgressReapplyResult;
 
@@ -28179,8 +28179,8 @@ export class SetPersonalEnvironmentJsonResponse extends Message<SetPersonalEnvir
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SetPersonalEnvironmentJsonResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "environment", kind: "message", T: LogicalEnvironment },
-    { no: 2, name: "live_egress_reapply", kind: "message", T: LiveEgressReapplyResult },
+    { no: 1, name: "environment", kind: "message", T: LogicalEnvironment, opt: true },
+    { no: 2, name: "live_egress_reapply", kind: "message", T: LiveEgressReapplyResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SetPersonalEnvironmentJsonResponse {
@@ -28220,9 +28220,9 @@ export class SetTeamEnvironmentJsonRequest extends Message<SetTeamEnvironmentJso
   scmRepoNodeId = "";
 
   /**
-   * @generated from field: string git_enterprise_uuid = 4;
+   * @generated from field: optional string git_enterprise_uuid = 4;
    */
-  gitEnterpriseUuid = "";
+  gitEnterpriseUuid?: string;
 
   /**
    * @generated from field: bool delete_personal_environment = 5;
@@ -28235,34 +28235,34 @@ export class SetTeamEnvironmentJsonRequest extends Message<SetTeamEnvironmentJso
   writeSource = EnvironmentWriteSource.UNSPECIFIED;
 
   /**
-   * @generated from field: string source_bc_id = 7;
+   * @generated from field: optional string source_bc_id = 7;
    */
-  sourceBcId = "";
+  sourceBcId?: string;
 
   /**
-   * @generated from field: string environment_name = 8;
+   * @generated from field: optional string environment_name = 8;
    */
-  environmentName = "";
+  environmentName?: string;
 
   /**
-   * @generated from field: aiserver.v1.EnvironmentRepoConfig repo_config = 9;
+   * @generated from field: optional aiserver.v1.EnvironmentRepoConfig repo_config = 9;
    */
   repoConfig?: EnvironmentRepoConfig;
 
   /**
-   * @generated from field: int64 environment_id = 10;
+   * @generated from field: optional int64 environment_id = 10;
    */
-  environmentId = protoInt64.zero;
+  environmentId?: bigint;
 
   /**
-   * @generated from field: string environment_public_id = 11;
+   * @generated from field: optional string environment_public_id = 11;
    */
-  environmentPublicId = "";
+  environmentPublicId?: string;
 
   /**
-   * @generated from field: string delete_personal_environment_public_id = 12;
+   * @generated from field: optional string delete_personal_environment_public_id = 12;
    */
-  deletePersonalEnvironmentPublicId = "";
+  deletePersonalEnvironmentPublicId?: string;
 
   constructor(data?: PartialMessage<SetTeamEnvironmentJsonRequest>) {
     super();
@@ -28275,15 +28275,15 @@ export class SetTeamEnvironmentJsonRequest extends Message<SetTeamEnvironmentJso
     { no: 1, name: "environment_json", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "scm_repo_node_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "git_enterprise_uuid", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "git_enterprise_uuid", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 5, name: "delete_personal_environment", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 6, name: "write_source", kind: "enum", T: proto3.getEnumType(EnvironmentWriteSource) },
-    { no: 7, name: "source_bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "environment_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "repo_config", kind: "message", T: EnvironmentRepoConfig },
-    { no: 10, name: "environment_id", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 11, name: "environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 12, name: "delete_personal_environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 7, name: "source_bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "environment_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 9, name: "repo_config", kind: "message", T: EnvironmentRepoConfig, opt: true },
+    { no: 10, name: "environment_id", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
+    { no: 11, name: "environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 12, name: "delete_personal_environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SetTeamEnvironmentJsonRequest {
@@ -28308,12 +28308,12 @@ export class SetTeamEnvironmentJsonRequest extends Message<SetTeamEnvironmentJso
  */
 export class SetTeamEnvironmentJsonResponse extends Message<SetTeamEnvironmentJsonResponse> {
   /**
-   * @generated from field: aiserver.v1.LogicalEnvironment environment = 1;
+   * @generated from field: optional aiserver.v1.LogicalEnvironment environment = 1;
    */
   environment?: LogicalEnvironment;
 
   /**
-   * @generated from field: aiserver.v1.LiveEgressReapplyResult live_egress_reapply = 2;
+   * @generated from field: optional aiserver.v1.LiveEgressReapplyResult live_egress_reapply = 2;
    */
   liveEgressReapply?: LiveEgressReapplyResult;
 
@@ -28325,8 +28325,8 @@ export class SetTeamEnvironmentJsonResponse extends Message<SetTeamEnvironmentJs
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SetTeamEnvironmentJsonResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "environment", kind: "message", T: LogicalEnvironment },
-    { no: 2, name: "live_egress_reapply", kind: "message", T: LiveEgressReapplyResult },
+    { no: 1, name: "environment", kind: "message", T: LogicalEnvironment, opt: true },
+    { no: 2, name: "live_egress_reapply", kind: "message", T: LiveEgressReapplyResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SetTeamEnvironmentJsonResponse {
@@ -28366,9 +28366,9 @@ export class SetWorkerManagerRequest extends Message<SetWorkerManagerRequest> {
   spawnKind = ManagerSpawnKind.UNSPECIFIED;
 
   /**
-   * @generated from field: string tool_call_id = 4;
+   * @generated from field: optional string tool_call_id = 4;
    */
-  toolCallId = "";
+  toolCallId?: string;
 
   constructor(data?: PartialMessage<SetWorkerManagerRequest>) {
     super();
@@ -28381,7 +28381,7 @@ export class SetWorkerManagerRequest extends Message<SetWorkerManagerRequest> {
     { no: 1, name: "worker_bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "manager_bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "spawn_kind", kind: "enum", T: proto3.getEnumType(ManagerSpawnKind) },
-    { no: 4, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SetWorkerManagerRequest {
@@ -28447,12 +28447,12 @@ export class ShareAgentStoreRequest extends Message<ShareAgentStoreRequest> {
   pathPrefix = "";
 
   /**
-   * @generated from field: string store_id = 4;
+   * @generated from field: optional string store_id = 4;
    */
-  storeId = "";
+  storeId?: string;
 
   /**
-   * @generated from field: aiserver.v1.AgentStoreSourceRef source = 5;
+   * @generated from field: optional aiserver.v1.AgentStoreSourceRef source = 5;
    */
   source?: AgentStoreSourceRef;
 
@@ -28466,8 +28466,8 @@ export class ShareAgentStoreRequest extends Message<ShareAgentStoreRequest> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "path_prefix", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "store_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "source", kind: "message", T: AgentStoreSourceRef },
+    { no: 4, name: "store_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "source", kind: "message", T: AgentStoreSourceRef, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ShareAgentStoreRequest {
@@ -28545,9 +28545,9 @@ export class ShareBackgroundComposerArtifactRequest extends Message<ShareBackgro
   absolutePath = "";
 
   /**
-   * @generated from field: string title = 3;
+   * @generated from field: optional string title = 3;
    */
-  title = "";
+  title?: string;
 
   constructor(data?: PartialMessage<ShareBackgroundComposerArtifactRequest>) {
     super();
@@ -28559,7 +28559,7 @@ export class ShareBackgroundComposerArtifactRequest extends Message<ShareBackgro
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "absolute_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ShareBackgroundComposerArtifactRequest {
@@ -28584,7 +28584,7 @@ export class ShareBackgroundComposerArtifactRequest extends Message<ShareBackgro
  */
 export class ShareBackgroundComposerArtifactResponse extends Message<ShareBackgroundComposerArtifactResponse> {
   /**
-   * @generated from field: aiserver.v1.BackgroundComposerSharedArtifact artifact = 1;
+   * @generated from field: optional aiserver.v1.BackgroundComposerSharedArtifact artifact = 1;
    */
   artifact?: BackgroundComposerSharedArtifact;
 
@@ -28596,7 +28596,7 @@ export class ShareBackgroundComposerArtifactResponse extends Message<ShareBackgr
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ShareBackgroundComposerArtifactResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "artifact", kind: "message", T: BackgroundComposerSharedArtifact },
+    { no: 1, name: "artifact", kind: "message", T: BackgroundComposerSharedArtifact, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ShareBackgroundComposerArtifactResponse {
@@ -28641,9 +28641,9 @@ export class SharedAgentStoreInfo extends Message<SharedAgentStoreInfo> {
   createdAtMs = 0;
 
   /**
-   * @generated from field: double revoked_at_ms = 5;
+   * @generated from field: optional double revoked_at_ms = 5;
    */
-  revokedAtMs = 0;
+  revokedAtMs?: number;
 
   constructor(data?: PartialMessage<SharedAgentStoreInfo>) {
     super();
@@ -28657,7 +28657,7 @@ export class SharedAgentStoreInfo extends Message<SharedAgentStoreInfo> {
     { no: 2, name: "path_prefix", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "visibility", kind: "enum", T: proto3.getEnumType(AgentStoreShareVisibility) },
     { no: 4, name: "created_at_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 5, name: "revoked_at_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
+    { no: 5, name: "revoked_at_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SharedAgentStoreInfo {
@@ -28712,19 +28712,19 @@ export class SharedAgentStoreListing extends Message<SharedAgentStoreListing> {
   createdAtMs = 0;
 
   /**
-   * @generated from field: double revoked_at_ms = 7;
+   * @generated from field: optional double revoked_at_ms = 7;
    */
-  revokedAtMs = 0;
+  revokedAtMs?: number;
 
   /**
-   * @generated from field: int32 owning_user_id = 8;
+   * @generated from field: optional int32 owning_user_id = 8;
    */
-  owningUserId = 0;
+  owningUserId?: number;
 
   /**
-   * @generated from field: int32 owning_team_id = 9;
+   * @generated from field: optional int32 owning_team_id = 9;
    */
-  owningTeamId = 0;
+  owningTeamId?: number;
 
   /**
    * @generated from field: string owner_display_name = 10;
@@ -28742,7 +28742,7 @@ export class SharedAgentStoreListing extends Message<SharedAgentStoreListing> {
   kind = AgentStoreKind.UNSPECIFIED;
 
   /**
-   * @generated from field: aiserver.v1.AgentStoreSourceRef source = 13;
+   * @generated from field: optional aiserver.v1.AgentStoreSourceRef source = 13;
    */
   source?: AgentStoreSourceRef;
 
@@ -28760,13 +28760,13 @@ export class SharedAgentStoreListing extends Message<SharedAgentStoreListing> {
     { no: 4, name: "path_prefix", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "visibility", kind: "enum", T: proto3.getEnumType(AgentStoreShareVisibility) },
     { no: 6, name: "created_at_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 7, name: "revoked_at_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 8, name: "owning_user_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 9, name: "owning_team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 7, name: "revoked_at_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
+    { no: 8, name: "owning_user_id", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 9, name: "owning_team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 10, name: "owner_display_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 11, name: "store_kind", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 12, name: "kind", kind: "enum", T: proto3.getEnumType(AgentStoreKind) },
-    { no: 13, name: "source", kind: "message", T: AgentStoreSourceRef },
+    { no: 13, name: "source", kind: "message", T: AgentStoreSourceRef, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SharedAgentStoreListing {
@@ -28834,29 +28834,29 @@ export class SideChatInfo extends Message<SideChatInfo> {
  */
 export class SlackSourceMetadata extends Message<SlackSourceMetadata> {
   /**
-   * @generated from field: string channel_id = 1;
+   * @generated from field: optional string channel_id = 1;
    */
-  channelId = "";
+  channelId?: string;
 
   /**
-   * @generated from field: string channel_name = 2;
+   * @generated from field: optional string channel_name = 2;
    */
-  channelName = "";
+  channelName?: string;
 
   /**
-   * @generated from field: string team_id = 3;
+   * @generated from field: optional string team_id = 3;
    */
-  teamId = "";
+  teamId?: string;
 
   /**
-   * @generated from field: string message_timestamp = 4;
+   * @generated from field: optional string message_timestamp = 4;
    */
-  messageTimestamp = "";
+  messageTimestamp?: string;
 
   /**
-   * @generated from field: string message_permalink = 5;
+   * @generated from field: optional string message_permalink = 5;
    */
-  messagePermalink = "";
+  messagePermalink?: string;
 
   constructor(data?: PartialMessage<SlackSourceMetadata>) {
     super();
@@ -28866,11 +28866,11 @@ export class SlackSourceMetadata extends Message<SlackSourceMetadata> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SlackSourceMetadata";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "channel_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "channel_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "team_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "message_timestamp", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "message_permalink", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "channel_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "channel_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "team_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "message_timestamp", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "message_permalink", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SlackSourceMetadata {
@@ -28910,54 +28910,54 @@ export class SnapshotAndSaveEnvironmentRequest extends Message<SnapshotAndSaveEn
   repoUrl = "";
 
   /**
-   * @generated from field: string install_command = 4;
+   * @generated from field: optional string install_command = 4;
    */
-  installCommand = "";
+  installCommand?: string;
 
   /**
-   * @generated from field: string existing_snapshot_id = 5;
+   * @generated from field: optional string existing_snapshot_id = 5;
    */
-  existingSnapshotId = "";
+  existingSnapshotId?: string;
 
   /**
-   * @generated from field: string scm_repo_node_id = 6;
+   * @generated from field: optional string scm_repo_node_id = 6;
    */
-  scmRepoNodeId = "";
+  scmRepoNodeId?: string;
 
   /**
-   * @generated from field: string git_enterprise_uuid = 7;
+   * @generated from field: optional string git_enterprise_uuid = 7;
    */
-  gitEnterpriseUuid = "";
+  gitEnterpriseUuid?: string;
 
   /**
-   * @generated from field: string environment_name = 8;
+   * @generated from field: optional string environment_name = 8;
    */
-  environmentName = "";
+  environmentName?: string;
 
   /**
-   * @generated from field: aiserver.v1.EnvironmentRepoConfig repo_config = 9;
+   * @generated from field: optional aiserver.v1.EnvironmentRepoConfig repo_config = 9;
    */
   repoConfig?: EnvironmentRepoConfig;
 
   /**
-   * @generated from field: string environment_public_id = 10;
+   * @generated from field: optional string environment_public_id = 10;
    */
-  environmentPublicId = "";
+  environmentPublicId?: string;
 
   /**
-   * @generated from field: aiserver.v1.SnapshotAndSaveEnvironmentRequest.EgressConfig egress_config = 11;
+   * @generated from field: optional aiserver.v1.SnapshotAndSaveEnvironmentRequest.EgressConfig egress_config = 11;
    */
   egressConfig?: SnapshotAndSaveEnvironmentRequest_EgressConfig;
 
   /**
-   * @generated from field: string start_command = 12;
+   * @generated from field: optional string start_command = 12;
    */
-  startCommand = "";
+  startCommand?: string;
 
   /**
-   * @generated from field: string environment_build_id = 13;
+   * @generated from field: optional string environment_build_id = 13;
    */
-  environmentBuildId = "";
+  environmentBuildId?: string;
 
   constructor(data?: PartialMessage<SnapshotAndSaveEnvironmentRequest>) {
     super();
@@ -28970,16 +28970,16 @@ export class SnapshotAndSaveEnvironmentRequest extends Message<SnapshotAndSaveEn
     { no: 1, name: "target", kind: "enum", T: proto3.getEnumType(SnapshotAndSaveEnvironmentRequest_Target) },
     { no: 2, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "install_command", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "existing_snapshot_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "scm_repo_node_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "git_enterprise_uuid", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "environment_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "repo_config", kind: "message", T: EnvironmentRepoConfig },
-    { no: 10, name: "environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 11, name: "egress_config", kind: "message", T: SnapshotAndSaveEnvironmentRequest_EgressConfig },
-    { no: 12, name: "start_command", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 13, name: "environment_build_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "install_command", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "existing_snapshot_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "scm_repo_node_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "git_enterprise_uuid", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "environment_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 9, name: "repo_config", kind: "message", T: EnvironmentRepoConfig, opt: true },
+    { no: 10, name: "environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 11, name: "egress_config", kind: "message", T: SnapshotAndSaveEnvironmentRequest_EgressConfig, opt: true },
+    { no: 12, name: "start_command", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 13, name: "environment_build_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SnapshotAndSaveEnvironmentRequest {
@@ -29125,12 +29125,12 @@ export class StartBackgroundComposerFromSnapshotRequest extends Message<StartBac
   files: StartBackgroundComposerFromSnapshotRequest_File[] = [];
 
   /**
-   * @generated from field: aiserver.v1.ModelDetails model_details = 4;
+   * @generated from field: optional aiserver.v1.ModelDetails model_details = 4;
    */
   modelDetails?: ModelDetails;
 
   /**
-   * @generated from field: aiserver.v1.HeadlessAgenticComposerRepositoryInfo repository_info = 5;
+   * @generated from field: optional aiserver.v1.HeadlessAgenticComposerRepositoryInfo repository_info = 5;
    */
   repositoryInfo?: HeadlessAgenticComposerRepositoryInfo;
 
@@ -29155,14 +29155,14 @@ export class StartBackgroundComposerFromSnapshotRequest extends Message<StartBac
   returnImmediately = false;
 
   /**
-   * @generated from field: aiserver.v1.DevcontainerStartingPoint devcontainer_starting_point = 11;
+   * @generated from field: optional aiserver.v1.DevcontainerStartingPoint devcontainer_starting_point = 11;
    */
   devcontainerStartingPoint?: DevcontainerStartingPoint;
 
   /**
-   * @generated from field: string force_vm_backend = 12;
+   * @generated from field: optional string force_vm_backend = 12;
    */
-  forceVmBackend = "";
+  forceVmBackend?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.ImageProto images = 13;
@@ -29170,14 +29170,14 @@ export class StartBackgroundComposerFromSnapshotRequest extends Message<StartBac
   images: ImageProto[] = [];
 
   /**
-   * @generated from field: string repo_url = 14;
+   * @generated from field: optional string repo_url = 14;
    */
-  repoUrl = "";
+  repoUrl?: string;
 
   /**
-   * @generated from field: string force_cluster = 15;
+   * @generated from field: optional string force_cluster = 15;
    */
-  forceCluster = "";
+  forceCluster?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.ModelDetails additional_model_details = 16;
@@ -29200,9 +29200,9 @@ export class StartBackgroundComposerFromSnapshotRequest extends Message<StartBac
   documentationIdentifiers: string[] = [];
 
   /**
-   * @generated from field: bool use_web = 20;
+   * @generated from field: optional bool use_web = 20;
    */
-  useWeb = false;
+  useWeb?: boolean;
 
   /**
    * @generated from field: repeated aiserver.v1.ComposerExternalLink external_links = 21;
@@ -29215,127 +29215,127 @@ export class StartBackgroundComposerFromSnapshotRequest extends Message<StartBac
   bcId = "";
 
   /**
-   * @generated from field: aiserver.v1.BackgroundComposerSource source = 23;
+   * @generated from field: optional aiserver.v1.BackgroundComposerSource source = 23;
    */
-  source = BackgroundComposerSource.UNSPECIFIED;
+  source?: BackgroundComposerSource;
 
   /**
-   * @generated from field: string slack_channel_id = 24;
+   * @generated from field: optional string slack_channel_id = 24;
    */
-  slackChannelId = "";
+  slackChannelId?: string;
 
   /**
-   * @generated from field: string slack_message_timestamp = 25;
+   * @generated from field: optional string slack_message_timestamp = 25;
    */
-  slackMessageTimestamp = "";
+  slackMessageTimestamp?: string;
 
   /**
-   * @generated from field: bool add_initial_message_to_responses = 26;
+   * @generated from field: optional bool add_initial_message_to_responses = 26;
    */
-  addInitialMessageToResponses = false;
+  addInitialMessageToResponses?: boolean;
 
   /**
-   * @generated from field: string slack_team_id = 27;
+   * @generated from field: optional string slack_team_id = 27;
    */
-  slackTeamId = "";
+  slackTeamId?: string;
 
   /**
-   * @generated from field: string linear_issue_id = 28;
+   * @generated from field: optional string linear_issue_id = 28;
    */
-  linearIssueId = "";
+  linearIssueId?: string;
 
   /**
-   * @generated from field: string force_machine_template = 29;
+   * @generated from field: optional string force_machine_template = 29;
    */
-  forceMachineTemplate = "";
+  forceMachineTemplate?: string;
 
   /**
-   * @generated from field: string linear_org_id = 30;
+   * @generated from field: optional string linear_org_id = 30;
    */
-  linearOrgId = "";
+  linearOrgId?: string;
 
   /**
-   * @generated from field: string base_branch = 31;
+   * @generated from field: optional string base_branch = 31;
    */
-  baseBranch = "";
+  baseBranch?: string;
 
   /**
-   * @generated from field: string client_ip = 32;
+   * @generated from field: optional string client_ip = 32;
    */
-  clientIp = "";
+  clientIp?: string;
 
   /**
-   * @generated from field: string linear_issue_identifier = 33;
+   * @generated from field: optional string linear_issue_identifier = 33;
    */
-  linearIssueIdentifier = "";
+  linearIssueIdentifier?: string;
 
   /**
-   * @generated from field: string prompt_group_id = 34;
+   * @generated from field: optional string prompt_group_id = 34;
    */
-  promptGroupId = "";
+  promptGroupId?: string;
 
   /**
-   * @generated from field: string pod_id = 35;
+   * @generated from field: optional string pod_id = 35;
    */
-  podId = "";
+  podId?: string;
 
   /**
-   * @generated from field: bool wait_on_branch_name = 36;
+   * @generated from field: optional bool wait_on_branch_name = 36;
    */
-  waitOnBranchName = false;
+  waitOnBranchName?: boolean;
 
   /**
-   * @generated from field: bool auto_create_pr = 37;
+   * @generated from field: optional bool auto_create_pr = 37;
    */
-  autoCreatePr = false;
+  autoCreatePr?: boolean;
 
   /**
-   * @generated from field: string custom_branch_name = 38;
+   * @generated from field: optional string custom_branch_name = 38;
    */
-  customBranchName = "";
+  customBranchName?: string;
 
   /**
-   * @generated from field: aiserver.v1.StartBackgroundComposerFromSnapshotRequest.WebhookConfig webhook_config = 39;
+   * @generated from field: optional aiserver.v1.StartBackgroundComposerFromSnapshotRequest.WebhookConfig webhook_config = 39;
    */
   webhookConfig?: StartBackgroundComposerFromSnapshotRequest_WebhookConfig;
 
   /**
-   * @generated from field: string github_issue_id = 40;
+   * @generated from field: optional string github_issue_id = 40;
    */
-  githubIssueId = "";
+  githubIssueId?: string;
 
   /**
-   * @generated from field: aiserver.v1.StartingMessageType starting_message_type = 41;
+   * @generated from field: optional aiserver.v1.StartingMessageType starting_message_type = 41;
    */
-  startingMessageType = StartingMessageType.UNSPECIFIED;
+  startingMessageType?: StartingMessageType;
 
   /**
-   * @generated from field: bool open_as_cursor_github_app = 42;
+   * @generated from field: optional bool open_as_cursor_github_app = 42;
    */
-  openAsCursorGithubApp = false;
+  openAsCursorGithubApp?: boolean;
 
   /**
-   * @generated from field: bool skip_reviewer_request = 43;
+   * @generated from field: optional bool skip_reviewer_request = 43;
    */
-  skipReviewerRequest = false;
+  skipReviewerRequest?: boolean;
 
   /**
-   * @generated from field: agent.v1.ConversationAction conversation_action = 44;
+   * @generated from field: optional agent.v1.ConversationAction conversation_action = 44;
    */
   conversationAction?: ConversationAction;
 
   /**
-   * @generated from field: bool test_mode_enabled = 45;
+   * @generated from field: optional bool test_mode_enabled = 45;
    */
-  testModeEnabled = false;
+  testModeEnabled?: boolean;
 
   /**
-   * @generated from field: string agent_session_id = 46;
+   * @generated from field: optional string agent_session_id = 46;
    */
-  agentSessionId = "";
+  agentSessionId?: string;
 
   /**
-   * @generated from field: agent.v1.ConversationStateStructure conversation_state = 47;
+   * @generated from field: optional agent.v1.ConversationStateStructure conversation_state = 47;
    */
   conversationState?: ConversationStateStructure;
 
@@ -29345,44 +29345,44 @@ export class StartBackgroundComposerFromSnapshotRequest extends Message<StartBac
   preFetchedBlobs: PreFetchedBlob[] = [];
 
   /**
-   * @generated from field: string kickoff_message_id = 49;
+   * @generated from field: optional string kickoff_message_id = 49;
    */
-  kickoffMessageId = "";
+  kickoffMessageId?: string;
 
   /**
-   * @generated from field: string name = 50;
+   * @generated from field: optional string name = 50;
    */
-  name = "";
+  name?: string;
 
   /**
-   * @generated from field: bool enable_setup_vm_environment_tool = 51;
+   * @generated from field: optional bool enable_setup_vm_environment_tool = 51;
    */
-  enableSetupVmEnvironmentTool = false;
+  enableSetupVmEnvironmentTool?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.GrindModeConfig grind_mode_config = 52;
+   * @generated from field: optional aiserver.v1.GrindModeConfig grind_mode_config = 52;
    */
   grindModeConfig?: GrindModeConfig;
 
   /**
-   * @generated from field: bool should_synthesize = 53;
+   * @generated from field: optional bool should_synthesize = 53;
    */
-  shouldSynthesize = false;
+  shouldSynthesize?: boolean;
 
   /**
-   * @generated from field: bool use_private_worker = 55;
+   * @generated from field: optional bool use_private_worker = 55;
    */
-  usePrivateWorker = false;
+  usePrivateWorker?: boolean;
 
   /**
-   * @generated from field: bool force_non_chargeable = 56;
+   * @generated from field: optional bool force_non_chargeable = 56;
    */
-  forceNonChargeable = false;
+  forceNonChargeable?: boolean;
 
   /**
-   * @generated from field: string pr_url = 57;
+   * @generated from field: optional string pr_url = 57;
    */
-  prUrl = "";
+  prUrl?: string;
 
   /**
    * @generated from field: repeated agent.v1.RequestedModel requested_models = 58;
@@ -29395,39 +29395,39 @@ export class StartBackgroundComposerFromSnapshotRequest extends Message<StartBac
   labels: PrivateWorkerLabel[] = [];
 
   /**
-   * @generated from field: bool skip_user_install_commands_and_cloud_testing = 60;
+   * @generated from field: optional bool skip_user_install_commands_and_cloud_testing = 60;
    */
-  skipUserInstallCommandsAndCloudTesting = false;
+  skipUserInstallCommandsAndCloudTesting?: boolean;
 
   /**
-   * @generated from field: string automation_id = 73;
+   * @generated from field: optional string automation_id = 73;
    */
-  automationId = "";
+  automationId?: string;
 
   /**
-   * @generated from field: aiserver.v1.CloudAgentEffortMode effort_mode = 75;
+   * @generated from field: optional aiserver.v1.CloudAgentEffortMode effort_mode = 75;
    */
-  effortMode = CloudAgentEffortMode.UNSPECIFIED;
+  effortMode?: CloudAgentEffortMode;
 
   /**
-   * @generated from field: bool auto_proceed_after_planning = 76;
+   * @generated from field: optional bool auto_proceed_after_planning = 76;
    */
-  autoProceedAfterPlanning = false;
+  autoProceedAfterPlanning?: boolean;
 
   /**
-   * @generated from field: int64 time_budget_seconds = 77;
+   * @generated from field: optional int64 time_budget_seconds = 77;
    */
-  timeBudgetSeconds = protoInt64.zero;
+  timeBudgetSeconds?: bigint;
 
   /**
-   * @generated from field: int64 time_budget_ms = 78;
+   * @generated from field: optional int64 time_budget_ms = 78;
    */
-  timeBudgetMs = protoInt64.zero;
+  timeBudgetMs?: bigint;
 
   /**
-   * @generated from field: bool init_empty_repo = 79;
+   * @generated from field: optional bool init_empty_repo = 79;
    */
-  initEmptyRepo = false;
+  initEmptyRepo?: boolean;
 
   /**
    * @generated from field: repeated agent.v1.AgentSkill skills = 80;
@@ -29435,24 +29435,24 @@ export class StartBackgroundComposerFromSnapshotRequest extends Message<StartBac
   skills: AgentSkill[] = [];
 
   /**
-   * @generated from field: string cloud_plugin_manifest_json = 81;
+   * @generated from field: optional string cloud_plugin_manifest_json = 81;
    */
-  cloudPluginManifestJson = "";
+  cloudPluginManifestJson?: string;
 
   /**
-   * @generated from field: string cloud_plugin_snapshot_token = 82;
+   * @generated from field: optional string cloud_plugin_snapshot_token = 82;
    */
-  cloudPluginSnapshotToken = "";
+  cloudPluginSnapshotToken?: string;
 
   /**
-   * @generated from field: aiserver.v1.ExternalSourceMetadata external_source_metadata = 94;
+   * @generated from field: optional aiserver.v1.ExternalSourceMetadata external_source_metadata = 94;
    */
   externalSourceMetadata?: ExternalSourceMetadata;
 
   /**
-   * @generated from field: string mcp_config_json = 95;
+   * @generated from field: optional string mcp_config_json = 95;
    */
-  mcpConfigJson = "";
+  mcpConfigJson?: string;
 
   /**
    * @generated from field: repeated agent.v1.CustomSubagent custom_subagents = 96;
@@ -29460,22 +29460,22 @@ export class StartBackgroundComposerFromSnapshotRequest extends Message<StartBac
   customSubagents: CustomSubagent[] = [];
 
   /**
-   * @generated from field: aiserver.v1.PrivateWorkerOwnerFilter private_worker_owner_filter = 97;
+   * @generated from field: optional aiserver.v1.PrivateWorkerOwnerFilter private_worker_owner_filter = 97;
    */
   privateWorkerOwnerFilter?: PrivateWorkerOwnerFilter;
 
   /**
-   * @generated from field: int32 team_id = 98;
+   * @generated from field: optional int32 team_id = 98;
    */
-  teamId = 0;
+  teamId?: number;
 
   /**
-   * @generated from field: aiserver.v1.CloudSubagentParentReference cloud_subagent_parent = 99;
+   * @generated from field: optional aiserver.v1.CloudSubagentParentReference cloud_subagent_parent = 99;
    */
   cloudSubagentParent?: CloudSubagentParentReference;
 
   /**
-   * @generated from field: aiserver.v1.PrivateWorkspaceIdentifier private_workspace_identifier = 100;
+   * @generated from field: optional aiserver.v1.PrivateWorkspaceIdentifier private_workspace_identifier = 100;
    */
   privateWorkspaceIdentifier?: PrivateWorkspaceIdentifier;
 
@@ -29485,24 +29485,24 @@ export class StartBackgroundComposerFromSnapshotRequest extends Message<StartBac
   requestedAdditionalStoreIds: string[] = [];
 
   /**
-   * @generated from field: bool is_slack_v2 = 104;
+   * @generated from field: optional bool is_slack_v2 = 104;
    */
-  isSlackV2 = false;
+  isSlackV2?: boolean;
 
   /**
-   * @generated from field: string named_agent_id = 105;
+   * @generated from field: optional string named_agent_id = 105;
    */
-  namedAgentId = "";
+  namedAgentId?: string;
 
   /**
-   * @generated from field: string named_agent_session_key = 106;
+   * @generated from field: optional string named_agent_session_key = 106;
    */
-  namedAgentSessionKey = "";
+  namedAgentSessionKey?: string;
 
   /**
-   * @generated from field: string named_agent_session_kind = 107;
+   * @generated from field: optional string named_agent_session_kind = 107;
    */
-  namedAgentSessionKind = "";
+  namedAgentSessionKind?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.AgentStoreMount store_mounts = 108;
@@ -29510,12 +29510,12 @@ export class StartBackgroundComposerFromSnapshotRequest extends Message<StartBac
   storeMounts: AgentStoreMount[] = [];
 
   /**
-   * @generated from field: aiserver.v1.NamedAgentProfile named_agent_profile = 109;
+   * @generated from field: optional aiserver.v1.NamedAgentProfile named_agent_profile = 109;
    */
   namedAgentProfile?: NamedAgentProfile;
 
   /**
-   * @generated from field: aiserver.v1.AgentWorkspaceBinding workspace_binding = 110;
+   * @generated from field: optional aiserver.v1.AgentWorkspaceBinding workspace_binding = 110;
    */
   workspaceBinding?: AgentWorkspaceBinding;
 
@@ -29525,29 +29525,29 @@ export class StartBackgroundComposerFromSnapshotRequest extends Message<StartBac
   runEnvVars: { [key: string]: string } = {};
 
   /**
-   * @generated from field: string selected_private_worker_id = 112;
+   * @generated from field: optional string selected_private_worker_id = 112;
    */
-  selectedPrivateWorkerId = "";
+  selectedPrivateWorkerId?: string;
 
   /**
-   * @generated from field: bool is_slack_v1_5 = 113;
+   * @generated from field: optional bool is_slack_v1_5 = 113;
    */
-  isSlackV15 = false;
+  isSlackV15?: boolean;
 
   /**
-   * @generated from field: bool use_experimental_model_opt_out = 114;
+   * @generated from field: optional bool use_experimental_model_opt_out = 114;
    */
-  useExperimentalModelOptOut = false;
+  useExperimentalModelOptOut?: boolean;
 
   /**
-   * @generated from field: string forked_from_bc_id = 115;
+   * @generated from field: optional string forked_from_bc_id = 115;
    */
-  forkedFromBcId = "";
+  forkedFromBcId?: string;
 
   /**
-   * @generated from field: string requested_environment_build_id = 116;
+   * @generated from field: optional string requested_environment_build_id = 116;
    */
-  requestedEnvironmentBuildId = "";
+  requestedEnvironmentBuildId?: string;
 
   /**
    * @generated from field: map<string, string> external_metadata = 117;
@@ -29555,22 +29555,22 @@ export class StartBackgroundComposerFromSnapshotRequest extends Message<StartBac
   externalMetadata: { [key: string]: string } = {};
 
   /**
-   * @generated from field: aiserver.v1.EnvironmentSetupRunStartedMetadata environment_setup_run_started_metadata = 118;
+   * @generated from field: optional aiserver.v1.EnvironmentSetupRunStartedMetadata environment_setup_run_started_metadata = 118;
    */
   environmentSetupRunStartedMetadata?: EnvironmentSetupRunStartedMetadata;
 
   /**
-   * @generated from field: agent.v1.ProjectDetails project_details = 119;
+   * @generated from field: optional agent.v1.ProjectDetails project_details = 119;
    */
   projectDetails?: ProjectDetails;
 
   /**
-   * @generated from field: bool disable_pr_management_tool = 120;
+   * @generated from field: optional bool disable_pr_management_tool = 120;
    */
-  disablePrManagementTool = false;
+  disablePrManagementTool?: boolean;
 
   /**
-   * @generated from field: agent.v1.SystemPromptSpec system_prompt_spec = 121;
+   * @generated from field: optional agent.v1.SystemPromptSpec system_prompt_spec = 121;
    */
   systemPromptSpec?: SystemPromptSpec;
 
@@ -29585,96 +29585,96 @@ export class StartBackgroundComposerFromSnapshotRequest extends Message<StartBac
     { no: 1, name: "snapshot_name_or_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "prompt", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "files", kind: "message", T: StartBackgroundComposerFromSnapshotRequest_File, repeated: true },
-    { no: 4, name: "model_details", kind: "message", T: ModelDetails },
-    { no: 5, name: "repository_info", kind: "message", T: HeadlessAgenticComposerRepositoryInfo },
+    { no: 4, name: "model_details", kind: "message", T: ModelDetails, opt: true },
+    { no: 5, name: "repository_info", kind: "message", T: HeadlessAgenticComposerRepositoryInfo, opt: true },
     { no: 6, name: "snapshot_workspace_root_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 8, name: "start_for_auth_id_on_team", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 9, name: "auto_branch", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 10, name: "return_immediately", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 11, name: "devcontainer_starting_point", kind: "message", T: DevcontainerStartingPoint },
-    { no: 12, name: "force_vm_backend", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 11, name: "devcontainer_starting_point", kind: "message", T: DevcontainerStartingPoint, opt: true },
+    { no: 12, name: "force_vm_backend", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 13, name: "images", kind: "message", T: ImageProto, repeated: true },
-    { no: 14, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 15, name: "force_cluster", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 14, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 15, name: "force_cluster", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 16, name: "additional_model_details", kind: "message", T: ModelDetails, repeated: true },
     { no: 17, name: "rich_prompt", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 18, name: "conversation_history", kind: "message", T: ConversationMessage, repeated: true },
     { no: 19, name: "documentation_identifiers", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 20, name: "use_web", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 20, name: "use_web", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 21, name: "external_links", kind: "message", T: ComposerExternalLink, repeated: true },
     { no: 22, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 23, name: "source", kind: "enum", T: proto3.getEnumType(BackgroundComposerSource) },
-    { no: 24, name: "slack_channel_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 25, name: "slack_message_timestamp", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 26, name: "add_initial_message_to_responses", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 27, name: "slack_team_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 28, name: "linear_issue_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 29, name: "force_machine_template", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 30, name: "linear_org_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 31, name: "base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 32, name: "client_ip", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 33, name: "linear_issue_identifier", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 34, name: "prompt_group_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 35, name: "pod_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 36, name: "wait_on_branch_name", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 37, name: "auto_create_pr", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 38, name: "custom_branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 39, name: "webhook_config", kind: "message", T: StartBackgroundComposerFromSnapshotRequest_WebhookConfig },
-    { no: 40, name: "github_issue_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 41, name: "starting_message_type", kind: "enum", T: proto3.getEnumType(StartingMessageType) },
-    { no: 42, name: "open_as_cursor_github_app", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 43, name: "skip_reviewer_request", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 44, name: "conversation_action", kind: "message", T: ConversationAction },
-    { no: 45, name: "test_mode_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 46, name: "agent_session_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 47, name: "conversation_state", kind: "message", T: ConversationStateStructure },
+    { no: 23, name: "source", kind: "enum", T: proto3.getEnumType(BackgroundComposerSource), opt: true },
+    { no: 24, name: "slack_channel_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 25, name: "slack_message_timestamp", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 26, name: "add_initial_message_to_responses", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 27, name: "slack_team_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 28, name: "linear_issue_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 29, name: "force_machine_template", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 30, name: "linear_org_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 31, name: "base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 32, name: "client_ip", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 33, name: "linear_issue_identifier", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 34, name: "prompt_group_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 35, name: "pod_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 36, name: "wait_on_branch_name", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 37, name: "auto_create_pr", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 38, name: "custom_branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 39, name: "webhook_config", kind: "message", T: StartBackgroundComposerFromSnapshotRequest_WebhookConfig, opt: true },
+    { no: 40, name: "github_issue_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 41, name: "starting_message_type", kind: "enum", T: proto3.getEnumType(StartingMessageType), opt: true },
+    { no: 42, name: "open_as_cursor_github_app", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 43, name: "skip_reviewer_request", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 44, name: "conversation_action", kind: "message", T: ConversationAction, opt: true },
+    { no: 45, name: "test_mode_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 46, name: "agent_session_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 47, name: "conversation_state", kind: "message", T: ConversationStateStructure, opt: true },
     { no: 48, name: "pre_fetched_blobs", kind: "message", T: PreFetchedBlob, repeated: true },
-    { no: 49, name: "kickoff_message_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 50, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 51, name: "enable_setup_vm_environment_tool", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 52, name: "grind_mode_config", kind: "message", T: GrindModeConfig },
-    { no: 53, name: "should_synthesize", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 55, name: "use_private_worker", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 56, name: "force_non_chargeable", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 57, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 49, name: "kickoff_message_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 50, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 51, name: "enable_setup_vm_environment_tool", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 52, name: "grind_mode_config", kind: "message", T: GrindModeConfig, opt: true },
+    { no: 53, name: "should_synthesize", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 55, name: "use_private_worker", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 56, name: "force_non_chargeable", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 57, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 58, name: "requested_models", kind: "message", T: RequestedModel, repeated: true },
     { no: 59, name: "labels", kind: "message", T: PrivateWorkerLabel, repeated: true },
-    { no: 60, name: "skip_user_install_commands_and_cloud_testing", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 73, name: "automation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 75, name: "effort_mode", kind: "enum", T: proto3.getEnumType(CloudAgentEffortMode) },
-    { no: 76, name: "auto_proceed_after_planning", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 77, name: "time_budget_seconds", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 78, name: "time_budget_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 79, name: "init_empty_repo", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 60, name: "skip_user_install_commands_and_cloud_testing", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 73, name: "automation_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 75, name: "effort_mode", kind: "enum", T: proto3.getEnumType(CloudAgentEffortMode), opt: true },
+    { no: 76, name: "auto_proceed_after_planning", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 77, name: "time_budget_seconds", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
+    { no: 78, name: "time_budget_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
+    { no: 79, name: "init_empty_repo", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 80, name: "skills", kind: "message", T: AgentSkill, repeated: true },
-    { no: 81, name: "cloud_plugin_manifest_json", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 82, name: "cloud_plugin_snapshot_token", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 94, name: "external_source_metadata", kind: "message", T: ExternalSourceMetadata },
-    { no: 95, name: "mcp_config_json", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 81, name: "cloud_plugin_manifest_json", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 82, name: "cloud_plugin_snapshot_token", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 94, name: "external_source_metadata", kind: "message", T: ExternalSourceMetadata, opt: true },
+    { no: 95, name: "mcp_config_json", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 96, name: "custom_subagents", kind: "message", T: CustomSubagent, repeated: true },
-    { no: 97, name: "private_worker_owner_filter", kind: "message", T: PrivateWorkerOwnerFilter },
-    { no: 98, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 99, name: "cloud_subagent_parent", kind: "message", T: CloudSubagentParentReference },
-    { no: 100, name: "private_workspace_identifier", kind: "message", T: PrivateWorkspaceIdentifier },
+    { no: 97, name: "private_worker_owner_filter", kind: "message", T: PrivateWorkerOwnerFilter, opt: true },
+    { no: 98, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 99, name: "cloud_subagent_parent", kind: "message", T: CloudSubagentParentReference, opt: true },
+    { no: 100, name: "private_workspace_identifier", kind: "message", T: PrivateWorkspaceIdentifier, opt: true },
     { no: 101, name: "requested_additional_store_ids", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 104, name: "is_slack_v2", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 105, name: "named_agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 106, name: "named_agent_session_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 107, name: "named_agent_session_kind", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 104, name: "is_slack_v2", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 105, name: "named_agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 106, name: "named_agent_session_key", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 107, name: "named_agent_session_kind", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 108, name: "store_mounts", kind: "message", T: AgentStoreMount, repeated: true },
-    { no: 109, name: "named_agent_profile", kind: "message", T: NamedAgentProfile },
-    { no: 110, name: "workspace_binding", kind: "message", T: AgentWorkspaceBinding },
+    { no: 109, name: "named_agent_profile", kind: "message", T: NamedAgentProfile, opt: true },
+    { no: 110, name: "workspace_binding", kind: "message", T: AgentWorkspaceBinding, opt: true },
     { no: 111, name: "run_env_vars", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
-    { no: 112, name: "selected_private_worker_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 113, name: "is_slack_v1_5", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 114, name: "use_experimental_model_opt_out", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 115, name: "forked_from_bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 116, name: "requested_environment_build_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 112, name: "selected_private_worker_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 113, name: "is_slack_v1_5", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 114, name: "use_experimental_model_opt_out", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 115, name: "forked_from_bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 116, name: "requested_environment_build_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 117, name: "external_metadata", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
-    { no: 118, name: "environment_setup_run_started_metadata", kind: "message", T: EnvironmentSetupRunStartedMetadata },
-    { no: 119, name: "project_details", kind: "message", T: ProjectDetails },
-    { no: 120, name: "disable_pr_management_tool", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 121, name: "system_prompt_spec", kind: "message", T: SystemPromptSpec },
+    { no: 118, name: "environment_setup_run_started_metadata", kind: "message", T: EnvironmentSetupRunStartedMetadata, opt: true },
+    { no: 119, name: "project_details", kind: "message", T: ProjectDetails, opt: true },
+    { no: 120, name: "disable_pr_management_tool", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 121, name: "system_prompt_spec", kind: "message", T: SystemPromptSpec, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StartBackgroundComposerFromSnapshotRequest {
@@ -29747,9 +29747,9 @@ export class StartBackgroundComposerFromSnapshotRequest_WebhookConfig extends Me
   url = "";
 
   /**
-   * @generated from field: string secret = 2;
+   * @generated from field: optional string secret = 2;
    */
-  secret = "";
+  secret?: string;
 
   constructor(data?: PartialMessage<StartBackgroundComposerFromSnapshotRequest_WebhookConfig>) {
     super();
@@ -29760,7 +29760,7 @@ export class StartBackgroundComposerFromSnapshotRequest_WebhookConfig extends Me
   static readonly typeName = "aiserver.v1.StartBackgroundComposerFromSnapshotRequest.WebhookConfig";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "secret", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "secret", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StartBackgroundComposerFromSnapshotRequest_WebhookConfig {
@@ -29785,19 +29785,19 @@ export class StartBackgroundComposerFromSnapshotRequest_WebhookConfig extends Me
  */
 export class StartBackgroundComposerFromSnapshotResponse extends Message<StartBackgroundComposerFromSnapshotResponse> {
   /**
-   * @generated from field: aiserver.v1.BackgroundComposer composer = 1;
+   * @generated from field: optional aiserver.v1.BackgroundComposer composer = 1;
    */
   composer?: BackgroundComposer;
 
   /**
-   * @generated from field: bool was_swapped_to_default = 2;
+   * @generated from field: optional bool was_swapped_to_default = 2;
    */
-  wasSwappedToDefault = false;
+  wasSwappedToDefault?: boolean;
 
   /**
-   * @generated from field: string initial_run_id = 3;
+   * @generated from field: optional string initial_run_id = 3;
    */
-  initialRunId = "";
+  initialRunId?: string;
 
   constructor(data?: PartialMessage<StartBackgroundComposerFromSnapshotResponse>) {
     super();
@@ -29807,9 +29807,9 @@ export class StartBackgroundComposerFromSnapshotResponse extends Message<StartBa
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.StartBackgroundComposerFromSnapshotResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "composer", kind: "message", T: BackgroundComposer },
-    { no: 2, name: "was_swapped_to_default", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "initial_run_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "composer", kind: "message", T: BackgroundComposer, opt: true },
+    { no: 2, name: "was_swapped_to_default", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 3, name: "initial_run_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StartBackgroundComposerFromSnapshotResponse {
@@ -29839,7 +29839,7 @@ export class StartCloudAgentLoadTestRequest extends Message<StartCloudAgentLoadT
   scenarioName = "";
 
   /**
-   * @generated from field: aiserver.v1.CloudAgentSyntheticsScenarioInput custom_scenario = 2;
+   * @generated from field: optional aiserver.v1.CloudAgentSyntheticsScenarioInput custom_scenario = 2;
    */
   customScenario?: CloudAgentSyntheticsScenarioInput;
 
@@ -29877,7 +29877,7 @@ export class StartCloudAgentLoadTestRequest extends Message<StartCloudAgentLoadT
   static readonly typeName = "aiserver.v1.StartCloudAgentLoadTestRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "scenario_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "custom_scenario", kind: "message", T: CloudAgentSyntheticsScenarioInput },
+    { no: 2, name: "custom_scenario", kind: "message", T: CloudAgentSyntheticsScenarioInput, opt: true },
     { no: 3, name: "pool_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "count", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
     { no: 5, name: "per_identity_create_per_min", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
@@ -30097,9 +30097,9 @@ export class StartSideChatBackgroundComposerRequest extends Message<StartSideCha
   parentBcId = "";
 
   /**
-   * @generated from field: string name = 2;
+   * @generated from field: optional string name = 2;
    */
-  name = "";
+  name?: string;
 
   /**
    * @generated from field: aiserver.v1.BackgroundComposerSource creation_source = 3;
@@ -30107,9 +30107,9 @@ export class StartSideChatBackgroundComposerRequest extends Message<StartSideCha
   creationSource = BackgroundComposerSource.UNSPECIFIED;
 
   /**
-   * @generated from field: string creation_id = 4;
+   * @generated from field: optional string creation_id = 4;
    */
-  creationId = "";
+  creationId?: string;
 
   constructor(data?: PartialMessage<StartSideChatBackgroundComposerRequest>) {
     super();
@@ -30120,9 +30120,9 @@ export class StartSideChatBackgroundComposerRequest extends Message<StartSideCha
   static readonly typeName = "aiserver.v1.StartSideChatBackgroundComposerRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "parent_bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "creation_source", kind: "enum", T: proto3.getEnumType(BackgroundComposerSource) },
-    { no: 4, name: "creation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "creation_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StartSideChatBackgroundComposerRequest {
@@ -30147,7 +30147,7 @@ export class StartSideChatBackgroundComposerRequest extends Message<StartSideCha
  */
 export class StartSideChatBackgroundComposerResponse extends Message<StartSideChatBackgroundComposerResponse> {
   /**
-   * @generated from field: aiserver.v1.BackgroundComposer composer = 1;
+   * @generated from field: optional aiserver.v1.BackgroundComposer composer = 1;
    */
   composer?: BackgroundComposer;
 
@@ -30159,7 +30159,7 @@ export class StartSideChatBackgroundComposerResponse extends Message<StartSideCh
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.StartSideChatBackgroundComposerResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "composer", kind: "message", T: BackgroundComposer },
+    { no: 1, name: "composer", kind: "message", T: BackgroundComposer, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StartSideChatBackgroundComposerResponse {
@@ -30392,14 +30392,14 @@ export class StreamConversationRequest extends Message<StreamConversationRequest
   bcId = "";
 
   /**
-   * @generated from field: string offset_key = 2;
+   * @generated from field: optional string offset_key = 2;
    */
-  offsetKey = "";
+  offsetKey?: string;
 
   /**
-   * @generated from field: bool filter_heavy_step_data = 3;
+   * @generated from field: optional bool filter_heavy_step_data = 3;
    */
-  filterHeavyStepData = false;
+  filterHeavyStepData?: boolean;
 
   /**
    * @generated from field: bool should_send_prefetched_blobs_first = 4;
@@ -30412,39 +30412,39 @@ export class StreamConversationRequest extends Message<StreamConversationRequest
   preFetchedBlobIds: Uint8Array[] = [];
 
   /**
-   * @generated from field: bool prefetch_only_last_step_per_turn = 6;
+   * @generated from field: optional bool prefetch_only_last_step_per_turn = 6;
    */
-  prefetchOnlyLastStepPerTurn = false;
+  prefetchOnlyLastStepPerTurn?: boolean;
 
   /**
-   * @generated from field: bool send_stream_signal_after_prefetch = 7;
+   * @generated from field: optional bool send_stream_signal_after_prefetch = 7;
    */
-  sendStreamSignalAfterPrefetch = false;
+  sendStreamSignalAfterPrefetch?: boolean;
 
   /**
-   * @generated from field: uint32 max_blobs_after_prefetch = 8;
+   * @generated from field: optional uint32 max_blobs_after_prefetch = 8;
    */
-  maxBlobsAfterPrefetch = 0;
+  maxBlobsAfterPrefetch?: number;
 
   /**
-   * @generated from field: bool allow_streaming_when_terminal_status = 9;
+   * @generated from field: optional bool allow_streaming_when_terminal_status = 9;
    */
-  allowStreamingWhenTerminalStatus = false;
+  allowStreamingWhenTerminalStatus?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.PreFetchedBlobFilter pre_fetched_blob_filter = 10;
+   * @generated from field: optional aiserver.v1.PreFetchedBlobFilter pre_fetched_blob_filter = 10;
    */
   preFetchedBlobFilter?: PreFetchedBlobFilter;
 
   /**
-   * @generated from field: bool include_stream_heartbeats = 11;
+   * @generated from field: optional bool include_stream_heartbeats = 11;
    */
-  includeStreamHeartbeats = false;
+  includeStreamHeartbeats?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.StreamConversationPurpose purpose = 12;
+   * @generated from field: optional aiserver.v1.StreamConversationPurpose purpose = 12;
    */
-  purpose = StreamConversationPurpose.UNSPECIFIED;
+  purpose?: StreamConversationPurpose;
 
   constructor(data?: PartialMessage<StreamConversationRequest>) {
     super();
@@ -30455,17 +30455,17 @@ export class StreamConversationRequest extends Message<StreamConversationRequest
   static readonly typeName = "aiserver.v1.StreamConversationRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "offset_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "filter_heavy_step_data", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "offset_key", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "filter_heavy_step_data", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 4, name: "should_send_prefetched_blobs_first", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 5, name: "pre_fetched_blob_ids", kind: "scalar", T: 12 /* ScalarType.BYTES */, repeated: true },
-    { no: 6, name: "prefetch_only_last_step_per_turn", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 7, name: "send_stream_signal_after_prefetch", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 8, name: "max_blobs_after_prefetch", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 9, name: "allow_streaming_when_terminal_status", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 10, name: "pre_fetched_blob_filter", kind: "message", T: PreFetchedBlobFilter },
-    { no: 11, name: "include_stream_heartbeats", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 12, name: "purpose", kind: "enum", T: proto3.getEnumType(StreamConversationPurpose) },
+    { no: 6, name: "prefetch_only_last_step_per_turn", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 7, name: "send_stream_signal_after_prefetch", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 8, name: "max_blobs_after_prefetch", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
+    { no: 9, name: "allow_streaming_when_terminal_status", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 10, name: "pre_fetched_blob_filter", kind: "message", T: PreFetchedBlobFilter, opt: true },
+    { no: 11, name: "include_stream_heartbeats", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 12, name: "purpose", kind: "enum", T: proto3.getEnumType(StreamConversationPurpose), opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StreamConversationRequest {
@@ -30640,7 +30640,7 @@ export class StreamConversationResponse_CloudAgentStateWithIdAndOffset extends M
   blobId = new Uint8Array(0);
 
   /**
-   * @generated from field: aiserver.v1.CloudAgentState cloud_agent_state = 3;
+   * @generated from field: optional aiserver.v1.CloudAgentState cloud_agent_state = 3;
    */
   cloudAgentState?: CloudAgentState;
 
@@ -30664,7 +30664,7 @@ export class StreamConversationResponse_CloudAgentStateWithIdAndOffset extends M
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "offset_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
-    { no: 3, name: "cloud_agent_state", kind: "message", T: CloudAgentState },
+    { no: 3, name: "cloud_agent_state", kind: "message", T: CloudAgentState, opt: true },
     { no: 4, name: "pre_fetched_blobs", kind: "message", T: PreFetchedBlob, repeated: true },
     { no: 5, name: "user_display_infos", kind: "message", T: UserDisplayInfo, repeated: true },
   ]);
@@ -30733,7 +30733,7 @@ export class StreamConversationResponse_InitialState extends Message<StreamConve
   blobId = new Uint8Array(0);
 
   /**
-   * @generated from field: aiserver.v1.CloudAgentState cloud_agent_state = 2;
+   * @generated from field: optional aiserver.v1.CloudAgentState cloud_agent_state = 2;
    */
   cloudAgentState?: CloudAgentState;
 
@@ -30761,7 +30761,7 @@ export class StreamConversationResponse_InitialState extends Message<StreamConve
   static readonly typeName = "aiserver.v1.StreamConversationResponse.InitialState";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
-    { no: 2, name: "cloud_agent_state", kind: "message", T: CloudAgentState },
+    { no: 2, name: "cloud_agent_state", kind: "message", T: CloudAgentState, opt: true },
     { no: 4, name: "pre_fetched_blobs", kind: "message", T: PreFetchedBlob, repeated: true },
     { no: 5, name: "workflow_status", kind: "enum", T: proto3.getEnumType(CloudAgentWorkflowStatus) },
     { no: 6, name: "user_display_infos", kind: "message", T: UserDisplayInfo, repeated: true },
@@ -30794,7 +30794,7 @@ export class StreamConversationResponse_InteractionQueryWithOffset extends Messa
   offsetKey = "";
 
   /**
-   * @generated from field: agent.v1.InteractionQuery interaction_query = 2;
+   * @generated from field: optional agent.v1.InteractionQuery interaction_query = 2;
    */
   interactionQuery?: InteractionQuery;
 
@@ -30807,7 +30807,7 @@ export class StreamConversationResponse_InteractionQueryWithOffset extends Messa
   static readonly typeName = "aiserver.v1.StreamConversationResponse.InteractionQueryWithOffset";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "offset_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "interaction_query", kind: "message", T: InteractionQuery },
+    { no: 2, name: "interaction_query", kind: "message", T: InteractionQuery, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StreamConversationResponse_InteractionQueryWithOffset {
@@ -30837,7 +30837,7 @@ export class StreamConversationResponse_InteractionUpdateWithOffset extends Mess
   offsetKey = "";
 
   /**
-   * @generated from field: agent.v1.InteractionUpdate interaction_update = 2;
+   * @generated from field: optional agent.v1.InteractionUpdate interaction_update = 2;
    */
   interactionUpdate?: InteractionUpdate;
 
@@ -30855,7 +30855,7 @@ export class StreamConversationResponse_InteractionUpdateWithOffset extends Mess
   static readonly typeName = "aiserver.v1.StreamConversationResponse.InteractionUpdateWithOffset";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "offset_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "interaction_update", kind: "message", T: InteractionUpdate },
+    { no: 2, name: "interaction_update", kind: "message", T: InteractionUpdate, opt: true },
     { no: 3, name: "user_display_infos", kind: "message", T: UserDisplayInfo, repeated: true },
   ]);
 
@@ -30923,7 +30923,7 @@ export class StreamConversationResponse_ReadOnlySharedPodLifecycleEventWithOffse
   offsetKey = "";
 
   /**
-   * @generated from field: aiserver.v1.ReadOnlySharedPodLifecycleEvent read_only_shared_pod_lifecycle_event = 2;
+   * @generated from field: optional aiserver.v1.ReadOnlySharedPodLifecycleEvent read_only_shared_pod_lifecycle_event = 2;
    */
   readOnlySharedPodLifecycleEvent?: ReadOnlySharedPodLifecycleEvent;
 
@@ -30936,7 +30936,7 @@ export class StreamConversationResponse_ReadOnlySharedPodLifecycleEventWithOffse
   static readonly typeName = "aiserver.v1.StreamConversationResponse.ReadOnlySharedPodLifecycleEventWithOffset";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "offset_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "read_only_shared_pod_lifecycle_event", kind: "message", T: ReadOnlySharedPodLifecycleEvent },
+    { no: 2, name: "read_only_shared_pod_lifecycle_event", kind: "message", T: ReadOnlySharedPodLifecycleEvent, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StreamConversationResponse_ReadOnlySharedPodLifecycleEventWithOffset {
@@ -30997,7 +30997,7 @@ export class StreamConversationResponse_TransientErrorWithOffset extends Message
   offsetKey = "";
 
   /**
-   * @generated from field: aiserver.v1.TransientError transient_error = 2;
+   * @generated from field: optional aiserver.v1.TransientError transient_error = 2;
    */
   transientError?: TransientError;
 
@@ -31010,7 +31010,7 @@ export class StreamConversationResponse_TransientErrorWithOffset extends Message
   static readonly typeName = "aiserver.v1.StreamConversationResponse.TransientErrorWithOffset";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "offset_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "transient_error", kind: "message", T: TransientError },
+    { no: 2, name: "transient_error", kind: "message", T: TransientError, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StreamConversationResponse_TransientErrorWithOffset {
@@ -31040,7 +31040,7 @@ export class StreamConversationResponse_WorkerLifecycleEventWithOffset extends M
   offsetKey = "";
 
   /**
-   * @generated from field: aiserver.v1.WorkerLifecycleEvent worker_lifecycle_event = 2;
+   * @generated from field: optional aiserver.v1.WorkerLifecycleEvent worker_lifecycle_event = 2;
    */
   workerLifecycleEvent?: WorkerLifecycleEvent;
 
@@ -31053,7 +31053,7 @@ export class StreamConversationResponse_WorkerLifecycleEventWithOffset extends M
   static readonly typeName = "aiserver.v1.StreamConversationResponse.WorkerLifecycleEventWithOffset";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "offset_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "worker_lifecycle_event", kind: "message", T: WorkerLifecycleEvent },
+    { no: 2, name: "worker_lifecycle_event", kind: "message", T: WorkerLifecycleEvent, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StreamConversationResponse_WorkerLifecycleEventWithOffset {
@@ -31126,14 +31126,14 @@ export class SubmitInteractionResponseBackgroundComposerRequest extends Message<
   bcId = "";
 
   /**
-   * @generated from field: agent.v1.InteractionResponse interaction_response = 2;
+   * @generated from field: optional agent.v1.InteractionResponse interaction_response = 2;
    */
   interactionResponse?: InteractionResponse;
 
   /**
-   * @generated from field: string ask_question_tool_call_id = 3;
+   * @generated from field: optional string ask_question_tool_call_id = 3;
    */
-  askQuestionToolCallId = "";
+  askQuestionToolCallId?: string;
 
   constructor(data?: PartialMessage<SubmitInteractionResponseBackgroundComposerRequest>) {
     super();
@@ -31144,8 +31144,8 @@ export class SubmitInteractionResponseBackgroundComposerRequest extends Message<
   static readonly typeName = "aiserver.v1.SubmitInteractionResponseBackgroundComposerRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "interaction_response", kind: "message", T: InteractionResponse },
-    { no: 3, name: "ask_question_tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "interaction_response", kind: "message", T: InteractionResponse, opt: true },
+    { no: 3, name: "ask_question_tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SubmitInteractionResponseBackgroundComposerRequest {
@@ -31340,7 +31340,7 @@ export class SyncLiveActivityRequest extends Message<SyncLiveActivityRequest> {
   activityPushToken = "";
 
   /**
-   * @generated from field: aiserver.v1.LiveActivityContentState content_state = 4;
+   * @generated from field: optional aiserver.v1.LiveActivityContentState content_state = 4;
    */
   contentState?: LiveActivityContentState;
 
@@ -31365,7 +31365,7 @@ export class SyncLiveActivityRequest extends Message<SyncLiveActivityRequest> {
     { no: 1, name: "device_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "platform", kind: "enum", T: proto3.getEnumType(PushPlatform) },
     { no: 3, name: "activity_push_token", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "content_state", kind: "message", T: LiveActivityContentState },
+    { no: 4, name: "content_state", kind: "message", T: LiveActivityContentState, opt: true },
     { no: 5, name: "state_version", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
     { no: 6, name: "bundle_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
@@ -31506,14 +31506,14 @@ export class TeamEnvironment extends Message<TeamEnvironment> {
   scmRepoNodeId = "";
 
   /**
-   * @generated from field: string git_enterprise_uuid = 9;
+   * @generated from field: optional string git_enterprise_uuid = 9;
    */
-  gitEnterpriseUuid = "";
+  gitEnterpriseUuid?: string;
 
   /**
-   * @generated from field: string environment_public_id = 10;
+   * @generated from field: optional string environment_public_id = 10;
    */
-  environmentPublicId = "";
+  environmentPublicId?: string;
 
   constructor(data?: PartialMessage<TeamEnvironment>) {
     super();
@@ -31531,8 +31531,8 @@ export class TeamEnvironment extends Message<TeamEnvironment> {
     { no: 6, name: "created_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 7, name: "updated_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 8, name: "scm_repo_node_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "git_enterprise_uuid", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 9, name: "git_enterprise_uuid", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 10, name: "environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): TeamEnvironment {
@@ -31685,9 +31685,9 @@ export class TriggerEnvironmentBuildRequest extends Message<TriggerEnvironmentBu
   environmentPublicId = "";
 
   /**
-   * @generated from field: bool is_draft = 2;
+   * @generated from field: optional bool is_draft = 2;
    */
-  isDraft = false;
+  isDraft?: boolean;
 
   /**
    * @generated from field: repeated aiserver.v1.RepoStartingRef refs = 3;
@@ -31703,7 +31703,7 @@ export class TriggerEnvironmentBuildRequest extends Message<TriggerEnvironmentBu
   static readonly typeName = "aiserver.v1.TriggerEnvironmentBuildRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "is_draft", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "is_draft", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 3, name: "refs", kind: "message", T: RepoStartingRef, repeated: true },
   ]);
 
@@ -32019,7 +32019,7 @@ export class UnshareBackgroundComposerArtifactRequest extends Message<UnshareBac
  */
 export class UnshareBackgroundComposerArtifactResponse extends Message<UnshareBackgroundComposerArtifactResponse> {
   /**
-   * @generated from field: aiserver.v1.BackgroundComposerSharedArtifact artifact = 1;
+   * @generated from field: optional aiserver.v1.BackgroundComposerSharedArtifact artifact = 1;
    */
   artifact?: BackgroundComposerSharedArtifact;
 
@@ -32031,7 +32031,7 @@ export class UnshareBackgroundComposerArtifactResponse extends Message<UnshareBa
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.UnshareBackgroundComposerArtifactResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "artifact", kind: "message", T: BackgroundComposerSharedArtifact },
+    { no: 1, name: "artifact", kind: "message", T: BackgroundComposerSharedArtifact, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UnshareBackgroundComposerArtifactResponse {
@@ -32216,74 +32216,74 @@ export class UpdateBackgroundComposerExperimentalModelOptOutResponse extends Mes
  */
 export class UpdateBackgroundComposerUserSettingsRequest extends Message<UpdateBackgroundComposerUserSettingsRequest> {
   /**
-   * @generated from field: string model_name = 1;
+   * @generated from field: optional string model_name = 1;
    */
-  modelName = "";
+  modelName?: string;
 
   /**
-   * @generated from field: bool slack_notifications_for_web_enabled = 2;
+   * @generated from field: optional bool slack_notifications_for_web_enabled = 2;
    */
-  slackNotificationsForWebEnabled = false;
+  slackNotificationsForWebEnabled?: boolean;
 
   /**
-   * @generated from field: bool ci_failure_followup_enabled = 3;
+   * @generated from field: optional bool ci_failure_followup_enabled = 3;
    */
-  ciFailureFollowupEnabled = false;
+  ciFailureFollowupEnabled?: boolean;
 
   /**
-   * @generated from field: bool browser_use_enabled = 4;
+   * @generated from field: optional bool browser_use_enabled = 4;
    */
-  browserUseEnabled = false;
+  browserUseEnabled?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.AutoCreatePrSetting auto_create_pr_setting = 5;
+   * @generated from field: optional aiserver.v1.AutoCreatePrSetting auto_create_pr_setting = 5;
    */
-  autoCreatePrSetting = AutoCreatePrSetting.UNSPECIFIED;
+  autoCreatePrSetting?: AutoCreatePrSetting;
 
   /**
-   * @generated from field: aiserver.v1.PrReviewOpenDestinationMode pr_review_open_destination = 6;
+   * @generated from field: optional aiserver.v1.PrReviewOpenDestinationMode pr_review_open_destination = 6;
    */
-  prReviewOpenDestination = PrReviewOpenDestinationMode.UNSPECIFIED;
+  prReviewOpenDestination?: PrReviewOpenDestinationMode;
 
   /**
-   * @generated from field: aiserver.v1.GithubArtifactPostingMode github_artifact_posting = 7;
+   * @generated from field: optional aiserver.v1.GithubArtifactPostingMode github_artifact_posting = 7;
    */
-  githubArtifactPosting = GithubArtifactPostingMode.UNSPECIFIED;
+  githubArtifactPosting?: GithubArtifactPostingMode;
 
   /**
-   * @generated from field: aiserver.v1.CloudAgentEgressProtectionMode egress_protection_mode = 8;
+   * @generated from field: optional aiserver.v1.CloudAgentEgressProtectionMode egress_protection_mode = 8;
    */
-  egressProtectionMode = CloudAgentEgressProtectionMode.UNSPECIFIED;
+  egressProtectionMode?: CloudAgentEgressProtectionMode;
 
   /**
-   * @generated from field: aiserver.v1.BackgroundComposerUserEgressPolicy egress_policy = 9;
+   * @generated from field: optional aiserver.v1.BackgroundComposerUserEgressPolicy egress_policy = 9;
    */
   egressPolicy?: BackgroundComposerUserEgressPolicy;
 
   /**
-   * @generated from field: string branch_prefix = 10;
+   * @generated from field: optional string branch_prefix = 10;
    */
-  branchPrefix = "";
+  branchPrefix?: string;
 
   /**
-   * @generated from field: aiserver.v1.BackgroundComposerQuickActionSettings quick_action_settings = 11;
+   * @generated from field: optional aiserver.v1.BackgroundComposerQuickActionSettings quick_action_settings = 11;
    */
   quickActionSettings?: BackgroundComposerQuickActionSettings;
 
   /**
-   * @generated from field: bool allow_private_workers = 12;
+   * @generated from field: optional bool allow_private_workers = 12;
    */
-  allowPrivateWorkers = false;
+  allowPrivateWorkers?: boolean;
 
   /**
-   * @generated from field: string bc_id = 13;
+   * @generated from field: optional string bc_id = 13;
    */
-  bcId = "";
+  bcId?: string;
 
   /**
-   * @generated from field: string default_environment_public_id = 14;
+   * @generated from field: optional string default_environment_public_id = 14;
    */
-  defaultEnvironmentPublicId = "";
+  defaultEnvironmentPublicId?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.BackgroundComposerDefaultEnvironmentSetting default_environment_settings = 15;
@@ -32291,14 +32291,14 @@ export class UpdateBackgroundComposerUserSettingsRequest extends Message<UpdateB
   defaultEnvironmentSettings: BackgroundComposerDefaultEnvironmentSetting[] = [];
 
   /**
-   * @generated from field: bool remote_control_enabled = 16;
+   * @generated from field: optional bool remote_control_enabled = 16;
    */
-  remoteControlEnabled = false;
+  remoteControlEnabled?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.PrReviewOpenSurfaceMode pr_review_open_surface = 17;
+   * @generated from field: optional aiserver.v1.PrReviewOpenSurfaceMode pr_review_open_surface = 17;
    */
-  prReviewOpenSurface = PrReviewOpenSurfaceMode.UNSPECIFIED;
+  prReviewOpenSurface?: PrReviewOpenSurfaceMode;
 
   /**
    * @generated from field: repeated string sidebar_named_agent_ids = 18;
@@ -32306,19 +32306,19 @@ export class UpdateBackgroundComposerUserSettingsRequest extends Message<UpdateB
   sidebarNamedAgentIds: string[] = [];
 
   /**
-   * @generated from field: bool sidebar_named_agent_ids_explicitly_set = 19;
+   * @generated from field: optional bool sidebar_named_agent_ids_explicitly_set = 19;
    */
-  sidebarNamedAgentIdsExplicitlySet = false;
+  sidebarNamedAgentIdsExplicitlySet?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.CloudAgentModelSelection default_model_selection = 20;
+   * @generated from field: optional aiserver.v1.CloudAgentModelSelection default_model_selection = 20;
    */
   defaultModelSelection?: CloudAgentModelSelection;
 
   /**
-   * @generated from field: int32 ask_question_auto_answer_timeout_minutes = 21;
+   * @generated from field: optional int32 ask_question_auto_answer_timeout_minutes = 21;
    */
-  askQuestionAutoAnswerTimeoutMinutes = 0;
+  askQuestionAutoAnswerTimeoutMinutes?: number;
 
   constructor(data?: PartialMessage<UpdateBackgroundComposerUserSettingsRequest>) {
     super();
@@ -32328,27 +32328,27 @@ export class UpdateBackgroundComposerUserSettingsRequest extends Message<UpdateB
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.UpdateBackgroundComposerUserSettingsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "model_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "slack_notifications_for_web_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "ci_failure_followup_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "browser_use_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "auto_create_pr_setting", kind: "enum", T: proto3.getEnumType(AutoCreatePrSetting) },
-    { no: 6, name: "pr_review_open_destination", kind: "enum", T: proto3.getEnumType(PrReviewOpenDestinationMode) },
-    { no: 7, name: "github_artifact_posting", kind: "enum", T: proto3.getEnumType(GithubArtifactPostingMode) },
-    { no: 8, name: "egress_protection_mode", kind: "enum", T: proto3.getEnumType(CloudAgentEgressProtectionMode) },
-    { no: 9, name: "egress_policy", kind: "message", T: BackgroundComposerUserEgressPolicy },
-    { no: 10, name: "branch_prefix", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 11, name: "quick_action_settings", kind: "message", T: BackgroundComposerQuickActionSettings },
-    { no: 12, name: "allow_private_workers", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 13, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 14, name: "default_environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "model_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "slack_notifications_for_web_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 3, name: "ci_failure_followup_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 4, name: "browser_use_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 5, name: "auto_create_pr_setting", kind: "enum", T: proto3.getEnumType(AutoCreatePrSetting), opt: true },
+    { no: 6, name: "pr_review_open_destination", kind: "enum", T: proto3.getEnumType(PrReviewOpenDestinationMode), opt: true },
+    { no: 7, name: "github_artifact_posting", kind: "enum", T: proto3.getEnumType(GithubArtifactPostingMode), opt: true },
+    { no: 8, name: "egress_protection_mode", kind: "enum", T: proto3.getEnumType(CloudAgentEgressProtectionMode), opt: true },
+    { no: 9, name: "egress_policy", kind: "message", T: BackgroundComposerUserEgressPolicy, opt: true },
+    { no: 10, name: "branch_prefix", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 11, name: "quick_action_settings", kind: "message", T: BackgroundComposerQuickActionSettings, opt: true },
+    { no: 12, name: "allow_private_workers", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 13, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 14, name: "default_environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 15, name: "default_environment_settings", kind: "message", T: BackgroundComposerDefaultEnvironmentSetting, repeated: true },
-    { no: 16, name: "remote_control_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 17, name: "pr_review_open_surface", kind: "enum", T: proto3.getEnumType(PrReviewOpenSurfaceMode) },
+    { no: 16, name: "remote_control_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 17, name: "pr_review_open_surface", kind: "enum", T: proto3.getEnumType(PrReviewOpenSurfaceMode), opt: true },
     { no: 18, name: "sidebar_named_agent_ids", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 19, name: "sidebar_named_agent_ids_explicitly_set", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 20, name: "default_model_selection", kind: "message", T: CloudAgentModelSelection },
-    { no: 21, name: "ask_question_auto_answer_timeout_minutes", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 19, name: "sidebar_named_agent_ids_explicitly_set", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 20, name: "default_model_selection", kind: "message", T: CloudAgentModelSelection, opt: true },
+    { no: 21, name: "ask_question_auto_answer_timeout_minutes", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateBackgroundComposerUserSettingsRequest {
@@ -32409,9 +32409,9 @@ export class UpdateEnvironmentBuildRequest extends Message<UpdateEnvironmentBuil
   buildId = "";
 
   /**
-   * @generated from field: bool is_draft = 2;
+   * @generated from field: optional bool is_draft = 2;
    */
-  isDraft = false;
+  isDraft?: boolean;
 
   constructor(data?: PartialMessage<UpdateEnvironmentBuildRequest>) {
     super();
@@ -32422,7 +32422,7 @@ export class UpdateEnvironmentBuildRequest extends Message<UpdateEnvironmentBuil
   static readonly typeName = "aiserver.v1.UpdateEnvironmentBuildRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "build_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "is_draft", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "is_draft", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateEnvironmentBuildRequest {
@@ -32447,7 +32447,7 @@ export class UpdateEnvironmentBuildRequest extends Message<UpdateEnvironmentBuil
  */
 export class UpdateEnvironmentBuildResponse extends Message<UpdateEnvironmentBuildResponse> {
   /**
-   * @generated from field: aiserver.v1.EnvironmentBuildRow row = 1;
+   * @generated from field: optional aiserver.v1.EnvironmentBuildRow row = 1;
    */
   row?: EnvironmentBuildRow;
 
@@ -32459,7 +32459,7 @@ export class UpdateEnvironmentBuildResponse extends Message<UpdateEnvironmentBui
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.UpdateEnvironmentBuildResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "row", kind: "message", T: EnvironmentBuildRow },
+    { no: 1, name: "row", kind: "message", T: EnvironmentBuildRow, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateEnvironmentBuildResponse {
@@ -32489,9 +32489,9 @@ export class UpdateEnvironmentBuildSettingsRequest extends Message<UpdateEnviron
   environmentPublicId = "";
 
   /**
-   * @generated from field: bool fast_forward_default_branch = 2;
+   * @generated from field: optional bool fast_forward_default_branch = 2;
    */
-  fastForwardDefaultBranch = false;
+  fastForwardDefaultBranch?: boolean;
 
   /**
    * @generated from field: bool clear_fast_forward_default_branch = 3;
@@ -32499,9 +32499,9 @@ export class UpdateEnvironmentBuildSettingsRequest extends Message<UpdateEnviron
   clearFastForwardDefaultBranch = false;
 
   /**
-   * @generated from field: bool builds_enabled = 4;
+   * @generated from field: optional bool builds_enabled = 4;
    */
-  buildsEnabled = false;
+  buildsEnabled?: boolean;
 
   /**
    * @generated from field: bool clear_builds_enabled = 5;
@@ -32509,9 +32509,9 @@ export class UpdateEnvironmentBuildSettingsRequest extends Message<UpdateEnviron
   clearBuildsEnabled = false;
 
   /**
-   * @generated from field: int32 auto_fast_forward_staleness_hours = 6;
+   * @generated from field: optional int32 auto_fast_forward_staleness_hours = 6;
    */
-  autoFastForwardStalenessHours = 0;
+  autoFastForwardStalenessHours?: number;
 
   /**
    * @generated from field: bool clear_auto_fast_forward_staleness_hours = 7;
@@ -32527,11 +32527,11 @@ export class UpdateEnvironmentBuildSettingsRequest extends Message<UpdateEnviron
   static readonly typeName = "aiserver.v1.UpdateEnvironmentBuildSettingsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "fast_forward_default_branch", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "fast_forward_default_branch", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 3, name: "clear_fast_forward_default_branch", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "builds_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 4, name: "builds_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 5, name: "clear_builds_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 6, name: "auto_fast_forward_staleness_hours", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 6, name: "auto_fast_forward_staleness_hours", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 7, name: "clear_auto_fast_forward_staleness_hours", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
@@ -32557,7 +32557,7 @@ export class UpdateEnvironmentBuildSettingsRequest extends Message<UpdateEnviron
  */
 export class UpdateEnvironmentBuildSettingsResponse extends Message<UpdateEnvironmentBuildSettingsResponse> {
   /**
-   * @generated from field: aiserver.v1.EnvironmentBuildSettings settings = 1;
+   * @generated from field: optional aiserver.v1.EnvironmentBuildSettings settings = 1;
    */
   settings?: EnvironmentBuildSettings;
 
@@ -32569,7 +32569,7 @@ export class UpdateEnvironmentBuildSettingsResponse extends Message<UpdateEnviro
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.UpdateEnvironmentBuildSettingsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "settings", kind: "message", T: EnvironmentBuildSettings },
+    { no: 1, name: "settings", kind: "message", T: EnvironmentBuildSettings, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateEnvironmentBuildSettingsResponse {
@@ -32604,7 +32604,7 @@ export class UpdatePendingFollowupRequest extends Message<UpdatePendingFollowupR
   followupId = "";
 
   /**
-   * @generated from field: aiserver.v1.ConversationMessage updated_message = 3;
+   * @generated from field: optional aiserver.v1.ConversationMessage updated_message = 3;
    */
   updatedMessage?: ConversationMessage;
 
@@ -32618,7 +32618,7 @@ export class UpdatePendingFollowupRequest extends Message<UpdatePendingFollowupR
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "followup_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "updated_message", kind: "message", T: ConversationMessage },
+    { no: 3, name: "updated_message", kind: "message", T: ConversationMessage, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdatePendingFollowupRequest {
@@ -32733,9 +32733,9 @@ export class UpdatePullRequestBranchResponse extends Message<UpdatePullRequestBr
   error = "";
 
   /**
-   * @generated from field: string new_head_sha = 3;
+   * @generated from field: optional string new_head_sha = 3;
    */
-  newHeadSha = "";
+  newHeadSha?: string;
 
   constructor(data?: PartialMessage<UpdatePullRequestBranchResponse>) {
     super();
@@ -32747,7 +32747,7 @@ export class UpdatePullRequestBranchResponse extends Message<UpdatePullRequestBr
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "success", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 2, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "new_head_sha", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "new_head_sha", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdatePullRequestBranchResponse {
@@ -32772,7 +32772,7 @@ export class UpdatePullRequestBranchResponse extends Message<UpdatePullRequestBr
  */
 export class UsedEnvironmentBuildInfo extends Message<UsedEnvironmentBuildInfo> {
   /**
-   * @generated from field: anyrun.v1.EnvironmentBuildBootInfo boot_info = 1;
+   * @generated from field: optional anyrun.v1.EnvironmentBuildBootInfo boot_info = 1;
    */
   bootInfo?: EnvironmentBuildBootInfo;
 
@@ -32784,7 +32784,7 @@ export class UsedEnvironmentBuildInfo extends Message<UsedEnvironmentBuildInfo> 
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.UsedEnvironmentBuildInfo";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "boot_info", kind: "message", T: EnvironmentBuildBootInfo },
+    { no: 1, name: "boot_info", kind: "message", T: EnvironmentBuildBootInfo, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UsedEnvironmentBuildInfo {
@@ -32943,19 +32943,19 @@ export class VideoAnnotation extends Message<VideoAnnotation> {
   labeledChapters: VideoChapter[] = [];
 
   /**
-   * @generated from field: aiserver.v1.VideoTimestamp thumbnail_timestamp = 2;
+   * @generated from field: optional aiserver.v1.VideoTimestamp thumbnail_timestamp = 2;
    */
   thumbnailTimestamp?: VideoTimestamp;
 
   /**
-   * @generated from field: double trim_start_seconds = 3;
+   * @generated from field: optional double trim_start_seconds = 3;
    */
-  trimStartSeconds = 0;
+  trimStartSeconds?: number;
 
   /**
-   * @generated from field: double trim_end_seconds = 4;
+   * @generated from field: optional double trim_end_seconds = 4;
    */
-  trimEndSeconds = 0;
+  trimEndSeconds?: number;
 
   constructor(data?: PartialMessage<VideoAnnotation>) {
     super();
@@ -32966,9 +32966,9 @@ export class VideoAnnotation extends Message<VideoAnnotation> {
   static readonly typeName = "aiserver.v1.VideoAnnotation";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "labeled_chapters", kind: "message", T: VideoChapter, repeated: true },
-    { no: 2, name: "thumbnail_timestamp", kind: "message", T: VideoTimestamp },
-    { no: 3, name: "trim_start_seconds", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 4, name: "trim_end_seconds", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
+    { no: 2, name: "thumbnail_timestamp", kind: "message", T: VideoTimestamp, opt: true },
+    { no: 3, name: "trim_start_seconds", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
+    { no: 4, name: "trim_end_seconds", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): VideoAnnotation {
@@ -32998,7 +32998,7 @@ export class VideoAnnotationEntry extends Message<VideoAnnotationEntry> {
   artifactPath = "";
 
   /**
-   * @generated from field: aiserver.v1.VideoAnnotation annotation = 2;
+   * @generated from field: optional aiserver.v1.VideoAnnotation annotation = 2;
    */
   annotation?: VideoAnnotation;
 
@@ -33011,7 +33011,7 @@ export class VideoAnnotationEntry extends Message<VideoAnnotationEntry> {
   static readonly typeName = "aiserver.v1.VideoAnnotationEntry";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "artifact_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "annotation", kind: "message", T: VideoAnnotation },
+    { no: 2, name: "annotation", kind: "message", T: VideoAnnotation, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): VideoAnnotationEntry {
@@ -33073,7 +33073,7 @@ export class VideoAnnotationsWrapper extends Message<VideoAnnotationsWrapper> {
  */
 export class VideoChapter extends Message<VideoChapter> {
   /**
-   * @generated from field: aiserver.v1.VideoTimestamp start_time = 1;
+   * @generated from field: optional aiserver.v1.VideoTimestamp start_time = 1;
    */
   startTime?: VideoTimestamp;
 
@@ -33095,7 +33095,7 @@ export class VideoChapter extends Message<VideoChapter> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.VideoChapter";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "start_time", kind: "message", T: VideoTimestamp },
+    { no: 1, name: "start_time", kind: "message", T: VideoTimestamp, opt: true },
     { no: 3, name: "label", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "should_hide", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
@@ -33228,24 +33228,24 @@ export class VmProvisionedSkill extends Message<VmProvisionedSkill> {
   disabledEnvironments: string[] = [];
 
   /**
-   * @generated from field: agent.v1.CustomModeDescriptor custom_mode = 5;
+   * @generated from field: optional agent.v1.CustomModeDescriptor custom_mode = 5;
    */
   customMode?: CustomModeDescriptor;
 
   /**
-   * @generated from field: string display_name = 6;
+   * @generated from field: optional string display_name = 6;
    */
-  displayName = "";
+  displayName?: string;
 
   /**
-   * @generated from field: string icon = 7;
+   * @generated from field: optional string icon = 7;
    */
-  icon = "";
+  icon?: string;
 
   /**
-   * @generated from field: string color = 8;
+   * @generated from field: optional string color = 8;
    */
-  color = "";
+  color?: string;
 
   constructor(data?: PartialMessage<VmProvisionedSkill>) {
     super();
@@ -33259,10 +33259,10 @@ export class VmProvisionedSkill extends Message<VmProvisionedSkill> {
     { no: 2, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "environments", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 4, name: "disabled_environments", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 5, name: "custom_mode", kind: "message", T: CustomModeDescriptor },
-    { no: 6, name: "display_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "icon", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "color", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "custom_mode", kind: "message", T: CustomModeDescriptor, opt: true },
+    { no: 6, name: "display_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "icon", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "color", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): VmProvisionedSkill {
@@ -33494,9 +33494,9 @@ export class WatchBackgroundComposerSnapshotStateResponse extends Message<WatchB
   state = SnapshotState.UNSPECIFIED;
 
   /**
-   * @generated from field: string error_message = 3;
+   * @generated from field: optional string error_message = 3;
    */
-  errorMessage = "";
+  errorMessage?: string;
 
   constructor(data?: PartialMessage<WatchBackgroundComposerSnapshotStateResponse>) {
     super();
@@ -33508,7 +33508,7 @@ export class WatchBackgroundComposerSnapshotStateResponse extends Message<WatchB
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "snapshot_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "state", kind: "enum", T: proto3.getEnumType(SnapshotState) },
-    { no: 3, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): WatchBackgroundComposerSnapshotStateResponse {

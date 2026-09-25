@@ -196,7 +196,7 @@ function fromRedactedLsTimeout(msg, purpose, opts) {
 function toRedactedTerminalMetadata(msg, privacyMode) {
   return {
     _privacyMode: privacyMode,
-    cwd: createRedactedString(msg.cwd, DataClassification.PATH, "cwd", privacyMode),
+    cwd: msg.cwd !== void 0 ? createRedactedString(msg.cwd, DataClassification.PATH, "cwd", privacyMode) : void 0,
     lastCommands: msg.lastCommands.map((v2) => toRedactedTerminalMetadata_Command(v2, privacyMode)),
     lastModifiedMs: msg.lastModifiedMs,
     currentCommand: msg.currentCommand !== void 0 ? toRedactedTerminalMetadata_Command(msg.currentCommand, privacyMode) : void 0,
@@ -207,7 +207,7 @@ function fromRedactedTerminalMetadata(msg, purpose, opts) {
   const redactUnallowedFieldsInsteadOfThrowing = opts?.redactUnallowedFieldsInsteadOfThrowing ?? false;
   const enforcing = opts?.enforcing;
   return new TerminalMetadata({
-    cwd: msg.cwd.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    cwd: msg.cwd?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     lastCommands: msg.lastCommands.map((v2) => fromRedactedTerminalMetadata_Command(v2, purpose, opts)),
     lastModifiedMs: msg.lastModifiedMs,
     currentCommand: msg.currentCommand !== void 0 ? fromRedactedTerminalMetadata_Command(msg.currentCommand, purpose, opts) : void 0,

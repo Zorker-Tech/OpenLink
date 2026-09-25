@@ -17,14 +17,14 @@ import { PiTruncation } from "./pi_common_pb.ts";
  */
 export class PiLsExecArgs extends Message<PiLsExecArgs> {
   /**
-   * @generated from field: string path = 1;
+   * @generated from field: optional string path = 1;
    */
-  path = "";
+  path?: string;
 
   /**
-   * @generated from field: int32 limit = 2;
+   * @generated from field: optional int32 limit = 2;
    */
-  limit = 0;
+  limit?: number;
 
   constructor(data?: PartialMessage<PiLsExecArgs>) {
     super();
@@ -34,8 +34,8 @@ export class PiLsExecArgs extends Message<PiLsExecArgs> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.PiLsExecArgs";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 1, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PiLsExecArgs {
@@ -115,14 +115,14 @@ export class PiLsExecSuccess extends Message<PiLsExecSuccess> {
   output = "";
 
   /**
-   * @generated from field: agent.v1.PiTruncation truncation = 2;
+   * @generated from field: optional agent.v1.PiTruncation truncation = 2;
    */
   truncation?: PiTruncation;
 
   /**
-   * @generated from field: uint32 entry_limit_reached = 3;
+   * @generated from field: optional uint32 entry_limit_reached = 3;
    */
-  entryLimitReached = 0;
+  entryLimitReached?: number;
 
   constructor(data?: PartialMessage<PiLsExecSuccess>) {
     super();
@@ -133,8 +133,8 @@ export class PiLsExecSuccess extends Message<PiLsExecSuccess> {
   static readonly typeName = "agent.v1.PiLsExecSuccess";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "output", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "truncation", kind: "message", T: PiTruncation },
-    { no: 3, name: "entry_limit_reached", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 2, name: "truncation", kind: "message", T: PiTruncation, opt: true },
+    { no: 3, name: "entry_limit_reached", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PiLsExecSuccess {

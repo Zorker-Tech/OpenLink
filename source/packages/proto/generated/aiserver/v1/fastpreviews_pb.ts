@@ -27,7 +27,7 @@ export class StreamAiPreviewsIntent extends Message<StreamAiPreviewsIntent> {
   relatedSymbols: DocumentSymbolWithText[] = [];
 
   /**
-   * @generated from field: aiserver.v1.HoverDetails main_symbol_hover_details = 4;
+   * @generated from field: optional aiserver.v1.HoverDetails main_symbol_hover_details = 4;
    */
   mainSymbolHoverDetails?: HoverDetails;
 
@@ -46,7 +46,7 @@ export class StreamAiPreviewsIntent extends Message<StreamAiPreviewsIntent> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "main_symbols_to_analyze_from_go_to_def", kind: "message", T: DocumentSymbolWithText, repeated: true },
     { no: 3, name: "related_symbols", kind: "message", T: DocumentSymbolWithText, repeated: true },
-    { no: 4, name: "main_symbol_hover_details", kind: "message", T: HoverDetails },
+    { no: 4, name: "main_symbol_hover_details", kind: "message", T: HoverDetails, opt: true },
     { no: 6, name: "main_symbols_to_analyze_from_implementations", kind: "message", T: DocumentSymbolWithText, repeated: true },
   ]);
 
@@ -72,24 +72,24 @@ export class StreamAiPreviewsIntent extends Message<StreamAiPreviewsIntent> {
  */
 export class StreamAiPreviewsRequest extends Message<StreamAiPreviewsRequest> {
   /**
-   * @generated from field: aiserver.v1.CurrentFileInfo current_file = 1;
+   * @generated from field: optional aiserver.v1.CurrentFileInfo current_file = 1;
    */
   currentFile?: CurrentFileInfo;
 
   /**
-   * @generated from field: aiserver.v1.StreamAiPreviewsIntent intent = 2;
+   * @generated from field: optional aiserver.v1.StreamAiPreviewsIntent intent = 2;
    */
   intent?: StreamAiPreviewsIntent;
 
   /**
-   * @generated from field: aiserver.v1.ModelDetails model_details = 14;
+   * @generated from field: optional aiserver.v1.ModelDetails model_details = 14;
    */
   modelDetails?: ModelDetails;
 
   /**
-   * @generated from field: bool is_detailed = 15;
+   * @generated from field: optional bool is_detailed = 15;
    */
-  isDetailed = false;
+  isDetailed?: boolean;
 
   constructor(data?: PartialMessage<StreamAiPreviewsRequest>) {
     super();
@@ -99,10 +99,10 @@ export class StreamAiPreviewsRequest extends Message<StreamAiPreviewsRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.StreamAiPreviewsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "current_file", kind: "message", T: CurrentFileInfo },
-    { no: 2, name: "intent", kind: "message", T: StreamAiPreviewsIntent },
-    { no: 14, name: "model_details", kind: "message", T: ModelDetails },
-    { no: 15, name: "is_detailed", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 1, name: "current_file", kind: "message", T: CurrentFileInfo, opt: true },
+    { no: 2, name: "intent", kind: "message", T: StreamAiPreviewsIntent, opt: true },
+    { no: 14, name: "model_details", kind: "message", T: ModelDetails, opt: true },
+    { no: 15, name: "is_detailed", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StreamAiPreviewsRequest {

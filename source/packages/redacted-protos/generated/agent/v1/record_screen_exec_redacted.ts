@@ -14,7 +14,7 @@ function toRedactedRecordScreenArgs(msg, privacyMode) {
     _privacyMode: privacyMode,
     mode: msg.mode,
     toolCallId: msg.toolCallId,
-    saveAsFilename: createRedactedString(msg.saveAsFilename, DataClassification.PATH, "save_as_filename", privacyMode),
+    saveAsFilename: msg.saveAsFilename !== void 0 ? createRedactedString(msg.saveAsFilename, DataClassification.PATH, "save_as_filename", privacyMode) : void 0,
   };
 }
 
@@ -24,7 +24,7 @@ function fromRedactedRecordScreenArgs(msg, purpose, opts) {
   return new RecordScreenArgs({
     mode: msg.mode,
     toolCallId: msg.toolCallId,
-    saveAsFilename: msg.saveAsFilename.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    saveAsFilename: msg.saveAsFilename?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
   });
 }
 

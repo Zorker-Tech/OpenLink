@@ -16,14 +16,14 @@ import { Message, proto3, protoInt64 } from "@bufbuild/protobuf";
  */
 export class AgentStoreConflictArgs extends Message<AgentStoreConflictArgs> {
   /**
-   * @generated from field: agent.v1.AgentStoreConflictCursor cursor = 1;
+   * @generated from field: optional agent.v1.AgentStoreConflictCursor cursor = 1;
    */
   cursor?: AgentStoreConflictCursor;
 
   /**
-   * @generated from field: bool advance = 2;
+   * @generated from field: optional bool advance = 2;
    */
-  advance = false;
+  advance?: boolean;
 
   constructor(data?: PartialMessage<AgentStoreConflictArgs>) {
     super();
@@ -33,8 +33,8 @@ export class AgentStoreConflictArgs extends Message<AgentStoreConflictArgs> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.AgentStoreConflictArgs";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "cursor", kind: "message", T: AgentStoreConflictCursor },
-    { no: 2, name: "advance", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 1, name: "cursor", kind: "message", T: AgentStoreConflictCursor, opt: true },
+    { no: 2, name: "advance", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AgentStoreConflictArgs {
@@ -163,7 +163,7 @@ export class AgentStoreConflictSuccess extends Message<AgentStoreConflictSuccess
   events: AgentStoreConflictEvent[] = [];
 
   /**
-   * @generated from field: agent.v1.AgentStoreConflictCursor next_cursor = 2;
+   * @generated from field: optional agent.v1.AgentStoreConflictCursor next_cursor = 2;
    */
   nextCursor?: AgentStoreConflictCursor;
 
@@ -181,7 +181,7 @@ export class AgentStoreConflictSuccess extends Message<AgentStoreConflictSuccess
   static readonly typeName = "agent.v1.AgentStoreConflictSuccess";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "events", kind: "message", T: AgentStoreConflictEvent, repeated: true },
-    { no: 2, name: "next_cursor", kind: "message", T: AgentStoreConflictCursor },
+    { no: 2, name: "next_cursor", kind: "message", T: AgentStoreConflictCursor, opt: true },
     { no: 3, name: "gap", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
@@ -274,34 +274,34 @@ export class AgentStoreConflictEvent extends Message<AgentStoreConflictEvent> {
   kind = "";
 
   /**
-   * @generated from field: string store_id = 7;
+   * @generated from field: optional string store_id = 7;
    */
-  storeId = "";
+  storeId?: string;
 
   /**
-   * @generated from field: string original_rel_path = 8;
+   * @generated from field: optional string original_rel_path = 8;
    */
-  originalRelPath = "";
+  originalRelPath?: string;
 
   /**
-   * @generated from field: string conflict_rel_path = 9;
+   * @generated from field: optional string conflict_rel_path = 9;
    */
-  conflictRelPath = "";
+  conflictRelPath?: string;
 
   /**
-   * @generated from field: string original_abs_path = 10;
+   * @generated from field: optional string original_abs_path = 10;
    */
-  originalAbsPath = "";
+  originalAbsPath?: string;
 
   /**
-   * @generated from field: string conflict_abs_path = 11;
+   * @generated from field: optional string conflict_abs_path = 11;
    */
-  conflictAbsPath = "";
+  conflictAbsPath?: string;
 
   /**
-   * @generated from field: uint64 preserved_bytes = 12;
+   * @generated from field: optional uint64 preserved_bytes = 12;
    */
-  preservedBytes = protoInt64.zero;
+  preservedBytes?: bigint;
 
   constructor(data?: PartialMessage<AgentStoreConflictEvent>) {
     super();
@@ -317,12 +317,12 @@ export class AgentStoreConflictEvent extends Message<AgentStoreConflictEvent> {
     { no: 4, name: "seq", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
     { no: 5, name: "ts_ms", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
     { no: 6, name: "kind", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "store_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "original_rel_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "conflict_rel_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "original_abs_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 11, name: "conflict_abs_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 12, name: "preserved_bytes", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
+    { no: 7, name: "store_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "original_rel_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 9, name: "conflict_rel_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 10, name: "original_abs_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 11, name: "conflict_abs_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 12, name: "preserved_bytes", kind: "scalar", T: 4 /* ScalarType.UINT64 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AgentStoreConflictEvent {

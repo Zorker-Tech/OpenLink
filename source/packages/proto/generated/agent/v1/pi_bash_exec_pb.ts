@@ -22,9 +22,9 @@ export class PiBashExecArgs extends Message<PiBashExecArgs> {
   command = "";
 
   /**
-   * @generated from field: double timeout = 2;
+   * @generated from field: optional double timeout = 2;
    */
-  timeout = 0;
+  timeout?: number;
 
   constructor(data?: PartialMessage<PiBashExecArgs>) {
     super();
@@ -35,7 +35,7 @@ export class PiBashExecArgs extends Message<PiBashExecArgs> {
   static readonly typeName = "agent.v1.PiBashExecArgs";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "command", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "timeout", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
+    { no: 2, name: "timeout", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PiBashExecArgs {
@@ -115,14 +115,14 @@ export class PiBashExecSuccess extends Message<PiBashExecSuccess> {
   output = "";
 
   /**
-   * @generated from field: agent.v1.PiTruncation truncation = 2;
+   * @generated from field: optional agent.v1.PiTruncation truncation = 2;
    */
   truncation?: PiTruncation;
 
   /**
-   * @generated from field: string full_output_path = 3;
+   * @generated from field: optional string full_output_path = 3;
    */
-  fullOutputPath = "";
+  fullOutputPath?: string;
 
   constructor(data?: PartialMessage<PiBashExecSuccess>) {
     super();
@@ -133,8 +133,8 @@ export class PiBashExecSuccess extends Message<PiBashExecSuccess> {
   static readonly typeName = "agent.v1.PiBashExecSuccess";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "output", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "truncation", kind: "message", T: PiTruncation },
-    { no: 3, name: "full_output_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "truncation", kind: "message", T: PiTruncation, opt: true },
+    { no: 3, name: "full_output_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PiBashExecSuccess {
@@ -164,14 +164,14 @@ export class PiBashExecError extends Message<PiBashExecError> {
   error = "";
 
   /**
-   * @generated from field: agent.v1.PiTruncation truncation = 2;
+   * @generated from field: optional agent.v1.PiTruncation truncation = 2;
    */
   truncation?: PiTruncation;
 
   /**
-   * @generated from field: string full_output_path = 3;
+   * @generated from field: optional string full_output_path = 3;
    */
-  fullOutputPath = "";
+  fullOutputPath?: string;
 
   constructor(data?: PartialMessage<PiBashExecError>) {
     super();
@@ -182,8 +182,8 @@ export class PiBashExecError extends Message<PiBashExecError> {
   static readonly typeName = "agent.v1.PiBashExecError";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "truncation", kind: "message", T: PiTruncation },
-    { no: 3, name: "full_output_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "truncation", kind: "message", T: PiTruncation, opt: true },
+    { no: 3, name: "full_output_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PiBashExecError {

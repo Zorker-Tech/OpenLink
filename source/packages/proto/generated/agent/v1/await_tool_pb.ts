@@ -16,12 +16,12 @@ import { Message, proto3, protoInt64 } from "@bufbuild/protobuf";
  */
 export class AwaitToolCall extends Message<AwaitToolCall> {
   /**
-   * @generated from field: agent.v1.AwaitArgs args = 1;
+   * @generated from field: optional agent.v1.AwaitArgs args = 1;
    */
   args?: AwaitArgs;
 
   /**
-   * @generated from field: agent.v1.AwaitResult result = 2;
+   * @generated from field: optional agent.v1.AwaitResult result = 2;
    */
   result?: AwaitResult;
 
@@ -33,8 +33,8 @@ export class AwaitToolCall extends Message<AwaitToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.AwaitToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: AwaitArgs },
-    { no: 2, name: "result", kind: "message", T: AwaitResult },
+    { no: 1, name: "args", kind: "message", T: AwaitArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: AwaitResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AwaitToolCall {
@@ -64,14 +64,14 @@ export class AwaitArgs extends Message<AwaitArgs> {
   taskId = "";
 
   /**
-   * @generated from field: uint32 block_until_ms = 2;
+   * @generated from field: optional uint32 block_until_ms = 2;
    */
-  blockUntilMs = 0;
+  blockUntilMs?: number;
 
   /**
-   * @generated from field: string regex = 3;
+   * @generated from field: optional string regex = 3;
    */
-  regex = "";
+  regex?: string;
 
   constructor(data?: PartialMessage<AwaitArgs>) {
     super();
@@ -82,8 +82,8 @@ export class AwaitArgs extends Message<AwaitArgs> {
   static readonly typeName = "agent.v1.AwaitArgs";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "task_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "block_until_ms", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 3, name: "regex", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "block_until_ms", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
+    { no: 3, name: "regex", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AwaitArgs {
@@ -197,19 +197,19 @@ export class AwaitTaskComplete extends Message<AwaitTaskComplete> {
   regexRequested = false;
 
   /**
-   * @generated from field: string regex_match = 6;
+   * @generated from field: optional string regex_match = 6;
    */
-  regexMatch = "";
+  regexMatch?: string;
 
   /**
-   * @generated from field: sint32 exit_code = 7;
+   * @generated from field: optional sint32 exit_code = 7;
    */
-  exitCode = 0;
+  exitCode?: number;
 
   /**
-   * @generated from field: string wake_reason = 8;
+   * @generated from field: optional string wake_reason = 8;
    */
-  wakeReason = "";
+  wakeReason?: string;
 
   constructor(data?: PartialMessage<AwaitTaskComplete>) {
     super();
@@ -224,9 +224,9 @@ export class AwaitTaskComplete extends Message<AwaitTaskComplete> {
     { no: 3, name: "output_file_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "output_length", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
     { no: 5, name: "regex_requested", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 6, name: "regex_match", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "exit_code", kind: "scalar", T: 17 /* ScalarType.SINT32 */ },
-    { no: 8, name: "wake_reason", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 6, name: "regex_match", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "exit_code", kind: "scalar", T: 17 /* ScalarType.SINT32 */, opt: true },
+    { no: 8, name: "wake_reason", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AwaitTaskComplete {
@@ -276,14 +276,14 @@ export class AwaitTaskStillRunning extends Message<AwaitTaskStillRunning> {
   regexRequested = false;
 
   /**
-   * @generated from field: string regex_match = 6;
+   * @generated from field: optional string regex_match = 6;
    */
-  regexMatch = "";
+  regexMatch?: string;
 
   /**
-   * @generated from field: string wake_reason = 7;
+   * @generated from field: optional string wake_reason = 7;
    */
-  wakeReason = "";
+  wakeReason?: string;
 
   constructor(data?: PartialMessage<AwaitTaskStillRunning>) {
     super();
@@ -298,8 +298,8 @@ export class AwaitTaskStillRunning extends Message<AwaitTaskStillRunning> {
     { no: 3, name: "output_file_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "output_length", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
     { no: 5, name: "regex_requested", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 6, name: "regex_match", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "wake_reason", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 6, name: "regex_match", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "wake_reason", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AwaitTaskStillRunning {

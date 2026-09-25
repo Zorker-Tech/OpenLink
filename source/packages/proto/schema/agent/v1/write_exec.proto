@@ -13,7 +13,7 @@ message WriteArgs {
   string tool_call_id = 3 [json_name = "toolCallId"];
   bool return_file_content_after_write = 4 [json_name = "returnFileContentAfterWrite"];
   bytes file_bytes = 5 [json_name = "fileBytes"];
-  string encoding_hint = 6 [json_name = "encodingHint"];
+  optional string encoding_hint = 6 [json_name = "encodingHint"];
 }
 
 message WriteResult {
@@ -30,7 +30,7 @@ message WriteSuccess {
   string path = 1 [json_name = "path"];
   int32 lines_created = 2 [json_name = "linesCreated"];
   int32 file_size = 3 [json_name = "fileSize"];
-  string file_content_after_write = 4 [json_name = "fileContentAfterWrite"];
+  optional string file_content_after_write = 4 [json_name = "fileContentAfterWrite"];
 }
 
 message WritePermissionDenied {

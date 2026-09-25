@@ -17,12 +17,12 @@ import { PiTruncation } from "./pi_common_pb.ts";
  */
 export class PiReadToolCall extends Message<PiReadToolCall> {
   /**
-   * @generated from field: agent.v1.PiReadToolArgs args = 1;
+   * @generated from field: optional agent.v1.PiReadToolArgs args = 1;
    */
   args?: PiReadToolArgs;
 
   /**
-   * @generated from field: agent.v1.PiReadToolResult result = 2;
+   * @generated from field: optional agent.v1.PiReadToolResult result = 2;
    */
   result?: PiReadToolResult;
 
@@ -34,8 +34,8 @@ export class PiReadToolCall extends Message<PiReadToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.PiReadToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: PiReadToolArgs },
-    { no: 2, name: "result", kind: "message", T: PiReadToolResult },
+    { no: 1, name: "args", kind: "message", T: PiReadToolArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: PiReadToolResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PiReadToolCall {
@@ -65,14 +65,14 @@ export class PiReadToolArgs extends Message<PiReadToolArgs> {
   path = "";
 
   /**
-   * @generated from field: int32 offset = 2;
+   * @generated from field: optional int32 offset = 2;
    */
-  offset = 0;
+  offset?: number;
 
   /**
-   * @generated from field: int32 limit = 3;
+   * @generated from field: optional int32 limit = 3;
    */
-  limit = 0;
+  limit?: number;
 
   constructor(data?: PartialMessage<PiReadToolArgs>) {
     super();
@@ -83,8 +83,8 @@ export class PiReadToolArgs extends Message<PiReadToolArgs> {
   static readonly typeName = "agent.v1.PiReadToolArgs";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "offset", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 2, name: "offset", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 3, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PiReadToolArgs {
@@ -164,7 +164,7 @@ export class PiReadToolSuccess extends Message<PiReadToolSuccess> {
   output = "";
 
   /**
-   * @generated from field: agent.v1.PiTruncation truncation = 2;
+   * @generated from field: optional agent.v1.PiTruncation truncation = 2;
    */
   truncation?: PiTruncation;
 
@@ -177,7 +177,7 @@ export class PiReadToolSuccess extends Message<PiReadToolSuccess> {
   static readonly typeName = "agent.v1.PiReadToolSuccess";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "output", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "truncation", kind: "message", T: PiTruncation },
+    { no: 2, name: "truncation", kind: "message", T: PiTruncation, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PiReadToolSuccess {

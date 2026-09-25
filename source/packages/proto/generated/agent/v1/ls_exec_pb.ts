@@ -9,7 +9,7 @@
 // @ts-nocheck
 
 import type { BinaryReadOptions, FieldList, JsonReadOptions, JsonValue, PartialMessage, PlainMessage } from "@bufbuild/protobuf";
-import { Message, proto3, protoInt64 } from "@bufbuild/protobuf";
+import { Message, proto3 } from "@bufbuild/protobuf";
 import { SandboxPolicy } from "./sandbox_pb.ts";
 
 /**
@@ -17,9 +17,9 @@ import { SandboxPolicy } from "./sandbox_pb.ts";
  */
 export class TerminalMetadata extends Message<TerminalMetadata> {
   /**
-   * @generated from field: string cwd = 1;
+   * @generated from field: optional string cwd = 1;
    */
-  cwd = "";
+  cwd?: string;
 
   /**
    * @generated from field: repeated agent.v1.TerminalMetadata.Command last_commands = 2;
@@ -27,12 +27,12 @@ export class TerminalMetadata extends Message<TerminalMetadata> {
   lastCommands: TerminalMetadata_Command[] = [];
 
   /**
-   * @generated from field: int64 last_modified_ms = 3;
+   * @generated from field: optional int64 last_modified_ms = 3;
    */
-  lastModifiedMs = protoInt64.zero;
+  lastModifiedMs?: bigint;
 
   /**
-   * @generated from field: agent.v1.TerminalMetadata.Command current_command = 4;
+   * @generated from field: optional agent.v1.TerminalMetadata.Command current_command = 4;
    */
   currentCommand?: TerminalMetadata_Command;
 
@@ -44,10 +44,10 @@ export class TerminalMetadata extends Message<TerminalMetadata> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.TerminalMetadata";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "cwd", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "cwd", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "last_commands", kind: "message", T: TerminalMetadata_Command, repeated: true },
-    { no: 3, name: "last_modified_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 4, name: "current_command", kind: "message", T: TerminalMetadata_Command },
+    { no: 3, name: "last_modified_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
+    { no: 4, name: "current_command", kind: "message", T: TerminalMetadata_Command, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): TerminalMetadata {
@@ -77,19 +77,19 @@ export class TerminalMetadata_Command extends Message<TerminalMetadata_Command> 
   command = "";
 
   /**
-   * @generated from field: int32 exit_code = 2;
+   * @generated from field: optional int32 exit_code = 2;
    */
-  exitCode = 0;
+  exitCode?: number;
 
   /**
-   * @generated from field: int64 timestamp_ms = 3;
+   * @generated from field: optional int64 timestamp_ms = 3;
    */
-  timestampMs = protoInt64.zero;
+  timestampMs?: bigint;
 
   /**
-   * @generated from field: int64 duration_ms = 4;
+   * @generated from field: optional int64 duration_ms = 4;
    */
-  durationMs = protoInt64.zero;
+  durationMs?: bigint;
 
   constructor(data?: PartialMessage<TerminalMetadata_Command>) {
     super();
@@ -100,9 +100,9 @@ export class TerminalMetadata_Command extends Message<TerminalMetadata_Command> 
   static readonly typeName = "agent.v1.TerminalMetadata.Command";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "command", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "exit_code", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "timestamp_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 4, name: "duration_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
+    { no: 2, name: "exit_code", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 3, name: "timestamp_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
+    { no: 4, name: "duration_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): TerminalMetadata_Command {
@@ -142,14 +142,14 @@ export class LsArgs extends Message<LsArgs> {
   toolCallId = "";
 
   /**
-   * @generated from field: agent.v1.SandboxPolicy sandbox_policy = 4;
+   * @generated from field: optional agent.v1.SandboxPolicy sandbox_policy = 4;
    */
   sandboxPolicy?: SandboxPolicy;
 
   /**
-   * @generated from field: uint32 timeout_ms = 5;
+   * @generated from field: optional uint32 timeout_ms = 5;
    */
-  timeoutMs = 0;
+  timeoutMs?: number;
 
   constructor(data?: PartialMessage<LsArgs>) {
     super();
@@ -162,8 +162,8 @@ export class LsArgs extends Message<LsArgs> {
     { no: 1, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "ignore", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 3, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "sandbox_policy", kind: "message", T: SandboxPolicy },
-    { no: 5, name: "timeout_ms", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 4, name: "sandbox_policy", kind: "message", T: SandboxPolicy, opt: true },
+    { no: 5, name: "timeout_ms", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): LsArgs {
@@ -260,7 +260,7 @@ export class LsDirectoryTreeNode_File extends Message<LsDirectoryTreeNode_File> 
   name = "";
 
   /**
-   * @generated from field: agent.v1.TerminalMetadata terminal_metadata = 2;
+   * @generated from field: optional agent.v1.TerminalMetadata terminal_metadata = 2;
    */
   terminalMetadata?: TerminalMetadata;
 
@@ -273,7 +273,7 @@ export class LsDirectoryTreeNode_File extends Message<LsDirectoryTreeNode_File> 
   static readonly typeName = "agent.v1.LsDirectoryTreeNode.File";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "terminal_metadata", kind: "message", T: TerminalMetadata },
+    { no: 2, name: "terminal_metadata", kind: "message", T: TerminalMetadata, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): LsDirectoryTreeNode_File {
@@ -362,7 +362,7 @@ export class LsResult extends Message<LsResult> {
  */
 export class LsSuccess extends Message<LsSuccess> {
   /**
-   * @generated from field: agent.v1.LsDirectoryTreeNode directory_tree_root = 1;
+   * @generated from field: optional agent.v1.LsDirectoryTreeNode directory_tree_root = 1;
    */
   directoryTreeRoot?: LsDirectoryTreeNode;
 
@@ -374,7 +374,7 @@ export class LsSuccess extends Message<LsSuccess> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.LsSuccess";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "directory_tree_root", kind: "message", T: LsDirectoryTreeNode },
+    { no: 1, name: "directory_tree_root", kind: "message", T: LsDirectoryTreeNode, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): LsSuccess {
@@ -485,7 +485,7 @@ export class LsRejected extends Message<LsRejected> {
  */
 export class LsTimeout extends Message<LsTimeout> {
   /**
-   * @generated from field: agent.v1.LsDirectoryTreeNode directory_tree_root = 1;
+   * @generated from field: optional agent.v1.LsDirectoryTreeNode directory_tree_root = 1;
    */
   directoryTreeRoot?: LsDirectoryTreeNode;
 
@@ -497,7 +497,7 @@ export class LsTimeout extends Message<LsTimeout> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.LsTimeout";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "directory_tree_root", kind: "message", T: LsDirectoryTreeNode },
+    { no: 1, name: "directory_tree_root", kind: "message", T: LsDirectoryTreeNode, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): LsTimeout {

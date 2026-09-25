@@ -8,11 +8,11 @@ syntax = "proto3";
 package agent.v1;
 
 import "agent/v1/agent_skills.proto";
-import "agent/v1/packages.proto";
-import "agent/v1/rules.proto";
 import "agent/v1/ls_exec.proto";
 import "agent/v1/mcp.proto";
+import "agent/v1/packages.proto";
 import "agent/v1/repo.proto";
+import "agent/v1/rules.proto";
 import "agent/v1/subagents.proto";
 import "agent/v1/system_prompt.proto";
 
@@ -23,11 +23,11 @@ message DebugModeConfig {
 }
 
 message RequestContextArgs {
-  string notes_session_id = 2 [json_name = "notesSessionId"];
-  string workspace_id = 3 [json_name = "workspaceId"];
-  string read_only_pinned_tree_sha = 4 [json_name = "readOnlyPinnedTreeSha"];
-  string read_only_plugin_cache_root = 5 [json_name = "readOnlyPluginCacheRoot"];
-  bool use_cached = 7 [json_name = "useCached"];
+  optional string notes_session_id = 2 [json_name = "notesSessionId"];
+  optional string workspace_id = 3 [json_name = "workspaceId"];
+  optional string read_only_pinned_tree_sha = 4 [json_name = "readOnlyPinnedTreeSha"];
+  optional string read_only_plugin_cache_root = 5 [json_name = "readOnlyPluginCacheRoot"];
+  optional bool use_cached = 7 [json_name = "useCached"];
 }
 
 message RequestContextResult {
@@ -39,8 +39,8 @@ message RequestContextResult {
 }
 
 message RequestContextSuccess {
-  .agent.v1.RequestContext request_context = 1 [json_name = "requestContext"];
-  bool served_from_disk_cache = 2 [json_name = "servedFromDiskCache"];
+  optional .agent.v1.RequestContext request_context = 1 [json_name = "requestContext"];
+  optional bool served_from_disk_cache = 2 [json_name = "servedFromDiskCache"];
 }
 
 message RequestContextError {
@@ -53,53 +53,53 @@ message RequestContextRejected {
 
 message RequestContext {
   repeated .agent.v1.CursorRule rules = 2 [json_name = "rules"];
-  .agent.v1.RequestContextEnv env = 4 [json_name = "env"];
+  optional .agent.v1.RequestContextEnv env = 4 [json_name = "env"];
   repeated .agent.v1.RepositoryIndexingInfo repository_info = 6 [json_name = "repositoryInfo"];
   repeated .agent.v1.McpToolDefinition tools = 7 [json_name = "tools"];
-  string conversation_notes_listing = 8 [json_name = "conversationNotesListing"];
-  string shared_notes_listing = 9 [json_name = "sharedNotesListing"];
+  optional string conversation_notes_listing = 8 [json_name = "conversationNotesListing"];
+  optional string shared_notes_listing = 9 [json_name = "sharedNotesListing"];
   repeated .agent.v1.GitRepoInfo git_repos = 11 [json_name = "gitRepos"];
   repeated .agent.v1.LsDirectoryTreeNode project_layouts = 13 [json_name = "projectLayouts"];
   repeated .agent.v1.McpInstructions mcp_instructions = 14 [json_name = "mcpInstructions"];
-  .agent.v1.DebugModeConfig debug_mode_config = 15 [json_name = "debugModeConfig"];
-  string cloud_rule = 16 [json_name = "cloudRule"];
-  bool web_search_enabled = 17 [json_name = "webSearchEnabled"];
-  .agent.v1.SkillOptions skill_options = 18 [json_name = "skillOptions"];
-  bool repository_info_should_query_prod = 19 [json_name = "repositoryInfoShouldQueryProd"];
+  optional .agent.v1.DebugModeConfig debug_mode_config = 15 [json_name = "debugModeConfig"];
+  optional string cloud_rule = 16 [json_name = "cloudRule"];
+  optional bool web_search_enabled = 17 [json_name = "webSearchEnabled"];
+  optional .agent.v1.SkillOptions skill_options = 18 [json_name = "skillOptions"];
+  optional bool repository_info_should_query_prod = 19 [json_name = "repositoryInfoShouldQueryProd"];
   map<string, string> file_contents = 20 [json_name = "fileContents"];
-  string user_intent_summary = 21 [json_name = "userIntentSummary"];
+  optional string user_intent_summary = 21 [json_name = "userIntentSummary"];
   repeated .agent.v1.CustomSubagent custom_subagents = 22 [json_name = "customSubagents"];
-  .agent.v1.McpFileSystemOptions mcp_file_system_options = 23 [json_name = "mcpFileSystemOptions"];
-  bool web_fetch_enabled = 24 [json_name = "webFetchEnabled"];
-  string hooks_additional_context = 25 [json_name = "hooksAdditionalContext"];
-  string commit_attribution_message = 26 [json_name = "commitAttributionMessage"];
-  string pr_attribution_message = 27 [json_name = "prAttributionMessage"];
-  .agent.v1.HooksConfigInfo hooks_config = 28 [json_name = "hooksConfig"];
+  optional .agent.v1.McpFileSystemOptions mcp_file_system_options = 23 [json_name = "mcpFileSystemOptions"];
+  optional bool web_fetch_enabled = 24 [json_name = "webFetchEnabled"];
+  optional string hooks_additional_context = 25 [json_name = "hooksAdditionalContext"];
+  optional string commit_attribution_message = 26 [json_name = "commitAttributionMessage"];
+  optional string pr_attribution_message = 27 [json_name = "prAttributionMessage"];
+  optional .agent.v1.HooksConfigInfo hooks_config = 28 [json_name = "hooksConfig"];
   repeated .agent.v1.AgentSkill agent_skills = 29 [json_name = "agentSkills"];
   repeated .agent.v1.PrecomputedHumanChange precomputed_human_changes = 30 [json_name = "precomputedHumanChanges"];
-  .agent.v1.RecentlyAddedPlugin recently_added_plugin = 31 [json_name = "recentlyAddedPlugin"];
-  bool supports_mcp_auth = 32 [json_name = "supportsMcpAuth"];
-  bool git_repo_info_complete = 33 [json_name = "gitRepoInfoComplete"];
-  .agent.v1.McpMetaToolOptions mcp_meta_tool_options = 34 [json_name = "mcpMetaToolOptions"];
-  bool read_lints_enabled = 35 [json_name = "readLintsEnabled"];
-  bool mcp_info_complete = 36 [json_name = "mcpInfoComplete"];
+  optional .agent.v1.RecentlyAddedPlugin recently_added_plugin = 31 [json_name = "recentlyAddedPlugin"];
+  optional bool supports_mcp_auth = 32 [json_name = "supportsMcpAuth"];
+  optional bool git_repo_info_complete = 33 [json_name = "gitRepoInfoComplete"];
+  optional .agent.v1.McpMetaToolOptions mcp_meta_tool_options = 34 [json_name = "mcpMetaToolOptions"];
+  optional bool read_lints_enabled = 35 [json_name = "readLintsEnabled"];
+  optional bool mcp_info_complete = 36 [json_name = "mcpInfoComplete"];
   repeated .agent.v1.CursorRule non_file_rules = 37 [json_name = "nonFileRules"];
-  .agent.v1.MatchedInstalledPlugin matched_installed_plugin = 38 [json_name = "matchedInstalledPlugin"];
-  bool rules_info_complete = 39 [json_name = "rulesInfoComplete"];
-  bool env_info_complete = 40 [json_name = "envInfoComplete"];
-  bool repository_info_complete = 41 [json_name = "repositoryInfoComplete"];
-  bool custom_subagents_info_complete = 42 [json_name = "customSubagentsInfoComplete"];
-  bool agent_skills_info_complete = 43 [json_name = "agentSkillsInfoComplete"];
-  bool mcp_file_system_info_complete = 44 [json_name = "mcpFileSystemInfoComplete"];
-  bool git_status_info_complete = 45 [json_name = "gitStatusInfoComplete"];
-  .agent.v1.PermissionsAutoRunInstructions user_permissions_auto_run = 46 [json_name = "userPermissionsAutoRun"];
-  .agent.v1.PermissionsAutoRunInstructions project_permissions_auto_run = 47 [json_name = "projectPermissionsAutoRun"];
-  .agent.v1.PermissionsAutoRunInstructions admin_permissions_auto_run = 48 [json_name = "adminPermissionsAutoRun"];
+  optional .agent.v1.MatchedInstalledPlugin matched_installed_plugin = 38 [json_name = "matchedInstalledPlugin"];
+  optional bool rules_info_complete = 39 [json_name = "rulesInfoComplete"];
+  optional bool env_info_complete = 40 [json_name = "envInfoComplete"];
+  optional bool repository_info_complete = 41 [json_name = "repositoryInfoComplete"];
+  optional bool custom_subagents_info_complete = 42 [json_name = "customSubagentsInfoComplete"];
+  optional bool agent_skills_info_complete = 43 [json_name = "agentSkillsInfoComplete"];
+  optional bool mcp_file_system_info_complete = 44 [json_name = "mcpFileSystemInfoComplete"];
+  optional bool git_status_info_complete = 45 [json_name = "gitStatusInfoComplete"];
+  optional .agent.v1.PermissionsAutoRunInstructions user_permissions_auto_run = 46 [json_name = "userPermissionsAutoRun"];
+  optional .agent.v1.PermissionsAutoRunInstructions project_permissions_auto_run = 47 [json_name = "projectPermissionsAutoRun"];
+  optional .agent.v1.PermissionsAutoRunInstructions admin_permissions_auto_run = 48 [json_name = "adminPermissionsAutoRun"];
   repeated string disabled_team_rules = 49 [json_name = "disabledTeamRules"];
-  bool search_conversations_enabled = 50 [json_name = "searchConversationsEnabled"];
-  bool send_message_enabled = 51 [json_name = "sendMessageEnabled"];
+  optional bool search_conversations_enabled = 50 [json_name = "searchConversationsEnabled"];
+  optional bool send_message_enabled = 51 [json_name = "sendMessageEnabled"];
   repeated string admin_command_denylist = 52 [json_name = "adminCommandDenylist"];
-  .agent.v1.SystemPromptSpec system_prompt_override = 53 [json_name = "systemPromptOverride"];
+  optional .agent.v1.SystemPromptSpec system_prompt_override = 53 [json_name = "systemPromptOverride"];
 }
 
 message RequestContextEnv {
@@ -113,17 +113,17 @@ message RequestContextEnv {
   string time_zone = 10 [json_name = "timeZone"];
   string project_folder = 11 [json_name = "projectFolder"];
   string agent_transcripts_folder = 12 [json_name = "agentTranscriptsFolder"];
-  string artifacts_folder = 13 [json_name = "artifactsFolder"];
-  bool sandbox_supported = 14 [json_name = "sandboxSupported"];
-  bool sandbox_network_has_defaults = 16 [json_name = "sandboxNetworkHasDefaults"];
+  optional string artifacts_folder = 13 [json_name = "artifactsFolder"];
+  optional bool sandbox_supported = 14 [json_name = "sandboxSupported"];
+  optional bool sandbox_network_has_defaults = 16 [json_name = "sandboxNetworkHasDefaults"];
   repeated string sandbox_network_explicit_allowlist = 17 [json_name = "sandboxNetworkExplicitAllowlist"];
-  bool secret_redaction_enabled = 18 [json_name = "secretRedactionEnabled"];
-  bool computer_use_supported = 19 [json_name = "computerUseSupported"];
-  bool is_working_dir_home_dir = 20 [json_name = "isWorkingDirHomeDir"];
-  string process_working_directory = 21 [json_name = "processWorkingDirectory"];
-  bool smart_mode_classifier_auto_mode_enabled = 22 [json_name = "smartModeClassifierAutoModeEnabled"];
-  string dev_force_next_smart_mode_classifier_block_token = 23 [json_name = "devForceNextSmartModeClassifierBlockToken"];
-  string dev_delay_next_smart_mode_classifier_token = 24 [json_name = "devDelayNextSmartModeClassifierToken"];
+  optional bool secret_redaction_enabled = 18 [json_name = "secretRedactionEnabled"];
+  optional bool computer_use_supported = 19 [json_name = "computerUseSupported"];
+  optional bool is_working_dir_home_dir = 20 [json_name = "isWorkingDirHomeDir"];
+  optional string process_working_directory = 21 [json_name = "processWorkingDirectory"];
+  optional bool smart_mode_classifier_auto_mode_enabled = 22 [json_name = "smartModeClassifierAutoModeEnabled"];
+  optional string dev_force_next_smart_mode_classifier_block_token = 23 [json_name = "devForceNextSmartModeClassifierBlockToken"];
+  optional string dev_delay_next_smart_mode_classifier_token = 24 [json_name = "devDelayNextSmartModeClassifierToken"];
   repeated .agent.v1.MountedAgentStore mounted_agent_stores = 25 [json_name = "mountedAgentStores"];
 }
 
@@ -131,9 +131,9 @@ message GitRepoInfo {
   string path = 1 [json_name = "path"];
   string status = 2 [json_name = "status"];
   string branch_name = 3 [json_name = "branchName"];
-  string remote_url = 4 [json_name = "remoteUrl"];
-  bool previous_branch_is_ancestor = 5 [json_name = "previousBranchIsAncestor"];
-  bool is_origin_backed = 6 [json_name = "isOriginBacked"];
+  optional string remote_url = 4 [json_name = "remoteUrl"];
+  optional bool previous_branch_is_ancestor = 5 [json_name = "previousBranchIsAncestor"];
+  optional bool is_origin_backed = 6 [json_name = "isOriginBacked"];
 }
 
 message SkillOptions {
@@ -197,7 +197,7 @@ message SkillDescriptor {
   string description = 2 [json_name = "description"];
   string folder_path = 3 [json_name = "folderPath"];
   bool enabled = 4 [json_name = "enabled"];
-  string parse_error = 5 [json_name = "parseError"];
+  optional string parse_error = 5 [json_name = "parseError"];
   string readme_file_path = 6 [json_name = "readmeFilePath"];
   .agent.v1.PackageType package_type = 7 [json_name = "packageType"];
 }
@@ -205,7 +205,7 @@ message SkillDescriptor {
 message MountedAgentStore {
   string path = 1 [json_name = "path"];
   .agent.v1.MountedAgentStoreKind kind = 2 [json_name = "kind"];
-  string alias = 3 [json_name = "alias"];
+  optional string alias = 3 [json_name = "alias"];
   bool read_only = 4 [json_name = "readOnly"];
 }
 
@@ -218,15 +218,15 @@ message RequestContextPartReferences {
   uint32 subagents_byte_length = 6 [json_name = "subagentsByteLength"];
   bytes mcps_blob_id = 7 [json_name = "mcpsBlobId"];
   uint32 mcps_byte_length = 8 [json_name = "mcpsByteLength"];
-  .agent.v1.RequestContext dynamic_context = 9 [json_name = "dynamicContext"];
+  optional .agent.v1.RequestContext dynamic_context = 9 [json_name = "dynamicContext"];
 }
 
 message ImageProto {
   bytes data = 1 [json_name = "data"];
   string uuid = 2 [json_name = "uuid"];
   string path = 3 [json_name = "path"];
-  .agent.v1.ImageProto.Dimension dimension = 4 [json_name = "dimension"];
-  string task_specific_description = 6 [json_name = "taskSpecificDescription"];
+  optional .agent.v1.ImageProto.Dimension dimension = 4 [json_name = "dimension"];
+  optional string task_specific_description = 6 [json_name = "taskSpecificDescription"];
   string mime_type = 7 [json_name = "mimeType"];
   message Dimension {
     int32 width = 1 [json_name = "width"];
@@ -245,19 +245,19 @@ enum MountedAgentStoreKind {
 message RequestContextMcpsPart {
   repeated .agent.v1.McpToolDefinition tools = 1 [json_name = "tools"];
   repeated .agent.v1.McpInstructions mcp_instructions = 2 [json_name = "mcpInstructions"];
-  .agent.v1.McpFileSystemOptions mcp_file_system_options = 3 [json_name = "mcpFileSystemOptions"];
-  .agent.v1.McpMetaToolOptions mcp_meta_tool_options = 4 [json_name = "mcpMetaToolOptions"];
+  optional .agent.v1.McpFileSystemOptions mcp_file_system_options = 3 [json_name = "mcpFileSystemOptions"];
+  optional .agent.v1.McpMetaToolOptions mcp_meta_tool_options = 4 [json_name = "mcpMetaToolOptions"];
 }
 
 message RequestContextRulesPart {
   repeated .agent.v1.CursorRule rules = 1 [json_name = "rules"];
   repeated .agent.v1.CursorRule non_file_rules = 2 [json_name = "nonFileRules"];
-  string cloud_rule = 3 [json_name = "cloudRule"];
+  optional string cloud_rule = 3 [json_name = "cloudRule"];
 }
 
 message RequestContextSkillsPart {
   repeated .agent.v1.AgentSkill agent_skills = 1 [json_name = "agentSkills"];
-  .agent.v1.SkillOptions skill_options = 2 [json_name = "skillOptions"];
+  optional .agent.v1.SkillOptions skill_options = 2 [json_name = "skillOptions"];
 }
 
 message RequestContextSubagentsPart {
@@ -265,6 +265,6 @@ message RequestContextSubagentsPart {
 }
 
 message UserGitContext {
-  string username = 1 [json_name = "username"];
-  string email = 2 [json_name = "email"];
+  optional string username = 1 [json_name = "username"];
+  optional string email = 2 [json_name = "email"];
 }

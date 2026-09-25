@@ -13,7 +13,7 @@ function toRedactedSwitchModeArgs(msg, privacyMode) {
   return {
     _privacyMode: privacyMode,
     targetModeId: msg.targetModeId,
-    explanation: createRedactedString(msg.explanation, DataClassification.CODE, "explanation", privacyMode),
+    explanation: msg.explanation !== void 0 ? createRedactedString(msg.explanation, DataClassification.CODE, "explanation", privacyMode) : void 0,
     toolCallId: msg.toolCallId,
   };
 }
@@ -23,7 +23,7 @@ function fromRedactedSwitchModeArgs(msg, purpose, opts) {
   const enforcing = opts?.enforcing;
   return new SwitchModeArgs({
     targetModeId: msg.targetModeId,
-    explanation: msg.explanation.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    explanation: msg.explanation?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     toolCallId: msg.toolCallId,
   });
 }

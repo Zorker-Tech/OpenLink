@@ -15,7 +15,7 @@ function toRedactedPiFindToolArgs(msg, privacyMode) {
   return {
     _privacyMode: privacyMode,
     pattern: createRedactedString(msg.pattern, DataClassification.PATH, "pattern", privacyMode),
-    path: createRedactedString(msg.path, DataClassification.PATH, "path", privacyMode),
+    path: msg.path !== void 0 ? createRedactedString(msg.path, DataClassification.PATH, "path", privacyMode) : void 0,
     limit: msg.limit,
   };
 }
@@ -25,7 +25,7 @@ function fromRedactedPiFindToolArgs(msg, purpose, opts) {
   const enforcing = opts?.enforcing;
   return new PiFindToolArgs({
     pattern: msg.pattern.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    path: msg.path.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    path: msg.path?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     limit: msg.limit,
   });
 }

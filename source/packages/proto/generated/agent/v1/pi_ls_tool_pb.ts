@@ -17,12 +17,12 @@ import { PiTruncation } from "./pi_common_pb.ts";
  */
 export class PiLsToolCall extends Message<PiLsToolCall> {
   /**
-   * @generated from field: agent.v1.PiLsToolArgs args = 1;
+   * @generated from field: optional agent.v1.PiLsToolArgs args = 1;
    */
   args?: PiLsToolArgs;
 
   /**
-   * @generated from field: agent.v1.PiLsToolResult result = 2;
+   * @generated from field: optional agent.v1.PiLsToolResult result = 2;
    */
   result?: PiLsToolResult;
 
@@ -34,8 +34,8 @@ export class PiLsToolCall extends Message<PiLsToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.PiLsToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: PiLsToolArgs },
-    { no: 2, name: "result", kind: "message", T: PiLsToolResult },
+    { no: 1, name: "args", kind: "message", T: PiLsToolArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: PiLsToolResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PiLsToolCall {
@@ -60,14 +60,14 @@ export class PiLsToolCall extends Message<PiLsToolCall> {
  */
 export class PiLsToolArgs extends Message<PiLsToolArgs> {
   /**
-   * @generated from field: string path = 1;
+   * @generated from field: optional string path = 1;
    */
-  path = "";
+  path?: string;
 
   /**
-   * @generated from field: int32 limit = 2;
+   * @generated from field: optional int32 limit = 2;
    */
-  limit = 0;
+  limit?: number;
 
   constructor(data?: PartialMessage<PiLsToolArgs>) {
     super();
@@ -77,8 +77,8 @@ export class PiLsToolArgs extends Message<PiLsToolArgs> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.PiLsToolArgs";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 1, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PiLsToolArgs {
@@ -158,14 +158,14 @@ export class PiLsToolSuccess extends Message<PiLsToolSuccess> {
   output = "";
 
   /**
-   * @generated from field: agent.v1.PiTruncation truncation = 2;
+   * @generated from field: optional agent.v1.PiTruncation truncation = 2;
    */
   truncation?: PiTruncation;
 
   /**
-   * @generated from field: uint32 entry_limit_reached = 3;
+   * @generated from field: optional uint32 entry_limit_reached = 3;
    */
-  entryLimitReached = 0;
+  entryLimitReached?: number;
 
   constructor(data?: PartialMessage<PiLsToolSuccess>) {
     super();
@@ -176,8 +176,8 @@ export class PiLsToolSuccess extends Message<PiLsToolSuccess> {
   static readonly typeName = "agent.v1.PiLsToolSuccess";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "output", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "truncation", kind: "message", T: PiTruncation },
-    { no: 3, name: "entry_limit_reached", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 2, name: "truncation", kind: "message", T: PiTruncation, opt: true },
+    { no: 3, name: "entry_limit_reached", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PiLsToolSuccess {

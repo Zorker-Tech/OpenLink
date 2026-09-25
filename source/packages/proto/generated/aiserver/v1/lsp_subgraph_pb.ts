@@ -120,9 +120,9 @@ export class LspSubgraphPosition extends Message<LspSubgraphPosition> {
  */
 export class LspSubgraphContextItem extends Message<LspSubgraphContextItem> {
   /**
-   * @generated from field: string uri = 1;
+   * @generated from field: optional string uri = 1;
    */
-  uri = "";
+  uri?: string;
 
   /**
    * @generated from field: string type = 2;
@@ -135,7 +135,7 @@ export class LspSubgraphContextItem extends Message<LspSubgraphContextItem> {
   content = "";
 
   /**
-   * @generated from field: aiserver.v1.LspSubgraphRange range = 4;
+   * @generated from field: optional aiserver.v1.LspSubgraphRange range = 4;
    */
   range?: LspSubgraphRange;
 
@@ -147,10 +147,10 @@ export class LspSubgraphContextItem extends Message<LspSubgraphContextItem> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.LspSubgraphContextItem";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "uri", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "uri", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "range", kind: "message", T: LspSubgraphRange },
+    { no: 4, name: "range", kind: "message", T: LspSubgraphRange, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): LspSubgraphContextItem {

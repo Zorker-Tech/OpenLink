@@ -301,9 +301,9 @@ export class PodCreatingStatus extends Message<PodCreatingStatus> {
  */
 export class PodRunningStatus extends Message<PodRunningStatus> {
   /**
-   * @generated from field: uint64 missed_heartbeat_deadline = 1;
+   * @generated from field: optional uint64 missed_heartbeat_deadline = 1;
    */
-  missedHeartbeatDeadline = protoInt64.zero;
+  missedHeartbeatDeadline?: bigint;
 
   constructor(data?: PartialMessage<PodRunningStatus>) {
     super();
@@ -313,7 +313,7 @@ export class PodRunningStatus extends Message<PodRunningStatus> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "anyrun.v1.PodRunningStatus";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "missed_heartbeat_deadline", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
+    { no: 1, name: "missed_heartbeat_deadline", kind: "scalar", T: 4 /* ScalarType.UINT64 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PodRunningStatus {
@@ -343,7 +343,7 @@ export class PodFailedStatus extends Message<PodFailedStatus> {
   reason = "";
 
   /**
-   * @generated from field: anyrun.v1.PodFailureDetails failure_details = 2;
+   * @generated from field: optional anyrun.v1.PodFailureDetails failure_details = 2;
    */
   failureDetails?: PodFailureDetails;
 
@@ -356,7 +356,7 @@ export class PodFailedStatus extends Message<PodFailedStatus> {
   static readonly typeName = "anyrun.v1.PodFailedStatus";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "reason", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "failure_details", kind: "message", T: PodFailureDetails },
+    { no: 2, name: "failure_details", kind: "message", T: PodFailureDetails, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PodFailedStatus {
@@ -386,9 +386,9 @@ export class PodTerminatedStatus extends Message<PodTerminatedStatus> {
   reason = "";
 
   /**
-   * @generated from field: uint32 exit_code = 2;
+   * @generated from field: optional uint32 exit_code = 2;
    */
-  exitCode = 0;
+  exitCode?: number;
 
   constructor(data?: PartialMessage<PodTerminatedStatus>) {
     super();
@@ -399,7 +399,7 @@ export class PodTerminatedStatus extends Message<PodTerminatedStatus> {
   static readonly typeName = "anyrun.v1.PodTerminatedStatus";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "reason", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "exit_code", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 2, name: "exit_code", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PodTerminatedStatus {
@@ -591,14 +591,14 @@ export class GitCloneFailure extends Message<GitCloneFailure> {
   retryable = false;
 
   /**
-   * @generated from field: string remote_host = 4;
+   * @generated from field: optional string remote_host = 4;
    */
-  remoteHost = "";
+  remoteHost?: string;
 
   /**
-   * @generated from field: int32 http_status = 5;
+   * @generated from field: optional int32 http_status = 5;
    */
-  httpStatus = 0;
+  httpStatus?: number;
 
   constructor(data?: PartialMessage<GitCloneFailure>) {
     super();
@@ -611,8 +611,8 @@ export class GitCloneFailure extends Message<GitCloneFailure> {
     { no: 1, name: "exit_code", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 2, name: "category", kind: "enum", T: proto3.getEnumType(GitCloneFailureCategory) },
     { no: 3, name: "retryable", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "remote_host", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "http_status", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 4, name: "remote_host", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "http_status", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GitCloneFailure {
@@ -727,14 +727,14 @@ export class ImagePullFailure extends Message<ImagePullFailure> {
   retryable = false;
 
   /**
-   * @generated from field: int32 http_status = 3;
+   * @generated from field: optional int32 http_status = 3;
    */
-  httpStatus = 0;
+  httpStatus?: number;
 
   /**
-   * @generated from field: string repository = 4;
+   * @generated from field: optional string repository = 4;
    */
-  repository = "";
+  repository?: string;
 
   constructor(data?: PartialMessage<ImagePullFailure>) {
     super();
@@ -746,8 +746,8 @@ export class ImagePullFailure extends Message<ImagePullFailure> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "category", kind: "enum", T: proto3.getEnumType(ImagePullFailureCategory) },
     { no: 2, name: "retryable", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "http_status", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 4, name: "repository", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "http_status", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 4, name: "repository", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ImagePullFailure {
@@ -772,39 +772,39 @@ export class ImagePullFailure extends Message<ImagePullFailure> {
  */
 export class DaemonPod extends Message<DaemonPod> {
   /**
-   * @generated from field: anyrun.v1.PodStatus status = 2;
+   * @generated from field: optional anyrun.v1.PodStatus status = 2;
    */
   status?: PodStatus;
 
   /**
-   * @generated from field: uint32 internal_proxy_port = 3;
+   * @generated from field: optional uint32 internal_proxy_port = 3;
    */
-  internalProxyPort = 0;
+  internalProxyPort?: number;
 
   /**
-   * @generated from field: anyrun.v1.DefaultPortConfig default_port_config = 4;
+   * @generated from field: optional anyrun.v1.DefaultPortConfig default_port_config = 4;
    */
   defaultPortConfig?: DefaultPortConfig;
 
   /**
-   * @generated from field: string started_from_checkpoint_group_id = 5;
+   * @generated from field: optional string started_from_checkpoint_group_id = 5;
    */
-  startedFromCheckpointGroupId = "";
+  startedFromCheckpointGroupId?: string;
 
   /**
-   * @generated from field: anyrun.v1.PodStartCacheSource started_from_cache_source = 6;
+   * @generated from field: optional anyrun.v1.PodStartCacheSource started_from_cache_source = 6;
    */
-  startedFromCacheSource = PodStartCacheSource.UNSPECIFIED;
+  startedFromCacheSource?: PodStartCacheSource;
 
   /**
-   * @generated from field: uint64 started_from_checkpoint_creation_timestamp = 7;
+   * @generated from field: optional uint64 started_from_checkpoint_creation_timestamp = 7;
    */
-  startedFromCheckpointCreationTimestamp = protoInt64.zero;
+  startedFromCheckpointCreationTimestamp?: bigint;
 
   /**
-   * @generated from field: string started_from_checkpoint_id = 8;
+   * @generated from field: optional string started_from_checkpoint_id = 8;
    */
-  startedFromCheckpointId = "";
+  startedFromCheckpointId?: string;
 
   constructor(data?: PartialMessage<DaemonPod>) {
     super();
@@ -814,13 +814,13 @@ export class DaemonPod extends Message<DaemonPod> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "anyrun.v1.DaemonPod";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 2, name: "status", kind: "message", T: PodStatus },
-    { no: 3, name: "internal_proxy_port", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 4, name: "default_port_config", kind: "message", T: DefaultPortConfig },
-    { no: 5, name: "started_from_checkpoint_group_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "started_from_cache_source", kind: "enum", T: proto3.getEnumType(PodStartCacheSource) },
-    { no: 7, name: "started_from_checkpoint_creation_timestamp", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
-    { no: 8, name: "started_from_checkpoint_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "status", kind: "message", T: PodStatus, opt: true },
+    { no: 3, name: "internal_proxy_port", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
+    { no: 4, name: "default_port_config", kind: "message", T: DefaultPortConfig, opt: true },
+    { no: 5, name: "started_from_checkpoint_group_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "started_from_cache_source", kind: "enum", T: proto3.getEnumType(PodStartCacheSource), opt: true },
+    { no: 7, name: "started_from_checkpoint_creation_timestamp", kind: "scalar", T: 4 /* ScalarType.UINT64 */, opt: true },
+    { no: 8, name: "started_from_checkpoint_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DaemonPod {
@@ -855,7 +855,7 @@ export class Pod extends Message<Pod> {
   podId = "";
 
   /**
-   * @generated from field: anyrun.v1.ResourceRequests resource_requests = 4;
+   * @generated from field: optional anyrun.v1.ResourceRequests resource_requests = 4;
    */
   resourceRequests?: ResourceRequests;
 
@@ -865,7 +865,7 @@ export class Pod extends Message<Pod> {
   nodeId = "";
 
   /**
-   * @generated from field: anyrun.v1.PodPorts ports = 6;
+   * @generated from field: optional anyrun.v1.PodPorts ports = 6;
    */
   ports?: PodPorts;
 
@@ -875,7 +875,7 @@ export class Pod extends Message<Pod> {
   networkToken = "";
 
   /**
-   * @generated from field: anyrun.v1.PodStatus status = 8;
+   * @generated from field: optional anyrun.v1.PodStatus status = 8;
    */
   status?: PodStatus;
 
@@ -900,42 +900,42 @@ export class Pod extends Message<Pod> {
   creationTimestamp = protoInt64.zero;
 
   /**
-   * @generated from field: uint64 deletion_timestamp = 13;
+   * @generated from field: optional uint64 deletion_timestamp = 13;
    */
-  deletionTimestamp = protoInt64.zero;
+  deletionTimestamp?: bigint;
 
   /**
-   * @generated from field: uint64 hibernation_timestamp = 14;
+   * @generated from field: optional uint64 hibernation_timestamp = 14;
    */
-  hibernationTimestamp = protoInt64.zero;
+  hibernationTimestamp?: bigint;
 
   /**
-   * @generated from field: bool hibernated = 15;
+   * @generated from field: optional bool hibernated = 15;
    */
-  hibernated = false;
+  hibernated?: boolean;
 
   /**
-   * @generated from field: anyrun.v1.PersistedDevContainerConfig config = 16;
+   * @generated from field: optional anyrun.v1.PersistedDevContainerConfig config = 16;
    */
   config?: PersistedDevContainerConfig;
 
   /**
-   * @generated from field: anyrun.v1.ResourceLimits resource_limits = 17;
+   * @generated from field: optional anyrun.v1.ResourceLimits resource_limits = 17;
    */
   resourceLimits?: ResourceLimits;
 
   /**
-   * @generated from field: bool cache = 18;
+   * @generated from field: optional bool cache = 18;
    */
-  cache = false;
+  cache?: boolean;
 
   /**
-   * @generated from field: string cache_tag = 19;
+   * @generated from field: optional string cache_tag = 19;
    */
-  cacheTag = "";
+  cacheTag?: string;
 
   /**
-   * @generated from field: anyrun.v1.ResourceRequests hibernated_resource_requests = 20;
+   * @generated from field: optional anyrun.v1.ResourceRequests hibernated_resource_requests = 20;
    */
   hibernatedResourceRequests?: ResourceRequests;
 
@@ -945,19 +945,19 @@ export class Pod extends Message<Pod> {
   workload = "";
 
   /**
-   * @generated from field: uint32 internal_proxy_port = 22;
+   * @generated from field: optional uint32 internal_proxy_port = 22;
    */
-  internalProxyPort = 0;
+  internalProxyPort?: number;
 
   /**
-   * @generated from field: uint64 modified_timestamp = 23;
+   * @generated from field: optional uint64 modified_timestamp = 23;
    */
-  modifiedTimestamp = protoInt64.zero;
+  modifiedTimestamp?: bigint;
 
   /**
-   * @generated from field: uint64 pod_awake_since = 24;
+   * @generated from field: optional uint64 pod_awake_since = 24;
    */
-  podAwakeSince = protoInt64.zero;
+  podAwakeSince?: bigint;
 
   /**
    * @generated from field: repeated string low_cardinality_labels = 25;
@@ -970,34 +970,34 @@ export class Pod extends Message<Pod> {
   checkpointGroupIds: string[] = [];
 
   /**
-   * @generated from field: string started_from_checkpoint_group_id = 27;
+   * @generated from field: optional string started_from_checkpoint_group_id = 27;
    */
-  startedFromCheckpointGroupId = "";
+  startedFromCheckpointGroupId?: string;
 
   /**
-   * @generated from field: anyrun.v1.PodStartCacheSource started_from_cache_source = 28;
+   * @generated from field: optional anyrun.v1.PodStartCacheSource started_from_cache_source = 28;
    */
-  startedFromCacheSource = PodStartCacheSource.UNSPECIFIED;
+  startedFromCacheSource?: PodStartCacheSource;
 
   /**
-   * @generated from field: uint64 started_from_checkpoint_creation_timestamp = 29;
+   * @generated from field: optional uint64 started_from_checkpoint_creation_timestamp = 29;
    */
-  startedFromCheckpointCreationTimestamp = protoInt64.zero;
+  startedFromCheckpointCreationTimestamp?: bigint;
 
   /**
-   * @generated from field: string started_from_checkpoint_id = 30;
+   * @generated from field: optional string started_from_checkpoint_id = 30;
    */
-  startedFromCheckpointId = "";
+  startedFromCheckpointId?: string;
 
   /**
-   * @generated from field: anyrun.v1.AntiAffinityTags anti_affinity_tags = 31;
+   * @generated from field: optional anyrun.v1.AntiAffinityTags anti_affinity_tags = 31;
    */
   antiAffinityTags?: AntiAffinityTags;
 
   /**
-   * @generated from field: bool collect_metrics = 32;
+   * @generated from field: optional bool collect_metrics = 32;
    */
-  collectMetrics = false;
+  collectMetrics?: boolean;
 
   /**
    * @generated from field: repeated anyrun.v1.PodMeshLink mesh_links = 34;
@@ -1014,35 +1014,35 @@ export class Pod extends Message<Pod> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "tenant_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "pod_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "resource_requests", kind: "message", T: ResourceRequests },
+    { no: 4, name: "resource_requests", kind: "message", T: ResourceRequests, opt: true },
     { no: 5, name: "node_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "ports", kind: "message", T: PodPorts },
+    { no: 6, name: "ports", kind: "message", T: PodPorts, opt: true },
     { no: 7, name: "network_token", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "status", kind: "message", T: PodStatus },
+    { no: 8, name: "status", kind: "message", T: PodStatus, opt: true },
     { no: 9, name: "resource_version", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
     { no: 10, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 11, name: "labels", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
     { no: 12, name: "creation_timestamp", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
-    { no: 13, name: "deletion_timestamp", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
-    { no: 14, name: "hibernation_timestamp", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
-    { no: 15, name: "hibernated", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 16, name: "config", kind: "message", T: PersistedDevContainerConfig },
-    { no: 17, name: "resource_limits", kind: "message", T: ResourceLimits },
-    { no: 18, name: "cache", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 19, name: "cache_tag", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 20, name: "hibernated_resource_requests", kind: "message", T: ResourceRequests },
+    { no: 13, name: "deletion_timestamp", kind: "scalar", T: 4 /* ScalarType.UINT64 */, opt: true },
+    { no: 14, name: "hibernation_timestamp", kind: "scalar", T: 4 /* ScalarType.UINT64 */, opt: true },
+    { no: 15, name: "hibernated", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 16, name: "config", kind: "message", T: PersistedDevContainerConfig, opt: true },
+    { no: 17, name: "resource_limits", kind: "message", T: ResourceLimits, opt: true },
+    { no: 18, name: "cache", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 19, name: "cache_tag", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 20, name: "hibernated_resource_requests", kind: "message", T: ResourceRequests, opt: true },
     { no: 21, name: "workload", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 22, name: "internal_proxy_port", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 23, name: "modified_timestamp", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
-    { no: 24, name: "pod_awake_since", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
+    { no: 22, name: "internal_proxy_port", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
+    { no: 23, name: "modified_timestamp", kind: "scalar", T: 4 /* ScalarType.UINT64 */, opt: true },
+    { no: 24, name: "pod_awake_since", kind: "scalar", T: 4 /* ScalarType.UINT64 */, opt: true },
     { no: 25, name: "low_cardinality_labels", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 26, name: "checkpoint_group_ids", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 27, name: "started_from_checkpoint_group_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 28, name: "started_from_cache_source", kind: "enum", T: proto3.getEnumType(PodStartCacheSource) },
-    { no: 29, name: "started_from_checkpoint_creation_timestamp", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
-    { no: 30, name: "started_from_checkpoint_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 31, name: "anti_affinity_tags", kind: "message", T: AntiAffinityTags },
-    { no: 32, name: "collect_metrics", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 27, name: "started_from_checkpoint_group_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 28, name: "started_from_cache_source", kind: "enum", T: proto3.getEnumType(PodStartCacheSource), opt: true },
+    { no: 29, name: "started_from_checkpoint_creation_timestamp", kind: "scalar", T: 4 /* ScalarType.UINT64 */, opt: true },
+    { no: 30, name: "started_from_checkpoint_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 31, name: "anti_affinity_tags", kind: "message", T: AntiAffinityTags, opt: true },
+    { no: 32, name: "collect_metrics", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 34, name: "mesh_links", kind: "message", T: PodMeshLink, repeated: true },
   ]);
 
@@ -1073,9 +1073,9 @@ export class PodCollection extends Message<PodCollection> {
   items: Pod[] = [];
 
   /**
-   * @generated from field: string next_cursor = 2;
+   * @generated from field: optional string next_cursor = 2;
    */
-  nextCursor = "";
+  nextCursor?: string;
 
   constructor(data?: PartialMessage<PodCollection>) {
     super();
@@ -1086,7 +1086,7 @@ export class PodCollection extends Message<PodCollection> {
   static readonly typeName = "anyrun.v1.PodCollection";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "items", kind: "message", T: Pod, repeated: true },
-    { no: 2, name: "next_cursor", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "next_cursor", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PodCollection {
@@ -1111,9 +1111,9 @@ export class PodCollection extends Message<PodCollection> {
  */
 export class PodFilter extends Message<PodFilter> {
   /**
-   * @generated from field: string pod_id = 1;
+   * @generated from field: optional string pod_id = 1;
    */
-  podId = "";
+  podId?: string;
 
   /**
    * @generated from field: map<string, string> labels = 2;
@@ -1128,7 +1128,7 @@ export class PodFilter extends Message<PodFilter> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "anyrun.v1.PodFilter";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "pod_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "pod_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "labels", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
   ]);
 
@@ -1202,7 +1202,7 @@ export class PodPorts extends Message<PodPorts> {
   ports: PortDefinition[] = [];
 
   /**
-   * @generated from field: anyrun.v1.DefaultPortConfig default_port_config = 2;
+   * @generated from field: optional anyrun.v1.DefaultPortConfig default_port_config = 2;
    */
   defaultPortConfig?: DefaultPortConfig;
 
@@ -1215,7 +1215,7 @@ export class PodPorts extends Message<PodPorts> {
   static readonly typeName = "anyrun.v1.PodPorts";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "ports", kind: "message", T: PortDefinition, repeated: true },
-    { no: 2, name: "default_port_config", kind: "message", T: DefaultPortConfig },
+    { no: 2, name: "default_port_config", kind: "message", T: DefaultPortConfig, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PodPorts {
@@ -1240,9 +1240,9 @@ export class PodPorts extends Message<PodPorts> {
  */
 export class PodUpdate extends Message<PodUpdate> {
   /**
-   * @generated from field: string event_id = 1;
+   * @generated from field: optional string event_id = 1;
    */
-  eventId = "";
+  eventId?: string;
 
   /**
    * @generated from oneof anyrun.v1.PodUpdate.update
@@ -1281,7 +1281,7 @@ export class PodUpdate extends Message<PodUpdate> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "anyrun.v1.PodUpdate";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "event_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "event_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "initial", kind: "message", T: PodCollection, oneof: "update" },
     { no: 3, name: "added", kind: "message", T: Pod, oneof: "update" },
     { no: 4, name: "updated", kind: "message", T: Pod, oneof: "update" },

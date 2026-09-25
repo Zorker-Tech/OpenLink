@@ -31,7 +31,7 @@ message ContainerTreeNode {
     double score = 7 [json_name = "score"];
   }
   message Blob {
-    string value = 1 [json_name = "value"];
+    optional string value = 1 [json_name = "value"];
   }
   message Symbol {
     string doc_string = 1 [json_name = "docString"];

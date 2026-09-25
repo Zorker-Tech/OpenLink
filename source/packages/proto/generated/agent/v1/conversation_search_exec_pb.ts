@@ -52,9 +52,9 @@ export class ConversationSearchArgs extends Message<ConversationSearchArgs> {
   toolCallId = "";
 
   /**
-   * @generated from field: int32 limit = 3;
+   * @generated from field: optional int32 limit = 3;
    */
-  limit = 0;
+  limit?: number;
 
   constructor(data?: PartialMessage<ConversationSearchArgs>) {
     super();
@@ -66,7 +66,7 @@ export class ConversationSearchArgs extends Message<ConversationSearchArgs> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "query", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 3, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ConversationSearchArgs {
@@ -253,9 +253,9 @@ export class ConversationSearchHit extends Message<ConversationSearchHit> {
   updatedAtMs = protoInt64.zero;
 
   /**
-   * @generated from field: string snippet = 5;
+   * @generated from field: optional string snippet = 5;
    */
-  snippet = "";
+  snippet?: string;
 
   constructor(data?: PartialMessage<ConversationSearchHit>) {
     super();
@@ -269,7 +269,7 @@ export class ConversationSearchHit extends Message<ConversationSearchHit> {
     { no: 2, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "source", kind: "enum", T: proto3.getEnumType(ConversationSearchSource) },
     { no: 4, name: "updated_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 5, name: "snippet", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "snippet", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ConversationSearchHit {

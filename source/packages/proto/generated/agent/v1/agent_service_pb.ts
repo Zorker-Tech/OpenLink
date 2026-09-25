@@ -224,7 +224,7 @@ export class AgentClientMessage extends Message<AgentClientMessage> {
  */
 export class AgentServerMessage extends Message<AgentServerMessage> {
   /**
-   * @generated from field: agent.v1.TtftBreakdown ttft_breakdown = 8;
+   * @generated from field: optional agent.v1.TtftBreakdown ttft_breakdown = 8;
    */
   ttftBreakdown?: TtftBreakdown;
 
@@ -277,7 +277,7 @@ export class AgentServerMessage extends Message<AgentServerMessage> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.AgentServerMessage";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 8, name: "ttft_breakdown", kind: "message", T: TtftBreakdown },
+    { no: 8, name: "ttft_breakdown", kind: "message", T: TtftBreakdown, opt: true },
     { no: 1, name: "interaction_update", kind: "message", T: InteractionUpdate, oneof: "message" },
     { no: 2, name: "exec_server_message", kind: "message", T: ExecServerMessage, oneof: "message" },
     { no: 3, name: "conversation_checkpoint_update", kind: "message", T: ConversationStateStructure, oneof: "message" },
@@ -555,7 +555,7 @@ export class GetDefaultModelForCliRequest extends Message<GetDefaultModelForCliR
  */
 export class GetDefaultModelForCliResponse extends Message<GetDefaultModelForCliResponse> {
   /**
-   * @generated from field: agent.v1.ModelDetails model = 1;
+   * @generated from field: optional agent.v1.ModelDetails model = 1;
    */
   model?: ModelDetails;
 
@@ -567,7 +567,7 @@ export class GetDefaultModelForCliResponse extends Message<GetDefaultModelForCli
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.GetDefaultModelForCliResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "model", kind: "message", T: ModelDetails },
+    { no: 1, name: "model", kind: "message", T: ModelDetails, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetDefaultModelForCliResponse {
@@ -635,7 +635,7 @@ export class GetNewChatNudgeLegacyModelPickerRequest extends Message<GetNewChatN
  */
 export class GetNewChatNudgeLegacyModelPickerResponse extends Message<GetNewChatNudgeLegacyModelPickerResponse> {
   /**
-   * @generated from field: agent.v1.NewChatNudge nudge = 1;
+   * @generated from field: optional agent.v1.NewChatNudge nudge = 1;
    */
   nudge?: NewChatNudge;
 
@@ -647,7 +647,7 @@ export class GetNewChatNudgeLegacyModelPickerResponse extends Message<GetNewChat
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.GetNewChatNudgeLegacyModelPickerResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "nudge", kind: "message", T: NewChatNudge },
+    { no: 1, name: "nudge", kind: "message", T: NewChatNudge, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetNewChatNudgeLegacyModelPickerResponse {
@@ -672,7 +672,7 @@ export class GetNewChatNudgeLegacyModelPickerResponse extends Message<GetNewChat
  */
 export class GetNewChatNudgeParameterizedModelPickerRequest extends Message<GetNewChatNudgeParameterizedModelPickerRequest> {
   /**
-   * @generated from field: agent.v1.RequestedModel current_model = 1;
+   * @generated from field: optional agent.v1.RequestedModel current_model = 1;
    */
   currentModel?: RequestedModel;
 
@@ -684,7 +684,7 @@ export class GetNewChatNudgeParameterizedModelPickerRequest extends Message<GetN
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.GetNewChatNudgeParameterizedModelPickerRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "current_model", kind: "message", T: RequestedModel },
+    { no: 1, name: "current_model", kind: "message", T: RequestedModel, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetNewChatNudgeParameterizedModelPickerRequest {
@@ -709,7 +709,7 @@ export class GetNewChatNudgeParameterizedModelPickerRequest extends Message<GetN
  */
 export class GetNewChatNudgeParameterizedModelPickerResponse extends Message<GetNewChatNudgeParameterizedModelPickerResponse> {
   /**
-   * @generated from field: agent.v1.NewChatNudgeV2 nudge = 1;
+   * @generated from field: optional agent.v1.NewChatNudgeV2 nudge = 1;
    */
   nudge?: NewChatNudgeV2;
 
@@ -721,7 +721,7 @@ export class GetNewChatNudgeParameterizedModelPickerResponse extends Message<Get
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.GetNewChatNudgeParameterizedModelPickerResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "nudge", kind: "message", T: NewChatNudgeV2 },
+    { no: 1, name: "nudge", kind: "message", T: NewChatNudgeV2, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetNewChatNudgeParameterizedModelPickerResponse {
@@ -789,7 +789,7 @@ export class GetPromptContextUsageRequest extends Message<GetPromptContextUsageR
  */
 export class GetPromptContextUsageResponse extends Message<GetPromptContextUsageResponse> {
   /**
-   * @generated from field: agent.v1.PromptContextUsageSnapshot snapshot = 1;
+   * @generated from field: optional agent.v1.PromptContextUsageSnapshot snapshot = 1;
    */
   snapshot?: PromptContextUsageSnapshot;
 
@@ -801,7 +801,7 @@ export class GetPromptContextUsageResponse extends Message<GetPromptContextUsage
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.GetPromptContextUsageResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "snapshot", kind: "message", T: PromptContextUsageSnapshot },
+    { no: 1, name: "snapshot", kind: "message", T: PromptContextUsageSnapshot, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetPromptContextUsageResponse {
@@ -826,14 +826,14 @@ export class GetPromptContextUsageResponse extends Message<GetPromptContextUsage
  */
 export class GetSignedUrlForAttachedMediaRequest extends Message<GetSignedUrlForAttachedMediaRequest> {
   /**
-   * @generated from field: string key = 1;
+   * @generated from field: optional string key = 1;
    */
-  key = "";
+  key?: string;
 
   /**
-   * @generated from field: string mime_type = 2;
+   * @generated from field: optional string mime_type = 2;
    */
-  mimeType = "";
+  mimeType?: string;
 
   /**
    * @generated from field: string conversation_id = 3;
@@ -841,9 +841,9 @@ export class GetSignedUrlForAttachedMediaRequest extends Message<GetSignedUrlFor
   conversationId = "";
 
   /**
-   * @generated from field: int64 content_length_bytes = 4;
+   * @generated from field: optional int64 content_length_bytes = 4;
    */
-  contentLengthBytes = protoInt64.zero;
+  contentLengthBytes?: bigint;
 
   constructor(data?: PartialMessage<GetSignedUrlForAttachedMediaRequest>) {
     super();
@@ -853,10 +853,10 @@ export class GetSignedUrlForAttachedMediaRequest extends Message<GetSignedUrlFor
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.GetSignedUrlForAttachedMediaRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "mime_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "key", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "mime_type", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "conversation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "content_length_bytes", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
+    { no: 4, name: "content_length_bytes", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetSignedUrlForAttachedMediaRequest {
@@ -1038,24 +1038,24 @@ export class IdeEditorsStateFile extends Message<IdeEditorsStateFile> {
   absolutePath = "";
 
   /**
-   * @generated from field: bool is_currently_focused = 3;
+   * @generated from field: optional bool is_currently_focused = 3;
    */
-  isCurrentlyFocused = false;
+  isCurrentlyFocused?: boolean;
 
   /**
-   * @generated from field: int32 current_line_number = 4;
+   * @generated from field: optional int32 current_line_number = 4;
    */
-  currentLineNumber = 0;
+  currentLineNumber?: number;
 
   /**
-   * @generated from field: string current_line_text = 5;
+   * @generated from field: optional string current_line_text = 5;
    */
-  currentLineText = "";
+  currentLineText?: string;
 
   /**
-   * @generated from field: int32 line_count = 6;
+   * @generated from field: optional int32 line_count = 6;
    */
-  lineCount = 0;
+  lineCount?: number;
 
   constructor(data?: PartialMessage<IdeEditorsStateFile>) {
     super();
@@ -1067,10 +1067,10 @@ export class IdeEditorsStateFile extends Message<IdeEditorsStateFile> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "relative_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "absolute_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "is_currently_focused", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "current_line_number", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 5, name: "current_line_text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "line_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 3, name: "is_currently_focused", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 4, name: "current_line_number", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 5, name: "current_line_text", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "line_count", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): IdeEditorsStateFile {
@@ -1202,14 +1202,14 @@ export class LocalPromptQualityInvocation extends Message<LocalPromptQualityInvo
   totalTokens = protoInt64.zero;
 
   /**
-   * @generated from field: int64 token_limit = 15;
+   * @generated from field: optional int64 token_limit = 15;
    */
-  tokenLimit = protoInt64.zero;
+  tokenLimit?: bigint;
 
   /**
-   * @generated from field: string error_message = 16;
+   * @generated from field: optional string error_message = 16;
    */
-  errorMessage = "";
+  errorMessage?: string;
 
   constructor(data?: PartialMessage<LocalPromptQualityInvocation>) {
     super();
@@ -1233,8 +1233,8 @@ export class LocalPromptQualityInvocation extends Message<LocalPromptQualityInvo
     { no: 12, name: "prompt_tokens", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 13, name: "completion_tokens", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 14, name: "total_tokens", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 15, name: "token_limit", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 16, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 15, name: "token_limit", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
+    { no: 16, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): LocalPromptQualityInvocation {
@@ -1413,7 +1413,7 @@ export class NewChatNudgeV2 extends Message<NewChatNudgeV2> {
   nudgeId = "";
 
   /**
-   * @generated from field: agent.v1.RequestedModel target_model = 2;
+   * @generated from field: optional agent.v1.RequestedModel target_model = 2;
    */
   targetModel?: RequestedModel;
 
@@ -1454,7 +1454,7 @@ export class NewChatNudgeV2 extends Message<NewChatNudgeV2> {
   static readonly typeName = "agent.v1.NewChatNudgeV2";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "nudge_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "target_model", kind: "message", T: RequestedModel },
+    { no: 2, name: "target_model", kind: "message", T: RequestedModel, opt: true },
     { no: 3, name: "experiment_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "bump", kind: "message", T: NudgeBumpVariant, oneof: "variant" },
     { no: 5, name: "ask", kind: "message", T: NudgeAskVariant, oneof: "variant" },
@@ -1674,69 +1674,69 @@ export class NudgeSilentSwitchVariant extends Message<NudgeSilentSwitchVariant> 
  */
 export class PrewarmRequest extends Message<PrewarmRequest> {
   /**
-   * @generated from field: agent.v1.ModelDetails model_details = 1;
+   * @generated from field: optional agent.v1.ModelDetails model_details = 1;
    */
   modelDetails?: ModelDetails;
 
   /**
-   * @generated from field: string conversation_id = 2;
+   * @generated from field: optional string conversation_id = 2;
    */
-  conversationId = "";
+  conversationId?: string;
 
   /**
-   * @generated from field: agent.v1.ConversationStateStructure conversation_state = 3;
+   * @generated from field: optional agent.v1.ConversationStateStructure conversation_state = 3;
    */
   conversationState?: ConversationStateStructure;
 
   /**
-   * @generated from field: agent.v1.McpTools mcp_tools = 4;
+   * @generated from field: optional agent.v1.McpTools mcp_tools = 4;
    */
   mcpTools?: McpTools;
 
   /**
-   * @generated from field: agent.v1.McpFileSystemOptions mcp_file_system_options = 5;
+   * @generated from field: optional agent.v1.McpFileSystemOptions mcp_file_system_options = 5;
    */
   mcpFileSystemOptions?: McpFileSystemOptions;
 
   /**
-   * @generated from field: string best_of_n_group_id = 6;
+   * @generated from field: optional string best_of_n_group_id = 6;
    */
-  bestOfNGroupId = "";
+  bestOfNGroupId?: string;
 
   /**
-   * @generated from field: bool try_use_best_of_n_promotion = 7;
+   * @generated from field: optional bool try_use_best_of_n_promotion = 7;
    */
-  tryUseBestOfNPromotion = false;
+  tryUseBestOfNPromotion?: boolean;
 
   /**
-   * @generated from field: string custom_system_prompt = 8;
+   * @generated from field: optional string custom_system_prompt = 8;
    */
-  customSystemPrompt = "";
+  customSystemPrompt?: string;
 
   /**
-   * @generated from field: agent.v1.RequestedModel requested_model = 9;
+   * @generated from field: optional agent.v1.RequestedModel requested_model = 9;
    */
   requestedModel?: RequestedModel;
 
   /**
-   * @generated from field: bool suggest_next_prompt = 10;
+   * @generated from field: optional bool suggest_next_prompt = 10;
    */
-  suggestNextPrompt = false;
+  suggestNextPrompt?: boolean;
 
   /**
-   * @generated from field: string subagent_type_name = 11;
+   * @generated from field: optional string subagent_type_name = 11;
    */
-  subagentTypeName = "";
+  subagentTypeName?: string;
 
   /**
-   * @generated from field: bool exclude_workspace_context = 12;
+   * @generated from field: optional bool exclude_workspace_context = 12;
    */
-  excludeWorkspaceContext = false;
+  excludeWorkspaceContext?: boolean;
 
   /**
-   * @generated from field: string harness = 13;
+   * @generated from field: optional string harness = 13;
    */
-  harness = "";
+  harness?: string;
 
   /**
    * @generated from field: repeated agent.v1.RequestedModel selected_subagent_models = 14;
@@ -1749,9 +1749,9 @@ export class PrewarmRequest extends Message<PrewarmRequest> {
   selectedSubagentModelDetails: ModelDetails[] = [];
 
   /**
-   * @generated from field: string conversation_group_id = 16;
+   * @generated from field: optional string conversation_group_id = 16;
    */
-  conversationGroupId = "";
+  conversationGroupId?: string;
 
   /**
    * @generated from field: repeated agent.v1.PreFetchedBlob pre_fetched_blobs = 17;
@@ -1759,9 +1759,9 @@ export class PrewarmRequest extends Message<PrewarmRequest> {
   preFetchedBlobs: PreFetchedBlob[] = [];
 
   /**
-   * @generated from field: bool client_supports_inline_images = 18;
+   * @generated from field: optional bool client_supports_inline_images = 18;
    */
-  clientSupportsInlineImages = false;
+  clientSupportsInlineImages?: boolean;
 
   /**
    * @generated from field: repeated agent.v1.SubagentModelOverride subagent_model_overrides = 19;
@@ -1769,42 +1769,42 @@ export class PrewarmRequest extends Message<PrewarmRequest> {
   subagentModelOverrides: SubagentModelOverride[] = [];
 
   /**
-   * @generated from field: bool can_create_cloud_subagents = 20;
+   * @generated from field: optional bool can_create_cloud_subagents = 20;
    */
-  canCreateCloudSubagents = false;
+  canCreateCloudSubagents?: boolean;
 
   /**
-   * @generated from field: bool suppress_subagent_progress_update_tool = 21;
+   * @generated from field: optional bool suppress_subagent_progress_update_tool = 21;
    */
-  suppressSubagentProgressUpdateTool = false;
+  suppressSubagentProgressUpdateTool?: boolean;
 
   /**
-   * @generated from field: bool client_supports_send_to_user = 22;
+   * @generated from field: optional bool client_supports_send_to_user = 22;
    */
-  clientSupportsSendToUser = false;
+  clientSupportsSendToUser?: boolean;
 
   /**
-   * @generated from field: string computer_use_coordinate_mode = 23;
+   * @generated from field: optional string computer_use_coordinate_mode = 23;
    */
-  computerUseCoordinateMode = "";
+  computerUseCoordinateMode?: string;
 
   /**
-   * @generated from field: string agent_session_id = 24;
+   * @generated from field: optional string agent_session_id = 24;
    */
-  agentSessionId = "";
+  agentSessionId?: string;
 
   /**
-   * @generated from field: bool client_supports_prompt_context_usage_rpc = 25;
+   * @generated from field: optional bool client_supports_prompt_context_usage_rpc = 25;
    */
-  clientSupportsPromptContextUsageRpc = false;
+  clientSupportsPromptContextUsageRpc?: boolean;
 
   /**
-   * @generated from field: bool client_supports_routed_model_update = 26;
+   * @generated from field: optional bool client_supports_routed_model_update = 26;
    */
-  clientSupportsRoutedModelUpdate = false;
+  clientSupportsRoutedModelUpdate?: boolean;
 
   /**
-   * @generated from field: agent.v1.ClientLlmGatewayCredential client_llm_gateway_credential = 27;
+   * @generated from field: optional agent.v1.ClientLlmGatewayCredential client_llm_gateway_credential = 27;
    */
   clientLlmGatewayCredential?: ClientLlmGatewayCredential;
 
@@ -1816,33 +1816,33 @@ export class PrewarmRequest extends Message<PrewarmRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.PrewarmRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "model_details", kind: "message", T: ModelDetails },
-    { no: 2, name: "conversation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "conversation_state", kind: "message", T: ConversationStateStructure },
-    { no: 4, name: "mcp_tools", kind: "message", T: McpTools },
-    { no: 5, name: "mcp_file_system_options", kind: "message", T: McpFileSystemOptions },
-    { no: 6, name: "best_of_n_group_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "try_use_best_of_n_promotion", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 8, name: "custom_system_prompt", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "requested_model", kind: "message", T: RequestedModel },
-    { no: 10, name: "suggest_next_prompt", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 11, name: "subagent_type_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 12, name: "exclude_workspace_context", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 13, name: "harness", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "model_details", kind: "message", T: ModelDetails, opt: true },
+    { no: 2, name: "conversation_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "conversation_state", kind: "message", T: ConversationStateStructure, opt: true },
+    { no: 4, name: "mcp_tools", kind: "message", T: McpTools, opt: true },
+    { no: 5, name: "mcp_file_system_options", kind: "message", T: McpFileSystemOptions, opt: true },
+    { no: 6, name: "best_of_n_group_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "try_use_best_of_n_promotion", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 8, name: "custom_system_prompt", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 9, name: "requested_model", kind: "message", T: RequestedModel, opt: true },
+    { no: 10, name: "suggest_next_prompt", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 11, name: "subagent_type_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 12, name: "exclude_workspace_context", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 13, name: "harness", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 14, name: "selected_subagent_models", kind: "message", T: RequestedModel, repeated: true },
     { no: 15, name: "selected_subagent_model_details", kind: "message", T: ModelDetails, repeated: true },
-    { no: 16, name: "conversation_group_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 16, name: "conversation_group_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 17, name: "pre_fetched_blobs", kind: "message", T: PreFetchedBlob, repeated: true },
-    { no: 18, name: "client_supports_inline_images", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 18, name: "client_supports_inline_images", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 19, name: "subagent_model_overrides", kind: "message", T: SubagentModelOverride, repeated: true },
-    { no: 20, name: "can_create_cloud_subagents", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 21, name: "suppress_subagent_progress_update_tool", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 22, name: "client_supports_send_to_user", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 23, name: "computer_use_coordinate_mode", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 24, name: "agent_session_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 25, name: "client_supports_prompt_context_usage_rpc", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 26, name: "client_supports_routed_model_update", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 27, name: "client_llm_gateway_credential", kind: "message", T: ClientLlmGatewayCredential },
+    { no: 20, name: "can_create_cloud_subagents", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 21, name: "suppress_subagent_progress_update_tool", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 22, name: "client_supports_send_to_user", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 23, name: "computer_use_coordinate_mode", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 24, name: "agent_session_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 25, name: "client_supports_prompt_context_usage_rpc", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 26, name: "client_supports_routed_model_update", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 27, name: "client_llm_gateway_credential", kind: "message", T: ClientLlmGatewayCredential, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PrewarmRequest {
@@ -1882,9 +1882,9 @@ export class TtftBreakdown extends Message<TtftBreakdown> {
   waitForFirstEventMs = 0;
 
   /**
-   * @generated from field: double provider_ttft_ms = 4;
+   * @generated from field: optional double provider_ttft_ms = 4;
    */
-  providerTtftMs = 0;
+  providerTtftMs?: number;
 
   /**
    * @generated from field: double slow_pool_wait_ms = 5;
@@ -1902,7 +1902,7 @@ export class TtftBreakdown extends Message<TtftBreakdown> {
     { no: 1, name: "server_first_token_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
     { no: 2, name: "pre_stream_setup_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
     { no: 3, name: "wait_for_first_event_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 4, name: "provider_ttft_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
+    { no: 4, name: "provider_ttft_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
     { no: 5, name: "slow_pool_wait_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
   ]);
 
@@ -1933,14 +1933,14 @@ export class UpdateConversationMetadataRequest extends Message<UpdateConversatio
   conversationId = "";
 
   /**
-   * @generated from field: string name = 2;
+   * @generated from field: optional string name = 2;
    */
-  name = "";
+  name?: string;
 
   /**
-   * @generated from field: bool only_set_name_if_empty = 3;
+   * @generated from field: optional bool only_set_name_if_empty = 3;
    */
-  onlySetNameIfEmpty = false;
+  onlySetNameIfEmpty?: boolean;
 
   /**
    * @generated from field: repeated string workspace_paths = 4;
@@ -1956,8 +1956,8 @@ export class UpdateConversationMetadataRequest extends Message<UpdateConversatio
   static readonly typeName = "agent.v1.UpdateConversationMetadataRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "conversation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "only_set_name_if_empty", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "only_set_name_if_empty", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 4, name: "workspace_paths", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
 

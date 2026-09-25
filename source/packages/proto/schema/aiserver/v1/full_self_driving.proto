@@ -20,7 +20,7 @@ message ApplyFullSelfDrivingPrScopedSuggestionRequest {
 
 message ApplyFullSelfDrivingPrScopedSuggestionResponse {
   string new_pr_head_sha = 1 [json_name = "newPrHeadSha"];
-  .aiserver.v1.FullSelfDrivingPrScopedSuggestion suggestion = 2 [json_name = "suggestion"];
+  optional .aiserver.v1.FullSelfDrivingPrScopedSuggestion suggestion = 2 [json_name = "suggestion"];
 }
 
 message ApplyFullSelfDrivingSuggestionRequest {
@@ -37,9 +37,9 @@ message ApplyFullSelfDrivingSuggestionResponse {
 message BuildFullSelfDrivingTriageContextRequest {
   string pr_url = 1 [json_name = "prUrl"];
   string trigger_description = 2 [json_name = "triggerDescription"];
-  string event_name = 3 [json_name = "eventName"];
+  optional string event_name = 3 [json_name = "eventName"];
   .aiserver.v1.FullSelfDrivingMode mode = 4 [json_name = "mode"];
-  string bc_id = 5 [json_name = "bcId"];
+  optional string bc_id = 5 [json_name = "bcId"];
   bool fetch_ci_log_excerpts = 6 [json_name = "fetchCiLogExcerpts"];
 }
 
@@ -63,11 +63,11 @@ message DismissFullSelfDrivingOutputRequest {
   string pr_url = 1 [json_name = "prUrl"];
   string bc_id = 2 [json_name = "bcId"];
   string stable_key = 3 [json_name = "stableKey"];
-  string reason = 4 [json_name = "reason"];
+  optional string reason = 4 [json_name = "reason"];
 }
 
 message DismissFullSelfDrivingOutputResponse {
-  .aiserver.v1.FullSelfDrivingFinding finding = 1 [json_name = "finding"];
+  optional .aiserver.v1.FullSelfDrivingFinding finding = 1 [json_name = "finding"];
 }
 
 message EnrollExternalFullSelfDrivingRunRequest {
@@ -87,7 +87,7 @@ message FullSelfDrivingAutoApplyConfig {
   string scope = 3 [json_name = "scope"];
   string repo_owner = 4 [json_name = "repoOwner"];
   string repo_name = 5 [json_name = "repoName"];
-  .google.protobuf.Timestamp created_at = 6 [json_name = "createdAt"];
+  optional .google.protobuf.Timestamp created_at = 6 [json_name = "createdAt"];
 }
 
 enum FullSelfDrivingCloudCommandAction {
@@ -98,7 +98,7 @@ enum FullSelfDrivingCloudCommandAction {
 
 message FullSelfDrivingFinding {
   string event_id = 1 [json_name = "eventId"];
-  .google.protobuf.Timestamp last_updated_at = 2 [json_name = "lastUpdatedAt"];
+  optional .google.protobuf.Timestamp last_updated_at = 2 [json_name = "lastUpdatedAt"];
   string pr_url = 3 [json_name = "prUrl"];
   string bc_id = 4 [json_name = "bcId"];
   string stable_key = 5 [json_name = "stableKey"];
@@ -106,7 +106,7 @@ message FullSelfDrivingFinding {
   string title = 7 [json_name = "title"];
   string body = 8 [json_name = "body"];
   string severity = 9 [json_name = "severity"];
-  .google.protobuf.Struct payload = 10 [json_name = "payload"];
+  optional .google.protobuf.Struct payload = 10 [json_name = "payload"];
   string superseded_by_stable_key = 11 [json_name = "supersededByStableKey"];
   string superseded_reason = 12 [json_name = "supersededReason"];
   string dismissed_reason = 13 [json_name = "dismissedReason"];
@@ -129,35 +129,35 @@ message FullSelfDrivingOutputInput {
   string body = 5 [json_name = "body"];
   string severity = 6 [json_name = "severity"];
   string action = 7 [json_name = "action"];
-  .google.protobuf.Struct payload = 8 [json_name = "payload"];
+  optional .google.protobuf.Struct payload = 8 [json_name = "payload"];
 }
 
 message FullSelfDrivingPrScopedSuggestion {
-  .aiserver.v1.FullSelfDrivingFinding finding = 1 [json_name = "finding"];
+  optional .aiserver.v1.FullSelfDrivingFinding finding = 1 [json_name = "finding"];
   string producer = 2 [json_name = "producer"];
   string producer_run_id = 3 [json_name = "producerRunId"];
   int64 created_by_user_id = 4 [json_name = "createdByUserId"];
-  int64 created_by_team_id = 5 [json_name = "createdByTeamId"];
+  optional int64 created_by_team_id = 5 [json_name = "createdByTeamId"];
 }
 
 message FullSelfDrivingRun {
   string bc_id = 1 [json_name = "bcId"];
   string status = 2 [json_name = "status"];
-  .google.protobuf.Timestamp created_at = 3 [json_name = "createdAt"];
-  .google.protobuf.Timestamp first_finished_at = 4 [json_name = "firstFinishedAt"];
+  optional .google.protobuf.Timestamp created_at = 3 [json_name = "createdAt"];
+  optional .google.protobuf.Timestamp first_finished_at = 4 [json_name = "firstFinishedAt"];
   string branch_name = 5 [json_name = "branchName"];
   bool auto_branch = 6 [json_name = "autoBranch"];
   int32 files_changed = 7 [json_name = "filesChanged"];
   string source = 8 [json_name = "source"];
   string active_run_id = 9 [json_name = "activeRunId"];
-  .aiserver.v1.FullSelfDrivingRunLiveStatus latest_status_update = 10 [json_name = "latestStatusUpdate"];
+  optional .aiserver.v1.FullSelfDrivingRunLiveStatus latest_status_update = 10 [json_name = "latestStatusUpdate"];
 }
 
 message FullSelfDrivingRunLiveStatus {
   string state = 1 [json_name = "state"];
   string status = 2 [json_name = "status"];
   repeated string loading_messages = 3 [json_name = "loadingMessages"];
-  .google.protobuf.Timestamp updated_at = 4 [json_name = "updatedAt"];
+  optional .google.protobuf.Timestamp updated_at = 4 [json_name = "updatedAt"];
 }
 
 enum FullSelfDrivingRunSuggestionState {
@@ -194,8 +194,8 @@ message GetFullSelfDrivingRunSuggestionResponse {
 }
 
 message ListFullSelfDrivingAutoApplyConfigsRequest {
-  string repo_owner = 1 [json_name = "repoOwner"];
-  string repo_name = 2 [json_name = "repoName"];
+  optional string repo_owner = 1 [json_name = "repoOwner"];
+  optional string repo_name = 2 [json_name = "repoName"];
 }
 
 message ListFullSelfDrivingAutoApplyConfigsResponse {
@@ -205,7 +205,7 @@ message ListFullSelfDrivingAutoApplyConfigsResponse {
 message ListFullSelfDrivingFindingsRequest {
   string pr_url = 1 [json_name = "prUrl"];
   string bc_id = 2 [json_name = "bcId"];
-  int32 limit = 3 [json_name = "limit"];
+  optional int32 limit = 3 [json_name = "limit"];
   bool include_superseded = 4 [json_name = "includeSuperseded"];
   repeated string kinds = 5 [json_name = "kinds"];
 }
@@ -216,7 +216,7 @@ message ListFullSelfDrivingFindingsResponse {
 
 message ListFullSelfDrivingPrScopedSuggestionsRequest {
   string pr_url = 1 [json_name = "prUrl"];
-  int32 limit = 2 [json_name = "limit"];
+  optional int32 limit = 2 [json_name = "limit"];
   bool include_superseded = 3 [json_name = "includeSuperseded"];
   repeated string kinds = 4 [json_name = "kinds"];
 }
@@ -227,7 +227,7 @@ message ListFullSelfDrivingPrScopedSuggestionsResponse {
 
 message ListFullSelfDrivingRunsRequest {
   string pr_url = 1 [json_name = "prUrl"];
-  int32 limit = 2 [json_name = "limit"];
+  optional int32 limit = 2 [json_name = "limit"];
 }
 
 message ListFullSelfDrivingRunsResponse {
@@ -237,8 +237,8 @@ message ListFullSelfDrivingRunsResponse {
 message PrepareLocalFullSelfDrivingRunRequest {
   string pr_url = 1 [json_name = "prUrl"];
   .aiserver.v1.FullSelfDrivingMode mode = 2 [json_name = "mode"];
-  string trigger_description = 3 [json_name = "triggerDescription"];
-  string model_id = 4 [json_name = "modelId"];
+  optional string trigger_description = 3 [json_name = "triggerDescription"];
+  optional string model_id = 4 [json_name = "modelId"];
 }
 
 message PrepareLocalFullSelfDrivingRunResponse {
@@ -260,7 +260,7 @@ message RecordFullSelfDrivingAutoApplyConfigRequest {
 }
 
 message RecordFullSelfDrivingAutoApplyConfigResponse {
-  .aiserver.v1.FullSelfDrivingAutoApplyConfig config = 1 [json_name = "config"];
+  optional .aiserver.v1.FullSelfDrivingAutoApplyConfig config = 1 [json_name = "config"];
 }
 
 message RecordFullSelfDrivingOutputsRequest {
@@ -277,19 +277,19 @@ message RecordFullSelfDrivingPrScopedSuggestionRequest {
   string pr_url = 1 [json_name = "prUrl"];
   string producer = 2 [json_name = "producer"];
   string producer_run_id = 3 [json_name = "producerRunId"];
-  .aiserver.v1.FullSelfDrivingOutputInput output = 4 [json_name = "output"];
+  optional .aiserver.v1.FullSelfDrivingOutputInput output = 4 [json_name = "output"];
 }
 
 message RecordFullSelfDrivingPrScopedSuggestionResponse {
-  .aiserver.v1.FullSelfDrivingPrScopedSuggestion suggestion = 1 [json_name = "suggestion"];
+  optional .aiserver.v1.FullSelfDrivingPrScopedSuggestion suggestion = 1 [json_name = "suggestion"];
 }
 
 message RunFullSelfDrivingCloudCommandRequest {
   string pr_url = 1 [json_name = "prUrl"];
   .aiserver.v1.FullSelfDrivingMode mode = 2 [json_name = "mode"];
-  string user_instructions = 3 [json_name = "userInstructions"];
-  string trigger_description = 4 [json_name = "triggerDescription"];
-  string model_id = 5 [json_name = "modelId"];
+  optional string user_instructions = 3 [json_name = "userInstructions"];
+  optional string trigger_description = 4 [json_name = "triggerDescription"];
+  optional string model_id = 5 [json_name = "modelId"];
 }
 
 message RunFullSelfDrivingCloudCommandResponse {
@@ -327,12 +327,12 @@ message SupersedeFullSelfDrivingOutputRequest {
   string pr_url = 1 [json_name = "prUrl"];
   string bc_id = 2 [json_name = "bcId"];
   string stable_key = 3 [json_name = "stableKey"];
-  string replacement_stable_key = 4 [json_name = "replacementStableKey"];
-  string reason = 5 [json_name = "reason"];
+  optional string replacement_stable_key = 4 [json_name = "replacementStableKey"];
+  optional string reason = 5 [json_name = "reason"];
 }
 
 message SupersedeFullSelfDrivingOutputResponse {
-  .aiserver.v1.FullSelfDrivingFinding finding = 1 [json_name = "finding"];
+  optional .aiserver.v1.FullSelfDrivingFinding finding = 1 [json_name = "finding"];
 }
 
 message UndoFullSelfDrivingOutputRequest {
@@ -342,7 +342,7 @@ message UndoFullSelfDrivingOutputRequest {
 }
 
 message UndoFullSelfDrivingOutputResponse {
-  .aiserver.v1.FullSelfDrivingFinding finding = 1 [json_name = "finding"];
+  optional .aiserver.v1.FullSelfDrivingFinding finding = 1 [json_name = "finding"];
 }
 
 message UpdateFullSelfDrivingFindingStatusRequest {
@@ -353,34 +353,34 @@ message UpdateFullSelfDrivingFindingStatusRequest {
 }
 
 message UpdateFullSelfDrivingFindingStatusResponse {
-  .aiserver.v1.FullSelfDrivingFinding finding = 1 [json_name = "finding"];
+  optional .aiserver.v1.FullSelfDrivingFinding finding = 1 [json_name = "finding"];
 }
 
 message UpdateFullSelfDrivingOutputRequest {
   string pr_url = 1 [json_name = "prUrl"];
   string bc_id = 2 [json_name = "bcId"];
   string stable_key = 3 [json_name = "stableKey"];
-  string title = 4 [json_name = "title"];
-  string body = 5 [json_name = "body"];
-  string status = 6 [json_name = "status"];
-  string severity = 7 [json_name = "severity"];
-  bool clear_severity = 8 [json_name = "clearSeverity"];
-  string action = 9 [json_name = "action"];
-  bool clear_action = 10 [json_name = "clearAction"];
-  .google.protobuf.Struct payload = 11 [json_name = "payload"];
+  optional string title = 4 [json_name = "title"];
+  optional string body = 5 [json_name = "body"];
+  optional string status = 6 [json_name = "status"];
+  optional string severity = 7 [json_name = "severity"];
+  optional bool clear_severity = 8 [json_name = "clearSeverity"];
+  optional string action = 9 [json_name = "action"];
+  optional bool clear_action = 10 [json_name = "clearAction"];
+  optional .google.protobuf.Struct payload = 11 [json_name = "payload"];
 }
 
 message UpdateFullSelfDrivingOutputResponse {
-  .aiserver.v1.FullSelfDrivingFinding finding = 1 [json_name = "finding"];
+  optional .aiserver.v1.FullSelfDrivingFinding finding = 1 [json_name = "finding"];
 }
 
 message UpdateFullSelfDrivingPrScopedSuggestionStatusRequest {
   string pr_url = 1 [json_name = "prUrl"];
   string stable_key = 2 [json_name = "stableKey"];
   string status = 3 [json_name = "status"];
-  string reason = 4 [json_name = "reason"];
+  optional string reason = 4 [json_name = "reason"];
 }
 
 message UpdateFullSelfDrivingPrScopedSuggestionStatusResponse {
-  .aiserver.v1.FullSelfDrivingPrScopedSuggestion suggestion = 1 [json_name = "suggestion"];
+  optional .aiserver.v1.FullSelfDrivingPrScopedSuggestion suggestion = 1 [json_name = "suggestion"];
 }

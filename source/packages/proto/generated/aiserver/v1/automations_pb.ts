@@ -1031,19 +1031,19 @@ export class ActionsPayload extends Message<ActionsPayload> {
  */
 export class AgentOptions extends Message<AgentOptions> {
   /**
-   * @generated from field: bool skip_install = 1;
+   * @generated from field: optional bool skip_install = 1;
    */
-  skipInstall = false;
+  skipInstall?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.AgentPrivateWorkerConfig private_worker = 2;
+   * @generated from field: optional aiserver.v1.AgentPrivateWorkerConfig private_worker = 2;
    */
   privateWorker?: AgentPrivateWorkerConfig;
 
   /**
-   * @generated from field: string environment_public_id = 3;
+   * @generated from field: optional string environment_public_id = 3;
    */
-  environmentPublicId = "";
+  environmentPublicId?: string;
 
   constructor(data?: PartialMessage<AgentOptions>) {
     super();
@@ -1053,9 +1053,9 @@ export class AgentOptions extends Message<AgentOptions> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.AgentOptions";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "skip_install", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 2, name: "private_worker", kind: "message", T: AgentPrivateWorkerConfig },
-    { no: 3, name: "environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "skip_install", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 2, name: "private_worker", kind: "message", T: AgentPrivateWorkerConfig, opt: true },
+    { no: 3, name: "environment_public_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AgentOptions {
@@ -1160,7 +1160,7 @@ export class AgentPrivateWorkerLabel extends Message<AgentPrivateWorkerLabel> {
  */
 export class ApplyAutomationSpecRequest extends Message<ApplyAutomationSpecRequest> {
   /**
-   * @generated from field: aiserver.v1.AutomationDeploySpec spec = 1;
+   * @generated from field: optional aiserver.v1.AutomationDeploySpec spec = 1;
    */
   spec?: AutomationDeploySpec;
 
@@ -1172,7 +1172,7 @@ export class ApplyAutomationSpecRequest extends Message<ApplyAutomationSpecReque
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ApplyAutomationSpecRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "spec", kind: "message", T: AutomationDeploySpec },
+    { no: 1, name: "spec", kind: "message", T: AutomationDeploySpec, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ApplyAutomationSpecRequest {
@@ -1197,7 +1197,7 @@ export class ApplyAutomationSpecRequest extends Message<ApplyAutomationSpecReque
  */
 export class ApplyAutomationSpecResponse extends Message<ApplyAutomationSpecResponse> {
   /**
-   * @generated from field: aiserver.v1.AutomationWithOwner workflow = 1;
+   * @generated from field: optional aiserver.v1.AutomationWithOwner workflow = 1;
    */
   workflow?: AutomationWithOwner;
 
@@ -1214,7 +1214,7 @@ export class ApplyAutomationSpecResponse extends Message<ApplyAutomationSpecResp
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ApplyAutomationSpecResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "workflow", kind: "message", T: AutomationWithOwner },
+    { no: 1, name: "workflow", kind: "message", T: AutomationWithOwner, opt: true },
     { no: 2, name: "created", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
@@ -1281,7 +1281,7 @@ export class Automation extends Message<Automation> {
   enabled = false;
 
   /**
-   * @generated from field: aiserver.v1.Workflow workflow = 4;
+   * @generated from field: optional aiserver.v1.Workflow workflow = 4;
    */
   workflow?: Workflow;
 
@@ -1296,9 +1296,9 @@ export class Automation extends Message<Automation> {
   updatedAt = protoInt64.zero;
 
   /**
-   * @generated from field: string description = 7;
+   * @generated from field: optional string description = 7;
    */
-  description = "";
+  description?: string;
 
   /**
    * @generated from field: string automation_id = 8;
@@ -1311,9 +1311,9 @@ export class Automation extends Message<Automation> {
   scope = AutomationScope.UNSPECIFIED;
 
   /**
-   * @generated from field: string service_account_id = 10;
+   * @generated from field: optional string service_account_id = 10;
    */
-  serviceAccountId = "";
+  serviceAccountId?: string;
 
   /**
    * @generated from field: aiserver.v1.AutomationManagedBy managed_by = 11;
@@ -1321,34 +1321,34 @@ export class Automation extends Message<Automation> {
   managedBy = AutomationManagedBy.UNSPECIFIED;
 
   /**
-   * @generated from field: string deploy_key = 12;
+   * @generated from field: optional string deploy_key = 12;
    */
-  deployKey = "";
+  deployKey?: string;
 
   /**
-   * @generated from field: int64 deploy_last_applied_at = 13;
+   * @generated from field: optional int64 deploy_last_applied_at = 13;
    */
-  deployLastAppliedAt = protoInt64.zero;
+  deployLastAppliedAt?: bigint;
 
   /**
-   * @generated from field: string deploy_last_apply_error = 14;
+   * @generated from field: optional string deploy_last_apply_error = 14;
    */
-  deployLastApplyError = "";
+  deployLastApplyError?: string;
 
   /**
-   * @generated from field: string managed_type = 15;
+   * @generated from field: optional string managed_type = 15;
    */
-  managedType = "";
+  managedType?: string;
 
   /**
-   * @generated from field: bool hidden = 16;
+   * @generated from field: optional bool hidden = 16;
    */
-  hidden = false;
+  hidden?: boolean;
 
   /**
-   * @generated from field: string template_id = 17;
+   * @generated from field: optional string template_id = 17;
    */
-  templateId = "";
+  templateId?: string;
 
   constructor(data?: PartialMessage<Automation>) {
     super();
@@ -1360,20 +1360,20 @@ export class Automation extends Message<Automation> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "workflow", kind: "message", T: Workflow },
+    { no: 4, name: "workflow", kind: "message", T: Workflow, opt: true },
     { no: 5, name: "created_at", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 6, name: "updated_at", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 7, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 7, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 8, name: "automation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 9, name: "scope", kind: "enum", T: proto3.getEnumType(AutomationScope) },
-    { no: 10, name: "service_account_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 10, name: "service_account_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 11, name: "managed_by", kind: "enum", T: proto3.getEnumType(AutomationManagedBy) },
-    { no: 12, name: "deploy_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 13, name: "deploy_last_applied_at", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 14, name: "deploy_last_apply_error", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 15, name: "managed_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 16, name: "hidden", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 17, name: "template_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 12, name: "deploy_key", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 13, name: "deploy_last_applied_at", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
+    { no: 14, name: "deploy_last_apply_error", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 15, name: "managed_type", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 16, name: "hidden", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 17, name: "template_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Automation {
@@ -1403,39 +1403,39 @@ export class AutomationDeploySource extends Message<AutomationDeploySource> {
   kind = "";
 
   /**
-   * @generated from field: string repo_instance_key = 2;
+   * @generated from field: optional string repo_instance_key = 2;
    */
-  repoInstanceKey = "";
+  repoInstanceKey?: string;
 
   /**
-   * @generated from field: string repo_node_id = 3;
+   * @generated from field: optional string repo_node_id = 3;
    */
-  repoNodeId = "";
+  repoNodeId?: string;
 
   /**
-   * @generated from field: string repo_name = 4;
+   * @generated from field: optional string repo_name = 4;
    */
-  repoName = "";
+  repoName?: string;
 
   /**
-   * @generated from field: string path = 5;
+   * @generated from field: optional string path = 5;
    */
-  path = "";
+  path?: string;
 
   /**
-   * @generated from field: string ref = 6;
+   * @generated from field: optional string ref = 6;
    */
-  ref = "";
+  ref?: string;
 
   /**
-   * @generated from field: string commit_sha = 7;
+   * @generated from field: optional string commit_sha = 7;
    */
-  commitSha = "";
+  commitSha?: string;
 
   /**
-   * @generated from field: string tool_version = 8;
+   * @generated from field: optional string tool_version = 8;
    */
-  toolVersion = "";
+  toolVersion?: string;
 
   constructor(data?: PartialMessage<AutomationDeploySource>) {
     super();
@@ -1446,13 +1446,13 @@ export class AutomationDeploySource extends Message<AutomationDeploySource> {
   static readonly typeName = "aiserver.v1.AutomationDeploySource";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "kind", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "repo_instance_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "repo_node_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "repo_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "ref", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "commit_sha", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "tool_version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "repo_instance_key", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "repo_node_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "repo_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "ref", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "commit_sha", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "tool_version", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AutomationDeploySource {
@@ -1482,7 +1482,7 @@ export class AutomationDeploySpec extends Message<AutomationDeploySpec> {
   version = 0;
 
   /**
-   * @generated from field: aiserver.v1.AutomationDeploySource source = 2;
+   * @generated from field: optional aiserver.v1.AutomationDeploySource source = 2;
    */
   source?: AutomationDeploySource;
 
@@ -1497,9 +1497,9 @@ export class AutomationDeploySpec extends Message<AutomationDeploySpec> {
   name = "";
 
   /**
-   * @generated from field: string description = 5;
+   * @generated from field: optional string description = 5;
    */
-  description = "";
+  description?: string;
 
   /**
    * @generated from field: bool enabled = 6;
@@ -1512,14 +1512,14 @@ export class AutomationDeploySpec extends Message<AutomationDeploySpec> {
   scope = AutomationScope.UNSPECIFIED;
 
   /**
-   * @generated from field: aiserver.v1.Workflow workflow = 8;
+   * @generated from field: optional aiserver.v1.Workflow workflow = 8;
    */
   workflow?: Workflow;
 
   /**
-   * @generated from field: aiserver.v1.AutomationManagedBy managed_by = 9;
+   * @generated from field: optional aiserver.v1.AutomationManagedBy managed_by = 9;
    */
-  managedBy = AutomationManagedBy.UNSPECIFIED;
+  managedBy?: AutomationManagedBy;
 
   constructor(data?: PartialMessage<AutomationDeploySpec>) {
     super();
@@ -1530,14 +1530,14 @@ export class AutomationDeploySpec extends Message<AutomationDeploySpec> {
   static readonly typeName = "aiserver.v1.AutomationDeploySpec";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "version", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 2, name: "source", kind: "message", T: AutomationDeploySource },
+    { no: 2, name: "source", kind: "message", T: AutomationDeploySource, opt: true },
     { no: 3, name: "key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 6, name: "enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 7, name: "scope", kind: "enum", T: proto3.getEnumType(AutomationScope) },
-    { no: 8, name: "workflow", kind: "message", T: Workflow },
-    { no: 9, name: "managed_by", kind: "enum", T: proto3.getEnumType(AutomationManagedBy) },
+    { no: 8, name: "workflow", kind: "message", T: Workflow, opt: true },
+    { no: 9, name: "managed_by", kind: "enum", T: proto3.getEnumType(AutomationManagedBy), opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AutomationDeploySpec {
@@ -1562,9 +1562,9 @@ export class AutomationDeploySpec extends Message<AutomationDeploySpec> {
  */
 export class AutomationMcpAuthState extends Message<AutomationMcpAuthState> {
   /**
-   * @generated from field: int64 server_id = 1;
+   * @generated from field: optional int64 server_id = 1;
    */
-  serverId = protoInt64.zero;
+  serverId?: bigint;
 
   /**
    * @generated from field: string server_name = 2;
@@ -1584,7 +1584,7 @@ export class AutomationMcpAuthState extends Message<AutomationMcpAuthState> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.AutomationMcpAuthState";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "server_id", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
+    { no: 1, name: "server_id", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
     { no: 2, name: "server_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "auth_state", kind: "enum", T: proto3.getEnumType(McpAuthState) },
   ]);
@@ -1621,7 +1621,7 @@ export class AutomationRun extends Message<AutomationRun> {
   namespacedWorkflowId = "";
 
   /**
-   * @generated from field: aiserver.v1.Workflow workflow = 5;
+   * @generated from field: optional aiserver.v1.Workflow workflow = 5;
    */
   workflow?: Workflow;
 
@@ -1636,12 +1636,12 @@ export class AutomationRun extends Message<AutomationRun> {
   updatedAt = protoInt64.zero;
 
   /**
-   * @generated from field: aiserver.v1.PlatformActionsPayload platform_actions = 8;
+   * @generated from field: optional aiserver.v1.PlatformActionsPayload platform_actions = 8;
    */
   platformActions?: PlatformActionsPayload;
 
   /**
-   * @generated from field: aiserver.v1.TriggerMetadataPayload trigger_metadata = 9;
+   * @generated from field: optional aiserver.v1.TriggerMetadataPayload trigger_metadata = 9;
    */
   triggerMetadata?: TriggerMetadataPayload;
 
@@ -1666,29 +1666,29 @@ export class AutomationRun extends Message<AutomationRun> {
   errorMessage = "";
 
   /**
-   * @generated from field: aiserver.v1.AutomationRunFailureDetails failure_details = 14;
+   * @generated from field: optional aiserver.v1.AutomationRunFailureDetails failure_details = 14;
    */
   failureDetails?: AutomationRunFailureDetails;
 
   /**
-   * @generated from field: int64 completed_at = 15;
+   * @generated from field: optional int64 completed_at = 15;
    */
-  completedAt = protoInt64.zero;
+  completedAt?: bigint;
 
   /**
-   * @generated from field: aiserver.v1.AutomationFilterDecision filter_decision = 16;
+   * @generated from field: optional aiserver.v1.AutomationFilterDecision filter_decision = 16;
    */
-  filterDecision = AutomationFilterDecision.UNSPECIFIED;
+  filterDecision?: AutomationFilterDecision;
 
   /**
-   * @generated from field: string filter_rationale = 17;
+   * @generated from field: optional string filter_rationale = 17;
    */
-  filterRationale = "";
+  filterRationale?: string;
 
   /**
-   * @generated from field: string filter_error_message = 18;
+   * @generated from field: optional string filter_error_message = 18;
    */
-  filterErrorMessage = "";
+  filterErrorMessage?: string;
 
   /**
    * @generated from field: bool can_retry = 19;
@@ -1696,19 +1696,19 @@ export class AutomationRun extends Message<AutomationRun> {
   canRetry = false;
 
   /**
-   * @generated from field: string retry_ineligible_reason = 20;
+   * @generated from field: optional string retry_ineligible_reason = 20;
    */
-  retryIneligibleReason = "";
+  retryIneligibleReason?: string;
 
   /**
-   * @generated from field: aiserver.v1.AutomationRunRetryIneligibleReason retry_ineligible_reason_code = 21;
+   * @generated from field: optional aiserver.v1.AutomationRunRetryIneligibleReason retry_ineligible_reason_code = 21;
    */
-  retryIneligibleReasonCode = AutomationRunRetryIneligibleReason.UNSPECIFIED;
+  retryIneligibleReasonCode?: AutomationRunRetryIneligibleReason;
 
   /**
-   * @generated from field: string skip_reason = 22;
+   * @generated from field: optional string skip_reason = 22;
    */
-  skipReason = "";
+  skipReason?: string;
 
   constructor(data?: PartialMessage<AutomationRun>) {
     super();
@@ -1720,24 +1720,24 @@ export class AutomationRun extends Message<AutomationRun> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 3, name: "background_composer_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "namespaced_workflow_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "workflow", kind: "message", T: Workflow },
+    { no: 5, name: "workflow", kind: "message", T: Workflow, opt: true },
     { no: 6, name: "created_at", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 7, name: "updated_at", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 8, name: "platform_actions", kind: "message", T: PlatformActionsPayload },
-    { no: 9, name: "trigger_metadata", kind: "message", T: TriggerMetadataPayload },
+    { no: 8, name: "platform_actions", kind: "message", T: PlatformActionsPayload, opt: true },
+    { no: 9, name: "trigger_metadata", kind: "message", T: TriggerMetadataPayload, opt: true },
     { no: 10, name: "uuid", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 11, name: "automation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 12, name: "status", kind: "enum", T: proto3.getEnumType(AutomationRunStatus) },
     { no: 13, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 14, name: "failure_details", kind: "message", T: AutomationRunFailureDetails },
-    { no: 15, name: "completed_at", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 16, name: "filter_decision", kind: "enum", T: proto3.getEnumType(AutomationFilterDecision) },
-    { no: 17, name: "filter_rationale", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 18, name: "filter_error_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 14, name: "failure_details", kind: "message", T: AutomationRunFailureDetails, opt: true },
+    { no: 15, name: "completed_at", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
+    { no: 16, name: "filter_decision", kind: "enum", T: proto3.getEnumType(AutomationFilterDecision), opt: true },
+    { no: 17, name: "filter_rationale", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 18, name: "filter_error_message", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 19, name: "can_retry", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 20, name: "retry_ineligible_reason", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 21, name: "retry_ineligible_reason_code", kind: "enum", T: proto3.getEnumType(AutomationRunRetryIneligibleReason) },
-    { no: 22, name: "skip_reason", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 20, name: "retry_ineligible_reason", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 21, name: "retry_ineligible_reason_code", kind: "enum", T: proto3.getEnumType(AutomationRunRetryIneligibleReason), opt: true },
+    { no: 22, name: "skip_reason", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AutomationRun {
@@ -1777,14 +1777,14 @@ export class AutomationRunFailureDetails extends Message<AutomationRunFailureDet
   message = "";
 
   /**
-   * @generated from field: string cta_label = 4;
+   * @generated from field: optional string cta_label = 4;
    */
-  ctaLabel = "";
+  ctaLabel?: string;
 
   /**
-   * @generated from field: string cta_path = 5;
+   * @generated from field: optional string cta_path = 5;
    */
-  ctaPath = "";
+  ctaPath?: string;
 
   constructor(data?: PartialMessage<AutomationRunFailureDetails>) {
     super();
@@ -1797,8 +1797,8 @@ export class AutomationRunFailureDetails extends Message<AutomationRunFailureDet
     { no: 1, name: "code", kind: "enum", T: proto3.getEnumType(AutomationRunFailureCode) },
     { no: 2, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "cta_label", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "cta_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "cta_label", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "cta_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AutomationRunFailureDetails {
@@ -1900,9 +1900,9 @@ export class AutomationRunLaunchStartingRef extends Message<AutomationRunLaunchS
   ref = "";
 
   /**
-   * @generated from field: string base_ref = 3;
+   * @generated from field: optional string base_ref = 3;
    */
-  baseRef = "";
+  baseRef?: string;
 
   constructor(data?: PartialMessage<AutomationRunLaunchStartingRef>) {
     super();
@@ -1914,7 +1914,7 @@ export class AutomationRunLaunchStartingRef extends Message<AutomationRunLaunchS
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "ref", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "base_ref", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "base_ref", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AutomationRunLaunchStartingRef {
@@ -1939,7 +1939,7 @@ export class AutomationRunLaunchStartingRef extends Message<AutomationRunLaunchS
  */
 export class AutomationWithOwner extends Message<AutomationWithOwner> {
   /**
-   * @generated from field: aiserver.v1.Automation workflow = 1;
+   * @generated from field: optional aiserver.v1.Automation workflow = 1;
    */
   workflow?: Automation;
 
@@ -1959,9 +1959,9 @@ export class AutomationWithOwner extends Message<AutomationWithOwner> {
   mcpAuthStates: AutomationMcpAuthState[] = [];
 
   /**
-   * @generated from field: int32 team_id = 5;
+   * @generated from field: optional int32 team_id = 5;
    */
-  teamId = 0;
+  teamId?: number;
 
   constructor(data?: PartialMessage<AutomationWithOwner>) {
     super();
@@ -1971,11 +1971,11 @@ export class AutomationWithOwner extends Message<AutomationWithOwner> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.AutomationWithOwner";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "workflow", kind: "message", T: Automation },
+    { no: 1, name: "workflow", kind: "message", T: Automation, opt: true },
     { no: 2, name: "user_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 3, name: "owner_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "mcp_auth_states", kind: "message", T: AutomationMcpAuthState, repeated: true },
-    { no: 5, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 5, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AutomationWithOwner {
@@ -2121,7 +2121,7 @@ export class BuilderCompletionRequest extends Message<BuilderCompletionRequest> 
   messages: BuilderCompletionMessage[] = [];
 
   /**
-   * @generated from field: aiserver.v1.BuilderCompletionContext context = 2;
+   * @generated from field: optional aiserver.v1.BuilderCompletionContext context = 2;
    */
   context?: BuilderCompletionContext;
 
@@ -2134,7 +2134,7 @@ export class BuilderCompletionRequest extends Message<BuilderCompletionRequest> 
   static readonly typeName = "aiserver.v1.BuilderCompletionRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "messages", kind: "message", T: BuilderCompletionMessage, repeated: true },
-    { no: 2, name: "context", kind: "message", T: BuilderCompletionContext },
+    { no: 2, name: "context", kind: "message", T: BuilderCompletionContext, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BuilderCompletionRequest {
@@ -2414,9 +2414,9 @@ export class ConnectSentryCallbackRequest extends Message<ConnectSentryCallbackR
   state = "";
 
   /**
-   * @generated from field: string organization_slug = 4;
+   * @generated from field: optional string organization_slug = 4;
    */
-  organizationSlug = "";
+  organizationSlug?: string;
 
   constructor(data?: PartialMessage<ConnectSentryCallbackRequest>) {
     super();
@@ -2429,7 +2429,7 @@ export class ConnectSentryCallbackRequest extends Message<ConnectSentryCallbackR
     { no: 1, name: "code", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "installation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "state", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "organization_slug", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "organization_slug", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ConnectSentryCallbackRequest {
@@ -2496,39 +2496,39 @@ export class CreateAutomationRequest extends Message<CreateAutomationRequest> {
   name = "";
 
   /**
-   * @generated from field: aiserver.v1.Workflow workflow = 2;
+   * @generated from field: optional aiserver.v1.Workflow workflow = 2;
    */
   workflow?: Workflow;
 
   /**
-   * @generated from field: string description = 3;
+   * @generated from field: optional string description = 3;
    */
-  description = "";
+  description?: string;
 
   /**
-   * @generated from field: aiserver.v1.AutomationScope scope = 4;
+   * @generated from field: optional aiserver.v1.AutomationScope scope = 4;
    */
-  scope = AutomationScope.UNSPECIFIED;
+  scope?: AutomationScope;
 
   /**
-   * @generated from field: string template_id = 5;
+   * @generated from field: optional string template_id = 5;
    */
-  templateId = "";
+  templateId?: string;
 
   /**
-   * @generated from field: string managed_type = 6;
+   * @generated from field: optional string managed_type = 6;
    */
-  managedType = "";
+  managedType?: string;
 
   /**
-   * @generated from field: bool hidden = 7;
+   * @generated from field: optional bool hidden = 7;
    */
-  hidden = false;
+  hidden?: boolean;
 
   /**
-   * @generated from field: int32 team_id = 8;
+   * @generated from field: optional int32 team_id = 8;
    */
-  teamId = 0;
+  teamId?: number;
 
   /**
    * @generated from field: aiserver.v1.AutomationCreationSource creation_source = 9;
@@ -2536,19 +2536,19 @@ export class CreateAutomationRequest extends Message<CreateAutomationRequest> {
   creationSource = AutomationCreationSource.UNSPECIFIED;
 
   /**
-   * @generated from field: bool enabled = 10;
+   * @generated from field: optional bool enabled = 10;
    */
-  enabled = false;
+  enabled?: boolean;
 
   /**
-   * @generated from field: string sand_agent_id = 11;
+   * @generated from field: optional string sand_agent_id = 11;
    */
-  sandAgentId = "";
+  sandAgentId?: string;
 
   /**
-   * @generated from field: string sand_automation_id = 12;
+   * @generated from field: optional string sand_automation_id = 12;
    */
-  sandAutomationId = "";
+  sandAutomationId?: string;
 
   constructor(data?: PartialMessage<CreateAutomationRequest>) {
     super();
@@ -2559,17 +2559,17 @@ export class CreateAutomationRequest extends Message<CreateAutomationRequest> {
   static readonly typeName = "aiserver.v1.CreateAutomationRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "workflow", kind: "message", T: Workflow },
-    { no: 3, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "scope", kind: "enum", T: proto3.getEnumType(AutomationScope) },
-    { no: 5, name: "template_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "managed_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "hidden", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 8, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 2, name: "workflow", kind: "message", T: Workflow, opt: true },
+    { no: 3, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "scope", kind: "enum", T: proto3.getEnumType(AutomationScope), opt: true },
+    { no: 5, name: "template_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "managed_type", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "hidden", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 8, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 9, name: "creation_source", kind: "enum", T: proto3.getEnumType(AutomationCreationSource) },
-    { no: 10, name: "enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 11, name: "sand_agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 12, name: "sand_automation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 10, name: "enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 11, name: "sand_agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 12, name: "sand_automation_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CreateAutomationRequest {
@@ -2594,7 +2594,7 @@ export class CreateAutomationRequest extends Message<CreateAutomationRequest> {
  */
 export class CreateAutomationResponse extends Message<CreateAutomationResponse> {
   /**
-   * @generated from field: aiserver.v1.AutomationWithOwner workflow = 1;
+   * @generated from field: optional aiserver.v1.AutomationWithOwner workflow = 1;
    */
   workflow?: AutomationWithOwner;
 
@@ -2606,7 +2606,7 @@ export class CreateAutomationResponse extends Message<CreateAutomationResponse> 
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CreateAutomationResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "workflow", kind: "message", T: AutomationWithOwner },
+    { no: 1, name: "workflow", kind: "message", T: AutomationWithOwner, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CreateAutomationResponse {
@@ -2641,14 +2641,14 @@ export class CreateWorkflowFromTemplateRequest extends Message<CreateWorkflowFro
   name = "";
 
   /**
-   * @generated from field: aiserver.v1.InputValues input_values = 3;
+   * @generated from field: optional aiserver.v1.InputValues input_values = 3;
    */
   inputValues?: InputValues;
 
   /**
-   * @generated from field: string description = 4;
+   * @generated from field: optional string description = 4;
    */
-  description = "";
+  description?: string;
 
   /**
    * @generated from field: aiserver.v1.AutomationCreationSource creation_source = 5;
@@ -2665,8 +2665,8 @@ export class CreateWorkflowFromTemplateRequest extends Message<CreateWorkflowFro
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "template_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "input_values", kind: "message", T: InputValues },
-    { no: 4, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "input_values", kind: "message", T: InputValues, opt: true },
+    { no: 4, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 5, name: "creation_source", kind: "enum", T: proto3.getEnumType(AutomationCreationSource) },
   ]);
 
@@ -2692,7 +2692,7 @@ export class CreateWorkflowFromTemplateRequest extends Message<CreateWorkflowFro
  */
 export class CreateWorkflowFromTemplateResponse extends Message<CreateWorkflowFromTemplateResponse> {
   /**
-   * @generated from field: aiserver.v1.Automation workflow = 1;
+   * @generated from field: optional aiserver.v1.Automation workflow = 1;
    */
   workflow?: Automation;
 
@@ -2704,7 +2704,7 @@ export class CreateWorkflowFromTemplateResponse extends Message<CreateWorkflowFr
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CreateWorkflowFromTemplateResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "workflow", kind: "message", T: Automation },
+    { no: 1, name: "workflow", kind: "message", T: Automation, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CreateWorkflowFromTemplateResponse {
@@ -2874,9 +2874,9 @@ export class DeleteAutomationMemoryResponse extends Message<DeleteAutomationMemo
   content = "";
 
   /**
-   * @generated from field: string version = 4;
+   * @generated from field: optional string version = 4;
    */
-  version = "";
+  version?: string;
 
   /**
    * @generated from field: repeated string files = 5;
@@ -2894,7 +2894,7 @@ export class DeleteAutomationMemoryResponse extends Message<DeleteAutomationMemo
     { no: 1, name: "file", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "conflict", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 3, name: "content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 5, name: "files", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
 
@@ -3130,14 +3130,14 @@ export class DisconnectSentryResponse extends Message<DisconnectSentryResponse> 
  */
 export class GetApprovalAgentAnalyticsRequest extends Message<GetApprovalAgentAnalyticsRequest> {
   /**
-   * @generated from field: string automation_id = 1;
+   * @generated from field: optional string automation_id = 1;
    */
-  automationId = "";
+  automationId?: string;
 
   /**
-   * @generated from field: int32 team_id = 2;
+   * @generated from field: optional int32 team_id = 2;
    */
-  teamId = 0;
+  teamId?: number;
 
   constructor(data?: PartialMessage<GetApprovalAgentAnalyticsRequest>) {
     super();
@@ -3147,8 +3147,8 @@ export class GetApprovalAgentAnalyticsRequest extends Message<GetApprovalAgentAn
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetApprovalAgentAnalyticsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "automation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 1, name: "automation_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetApprovalAgentAnalyticsRequest {
@@ -3280,9 +3280,9 @@ export class GetAutomationMemoryResponse extends Message<GetAutomationMemoryResp
   exists = false;
 
   /**
-   * @generated from field: string version = 4;
+   * @generated from field: optional string version = 4;
    */
-  version = "";
+  version?: string;
 
   constructor(data?: PartialMessage<GetAutomationMemoryResponse>) {
     super();
@@ -3295,7 +3295,7 @@ export class GetAutomationMemoryResponse extends Message<GetAutomationMemoryResp
     { no: 1, name: "file", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "exists", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetAutomationMemoryResponse {
@@ -3325,9 +3325,9 @@ export class GetAutomationRequest extends Message<GetAutomationRequest> {
   automationId = "";
 
   /**
-   * @generated from field: int32 team_id = 3;
+   * @generated from field: optional int32 team_id = 3;
    */
-  teamId = 0;
+  teamId?: number;
 
   constructor(data?: PartialMessage<GetAutomationRequest>) {
     super();
@@ -3338,7 +3338,7 @@ export class GetAutomationRequest extends Message<GetAutomationRequest> {
   static readonly typeName = "aiserver.v1.GetAutomationRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 2, name: "automation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 3, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetAutomationRequest {
@@ -3450,7 +3450,7 @@ export class GetAutomationRunRequest extends Message<GetAutomationRunRequest> {
  */
 export class GetAutomationRunResponse extends Message<GetAutomationRunResponse> {
   /**
-   * @generated from field: aiserver.v1.AutomationRun run = 1;
+   * @generated from field: optional aiserver.v1.AutomationRun run = 1;
    */
   run?: AutomationRun;
 
@@ -3462,7 +3462,7 @@ export class GetAutomationRunResponse extends Message<GetAutomationRunResponse> 
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetAutomationRunResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "run", kind: "message", T: AutomationRun },
+    { no: 1, name: "run", kind: "message", T: AutomationRun, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetAutomationRunResponse {
@@ -3524,7 +3524,7 @@ export class GetManagedAutomationTeamSettingsRequest extends Message<GetManagedA
  */
 export class GetManagedAutomationTeamSettingsResponse extends Message<GetManagedAutomationTeamSettingsResponse> {
   /**
-   * @generated from field: aiserver.v1.ManagedAutomationTeamSettings settings = 1;
+   * @generated from field: optional aiserver.v1.ManagedAutomationTeamSettings settings = 1;
    */
   settings?: ManagedAutomationTeamSettings;
 
@@ -3536,7 +3536,7 @@ export class GetManagedAutomationTeamSettingsResponse extends Message<GetManaged
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetManagedAutomationTeamSettingsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "settings", kind: "message", T: ManagedAutomationTeamSettings },
+    { no: 1, name: "settings", kind: "message", T: ManagedAutomationTeamSettings, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetManagedAutomationTeamSettingsResponse {
@@ -3561,14 +3561,14 @@ export class GetManagedAutomationTeamSettingsResponse extends Message<GetManaged
  */
 export class GetRunSummaryRequest extends Message<GetRunSummaryRequest> {
   /**
-   * @generated from field: string automation_id = 1;
+   * @generated from field: optional string automation_id = 1;
    */
-  automationId = "";
+  automationId?: string;
 
   /**
-   * @generated from field: int32 team_id = 2;
+   * @generated from field: optional int32 team_id = 2;
    */
-  teamId = 0;
+  teamId?: number;
 
   /**
    * @generated from field: bool owner_only = 3;
@@ -3583,8 +3583,8 @@ export class GetRunSummaryRequest extends Message<GetRunSummaryRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetRunSummaryRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "automation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 1, name: "automation_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 3, name: "owner_only", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
@@ -3653,14 +3653,14 @@ export class GetRunSummaryResponse extends Message<GetRunSummaryResponse> {
  */
 export class GetSecuritybotResolutionStatsRequest extends Message<GetSecuritybotResolutionStatsRequest> {
   /**
-   * @generated from field: string automation_id = 1;
+   * @generated from field: optional string automation_id = 1;
    */
-  automationId = "";
+  automationId?: string;
 
   /**
-   * @generated from field: int32 team_id = 2;
+   * @generated from field: optional int32 team_id = 2;
    */
-  teamId = 0;
+  teamId?: number;
 
   constructor(data?: PartialMessage<GetSecuritybotResolutionStatsRequest>) {
     super();
@@ -3670,8 +3670,8 @@ export class GetSecuritybotResolutionStatsRequest extends Message<GetSecuritybot
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetSecuritybotResolutionStatsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "automation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 1, name: "automation_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetSecuritybotResolutionStatsRequest {
@@ -3855,9 +3855,9 @@ export class GetSentryProjectsResponse extends Message<GetSentryProjectsResponse
   projects: SentryProject[] = [];
 
   /**
-   * @generated from field: string organization_slug = 2;
+   * @generated from field: optional string organization_slug = 2;
    */
-  organizationSlug = "";
+  organizationSlug?: string;
 
   constructor(data?: PartialMessage<GetSentryProjectsResponse>) {
     super();
@@ -3868,7 +3868,7 @@ export class GetSentryProjectsResponse extends Message<GetSentryProjectsResponse
   static readonly typeName = "aiserver.v1.GetSentryProjectsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "projects", kind: "message", T: SentryProject, repeated: true },
-    { no: 2, name: "organization_slug", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "organization_slug", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetSentryProjectsResponse {
@@ -3929,9 +3929,9 @@ export class GetSentryStatusResponse extends Message<GetSentryStatusResponse> {
   isConnected = false;
 
   /**
-   * @generated from field: string organization_slug = 2;
+   * @generated from field: optional string organization_slug = 2;
    */
-  organizationSlug = "";
+  organizationSlug?: string;
 
   constructor(data?: PartialMessage<GetSentryStatusResponse>) {
     super();
@@ -3942,7 +3942,7 @@ export class GetSentryStatusResponse extends Message<GetSentryStatusResponse> {
   static readonly typeName = "aiserver.v1.GetSentryStatusResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "is_connected", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 2, name: "organization_slug", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "organization_slug", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetSentryStatusResponse {
@@ -4004,7 +4004,7 @@ export class GetWorkflowTemplateRequest extends Message<GetWorkflowTemplateReque
  */
 export class GetWorkflowTemplateResponse extends Message<GetWorkflowTemplateResponse> {
   /**
-   * @generated from field: aiserver.v1.WorkflowTemplate template = 1;
+   * @generated from field: optional aiserver.v1.WorkflowTemplate template = 1;
    */
   template?: WorkflowTemplate;
 
@@ -4016,7 +4016,7 @@ export class GetWorkflowTemplateResponse extends Message<GetWorkflowTemplateResp
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetWorkflowTemplateResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "template", kind: "message", T: WorkflowTemplate },
+    { no: 1, name: "template", kind: "message", T: WorkflowTemplate, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetWorkflowTemplateResponse {
@@ -4384,9 +4384,9 @@ export class GitPrAction extends Message<GitPrAction> {
  */
 export class GitPrActionPayload extends Message<GitPrActionPayload> {
   /**
-   * @generated from field: string pr_url = 1;
+   * @generated from field: optional string pr_url = 1;
    */
-  prUrl = "";
+  prUrl?: string;
 
   /**
    * @generated from field: string repo_url = 2;
@@ -4401,7 +4401,7 @@ export class GitPrActionPayload extends Message<GitPrActionPayload> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GitPrActionPayload";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
@@ -5614,19 +5614,19 @@ export class LinearTriggerPayload extends Message<LinearTriggerPayload> {
  */
 export class ListAllRunsRequest extends Message<ListAllRunsRequest> {
   /**
-   * @generated from field: string automation_id = 1;
+   * @generated from field: optional string automation_id = 1;
    */
-  automationId = "";
+  automationId?: string;
 
   /**
-   * @generated from field: int32 limit = 2;
+   * @generated from field: optional int32 limit = 2;
    */
-  limit = 0;
+  limit?: number;
 
   /**
-   * @generated from field: string cursor = 3;
+   * @generated from field: optional string cursor = 3;
    */
-  cursor = "";
+  cursor?: string;
 
   /**
    * @generated from field: aiserver.v1.AutomationRunListKind run_kind = 4;
@@ -5634,9 +5634,9 @@ export class ListAllRunsRequest extends Message<ListAllRunsRequest> {
   runKind = AutomationRunListKind.UNSPECIFIED;
 
   /**
-   * @generated from field: int32 team_id = 5;
+   * @generated from field: optional int32 team_id = 5;
    */
-  teamId = 0;
+  teamId?: number;
 
   /**
    * @generated from field: bool owner_only = 6;
@@ -5651,11 +5651,11 @@ export class ListAllRunsRequest extends Message<ListAllRunsRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ListAllRunsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "automation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "cursor", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "automation_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 3, name: "cursor", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 4, name: "run_kind", kind: "enum", T: proto3.getEnumType(AutomationRunListKind) },
-    { no: 5, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 5, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 6, name: "owner_only", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
@@ -5686,9 +5686,9 @@ export class ListAllRunsResponse extends Message<ListAllRunsResponse> {
   runs: AutomationRun[] = [];
 
   /**
-   * @generated from field: string next_cursor = 2;
+   * @generated from field: optional string next_cursor = 2;
    */
-  nextCursor = "";
+  nextCursor?: string;
 
   constructor(data?: PartialMessage<ListAllRunsResponse>) {
     super();
@@ -5699,7 +5699,7 @@ export class ListAllRunsResponse extends Message<ListAllRunsResponse> {
   static readonly typeName = "aiserver.v1.ListAllRunsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "runs", kind: "message", T: AutomationRun, repeated: true },
-    { no: 2, name: "next_cursor", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "next_cursor", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListAllRunsResponse {
@@ -5798,9 +5798,9 @@ export class ListAutomationMemoriesResponse extends Message<ListAutomationMemori
  */
 export class ListAutomationRunsRequest extends Message<ListAutomationRunsRequest> {
   /**
-   * @generated from field: int32 limit = 2;
+   * @generated from field: optional int32 limit = 2;
    */
-  limit = 0;
+  limit?: number;
 
   /**
    * @generated from field: string automation_id = 3;
@@ -5808,9 +5808,9 @@ export class ListAutomationRunsRequest extends Message<ListAutomationRunsRequest
   automationId = "";
 
   /**
-   * @generated from field: string cursor = 4;
+   * @generated from field: optional string cursor = 4;
    */
-  cursor = "";
+  cursor?: string;
 
   /**
    * @generated from field: aiserver.v1.AutomationRunListKind run_kind = 5;
@@ -5825,9 +5825,9 @@ export class ListAutomationRunsRequest extends Message<ListAutomationRunsRequest
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ListAutomationRunsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 2, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 2, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 3, name: "automation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "cursor", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "cursor", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 5, name: "run_kind", kind: "enum", T: proto3.getEnumType(AutomationRunListKind) },
   ]);
 
@@ -5858,9 +5858,9 @@ export class ListAutomationRunsResponse extends Message<ListAutomationRunsRespon
   runs: AutomationRun[] = [];
 
   /**
-   * @generated from field: string next_cursor = 2;
+   * @generated from field: optional string next_cursor = 2;
    */
-  nextCursor = "";
+  nextCursor?: string;
 
   constructor(data?: PartialMessage<ListAutomationRunsResponse>) {
     super();
@@ -5871,7 +5871,7 @@ export class ListAutomationRunsResponse extends Message<ListAutomationRunsRespon
   static readonly typeName = "aiserver.v1.ListAutomationRunsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "runs", kind: "message", T: AutomationRun, repeated: true },
-    { no: 2, name: "next_cursor", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "next_cursor", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListAutomationRunsResponse {
@@ -5896,9 +5896,9 @@ export class ListAutomationRunsResponse extends Message<ListAutomationRunsRespon
  */
 export class ListAutomationsRequest extends Message<ListAutomationsRequest> {
   /**
-   * @generated from field: int32 team_id = 1;
+   * @generated from field: optional int32 team_id = 1;
    */
-  teamId = 0;
+  teamId?: number;
 
   constructor(data?: PartialMessage<ListAutomationsRequest>) {
     super();
@@ -5908,7 +5908,7 @@ export class ListAutomationsRequest extends Message<ListAutomationsRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ListAutomationsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 1, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListAutomationsRequest {
@@ -6007,9 +6007,9 @@ export class ListSandAutomationsRequest extends Message<ListSandAutomationsReque
  */
 export class ListWorkflowTemplatesRequest extends Message<ListWorkflowTemplatesRequest> {
   /**
-   * @generated from field: string category = 1;
+   * @generated from field: optional string category = 1;
    */
-  category = "";
+  category?: string;
 
   constructor(data?: PartialMessage<ListWorkflowTemplatesRequest>) {
     super();
@@ -6019,7 +6019,7 @@ export class ListWorkflowTemplatesRequest extends Message<ListWorkflowTemplatesR
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ListWorkflowTemplatesRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "category", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "category", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListWorkflowTemplatesRequest {
@@ -6167,7 +6167,7 @@ export class ManagedAutomationTeamSettings extends Message<ManagedAutomationTeam
  */
 export class McpAction extends Message<McpAction> {
   /**
-   * @generated from field: aiserver.v1.McpServerConfig server = 1;
+   * @generated from field: optional aiserver.v1.McpServerConfig server = 1;
    */
   server?: McpServerConfig;
 
@@ -6179,7 +6179,7 @@ export class McpAction extends Message<McpAction> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.McpAction";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "server", kind: "message", T: McpServerConfig },
+    { no: 1, name: "server", kind: "message", T: McpServerConfig, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): McpAction {
@@ -6209,9 +6209,9 @@ export class McpServerConfig extends Message<McpServerConfig> {
   name = "";
 
   /**
-   * @generated from field: int64 id = 4;
+   * @generated from field: optional int64 id = 4;
    */
-  id = protoInt64.zero;
+  id?: bigint;
 
   constructor(data?: PartialMessage<McpServerConfig>) {
     super();
@@ -6222,7 +6222,7 @@ export class McpServerConfig extends Message<McpServerConfig> {
   static readonly typeName = "aiserver.v1.McpServerConfig";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "id", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
+    { no: 4, name: "id", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): McpServerConfig {
@@ -6252,9 +6252,9 @@ export class McpTemplateHint extends Message<McpTemplateHint> {
   name = "";
 
   /**
-   * @generated from field: string url = 2;
+   * @generated from field: optional string url = 2;
    */
-  url = "";
+  url?: string;
 
   constructor(data?: PartialMessage<McpTemplateHint>) {
     super();
@@ -6265,7 +6265,7 @@ export class McpTemplateHint extends Message<McpTemplateHint> {
   static readonly typeName = "aiserver.v1.McpTemplateHint";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): McpTemplateHint {
@@ -6378,14 +6378,14 @@ export class MicrosoftTeamsActionPayload extends Message<MicrosoftTeamsActionPay
   channelId = "";
 
   /**
-   * @generated from field: string triggering_pr_url = 4;
+   * @generated from field: optional string triggering_pr_url = 4;
    */
-  triggeringPrUrl = "";
+  triggeringPrUrl?: string;
 
   /**
-   * @generated from field: string reply_root_message_id = 5;
+   * @generated from field: optional string reply_root_message_id = 5;
    */
-  replyRootMessageId = "";
+  replyRootMessageId?: string;
 
   constructor(data?: PartialMessage<MicrosoftTeamsActionPayload>) {
     super();
@@ -6398,8 +6398,8 @@ export class MicrosoftTeamsActionPayload extends Message<MicrosoftTeamsActionPay
     { no: 1, name: "tenant_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "team_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "channel_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "triggering_pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "reply_root_message_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "triggering_pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "reply_root_message_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): MicrosoftTeamsActionPayload {
@@ -6705,9 +6705,9 @@ export class MicrosoftTeamsTriggerPayload extends Message<MicrosoftTeamsTriggerP
   activityId = "";
 
   /**
-   * @generated from field: string root_message_id = 7;
+   * @generated from field: optional string root_message_id = 7;
    */
-  rootMessageId = "";
+  rootMessageId?: string;
 
   constructor(data?: PartialMessage<MicrosoftTeamsTriggerPayload>) {
     super();
@@ -6723,7 +6723,7 @@ export class MicrosoftTeamsTriggerPayload extends Message<MicrosoftTeamsTriggerP
     { no: 4, name: "message_text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "aad_object_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 6, name: "activity_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "root_message_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 7, name: "root_message_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): MicrosoftTeamsTriggerPayload {
@@ -7277,9 +7277,9 @@ export class PrCommentActionPayload extends Message<PrCommentActionPayload> {
   repoUrl = "";
 
   /**
-   * @generated from field: string head_sha = 3;
+   * @generated from field: optional string head_sha = 3;
    */
-  headSha = "";
+  headSha?: string;
 
   constructor(data?: PartialMessage<PrCommentActionPayload>) {
     super();
@@ -7291,7 +7291,7 @@ export class PrCommentActionPayload extends Message<PrCommentActionPayload> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "pr_number", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 2, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "head_sha", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "head_sha", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PrCommentActionPayload {
@@ -7326,24 +7326,24 @@ export class Prompt extends Message<Prompt> {
   effortLevel = PromptEffortLevel.UNSPECIFIED;
 
   /**
-   * @generated from field: string model = 3;
+   * @generated from field: optional string model = 3;
    */
-  model = "";
+  model?: string;
 
   /**
-   * @generated from field: bool is_filter = 4;
+   * @generated from field: optional bool is_filter = 4;
    */
-  isFilter = false;
+  isFilter?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.PromptRunMode run_mode = 5;
+   * @generated from field: optional aiserver.v1.PromptRunMode run_mode = 5;
    */
-  runMode = PromptRunMode.UNSPECIFIED;
+  runMode?: PromptRunMode;
 
   /**
-   * @generated from field: bool suppress_slack_reaction = 6;
+   * @generated from field: optional bool suppress_slack_reaction = 6;
    */
-  suppressSlackReaction = false;
+  suppressSlackReaction?: boolean;
 
   constructor(data?: PartialMessage<Prompt>) {
     super();
@@ -7355,10 +7355,10 @@ export class Prompt extends Message<Prompt> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "prompt", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "effort_level", kind: "enum", T: proto3.getEnumType(PromptEffortLevel) },
-    { no: 3, name: "model", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "is_filter", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "run_mode", kind: "enum", T: proto3.getEnumType(PromptRunMode) },
-    { no: 6, name: "suppress_slack_reaction", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 3, name: "model", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "is_filter", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 5, name: "run_mode", kind: "enum", T: proto3.getEnumType(PromptRunMode), opt: true },
+    { no: 6, name: "suppress_slack_reaction", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Prompt {
@@ -7586,7 +7586,7 @@ export class ReassignAutomationOwnerRequest extends Message<ReassignAutomationOw
  */
 export class ReassignAutomationOwnerResponse extends Message<ReassignAutomationOwnerResponse> {
   /**
-   * @generated from field: aiserver.v1.AutomationWithOwner workflow = 1;
+   * @generated from field: optional aiserver.v1.AutomationWithOwner workflow = 1;
    */
   workflow?: AutomationWithOwner;
 
@@ -7598,7 +7598,7 @@ export class ReassignAutomationOwnerResponse extends Message<ReassignAutomationO
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ReassignAutomationOwnerResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "workflow", kind: "message", T: AutomationWithOwner },
+    { no: 1, name: "workflow", kind: "message", T: AutomationWithOwner, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ReassignAutomationOwnerResponse {
@@ -8431,14 +8431,14 @@ export class SlackActionPayload extends Message<SlackActionPayload> {
   channel = "";
 
   /**
-   * @generated from field: string triggering_pr_url = 2;
+   * @generated from field: optional string triggering_pr_url = 2;
    */
-  triggeringPrUrl = "";
+  triggeringPrUrl?: string;
 
   /**
-   * @generated from field: string reply_thread_ts = 4;
+   * @generated from field: optional string reply_thread_ts = 4;
    */
-  replyThreadTs = "";
+  replyThreadTs?: string;
 
   constructor(data?: PartialMessage<SlackActionPayload>) {
     super();
@@ -8449,8 +8449,8 @@ export class SlackActionPayload extends Message<SlackActionPayload> {
   static readonly typeName = "aiserver.v1.SlackActionPayload";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "channel", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "triggering_pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "reply_thread_ts", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "triggering_pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "reply_thread_ts", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SlackActionPayload {
@@ -8826,9 +8826,9 @@ export class SlackReactionAddedTriggerPayload extends Message<SlackReactionAdded
   messageTs = "";
 
   /**
-   * @generated from field: string thread_ts = 5;
+   * @generated from field: optional string thread_ts = 5;
    */
-  threadTs = "";
+  threadTs?: string;
 
   /**
    * @generated from field: string emoji_name = 6;
@@ -8847,7 +8847,7 @@ export class SlackReactionAddedTriggerPayload extends Message<SlackReactionAdded
     { no: 2, name: "message_text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "user_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "message_ts", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "thread_ts", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "thread_ts", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 6, name: "emoji_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
@@ -8941,19 +8941,19 @@ export class SlackTrigger extends Message<SlackTrigger> {
   blockUnauthenticatedSlackUsers = false;
 
   /**
-   * @generated from field: aiserver.v1.SlackCompletionReactionMode slack_completion_reaction_mode = 7;
+   * @generated from field: optional aiserver.v1.SlackCompletionReactionMode slack_completion_reaction_mode = 7;
    */
-  slackCompletionReactionMode = SlackCompletionReactionMode.UNSPECIFIED;
+  slackCompletionReactionMode?: SlackCompletionReactionMode;
 
   /**
-   * @generated from field: string slack_completion_reaction_custom_emoji = 8;
+   * @generated from field: optional string slack_completion_reaction_custom_emoji = 8;
    */
-  slackCompletionReactionCustomEmoji = "";
+  slackCompletionReactionCustomEmoji?: string;
 
   /**
-   * @generated from field: bool top_level_only = 9;
+   * @generated from field: optional bool top_level_only = 9;
    */
-  topLevelOnly = false;
+  topLevelOnly?: boolean;
 
   constructor(data?: PartialMessage<SlackTrigger>) {
     super();
@@ -8968,9 +8968,9 @@ export class SlackTrigger extends Message<SlackTrigger> {
     { no: 4, name: "message_contains_is_regex", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 5, name: "channels", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 6, name: "block_unauthenticated_slack_users", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 7, name: "slack_completion_reaction_mode", kind: "enum", T: proto3.getEnumType(SlackCompletionReactionMode) },
-    { no: 8, name: "slack_completion_reaction_custom_emoji", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "top_level_only", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 7, name: "slack_completion_reaction_mode", kind: "enum", T: proto3.getEnumType(SlackCompletionReactionMode), opt: true },
+    { no: 8, name: "slack_completion_reaction_custom_emoji", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 9, name: "top_level_only", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SlackTrigger {
@@ -9015,9 +9015,9 @@ export class SlackTriggerPayload extends Message<SlackTriggerPayload> {
   messageTs = "";
 
   /**
-   * @generated from field: string thread_ts = 5;
+   * @generated from field: optional string thread_ts = 5;
    */
-  threadTs = "";
+  threadTs?: string;
 
   constructor(data?: PartialMessage<SlackTriggerPayload>) {
     super();
@@ -9031,7 +9031,7 @@ export class SlackTriggerPayload extends Message<SlackTriggerPayload> {
     { no: 2, name: "message_text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "user_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "message_ts", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "thread_ts", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "thread_ts", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SlackTriggerPayload {
@@ -9098,19 +9098,19 @@ export class TestAutomationFilterRequest extends Message<TestAutomationFilterReq
   automationId = "";
 
   /**
-   * @generated from field: int32 trigger_index = 11;
+   * @generated from field: optional int32 trigger_index = 11;
    */
-  triggerIndex = 0;
+  triggerIndex?: number;
 
   /**
-   * @generated from field: string test_repo = 12;
+   * @generated from field: optional string test_repo = 12;
    */
-  testRepo = "";
+  testRepo?: string;
 
   /**
-   * @generated from field: string test_branch = 13;
+   * @generated from field: optional string test_branch = 13;
    */
-  testBranch = "";
+  testBranch?: string;
 
   /**
    * @generated from oneof aiserver.v1.TestAutomationFilterRequest.sample_payload
@@ -9204,9 +9204,9 @@ export class TestAutomationFilterRequest extends Message<TestAutomationFilterReq
   static readonly typeName = "aiserver.v1.TestAutomationFilterRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "automation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 11, name: "trigger_index", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 12, name: "test_repo", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 13, name: "test_branch", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 11, name: "trigger_index", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 12, name: "test_repo", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 13, name: "test_branch", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "cron", kind: "message", T: CronSamplePayload, oneof: "sample_payload" },
     { no: 3, name: "pull_request", kind: "message", T: PullRequestSamplePayload, oneof: "sample_payload" },
     { no: 4, name: "push", kind: "message", T: PushSamplePayload, oneof: "sample_payload" },
@@ -9249,14 +9249,14 @@ export class TestAutomationFilterResponse extends Message<TestAutomationFilterRe
   decision = AutomationFilterDecision.UNSPECIFIED;
 
   /**
-   * @generated from field: string rationale = 2;
+   * @generated from field: optional string rationale = 2;
    */
-  rationale = "";
+  rationale?: string;
 
   /**
-   * @generated from field: string error_message = 3;
+   * @generated from field: optional string error_message = 3;
    */
-  errorMessage = "";
+  errorMessage?: string;
 
   constructor(data?: PartialMessage<TestAutomationFilterResponse>) {
     super();
@@ -9267,8 +9267,8 @@ export class TestAutomationFilterResponse extends Message<TestAutomationFilterRe
   static readonly typeName = "aiserver.v1.TestAutomationFilterResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "decision", kind: "enum", T: proto3.getEnumType(AutomationFilterDecision) },
-    { no: 2, name: "rationale", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "rationale", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): TestAutomationFilterResponse {
@@ -9298,19 +9298,19 @@ export class TestAutomationRequest extends Message<TestAutomationRequest> {
   automationId = "";
 
   /**
-   * @generated from field: int32 trigger_index = 12;
+   * @generated from field: optional int32 trigger_index = 12;
    */
-  triggerIndex = 0;
+  triggerIndex?: number;
 
   /**
-   * @generated from field: string test_repo = 13;
+   * @generated from field: optional string test_repo = 13;
    */
-  testRepo = "";
+  testRepo?: string;
 
   /**
-   * @generated from field: string test_branch = 14;
+   * @generated from field: optional string test_branch = 14;
    */
-  testBranch = "";
+  testBranch?: string;
 
   /**
    * @generated from oneof aiserver.v1.TestAutomationRequest.sample_payload
@@ -9404,9 +9404,9 @@ export class TestAutomationRequest extends Message<TestAutomationRequest> {
   static readonly typeName = "aiserver.v1.TestAutomationRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 8, name: "automation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 12, name: "trigger_index", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 13, name: "test_repo", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 14, name: "test_branch", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 12, name: "trigger_index", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 13, name: "test_repo", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 14, name: "test_branch", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "cron", kind: "message", T: CronSamplePayload, oneof: "sample_payload" },
     { no: 3, name: "pull_request", kind: "message", T: PullRequestSamplePayload, oneof: "sample_payload" },
     { no: 4, name: "push", kind: "message", T: PushSamplePayload, oneof: "sample_payload" },
@@ -9449,14 +9449,14 @@ export class TestAutomationResponse extends Message<TestAutomationResponse> {
   message = "";
 
   /**
-   * @generated from field: string background_composer_id = 2;
+   * @generated from field: optional string background_composer_id = 2;
    */
-  backgroundComposerId = "";
+  backgroundComposerId?: string;
 
   /**
-   * @generated from field: string run_uuid = 3;
+   * @generated from field: optional string run_uuid = 3;
    */
-  runUuid = "";
+  runUuid?: string;
 
   constructor(data?: PartialMessage<TestAutomationResponse>) {
     super();
@@ -9467,8 +9467,8 @@ export class TestAutomationResponse extends Message<TestAutomationResponse> {
   static readonly typeName = "aiserver.v1.TestAutomationResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "background_composer_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "run_uuid", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "background_composer_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "run_uuid", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): TestAutomationResponse {
@@ -9548,9 +9548,9 @@ export class ToolSuggestion extends Message<ToolSuggestion> {
  */
 export class Trigger extends Message<Trigger> {
   /**
-   * @generated from field: string agentic_filter_prompt = 14;
+   * @generated from field: optional string agentic_filter_prompt = 14;
    */
-  agenticFilterPrompt = "";
+  agenticFilterPrompt?: string;
 
   /**
    * @generated from oneof aiserver.v1.Trigger.trigger
@@ -9643,7 +9643,7 @@ export class Trigger extends Message<Trigger> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.Trigger";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 14, name: "agentic_filter_prompt", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 14, name: "agentic_filter_prompt", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 1, name: "cron", kind: "message", T: CronTrigger, oneof: "trigger" },
     { no: 2, name: "git", kind: "message", T: GitTrigger, oneof: "trigger" },
     { no: 7, name: "slack_trigger", kind: "message", T: SlackTrigger, oneof: "trigger" },
@@ -9771,9 +9771,9 @@ export class UpdateAutomationAuthoringModeRequest extends Message<UpdateAutomati
   managedBy = AutomationManagedBy.UNSPECIFIED;
 
   /**
-   * @generated from field: string deploy_key = 3;
+   * @generated from field: optional string deploy_key = 3;
    */
-  deployKey = "";
+  deployKey?: string;
 
   constructor(data?: PartialMessage<UpdateAutomationAuthoringModeRequest>) {
     super();
@@ -9785,7 +9785,7 @@ export class UpdateAutomationAuthoringModeRequest extends Message<UpdateAutomati
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "automation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "managed_by", kind: "enum", T: proto3.getEnumType(AutomationManagedBy) },
-    { no: 3, name: "deploy_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "deploy_key", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateAutomationAuthoringModeRequest {
@@ -9810,7 +9810,7 @@ export class UpdateAutomationAuthoringModeRequest extends Message<UpdateAutomati
  */
 export class UpdateAutomationAuthoringModeResponse extends Message<UpdateAutomationAuthoringModeResponse> {
   /**
-   * @generated from field: aiserver.v1.AutomationWithOwner workflow = 1;
+   * @generated from field: optional aiserver.v1.AutomationWithOwner workflow = 1;
    */
   workflow?: AutomationWithOwner;
 
@@ -9822,7 +9822,7 @@ export class UpdateAutomationAuthoringModeResponse extends Message<UpdateAutomat
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.UpdateAutomationAuthoringModeResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "workflow", kind: "message", T: AutomationWithOwner },
+    { no: 1, name: "workflow", kind: "message", T: AutomationWithOwner, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateAutomationAuthoringModeResponse {
@@ -9925,9 +9925,9 @@ export class UpdateAutomationMemoryResponse extends Message<UpdateAutomationMemo
   content = "";
 
   /**
-   * @generated from field: string version = 3;
+   * @generated from field: optional string version = 3;
    */
-  version = "";
+  version?: string;
 
   /**
    * @generated from field: bool conflict = 4;
@@ -9944,7 +9944,7 @@ export class UpdateAutomationMemoryResponse extends Message<UpdateAutomationMemo
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "file", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 4, name: "conflict", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
@@ -9970,24 +9970,24 @@ export class UpdateAutomationMemoryResponse extends Message<UpdateAutomationMemo
  */
 export class UpdateAutomationRequest extends Message<UpdateAutomationRequest> {
   /**
-   * @generated from field: string name = 2;
+   * @generated from field: optional string name = 2;
    */
-  name = "";
+  name?: string;
 
   /**
-   * @generated from field: aiserver.v1.Workflow workflow = 3;
+   * @generated from field: optional aiserver.v1.Workflow workflow = 3;
    */
   workflow?: Workflow;
 
   /**
-   * @generated from field: bool enabled = 4;
+   * @generated from field: optional bool enabled = 4;
    */
-  enabled = false;
+  enabled?: boolean;
 
   /**
-   * @generated from field: string description = 5;
+   * @generated from field: optional string description = 5;
    */
-  description = "";
+  description?: string;
 
   /**
    * @generated from field: string automation_id = 6;
@@ -9995,19 +9995,19 @@ export class UpdateAutomationRequest extends Message<UpdateAutomationRequest> {
   automationId = "";
 
   /**
-   * @generated from field: aiserver.v1.AutomationScope scope = 7;
+   * @generated from field: optional aiserver.v1.AutomationScope scope = 7;
    */
-  scope = AutomationScope.UNSPECIFIED;
+  scope?: AutomationScope;
 
   /**
-   * @generated from field: string managed_type = 8;
+   * @generated from field: optional string managed_type = 8;
    */
-  managedType = "";
+  managedType?: string;
 
   /**
-   * @generated from field: bool hidden = 9;
+   * @generated from field: optional bool hidden = 9;
    */
-  hidden = false;
+  hidden?: boolean;
 
   constructor(data?: PartialMessage<UpdateAutomationRequest>) {
     super();
@@ -10017,14 +10017,14 @@ export class UpdateAutomationRequest extends Message<UpdateAutomationRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.UpdateAutomationRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "workflow", kind: "message", T: Workflow },
-    { no: 4, name: "enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "workflow", kind: "message", T: Workflow, opt: true },
+    { no: 4, name: "enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 5, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 6, name: "automation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "scope", kind: "enum", T: proto3.getEnumType(AutomationScope) },
-    { no: 8, name: "managed_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "hidden", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 7, name: "scope", kind: "enum", T: proto3.getEnumType(AutomationScope), opt: true },
+    { no: 8, name: "managed_type", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 9, name: "hidden", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateAutomationRequest {
@@ -10049,7 +10049,7 @@ export class UpdateAutomationRequest extends Message<UpdateAutomationRequest> {
  */
 export class UpdateAutomationResponse extends Message<UpdateAutomationResponse> {
   /**
-   * @generated from field: aiserver.v1.AutomationWithOwner workflow = 1;
+   * @generated from field: optional aiserver.v1.AutomationWithOwner workflow = 1;
    */
   workflow?: AutomationWithOwner;
 
@@ -10061,7 +10061,7 @@ export class UpdateAutomationResponse extends Message<UpdateAutomationResponse> 
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.UpdateAutomationResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "workflow", kind: "message", T: AutomationWithOwner },
+    { no: 1, name: "workflow", kind: "message", T: AutomationWithOwner, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateAutomationResponse {
@@ -10101,14 +10101,14 @@ export class UpdateManagedAutomationTeamSettingsRequest extends Message<UpdateMa
   approvalAgentDisabled = false;
 
   /**
-   * @generated from field: bool security_agent_disabled_patch = 4;
+   * @generated from field: optional bool security_agent_disabled_patch = 4;
    */
-  securityAgentDisabledPatch = false;
+  securityAgentDisabledPatch?: boolean;
 
   /**
-   * @generated from field: bool approval_agent_disabled_patch = 5;
+   * @generated from field: optional bool approval_agent_disabled_patch = 5;
    */
-  approvalAgentDisabledPatch = false;
+  approvalAgentDisabledPatch?: boolean;
 
   constructor(data?: PartialMessage<UpdateManagedAutomationTeamSettingsRequest>) {
     super();
@@ -10121,8 +10121,8 @@ export class UpdateManagedAutomationTeamSettingsRequest extends Message<UpdateMa
     { no: 1, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 2, name: "security_agent_disabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 3, name: "approval_agent_disabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "security_agent_disabled_patch", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "approval_agent_disabled_patch", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 4, name: "security_agent_disabled_patch", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 5, name: "approval_agent_disabled_patch", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateManagedAutomationTeamSettingsRequest {
@@ -10147,7 +10147,7 @@ export class UpdateManagedAutomationTeamSettingsRequest extends Message<UpdateMa
  */
 export class UpdateManagedAutomationTeamSettingsResponse extends Message<UpdateManagedAutomationTeamSettingsResponse> {
   /**
-   * @generated from field: aiserver.v1.ManagedAutomationTeamSettings settings = 1;
+   * @generated from field: optional aiserver.v1.ManagedAutomationTeamSettings settings = 1;
    */
   settings?: ManagedAutomationTeamSettings;
 
@@ -10159,7 +10159,7 @@ export class UpdateManagedAutomationTeamSettingsResponse extends Message<UpdateM
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.UpdateManagedAutomationTeamSettingsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "settings", kind: "message", T: ManagedAutomationTeamSettings },
+    { no: 1, name: "settings", kind: "message", T: ManagedAutomationTeamSettings, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateManagedAutomationTeamSettingsResponse {
@@ -10184,7 +10184,7 @@ export class UpdateManagedAutomationTeamSettingsResponse extends Message<UpdateM
  */
 export class ValidateAutomationSpecRequest extends Message<ValidateAutomationSpecRequest> {
   /**
-   * @generated from field: aiserver.v1.AutomationDeploySpec spec = 1;
+   * @generated from field: optional aiserver.v1.AutomationDeploySpec spec = 1;
    */
   spec?: AutomationDeploySpec;
 
@@ -10196,7 +10196,7 @@ export class ValidateAutomationSpecRequest extends Message<ValidateAutomationSpe
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ValidateAutomationSpecRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "spec", kind: "message", T: AutomationDeploySpec },
+    { no: 1, name: "spec", kind: "message", T: AutomationDeploySpec, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ValidateAutomationSpecRequest {
@@ -10226,9 +10226,9 @@ export class ValidateAutomationSpecResponse extends Message<ValidateAutomationSp
   wouldCreate = false;
 
   /**
-   * @generated from field: string automation_id = 2;
+   * @generated from field: optional string automation_id = 2;
    */
-  automationId = "";
+  automationId?: string;
 
   constructor(data?: PartialMessage<ValidateAutomationSpecResponse>) {
     super();
@@ -10239,7 +10239,7 @@ export class ValidateAutomationSpecResponse extends Message<ValidateAutomationSp
   static readonly typeName = "aiserver.v1.ValidateAutomationSpecResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "would_create", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 2, name: "automation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "automation_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ValidateAutomationSpecResponse {
@@ -10423,9 +10423,9 @@ export class Workflow extends Message<Workflow> {
   prompts: Prompt[] = [];
 
   /**
-   * @generated from field: string model = 8;
+   * @generated from field: optional string model = 8;
    */
-  model = "";
+  model?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.Trigger triggers = 10;
@@ -10438,19 +10438,19 @@ export class Workflow extends Message<Workflow> {
   actions: Action[] = [];
 
   /**
-   * @generated from field: aiserver.v1.GitConfig git_config = 12;
+   * @generated from field: optional aiserver.v1.GitConfig git_config = 12;
    */
   gitConfig?: GitConfig;
 
   /**
-   * @generated from field: aiserver.v1.AgentOptions agent_options = 13;
+   * @generated from field: optional aiserver.v1.AgentOptions agent_options = 13;
    */
   agentOptions?: AgentOptions;
 
   /**
-   * @generated from field: bool memory_enabled = 14;
+   * @generated from field: optional bool memory_enabled = 14;
    */
-  memoryEnabled = false;
+  memoryEnabled?: boolean;
 
   /**
    * @generated from field: repeated string slack_notified_channels = 15;
@@ -10458,17 +10458,17 @@ export class Workflow extends Message<Workflow> {
   slackNotifiedChannels: string[] = [];
 
   /**
-   * @generated from field: aiserver.v1.SlackCompletionReactionMode slack_completion_reaction_mode = 16;
+   * @generated from field: optional aiserver.v1.SlackCompletionReactionMode slack_completion_reaction_mode = 16;
    */
-  slackCompletionReactionMode = SlackCompletionReactionMode.UNSPECIFIED;
+  slackCompletionReactionMode?: SlackCompletionReactionMode;
 
   /**
-   * @generated from field: string slack_completion_reaction_custom_emoji = 17;
+   * @generated from field: optional string slack_completion_reaction_custom_emoji = 17;
    */
-  slackCompletionReactionCustomEmoji = "";
+  slackCompletionReactionCustomEmoji?: string;
 
   /**
-   * @generated from field: google.protobuf.Struct managed_config = 18;
+   * @generated from field: optional google.protobuf.Struct managed_config = 18;
    */
   managedConfig?: Struct;
 
@@ -10486,16 +10486,16 @@ export class Workflow extends Message<Workflow> {
   static readonly typeName = "aiserver.v1.Workflow";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 3, name: "prompts", kind: "message", T: Prompt, repeated: true },
-    { no: 8, name: "model", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 8, name: "model", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 10, name: "triggers", kind: "message", T: Trigger, repeated: true },
     { no: 11, name: "actions", kind: "message", T: Action, repeated: true },
-    { no: 12, name: "git_config", kind: "message", T: GitConfig },
-    { no: 13, name: "agent_options", kind: "message", T: AgentOptions },
-    { no: 14, name: "memory_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 12, name: "git_config", kind: "message", T: GitConfig, opt: true },
+    { no: 13, name: "agent_options", kind: "message", T: AgentOptions, opt: true },
+    { no: 14, name: "memory_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 15, name: "slack_notified_channels", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 16, name: "slack_completion_reaction_mode", kind: "enum", T: proto3.getEnumType(SlackCompletionReactionMode) },
-    { no: 17, name: "slack_completion_reaction_custom_emoji", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 18, name: "managed_config", kind: "message", T: Struct },
+    { no: 16, name: "slack_completion_reaction_mode", kind: "enum", T: proto3.getEnumType(SlackCompletionReactionMode), opt: true },
+    { no: 17, name: "slack_completion_reaction_custom_emoji", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 18, name: "managed_config", kind: "message", T: Struct, opt: true },
     { no: 19, name: "disabled_default_tools", kind: "enum", T: proto3.getEnumType(AutomationDefaultTool), repeated: true },
   ]);
 
@@ -10541,12 +10541,12 @@ export class WorkflowTemplate extends Message<WorkflowTemplate> {
   category = "";
 
   /**
-   * @generated from field: aiserver.v1.Workflow workflow = 5;
+   * @generated from field: optional aiserver.v1.Workflow workflow = 5;
    */
   workflow?: Workflow;
 
   /**
-   * @generated from field: aiserver.v1.InputSchema input_schema = 6;
+   * @generated from field: optional aiserver.v1.InputSchema input_schema = 6;
    */
   inputSchema?: InputSchema;
 
@@ -10556,9 +10556,9 @@ export class WorkflowTemplate extends Message<WorkflowTemplate> {
   icon = "";
 
   /**
-   * @generated from field: int32 featured_index = 8;
+   * @generated from field: optional int32 featured_index = 8;
    */
-  featuredIndex = 0;
+  featuredIndex?: number;
 
   /**
    * @generated from field: repeated aiserver.v1.McpTemplateHint mcp_hints = 9;
@@ -10577,10 +10577,10 @@ export class WorkflowTemplate extends Message<WorkflowTemplate> {
     { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "category", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "workflow", kind: "message", T: Workflow },
-    { no: 6, name: "input_schema", kind: "message", T: InputSchema },
+    { no: 5, name: "workflow", kind: "message", T: Workflow, opt: true },
+    { no: 6, name: "input_schema", kind: "message", T: InputSchema, opt: true },
     { no: 7, name: "icon", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "featured_index", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 8, name: "featured_index", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 9, name: "mcp_hints", kind: "message", T: McpTemplateHint, repeated: true },
   ]);
 

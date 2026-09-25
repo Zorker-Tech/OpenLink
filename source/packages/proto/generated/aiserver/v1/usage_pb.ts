@@ -90,27 +90,27 @@ proto3.util.setEnumType(UsageEventKind, "aiserver.v1.UsageEventKind", [
  */
 export class UsageEventDetails extends Message<UsageEventDetails> {
   /**
-   * @generated from field: int32 override_num_requests_counted = 13;
+   * @generated from field: optional int32 override_num_requests_counted = 13;
    */
-  overrideNumRequestsCounted = 0;
+  overrideNumRequestsCounted?: number;
 
   /**
-   * @generated from field: int32 override_num_requests_counted_millis = 16;
+   * @generated from field: optional int32 override_num_requests_counted_millis = 16;
    */
-  overrideNumRequestsCountedMillis = 0;
+  overrideNumRequestsCountedMillis?: number;
 
   /**
-   * @generated from field: string routed_model = 17;
+   * @generated from field: optional string routed_model = 17;
    */
-  routedModel = "";
+  routedModel?: string;
 
   /**
-   * @generated from field: aiserver.v1.ModelSelectionSnapshot requested_model_selection = 18;
+   * @generated from field: optional aiserver.v1.ModelSelectionSnapshot requested_model_selection = 18;
    */
   requestedModelSelection?: ModelSelectionSnapshot;
 
   /**
-   * @generated from field: aiserver.v1.ModelSelectionSnapshot effective_model_selection = 19;
+   * @generated from field: optional aiserver.v1.ModelSelectionSnapshot effective_model_selection = 19;
    */
   effectiveModelSelection?: ModelSelectionSnapshot;
 
@@ -211,11 +211,11 @@ export class UsageEventDetails extends Message<UsageEventDetails> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.UsageEventDetails";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 13, name: "override_num_requests_counted", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 16, name: "override_num_requests_counted_millis", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 17, name: "routed_model", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 18, name: "requested_model_selection", kind: "message", T: ModelSelectionSnapshot },
-    { no: 19, name: "effective_model_selection", kind: "message", T: ModelSelectionSnapshot },
+    { no: 13, name: "override_num_requests_counted", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 16, name: "override_num_requests_counted_millis", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 17, name: "routed_model", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 18, name: "requested_model_selection", kind: "message", T: ModelSelectionSnapshot, opt: true },
+    { no: 19, name: "effective_model_selection", kind: "message", T: ModelSelectionSnapshot, opt: true },
     { no: 1, name: "chat", kind: "message", T: UsageEventDetails_Chat, oneof: "feature" },
     { no: 2, name: "context_chat", kind: "message", T: UsageEventDetails_ContextChat, oneof: "feature" },
     { no: 3, name: "cmd_k", kind: "message", T: UsageEventDetails_CmdK, oneof: "feature" },
@@ -259,24 +259,24 @@ export class UsageEventDetails_Chat extends Message<UsageEventDetails_Chat> {
   modelIntent = "";
 
   /**
-   * @generated from field: int32 override_num_requests_counted = 2;
+   * @generated from field: optional int32 override_num_requests_counted = 2;
    */
-  overrideNumRequestsCounted = 0;
+  overrideNumRequestsCounted?: number;
 
   /**
-   * @generated from field: bool is_token_based_call = 3;
+   * @generated from field: optional bool is_token_based_call = 3;
    */
-  isTokenBasedCall = false;
+  isTokenBasedCall?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.TokenUsage token_usage = 4;
+   * @generated from field: optional aiserver.v1.TokenUsage token_usage = 4;
    */
   tokenUsage?: TokenUsage;
 
   /**
-   * @generated from field: bool max_mode = 5;
+   * @generated from field: optional bool max_mode = 5;
    */
-  maxMode = false;
+  maxMode?: boolean;
 
   constructor(data?: PartialMessage<UsageEventDetails_Chat>) {
     super();
@@ -287,10 +287,10 @@ export class UsageEventDetails_Chat extends Message<UsageEventDetails_Chat> {
   static readonly typeName = "aiserver.v1.UsageEventDetails.Chat";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "model_intent", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "override_num_requests_counted", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "is_token_based_call", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "token_usage", kind: "message", T: TokenUsage },
-    { no: 5, name: "max_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "override_num_requests_counted", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 3, name: "is_token_based_call", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 4, name: "token_usage", kind: "message", T: TokenUsage, opt: true },
+    { no: 5, name: "max_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UsageEventDetails_Chat {
@@ -320,24 +320,24 @@ export class UsageEventDetails_ContextChat extends Message<UsageEventDetails_Con
   modelIntent = "";
 
   /**
-   * @generated from field: int32 override_num_requests_counted = 2;
+   * @generated from field: optional int32 override_num_requests_counted = 2;
    */
-  overrideNumRequestsCounted = 0;
+  overrideNumRequestsCounted?: number;
 
   /**
-   * @generated from field: bool is_token_based_call = 3;
+   * @generated from field: optional bool is_token_based_call = 3;
    */
-  isTokenBasedCall = false;
+  isTokenBasedCall?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.TokenUsage token_usage = 4;
+   * @generated from field: optional aiserver.v1.TokenUsage token_usage = 4;
    */
   tokenUsage?: TokenUsage;
 
   /**
-   * @generated from field: bool max_mode = 5;
+   * @generated from field: optional bool max_mode = 5;
    */
-  maxMode = false;
+  maxMode?: boolean;
 
   constructor(data?: PartialMessage<UsageEventDetails_ContextChat>) {
     super();
@@ -348,10 +348,10 @@ export class UsageEventDetails_ContextChat extends Message<UsageEventDetails_Con
   static readonly typeName = "aiserver.v1.UsageEventDetails.ContextChat";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "model_intent", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "override_num_requests_counted", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "is_token_based_call", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "token_usage", kind: "message", T: TokenUsage },
-    { no: 5, name: "max_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "override_num_requests_counted", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 3, name: "is_token_based_call", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 4, name: "token_usage", kind: "message", T: TokenUsage, opt: true },
+    { no: 5, name: "max_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UsageEventDetails_ContextChat {
@@ -381,24 +381,24 @@ export class UsageEventDetails_CmdK extends Message<UsageEventDetails_CmdK> {
   modelIntent = "";
 
   /**
-   * @generated from field: int32 override_num_requests_counted = 2;
+   * @generated from field: optional int32 override_num_requests_counted = 2;
    */
-  overrideNumRequestsCounted = 0;
+  overrideNumRequestsCounted?: number;
 
   /**
-   * @generated from field: bool is_token_based_call = 3;
+   * @generated from field: optional bool is_token_based_call = 3;
    */
-  isTokenBasedCall = false;
+  isTokenBasedCall?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.TokenUsage token_usage = 4;
+   * @generated from field: optional aiserver.v1.TokenUsage token_usage = 4;
    */
   tokenUsage?: TokenUsage;
 
   /**
-   * @generated from field: bool max_mode = 5;
+   * @generated from field: optional bool max_mode = 5;
    */
-  maxMode = false;
+  maxMode?: boolean;
 
   constructor(data?: PartialMessage<UsageEventDetails_CmdK>) {
     super();
@@ -409,10 +409,10 @@ export class UsageEventDetails_CmdK extends Message<UsageEventDetails_CmdK> {
   static readonly typeName = "aiserver.v1.UsageEventDetails.CmdK";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "model_intent", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "override_num_requests_counted", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "is_token_based_call", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "token_usage", kind: "message", T: TokenUsage },
-    { no: 5, name: "max_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "override_num_requests_counted", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 3, name: "is_token_based_call", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 4, name: "token_usage", kind: "message", T: TokenUsage, opt: true },
+    { no: 5, name: "max_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UsageEventDetails_CmdK {
@@ -442,24 +442,24 @@ export class UsageEventDetails_TerminalCmdK extends Message<UsageEventDetails_Te
   modelIntent = "";
 
   /**
-   * @generated from field: int32 override_num_requests_counted = 2;
+   * @generated from field: optional int32 override_num_requests_counted = 2;
    */
-  overrideNumRequestsCounted = 0;
+  overrideNumRequestsCounted?: number;
 
   /**
-   * @generated from field: bool is_token_based_call = 3;
+   * @generated from field: optional bool is_token_based_call = 3;
    */
-  isTokenBasedCall = false;
+  isTokenBasedCall?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.TokenUsage token_usage = 4;
+   * @generated from field: optional aiserver.v1.TokenUsage token_usage = 4;
    */
   tokenUsage?: TokenUsage;
 
   /**
-   * @generated from field: bool max_mode = 5;
+   * @generated from field: optional bool max_mode = 5;
    */
-  maxMode = false;
+  maxMode?: boolean;
 
   constructor(data?: PartialMessage<UsageEventDetails_TerminalCmdK>) {
     super();
@@ -470,10 +470,10 @@ export class UsageEventDetails_TerminalCmdK extends Message<UsageEventDetails_Te
   static readonly typeName = "aiserver.v1.UsageEventDetails.TerminalCmdK";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "model_intent", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "override_num_requests_counted", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "is_token_based_call", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "token_usage", kind: "message", T: TokenUsage },
-    { no: 5, name: "max_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "override_num_requests_counted", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 3, name: "is_token_based_call", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 4, name: "token_usage", kind: "message", T: TokenUsage, opt: true },
+    { no: 5, name: "max_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UsageEventDetails_TerminalCmdK {
@@ -534,24 +534,24 @@ export class UsageEventDetails_InterpreterChat extends Message<UsageEventDetails
   modelIntent = "";
 
   /**
-   * @generated from field: int32 override_num_requests_counted = 2;
+   * @generated from field: optional int32 override_num_requests_counted = 2;
    */
-  overrideNumRequestsCounted = 0;
+  overrideNumRequestsCounted?: number;
 
   /**
-   * @generated from field: bool is_token_based_call = 3;
+   * @generated from field: optional bool is_token_based_call = 3;
    */
-  isTokenBasedCall = false;
+  isTokenBasedCall?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.TokenUsage token_usage = 4;
+   * @generated from field: optional aiserver.v1.TokenUsage token_usage = 4;
    */
   tokenUsage?: TokenUsage;
 
   /**
-   * @generated from field: bool max_mode = 5;
+   * @generated from field: optional bool max_mode = 5;
    */
-  maxMode = false;
+  maxMode?: boolean;
 
   constructor(data?: PartialMessage<UsageEventDetails_InterpreterChat>) {
     super();
@@ -562,10 +562,10 @@ export class UsageEventDetails_InterpreterChat extends Message<UsageEventDetails
   static readonly typeName = "aiserver.v1.UsageEventDetails.InterpreterChat";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "model_intent", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "override_num_requests_counted", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "is_token_based_call", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "token_usage", kind: "message", T: TokenUsage },
-    { no: 5, name: "max_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "override_num_requests_counted", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 3, name: "is_token_based_call", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 4, name: "token_usage", kind: "message", T: TokenUsage, opt: true },
+    { no: 5, name: "max_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UsageEventDetails_InterpreterChat {
@@ -595,9 +595,9 @@ export class UsageEventDetails_SlashEdit extends Message<UsageEventDetails_Slash
   modelIntent = "";
 
   /**
-   * @generated from field: bool max_mode = 2;
+   * @generated from field: optional bool max_mode = 2;
    */
-  maxMode = false;
+  maxMode?: boolean;
 
   constructor(data?: PartialMessage<UsageEventDetails_SlashEdit>) {
     super();
@@ -608,7 +608,7 @@ export class UsageEventDetails_SlashEdit extends Message<UsageEventDetails_Slash
   static readonly typeName = "aiserver.v1.UsageEventDetails.SlashEdit";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "model_intent", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "max_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "max_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UsageEventDetails_SlashEdit {
@@ -638,29 +638,29 @@ export class UsageEventDetails_Composer extends Message<UsageEventDetails_Compos
   modelIntent = "";
 
   /**
-   * @generated from field: int32 override_num_requests_counted = 2;
+   * @generated from field: optional int32 override_num_requests_counted = 2;
    */
-  overrideNumRequestsCounted = 0;
+  overrideNumRequestsCounted?: number;
 
   /**
-   * @generated from field: bool is_headless = 3;
+   * @generated from field: optional bool is_headless = 3;
    */
-  isHeadless = false;
+  isHeadless?: boolean;
 
   /**
-   * @generated from field: bool is_token_based_call = 4;
+   * @generated from field: optional bool is_token_based_call = 4;
    */
-  isTokenBasedCall = false;
+  isTokenBasedCall?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.TokenUsage token_usage = 5;
+   * @generated from field: optional aiserver.v1.TokenUsage token_usage = 5;
    */
   tokenUsage?: TokenUsage;
 
   /**
-   * @generated from field: bool max_mode = 6;
+   * @generated from field: optional bool max_mode = 6;
    */
-  maxMode = false;
+  maxMode?: boolean;
 
   constructor(data?: PartialMessage<UsageEventDetails_Composer>) {
     super();
@@ -671,11 +671,11 @@ export class UsageEventDetails_Composer extends Message<UsageEventDetails_Compos
   static readonly typeName = "aiserver.v1.UsageEventDetails.Composer";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "model_intent", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "override_num_requests_counted", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "is_headless", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "is_token_based_call", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "token_usage", kind: "message", T: TokenUsage },
-    { no: 6, name: "max_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "override_num_requests_counted", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 3, name: "is_headless", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 4, name: "is_token_based_call", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 5, name: "token_usage", kind: "message", T: TokenUsage, opt: true },
+    { no: 6, name: "max_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UsageEventDetails_Composer {
@@ -748,9 +748,9 @@ export class UsageEventDetails_WarmComposer extends Message<UsageEventDetails_Wa
   modelIntent = "";
 
   /**
-   * @generated from field: bool max_mode = 2;
+   * @generated from field: optional bool max_mode = 2;
    */
-  maxMode = false;
+  maxMode?: boolean;
 
   constructor(data?: PartialMessage<UsageEventDetails_WarmComposer>) {
     super();
@@ -761,7 +761,7 @@ export class UsageEventDetails_WarmComposer extends Message<UsageEventDetails_Wa
   static readonly typeName = "aiserver.v1.UsageEventDetails.WarmComposer";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "model_intent", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "max_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "max_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UsageEventDetails_WarmComposer {
@@ -840,29 +840,29 @@ export class UsageEventDetails_ToolCallComposer extends Message<UsageEventDetail
   modelIntent = "";
 
   /**
-   * @generated from field: int32 override_num_requests_counted = 2;
+   * @generated from field: optional int32 override_num_requests_counted = 2;
    */
-  overrideNumRequestsCounted = 0;
+  overrideNumRequestsCounted?: number;
 
   /**
-   * @generated from field: bool is_headless = 3;
+   * @generated from field: optional bool is_headless = 3;
    */
-  isHeadless = false;
+  isHeadless?: boolean;
 
   /**
-   * @generated from field: bool is_token_based_call = 4;
+   * @generated from field: optional bool is_token_based_call = 4;
    */
-  isTokenBasedCall = false;
+  isTokenBasedCall?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.TokenUsage token_usage = 5;
+   * @generated from field: optional aiserver.v1.TokenUsage token_usage = 5;
    */
   tokenUsage?: TokenUsage;
 
   /**
-   * @generated from field: bool max_mode = 6;
+   * @generated from field: optional bool max_mode = 6;
    */
-  maxMode = false;
+  maxMode?: boolean;
 
   constructor(data?: PartialMessage<UsageEventDetails_ToolCallComposer>) {
     super();
@@ -873,11 +873,11 @@ export class UsageEventDetails_ToolCallComposer extends Message<UsageEventDetail
   static readonly typeName = "aiserver.v1.UsageEventDetails.ToolCallComposer";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "model_intent", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "override_num_requests_counted", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "is_headless", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "is_token_based_call", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "token_usage", kind: "message", T: TokenUsage },
-    { no: 6, name: "max_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "override_num_requests_counted", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 3, name: "is_headless", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 4, name: "is_token_based_call", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 5, name: "token_usage", kind: "message", T: TokenUsage, opt: true },
+    { no: 6, name: "max_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UsageEventDetails_ToolCallComposer {
@@ -907,7 +907,7 @@ export class UsageEventDetails_BugBot extends Message<UsageEventDetails_BugBot> 
   modelIntent = "";
 
   /**
-   * @generated from field: aiserver.v1.TokenUsage token_usage = 2;
+   * @generated from field: optional aiserver.v1.TokenUsage token_usage = 2;
    */
   tokenUsage?: TokenUsage;
 
@@ -952,7 +952,7 @@ export class UsageEventDetails_BugBot extends Message<UsageEventDetails_BugBot> 
   static readonly typeName = "aiserver.v1.UsageEventDetails.BugBot";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "model_intent", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "token_usage", kind: "message", T: TokenUsage },
+    { no: 2, name: "token_usage", kind: "message", T: TokenUsage, opt: true },
     { no: 3, name: "is_token_based_call", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 4, name: "max_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 7, name: "billing_mode", kind: "scalar", T: 9 /* ScalarType.STRING */ },
@@ -987,19 +987,19 @@ export class UsageEventDetails_PromptHook extends Message<UsageEventDetails_Prom
   modelIntent = "";
 
   /**
-   * @generated from field: aiserver.v1.TokenUsage token_usage = 2;
+   * @generated from field: optional aiserver.v1.TokenUsage token_usage = 2;
    */
   tokenUsage?: TokenUsage;
 
   /**
-   * @generated from field: bool max_mode = 3;
+   * @generated from field: optional bool max_mode = 3;
    */
-  maxMode = false;
+  maxMode?: boolean;
 
   /**
-   * @generated from field: bool is_token_based_call = 4;
+   * @generated from field: optional bool is_token_based_call = 4;
    */
-  isTokenBasedCall = false;
+  isTokenBasedCall?: boolean;
 
   constructor(data?: PartialMessage<UsageEventDetails_PromptHook>) {
     super();
@@ -1010,9 +1010,9 @@ export class UsageEventDetails_PromptHook extends Message<UsageEventDetails_Prom
   static readonly typeName = "aiserver.v1.UsageEventDetails.PromptHook";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "model_intent", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "token_usage", kind: "message", T: TokenUsage },
-    { no: 3, name: "max_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "is_token_based_call", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "token_usage", kind: "message", T: TokenUsage, opt: true },
+    { no: 3, name: "max_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 4, name: "is_token_based_call", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UsageEventDetails_PromptHook {
@@ -1154,14 +1154,14 @@ export class TokenUsage extends Message<TokenUsage> {
   totalCents = 0;
 
   /**
-   * @generated from field: int32 discount_percent_off = 6;
+   * @generated from field: optional int32 discount_percent_off = 6;
    */
-  discountPercentOff = 0;
+  discountPercentOff?: number;
 
   /**
-   * @generated from field: float enterprise_usage_discount_percent = 7;
+   * @generated from field: optional float enterprise_usage_discount_percent = 7;
    */
-  enterpriseUsageDiscountPercent = 0;
+  enterpriseUsageDiscountPercent?: number;
 
   constructor(data?: PartialMessage<TokenUsage>) {
     super();
@@ -1176,8 +1176,8 @@ export class TokenUsage extends Message<TokenUsage> {
     { no: 3, name: "cache_write_tokens", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 4, name: "cache_read_tokens", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 5, name: "total_cents", kind: "scalar", T: 2 /* ScalarType.FLOAT */ },
-    { no: 6, name: "discount_percent_off", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 7, name: "enterprise_usage_discount_percent", kind: "scalar", T: 2 /* ScalarType.FLOAT */ },
+    { no: 6, name: "discount_percent_off", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 7, name: "enterprise_usage_discount_percent", kind: "scalar", T: 2 /* ScalarType.FLOAT */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): TokenUsage {
@@ -1207,19 +1207,19 @@ export class UsageEvent extends Message<UsageEvent> {
   timestamp = protoInt64.zero;
 
   /**
-   * @generated from field: aiserver.v1.UsageEventDetails details = 2;
+   * @generated from field: optional aiserver.v1.UsageEventDetails details = 2;
    */
   details?: UsageEventDetails;
 
   /**
-   * @generated from field: string subscription_product_id = 3;
+   * @generated from field: optional string subscription_product_id = 3;
    */
-  subscriptionProductId = "";
+  subscriptionProductId?: string;
 
   /**
-   * @generated from field: string usage_price_id = 4;
+   * @generated from field: optional string usage_price_id = 4;
    */
-  usagePriceId = "";
+  usagePriceId?: string;
 
   /**
    * @generated from field: bool is_slow = 5;
@@ -1232,24 +1232,24 @@ export class UsageEvent extends Message<UsageEvent> {
   status = "";
 
   /**
-   * @generated from field: string owning_user = 7;
+   * @generated from field: optional string owning_user = 7;
    */
-  owningUser = "";
+  owningUser?: string;
 
   /**
-   * @generated from field: string owning_team = 8;
+   * @generated from field: optional string owning_team = 8;
    */
-  owningTeam = "";
+  owningTeam?: string;
 
   /**
-   * @generated from field: float price_cents = 9;
+   * @generated from field: optional float price_cents = 9;
    */
-  priceCents = 0;
+  priceCents?: number;
 
   /**
-   * @generated from field: string team_membership_type = 10;
+   * @generated from field: optional string team_membership_type = 10;
    */
-  teamMembershipType = "";
+  teamMembershipType?: string;
 
   constructor(data?: PartialMessage<UsageEvent>) {
     super();
@@ -1260,15 +1260,15 @@ export class UsageEvent extends Message<UsageEvent> {
   static readonly typeName = "aiserver.v1.UsageEvent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "timestamp", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 2, name: "details", kind: "message", T: UsageEventDetails },
-    { no: 3, name: "subscription_product_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "usage_price_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "details", kind: "message", T: UsageEventDetails, opt: true },
+    { no: 3, name: "subscription_product_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "usage_price_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 5, name: "is_slow", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 6, name: "status", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "owning_user", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "owning_team", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "price_cents", kind: "scalar", T: 2 /* ScalarType.FLOAT */ },
-    { no: 10, name: "team_membership_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 7, name: "owning_user", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "owning_team", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 9, name: "price_cents", kind: "scalar", T: 2 /* ScalarType.FLOAT */, opt: true },
+    { no: 10, name: "team_membership_type", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UsageEvent {
@@ -1308,9 +1308,9 @@ export class UsageEventDisplay extends Message<UsageEventDisplay> {
   kind = UsageEventKind.UNSPECIFIED;
 
   /**
-   * @generated from field: string custom_subscription_name = 4;
+   * @generated from field: optional string custom_subscription_name = 4;
    */
-  customSubscriptionName = "";
+  customSubscriptionName?: string;
 
   /**
    * @generated from field: bool max_mode = 5;
@@ -1323,94 +1323,94 @@ export class UsageEventDisplay extends Message<UsageEventDisplay> {
   requestsCosts = 0;
 
   /**
-   * @generated from field: string usage_based_costs = 7;
+   * @generated from field: optional string usage_based_costs = 7;
    */
-  usageBasedCosts = "";
+  usageBasedCosts?: string;
 
   /**
-   * @generated from field: bool is_token_based_call = 8;
+   * @generated from field: optional bool is_token_based_call = 8;
    */
-  isTokenBasedCall = false;
+  isTokenBasedCall?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.TokenUsage token_usage = 9;
+   * @generated from field: optional aiserver.v1.TokenUsage token_usage = 9;
    */
   tokenUsage?: TokenUsage;
 
   /**
-   * @generated from field: string owning_user = 10;
+   * @generated from field: optional string owning_user = 10;
    */
-  owningUser = "";
+  owningUser?: string;
 
   /**
-   * @generated from field: string owning_team = 11;
+   * @generated from field: optional string owning_team = 11;
    */
-  owningTeam = "";
+  owningTeam?: string;
 
   /**
-   * @generated from field: string user_email = 12;
+   * @generated from field: optional string user_email = 12;
    */
-  userEmail = "";
+  userEmail?: string;
 
   /**
-   * @generated from field: float cursor_token_fee = 13;
+   * @generated from field: optional float cursor_token_fee = 13;
    */
-  cursorTokenFee = 0;
+  cursorTokenFee?: number;
 
   /**
-   * @generated from field: bool is_chargeable = 14;
+   * @generated from field: optional bool is_chargeable = 14;
    */
-  isChargeable = false;
+  isChargeable?: boolean;
 
   /**
-   * @generated from field: string service_account_name = 15;
+   * @generated from field: optional string service_account_name = 15;
    */
-  serviceAccountName = "";
+  serviceAccountName?: string;
 
   /**
-   * @generated from field: string service_account_id = 16;
+   * @generated from field: optional string service_account_id = 16;
    */
-  serviceAccountId = "";
+  serviceAccountId?: string;
 
   /**
-   * @generated from field: bool is_headless = 17;
+   * @generated from field: optional bool is_headless = 17;
    */
-  isHeadless = false;
+  isHeadless?: boolean;
 
   /**
-   * @generated from field: float charged_cents = 18;
+   * @generated from field: optional float charged_cents = 18;
    */
-  chargedCents = 0;
+  chargedCents?: number;
 
   /**
-   * @generated from field: string cloud_agent_id = 19;
+   * @generated from field: optional string cloud_agent_id = 19;
    */
-  cloudAgentId = "";
+  cloudAgentId?: string;
 
   /**
-   * @generated from field: string automation_id = 20;
+   * @generated from field: optional string automation_id = 20;
    */
-  automationId = "";
+  automationId?: string;
 
   /**
-   * @generated from field: string automation_managed_type = 21;
+   * @generated from field: optional string automation_managed_type = 21;
    */
-  automationManagedType = "";
+  automationManagedType?: string;
 
   /**
-   * @generated from field: string client_type = 22;
+   * @generated from field: optional string client_type = 22;
    */
-  clientType = "";
+  clientType?: string;
 
   /**
-   * @generated from field: string conversation_id = 23;
+   * @generated from field: optional string conversation_id = 23;
    */
-  conversationId = "";
+  conversationId?: string;
 
   /**
-   * @generated from field: string subscription_product_id = 24;
+   * @generated from field: optional string subscription_product_id = 24;
    */
-  subscriptionProductId = "";
+  subscriptionProductId?: string;
 
   constructor(data?: PartialMessage<UsageEventDisplay>) {
     super();
@@ -1423,27 +1423,27 @@ export class UsageEventDisplay extends Message<UsageEventDisplay> {
     { no: 1, name: "timestamp", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 2, name: "model", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "kind", kind: "enum", T: proto3.getEnumType(UsageEventKind) },
-    { no: 4, name: "custom_subscription_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "custom_subscription_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 5, name: "max_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 6, name: "requests_costs", kind: "scalar", T: 2 /* ScalarType.FLOAT */ },
-    { no: 7, name: "usage_based_costs", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "is_token_based_call", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 9, name: "token_usage", kind: "message", T: TokenUsage },
-    { no: 10, name: "owning_user", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 11, name: "owning_team", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 12, name: "user_email", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 13, name: "cursor_token_fee", kind: "scalar", T: 2 /* ScalarType.FLOAT */ },
-    { no: 14, name: "is_chargeable", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 15, name: "service_account_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 16, name: "service_account_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 17, name: "is_headless", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 18, name: "charged_cents", kind: "scalar", T: 2 /* ScalarType.FLOAT */ },
-    { no: 19, name: "cloud_agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 20, name: "automation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 21, name: "automation_managed_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 22, name: "client_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 23, name: "conversation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 24, name: "subscription_product_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 7, name: "usage_based_costs", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "is_token_based_call", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 9, name: "token_usage", kind: "message", T: TokenUsage, opt: true },
+    { no: 10, name: "owning_user", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 11, name: "owning_team", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 12, name: "user_email", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 13, name: "cursor_token_fee", kind: "scalar", T: 2 /* ScalarType.FLOAT */, opt: true },
+    { no: 14, name: "is_chargeable", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 15, name: "service_account_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 16, name: "service_account_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 17, name: "is_headless", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 18, name: "charged_cents", kind: "scalar", T: 2 /* ScalarType.FLOAT */, opt: true },
+    { no: 19, name: "cloud_agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 20, name: "automation_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 21, name: "automation_managed_type", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 22, name: "client_type", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 23, name: "conversation_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 24, name: "subscription_product_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UsageEventDisplay {

@@ -92,7 +92,7 @@ proto3.util.setEnumType(ClientOS, "aiserver.v1.ClientOS", [
  */
 export class AnalyticsContext extends Message<AnalyticsContext> {
   /**
-   * @generated from field: aiserver.v1.ClientInfo client = 1;
+   * @generated from field: optional aiserver.v1.ClientInfo client = 1;
    */
   client?: ClientInfo;
 
@@ -104,7 +104,7 @@ export class AnalyticsContext extends Message<AnalyticsContext> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.AnalyticsContext";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "client", kind: "message", T: ClientInfo },
+    { no: 1, name: "client", kind: "message", T: ClientInfo, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AnalyticsContext {
@@ -183,7 +183,7 @@ export class BatchEvent extends Message<BatchEvent> {
   event = "";
 
   /**
-   * @generated from field: google.protobuf.Struct properties = 2;
+   * @generated from field: optional google.protobuf.Struct properties = 2;
    */
   properties?: Struct;
 
@@ -193,22 +193,22 @@ export class BatchEvent extends Message<BatchEvent> {
   timestamp = protoInt64.zero;
 
   /**
-   * @generated from field: string user_id = 4;
+   * @generated from field: optional string user_id = 4;
    */
-  userId = "";
+  userId?: string;
 
   /**
-   * @generated from field: string anonymous_id = 5;
+   * @generated from field: optional string anonymous_id = 5;
    */
-  anonymousId = "";
+  anonymousId?: string;
 
   /**
-   * @generated from field: string message_id = 6;
+   * @generated from field: optional string message_id = 6;
    */
-  messageId = "";
+  messageId?: string;
 
   /**
-   * @generated from field: aiserver.v1.AnalyticsContext context = 7;
+   * @generated from field: optional aiserver.v1.AnalyticsContext context = 7;
    */
   context?: AnalyticsContext;
 
@@ -221,12 +221,12 @@ export class BatchEvent extends Message<BatchEvent> {
   static readonly typeName = "aiserver.v1.BatchEvent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "event", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "properties", kind: "message", T: Struct },
+    { no: 2, name: "properties", kind: "message", T: Struct, opt: true },
     { no: 3, name: "timestamp", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 4, name: "user_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "anonymous_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "message_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "context", kind: "message", T: AnalyticsContext },
+    { no: 4, name: "user_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "anonymous_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "message_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "context", kind: "message", T: AnalyticsContext, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BatchEvent {
@@ -319,44 +319,44 @@ export class BatchResponse extends Message<BatchResponse> {
  */
 export class BootstrapStatsigRequest extends Message<BootstrapStatsigRequest> {
   /**
-   * @generated from field: bool ignore_dev_status = 1;
+   * @generated from field: optional bool ignore_dev_status = 1;
    */
-  ignoreDevStatus = false;
+  ignoreDevStatus?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.ClientOS operating_system = 2;
+   * @generated from field: optional aiserver.v1.ClientOS operating_system = 2;
    */
-  operatingSystem = ClientOS.CLIENT_OS_UNSPECIFIED;
+  operatingSystem?: ClientOS;
 
   /**
-   * @generated from field: string device_model = 3;
+   * @generated from field: optional string device_model = 3;
    */
-  deviceModel = "";
+  deviceModel?: string;
 
   /**
-   * @generated from field: string os_version = 4;
+   * @generated from field: optional string os_version = 4;
    */
-  osVersion = "";
+  osVersion?: string;
 
   /**
-   * @generated from field: string form_factor = 5;
+   * @generated from field: optional string form_factor = 5;
    */
-  formFactor = "";
+  formFactor?: string;
 
   /**
-   * @generated from field: string stable_id = 6;
+   * @generated from field: optional string stable_id = 6;
    */
-  stableId = "";
+  stableId?: string;
 
   /**
-   * @generated from field: string client_channel = 7;
+   * @generated from field: optional string client_channel = 7;
    */
-  clientChannel = "";
+  clientChannel?: string;
 
   /**
-   * @generated from field: string bundle_id = 8;
+   * @generated from field: optional string bundle_id = 8;
    */
-  bundleId = "";
+  bundleId?: string;
 
   constructor(data?: PartialMessage<BootstrapStatsigRequest>) {
     super();
@@ -366,14 +366,14 @@ export class BootstrapStatsigRequest extends Message<BootstrapStatsigRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.BootstrapStatsigRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "ignore_dev_status", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 2, name: "operating_system", kind: "enum", T: proto3.getEnumType(ClientOS) },
-    { no: 3, name: "device_model", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "os_version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "form_factor", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "stable_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "client_channel", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "bundle_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "ignore_dev_status", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 2, name: "operating_system", kind: "enum", T: proto3.getEnumType(ClientOS), opt: true },
+    { no: 3, name: "device_model", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "os_version", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "form_factor", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "stable_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "client_channel", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "bundle_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BootstrapStatsigRequest {
@@ -441,29 +441,29 @@ export class BootstrapStatsigResponse extends Message<BootstrapStatsigResponse> 
  */
 export class ClientInfo extends Message<ClientInfo> {
   /**
-   * @generated from field: string os = 1;
+   * @generated from field: optional string os = 1;
    */
-  os = "";
+  os?: string;
 
   /**
-   * @generated from field: string arch = 2;
+   * @generated from field: optional string arch = 2;
    */
-  arch = "";
+  arch?: string;
 
   /**
-   * @generated from field: string os_version = 3;
+   * @generated from field: optional string os_version = 3;
    */
-  osVersion = "";
+  osVersion?: string;
 
   /**
-   * @generated from field: string version = 4;
+   * @generated from field: optional string version = 4;
    */
-  version = "";
+  version?: string;
 
   /**
-   * @generated from field: string layout = 5;
+   * @generated from field: optional string layout = 5;
    */
-  layout = "";
+  layout?: string;
 
   constructor(data?: PartialMessage<ClientInfo>) {
     super();
@@ -473,11 +473,11 @@ export class ClientInfo extends Message<ClientInfo> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ClientInfo";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "os", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "arch", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "os_version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "layout", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "os", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "arch", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "os_version", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "layout", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ClientInfo {
@@ -522,14 +522,14 @@ export class ClientLogEntry extends Message<ClientLogEntry> {
   timestamp = protoInt64.zero;
 
   /**
-   * @generated from field: string error_message = 5;
+   * @generated from field: optional string error_message = 5;
    */
-  errorMessage = "";
+  errorMessage?: string;
 
   /**
-   * @generated from field: string error_stack = 6;
+   * @generated from field: optional string error_stack = 6;
    */
-  errorStack = "";
+  errorStack?: string;
 
   /**
    * @generated from field: string key = 7;
@@ -548,8 +548,8 @@ export class ClientLogEntry extends Message<ClientLogEntry> {
     { no: 2, name: "message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "metadata", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
     { no: 4, name: "timestamp", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 5, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "error_stack", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "error_stack", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 7, name: "key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
@@ -731,9 +731,9 @@ export class EventData extends Message<EventData> {
  */
 export class GetFirstWindowStatsigDecisionRequest extends Message<GetFirstWindowStatsigDecisionRequest> {
   /**
-   * @generated from field: aiserver.v1.ClientOS operating_system = 1;
+   * @generated from field: optional aiserver.v1.ClientOS operating_system = 1;
    */
-  operatingSystem = ClientOS.CLIENT_OS_UNSPECIFIED;
+  operatingSystem?: ClientOS;
 
   constructor(data?: PartialMessage<GetFirstWindowStatsigDecisionRequest>) {
     super();
@@ -743,7 +743,7 @@ export class GetFirstWindowStatsigDecisionRequest extends Message<GetFirstWindow
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetFirstWindowStatsigDecisionRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "operating_system", kind: "enum", T: proto3.getEnumType(ClientOS) },
+    { no: 1, name: "operating_system", kind: "enum", T: proto3.getEnumType(ClientOS), opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetFirstWindowStatsigDecisionRequest {
@@ -821,19 +821,19 @@ export class IngestConversationRequest extends Message<IngestConversationRequest
   transcript = "";
 
   /**
-   * @generated from field: string transcript_json = 3;
+   * @generated from field: optional string transcript_json = 3;
    */
-  transcriptJson = "";
+  transcriptJson?: string;
 
   /**
-   * @generated from field: string mode = 4;
+   * @generated from field: optional string mode = 4;
    */
-  mode = "";
+  mode?: string;
 
   /**
-   * @generated from field: string model = 5;
+   * @generated from field: optional string model = 5;
    */
-  model = "";
+  model?: string;
 
   /**
    * @generated from field: int64 last_updated_at = 6;
@@ -850,9 +850,9 @@ export class IngestConversationRequest extends Message<IngestConversationRequest
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "conversation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "transcript", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "transcript_json", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "mode", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "model", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "transcript_json", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "mode", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "model", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 6, name: "last_updated_at", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
   ]);
 
@@ -883,19 +883,19 @@ export class IngestConversationResponse extends Message<IngestConversationRespon
   success = false;
 
   /**
-   * @generated from field: string summary = 2;
+   * @generated from field: optional string summary = 2;
    */
-  summary = "";
+  summary?: string;
 
   /**
-   * @generated from field: string detailed_summary = 3;
+   * @generated from field: optional string detailed_summary = 3;
    */
-  detailedSummary = "";
+  detailedSummary?: string;
 
   /**
-   * @generated from field: string error_message = 4;
+   * @generated from field: optional string error_message = 4;
    */
-  errorMessage = "";
+  errorMessage?: string;
 
   constructor(data?: PartialMessage<IngestConversationResponse>) {
     super();
@@ -906,9 +906,9 @@ export class IngestConversationResponse extends Message<IngestConversationRespon
   static readonly typeName = "aiserver.v1.IngestConversationResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "success", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 2, name: "summary", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "detailed_summary", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "summary", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "detailed_summary", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): IngestConversationResponse {
@@ -975,9 +975,9 @@ export class SubmitLogsResponse extends Message<SubmitLogsResponse> {
   success = false;
 
   /**
-   * @generated from field: string error_message = 2;
+   * @generated from field: optional string error_message = 2;
    */
-  errorMessage = "";
+  errorMessage?: string;
 
   /**
    * @generated from field: uint32 logs_processed = 3;
@@ -998,7 +998,7 @@ export class SubmitLogsResponse extends Message<SubmitLogsResponse> {
   static readonly typeName = "aiserver.v1.SubmitLogsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "success", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 2, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "logs_processed", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
     { no: 4, name: "logs_dropped", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
   ]);

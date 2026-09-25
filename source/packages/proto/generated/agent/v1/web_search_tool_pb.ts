@@ -134,12 +134,12 @@ export class WebSearchRequestResponse_Rejected extends Message<WebSearchRequestR
  */
 export class WebSearchToolCall extends Message<WebSearchToolCall> {
   /**
-   * @generated from field: agent.v1.WebSearchArgs args = 1;
+   * @generated from field: optional agent.v1.WebSearchArgs args = 1;
    */
   args?: WebSearchArgs;
 
   /**
-   * @generated from field: agent.v1.WebSearchResult result = 2;
+   * @generated from field: optional agent.v1.WebSearchResult result = 2;
    */
   result?: WebSearchResult;
 
@@ -151,8 +151,8 @@ export class WebSearchToolCall extends Message<WebSearchToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.WebSearchToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: WebSearchArgs },
-    { no: 2, name: "result", kind: "message", T: WebSearchResult },
+    { no: 1, name: "args", kind: "message", T: WebSearchArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: WebSearchResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): WebSearchToolCall {
@@ -437,7 +437,7 @@ export class WebSearchReference extends Message<WebSearchReference> {
  */
 export class WebSearchRequestQuery extends Message<WebSearchRequestQuery> {
   /**
-   * @generated from field: agent.v1.WebSearchArgs args = 1;
+   * @generated from field: optional agent.v1.WebSearchArgs args = 1;
    */
   args?: WebSearchArgs;
 
@@ -449,7 +449,7 @@ export class WebSearchRequestQuery extends Message<WebSearchRequestQuery> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.WebSearchRequestQuery";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: WebSearchArgs },
+    { no: 1, name: "args", kind: "message", T: WebSearchArgs, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): WebSearchRequestQuery {

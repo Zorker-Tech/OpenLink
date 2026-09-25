@@ -1,4 +1,4 @@
-// aiserver.v1 — aiserver/v1/sand_box messages, enums and services.
+// aiserver.v1 — aiserver/v1/sandbox messages, enums and services.
 //
 // Generated from this repository's schema (source/packages/proto/schema) by
 // `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
@@ -73,11 +73,11 @@ message AdminSandBoxHostStatusRequest {
 
 message AdminSandBoxHostStatusResponse {
   bool gateway_reachable = 1 [json_name = "gatewayReachable"];
-  string host_version = 2 [json_name = "hostVersion"];
-  bool host_update_available = 3 [json_name = "hostUpdateAvailable"];
-  string latest_host_version = 4 [json_name = "latestHostVersion"];
-  bool is_busy = 5 [json_name = "isBusy"];
-  int64 last_busy_at_ms = 6 [json_name = "lastBusyAtMs"];
+  optional string host_version = 2 [json_name = "hostVersion"];
+  optional bool host_update_available = 3 [json_name = "hostUpdateAvailable"];
+  optional string latest_host_version = 4 [json_name = "latestHostVersion"];
+  optional bool is_busy = 5 [json_name = "isBusy"];
+  optional int64 last_busy_at_ms = 6 [json_name = "lastBusyAtMs"];
 }
 
 message AdminSandBoxStoreStatusRequest {
@@ -151,7 +151,7 @@ message EnsureSandBoxResponse {
   string exec_daemon_url = 6 [json_name = "execDaemonUrl"];
   string vnc_url = 7 [json_name = "vncUrl"];
   string terminals_folder = 8 [json_name = "terminalsFolder"];
-  bool image_update_available = 9 [json_name = "imageUpdateAvailable"];
+  optional bool image_update_available = 9 [json_name = "imageUpdateAvailable"];
   string gateway_url = 10 [json_name = "gatewayUrl"];
   string gateway_token = 11 [json_name = "gatewayToken"];
   string fork_vnc_base_url = 12 [json_name = "forkVncBaseUrl"];
@@ -169,7 +169,7 @@ message GetSandBoxRunStateRequest {
 
 message GetSandBoxRunStateResponse {
   .aiserver.v1.SandBoxRunState state = 1 [json_name = "state"];
-  bool image_update_available = 2 [json_name = "imageUpdateAvailable"];
+  optional bool image_update_available = 2 [json_name = "imageUpdateAvailable"];
 }
 
 message KillTeamMemberSandBoxRequest {
@@ -372,16 +372,16 @@ message SandBoxStoreMultipartUploadedPart {
 }
 
 message SandBoxStoreMultipartWriteAbort {
-  .aiserver.v1.SandBoxStoreMultipartUploadContext context = 1 [json_name = "context"];
+  optional .aiserver.v1.SandBoxStoreMultipartUploadContext context = 1 [json_name = "context"];
 }
 
 message SandBoxStoreMultipartWriteCompletion {
-  .aiserver.v1.SandBoxStoreMultipartUploadContext context = 1 [json_name = "context"];
+  optional .aiserver.v1.SandBoxStoreMultipartUploadContext context = 1 [json_name = "context"];
   repeated .aiserver.v1.SandBoxStoreMultipartUploadedPart parts = 2 [json_name = "parts"];
 }
 
 message SandBoxStoreMultipartWriteInstruction {
-  .aiserver.v1.SandBoxStoreMultipartUploadContext context = 1 [json_name = "context"];
+  optional .aiserver.v1.SandBoxStoreMultipartUploadContext context = 1 [json_name = "context"];
   repeated .aiserver.v1.SandBoxStoreMultipartUploadPartInstruction parts = 2 [json_name = "parts"];
   int64 part_urls_expires_at_ms = 3 [json_name = "partUrlsExpiresAtMs"];
 }
@@ -427,13 +427,13 @@ message SandBoxStoreWriteInstruction {
   string url = 2 [json_name = "url"];
   map<string, string> headers = 3 [json_name = "headers"];
   int64 expires_at_ms = 4 [json_name = "expiresAtMs"];
-  .aiserver.v1.SandBoxStoreMultipartWriteInstruction multipart = 5 [json_name = "multipart"];
+  optional .aiserver.v1.SandBoxStoreMultipartWriteInstruction multipart = 5 [json_name = "multipart"];
 }
 
 message SandSetupManifestEntry {
   string id = 1 [json_name = "id"];
   string setup = 2 [json_name = "setup"];
-  string check = 3 [json_name = "check"];
+  optional string check = 3 [json_name = "check"];
 }
 
 enum SandSetupManifestScopeKind {
@@ -457,7 +457,7 @@ message SaveTeamSandSetupManifestRequest {
 }
 
 message SaveTeamSandSetupManifestResponse {
-  .aiserver.v1.SandTeamSetupManifest manifest = 1 [json_name = "manifest"];
+  optional .aiserver.v1.SandTeamSetupManifest manifest = 1 [json_name = "manifest"];
 }
 
 message StatSandBoxStoreObjectRequest {
@@ -477,11 +477,11 @@ message TeamMemberSandBoxPod {
   string tenant_id = 3 [json_name = "tenantId"];
   string flavor = 4 [json_name = "flavor"];
   string run_state = 5 [json_name = "runState"];
-  string image_tag = 6 [json_name = "imageTag"];
-  int64 created_at_ms = 7 [json_name = "createdAtMs"];
-  int64 last_active_at_ms = 8 [json_name = "lastActiveAtMs"];
-  string node_id = 9 [json_name = "nodeId"];
-  string failure_reason = 10 [json_name = "failureReason"];
+  optional string image_tag = 6 [json_name = "imageTag"];
+  optional int64 created_at_ms = 7 [json_name = "createdAtMs"];
+  optional int64 last_active_at_ms = 8 [json_name = "lastActiveAtMs"];
+  optional string node_id = 9 [json_name = "nodeId"];
+  optional string failure_reason = 10 [json_name = "failureReason"];
 }
 
 message WatchSandBoxMigrationRequest {

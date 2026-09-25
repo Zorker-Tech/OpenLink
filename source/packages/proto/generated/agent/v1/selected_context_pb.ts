@@ -62,19 +62,19 @@ export class SelectedCursorCommand extends Message<SelectedCursorCommand> {
   content = "";
 
   /**
-   * @generated from field: agent.v1.SelectedPluginCapabilityRef plugin_capability = 3;
+   * @generated from field: optional agent.v1.SelectedPluginCapabilityRef plugin_capability = 3;
    */
   pluginCapability?: SelectedPluginCapabilityRef;
 
   /**
-   * @generated from field: string full_path = 4;
+   * @generated from field: optional string full_path = 4;
    */
-  fullPath = "";
+  fullPath?: string;
 
   /**
-   * @generated from field: string display_name = 5;
+   * @generated from field: optional string display_name = 5;
    */
-  displayName = "";
+  displayName?: string;
 
   constructor(data?: PartialMessage<SelectedCursorCommand>) {
     super();
@@ -86,9 +86,9 @@ export class SelectedCursorCommand extends Message<SelectedCursorCommand> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "plugin_capability", kind: "message", T: SelectedPluginCapabilityRef },
-    { no: 4, name: "full_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "display_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "plugin_capability", kind: "message", T: SelectedPluginCapabilityRef, opt: true },
+    { no: 4, name: "full_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "display_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SelectedCursorCommand {
@@ -176,9 +176,9 @@ export class SelectedPluginCapabilityRef extends Message<SelectedPluginCapabilit
   snapshotToken = "";
 
   /**
-   * @generated from field: string resolved_commit_sha = 5;
+   * @generated from field: optional string resolved_commit_sha = 5;
    */
-  resolvedCommitSha = "";
+  resolvedCommitSha?: string;
 
   constructor(data?: PartialMessage<SelectedPluginCapabilityRef>) {
     super();
@@ -192,7 +192,7 @@ export class SelectedPluginCapabilityRef extends Message<SelectedPluginCapabilit
     { no: 2, name: "capability_type", kind: "enum", T: proto3.getEnumType(SelectedPluginCapabilityType) },
     { no: 3, name: "source_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "snapshot_token", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "resolved_commit_sha", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "resolved_commit_sha", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SelectedPluginCapabilityRef {
@@ -222,7 +222,7 @@ export class SelectedContext extends Message<SelectedContext> {
   selectedImages: SelectedImage[] = [];
 
   /**
-   * @generated from field: agent.v1.InvocationContext invocation_context = 2;
+   * @generated from field: optional agent.v1.InvocationContext invocation_context = 2;
    */
   invocationContext?: InvocationContext;
 
@@ -267,7 +267,7 @@ export class SelectedContext extends Message<SelectedContext> {
   cursorRules: SelectedCursorRule[] = [];
 
   /**
-   * @generated from field: agent.v1.SelectedGitDiffFromBranchToMain git_diff_from_branch_to_main = 11;
+   * @generated from field: optional agent.v1.SelectedGitDiffFromBranchToMain git_diff_from_branch_to_main = 11;
    */
   gitDiffFromBranchToMain?: SelectedGitDiffFromBranchToMain;
 
@@ -302,7 +302,7 @@ export class SelectedContext extends Message<SelectedContext> {
   gitCommits: SelectedGitCommit[] = [];
 
   /**
-   * @generated from field: agent.v1.SelectedGitDiff git_diff = 18;
+   * @generated from field: optional agent.v1.SelectedGitDiff git_diff = 18;
    */
   gitDiff?: SelectedGitDiff;
 
@@ -347,12 +347,12 @@ export class SelectedContext extends Message<SelectedContext> {
   selectedSkills: AgentSkill[] = [];
 
   /**
-   * @generated from field: agent.v1.RecentAgentsContext recent_agents_context = 27;
+   * @generated from field: optional agent.v1.RecentAgentsContext recent_agents_context = 27;
    */
   recentAgentsContext?: RecentAgentsContext;
 
   /**
-   * @generated from field: agent.v1.SelectedAgenticGitAction selected_agentic_git_action = 34;
+   * @generated from field: optional agent.v1.SelectedAgenticGitAction selected_agentic_git_action = 34;
    */
   selectedAgenticGitAction?: SelectedAgenticGitAction;
 
@@ -365,7 +365,7 @@ export class SelectedContext extends Message<SelectedContext> {
   static readonly typeName = "agent.v1.SelectedContext";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "selected_images", kind: "message", T: SelectedImage, repeated: true },
-    { no: 2, name: "invocation_context", kind: "message", T: InvocationContext },
+    { no: 2, name: "invocation_context", kind: "message", T: InvocationContext, opt: true },
     { no: 3, name: "extra_context", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 4, name: "files", kind: "message", T: SelectedFile, repeated: true },
     { no: 5, name: "code_selections", kind: "message", T: SelectedCodeSelection, repeated: true },
@@ -374,14 +374,14 @@ export class SelectedContext extends Message<SelectedContext> {
     { no: 8, name: "folders", kind: "message", T: SelectedFolder, repeated: true },
     { no: 9, name: "external_links", kind: "message", T: SelectedExternalLink, repeated: true },
     { no: 10, name: "cursor_rules", kind: "message", T: SelectedCursorRule, repeated: true },
-    { no: 11, name: "git_diff_from_branch_to_main", kind: "message", T: SelectedGitDiffFromBranchToMain },
+    { no: 11, name: "git_diff_from_branch_to_main", kind: "message", T: SelectedGitDiffFromBranchToMain, opt: true },
     { no: 12, name: "cursor_commands", kind: "message", T: SelectedCursorCommand, repeated: true },
     { no: 13, name: "documentations", kind: "message", T: SelectedDocumentation, repeated: true },
     { no: 14, name: "ui_elements", kind: "message", T: SelectedUIElement, repeated: true },
     { no: 15, name: "console_logs", kind: "message", T: SelectedConsoleLog, repeated: true },
     { no: 16, name: "extra_context_entries", kind: "message", T: ExtraContextEntry, repeated: true },
     { no: 17, name: "git_commits", kind: "message", T: SelectedGitCommit, repeated: true },
-    { no: 18, name: "git_diff", kind: "message", T: SelectedGitDiff },
+    { no: 18, name: "git_diff", kind: "message", T: SelectedGitDiff, opt: true },
     { no: 19, name: "past_chats", kind: "message", T: SelectedPastChat, repeated: true },
     { no: 20, name: "git_pr_diff_selections", kind: "message", T: SelectedGitPRDiffSelection, repeated: true },
     { no: 21, name: "selected_pull_requests", kind: "message", T: SelectedPullRequest, repeated: true },
@@ -390,8 +390,8 @@ export class SelectedContext extends Message<SelectedContext> {
     { no: 24, name: "selected_browsers", kind: "message", T: SelectedBrowser, repeated: true },
     { no: 25, name: "selected_documents", kind: "message", T: SelectedDocument, repeated: true },
     { no: 26, name: "selected_skills", kind: "message", T: AgentSkill, repeated: true },
-    { no: 27, name: "recent_agents_context", kind: "message", T: RecentAgentsContext },
-    { no: 34, name: "selected_agentic_git_action", kind: "message", T: SelectedAgenticGitAction },
+    { no: 27, name: "recent_agents_context", kind: "message", T: RecentAgentsContext, opt: true },
+    { no: 34, name: "selected_agentic_git_action", kind: "message", T: SelectedAgenticGitAction, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SelectedContext {
@@ -426,7 +426,7 @@ export class SelectedImage extends Message<SelectedImage> {
   path = "";
 
   /**
-   * @generated from field: agent.v1.SelectedImage.Dimension dimension = 4;
+   * @generated from field: optional agent.v1.SelectedImage.Dimension dimension = 4;
    */
   dimension?: SelectedImage_Dimension;
 
@@ -474,7 +474,7 @@ export class SelectedImage extends Message<SelectedImage> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 2, name: "uuid", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "dimension", kind: "message", T: SelectedImage_Dimension },
+    { no: 4, name: "dimension", kind: "message", T: SelectedImage_Dimension, opt: true },
     { no: 7, name: "mime_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 1, name: "blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */, oneof: "data_or_blob_id" },
     { no: 8, name: "data", kind: "scalar", T: 12 /* ScalarType.BYTES */, oneof: "data_or_blob_id" },
@@ -666,39 +666,39 @@ export class InvocationContext_SlackThread extends Message<InvocationContext_Sla
   thread = "";
 
   /**
-   * @generated from field: string channel_name = 2;
+   * @generated from field: optional string channel_name = 2;
    */
-  channelName = "";
+  channelName?: string;
 
   /**
-   * @generated from field: string channel_purpose = 3;
+   * @generated from field: optional string channel_purpose = 3;
    */
-  channelPurpose = "";
+  channelPurpose?: string;
 
   /**
-   * @generated from field: string channel_topic = 4;
+   * @generated from field: optional string channel_topic = 4;
    */
-  channelTopic = "";
+  channelTopic?: string;
 
   /**
-   * @generated from field: string sender_name = 5;
+   * @generated from field: optional string sender_name = 5;
    */
-  senderName = "";
+  senderName?: string;
 
   /**
-   * @generated from field: string sender_id = 6;
+   * @generated from field: optional string sender_id = 6;
    */
-  senderId = "";
+  senderId?: string;
 
   /**
-   * @generated from field: string sender_type = 7;
+   * @generated from field: optional string sender_type = 7;
    */
-  senderType = "";
+  senderType?: string;
 
   /**
-   * @generated from field: bool is_directly_addressed = 8;
+   * @generated from field: optional bool is_directly_addressed = 8;
    */
-  isDirectlyAddressed = false;
+  isDirectlyAddressed?: boolean;
 
   constructor(data?: PartialMessage<InvocationContext_SlackThread>) {
     super();
@@ -709,13 +709,13 @@ export class InvocationContext_SlackThread extends Message<InvocationContext_Sla
   static readonly typeName = "agent.v1.InvocationContext.SlackThread";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "thread", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "channel_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "channel_purpose", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "channel_topic", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "sender_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "sender_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "sender_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "is_directly_addressed", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "channel_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "channel_purpose", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "channel_topic", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "sender_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "sender_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "sender_type", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "is_directly_addressed", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): InvocationContext_SlackThread {
@@ -755,9 +755,9 @@ export class InvocationContext_GithubPR extends Message<InvocationContext_Github
   comments = "";
 
   /**
-   * @generated from field: string ci_failures = 4;
+   * @generated from field: optional string ci_failures = 4;
    */
-  ciFailures = "";
+  ciFailures?: string;
 
   constructor(data?: PartialMessage<InvocationContext_GithubPR>) {
     super();
@@ -770,7 +770,7 @@ export class InvocationContext_GithubPR extends Message<InvocationContext_Github
     { no: 1, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "comments", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "ci_failures", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "ci_failures", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): InvocationContext_GithubPR {
@@ -849,12 +849,12 @@ export class InvocationContext_IdeState_File extends Message<InvocationContext_I
   path = "";
 
   /**
-   * @generated from field: string relative_path = 2;
+   * @generated from field: optional string relative_path = 2;
    */
-  relativePath = "";
+  relativePath?: string;
 
   /**
-   * @generated from field: agent.v1.InvocationContext.IdeState.File.CursorPosition cursor_position = 3;
+   * @generated from field: optional agent.v1.InvocationContext.IdeState.File.CursorPosition cursor_position = 3;
    */
   cursorPosition?: InvocationContext_IdeState_File_CursorPosition;
 
@@ -864,9 +864,9 @@ export class InvocationContext_IdeState_File extends Message<InvocationContext_I
   totalLines = 0;
 
   /**
-   * @generated from field: string active_command = 5;
+   * @generated from field: optional string active_command = 5;
    */
-  activeCommand = "";
+  activeCommand?: string;
 
   constructor(data?: PartialMessage<InvocationContext_IdeState_File>) {
     super();
@@ -877,10 +877,10 @@ export class InvocationContext_IdeState_File extends Message<InvocationContext_I
   static readonly typeName = "agent.v1.InvocationContext.IdeState.File";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "relative_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "cursor_position", kind: "message", T: InvocationContext_IdeState_File_CursorPosition },
+    { no: 2, name: "relative_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "cursor_position", kind: "message", T: InvocationContext_IdeState_File_CursorPosition, opt: true },
     { no: 4, name: "total_lines", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 5, name: "active_command", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "active_command", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): InvocationContext_IdeState_File {
@@ -958,24 +958,24 @@ export class InvocationContext_IdeState_ViewedPullRequest extends Message<Invoca
   url = "";
 
   /**
-   * @generated from field: string title = 3;
+   * @generated from field: optional string title = 3;
    */
-  title = "";
+  title?: string;
 
   /**
-   * @generated from field: string folder_path = 4;
+   * @generated from field: optional string folder_path = 4;
    */
-  folderPath = "";
+  folderPath?: string;
 
   /**
-   * @generated from field: string summary_json = 5;
+   * @generated from field: optional string summary_json = 5;
    */
-  summaryJson = "";
+  summaryJson?: string;
 
   /**
-   * @generated from field: string description = 6;
+   * @generated from field: optional string description = 6;
    */
-  description = "";
+  description?: string;
 
   constructor(data?: PartialMessage<InvocationContext_IdeState_ViewedPullRequest>) {
     super();
@@ -987,10 +987,10 @@ export class InvocationContext_IdeState_ViewedPullRequest extends Message<Invoca
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "number", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 2, name: "url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "folder_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "summary_json", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "folder_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "summary_json", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): InvocationContext_IdeState_ViewedPullRequest {
@@ -1020,24 +1020,24 @@ export class InvocationContext_MicrosoftTeamsThread extends Message<InvocationCo
   thread = "";
 
   /**
-   * @generated from field: string channel_name = 2;
+   * @generated from field: optional string channel_name = 2;
    */
-  channelName = "";
+  channelName?: string;
 
   /**
-   * @generated from field: string team_name = 3;
+   * @generated from field: optional string team_name = 3;
    */
-  teamName = "";
+  teamName?: string;
 
   /**
-   * @generated from field: string channel_description = 4;
+   * @generated from field: optional string channel_description = 4;
    */
-  channelDescription = "";
+  channelDescription?: string;
 
   /**
-   * @generated from field: string team_description = 5;
+   * @generated from field: optional string team_description = 5;
    */
-  teamDescription = "";
+  teamDescription?: string;
 
   constructor(data?: PartialMessage<InvocationContext_MicrosoftTeamsThread>) {
     super();
@@ -1048,10 +1048,10 @@ export class InvocationContext_MicrosoftTeamsThread extends Message<InvocationCo
   static readonly typeName = "agent.v1.InvocationContext.MicrosoftTeamsThread";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "thread", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "channel_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "team_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "channel_description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "team_description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "channel_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "team_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "channel_description", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "team_description", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): InvocationContext_MicrosoftTeamsThread {
@@ -1136,9 +1136,9 @@ export class SelectedFile extends Message<SelectedFile> {
   path = "";
 
   /**
-   * @generated from field: string relative_path = 3;
+   * @generated from field: optional string relative_path = 3;
    */
-  relativePath = "";
+  relativePath?: string;
 
   constructor(data?: PartialMessage<SelectedFile>) {
     super();
@@ -1150,7 +1150,7 @@ export class SelectedFile extends Message<SelectedFile> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "relative_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "relative_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SelectedFile {
@@ -1185,12 +1185,12 @@ export class SelectedCodeSelection extends Message<SelectedCodeSelection> {
   path = "";
 
   /**
-   * @generated from field: string relative_path = 3;
+   * @generated from field: optional string relative_path = 3;
    */
-  relativePath = "";
+  relativePath?: string;
 
   /**
-   * @generated from field: agent.v1.Range range = 4;
+   * @generated from field: optional agent.v1.Range range = 4;
    */
   range?: Range;
 
@@ -1204,8 +1204,8 @@ export class SelectedCodeSelection extends Message<SelectedCodeSelection> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "relative_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "range", kind: "message", T: Range },
+    { no: 3, name: "relative_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "range", kind: "message", T: Range, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SelectedCodeSelection {
@@ -1235,14 +1235,14 @@ export class SelectedTerminal extends Message<SelectedTerminal> {
   content = "";
 
   /**
-   * @generated from field: string title = 2;
+   * @generated from field: optional string title = 2;
    */
-  title = "";
+  title?: string;
 
   /**
-   * @generated from field: string path = 3;
+   * @generated from field: optional string path = 3;
    */
-  path = "";
+  path?: string;
 
   constructor(data?: PartialMessage<SelectedTerminal>) {
     super();
@@ -1253,8 +1253,8 @@ export class SelectedTerminal extends Message<SelectedTerminal> {
   static readonly typeName = "agent.v1.SelectedTerminal";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SelectedTerminal {
@@ -1284,17 +1284,17 @@ export class SelectedTerminalSelection extends Message<SelectedTerminalSelection
   content = "";
 
   /**
-   * @generated from field: string title = 2;
+   * @generated from field: optional string title = 2;
    */
-  title = "";
+  title?: string;
 
   /**
-   * @generated from field: string path = 3;
+   * @generated from field: optional string path = 3;
    */
-  path = "";
+  path?: string;
 
   /**
-   * @generated from field: agent.v1.Range range = 4;
+   * @generated from field: optional agent.v1.Range range = 4;
    */
   range?: Range;
 
@@ -1307,9 +1307,9 @@ export class SelectedTerminalSelection extends Message<SelectedTerminalSelection
   static readonly typeName = "agent.v1.SelectedTerminalSelection";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "range", kind: "message", T: Range },
+    { no: 2, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "range", kind: "message", T: Range, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SelectedTerminalSelection {
@@ -1339,12 +1339,12 @@ export class SelectedFolder extends Message<SelectedFolder> {
   path = "";
 
   /**
-   * @generated from field: string relative_path = 2;
+   * @generated from field: optional string relative_path = 2;
    */
-  relativePath = "";
+  relativePath?: string;
 
   /**
-   * @generated from field: agent.v1.LsDirectoryTreeNode directory_tree = 3;
+   * @generated from field: optional agent.v1.LsDirectoryTreeNode directory_tree = 3;
    */
   directoryTree?: LsDirectoryTreeNode;
 
@@ -1357,8 +1357,8 @@ export class SelectedFolder extends Message<SelectedFolder> {
   static readonly typeName = "agent.v1.SelectedFolder";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "relative_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "directory_tree", kind: "message", T: LsDirectoryTreeNode },
+    { no: 2, name: "relative_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "directory_tree", kind: "message", T: LsDirectoryTreeNode, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SelectedFolder {
@@ -1393,24 +1393,24 @@ export class SelectedExternalLink extends Message<SelectedExternalLink> {
   uuid = "";
 
   /**
-   * @generated from field: string pdf_content = 3;
+   * @generated from field: optional string pdf_content = 3;
    */
-  pdfContent = "";
+  pdfContent?: string;
 
   /**
-   * @generated from field: bool is_pdf = 4;
+   * @generated from field: optional bool is_pdf = 4;
    */
-  isPdf = false;
+  isPdf?: boolean;
 
   /**
-   * @generated from field: string filename = 5;
+   * @generated from field: optional string filename = 5;
    */
-  filename = "";
+  filename?: string;
 
   /**
-   * @generated from field: bytes blob_id = 6;
+   * @generated from field: optional bytes blob_id = 6;
    */
-  blobId = new Uint8Array(0);
+  blobId?: Uint8Array;
 
   constructor(data?: PartialMessage<SelectedExternalLink>) {
     super();
@@ -1422,10 +1422,10 @@ export class SelectedExternalLink extends Message<SelectedExternalLink> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "uuid", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "pdf_content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "is_pdf", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "filename", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
+    { no: 3, name: "pdf_content", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "is_pdf", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 5, name: "filename", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SelectedExternalLink {
@@ -1450,7 +1450,7 @@ export class SelectedExternalLink extends Message<SelectedExternalLink> {
  */
 export class SelectedCursorRule extends Message<SelectedCursorRule> {
   /**
-   * @generated from field: agent.v1.CursorRule rule = 1;
+   * @generated from field: optional agent.v1.CursorRule rule = 1;
    */
   rule?: CursorRule;
 
@@ -1462,7 +1462,7 @@ export class SelectedCursorRule extends Message<SelectedCursorRule> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.SelectedCursorRule";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "rule", kind: "message", T: CursorRule },
+    { no: 1, name: "rule", kind: "message", T: CursorRule, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SelectedCursorRule {
@@ -1636,14 +1636,14 @@ export class SelectedUIElement extends Message<SelectedUIElement> {
   extra = "";
 
   /**
-   * @generated from field: string component = 5;
+   * @generated from field: optional string component = 5;
    */
-  component = "";
+  component?: string;
 
   /**
-   * @generated from field: string component_props_json = 6;
+   * @generated from field: optional string component_props_json = 6;
    */
-  componentPropsJson = "";
+  componentPropsJson?: string;
 
   constructor(data?: PartialMessage<SelectedUIElement>) {
     super();
@@ -1657,8 +1657,8 @@ export class SelectedUIElement extends Message<SelectedUIElement> {
     { no: 2, name: "xpath", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "text_content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "extra", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "component", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "component_props_json", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "component", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "component_props_json", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SelectedUIElement {
@@ -1708,14 +1708,14 @@ export class SelectedConsoleLog extends Message<SelectedConsoleLog> {
   sessionId = "";
 
   /**
-   * @generated from field: agent.v1.StackTrace stack_trace = 6;
+   * @generated from field: optional agent.v1.StackTrace stack_trace = 6;
    */
   stackTrace?: StackTrace;
 
   /**
-   * @generated from field: string object_data_json = 7;
+   * @generated from field: optional string object_data_json = 7;
    */
-  objectDataJson = "";
+  objectDataJson?: string;
 
   constructor(data?: PartialMessage<SelectedConsoleLog>) {
     super();
@@ -1730,8 +1730,8 @@ export class SelectedConsoleLog extends Message<SelectedConsoleLog> {
     { no: 3, name: "level", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "client_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "session_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "stack_trace", kind: "message", T: StackTrace },
-    { no: 7, name: "object_data_json", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 6, name: "stack_trace", kind: "message", T: StackTrace, opt: true },
+    { no: 7, name: "object_data_json", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SelectedConsoleLog {
@@ -1766,9 +1766,9 @@ export class SelectedGitCommit extends Message<SelectedGitCommit> {
   message = "";
 
   /**
-   * @generated from field: string description = 3;
+   * @generated from field: optional string description = 3;
    */
-  description = "";
+  description?: string;
 
   /**
    * @generated from field: string diff = 4;
@@ -1785,7 +1785,7 @@ export class SelectedGitCommit extends Message<SelectedGitCommit> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "sha", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 4, name: "diff", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
@@ -1831,14 +1831,14 @@ export class SelectedGitPRDiffSelection extends Message<SelectedGitPRDiffSelecti
   endLine = 0;
 
   /**
-   * @generated from field: string diff_content = 5;
+   * @generated from field: optional string diff_content = 5;
    */
-  diffContent = "";
+  diffContent?: string;
 
   /**
-   * @generated from field: bytes blob_id = 6;
+   * @generated from field: optional bytes blob_id = 6;
    */
-  blobId = new Uint8Array(0);
+  blobId?: Uint8Array;
 
   constructor(data?: PartialMessage<SelectedGitPRDiffSelection>) {
     super();
@@ -1852,8 +1852,8 @@ export class SelectedGitPRDiffSelection extends Message<SelectedGitPRDiffSelecti
     { no: 2, name: "file_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "start_line", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 4, name: "end_line", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 5, name: "diff_content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
+    { no: 5, name: "diff_content", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SelectedGitPRDiffSelection {
@@ -1888,9 +1888,9 @@ export class SelectedPullRequest extends Message<SelectedPullRequest> {
   url = "";
 
   /**
-   * @generated from field: string title = 3;
+   * @generated from field: optional string title = 3;
    */
-  title = "";
+  title?: string;
 
   /**
    * @generated from field: string folder_path = 4;
@@ -1898,19 +1898,19 @@ export class SelectedPullRequest extends Message<SelectedPullRequest> {
   folderPath = "";
 
   /**
-   * @generated from field: string summary_json = 5;
+   * @generated from field: optional string summary_json = 5;
    */
-  summaryJson = "";
+  summaryJson?: string;
 
   /**
-   * @generated from field: string description = 6;
+   * @generated from field: optional string description = 6;
    */
-  description = "";
+  description?: string;
 
   /**
-   * @generated from field: bytes blob_id = 7;
+   * @generated from field: optional bytes blob_id = 7;
    */
-  blobId = new Uint8Array(0);
+  blobId?: Uint8Array;
 
   constructor(data?: PartialMessage<SelectedPullRequest>) {
     super();
@@ -1922,11 +1922,11 @@ export class SelectedPullRequest extends Message<SelectedPullRequest> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "number", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 2, name: "url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 4, name: "folder_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "summary_json", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
+    { no: 5, name: "summary_json", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SelectedPullRequest {
@@ -1998,9 +1998,9 @@ export class SelectedVideo extends Message<SelectedVideo> {
   path = "";
 
   /**
-   * @generated from field: float fps = 4;
+   * @generated from field: optional float fps = 4;
    */
-  fps = 0;
+  fps?: number;
 
   /**
    * @generated from field: string mime_type = 7;
@@ -2056,7 +2056,7 @@ export class SelectedVideo extends Message<SelectedVideo> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 2, name: "uuid", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "fps", kind: "scalar", T: 2 /* ScalarType.FLOAT */ },
+    { no: 4, name: "fps", kind: "scalar", T: 2 /* ScalarType.FLOAT */, opt: true },
     { no: 7, name: "mime_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 10, name: "filename", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 12, name: "materialize_to_filesystem", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
@@ -2202,9 +2202,9 @@ export class SelectedBrowser extends Message<SelectedBrowser> {
   url = "";
 
   /**
-   * @generated from field: string page_title = 3;
+   * @generated from field: optional string page_title = 3;
    */
-  pageTitle = "";
+  pageTitle?: string;
 
   constructor(data?: PartialMessage<SelectedBrowser>) {
     super();
@@ -2216,7 +2216,7 @@ export class SelectedBrowser extends Message<SelectedBrowser> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "browser_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "page_title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "page_title", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SelectedBrowser {
@@ -2409,19 +2409,19 @@ export class RecentAgentsContext extends Message<RecentAgentsContext> {
  */
 export class SelectedAgenticGitAction extends Message<SelectedAgenticGitAction> {
   /**
-   * @generated from field: agent.v1.SelectedGitBranchContext branch_context = 5;
+   * @generated from field: optional agent.v1.SelectedGitBranchContext branch_context = 5;
    */
   branchContext?: SelectedGitBranchContext;
 
   /**
-   * @generated from field: string path_to_template_file = 9;
+   * @generated from field: optional string path_to_template_file = 9;
    */
-  pathToTemplateFile = "";
+  pathToTemplateFile?: string;
 
   /**
-   * @generated from field: string path_to_template_dir = 10;
+   * @generated from field: optional string path_to_template_dir = 10;
    */
-  pathToTemplateDir = "";
+  pathToTemplateDir?: string;
 
   /**
    * @generated from oneof agent.v1.SelectedAgenticGitAction.params
@@ -2514,9 +2514,9 @@ export class SelectedAgenticGitAction extends Message<SelectedAgenticGitAction> 
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.SelectedAgenticGitAction";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 5, name: "branch_context", kind: "message", T: SelectedGitBranchContext },
-    { no: 9, name: "path_to_template_file", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "path_to_template_dir", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "branch_context", kind: "message", T: SelectedGitBranchContext, opt: true },
+    { no: 9, name: "path_to_template_file", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 10, name: "path_to_template_dir", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "commit_params", kind: "message", T: SelectedAgenticGitActionCommitParams, oneof: "params" },
     { no: 3, name: "push_params", kind: "message", T: SelectedAgenticGitActionPushParams, oneof: "params" },
     { no: 4, name: "fix_merge_conflicts_params", kind: "message", T: SelectedAgenticGitActionFixMergeConflictsParams, oneof: "params" },
@@ -2569,9 +2569,9 @@ export class SelectedAgenticGitActionCommitParams extends Message<SelectedAgenti
   shouldStageAllChanges = false;
 
   /**
-   * @generated from field: bool create_pr_draft = 4;
+   * @generated from field: optional bool create_pr_draft = 4;
    */
-  createPrDraft = false;
+  createPrDraft?: boolean;
 
   /**
    * @generated from field: repeated agent.v1.SelectedAgenticGitFileWithStatus files_to_commit_with_status = 5;
@@ -2594,7 +2594,7 @@ export class SelectedAgenticGitActionCommitParams extends Message<SelectedAgenti
     { no: 1, name: "files_to_commit", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 2, name: "files_to_exclude_from_commit", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 3, name: "should_stage_all_changes", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "create_pr_draft", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 4, name: "create_pr_draft", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 5, name: "files_to_commit_with_status", kind: "message", T: SelectedAgenticGitFileWithStatus, repeated: true },
     { no: 6, name: "files_to_exclude_from_commit_with_status", kind: "message", T: SelectedAgenticGitFileWithStatus, repeated: true },
   ]);
@@ -2626,9 +2626,9 @@ export class SelectedAgenticGitActionPushParams extends Message<SelectedAgenticG
   filesToPush: string[] = [];
 
   /**
-   * @generated from field: bool create_pr_draft = 2;
+   * @generated from field: optional bool create_pr_draft = 2;
    */
-  createPrDraft = false;
+  createPrDraft?: boolean;
 
   constructor(data?: PartialMessage<SelectedAgenticGitActionPushParams>) {
     super();
@@ -2639,7 +2639,7 @@ export class SelectedAgenticGitActionPushParams extends Message<SelectedAgenticG
   static readonly typeName = "agent.v1.SelectedAgenticGitActionPushParams";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "files_to_push", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 2, name: "create_pr_draft", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "create_pr_draft", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SelectedAgenticGitActionPushParams {
@@ -2664,14 +2664,14 @@ export class SelectedAgenticGitActionPushParams extends Message<SelectedAgenticG
  */
 export class SelectedAgenticGitActionFixMergeConflictsParams extends Message<SelectedAgenticGitActionFixMergeConflictsParams> {
   /**
-   * @generated from field: string base_branch = 1;
+   * @generated from field: optional string base_branch = 1;
    */
-  baseBranch = "";
+  baseBranch?: string;
 
   /**
-   * @generated from field: string pr_url = 2;
+   * @generated from field: optional string pr_url = 2;
    */
-  prUrl = "";
+  prUrl?: string;
 
   constructor(data?: PartialMessage<SelectedAgenticGitActionFixMergeConflictsParams>) {
     super();
@@ -2681,8 +2681,8 @@ export class SelectedAgenticGitActionFixMergeConflictsParams extends Message<Sel
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.SelectedAgenticGitActionFixMergeConflictsParams";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SelectedAgenticGitActionFixMergeConflictsParams {
@@ -2707,9 +2707,9 @@ export class SelectedAgenticGitActionFixMergeConflictsParams extends Message<Sel
  */
 export class SelectedAgenticGitActionBabysitPrInCloudParams extends Message<SelectedAgenticGitActionBabysitPrInCloudParams> {
   /**
-   * @generated from field: string base_branch = 1;
+   * @generated from field: optional string base_branch = 1;
    */
-  baseBranch = "";
+  baseBranch?: string;
 
   constructor(data?: PartialMessage<SelectedAgenticGitActionBabysitPrInCloudParams>) {
     super();
@@ -2719,7 +2719,7 @@ export class SelectedAgenticGitActionBabysitPrInCloudParams extends Message<Sele
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.SelectedAgenticGitActionBabysitPrInCloudParams";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SelectedAgenticGitActionBabysitPrInCloudParams {
@@ -2781,9 +2781,9 @@ export class SelectedAgenticGitActionPullLocallyParams extends Message<SelectedA
  */
 export class SelectedAgenticGitActionUpdateBranchParams extends Message<SelectedAgenticGitActionUpdateBranchParams> {
   /**
-   * @generated from field: string base_branch = 1;
+   * @generated from field: optional string base_branch = 1;
    */
-  baseBranch = "";
+  baseBranch?: string;
 
   constructor(data?: PartialMessage<SelectedAgenticGitActionUpdateBranchParams>) {
     super();
@@ -2793,7 +2793,7 @@ export class SelectedAgenticGitActionUpdateBranchParams extends Message<Selected
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.SelectedAgenticGitActionUpdateBranchParams";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SelectedAgenticGitActionUpdateBranchParams {
@@ -2849,19 +2849,19 @@ export class SelectedAgenticGitActionCreateBranchParams extends Message<Selected
  */
 export class SelectedGitBranchContext extends Message<SelectedGitBranchContext> {
   /**
-   * @generated from field: string current_branch = 1;
+   * @generated from field: optional string current_branch = 1;
    */
-  currentBranch = "";
+  currentBranch?: string;
 
   /**
-   * @generated from field: string base_branch = 2;
+   * @generated from field: optional string base_branch = 2;
    */
-  baseBranch = "";
+  baseBranch?: string;
 
   /**
-   * @generated from field: string agent_branch_prefix = 3;
+   * @generated from field: optional string agent_branch_prefix = 3;
    */
-  agentBranchPrefix = "";
+  agentBranchPrefix?: string;
 
   constructor(data?: PartialMessage<SelectedGitBranchContext>) {
     super();
@@ -2871,9 +2871,9 @@ export class SelectedGitBranchContext extends Message<SelectedGitBranchContext> 
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.SelectedGitBranchContext";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "current_branch", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "agent_branch_prefix", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "current_branch", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "agent_branch_prefix", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SelectedGitBranchContext {
@@ -2903,9 +2903,9 @@ export class SelectedAgenticGitFileWithStatus extends Message<SelectedAgenticGit
   path = "";
 
   /**
-   * @generated from field: string status = 2;
+   * @generated from field: optional string status = 2;
    */
-  status = "";
+  status?: string;
 
   constructor(data?: PartialMessage<SelectedAgenticGitFileWithStatus>) {
     super();
@@ -2916,7 +2916,7 @@ export class SelectedAgenticGitFileWithStatus extends Message<SelectedAgenticGit
   static readonly typeName = "agent.v1.SelectedAgenticGitFileWithStatus";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "status", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "status", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SelectedAgenticGitFileWithStatus {
@@ -2951,9 +2951,9 @@ export class RecentAgent extends Message<RecentAgent> {
   path = "";
 
   /**
-   * @generated from field: string overview = 3;
+   * @generated from field: optional string overview = 3;
    */
-  overview = "";
+  overview?: string;
 
   constructor(data?: PartialMessage<RecentAgent>) {
     super();
@@ -2965,7 +2965,7 @@ export class RecentAgent extends Message<RecentAgent> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "overview", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "overview", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RecentAgent {
@@ -3032,9 +3032,9 @@ export class StackTrace extends Message<StackTrace> {
   callFrames: CallFrame[] = [];
 
   /**
-   * @generated from field: string raw_stack_trace = 2;
+   * @generated from field: optional string raw_stack_trace = 2;
    */
-  rawStackTrace = "";
+  rawStackTrace?: string;
 
   constructor(data?: PartialMessage<StackTrace>) {
     super();
@@ -3045,7 +3045,7 @@ export class StackTrace extends Message<StackTrace> {
   static readonly typeName = "agent.v1.StackTrace";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "call_frames", kind: "message", T: CallFrame, repeated: true },
-    { no: 2, name: "raw_stack_trace", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "raw_stack_trace", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StackTrace {
@@ -3070,24 +3070,24 @@ export class StackTrace extends Message<StackTrace> {
  */
 export class CallFrame extends Message<CallFrame> {
   /**
-   * @generated from field: string function_name = 1;
+   * @generated from field: optional string function_name = 1;
    */
-  functionName = "";
+  functionName?: string;
 
   /**
-   * @generated from field: string url = 2;
+   * @generated from field: optional string url = 2;
    */
-  url = "";
+  url?: string;
 
   /**
-   * @generated from field: int32 line_number = 3;
+   * @generated from field: optional int32 line_number = 3;
    */
-  lineNumber = 0;
+  lineNumber?: number;
 
   /**
-   * @generated from field: int32 column_number = 4;
+   * @generated from field: optional int32 column_number = 4;
    */
-  columnNumber = 0;
+  columnNumber?: number;
 
   constructor(data?: PartialMessage<CallFrame>) {
     super();
@@ -3097,10 +3097,10 @@ export class CallFrame extends Message<CallFrame> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.CallFrame";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "function_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "line_number", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 4, name: "column_number", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 1, name: "function_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "line_number", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 4, name: "column_number", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CallFrame {

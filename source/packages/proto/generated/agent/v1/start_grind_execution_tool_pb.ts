@@ -16,12 +16,12 @@ import { Message, proto3 } from "@bufbuild/protobuf";
  */
 export class StartGrindExecutionToolCall extends Message<StartGrindExecutionToolCall> {
   /**
-   * @generated from field: agent.v1.StartGrindExecutionArgs args = 1;
+   * @generated from field: optional agent.v1.StartGrindExecutionArgs args = 1;
    */
   args?: StartGrindExecutionArgs;
 
   /**
-   * @generated from field: agent.v1.StartGrindExecutionResult result = 2;
+   * @generated from field: optional agent.v1.StartGrindExecutionResult result = 2;
    */
   result?: StartGrindExecutionResult;
 
@@ -33,8 +33,8 @@ export class StartGrindExecutionToolCall extends Message<StartGrindExecutionTool
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.StartGrindExecutionToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: StartGrindExecutionArgs },
-    { no: 2, name: "result", kind: "message", T: StartGrindExecutionResult },
+    { no: 1, name: "args", kind: "message", T: StartGrindExecutionArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: StartGrindExecutionResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StartGrindExecutionToolCall {
@@ -59,9 +59,9 @@ export class StartGrindExecutionToolCall extends Message<StartGrindExecutionTool
  */
 export class StartGrindExecutionArgs extends Message<StartGrindExecutionArgs> {
   /**
-   * @generated from field: string explanation = 1;
+   * @generated from field: optional string explanation = 1;
    */
-  explanation = "";
+  explanation?: string;
 
   /**
    * @generated from field: string tool_call_id = 2;
@@ -76,7 +76,7 @@ export class StartGrindExecutionArgs extends Message<StartGrindExecutionArgs> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.StartGrindExecutionArgs";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "explanation", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "explanation", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 

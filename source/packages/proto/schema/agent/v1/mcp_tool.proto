@@ -10,9 +10,9 @@ package agent.v1;
 import "agent/v1/mcp_exec.proto";
 
 message McpToolCall {
-  .agent.v1.McpArgs args = 1 [json_name = "args"];
-  .agent.v1.McpToolResult result = 2 [json_name = "result"];
-  string description = 3 [json_name = "description"];
+  optional .agent.v1.McpArgs args = 1 [json_name = "args"];
+  optional .agent.v1.McpToolResult result = 2 [json_name = "result"];
+  optional string description = 3 [json_name = "description"];
 }
 
 message McpToolResult {

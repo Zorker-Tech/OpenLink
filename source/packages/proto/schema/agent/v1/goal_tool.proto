@@ -8,13 +8,13 @@ syntax = "proto3";
 package agent.v1;
 
 message CreateGoalToolCall {
-  .agent.v1.CreateGoalArgs args = 1 [json_name = "args"];
-  .agent.v1.CreateGoalResult result = 2 [json_name = "result"];
+  optional .agent.v1.CreateGoalArgs args = 1 [json_name = "args"];
+  optional .agent.v1.CreateGoalResult result = 2 [json_name = "result"];
 }
 
 message UpdateGoalToolCall {
-  .agent.v1.UpdateGoalArgs args = 1 [json_name = "args"];
-  .agent.v1.UpdateGoalResult result = 2 [json_name = "result"];
+  optional .agent.v1.UpdateGoalArgs args = 1 [json_name = "args"];
+  optional .agent.v1.UpdateGoalResult result = 2 [json_name = "result"];
 }
 
 message UpdateGoalArgs {

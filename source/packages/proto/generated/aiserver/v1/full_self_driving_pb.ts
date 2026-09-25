@@ -167,7 +167,7 @@ export class ApplyFullSelfDrivingPrScopedSuggestionResponse extends Message<Appl
   newPrHeadSha = "";
 
   /**
-   * @generated from field: aiserver.v1.FullSelfDrivingPrScopedSuggestion suggestion = 2;
+   * @generated from field: optional aiserver.v1.FullSelfDrivingPrScopedSuggestion suggestion = 2;
    */
   suggestion?: FullSelfDrivingPrScopedSuggestion;
 
@@ -180,7 +180,7 @@ export class ApplyFullSelfDrivingPrScopedSuggestionResponse extends Message<Appl
   static readonly typeName = "aiserver.v1.ApplyFullSelfDrivingPrScopedSuggestionResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "new_pr_head_sha", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "suggestion", kind: "message", T: FullSelfDrivingPrScopedSuggestion },
+    { no: 2, name: "suggestion", kind: "message", T: FullSelfDrivingPrScopedSuggestion, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ApplyFullSelfDrivingPrScopedSuggestionResponse {
@@ -307,9 +307,9 @@ export class BuildFullSelfDrivingTriageContextRequest extends Message<BuildFullS
   triggerDescription = "";
 
   /**
-   * @generated from field: string event_name = 3;
+   * @generated from field: optional string event_name = 3;
    */
-  eventName = "";
+  eventName?: string;
 
   /**
    * @generated from field: aiserver.v1.FullSelfDrivingMode mode = 4;
@@ -317,9 +317,9 @@ export class BuildFullSelfDrivingTriageContextRequest extends Message<BuildFullS
   mode = FullSelfDrivingMode.UNSPECIFIED;
 
   /**
-   * @generated from field: string bc_id = 5;
+   * @generated from field: optional string bc_id = 5;
    */
-  bcId = "";
+  bcId?: string;
 
   /**
    * @generated from field: bool fetch_ci_log_excerpts = 6;
@@ -336,9 +336,9 @@ export class BuildFullSelfDrivingTriageContextRequest extends Message<BuildFullS
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "trigger_description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "event_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "event_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 4, name: "mode", kind: "enum", T: proto3.getEnumType(FullSelfDrivingMode) },
-    { no: 5, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 6, name: "fetch_ci_log_excerpts", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
@@ -514,9 +514,9 @@ export class DismissFullSelfDrivingOutputRequest extends Message<DismissFullSelf
   stableKey = "";
 
   /**
-   * @generated from field: string reason = 4;
+   * @generated from field: optional string reason = 4;
    */
-  reason = "";
+  reason?: string;
 
   constructor(data?: PartialMessage<DismissFullSelfDrivingOutputRequest>) {
     super();
@@ -529,7 +529,7 @@ export class DismissFullSelfDrivingOutputRequest extends Message<DismissFullSelf
     { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "stable_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "reason", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "reason", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DismissFullSelfDrivingOutputRequest {
@@ -554,7 +554,7 @@ export class DismissFullSelfDrivingOutputRequest extends Message<DismissFullSelf
  */
 export class DismissFullSelfDrivingOutputResponse extends Message<DismissFullSelfDrivingOutputResponse> {
   /**
-   * @generated from field: aiserver.v1.FullSelfDrivingFinding finding = 1;
+   * @generated from field: optional aiserver.v1.FullSelfDrivingFinding finding = 1;
    */
   finding?: FullSelfDrivingFinding;
 
@@ -566,7 +566,7 @@ export class DismissFullSelfDrivingOutputResponse extends Message<DismissFullSel
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.DismissFullSelfDrivingOutputResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "finding", kind: "message", T: FullSelfDrivingFinding },
+    { no: 1, name: "finding", kind: "message", T: FullSelfDrivingFinding, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DismissFullSelfDrivingOutputResponse {
@@ -708,7 +708,7 @@ export class FullSelfDrivingAutoApplyConfig extends Message<FullSelfDrivingAutoA
   repoName = "";
 
   /**
-   * @generated from field: google.protobuf.Timestamp created_at = 6;
+   * @generated from field: optional google.protobuf.Timestamp created_at = 6;
    */
   createdAt?: Timestamp;
 
@@ -725,7 +725,7 @@ export class FullSelfDrivingAutoApplyConfig extends Message<FullSelfDrivingAutoA
     { no: 3, name: "scope", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "repo_owner", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "repo_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "created_at", kind: "message", T: Timestamp },
+    { no: 6, name: "created_at", kind: "message", T: Timestamp, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): FullSelfDrivingAutoApplyConfig {
@@ -755,7 +755,7 @@ export class FullSelfDrivingFinding extends Message<FullSelfDrivingFinding> {
   eventId = "";
 
   /**
-   * @generated from field: google.protobuf.Timestamp last_updated_at = 2;
+   * @generated from field: optional google.protobuf.Timestamp last_updated_at = 2;
    */
   lastUpdatedAt?: Timestamp;
 
@@ -795,7 +795,7 @@ export class FullSelfDrivingFinding extends Message<FullSelfDrivingFinding> {
   severity = "";
 
   /**
-   * @generated from field: google.protobuf.Struct payload = 10;
+   * @generated from field: optional google.protobuf.Struct payload = 10;
    */
   payload?: Struct;
 
@@ -838,7 +838,7 @@ export class FullSelfDrivingFinding extends Message<FullSelfDrivingFinding> {
   static readonly typeName = "aiserver.v1.FullSelfDrivingFinding";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "event_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "last_updated_at", kind: "message", T: Timestamp },
+    { no: 2, name: "last_updated_at", kind: "message", T: Timestamp, opt: true },
     { no: 3, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "stable_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
@@ -846,7 +846,7 @@ export class FullSelfDrivingFinding extends Message<FullSelfDrivingFinding> {
     { no: 7, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 8, name: "body", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 9, name: "severity", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "payload", kind: "message", T: Struct },
+    { no: 10, name: "payload", kind: "message", T: Struct, opt: true },
     { no: 11, name: "superseded_by_stable_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 12, name: "superseded_reason", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 13, name: "dismissed_reason", kind: "scalar", T: 9 /* ScalarType.STRING */ },
@@ -912,7 +912,7 @@ export class FullSelfDrivingOutputInput extends Message<FullSelfDrivingOutputInp
   action = "";
 
   /**
-   * @generated from field: google.protobuf.Struct payload = 8;
+   * @generated from field: optional google.protobuf.Struct payload = 8;
    */
   payload?: Struct;
 
@@ -931,7 +931,7 @@ export class FullSelfDrivingOutputInput extends Message<FullSelfDrivingOutputInp
     { no: 5, name: "body", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 6, name: "severity", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 7, name: "action", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "payload", kind: "message", T: Struct },
+    { no: 8, name: "payload", kind: "message", T: Struct, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): FullSelfDrivingOutputInput {
@@ -956,7 +956,7 @@ export class FullSelfDrivingOutputInput extends Message<FullSelfDrivingOutputInp
  */
 export class FullSelfDrivingPrScopedSuggestion extends Message<FullSelfDrivingPrScopedSuggestion> {
   /**
-   * @generated from field: aiserver.v1.FullSelfDrivingFinding finding = 1;
+   * @generated from field: optional aiserver.v1.FullSelfDrivingFinding finding = 1;
    */
   finding?: FullSelfDrivingFinding;
 
@@ -976,9 +976,9 @@ export class FullSelfDrivingPrScopedSuggestion extends Message<FullSelfDrivingPr
   createdByUserId = protoInt64.zero;
 
   /**
-   * @generated from field: int64 created_by_team_id = 5;
+   * @generated from field: optional int64 created_by_team_id = 5;
    */
-  createdByTeamId = protoInt64.zero;
+  createdByTeamId?: bigint;
 
   constructor(data?: PartialMessage<FullSelfDrivingPrScopedSuggestion>) {
     super();
@@ -988,11 +988,11 @@ export class FullSelfDrivingPrScopedSuggestion extends Message<FullSelfDrivingPr
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.FullSelfDrivingPrScopedSuggestion";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "finding", kind: "message", T: FullSelfDrivingFinding },
+    { no: 1, name: "finding", kind: "message", T: FullSelfDrivingFinding, opt: true },
     { no: 2, name: "producer", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "producer_run_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "created_by_user_id", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 5, name: "created_by_team_id", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
+    { no: 5, name: "created_by_team_id", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): FullSelfDrivingPrScopedSuggestion {
@@ -1027,12 +1027,12 @@ export class FullSelfDrivingRun extends Message<FullSelfDrivingRun> {
   status = "";
 
   /**
-   * @generated from field: google.protobuf.Timestamp created_at = 3;
+   * @generated from field: optional google.protobuf.Timestamp created_at = 3;
    */
   createdAt?: Timestamp;
 
   /**
-   * @generated from field: google.protobuf.Timestamp first_finished_at = 4;
+   * @generated from field: optional google.protobuf.Timestamp first_finished_at = 4;
    */
   firstFinishedAt?: Timestamp;
 
@@ -1062,7 +1062,7 @@ export class FullSelfDrivingRun extends Message<FullSelfDrivingRun> {
   activeRunId = "";
 
   /**
-   * @generated from field: aiserver.v1.FullSelfDrivingRunLiveStatus latest_status_update = 10;
+   * @generated from field: optional aiserver.v1.FullSelfDrivingRunLiveStatus latest_status_update = 10;
    */
   latestStatusUpdate?: FullSelfDrivingRunLiveStatus;
 
@@ -1076,14 +1076,14 @@ export class FullSelfDrivingRun extends Message<FullSelfDrivingRun> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "status", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "created_at", kind: "message", T: Timestamp },
-    { no: 4, name: "first_finished_at", kind: "message", T: Timestamp },
+    { no: 3, name: "created_at", kind: "message", T: Timestamp, opt: true },
+    { no: 4, name: "first_finished_at", kind: "message", T: Timestamp, opt: true },
     { no: 5, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 6, name: "auto_branch", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 7, name: "files_changed", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 8, name: "source", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 9, name: "active_run_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "latest_status_update", kind: "message", T: FullSelfDrivingRunLiveStatus },
+    { no: 10, name: "latest_status_update", kind: "message", T: FullSelfDrivingRunLiveStatus, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): FullSelfDrivingRun {
@@ -1123,7 +1123,7 @@ export class FullSelfDrivingRunLiveStatus extends Message<FullSelfDrivingRunLive
   loadingMessages: string[] = [];
 
   /**
-   * @generated from field: google.protobuf.Timestamp updated_at = 4;
+   * @generated from field: optional google.protobuf.Timestamp updated_at = 4;
    */
   updatedAt?: Timestamp;
 
@@ -1138,7 +1138,7 @@ export class FullSelfDrivingRunLiveStatus extends Message<FullSelfDrivingRunLive
     { no: 1, name: "state", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "status", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "loading_messages", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 4, name: "updated_at", kind: "message", T: Timestamp },
+    { no: 4, name: "updated_at", kind: "message", T: Timestamp, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): FullSelfDrivingRunLiveStatus {
@@ -1365,14 +1365,14 @@ export class GetFullSelfDrivingRunSuggestionResponse extends Message<GetFullSelf
  */
 export class ListFullSelfDrivingAutoApplyConfigsRequest extends Message<ListFullSelfDrivingAutoApplyConfigsRequest> {
   /**
-   * @generated from field: string repo_owner = 1;
+   * @generated from field: optional string repo_owner = 1;
    */
-  repoOwner = "";
+  repoOwner?: string;
 
   /**
-   * @generated from field: string repo_name = 2;
+   * @generated from field: optional string repo_name = 2;
    */
-  repoName = "";
+  repoName?: string;
 
   constructor(data?: PartialMessage<ListFullSelfDrivingAutoApplyConfigsRequest>) {
     super();
@@ -1382,8 +1382,8 @@ export class ListFullSelfDrivingAutoApplyConfigsRequest extends Message<ListFull
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ListFullSelfDrivingAutoApplyConfigsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repo_owner", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "repo_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "repo_owner", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "repo_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListFullSelfDrivingAutoApplyConfigsRequest {
@@ -1455,9 +1455,9 @@ export class ListFullSelfDrivingFindingsRequest extends Message<ListFullSelfDriv
   bcId = "";
 
   /**
-   * @generated from field: int32 limit = 3;
+   * @generated from field: optional int32 limit = 3;
    */
-  limit = 0;
+  limit?: number;
 
   /**
    * @generated from field: bool include_superseded = 4;
@@ -1479,7 +1479,7 @@ export class ListFullSelfDrivingFindingsRequest extends Message<ListFullSelfDriv
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 3, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 4, name: "include_superseded", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 5, name: "kinds", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
@@ -1548,9 +1548,9 @@ export class ListFullSelfDrivingPrScopedSuggestionsRequest extends Message<ListF
   prUrl = "";
 
   /**
-   * @generated from field: int32 limit = 2;
+   * @generated from field: optional int32 limit = 2;
    */
-  limit = 0;
+  limit?: number;
 
   /**
    * @generated from field: bool include_superseded = 3;
@@ -1571,7 +1571,7 @@ export class ListFullSelfDrivingPrScopedSuggestionsRequest extends Message<ListF
   static readonly typeName = "aiserver.v1.ListFullSelfDrivingPrScopedSuggestionsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 2, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 3, name: "include_superseded", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 4, name: "kinds", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
@@ -1640,9 +1640,9 @@ export class ListFullSelfDrivingRunsRequest extends Message<ListFullSelfDrivingR
   prUrl = "";
 
   /**
-   * @generated from field: int32 limit = 2;
+   * @generated from field: optional int32 limit = 2;
    */
-  limit = 0;
+  limit?: number;
 
   constructor(data?: PartialMessage<ListFullSelfDrivingRunsRequest>) {
     super();
@@ -1653,7 +1653,7 @@ export class ListFullSelfDrivingRunsRequest extends Message<ListFullSelfDrivingR
   static readonly typeName = "aiserver.v1.ListFullSelfDrivingRunsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 2, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListFullSelfDrivingRunsRequest {
@@ -1725,14 +1725,14 @@ export class PrepareLocalFullSelfDrivingRunRequest extends Message<PrepareLocalF
   mode = FullSelfDrivingMode.UNSPECIFIED;
 
   /**
-   * @generated from field: string trigger_description = 3;
+   * @generated from field: optional string trigger_description = 3;
    */
-  triggerDescription = "";
+  triggerDescription?: string;
 
   /**
-   * @generated from field: string model_id = 4;
+   * @generated from field: optional string model_id = 4;
    */
-  modelId = "";
+  modelId?: string;
 
   constructor(data?: PartialMessage<PrepareLocalFullSelfDrivingRunRequest>) {
     super();
@@ -1744,8 +1744,8 @@ export class PrepareLocalFullSelfDrivingRunRequest extends Message<PrepareLocalF
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "mode", kind: "enum", T: proto3.getEnumType(FullSelfDrivingMode) },
-    { no: 3, name: "trigger_description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "model_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "trigger_description", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "model_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PrepareLocalFullSelfDrivingRunRequest {
@@ -1904,7 +1904,7 @@ export class RecordFullSelfDrivingAutoApplyConfigRequest extends Message<RecordF
  */
 export class RecordFullSelfDrivingAutoApplyConfigResponse extends Message<RecordFullSelfDrivingAutoApplyConfigResponse> {
   /**
-   * @generated from field: aiserver.v1.FullSelfDrivingAutoApplyConfig config = 1;
+   * @generated from field: optional aiserver.v1.FullSelfDrivingAutoApplyConfig config = 1;
    */
   config?: FullSelfDrivingAutoApplyConfig;
 
@@ -1916,7 +1916,7 @@ export class RecordFullSelfDrivingAutoApplyConfigResponse extends Message<Record
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.RecordFullSelfDrivingAutoApplyConfigResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "config", kind: "message", T: FullSelfDrivingAutoApplyConfig },
+    { no: 1, name: "config", kind: "message", T: FullSelfDrivingAutoApplyConfig, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RecordFullSelfDrivingAutoApplyConfigResponse {
@@ -2042,7 +2042,7 @@ export class RecordFullSelfDrivingPrScopedSuggestionRequest extends Message<Reco
   producerRunId = "";
 
   /**
-   * @generated from field: aiserver.v1.FullSelfDrivingOutputInput output = 4;
+   * @generated from field: optional aiserver.v1.FullSelfDrivingOutputInput output = 4;
    */
   output?: FullSelfDrivingOutputInput;
 
@@ -2057,7 +2057,7 @@ export class RecordFullSelfDrivingPrScopedSuggestionRequest extends Message<Reco
     { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "producer", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "producer_run_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "output", kind: "message", T: FullSelfDrivingOutputInput },
+    { no: 4, name: "output", kind: "message", T: FullSelfDrivingOutputInput, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RecordFullSelfDrivingPrScopedSuggestionRequest {
@@ -2082,7 +2082,7 @@ export class RecordFullSelfDrivingPrScopedSuggestionRequest extends Message<Reco
  */
 export class RecordFullSelfDrivingPrScopedSuggestionResponse extends Message<RecordFullSelfDrivingPrScopedSuggestionResponse> {
   /**
-   * @generated from field: aiserver.v1.FullSelfDrivingPrScopedSuggestion suggestion = 1;
+   * @generated from field: optional aiserver.v1.FullSelfDrivingPrScopedSuggestion suggestion = 1;
    */
   suggestion?: FullSelfDrivingPrScopedSuggestion;
 
@@ -2094,7 +2094,7 @@ export class RecordFullSelfDrivingPrScopedSuggestionResponse extends Message<Rec
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.RecordFullSelfDrivingPrScopedSuggestionResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "suggestion", kind: "message", T: FullSelfDrivingPrScopedSuggestion },
+    { no: 1, name: "suggestion", kind: "message", T: FullSelfDrivingPrScopedSuggestion, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RecordFullSelfDrivingPrScopedSuggestionResponse {
@@ -2129,19 +2129,19 @@ export class RunFullSelfDrivingCloudCommandRequest extends Message<RunFullSelfDr
   mode = FullSelfDrivingMode.UNSPECIFIED;
 
   /**
-   * @generated from field: string user_instructions = 3;
+   * @generated from field: optional string user_instructions = 3;
    */
-  userInstructions = "";
+  userInstructions?: string;
 
   /**
-   * @generated from field: string trigger_description = 4;
+   * @generated from field: optional string trigger_description = 4;
    */
-  triggerDescription = "";
+  triggerDescription?: string;
 
   /**
-   * @generated from field: string model_id = 5;
+   * @generated from field: optional string model_id = 5;
    */
-  modelId = "";
+  modelId?: string;
 
   constructor(data?: PartialMessage<RunFullSelfDrivingCloudCommandRequest>) {
     super();
@@ -2153,9 +2153,9 @@ export class RunFullSelfDrivingCloudCommandRequest extends Message<RunFullSelfDr
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "mode", kind: "enum", T: proto3.getEnumType(FullSelfDrivingMode) },
-    { no: 3, name: "user_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "trigger_description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "model_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "user_instructions", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "trigger_description", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "model_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RunFullSelfDrivingCloudCommandRequest {
@@ -2446,14 +2446,14 @@ export class SupersedeFullSelfDrivingOutputRequest extends Message<SupersedeFull
   stableKey = "";
 
   /**
-   * @generated from field: string replacement_stable_key = 4;
+   * @generated from field: optional string replacement_stable_key = 4;
    */
-  replacementStableKey = "";
+  replacementStableKey?: string;
 
   /**
-   * @generated from field: string reason = 5;
+   * @generated from field: optional string reason = 5;
    */
-  reason = "";
+  reason?: string;
 
   constructor(data?: PartialMessage<SupersedeFullSelfDrivingOutputRequest>) {
     super();
@@ -2466,8 +2466,8 @@ export class SupersedeFullSelfDrivingOutputRequest extends Message<SupersedeFull
     { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "stable_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "replacement_stable_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "reason", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "replacement_stable_key", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "reason", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SupersedeFullSelfDrivingOutputRequest {
@@ -2492,7 +2492,7 @@ export class SupersedeFullSelfDrivingOutputRequest extends Message<SupersedeFull
  */
 export class SupersedeFullSelfDrivingOutputResponse extends Message<SupersedeFullSelfDrivingOutputResponse> {
   /**
-   * @generated from field: aiserver.v1.FullSelfDrivingFinding finding = 1;
+   * @generated from field: optional aiserver.v1.FullSelfDrivingFinding finding = 1;
    */
   finding?: FullSelfDrivingFinding;
 
@@ -2504,7 +2504,7 @@ export class SupersedeFullSelfDrivingOutputResponse extends Message<SupersedeFul
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SupersedeFullSelfDrivingOutputResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "finding", kind: "message", T: FullSelfDrivingFinding },
+    { no: 1, name: "finding", kind: "message", T: FullSelfDrivingFinding, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SupersedeFullSelfDrivingOutputResponse {
@@ -2578,7 +2578,7 @@ export class UndoFullSelfDrivingOutputRequest extends Message<UndoFullSelfDrivin
  */
 export class UndoFullSelfDrivingOutputResponse extends Message<UndoFullSelfDrivingOutputResponse> {
   /**
-   * @generated from field: aiserver.v1.FullSelfDrivingFinding finding = 1;
+   * @generated from field: optional aiserver.v1.FullSelfDrivingFinding finding = 1;
    */
   finding?: FullSelfDrivingFinding;
 
@@ -2590,7 +2590,7 @@ export class UndoFullSelfDrivingOutputResponse extends Message<UndoFullSelfDrivi
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.UndoFullSelfDrivingOutputResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "finding", kind: "message", T: FullSelfDrivingFinding },
+    { no: 1, name: "finding", kind: "message", T: FullSelfDrivingFinding, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UndoFullSelfDrivingOutputResponse {
@@ -2670,7 +2670,7 @@ export class UpdateFullSelfDrivingFindingStatusRequest extends Message<UpdateFul
  */
 export class UpdateFullSelfDrivingFindingStatusResponse extends Message<UpdateFullSelfDrivingFindingStatusResponse> {
   /**
-   * @generated from field: aiserver.v1.FullSelfDrivingFinding finding = 1;
+   * @generated from field: optional aiserver.v1.FullSelfDrivingFinding finding = 1;
    */
   finding?: FullSelfDrivingFinding;
 
@@ -2682,7 +2682,7 @@ export class UpdateFullSelfDrivingFindingStatusResponse extends Message<UpdateFu
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.UpdateFullSelfDrivingFindingStatusResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "finding", kind: "message", T: FullSelfDrivingFinding },
+    { no: 1, name: "finding", kind: "message", T: FullSelfDrivingFinding, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateFullSelfDrivingFindingStatusResponse {
@@ -2722,42 +2722,42 @@ export class UpdateFullSelfDrivingOutputRequest extends Message<UpdateFullSelfDr
   stableKey = "";
 
   /**
-   * @generated from field: string title = 4;
+   * @generated from field: optional string title = 4;
    */
-  title = "";
+  title?: string;
 
   /**
-   * @generated from field: string body = 5;
+   * @generated from field: optional string body = 5;
    */
-  body = "";
+  body?: string;
 
   /**
-   * @generated from field: string status = 6;
+   * @generated from field: optional string status = 6;
    */
-  status = "";
+  status?: string;
 
   /**
-   * @generated from field: string severity = 7;
+   * @generated from field: optional string severity = 7;
    */
-  severity = "";
+  severity?: string;
 
   /**
-   * @generated from field: bool clear_severity = 8;
+   * @generated from field: optional bool clear_severity = 8;
    */
-  clearSeverity = false;
+  clearSeverity?: boolean;
 
   /**
-   * @generated from field: string action = 9;
+   * @generated from field: optional string action = 9;
    */
-  action = "";
+  action?: string;
 
   /**
-   * @generated from field: bool clear_action = 10;
+   * @generated from field: optional bool clear_action = 10;
    */
-  clearAction = false;
+  clearAction?: boolean;
 
   /**
-   * @generated from field: google.protobuf.Struct payload = 11;
+   * @generated from field: optional google.protobuf.Struct payload = 11;
    */
   payload?: Struct;
 
@@ -2772,14 +2772,14 @@ export class UpdateFullSelfDrivingOutputRequest extends Message<UpdateFullSelfDr
     { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "bc_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "stable_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "body", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "status", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "severity", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "clear_severity", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 9, name: "action", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "clear_action", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 11, name: "payload", kind: "message", T: Struct },
+    { no: 4, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "body", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "status", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "severity", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "clear_severity", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 9, name: "action", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 10, name: "clear_action", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 11, name: "payload", kind: "message", T: Struct, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateFullSelfDrivingOutputRequest {
@@ -2804,7 +2804,7 @@ export class UpdateFullSelfDrivingOutputRequest extends Message<UpdateFullSelfDr
  */
 export class UpdateFullSelfDrivingOutputResponse extends Message<UpdateFullSelfDrivingOutputResponse> {
   /**
-   * @generated from field: aiserver.v1.FullSelfDrivingFinding finding = 1;
+   * @generated from field: optional aiserver.v1.FullSelfDrivingFinding finding = 1;
    */
   finding?: FullSelfDrivingFinding;
 
@@ -2816,7 +2816,7 @@ export class UpdateFullSelfDrivingOutputResponse extends Message<UpdateFullSelfD
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.UpdateFullSelfDrivingOutputResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "finding", kind: "message", T: FullSelfDrivingFinding },
+    { no: 1, name: "finding", kind: "message", T: FullSelfDrivingFinding, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateFullSelfDrivingOutputResponse {
@@ -2856,9 +2856,9 @@ export class UpdateFullSelfDrivingPrScopedSuggestionStatusRequest extends Messag
   status = "";
 
   /**
-   * @generated from field: string reason = 4;
+   * @generated from field: optional string reason = 4;
    */
-  reason = "";
+  reason?: string;
 
   constructor(data?: PartialMessage<UpdateFullSelfDrivingPrScopedSuggestionStatusRequest>) {
     super();
@@ -2871,7 +2871,7 @@ export class UpdateFullSelfDrivingPrScopedSuggestionStatusRequest extends Messag
     { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "stable_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "status", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "reason", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "reason", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateFullSelfDrivingPrScopedSuggestionStatusRequest {
@@ -2896,7 +2896,7 @@ export class UpdateFullSelfDrivingPrScopedSuggestionStatusRequest extends Messag
  */
 export class UpdateFullSelfDrivingPrScopedSuggestionStatusResponse extends Message<UpdateFullSelfDrivingPrScopedSuggestionStatusResponse> {
   /**
-   * @generated from field: aiserver.v1.FullSelfDrivingPrScopedSuggestion suggestion = 1;
+   * @generated from field: optional aiserver.v1.FullSelfDrivingPrScopedSuggestion suggestion = 1;
    */
   suggestion?: FullSelfDrivingPrScopedSuggestion;
 
@@ -2908,7 +2908,7 @@ export class UpdateFullSelfDrivingPrScopedSuggestionStatusResponse extends Messa
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.UpdateFullSelfDrivingPrScopedSuggestionStatusResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "suggestion", kind: "message", T: FullSelfDrivingPrScopedSuggestion },
+    { no: 1, name: "suggestion", kind: "message", T: FullSelfDrivingPrScopedSuggestion, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateFullSelfDrivingPrScopedSuggestionStatusResponse {

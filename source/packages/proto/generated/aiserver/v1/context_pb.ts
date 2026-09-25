@@ -9,7 +9,7 @@
 // @ts-nocheck
 
 import type { BinaryReadOptions, FieldList, JsonReadOptions, JsonValue, PartialMessage, PlainMessage } from "@bufbuild/protobuf";
-import { Message, proto3, protoInt64 } from "@bufbuild/protobuf";
+import { Message, proto3 } from "@bufbuild/protobuf";
 import { CursorRule, DocumentSymbol, LineRange, Lint, LintSeverity, SimpleRange } from "./utils_pb.ts";
 import { LspSubgraphFullContext } from "./lsp_subgraph_pb.ts";
 import { CppFileDiffHistory } from "./cpp_pb.ts";
@@ -19,7 +19,7 @@ import { CppFileDiffHistory } from "./cpp_pb.ts";
  */
 export class ContextItem extends Message<ContextItem> {
   /**
-   * @generated from field: aiserver.v1.ContextIntent intent = 1;
+   * @generated from field: optional aiserver.v1.ContextIntent intent = 1;
    */
   intent?: ContextIntent;
 
@@ -162,7 +162,7 @@ export class ContextItem extends Message<ContextItem> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ContextItem";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "intent", kind: "message", T: ContextIntent },
+    { no: 1, name: "intent", kind: "message", T: ContextIntent, opt: true },
     { no: 2, name: "file_chunk", kind: "message", T: ContextItem_FileChunk, oneof: "item" },
     { no: 3, name: "outline_chunk", kind: "message", T: ContextItem_OutlineChunk, oneof: "item" },
     { no: 4, name: "cmd_k_selection", kind: "message", T: ContextItem_CmdKSelection, oneof: "item" },
@@ -267,7 +267,7 @@ export class ContextItem_OutlineChunk extends Message<ContextItem_OutlineChunk> 
   contents = "";
 
   /**
-   * @generated from field: aiserver.v1.LineRange full_range = 3;
+   * @generated from field: optional aiserver.v1.LineRange full_range = 3;
    */
   fullRange?: LineRange;
 
@@ -281,7 +281,7 @@ export class ContextItem_OutlineChunk extends Message<ContextItem_OutlineChunk> 
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "contents", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "full_range", kind: "message", T: LineRange },
+    { no: 3, name: "full_range", kind: "message", T: LineRange, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ContextItem_OutlineChunk {
@@ -364,9 +364,9 @@ export class ContextItem_CmdKImmediateContext extends Message<ContextItem_CmdKIm
   totalNumberOfLinesInFile = 0;
 
   /**
-   * @generated from field: int32 cell_number = 4;
+   * @generated from field: optional int32 cell_number = 4;
    */
-  cellNumber = 0;
+  cellNumber?: number;
 
   constructor(data?: PartialMessage<ContextItem_CmdKImmediateContext>) {
     super();
@@ -379,7 +379,7 @@ export class ContextItem_CmdKImmediateContext extends Message<ContextItem_CmdKIm
     { no: 1, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "lines", kind: "message", T: ContextItem_CmdKImmediateContext_Line, repeated: true },
     { no: 3, name: "total_number_of_lines_in_file", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 4, name: "cell_number", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 4, name: "cell_number", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ContextItem_CmdKImmediateContext {
@@ -484,22 +484,22 @@ export class ContextItem_CmdKQuery extends Message<ContextItem_CmdKQuery> {
  */
 export class ContextItem_CmdKQueryHistory extends Message<ContextItem_CmdKQueryHistory> {
   /**
-   * @generated from field: aiserver.v1.ContextItem.CmdKQuery query = 1;
+   * @generated from field: optional aiserver.v1.ContextItem.CmdKQuery query = 1;
    */
   query?: ContextItem_CmdKQuery;
 
   /**
-   * @generated from field: aiserver.v1.ContextItem.CmdKImmediateContext immediate_context = 2;
+   * @generated from field: optional aiserver.v1.ContextItem.CmdKImmediateContext immediate_context = 2;
    */
   immediateContext?: ContextItem_CmdKImmediateContext;
 
   /**
-   * @generated from field: aiserver.v1.ContextItem.CmdKSelection selection = 3;
+   * @generated from field: optional aiserver.v1.ContextItem.CmdKSelection selection = 3;
    */
   selection?: ContextItem_CmdKSelection;
 
   /**
-   * @generated from field: aiserver.v1.ContextItem.CmdKQueryHistory query_history = 4;
+   * @generated from field: optional aiserver.v1.ContextItem.CmdKQueryHistory query_history = 4;
    */
   queryHistory?: ContextItem_CmdKQueryHistory;
 
@@ -509,14 +509,14 @@ export class ContextItem_CmdKQueryHistory extends Message<ContextItem_CmdKQueryH
   contextItemHashes: string[] = [];
 
   /**
-   * @generated from field: int64 timestamp = 6;
+   * @generated from field: optional int64 timestamp = 6;
    */
-  timestamp = protoInt64.zero;
+  timestamp?: bigint;
 
   /**
-   * @generated from field: double timestamp_double = 7;
+   * @generated from field: optional double timestamp_double = 7;
    */
-  timestampDouble = 0;
+  timestampDouble?: number;
 
   constructor(data?: PartialMessage<ContextItem_CmdKQueryHistory>) {
     super();
@@ -526,13 +526,13 @@ export class ContextItem_CmdKQueryHistory extends Message<ContextItem_CmdKQueryH
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ContextItem.CmdKQueryHistory";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "query", kind: "message", T: ContextItem_CmdKQuery },
-    { no: 2, name: "immediate_context", kind: "message", T: ContextItem_CmdKImmediateContext },
-    { no: 3, name: "selection", kind: "message", T: ContextItem_CmdKSelection },
-    { no: 4, name: "query_history", kind: "message", T: ContextItem_CmdKQueryHistory },
+    { no: 1, name: "query", kind: "message", T: ContextItem_CmdKQuery, opt: true },
+    { no: 2, name: "immediate_context", kind: "message", T: ContextItem_CmdKImmediateContext, opt: true },
+    { no: 3, name: "selection", kind: "message", T: ContextItem_CmdKSelection, opt: true },
+    { no: 4, name: "query_history", kind: "message", T: ContextItem_CmdKQueryHistory, opt: true },
     { no: 5, name: "context_item_hashes", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 6, name: "timestamp", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 7, name: "timestamp_double", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
+    { no: 6, name: "timestamp", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
+    { no: 7, name: "timestamp_double", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ContextItem_CmdKQueryHistory {
@@ -614,7 +614,7 @@ export class ContextItem_GoToDefinitionResult extends Message<ContextItem_GoToDe
   columnNumber = 0;
 
   /**
-   * @generated from field: aiserver.v1.ContextItem.FileChunk definition_chunk = 5;
+   * @generated from field: optional aiserver.v1.ContextItem.FileChunk definition_chunk = 5;
    */
   definitionChunk?: ContextItem_FileChunk;
 
@@ -630,7 +630,7 @@ export class ContextItem_GoToDefinitionResult extends Message<ContextItem_GoToDe
     { no: 2, name: "line", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "line_number", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 4, name: "column_number", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 5, name: "definition_chunk", kind: "message", T: ContextItem_FileChunk },
+    { no: 5, name: "definition_chunk", kind: "message", T: ContextItem_FileChunk, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ContextItem_GoToDefinitionResult {
@@ -812,7 +812,7 @@ export class ContextItem_ChatHistory extends Message<ContextItem_ChatHistory> {
   assistantResponse = "";
 
   /**
-   * @generated from field: aiserver.v1.ContextItem.ChatHistory chat_history = 3;
+   * @generated from field: optional aiserver.v1.ContextItem.ChatHistory chat_history = 3;
    */
   chatHistory?: ContextItem_ChatHistory;
 
@@ -822,14 +822,14 @@ export class ContextItem_ChatHistory extends Message<ContextItem_ChatHistory> {
   activeForCmdK = false;
 
   /**
-   * @generated from field: int64 timestamp = 5;
+   * @generated from field: optional int64 timestamp = 5;
    */
-  timestamp = protoInt64.zero;
+  timestamp?: bigint;
 
   /**
-   * @generated from field: double timestamp_double = 6;
+   * @generated from field: optional double timestamp_double = 6;
    */
-  timestampDouble = 0;
+  timestampDouble?: number;
 
   constructor(data?: PartialMessage<ContextItem_ChatHistory>) {
     super();
@@ -841,10 +841,10 @@ export class ContextItem_ChatHistory extends Message<ContextItem_ChatHistory> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "user_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "assistant_response", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "chat_history", kind: "message", T: ContextItem_ChatHistory },
+    { no: 3, name: "chat_history", kind: "message", T: ContextItem_ChatHistory, opt: true },
     { no: 4, name: "active_for_cmd_k", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "timestamp", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 6, name: "timestamp_double", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
+    { no: 5, name: "timestamp", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
+    { no: 6, name: "timestamp_double", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ContextItem_ChatHistory {
@@ -938,14 +938,14 @@ export class ContextItem_TerminalHistory extends Message<ContextItem_TerminalHis
   cwdRelativeWorkspacePath = "";
 
   /**
-   * @generated from field: int64 timestamp = 7;
+   * @generated from field: optional int64 timestamp = 7;
    */
-  timestamp = protoInt64.zero;
+  timestamp?: bigint;
 
   /**
-   * @generated from field: double timestamp_double = 8;
+   * @generated from field: optional double timestamp_double = 8;
    */
-  timestampDouble = 0;
+  timestampDouble?: number;
 
   constructor(data?: PartialMessage<ContextItem_TerminalHistory>) {
     super();
@@ -959,8 +959,8 @@ export class ContextItem_TerminalHistory extends Message<ContextItem_TerminalHis
     { no: 4, name: "active_for_cmd_k", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 5, name: "cwd_full", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 6, name: "cwd_relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "timestamp", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 8, name: "timestamp_double", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
+    { no: 7, name: "timestamp", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
+    { no: 8, name: "timestamp_double", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ContextItem_TerminalHistory {
@@ -1022,12 +1022,12 @@ export class ContextItem_TerminalCmdKQuery extends Message<ContextItem_TerminalC
  */
 export class ContextItem_TerminalCmdKQueryHistory extends Message<ContextItem_TerminalCmdKQueryHistory> {
   /**
-   * @generated from field: aiserver.v1.ContextItem.TerminalCmdKQuery query = 1;
+   * @generated from field: optional aiserver.v1.ContextItem.TerminalCmdKQuery query = 1;
    */
   query?: ContextItem_TerminalCmdKQuery;
 
   /**
-   * @generated from field: aiserver.v1.ContextItem.TerminalCmdKQueryHistory query_history = 2;
+   * @generated from field: optional aiserver.v1.ContextItem.TerminalCmdKQueryHistory query_history = 2;
    */
   queryHistory?: ContextItem_TerminalCmdKQueryHistory;
 
@@ -1049,8 +1049,8 @@ export class ContextItem_TerminalCmdKQueryHistory extends Message<ContextItem_Te
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ContextItem.TerminalCmdKQueryHistory";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "query", kind: "message", T: ContextItem_TerminalCmdKQuery },
-    { no: 2, name: "query_history", kind: "message", T: ContextItem_TerminalCmdKQueryHistory },
+    { no: 1, name: "query", kind: "message", T: ContextItem_TerminalCmdKQuery, opt: true },
+    { no: 2, name: "query_history", kind: "message", T: ContextItem_TerminalCmdKQueryHistory, opt: true },
     { no: 5, name: "context_item_hashes", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 6, name: "suggested_command", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
@@ -1092,9 +1092,9 @@ export class ContextItem_SparseFileChunk extends Message<ContextItem_SparseFileC
   totalNumberOfLinesInFile = 0;
 
   /**
-   * @generated from field: int32 cell_number = 4;
+   * @generated from field: optional int32 cell_number = 4;
    */
-  cellNumber = 0;
+  cellNumber?: number;
 
   constructor(data?: PartialMessage<ContextItem_SparseFileChunk>) {
     super();
@@ -1107,7 +1107,7 @@ export class ContextItem_SparseFileChunk extends Message<ContextItem_SparseFileC
     { no: 1, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "lines", kind: "message", T: ContextItem_SparseFileChunk_Line, repeated: true },
     { no: 3, name: "total_number_of_lines_in_file", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 4, name: "cell_number", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 4, name: "cell_number", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ContextItem_SparseFileChunk {
@@ -1175,7 +1175,7 @@ export class ContextItem_SparseFileChunk_Line extends Message<ContextItem_Sparse
  */
 export class ContextItem_LspSubgraphChunk extends Message<ContextItem_LspSubgraphChunk> {
   /**
-   * @generated from field: aiserver.v1.LspSubgraphFullContext lsp_subgraph_full_context = 1;
+   * @generated from field: optional aiserver.v1.LspSubgraphFullContext lsp_subgraph_full_context = 1;
    */
   lspSubgraphFullContext?: LspSubgraphFullContext;
 
@@ -1187,7 +1187,7 @@ export class ContextItem_LspSubgraphChunk extends Message<ContextItem_LspSubgrap
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ContextItem.LspSubgraphChunk";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "lsp_subgraph_full_context", kind: "message", T: LspSubgraphFullContext },
+    { no: 1, name: "lsp_subgraph_full_context", kind: "message", T: LspSubgraphFullContext, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ContextItem_LspSubgraphChunk {
@@ -1249,7 +1249,7 @@ export class ContextItem_CommitNoteChunk extends Message<ContextItem_CommitNoteC
  */
 export class ContextItem_FileDiffHistory extends Message<ContextItem_FileDiffHistory> {
   /**
-   * @generated from field: aiserver.v1.CppFileDiffHistory cpp_file_diff_history = 1;
+   * @generated from field: optional aiserver.v1.CppFileDiffHistory cpp_file_diff_history = 1;
    */
   cppFileDiffHistory?: CppFileDiffHistory;
 
@@ -1271,7 +1271,7 @@ export class ContextItem_FileDiffHistory extends Message<ContextItem_FileDiffHis
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ContextItem.FileDiffHistory";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "cpp_file_diff_history", kind: "message", T: CppFileDiffHistory },
+    { no: 1, name: "cpp_file_diff_history", kind: "message", T: CppFileDiffHistory, opt: true },
     { no: 2, name: "how_many_diffs_ago", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 3, name: "is_very_recent", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
@@ -1341,7 +1341,7 @@ export class ContextItem_CmdKQueryHistoryInDiffSession extends Message<ContextIt
  */
 export class ContextItem_CmdKQueryHistoryInDiffSession_PastCmdKQueryInDiffSession extends Message<ContextItem_CmdKQueryHistoryInDiffSession_PastCmdKQueryInDiffSession> {
   /**
-   * @generated from field: aiserver.v1.ContextItem.CmdKQuery query = 1;
+   * @generated from field: optional aiserver.v1.ContextItem.CmdKQuery query = 1;
    */
   query?: ContextItem_CmdKQuery;
 
@@ -1351,9 +1351,9 @@ export class ContextItem_CmdKQueryHistoryInDiffSession_PastCmdKQueryInDiffSessio
   relativeWorkspacePath = "";
 
   /**
-   * @generated from field: bool cmdk_was_accepted = 5;
+   * @generated from field: optional bool cmdk_was_accepted = 5;
    */
-  cmdkWasAccepted = false;
+  cmdkWasAccepted?: boolean;
 
   /**
    * @generated from field: double timestamp_double = 6;
@@ -1361,14 +1361,14 @@ export class ContextItem_CmdKQueryHistoryInDiffSession_PastCmdKQueryInDiffSessio
   timestampDouble = 0;
 
   /**
-   * @generated from field: double timestamp_for_diff_interleaving = 7;
+   * @generated from field: optional double timestamp_for_diff_interleaving = 7;
    */
-  timestampForDiffInterleaving = 0;
+  timestampForDiffInterleaving?: number;
 
   /**
-   * @generated from field: string request_id = 8;
+   * @generated from field: optional string request_id = 8;
    */
-  requestId = "";
+  requestId?: string;
 
   constructor(data?: PartialMessage<ContextItem_CmdKQueryHistoryInDiffSession_PastCmdKQueryInDiffSession>) {
     super();
@@ -1378,12 +1378,12 @@ export class ContextItem_CmdKQueryHistoryInDiffSession_PastCmdKQueryInDiffSessio
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ContextItem.CmdKQueryHistoryInDiffSession.PastCmdKQueryInDiffSession";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "query", kind: "message", T: ContextItem_CmdKQuery },
+    { no: 1, name: "query", kind: "message", T: ContextItem_CmdKQuery, opt: true },
     { no: 2, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "cmdk_was_accepted", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 5, name: "cmdk_was_accepted", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 6, name: "timestamp_double", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 7, name: "timestamp_for_diff_interleaving", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 8, name: "request_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 7, name: "timestamp_for_diff_interleaving", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
+    { no: 8, name: "request_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ContextItem_CmdKQueryHistoryInDiffSession_PastCmdKQueryInDiffSession {
@@ -1681,7 +1681,7 @@ export class ContextIntent_CodeSelection extends Message<ContextIntent_CodeSelec
   relativeWorkspacePath = "";
 
   /**
-   * @generated from field: aiserver.v1.SimpleRange potentially_out_of_date_range = 2;
+   * @generated from field: optional aiserver.v1.SimpleRange potentially_out_of_date_range = 2;
    */
   potentiallyOutOfDateRange?: SimpleRange;
 
@@ -1699,7 +1699,7 @@ export class ContextIntent_CodeSelection extends Message<ContextIntent_CodeSelec
   static readonly typeName = "aiserver.v1.ContextIntent.CodeSelection";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "potentially_out_of_date_range", kind: "message", T: SimpleRange },
+    { no: 2, name: "potentially_out_of_date_range", kind: "message", T: SimpleRange, opt: true },
     { no: 3, name: "text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
@@ -1817,7 +1817,7 @@ export class ContextIntent_Lints_FileScope extends Message<ContextIntent_Lints_F
   relativeWorkspacePath = "";
 
   /**
-   * @generated from field: aiserver.v1.LineRange filter_range = 2;
+   * @generated from field: optional aiserver.v1.LineRange filter_range = 2;
    */
   filterRange?: LineRange;
 
@@ -1830,7 +1830,7 @@ export class ContextIntent_Lints_FileScope extends Message<ContextIntent_Lints_F
   static readonly typeName = "aiserver.v1.ContextIntent.Lints.FileScope";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "filter_range", kind: "message", T: LineRange },
+    { no: 2, name: "filter_range", kind: "message", T: LineRange, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ContextIntent_Lints_FileScope {
@@ -1855,9 +1855,9 @@ export class ContextIntent_Lints_FileScope extends Message<ContextIntent_Lints_F
  */
 export class ContextIntent_RecentLocations extends Message<ContextIntent_RecentLocations> {
   /**
-   * @generated from field: double timestamp = 2;
+   * @generated from field: optional double timestamp = 2;
    */
-  timestamp = 0;
+  timestamp?: number;
 
   constructor(data?: PartialMessage<ContextIntent_RecentLocations>) {
     super();
@@ -1867,7 +1867,7 @@ export class ContextIntent_RecentLocations extends Message<ContextIntent_RecentL
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ContextIntent.RecentLocations";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 2, name: "timestamp", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
+    { no: 2, name: "timestamp", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ContextIntent_RecentLocations {
@@ -2125,9 +2125,9 @@ export class ContextIntent_TerminalHistory extends Message<ContextIntent_Termina
   activeForCmdK = false;
 
   /**
-   * @generated from field: bool use_active_instance_as_fallback = 3;
+   * @generated from field: optional bool use_active_instance_as_fallback = 3;
    */
-  useActiveInstanceAsFallback = false;
+  useActiveInstanceAsFallback?: boolean;
 
   constructor(data?: PartialMessage<ContextIntent_TerminalHistory>) {
     super();
@@ -2139,7 +2139,7 @@ export class ContextIntent_TerminalHistory extends Message<ContextIntent_Termina
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "instance_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 2, name: "active_for_cmd_k", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "use_active_instance_as_fallback", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 3, name: "use_active_instance_as_fallback", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ContextIntent_TerminalHistory {
@@ -2350,7 +2350,7 @@ export class ContextIntent_CodebaseChunks extends Message<ContextIntent_Codebase
  */
 export class ContextIntent_Symbol extends Message<ContextIntent_Symbol> {
   /**
-   * @generated from field: aiserver.v1.DocumentSymbol symbol = 1;
+   * @generated from field: optional aiserver.v1.DocumentSymbol symbol = 1;
    */
   symbol?: DocumentSymbol;
 
@@ -2367,7 +2367,7 @@ export class ContextIntent_Symbol extends Message<ContextIntent_Symbol> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ContextIntent.Symbol";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "symbol", kind: "message", T: DocumentSymbol },
+    { no: 1, name: "symbol", kind: "message", T: DocumentSymbol, opt: true },
     { no: 2, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 

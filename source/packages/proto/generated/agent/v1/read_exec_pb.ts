@@ -26,19 +26,19 @@ export class ReadArgs extends Message<ReadArgs> {
   toolCallId = "";
 
   /**
-   * @generated from field: int32 offset = 4;
+   * @generated from field: optional int32 offset = 4;
    */
-  offset = 0;
+  offset?: number;
 
   /**
-   * @generated from field: uint32 limit = 5;
+   * @generated from field: optional uint32 limit = 5;
    */
-  limit = 0;
+  limit?: number;
 
   /**
-   * @generated from field: string encoding_hint = 6;
+   * @generated from field: optional string encoding_hint = 6;
    */
-  encodingHint = "";
+  encodingHint?: string;
 
   constructor(data?: PartialMessage<ReadArgs>) {
     super();
@@ -50,9 +50,9 @@ export class ReadArgs extends Message<ReadArgs> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "offset", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 5, name: "limit", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 6, name: "encoding_hint", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "offset", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 5, name: "limit", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
+    { no: 6, name: "encoding_hint", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ReadArgs {
@@ -175,9 +175,9 @@ export class ReadSuccess extends Message<ReadSuccess> {
   truncated = false;
 
   /**
-   * @generated from field: bytes output_blob_id = 7;
+   * @generated from field: optional bytes output_blob_id = 7;
    */
-  outputBlobId = new Uint8Array(0);
+  outputBlobId?: Uint8Array;
 
   /**
    * @generated from field: bool range_applied = 8;
@@ -213,7 +213,7 @@ export class ReadSuccess extends Message<ReadSuccess> {
     { no: 3, name: "total_lines", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 4, name: "file_size", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 6, name: "truncated", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 7, name: "output_blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
+    { no: 7, name: "output_blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */, opt: true },
     { no: 8, name: "range_applied", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 2, name: "content", kind: "scalar", T: 9 /* ScalarType.STRING */, oneof: "output" },
     { no: 5, name: "data", kind: "scalar", T: 12 /* ScalarType.BYTES */, oneof: "output" },

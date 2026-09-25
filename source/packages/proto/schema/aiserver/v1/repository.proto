@@ -18,15 +18,15 @@ message RepositoryInfo {
   string repo_owner = 5 [json_name = "repoOwner"];
   bool is_tracked = 6 [json_name = "isTracked"];
   bool is_local = 7 [json_name = "isLocal"];
-  int32 num_files = 8 [json_name = "numFiles"];
-  double orthogonal_transform_seed = 9 [json_name = "orthogonalTransformSeed"];
-  .aiserver.v1.EmbeddingModel preferred_embedding_model = 10 [json_name = "preferredEmbeddingModel"];
+  optional int32 num_files = 8 [json_name = "numFiles"];
+  optional double orthogonal_transform_seed = 9 [json_name = "orthogonalTransformSeed"];
+  optional .aiserver.v1.EmbeddingModel preferred_embedding_model = 10 [json_name = "preferredEmbeddingModel"];
   string workspace_uri = 11 [json_name = "workspaceUri"];
-  .aiserver.v1.DatabaseProvider preferred_db_provider = 12 [json_name = "preferredDbProvider"];
+  optional .aiserver.v1.DatabaseProvider preferred_db_provider = 12 [json_name = "preferredDbProvider"];
 }
 
 message CodeResult {
-  .aiserver.v1.CodeBlock code_block = 1 [json_name = "codeBlock"];
+  optional .aiserver.v1.CodeBlock code_block = 1 [json_name = "codeBlock"];
   float score = 2 [json_name = "score"];
 }
 
@@ -37,18 +37,18 @@ message SearchRepositoryDeepContextResponse {
 }
 
 message NodeResult {
-  .aiserver.v1.IndexFileData.NodeData node = 1 [json_name = "node"];
-  .aiserver.v1.File file = 2 [json_name = "file"];
+  optional .aiserver.v1.IndexFileData.NodeData node = 1 [json_name = "node"];
+  optional .aiserver.v1.File file = 2 [json_name = "file"];
   float score = 3 [json_name = "score"];
 }
 
 message ReflectionResult {
-  .aiserver.v1.ReflectionData reflection = 1 [json_name = "reflection"];
+  optional .aiserver.v1.ReflectionData reflection = 1 [json_name = "reflection"];
   float score = 2 [json_name = "score"];
 }
 
 message FileResult {
-  .aiserver.v1.File file = 1 [json_name = "file"];
+  optional .aiserver.v1.File file = 1 [json_name = "file"];
   float score = 2 [json_name = "score"];
 }
 
@@ -84,13 +84,13 @@ message ClientRepositoryInfo {
 }
 
 message CodeResultWithClassificationInfo {
-  .aiserver.v1.CodeResult code_result = 1 [json_name = "codeResult"];
-  .aiserver.v1.CodeResultWithClassificationInfo.LineNumberClassification line_number_classification = 2 [json_name = "lineNumberClassification"];
+  optional .aiserver.v1.CodeResult code_result = 1 [json_name = "codeResult"];
+  optional .aiserver.v1.CodeResultWithClassificationInfo.LineNumberClassification line_number_classification = 2 [json_name = "lineNumberClassification"];
   message LineNumberClassification {
-    .aiserver.v1.DetailedLine detailed_line = 1 [json_name = "detailedLine"];
+    optional .aiserver.v1.DetailedLine detailed_line = 1 [json_name = "detailedLine"];
     string query_computed_for = 2 [json_name = "queryComputedFor"];
     repeated string matched_strings = 3 [json_name = "matchedStrings"];
-    .aiserver.v1.SimpleRange highlight_range = 4 [json_name = "highlightRange"];
+    optional .aiserver.v1.SimpleRange highlight_range = 4 [json_name = "highlightRange"];
   }
 }
 
@@ -101,14 +101,14 @@ enum DatabaseProvider {
 }
 
 message EnsureIndexCreatedRequest {
-  .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
+  optional .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
 }
 
 message EnsureIndexCreatedResponse {
 }
 
 message FastRepoInitHandshakeRequest {
-  .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
+  optional .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
   string root_hash = 2 [json_name = "rootHash"];
   string potential_legacy_repo_name = 3 [json_name = "potentialLegacyRepoName"];
 }
@@ -126,7 +126,7 @@ message FastRepoInitHandshakeResponse {
 }
 
 message FastRepoInitHandshakeV2Request {
-  .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
+  optional .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
   string root_hash = 2 [json_name = "rootHash"];
   .aiserver.v1.SimilarityMetricType similarity_metric_type = 3 [json_name = "similarityMetricType"];
   repeated float similarity_metric = 4 [json_name = "similarityMetric"];
@@ -134,7 +134,7 @@ message FastRepoInitHandshakeV2Request {
   .aiserver.v1.PathKeyHashType path_key_hash_type = 6 [json_name = "pathKeyHashType"];
   bool do_copy = 7 [json_name = "doCopy"];
   string path_key = 8 [json_name = "pathKey"];
-  .aiserver.v1.LocalCodebaseFileInfo local_codebase_root_info = 9 [json_name = "localCodebaseRootInfo"];
+  optional .aiserver.v1.LocalCodebaseFileInfo local_codebase_root_info = 9 [json_name = "localCodebaseRootInfo"];
   bool return_after_background_copy_started = 10 [json_name = "returnAfterBackgroundCopyStarted"];
 }
 
@@ -156,7 +156,7 @@ message FastRepoSyncCompleteResponse {
 }
 
 message FastUpdateFileRequest {
-  .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
+  optional .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
   repeated .aiserver.v1.PartialPathItem ancestor_spline = 4 [json_name = "ancestorSpline"];
   .aiserver.v1.FastUpdateFileRequest.UpdateType update_type = 5 [json_name = "updateType"];
   oneof partial_path {
@@ -164,7 +164,7 @@ message FastUpdateFileRequest {
     .aiserver.v1.FastUpdateFileRequest.LocalFile local_file = 3 [json_name = "localFile"];
   }
   message LocalFile {
-    .aiserver.v1.File file = 1 [json_name = "file"];
+    optional .aiserver.v1.File file = 1 [json_name = "file"];
     string hash = 2 [json_name = "hash"];
     string unencrypted_relative_workspace_path = 3 [json_name = "unencryptedRelativeWorkspacePath"];
   }
@@ -187,7 +187,7 @@ message FastUpdateFileResponse {
 }
 
 message FastUpdateFileV2Request {
-  .aiserver.v1.ClientRepositoryInfo client_repository_info = 1 [json_name = "clientRepositoryInfo"];
+  optional .aiserver.v1.ClientRepositoryInfo client_repository_info = 1 [json_name = "clientRepositoryInfo"];
   string codebase_id = 2 [json_name = "codebaseId"];
   repeated .aiserver.v1.PartialPathItem ancestor_spline = 5 [json_name = "ancestorSpline"];
   .aiserver.v1.FastUpdateFileV2Request.UpdateType update_type = 6 [json_name = "updateType"];
@@ -205,7 +205,7 @@ message FastUpdateFileV2Request {
     }
   }
   message LocalFile {
-    .aiserver.v1.File file = 1 [json_name = "file"];
+    optional .aiserver.v1.File file = 1 [json_name = "file"];
     string hash = 2 [json_name = "hash"];
     string unencrypted_relative_workspace_path = 3 [json_name = "unencryptedRelativeWorkspacePath"];
   }
@@ -229,7 +229,7 @@ message FastUpdateFileV2Response {
 }
 
 message FinishUpdateRepoRequest {
-  .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
+  optional .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
 }
 
 message FinishUpdateRepoResponse {
@@ -242,7 +242,7 @@ message FinishUpdateRepoResponse {
 }
 
 message FinishUploadRepoRequest {
-  .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
+  optional .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
 }
 
 message FinishUploadRepoResponse {
@@ -255,7 +255,7 @@ message FinishUploadRepoResponse {
 }
 
 message GetAvailableChunkingStrategiesRequest {
-  .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
+  optional .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
 }
 
 message GetAvailableChunkingStrategiesResponse {
@@ -271,7 +271,7 @@ message GetCopyStatusResponse {
   .aiserver.v1.GetCopyStatusResponse.Phase phase = 1 [json_name = "phase"];
   float percent_done = 2 [json_name = "percentDone"];
   string error_message = 3 [json_name = "errorMessage"];
-  .aiserver.v1.GetCopyStatusResponse.CompletedStatus completed_status = 4 [json_name = "completedStatus"];
+  optional .aiserver.v1.GetCopyStatusResponse.CompletedStatus completed_status = 4 [json_name = "completedStatus"];
   enum CompletedStatus {
     COMPLETED_STATUS_UNSPECIFIED = 0;
     COMPLETED_STATUS_UP_TO_DATE = 1;
@@ -321,11 +321,11 @@ message GetLineNumberClassificationsRequest {
 }
 
 message GetLineNumberClassificationsResponse {
-  .aiserver.v1.CodeResultWithClassificationInfo classified_result = 1 [json_name = "classifiedResult"];
+  optional .aiserver.v1.CodeResultWithClassificationInfo classified_result = 1 [json_name = "classifiedResult"];
 }
 
 message GetNumFilesToSendRequest {
-  .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
+  optional .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
 }
 
 message GetNumFilesToSendResponse {
@@ -333,18 +333,18 @@ message GetNumFilesToSendResponse {
 }
 
 message GetPRIndexingStatusRequest {
-  .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
+  optional .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
 }
 
 message GetPRIndexingStatusResponse {
   .aiserver.v1.GetPRIndexingStatusResponse.Status status = 1 [json_name = "status"];
   float sync_percentage = 2 [json_name = "syncPercentage"];
-  string last_indexed_commit = 3 [json_name = "lastIndexedCommit"];
-  uint32 last_indexed_generation = 4 [json_name = "lastIndexedGeneration"];
-  uint32 total_commits = 5 [json_name = "totalCommits"];
-  float indexing_rate = 6 [json_name = "indexingRate"];
-  int64 last_updated_timestamp = 7 [json_name = "lastUpdatedTimestamp"];
-  uint32 index_version = 8 [json_name = "indexVersion"];
+  optional string last_indexed_commit = 3 [json_name = "lastIndexedCommit"];
+  optional uint32 last_indexed_generation = 4 [json_name = "lastIndexedGeneration"];
+  optional uint32 total_commits = 5 [json_name = "totalCommits"];
+  optional float indexing_rate = 6 [json_name = "indexingRate"];
+  optional int64 last_updated_timestamp = 7 [json_name = "lastUpdatedTimestamp"];
+  optional uint32 index_version = 8 [json_name = "indexVersion"];
   enum Status {
     STATUS_UNSPECIFIED = 0;
     STATUS_EMPTY = 1;
@@ -355,7 +355,7 @@ message GetPRIndexingStatusResponse {
 }
 
 message GetUploadLimitsRequest {
-  .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
+  optional .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
 }
 
 message GetUploadLimitsResponse {
@@ -376,8 +376,8 @@ message IndexedPullRequest {
   uint32 generation = 5 [json_name = "generation"];
   string commit_secret = 6 [json_name = "commitSecret"];
   int64 unix_timestamp = 7 [json_name = "unixTimestamp"];
-  string title = 8 [json_name = "title"];
-  string author = 9 [json_name = "author"];
+  optional string title = 8 [json_name = "title"];
+  optional string author = 9 [json_name = "author"];
 }
 
 message IsLoggedInRequest {
@@ -391,7 +391,7 @@ message LocalCodebaseFileInfo {
   string encrypted_relative_path = 1 [json_name = "encryptedRelativePath"];
   string hash = 2 [json_name = "hash"];
   repeated .aiserver.v1.LocalCodebaseFileInfo children = 3 [json_name = "children"];
-  string separator = 4 [json_name = "separator"];
+  optional string separator = 4 [json_name = "separator"];
 }
 
 message LoginRequest {
@@ -444,8 +444,8 @@ message PollLoginResponse {
 }
 
 message QueryOnlyRepositoryInfo {
-  .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
-  .aiserver.v1.QueryOnlyRepoAccess query_only_repo_access = 2 [json_name = "queryOnlyRepoAccess"];
+  optional .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
+  optional .aiserver.v1.QueryOnlyRepoAccess query_only_repo_access = 2 [json_name = "queryOnlyRepoAccess"];
 }
 
 enum RechunkerChoice {
@@ -457,7 +457,7 @@ enum RechunkerChoice {
 }
 
 message RemoveRepoHistoryRequest {
-  .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
+  optional .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
 }
 
 message RemoveRepoHistoryResponse {
@@ -472,7 +472,7 @@ message RemoveRepoHistoryResponse {
 }
 
 message RemoveRepositoryRequest {
-  .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
+  optional .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
 }
 
 message RemoveRepositoryResponse {
@@ -488,26 +488,26 @@ message RemoveRepositoryResponse {
 
 message RepoHistoryInfo {
   string history_id = 1 [json_name = "historyId"];
-  string branch_name = 2 [json_name = "branchName"];
-  string last_indexed_commit = 3 [json_name = "lastIndexedCommit"];
-  uint32 last_indexed_commit_generation = 4 [json_name = "lastIndexedCommitGeneration"];
-  bytes sync_bitmap = 5 [json_name = "syncBitmap"];
+  optional string branch_name = 2 [json_name = "branchName"];
+  optional string last_indexed_commit = 3 [json_name = "lastIndexedCommit"];
+  optional uint32 last_indexed_commit_generation = 4 [json_name = "lastIndexedCommitGeneration"];
+  optional bytes sync_bitmap = 5 [json_name = "syncBitmap"];
 }
 
 message RepoHistoryInitHandshakeRequest {
-  .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
+  optional .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
   string origin = 2 [json_name = "origin"];
-  string test_origin_commit = 3 [json_name = "testOriginCommit"];
-  string test_origin_commit_secret = 4 [json_name = "testOriginCommitSecret"];
-  bool send_copy_candidates = 5 [json_name = "sendCopyCandidates"];
+  optional string test_origin_commit = 3 [json_name = "testOriginCommit"];
+  optional string test_origin_commit_secret = 4 [json_name = "testOriginCommitSecret"];
+  optional bool send_copy_candidates = 5 [json_name = "sendCopyCandidates"];
 }
 
 message RepoHistoryInitHandshakeResponse {
   .aiserver.v1.RepoHistoryInitHandshakeResponse.Status status = 1 [json_name = "status"];
   repeated .aiserver.v1.RepoHistoryInfo histories = 2 [json_name = "histories"];
-  string copy_candidate_nonce = 3 [json_name = "copyCandidateNonce"];
+  optional string copy_candidate_nonce = 3 [json_name = "copyCandidateNonce"];
   repeated string copy_candidates = 4 [json_name = "copyCandidates"];
-  string error_message = 5 [json_name = "errorMessage"];
+  optional string error_message = 5 [json_name = "errorMessage"];
   enum Status {
     STATUS_UNSPECIFIED = 0;
     STATUS_FAILURE = 1;
@@ -529,9 +529,9 @@ message RepoHistorySyncCompleteRequest {
   message SyncedHistory {
     string history_id = 1 [json_name = "historyId"];
     .aiserver.v1.RepoHistorySyncCompleteRequest.Status status = 2 [json_name = "status"];
-    string last_indexed_commit = 3 [json_name = "lastIndexedCommit"];
-    string last_indexed_commit_secret = 4 [json_name = "lastIndexedCommitSecret"];
-    uint32 last_indexed_commit_generation = 5 [json_name = "lastIndexedCommitGeneration"];
+    optional string last_indexed_commit = 3 [json_name = "lastIndexedCommit"];
+    optional string last_indexed_commit_secret = 4 [json_name = "lastIndexedCommitSecret"];
+    optional uint32 last_indexed_commit_generation = 5 [json_name = "lastIndexedCommitGeneration"];
   }
 }
 
@@ -565,7 +565,7 @@ message RepositoriesResponse {
 message RepositoryCodebaseInfo {
   string codebase_id = 1 [json_name = "codebaseId"];
   .aiserver.v1.RepositoryCodebaseInfo.Status status = 2 [json_name = "status"];
-  .aiserver.v1.QueryOnlyRepositoryInfo query_only_similar_repo = 3 [json_name = "queryOnlySimilarRepo"];
+  optional .aiserver.v1.QueryOnlyRepositoryInfo query_only_similar_repo = 3 [json_name = "queryOnlySimilarRepo"];
   string copy_task_handle = 4 [json_name = "copyTaskHandle"];
   enum Status {
     STATUS_UNSPECIFIED = 0;
@@ -599,11 +599,11 @@ message RepositoryCodebaseSyncStatus {
 }
 
 message RepositoryStatusRequest {
-  .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
+  optional .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
 }
 
 message RepositoryStatusResponse {
-  bool is_owner = 9 [json_name = "isOwner"];
+  optional bool is_owner = 9 [json_name = "isOwner"];
   oneof status {
     .aiserver.v1.RepositoryStatusResponse.NotFound not_found = 1 [json_name = "notFound"];
     .aiserver.v1.RepositoryStatusResponse.Uploading uploading = 2 [json_name = "uploading"];
@@ -661,23 +661,23 @@ enum RerankerAlgorithm {
 }
 
 message SearchPRHistoryRequest {
-  .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
+  optional .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
   string query = 2 [json_name = "query"];
   int32 top_k = 3 [json_name = "topK"];
 }
 
 message SearchPRHistoryResponse {
   repeated .aiserver.v1.SearchPRHistoryResponse.PRSearchResult results = 1 [json_name = "results"];
-  uint32 git_height = 2 [json_name = "gitHeight"];
+  optional uint32 git_height = 2 [json_name = "gitHeight"];
   message PRSearchResult {
     string commit_hash = 1 [json_name = "commitHash"];
     float score = 2 [json_name = "score"];
     repeated .aiserver.v1.PRDiffChunkPointer diff_chunks = 3 [json_name = "diffChunks"];
-    string title = 4 [json_name = "title"];
-    string summary = 5 [json_name = "summary"];
-    uint32 pr_number = 6 [json_name = "prNumber"];
-    string author = 7 [json_name = "author"];
-    string date = 8 [json_name = "date"];
+    optional string title = 4 [json_name = "title"];
+    optional string summary = 5 [json_name = "summary"];
+    optional uint32 pr_number = 6 [json_name = "prNumber"];
+    optional string author = 7 [json_name = "author"];
+    optional string date = 8 [json_name = "date"];
     repeated string changed_files = 9 [json_name = "changedFiles"];
   }
 }
@@ -693,15 +693,15 @@ message SearchRepositoryDeepContextRequest {
 
 message SearchRepositoryRequest {
   string query = 1 [json_name = "query"];
-  .aiserver.v1.RepositoryInfo repository = 2 [json_name = "repository"];
+  optional .aiserver.v1.RepositoryInfo repository = 2 [json_name = "repository"];
   int32 top_k = 3 [json_name = "topK"];
-  .aiserver.v1.ModelDetails model_details = 4 [json_name = "modelDetails"];
+  optional .aiserver.v1.ModelDetails model_details = 4 [json_name = "modelDetails"];
   bool rerank = 5 [json_name = "rerank"];
-  bool context_cache_request = 6 [json_name = "contextCacheRequest"];
-  string glob_filter = 7 [json_name = "globFilter"];
-  string not_glob_filter = 8 [json_name = "notGlobFilter"];
-  int32 race_n_requests = 9 [json_name = "raceNRequests"];
-  .aiserver.v1.QueryOnlyRepoAccess query_only_repo_access = 10 [json_name = "queryOnlyRepoAccess"];
+  optional bool context_cache_request = 6 [json_name = "contextCacheRequest"];
+  optional string glob_filter = 7 [json_name = "globFilter"];
+  optional string not_glob_filter = 8 [json_name = "notGlobFilter"];
+  optional int32 race_n_requests = 9 [json_name = "raceNRequests"];
+  optional .aiserver.v1.QueryOnlyRepoAccess query_only_repo_access = 10 [json_name = "queryOnlyRepoAccess"];
 }
 
 message SearchRepositoryResponse {
@@ -709,18 +709,18 @@ message SearchRepositoryResponse {
 }
 
 message SemSearchRequest {
-  .aiserver.v1.SearchRepositoryRequest request = 1 [json_name = "request"];
+  optional .aiserver.v1.SearchRepositoryRequest request = 1 [json_name = "request"];
 }
 
 message SemSearchResponse {
-  .aiserver.v1.SearchRepositoryResponse response = 1 [json_name = "response"];
-  .aiserver.v1.SemSearchResponse.SemSearchMetadata metadata = 2 [json_name = "metadata"];
+  optional .aiserver.v1.SearchRepositoryResponse response = 1 [json_name = "response"];
+  optional .aiserver.v1.SemSearchResponse.SemSearchMetadata metadata = 2 [json_name = "metadata"];
   repeated .aiserver.v1.CodeResultWithClassificationInfo code_results = 3 [json_name = "codeResults"];
   message SemSearchMetadata {
-    string query_embedding_model = 1 [json_name = "queryEmbeddingModel"];
-    int32 server_side_latency_ms = 2 [json_name = "serverSideLatencyMs"];
-    int32 embed_latency_ms = 3 [json_name = "embedLatencyMs"];
-    int32 knn_latency_ms = 4 [json_name = "knnLatencyMs"];
+    optional string query_embedding_model = 1 [json_name = "queryEmbeddingModel"];
+    optional int32 server_side_latency_ms = 2 [json_name = "serverSideLatencyMs"];
+    optional int32 embed_latency_ms = 3 [json_name = "embedLatencyMs"];
+    optional int32 knn_latency_ms = 4 [json_name = "knnLatencyMs"];
   }
 }
 
@@ -730,7 +730,7 @@ enum SimilarityMetricType {
 }
 
 message StartUpdateRepoRequest {
-  .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
+  optional .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
 }
 
 message StartUpdateRepoResponse {
@@ -745,7 +745,7 @@ message StartUpdateRepoResponse {
 }
 
 message StartUploadRepoRequest {
-  .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
+  optional .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
 }
 
 message StartUploadRepoResponse {
@@ -760,7 +760,7 @@ message StartUploadRepoResponse {
 }
 
 message SubscribeRepositoryRequest {
-  .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
+  optional .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
 }
 
 message SubscribeRepositoryResponse {
@@ -775,8 +775,8 @@ message SubscribeRepositoryResponse {
 }
 
 message SyncMerkleSubtreeRequest {
-  .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
-  .aiserver.v1.PartialPathItem local_partial_path = 2 [json_name = "localPartialPath"];
+  optional .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
+  optional .aiserver.v1.PartialPathItem local_partial_path = 2 [json_name = "localPartialPath"];
 }
 
 message SyncMerkleSubtreeResponse {
@@ -790,9 +790,9 @@ message SyncMerkleSubtreeResponse {
 }
 
 message SyncMerkleSubtreeV2Request {
-  .aiserver.v1.ClientRepositoryInfo client_repository_info = 1 [json_name = "clientRepositoryInfo"];
+  optional .aiserver.v1.ClientRepositoryInfo client_repository_info = 1 [json_name = "clientRepositoryInfo"];
   string codebase_id = 2 [json_name = "codebaseId"];
-  .aiserver.v1.PartialPathItem local_partial_path = 3 [json_name = "localPartialPath"];
+  optional .aiserver.v1.PartialPathItem local_partial_path = 3 [json_name = "localPartialPath"];
   repeated .aiserver.v1.PartialPathItem local_partial_paths = 4 [json_name = "localPartialPaths"];
 }
 
@@ -822,7 +822,7 @@ message SyncRepositoryResponse {
 }
 
 message UnsubscribeRepositoryRequest {
-  .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
+  optional .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
 }
 
 message UnsubscribeRepositoryResponse {
@@ -836,9 +836,9 @@ message UnsubscribeRepositoryResponse {
 }
 
 message UpdateFileRequest {
-  .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
-  .aiserver.v1.File added_file = 2 [json_name = "addedFile"];
-  string deleted_file_path = 3 [json_name = "deletedFilePath"];
+  optional .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
+  optional .aiserver.v1.File added_file = 2 [json_name = "addedFile"];
+  optional string deleted_file_path = 3 [json_name = "deletedFilePath"];
   string commit_sha = 4 [json_name = "commitSha"];
   string queue_id = 5 [json_name = "queueId"];
 }
@@ -868,8 +868,8 @@ message UpgradeScopeResponse {
 }
 
 message UploadFileRequest {
-  .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
-  .aiserver.v1.File file = 2 [json_name = "file"];
+  optional .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
+  optional .aiserver.v1.File file = 2 [json_name = "file"];
   string commit_sha = 3 [json_name = "commitSha"];
   string queue_id = 4 [json_name = "queueId"];
 }
@@ -886,7 +886,7 @@ message UploadFileResponse {
 }
 
 message UploadRepositoryRequest {
-  .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
+  optional .aiserver.v1.RepositoryInfo repository = 1 [json_name = "repository"];
 }
 
 message UploadRepositoryResponse {

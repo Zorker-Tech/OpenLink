@@ -111,29 +111,29 @@ export class DebugModeConfig extends Message<DebugModeConfig> {
  */
 export class RequestContextArgs extends Message<RequestContextArgs> {
   /**
-   * @generated from field: string notes_session_id = 2;
+   * @generated from field: optional string notes_session_id = 2;
    */
-  notesSessionId = "";
+  notesSessionId?: string;
 
   /**
-   * @generated from field: string workspace_id = 3;
+   * @generated from field: optional string workspace_id = 3;
    */
-  workspaceId = "";
+  workspaceId?: string;
 
   /**
-   * @generated from field: string read_only_pinned_tree_sha = 4;
+   * @generated from field: optional string read_only_pinned_tree_sha = 4;
    */
-  readOnlyPinnedTreeSha = "";
+  readOnlyPinnedTreeSha?: string;
 
   /**
-   * @generated from field: string read_only_plugin_cache_root = 5;
+   * @generated from field: optional string read_only_plugin_cache_root = 5;
    */
-  readOnlyPluginCacheRoot = "";
+  readOnlyPluginCacheRoot?: string;
 
   /**
-   * @generated from field: bool use_cached = 7;
+   * @generated from field: optional bool use_cached = 7;
    */
-  useCached = false;
+  useCached?: boolean;
 
   constructor(data?: PartialMessage<RequestContextArgs>) {
     super();
@@ -143,11 +143,11 @@ export class RequestContextArgs extends Message<RequestContextArgs> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.RequestContextArgs";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 2, name: "notes_session_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "workspace_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "read_only_pinned_tree_sha", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "read_only_plugin_cache_root", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "use_cached", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "notes_session_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "workspace_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "read_only_pinned_tree_sha", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "read_only_plugin_cache_root", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "use_cached", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RequestContextArgs {
@@ -229,14 +229,14 @@ export class RequestContextResult extends Message<RequestContextResult> {
  */
 export class RequestContextSuccess extends Message<RequestContextSuccess> {
   /**
-   * @generated from field: agent.v1.RequestContext request_context = 1;
+   * @generated from field: optional agent.v1.RequestContext request_context = 1;
    */
   requestContext?: RequestContext;
 
   /**
-   * @generated from field: bool served_from_disk_cache = 2;
+   * @generated from field: optional bool served_from_disk_cache = 2;
    */
-  servedFromDiskCache = false;
+  servedFromDiskCache?: boolean;
 
   constructor(data?: PartialMessage<RequestContextSuccess>) {
     super();
@@ -246,8 +246,8 @@ export class RequestContextSuccess extends Message<RequestContextSuccess> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.RequestContextSuccess";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "request_context", kind: "message", T: RequestContext },
-    { no: 2, name: "served_from_disk_cache", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 1, name: "request_context", kind: "message", T: RequestContext, opt: true },
+    { no: 2, name: "served_from_disk_cache", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RequestContextSuccess {
@@ -351,7 +351,7 @@ export class RequestContext extends Message<RequestContext> {
   rules: CursorRule[] = [];
 
   /**
-   * @generated from field: agent.v1.RequestContextEnv env = 4;
+   * @generated from field: optional agent.v1.RequestContextEnv env = 4;
    */
   env?: RequestContextEnv;
 
@@ -366,14 +366,14 @@ export class RequestContext extends Message<RequestContext> {
   tools: McpToolDefinition[] = [];
 
   /**
-   * @generated from field: string conversation_notes_listing = 8;
+   * @generated from field: optional string conversation_notes_listing = 8;
    */
-  conversationNotesListing = "";
+  conversationNotesListing?: string;
 
   /**
-   * @generated from field: string shared_notes_listing = 9;
+   * @generated from field: optional string shared_notes_listing = 9;
    */
-  sharedNotesListing = "";
+  sharedNotesListing?: string;
 
   /**
    * @generated from field: repeated agent.v1.GitRepoInfo git_repos = 11;
@@ -391,29 +391,29 @@ export class RequestContext extends Message<RequestContext> {
   mcpInstructions: McpInstructions[] = [];
 
   /**
-   * @generated from field: agent.v1.DebugModeConfig debug_mode_config = 15;
+   * @generated from field: optional agent.v1.DebugModeConfig debug_mode_config = 15;
    */
   debugModeConfig?: DebugModeConfig;
 
   /**
-   * @generated from field: string cloud_rule = 16;
+   * @generated from field: optional string cloud_rule = 16;
    */
-  cloudRule = "";
+  cloudRule?: string;
 
   /**
-   * @generated from field: bool web_search_enabled = 17;
+   * @generated from field: optional bool web_search_enabled = 17;
    */
-  webSearchEnabled = false;
+  webSearchEnabled?: boolean;
 
   /**
-   * @generated from field: agent.v1.SkillOptions skill_options = 18;
+   * @generated from field: optional agent.v1.SkillOptions skill_options = 18;
    */
   skillOptions?: SkillOptions;
 
   /**
-   * @generated from field: bool repository_info_should_query_prod = 19;
+   * @generated from field: optional bool repository_info_should_query_prod = 19;
    */
-  repositoryInfoShouldQueryProd = false;
+  repositoryInfoShouldQueryProd?: boolean;
 
   /**
    * @generated from field: map<string, string> file_contents = 20;
@@ -421,9 +421,9 @@ export class RequestContext extends Message<RequestContext> {
   fileContents: { [key: string]: string } = {};
 
   /**
-   * @generated from field: string user_intent_summary = 21;
+   * @generated from field: optional string user_intent_summary = 21;
    */
-  userIntentSummary = "";
+  userIntentSummary?: string;
 
   /**
    * @generated from field: repeated agent.v1.CustomSubagent custom_subagents = 22;
@@ -431,32 +431,32 @@ export class RequestContext extends Message<RequestContext> {
   customSubagents: CustomSubagent[] = [];
 
   /**
-   * @generated from field: agent.v1.McpFileSystemOptions mcp_file_system_options = 23;
+   * @generated from field: optional agent.v1.McpFileSystemOptions mcp_file_system_options = 23;
    */
   mcpFileSystemOptions?: McpFileSystemOptions;
 
   /**
-   * @generated from field: bool web_fetch_enabled = 24;
+   * @generated from field: optional bool web_fetch_enabled = 24;
    */
-  webFetchEnabled = false;
+  webFetchEnabled?: boolean;
 
   /**
-   * @generated from field: string hooks_additional_context = 25;
+   * @generated from field: optional string hooks_additional_context = 25;
    */
-  hooksAdditionalContext = "";
+  hooksAdditionalContext?: string;
 
   /**
-   * @generated from field: string commit_attribution_message = 26;
+   * @generated from field: optional string commit_attribution_message = 26;
    */
-  commitAttributionMessage = "";
+  commitAttributionMessage?: string;
 
   /**
-   * @generated from field: string pr_attribution_message = 27;
+   * @generated from field: optional string pr_attribution_message = 27;
    */
-  prAttributionMessage = "";
+  prAttributionMessage?: string;
 
   /**
-   * @generated from field: agent.v1.HooksConfigInfo hooks_config = 28;
+   * @generated from field: optional agent.v1.HooksConfigInfo hooks_config = 28;
    */
   hooksConfig?: HooksConfigInfo;
 
@@ -471,34 +471,34 @@ export class RequestContext extends Message<RequestContext> {
   precomputedHumanChanges: PrecomputedHumanChange[] = [];
 
   /**
-   * @generated from field: agent.v1.RecentlyAddedPlugin recently_added_plugin = 31;
+   * @generated from field: optional agent.v1.RecentlyAddedPlugin recently_added_plugin = 31;
    */
   recentlyAddedPlugin?: RecentlyAddedPlugin;
 
   /**
-   * @generated from field: bool supports_mcp_auth = 32;
+   * @generated from field: optional bool supports_mcp_auth = 32;
    */
-  supportsMcpAuth = false;
+  supportsMcpAuth?: boolean;
 
   /**
-   * @generated from field: bool git_repo_info_complete = 33;
+   * @generated from field: optional bool git_repo_info_complete = 33;
    */
-  gitRepoInfoComplete = false;
+  gitRepoInfoComplete?: boolean;
 
   /**
-   * @generated from field: agent.v1.McpMetaToolOptions mcp_meta_tool_options = 34;
+   * @generated from field: optional agent.v1.McpMetaToolOptions mcp_meta_tool_options = 34;
    */
   mcpMetaToolOptions?: McpMetaToolOptions;
 
   /**
-   * @generated from field: bool read_lints_enabled = 35;
+   * @generated from field: optional bool read_lints_enabled = 35;
    */
-  readLintsEnabled = false;
+  readLintsEnabled?: boolean;
 
   /**
-   * @generated from field: bool mcp_info_complete = 36;
+   * @generated from field: optional bool mcp_info_complete = 36;
    */
-  mcpInfoComplete = false;
+  mcpInfoComplete?: boolean;
 
   /**
    * @generated from field: repeated agent.v1.CursorRule non_file_rules = 37;
@@ -506,57 +506,57 @@ export class RequestContext extends Message<RequestContext> {
   nonFileRules: CursorRule[] = [];
 
   /**
-   * @generated from field: agent.v1.MatchedInstalledPlugin matched_installed_plugin = 38;
+   * @generated from field: optional agent.v1.MatchedInstalledPlugin matched_installed_plugin = 38;
    */
   matchedInstalledPlugin?: MatchedInstalledPlugin;
 
   /**
-   * @generated from field: bool rules_info_complete = 39;
+   * @generated from field: optional bool rules_info_complete = 39;
    */
-  rulesInfoComplete = false;
+  rulesInfoComplete?: boolean;
 
   /**
-   * @generated from field: bool env_info_complete = 40;
+   * @generated from field: optional bool env_info_complete = 40;
    */
-  envInfoComplete = false;
+  envInfoComplete?: boolean;
 
   /**
-   * @generated from field: bool repository_info_complete = 41;
+   * @generated from field: optional bool repository_info_complete = 41;
    */
-  repositoryInfoComplete = false;
+  repositoryInfoComplete?: boolean;
 
   /**
-   * @generated from field: bool custom_subagents_info_complete = 42;
+   * @generated from field: optional bool custom_subagents_info_complete = 42;
    */
-  customSubagentsInfoComplete = false;
+  customSubagentsInfoComplete?: boolean;
 
   /**
-   * @generated from field: bool agent_skills_info_complete = 43;
+   * @generated from field: optional bool agent_skills_info_complete = 43;
    */
-  agentSkillsInfoComplete = false;
+  agentSkillsInfoComplete?: boolean;
 
   /**
-   * @generated from field: bool mcp_file_system_info_complete = 44;
+   * @generated from field: optional bool mcp_file_system_info_complete = 44;
    */
-  mcpFileSystemInfoComplete = false;
+  mcpFileSystemInfoComplete?: boolean;
 
   /**
-   * @generated from field: bool git_status_info_complete = 45;
+   * @generated from field: optional bool git_status_info_complete = 45;
    */
-  gitStatusInfoComplete = false;
+  gitStatusInfoComplete?: boolean;
 
   /**
-   * @generated from field: agent.v1.PermissionsAutoRunInstructions user_permissions_auto_run = 46;
+   * @generated from field: optional agent.v1.PermissionsAutoRunInstructions user_permissions_auto_run = 46;
    */
   userPermissionsAutoRun?: PermissionsAutoRunInstructions;
 
   /**
-   * @generated from field: agent.v1.PermissionsAutoRunInstructions project_permissions_auto_run = 47;
+   * @generated from field: optional agent.v1.PermissionsAutoRunInstructions project_permissions_auto_run = 47;
    */
   projectPermissionsAutoRun?: PermissionsAutoRunInstructions;
 
   /**
-   * @generated from field: agent.v1.PermissionsAutoRunInstructions admin_permissions_auto_run = 48;
+   * @generated from field: optional agent.v1.PermissionsAutoRunInstructions admin_permissions_auto_run = 48;
    */
   adminPermissionsAutoRun?: PermissionsAutoRunInstructions;
 
@@ -566,14 +566,14 @@ export class RequestContext extends Message<RequestContext> {
   disabledTeamRules: string[] = [];
 
   /**
-   * @generated from field: bool search_conversations_enabled = 50;
+   * @generated from field: optional bool search_conversations_enabled = 50;
    */
-  searchConversationsEnabled = false;
+  searchConversationsEnabled?: boolean;
 
   /**
-   * @generated from field: bool send_message_enabled = 51;
+   * @generated from field: optional bool send_message_enabled = 51;
    */
-  sendMessageEnabled = false;
+  sendMessageEnabled?: boolean;
 
   /**
    * @generated from field: repeated string admin_command_denylist = 52;
@@ -581,7 +581,7 @@ export class RequestContext extends Message<RequestContext> {
   adminCommandDenylist: string[] = [];
 
   /**
-   * @generated from field: agent.v1.SystemPromptSpec system_prompt_override = 53;
+   * @generated from field: optional agent.v1.SystemPromptSpec system_prompt_override = 53;
    */
   systemPromptOverride?: SystemPromptSpec;
 
@@ -594,53 +594,53 @@ export class RequestContext extends Message<RequestContext> {
   static readonly typeName = "agent.v1.RequestContext";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 2, name: "rules", kind: "message", T: CursorRule, repeated: true },
-    { no: 4, name: "env", kind: "message", T: RequestContextEnv },
+    { no: 4, name: "env", kind: "message", T: RequestContextEnv, opt: true },
     { no: 6, name: "repository_info", kind: "message", T: RepositoryIndexingInfo, repeated: true },
     { no: 7, name: "tools", kind: "message", T: McpToolDefinition, repeated: true },
-    { no: 8, name: "conversation_notes_listing", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "shared_notes_listing", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 8, name: "conversation_notes_listing", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 9, name: "shared_notes_listing", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 11, name: "git_repos", kind: "message", T: GitRepoInfo, repeated: true },
     { no: 13, name: "project_layouts", kind: "message", T: LsDirectoryTreeNode, repeated: true },
     { no: 14, name: "mcp_instructions", kind: "message", T: McpInstructions, repeated: true },
-    { no: 15, name: "debug_mode_config", kind: "message", T: DebugModeConfig },
-    { no: 16, name: "cloud_rule", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 17, name: "web_search_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 18, name: "skill_options", kind: "message", T: SkillOptions },
-    { no: 19, name: "repository_info_should_query_prod", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 15, name: "debug_mode_config", kind: "message", T: DebugModeConfig, opt: true },
+    { no: 16, name: "cloud_rule", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 17, name: "web_search_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 18, name: "skill_options", kind: "message", T: SkillOptions, opt: true },
+    { no: 19, name: "repository_info_should_query_prod", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 20, name: "file_contents", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
-    { no: 21, name: "user_intent_summary", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 21, name: "user_intent_summary", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 22, name: "custom_subagents", kind: "message", T: CustomSubagent, repeated: true },
-    { no: 23, name: "mcp_file_system_options", kind: "message", T: McpFileSystemOptions },
-    { no: 24, name: "web_fetch_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 25, name: "hooks_additional_context", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 26, name: "commit_attribution_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 27, name: "pr_attribution_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 28, name: "hooks_config", kind: "message", T: HooksConfigInfo },
+    { no: 23, name: "mcp_file_system_options", kind: "message", T: McpFileSystemOptions, opt: true },
+    { no: 24, name: "web_fetch_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 25, name: "hooks_additional_context", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 26, name: "commit_attribution_message", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 27, name: "pr_attribution_message", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 28, name: "hooks_config", kind: "message", T: HooksConfigInfo, opt: true },
     { no: 29, name: "agent_skills", kind: "message", T: AgentSkill, repeated: true },
     { no: 30, name: "precomputed_human_changes", kind: "message", T: PrecomputedHumanChange, repeated: true },
-    { no: 31, name: "recently_added_plugin", kind: "message", T: RecentlyAddedPlugin },
-    { no: 32, name: "supports_mcp_auth", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 33, name: "git_repo_info_complete", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 34, name: "mcp_meta_tool_options", kind: "message", T: McpMetaToolOptions },
-    { no: 35, name: "read_lints_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 36, name: "mcp_info_complete", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 31, name: "recently_added_plugin", kind: "message", T: RecentlyAddedPlugin, opt: true },
+    { no: 32, name: "supports_mcp_auth", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 33, name: "git_repo_info_complete", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 34, name: "mcp_meta_tool_options", kind: "message", T: McpMetaToolOptions, opt: true },
+    { no: 35, name: "read_lints_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 36, name: "mcp_info_complete", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 37, name: "non_file_rules", kind: "message", T: CursorRule, repeated: true },
-    { no: 38, name: "matched_installed_plugin", kind: "message", T: MatchedInstalledPlugin },
-    { no: 39, name: "rules_info_complete", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 40, name: "env_info_complete", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 41, name: "repository_info_complete", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 42, name: "custom_subagents_info_complete", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 43, name: "agent_skills_info_complete", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 44, name: "mcp_file_system_info_complete", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 45, name: "git_status_info_complete", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 46, name: "user_permissions_auto_run", kind: "message", T: PermissionsAutoRunInstructions },
-    { no: 47, name: "project_permissions_auto_run", kind: "message", T: PermissionsAutoRunInstructions },
-    { no: 48, name: "admin_permissions_auto_run", kind: "message", T: PermissionsAutoRunInstructions },
+    { no: 38, name: "matched_installed_plugin", kind: "message", T: MatchedInstalledPlugin, opt: true },
+    { no: 39, name: "rules_info_complete", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 40, name: "env_info_complete", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 41, name: "repository_info_complete", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 42, name: "custom_subagents_info_complete", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 43, name: "agent_skills_info_complete", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 44, name: "mcp_file_system_info_complete", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 45, name: "git_status_info_complete", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 46, name: "user_permissions_auto_run", kind: "message", T: PermissionsAutoRunInstructions, opt: true },
+    { no: 47, name: "project_permissions_auto_run", kind: "message", T: PermissionsAutoRunInstructions, opt: true },
+    { no: 48, name: "admin_permissions_auto_run", kind: "message", T: PermissionsAutoRunInstructions, opt: true },
     { no: 49, name: "disabled_team_rules", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 50, name: "search_conversations_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 51, name: "send_message_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 50, name: "search_conversations_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 51, name: "send_message_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 52, name: "admin_command_denylist", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 53, name: "system_prompt_override", kind: "message", T: SystemPromptSpec },
+    { no: 53, name: "system_prompt_override", kind: "message", T: SystemPromptSpec, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RequestContext {
@@ -715,19 +715,19 @@ export class RequestContextEnv extends Message<RequestContextEnv> {
   agentTranscriptsFolder = "";
 
   /**
-   * @generated from field: string artifacts_folder = 13;
+   * @generated from field: optional string artifacts_folder = 13;
    */
-  artifactsFolder = "";
+  artifactsFolder?: string;
 
   /**
-   * @generated from field: bool sandbox_supported = 14;
+   * @generated from field: optional bool sandbox_supported = 14;
    */
-  sandboxSupported = false;
+  sandboxSupported?: boolean;
 
   /**
-   * @generated from field: bool sandbox_network_has_defaults = 16;
+   * @generated from field: optional bool sandbox_network_has_defaults = 16;
    */
-  sandboxNetworkHasDefaults = false;
+  sandboxNetworkHasDefaults?: boolean;
 
   /**
    * @generated from field: repeated string sandbox_network_explicit_allowlist = 17;
@@ -735,39 +735,39 @@ export class RequestContextEnv extends Message<RequestContextEnv> {
   sandboxNetworkExplicitAllowlist: string[] = [];
 
   /**
-   * @generated from field: bool secret_redaction_enabled = 18;
+   * @generated from field: optional bool secret_redaction_enabled = 18;
    */
-  secretRedactionEnabled = false;
+  secretRedactionEnabled?: boolean;
 
   /**
-   * @generated from field: bool computer_use_supported = 19;
+   * @generated from field: optional bool computer_use_supported = 19;
    */
-  computerUseSupported = false;
+  computerUseSupported?: boolean;
 
   /**
-   * @generated from field: bool is_working_dir_home_dir = 20;
+   * @generated from field: optional bool is_working_dir_home_dir = 20;
    */
-  isWorkingDirHomeDir = false;
+  isWorkingDirHomeDir?: boolean;
 
   /**
-   * @generated from field: string process_working_directory = 21;
+   * @generated from field: optional string process_working_directory = 21;
    */
-  processWorkingDirectory = "";
+  processWorkingDirectory?: string;
 
   /**
-   * @generated from field: bool smart_mode_classifier_auto_mode_enabled = 22;
+   * @generated from field: optional bool smart_mode_classifier_auto_mode_enabled = 22;
    */
-  smartModeClassifierAutoModeEnabled = false;
+  smartModeClassifierAutoModeEnabled?: boolean;
 
   /**
-   * @generated from field: string dev_force_next_smart_mode_classifier_block_token = 23;
+   * @generated from field: optional string dev_force_next_smart_mode_classifier_block_token = 23;
    */
-  devForceNextSmartModeClassifierBlockToken = "";
+  devForceNextSmartModeClassifierBlockToken?: string;
 
   /**
-   * @generated from field: string dev_delay_next_smart_mode_classifier_token = 24;
+   * @generated from field: optional string dev_delay_next_smart_mode_classifier_token = 24;
    */
-  devDelayNextSmartModeClassifierToken = "";
+  devDelayNextSmartModeClassifierToken?: string;
 
   /**
    * @generated from field: repeated agent.v1.MountedAgentStore mounted_agent_stores = 25;
@@ -792,17 +792,17 @@ export class RequestContextEnv extends Message<RequestContextEnv> {
     { no: 10, name: "time_zone", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 11, name: "project_folder", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 12, name: "agent_transcripts_folder", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 13, name: "artifacts_folder", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 14, name: "sandbox_supported", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 16, name: "sandbox_network_has_defaults", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 13, name: "artifacts_folder", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 14, name: "sandbox_supported", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 16, name: "sandbox_network_has_defaults", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 17, name: "sandbox_network_explicit_allowlist", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 18, name: "secret_redaction_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 19, name: "computer_use_supported", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 20, name: "is_working_dir_home_dir", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 21, name: "process_working_directory", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 22, name: "smart_mode_classifier_auto_mode_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 23, name: "dev_force_next_smart_mode_classifier_block_token", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 24, name: "dev_delay_next_smart_mode_classifier_token", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 18, name: "secret_redaction_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 19, name: "computer_use_supported", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 20, name: "is_working_dir_home_dir", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 21, name: "process_working_directory", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 22, name: "smart_mode_classifier_auto_mode_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 23, name: "dev_force_next_smart_mode_classifier_block_token", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 24, name: "dev_delay_next_smart_mode_classifier_token", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 25, name: "mounted_agent_stores", kind: "message", T: MountedAgentStore, repeated: true },
   ]);
 
@@ -843,19 +843,19 @@ export class GitRepoInfo extends Message<GitRepoInfo> {
   branchName = "";
 
   /**
-   * @generated from field: string remote_url = 4;
+   * @generated from field: optional string remote_url = 4;
    */
-  remoteUrl = "";
+  remoteUrl?: string;
 
   /**
-   * @generated from field: bool previous_branch_is_ancestor = 5;
+   * @generated from field: optional bool previous_branch_is_ancestor = 5;
    */
-  previousBranchIsAncestor = false;
+  previousBranchIsAncestor?: boolean;
 
   /**
-   * @generated from field: bool is_origin_backed = 6;
+   * @generated from field: optional bool is_origin_backed = 6;
    */
-  isOriginBacked = false;
+  isOriginBacked?: boolean;
 
   constructor(data?: PartialMessage<GitRepoInfo>) {
     super();
@@ -868,9 +868,9 @@ export class GitRepoInfo extends Message<GitRepoInfo> {
     { no: 1, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "status", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "remote_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "previous_branch_is_ancestor", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 6, name: "is_origin_backed", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 4, name: "remote_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "previous_branch_is_ancestor", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 6, name: "is_origin_backed", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GitRepoInfo {
@@ -1361,9 +1361,9 @@ export class SkillDescriptor extends Message<SkillDescriptor> {
   enabled = false;
 
   /**
-   * @generated from field: string parse_error = 5;
+   * @generated from field: optional string parse_error = 5;
    */
-  parseError = "";
+  parseError?: string;
 
   /**
    * @generated from field: string readme_file_path = 6;
@@ -1387,7 +1387,7 @@ export class SkillDescriptor extends Message<SkillDescriptor> {
     { no: 2, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "folder_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "parse_error", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "parse_error", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 6, name: "readme_file_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 7, name: "package_type", kind: "enum", T: proto3.getEnumType(PackageType) },
   ]);
@@ -1424,9 +1424,9 @@ export class MountedAgentStore extends Message<MountedAgentStore> {
   kind = MountedAgentStoreKind.UNSPECIFIED;
 
   /**
-   * @generated from field: string alias = 3;
+   * @generated from field: optional string alias = 3;
    */
-  alias = "";
+  alias?: string;
 
   /**
    * @generated from field: bool read_only = 4;
@@ -1443,7 +1443,7 @@ export class MountedAgentStore extends Message<MountedAgentStore> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "kind", kind: "enum", T: proto3.getEnumType(MountedAgentStoreKind) },
-    { no: 3, name: "alias", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "alias", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 4, name: "read_only", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
@@ -1509,7 +1509,7 @@ export class RequestContextPartReferences extends Message<RequestContextPartRefe
   mcpsByteLength = 0;
 
   /**
-   * @generated from field: agent.v1.RequestContext dynamic_context = 9;
+   * @generated from field: optional agent.v1.RequestContext dynamic_context = 9;
    */
   dynamicContext?: RequestContext;
 
@@ -1529,7 +1529,7 @@ export class RequestContextPartReferences extends Message<RequestContextPartRefe
     { no: 6, name: "subagents_byte_length", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
     { no: 7, name: "mcps_blob_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
     { no: 8, name: "mcps_byte_length", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 9, name: "dynamic_context", kind: "message", T: RequestContext },
+    { no: 9, name: "dynamic_context", kind: "message", T: RequestContext, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RequestContextPartReferences {
@@ -1569,14 +1569,14 @@ export class ImageProto extends Message<ImageProto> {
   path = "";
 
   /**
-   * @generated from field: agent.v1.ImageProto.Dimension dimension = 4;
+   * @generated from field: optional agent.v1.ImageProto.Dimension dimension = 4;
    */
   dimension?: ImageProto_Dimension;
 
   /**
-   * @generated from field: string task_specific_description = 6;
+   * @generated from field: optional string task_specific_description = 6;
    */
-  taskSpecificDescription = "";
+  taskSpecificDescription?: string;
 
   /**
    * @generated from field: string mime_type = 7;
@@ -1594,8 +1594,8 @@ export class ImageProto extends Message<ImageProto> {
     { no: 1, name: "data", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
     { no: 2, name: "uuid", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "dimension", kind: "message", T: ImageProto_Dimension },
-    { no: 6, name: "task_specific_description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "dimension", kind: "message", T: ImageProto_Dimension, opt: true },
+    { no: 6, name: "task_specific_description", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 7, name: "mime_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
@@ -1674,12 +1674,12 @@ export class RequestContextMcpsPart extends Message<RequestContextMcpsPart> {
   mcpInstructions: McpInstructions[] = [];
 
   /**
-   * @generated from field: agent.v1.McpFileSystemOptions mcp_file_system_options = 3;
+   * @generated from field: optional agent.v1.McpFileSystemOptions mcp_file_system_options = 3;
    */
   mcpFileSystemOptions?: McpFileSystemOptions;
 
   /**
-   * @generated from field: agent.v1.McpMetaToolOptions mcp_meta_tool_options = 4;
+   * @generated from field: optional agent.v1.McpMetaToolOptions mcp_meta_tool_options = 4;
    */
   mcpMetaToolOptions?: McpMetaToolOptions;
 
@@ -1693,8 +1693,8 @@ export class RequestContextMcpsPart extends Message<RequestContextMcpsPart> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "tools", kind: "message", T: McpToolDefinition, repeated: true },
     { no: 2, name: "mcp_instructions", kind: "message", T: McpInstructions, repeated: true },
-    { no: 3, name: "mcp_file_system_options", kind: "message", T: McpFileSystemOptions },
-    { no: 4, name: "mcp_meta_tool_options", kind: "message", T: McpMetaToolOptions },
+    { no: 3, name: "mcp_file_system_options", kind: "message", T: McpFileSystemOptions, opt: true },
+    { no: 4, name: "mcp_meta_tool_options", kind: "message", T: McpMetaToolOptions, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RequestContextMcpsPart {
@@ -1729,9 +1729,9 @@ export class RequestContextRulesPart extends Message<RequestContextRulesPart> {
   nonFileRules: CursorRule[] = [];
 
   /**
-   * @generated from field: string cloud_rule = 3;
+   * @generated from field: optional string cloud_rule = 3;
    */
-  cloudRule = "";
+  cloudRule?: string;
 
   constructor(data?: PartialMessage<RequestContextRulesPart>) {
     super();
@@ -1743,7 +1743,7 @@ export class RequestContextRulesPart extends Message<RequestContextRulesPart> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "rules", kind: "message", T: CursorRule, repeated: true },
     { no: 2, name: "non_file_rules", kind: "message", T: CursorRule, repeated: true },
-    { no: 3, name: "cloud_rule", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "cloud_rule", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RequestContextRulesPart {
@@ -1773,7 +1773,7 @@ export class RequestContextSkillsPart extends Message<RequestContextSkillsPart> 
   agentSkills: AgentSkill[] = [];
 
   /**
-   * @generated from field: agent.v1.SkillOptions skill_options = 2;
+   * @generated from field: optional agent.v1.SkillOptions skill_options = 2;
    */
   skillOptions?: SkillOptions;
 
@@ -1786,7 +1786,7 @@ export class RequestContextSkillsPart extends Message<RequestContextSkillsPart> 
   static readonly typeName = "agent.v1.RequestContextSkillsPart";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "agent_skills", kind: "message", T: AgentSkill, repeated: true },
-    { no: 2, name: "skill_options", kind: "message", T: SkillOptions },
+    { no: 2, name: "skill_options", kind: "message", T: SkillOptions, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RequestContextSkillsPart {
@@ -1848,14 +1848,14 @@ export class RequestContextSubagentsPart extends Message<RequestContextSubagents
  */
 export class UserGitContext extends Message<UserGitContext> {
   /**
-   * @generated from field: string username = 1;
+   * @generated from field: optional string username = 1;
    */
-  username = "";
+  username?: string;
 
   /**
-   * @generated from field: string email = 2;
+   * @generated from field: optional string email = 2;
    */
-  email = "";
+  email?: string;
 
   constructor(data?: PartialMessage<UserGitContext>) {
     super();
@@ -1865,8 +1865,8 @@ export class UserGitContext extends Message<UserGitContext> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.UserGitContext";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "username", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "email", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "username", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "email", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UserGitContext {

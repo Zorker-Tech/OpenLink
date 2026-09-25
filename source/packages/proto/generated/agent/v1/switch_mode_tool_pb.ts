@@ -134,12 +134,12 @@ export class SwitchModeRequestResponse_Rejected extends Message<SwitchModeReques
  */
 export class SwitchModeToolCall extends Message<SwitchModeToolCall> {
   /**
-   * @generated from field: agent.v1.SwitchModeArgs args = 1;
+   * @generated from field: optional agent.v1.SwitchModeArgs args = 1;
    */
   args?: SwitchModeArgs;
 
   /**
-   * @generated from field: agent.v1.SwitchModeResult result = 2;
+   * @generated from field: optional agent.v1.SwitchModeResult result = 2;
    */
   result?: SwitchModeResult;
 
@@ -151,8 +151,8 @@ export class SwitchModeToolCall extends Message<SwitchModeToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.SwitchModeToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: SwitchModeArgs },
-    { no: 2, name: "result", kind: "message", T: SwitchModeResult },
+    { no: 1, name: "args", kind: "message", T: SwitchModeArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: SwitchModeResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SwitchModeToolCall {
@@ -182,9 +182,9 @@ export class SwitchModeArgs extends Message<SwitchModeArgs> {
   targetModeId = "";
 
   /**
-   * @generated from field: string explanation = 2;
+   * @generated from field: optional string explanation = 2;
    */
-  explanation = "";
+  explanation?: string;
 
   /**
    * @generated from field: string tool_call_id = 3;
@@ -200,7 +200,7 @@ export class SwitchModeArgs extends Message<SwitchModeArgs> {
   static readonly typeName = "agent.v1.SwitchModeArgs";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "target_mode_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "explanation", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "explanation", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
@@ -400,7 +400,7 @@ export class SwitchModeRejected extends Message<SwitchModeRejected> {
  */
 export class SwitchModeRequestQuery extends Message<SwitchModeRequestQuery> {
   /**
-   * @generated from field: agent.v1.SwitchModeArgs args = 1;
+   * @generated from field: optional agent.v1.SwitchModeArgs args = 1;
    */
   args?: SwitchModeArgs;
 
@@ -412,7 +412,7 @@ export class SwitchModeRequestQuery extends Message<SwitchModeRequestQuery> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.SwitchModeRequestQuery";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: SwitchModeArgs },
+    { no: 1, name: "args", kind: "message", T: SwitchModeArgs, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SwitchModeRequestQuery {

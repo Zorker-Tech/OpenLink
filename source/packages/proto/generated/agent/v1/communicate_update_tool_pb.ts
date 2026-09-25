@@ -16,12 +16,12 @@ import { Message, proto3 } from "@bufbuild/protobuf";
  */
 export class CommunicateUpdateToolCall extends Message<CommunicateUpdateToolCall> {
   /**
-   * @generated from field: agent.v1.CommunicateUpdateArgs args = 1;
+   * @generated from field: optional agent.v1.CommunicateUpdateArgs args = 1;
    */
   args?: CommunicateUpdateArgs;
 
   /**
-   * @generated from field: agent.v1.CommunicateUpdateResult result = 2;
+   * @generated from field: optional agent.v1.CommunicateUpdateResult result = 2;
    */
   result?: CommunicateUpdateResult;
 
@@ -33,8 +33,8 @@ export class CommunicateUpdateToolCall extends Message<CommunicateUpdateToolCall
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.CommunicateUpdateToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: CommunicateUpdateArgs },
-    { no: 2, name: "result", kind: "message", T: CommunicateUpdateResult },
+    { no: 1, name: "args", kind: "message", T: CommunicateUpdateArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: CommunicateUpdateResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CommunicateUpdateToolCall {
@@ -59,19 +59,19 @@ export class CommunicateUpdateToolCall extends Message<CommunicateUpdateToolCall
  */
 export class CommunicateUpdateArgs extends Message<CommunicateUpdateArgs> {
   /**
-   * @generated from field: string current_step = 1;
+   * @generated from field: optional string current_step = 1;
    */
-  currentStep = "";
+  currentStep?: string;
 
   /**
-   * @generated from field: string final_summary = 3;
+   * @generated from field: optional string final_summary = 3;
    */
-  finalSummary = "";
+  finalSummary?: string;
 
   /**
-   * @generated from field: string completed_subtitle = 4;
+   * @generated from field: optional string completed_subtitle = 4;
    */
-  completedSubtitle = "";
+  completedSubtitle?: string;
 
   constructor(data?: PartialMessage<CommunicateUpdateArgs>) {
     super();
@@ -81,9 +81,9 @@ export class CommunicateUpdateArgs extends Message<CommunicateUpdateArgs> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.CommunicateUpdateArgs";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "current_step", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "final_summary", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "completed_subtitle", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "current_step", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "final_summary", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "completed_subtitle", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CommunicateUpdateArgs {

@@ -36,16 +36,16 @@ message BackgroundShellSpawnArgs {
   string command = 1 [json_name = "command"];
   string working_directory = 2 [json_name = "workingDirectory"];
   string tool_call_id = 3 [json_name = "toolCallId"];
-  .agent.v1.ShellCommandParsingResult parsing_result = 4 [json_name = "parsingResult"];
-  .agent.v1.SandboxPolicy sandbox_policy = 5 [json_name = "sandboxPolicy"];
+  optional .agent.v1.ShellCommandParsingResult parsing_result = 4 [json_name = "parsingResult"];
+  optional .agent.v1.SandboxPolicy sandbox_policy = 5 [json_name = "sandboxPolicy"];
   bool enable_write_shell_stdin_tool = 6 [json_name = "enableWriteShellStdinTool"];
-  string description = 7 [json_name = "description"];
-  .agent.v1.CommandClassifierResult classifier_result = 8 [json_name = "classifierResult"];
-  .agent.v1.ShellOutputNotificationConfig output_notification = 9 [json_name = "outputNotification"];
-  .agent.v1.SmartModeApproval smart_mode_approval = 10 [json_name = "smartModeApproval"];
-  .agent.v1.ShellHookApprovalRequirement hook_approval_requirement = 11 [json_name = "hookApprovalRequirement"];
+  optional string description = 7 [json_name = "description"];
+  optional .agent.v1.CommandClassifierResult classifier_result = 8 [json_name = "classifierResult"];
+  optional .agent.v1.ShellOutputNotificationConfig output_notification = 9 [json_name = "outputNotification"];
+  optional .agent.v1.SmartModeApproval smart_mode_approval = 10 [json_name = "smartModeApproval"];
+  optional .agent.v1.ShellHookApprovalRequirement hook_approval_requirement = 11 [json_name = "hookApprovalRequirement"];
   bool skip_approval = 12 [json_name = "skipApproval"];
-  string conversation_id = 13 [json_name = "conversationId"];
+  optional string conversation_id = 13 [json_name = "conversationId"];
   repeated string admin_command_denylist = 14 [json_name = "adminCommandDenylist"];
 }
 
@@ -63,7 +63,7 @@ message BackgroundShellSpawnSuccess {
   uint32 shell_id = 1 [json_name = "shellId"];
   string command = 2 [json_name = "command"];
   string working_directory = 3 [json_name = "workingDirectory"];
-  uint32 pid = 4 [json_name = "pid"];
+  optional uint32 pid = 4 [json_name = "pid"];
 }
 
 message BackgroundShellSpawnError {

@@ -8,8 +8,8 @@ syntax = "proto3";
 package agent.v1;
 
 message ReportBugToolCall {
-  .agent.v1.ReportBugArgs args = 1 [json_name = "args"];
-  .agent.v1.ReportBugResult result = 2 [json_name = "result"];
+  optional .agent.v1.ReportBugArgs args = 1 [json_name = "args"];
+  optional .agent.v1.ReportBugResult result = 2 [json_name = "result"];
 }
 
 message ReportBugArgs {

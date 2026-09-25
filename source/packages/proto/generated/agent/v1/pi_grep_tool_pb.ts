@@ -17,12 +17,12 @@ import { PiTruncation } from "./pi_common_pb.ts";
  */
 export class PiGrepToolCall extends Message<PiGrepToolCall> {
   /**
-   * @generated from field: agent.v1.PiGrepToolArgs args = 1;
+   * @generated from field: optional agent.v1.PiGrepToolArgs args = 1;
    */
   args?: PiGrepToolArgs;
 
   /**
-   * @generated from field: agent.v1.PiGrepToolResult result = 2;
+   * @generated from field: optional agent.v1.PiGrepToolResult result = 2;
    */
   result?: PiGrepToolResult;
 
@@ -34,8 +34,8 @@ export class PiGrepToolCall extends Message<PiGrepToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.PiGrepToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: PiGrepToolArgs },
-    { no: 2, name: "result", kind: "message", T: PiGrepToolResult },
+    { no: 1, name: "args", kind: "message", T: PiGrepToolArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: PiGrepToolResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PiGrepToolCall {
@@ -65,34 +65,34 @@ export class PiGrepToolArgs extends Message<PiGrepToolArgs> {
   pattern = "";
 
   /**
-   * @generated from field: string path = 2;
+   * @generated from field: optional string path = 2;
    */
-  path = "";
+  path?: string;
 
   /**
-   * @generated from field: string glob = 3;
+   * @generated from field: optional string glob = 3;
    */
-  glob = "";
+  glob?: string;
 
   /**
-   * @generated from field: bool ignore_case = 4;
+   * @generated from field: optional bool ignore_case = 4;
    */
-  ignoreCase = false;
+  ignoreCase?: boolean;
 
   /**
-   * @generated from field: bool literal = 5;
+   * @generated from field: optional bool literal = 5;
    */
-  literal = false;
+  literal?: boolean;
 
   /**
-   * @generated from field: int32 context = 6;
+   * @generated from field: optional int32 context = 6;
    */
-  context = 0;
+  context?: number;
 
   /**
-   * @generated from field: int32 limit = 7;
+   * @generated from field: optional int32 limit = 7;
    */
-  limit = 0;
+  limit?: number;
 
   constructor(data?: PartialMessage<PiGrepToolArgs>) {
     super();
@@ -103,12 +103,12 @@ export class PiGrepToolArgs extends Message<PiGrepToolArgs> {
   static readonly typeName = "agent.v1.PiGrepToolArgs";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "pattern", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "glob", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "ignore_case", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "literal", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 6, name: "context", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 7, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 2, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "glob", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "ignore_case", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 5, name: "literal", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 6, name: "context", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 7, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PiGrepToolArgs {
@@ -188,14 +188,14 @@ export class PiGrepToolSuccess extends Message<PiGrepToolSuccess> {
   output = "";
 
   /**
-   * @generated from field: agent.v1.PiTruncation truncation = 2;
+   * @generated from field: optional agent.v1.PiTruncation truncation = 2;
    */
   truncation?: PiTruncation;
 
   /**
-   * @generated from field: uint32 match_limit_reached = 3;
+   * @generated from field: optional uint32 match_limit_reached = 3;
    */
-  matchLimitReached = 0;
+  matchLimitReached?: number;
 
   /**
    * @generated from field: bool lines_truncated = 4;
@@ -211,8 +211,8 @@ export class PiGrepToolSuccess extends Message<PiGrepToolSuccess> {
   static readonly typeName = "agent.v1.PiGrepToolSuccess";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "output", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "truncation", kind: "message", T: PiTruncation },
-    { no: 3, name: "match_limit_reached", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 2, name: "truncation", kind: "message", T: PiTruncation, opt: true },
+    { no: 3, name: "match_limit_reached", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
     { no: 4, name: "lines_truncated", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 

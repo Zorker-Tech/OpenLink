@@ -41,9 +41,9 @@ export class WriteArgs extends Message<WriteArgs> {
   fileBytes = new Uint8Array(0);
 
   /**
-   * @generated from field: string encoding_hint = 6;
+   * @generated from field: optional string encoding_hint = 6;
    */
-  encodingHint = "";
+  encodingHint?: string;
 
   constructor(data?: PartialMessage<WriteArgs>) {
     super();
@@ -58,7 +58,7 @@ export class WriteArgs extends Message<WriteArgs> {
     { no: 3, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "return_file_content_after_write", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 5, name: "file_bytes", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
-    { no: 6, name: "encoding_hint", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 6, name: "encoding_hint", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): WriteArgs {
@@ -169,9 +169,9 @@ export class WriteSuccess extends Message<WriteSuccess> {
   fileSize = 0;
 
   /**
-   * @generated from field: string file_content_after_write = 4;
+   * @generated from field: optional string file_content_after_write = 4;
    */
-  fileContentAfterWrite = "";
+  fileContentAfterWrite?: string;
 
   constructor(data?: PartialMessage<WriteSuccess>) {
     super();
@@ -184,7 +184,7 @@ export class WriteSuccess extends Message<WriteSuccess> {
     { no: 1, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "lines_created", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 3, name: "file_size", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 4, name: "file_content_after_write", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "file_content_after_write", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): WriteSuccess {

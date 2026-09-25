@@ -37,18 +37,18 @@ message GenerateImageRequestResponse {
 }
 
 message GenerateImageToolCall {
-  .agent.v1.GenerateImageArgs args = 1 [json_name = "args"];
-  .agent.v1.GenerateImageResult result = 2 [json_name = "result"];
+  optional .agent.v1.GenerateImageArgs args = 1 [json_name = "args"];
+  optional .agent.v1.GenerateImageResult result = 2 [json_name = "result"];
 }
 
 message GenerateImageArgs {
   string description = 1 [json_name = "description"];
-  string file_path = 2 [json_name = "filePath"];
+  optional string file_path = 2 [json_name = "filePath"];
   repeated string reference_image_paths = 5 [json_name = "referenceImagePaths"];
-  string aspect_ratio = 6 [json_name = "aspectRatio"];
+  optional string aspect_ratio = 6 [json_name = "aspectRatio"];
 }
 
 message GenerateImageRequestQuery {
-  .agent.v1.GenerateImageArgs args = 1 [json_name = "args"];
+  optional .agent.v1.GenerateImageArgs args = 1 [json_name = "args"];
   string tool_call_id = 2 [json_name = "toolCallId"];
 }

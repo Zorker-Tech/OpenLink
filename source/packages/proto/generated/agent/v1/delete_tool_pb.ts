@@ -17,12 +17,12 @@ import { DeleteArgs, DeleteResult } from "./delete_exec_pb.ts";
  */
 export class DeleteToolCall extends Message<DeleteToolCall> {
   /**
-   * @generated from field: agent.v1.DeleteArgs args = 1;
+   * @generated from field: optional agent.v1.DeleteArgs args = 1;
    */
   args?: DeleteArgs;
 
   /**
-   * @generated from field: agent.v1.DeleteResult result = 2;
+   * @generated from field: optional agent.v1.DeleteResult result = 2;
    */
   result?: DeleteResult;
 
@@ -34,8 +34,8 @@ export class DeleteToolCall extends Message<DeleteToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.DeleteToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: DeleteArgs },
-    { no: 2, name: "result", kind: "message", T: DeleteResult },
+    { no: 1, name: "args", kind: "message", T: DeleteArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: DeleteResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DeleteToolCall {

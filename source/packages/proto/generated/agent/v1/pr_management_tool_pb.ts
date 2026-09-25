@@ -251,14 +251,14 @@ export class PrManagementRegistered extends Message<PrManagementRegistered> {
   body = "";
 
   /**
-   * @generated from field: string base_branch = 4;
+   * @generated from field: optional string base_branch = 4;
    */
-  baseBranch = "";
+  baseBranch?: string;
 
   /**
-   * @generated from field: bool draft = 5;
+   * @generated from field: optional bool draft = 5;
    */
-  draft = false;
+  draft?: boolean;
 
   /**
    * @generated from field: string branch_name = 6;
@@ -276,8 +276,8 @@ export class PrManagementRegistered extends Message<PrManagementRegistered> {
     { no: 1, name: "message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "body", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "draft", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 4, name: "base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "draft", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 6, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
@@ -364,12 +364,12 @@ export class PrManagementNeedsConfirmation extends Message<PrManagementNeedsConf
  */
 export class PrManagementToolCall extends Message<PrManagementToolCall> {
   /**
-   * @generated from field: agent.v1.PrManagementArgs args = 1;
+   * @generated from field: optional agent.v1.PrManagementArgs args = 1;
    */
   args?: PrManagementArgs;
 
   /**
-   * @generated from field: agent.v1.PrManagementResult result = 2;
+   * @generated from field: optional agent.v1.PrManagementResult result = 2;
    */
   result?: PrManagementResult;
 
@@ -381,8 +381,8 @@ export class PrManagementToolCall extends Message<PrManagementToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.PrManagementToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: PrManagementArgs },
-    { no: 2, name: "result", kind: "message", T: PrManagementResult },
+    { no: 1, name: "args", kind: "message", T: PrManagementArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: PrManagementResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PrManagementToolCall {
@@ -501,14 +501,14 @@ export class CreatePrAction extends Message<CreatePrAction> {
   body = "";
 
   /**
-   * @generated from field: string base_branch = 3;
+   * @generated from field: optional string base_branch = 3;
    */
-  baseBranch = "";
+  baseBranch?: string;
 
   /**
-   * @generated from field: bool draft = 4;
+   * @generated from field: optional bool draft = 4;
    */
-  draft = false;
+  draft?: boolean;
 
   /**
    * @generated from field: string branch_name = 5;
@@ -521,19 +521,19 @@ export class CreatePrAction extends Message<CreatePrAction> {
   addLabels: string[] = [];
 
   /**
-   * @generated from field: string repo_url = 7;
+   * @generated from field: optional string repo_url = 7;
    */
-  repoUrl = "";
+  repoUrl?: string;
 
   /**
-   * @generated from field: bool skip_branch_prefix_check = 8;
+   * @generated from field: optional bool skip_branch_prefix_check = 8;
    */
-  skipBranchPrefixCheck = false;
+  skipBranchPrefixCheck?: boolean;
 
   /**
-   * @generated from field: int64 stack_on_pr_number = 9;
+   * @generated from field: optional int64 stack_on_pr_number = 9;
    */
-  stackOnPrNumber = protoInt64.zero;
+  stackOnPrNumber?: bigint;
 
   constructor(data?: PartialMessage<CreatePrAction>) {
     super();
@@ -545,13 +545,13 @@ export class CreatePrAction extends Message<CreatePrAction> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "body", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "draft", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 3, name: "base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "draft", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 5, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 6, name: "add_labels", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 7, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "skip_branch_prefix_check", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 9, name: "stack_on_pr_number", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
+    { no: 7, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "skip_branch_prefix_check", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 9, name: "stack_on_pr_number", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CreatePrAction {
@@ -576,29 +576,29 @@ export class CreatePrAction extends Message<CreatePrAction> {
  */
 export class UpdatePrAction extends Message<UpdatePrAction> {
   /**
-   * @generated from field: string pr_url = 1;
+   * @generated from field: optional string pr_url = 1;
    */
-  prUrl = "";
+  prUrl?: string;
 
   /**
-   * @generated from field: string title = 2;
+   * @generated from field: optional string title = 2;
    */
-  title = "";
+  title?: string;
 
   /**
-   * @generated from field: string body = 3;
+   * @generated from field: optional string body = 3;
    */
-  body = "";
+  body?: string;
 
   /**
-   * @generated from field: string base_branch = 4;
+   * @generated from field: optional string base_branch = 4;
    */
-  baseBranch = "";
+  baseBranch?: string;
 
   /**
-   * @generated from field: string branch_name = 5;
+   * @generated from field: optional string branch_name = 5;
    */
-  branchName = "";
+  branchName?: string;
 
   /**
    * @generated from field: repeated string add_labels = 6;
@@ -611,24 +611,24 @@ export class UpdatePrAction extends Message<UpdatePrAction> {
   removeLabels: string[] = [];
 
   /**
-   * @generated from field: string repo_url = 8;
+   * @generated from field: optional string repo_url = 8;
    */
-  repoUrl = "";
+  repoUrl?: string;
 
   /**
-   * @generated from field: int64 stack_on_pr_number = 9;
+   * @generated from field: optional int64 stack_on_pr_number = 9;
    */
-  stackOnPrNumber = protoInt64.zero;
+  stackOnPrNumber?: bigint;
 
   /**
-   * @generated from field: bool clear_stack = 10;
+   * @generated from field: optional bool clear_stack = 10;
    */
-  clearStack = false;
+  clearStack?: boolean;
 
   /**
-   * @generated from field: bool draft = 11;
+   * @generated from field: optional bool draft = 11;
    */
-  draft = false;
+  draft?: boolean;
 
   constructor(data?: PartialMessage<UpdatePrAction>) {
     super();
@@ -638,17 +638,17 @@ export class UpdatePrAction extends Message<UpdatePrAction> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.UpdatePrAction";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "body", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "body", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "base_branch", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 6, name: "add_labels", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 7, name: "remove_labels", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 8, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "stack_on_pr_number", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 10, name: "clear_stack", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 11, name: "draft", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 8, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 9, name: "stack_on_pr_number", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
+    { no: 10, name: "clear_stack", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 11, name: "draft", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdatePrAction {
@@ -673,14 +673,14 @@ export class UpdatePrAction extends Message<UpdatePrAction> {
  */
 export class PostCommentAction extends Message<PostCommentAction> {
   /**
-   * @generated from field: string pr_url = 1;
+   * @generated from field: optional string pr_url = 1;
    */
-  prUrl = "";
+  prUrl?: string;
 
   /**
-   * @generated from field: string branch_name = 2;
+   * @generated from field: optional string branch_name = 2;
    */
-  branchName = "";
+  branchName?: string;
 
   /**
    * @generated from field: string body = 3;
@@ -688,39 +688,39 @@ export class PostCommentAction extends Message<PostCommentAction> {
   body = "";
 
   /**
-   * @generated from field: string repo_url = 4;
+   * @generated from field: optional string repo_url = 4;
    */
-  repoUrl = "";
+  repoUrl?: string;
 
   /**
-   * @generated from field: int64 in_reply_to = 5;
+   * @generated from field: optional int64 in_reply_to = 5;
    */
-  inReplyTo = protoInt64.zero;
+  inReplyTo?: bigint;
 
   /**
-   * @generated from field: string path = 6;
+   * @generated from field: optional string path = 6;
    */
-  path = "";
+  path?: string;
 
   /**
-   * @generated from field: int32 line = 7;
+   * @generated from field: optional int32 line = 7;
    */
-  line = 0;
+  line?: number;
 
   /**
-   * @generated from field: int32 start_line = 8;
+   * @generated from field: optional int32 start_line = 8;
    */
-  startLine = 0;
+  startLine?: number;
 
   /**
-   * @generated from field: string side = 9;
+   * @generated from field: optional string side = 9;
    */
-  side = "";
+  side?: string;
 
   /**
-   * @generated from field: string reply_to_reference = 10;
+   * @generated from field: optional string reply_to_reference = 10;
    */
-  replyToReference = "";
+  replyToReference?: string;
 
   constructor(data?: PartialMessage<PostCommentAction>) {
     super();
@@ -730,16 +730,16 @@ export class PostCommentAction extends Message<PostCommentAction> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.PostCommentAction";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "body", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "in_reply_to", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 6, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "line", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 8, name: "start_line", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 9, name: "side", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "reply_to_reference", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "in_reply_to", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
+    { no: 6, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "line", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 8, name: "start_line", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 9, name: "side", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 10, name: "reply_to_reference", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PostCommentAction {
@@ -764,14 +764,14 @@ export class PostCommentAction extends Message<PostCommentAction> {
  */
 export class ResolveCommentAction extends Message<ResolveCommentAction> {
   /**
-   * @generated from field: string pr_url = 1;
+   * @generated from field: optional string pr_url = 1;
    */
-  prUrl = "";
+  prUrl?: string;
 
   /**
-   * @generated from field: string branch_name = 2;
+   * @generated from field: optional string branch_name = 2;
    */
-  branchName = "";
+  branchName?: string;
 
   /**
    * @generated from field: int64 comment_id = 3;
@@ -779,14 +779,14 @@ export class ResolveCommentAction extends Message<ResolveCommentAction> {
   commentId = protoInt64.zero;
 
   /**
-   * @generated from field: string repo_url = 4;
+   * @generated from field: optional string repo_url = 4;
    */
-  repoUrl = "";
+  repoUrl?: string;
 
   /**
-   * @generated from field: string comment_reference = 5;
+   * @generated from field: optional string comment_reference = 5;
    */
-  commentReference = "";
+  commentReference?: string;
 
   constructor(data?: PartialMessage<ResolveCommentAction>) {
     super();
@@ -796,11 +796,11 @@ export class ResolveCommentAction extends Message<ResolveCommentAction> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.ResolveCommentAction";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "comment_id", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 4, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "comment_reference", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "comment_reference", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ResolveCommentAction {
@@ -825,19 +825,19 @@ export class ResolveCommentAction extends Message<ResolveCommentAction> {
  */
 export class GetCiStatusAction extends Message<GetCiStatusAction> {
   /**
-   * @generated from field: string pr_url = 1;
+   * @generated from field: optional string pr_url = 1;
    */
-  prUrl = "";
+  prUrl?: string;
 
   /**
-   * @generated from field: string branch_name = 2;
+   * @generated from field: optional string branch_name = 2;
    */
-  branchName = "";
+  branchName?: string;
 
   /**
-   * @generated from field: string repo_url = 3;
+   * @generated from field: optional string repo_url = 3;
    */
-  repoUrl = "";
+  repoUrl?: string;
 
   constructor(data?: PartialMessage<GetCiStatusAction>) {
     super();
@@ -847,9 +847,9 @@ export class GetCiStatusAction extends Message<GetCiStatusAction> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.GetCiStatusAction";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetCiStatusAction {
@@ -874,19 +874,19 @@ export class GetCiStatusAction extends Message<GetCiStatusAction> {
  */
 export class SetPrStatusAction extends Message<SetPrStatusAction> {
   /**
-   * @generated from field: string pr_url = 1;
+   * @generated from field: optional string pr_url = 1;
    */
-  prUrl = "";
+  prUrl?: string;
 
   /**
-   * @generated from field: string branch_name = 2;
+   * @generated from field: optional string branch_name = 2;
    */
-  branchName = "";
+  branchName?: string;
 
   /**
-   * @generated from field: string repo_url = 3;
+   * @generated from field: optional string repo_url = 3;
    */
-  repoUrl = "";
+  repoUrl?: string;
 
   /**
    * @generated from field: agent.v1.PullRequestStatus status = 4;
@@ -901,9 +901,9 @@ export class SetPrStatusAction extends Message<SetPrStatusAction> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.SetPrStatusAction";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "pr_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "repo_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 4, name: "status", kind: "enum", T: proto3.getEnumType(PullRequestStatus) },
   ]);
 
@@ -929,7 +929,7 @@ export class SetPrStatusAction extends Message<SetPrStatusAction> {
  */
 export class PrManagementRequestQuery extends Message<PrManagementRequestQuery> {
   /**
-   * @generated from field: agent.v1.PrManagementArgs args = 1;
+   * @generated from field: optional agent.v1.PrManagementArgs args = 1;
    */
   args?: PrManagementArgs;
 
@@ -941,7 +941,7 @@ export class PrManagementRequestQuery extends Message<PrManagementRequestQuery> 
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.PrManagementRequestQuery";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: PrManagementArgs },
+    { no: 1, name: "args", kind: "message", T: PrManagementArgs, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PrManagementRequestQuery {

@@ -101,14 +101,14 @@ export class StreamCmdKResponse_EditStart extends Message<StreamCmdKResponse_Edi
   editId = 0;
 
   /**
-   * @generated from field: int32 max_end_line_number_exclusive = 3;
+   * @generated from field: optional int32 max_end_line_number_exclusive = 3;
    */
-  maxEndLineNumberExclusive = 0;
+  maxEndLineNumberExclusive?: number;
 
   /**
-   * @generated from field: string file_path = 4;
+   * @generated from field: optional string file_path = 4;
    */
-  filePath = "";
+  filePath?: string;
 
   constructor(data?: PartialMessage<StreamCmdKResponse_EditStart>) {
     super();
@@ -120,8 +120,8 @@ export class StreamCmdKResponse_EditStart extends Message<StreamCmdKResponse_Edi
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "start_line_number", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 2, name: "edit_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "max_end_line_number_exclusive", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 4, name: "file_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "max_end_line_number_exclusive", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 4, name: "file_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StreamCmdKResponse_EditStart {
@@ -156,9 +156,9 @@ export class StreamCmdKResponse_EditStream extends Message<StreamCmdKResponse_Ed
   editId = 0;
 
   /**
-   * @generated from field: string file_path = 3;
+   * @generated from field: optional string file_path = 3;
    */
-  filePath = "";
+  filePath?: string;
 
   constructor(data?: PartialMessage<StreamCmdKResponse_EditStream>) {
     super();
@@ -170,7 +170,7 @@ export class StreamCmdKResponse_EditStream extends Message<StreamCmdKResponse_Ed
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "edit_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "file_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "file_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StreamCmdKResponse_EditStream {
@@ -205,9 +205,9 @@ export class StreamCmdKResponse_EditEnd extends Message<StreamCmdKResponse_EditE
   editId = 0;
 
   /**
-   * @generated from field: string file_path = 3;
+   * @generated from field: optional string file_path = 3;
    */
-  filePath = "";
+  filePath?: string;
 
   constructor(data?: PartialMessage<StreamCmdKResponse_EditEnd>) {
     super();
@@ -219,7 +219,7 @@ export class StreamCmdKResponse_EditEnd extends Message<StreamCmdKResponse_EditE
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "end_line_number_exclusive", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 2, name: "edit_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "file_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "file_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StreamCmdKResponse_EditEnd {
@@ -318,7 +318,7 @@ export class StreamCmdKResponse_StatusUpdate extends Message<StreamCmdKResponse_
  */
 export class CmdKLegacyContext extends Message<CmdKLegacyContext> {
   /**
-   * @generated from field: aiserver.v1.ExplicitContext explicit_context = 4;
+   * @generated from field: optional aiserver.v1.ExplicitContext explicit_context = 4;
    */
   explicitContext?: ExplicitContext;
 
@@ -340,7 +340,7 @@ export class CmdKLegacyContext extends Message<CmdKLegacyContext> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CmdKLegacyContext";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 4, name: "explicit_context", kind: "message", T: ExplicitContext },
+    { no: 4, name: "explicit_context", kind: "message", T: ExplicitContext, opt: true },
     { no: 10, name: "documentation_identifiers", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 12, name: "prompt_code_blocks", kind: "message", T: CodeBlock, repeated: true },
   ]);
@@ -377,24 +377,24 @@ export class CmdKOptions extends Message<CmdKOptions> {
   adaCmdKContext = false;
 
   /**
-   * @generated from field: aiserver.v1.ModelDetails model_details = 3;
+   * @generated from field: optional aiserver.v1.ModelDetails model_details = 3;
    */
   modelDetails?: ModelDetails;
 
   /**
-   * @generated from field: bool use_reranker = 4;
+   * @generated from field: optional bool use_reranker = 4;
    */
-  useReranker = false;
+  useReranker?: boolean;
 
   /**
-   * @generated from field: bool use_web = 5;
+   * @generated from field: optional bool use_web = 5;
    */
-  useWeb = false;
+  useWeb?: boolean;
 
   /**
-   * @generated from field: bool request_is_for_caching = 6;
+   * @generated from field: optional bool request_is_for_caching = 6;
    */
-  requestIsForCaching = false;
+  requestIsForCaching?: boolean;
 
   constructor(data?: PartialMessage<CmdKOptions>) {
     super();
@@ -406,10 +406,10 @@ export class CmdKOptions extends Message<CmdKOptions> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "chat_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 2, name: "ada_cmd_k_context", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "model_details", kind: "message", T: ModelDetails },
-    { no: 4, name: "use_reranker", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "use_web", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 6, name: "request_is_for_caching", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 3, name: "model_details", kind: "message", T: ModelDetails, opt: true },
+    { no: 4, name: "use_reranker", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 5, name: "use_web", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 6, name: "request_is_for_caching", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CmdKOptions {
@@ -555,7 +555,7 @@ export class GetRelevantChunksRequest extends Message<GetRelevantChunksRequest> 
   codeBlocks: CodeBlock[] = [];
 
   /**
-   * @generated from field: aiserver.v1.CmdKOptions cmd_k_options = 2;
+   * @generated from field: optional aiserver.v1.CmdKOptions cmd_k_options = 2;
    */
   cmdKOptions?: CmdKOptions;
 
@@ -570,7 +570,7 @@ export class GetRelevantChunksRequest extends Message<GetRelevantChunksRequest> 
   sessionId = "";
 
   /**
-   * @generated from field: aiserver.v1.CmdKLegacyContext legacy_context = 5;
+   * @generated from field: optional aiserver.v1.CmdKLegacyContext legacy_context = 5;
    */
   legacyContext?: CmdKLegacyContext;
 
@@ -583,10 +583,10 @@ export class GetRelevantChunksRequest extends Message<GetRelevantChunksRequest> 
   static readonly typeName = "aiserver.v1.GetRelevantChunksRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "code_blocks", kind: "message", T: CodeBlock, repeated: true },
-    { no: 2, name: "cmd_k_options", kind: "message", T: CmdKOptions },
+    { no: 2, name: "cmd_k_options", kind: "message", T: CmdKOptions, opt: true },
     { no: 3, name: "context_items", kind: "message", T: PotentiallyCachedContextItem, repeated: true },
     { no: 4, name: "session_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "legacy_context", kind: "message", T: CmdKLegacyContext },
+    { no: 5, name: "legacy_context", kind: "message", T: CmdKLegacyContext, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetRelevantChunksRequest {
@@ -740,12 +740,12 @@ export class RerankCmdKContextRequest extends Message<RerankCmdKContextRequest> 
   contextItems: PotentiallyCachedContextItem[] = [];
 
   /**
-   * @generated from field: aiserver.v1.CmdKOptions cmd_k_options = 2;
+   * @generated from field: optional aiserver.v1.CmdKOptions cmd_k_options = 2;
    */
   cmdKOptions?: CmdKOptions;
 
   /**
-   * @generated from field: aiserver.v1.CmdKLegacyContext legacy_context = 3;
+   * @generated from field: optional aiserver.v1.CmdKLegacyContext legacy_context = 3;
    */
   legacyContext?: CmdKLegacyContext;
 
@@ -758,8 +758,8 @@ export class RerankCmdKContextRequest extends Message<RerankCmdKContextRequest> 
   static readonly typeName = "aiserver.v1.RerankCmdKContextRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "context_items", kind: "message", T: PotentiallyCachedContextItem, repeated: true },
-    { no: 2, name: "cmd_k_options", kind: "message", T: CmdKOptions },
-    { no: 3, name: "legacy_context", kind: "message", T: CmdKLegacyContext },
+    { no: 2, name: "cmd_k_options", kind: "message", T: CmdKOptions, opt: true },
+    { no: 3, name: "legacy_context", kind: "message", T: CmdKLegacyContext, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RerankCmdKContextRequest {
@@ -784,9 +784,9 @@ export class RerankCmdKContextRequest extends Message<RerankCmdKContextRequest> 
  */
 export class RerankCmdKContextResponse extends Message<RerankCmdKContextResponse> {
   /**
-   * @generated from field: bool did_call = 3;
+   * @generated from field: optional bool did_call = 3;
    */
-  didCall = false;
+  didCall?: boolean;
 
   /**
    * @generated from oneof aiserver.v1.RerankCmdKContextResponse.response
@@ -813,7 +813,7 @@ export class RerankCmdKContextResponse extends Message<RerankCmdKContextResponse
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.RerankCmdKContextResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 3, name: "did_call", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 3, name: "did_call", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 1, name: "context_status_update", kind: "message", T: ContextStatusUpdate, oneof: "response" },
     { no: 2, name: "missing_context_items", kind: "message", T: MissingContextItems, oneof: "response" },
   ]);
@@ -845,7 +845,7 @@ export class RerankTerminalCmdKContextRequest extends Message<RerankTerminalCmdK
   contextItems: PotentiallyCachedContextItem[] = [];
 
   /**
-   * @generated from field: aiserver.v1.TerminalCmdKOptions cmd_k_options = 2;
+   * @generated from field: optional aiserver.v1.TerminalCmdKOptions cmd_k_options = 2;
    */
   cmdKOptions?: TerminalCmdKOptions;
 
@@ -858,7 +858,7 @@ export class RerankTerminalCmdKContextRequest extends Message<RerankTerminalCmdK
   static readonly typeName = "aiserver.v1.RerankTerminalCmdKContextRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "context_items", kind: "message", T: PotentiallyCachedContextItem, repeated: true },
-    { no: 2, name: "cmd_k_options", kind: "message", T: TerminalCmdKOptions },
+    { no: 2, name: "cmd_k_options", kind: "message", T: TerminalCmdKOptions, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RerankTerminalCmdKContextRequest {
@@ -938,17 +938,17 @@ export class StreamCmdKRequest extends Message<StreamCmdKRequest> {
   contextItems: PotentiallyCachedContextItem[] = [];
 
   /**
-   * @generated from field: aiserver.v1.CmdKOptions cmd_k_options = 2;
+   * @generated from field: optional aiserver.v1.CmdKOptions cmd_k_options = 2;
    */
   cmdKOptions?: CmdKOptions;
 
   /**
-   * @generated from field: aiserver.v1.CmdKDebugInfo cmd_k_debug_info = 4;
+   * @generated from field: optional aiserver.v1.CmdKDebugInfo cmd_k_debug_info = 4;
    */
   cmdKDebugInfo?: CmdKDebugInfo;
 
   /**
-   * @generated from field: aiserver.v1.CmdKLegacyContext legacy_context = 5;
+   * @generated from field: optional aiserver.v1.CmdKLegacyContext legacy_context = 5;
    */
   legacyContext?: CmdKLegacyContext;
 
@@ -958,7 +958,7 @@ export class StreamCmdKRequest extends Message<StreamCmdKRequest> {
   sessionId = "";
 
   /**
-   * @generated from field: aiserver.v1.CmdKPreviousEdit previous_edit = 7;
+   * @generated from field: optional aiserver.v1.CmdKPreviousEdit previous_edit = 7;
    */
   previousEdit?: CmdKPreviousEdit;
 
@@ -968,9 +968,9 @@ export class StreamCmdKRequest extends Message<StreamCmdKRequest> {
   previousEdits: CmdKPreviousEdit[] = [];
 
   /**
-   * @generated from field: bool use_big_cmdk_for_multi_file_edit = 9;
+   * @generated from field: optional bool use_big_cmdk_for_multi_file_edit = 9;
    */
-  useBigCmdkForMultiFileEdit = false;
+  useBigCmdkForMultiFileEdit?: boolean;
 
   /**
    * @generated from field: repeated aiserver.v1.ImageProto images = 10;
@@ -993,12 +993,12 @@ export class StreamCmdKRequest extends Message<StreamCmdKRequest> {
   diffHistory: CppFileDiffHistory[] = [];
 
   /**
-   * @generated from field: aiserver.v1.StreamCmdKRequest.BranchDiff diff_to_base_branch = 14;
+   * @generated from field: optional aiserver.v1.StreamCmdKRequest.BranchDiff diff_to_base_branch = 14;
    */
   diffToBaseBranch?: StreamCmdKRequest_BranchDiff;
 
   /**
-   * @generated from field: aiserver.v1.TimingInfo timing_info = 15;
+   * @generated from field: optional aiserver.v1.TimingInfo timing_info = 15;
    */
   timingInfo?: TimingInfo;
 
@@ -1016,19 +1016,19 @@ export class StreamCmdKRequest extends Message<StreamCmdKRequest> {
   static readonly typeName = "aiserver.v1.StreamCmdKRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "context_items", kind: "message", T: PotentiallyCachedContextItem, repeated: true },
-    { no: 2, name: "cmd_k_options", kind: "message", T: CmdKOptions },
-    { no: 4, name: "cmd_k_debug_info", kind: "message", T: CmdKDebugInfo },
-    { no: 5, name: "legacy_context", kind: "message", T: CmdKLegacyContext },
+    { no: 2, name: "cmd_k_options", kind: "message", T: CmdKOptions, opt: true },
+    { no: 4, name: "cmd_k_debug_info", kind: "message", T: CmdKDebugInfo, opt: true },
+    { no: 5, name: "legacy_context", kind: "message", T: CmdKLegacyContext, opt: true },
     { no: 6, name: "session_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "previous_edit", kind: "message", T: CmdKPreviousEdit },
+    { no: 7, name: "previous_edit", kind: "message", T: CmdKPreviousEdit, opt: true },
     { no: 8, name: "previous_edits", kind: "message", T: CmdKPreviousEdit, repeated: true },
-    { no: 9, name: "use_big_cmdk_for_multi_file_edit", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 9, name: "use_big_cmdk_for_multi_file_edit", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 10, name: "images", kind: "message", T: ImageProto, repeated: true },
     { no: 11, name: "links", kind: "message", T: CmdKExternalLink, repeated: true },
     { no: 12, name: "upcoming_edits", kind: "message", T: CmdKUpcomingEdit, repeated: true },
     { no: 13, name: "diff_history", kind: "message", T: CppFileDiffHistory, repeated: true },
-    { no: 14, name: "diff_to_base_branch", kind: "message", T: StreamCmdKRequest_BranchDiff },
-    { no: 15, name: "timing_info", kind: "message", T: TimingInfo },
+    { no: 14, name: "diff_to_base_branch", kind: "message", T: StreamCmdKRequest_BranchDiff, opt: true },
+    { no: 15, name: "timing_info", kind: "message", T: TimingInfo, opt: true },
     { no: 16, name: "rules", kind: "message", T: CursorRule, repeated: true },
   ]);
 
@@ -1251,17 +1251,17 @@ export class StreamHypermodeRequest extends Message<StreamHypermodeRequest> {
   contextItems: PotentiallyCachedContextItem[] = [];
 
   /**
-   * @generated from field: aiserver.v1.CmdKOptions cmd_k_options = 2;
+   * @generated from field: optional aiserver.v1.CmdKOptions cmd_k_options = 2;
    */
   cmdKOptions?: CmdKOptions;
 
   /**
-   * @generated from field: aiserver.v1.CmdKDebugInfo cmd_k_debug_info = 4;
+   * @generated from field: optional aiserver.v1.CmdKDebugInfo cmd_k_debug_info = 4;
    */
   cmdKDebugInfo?: CmdKDebugInfo;
 
   /**
-   * @generated from field: aiserver.v1.CmdKLegacyContext legacy_context = 5;
+   * @generated from field: optional aiserver.v1.CmdKLegacyContext legacy_context = 5;
    */
   legacyContext?: CmdKLegacyContext;
 
@@ -1271,7 +1271,7 @@ export class StreamHypermodeRequest extends Message<StreamHypermodeRequest> {
   sessionId = "";
 
   /**
-   * @generated from field: aiserver.v1.CmdKPreviousEdit previous_edit = 7;
+   * @generated from field: optional aiserver.v1.CmdKPreviousEdit previous_edit = 7;
    */
   previousEdit?: CmdKPreviousEdit;
 
@@ -1281,9 +1281,9 @@ export class StreamHypermodeRequest extends Message<StreamHypermodeRequest> {
   previousEdits: CmdKPreviousEdit[] = [];
 
   /**
-   * @generated from field: bool use_big_cmdk_for_multi_file_edit = 9;
+   * @generated from field: optional bool use_big_cmdk_for_multi_file_edit = 9;
    */
-  useBigCmdkForMultiFileEdit = false;
+  useBigCmdkForMultiFileEdit?: boolean;
 
   /**
    * @generated from field: repeated aiserver.v1.ImageProto images = 10;
@@ -1306,12 +1306,12 @@ export class StreamHypermodeRequest extends Message<StreamHypermodeRequest> {
   diffHistory: CppFileDiffHistory[] = [];
 
   /**
-   * @generated from field: string hyper_model = 14;
+   * @generated from field: optional string hyper_model = 14;
    */
-  hyperModel = "";
+  hyperModel?: string;
 
   /**
-   * @generated from field: aiserver.v1.TimingInfo timing_info = 15;
+   * @generated from field: optional aiserver.v1.TimingInfo timing_info = 15;
    */
   timingInfo?: TimingInfo;
 
@@ -1324,19 +1324,19 @@ export class StreamHypermodeRequest extends Message<StreamHypermodeRequest> {
   static readonly typeName = "aiserver.v1.StreamHypermodeRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "context_items", kind: "message", T: PotentiallyCachedContextItem, repeated: true },
-    { no: 2, name: "cmd_k_options", kind: "message", T: CmdKOptions },
-    { no: 4, name: "cmd_k_debug_info", kind: "message", T: CmdKDebugInfo },
-    { no: 5, name: "legacy_context", kind: "message", T: CmdKLegacyContext },
+    { no: 2, name: "cmd_k_options", kind: "message", T: CmdKOptions, opt: true },
+    { no: 4, name: "cmd_k_debug_info", kind: "message", T: CmdKDebugInfo, opt: true },
+    { no: 5, name: "legacy_context", kind: "message", T: CmdKLegacyContext, opt: true },
     { no: 6, name: "session_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "previous_edit", kind: "message", T: CmdKPreviousEdit },
+    { no: 7, name: "previous_edit", kind: "message", T: CmdKPreviousEdit, opt: true },
     { no: 8, name: "previous_edits", kind: "message", T: CmdKPreviousEdit, repeated: true },
-    { no: 9, name: "use_big_cmdk_for_multi_file_edit", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 9, name: "use_big_cmdk_for_multi_file_edit", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 10, name: "images", kind: "message", T: ImageProto, repeated: true },
     { no: 11, name: "links", kind: "message", T: CmdKExternalLink, repeated: true },
     { no: 12, name: "upcoming_edits", kind: "message", T: CmdKUpcomingEdit, repeated: true },
     { no: 13, name: "diff_history", kind: "message", T: CppFileDiffHistory, repeated: true },
-    { no: 14, name: "hyper_model", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 15, name: "timing_info", kind: "message", T: TimingInfo },
+    { no: 14, name: "hyper_model", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 15, name: "timing_info", kind: "message", T: TimingInfo, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StreamHypermodeRequest {
@@ -1366,12 +1366,12 @@ export class StreamTerminalCmdKRequest extends Message<StreamTerminalCmdKRequest
   contextItems: PotentiallyCachedContextItem[] = [];
 
   /**
-   * @generated from field: aiserver.v1.TerminalCmdKOptions cmd_k_options = 2;
+   * @generated from field: optional aiserver.v1.TerminalCmdKOptions cmd_k_options = 2;
    */
   cmdKOptions?: TerminalCmdKOptions;
 
   /**
-   * @generated from field: aiserver.v1.CmdKLegacyContext legacy_context = 5;
+   * @generated from field: optional aiserver.v1.CmdKLegacyContext legacy_context = 5;
    */
   legacyContext?: CmdKLegacyContext;
 
@@ -1389,8 +1389,8 @@ export class StreamTerminalCmdKRequest extends Message<StreamTerminalCmdKRequest
   static readonly typeName = "aiserver.v1.StreamTerminalCmdKRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "context_items", kind: "message", T: PotentiallyCachedContextItem, repeated: true },
-    { no: 2, name: "cmd_k_options", kind: "message", T: TerminalCmdKOptions },
-    { no: 5, name: "legacy_context", kind: "message", T: CmdKLegacyContext },
+    { no: 2, name: "cmd_k_options", kind: "message", T: TerminalCmdKOptions, opt: true },
+    { no: 5, name: "legacy_context", kind: "message", T: CmdKLegacyContext, opt: true },
     { no: 6, name: "session_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
@@ -1651,14 +1651,14 @@ export class TerminalCmdKOptions extends Message<TerminalCmdKOptions> {
   adaCmdKContext = false;
 
   /**
-   * @generated from field: aiserver.v1.ModelDetails model_details = 3;
+   * @generated from field: optional aiserver.v1.ModelDetails model_details = 3;
    */
   modelDetails?: ModelDetails;
 
   /**
-   * @generated from field: bool use_web = 4;
+   * @generated from field: optional bool use_web = 4;
    */
-  useWeb = false;
+  useWeb?: boolean;
 
   constructor(data?: PartialMessage<TerminalCmdKOptions>) {
     super();
@@ -1670,8 +1670,8 @@ export class TerminalCmdKOptions extends Message<TerminalCmdKOptions> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "chat_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 2, name: "ada_cmd_k_context", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "model_details", kind: "message", T: ModelDetails },
-    { no: 4, name: "use_web", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 3, name: "model_details", kind: "message", T: ModelDetails, opt: true },
+    { no: 4, name: "use_web", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): TerminalCmdKOptions {

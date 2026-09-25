@@ -22,34 +22,34 @@ export class PiGrepExecArgs extends Message<PiGrepExecArgs> {
   pattern = "";
 
   /**
-   * @generated from field: string path = 2;
+   * @generated from field: optional string path = 2;
    */
-  path = "";
+  path?: string;
 
   /**
-   * @generated from field: string glob = 3;
+   * @generated from field: optional string glob = 3;
    */
-  glob = "";
+  glob?: string;
 
   /**
-   * @generated from field: bool ignore_case = 4;
+   * @generated from field: optional bool ignore_case = 4;
    */
-  ignoreCase = false;
+  ignoreCase?: boolean;
 
   /**
-   * @generated from field: bool literal = 5;
+   * @generated from field: optional bool literal = 5;
    */
-  literal = false;
+  literal?: boolean;
 
   /**
-   * @generated from field: int32 context = 6;
+   * @generated from field: optional int32 context = 6;
    */
-  context = 0;
+  context?: number;
 
   /**
-   * @generated from field: int32 limit = 7;
+   * @generated from field: optional int32 limit = 7;
    */
-  limit = 0;
+  limit?: number;
 
   constructor(data?: PartialMessage<PiGrepExecArgs>) {
     super();
@@ -60,12 +60,12 @@ export class PiGrepExecArgs extends Message<PiGrepExecArgs> {
   static readonly typeName = "agent.v1.PiGrepExecArgs";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "pattern", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "glob", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "ignore_case", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "literal", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 6, name: "context", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 7, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 2, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "glob", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "ignore_case", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 5, name: "literal", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 6, name: "context", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 7, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PiGrepExecArgs {
@@ -145,14 +145,14 @@ export class PiGrepExecSuccess extends Message<PiGrepExecSuccess> {
   output = "";
 
   /**
-   * @generated from field: agent.v1.PiTruncation truncation = 2;
+   * @generated from field: optional agent.v1.PiTruncation truncation = 2;
    */
   truncation?: PiTruncation;
 
   /**
-   * @generated from field: uint32 match_limit_reached = 3;
+   * @generated from field: optional uint32 match_limit_reached = 3;
    */
-  matchLimitReached = 0;
+  matchLimitReached?: number;
 
   /**
    * @generated from field: bool lines_truncated = 4;
@@ -168,8 +168,8 @@ export class PiGrepExecSuccess extends Message<PiGrepExecSuccess> {
   static readonly typeName = "agent.v1.PiGrepExecSuccess";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "output", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "truncation", kind: "message", T: PiTruncation },
-    { no: 3, name: "match_limit_reached", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 2, name: "truncation", kind: "message", T: PiTruncation, opt: true },
+    { no: 3, name: "match_limit_reached", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
     { no: 4, name: "lines_truncated", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 

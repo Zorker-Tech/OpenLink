@@ -16,12 +16,12 @@ import { Message, proto3 } from "@bufbuild/protobuf";
  */
 export class ReflectToolCall extends Message<ReflectToolCall> {
   /**
-   * @generated from field: agent.v1.ReflectArgs args = 1;
+   * @generated from field: optional agent.v1.ReflectArgs args = 1;
    */
   args?: ReflectArgs;
 
   /**
-   * @generated from field: agent.v1.ReflectResult result = 2;
+   * @generated from field: optional agent.v1.ReflectResult result = 2;
    */
   result?: ReflectResult;
 
@@ -33,8 +33,8 @@ export class ReflectToolCall extends Message<ReflectToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.ReflectToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: ReflectArgs },
-    { no: 2, name: "result", kind: "message", T: ReflectResult },
+    { no: 1, name: "args", kind: "message", T: ReflectArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: ReflectResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ReflectToolCall {

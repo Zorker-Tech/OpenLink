@@ -26,10 +26,10 @@ message AgentStartupTraceEvent {
   message SpanStarted {
     string span_id = 1 [json_name = "spanId"];
     string name = 2 [json_name = "name"];
-    string parent_span_id = 3 [json_name = "parentSpanId"];
-    string href = 4 [json_name = "href"];
-    string temporal_run_id = 5 [json_name = "temporalRunId"];
-    string temporal_activity_id = 6 [json_name = "temporalActivityId"];
+    optional string parent_span_id = 3 [json_name = "parentSpanId"];
+    optional string href = 4 [json_name = "href"];
+    optional string temporal_run_id = 5 [json_name = "temporalRunId"];
+    optional string temporal_activity_id = 6 [json_name = "temporalActivityId"];
   }
   message TurnClose {
     uint32 turn_index = 1 [json_name = "turnIndex"];

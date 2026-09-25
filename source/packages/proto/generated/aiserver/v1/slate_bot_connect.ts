@@ -1,4 +1,4 @@
-// aiserver.v1 — aiserver/v1/grok_bot messages, enums and services.
+// aiserver.v1 — aiserver/v1/slate_bot messages, enums and services.
 //
 // Generated from this repository's schema (source/packages/proto/schema) by
 // `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.

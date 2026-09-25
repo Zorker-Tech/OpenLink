@@ -186,12 +186,12 @@ proto3.util.setEnumType(SpanKind, "aiserver.v1.SpanKind", [
  */
 export class CapturedProfile extends Message<CapturedProfile> {
   /**
-   * @generated from field: google.protobuf.Timestamp timestamp = 1;
+   * @generated from field: optional google.protobuf.Timestamp timestamp = 1;
    */
   timestamp?: Timestamp;
 
   /**
-   * @generated from field: google.protobuf.Duration duration = 2;
+   * @generated from field: optional google.protobuf.Duration duration = 2;
    */
   duration?: Duration;
 
@@ -223,8 +223,8 @@ export class CapturedProfile extends Message<CapturedProfile> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CapturedProfile";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "timestamp", kind: "message", T: Timestamp },
-    { no: 2, name: "duration", kind: "message", T: Duration },
+    { no: 1, name: "timestamp", kind: "message", T: Timestamp, opt: true },
+    { no: 2, name: "duration", kind: "message", T: Duration, opt: true },
     { no: 3, name: "profile_data", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
     { no: 4, name: "profile_config_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "profile_kind", kind: "enum", T: proto3.getEnumType(ProfileKind) },
@@ -253,7 +253,7 @@ export class CapturedProfile extends Message<CapturedProfile> {
  */
 export class CapturedWebProfile extends Message<CapturedWebProfile> {
   /**
-   * @generated from field: google.protobuf.Timestamp timestamp = 1;
+   * @generated from field: optional google.protobuf.Timestamp timestamp = 1;
    */
   timestamp?: Timestamp;
 
@@ -275,7 +275,7 @@ export class CapturedWebProfile extends Message<CapturedWebProfile> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CapturedWebProfile";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "timestamp", kind: "message", T: Timestamp },
+    { no: 1, name: "timestamp", kind: "message", T: Timestamp, opt: true },
     { no: 3, name: "trace_data", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
     { no: 4, name: "tags", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
   ]);
@@ -317,17 +317,17 @@ export class ChatRequestTelemetryEvent extends Message<ChatRequestTelemetryEvent
   actualModel = "";
 
   /**
-   * @generated from field: google.protobuf.Timestamp start_time = 4;
+   * @generated from field: optional google.protobuf.Timestamp start_time = 4;
    */
   startTime?: Timestamp;
 
   /**
-   * @generated from field: google.protobuf.Timestamp end_time = 5;
+   * @generated from field: optional google.protobuf.Timestamp end_time = 5;
    */
   endTime?: Timestamp;
 
   /**
-   * @generated from field: google.protobuf.Duration duration = 6;
+   * @generated from field: optional google.protobuf.Duration duration = 6;
    */
   duration?: Duration;
 
@@ -337,14 +337,14 @@ export class ChatRequestTelemetryEvent extends Message<ChatRequestTelemetryEvent
   success = false;
 
   /**
-   * @generated from field: string error_message = 8;
+   * @generated from field: optional string error_message = 8;
    */
-  errorMessage = "";
+  errorMessage?: string;
 
   /**
-   * @generated from field: string transport = 9;
+   * @generated from field: optional string transport = 9;
    */
-  transport = "";
+  transport?: string;
 
   /**
    * @generated from field: string completion_status = 10;
@@ -357,39 +357,39 @@ export class ChatRequestTelemetryEvent extends Message<ChatRequestTelemetryEvent
   metadata: { [key: string]: string } = {};
 
   /**
-   * @generated from field: double total_ttft_ms = 12;
+   * @generated from field: optional double total_ttft_ms = 12;
    */
-  totalTtftMs = 0;
+  totalTtftMs?: number;
 
   /**
-   * @generated from field: double total_generate_ms = 13;
+   * @generated from field: optional double total_generate_ms = 13;
    */
-  totalGenerateMs = 0;
+  totalGenerateMs?: number;
 
   /**
-   * @generated from field: double total_stream_ms = 14;
+   * @generated from field: optional double total_stream_ms = 14;
    */
-  totalStreamMs = 0;
+  totalStreamMs?: number;
 
   /**
-   * @generated from field: double total_request_ms = 15;
+   * @generated from field: optional double total_request_ms = 15;
    */
-  totalRequestMs = 0;
+  totalRequestMs?: number;
 
   /**
-   * @generated from field: int32 model_call_count = 16;
+   * @generated from field: optional int32 model_call_count = 16;
    */
-  modelCallCount = 0;
+  modelCallCount?: number;
 
   /**
-   * @generated from field: double total_tool_call_latency = 17;
+   * @generated from field: optional double total_tool_call_latency = 17;
    */
-  totalToolCallLatency = 0;
+  totalToolCallLatency?: number;
 
   /**
-   * @generated from field: int32 tool_call_count = 18;
+   * @generated from field: optional int32 tool_call_count = 18;
    */
-  toolCallCount = 0;
+  toolCallCount?: number;
 
   constructor(data?: PartialMessage<ChatRequestTelemetryEvent>) {
     super();
@@ -402,21 +402,21 @@ export class ChatRequestTelemetryEvent extends Message<ChatRequestTelemetryEvent
     { no: 1, name: "chat_request_uuid", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "requested_model", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "actual_model", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "start_time", kind: "message", T: Timestamp },
-    { no: 5, name: "end_time", kind: "message", T: Timestamp },
-    { no: 6, name: "duration", kind: "message", T: Duration },
+    { no: 4, name: "start_time", kind: "message", T: Timestamp, opt: true },
+    { no: 5, name: "end_time", kind: "message", T: Timestamp, opt: true },
+    { no: 6, name: "duration", kind: "message", T: Duration, opt: true },
     { no: 7, name: "success", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 8, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "transport", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 8, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 9, name: "transport", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 10, name: "completion_status", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 11, name: "metadata", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
-    { no: 12, name: "total_ttft_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 13, name: "total_generate_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 14, name: "total_stream_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 15, name: "total_request_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 16, name: "model_call_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 17, name: "total_tool_call_latency", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 18, name: "tool_call_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 12, name: "total_ttft_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
+    { no: 13, name: "total_generate_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
+    { no: 14, name: "total_stream_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
+    { no: 15, name: "total_request_ms", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
+    { no: 16, name: "model_call_count", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 17, name: "total_tool_call_latency", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
+    { no: 18, name: "tool_call_count", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ChatRequestTelemetryEvent {
@@ -501,7 +501,7 @@ export class PerformanceEvent extends Message<PerformanceEvent> {
   eventType = PerformanceEventType.UNSPECIFIED;
 
   /**
-   * @generated from field: google.protobuf.Timestamp timestamp = 2;
+   * @generated from field: optional google.protobuf.Timestamp timestamp = 2;
    */
   timestamp?: Timestamp;
 
@@ -511,84 +511,84 @@ export class PerformanceEvent extends Message<PerformanceEvent> {
   performanceTimestamp = 0;
 
   /**
-   * @generated from field: double duration = 4;
+   * @generated from field: optional double duration = 4;
    */
-  duration = 0;
+  duration?: number;
 
   /**
-   * @generated from field: string target_element = 5;
+   * @generated from field: optional string target_element = 5;
    */
-  targetElement = "";
+  targetElement?: string;
 
   /**
-   * @generated from field: string target_class = 6;
+   * @generated from field: optional string target_class = 6;
    */
-  targetClass = "";
+  targetClass?: string;
 
   /**
-   * @generated from field: string target_id = 7;
+   * @generated from field: optional string target_id = 7;
    */
-  targetId = "";
+  targetId?: string;
 
   /**
-   * @generated from field: int32 client_x = 8;
+   * @generated from field: optional int32 client_x = 8;
    */
-  clientX = 0;
+  clientX?: number;
 
   /**
-   * @generated from field: int32 client_y = 9;
+   * @generated from field: optional int32 client_y = 9;
    */
-  clientY = 0;
+  clientY?: number;
 
   /**
-   * @generated from field: string key = 10;
+   * @generated from field: optional string key = 10;
    */
-  key = "";
+  key?: string;
 
   /**
-   * @generated from field: string code = 11;
+   * @generated from field: optional string code = 11;
    */
-  code = "";
+  code?: string;
 
   /**
-   * @generated from field: bool ctrl_key = 12;
+   * @generated from field: optional bool ctrl_key = 12;
    */
-  ctrlKey = false;
+  ctrlKey?: boolean;
 
   /**
-   * @generated from field: bool alt_key = 13;
+   * @generated from field: optional bool alt_key = 13;
    */
-  altKey = false;
+  altKey?: boolean;
 
   /**
-   * @generated from field: bool shift_key = 14;
+   * @generated from field: optional bool shift_key = 14;
    */
-  shiftKey = false;
+  shiftKey?: boolean;
 
   /**
-   * @generated from field: bool meta_key = 15;
+   * @generated from field: optional bool meta_key = 15;
    */
-  metaKey = false;
+  metaKey?: boolean;
 
   /**
-   * @generated from field: double scroll_x = 16;
+   * @generated from field: optional double scroll_x = 16;
    */
-  scrollX = 0;
+  scrollX?: number;
 
   /**
-   * @generated from field: double scroll_y = 17;
+   * @generated from field: optional double scroll_y = 17;
    */
-  scrollY = 0;
+  scrollY?: number;
 
   /**
-   * @generated from field: double scroll_delta_x = 18;
+   * @generated from field: optional double scroll_delta_x = 18;
    */
-  scrollDeltaX = 0;
+  scrollDeltaX?: number;
 
   /**
-   * @generated from field: double scroll_delta_y = 19;
+   * @generated from field: optional double scroll_delta_y = 19;
    */
-  scrollDeltaY = 0;
+  scrollDeltaY?: number;
 
   /**
    * @generated from field: map<string, string> metadata = 20;
@@ -596,24 +596,24 @@ export class PerformanceEvent extends Message<PerformanceEvent> {
   metadata: { [key: string]: string } = {};
 
   /**
-   * @generated from field: double render_start = 21;
+   * @generated from field: optional double render_start = 21;
    */
-  renderStart = 0;
+  renderStart?: number;
 
   /**
-   * @generated from field: double style_and_layout_start = 22;
+   * @generated from field: optional double style_and_layout_start = 22;
    */
-  styleAndLayoutStart = 0;
+  styleAndLayoutStart?: number;
 
   /**
-   * @generated from field: double first_ui_event_timestamp = 23;
+   * @generated from field: optional double first_ui_event_timestamp = 23;
    */
-  firstUiEventTimestamp = 0;
+  firstUiEventTimestamp?: number;
 
   /**
-   * @generated from field: double blocking_duration = 24;
+   * @generated from field: optional double blocking_duration = 24;
    */
-  blockingDuration = 0;
+  blockingDuration?: number;
 
   /**
    * @generated from field: repeated aiserver.v1.ScriptTiming scripts = 25;
@@ -621,9 +621,9 @@ export class PerformanceEvent extends Message<PerformanceEvent> {
   scripts: ScriptTiming[] = [];
 
   /**
-   * @generated from field: string target_aria_id = 26;
+   * @generated from field: optional string target_aria_id = 26;
    */
-  targetAriaId = "";
+  targetAriaId?: string;
 
   constructor(data?: PartialMessage<PerformanceEvent>) {
     super();
@@ -634,31 +634,31 @@ export class PerformanceEvent extends Message<PerformanceEvent> {
   static readonly typeName = "aiserver.v1.PerformanceEvent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "event_type", kind: "enum", T: proto3.getEnumType(PerformanceEventType) },
-    { no: 2, name: "timestamp", kind: "message", T: Timestamp },
+    { no: 2, name: "timestamp", kind: "message", T: Timestamp, opt: true },
     { no: 3, name: "performance_timestamp", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 4, name: "duration", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 5, name: "target_element", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "target_class", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "target_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "client_x", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 9, name: "client_y", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 10, name: "key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 11, name: "code", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 12, name: "ctrl_key", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 13, name: "alt_key", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 14, name: "shift_key", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 15, name: "meta_key", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 16, name: "scroll_x", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 17, name: "scroll_y", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 18, name: "scroll_delta_x", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 19, name: "scroll_delta_y", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
+    { no: 4, name: "duration", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
+    { no: 5, name: "target_element", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "target_class", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "target_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "client_x", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 9, name: "client_y", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 10, name: "key", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 11, name: "code", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 12, name: "ctrl_key", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 13, name: "alt_key", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 14, name: "shift_key", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 15, name: "meta_key", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 16, name: "scroll_x", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
+    { no: 17, name: "scroll_y", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
+    { no: 18, name: "scroll_delta_x", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
+    { no: 19, name: "scroll_delta_y", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
     { no: 20, name: "metadata", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
-    { no: 21, name: "render_start", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 22, name: "style_and_layout_start", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 23, name: "first_ui_event_timestamp", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 24, name: "blocking_duration", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
+    { no: 21, name: "render_start", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
+    { no: 22, name: "style_and_layout_start", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
+    { no: 23, name: "first_ui_event_timestamp", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
+    { no: 24, name: "blocking_duration", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
     { no: 25, name: "scripts", kind: "message", T: ScriptTiming, repeated: true },
-    { no: 26, name: "target_aria_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 26, name: "target_aria_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PerformanceEvent {
@@ -683,7 +683,7 @@ export class PerformanceEvent extends Message<PerformanceEvent> {
  */
 export class PerformanceMetric extends Message<PerformanceMetric> {
   /**
-   * @generated from field: google.protobuf.Timestamp timestamp = 1;
+   * @generated from field: optional google.protobuf.Timestamp timestamp = 1;
    */
   timestamp?: Timestamp;
 
@@ -698,9 +698,9 @@ export class PerformanceMetric extends Message<PerformanceMetric> {
   value = 0;
 
   /**
-   * @generated from field: string unit = 4;
+   * @generated from field: optional string unit = 4;
    */
-  unit = "";
+  unit?: string;
 
   /**
    * @generated from field: map<string, string> metadata = 5;
@@ -715,10 +715,10 @@ export class PerformanceMetric extends Message<PerformanceMetric> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.PerformanceMetric";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "timestamp", kind: "message", T: Timestamp },
+    { no: 1, name: "timestamp", kind: "message", T: Timestamp, opt: true },
     { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "value", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 4, name: "unit", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "unit", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 5, name: "metadata", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
   ]);
 
@@ -861,9 +861,9 @@ export class ReportMetricsRequest extends Message<ReportMetricsRequest> {
  */
 export class ReportMetricsRequest_Metric extends Message<ReportMetricsRequest_Metric> {
   /**
-   * @generated from field: double value = 1;
+   * @generated from field: optional double value = 1;
    */
-  value = 0;
+  value?: number;
 
   /**
    * @generated from field: map<string, string> tags = 2;
@@ -878,7 +878,7 @@ export class ReportMetricsRequest_Metric extends Message<ReportMetricsRequest_Me
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ReportMetricsRequest.Metric";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "value", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
+    { no: 1, name: "value", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
     { no: 2, name: "tags", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
   ]);
 
@@ -909,9 +909,9 @@ export class ReportMetricsRequest_NamedMetric extends Message<ReportMetricsReque
   name = "";
 
   /**
-   * @generated from field: double value = 2;
+   * @generated from field: optional double value = 2;
    */
-  value = 0;
+  value?: number;
 
   /**
    * @generated from field: map<string, string> tags = 3;
@@ -927,7 +927,7 @@ export class ReportMetricsRequest_NamedMetric extends Message<ReportMetricsReque
   static readonly typeName = "aiserver.v1.ReportMetricsRequest.NamedMetric";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "value", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
+    { no: 2, name: "value", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
     { no: 3, name: "tags", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
   ]);
 
@@ -1029,9 +1029,9 @@ export class ScriptTiming extends Message<ScriptTiming> {
   sourceCharPosition = 0;
 
   /**
-   * @generated from field: string invoker = 10;
+   * @generated from field: optional string invoker = 10;
    */
-  invoker = "";
+  invoker?: string;
 
   /**
    * @generated from field: string invoker_type = 11;
@@ -1060,7 +1060,7 @@ export class ScriptTiming extends Message<ScriptTiming> {
     { no: 7, name: "source_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 8, name: "source_function_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 9, name: "source_char_position", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 10, name: "invoker", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 10, name: "invoker", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 11, name: "invoker_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 12, name: "window_attribution", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
@@ -1181,9 +1181,9 @@ export class SubmitChatRequestEventsRequest extends Message<SubmitChatRequestEve
   platformTags: { [key: string]: string } = {};
 
   /**
-   * @generated from field: string window_type = 6;
+   * @generated from field: optional string window_type = 6;
    */
-  windowType = "";
+  windowType?: string;
 
   constructor(data?: PartialMessage<SubmitChatRequestEventsRequest>) {
     super();
@@ -1198,7 +1198,7 @@ export class SubmitChatRequestEventsRequest extends Message<SubmitChatRequestEve
     { no: 3, name: "client_version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "client_commit", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "platform_tags", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
-    { no: 6, name: "window_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 6, name: "window_type", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SubmitChatRequestEventsRequest {
@@ -1228,9 +1228,9 @@ export class SubmitChatRequestEventsResponse extends Message<SubmitChatRequestEv
   success = false;
 
   /**
-   * @generated from field: string error_message = 2;
+   * @generated from field: optional string error_message = 2;
    */
-  errorMessage = "";
+  errorMessage?: string;
 
   /**
    * @generated from field: int32 events_processed = 3;
@@ -1246,7 +1246,7 @@ export class SubmitChatRequestEventsResponse extends Message<SubmitChatRequestEv
   static readonly typeName = "aiserver.v1.SubmitChatRequestEventsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "success", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 2, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "events_processed", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
   ]);
 
@@ -1272,12 +1272,12 @@ export class SubmitChatRequestEventsResponse extends Message<SubmitChatRequestEv
  */
 export class SubmitInteractionWindowRequest extends Message<SubmitInteractionWindowRequest> {
   /**
-   * @generated from field: google.protobuf.Timestamp time_origin = 1;
+   * @generated from field: optional google.protobuf.Timestamp time_origin = 1;
    */
   timeOrigin?: Timestamp;
 
   /**
-   * @generated from field: aiserver.v1.CapturedWebProfile web_profile = 2;
+   * @generated from field: optional aiserver.v1.CapturedWebProfile web_profile = 2;
    */
   webProfile?: CapturedWebProfile;
 
@@ -1299,8 +1299,8 @@ export class SubmitInteractionWindowRequest extends Message<SubmitInteractionWin
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SubmitInteractionWindowRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "time_origin", kind: "message", T: Timestamp },
-    { no: 2, name: "web_profile", kind: "message", T: CapturedWebProfile },
+    { no: 1, name: "time_origin", kind: "message", T: Timestamp, opt: true },
+    { no: 2, name: "web_profile", kind: "message", T: CapturedWebProfile, opt: true },
     { no: 3, name: "interactions", kind: "message", T: Interaction, repeated: true },
     { no: 4, name: "session_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
@@ -1332,9 +1332,9 @@ export class SubmitInteractionWindowResponse extends Message<SubmitInteractionWi
   success = false;
 
   /**
-   * @generated from field: string error_message = 2;
+   * @generated from field: optional string error_message = 2;
    */
-  errorMessage = "";
+  errorMessage?: string;
 
   constructor(data?: PartialMessage<SubmitInteractionWindowResponse>) {
     super();
@@ -1345,7 +1345,7 @@ export class SubmitInteractionWindowResponse extends Message<SubmitInteractionWi
   static readonly typeName = "aiserver.v1.SubmitInteractionWindowResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "success", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 2, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SubmitInteractionWindowResponse {
@@ -1380,7 +1380,7 @@ export class SubmitPerformanceEventsRequest extends Message<SubmitPerformanceEve
   events: PerformanceEvent[] = [];
 
   /**
-   * @generated from field: aiserver.v1.SystemMetadata system_metadata = 3;
+   * @generated from field: optional aiserver.v1.SystemMetadata system_metadata = 3;
    */
   systemMetadata?: SystemMetadata;
 
@@ -1400,9 +1400,9 @@ export class SubmitPerformanceEventsRequest extends Message<SubmitPerformanceEve
   platformTags: { [key: string]: string } = {};
 
   /**
-   * @generated from field: string window_type = 7;
+   * @generated from field: optional string window_type = 7;
    */
-  windowType = "";
+  windowType?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.PerformanceMetric metrics = 8;
@@ -1419,11 +1419,11 @@ export class SubmitPerformanceEventsRequest extends Message<SubmitPerformanceEve
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "session_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "events", kind: "message", T: PerformanceEvent, repeated: true },
-    { no: 3, name: "system_metadata", kind: "message", T: SystemMetadata },
+    { no: 3, name: "system_metadata", kind: "message", T: SystemMetadata, opt: true },
     { no: 4, name: "client_version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "client_commit", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 6, name: "platform_tags", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
-    { no: 7, name: "window_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 7, name: "window_type", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 8, name: "metrics", kind: "message", T: PerformanceMetric, repeated: true },
   ]);
 
@@ -1454,9 +1454,9 @@ export class SubmitPerformanceEventsResponse extends Message<SubmitPerformanceEv
   success = false;
 
   /**
-   * @generated from field: string error_message = 2;
+   * @generated from field: optional string error_message = 2;
    */
-  errorMessage = "";
+  errorMessage?: string;
 
   /**
    * @generated from field: int32 events_processed = 3;
@@ -1472,7 +1472,7 @@ export class SubmitPerformanceEventsResponse extends Message<SubmitPerformanceEv
   static readonly typeName = "aiserver.v1.SubmitPerformanceEventsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "success", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 2, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "events_processed", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
   ]);
 
@@ -1626,9 +1626,9 @@ export class SubmitSpansResponse extends Message<SubmitSpansResponse> {
   success = false;
 
   /**
-   * @generated from field: string error_message = 2;
+   * @generated from field: optional string error_message = 2;
    */
-  errorMessage = "";
+  errorMessage?: string;
 
   constructor(data?: PartialMessage<SubmitSpansResponse>) {
     super();
@@ -1639,7 +1639,7 @@ export class SubmitSpansResponse extends Message<SubmitSpansResponse> {
   static readonly typeName = "aiserver.v1.SubmitSpansResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "success", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 2, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SubmitSpansResponse {
@@ -1689,9 +1689,9 @@ export class SubmitToolCallEventsRequest extends Message<SubmitToolCallEventsReq
   platformTags: { [key: string]: string } = {};
 
   /**
-   * @generated from field: string window_type = 6;
+   * @generated from field: optional string window_type = 6;
    */
-  windowType = "";
+  windowType?: string;
 
   constructor(data?: PartialMessage<SubmitToolCallEventsRequest>) {
     super();
@@ -1706,7 +1706,7 @@ export class SubmitToolCallEventsRequest extends Message<SubmitToolCallEventsReq
     { no: 3, name: "client_version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "client_commit", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "platform_tags", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
-    { no: 6, name: "window_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 6, name: "window_type", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SubmitToolCallEventsRequest {
@@ -1736,9 +1736,9 @@ export class SubmitToolCallEventsResponse extends Message<SubmitToolCallEventsRe
   success = false;
 
   /**
-   * @generated from field: string error_message = 2;
+   * @generated from field: optional string error_message = 2;
    */
-  errorMessage = "";
+  errorMessage?: string;
 
   /**
    * @generated from field: int32 events_processed = 3;
@@ -1754,7 +1754,7 @@ export class SubmitToolCallEventsResponse extends Message<SubmitToolCallEventsRe
   static readonly typeName = "aiserver.v1.SubmitToolCallEventsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "success", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 2, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "events_processed", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
   ]);
 
@@ -1780,44 +1780,44 @@ export class SubmitToolCallEventsResponse extends Message<SubmitToolCallEventsRe
  */
 export class SystemMetadata extends Message<SystemMetadata> {
   /**
-   * @generated from field: google.protobuf.Timestamp timestamp = 1;
+   * @generated from field: optional google.protobuf.Timestamp timestamp = 1;
    */
   timestamp?: Timestamp;
 
   /**
-   * @generated from field: double memory_used_mb = 2;
+   * @generated from field: optional double memory_used_mb = 2;
    */
-  memoryUsedMb = 0;
+  memoryUsedMb?: number;
 
   /**
-   * @generated from field: double memory_total_mb = 3;
+   * @generated from field: optional double memory_total_mb = 3;
    */
-  memoryTotalMb = 0;
+  memoryTotalMb?: number;
 
   /**
-   * @generated from field: double cpu_usage_percent = 4;
+   * @generated from field: optional double cpu_usage_percent = 4;
    */
-  cpuUsagePercent = 0;
+  cpuUsagePercent?: number;
 
   /**
-   * @generated from field: int32 active_tabs_count = 5;
+   * @generated from field: optional int32 active_tabs_count = 5;
    */
-  activeTabsCount = 0;
+  activeTabsCount?: number;
 
   /**
-   * @generated from field: int32 open_editors_count = 6;
+   * @generated from field: optional int32 open_editors_count = 6;
    */
-  openEditorsCount = 0;
+  openEditorsCount?: number;
 
   /**
-   * @generated from field: bool window_focused = 7;
+   * @generated from field: optional bool window_focused = 7;
    */
-  windowFocused = false;
+  windowFocused?: boolean;
 
   /**
-   * @generated from field: string window_size = 8;
+   * @generated from field: optional string window_size = 8;
    */
-  windowSize = "";
+  windowSize?: string;
 
   /**
    * @generated from field: map<string, string> additional_metadata = 9;
@@ -1832,14 +1832,14 @@ export class SystemMetadata extends Message<SystemMetadata> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SystemMetadata";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "timestamp", kind: "message", T: Timestamp },
-    { no: 2, name: "memory_used_mb", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 3, name: "memory_total_mb", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 4, name: "cpu_usage_percent", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 5, name: "active_tabs_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 6, name: "open_editors_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 7, name: "window_focused", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 8, name: "window_size", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "timestamp", kind: "message", T: Timestamp, opt: true },
+    { no: 2, name: "memory_used_mb", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
+    { no: 3, name: "memory_total_mb", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
+    { no: 4, name: "cpu_usage_percent", kind: "scalar", T: 1 /* ScalarType.DOUBLE */, opt: true },
+    { no: 5, name: "active_tabs_count", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 6, name: "open_editors_count", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 7, name: "window_focused", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 8, name: "window_size", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 9, name: "additional_metadata", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
   ]);
 
@@ -1885,17 +1885,17 @@ export class ToolCallTelemetryEvent extends Message<ToolCallTelemetryEvent> {
   modelName = "";
 
   /**
-   * @generated from field: google.protobuf.Timestamp start_time = 5;
+   * @generated from field: optional google.protobuf.Timestamp start_time = 5;
    */
   startTime?: Timestamp;
 
   /**
-   * @generated from field: google.protobuf.Timestamp end_time = 6;
+   * @generated from field: optional google.protobuf.Timestamp end_time = 6;
    */
   endTime?: Timestamp;
 
   /**
-   * @generated from field: google.protobuf.Duration duration = 7;
+   * @generated from field: optional google.protobuf.Duration duration = 7;
    */
   duration?: Duration;
 
@@ -1905,9 +1905,9 @@ export class ToolCallTelemetryEvent extends Message<ToolCallTelemetryEvent> {
   isParallel = false;
 
   /**
-   * @generated from field: int32 parallel_batch_size = 9;
+   * @generated from field: optional int32 parallel_batch_size = 9;
    */
-  parallelBatchSize = 0;
+  parallelBatchSize?: number;
 
   /**
    * @generated from field: bool success = 10;
@@ -1915,9 +1915,9 @@ export class ToolCallTelemetryEvent extends Message<ToolCallTelemetryEvent> {
   success = false;
 
   /**
-   * @generated from field: string error_message = 11;
+   * @generated from field: optional string error_message = 11;
    */
-  errorMessage = "";
+  errorMessage?: string;
 
   /**
    * @generated from field: map<string, string> metadata = 12;
@@ -1925,7 +1925,7 @@ export class ToolCallTelemetryEvent extends Message<ToolCallTelemetryEvent> {
   metadata: { [key: string]: string } = {};
 
   /**
-   * @generated from field: google.protobuf.Duration approval_wait_duration = 13;
+   * @generated from field: optional google.protobuf.Duration approval_wait_duration = 13;
    */
   approvalWaitDuration?: Duration;
 
@@ -1946,15 +1946,15 @@ export class ToolCallTelemetryEvent extends Message<ToolCallTelemetryEvent> {
     { no: 2, name: "tool_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "chat_request_uuid", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "model_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "start_time", kind: "message", T: Timestamp },
-    { no: 6, name: "end_time", kind: "message", T: Timestamp },
-    { no: 7, name: "duration", kind: "message", T: Duration },
+    { no: 5, name: "start_time", kind: "message", T: Timestamp, opt: true },
+    { no: 6, name: "end_time", kind: "message", T: Timestamp, opt: true },
+    { no: 7, name: "duration", kind: "message", T: Duration, opt: true },
     { no: 8, name: "is_parallel", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 9, name: "parallel_batch_size", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 9, name: "parallel_batch_size", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 10, name: "success", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 11, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 11, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 12, name: "metadata", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
-    { no: 13, name: "approval_wait_duration", kind: "message", T: Duration },
+    { no: 13, name: "approval_wait_duration", kind: "message", T: Duration, opt: true },
     { no: 14, name: "is_stream", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
@@ -1990,9 +1990,9 @@ export class TraceLink extends Message<TraceLink> {
   spanId = "";
 
   /**
-   * @generated from field: string trace_state = 3;
+   * @generated from field: optional string trace_state = 3;
    */
-  traceState = "";
+  traceState?: string;
 
   /**
    * @generated from field: map<string, string> attributes = 4;
@@ -2000,9 +2000,9 @@ export class TraceLink extends Message<TraceLink> {
   attributes: { [key: string]: string } = {};
 
   /**
-   * @generated from field: uint32 flags = 5;
+   * @generated from field: optional uint32 flags = 5;
    */
-  flags = 0;
+  flags?: number;
 
   constructor(data?: PartialMessage<TraceLink>) {
     super();
@@ -2014,9 +2014,9 @@ export class TraceLink extends Message<TraceLink> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "trace_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "span_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "trace_state", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "trace_state", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 4, name: "attributes", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
-    { no: 5, name: "flags", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 5, name: "flags", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): TraceLink {
@@ -2051,9 +2051,9 @@ export class TraceSpan extends Message<TraceSpan> {
   spanId = "";
 
   /**
-   * @generated from field: string parent_span_id = 3;
+   * @generated from field: optional string parent_span_id = 3;
    */
-  parentSpanId = "";
+  parentSpanId?: string;
 
   /**
    * @generated from field: string name = 4;
@@ -2061,12 +2061,12 @@ export class TraceSpan extends Message<TraceSpan> {
   name = "";
 
   /**
-   * @generated from field: google.protobuf.Timestamp start_time = 5;
+   * @generated from field: optional google.protobuf.Timestamp start_time = 5;
    */
   startTime?: Timestamp;
 
   /**
-   * @generated from field: google.protobuf.Timestamp end_time = 6;
+   * @generated from field: optional google.protobuf.Timestamp end_time = 6;
    */
   endTime?: Timestamp;
 
@@ -2076,27 +2076,27 @@ export class TraceSpan extends Message<TraceSpan> {
   attributes: { [key: string]: string } = {};
 
   /**
-   * @generated from field: bool error = 8;
+   * @generated from field: optional bool error = 8;
    */
-  error = false;
+  error?: boolean;
 
   /**
-   * @generated from field: string trace_state = 9;
+   * @generated from field: optional string trace_state = 9;
    */
-  traceState = "";
+  traceState?: string;
 
   /**
-   * @generated from field: uint32 flags = 10;
+   * @generated from field: optional uint32 flags = 10;
    */
-  flags = 0;
+  flags?: number;
 
   /**
-   * @generated from field: aiserver.v1.SpanKind kind = 11;
+   * @generated from field: optional aiserver.v1.SpanKind kind = 11;
    */
-  kind = SpanKind.UNSPECIFIED;
+  kind?: SpanKind;
 
   /**
-   * @generated from field: aiserver.v1.Status status = 12;
+   * @generated from field: optional aiserver.v1.Status status = 12;
    */
   status?: Status;
 
@@ -2115,16 +2115,16 @@ export class TraceSpan extends Message<TraceSpan> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "trace_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "span_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "parent_span_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "parent_span_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 4, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "start_time", kind: "message", T: Timestamp },
-    { no: 6, name: "end_time", kind: "message", T: Timestamp },
+    { no: 5, name: "start_time", kind: "message", T: Timestamp, opt: true },
+    { no: 6, name: "end_time", kind: "message", T: Timestamp, opt: true },
     { no: 7, name: "attributes", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
-    { no: 8, name: "error", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 9, name: "trace_state", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "flags", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 11, name: "kind", kind: "enum", T: proto3.getEnumType(SpanKind) },
-    { no: 12, name: "status", kind: "message", T: Status },
+    { no: 8, name: "error", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 9, name: "trace_state", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 10, name: "flags", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
+    { no: 11, name: "kind", kind: "enum", T: proto3.getEnumType(SpanKind), opt: true },
+    { no: 12, name: "status", kind: "message", T: Status, opt: true },
     { no: 13, name: "links", kind: "message", T: TraceLink, repeated: true },
   ]);
 

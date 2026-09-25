@@ -94,7 +94,7 @@ function toRedactedGetMcpToolsSuccess(msg, privacyMode) {
   return {
     _privacyMode: privacyMode,
     content: createRedactedString(msg.content, DataClassification.CODE, "content", privacyMode),
-    outputFilePath: createRedactedString(msg.outputFilePath, DataClassification.PATH, "output_file_path", privacyMode),
+    outputFilePath: msg.outputFilePath !== void 0 ? createRedactedString(msg.outputFilePath, DataClassification.PATH, "output_file_path", privacyMode) : void 0,
   };
 }
 
@@ -103,7 +103,7 @@ function fromRedactedGetMcpToolsSuccess(msg, purpose, opts) {
   const enforcing = opts?.enforcing;
   return new GetMcpToolsSuccess({
     content: msg.content.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    outputFilePath: msg.outputFilePath.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    outputFilePath: msg.outputFilePath?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
   });
 }
 

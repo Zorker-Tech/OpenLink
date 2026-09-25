@@ -90,12 +90,12 @@ export class SetupVmEnvironmentSuccess extends Message<SetupVmEnvironmentSuccess
  */
 export class SetupVmEnvironmentToolCall extends Message<SetupVmEnvironmentToolCall> {
   /**
-   * @generated from field: agent.v1.SetupVmEnvironmentArgs args = 1;
+   * @generated from field: optional agent.v1.SetupVmEnvironmentArgs args = 1;
    */
   args?: SetupVmEnvironmentArgs;
 
   /**
-   * @generated from field: agent.v1.SetupVmEnvironmentResult result = 2;
+   * @generated from field: optional agent.v1.SetupVmEnvironmentResult result = 2;
    */
   result?: SetupVmEnvironmentResult;
 
@@ -107,8 +107,8 @@ export class SetupVmEnvironmentToolCall extends Message<SetupVmEnvironmentToolCa
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.SetupVmEnvironmentToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: SetupVmEnvironmentArgs },
-    { no: 2, name: "result", kind: "message", T: SetupVmEnvironmentResult },
+    { no: 1, name: "args", kind: "message", T: SetupVmEnvironmentArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: SetupVmEnvironmentResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SetupVmEnvironmentToolCall {

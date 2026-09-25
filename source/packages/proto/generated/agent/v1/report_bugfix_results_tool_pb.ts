@@ -74,9 +74,9 @@ export class BugfixResultItem extends Message<BugfixResultItem> {
   explanation = "";
 
   /**
-   * @generated from field: string severity = 5;
+   * @generated from field: optional string severity = 5;
    */
-  severity = "";
+  severity?: string;
 
   constructor(data?: PartialMessage<BugfixResultItem>) {
     super();
@@ -90,7 +90,7 @@ export class BugfixResultItem extends Message<BugfixResultItem> {
     { no: 2, name: "bug_title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "verdict", kind: "enum", T: proto3.getEnumType(BugfixVerdict) },
     { no: 4, name: "explanation", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "severity", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "severity", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugfixResultItem {
@@ -189,12 +189,12 @@ export class ReportBugfixResultsError extends Message<ReportBugfixResultsError> 
  */
 export class ReportBugfixResultsToolCall extends Message<ReportBugfixResultsToolCall> {
   /**
-   * @generated from field: agent.v1.ReportBugfixResultsArgs args = 1;
+   * @generated from field: optional agent.v1.ReportBugfixResultsArgs args = 1;
    */
   args?: ReportBugfixResultsArgs;
 
   /**
-   * @generated from field: agent.v1.ReportBugfixResultsResult result = 2;
+   * @generated from field: optional agent.v1.ReportBugfixResultsResult result = 2;
    */
   result?: ReportBugfixResultsResult;
 
@@ -206,8 +206,8 @@ export class ReportBugfixResultsToolCall extends Message<ReportBugfixResultsTool
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.ReportBugfixResultsToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: ReportBugfixResultsArgs },
-    { no: 2, name: "result", kind: "message", T: ReportBugfixResultsResult },
+    { no: 1, name: "args", kind: "message", T: ReportBugfixResultsArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: ReportBugfixResultsResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ReportBugfixResultsToolCall {

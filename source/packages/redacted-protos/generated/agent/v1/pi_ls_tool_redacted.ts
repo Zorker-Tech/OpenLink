@@ -14,7 +14,7 @@ import { fromRedactedPiTruncation, toRedactedPiTruncation } from "./pi_common_re
 function toRedactedPiLsToolArgs(msg, privacyMode) {
   return {
     _privacyMode: privacyMode,
-    path: createRedactedString(msg.path, DataClassification.PATH, "path", privacyMode),
+    path: msg.path !== void 0 ? createRedactedString(msg.path, DataClassification.PATH, "path", privacyMode) : void 0,
     limit: msg.limit,
   };
 }
@@ -23,7 +23,7 @@ function fromRedactedPiLsToolArgs(msg, purpose, opts) {
   const redactUnallowedFieldsInsteadOfThrowing = opts?.redactUnallowedFieldsInsteadOfThrowing ?? false;
   const enforcing = opts?.enforcing;
   return new PiLsToolArgs({
-    path: msg.path.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    path: msg.path?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     limit: msg.limit,
   });
 }

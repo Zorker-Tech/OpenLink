@@ -25,17 +25,17 @@ message PodCreatingStatus {
 }
 
 message PodRunningStatus {
-  uint64 missed_heartbeat_deadline = 1 [json_name = "missedHeartbeatDeadline"];
+  optional uint64 missed_heartbeat_deadline = 1 [json_name = "missedHeartbeatDeadline"];
 }
 
 message PodFailedStatus {
   string reason = 1 [json_name = "reason"];
-  .anyrun.v1.PodFailureDetails failure_details = 2 [json_name = "failureDetails"];
+  optional .anyrun.v1.PodFailureDetails failure_details = 2 [json_name = "failureDetails"];
 }
 
 message PodTerminatedStatus {
   string reason = 1 [json_name = "reason"];
-  uint32 exit_code = 2 [json_name = "exitCode"];
+  optional uint32 exit_code = 2 [json_name = "exitCode"];
 }
 
 message PodFailureDetails {
@@ -61,8 +61,8 @@ message GitCloneFailure {
   int64 exit_code = 1 [json_name = "exitCode"];
   .anyrun.v1.GitCloneFailureCategory category = 2 [json_name = "category"];
   bool retryable = 3 [json_name = "retryable"];
-  string remote_host = 4 [json_name = "remoteHost"];
-  int32 http_status = 5 [json_name = "httpStatus"];
+  optional string remote_host = 4 [json_name = "remoteHost"];
+  optional int32 http_status = 5 [json_name = "httpStatus"];
 }
 
 message GitCheckoutFailure {
@@ -77,18 +77,18 @@ message ContainerWaitFailure {
 message ImagePullFailure {
   .anyrun.v1.ImagePullFailureCategory category = 1 [json_name = "category"];
   bool retryable = 2 [json_name = "retryable"];
-  int32 http_status = 3 [json_name = "httpStatus"];
-  string repository = 4 [json_name = "repository"];
+  optional int32 http_status = 3 [json_name = "httpStatus"];
+  optional string repository = 4 [json_name = "repository"];
 }
 
 message DaemonPod {
-  .anyrun.v1.PodStatus status = 2 [json_name = "status"];
-  uint32 internal_proxy_port = 3 [json_name = "internalProxyPort"];
-  .anyrun.v1.DefaultPortConfig default_port_config = 4 [json_name = "defaultPortConfig"];
-  string started_from_checkpoint_group_id = 5 [json_name = "startedFromCheckpointGroupId"];
-  .anyrun.v1.PodStartCacheSource started_from_cache_source = 6 [json_name = "startedFromCacheSource"];
-  uint64 started_from_checkpoint_creation_timestamp = 7 [json_name = "startedFromCheckpointCreationTimestamp"];
-  string started_from_checkpoint_id = 8 [json_name = "startedFromCheckpointId"];
+  optional .anyrun.v1.PodStatus status = 2 [json_name = "status"];
+  optional uint32 internal_proxy_port = 3 [json_name = "internalProxyPort"];
+  optional .anyrun.v1.DefaultPortConfig default_port_config = 4 [json_name = "defaultPortConfig"];
+  optional string started_from_checkpoint_group_id = 5 [json_name = "startedFromCheckpointGroupId"];
+  optional .anyrun.v1.PodStartCacheSource started_from_cache_source = 6 [json_name = "startedFromCacheSource"];
+  optional uint64 started_from_checkpoint_creation_timestamp = 7 [json_name = "startedFromCheckpointCreationTimestamp"];
+  optional string started_from_checkpoint_id = 8 [json_name = "startedFromCheckpointId"];
 }
 
 enum GitCloneFailureCategory {
@@ -115,41 +115,41 @@ enum ImagePullFailureCategory {
 message Pod {
   string tenant_id = 1 [json_name = "tenantId"];
   string pod_id = 2 [json_name = "podId"];
-  .anyrun.v1.ResourceRequests resource_requests = 4 [json_name = "resourceRequests"];
+  optional .anyrun.v1.ResourceRequests resource_requests = 4 [json_name = "resourceRequests"];
   string node_id = 5 [json_name = "nodeId"];
-  .anyrun.v1.PodPorts ports = 6 [json_name = "ports"];
+  optional .anyrun.v1.PodPorts ports = 6 [json_name = "ports"];
   string network_token = 7 [json_name = "networkToken"];
-  .anyrun.v1.PodStatus status = 8 [json_name = "status"];
+  optional .anyrun.v1.PodStatus status = 8 [json_name = "status"];
   uint32 resource_version = 9 [json_name = "resourceVersion"];
   string name = 10 [json_name = "name"];
   map<string, string> labels = 11 [json_name = "labels"];
   uint64 creation_timestamp = 12 [json_name = "creationTimestamp"];
-  uint64 deletion_timestamp = 13 [json_name = "deletionTimestamp"];
-  uint64 hibernation_timestamp = 14 [json_name = "hibernationTimestamp"];
-  bool hibernated = 15 [json_name = "hibernated"];
-  .anyrun.v1.PersistedDevContainerConfig config = 16 [json_name = "config"];
-  .anyrun.v1.ResourceLimits resource_limits = 17 [json_name = "resourceLimits"];
-  bool cache = 18 [json_name = "cache"];
-  string cache_tag = 19 [json_name = "cacheTag"];
-  .anyrun.v1.ResourceRequests hibernated_resource_requests = 20 [json_name = "hibernatedResourceRequests"];
+  optional uint64 deletion_timestamp = 13 [json_name = "deletionTimestamp"];
+  optional uint64 hibernation_timestamp = 14 [json_name = "hibernationTimestamp"];
+  optional bool hibernated = 15 [json_name = "hibernated"];
+  optional .anyrun.v1.PersistedDevContainerConfig config = 16 [json_name = "config"];
+  optional .anyrun.v1.ResourceLimits resource_limits = 17 [json_name = "resourceLimits"];
+  optional bool cache = 18 [json_name = "cache"];
+  optional string cache_tag = 19 [json_name = "cacheTag"];
+  optional .anyrun.v1.ResourceRequests hibernated_resource_requests = 20 [json_name = "hibernatedResourceRequests"];
   string workload = 21 [json_name = "workload"];
-  uint32 internal_proxy_port = 22 [json_name = "internalProxyPort"];
-  uint64 modified_timestamp = 23 [json_name = "modifiedTimestamp"];
-  uint64 pod_awake_since = 24 [json_name = "podAwakeSince"];
+  optional uint32 internal_proxy_port = 22 [json_name = "internalProxyPort"];
+  optional uint64 modified_timestamp = 23 [json_name = "modifiedTimestamp"];
+  optional uint64 pod_awake_since = 24 [json_name = "podAwakeSince"];
   repeated string low_cardinality_labels = 25 [json_name = "lowCardinalityLabels"];
   repeated string checkpoint_group_ids = 26 [json_name = "checkpointGroupIds"];
-  string started_from_checkpoint_group_id = 27 [json_name = "startedFromCheckpointGroupId"];
-  .anyrun.v1.PodStartCacheSource started_from_cache_source = 28 [json_name = "startedFromCacheSource"];
-  uint64 started_from_checkpoint_creation_timestamp = 29 [json_name = "startedFromCheckpointCreationTimestamp"];
-  string started_from_checkpoint_id = 30 [json_name = "startedFromCheckpointId"];
-  .anyrun.v1.AntiAffinityTags anti_affinity_tags = 31 [json_name = "antiAffinityTags"];
-  bool collect_metrics = 32 [json_name = "collectMetrics"];
+  optional string started_from_checkpoint_group_id = 27 [json_name = "startedFromCheckpointGroupId"];
+  optional .anyrun.v1.PodStartCacheSource started_from_cache_source = 28 [json_name = "startedFromCacheSource"];
+  optional uint64 started_from_checkpoint_creation_timestamp = 29 [json_name = "startedFromCheckpointCreationTimestamp"];
+  optional string started_from_checkpoint_id = 30 [json_name = "startedFromCheckpointId"];
+  optional .anyrun.v1.AntiAffinityTags anti_affinity_tags = 31 [json_name = "antiAffinityTags"];
+  optional bool collect_metrics = 32 [json_name = "collectMetrics"];
   repeated .anyrun.v1.PodMeshLink mesh_links = 34 [json_name = "meshLinks"];
 }
 
 message PodCollection {
   repeated .anyrun.v1.Pod items = 1 [json_name = "items"];
-  string next_cursor = 2 [json_name = "nextCursor"];
+  optional string next_cursor = 2 [json_name = "nextCursor"];
 }
 
 enum PodCreatingPhase {
@@ -163,7 +163,7 @@ enum PodCreatingPhase {
 }
 
 message PodFilter {
-  string pod_id = 1 [json_name = "podId"];
+  optional string pod_id = 1 [json_name = "podId"];
   map<string, string> labels = 2 [json_name = "labels"];
 }
 
@@ -174,7 +174,7 @@ message PodMeshLink {
 
 message PodPorts {
   repeated .anyrun.v1.PortDefinition ports = 1 [json_name = "ports"];
-  .anyrun.v1.DefaultPortConfig default_port_config = 2 [json_name = "defaultPortConfig"];
+  optional .anyrun.v1.DefaultPortConfig default_port_config = 2 [json_name = "defaultPortConfig"];
 }
 
 enum PodStartCacheSource {
@@ -184,7 +184,7 @@ enum PodStartCacheSource {
 }
 
 message PodUpdate {
-  string event_id = 1 [json_name = "eventId"];
+  optional string event_id = 1 [json_name = "eventId"];
   oneof update {
     .anyrun.v1.PodCollection initial = 2 [json_name = "initial"];
     .anyrun.v1.Pod added = 3 [json_name = "added"];

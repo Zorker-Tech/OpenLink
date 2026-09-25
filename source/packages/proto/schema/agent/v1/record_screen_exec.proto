@@ -10,7 +10,7 @@ package agent.v1;
 message RecordScreenArgs {
   .agent.v1.RecordingMode mode = 1 [json_name = "mode"];
   string tool_call_id = 2 [json_name = "toolCallId"];
-  string save_as_filename = 3 [json_name = "saveAsFilename"];
+  optional string save_as_filename = 3 [json_name = "saveAsFilename"];
 }
 
 message RecordScreenResult {
@@ -30,7 +30,7 @@ message RecordScreenStartSuccess {
 message RecordScreenSaveSuccess {
   string path = 1 [json_name = "path"];
   int64 recording_duration_ms = 2 [json_name = "recordingDurationMs"];
-  .agent.v1.RequestedFilePathRejectedReason requested_file_path_rejected_reason = 3 [json_name = "requestedFilePathRejectedReason"];
+  optional .agent.v1.RequestedFilePathRejectedReason requested_file_path_rejected_reason = 3 [json_name = "requestedFilePathRejectedReason"];
 }
 
 message RecordScreenDiscardSuccess {

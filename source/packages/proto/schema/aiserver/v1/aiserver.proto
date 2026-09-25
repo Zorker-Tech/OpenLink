@@ -42,26 +42,26 @@ message AcknowledgeGracePeriodDisclaimerResponse {
 
 message AdvancedCodebaseContextOptions {
   int32 num_results_per_search = 1 [json_name = "numResultsPerSearch"];
-  string include_pattern = 2 [json_name = "includePattern"];
-  string exclude_pattern = 3 [json_name = "excludePattern"];
+  optional string include_pattern = 2 [json_name = "includePattern"];
+  optional string exclude_pattern = 3 [json_name = "excludePattern"];
   .aiserver.v1.RerankerAlgorithm reranker = 4 [json_name = "reranker"];
-  string index_id = 5 [json_name = "indexId"];
+  optional string index_id = 5 [json_name = "indexId"];
   bool reasoning_step = 6 [json_name = "reasoningStep"];
-  .aiserver.v1.RechunkerChoice rechunker = 7 [json_name = "rechunker"];
+  optional .aiserver.v1.RechunkerChoice rechunker = 7 [json_name = "rechunker"];
 }
 
 message AiCodeChange {
   string change_id = 1 [json_name = "changeId"];
   string source = 2 [json_name = "source"];
   repeated .aiserver.v1.ScoredAiCodeMetadata metadata = 3 [json_name = "metadata"];
-  string model = 4 [json_name = "model"];
+  optional string model = 4 [json_name = "model"];
   int32 total_lines_added = 5 [json_name = "totalLinesAdded"];
   int32 total_lines_deleted = 6 [json_name = "totalLinesDeleted"];
 }
 
 message AiProjectRequest {
   string description = 1 [json_name = "description"];
-  .aiserver.v1.ModelDetails model_details = 2 [json_name = "modelDetails"];
+  optional .aiserver.v1.ModelDetails model_details = 2 [json_name = "modelDetails"];
 }
 
 message AiProjectResponse {
@@ -71,13 +71,13 @@ message AiProjectResponse {
 message AiThoughtAnnotation {
   string request_id = 1 [json_name = "requestId"];
   string auth_id = 2 [json_name = "authId"];
-  .aiserver.v1.CmdKDebugInfo debug_info = 3 [json_name = "debugInfo"];
+  optional .aiserver.v1.CmdKDebugInfo debug_info = 3 [json_name = "debugInfo"];
   string thought = 4 [json_name = "thought"];
 }
 
 message ApiDetails {
   string api_key = 1 [json_name = "apiKey"];
-  bool enable_ghost_mode = 2 [json_name = "enableGhostMode"];
+  optional bool enable_ghost_mode = 2 [json_name = "enableGhostMode"];
 }
 
 message AtSymbolDependencyInformation {
@@ -104,7 +104,7 @@ message AutoContextRankedFile {
 message AutoContextRequest {
   string text = 1 [json_name = "text"];
   repeated .aiserver.v1.AutoContextFile candidate_files = 2 [json_name = "candidateFiles"];
-  .aiserver.v1.ModelDetails model_details = 3 [json_name = "modelDetails"];
+  optional .aiserver.v1.ModelDetails model_details = 3 [json_name = "modelDetails"];
 }
 
 message AutoContextResponse {
@@ -141,83 +141,83 @@ message AvailableModelsRequest {
   bool include_long_context_models = 2 [json_name = "includeLongContextModels"];
   bool exclude_max_named_models = 3 [json_name = "excludeMaxNamedModels"];
   repeated string additional_model_names = 4 [json_name = "additionalModelNames"];
-  bool use_model_parameters = 5 [json_name = "useModelParameters"];
-  bool include_hidden_models = 6 [json_name = "includeHiddenModels"];
-  bool do_not_use_markdown = 7 [json_name = "doNotUseMarkdown"];
-  bool variants_will_be_shown_in_exploded_list = 8 [json_name = "variantsWillBeShownInExplodedList"];
-  bool for_automations = 9 [json_name = "forAutomations"];
-  .aiserver.v1.AvailableModelsScope scope = 10 [json_name = "scope"];
-  bool use_react_model_picker = 11 [json_name = "useReactModelPicker"];
-  bool use_cloud_agent_effort_modes = 12 [json_name = "useCloudAgentEffortModes"];
-  string admin_settings_group_public_id = 13 [json_name = "adminSettingsGroupPublicId"];
-  bool byok_enabled = 14 [json_name = "byokEnabled"];
+  optional bool use_model_parameters = 5 [json_name = "useModelParameters"];
+  optional bool include_hidden_models = 6 [json_name = "includeHiddenModels"];
+  optional bool do_not_use_markdown = 7 [json_name = "doNotUseMarkdown"];
+  optional bool variants_will_be_shown_in_exploded_list = 8 [json_name = "variantsWillBeShownInExplodedList"];
+  optional bool for_automations = 9 [json_name = "forAutomations"];
+  optional .aiserver.v1.AvailableModelsScope scope = 10 [json_name = "scope"];
+  optional bool use_react_model_picker = 11 [json_name = "useReactModelPicker"];
+  optional bool use_cloud_agent_effort_modes = 12 [json_name = "useCloudAgentEffortModes"];
+  optional string admin_settings_group_public_id = 13 [json_name = "adminSettingsGroupPublicId"];
+  optional bool byok_enabled = 14 [json_name = "byokEnabled"];
 }
 
 message AvailableModelsResponse {
   repeated string model_names = 1 [json_name = "modelNames"];
   repeated .aiserver.v1.AvailableModelsResponse.AvailableModel models = 2 [json_name = "models"];
-  .aiserver.v1.AvailableModelsResponse.FeatureModelConfig composer_model_config = 4 [json_name = "composerModelConfig"];
-  .aiserver.v1.AvailableModelsResponse.FeatureModelConfig cmd_k_model_config = 5 [json_name = "cmdKModelConfig"];
-  .aiserver.v1.AvailableModelsResponse.FeatureModelConfig background_composer_model_config = 6 [json_name = "backgroundComposerModelConfig"];
-  .aiserver.v1.AvailableModelsResponse.FeatureModelConfig plan_execution_model_config = 7 [json_name = "planExecutionModelConfig"];
-  .aiserver.v1.AvailableModelsResponse.FeatureModelConfig spec_model_config = 8 [json_name = "specModelConfig"];
-  .aiserver.v1.AvailableModelsResponse.FeatureModelConfig deep_search_model_config = 9 [json_name = "deepSearchModelConfig"];
-  .aiserver.v1.AvailableModelsResponse.FeatureModelConfig quick_agent_model_config = 10 [json_name = "quickAgentModelConfig"];
+  optional .aiserver.v1.AvailableModelsResponse.FeatureModelConfig composer_model_config = 4 [json_name = "composerModelConfig"];
+  optional .aiserver.v1.AvailableModelsResponse.FeatureModelConfig cmd_k_model_config = 5 [json_name = "cmdKModelConfig"];
+  optional .aiserver.v1.AvailableModelsResponse.FeatureModelConfig background_composer_model_config = 6 [json_name = "backgroundComposerModelConfig"];
+  optional .aiserver.v1.AvailableModelsResponse.FeatureModelConfig plan_execution_model_config = 7 [json_name = "planExecutionModelConfig"];
+  optional .aiserver.v1.AvailableModelsResponse.FeatureModelConfig spec_model_config = 8 [json_name = "specModelConfig"];
+  optional .aiserver.v1.AvailableModelsResponse.FeatureModelConfig deep_search_model_config = 9 [json_name = "deepSearchModelConfig"];
+  optional .aiserver.v1.AvailableModelsResponse.FeatureModelConfig quick_agent_model_config = 10 [json_name = "quickAgentModelConfig"];
   bool use_model_parameters = 11 [json_name = "useModelParameters"];
-  int32 disable_unused_models_after_n_hours = 12 [json_name = "disableUnusedModelsAfterNHours"];
-  int32 upgrade_unchanged_models_after_n_hours = 13 [json_name = "upgradeUnchangedModelsAfterNHours"];
-  .aiserver.v1.AvailableModelsResponse.ModelPickerDisplayConfiguration display_configuration = 15 [json_name = "displayConfiguration"];
+  optional int32 disable_unused_models_after_n_hours = 12 [json_name = "disableUnusedModelsAfterNHours"];
+  optional int32 upgrade_unchanged_models_after_n_hours = 13 [json_name = "upgradeUnchangedModelsAfterNHours"];
+  optional .aiserver.v1.AvailableModelsResponse.ModelPickerDisplayConfiguration display_configuration = 15 [json_name = "displayConfiguration"];
   map<string, .aiserver.v1.AvailableModelsResponse.FeatureModelConfig> subagent_model_configs = 16 [json_name = "subagentModelConfigs"];
-  string experimental_model_id = 19 [json_name = "experimentalModelId"];
-  string experimental_model_display_name = 20 [json_name = "experimentalModelDisplayName"];
-  string nudge_new_chats_to_auto_optimize_for = 21 [json_name = "nudgeNewChatsToAutoOptimizeFor"];
+  optional string experimental_model_id = 19 [json_name = "experimentalModelId"];
+  optional string experimental_model_display_name = 20 [json_name = "experimentalModelDisplayName"];
+  optional string nudge_new_chats_to_auto_optimize_for = 21 [json_name = "nudgeNewChatsToAutoOptimizeFor"];
   message AvailableModel {
     string name = 1 [json_name = "name"];
     bool default_on = 2 [json_name = "defaultOn"];
-    bool is_long_context_only = 3 [json_name = "isLongContextOnly"];
-    bool is_chat_only = 4 [json_name = "isChatOnly"];
-    bool supports_agent = 5 [json_name = "supportsAgent"];
-    .aiserver.v1.AvailableModelsResponse.DegradationStatus degradation_status = 6 [json_name = "degradationStatus"];
-    double price = 7 [json_name = "price"];
-    .aiserver.v1.AvailableModelsResponse.TooltipData tooltip_data = 8 [json_name = "tooltipData"];
-    bool supports_thinking = 9 [json_name = "supportsThinking"];
-    bool supports_images = 10 [json_name = "supportsImages"];
-    bool supports_auto_context = 11 [json_name = "supportsAutoContext"];
-    int32 auto_context_max_tokens = 12 [json_name = "autoContextMaxTokens"];
-    int32 auto_context_extended_max_tokens = 13 [json_name = "autoContextExtendedMaxTokens"];
-    bool supports_max_mode = 14 [json_name = "supportsMaxMode"];
-    int32 context_token_limit = 15 [json_name = "contextTokenLimit"];
-    int32 context_token_limit_for_max_mode = 16 [json_name = "contextTokenLimitForMaxMode"];
-    string client_display_name = 17 [json_name = "clientDisplayName"];
-    string server_model_name = 18 [json_name = "serverModelName"];
-    bool supports_non_max_mode = 19 [json_name = "supportsNonMaxMode"];
-    .aiserver.v1.AvailableModelsResponse.TooltipData tooltip_data_for_max_mode = 20 [json_name = "tooltipDataForMaxMode"];
-    bool is_recommended_for_background_composer = 21 [json_name = "isRecommendedForBackgroundComposer"];
-    bool supports_plan_mode = 22 [json_name = "supportsPlanMode"];
-    bool is_user_added = 23 [json_name = "isUserAdded"];
-    string inputbox_short_model_name = 24 [json_name = "inputboxShortModelName"];
-    bool supports_sandboxing = 25 [json_name = "supportsSandboxing"];
-    bool supports_cmd_k = 26 [json_name = "supportsCmdK"];
-    bool only_supports_cmd_k = 27 [json_name = "onlySupportsCmdK"];
-    int32 background_composer_sort_order = 28 [json_name = "backgroundComposerSortOrder"];
+    optional bool is_long_context_only = 3 [json_name = "isLongContextOnly"];
+    optional bool is_chat_only = 4 [json_name = "isChatOnly"];
+    optional bool supports_agent = 5 [json_name = "supportsAgent"];
+    optional .aiserver.v1.AvailableModelsResponse.DegradationStatus degradation_status = 6 [json_name = "degradationStatus"];
+    optional double price = 7 [json_name = "price"];
+    optional .aiserver.v1.AvailableModelsResponse.TooltipData tooltip_data = 8 [json_name = "tooltipData"];
+    optional bool supports_thinking = 9 [json_name = "supportsThinking"];
+    optional bool supports_images = 10 [json_name = "supportsImages"];
+    optional bool supports_auto_context = 11 [json_name = "supportsAutoContext"];
+    optional int32 auto_context_max_tokens = 12 [json_name = "autoContextMaxTokens"];
+    optional int32 auto_context_extended_max_tokens = 13 [json_name = "autoContextExtendedMaxTokens"];
+    optional bool supports_max_mode = 14 [json_name = "supportsMaxMode"];
+    optional int32 context_token_limit = 15 [json_name = "contextTokenLimit"];
+    optional int32 context_token_limit_for_max_mode = 16 [json_name = "contextTokenLimitForMaxMode"];
+    optional string client_display_name = 17 [json_name = "clientDisplayName"];
+    optional string server_model_name = 18 [json_name = "serverModelName"];
+    optional bool supports_non_max_mode = 19 [json_name = "supportsNonMaxMode"];
+    optional .aiserver.v1.AvailableModelsResponse.TooltipData tooltip_data_for_max_mode = 20 [json_name = "tooltipDataForMaxMode"];
+    optional bool is_recommended_for_background_composer = 21 [json_name = "isRecommendedForBackgroundComposer"];
+    optional bool supports_plan_mode = 22 [json_name = "supportsPlanMode"];
+    optional bool is_user_added = 23 [json_name = "isUserAdded"];
+    optional string inputbox_short_model_name = 24 [json_name = "inputboxShortModelName"];
+    optional bool supports_sandboxing = 25 [json_name = "supportsSandboxing"];
+    optional bool supports_cmd_k = 26 [json_name = "supportsCmdK"];
+    optional bool only_supports_cmd_k = 27 [json_name = "onlySupportsCmdK"];
+    optional int32 background_composer_sort_order = 28 [json_name = "backgroundComposerSortOrder"];
     repeated .aiserver.v1.ModelParameterDefinition parameter_definitions = 29 [json_name = "parameterDefinitions"];
     repeated .aiserver.v1.AvailableModelsResponse.ModelVariantConfig variants = 30 [json_name = "variants"];
-    .aiserver.v1.CloudAgentEffortMode cloud_agent_effort_mode = 32 [json_name = "cloudAgentEffortMode"];
-    string cloud_migrate_to_model = 33 [json_name = "cloudMigrateToModel"];
-    string upgrade_model_id = 34 [json_name = "upgradeModelId"];
-    bool is_hidden = 35 [json_name = "isHidden"];
+    optional .aiserver.v1.CloudAgentEffortMode cloud_agent_effort_mode = 32 [json_name = "cloudAgentEffortMode"];
+    optional string cloud_migrate_to_model = 33 [json_name = "cloudMigrateToModel"];
+    optional string upgrade_model_id = 34 [json_name = "upgradeModelId"];
+    optional bool is_hidden = 35 [json_name = "isHidden"];
     repeated string legacy_slugs = 36 [json_name = "legacySlugs"];
     repeated string id_aliases = 37 [json_name = "idAliases"];
-    int32 named_model_section_index = 38 [json_name = "namedModelSectionIndex"];
-    string tagline = 39 [json_name = "tagline"];
-    bool visible_in_routed_model_view = 40 [json_name = "visibleInRoutedModelView"];
-    string vendor_name = 41 [json_name = "vendorName"];
-    .aiserver.v1.AvailableModelsResponse.ModelVendor vendor = 42 [json_name = "vendor"];
-    bool default_disabled_in_admin_allowlist = 43 [json_name = "defaultDisabledInAdminAllowlist"];
+    optional int32 named_model_section_index = 38 [json_name = "namedModelSectionIndex"];
+    optional string tagline = 39 [json_name = "tagline"];
+    optional bool visible_in_routed_model_view = 40 [json_name = "visibleInRoutedModelView"];
+    optional string vendor_name = 41 [json_name = "vendorName"];
+    optional .aiserver.v1.AvailableModelsResponse.ModelVendor vendor = 42 [json_name = "vendor"];
+    optional bool default_disabled_in_admin_allowlist = 43 [json_name = "defaultDisabledInAdminAllowlist"];
     repeated .aiserver.v1.CloudAgentEffortMode cloud_agent_effort_modes = 44 [json_name = "cloudAgentEffortModes"];
-    bool supports_smart_mode_classifier = 45 [json_name = "supportsSmartModeClassifier"];
-    bool requires_data_retention = 46 [json_name = "requiresDataRetention"];
-    string reason_for_zdr_consent_block = 47 [json_name = "reasonForZdrConsentBlock"];
+    optional bool supports_smart_mode_classifier = 45 [json_name = "supportsSmartModeClassifier"];
+    optional bool requires_data_retention = 46 [json_name = "requiresDataRetention"];
+    optional string reason_for_zdr_consent_block = 47 [json_name = "reasonForZdrConsentBlock"];
     repeated .aiserver.v1.AvailableModelsResponse.ModelPickerBadge model_picker_badges = 48 [json_name = "modelPickerBadges"];
   }
   message ConfirmationDialogue {
@@ -225,7 +225,7 @@ message AvailableModelsResponse {
     string body = 2 [json_name = "body"];
     string key = 3 [json_name = "key"];
     bool blocks_submission = 4 [json_name = "blocksSubmission"];
-    .aiserver.v1.AvailableModelsResponse.ConfirmationDialogue.Presentation presentation = 5 [json_name = "presentation"];
+    optional .aiserver.v1.AvailableModelsResponse.ConfirmationDialogue.Presentation presentation = 5 [json_name = "presentation"];
     enum Presentation {
       PRESENTATION_UNSPECIFIED = 0;
       PRESENTATION_POST_PICKER_WARNING = 1;
@@ -255,15 +255,15 @@ message AvailableModelsResponse {
     }
   }
   message ModelPickerDisplayConfiguration {
-    .aiserver.v1.AvailableModelsResponse.ModelPickerDisplayConfiguration.RoutedModelViewConfig routed_model_view_config = 1 [json_name = "routedModelViewConfig"];
-    .aiserver.v1.AvailableModelsResponse.ModelPickerDisplayConfiguration.NamedModelsViewConfig named_models_view_config = 2 [json_name = "namedModelsViewConfig"];
-    bool hide_search_bar = 3 [json_name = "hideSearchBar"];
-    bool hide_add_models = 4 [json_name = "hideAddModels"];
-    string model_selection_restriction_message = 5 [json_name = "modelSelectionRestrictionMessage"];
+    optional .aiserver.v1.AvailableModelsResponse.ModelPickerDisplayConfiguration.RoutedModelViewConfig routed_model_view_config = 1 [json_name = "routedModelViewConfig"];
+    optional .aiserver.v1.AvailableModelsResponse.ModelPickerDisplayConfiguration.NamedModelsViewConfig named_models_view_config = 2 [json_name = "namedModelsViewConfig"];
+    optional bool hide_search_bar = 3 [json_name = "hideSearchBar"];
+    optional bool hide_add_models = 4 [json_name = "hideAddModels"];
+    optional string model_selection_restriction_message = 5 [json_name = "modelSelectionRestrictionMessage"];
     message NamedModelsViewConfig {
-      .aiserver.v1.AvailableModelsResponse.ModelPickerDisplayConfiguration.NamedModelsViewConfig.NamedViewToRoutedModelViewToggle named_view_to_routed_model_view_toggle = 2 [json_name = "namedViewToRoutedModelViewToggle"];
-      .aiserver.v1.AvailableModelsResponse.ModelPickerDisplayConfiguration.NamedModelsViewConfig.NamedViewToRoutedModelViewNoButton named_view_to_routed_model_view_no_button = 3 [json_name = "namedViewToRoutedModelViewNoButton"];
-      .aiserver.v1.AvailableModelsResponse.ModelPickerDisplayConfiguration.NamedModelsViewConfig.NamedViewToRoutedModelViewButton named_view_to_routed_model_view_button = 4 [json_name = "namedViewToRoutedModelViewButton"];
+      optional .aiserver.v1.AvailableModelsResponse.ModelPickerDisplayConfiguration.NamedModelsViewConfig.NamedViewToRoutedModelViewToggle named_view_to_routed_model_view_toggle = 2 [json_name = "namedViewToRoutedModelViewToggle"];
+      optional .aiserver.v1.AvailableModelsResponse.ModelPickerDisplayConfiguration.NamedModelsViewConfig.NamedViewToRoutedModelViewNoButton named_view_to_routed_model_view_no_button = 3 [json_name = "namedViewToRoutedModelViewNoButton"];
+      optional .aiserver.v1.AvailableModelsResponse.ModelPickerDisplayConfiguration.NamedModelsViewConfig.NamedViewToRoutedModelViewButton named_view_to_routed_model_view_button = 4 [json_name = "namedViewToRoutedModelViewButton"];
       message NamedViewToRoutedModelViewButton {
         string markdown = 1 [json_name = "markdown"];
       }
@@ -274,18 +274,18 @@ message AvailableModelsResponse {
       }
     }
     message RoutedModelViewConfig {
-      string title = 1 [json_name = "title"];
-      .aiserver.v1.AvailableModelsResponse.ModelPickerDisplayConfiguration.RoutedModelViewConfig.RoutedModelViewToNamedViewToggle routed_model_view_to_named_view_toggle = 2 [json_name = "routedModelViewToNamedViewToggle"];
-      .aiserver.v1.AvailableModelsResponse.ModelPickerDisplayConfiguration.RoutedModelViewConfig.RoutedModelViewToNamedViewButton routed_model_view_to_named_view_button = 3 [json_name = "routedModelViewToNamedViewButton"];
-      bool hide_search_bar = 4 [json_name = "hideSearchBar"];
-      bool hide_routed_model_view = 5 [json_name = "hideRoutedModelView"];
+      optional string title = 1 [json_name = "title"];
+      optional .aiserver.v1.AvailableModelsResponse.ModelPickerDisplayConfiguration.RoutedModelViewConfig.RoutedModelViewToNamedViewToggle routed_model_view_to_named_view_toggle = 2 [json_name = "routedModelViewToNamedViewToggle"];
+      optional .aiserver.v1.AvailableModelsResponse.ModelPickerDisplayConfiguration.RoutedModelViewConfig.RoutedModelViewToNamedViewButton routed_model_view_to_named_view_button = 3 [json_name = "routedModelViewToNamedViewButton"];
+      optional bool hide_search_bar = 4 [json_name = "hideSearchBar"];
+      optional bool hide_routed_model_view = 5 [json_name = "hideRoutedModelView"];
       message RoutedModelViewToNamedViewButton {
         string markdown = 1 [json_name = "markdown"];
       }
       message RoutedModelViewToNamedViewToggle {
         string title_markdown = 1 [json_name = "titleMarkdown"];
-        string subtitle = 2 [json_name = "subtitle"];
-        bool set_to_last_named_model = 3 [json_name = "setToLastNamedModel"];
+        optional string subtitle = 2 [json_name = "subtitle"];
+        optional bool set_to_last_named_model = 3 [json_name = "setToLastNamedModel"];
       }
     }
   }
@@ -293,14 +293,14 @@ message AvailableModelsResponse {
     repeated .agent.v1.RequestedModel.ModelParameterValue parameter_values = 1 [json_name = "parameterValues"];
     string display_name = 2 [json_name = "displayName"];
     bool is_max_mode = 3 [json_name = "isMaxMode"];
-    bool is_default_max_config = 4 [json_name = "isDefaultMaxConfig"];
-    bool is_default_non_max_config = 5 [json_name = "isDefaultNonMaxConfig"];
-    .aiserver.v1.AvailableModelsResponse.TooltipData tooltip_data = 6 [json_name = "tooltipData"];
-    string tagline = 7 [json_name = "tagline"];
-    string display_name_outside_picker = 8 [json_name = "displayNameOutsidePicker"];
-    string variant_string_representation = 9 [json_name = "variantStringRepresentation"];
-    .aiserver.v1.AvailableModelsResponse.ConfirmationDialogue confirmation_dialogue = 10 [json_name = "confirmationDialogue"];
-    string legacy_slug = 11 [json_name = "legacySlug"];
+    optional bool is_default_max_config = 4 [json_name = "isDefaultMaxConfig"];
+    optional bool is_default_non_max_config = 5 [json_name = "isDefaultNonMaxConfig"];
+    optional .aiserver.v1.AvailableModelsResponse.TooltipData tooltip_data = 6 [json_name = "tooltipData"];
+    optional string tagline = 7 [json_name = "tagline"];
+    optional string display_name_outside_picker = 8 [json_name = "displayNameOutsidePicker"];
+    optional string variant_string_representation = 9 [json_name = "variantStringRepresentation"];
+    optional .aiserver.v1.AvailableModelsResponse.ConfirmationDialogue confirmation_dialogue = 10 [json_name = "confirmationDialogue"];
+    optional string legacy_slug = 11 [json_name = "legacySlug"];
   }
   message ModelVendor {
     .aiserver.v1.AvailableModelsResponse.ModelVendorId id = 1 [json_name = "id"];
@@ -325,7 +325,7 @@ message AvailableModelsResponse {
     string icon = 4 [json_name = "icon"];
     string tertiary_text = 5 [json_name = "tertiaryText"];
     string tertiary_text_url = 6 [json_name = "tertiaryTextUrl"];
-    string markdown_content = 7 [json_name = "markdownContent"];
+    optional string markdown_content = 7 [json_name = "markdownContent"];
   }
 }
 
@@ -338,8 +338,8 @@ enum AvailableModelsScope {
 
 message BackgroundCmdKEvalRequest {
   string instruction = 1 [json_name = "instruction"];
-  .aiserver.v1.CurrentFileInfo current_file = 2 [json_name = "currentFile"];
-  .aiserver.v1.SimpleRange selection_range = 3 [json_name = "selectionRange"];
+  optional .aiserver.v1.CurrentFileInfo current_file = 2 [json_name = "currentFile"];
+  optional .aiserver.v1.SimpleRange selection_range = 3 [json_name = "selectionRange"];
   string ground_truth = 4 [json_name = "groundTruth"];
   .aiserver.v1.BackgroundCmdKEvalRequest.Experiment experiment = 5 [json_name = "experiment"];
   bool run_automated_eval = 6 [json_name = "runAutomatedEval"];
@@ -395,8 +395,8 @@ message BackgroundCmdKEvalResponse {
 
 message BackgroundCmdKRequest {
   string instruction = 1 [json_name = "instruction"];
-  .aiserver.v1.CurrentFileInfo current_file = 2 [json_name = "currentFile"];
-  .aiserver.v1.SimpleRange selection_range = 3 [json_name = "selectionRange"];
+  optional .aiserver.v1.CurrentFileInfo current_file = 2 [json_name = "currentFile"];
+  optional .aiserver.v1.SimpleRange selection_range = 3 [json_name = "selectionRange"];
   .aiserver.v1.BackgroundCmdKRequest.Type type = 4 [json_name = "type"];
   repeated .aiserver.v1.BackgroundCmdKRequest.ProposedChange proposed_change_history = 5 [json_name = "proposedChangeHistory"];
   repeated .aiserver.v1.CodeBlock related_code_blocks = 6 [json_name = "relatedCodeBlocks"];
@@ -405,7 +405,7 @@ message BackgroundCmdKRequest {
   repeated .aiserver.v1.BackgroundCmdKRequest.UsefulType useful_types = 9 [json_name = "usefulTypes"];
   repeated .aiserver.v1.BackgroundCmdKRequest.RecentlyViewedFile recently_viewed_files = 10 [json_name = "recentlyViewedFiles"];
   repeated .aiserver.v1.BackgroundCmdKRequest.Diff recent_diffs = 11 [json_name = "recentDiffs"];
-  bool multiple_completions = 12 [json_name = "multipleCompletions"];
+  optional bool multiple_completions = 12 [json_name = "multipleCompletions"];
   message Diff {
     string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
     string diff = 2 [json_name = "diff"];
@@ -445,8 +445,8 @@ message BackgroundCmdKRequest {
     message VisibleRange {
       int32 start_line_number_inclusive = 1 [json_name = "startLineNumberInclusive"];
       int32 end_line_number_exclusive = 2 [json_name = "endLineNumberExclusive"];
-      int32 viewed_at = 3 [json_name = "viewedAt"];
-      int32 global_order_descending = 4 [json_name = "globalOrderDescending"];
+      optional int32 viewed_at = 3 [json_name = "viewedAt"];
+      optional int32 global_order_descending = 4 [json_name = "globalOrderDescending"];
     }
   }
   enum Type {
@@ -466,7 +466,7 @@ message BackgroundCmdKRequest {
     string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
     int32 start_line = 2 [json_name = "startLine"];
     string text = 3 [json_name = "text"];
-    double score = 4 [json_name = "score"];
+    optional double score = 4 [json_name = "score"];
   }
 }
 
@@ -477,13 +477,13 @@ message BackgroundCmdKResponse {
 message BugBotStatus {
   .aiserver.v1.BugBotStatus.Status status = 1 [json_name = "status"];
   string message = 2 [json_name = "message"];
-  int32 iterations_completed = 3 [json_name = "iterationsCompleted"];
-  int32 total_iterations = 4 [json_name = "totalIterations"];
-  int32 total_tokens = 5 [json_name = "totalTokens"];
-  int32 processed_tokens = 6 [json_name = "processedTokens"];
-  float processed_cost = 7 [json_name = "processedCost"];
-  int32 thinking_tokens = 8 [json_name = "thinkingTokens"];
-  float thinking_cost = 9 [json_name = "thinkingCost"];
+  optional int32 iterations_completed = 3 [json_name = "iterationsCompleted"];
+  optional int32 total_iterations = 4 [json_name = "totalIterations"];
+  optional int32 total_tokens = 5 [json_name = "totalTokens"];
+  optional int32 processed_tokens = 6 [json_name = "processedTokens"];
+  optional float processed_cost = 7 [json_name = "processedCost"];
+  optional int32 thinking_tokens = 8 [json_name = "thinkingTokens"];
+  optional float thinking_cost = 9 [json_name = "thinkingCost"];
   enum Status {
     STATUS_UNSPECIFIED = 0;
     STATUS_IN_PROGRESS = 1;
@@ -495,7 +495,7 @@ message BugBotStatus {
 
 message BugContext {
   repeated string screenshots = 1 [json_name = "screenshots"];
-  .aiserver.v1.CurrentFileInfo current_file = 2 [json_name = "currentFile"];
+  optional .aiserver.v1.CurrentFileInfo current_file = 2 [json_name = "currentFile"];
   repeated .aiserver.v1.ConversationMessage conversation = 3 [json_name = "conversation"];
   repeated .aiserver.v1.LogFile logs = 4 [json_name = "logs"];
   string console_logs = 5 [json_name = "consoleLogs"];
@@ -504,11 +504,11 @@ message BugContext {
   string proto_url = 8 [json_name = "protoUrl"];
   string failing_requst_id = 9 [json_name = "failingRequstId"];
   string connection_error_raw = 10 [json_name = "connectionErrorRaw"];
-  .aiserver.v1.CmdKDebugInfo debug_info = 12 [json_name = "debugInfo"];
-  int32 connect_error_code = 13 [json_name = "connectErrorCode"];
-  .aiserver.v1.ErrorDetails.Error error_detail_code = 14 [json_name = "errorDetailCode"];
-  string error_detail_title = 15 [json_name = "errorDetailTitle"];
-  string error_detail_detail = 16 [json_name = "errorDetailDetail"];
+  optional .aiserver.v1.CmdKDebugInfo debug_info = 12 [json_name = "debugInfo"];
+  optional int32 connect_error_code = 13 [json_name = "connectErrorCode"];
+  optional .aiserver.v1.ErrorDetails.Error error_detail_code = 14 [json_name = "errorDetailCode"];
+  optional string error_detail_title = 15 [json_name = "errorDetailTitle"];
+  optional string error_detail_detail = 16 [json_name = "errorDetailDetail"];
   repeated .aiserver.v1.BugReportScreenshot binary_screenshots = 17 [json_name = "binaryScreenshots"];
 }
 
@@ -519,8 +519,8 @@ message BugReportScreenshot {
 
 message BugbotTrialNotification {
   bool show = 1 [json_name = "show"];
-  string message = 2 [json_name = "message"];
-  string learn_more_url = 3 [json_name = "learnMoreUrl"];
+  optional string message = 2 [json_name = "message"];
+  optional string learn_more_url = 3 [json_name = "learnMoreUrl"];
 }
 
 message BulkEmbedRequest {
@@ -539,10 +539,10 @@ message CachedFileContext {
 }
 
 message CalculateAutoSelectionRequest {
-  .aiserver.v1.CurrentFileInfo current_file_info = 1 [json_name = "currentFileInfo"];
-  .aiserver.v1.CursorPosition cursor_position = 2 [json_name = "cursorPosition"];
-  .aiserver.v1.SimpleRange selection_range = 3 [json_name = "selectionRange"];
-  .aiserver.v1.ModelDetails model_details = 4 [json_name = "modelDetails"];
+  optional .aiserver.v1.CurrentFileInfo current_file_info = 1 [json_name = "currentFileInfo"];
+  optional .aiserver.v1.CursorPosition cursor_position = 2 [json_name = "cursorPosition"];
+  optional .aiserver.v1.SimpleRange selection_range = 3 [json_name = "selectionRange"];
+  optional .aiserver.v1.ModelDetails model_details = 4 [json_name = "modelDetails"];
   repeated .aiserver.v1.HeuristicsSelection heuristics_selections = 5 [json_name = "heuristicsSelections"];
 }
 
@@ -560,8 +560,8 @@ message ChatSuggestionItem {
 message CheckBugBotPriceRequest {
   int32 diff_char_len = 1 [json_name = "diffCharLen"];
   int32 iterations = 2 [json_name = "iterations"];
-  .aiserver.v1.ModelDetails model_details = 3 [json_name = "modelDetails"];
-  string session_id = 4 [json_name = "sessionId"];
+  optional .aiserver.v1.ModelDetails model_details = 3 [json_name = "modelDetails"];
+  optional string session_id = 4 [json_name = "sessionId"];
 }
 
 message CheckBugBotPriceResponse {
@@ -579,7 +579,7 @@ message CheckBugBotTelemetryHealthyResponse {
 
 message CheckDoableAsTaskRequest {
   string model_output = 1 [json_name = "modelOutput"];
-  .aiserver.v1.ModelDetails model_details = 2 [json_name = "modelDetails"];
+  optional .aiserver.v1.ModelDetails model_details = 2 [json_name = "modelDetails"];
 }
 
 message CheckDoableAsTaskResponse {
@@ -632,19 +632,19 @@ message CheckNumberConfigsResponse {
 
 message CheckQueuePositionRequest {
   string orig_request_id = 1 [json_name = "origRequestId"];
-  .aiserver.v1.ModelDetails model_details = 2 [json_name = "modelDetails"];
+  optional .aiserver.v1.ModelDetails model_details = 2 [json_name = "modelDetails"];
   string usage_uuid = 3 [json_name = "usageUuid"];
 }
 
 message CheckQueuePositionResponse {
   int32 position = 1 [json_name = "position"];
-  int32 seconds_left_to_wait = 2 [json_name = "secondsLeftToWait"];
+  optional int32 seconds_left_to_wait = 2 [json_name = "secondsLeftToWait"];
   bool hit_hard_limit = 3 [json_name = "hitHardLimit"];
   bool could_enable_usage_based_pricing_to_skip = 4 [json_name = "couldEnableUsageBasedPricingToSkip"];
-  .aiserver.v1.UsageEventDetails usage_event_details = 5 [json_name = "usageEventDetails"];
-  .aiserver.v1.CheckQueuePositionResponse.CustomLink custom_link = 6 [json_name = "customLink"];
-  int32 new_queue_position = 7 [json_name = "newQueuePosition"];
-  .aiserver.v1.CheckQueuePositionResponse.ModelForSlowPoolNudgeData model_for_slow_pool_nudge_data = 8 [json_name = "modelForSlowPoolNudgeData"];
+  optional .aiserver.v1.UsageEventDetails usage_event_details = 5 [json_name = "usageEventDetails"];
+  optional .aiserver.v1.CheckQueuePositionResponse.CustomLink custom_link = 6 [json_name = "customLink"];
+  optional int32 new_queue_position = 7 [json_name = "newQueuePosition"];
+  optional .aiserver.v1.CheckQueuePositionResponse.ModelForSlowPoolNudgeData model_for_slow_pool_nudge_data = 8 [json_name = "modelForSlowPoolNudgeData"];
   message CustomLink {
     string address = 1 [json_name = "address"];
     string message = 2 [json_name = "message"];
@@ -656,7 +656,7 @@ message CheckQueuePositionResponse {
 }
 
 message CheckUsageBasedPriceRequest {
-  .aiserver.v1.UsageEventDetails usage_event_details = 1 [json_name = "usageEventDetails"];
+  optional .aiserver.v1.UsageEventDetails usage_event_details = 1 [json_name = "usageEventDetails"];
 }
 
 message CheckUsageBasedPriceResponse {
@@ -668,15 +668,15 @@ message CheckUsageBasedPriceResponse {
 message ClientNumericMetric {
   string metric = 1 [json_name = "metric"];
   double value = 2 [json_name = "value"];
-  string session_id = 3 [json_name = "sessionId"];
-  string ff_hash = 4 [json_name = "ffHash"];
+  optional string session_id = 3 [json_name = "sessionId"];
+  optional string ff_hash = 4 [json_name = "ffHash"];
   int64 timestamp_ms = 5 [json_name = "timestampMs"];
-  string client_version = 6 [json_name = "clientVersion"];
-  string os = 7 [json_name = "os"];
-  string enabled_extensions_hash = 8 [json_name = "enabledExtensionsHash"];
-  string ff_resolved = 9 [json_name = "ffResolved"];
-  string extensions_resolved = 10 [json_name = "extensionsResolved"];
-  string window_type = 11 [json_name = "windowType"];
+  optional string client_version = 6 [json_name = "clientVersion"];
+  optional string os = 7 [json_name = "os"];
+  optional string enabled_extensions_hash = 8 [json_name = "enabledExtensionsHash"];
+  optional string ff_resolved = 9 [json_name = "ffResolved"];
+  optional string extensions_resolved = 10 [json_name = "extensionsResolved"];
+  optional string window_type = 11 [json_name = "windowType"];
 }
 
 enum CloudAgentEffortMode {
@@ -688,7 +688,7 @@ enum CloudAgentEffortMode {
 message CloudSetupBlocker {
   string id = 1 [json_name = "id"];
   string icon = 2 [json_name = "icon"];
-  .aiserver.v1.CloudSetupBlockerAction action = 3 [json_name = "action"];
+  optional .aiserver.v1.CloudSetupBlockerAction action = 3 [json_name = "action"];
   string cta_label = 4 [json_name = "ctaLabel"];
   string checklist_title = 7 [json_name = "checklistTitle"];
   string checklist_description = 8 [json_name = "checklistDescription"];
@@ -711,15 +711,15 @@ message CodeSearchResult {
 message CommitLineRange {
   int32 start = 1 [json_name = "start"];
   int32 end = 2 [json_name = "end"];
-  int32 absolute_start = 3 [json_name = "absoluteStart"];
-  int32 absolute_end = 4 [json_name = "absoluteEnd"];
+  optional int32 absolute_start = 3 [json_name = "absoluteStart"];
+  optional int32 absolute_end = 4 [json_name = "absoluteEnd"];
 }
 
 message ComposerAutocompleteContext {
-  .aiserver.v1.CurrentFileContext current_file = 1 [json_name = "currentFile"];
+  optional .aiserver.v1.CurrentFileContext current_file = 1 [json_name = "currentFile"];
   repeated .aiserver.v1.CachedFileContext cached_files = 2 [json_name = "cachedFiles"];
   repeated .aiserver.v1.ConversationMessage conversation_messages = 3 [json_name = "conversationMessages"];
-  string visible_viewport_text = 4 [json_name = "visibleViewportText"];
+  optional string visible_viewport_text = 4 [json_name = "visibleViewportText"];
   repeated string first_user_messages = 5 [json_name = "firstUserMessages"];
 }
 
@@ -732,7 +732,7 @@ message ComposerEnhancerClientMessage {
 
 message ComposerEnhancerRequest {
   string input_text = 1 [json_name = "inputText"];
-  string composer_id = 2 [json_name = "composerId"];
+  optional string composer_id = 2 [json_name = "composerId"];
 }
 
 message ComposerEnhancerResponse {
@@ -767,10 +767,10 @@ message ContextItemTokenDetail {
 }
 
 message ContextOptions {
-  .aiserver.v1.ContextOptions.AllDocumentation all_documentation = 1 [json_name = "allDocumentation"];
-  .aiserver.v1.ContextOptions.CurrentFileContents current_file_contents = 2 [json_name = "currentFileContents"];
-  .aiserver.v1.ContextOptions.LinterDiagnostics linter_diagnostics = 3 [json_name = "linterDiagnostics"];
-  .aiserver.v1.ContextOptions.GlobalContext global_context = 4 [json_name = "globalContext"];
+  optional .aiserver.v1.ContextOptions.AllDocumentation all_documentation = 1 [json_name = "allDocumentation"];
+  optional .aiserver.v1.ContextOptions.CurrentFileContents current_file_contents = 2 [json_name = "currentFileContents"];
+  optional .aiserver.v1.ContextOptions.LinterDiagnostics linter_diagnostics = 3 [json_name = "linterDiagnostics"];
+  optional .aiserver.v1.ContextOptions.GlobalContext global_context = 4 [json_name = "globalContext"];
   message AllDocumentation {
     repeated .aiserver.v1.ContextOptions.AllDocumentation.Documentation available_docs = 1 [json_name = "availableDocs"];
     message Documentation {
@@ -782,10 +782,10 @@ message ContextOptions {
   message CurrentFileContents {
     string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
     string contents = 2 [json_name = "contents"];
-    .aiserver.v1.CursorPosition cursor_position = 3 [json_name = "cursorPosition"];
+    optional .aiserver.v1.CursorPosition cursor_position = 3 [json_name = "cursorPosition"];
     repeated .aiserver.v1.DataframeInfo dataframes = 4 [json_name = "dataframes"];
     string language_id = 5 [json_name = "languageId"];
-    .aiserver.v1.CursorRange selection = 6 [json_name = "selection"];
+    optional .aiserver.v1.CursorRange selection = 6 [json_name = "selection"];
   }
   message GlobalContext {
   }
@@ -796,14 +796,14 @@ message ContextOptions {
     message Diagnostic {
       string message = 1 [json_name = "message"];
       string source = 2 [json_name = "source"];
-      .aiserver.v1.CursorRange range = 3 [json_name = "range"];
+      optional .aiserver.v1.CursorRange range = 3 [json_name = "range"];
       string relative_workspace_path = 4 [json_name = "relativeWorkspacePath"];
     }
   }
 }
 
 message ContextRerankingRequest {
-  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  optional .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
   repeated .aiserver.v1.ConversationMessage chat_conversation_history = 2 [json_name = "chatConversationHistory"];
   repeated .aiserver.v1.CppFileDiffHistory cpp_diff_trajectories = 3 [json_name = "cppDiffTrajectories"];
   repeated .aiserver.v1.ContextRerankingCandidateFile candidate_files = 4 [json_name = "candidateFiles"];
@@ -851,7 +851,7 @@ message CursorHelpConversationMessage {
 }
 
 message DebugInfo {
-  .aiserver.v1.DebugInfo.Breakpoint breakpoint = 1 [json_name = "breakpoint"];
+  optional .aiserver.v1.DebugInfo.Breakpoint breakpoint = 1 [json_name = "breakpoint"];
   repeated .aiserver.v1.DebugInfo.CallStackFrame call_stack = 2 [json_name = "callStack"];
   repeated .aiserver.v1.CodeBlock history = 3 [json_name = "history"];
   message Breakpoint {
@@ -859,7 +859,7 @@ message DebugInfo {
     int32 line_number = 2 [json_name = "lineNumber"];
     repeated string lines_before_breakpoint = 3 [json_name = "linesBeforeBreakpoint"];
     repeated string lines_after_breakpoint = 4 [json_name = "linesAfterBreakpoint"];
-    string exception_info = 5 [json_name = "exceptionInfo"];
+    optional string exception_info = 5 [json_name = "exceptionInfo"];
   }
   message CallStackFrame {
     string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
@@ -874,13 +874,13 @@ message DebugInfo {
   message Variable {
     string name = 1 [json_name = "name"];
     string value = 2 [json_name = "value"];
-    string type = 3 [json_name = "type"];
+    optional string type = 3 [json_name = "type"];
   }
 }
 
 message DevOnlyGetPastRequestIdsRequest {
-  int32 count = 1 [json_name = "count"];
-  int32 page = 2 [json_name = "page"];
+  optional int32 count = 1 [json_name = "count"];
+  optional int32 page = 2 [json_name = "page"];
 }
 
 message DevOnlyGetPastRequestIdsResponse {
@@ -930,7 +930,7 @@ message DoThisForMeCheckResponse {
 message DoThisForMeRequest {
   string generation_uuid = 1 [json_name = "generationUuid"];
   string completion = 2 [json_name = "completion"];
-  .aiserver.v1.DoThisForMeCheckResponse action = 3 [json_name = "action"];
+  optional .aiserver.v1.DoThisForMeCheckResponse action = 3 [json_name = "action"];
 }
 
 message DoThisForMeResponse {
@@ -951,7 +951,7 @@ message DoThisForMeResponseWrapped {
 
 message DocumentationInfo {
   string doc_identifier = 1 [json_name = "docIdentifier"];
-  .aiserver.v1.DocumentationMetadata metadata = 2 [json_name = "metadata"];
+  optional .aiserver.v1.DocumentationMetadata metadata = 2 [json_name = "metadata"];
 }
 
 message EmbeddingResponse {
@@ -960,20 +960,20 @@ message EmbeddingResponse {
 
 message EvaluatePromptHookRequest {
   string prompt = 1 [json_name = "prompt"];
-  .google.protobuf.Value hook_input_json = 2 [json_name = "hookInputJson"];
-  string model_name = 3 [json_name = "modelName"];
+  optional .google.protobuf.Value hook_input_json = 2 [json_name = "hookInputJson"];
+  optional string model_name = 3 [json_name = "modelName"];
 }
 
 message EvaluatePromptHookResponse {
   bool ok = 1 [json_name = "ok"];
-  string reason = 2 [json_name = "reason"];
+  optional string reason = 2 [json_name = "reason"];
 }
 
 message FetchRelevantKnowledgeForConversationRequest {
   string request_id = 1 [json_name = "requestId"];
   repeated .aiserver.v1.ConversationMessage conversation = 2 [json_name = "conversation"];
-  string git_origin = 3 [json_name = "gitOrigin"];
-  int32 limit = 4 [json_name = "limit"];
+  optional string git_origin = 3 [json_name = "gitOrigin"];
+  optional int32 limit = 4 [json_name = "limit"];
   repeated string tagged_filenames = 5 [json_name = "taggedFilenames"];
 }
 
@@ -987,12 +987,12 @@ message FileRangeAnnotations {
 }
 
 message FindBugsRequest {
-  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
-  .aiserver.v1.ModelDetails model_details = 2 [json_name = "modelDetails"];
+  optional .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  optional .aiserver.v1.ModelDetails model_details = 2 [json_name = "modelDetails"];
 }
 
 message FindBugsResponse {
-  .aiserver.v1.FindBugsResponse.Bug bug = 1 [json_name = "bug"];
+  optional .aiserver.v1.FindBugsResponse.Bug bug = 1 [json_name = "bug"];
   message Bug {
     string description = 1 [json_name = "description"];
     int32 line_number = 2 [json_name = "lineNumber"];
@@ -1002,7 +1002,7 @@ message FindBugsResponse {
 
 message FixMarkersRequest {
   repeated .aiserver.v1.FixMarkersRequest.Marker markers = 1 [json_name = "markers"];
-  .aiserver.v1.ModelDetails model_details = 2 [json_name = "modelDetails"];
+  optional .aiserver.v1.ModelDetails model_details = 2 [json_name = "modelDetails"];
   int32 iteration_number = 3 [json_name = "iterationNumber"];
   string sequence_id = 4 [json_name = "sequenceId"];
   string user_instruction = 5 [json_name = "userInstruction"];
@@ -1114,11 +1114,11 @@ message GenerateTldrResponse {
 }
 
 message GetAtSymbolSuggestionsRequest {
-  .aiserver.v1.CurrentFileInfo current_file_info = 1 [json_name = "currentFileInfo"];
+  optional .aiserver.v1.CurrentFileInfo current_file_info = 1 [json_name = "currentFileInfo"];
   repeated .aiserver.v1.AtSymbolDependencyInformation at_symbol_dependencies = 2 [json_name = "atSymbolDependencies"];
   repeated .aiserver.v1.AtSymbolOption at_symbol_options = 3 [json_name = "atSymbolOptions"];
   string user_query = 4 [json_name = "userQuery"];
-  .aiserver.v1.ModelDetails model_details = 5 [json_name = "modelDetails"];
+  optional .aiserver.v1.ModelDetails model_details = 5 [json_name = "modelDetails"];
 }
 
 message GetAtSymbolSuggestionsResponse {
@@ -1141,7 +1141,7 @@ message GetBedrockModelsRequest {
 
 message GetBedrockModelsResponse {
   repeated string models = 1 [json_name = "models"];
-  string error = 2 [json_name = "error"];
+  optional string error = 2 [json_name = "error"];
 }
 
 message GetChatPromptResponse {
@@ -1150,37 +1150,37 @@ message GetChatPromptResponse {
 }
 
 message GetChatRequest {
-  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  optional .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
   repeated .aiserver.v1.ConversationMessage conversation = 2 [json_name = "conversation"];
   repeated .aiserver.v1.RepositoryInfo repositories = 3 [json_name = "repositories"];
-  .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
-  string workspace_root_path = 5 [json_name = "workspaceRootPath"];
+  optional .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
+  optional string workspace_root_path = 5 [json_name = "workspaceRootPath"];
   repeated .aiserver.v1.CodeBlock code_blocks = 6 [json_name = "codeBlocks"];
-  .aiserver.v1.ModelDetails model_details = 7 [json_name = "modelDetails"];
+  optional .aiserver.v1.ModelDetails model_details = 7 [json_name = "modelDetails"];
   repeated string documentation_identifiers = 8 [json_name = "documentationIdentifiers"];
   string request_id = 9 [json_name = "requestId"];
-  .aiserver.v1.LinterErrors linter_errors = 10 [json_name = "linterErrors"];
-  string summary = 11 [json_name = "summary"];
-  int32 summary_up_until_index = 12 [json_name = "summaryUpUntilIndex"];
-  bool allow_long_file_scan = 13 [json_name = "allowLongFileScan"];
-  bool is_bash = 14 [json_name = "isBash"];
+  optional .aiserver.v1.LinterErrors linter_errors = 10 [json_name = "linterErrors"];
+  optional string summary = 11 [json_name = "summary"];
+  optional int32 summary_up_until_index = 12 [json_name = "summaryUpUntilIndex"];
+  optional bool allow_long_file_scan = 13 [json_name = "allowLongFileScan"];
+  optional bool is_bash = 14 [json_name = "isBash"];
   string conversation_id = 15 [json_name = "conversationId"];
-  bool can_handle_filenames_after_language_ids = 16 [json_name = "canHandleFilenamesAfterLanguageIds"];
-  string use_web = 17 [json_name = "useWeb"];
+  optional bool can_handle_filenames_after_language_ids = 16 [json_name = "canHandleFilenamesAfterLanguageIds"];
+  optional string use_web = 17 [json_name = "useWeb"];
   repeated .aiserver.v1.ChatQuote quotes = 18 [json_name = "quotes"];
-  .aiserver.v1.DebugInfo debug_info = 19 [json_name = "debugInfo"];
-  string workspace_id = 20 [json_name = "workspaceId"];
+  optional .aiserver.v1.DebugInfo debug_info = 19 [json_name = "debugInfo"];
+  optional string workspace_id = 20 [json_name = "workspaceId"];
   repeated .aiserver.v1.ChatExternalLink external_links = 21 [json_name = "externalLinks"];
-  bool long_context_mode = 22 [json_name = "longContextMode"];
+  optional bool long_context_mode = 22 [json_name = "longContextMode"];
   repeated .aiserver.v1.CommitNote commit_notes = 23 [json_name = "commitNotes"];
-  bool is_eval = 24 [json_name = "isEval"];
-  .aiserver.v1.ContextAST context_ast = 25 [json_name = "contextAst"];
-  int32 desired_max_tokens = 26 [json_name = "desiredMaxTokens"];
-  bool is_composer = 27 [json_name = "isComposer"];
-  bool runnable_code_blocks = 28 [json_name = "runnableCodeBlocks"];
-  bool should_cache = 29 [json_name = "shouldCache"];
-  bool allow_model_fallbacks = 30 [json_name = "allowModelFallbacks"];
-  int32 number_of_times_shown_fallback_model_warning = 31 [json_name = "numberOfTimesShownFallbackModelWarning"];
+  optional bool is_eval = 24 [json_name = "isEval"];
+  optional .aiserver.v1.ContextAST context_ast = 25 [json_name = "contextAst"];
+  optional int32 desired_max_tokens = 26 [json_name = "desiredMaxTokens"];
+  optional bool is_composer = 27 [json_name = "isComposer"];
+  optional bool runnable_code_blocks = 28 [json_name = "runnableCodeBlocks"];
+  optional bool should_cache = 29 [json_name = "shouldCache"];
+  optional bool allow_model_fallbacks = 30 [json_name = "allowModelFallbacks"];
+  optional int32 number_of_times_shown_fallback_model_warning = 31 [json_name = "numberOfTimesShownFallbackModelWarning"];
 }
 
 message GetChatSuggestionsRequest {
@@ -1213,23 +1213,23 @@ message GetCodebaseQuestionsResponse {
 }
 
 message GetCompletionRequest {
-  .aiserver.v1.UniqueFileIdentifier file_identifier = 1 [json_name = "fileIdentifier"];
-  .aiserver.v1.CursorPosition cursor_position = 2 [json_name = "cursorPosition"];
-  .aiserver.v1.SurroundingLines surrounding_lines = 3 [json_name = "surroundingLines"];
-  .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
+  optional .aiserver.v1.UniqueFileIdentifier file_identifier = 1 [json_name = "fileIdentifier"];
+  optional .aiserver.v1.CursorPosition cursor_position = 2 [json_name = "cursorPosition"];
+  optional .aiserver.v1.SurroundingLines surrounding_lines = 3 [json_name = "surroundingLines"];
+  optional .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
   repeated string suggestions_from_editor = 5 [json_name = "suggestionsFromEditor"];
 }
 
 message GetCompletionResponse {
   string completion = 1 [json_name = "completion"];
   float score = 2 [json_name = "score"];
-  string debugging_only_completion_prompt = 3 [json_name = "debuggingOnlyCompletionPrompt"];
+  optional string debugging_only_completion_prompt = 3 [json_name = "debuggingOnlyCompletionPrompt"];
 }
 
 message GetComposerAutocompleteRequest {
   string input_text = 1 [json_name = "inputText"];
-  string composer_id = 2 [json_name = "composerId"];
-  .aiserver.v1.ComposerAutocompleteContext context = 3 [json_name = "context"];
+  optional string composer_id = 2 [json_name = "composerId"];
+  optional .aiserver.v1.ComposerAutocompleteContext context = 3 [json_name = "context"];
 }
 
 message GetComposerAutocompleteResponse {
@@ -1238,45 +1238,45 @@ message GetComposerAutocompleteResponse {
 
 message GetComposerChatRequest {
   repeated .aiserver.v1.ConversationMessage conversation = 1 [json_name = "conversation"];
-  bool allow_long_file_scan = 2 [json_name = "allowLongFileScan"];
-  .aiserver.v1.ExplicitContext explicit_context = 3 [json_name = "explicitContext"];
-  bool can_handle_filenames_after_language_ids = 4 [json_name = "canHandleFilenamesAfterLanguageIds"];
-  .aiserver.v1.ModelDetails model_details = 5 [json_name = "modelDetails"];
-  .aiserver.v1.LinterErrors linter_errors = 6 [json_name = "linterErrors"];
+  optional bool allow_long_file_scan = 2 [json_name = "allowLongFileScan"];
+  optional .aiserver.v1.ExplicitContext explicit_context = 3 [json_name = "explicitContext"];
+  optional bool can_handle_filenames_after_language_ids = 4 [json_name = "canHandleFilenamesAfterLanguageIds"];
+  optional .aiserver.v1.ModelDetails model_details = 5 [json_name = "modelDetails"];
+  optional .aiserver.v1.LinterErrors linter_errors = 6 [json_name = "linterErrors"];
   repeated string documentation_identifiers = 7 [json_name = "documentationIdentifiers"];
-  string use_web = 8 [json_name = "useWeb"];
+  optional string use_web = 8 [json_name = "useWeb"];
   repeated .aiserver.v1.ComposerExternalLink external_links = 9 [json_name = "externalLinks"];
-  .aiserver.v1.ConversationMessage project_context = 10 [json_name = "projectContext"];
+  optional .aiserver.v1.ConversationMessage project_context = 10 [json_name = "projectContext"];
   repeated .aiserver.v1.GetComposerChatRequest.RedDiff diffs_for_compressing_files = 11 [json_name = "diffsForCompressingFiles"];
-  bool compress_edits = 12 [json_name = "compressEdits"];
-  bool should_cache = 13 [json_name = "shouldCache"];
+  optional bool compress_edits = 12 [json_name = "compressEdits"];
+  optional bool should_cache = 13 [json_name = "shouldCache"];
   repeated .aiserver.v1.LinterErrors multi_file_linter_errors = 14 [json_name = "multiFileLinterErrors"];
-  .aiserver.v1.CurrentFileInfo current_file = 15 [json_name = "currentFile"];
-  .aiserver.v1.GetComposerChatRequest.RecentEdits recent_edits = 16 [json_name = "recentEdits"];
-  bool use_reference_composer_diff_prompt = 17 [json_name = "useReferenceComposerDiffPrompt"];
+  optional .aiserver.v1.CurrentFileInfo current_file = 15 [json_name = "currentFile"];
+  optional .aiserver.v1.GetComposerChatRequest.RecentEdits recent_edits = 16 [json_name = "recentEdits"];
+  optional bool use_reference_composer_diff_prompt = 17 [json_name = "useReferenceComposerDiffPrompt"];
   repeated .aiserver.v1.ComposerFileDiffHistory file_diff_histories = 18 [json_name = "fileDiffHistories"];
-  bool use_new_compression_scheme = 19 [json_name = "useNewCompressionScheme"];
+  optional bool use_new_compression_scheme = 19 [json_name = "useNewCompressionScheme"];
   repeated .aiserver.v1.RankedContext additional_ranked_context = 20 [json_name = "additionalRankedContext"];
   repeated .aiserver.v1.ChatQuote quotes = 21 [json_name = "quotes"];
-  bool willing_to_pay_extra_for_speed = 22 [json_name = "willingToPayExtraForSpeed"];
+  optional bool willing_to_pay_extra_for_speed = 22 [json_name = "willingToPayExtraForSpeed"];
   string conversation_id = 23 [json_name = "conversationId"];
-  bool use_unified_chat_prompt = 24 [json_name = "useUnifiedChatPrompt"];
-  bool use_full_inputs_context = 25 [json_name = "useFullInputsContext"];
-  bool is_resume = 26 [json_name = "isResume"];
-  string context_bank_session_id = 27 [json_name = "contextBankSessionId"];
-  int32 context_bank_version = 28 [json_name = "contextBankVersion"];
-  .aiserver.v1.CodeSearchResult uses_codebase_results = 29 [json_name = "usesCodebaseResults"];
-  bytes context_bank_encryption_key = 31 [json_name = "contextBankEncryptionKey"];
+  optional bool use_unified_chat_prompt = 24 [json_name = "useUnifiedChatPrompt"];
+  optional bool use_full_inputs_context = 25 [json_name = "useFullInputsContext"];
+  optional bool is_resume = 26 [json_name = "isResume"];
+  optional string context_bank_session_id = 27 [json_name = "contextBankSessionId"];
+  optional int32 context_bank_version = 28 [json_name = "contextBankVersion"];
+  optional .aiserver.v1.CodeSearchResult uses_codebase_results = 29 [json_name = "usesCodebaseResults"];
+  optional bytes context_bank_encryption_key = 31 [json_name = "contextBankEncryptionKey"];
   message RecentEdits {
     repeated .aiserver.v1.GetComposerChatRequest.RecentEdits.CodeBlockInfo code_block_info = 1 [json_name = "codeBlockInfo"];
     repeated .aiserver.v1.GetComposerChatRequest.RecentEdits.FileInfo final_file_values = 2 [json_name = "finalFileValues"];
-    string edits_belong_to_composer_generation_uuid = 3 [json_name = "editsBelongToComposerGenerationUuid"];
+    optional string edits_belong_to_composer_generation_uuid = 3 [json_name = "editsBelongToComposerGenerationUuid"];
     message CodeBlockInfo {
       string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
-      string content_before = 2 [json_name = "contentBefore"];
-      string content_after = 3 [json_name = "contentAfter"];
-      string generation_uuid = 4 [json_name = "generationUuid"];
-      int32 version = 5 [json_name = "version"];
+      optional string content_before = 2 [json_name = "contentBefore"];
+      optional string content_after = 3 [json_name = "contentAfter"];
+      optional string generation_uuid = 4 [json_name = "generationUuid"];
+      optional int32 version = 5 [json_name = "version"];
     }
     message FileInfo {
       string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
@@ -1294,7 +1294,7 @@ message GetComposerChatRequest {
 
 message GetDefaultModelNudgeDataRequest {
   .aiserver.v1.GetDefaultModelNudgeDataRequest.StartupOpportunity startup_opportunity = 1 [json_name = "startupOpportunity"];
-  .agent.v1.RequestedModel current_model = 2 [json_name = "currentModel"];
+  optional .agent.v1.RequestedModel current_model = 2 [json_name = "currentModel"];
   enum StartupOpportunity {
     STARTUP_OPPORTUNITY_UNSPECIFIED = 0;
     STARTUP_OPPORTUNITY_FIRST_OPEN = 1;
@@ -1307,12 +1307,12 @@ message GetDefaultModelNudgeDataResponse {
   bool should_default_switch_on_new_chat = 2 [json_name = "shouldDefaultSwitchOnNewChat"];
   repeated string models_with_no_default_switch = 3 [json_name = "modelsWithNoDefaultSwitch"];
   string conversion_model_override = 4 [json_name = "conversionModelOverride"];
-  .aiserver.v1.GetDefaultModelNudgeDataResponse.InitialModel initial_model = 5 [json_name = "initialModel"];
-  .aiserver.v1.GetDefaultModelNudgeDataResponse.ApplicationOpenModelSwitch application_open_model_switch = 6 [json_name = "applicationOpenModelSwitch"];
+  optional .aiserver.v1.GetDefaultModelNudgeDataResponse.InitialModel initial_model = 5 [json_name = "initialModel"];
+  optional .aiserver.v1.GetDefaultModelNudgeDataResponse.ApplicationOpenModelSwitch application_open_model_switch = 6 [json_name = "applicationOpenModelSwitch"];
   message ApplicationOpenModelSwitch {
     string nudge_id = 1 [json_name = "nudgeId"];
     string experiment_name = 2 [json_name = "experimentName"];
-    .aiserver.v1.GetDefaultModelNudgeDataResponse.InitialModel target_model = 3 [json_name = "targetModel"];
+    optional .aiserver.v1.GetDefaultModelNudgeDataResponse.InitialModel target_model = 3 [json_name = "targetModel"];
   }
   message InitialModel {
     string model_id = 1 [json_name = "modelId"];
@@ -1332,15 +1332,15 @@ message GetDefaultModelResponse {
 
 message GetDiffReviewRequest {
   repeated .aiserver.v1.GetDiffReviewRequest.SimpleFileDiff diffs = 1 [json_name = "diffs"];
-  string model = 2 [json_name = "model"];
+  optional string model = 2 [json_name = "model"];
   message SimpleFileDiff {
     string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
     repeated .aiserver.v1.GetDiffReviewRequest.SimpleFileDiff.Chunk chunks = 2 [json_name = "chunks"];
     message Chunk {
       repeated string old_lines = 1 [json_name = "oldLines"];
       repeated string new_lines = 2 [json_name = "newLines"];
-      .aiserver.v1.LineRange old_range = 3 [json_name = "oldRange"];
-      .aiserver.v1.LineRange new_range = 4 [json_name = "newRange"];
+      optional .aiserver.v1.LineRange old_range = 3 [json_name = "oldRange"];
+      optional .aiserver.v1.LineRange new_range = 4 [json_name = "newRange"];
     }
   }
 }
@@ -1353,7 +1353,7 @@ message GetEditorBugbotAutoRunStatusResponse {
 }
 
 message GetEffectiveTokenLimitRequest {
-  .aiserver.v1.ModelDetails model_details = 1 [json_name = "modelDetails"];
+  optional .aiserver.v1.ModelDetails model_details = 1 [json_name = "modelDetails"];
 }
 
 message GetEffectiveTokenLimitResponse {
@@ -1362,7 +1362,7 @@ message GetEffectiveTokenLimitResponse {
 
 message GetEvaluationPromptRequest {
   .aiserver.v1.GetEvaluationPromptRequest.EvaluationPromptType prompt_type = 1 [json_name = "promptType"];
-  .aiserver.v1.CurrentFileInfo current_file = 2 [json_name = "currentFile"];
+  optional .aiserver.v1.CurrentFileInfo current_file = 2 [json_name = "currentFile"];
   string query = 3 [json_name = "query"];
   string bucket_id = 4 [json_name = "bucketId"];
   string query_strategy = 5 [json_name = "queryStrategy"];
@@ -1389,12 +1389,12 @@ message GetEvaluationPromptResponse {
 message GetFilesForComposerRequest {
   repeated .aiserver.v1.ConversationMessage conversation = 1 [json_name = "conversation"];
   repeated .aiserver.v1.CurrentFileInfo files = 2 [json_name = "files"];
-  bool rerank_results = 3 [json_name = "rerankResults"];
-  bool rerank_results_v2 = 6 [json_name = "rerankResultsV2"];
-  bool long_context_mode = 7 [json_name = "longContextMode"];
-  bool is_eval = 8 [json_name = "isEval"];
-  string request_id = 9 [json_name = "requestId"];
-  .aiserver.v1.ModelDetails model_details = 10 [json_name = "modelDetails"];
+  optional bool rerank_results = 3 [json_name = "rerankResults"];
+  optional bool rerank_results_v2 = 6 [json_name = "rerankResultsV2"];
+  optional bool long_context_mode = 7 [json_name = "longContextMode"];
+  optional bool is_eval = 8 [json_name = "isEval"];
+  optional string request_id = 9 [json_name = "requestId"];
+  optional .aiserver.v1.ModelDetails model_details = 10 [json_name = "modelDetails"];
   oneof context_results {
     .aiserver.v1.FullFileSearchResult file_search_results = 4 [json_name = "fileSearchResults"];
     .aiserver.v1.CodeSearchResult code_search_results = 5 [json_name = "codeSearchResults"];
@@ -1420,8 +1420,8 @@ message GetModelLabelsResponse {
   message ModelLabel {
     string name = 1 [json_name = "name"];
     string label = 2 [json_name = "label"];
-    string short_label = 3 [json_name = "shortLabel"];
-    bool supports_agent = 4 [json_name = "supportsAgent"];
+    optional string short_label = 3 [json_name = "shortLabel"];
+    optional bool supports_agent = 4 [json_name = "supportsAgent"];
   }
 }
 
@@ -1445,7 +1445,7 @@ message GetSimplePromptResponse {
 
 message GetSuggestedBugBotIterationsRequest {
   int32 diff_char_len = 1 [json_name = "diffCharLen"];
-  .aiserver.v1.ModelDetails model_details = 2 [json_name = "modelDetails"];
+  optional .aiserver.v1.ModelDetails model_details = 2 [json_name = "modelDetails"];
 }
 
 message GetSuggestedBugBotIterationsResponse {
@@ -1455,12 +1455,12 @@ message GetSuggestedBugBotIterationsResponse {
 message GetTerminalCompletionRequest {
   string current_command = 1 [json_name = "currentCommand"];
   repeated string command_history = 2 [json_name = "commandHistory"];
-  string model_name = 3 [json_name = "modelName"];
+  optional string model_name = 3 [json_name = "modelName"];
   repeated .aiserver.v1.CppFileDiffHistory file_diff_histories = 4 [json_name = "fileDiffHistories"];
-  string git_diff = 5 [json_name = "gitDiff"];
+  optional string git_diff = 5 [json_name = "gitDiff"];
   repeated string commit_history = 6 [json_name = "commitHistory"];
   repeated string past_results = 7 [json_name = "pastResults"];
-  .aiserver.v1.ModelDetails model_details = 8 [json_name = "modelDetails"];
+  optional .aiserver.v1.ModelDetails model_details = 8 [json_name = "modelDetails"];
   string user_platform = 9 [json_name = "userPlatform"];
   string current_folder = 10 [json_name = "currentFolder"];
   repeated .aiserver.v1.CurrentFolderFileOrFolder current_folder_structure = 11 [json_name = "currentFolderStructure"];
@@ -1476,7 +1476,7 @@ message GetThoughtAnnotationRequest {
 }
 
 message GetThoughtAnnotationResponse {
-  .aiserver.v1.AiThoughtAnnotation thought_annotation = 1 [json_name = "thoughtAnnotation"];
+  optional .aiserver.v1.AiThoughtAnnotation thought_annotation = 1 [json_name = "thoughtAnnotation"];
 }
 
 message GetUserInfoRequest {
@@ -1485,12 +1485,12 @@ message GetUserInfoRequest {
 message GetUserInfoResponse {
   string user_id = 1 [json_name = "userId"];
   string jupyter_token = 2 [json_name = "jupyterToken"];
-  .aiserver.v1.UsageData usage = 3 [json_name = "usage"];
+  optional .aiserver.v1.UsageData usage = 3 [json_name = "usage"];
 }
 
 message GetUserInstructionsRequest {
   repeated .aiserver.v1.RecentChatMessage chats = 1 [json_name = "chats"];
-  string existing_instructions = 2 [json_name = "existingInstructions"];
+  optional string existing_instructions = 2 [json_name = "existingInstructions"];
 }
 
 message GetUserInstructionsResponse {
@@ -1525,7 +1525,7 @@ message InferBackgroundComposerScriptsRequest {
   message Command {
     string command = 1 [json_name = "command"];
     float timestamp = 2 [json_name = "timestamp"];
-    string cwd = 3 [json_name = "cwd"];
+    optional string cwd = 3 [json_name = "cwd"];
   }
 }
 
@@ -1541,14 +1541,14 @@ message InferBackgroundComposerScriptsResponse {
 
 message IntentPredictionRequest {
   repeated .aiserver.v1.ConversationMessage messages = 1 [json_name = "messages"];
-  .aiserver.v1.ContextOptions context_options = 2 [json_name = "contextOptions"];
-  .aiserver.v1.ModelDetails model_details = 3 [json_name = "modelDetails"];
+  optional .aiserver.v1.ContextOptions context_options = 2 [json_name = "contextOptions"];
+  optional .aiserver.v1.ModelDetails model_details = 3 [json_name = "modelDetails"];
 }
 
 message IntentPredictionResponse {
-  .aiserver.v1.IntentPredictionResponse.ChosenDocumentation chosen_documentation = 1 [json_name = "chosenDocumentation"];
-  .aiserver.v1.IntentPredictionResponse.ChosenFileContents chosen_file_contents = 2 [json_name = "chosenFileContents"];
-  .aiserver.v1.IntentPredictionResponse.ChosenLinterDiagnostics chosen_linter_diagnostics = 3 [json_name = "chosenLinterDiagnostics"];
+  optional .aiserver.v1.IntentPredictionResponse.ChosenDocumentation chosen_documentation = 1 [json_name = "chosenDocumentation"];
+  optional .aiserver.v1.IntentPredictionResponse.ChosenFileContents chosen_file_contents = 2 [json_name = "chosenFileContents"];
+  optional .aiserver.v1.IntentPredictionResponse.ChosenLinterDiagnostics chosen_linter_diagnostics = 3 [json_name = "chosenLinterDiagnostics"];
   bool use_global_context = 4 [json_name = "useGlobalContext"];
   bool use_with_folder_context = 5 [json_name = "useWithFolderContext"];
   message ChosenDocumentation {
@@ -1564,9 +1564,9 @@ message IntentPredictionResponse {
 }
 
 message InterfaceAgentInitRequest {
-  .aiserver.v1.ModelDetails model_details = 1 [json_name = "modelDetails"];
+  optional .aiserver.v1.ModelDetails model_details = 1 [json_name = "modelDetails"];
   bool debugging_only_live_mode = 2 [json_name = "debuggingOnlyLiveMode"];
-  .aiserver.v1.InterfaceAgentClientState interface_agent_client_state = 3 [json_name = "interfaceAgentClientState"];
+  optional .aiserver.v1.InterfaceAgentClientState interface_agent_client_state = 3 [json_name = "interfaceAgentClientState"];
 }
 
 message InterfaceAgentInitResponse {
@@ -1584,14 +1584,14 @@ message IsCursorPredictionEnabledResponse {
 message IsTerminalFinishedRequest {
   string terminal_content = 1 [json_name = "terminalContent"];
   bool check_for_hangs = 2 [json_name = "checkForHangs"];
-  string chat_request_id = 3 [json_name = "chatRequestId"];
-  string command = 4 [json_name = "command"];
+  optional string chat_request_id = 3 [json_name = "chatRequestId"];
+  optional string command = 4 [json_name = "command"];
 }
 
 message IsTerminalFinishedResponseV2 {
   bool is_finished = 1 [json_name = "isFinished"];
-  .aiserver.v1.RunTerminalCommandEndedReason ended_reason = 2 [json_name = "endedReason"];
-  int32 exit_code = 3 [json_name = "exitCode"];
+  optional .aiserver.v1.RunTerminalCommandEndedReason ended_reason = 2 [json_name = "endedReason"];
+  optional int32 exit_code = 3 [json_name = "exitCode"];
   bool is_hanging = 4 [json_name = "isHanging"];
 }
 
@@ -1609,18 +1609,18 @@ message IsolatedTreesitterResponse {
   }
   message TreesitterSymbolNameItem {
     string symbol_name = 1 [json_name = "symbolName"];
-    .aiserver.v1.IsolatedTreesitterResponse.TreeSitterPosition start_position = 2 [json_name = "startPosition"];
-    .aiserver.v1.IsolatedTreesitterResponse.TreeSitterPosition end_position = 3 [json_name = "endPosition"];
+    optional .aiserver.v1.IsolatedTreesitterResponse.TreeSitterPosition start_position = 2 [json_name = "startPosition"];
+    optional .aiserver.v1.IsolatedTreesitterResponse.TreeSitterPosition end_position = 3 [json_name = "endPosition"];
   }
 }
 
 message IterativeSftInferenceConfig {
-  double temperature = 1 [json_name = "temperature"];
-  double top_p = 2 [json_name = "topP"];
+  optional double temperature = 1 [json_name = "temperature"];
+  optional double top_p = 2 [json_name = "topP"];
 }
 
 message KeepComposerCacheWarmRequest {
-  .aiserver.v1.GetComposerChatRequest request = 1 [json_name = "request"];
+  optional .aiserver.v1.GetComposerChatRequest request = 1 [json_name = "request"];
   string request_id = 2 [json_name = "requestId"];
   bool is_composer_visible = 3 [json_name = "isComposerVisible"];
 }
@@ -1633,7 +1633,7 @@ message KnowledgeBaseAddRequest {
   string knowledge = 1 [json_name = "knowledge"];
   string title = 2 [json_name = "title"];
   string git_origin = 3 [json_name = "gitOrigin"];
-  string composer_id = 4 [json_name = "composerId"];
+  optional string composer_id = 4 [json_name = "composerId"];
 }
 
 message KnowledgeBaseAddResponse {
@@ -1647,7 +1647,7 @@ message KnowledgeBaseGetRequest {
 
 message KnowledgeBaseGetResponse {
   bool success = 1 [json_name = "success"];
-  .aiserver.v1.KnowledgeBaseGetResponse.Item result = 2 [json_name = "result"];
+  optional .aiserver.v1.KnowledgeBaseGetResponse.Item result = 2 [json_name = "result"];
   message Item {
     string id = 1 [json_name = "id"];
     string knowledge = 2 [json_name = "knowledge"];
@@ -1657,8 +1657,8 @@ message KnowledgeBaseGetResponse {
 }
 
 message KnowledgeBaseListRequest {
-  int32 limit = 1 [json_name = "limit"];
-  string git_origin = 2 [json_name = "gitOrigin"];
+  optional int32 limit = 1 [json_name = "limit"];
+  optional string git_origin = 2 [json_name = "gitOrigin"];
 }
 
 message KnowledgeBaseListResponse {
@@ -1697,7 +1697,7 @@ message LogFile {
 }
 
 message LogLinterExplicitUserFeedbackRequest {
-  .aiserver.v1.AiLintBug bug = 1 [json_name = "bug"];
+  optional .aiserver.v1.AiLintBug bug = 1 [json_name = "bug"];
   .aiserver.v1.LogLinterExplicitUserFeedbackRequest.LinterUserFeedback user_feedback = 3 [json_name = "userFeedback"];
   string user_feedback_details = 4 [json_name = "userFeedbackDetails"];
   enum LinterUserFeedback {
@@ -1723,47 +1723,47 @@ message LogUserLintReplyResponse {
 message ModelParameterDefinition {
   string id = 1 [json_name = "id"];
   string name = 2 [json_name = "name"];
-  string markdown_tooltip = 3 [json_name = "markdownTooltip"];
-  .aiserver.v1.ModelParameterDefinition.ModelParameterType parameter_type = 4 [json_name = "parameterType"];
-  bool is_cycleable_by_hotkey = 5 [json_name = "isCycleableByHotkey"];
+  optional string markdown_tooltip = 3 [json_name = "markdownTooltip"];
+  optional .aiserver.v1.ModelParameterDefinition.ModelParameterType parameter_type = 4 [json_name = "parameterType"];
+  optional bool is_cycleable_by_hotkey = 5 [json_name = "isCycleableByHotkey"];
   message BooleanParameterDefinition {
     repeated .aiserver.v1.ModelParameterDefinition.BooleanParameterDefinition.BooleanParameterValue values = 1 [json_name = "values"];
     message BooleanParameterValue {
       string value = 1 [json_name = "value"];
-      string display_name = 2 [json_name = "displayName"];
-      bool increases_model_cost = 3 [json_name = "increasesModelCost"];
-      bool default_blocked_in_admin_allowlist = 4 [json_name = "defaultBlockedInAdminAllowlist"];
-      bool hide_from_user_picker_when_admin_blocked = 5 [json_name = "hideFromUserPickerWhenAdminBlocked"];
-      bool blocked_by_admin_allowlist = 6 [json_name = "blockedByAdminAllowlist"];
+      optional string display_name = 2 [json_name = "displayName"];
+      optional bool increases_model_cost = 3 [json_name = "increasesModelCost"];
+      optional bool default_blocked_in_admin_allowlist = 4 [json_name = "defaultBlockedInAdminAllowlist"];
+      optional bool hide_from_user_picker_when_admin_blocked = 5 [json_name = "hideFromUserPickerWhenAdminBlocked"];
+      optional bool blocked_by_admin_allowlist = 6 [json_name = "blockedByAdminAllowlist"];
     }
   }
   message EnumParameterDefinition {
     repeated .aiserver.v1.ModelParameterDefinition.EnumParameterDefinition.EnumParameterValue values = 1 [json_name = "values"];
     message EnumParameterValue {
       string value = 1 [json_name = "value"];
-      string display_name = 2 [json_name = "displayName"];
-      bool increases_model_cost = 3 [json_name = "increasesModelCost"];
-      bool blocked_by_admin_allowlist = 4 [json_name = "blockedByAdminAllowlist"];
-      string markdown_tooltip = 5 [json_name = "markdownTooltip"];
+      optional string display_name = 2 [json_name = "displayName"];
+      optional bool increases_model_cost = 3 [json_name = "increasesModelCost"];
+      optional bool blocked_by_admin_allowlist = 4 [json_name = "blockedByAdminAllowlist"];
+      optional string markdown_tooltip = 5 [json_name = "markdownTooltip"];
       repeated .aiserver.v1.AvailableModelsResponse.ModelPickerBadge model_picker_badges = 6 [json_name = "modelPickerBadges"];
     }
   }
   message ModelParameterType {
-    .aiserver.v1.ModelParameterDefinition.BooleanParameterDefinition boolean_parameter = 1 [json_name = "booleanParameter"];
-    .aiserver.v1.ModelParameterDefinition.EnumParameterDefinition enum_parameter = 2 [json_name = "enumParameter"];
+    optional .aiserver.v1.ModelParameterDefinition.BooleanParameterDefinition boolean_parameter = 1 [json_name = "booleanParameter"];
+    optional .aiserver.v1.ModelParameterDefinition.EnumParameterDefinition enum_parameter = 2 [json_name = "enumParameter"];
   }
 }
 
 message ModelQueryRequest {
-  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  optional .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
   repeated .aiserver.v1.ConversationMessage conversation = 2 [json_name = "conversation"];
   repeated .aiserver.v1.RepositoryInfo repositories = 3 [json_name = "repositories"];
-  .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
-  string workspace_root_path = 5 [json_name = "workspaceRootPath"];
+  optional .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
+  optional string workspace_root_path = 5 [json_name = "workspaceRootPath"];
   repeated .aiserver.v1.CodeBlock code_blocks = 6 [json_name = "codeBlocks"];
-  .aiserver.v1.ModelDetails model_details = 7 [json_name = "modelDetails"];
+  optional .aiserver.v1.ModelDetails model_details = 7 [json_name = "modelDetails"];
   .aiserver.v1.ModelQueryRequest.QueryType query_type = 8 [json_name = "queryType"];
-  .aiserver.v1.RepositoryInfo repository_info = 9 [json_name = "repositoryInfo"];
+  optional .aiserver.v1.RepositoryInfo repository_info = 9 [json_name = "repositoryInfo"];
   bool faster_and_stupider = 10 [json_name = "fasterAndStupider"];
   bool use_globs = 11 [json_name = "useGlobs"];
   enum QueryType {
@@ -1846,18 +1846,18 @@ message PotentialLocsUnderneathResponse {
 message PotentiallyGenerateMemoryRequest {
   string request_id = 1 [json_name = "requestId"];
   repeated .aiserver.v1.ConversationMessage conversation = 2 [json_name = "conversation"];
-  string git_upstream_url = 3 [json_name = "gitUpstreamUrl"];
+  optional string git_upstream_url = 3 [json_name = "gitUpstreamUrl"];
   string composer_id = 4 [json_name = "composerId"];
 }
 
 message PotentiallyGenerateMemoryResponse {
-  string saved_memory = 1 [json_name = "savedMemory"];
-  string knowledge_id = 2 [json_name = "knowledgeId"];
-  string title = 3 [json_name = "title"];
+  optional string saved_memory = 1 [json_name = "savedMemory"];
+  optional string knowledge_id = 2 [json_name = "knowledgeId"];
+  optional string title = 3 [json_name = "title"];
 }
 
 message PreloadEditRequest {
-  .aiserver.v1.StreamEditRequest req = 1 [json_name = "req"];
+  optional .aiserver.v1.StreamEditRequest req = 1 [json_name = "req"];
 }
 
 message PreloadEditResponse {
@@ -1880,7 +1880,7 @@ message ProcessMetricsRowRequest {
   double sample_avg_mem_mb = 6 [json_name = "sampleAvgMemMb"];
   double sample_peak_mem_mb = 7 [json_name = "samplePeakMemMb"];
   double session_peak_mem_mb = 8 [json_name = "sessionPeakMemMb"];
-  string process_name_hash = 9 [json_name = "processNameHash"];
+  optional string process_name_hash = 9 [json_name = "processNameHash"];
 }
 
 message ProcessMetricsV2RowRequest {
@@ -1899,7 +1899,7 @@ message ProcessMetricsV2RowRequest {
 }
 
 message PseudocodeTarget {
-  .aiserver.v1.SimpleRange range = 1 [json_name = "range"];
+  optional .aiserver.v1.SimpleRange range = 1 [json_name = "range"];
   string content = 2 [json_name = "content"];
 }
 
@@ -1911,9 +1911,9 @@ message PullRequestResult {
 
 message PushAiThoughtRequest {
   string thought = 1 [json_name = "thought"];
-  .aiserver.v1.CmdKDebugInfo cmd_k_debug_info = 2 [json_name = "cmdKDebugInfo"];
+  optional .aiserver.v1.CmdKDebugInfo cmd_k_debug_info = 2 [json_name = "cmdKDebugInfo"];
   bool automated = 3 [json_name = "automated"];
-  .aiserver.v1.PushAiThoughtRequest.Metadata metadata = 4 [json_name = "metadata"];
+  optional .aiserver.v1.PushAiThoughtRequest.Metadata metadata = 4 [json_name = "metadata"];
   message Metadata {
     oneof event {
       .aiserver.v1.PushAiThoughtRequest.Metadata.AcceptedHallucinatedFunctionEvent accepted_hallucinated_function_event = 1 [json_name = "acceptedHallucinatedFunctionEvent"];
@@ -1939,19 +1939,19 @@ message QuickActionCandidate {
 }
 
 message RangeGroup {
-  string conversation_id = 1 [json_name = "conversationId"];
-  string model = 2 [json_name = "model"];
+  optional string conversation_id = 1 [json_name = "conversationId"];
+  optional string model = 2 [json_name = "model"];
   string operation_type = 3 [json_name = "operationType"];
   repeated .aiserver.v1.CommitLineRange ranges = 4 [json_name = "ranges"];
-  string request_id = 5 [json_name = "requestId"];
+  optional string request_id = 5 [json_name = "requestId"];
 }
 
 message RecentChat {
   string title = 1 [json_name = "title"];
-  int64 timestamp = 2 [json_name = "timestamp"];
-  string summary = 3 [json_name = "summary"];
+  optional int64 timestamp = 2 [json_name = "timestamp"];
+  optional string summary = 3 [json_name = "summary"];
   repeated .aiserver.v1.RecentChatMessage messages = 4 [json_name = "messages"];
-  string todos = 5 [json_name = "todos"];
+  optional string todos = 5 [json_name = "todos"];
 }
 
 message RecentChatMessage {
@@ -1973,10 +1973,10 @@ message ReportAgentFeedbackRequest {
   string request_id = 1 [json_name = "requestId"];
   .aiserver.v1.ReportAgentFeedbackRequest.Sentiment sentiment = 2 [json_name = "sentiment"];
   repeated string categories = 3 [json_name = "categories"];
-  string comment = 4 [json_name = "comment"];
-  string canonical_model_name = 5 [json_name = "canonicalModelName"];
-  .aiserver.v1.ReportAgentFeedbackRequest.Source source = 6 [json_name = "source"];
-  .aiserver.v1.ReportAgentFeedbackRequest.Variant variant = 7 [json_name = "variant"];
+  optional string comment = 4 [json_name = "comment"];
+  optional string canonical_model_name = 5 [json_name = "canonicalModelName"];
+  optional .aiserver.v1.ReportAgentFeedbackRequest.Source source = 6 [json_name = "source"];
+  optional .aiserver.v1.ReportAgentFeedbackRequest.Variant variant = 7 [json_name = "variant"];
   enum Sentiment {
     SENTIMENT_UNSPECIFIED = 0;
     SENTIMENT_UP = 1;
@@ -2001,14 +2001,14 @@ message ReportAgentFeedbackResponse {
 message ReportAgentMessageFeedbackRequest {
   string request_id = 1 [json_name = "requestId"];
   string bubble_id = 2 [json_name = "bubbleId"];
-  string composer_id = 3 [json_name = "composerId"];
+  optional string composer_id = 3 [json_name = "composerId"];
   string selected_text = 4 [json_name = "selectedText"];
-  int32 selection_start = 5 [json_name = "selectionStart"];
-  int32 selection_end = 6 [json_name = "selectionEnd"];
+  optional int32 selection_start = 5 [json_name = "selectionStart"];
+  optional int32 selection_end = 6 [json_name = "selectionEnd"];
   string comment = 7 [json_name = "comment"];
-  string canonical_model_name = 8 [json_name = "canonicalModelName"];
-  string category = 9 [json_name = "category"];
-  string sentiment = 10 [json_name = "sentiment"];
+  optional string canonical_model_name = 8 [json_name = "canonicalModelName"];
+  optional string category = 9 [json_name = "category"];
+  optional string sentiment = 10 [json_name = "sentiment"];
 }
 
 message ReportAgentMessageFeedbackResponse {
@@ -2035,7 +2035,7 @@ message ReportAutoRoutingResultFeedbackResponse {
 message ReportBugRequest {
   string bug = 1 [json_name = "bug"];
   .aiserver.v1.ReportBugRequest.BugType bug_type = 2 [json_name = "bugType"];
-  .aiserver.v1.BugContext context = 3 [json_name = "context"];
+  optional .aiserver.v1.BugContext context = 3 [json_name = "context"];
   string contact_email = 4 [json_name = "contactEmail"];
   enum BugType {
     BUG_TYPE_UNSPECIFIED = 0;
@@ -2083,16 +2083,16 @@ message ReportCommitAiAnalyticsRequest {
   int32 tab_lines_deleted = 5 [json_name = "tabLinesDeleted"];
   int32 composer_lines_added = 6 [json_name = "composerLinesAdded"];
   int32 composer_lines_deleted = 7 [json_name = "composerLinesDeleted"];
-  string branch_name = 8 [json_name = "branchName"];
-  bool is_primary_branch = 9 [json_name = "isPrimaryBranch"];
-  string repo_name = 10 [json_name = "repoName"];
+  optional string branch_name = 8 [json_name = "branchName"];
+  optional bool is_primary_branch = 9 [json_name = "isPrimaryBranch"];
+  optional string repo_name = 10 [json_name = "repoName"];
   int32 non_ai_lines_added = 11 [json_name = "nonAiLinesAdded"];
   int32 non_ai_lines_deleted = 12 [json_name = "nonAiLinesDeleted"];
   repeated string change_ids = 13 [json_name = "changeIds"];
-  string message = 14 [json_name = "message"];
-  int64 commit_ts = 15 [json_name = "commitTs"];
+  optional string message = 14 [json_name = "message"];
+  optional int64 commit_ts = 15 [json_name = "commitTs"];
   repeated .aiserver.v1.FileRangeAnnotations range_annotations = 16 [json_name = "rangeAnnotations"];
-  string commit_source = 17 [json_name = "commitSource"];
+  optional string commit_source = 17 [json_name = "commitSource"];
 }
 
 message ReportCommitAiAnalyticsResponse {
@@ -2114,13 +2114,13 @@ message ReportFeedbackResponse {
 message ReportGenerationFeedbackRequest {
   .aiserver.v1.ReportGenerationFeedbackRequest.FeedbackType feedback_type = 1 [json_name = "feedbackType"];
   string request_id = 2 [json_name = "requestId"];
-  string comment = 3 [json_name = "comment"];
-  int32 stars_overall = 4 [json_name = "starsOverall"];
-  int32 stars_speed = 6 [json_name = "starsSpeed"];
-  int32 stars_accuracy = 7 [json_name = "starsAccuracy"];
-  int32 stars_style_taste = 8 [json_name = "starsStyleTaste"];
-  bool never_ask_again = 9 [json_name = "neverAskAgain"];
-  bool did_popup = 10 [json_name = "didPopup"];
+  optional string comment = 3 [json_name = "comment"];
+  optional int32 stars_overall = 4 [json_name = "starsOverall"];
+  optional int32 stars_speed = 6 [json_name = "starsSpeed"];
+  optional int32 stars_accuracy = 7 [json_name = "starsAccuracy"];
+  optional int32 stars_style_taste = 8 [json_name = "starsStyleTaste"];
+  optional bool never_ask_again = 9 [json_name = "neverAskAgain"];
+  optional bool did_popup = 10 [json_name = "didPopup"];
   .aiserver.v1.ReportGenerationFeedbackRequest.Source source = 11 [json_name = "source"];
   enum FeedbackType {
     FEEDBACK_TYPE_UNSPECIFIED = 0;
@@ -2145,7 +2145,7 @@ message ReportGroundTruthCandidateRequest {
   .aiserver.v1.FeatureType feature_type = 3 [json_name = "featureType"];
   string relative_workspace_path = 4 [json_name = "relativeWorkspacePath"];
   string contents = 5 [json_name = "contents"];
-  .aiserver.v1.LineRange selection_in_question = 6 [json_name = "selectionInQuestion"];
+  optional .aiserver.v1.LineRange selection_in_question = 6 [json_name = "selectionInQuestion"];
   int32 lines_above_and_below = 7 [json_name = "linesAboveAndBelow"];
 }
 
@@ -2159,11 +2159,11 @@ message ReportProcessMetricsRequest {
   int64 window_seq = 4 [json_name = "windowSeq"];
   string session_id = 5 [json_name = "sessionId"];
   repeated .aiserver.v1.ProcessMetricsRowRequest rows = 6 [json_name = "rows"];
-  string os = 7 [json_name = "os"];
-  string os_version = 8 [json_name = "osVersion"];
-  string arch = 9 [json_name = "arch"];
-  string client_version = 10 [json_name = "clientVersion"];
-  string client_id = 11 [json_name = "clientId"];
+  optional string os = 7 [json_name = "os"];
+  optional string os_version = 8 [json_name = "osVersion"];
+  optional string arch = 9 [json_name = "arch"];
+  optional string client_version = 10 [json_name = "clientVersion"];
+  optional string client_id = 11 [json_name = "clientId"];
 }
 
 message ReportProcessMetricsResponse {
@@ -2205,9 +2205,9 @@ message RerankerRequest {
   repeated .aiserver.v1.CodeResult code_results = 1 [json_name = "codeResults"];
   string query = 2 [json_name = "query"];
   int32 num_blocks = 3 [json_name = "numBlocks"];
-  .aiserver.v1.CurrentFileInfo current_file = 4 [json_name = "currentFile"];
+  optional .aiserver.v1.CurrentFileInfo current_file = 4 [json_name = "currentFile"];
   repeated .aiserver.v1.ConversationMessage conversation = 5 [json_name = "conversation"];
-  .aiserver.v1.ApiDetails api_details = 6 [json_name = "apiDetails"];
+  optional .aiserver.v1.ApiDetails api_details = 6 [json_name = "apiDetails"];
   oneof context_results {
     .aiserver.v1.FullFileSearchResult file_search_results = 7 [json_name = "fileSearchResults"];
     .aiserver.v1.CodeSearchResult code_search_results = 8 [json_name = "codeSearchResults"];
@@ -2220,11 +2220,11 @@ message RerankerResponse {
 
 message ReviewBug {
   string id = 1 [json_name = "id"];
-  int32 start_line = 2 [json_name = "startLine"];
-  int32 end_line = 3 [json_name = "endLine"];
-  string description = 4 [json_name = "description"];
-  int32 severity = 5 [json_name = "severity"];
-  string tldr = 6 [json_name = "tldr"];
+  optional int32 start_line = 2 [json_name = "startLine"];
+  optional int32 end_line = 3 [json_name = "endLine"];
+  optional string description = 4 [json_name = "description"];
+  optional int32 severity = 5 [json_name = "severity"];
+  optional string tldr = 6 [json_name = "tldr"];
 }
 
 message ReviewChatMessage {
@@ -2240,28 +2240,28 @@ message ReviewChatMessage {
 message ReviewChatRequest {
   string chunk = 1 [json_name = "chunk"];
   string file_context = 2 [json_name = "fileContext"];
-  .aiserver.v1.LineRange chunk_range = 3 [json_name = "chunkRange"];
+  optional .aiserver.v1.LineRange chunk_range = 3 [json_name = "chunkRange"];
   repeated .aiserver.v1.ReviewChatMessage messages = 4 [json_name = "messages"];
 }
 
 message ReviewChatResponse {
   string text = 1 [json_name = "text"];
-  bool should_resolve = 2 [json_name = "shouldResolve"];
+  optional bool should_resolve = 2 [json_name = "shouldResolve"];
 }
 
 message ReviewRequest {
   string chunk = 1 [json_name = "chunk"];
   string file_context = 2 [json_name = "fileContext"];
-  .aiserver.v1.LineRange chunk_range = 3 [json_name = "chunkRange"];
-  string diff_string = 4 [json_name = "diffString"];
-  string custom_instructions = 5 [json_name = "customInstructions"];
+  optional .aiserver.v1.LineRange chunk_range = 3 [json_name = "chunkRange"];
+  optional string diff_string = 4 [json_name = "diffString"];
+  optional string custom_instructions = 5 [json_name = "customInstructions"];
 }
 
 message ReviewResponse {
   string text = 1 [json_name = "text"];
-  string prompt = 2 [json_name = "prompt"];
-  string tldr = 3 [json_name = "tldr"];
-  bool is_bug = 4 [json_name = "isBug"];
+  optional string prompt = 2 [json_name = "prompt"];
+  optional string tldr = 3 [json_name = "tldr"];
+  optional bool is_bug = 4 [json_name = "isBug"];
   repeated .aiserver.v1.ReviewBug bugs = 5 [json_name = "bugs"];
 }
 
@@ -2311,12 +2311,12 @@ message RunWebFetchSuccess {
 
 message RunWebSearchRequest {
   string search_term = 1 [json_name = "searchTerm"];
-  string explanation = 2 [json_name = "explanation"];
+  optional string explanation = 2 [json_name = "explanation"];
   string model_id = 3 [json_name = "modelId"];
 }
 
 message RunWebSearchResponse {
-  string answer = 1 [json_name = "answer"];
+  optional string answer = 1 [json_name = "answer"];
   repeated .aiserver.v1.WebSearchDocument documents = 2 [json_name = "documents"];
 }
 
@@ -2337,7 +2337,7 @@ message ScoredAiCodeMetadata {
   string file_extension = 1 [json_name = "fileExtension"];
   int32 lines_added = 2 [json_name = "linesAdded"];
   int32 lines_deleted = 3 [json_name = "linesDeleted"];
-  string file_name = 4 [json_name = "fileName"];
+  optional string file_name = 4 [json_name = "fileName"];
   repeated string change_hashes = 5 [json_name = "changeHashes"];
 }
 
@@ -2349,7 +2349,7 @@ message SemanticDiffGroup {
 
 message SemanticDiffGroups {
   repeated .aiserver.v1.SemanticDiffGroup groups = 1 [json_name = "groups"];
-  string summary = 2 [json_name = "summary"];
+  optional string summary = 2 [json_name = "summary"];
 }
 
 message SemanticDiffReference {
@@ -2365,7 +2365,7 @@ message SemanticFileGroup {
 
 message SemanticFileGroups {
   repeated .aiserver.v1.SemanticFileGroup groups = 1 [json_name = "groups"];
-  string summary = 2 [json_name = "summary"];
+  optional string summary = 2 [json_name = "summary"];
 }
 
 message ServerTimeRequest {
@@ -2397,7 +2397,7 @@ message SimpleCommitWithDiff {
 
 message SlashEditFollowUpWithPreviousEditsRequest {
   repeated .aiserver.v1.ConversationMessage conversation = 1 [json_name = "conversation"];
-  .aiserver.v1.ModelDetails model_details = 2 [json_name = "modelDetails"];
+  optional .aiserver.v1.ModelDetails model_details = 2 [json_name = "modelDetails"];
   repeated .aiserver.v1.SlashEditPreviousEdit previous_edits = 3 [json_name = "previousEdits"];
 }
 
@@ -2405,32 +2405,32 @@ message SlashEditPreviousEdit {
   repeated string original_lines = 1 [json_name = "originalLines"];
   repeated string new_lines = 2 [json_name = "newLines"];
   string relative_workspace_path = 3 [json_name = "relativeWorkspacePath"];
-  .aiserver.v1.LineRange range = 4 [json_name = "range"];
+  optional .aiserver.v1.LineRange range = 4 [json_name = "range"];
 }
 
 message SlashEditRequest {
-  .aiserver.v1.CurrentFileInfo current_file = 2 [json_name = "currentFile"];
+  optional .aiserver.v1.CurrentFileInfo current_file = 2 [json_name = "currentFile"];
   repeated .aiserver.v1.ConversationMessage conversation = 3 [json_name = "conversation"];
-  .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
-  .aiserver.v1.ModelDetails model_details = 7 [json_name = "modelDetails"];
+  optional .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
+  optional .aiserver.v1.ModelDetails model_details = 7 [json_name = "modelDetails"];
   bool is_cmd_i = 8 [json_name = "isCmdI"];
-  string summary = 11 [json_name = "summary"];
-  int32 summary_up_until_index = 12 [json_name = "summaryUpUntilIndex"];
-  bool should_use_turbo_debug_prompt = 13 [json_name = "shouldUseTurboDebugPrompt"];
-  .aiserver.v1.LineRange edit_selection = 14 [json_name = "editSelection"];
+  optional string summary = 11 [json_name = "summary"];
+  optional int32 summary_up_until_index = 12 [json_name = "summaryUpUntilIndex"];
+  optional bool should_use_turbo_debug_prompt = 13 [json_name = "shouldUseTurboDebugPrompt"];
+  optional .aiserver.v1.LineRange edit_selection = 14 [json_name = "editSelection"];
   repeated .aiserver.v1.CurrentFileInfo files = 15 [json_name = "files"];
-  string clicked_code_block_contents = 16 [json_name = "clickedCodeBlockContents"];
-  bool is_an_optimistic_request_for_caching_and_linting = 17 [json_name = "isAnOptimisticRequestForCachingAndLinting"];
-  string specific_instructions = 18 [json_name = "specificInstructions"];
+  optional string clicked_code_block_contents = 16 [json_name = "clickedCodeBlockContents"];
+  optional bool is_an_optimistic_request_for_caching_and_linting = 17 [json_name = "isAnOptimisticRequestForCachingAndLinting"];
+  optional string specific_instructions = 18 [json_name = "specificInstructions"];
   bool use_fast_apply = 19 [json_name = "useFastApply"];
   .aiserver.v1.SlashEditRequest.FastApplyModelType fast_apply_model_type = 20 [json_name = "fastApplyModelType"];
-  bool use_chunk_speculation_for_long_files = 25 [json_name = "useChunkSpeculationForLongFiles"];
-  string parent_request_id = 26 [json_name = "parentRequestId"];
-  .aiserver.v1.FastApplySource source = 27 [json_name = "source"];
-  bool is_reapply = 28 [json_name = "isReapply"];
-  bool willing_to_pay_extra_for_speed = 29 [json_name = "willingToPayExtraForSpeed"];
-  int32 attempt_number = 30 [json_name = "attemptNumber"];
-  bool should_throw_timeout_error = 31 [json_name = "shouldThrowTimeoutError"];
+  optional bool use_chunk_speculation_for_long_files = 25 [json_name = "useChunkSpeculationForLongFiles"];
+  optional string parent_request_id = 26 [json_name = "parentRequestId"];
+  optional .aiserver.v1.FastApplySource source = 27 [json_name = "source"];
+  optional bool is_reapply = 28 [json_name = "isReapply"];
+  optional bool willing_to_pay_extra_for_speed = 29 [json_name = "willingToPayExtraForSpeed"];
+  optional int32 attempt_number = 30 [json_name = "attemptNumber"];
+  optional bool should_throw_timeout_error = 31 [json_name = "shouldThrowTimeoutError"];
   enum FastApplyModelType {
     FAST_APPLY_MODEL_TYPE_UNSPECIFIED = 0;
     FAST_APPLY_MODEL_TYPE_DEFAULT = 1;
@@ -2461,7 +2461,7 @@ message SlashEditRequest {
 }
 
 message SlashEditResponse {
-  .aiserver.v1.StreamCmdKResponse cmd_k_response = 1 [json_name = "cmdKResponse"];
+  optional .aiserver.v1.StreamCmdKResponse cmd_k_response = 1 [json_name = "cmdKResponse"];
 }
 
 message SshConfigPromptProps {
@@ -2471,7 +2471,7 @@ message SshConfigPromptProps {
 message StreamAiCursorHelpRequest {
   repeated .aiserver.v1.CursorHelpConversationMessage messages = 1 [json_name = "messages"];
   string user_os = 2 [json_name = "userOs"];
-  .aiserver.v1.ModelDetails model_details = 3 [json_name = "modelDetails"];
+  optional .aiserver.v1.ModelDetails model_details = 3 [json_name = "modelDetails"];
 }
 
 message StreamAiCursorHelpResponse {
@@ -2481,14 +2481,14 @@ message StreamAiCursorHelpResponse {
 
 message StreamAiLintBugRequest {
   repeated .aiserver.v1.StreamAiLintBugRequest.CodeChunk chunks_to_analyze = 1 [json_name = "chunksToAnalyze"];
-  .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
-  string workspace_root_path = 5 [json_name = "workspaceRootPath"];
-  .aiserver.v1.ModelDetails model_details = 9 [json_name = "modelDetails"];
+  optional .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
+  optional string workspace_root_path = 5 [json_name = "workspaceRootPath"];
+  optional .aiserver.v1.ModelDetails model_details = 9 [json_name = "modelDetails"];
   repeated .aiserver.v1.AiLintBug dismissed_bugs = 10 [json_name = "dismissedBugs"];
   repeated .aiserver.v1.AiLintBug active_bugs = 11 [json_name = "activeBugs"];
   repeated .aiserver.v1.AiLintRule lint_rules = 12 [json_name = "lintRules"];
   repeated .aiserver.v1.StreamAiLintBugRequest.CodeChunkList clients = 14 [json_name = "clients"];
-  .aiserver.v1.StreamAiLintBugRequest.DiscriminatorOptions discriminator_options = 15 [json_name = "discriminatorOptions"];
+  optional .aiserver.v1.StreamAiLintBugRequest.DiscriminatorOptions discriminator_options = 15 [json_name = "discriminatorOptions"];
   bool debug_mode = 16 [json_name = "debugMode"];
   repeated .aiserver.v1.LintDiscriminator force_enable_discriminators = 17 [json_name = "forceEnableDiscriminators"];
   repeated .aiserver.v1.LintDiscriminator force_disable_discriminators = 18 [json_name = "forceDisableDiscriminators"];
@@ -2541,35 +2541,35 @@ message StreamBugBotAgenticServerMessage {
 }
 
 message StreamBugBotResponse {
-  .aiserver.v1.BugReports bug_reports = 1 [json_name = "bugReports"];
-  .aiserver.v1.BugBotStatus status = 2 [json_name = "status"];
-  string summary = 3 [json_name = "summary"];
-  .aiserver.v1.BugbotTrialNotification trial_notification = 4 [json_name = "trialNotification"];
-  int32 num_turns = 5 [json_name = "numTurns"];
+  optional .aiserver.v1.BugReports bug_reports = 1 [json_name = "bugReports"];
+  optional .aiserver.v1.BugBotStatus status = 2 [json_name = "status"];
+  optional string summary = 3 [json_name = "summary"];
+  optional .aiserver.v1.BugbotTrialNotification trial_notification = 4 [json_name = "trialNotification"];
+  optional int32 num_turns = 5 [json_name = "numTurns"];
 }
 
 message StreamChatContextRequest {
-  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  optional .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
   repeated .aiserver.v1.ConversationMessage conversation = 2 [json_name = "conversation"];
   repeated .aiserver.v1.RepositoryInfo repositories = 3 [json_name = "repositories"];
-  .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
-  string workspace_root_path = 5 [json_name = "workspaceRootPath"];
+  optional .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
+  optional string workspace_root_path = 5 [json_name = "workspaceRootPath"];
   repeated .aiserver.v1.CodeBlock code_blocks = 6 [json_name = "codeBlocks"];
-  .aiserver.v1.ModelDetails model_details = 7 [json_name = "modelDetails"];
+  optional .aiserver.v1.ModelDetails model_details = 7 [json_name = "modelDetails"];
   repeated string documentation_identifiers = 8 [json_name = "documentationIdentifiers"];
   string query = 9 [json_name = "query"];
-  .aiserver.v1.StreamChatContextRequest.CodeContext code_context = 10 [json_name = "codeContext"];
+  optional .aiserver.v1.StreamChatContextRequest.CodeContext code_context = 10 [json_name = "codeContext"];
   bool rerank_results = 11 [json_name = "rerankResults"];
-  .aiserver.v1.LinterErrors linter_errors = 14 [json_name = "linterErrors"];
-  bool is_bash = 15 [json_name = "isBash"];
+  optional .aiserver.v1.LinterErrors linter_errors = 14 [json_name = "linterErrors"];
+  optional bool is_bash = 15 [json_name = "isBash"];
   bool rerank_results_v2 = 16 [json_name = "rerankResultsV2"];
   string conversation_id = 17 [json_name = "conversationId"];
   bool can_handle_filenames_after_language_ids = 18 [json_name = "canHandleFilenamesAfterLanguageIds"];
   bool long_context_mode = 19 [json_name = "longContextMode"];
   bool is_eval = 20 [json_name = "isEval"];
   string request_id = 21 [json_name = "requestId"];
-  int32 desired_max_tokens = 22 [json_name = "desiredMaxTokens"];
-  bool runnable_code_blocks = 23 [json_name = "runnableCodeBlocks"];
+  optional int32 desired_max_tokens = 22 [json_name = "desiredMaxTokens"];
+  optional bool runnable_code_blocks = 23 [json_name = "runnableCodeBlocks"];
   oneof context_results {
     .aiserver.v1.FullFileSearchResult file_search_results = 12 [json_name = "fileSearchResults"];
     .aiserver.v1.CodeSearchResult code_search_results = 13 [json_name = "codeSearchResults"];
@@ -2582,16 +2582,16 @@ message StreamChatContextRequest {
 
 message StreamChatContextResponse {
   string text = 1 [json_name = "text"];
-  string debugging_only_chat_prompt = 2 [json_name = "debuggingOnlyChatPrompt"];
-  int32 debugging_only_token_count = 3 [json_name = "debuggingOnlyTokenCount"];
-  .aiserver.v1.DocumentationCitation document_citation = 4 [json_name = "documentCitation"];
-  string filled_prompt = 5 [json_name = "filledPrompt"];
-  .aiserver.v1.StreamChatContextResponse.UsedCode used_code = 6 [json_name = "usedCode"];
-  .aiserver.v1.StreamChatContextResponse.CodeLink code_link = 7 [json_name = "codeLink"];
-  .aiserver.v1.StreamChatContextResponse.ChunkIdentity chunk_identity = 8 [json_name = "chunkIdentity"];
-  .aiserver.v1.DocsReference docs_reference = 9 [json_name = "docsReference"];
-  .aiserver.v1.SymbolLink symbol_link = 10 [json_name = "symbolLink"];
-  .aiserver.v1.FileLink file_link = 11 [json_name = "fileLink"];
+  optional string debugging_only_chat_prompt = 2 [json_name = "debuggingOnlyChatPrompt"];
+  optional int32 debugging_only_token_count = 3 [json_name = "debuggingOnlyTokenCount"];
+  optional .aiserver.v1.DocumentationCitation document_citation = 4 [json_name = "documentCitation"];
+  optional string filled_prompt = 5 [json_name = "filledPrompt"];
+  optional .aiserver.v1.StreamChatContextResponse.UsedCode used_code = 6 [json_name = "usedCode"];
+  optional .aiserver.v1.StreamChatContextResponse.CodeLink code_link = 7 [json_name = "codeLink"];
+  optional .aiserver.v1.StreamChatContextResponse.ChunkIdentity chunk_identity = 8 [json_name = "chunkIdentity"];
+  optional .aiserver.v1.DocsReference docs_reference = 9 [json_name = "docsReference"];
+  optional .aiserver.v1.SymbolLink symbol_link = 10 [json_name = "symbolLink"];
+  optional .aiserver.v1.FileLink file_link = 11 [json_name = "fileLink"];
   message ChunkIdentity {
     string file_name = 1 [json_name = "fileName"];
     int32 start_line = 2 [json_name = "startLine"];
@@ -2611,9 +2611,9 @@ message StreamChatContextResponse {
 
 message StreamChatDeepContextRequest {
   repeated .aiserver.v1.ConversationMessage conversation = 1 [json_name = "conversation"];
-  .aiserver.v1.ExplicitContext explicit_context = 2 [json_name = "explicitContext"];
-  .aiserver.v1.ModelDetails model_details = 3 [json_name = "modelDetails"];
-  .aiserver.v1.SearchRepositoryDeepContextResponse context_results = 4 [json_name = "contextResults"];
+  optional .aiserver.v1.ExplicitContext explicit_context = 2 [json_name = "explicitContext"];
+  optional .aiserver.v1.ModelDetails model_details = 3 [json_name = "modelDetails"];
+  optional .aiserver.v1.SearchRepositoryDeepContextResponse context_results = 4 [json_name = "contextResults"];
   bool rerank_results = 5 [json_name = "rerankResults"];
 }
 
@@ -2623,26 +2623,26 @@ message StreamChatDeepContextResponse {
 
 message StreamChatResponse {
   string text = 1 [json_name = "text"];
-  string debugging_only_chat_prompt = 2 [json_name = "debuggingOnlyChatPrompt"];
-  int32 debugging_only_token_count = 3 [json_name = "debuggingOnlyTokenCount"];
-  .aiserver.v1.DocumentationCitation document_citation = 4 [json_name = "documentCitation"];
-  string filled_prompt = 5 [json_name = "filledPrompt"];
-  bool is_big_file = 6 [json_name = "isBigFile"];
-  string intermediate_text = 7 [json_name = "intermediateText"];
-  .aiserver.v1.StreamChatResponse.ChunkIdentity chunk_identity = 8 [json_name = "chunkIdentity"];
-  .aiserver.v1.DocsReference docs_reference = 9 [json_name = "docsReference"];
-  bool is_using_slow_request = 10 [json_name = "isUsingSlowRequest"];
-  .aiserver.v1.WebCitation web_citation = 11 [json_name = "webCitation"];
-  .aiserver.v1.StatusUpdates status_updates = 12 [json_name = "statusUpdates"];
-  .aiserver.v1.ServerTimingInfo timing_info = 13 [json_name = "timingInfo"];
-  .aiserver.v1.SymbolLink symbol_link = 14 [json_name = "symbolLink"];
-  .aiserver.v1.FileLink file_link = 15 [json_name = "fileLink"];
-  .aiserver.v1.ConversationSummary conversation_summary = 16 [json_name = "conversationSummary"];
-  .aiserver.v1.ServiceStatusUpdate service_status_update = 17 [json_name = "serviceStatusUpdate"];
-  .aiserver.v1.StreamChatResponse.UsedCode used_code = 18 [json_name = "usedCode"];
-  string server_bubble_id = 22 [json_name = "serverBubbleId"];
-  bool stop_using_dsv3_agentic_model = 26 [json_name = "stopUsingDsv3AgenticModel"];
-  string usage_uuid = 27 [json_name = "usageUuid"];
+  optional string debugging_only_chat_prompt = 2 [json_name = "debuggingOnlyChatPrompt"];
+  optional int32 debugging_only_token_count = 3 [json_name = "debuggingOnlyTokenCount"];
+  optional .aiserver.v1.DocumentationCitation document_citation = 4 [json_name = "documentCitation"];
+  optional string filled_prompt = 5 [json_name = "filledPrompt"];
+  optional bool is_big_file = 6 [json_name = "isBigFile"];
+  optional string intermediate_text = 7 [json_name = "intermediateText"];
+  optional .aiserver.v1.StreamChatResponse.ChunkIdentity chunk_identity = 8 [json_name = "chunkIdentity"];
+  optional .aiserver.v1.DocsReference docs_reference = 9 [json_name = "docsReference"];
+  optional bool is_using_slow_request = 10 [json_name = "isUsingSlowRequest"];
+  optional .aiserver.v1.WebCitation web_citation = 11 [json_name = "webCitation"];
+  optional .aiserver.v1.StatusUpdates status_updates = 12 [json_name = "statusUpdates"];
+  optional .aiserver.v1.ServerTimingInfo timing_info = 13 [json_name = "timingInfo"];
+  optional .aiserver.v1.SymbolLink symbol_link = 14 [json_name = "symbolLink"];
+  optional .aiserver.v1.FileLink file_link = 15 [json_name = "fileLink"];
+  optional .aiserver.v1.ConversationSummary conversation_summary = 16 [json_name = "conversationSummary"];
+  optional .aiserver.v1.ServiceStatusUpdate service_status_update = 17 [json_name = "serviceStatusUpdate"];
+  optional .aiserver.v1.StreamChatResponse.UsedCode used_code = 18 [json_name = "usedCode"];
+  optional string server_bubble_id = 22 [json_name = "serverBubbleId"];
+  optional bool stop_using_dsv3_agentic_model = 26 [json_name = "stopUsingDsv3AgenticModel"];
+  optional string usage_uuid = 27 [json_name = "usageUuid"];
   message ChunkIdentity {
     string file_name = 1 [json_name = "fileName"];
     int32 start_line = 2 [json_name = "startLine"];
@@ -2657,11 +2657,11 @@ message StreamChatResponse {
 
 message StreamChatToolformerContinueRequest {
   string toolformer_session_id = 1 [json_name = "toolformerSessionId"];
-  .aiserver.v1.ToolResult tool_result = 2 [json_name = "toolResult"];
+  optional .aiserver.v1.ToolResult tool_result = 2 [json_name = "toolResult"];
 }
 
 message StreamChatToolformerResponse {
-  string toolformer_session_id = 1 [json_name = "toolformerSessionId"];
+  optional string toolformer_session_id = 1 [json_name = "toolformerSessionId"];
   oneof response_type {
     .aiserver.v1.StreamChatToolformerResponse.Output output = 2 [json_name = "output"];
     .aiserver.v1.StreamChatToolformerResponse.ToolAction tool_action = 3 [json_name = "toolAction"];
@@ -2675,34 +2675,34 @@ message StreamChatToolformerResponse {
   }
   message ToolAction {
     string user_facing_text = 1 [json_name = "userFacingText"];
-    .aiserver.v1.ToolCall tool_call = 2 [json_name = "toolCall"];
+    optional .aiserver.v1.ToolCall tool_call = 2 [json_name = "toolCall"];
     string raw_model_output = 3 [json_name = "rawModelOutput"];
     bool more_to_come = 4 [json_name = "moreToCome"];
   }
 }
 
 message StreamComposerContextRequest {
-  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  optional .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
   repeated .aiserver.v1.ConversationMessage conversation = 2 [json_name = "conversation"];
   repeated .aiserver.v1.RepositoryInfo repositories = 3 [json_name = "repositories"];
-  .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
-  string workspace_root_path = 5 [json_name = "workspaceRootPath"];
+  optional .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
+  optional string workspace_root_path = 5 [json_name = "workspaceRootPath"];
   repeated .aiserver.v1.CodeBlock code_blocks = 6 [json_name = "codeBlocks"];
-  .aiserver.v1.ModelDetails model_details = 7 [json_name = "modelDetails"];
+  optional .aiserver.v1.ModelDetails model_details = 7 [json_name = "modelDetails"];
   repeated string documentation_identifiers = 8 [json_name = "documentationIdentifiers"];
   string query = 9 [json_name = "query"];
-  .aiserver.v1.StreamComposerContextRequest.CodeContext code_context = 10 [json_name = "codeContext"];
+  optional .aiserver.v1.StreamComposerContextRequest.CodeContext code_context = 10 [json_name = "codeContext"];
   bool rerank_results = 11 [json_name = "rerankResults"];
-  .aiserver.v1.LinterErrors linter_errors = 14 [json_name = "linterErrors"];
-  bool is_bash = 15 [json_name = "isBash"];
+  optional .aiserver.v1.LinterErrors linter_errors = 14 [json_name = "linterErrors"];
+  optional bool is_bash = 15 [json_name = "isBash"];
   bool rerank_results_v2 = 16 [json_name = "rerankResultsV2"];
   string conversation_id = 17 [json_name = "conversationId"];
   bool can_handle_filenames_after_language_ids = 18 [json_name = "canHandleFilenamesAfterLanguageIds"];
   bool long_context_mode = 19 [json_name = "longContextMode"];
   bool is_eval = 20 [json_name = "isEval"];
   string request_id = 21 [json_name = "requestId"];
-  int32 desired_max_tokens = 22 [json_name = "desiredMaxTokens"];
-  bool runnable_code_blocks = 23 [json_name = "runnableCodeBlocks"];
+  optional int32 desired_max_tokens = 22 [json_name = "desiredMaxTokens"];
+  optional bool runnable_code_blocks = 23 [json_name = "runnableCodeBlocks"];
   oneof context_results {
     .aiserver.v1.FullFileSearchResult file_search_results = 12 [json_name = "fileSearchResults"];
     .aiserver.v1.CodeSearchResult code_search_results = 13 [json_name = "codeSearchResults"];
@@ -2715,7 +2715,7 @@ message StreamComposerContextRequest {
 
 message StreamCursorTutorRequest {
   repeated .aiserver.v1.ConversationMessage conversation = 1 [json_name = "conversation"];
-  .aiserver.v1.ModelDetails model_details = 2 [json_name = "modelDetails"];
+  optional .aiserver.v1.ModelDetails model_details = 2 [json_name = "modelDetails"];
 }
 
 message StreamCursorTutorResponse {
@@ -2737,63 +2737,63 @@ message StreamDiffReviewResponse {
 }
 
 message StreamEditRequest {
-  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  optional .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
   repeated .aiserver.v1.ConversationMessage conversation = 2 [json_name = "conversation"];
   repeated .aiserver.v1.RepositoryInfo repositories = 3 [json_name = "repositories"];
-  .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
-  string workspace_root_path = 5 [json_name = "workspaceRootPath"];
+  optional .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
+  optional string workspace_root_path = 5 [json_name = "workspaceRootPath"];
   string query = 6 [json_name = "query"];
   repeated .aiserver.v1.CodeBlock code_blocks = 7 [json_name = "codeBlocks"];
-  .aiserver.v1.ModelDetails model_details = 9 [json_name = "modelDetails"];
+  optional .aiserver.v1.ModelDetails model_details = 9 [json_name = "modelDetails"];
   repeated string documentation_identifiers = 10 [json_name = "documentationIdentifiers"];
-  .aiserver.v1.LinterErrors linter_errors = 11 [json_name = "linterErrors"];
+  optional .aiserver.v1.LinterErrors linter_errors = 11 [json_name = "linterErrors"];
   repeated .aiserver.v1.CodeBlock prompt_code_blocks = 12 [json_name = "promptCodeBlocks"];
-  .aiserver.v1.CmdKDebugInfo cmd_k_debug_info = 13 [json_name = "cmdKDebugInfo"];
+  optional .aiserver.v1.CmdKDebugInfo cmd_k_debug_info = 13 [json_name = "cmdKDebugInfo"];
   string session_id = 14 [json_name = "sessionId"];
   bool fast_mode = 15 [json_name = "fastMode"];
-  .aiserver.v1.StreamEditRequest original_request = 16 [json_name = "originalRequest"];
+  optional .aiserver.v1.StreamEditRequest original_request = 16 [json_name = "originalRequest"];
   repeated .aiserver.v1.ImageProto images = 17 [json_name = "images"];
   repeated .aiserver.v1.CmdKExternalLink links = 18 [json_name = "links"];
   repeated .aiserver.v1.CursorRule rules = 19 [json_name = "rules"];
 }
 
 message StreamFastEditRequest {
-  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  optional .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
   repeated .aiserver.v1.RepositoryInfo repositories = 3 [json_name = "repositories"];
-  .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
-  string workspace_root_path = 5 [json_name = "workspaceRootPath"];
+  optional .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
+  optional string workspace_root_path = 5 [json_name = "workspaceRootPath"];
   string query = 6 [json_name = "query"];
   repeated .aiserver.v1.CodeBlock code_blocks = 7 [json_name = "codeBlocks"];
-  .aiserver.v1.ModelDetails model_details = 9 [json_name = "modelDetails"];
+  optional .aiserver.v1.ModelDetails model_details = 9 [json_name = "modelDetails"];
   repeated string documentation_identifiers = 10 [json_name = "documentationIdentifiers"];
-  .aiserver.v1.LinterErrors linter_errors = 11 [json_name = "linterErrors"];
+  optional .aiserver.v1.LinterErrors linter_errors = 11 [json_name = "linterErrors"];
 }
 
 message StreamFastEditResponse {
   int32 line_number = 2 [json_name = "lineNumber"];
   int32 replace_num_lines = 3 [json_name = "replaceNumLines"];
-  bool done = 4 [json_name = "done"];
+  optional bool done = 4 [json_name = "done"];
   string edit_uuid = 5 [json_name = "editUuid"];
-  string new_line = 6 [json_name = "newLine"];
+  optional string new_line = 6 [json_name = "newLine"];
   bool reset_new_lines = 7 [json_name = "resetNewLines"];
 }
 
 message StreamGenerateRequest {
-  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  optional .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
   repeated .aiserver.v1.ConversationMessage conversation = 2 [json_name = "conversation"];
   repeated .aiserver.v1.RepositoryInfo repositories = 3 [json_name = "repositories"];
-  .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
-  string workspace_root_path = 5 [json_name = "workspaceRootPath"];
+  optional .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
+  optional string workspace_root_path = 5 [json_name = "workspaceRootPath"];
   string query = 6 [json_name = "query"];
   repeated .aiserver.v1.CodeBlock code_blocks = 7 [json_name = "codeBlocks"];
-  .aiserver.v1.ModelDetails model_details = 9 [json_name = "modelDetails"];
+  optional .aiserver.v1.ModelDetails model_details = 9 [json_name = "modelDetails"];
   repeated string documentation_identifiers = 10 [json_name = "documentationIdentifiers"];
-  .aiserver.v1.LinterErrors linter_errors = 11 [json_name = "linterErrors"];
+  optional .aiserver.v1.LinterErrors linter_errors = 11 [json_name = "linterErrors"];
   repeated .aiserver.v1.CodeBlock prompt_code_blocks = 12 [json_name = "promptCodeBlocks"];
-  .aiserver.v1.CmdKDebugInfo cmd_k_debug_info = 13 [json_name = "cmdKDebugInfo"];
+  optional .aiserver.v1.CmdKDebugInfo cmd_k_debug_info = 13 [json_name = "cmdKDebugInfo"];
   string session_id = 14 [json_name = "sessionId"];
   bool fast_mode = 15 [json_name = "fastMode"];
-  .aiserver.v1.StreamGenerateRequest original_request = 16 [json_name = "originalRequest"];
+  optional .aiserver.v1.StreamGenerateRequest original_request = 16 [json_name = "originalRequest"];
 }
 
 message StreamInterfaceAgentStatusRequest {
@@ -2801,18 +2801,18 @@ message StreamInterfaceAgentStatusRequest {
 }
 
 message StreamInterfaceAgentStatusResponse {
-  .aiserver.v1.InterfaceAgentStatus status = 1 [json_name = "status"];
+  optional .aiserver.v1.InterfaceAgentStatus status = 1 [json_name = "status"];
 }
 
 message StreamLintRequest {
-  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  optional .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
   repeated .aiserver.v1.ConversationMessage conversation = 2 [json_name = "conversation"];
   repeated .aiserver.v1.RepositoryInfo repositories = 3 [json_name = "repositories"];
-  .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
-  string workspace_root_path = 5 [json_name = "workspaceRootPath"];
+  optional .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
+  optional string workspace_root_path = 5 [json_name = "workspaceRootPath"];
   string query = 6 [json_name = "query"];
   repeated .aiserver.v1.CodeBlock code_blocks = 7 [json_name = "codeBlocks"];
-  .aiserver.v1.ModelDetails model_details = 9 [json_name = "modelDetails"];
+  optional .aiserver.v1.ModelDetails model_details = 9 [json_name = "modelDetails"];
   repeated string documentation_identifiers = 10 [json_name = "documentationIdentifiers"];
   repeated string bad_notifications = 11 [json_name = "badNotifications"];
   string lint_rules = 12 [json_name = "lintRules"];
@@ -2824,24 +2824,24 @@ message StreamNewRuleRequest {
 }
 
 message StreamNextCursorPredictionRequest {
-  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  optional .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
   repeated string diff_history = 2 [json_name = "diffHistory"];
-  string model_name = 3 [json_name = "modelName"];
-  .aiserver.v1.LinterErrors linter_errors = 4 [json_name = "linterErrors"];
+  optional string model_name = 3 [json_name = "modelName"];
+  optional .aiserver.v1.LinterErrors linter_errors = 4 [json_name = "linterErrors"];
   repeated string diff_history_keys = 5 [json_name = "diffHistoryKeys"];
-  bool give_debug_output = 6 [json_name = "giveDebugOutput"];
+  optional bool give_debug_output = 6 [json_name = "giveDebugOutput"];
   repeated .aiserver.v1.CppFileDiffHistory file_diff_histories = 7 [json_name = "fileDiffHistories"];
   repeated .aiserver.v1.CppFileDiffHistory merged_diff_histories = 8 [json_name = "mergedDiffHistories"];
   repeated .aiserver.v1.BlockDiffPatch block_diff_patches = 9 [json_name = "blockDiffPatches"];
-  bool is_nightly = 10 [json_name = "isNightly"];
-  bool is_debug = 11 [json_name = "isDebug"];
-  bool immediately_ack = 12 [json_name = "immediatelyAck"];
+  optional bool is_nightly = 10 [json_name = "isNightly"];
+  optional bool is_debug = 11 [json_name = "isDebug"];
+  optional bool immediately_ack = 12 [json_name = "immediatelyAck"];
   repeated .aiserver.v1.CppContextItem context_items = 13 [json_name = "contextItems"];
   repeated .aiserver.v1.CppParameterHint parameter_hints = 14 [json_name = "parameterHints"];
   repeated .aiserver.v1.LspSubgraphFullContext lsp_contexts = 15 [json_name = "lspContexts"];
-  .aiserver.v1.CppIntentInfo cpp_intent_info = 16 [json_name = "cppIntentInfo"];
-  bool enable_more_context = 17 [json_name = "enableMoreContext"];
-  string workspace_id = 18 [json_name = "workspaceId"];
+  optional .aiserver.v1.CppIntentInfo cpp_intent_info = 16 [json_name = "cppIntentInfo"];
+  optional bool enable_more_context = 17 [json_name = "enableMoreContext"];
+  optional string workspace_id = 18 [json_name = "workspaceId"];
   repeated .aiserver.v1.FilesyncUpdateWithModelVersion file_sync_updates = 19 [json_name = "fileSyncUpdates"];
   repeated .aiserver.v1.StreamNextCursorPredictionRequest.FileVisibleRange file_visible_ranges = 20 [json_name = "fileVisibleRanges"];
   message FileVisibleRange {
@@ -2866,7 +2866,7 @@ message StreamNextCursorPredictionResponse {
 message StreamPriomptPromptRequest {
   string prompt_props = 2 [json_name = "promptProps"];
   string prompt_props_type_name = 3 [json_name = "promptPropsTypeName"];
-  .aiserver.v1.ModelDetails model_details = 4 [json_name = "modelDetails"];
+  optional .aiserver.v1.ModelDetails model_details = 4 [json_name = "modelDetails"];
   bool skip_login_check = 5 [json_name = "skipLoginCheck"];
 }
 
@@ -2875,8 +2875,8 @@ message StreamPriomptPromptResponse {
 }
 
 message StreamPseudocodeGeneratorRequest {
-  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
-  .aiserver.v1.PseudocodeTarget target = 2 [json_name = "target"];
+  optional .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  optional .aiserver.v1.PseudocodeTarget target = 2 [json_name = "target"];
 }
 
 message StreamPseudocodeGeneratorResponse {
@@ -2885,7 +2885,7 @@ message StreamPseudocodeGeneratorResponse {
 
 message StreamPseudocodeMapperRequest {
   string pseudocode = 1 [json_name = "pseudocode"];
-  .aiserver.v1.PseudocodeTarget target = 2 [json_name = "target"];
+  optional .aiserver.v1.PseudocodeTarget target = 2 [json_name = "target"];
 }
 
 message StreamPseudocodeMapperResponse {
@@ -2908,16 +2908,16 @@ message StreamSlashEditFollowUpWithPreviousEditsResponse {
 message StreamTerminalAutocompleteRequest {
   string current_command = 1 [json_name = "currentCommand"];
   repeated string command_history = 2 [json_name = "commandHistory"];
-  string model_name = 3 [json_name = "modelName"];
+  optional string model_name = 3 [json_name = "modelName"];
   repeated .aiserver.v1.CppFileDiffHistory file_diff_histories = 4 [json_name = "fileDiffHistories"];
-  string git_diff = 5 [json_name = "gitDiff"];
+  optional string git_diff = 5 [json_name = "gitDiff"];
   repeated string commit_history = 6 [json_name = "commitHistory"];
   repeated string past_results = 7 [json_name = "pastResults"];
 }
 
 message StreamTerminalAutocompleteResponse {
   string text = 1 [json_name = "text"];
-  bool done_stream = 2 [json_name = "doneStream"];
+  optional bool done_stream = 2 [json_name = "doneStream"];
 }
 
 message StreamUiBestOfNJudgeClientMessage {
@@ -2945,13 +2945,13 @@ message StreamWebCmdKV1Request {
   string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
   string file_contents = 2 [json_name = "fileContents"];
   string prompt = 3 [json_name = "prompt"];
-  .aiserver.v1.LineRange selection_range = 4 [json_name = "selectionRange"];
-  .aiserver.v1.ModelDetails model_details = 5 [json_name = "modelDetails"];
+  optional .aiserver.v1.LineRange selection_range = 4 [json_name = "selectionRange"];
+  optional .aiserver.v1.ModelDetails model_details = 5 [json_name = "modelDetails"];
   repeated .aiserver.v1.ImageProto images = 10 [json_name = "images"];
 }
 
 message StreamWebCmdKV1Response {
-  .aiserver.v1.StreamCmdKResponse cmd_k_response = 1 [json_name = "cmdKResponse"];
+  optional .aiserver.v1.StreamCmdKResponse cmd_k_response = 1 [json_name = "cmdKResponse"];
 }
 
 message SttAudioChunk {
@@ -2967,8 +2967,8 @@ message SttClientMessage {
 }
 
 message SttConfig {
-  string language = 1 [json_name = "language"];
-  bool punctuate = 2 [json_name = "punctuate"];
+  optional string language = 1 [json_name = "language"];
+  optional bool punctuate = 2 [json_name = "punctuate"];
 }
 
 message SttControl {
@@ -2989,7 +2989,7 @@ message SuggestQuickActionsRequest {
   repeated .aiserver.v1.QuickActionCandidate candidates = 1 [json_name = "candidates"];
   string last_user_message = 2 [json_name = "lastUserMessage"];
   string last_assistant_message = 3 [json_name = "lastAssistantMessage"];
-  int32 max_suggestions = 4 [json_name = "maxSuggestions"];
+  optional int32 max_suggestions = 4 [json_name = "maxSuggestions"];
   repeated string recently_used_skill_ids = 5 [json_name = "recentlyUsedSkillIds"];
   bool include_skills = 6 [json_name = "includeSkills"];
   bool include_text = 7 [json_name = "includeText"];
@@ -3011,7 +3011,7 @@ message SurroundingLines {
 }
 
 message TakeNotesOnCommitDiffRequest {
-  .aiserver.v1.CommitDiffString diff = 1 [json_name = "diff"];
+  optional .aiserver.v1.CommitDiffString diff = 1 [json_name = "diff"];
   string commit_hash = 2 [json_name = "commitHash"];
 }
 
@@ -3020,11 +3020,11 @@ message TakeNotesOnCommitDiffResponse {
 }
 
 message TaskGetInterfaceAgentStatusRequest {
-  .aiserver.v1.InterfaceAgentClientState interface_agent_client_state = 1 [json_name = "interfaceAgentClientState"];
+  optional .aiserver.v1.InterfaceAgentClientState interface_agent_client_state = 1 [json_name = "interfaceAgentClientState"];
 }
 
 message TaskGetInterfaceAgentStatusResponse {
-  .aiserver.v1.InterfaceAgentStatus status = 1 [json_name = "status"];
+  optional .aiserver.v1.InterfaceAgentStatus status = 1 [json_name = "status"];
 }
 
 message TaskGetInterfaceAgentStatusResponseWrapped {
@@ -3045,10 +3045,10 @@ message TaskInfoResponse {
 }
 
 message TaskInitRequest {
-  .aiserver.v1.TaskInstruction instruction = 1 [json_name = "instruction"];
-  .aiserver.v1.ModelDetails model_details = 2 [json_name = "modelDetails"];
+  optional .aiserver.v1.TaskInstruction instruction = 1 [json_name = "instruction"];
+  optional .aiserver.v1.ModelDetails model_details = 2 [json_name = "modelDetails"];
   bool debugging_only_live_mode = 3 [json_name = "debuggingOnlyLiveMode"];
-  string engine_id = 4 [json_name = "engineId"];
+  optional string engine_id = 4 [json_name = "engineId"];
 }
 
 message TaskInitResponse {
@@ -3059,9 +3059,9 @@ message TaskInitResponse {
 message TaskInstruction {
   string text = 1 [json_name = "text"];
   repeated .aiserver.v1.TaskInstruction.CodeChunk attached_code_chunks = 2 [json_name = "attachedCodeChunks"];
-  .aiserver.v1.CurrentFileInfo current_file = 3 [json_name = "currentFile"];
+  optional .aiserver.v1.CurrentFileInfo current_file = 3 [json_name = "currentFile"];
   repeated .aiserver.v1.RepositoryInfo repositories = 4 [json_name = "repositories"];
-  .aiserver.v1.ExplicitContext explicit_context = 5 [json_name = "explicitContext"];
+  optional .aiserver.v1.ExplicitContext explicit_context = 5 [json_name = "explicitContext"];
   message CodeChunk {
     string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
     int32 start_line_number = 2 [json_name = "startLineNumber"];
@@ -3092,12 +3092,12 @@ message TaskLogThought {
 
 message TaskLogToolAction {
   string user_facing_text = 1 [json_name = "userFacingText"];
-  .aiserver.v1.ToolCall tool_call = 2 [json_name = "toolCall"];
+  optional .aiserver.v1.ToolCall tool_call = 2 [json_name = "toolCall"];
   string raw_model_output = 3 [json_name = "rawModelOutput"];
 }
 
 message TaskLogToolResult {
-  .aiserver.v1.ToolResult tool_result = 1 [json_name = "toolResult"];
+  optional .aiserver.v1.ToolResult tool_result = 1 [json_name = "toolResult"];
   int32 action_sequence_number = 2 [json_name = "actionSequenceNumber"];
 }
 
@@ -3111,7 +3111,7 @@ message TaskPauseResponse {
 message TaskProvideResultRequest {
   string task_uuid = 1 [json_name = "taskUuid"];
   int32 action_sequence_number = 2 [json_name = "actionSequenceNumber"];
-  .aiserver.v1.ToolResult tool_result = 3 [json_name = "toolResult"];
+  optional .aiserver.v1.ToolResult tool_result = 3 [json_name = "toolResult"];
 }
 
 message TaskProvideResultResponse {
@@ -3119,7 +3119,7 @@ message TaskProvideResultResponse {
 
 message TaskSendMessageRequest {
   string task_uuid = 1 [json_name = "taskUuid"];
-  .aiserver.v1.TaskUserMessage user_message = 2 [json_name = "userMessage"];
+  optional .aiserver.v1.TaskUserMessage user_message = 2 [json_name = "userMessage"];
   bool wants_attention_right_now = 3 [json_name = "wantsAttentionRightNow"];
 }
 
@@ -3135,19 +3135,19 @@ enum TaskStatus {
 }
 
 message TaskStreamChatContextRequest {
-  .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
+  optional .aiserver.v1.CurrentFileInfo current_file = 1 [json_name = "currentFile"];
   repeated .aiserver.v1.ConversationMessage conversation = 2 [json_name = "conversation"];
   repeated .aiserver.v1.RepositoryInfo repositories = 3 [json_name = "repositories"];
-  .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
-  string workspace_root_path = 5 [json_name = "workspaceRootPath"];
+  optional .aiserver.v1.ExplicitContext explicit_context = 4 [json_name = "explicitContext"];
+  optional string workspace_root_path = 5 [json_name = "workspaceRootPath"];
   repeated .aiserver.v1.CodeBlock code_blocks = 6 [json_name = "codeBlocks"];
-  .aiserver.v1.ModelDetails model_details = 7 [json_name = "modelDetails"];
+  optional .aiserver.v1.ModelDetails model_details = 7 [json_name = "modelDetails"];
   repeated string documentation_identifiers = 8 [json_name = "documentationIdentifiers"];
-  .aiserver.v1.LinterErrors linter_errors = 14 [json_name = "linterErrors"];
-  .aiserver.v1.AdvancedCodebaseContextOptions advanced_codebase_context = 15 [json_name = "advancedCodebaseContext"];
-  bool is_eval = 16 [json_name = "isEval"];
+  optional .aiserver.v1.LinterErrors linter_errors = 14 [json_name = "linterErrors"];
+  optional .aiserver.v1.AdvancedCodebaseContextOptions advanced_codebase_context = 15 [json_name = "advancedCodebaseContext"];
+  optional bool is_eval = 16 [json_name = "isEval"];
   string request_id = 17 [json_name = "requestId"];
-  int32 desired_token_limit = 18 [json_name = "desiredTokenLimit"];
+  optional int32 desired_token_limit = 18 [json_name = "desiredTokenLimit"];
 }
 
 message TaskStreamChatContextResponse {
@@ -3162,7 +3162,7 @@ message TaskStreamChatContextResponse {
   }
   message GatheringFile {
     string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
-    .aiserver.v1.SimpleRange range = 2 [json_name = "range"];
+    optional .aiserver.v1.SimpleRange range = 2 [json_name = "range"];
     int32 step_index = 3 [json_name = "stepIndex"];
     float score = 4 [json_name = "score"];
   }
@@ -3184,7 +3184,7 @@ message TaskStreamChatContextResponse {
   }
   message RerankingFile {
     string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
-    .aiserver.v1.SimpleRange range = 2 [json_name = "range"];
+    optional .aiserver.v1.SimpleRange range = 2 [json_name = "range"];
     string reason = 3 [json_name = "reason"];
     bool failed = 4 [json_name = "failed"];
     float score = 5 [json_name = "score"];
@@ -3215,8 +3215,8 @@ message TaskStreamLogResponse {
     .aiserver.v1.TaskInfoResponse initial_task_info = 3 [json_name = "initialTaskInfo"];
   }
   message InfoUpdate {
-    string human_readable_title = 1 [json_name = "humanReadableTitle"];
-    .aiserver.v1.TaskStatus task_status = 2 [json_name = "taskStatus"];
+    optional string human_readable_title = 1 [json_name = "humanReadableTitle"];
+    optional .aiserver.v1.TaskStatus task_status = 2 [json_name = "taskStatus"];
   }
 }
 
@@ -3239,7 +3239,7 @@ message TestBedrockCredentialsRequest {
 
 message TestBedrockCredentialsResponse {
   bool success = 1 [json_name = "success"];
-  string error = 2 [json_name = "error"];
+  optional string error = 2 [json_name = "error"];
 }
 
 message TestBidiRequest {
@@ -3284,7 +3284,7 @@ message ToCamelCaseResponse {
 message TranscribeAudioRequest {
   bytes audio = 1 [json_name = "audio"];
   string mime_type = 2 [json_name = "mimeType"];
-  string language = 3 [json_name = "language"];
+  optional string language = 3 [json_name = "language"];
 }
 
 message TranscribeAudioResponse {
@@ -3303,7 +3303,7 @@ message TryParseTypeScriptTreeSitterResponse {
 
 message UiBestOfNJudgeCandidate {
   string composer_id = 1 [json_name = "composerId"];
-  .aiserver.v1.GitDiff diff = 2 [json_name = "diff"];
+  optional .aiserver.v1.GitDiff diff = 2 [json_name = "diff"];
 }
 
 message UiBestOfNJudgeFinalResult {
@@ -3314,7 +3314,7 @@ message UiBestOfNJudgeFinalResult {
 message UniqueFileIdentifier {
   string project_uuid = 1 [json_name = "projectUuid"];
   string relative_path = 2 [json_name = "relativePath"];
-  string language_id = 3 [json_name = "languageId"];
+  optional string language_id = 3 [json_name = "languageId"];
 }
 
 message UpdateVscodeProfileRequest {
@@ -3332,7 +3332,7 @@ message UsageData {
 }
 
 message WarmChatCacheRequest {
-  .aiserver.v1.GetChatRequest request = 1 [json_name = "request"];
+  optional .aiserver.v1.GetChatRequest request = 1 [json_name = "request"];
 }
 
 message WarmChatCacheResponse {
@@ -3351,8 +3351,8 @@ message WebSearchDocument {
 
 message WriteGitBranchNameRequest {
   string diffs = 1 [json_name = "diffs"];
-  string context = 2 [json_name = "context"];
-  string conversation_id = 3 [json_name = "conversationId"];
+  optional string context = 2 [json_name = "context"];
+  optional string conversation_id = 3 [json_name = "conversationId"];
   oneof credentials {
     .agent.v1.ApiKeyCredentials api_key_credentials = 4 [json_name = "apiKeyCredentials"];
     .agent.v1.AzureCredentials azure_credentials = 5 [json_name = "azureCredentials"];
@@ -3367,7 +3367,7 @@ message WriteGitBranchNameResponse {
 message WriteGitCommitMessageRequest {
   repeated string diffs = 1 [json_name = "diffs"];
   repeated string previous_commit_messages = 2 [json_name = "previousCommitMessages"];
-  .aiserver.v1.ExplicitContext explicit_context = 3 [json_name = "explicitContext"];
+  optional .aiserver.v1.ExplicitContext explicit_context = 3 [json_name = "explicitContext"];
   oneof credentials {
     .agent.v1.ApiKeyCredentials api_key_credentials = 4 [json_name = "apiKeyCredentials"];
     .agent.v1.AzureCredentials azure_credentials = 5 [json_name = "azureCredentials"];

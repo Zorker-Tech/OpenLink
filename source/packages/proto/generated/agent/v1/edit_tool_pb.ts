@@ -16,12 +16,12 @@ import { Message, proto3 } from "@bufbuild/protobuf";
  */
 export class EditToolCall extends Message<EditToolCall> {
   /**
-   * @generated from field: agent.v1.EditArgs args = 1;
+   * @generated from field: optional agent.v1.EditArgs args = 1;
    */
   args?: EditArgs;
 
   /**
-   * @generated from field: agent.v1.EditResult result = 2;
+   * @generated from field: optional agent.v1.EditResult result = 2;
    */
   result?: EditResult;
 
@@ -33,8 +33,8 @@ export class EditToolCall extends Message<EditToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.EditToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: EditArgs },
-    { no: 2, name: "result", kind: "message", T: EditResult },
+    { no: 1, name: "args", kind: "message", T: EditArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: EditResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): EditToolCall {
@@ -64,9 +64,9 @@ export class EditArgs extends Message<EditArgs> {
   path = "";
 
   /**
-   * @generated from field: string stream_content = 6;
+   * @generated from field: optional string stream_content = 6;
    */
-  streamContent = "";
+  streamContent?: string;
 
   constructor(data?: PartialMessage<EditArgs>) {
     super();
@@ -77,7 +77,7 @@ export class EditArgs extends Message<EditArgs> {
   static readonly typeName = "agent.v1.EditArgs";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "stream_content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 6, name: "stream_content", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): EditArgs {
@@ -185,24 +185,24 @@ export class EditSuccess extends Message<EditSuccess> {
   path = "";
 
   /**
-   * @generated from field: int32 lines_added = 3;
+   * @generated from field: optional int32 lines_added = 3;
    */
-  linesAdded = 0;
+  linesAdded?: number;
 
   /**
-   * @generated from field: int32 lines_removed = 4;
+   * @generated from field: optional int32 lines_removed = 4;
    */
-  linesRemoved = 0;
+  linesRemoved?: number;
 
   /**
-   * @generated from field: string diff_string = 5;
+   * @generated from field: optional string diff_string = 5;
    */
-  diffString = "";
+  diffString?: string;
 
   /**
-   * @generated from field: string before_full_file_content = 6;
+   * @generated from field: optional string before_full_file_content = 6;
    */
-  beforeFullFileContent = "";
+  beforeFullFileContent?: string;
 
   /**
    * @generated from field: string after_full_file_content = 7;
@@ -210,9 +210,9 @@ export class EditSuccess extends Message<EditSuccess> {
   afterFullFileContent = "";
 
   /**
-   * @generated from field: string message = 8;
+   * @generated from field: optional string message = 8;
    */
-  message = "";
+  message?: string;
 
   constructor(data?: PartialMessage<EditSuccess>) {
     super();
@@ -223,12 +223,12 @@ export class EditSuccess extends Message<EditSuccess> {
   static readonly typeName = "agent.v1.EditSuccess";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "lines_added", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 4, name: "lines_removed", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 5, name: "diff_string", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "before_full_file_content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "lines_added", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 4, name: "lines_removed", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 5, name: "diff_string", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "before_full_file_content", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 7, name: "after_full_file_content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 8, name: "message", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): EditSuccess {
@@ -429,9 +429,9 @@ export class EditError extends Message<EditError> {
   error = "";
 
   /**
-   * @generated from field: string model_visible_error = 5;
+   * @generated from field: optional string model_visible_error = 5;
    */
-  modelVisibleError = "";
+  modelVisibleError?: string;
 
   constructor(data?: PartialMessage<EditError>) {
     super();
@@ -443,7 +443,7 @@ export class EditError extends Message<EditError> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "model_visible_error", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "model_visible_error", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): EditError {

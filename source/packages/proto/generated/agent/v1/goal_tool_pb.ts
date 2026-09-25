@@ -54,12 +54,12 @@ proto3.util.setEnumType(GoalStatus, "agent.v1.GoalStatus", [
  */
 export class CreateGoalToolCall extends Message<CreateGoalToolCall> {
   /**
-   * @generated from field: agent.v1.CreateGoalArgs args = 1;
+   * @generated from field: optional agent.v1.CreateGoalArgs args = 1;
    */
   args?: CreateGoalArgs;
 
   /**
-   * @generated from field: agent.v1.CreateGoalResult result = 2;
+   * @generated from field: optional agent.v1.CreateGoalResult result = 2;
    */
   result?: CreateGoalResult;
 
@@ -71,8 +71,8 @@ export class CreateGoalToolCall extends Message<CreateGoalToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.CreateGoalToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: CreateGoalArgs },
-    { no: 2, name: "result", kind: "message", T: CreateGoalResult },
+    { no: 1, name: "args", kind: "message", T: CreateGoalArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: CreateGoalResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CreateGoalToolCall {
@@ -97,12 +97,12 @@ export class CreateGoalToolCall extends Message<CreateGoalToolCall> {
  */
 export class UpdateGoalToolCall extends Message<UpdateGoalToolCall> {
   /**
-   * @generated from field: agent.v1.UpdateGoalArgs args = 1;
+   * @generated from field: optional agent.v1.UpdateGoalArgs args = 1;
    */
   args?: UpdateGoalArgs;
 
   /**
-   * @generated from field: agent.v1.UpdateGoalResult result = 2;
+   * @generated from field: optional agent.v1.UpdateGoalResult result = 2;
    */
   result?: UpdateGoalResult;
 
@@ -114,8 +114,8 @@ export class UpdateGoalToolCall extends Message<UpdateGoalToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.UpdateGoalToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: UpdateGoalArgs },
-    { no: 2, name: "result", kind: "message", T: UpdateGoalResult },
+    { no: 1, name: "args", kind: "message", T: UpdateGoalArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: UpdateGoalResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateGoalToolCall {

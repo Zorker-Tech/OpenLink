@@ -13,8 +13,8 @@ message PiEditReplacement {
 }
 
 message PiEditToolCall {
-  .agent.v1.PiEditToolArgs args = 1 [json_name = "args"];
-  .agent.v1.PiEditToolResult result = 2 [json_name = "result"];
+  optional .agent.v1.PiEditToolArgs args = 1 [json_name = "args"];
+  optional .agent.v1.PiEditToolResult result = 2 [json_name = "result"];
 }
 
 message PiEditToolArgs {
@@ -34,7 +34,7 @@ message PiEditToolSuccess {
   string output = 1 [json_name = "output"];
   string diff = 2 [json_name = "diff"];
   string patch = 3 [json_name = "patch"];
-  uint32 first_changed_line = 4 [json_name = "firstChangedLine"];
+  optional uint32 first_changed_line = 4 [json_name = "firstChangedLine"];
 }
 
 message PiEditToolError {

@@ -16,12 +16,12 @@ message CustomSubagent {
   string prompt = 6 [json_name = "prompt"];
   .agent.v1.CustomSubagentPermissionMode permission_mode = 7 [json_name = "permissionMode"];
   bool is_background = 8 [json_name = "isBackground"];
-  string plugin = 9 [json_name = "plugin"];
-  string marketplace = 10 [json_name = "marketplace"];
-  string plugin_id = 11 [json_name = "pluginId"];
-  string marketplace_id = 12 [json_name = "marketplaceId"];
+  optional string plugin = 9 [json_name = "plugin"];
+  optional string marketplace = 10 [json_name = "marketplace"];
+  optional string plugin_id = 11 [json_name = "pluginId"];
+  optional string marketplace_id = 12 [json_name = "marketplaceId"];
   bool force_default_model = 13 [json_name = "forceDefaultModel"];
-  string source = 14 [json_name = "source"];
+  optional string source = 14 [json_name = "source"];
 }
 
 message SubagentType {

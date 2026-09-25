@@ -127,9 +127,9 @@ export class Snapshot extends Message<Snapshot> {
   creationTimestamp = protoInt64.zero;
 
   /**
-   * @generated from field: uint64 deletion_timestamp = 6;
+   * @generated from field: optional uint64 deletion_timestamp = 6;
    */
-  deletionTimestamp = protoInt64.zero;
+  deletionTimestamp?: bigint;
 
   /**
    * @generated from field: string tenant_id = 7;
@@ -147,7 +147,7 @@ export class Snapshot extends Message<Snapshot> {
   state = SnapshotState.UNSPECIFIED;
 
   /**
-   * @generated from field: anyrun.v1.ImageMetadata image_metadata = 10;
+   * @generated from field: optional anyrun.v1.ImageMetadata image_metadata = 10;
    */
   imageMetadata?: ImageMetadata;
 
@@ -157,64 +157,64 @@ export class Snapshot extends Message<Snapshot> {
   blobStorageFormat = BlobStorageFormat.LEGACY_UNSPECIFIED;
 
   /**
-   * @generated from field: uint64 deletion_duration_ms = 12;
+   * @generated from field: optional uint64 deletion_duration_ms = 12;
    */
-  deletionDurationMs = protoInt64.zero;
+  deletionDurationMs?: bigint;
 
   /**
-   * @generated from field: anyrun.v1.PersistedDevContainerConfig pod_config = 13;
+   * @generated from field: optional anyrun.v1.PersistedDevContainerConfig pod_config = 13;
    */
   podConfig?: PersistedDevContainerConfig;
 
   /**
-   * @generated from field: uint64 archive_timestamp = 14;
+   * @generated from field: optional uint64 archive_timestamp = 14;
    */
-  archiveTimestamp = protoInt64.zero;
+  archiveTimestamp?: bigint;
 
   /**
-   * @generated from field: uint64 archive_duration_ms = 15;
+   * @generated from field: optional uint64 archive_duration_ms = 15;
    */
-  archiveDurationMs = protoInt64.zero;
+  archiveDurationMs?: bigint;
 
   /**
-   * @generated from field: string node_machine_type = 16;
+   * @generated from field: optional string node_machine_type = 16;
    */
-  nodeMachineType = "";
+  nodeMachineType?: string;
 
   /**
-   * @generated from field: anyrun.v1.ResourceRequests resource_requests = 17;
+   * @generated from field: optional anyrun.v1.ResourceRequests resource_requests = 17;
    */
   resourceRequests?: ResourceRequests;
 
   /**
-   * @generated from field: anyrun.v1.ResourceLimits resource_limits = 18;
+   * @generated from field: optional anyrun.v1.ResourceLimits resource_limits = 18;
    */
   resourceLimits?: ResourceLimits;
 
   /**
-   * @generated from field: string cpu_baseline_id = 19;
+   * @generated from field: optional string cpu_baseline_id = 19;
    */
-  cpuBaselineId = "";
+  cpuBaselineId?: string;
 
   /**
-   * @generated from field: anyrun.v1.SnapshotUsageStats usage_stats = 20;
+   * @generated from field: optional anyrun.v1.SnapshotUsageStats usage_stats = 20;
    */
   usageStats?: SnapshotUsageStats;
 
   /**
-   * @generated from field: uint64 object_size_bytes = 21;
+   * @generated from field: optional uint64 object_size_bytes = 21;
    */
-  objectSizeBytes = protoInt64.zero;
+  objectSizeBytes?: bigint;
 
   /**
-   * @generated from field: anyrun.v1.V4RootArchiveOptions v4_root_archive_options = 22;
+   * @generated from field: optional anyrun.v1.V4RootArchiveOptions v4_root_archive_options = 22;
    */
   v4RootArchiveOptions?: V4RootArchiveOptions;
 
   /**
-   * @generated from field: string failure_reason = 23;
+   * @generated from field: optional string failure_reason = 23;
    */
-  failureReason = "";
+  failureReason?: string;
 
   constructor(data?: PartialMessage<Snapshot>) {
     super();
@@ -229,24 +229,24 @@ export class Snapshot extends Message<Snapshot> {
     { no: 3, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "labels", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
     { no: 5, name: "creation_timestamp", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
-    { no: 6, name: "deletion_timestamp", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
+    { no: 6, name: "deletion_timestamp", kind: "scalar", T: 4 /* ScalarType.UINT64 */, opt: true },
     { no: 7, name: "tenant_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 8, name: "pod_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 9, name: "state", kind: "enum", T: proto3.getEnumType(SnapshotState) },
-    { no: 10, name: "image_metadata", kind: "message", T: ImageMetadata },
+    { no: 10, name: "image_metadata", kind: "message", T: ImageMetadata, opt: true },
     { no: 11, name: "blob_storage_format", kind: "enum", T: proto3.getEnumType(BlobStorageFormat) },
-    { no: 12, name: "deletion_duration_ms", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
-    { no: 13, name: "pod_config", kind: "message", T: PersistedDevContainerConfig },
-    { no: 14, name: "archive_timestamp", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
-    { no: 15, name: "archive_duration_ms", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
-    { no: 16, name: "node_machine_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 17, name: "resource_requests", kind: "message", T: ResourceRequests },
-    { no: 18, name: "resource_limits", kind: "message", T: ResourceLimits },
-    { no: 19, name: "cpu_baseline_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 20, name: "usage_stats", kind: "message", T: SnapshotUsageStats },
-    { no: 21, name: "object_size_bytes", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
-    { no: 22, name: "v4_root_archive_options", kind: "message", T: V4RootArchiveOptions },
-    { no: 23, name: "failure_reason", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 12, name: "deletion_duration_ms", kind: "scalar", T: 4 /* ScalarType.UINT64 */, opt: true },
+    { no: 13, name: "pod_config", kind: "message", T: PersistedDevContainerConfig, opt: true },
+    { no: 14, name: "archive_timestamp", kind: "scalar", T: 4 /* ScalarType.UINT64 */, opt: true },
+    { no: 15, name: "archive_duration_ms", kind: "scalar", T: 4 /* ScalarType.UINT64 */, opt: true },
+    { no: 16, name: "node_machine_type", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 17, name: "resource_requests", kind: "message", T: ResourceRequests, opt: true },
+    { no: 18, name: "resource_limits", kind: "message", T: ResourceLimits, opt: true },
+    { no: 19, name: "cpu_baseline_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 20, name: "usage_stats", kind: "message", T: SnapshotUsageStats, opt: true },
+    { no: 21, name: "object_size_bytes", kind: "scalar", T: 4 /* ScalarType.UINT64 */, opt: true },
+    { no: 22, name: "v4_root_archive_options", kind: "message", T: V4RootArchiveOptions, opt: true },
+    { no: 23, name: "failure_reason", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Snapshot {
@@ -276,9 +276,9 @@ export class SnapshotCollection extends Message<SnapshotCollection> {
   items: Snapshot[] = [];
 
   /**
-   * @generated from field: string next_cursor = 2;
+   * @generated from field: optional string next_cursor = 2;
    */
-  nextCursor = "";
+  nextCursor?: string;
 
   constructor(data?: PartialMessage<SnapshotCollection>) {
     super();
@@ -289,7 +289,7 @@ export class SnapshotCollection extends Message<SnapshotCollection> {
   static readonly typeName = "anyrun.v1.SnapshotCollection";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "items", kind: "message", T: Snapshot, repeated: true },
-    { no: 2, name: "next_cursor", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "next_cursor", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SnapshotCollection {
@@ -472,9 +472,9 @@ export class SnapshotMemoryCellAttributes extends Message<SnapshotMemoryCellAttr
   chunkIndex = protoInt64.zero;
 
   /**
-   * @generated from field: bytes hash = 2;
+   * @generated from field: optional bytes hash = 2;
    */
-  hash = new Uint8Array(0);
+  hash?: Uint8Array;
 
   constructor(data?: PartialMessage<SnapshotMemoryCellAttributes>) {
     super();
@@ -485,7 +485,7 @@ export class SnapshotMemoryCellAttributes extends Message<SnapshotMemoryCellAttr
   static readonly typeName = "anyrun.v1.SnapshotMemoryCellAttributes";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "chunk_index", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
-    { no: 2, name: "hash", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
+    { no: 2, name: "hash", kind: "scalar", T: 12 /* ScalarType.BYTES */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SnapshotMemoryCellAttributes {
@@ -563,22 +563,22 @@ export class SnapshotVmSnapshotV1Metadata extends Message<SnapshotVmSnapshotV1Me
   rootfsFileSize = protoInt64.zero;
 
   /**
-   * @generated from field: anyrun.v1.SnapshotFileChunk memory_file_chunk = 3;
+   * @generated from field: optional anyrun.v1.SnapshotFileChunk memory_file_chunk = 3;
    */
   memoryFileChunk?: SnapshotFileChunk;
 
   /**
-   * @generated from field: anyrun.v1.SnapshotFileChunk state_file_chunk = 4;
+   * @generated from field: optional anyrun.v1.SnapshotFileChunk state_file_chunk = 4;
    */
   stateFileChunk?: SnapshotFileChunk;
 
   /**
-   * @generated from field: anyrun.v1.SnapshotFileChunk kernel_file_chunk = 5;
+   * @generated from field: optional anyrun.v1.SnapshotFileChunk kernel_file_chunk = 5;
    */
   kernelFileChunk?: SnapshotFileChunk;
 
   /**
-   * @generated from field: anyrun.v1.IsoDevContainerMetadata dev_container_metadata = 6;
+   * @generated from field: optional anyrun.v1.IsoDevContainerMetadata dev_container_metadata = 6;
    */
   devContainerMetadata?: IsoDevContainerMetadata;
 
@@ -597,10 +597,10 @@ export class SnapshotVmSnapshotV1Metadata extends Message<SnapshotVmSnapshotV1Me
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "rootfs_file_chunks", kind: "message", T: SnapshotFileChunk, repeated: true },
     { no: 2, name: "rootfs_file_size", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
-    { no: 3, name: "memory_file_chunk", kind: "message", T: SnapshotFileChunk },
-    { no: 4, name: "state_file_chunk", kind: "message", T: SnapshotFileChunk },
-    { no: 5, name: "kernel_file_chunk", kind: "message", T: SnapshotFileChunk },
-    { no: 6, name: "dev_container_metadata", kind: "message", T: IsoDevContainerMetadata },
+    { no: 3, name: "memory_file_chunk", kind: "message", T: SnapshotFileChunk, opt: true },
+    { no: 4, name: "state_file_chunk", kind: "message", T: SnapshotFileChunk, opt: true },
+    { no: 5, name: "kernel_file_chunk", kind: "message", T: SnapshotFileChunk, opt: true },
+    { no: 6, name: "dev_container_metadata", kind: "message", T: IsoDevContainerMetadata, opt: true },
     { no: 7, name: "extra_drive_files", kind: "message", T: SnapshotExtraDriveFile, repeated: true },
   ]);
 
@@ -651,17 +651,17 @@ export class SnapshotVmSnapshotV2Metadata extends Message<SnapshotVmSnapshotV2Me
   memoryCellSize = protoInt64.zero;
 
   /**
-   * @generated from field: anyrun.v1.SnapshotFileChunk state_file_chunk = 6;
+   * @generated from field: optional anyrun.v1.SnapshotFileChunk state_file_chunk = 6;
    */
   stateFileChunk?: SnapshotFileChunk;
 
   /**
-   * @generated from field: anyrun.v1.SnapshotFileChunk kernel_file_chunk = 7;
+   * @generated from field: optional anyrun.v1.SnapshotFileChunk kernel_file_chunk = 7;
    */
   kernelFileChunk?: SnapshotFileChunk;
 
   /**
-   * @generated from field: anyrun.v1.IsoDevContainerMetadata dev_container_metadata = 8;
+   * @generated from field: optional anyrun.v1.IsoDevContainerMetadata dev_container_metadata = 8;
    */
   devContainerMetadata?: IsoDevContainerMetadata;
 
@@ -671,7 +671,7 @@ export class SnapshotVmSnapshotV2Metadata extends Message<SnapshotVmSnapshotV2Me
   extraDriveFiles: SnapshotExtraDriveFile[] = [];
 
   /**
-   * @generated from field: anyrun.v1.SnapshotMemoryPrefetchHint memory_prefetch_hint = 10;
+   * @generated from field: optional anyrun.v1.SnapshotMemoryPrefetchHint memory_prefetch_hint = 10;
    */
   memoryPrefetchHint?: SnapshotMemoryPrefetchHint;
 
@@ -698,11 +698,11 @@ export class SnapshotVmSnapshotV2Metadata extends Message<SnapshotVmSnapshotV2Me
     { no: 3, name: "memory_cells", kind: "message", T: SnapshotMemoryCell, repeated: true },
     { no: 4, name: "memory_file_size", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
     { no: 5, name: "memory_cell_size", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
-    { no: 6, name: "state_file_chunk", kind: "message", T: SnapshotFileChunk },
-    { no: 7, name: "kernel_file_chunk", kind: "message", T: SnapshotFileChunk },
-    { no: 8, name: "dev_container_metadata", kind: "message", T: IsoDevContainerMetadata },
+    { no: 6, name: "state_file_chunk", kind: "message", T: SnapshotFileChunk, opt: true },
+    { no: 7, name: "kernel_file_chunk", kind: "message", T: SnapshotFileChunk, opt: true },
+    { no: 8, name: "dev_container_metadata", kind: "message", T: IsoDevContainerMetadata, opt: true },
     { no: 9, name: "extra_drive_files", kind: "message", T: SnapshotExtraDriveFile, repeated: true },
-    { no: 10, name: "memory_prefetch_hint", kind: "message", T: SnapshotMemoryPrefetchHint },
+    { no: 10, name: "memory_prefetch_hint", kind: "message", T: SnapshotMemoryPrefetchHint, opt: true },
     { no: 11, name: "memory_hash_algorithm", kind: "enum", T: proto3.getEnumType(SnapshotMemoryHashAlgorithm) },
     { no: 12, name: "memory_cell_attrs", kind: "message", T: SnapshotMemoryCellAttributes, repeated: true },
   ]);

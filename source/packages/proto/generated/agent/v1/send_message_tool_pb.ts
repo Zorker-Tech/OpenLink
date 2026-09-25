@@ -16,12 +16,12 @@ import { Message, proto3, protoInt64 } from "@bufbuild/protobuf";
  */
 export class SendMessageToolCall extends Message<SendMessageToolCall> {
   /**
-   * @generated from field: agent.v1.SendMessageArgs args = 1;
+   * @generated from field: optional agent.v1.SendMessageArgs args = 1;
    */
   args?: SendMessageArgs;
 
   /**
-   * @generated from field: agent.v1.SendMessageResult result = 2;
+   * @generated from field: optional agent.v1.SendMessageResult result = 2;
    */
   result?: SendMessageResult;
 
@@ -33,8 +33,8 @@ export class SendMessageToolCall extends Message<SendMessageToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.SendMessageToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: SendMessageArgs },
-    { no: 2, name: "result", kind: "message", T: SendMessageResult },
+    { no: 1, name: "args", kind: "message", T: SendMessageArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: SendMessageResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SendMessageToolCall {
@@ -281,9 +281,9 @@ export class SendMessageAttachment extends Message<SendMessageAttachment> {
   url = "";
 
   /**
-   * @generated from field: string alt = 2;
+   * @generated from field: optional string alt = 2;
    */
-  alt = "";
+  alt?: string;
 
   constructor(data?: PartialMessage<SendMessageAttachment>) {
     super();
@@ -294,7 +294,7 @@ export class SendMessageAttachment extends Message<SendMessageAttachment> {
   static readonly typeName = "agent.v1.SendMessageAttachment";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "alt", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "alt", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SendMessageAttachment {

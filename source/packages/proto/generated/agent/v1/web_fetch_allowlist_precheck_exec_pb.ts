@@ -21,9 +21,9 @@ export class WebFetchAllowlistPrecheckArgs extends Message<WebFetchAllowlistPrec
   url = "";
 
   /**
-   * @generated from field: string tool_call_id = 2;
+   * @generated from field: optional string tool_call_id = 2;
    */
-  toolCallId = "";
+  toolCallId?: string;
 
   constructor(data?: PartialMessage<WebFetchAllowlistPrecheckArgs>) {
     super();
@@ -34,7 +34,7 @@ export class WebFetchAllowlistPrecheckArgs extends Message<WebFetchAllowlistPrec
   static readonly typeName = "agent.v1.WebFetchAllowlistPrecheckArgs";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): WebFetchAllowlistPrecheckArgs {

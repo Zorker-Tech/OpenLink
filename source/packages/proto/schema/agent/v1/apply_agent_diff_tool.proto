@@ -26,10 +26,10 @@ message ApplyAgentDiffError {
 message AppliedAgentChange {
   string path = 1 [json_name = "path"];
   .agent.v1.AppliedAgentChange.ChangeType change_type = 2 [json_name = "changeType"];
-  string before_content = 3 [json_name = "beforeContent"];
-  string after_content = 4 [json_name = "afterContent"];
-  string error = 5 [json_name = "error"];
-  string message_for_model = 6 [json_name = "messageForModel"];
+  optional string before_content = 3 [json_name = "beforeContent"];
+  optional string after_content = 4 [json_name = "afterContent"];
+  optional string error = 5 [json_name = "error"];
+  optional string message_for_model = 6 [json_name = "messageForModel"];
   enum ChangeType {
     CHANGE_TYPE_UNSPECIFIED = 0;
     CHANGE_TYPE_CREATED = 1;
@@ -39,8 +39,8 @@ message AppliedAgentChange {
 }
 
 message ApplyAgentDiffToolCall {
-  .agent.v1.ApplyAgentDiffArgs args = 1 [json_name = "args"];
-  .agent.v1.ApplyAgentDiffResult result = 2 [json_name = "result"];
+  optional .agent.v1.ApplyAgentDiffArgs args = 1 [json_name = "args"];
+  optional .agent.v1.ApplyAgentDiffResult result = 2 [json_name = "result"];
 }
 
 message ApplyAgentDiffArgs {

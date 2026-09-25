@@ -10,7 +10,7 @@ package agent.v1;
 message McpAllowlistPrecheckArgs {
   string provider_identifier = 1 [json_name = "providerIdentifier"];
   string tool_name = 2 [json_name = "toolName"];
-  string tool_call_id = 3 [json_name = "toolCallId"];
+  optional string tool_call_id = 3 [json_name = "toolCallId"];
 }
 
 message McpAllowlistPrecheckResult {

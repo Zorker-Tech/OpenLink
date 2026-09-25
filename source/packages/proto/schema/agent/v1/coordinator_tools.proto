@@ -8,28 +8,28 @@ syntax = "proto3";
 package agent.v1;
 
 message GetAgentStatusToolCall {
-  .agent.v1.GetAgentStatusArgs args = 1 [json_name = "args"];
-  .agent.v1.GetAgentStatusResult result = 2 [json_name = "result"];
+  optional .agent.v1.GetAgentStatusArgs args = 1 [json_name = "args"];
+  optional .agent.v1.GetAgentStatusResult result = 2 [json_name = "result"];
 }
 
 message SendToAgentToolCall {
-  .agent.v1.SendToAgentArgs args = 1 [json_name = "args"];
-  .agent.v1.SendToAgentResult result = 2 [json_name = "result"];
+  optional .agent.v1.SendToAgentArgs args = 1 [json_name = "args"];
+  optional .agent.v1.SendToAgentResult result = 2 [json_name = "result"];
 }
 
 message ReadAgentTranscriptToolCall {
-  .agent.v1.ReadAgentTranscriptArgs args = 1 [json_name = "args"];
-  .agent.v1.ReadAgentTranscriptResult result = 2 [json_name = "result"];
+  optional .agent.v1.ReadAgentTranscriptArgs args = 1 [json_name = "args"];
+  optional .agent.v1.ReadAgentTranscriptResult result = 2 [json_name = "result"];
 }
 
 message CreateAgentToolCall {
-  .agent.v1.CreateAgentArgs args = 1 [json_name = "args"];
-  .agent.v1.CreateAgentResult result = 2 [json_name = "result"];
+  optional .agent.v1.CreateAgentArgs args = 1 [json_name = "args"];
+  optional .agent.v1.CreateAgentResult result = 2 [json_name = "result"];
 }
 
 message StopAgentToolCall {
-  .agent.v1.StopAgentArgs args = 1 [json_name = "args"];
-  .agent.v1.StopAgentResult result = 2 [json_name = "result"];
+  optional .agent.v1.StopAgentArgs args = 1 [json_name = "args"];
+  optional .agent.v1.StopAgentResult result = 2 [json_name = "result"];
 }
 
 message StopAgentArgs {
@@ -56,14 +56,14 @@ message StopAgentError {
 message CreateAgentArgs {
   string tool_call_id = 1 [json_name = "toolCallId"];
   string prompt = 2 [json_name = "prompt"];
-  string name = 3 [json_name = "name"];
-  string model = 4 [json_name = "model"];
-  string base_branch = 5 [json_name = "baseBranch"];
-  string machine_type = 6 [json_name = "machineType"];
-  string worker_id = 7 [json_name = "workerId"];
-  string pool = 8 [json_name = "pool"];
+  optional string name = 3 [json_name = "name"];
+  optional string model = 4 [json_name = "model"];
+  optional string base_branch = 5 [json_name = "baseBranch"];
+  optional string machine_type = 6 [json_name = "machineType"];
+  optional string worker_id = 7 [json_name = "workerId"];
+  optional string pool = 8 [json_name = "pool"];
   map<string, string> labels = 9 [json_name = "labels"];
-  string environment_build_id = 10 [json_name = "environmentBuildId"];
+  optional string environment_build_id = 10 [json_name = "environmentBuildId"];
 }
 
 message CreateAgentResult {

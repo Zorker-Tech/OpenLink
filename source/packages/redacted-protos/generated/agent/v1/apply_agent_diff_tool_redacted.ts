@@ -14,10 +14,10 @@ function toRedactedAppliedAgentChange(msg, privacyMode) {
     _privacyMode: privacyMode,
     path: createRedactedString(msg.path, DataClassification.PATH, "path", privacyMode),
     changeType: msg.changeType,
-    beforeContent: createRedactedString(msg.beforeContent, DataClassification.CODE, "before_content", privacyMode),
-    afterContent: createRedactedString(msg.afterContent, DataClassification.CODE, "after_content", privacyMode),
-    error: createRedactedString(msg.error, DataClassification.CODE, "error", privacyMode),
-    messageForModel: createRedactedString(msg.messageForModel, DataClassification.CODE, "message_for_model", privacyMode),
+    beforeContent: msg.beforeContent !== void 0 ? createRedactedString(msg.beforeContent, DataClassification.CODE, "before_content", privacyMode) : void 0,
+    afterContent: msg.afterContent !== void 0 ? createRedactedString(msg.afterContent, DataClassification.CODE, "after_content", privacyMode) : void 0,
+    error: msg.error !== void 0 ? createRedactedString(msg.error, DataClassification.CODE, "error", privacyMode) : void 0,
+    messageForModel: msg.messageForModel !== void 0 ? createRedactedString(msg.messageForModel, DataClassification.CODE, "message_for_model", privacyMode) : void 0,
   };
 }
 
@@ -27,10 +27,10 @@ function fromRedactedAppliedAgentChange(msg, purpose, opts) {
   return new AppliedAgentChange({
     path: msg.path.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     changeType: msg.changeType,
-    beforeContent: msg.beforeContent.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    afterContent: msg.afterContent.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    error: msg.error.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    messageForModel: msg.messageForModel.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    beforeContent: msg.beforeContent?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    afterContent: msg.afterContent?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    error: msg.error?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    messageForModel: msg.messageForModel?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
   });
 }
 

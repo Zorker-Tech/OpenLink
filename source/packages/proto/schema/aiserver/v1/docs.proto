@@ -21,7 +21,7 @@ message DocumentationMetadata {
   bool is_different_prefix_origin = 3 [json_name = "isDifferentPrefixOrigin"];
   string true_prefix_url = 4 [json_name = "truePrefixUrl"];
   bool public = 5 [json_name = "public"];
-  int32 team_id = 6 [json_name = "teamId"];
+  optional int32 team_id = 6 [json_name = "teamId"];
 }
 
 message DocumentationQueryRequest {

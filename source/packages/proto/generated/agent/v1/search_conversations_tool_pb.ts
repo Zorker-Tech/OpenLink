@@ -17,12 +17,12 @@ import { ConversationSearchArgs, ConversationSearchResult } from "./conversation
  */
 export class SearchConversationsToolCall extends Message<SearchConversationsToolCall> {
   /**
-   * @generated from field: agent.v1.ConversationSearchArgs args = 1;
+   * @generated from field: optional agent.v1.ConversationSearchArgs args = 1;
    */
   args?: ConversationSearchArgs;
 
   /**
-   * @generated from field: agent.v1.ConversationSearchResult result = 2;
+   * @generated from field: optional agent.v1.ConversationSearchResult result = 2;
    */
   result?: ConversationSearchResult;
 
@@ -34,8 +34,8 @@ export class SearchConversationsToolCall extends Message<SearchConversationsTool
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.SearchConversationsToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: ConversationSearchArgs },
-    { no: 2, name: "result", kind: "message", T: ConversationSearchResult },
+    { no: 1, name: "args", kind: "message", T: ConversationSearchArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: ConversationSearchResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SearchConversationsToolCall {

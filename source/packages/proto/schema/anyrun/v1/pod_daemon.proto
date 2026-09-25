@@ -9,9 +9,9 @@ package anyrun.v1;
 
 message ProcessSupervision {
   .anyrun.v1.RestartPolicy restart_policy = 1 [json_name = "restartPolicy"];
-  .anyrun.v1.RestartBackoff backoff = 2 [json_name = "backoff"];
-  .anyrun.v1.HttpHealthCheck health_check = 3 [json_name = "healthCheck"];
-  string exclusive_group = 4 [json_name = "exclusiveGroup"];
+  optional .anyrun.v1.RestartBackoff backoff = 2 [json_name = "backoff"];
+  optional .anyrun.v1.HttpHealthCheck health_check = 3 [json_name = "healthCheck"];
+  optional string exclusive_group = 4 [json_name = "exclusiveGroup"];
 }
 
 message RestartBackoff {
@@ -34,7 +34,7 @@ message HttpHealthCheck {
 
 message AttachProcessRequest {
   int64 pid = 1 [json_name = "pid"];
-  string last_event_id = 2 [json_name = "lastEventId"];
+  optional string last_event_id = 2 [json_name = "lastEventId"];
 }
 
 message CreateProcessRequest {
@@ -42,14 +42,14 @@ message CreateProcessRequest {
   string user = 2 [json_name = "user"];
   string working_directory = 3 [json_name = "workingDirectory"];
   map<string, string> env = 4 [json_name = "env"];
-  string idempotency_key = 5 [json_name = "idempotencyKey"];
-  .anyrun.v1.ProcessSupervision supervision = 6 [json_name = "supervision"];
+  optional string idempotency_key = 5 [json_name = "idempotencyKey"];
+  optional .anyrun.v1.ProcessSupervision supervision = 6 [json_name = "supervision"];
 }
 
 message CreateProcessResponse {
   int64 pid = 1 [json_name = "pid"];
   bool reused_existing_pid = 2 [json_name = "reusedExistingPid"];
-  int64 process_pid = 3 [json_name = "processPid"];
+  optional int64 process_pid = 3 [json_name = "processPid"];
 }
 
 message DirectoryEntry {
@@ -101,7 +101,7 @@ message ListProcessesResponse {
 
 message ListedProcess {
   int64 pid = 1 [json_name = "pid"];
-  .anyrun.v1.GetProcessStatusResponse status = 2 [json_name = "status"];
+  optional .anyrun.v1.GetProcessStatusResponse status = 2 [json_name = "status"];
 }
 
 message PodDiskUsage {
@@ -114,9 +114,9 @@ message PodDiskUsage {
 message PodMemoryBreakdown {
   uint64 all_process_rss_bytes = 1 [json_name = "allProcessRssBytes"];
   uint64 process_rss_count = 2 [json_name = "processRssCount"];
-  uint64 cgroup_anon_bytes = 3 [json_name = "cgroupAnonBytes"];
-  uint64 cgroup_file_bytes = 4 [json_name = "cgroupFileBytes"];
-  uint64 cgroup_kernel_bytes = 5 [json_name = "cgroupKernelBytes"];
+  optional uint64 cgroup_anon_bytes = 3 [json_name = "cgroupAnonBytes"];
+  optional uint64 cgroup_file_bytes = 4 [json_name = "cgroupFileBytes"];
+  optional uint64 cgroup_kernel_bytes = 5 [json_name = "cgroupKernelBytes"];
 }
 
 message PodMetricsSample {
@@ -142,7 +142,7 @@ message PodMetricsSample {
   repeated .anyrun.v1.PodDiskUsage disk_usage_by_device = 21 [json_name = "diskUsageByDevice"];
   uint64 event_stream_subscribers_fell_behind_total = 22 [json_name = "eventStreamSubscribersFellBehindTotal"];
   double cpu_psi_some_avg10 = 23 [json_name = "cpuPsiSomeAvg10"];
-  .anyrun.v1.PodMemoryBreakdown memory_breakdown = 24 [json_name = "memoryBreakdown"];
+  optional .anyrun.v1.PodMemoryBreakdown memory_breakdown = 24 [json_name = "memoryBreakdown"];
 }
 
 message ProcessEvent {

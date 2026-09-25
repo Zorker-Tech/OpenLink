@@ -17,12 +17,12 @@ import { WriteShellStdinArgs, WriteShellStdinResult } from "./background_shell_e
  */
 export class WriteShellStdinToolCall extends Message<WriteShellStdinToolCall> {
   /**
-   * @generated from field: agent.v1.WriteShellStdinArgs args = 1;
+   * @generated from field: optional agent.v1.WriteShellStdinArgs args = 1;
    */
   args?: WriteShellStdinArgs;
 
   /**
-   * @generated from field: agent.v1.WriteShellStdinResult result = 2;
+   * @generated from field: optional agent.v1.WriteShellStdinResult result = 2;
    */
   result?: WriteShellStdinResult;
 
@@ -34,8 +34,8 @@ export class WriteShellStdinToolCall extends Message<WriteShellStdinToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.WriteShellStdinToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: WriteShellStdinArgs },
-    { no: 2, name: "result", kind: "message", T: WriteShellStdinResult },
+    { no: 1, name: "args", kind: "message", T: WriteShellStdinArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: WriteShellStdinResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): WriteShellStdinToolCall {

@@ -35,7 +35,7 @@ function fromRedactedNetworkPolicy(msg, purpose, opts) {
 function toRedactedNetworkPolicyLoggingConfig(msg, privacyMode) {
   return {
     _privacyMode: privacyMode,
-    decisionLogPath: createRedactedString(msg.decisionLogPath, DataClassification.PATH, "decision_log_path", privacyMode),
+    decisionLogPath: msg.decisionLogPath !== void 0 ? createRedactedString(msg.decisionLogPath, DataClassification.PATH, "decision_log_path", privacyMode) : void 0,
     logFormat: msg.logFormat,
   };
 }
@@ -44,7 +44,7 @@ function fromRedactedNetworkPolicyLoggingConfig(msg, purpose, opts) {
   const redactUnallowedFieldsInsteadOfThrowing = opts?.redactUnallowedFieldsInsteadOfThrowing ?? false;
   const enforcing = opts?.enforcing;
   return new NetworkPolicyLoggingConfig({
-    decisionLogPath: msg.decisionLogPath.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    decisionLogPath: msg.decisionLogPath?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     logFormat: msg.logFormat,
   });
 }
@@ -56,7 +56,7 @@ function toRedactedSandboxPolicy(msg, privacyMode) {
     networkAccess: msg.networkAccess,
     additionalReadwritePaths: msg.additionalReadwritePaths.map((v2) => createRedactedString(v2, DataClassification.PATH, "additional_readwrite_paths", privacyMode)),
     additionalReadonlyPaths: msg.additionalReadonlyPaths.map((v2) => createRedactedString(v2, DataClassification.PATH, "additional_readonly_paths", privacyMode)),
-    debugOutputDir: createRedactedString(msg.debugOutputDir, DataClassification.PATH, "debug_output_dir", privacyMode),
+    debugOutputDir: msg.debugOutputDir !== void 0 ? createRedactedString(msg.debugOutputDir, DataClassification.PATH, "debug_output_dir", privacyMode) : void 0,
     disableTmpWrite: msg.disableTmpWrite,
     allowlistEscalated: msg.allowlistEscalated,
     enableSharedBuildCache: msg.enableSharedBuildCache,
@@ -77,7 +77,7 @@ function fromRedactedSandboxPolicy(msg, purpose, opts) {
     networkAccess: msg.networkAccess,
     additionalReadwritePaths: msg.additionalReadwritePaths.map((v2) => v2.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing })),
     additionalReadonlyPaths: msg.additionalReadonlyPaths.map((v2) => v2.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing })),
-    debugOutputDir: msg.debugOutputDir.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    debugOutputDir: msg.debugOutputDir?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     disableTmpWrite: msg.disableTmpWrite,
     allowlistEscalated: msg.allowlistEscalated,
     enableSharedBuildCache: msg.enableSharedBuildCache,

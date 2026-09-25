@@ -11,7 +11,7 @@ import "agent/v1/exec.proto";
 
 message KvServerMessage {
   uint32 id = 1 [json_name = "id"];
-  .agent.v1.SpanContext span_context = 4 [json_name = "spanContext"];
+  optional .agent.v1.SpanContext span_context = 4 [json_name = "spanContext"];
   oneof message {
     .agent.v1.GetBlobArgs get_blob_args = 2 [json_name = "getBlobArgs"];
     .agent.v1.SetBlobArgs set_blob_args = 3 [json_name = "setBlobArgs"];
@@ -36,12 +36,12 @@ message KvClientMessage {
 }
 
 message GetBlobResult {
-  bytes blob_data = 1 [json_name = "blobData"];
-  .agent.v1.Error error = 2 [json_name = "error"];
+  optional bytes blob_data = 1 [json_name = "blobData"];
+  optional .agent.v1.Error error = 2 [json_name = "error"];
 }
 
 message SetBlobResult {
-  .agent.v1.Error error = 1 [json_name = "error"];
+  optional .agent.v1.Error error = 1 [json_name = "error"];
 }
 
 message Error {

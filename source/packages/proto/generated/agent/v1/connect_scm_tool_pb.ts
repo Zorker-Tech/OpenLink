@@ -178,12 +178,12 @@ export class ConnectScmRequestResponse_Failed extends Message<ConnectScmRequestR
  */
 export class ConnectScmToolCall extends Message<ConnectScmToolCall> {
   /**
-   * @generated from field: agent.v1.ConnectScmArgs args = 1;
+   * @generated from field: optional agent.v1.ConnectScmArgs args = 1;
    */
   args?: ConnectScmArgs;
 
   /**
-   * @generated from field: agent.v1.ConnectScmResult result = 2;
+   * @generated from field: optional agent.v1.ConnectScmResult result = 2;
    */
   result?: ConnectScmResult;
 
@@ -195,8 +195,8 @@ export class ConnectScmToolCall extends Message<ConnectScmToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.ConnectScmToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: ConnectScmArgs },
-    { no: 2, name: "result", kind: "message", T: ConnectScmResult },
+    { no: 1, name: "args", kind: "message", T: ConnectScmArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: ConnectScmResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ConnectScmToolCall {
@@ -432,14 +432,14 @@ export class ConnectScmRejected extends Message<ConnectScmRejected> {
  */
 export class ConnectScmGithub extends Message<ConnectScmGithub> {
   /**
-   * @generated from field: agent.v1.ConnectScmGithubRepository repository = 1;
+   * @generated from field: optional agent.v1.ConnectScmGithubRepository repository = 1;
    */
   repository?: ConnectScmGithubRepository;
 
   /**
-   * @generated from field: string ghe_application = 2;
+   * @generated from field: optional string ghe_application = 2;
    */
-  gheApplication = "";
+  gheApplication?: string;
 
   constructor(data?: PartialMessage<ConnectScmGithub>) {
     super();
@@ -449,8 +449,8 @@ export class ConnectScmGithub extends Message<ConnectScmGithub> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.ConnectScmGithub";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repository", kind: "message", T: ConnectScmGithubRepository },
-    { no: 2, name: "ghe_application", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "repository", kind: "message", T: ConnectScmGithubRepository, opt: true },
+    { no: 2, name: "ghe_application", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ConnectScmGithub {
@@ -518,7 +518,7 @@ export class ConnectScmGithubRepository extends Message<ConnectScmGithubReposito
  */
 export class ConnectScmRequestQuery extends Message<ConnectScmRequestQuery> {
   /**
-   * @generated from field: agent.v1.ConnectScmArgs args = 1;
+   * @generated from field: optional agent.v1.ConnectScmArgs args = 1;
    */
   args?: ConnectScmArgs;
 
@@ -530,7 +530,7 @@ export class ConnectScmRequestQuery extends Message<ConnectScmRequestQuery> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.ConnectScmRequestQuery";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: ConnectScmArgs },
+    { no: 1, name: "args", kind: "message", T: ConnectScmArgs, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ConnectScmRequestQuery {

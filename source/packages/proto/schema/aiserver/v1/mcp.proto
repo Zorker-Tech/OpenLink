@@ -8,11 +8,11 @@ syntax = "proto3";
 package aiserver.v1;
 
 message McpOAuthStoredData {
-  string refresh_token = 1 [json_name = "refreshToken"];
+  optional string refresh_token = 1 [json_name = "refreshToken"];
   string client_id = 2 [json_name = "clientId"];
-  string client_secret = 3 [json_name = "clientSecret"];
+  optional string client_secret = 3 [json_name = "clientSecret"];
   repeated string redirect_uris = 4 [json_name = "redirectUris"];
-  string access_token = 5 [json_name = "accessToken"];
+  optional string access_token = 5 [json_name = "accessToken"];
 }
 
 message GetKnownServersRequest {
@@ -32,11 +32,11 @@ message MCPKnownServerInfo {
 
 message MCPServerRegistration {
   repeated string domains = 1 [json_name = "domains"];
-  .aiserver.v1.MCPKnownServerInfo info = 2 [json_name = "info"];
+  optional .aiserver.v1.MCPKnownServerInfo info = 2 [json_name = "info"];
 }
 
 message McpOAuthStoredClientInfo {
   string client_id = 1 [json_name = "clientId"];
-  string client_secret = 2 [json_name = "clientSecret"];
+  optional string client_secret = 2 [json_name = "clientSecret"];
   repeated string redirect_uris = 3 [json_name = "redirectUris"];
 }

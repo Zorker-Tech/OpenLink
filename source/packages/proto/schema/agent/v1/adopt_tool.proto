@@ -22,8 +22,8 @@ message AdoptResult {
 }
 
 message AdoptToolCall {
-  .agent.v1.AdoptArgs args = 1 [json_name = "args"];
-  .agent.v1.AdoptResult result = 2 [json_name = "result"];
+  optional .agent.v1.AdoptArgs args = 1 [json_name = "args"];
+  optional .agent.v1.AdoptResult result = 2 [json_name = "result"];
 }
 
 enum AdoptOutcome {

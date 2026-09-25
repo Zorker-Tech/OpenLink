@@ -8,8 +8,8 @@ syntax = "proto3";
 package agent.v1;
 
 message EditPrLabelsToolCall {
-  .agent.v1.EditPrLabelsArgs args = 1 [json_name = "args"];
-  .agent.v1.EditPrLabelsResult result = 2 [json_name = "result"];
+  optional .agent.v1.EditPrLabelsArgs args = 1 [json_name = "args"];
+  optional .agent.v1.EditPrLabelsResult result = 2 [json_name = "result"];
 }
 
 message EditPrLabelsArgs {

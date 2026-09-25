@@ -151,19 +151,19 @@ export class AgentFollowupCategorizationRequest extends Message<AgentFollowupCat
   messages: InferenceCoreMessage[] = [];
 
   /**
-   * @generated from field: string conversation_id = 4;
+   * @generated from field: optional string conversation_id = 4;
    */
-  conversationId = "";
+  conversationId?: string;
 
   /**
-   * @generated from field: string agent_mode = 5;
+   * @generated from field: optional string agent_mode = 5;
    */
-  agentMode = "";
+  agentMode?: string;
 
   /**
-   * @generated from field: string model_name = 6;
+   * @generated from field: optional string model_name = 6;
    */
-  modelName = "";
+  modelName?: string;
 
   constructor(data?: PartialMessage<AgentFollowupCategorizationRequest>) {
     super();
@@ -176,9 +176,9 @@ export class AgentFollowupCategorizationRequest extends Message<AgentFollowupCat
     { no: 1, name: "request_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "replying_to_request_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "messages", kind: "message", T: InferenceCoreMessage, repeated: true },
-    { no: 4, name: "conversation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "agent_mode", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "model_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "conversation_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "agent_mode", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "model_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AgentFollowupCategorizationRequest {
@@ -213,19 +213,19 @@ export class AgentPostTurnLabelingRequest extends Message<AgentPostTurnLabelingR
   messages: InferenceCoreMessage[] = [];
 
   /**
-   * @generated from field: string conversation_id = 3;
+   * @generated from field: optional string conversation_id = 3;
    */
-  conversationId = "";
+  conversationId?: string;
 
   /**
-   * @generated from field: string agent_mode = 4;
+   * @generated from field: optional string agent_mode = 4;
    */
-  agentMode = "";
+  agentMode?: string;
 
   /**
-   * @generated from field: string model_name = 5;
+   * @generated from field: optional string model_name = 5;
    */
-  modelName = "";
+  modelName?: string;
 
   constructor(data?: PartialMessage<AgentPostTurnLabelingRequest>) {
     super();
@@ -237,9 +237,9 @@ export class AgentPostTurnLabelingRequest extends Message<AgentPostTurnLabelingR
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "request_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "messages", kind: "message", T: InferenceCoreMessage, repeated: true },
-    { no: 3, name: "conversation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "agent_mode", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "model_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "conversation_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "agent_mode", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "model_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AgentPostTurnLabelingRequest {
@@ -274,12 +274,12 @@ export class InferenceAgentTool extends Message<InferenceAgentTool> {
   description = "";
 
   /**
-   * @generated from field: google.protobuf.Struct parameters = 3;
+   * @generated from field: optional google.protobuf.Struct parameters = 3;
    */
   parameters?: Struct;
 
   /**
-   * @generated from field: aiserver.v1.InferenceCustomToolFormat custom_tool_format = 4;
+   * @generated from field: optional aiserver.v1.InferenceCustomToolFormat custom_tool_format = 4;
    */
   customToolFormat?: InferenceCustomToolFormat;
 
@@ -293,8 +293,8 @@ export class InferenceAgentTool extends Message<InferenceAgentTool> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "parameters", kind: "message", T: Struct },
-    { no: 4, name: "custom_tool_format", kind: "message", T: InferenceCustomToolFormat },
+    { no: 3, name: "parameters", kind: "message", T: Struct, opt: true },
+    { no: 4, name: "custom_tool_format", kind: "message", T: InferenceCustomToolFormat, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): InferenceAgentTool {
@@ -319,7 +319,7 @@ export class InferenceAgentTool extends Message<InferenceAgentTool> {
  */
 export class InferenceAnthropicOptions extends Message<InferenceAnthropicOptions> {
   /**
-   * @generated from field: aiserver.v1.InferenceCacheControl cache_control = 1;
+   * @generated from field: optional aiserver.v1.InferenceCacheControl cache_control = 1;
    */
   cacheControl?: InferenceCacheControl;
 
@@ -331,7 +331,7 @@ export class InferenceAnthropicOptions extends Message<InferenceAnthropicOptions
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.InferenceAnthropicOptions";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "cache_control", kind: "message", T: InferenceCacheControl },
+    { no: 1, name: "cache_control", kind: "message", T: InferenceCacheControl, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): InferenceAnthropicOptions {
@@ -502,19 +502,19 @@ export class InferenceCoreMessage extends Message<InferenceCoreMessage> {
   reasoningParts: InferenceReasoningPart[] = [];
 
   /**
-   * @generated from field: string model_provider_message_id = 8;
+   * @generated from field: optional string model_provider_message_id = 8;
    */
-  modelProviderMessageId = "";
+  modelProviderMessageId?: string;
 
   /**
-   * @generated from field: string openai_phase = 9;
+   * @generated from field: optional string openai_phase = 9;
    */
-  openaiPhase = "";
+  openaiPhase?: string;
 
   /**
-   * @generated from field: bool openai_phase_null = 10;
+   * @generated from field: optional bool openai_phase_null = 10;
    */
-  openaiPhaseNull = false;
+  openaiPhaseNull?: boolean;
 
   /**
    * @generated from oneof aiserver.v1.InferenceCoreMessage.content
@@ -550,9 +550,9 @@ export class InferenceCoreMessage extends Message<InferenceCoreMessage> {
     { no: 1, name: "role", kind: "enum", T: proto3.getEnumType(InferenceMessageRole) },
     { no: 4, name: "tool_calls", kind: "message", T: InferenceToolCall, repeated: true },
     { no: 7, name: "reasoning_parts", kind: "message", T: InferenceReasoningPart, repeated: true },
-    { no: 8, name: "model_provider_message_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "openai_phase", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "openai_phase_null", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 8, name: "model_provider_message_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 9, name: "openai_phase", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 10, name: "openai_phase_null", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 2, name: "text", kind: "scalar", T: 9 /* ScalarType.STRING */, oneof: "content" },
     { no: 3, name: "parts", kind: "message", T: InferenceContentParts, oneof: "content" },
     { no: 6, name: "tool_content", kind: "message", T: InferenceToolResultContent, oneof: "content" },
@@ -580,9 +580,9 @@ export class InferenceCoreMessage extends Message<InferenceCoreMessage> {
  */
 export class InferenceCursorOptions extends Message<InferenceCursorOptions> {
   /**
-   * @generated from field: string image_description = 1;
+   * @generated from field: optional string image_description = 1;
    */
-  imageDescription = "";
+  imageDescription?: string;
 
   /**
    * @generated from field: map<int32, string> image_descriptions = 2;
@@ -597,7 +597,7 @@ export class InferenceCursorOptions extends Message<InferenceCursorOptions> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.InferenceCursorOptions";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "image_description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "image_description", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "image_descriptions", kind: "map", K: 5 /* ScalarType.INT32 */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
   ]);
 
@@ -810,12 +810,12 @@ export class InferenceFilePart extends Message<InferenceFilePart> {
   mediaType = "";
 
   /**
-   * @generated from field: string filename = 3;
+   * @generated from field: optional string filename = 3;
    */
-  filename = "";
+  filename?: string;
 
   /**
-   * @generated from field: aiserver.v1.InferenceProviderOptions provider_options = 4;
+   * @generated from field: optional aiserver.v1.InferenceProviderOptions provider_options = 4;
    */
   providerOptions?: InferenceProviderOptions;
 
@@ -829,8 +829,8 @@ export class InferenceFilePart extends Message<InferenceFilePart> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "data", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "media_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "filename", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "provider_options", kind: "message", T: InferenceProviderOptions },
+    { no: 3, name: "filename", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "provider_options", kind: "message", T: InferenceProviderOptions, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): InferenceFilePart {
@@ -865,9 +865,9 @@ export class InferenceImageDescription extends Message<InferenceImageDescription
   partIndex = 0;
 
   /**
-   * @generated from field: int32 exp_content_index = 3;
+   * @generated from field: optional int32 exp_content_index = 3;
    */
-  expContentIndex = 0;
+  expContentIndex?: number;
 
   /**
    * @generated from field: string description = 4;
@@ -884,7 +884,7 @@ export class InferenceImageDescription extends Message<InferenceImageDescription
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "message_index", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 2, name: "part_index", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "exp_content_index", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 3, name: "exp_content_index", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 4, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
@@ -952,12 +952,12 @@ export class InferenceImagePart extends Message<InferenceImagePart> {
   data = "";
 
   /**
-   * @generated from field: string mime_type = 2;
+   * @generated from field: optional string mime_type = 2;
    */
-  mimeType = "";
+  mimeType?: string;
 
   /**
-   * @generated from field: aiserver.v1.InferenceProviderOptions provider_options = 3;
+   * @generated from field: optional aiserver.v1.InferenceProviderOptions provider_options = 3;
    */
   providerOptions?: InferenceProviderOptions;
 
@@ -970,8 +970,8 @@ export class InferenceImagePart extends Message<InferenceImagePart> {
   static readonly typeName = "aiserver.v1.InferenceImagePart";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "data", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "mime_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "provider_options", kind: "message", T: InferenceProviderOptions },
+    { no: 2, name: "mime_type", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "provider_options", kind: "message", T: InferenceProviderOptions, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): InferenceImagePart {
@@ -1033,19 +1033,19 @@ export class InferenceInvocationIdInfo extends Message<InferenceInvocationIdInfo
  */
 export class InferenceModelConfig extends Message<InferenceModelConfig> {
   /**
-   * @generated from field: int32 max_tokens = 1;
+   * @generated from field: optional int32 max_tokens = 1;
    */
-  maxTokens = 0;
+  maxTokens?: number;
 
   /**
-   * @generated from field: float temperature = 2;
+   * @generated from field: optional float temperature = 2;
    */
-  temperature = 0;
+  temperature?: number;
 
   /**
-   * @generated from field: float top_p = 3;
+   * @generated from field: optional float top_p = 3;
    */
-  topP = 0;
+  topP?: number;
 
   /**
    * @generated from field: repeated string stop_sequences = 4;
@@ -1060,9 +1060,9 @@ export class InferenceModelConfig extends Message<InferenceModelConfig> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.InferenceModelConfig";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "max_tokens", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 2, name: "temperature", kind: "scalar", T: 2 /* ScalarType.FLOAT */ },
-    { no: 3, name: "top_p", kind: "scalar", T: 2 /* ScalarType.FLOAT */ },
+    { no: 1, name: "max_tokens", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 2, name: "temperature", kind: "scalar", T: 2 /* ScalarType.FLOAT */, opt: true },
+    { no: 3, name: "top_p", kind: "scalar", T: 2 /* ScalarType.FLOAT */, opt: true },
     { no: 4, name: "stop_sequences", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
 
@@ -1146,7 +1146,7 @@ export class InferenceNamedProviderDefinedTool extends Message<InferenceNamedPro
   type = "";
 
   /**
-   * @generated from field: google.protobuf.Struct options = 4;
+   * @generated from field: optional google.protobuf.Struct options = 4;
    */
   options?: Struct;
 
@@ -1161,7 +1161,7 @@ export class InferenceNamedProviderDefinedTool extends Message<InferenceNamedPro
     { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "options", kind: "message", T: Struct },
+    { no: 4, name: "options", kind: "message", T: Struct, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): InferenceNamedProviderDefinedTool {
@@ -1186,7 +1186,7 @@ export class InferenceNamedProviderDefinedTool extends Message<InferenceNamedPro
  */
 export class InferenceProviderMetadataInfo extends Message<InferenceProviderMetadataInfo> {
   /**
-   * @generated from field: google.protobuf.Struct metadata = 1;
+   * @generated from field: optional google.protobuf.Struct metadata = 1;
    */
   metadata?: Struct;
 
@@ -1198,7 +1198,7 @@ export class InferenceProviderMetadataInfo extends Message<InferenceProviderMeta
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.InferenceProviderMetadataInfo";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "metadata", kind: "message", T: Struct },
+    { no: 1, name: "metadata", kind: "message", T: Struct, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): InferenceProviderMetadataInfo {
@@ -1223,12 +1223,12 @@ export class InferenceProviderMetadataInfo extends Message<InferenceProviderMeta
  */
 export class InferenceProviderOptions extends Message<InferenceProviderOptions> {
   /**
-   * @generated from field: aiserver.v1.InferenceAnthropicOptions anthropic = 1;
+   * @generated from field: optional aiserver.v1.InferenceAnthropicOptions anthropic = 1;
    */
   anthropic?: InferenceAnthropicOptions;
 
   /**
-   * @generated from field: aiserver.v1.InferenceCursorOptions cursor = 2;
+   * @generated from field: optional aiserver.v1.InferenceCursorOptions cursor = 2;
    */
   cursor?: InferenceCursorOptions;
 
@@ -1240,8 +1240,8 @@ export class InferenceProviderOptions extends Message<InferenceProviderOptions> 
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.InferenceProviderOptions";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "anthropic", kind: "message", T: InferenceAnthropicOptions },
-    { no: 2, name: "cursor", kind: "message", T: InferenceCursorOptions },
+    { no: 1, name: "anthropic", kind: "message", T: InferenceAnthropicOptions, opt: true },
+    { no: 2, name: "cursor", kind: "message", T: InferenceCursorOptions, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): InferenceProviderOptions {
@@ -1276,19 +1276,19 @@ export class InferenceReasoningPart extends Message<InferenceReasoningPart> {
   text = "";
 
   /**
-   * @generated from field: string signature = 3;
+   * @generated from field: optional string signature = 3;
    */
-  signature = "";
+  signature?: string;
 
   /**
-   * @generated from field: string redacted_data = 4;
+   * @generated from field: optional string redacted_data = 4;
    */
-  redactedData = "";
+  redactedData?: string;
 
   /**
-   * @generated from field: string model_name = 5;
+   * @generated from field: optional string model_name = 5;
    */
-  modelName = "";
+  modelName?: string;
 
   constructor(data?: PartialMessage<InferenceReasoningPart>) {
     super();
@@ -1300,9 +1300,9 @@ export class InferenceReasoningPart extends Message<InferenceReasoningPart> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "is_redacted", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 2, name: "text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "signature", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "redacted_data", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "model_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "signature", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "redacted_data", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "model_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): InferenceReasoningPart {
@@ -1408,12 +1408,12 @@ export class InferenceResponseInfo extends Message<InferenceResponseInfo> {
   messages: InferenceResponseMessage[] = [];
 
   /**
-   * @generated from field: string error_message = 5;
+   * @generated from field: optional string error_message = 5;
    */
-  errorMessage = "";
+  errorMessage?: string;
 
   /**
-   * @generated from field: aiserver.v1.InferenceExtraData inference_extra_data = 6;
+   * @generated from field: optional aiserver.v1.InferenceExtraData inference_extra_data = 6;
    */
   inferenceExtraData?: InferenceExtraData;
 
@@ -1429,8 +1429,8 @@ export class InferenceResponseInfo extends Message<InferenceResponseInfo> {
     { no: 2, name: "model", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "created_at", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 4, name: "messages", kind: "message", T: InferenceResponseMessage, repeated: true },
-    { no: 5, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "inference_extra_data", kind: "message", T: InferenceExtraData },
+    { no: 5, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "inference_extra_data", kind: "message", T: InferenceExtraData, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): InferenceResponseInfo {
@@ -1465,9 +1465,9 @@ export class InferenceResponseMessage extends Message<InferenceResponseMessage> 
   role = InferenceMessageRole.UNSPECIFIED;
 
   /**
-   * @generated from field: string content = 3;
+   * @generated from field: optional string content = 3;
    */
-  content = "";
+  content?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.InferenceToolCall tool_calls = 4;
@@ -1475,7 +1475,7 @@ export class InferenceResponseMessage extends Message<InferenceResponseMessage> 
   toolCalls: InferenceToolCall[] = [];
 
   /**
-   * @generated from field: aiserver.v1.InferenceToolResultContent tool_result = 5;
+   * @generated from field: optional aiserver.v1.InferenceToolResultContent tool_result = 5;
    */
   toolResult?: InferenceToolResultContent;
 
@@ -1494,9 +1494,9 @@ export class InferenceResponseMessage extends Message<InferenceResponseMessage> 
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "role", kind: "enum", T: proto3.getEnumType(InferenceMessageRole) },
-    { no: 3, name: "content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "content", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 4, name: "tool_calls", kind: "message", T: InferenceToolCall, repeated: true },
-    { no: 5, name: "tool_result", kind: "message", T: InferenceToolResultContent },
+    { no: 5, name: "tool_result", kind: "message", T: InferenceToolResultContent, opt: true },
     { no: 6, name: "reasoning_parts", kind: "message", T: InferenceReasoningPart, repeated: true },
   ]);
 
@@ -1635,29 +1635,29 @@ export class InferenceStreamRequest extends Message<InferenceStreamRequest> {
   providerDefinedTools: InferenceNamedProviderDefinedTool[] = [];
 
   /**
-   * @generated from field: aiserver.v1.InferenceModelConfig model_config = 4;
+   * @generated from field: optional aiserver.v1.InferenceModelConfig model_config = 4;
    */
   modelConfig?: InferenceModelConfig;
 
   /**
-   * @generated from field: string model_id = 5;
+   * @generated from field: optional string model_id = 5;
    */
-  modelId = "";
+  modelId?: string;
 
   /**
-   * @generated from field: string invocation_id = 6;
+   * @generated from field: optional string invocation_id = 6;
    */
-  invocationId = "";
+  invocationId?: string;
 
   /**
-   * @generated from field: aiserver.v1.InferenceRequestedModel requested_model = 7;
+   * @generated from field: optional aiserver.v1.InferenceRequestedModel requested_model = 7;
    */
   requestedModel?: InferenceRequestedModel;
 
   /**
-   * @generated from field: string conversation_id = 8;
+   * @generated from field: optional string conversation_id = 8;
    */
-  conversationId = "";
+  conversationId?: string;
 
   /**
    * @generated from field: repeated string accepted_unadvertised_tool_names = 9;
@@ -1665,14 +1665,14 @@ export class InferenceStreamRequest extends Message<InferenceStreamRequest> {
   acceptedUnadvertisedToolNames: string[] = [];
 
   /**
-   * @generated from field: string automation_id = 10;
+   * @generated from field: optional string automation_id = 10;
    */
-  automationId = "";
+  automationId?: string;
 
   /**
-   * @generated from field: aiserver.v1.InferenceReason inference_reason = 11;
+   * @generated from field: optional aiserver.v1.InferenceReason inference_reason = 11;
    */
-  inferenceReason = InferenceReason.UNSPECIFIED;
+  inferenceReason?: InferenceReason;
 
   constructor(data?: PartialMessage<InferenceStreamRequest>) {
     super();
@@ -1685,14 +1685,14 @@ export class InferenceStreamRequest extends Message<InferenceStreamRequest> {
     { no: 1, name: "messages", kind: "message", T: InferenceCoreMessage, repeated: true },
     { no: 2, name: "tools", kind: "message", T: InferenceAgentTool, repeated: true },
     { no: 3, name: "provider_defined_tools", kind: "message", T: InferenceNamedProviderDefinedTool, repeated: true },
-    { no: 4, name: "model_config", kind: "message", T: InferenceModelConfig },
-    { no: 5, name: "model_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "invocation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "requested_model", kind: "message", T: InferenceRequestedModel },
-    { no: 8, name: "conversation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "model_config", kind: "message", T: InferenceModelConfig, opt: true },
+    { no: 5, name: "model_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "invocation_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "requested_model", kind: "message", T: InferenceRequestedModel, opt: true },
+    { no: 8, name: "conversation_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 9, name: "accepted_unadvertised_tool_names", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 10, name: "automation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 11, name: "inference_reason", kind: "enum", T: proto3.getEnumType(InferenceReason) },
+    { no: 10, name: "automation_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 11, name: "inference_reason", kind: "enum", T: proto3.getEnumType(InferenceReason), opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): InferenceStreamRequest {
@@ -1828,7 +1828,7 @@ export class InferenceTextPart extends Message<InferenceTextPart> {
   text = "";
 
   /**
-   * @generated from field: aiserver.v1.InferenceProviderOptions provider_options = 2;
+   * @generated from field: optional aiserver.v1.InferenceProviderOptions provider_options = 2;
    */
   providerOptions?: InferenceProviderOptions;
 
@@ -1841,7 +1841,7 @@ export class InferenceTextPart extends Message<InferenceTextPart> {
   static readonly typeName = "aiserver.v1.InferenceTextPart";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "provider_options", kind: "message", T: InferenceProviderOptions },
+    { no: 2, name: "provider_options", kind: "message", T: InferenceProviderOptions, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): InferenceTextPart {
@@ -1914,9 +1914,9 @@ export class InferenceThinkingStreamPart extends Message<InferenceThinkingStream
   text = "";
 
   /**
-   * @generated from field: string signature = 2;
+   * @generated from field: optional string signature = 2;
    */
-  signature = "";
+  signature?: string;
 
   /**
    * @generated from field: bool is_final = 3;
@@ -1932,7 +1932,7 @@ export class InferenceThinkingStreamPart extends Message<InferenceThinkingStream
   static readonly typeName = "aiserver.v1.InferenceThinkingStreamPart";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "signature", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "signature", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "is_final", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
@@ -2042,14 +2042,14 @@ export class InferenceToolCall extends Message<InferenceToolCall> {
   toolName = "";
 
   /**
-   * @generated from field: google.protobuf.Struct args = 3;
+   * @generated from field: optional google.protobuf.Struct args = 3;
    */
   args?: Struct;
 
   /**
-   * @generated from field: string raw_tool_call_args = 4;
+   * @generated from field: optional string raw_tool_call_args = 4;
    */
-  rawToolCallArgs = "";
+  rawToolCallArgs?: string;
 
   constructor(data?: PartialMessage<InferenceToolCall>) {
     super();
@@ -2061,8 +2061,8 @@ export class InferenceToolCall extends Message<InferenceToolCall> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "tool_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "args", kind: "message", T: Struct },
-    { no: 4, name: "raw_tool_call_args", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "args", kind: "message", T: Struct, opt: true },
+    { no: 4, name: "raw_tool_call_args", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): InferenceToolCall {
@@ -2107,9 +2107,9 @@ export class InferenceToolCallStreamPart extends Message<InferenceToolCallStream
   isComplete = false;
 
   /**
-   * @generated from field: int32 tool_index = 5;
+   * @generated from field: optional int32 tool_index = 5;
    */
-  toolIndex = 0;
+  toolIndex?: number;
 
   constructor(data?: PartialMessage<InferenceToolCallStreamPart>) {
     super();
@@ -2123,7 +2123,7 @@ export class InferenceToolCallStreamPart extends Message<InferenceToolCallStream
     { no: 2, name: "tool_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "args", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "is_complete", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "tool_index", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 5, name: "tool_index", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): InferenceToolCallStreamPart {
@@ -2195,7 +2195,7 @@ export class InferenceToolResultPart extends Message<InferenceToolResultPart> {
   toolName = "";
 
   /**
-   * @generated from field: google.protobuf.Value result = 3;
+   * @generated from field: optional google.protobuf.Value result = 3;
    */
   result?: Value;
 
@@ -2210,7 +2210,7 @@ export class InferenceToolResultPart extends Message<InferenceToolResultPart> {
   experimentalContent: InferenceContentPart[] = [];
 
   /**
-   * @generated from field: aiserver.v1.InferenceProviderOptions provider_options = 6;
+   * @generated from field: optional aiserver.v1.InferenceProviderOptions provider_options = 6;
    */
   providerOptions?: InferenceProviderOptions;
 
@@ -2224,10 +2224,10 @@ export class InferenceToolResultPart extends Message<InferenceToolResultPart> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "tool_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "result", kind: "message", T: Value },
+    { no: 3, name: "result", kind: "message", T: Value, opt: true },
     { no: 4, name: "is_error", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 5, name: "experimental_content", kind: "message", T: InferenceContentPart, repeated: true },
-    { no: 6, name: "provider_options", kind: "message", T: InferenceProviderOptions },
+    { no: 6, name: "provider_options", kind: "message", T: InferenceProviderOptions, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): InferenceToolResultPart {
@@ -2262,9 +2262,9 @@ export class InferenceUsageInfo extends Message<InferenceUsageInfo> {
   completionTokens = 0;
 
   /**
-   * @generated from field: int32 total_tokens = 3;
+   * @generated from field: optional int32 total_tokens = 3;
    */
-  totalTokens = 0;
+  totalTokens?: number;
 
   constructor(data?: PartialMessage<InferenceUsageInfo>) {
     super();
@@ -2276,7 +2276,7 @@ export class InferenceUsageInfo extends Message<InferenceUsageInfo> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "prompt_tokens", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 2, name: "completion_tokens", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "total_tokens", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 3, name: "total_tokens", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): InferenceUsageInfo {

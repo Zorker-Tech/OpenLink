@@ -116,7 +116,7 @@ function toRedactedComputerUseArgs(msg, privacyMode) {
     _privacyMode: privacyMode,
     toolCallId: msg.toolCallId,
     actions: msg.actions.map((v2) => toRedactedComputerUseAction(v2, privacyMode)),
-    description: createRedactedString(msg.description, DataClassification.CODE, "description", privacyMode),
+    description: msg.description !== void 0 ? createRedactedString(msg.description, DataClassification.CODE, "description", privacyMode) : void 0,
     bindUnmappedCharacters: msg.bindUnmappedCharacters,
   };
 }
@@ -127,7 +127,7 @@ function fromRedactedComputerUseArgs(msg, purpose, opts) {
   return new ComputerUseArgs({
     toolCallId: msg.toolCallId,
     actions: msg.actions.map((v2) => fromRedactedComputerUseAction(v2, purpose, opts)),
-    description: msg.description.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    description: msg.description?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     bindUnmappedCharacters: msg.bindUnmappedCharacters,
   });
 }
@@ -138,9 +138,9 @@ function toRedactedComputerUseError(msg, privacyMode) {
     error: createRedactedString(msg.error, DataClassification.CODE, "error", privacyMode),
     actionCount: msg.actionCount,
     durationMs: msg.durationMs,
-    log: createRedactedString(msg.log, DataClassification.CODE, "log", privacyMode),
-    screenshot: createRedactedString(msg.screenshot, DataClassification.CODE, "screenshot", privacyMode),
-    screenshotPath: createRedactedString(msg.screenshotPath, DataClassification.PATH, "screenshot_path", privacyMode),
+    log: msg.log !== void 0 ? createRedactedString(msg.log, DataClassification.CODE, "log", privacyMode) : void 0,
+    screenshot: msg.screenshot !== void 0 ? createRedactedString(msg.screenshot, DataClassification.CODE, "screenshot", privacyMode) : void 0,
+    screenshotPath: msg.screenshotPath !== void 0 ? createRedactedString(msg.screenshotPath, DataClassification.PATH, "screenshot_path", privacyMode) : void 0,
   };
 }
 
@@ -151,9 +151,9 @@ function fromRedactedComputerUseError(msg, purpose, opts) {
     error: msg.error.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     actionCount: msg.actionCount,
     durationMs: msg.durationMs,
-    log: msg.log.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    screenshot: msg.screenshot.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    screenshotPath: msg.screenshotPath.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    log: msg.log?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    screenshot: msg.screenshot?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    screenshotPath: msg.screenshotPath?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
   });
 }
 
@@ -207,9 +207,9 @@ function toRedactedComputerUseSuccess(msg, privacyMode) {
     _privacyMode: privacyMode,
     actionCount: msg.actionCount,
     durationMs: msg.durationMs,
-    screenshot: createRedactedString(msg.screenshot, DataClassification.CODE, "screenshot", privacyMode),
-    log: createRedactedString(msg.log, DataClassification.CODE, "log", privacyMode),
-    screenshotPath: createRedactedString(msg.screenshotPath, DataClassification.PATH, "screenshot_path", privacyMode),
+    screenshot: msg.screenshot !== void 0 ? createRedactedString(msg.screenshot, DataClassification.CODE, "screenshot", privacyMode) : void 0,
+    log: msg.log !== void 0 ? createRedactedString(msg.log, DataClassification.CODE, "log", privacyMode) : void 0,
+    screenshotPath: msg.screenshotPath !== void 0 ? createRedactedString(msg.screenshotPath, DataClassification.PATH, "screenshot_path", privacyMode) : void 0,
     cursorPosition: msg.cursorPosition !== void 0 ? toRedactedCoordinate(msg.cursorPosition, privacyMode) : void 0,
   };
 }
@@ -220,9 +220,9 @@ function fromRedactedComputerUseSuccess(msg, purpose, opts) {
   return new ComputerUseSuccess({
     actionCount: msg.actionCount,
     durationMs: msg.durationMs,
-    screenshot: msg.screenshot.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    log: msg.log.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    screenshotPath: msg.screenshotPath.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    screenshot: msg.screenshot?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    log: msg.log?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    screenshotPath: msg.screenshotPath?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     cursorPosition: msg.cursorPosition !== void 0 ? fromRedactedCoordinate(msg.cursorPosition, purpose, opts) : void 0,
   });
 }

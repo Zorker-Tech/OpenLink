@@ -8,8 +8,8 @@ syntax = "proto3";
 package agent.v1;
 
 message PiWriteToolCall {
-  .agent.v1.PiWriteToolArgs args = 1 [json_name = "args"];
-  .agent.v1.PiWriteToolResult result = 2 [json_name = "result"];
+  optional .agent.v1.PiWriteToolArgs args = 1 [json_name = "args"];
+  optional .agent.v1.PiWriteToolResult result = 2 [json_name = "result"];
 }
 
 message PiWriteToolArgs {

@@ -48,12 +48,12 @@ proto3.util.setEnumType(UpdatePrCodeTourExecutionMode, "agent.v1.UpdatePrCodeTou
  */
 export class UpdatePrCodeTourToolCall extends Message<UpdatePrCodeTourToolCall> {
   /**
-   * @generated from field: agent.v1.UpdatePrCodeTourArgs args = 1;
+   * @generated from field: optional agent.v1.UpdatePrCodeTourArgs args = 1;
    */
   args?: UpdatePrCodeTourArgs;
 
   /**
-   * @generated from field: agent.v1.UpdatePrCodeTourResult result = 2;
+   * @generated from field: optional agent.v1.UpdatePrCodeTourResult result = 2;
    */
   result?: UpdatePrCodeTourResult;
 
@@ -65,8 +65,8 @@ export class UpdatePrCodeTourToolCall extends Message<UpdatePrCodeTourToolCall> 
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.UpdatePrCodeTourToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: UpdatePrCodeTourArgs },
-    { no: 2, name: "result", kind: "message", T: UpdatePrCodeTourResult },
+    { no: 1, name: "args", kind: "message", T: UpdatePrCodeTourArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: UpdatePrCodeTourResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdatePrCodeTourToolCall {

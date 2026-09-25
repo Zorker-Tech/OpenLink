@@ -18,7 +18,7 @@ message CommandClassifierResult {
   message ClassifiedCommand {
     string name = 1 [json_name = "name"];
     repeated string arguments = 2 [json_name = "arguments"];
-    string suggested_allowlist_entry = 3 [json_name = "suggestedAllowlistEntry"];
+    optional string suggested_allowlist_entry = 3 [json_name = "suggestedAllowlistEntry"];
     repeated string subcommand_tokens = 4 [json_name = "subcommandTokens"];
   }
   enum SuggestedSandboxMode {
@@ -37,20 +37,20 @@ message ShellArgs {
   repeated string simple_commands = 5 [json_name = "simpleCommands"];
   bool has_input_redirect = 6 [json_name = "hasInputRedirect"];
   bool has_output_redirect = 7 [json_name = "hasOutputRedirect"];
-  .agent.v1.ShellCommandParsingResult parsing_result = 8 [json_name = "parsingResult"];
-  .agent.v1.SandboxPolicy requested_sandbox_policy = 9 [json_name = "requestedSandboxPolicy"];
-  uint64 file_output_threshold_bytes = 10 [json_name = "fileOutputThresholdBytes"];
+  optional .agent.v1.ShellCommandParsingResult parsing_result = 8 [json_name = "parsingResult"];
+  optional .agent.v1.SandboxPolicy requested_sandbox_policy = 9 [json_name = "requestedSandboxPolicy"];
+  optional uint64 file_output_threshold_bytes = 10 [json_name = "fileOutputThresholdBytes"];
   bool is_background = 11 [json_name = "isBackground"];
   bool skip_approval = 12 [json_name = "skipApproval"];
   .agent.v1.TimeoutBehavior timeout_behavior = 13 [json_name = "timeoutBehavior"];
-  int32 hard_timeout = 14 [json_name = "hardTimeout"];
-  string description = 15 [json_name = "description"];
-  .agent.v1.CommandClassifierResult classifier_result = 16 [json_name = "classifierResult"];
+  optional int32 hard_timeout = 14 [json_name = "hardTimeout"];
+  optional string description = 15 [json_name = "description"];
+  optional .agent.v1.CommandClassifierResult classifier_result = 16 [json_name = "classifierResult"];
   bool close_stdin = 17 [json_name = "closeStdin"];
-  .agent.v1.ShellOutputNotificationConfig output_notification = 18 [json_name = "outputNotification"];
-  .agent.v1.SmartModeApproval smart_mode_approval = 19 [json_name = "smartModeApproval"];
-  .agent.v1.ShellHookApprovalRequirement hook_approval_requirement = 20 [json_name = "hookApprovalRequirement"];
-  string conversation_id = 21 [json_name = "conversationId"];
+  optional .agent.v1.ShellOutputNotificationConfig output_notification = 18 [json_name = "outputNotification"];
+  optional .agent.v1.SmartModeApproval smart_mode_approval = 19 [json_name = "smartModeApproval"];
+  optional .agent.v1.ShellHookApprovalRequirement hook_approval_requirement = 20 [json_name = "hookApprovalRequirement"];
+  optional string conversation_id = 21 [json_name = "conversationId"];
   repeated string admin_command_denylist = 22 [json_name = "adminCommandDenylist"];
 }
 
@@ -63,7 +63,7 @@ message ShellCommandParsingResult {
   repeated .agent.v1.ShellCommandParsingResult.ExecutableCommand executable_commands = 2 [json_name = "executableCommands"];
   bool has_redirects = 3 [json_name = "hasRedirects"];
   bool has_command_substitution = 4 [json_name = "hasCommandSubstitution"];
-  bool all_redirects_are_dev_null = 5 [json_name = "allRedirectsAreDevNull"];
+  optional bool all_redirects_are_dev_null = 5 [json_name = "allRedirectsAreDevNull"];
   repeated .agent.v1.ShellCommandParsingResult.Redirect redirects = 6 [json_name = "redirects"];
   message ExecutableCommand {
     string name = 1 [json_name = "name"];
@@ -74,7 +74,7 @@ message ShellCommandParsingResult {
     string operator = 1 [json_name = "operator"];
     repeated uint32 destination_fds = 2 [json_name = "destinationFds"];
     string target_node_type = 3 [json_name = "targetNodeType"];
-    string target_text = 4 [json_name = "targetText"];
+    optional string target_text = 4 [json_name = "targetText"];
   }
   message ExecutableCommandArg {
     string type = 1 [json_name = "type"];
@@ -85,13 +85,13 @@ message ShellCommandParsingResult {
 message ShellOutputNotificationConfig {
   string pattern = 1 [json_name = "pattern"];
   string reason = 2 [json_name = "reason"];
-  double debounce = 3 [json_name = "debounce"];
-  int32 notification_limit = 4 [json_name = "notificationLimit"];
+  optional double debounce = 3 [json_name = "debounce"];
+  optional int32 notification_limit = 4 [json_name = "notificationLimit"];
 }
 
 message ShellHookApprovalRequirement {
   .agent.v1.ShellHookApprovalRequirement.Kind kind = 1 [json_name = "kind"];
-  string reason = 2 [json_name = "reason"];
+  optional string reason = 2 [json_name = "reason"];
   enum Kind {
     KIND_UNSPECIFIED = 0;
     KIND_FORCE_PROMPT = 1;
@@ -99,10 +99,10 @@ message ShellHookApprovalRequirement {
 }
 
 message ShellResult {
-  .agent.v1.SandboxPolicy sandbox_policy = 101 [json_name = "sandboxPolicy"];
-  bool is_background = 102 [json_name = "isBackground"];
-  string terminals_folder = 103 [json_name = "terminalsFolder"];
-  uint32 pid = 104 [json_name = "pid"];
+  optional .agent.v1.SandboxPolicy sandbox_policy = 101 [json_name = "sandboxPolicy"];
+  optional bool is_background = 102 [json_name = "isBackground"];
+  optional string terminals_folder = 103 [json_name = "terminalsFolder"];
+  optional uint32 pid = 104 [json_name = "pid"];
   oneof result {
     .agent.v1.ShellSuccess success = 1 [json_name = "success"];
     .agent.v1.ShellFailure failure = 2 [json_name = "failure"];
@@ -129,7 +129,7 @@ message ShellStream {
 
 message ForceBackgroundShellResult {
   .agent.v1.ForceBackgroundShellStatus status = 1 [json_name = "status"];
-  .agent.v1.ShellResult shell_result = 2 [json_name = "shellResult"];
+  optional .agent.v1.ShellResult shell_result = 2 [json_name = "shellResult"];
 }
 
 message ShellRejected {
@@ -165,23 +165,23 @@ message ShellStreamStderr {
 message ShellStreamExit {
   uint32 code = 1 [json_name = "code"];
   string cwd = 2 [json_name = "cwd"];
-  .agent.v1.OutputLocation output_location = 3 [json_name = "outputLocation"];
+  optional .agent.v1.OutputLocation output_location = 3 [json_name = "outputLocation"];
   bool aborted = 4 [json_name = "aborted"];
-  .agent.v1.ShellAbortReason abort_reason = 5 [json_name = "abortReason"];
-  int32 local_execution_time_ms = 6 [json_name = "localExecutionTimeMs"];
+  optional .agent.v1.ShellAbortReason abort_reason = 5 [json_name = "abortReason"];
+  optional int32 local_execution_time_ms = 6 [json_name = "localExecutionTimeMs"];
 }
 
 message ShellStreamStart {
-  .agent.v1.SandboxPolicy sandbox_policy = 1 [json_name = "sandboxPolicy"];
+  optional .agent.v1.SandboxPolicy sandbox_policy = 1 [json_name = "sandboxPolicy"];
 }
 
 message ShellStreamBackgrounded {
   uint32 shell_id = 1 [json_name = "shellId"];
   string command = 2 [json_name = "command"];
   string working_directory = 3 [json_name = "workingDirectory"];
-  uint32 pid = 4 [json_name = "pid"];
-  int32 ms_to_wait = 5 [json_name = "msToWait"];
-  .agent.v1.ShellBackgroundReason reason = 6 [json_name = "reason"];
+  optional uint32 pid = 4 [json_name = "pid"];
+  optional int32 ms_to_wait = 5 [json_name = "msToWait"];
+  optional .agent.v1.ShellBackgroundReason reason = 6 [json_name = "reason"];
 }
 
 message ShellStreamHookContext {
@@ -196,16 +196,16 @@ message ShellSuccess {
   string stdout = 5 [json_name = "stdout"];
   string stderr = 6 [json_name = "stderr"];
   int32 execution_time = 7 [json_name = "executionTime"];
-  .agent.v1.OutputLocation output_location = 8 [json_name = "outputLocation"];
-  uint32 shell_id = 9 [json_name = "shellId"];
-  string interleaved_output = 10 [json_name = "interleavedOutput"];
-  uint32 pid = 11 [json_name = "pid"];
-  int32 ms_to_wait = 12 [json_name = "msToWait"];
-  int32 local_execution_time_ms = 13 [json_name = "localExecutionTimeMs"];
-  .agent.v1.ShellBackgroundReason background_reason = 14 [json_name = "backgroundReason"];
-  string output_head = 15 [json_name = "outputHead"];
-  string output_tail = 16 [json_name = "outputTail"];
-  uint32 elided_chars = 17 [json_name = "elidedChars"];
+  optional .agent.v1.OutputLocation output_location = 8 [json_name = "outputLocation"];
+  optional uint32 shell_id = 9 [json_name = "shellId"];
+  optional string interleaved_output = 10 [json_name = "interleavedOutput"];
+  optional uint32 pid = 11 [json_name = "pid"];
+  optional int32 ms_to_wait = 12 [json_name = "msToWait"];
+  optional int32 local_execution_time_ms = 13 [json_name = "localExecutionTimeMs"];
+  optional .agent.v1.ShellBackgroundReason background_reason = 14 [json_name = "backgroundReason"];
+  optional string output_head = 15 [json_name = "outputHead"];
+  optional string output_tail = 16 [json_name = "outputTail"];
+  optional uint32 elided_chars = 17 [json_name = "elidedChars"];
 }
 
 message ShellFailure {
@@ -216,14 +216,14 @@ message ShellFailure {
   string stdout = 5 [json_name = "stdout"];
   string stderr = 6 [json_name = "stderr"];
   int32 execution_time = 7 [json_name = "executionTime"];
-  .agent.v1.OutputLocation output_location = 8 [json_name = "outputLocation"];
-  string interleaved_output = 9 [json_name = "interleavedOutput"];
-  .agent.v1.ShellAbortReason abort_reason = 10 [json_name = "abortReason"];
+  optional .agent.v1.OutputLocation output_location = 8 [json_name = "outputLocation"];
+  optional string interleaved_output = 9 [json_name = "interleavedOutput"];
+  optional .agent.v1.ShellAbortReason abort_reason = 10 [json_name = "abortReason"];
   bool aborted = 11 [json_name = "aborted"];
-  int32 local_execution_time_ms = 12 [json_name = "localExecutionTimeMs"];
-  string output_head = 13 [json_name = "outputHead"];
-  string output_tail = 14 [json_name = "outputTail"];
-  uint32 elided_chars = 15 [json_name = "elidedChars"];
+  optional int32 local_execution_time_ms = 12 [json_name = "localExecutionTimeMs"];
+  optional string output_head = 13 [json_name = "outputHead"];
+  optional string output_tail = 14 [json_name = "outputTail"];
+  optional uint32 elided_chars = 15 [json_name = "elidedChars"];
 }
 
 message ShellTimeout {

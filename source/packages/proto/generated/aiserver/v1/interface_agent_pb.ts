@@ -191,14 +191,14 @@ export class InterfaceAgentClientState extends Message<InterfaceAgentClientState
   interfaceLines: string[] = [];
 
   /**
-   * @generated from field: string test_relative_workspace_path = 5;
+   * @generated from field: optional string test_relative_workspace_path = 5;
    */
-  testRelativeWorkspacePath = "";
+  testRelativeWorkspacePath?: string;
 
   /**
-   * @generated from field: string implementation_relative_workspace_path = 6;
+   * @generated from field: optional string implementation_relative_workspace_path = 6;
    */
-  implementationRelativeWorkspacePath = "";
+  implementationRelativeWorkspacePath?: string;
 
   /**
    * @generated from field: repeated string implementation_lines = 7;
@@ -230,8 +230,8 @@ export class InterfaceAgentClientState extends Message<InterfaceAgentClientState
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 3, name: "interface_relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "interface_lines", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 5, name: "test_relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "implementation_relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "test_relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "implementation_relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 7, name: "implementation_lines", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 8, name: "language", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 9, name: "testing_framework", kind: "scalar", T: 9 /* ScalarType.STRING */ },

@@ -42,9 +42,9 @@ export class DaemonCommandHandlerPersistentState extends Message<DaemonCommandHa
   vpid = protoInt64.zero;
 
   /**
-   * @generated from field: string last_event_id = 2;
+   * @generated from field: optional string last_event_id = 2;
    */
-  lastEventId = "";
+  lastEventId?: string;
 
   constructor(data?: PartialMessage<DaemonCommandHandlerPersistentState>) {
     super();
@@ -55,7 +55,7 @@ export class DaemonCommandHandlerPersistentState extends Message<DaemonCommandHa
   static readonly typeName = "anyrun.v1.DaemonCommandHandlerPersistentState";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "vpid", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 2, name: "last_event_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "last_event_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DaemonCommandHandlerPersistentState {
@@ -105,14 +105,14 @@ export class DockerContainerPersistentState extends Message<DockerContainerPersi
   leaked = false;
 
   /**
-   * @generated from field: uint64 post_pause_unpause_delay_ms = 6;
+   * @generated from field: optional uint64 post_pause_unpause_delay_ms = 6;
    */
-  postPauseUnpauseDelayMs = protoInt64.zero;
+  postPauseUnpauseDelayMs?: bigint;
 
   /**
-   * @generated from field: string isod_container_name = 8;
+   * @generated from field: optional string isod_container_name = 8;
    */
-  isodContainerName = "";
+  isodContainerName?: string;
 
   constructor(data?: PartialMessage<DockerContainerPersistentState>) {
     super();
@@ -127,8 +127,8 @@ export class DockerContainerPersistentState extends Message<DockerContainerPersi
     { no: 3, name: "stopped", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 4, name: "removed", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 5, name: "leaked", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 6, name: "post_pause_unpause_delay_ms", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
-    { no: 8, name: "isod_container_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 6, name: "post_pause_unpause_delay_ms", kind: "scalar", T: 4 /* ScalarType.UINT64 */, opt: true },
+    { no: 8, name: "isod_container_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DockerContainerPersistentState {
@@ -158,29 +158,29 @@ export class DockerDevContainerPersistentState extends Message<DockerDevContaine
   name = "";
 
   /**
-   * @generated from field: anyrun.v1.DockerContainerPersistentState container = 2;
+   * @generated from field: optional anyrun.v1.DockerContainerPersistentState container = 2;
    */
   container?: DockerContainerPersistentState;
 
   /**
-   * @generated from field: anyrun.v1.RuntimeStatePersistentState runtime_state = 3;
+   * @generated from field: optional anyrun.v1.RuntimeStatePersistentState runtime_state = 3;
    */
   runtimeState?: RuntimeStatePersistentState;
 
   /**
-   * @generated from field: anyrun.v1.ImageMetadata image_metadata = 4;
+   * @generated from field: optional anyrun.v1.ImageMetadata image_metadata = 4;
    */
   imageMetadata?: ImageMetadata;
 
   /**
-   * @generated from field: anyrun.v1.NetworkInfo network_info = 5;
+   * @generated from field: optional anyrun.v1.NetworkInfo network_info = 5;
    */
   networkInfo?: NetworkInfo;
 
   /**
-   * @generated from field: string user = 6;
+   * @generated from field: optional string user = 6;
    */
-  user = "";
+  user?: string;
 
   /**
    * @generated from field: string shell = 7;
@@ -193,7 +193,7 @@ export class DockerDevContainerPersistentState extends Message<DockerDevContaine
   daemonPort = 0;
 
   /**
-   * @generated from field: anyrun.v1.WorkspaceConfig workspace = 9;
+   * @generated from field: optional anyrun.v1.WorkspaceConfig workspace = 9;
    */
   workspace?: WorkspaceConfig;
 
@@ -203,9 +203,9 @@ export class DockerDevContainerPersistentState extends Message<DockerDevContaine
   v2Hydrated = false;
 
   /**
-   * @generated from field: string pod_daemon_auth_token = 11;
+   * @generated from field: optional string pod_daemon_auth_token = 11;
    */
-  podDaemonAuthToken = "";
+  podDaemonAuthToken?: string;
 
   constructor(data?: PartialMessage<DockerDevContainerPersistentState>) {
     super();
@@ -216,16 +216,16 @@ export class DockerDevContainerPersistentState extends Message<DockerDevContaine
   static readonly typeName = "anyrun.v1.DockerDevContainerPersistentState";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "container", kind: "message", T: DockerContainerPersistentState },
-    { no: 3, name: "runtime_state", kind: "message", T: RuntimeStatePersistentState },
-    { no: 4, name: "image_metadata", kind: "message", T: ImageMetadata },
-    { no: 5, name: "network_info", kind: "message", T: NetworkInfo },
-    { no: 6, name: "user", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "container", kind: "message", T: DockerContainerPersistentState, opt: true },
+    { no: 3, name: "runtime_state", kind: "message", T: RuntimeStatePersistentState, opt: true },
+    { no: 4, name: "image_metadata", kind: "message", T: ImageMetadata, opt: true },
+    { no: 5, name: "network_info", kind: "message", T: NetworkInfo, opt: true },
+    { no: 6, name: "user", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 7, name: "shell", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 8, name: "daemon_port", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 9, name: "workspace", kind: "message", T: WorkspaceConfig },
+    { no: 9, name: "workspace", kind: "message", T: WorkspaceConfig, opt: true },
     { no: 10, name: "v2_hydrated", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 11, name: "pod_daemon_auth_token", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 11, name: "pod_daemon_auth_token", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DockerDevContainerPersistentState {
@@ -255,12 +255,12 @@ export class IsoDevContainerMetadata extends Message<IsoDevContainerMetadata> {
   name = "";
 
   /**
-   * @generated from field: anyrun.v1.DockerDevContainerPersistentState persistent_state = 2;
+   * @generated from field: optional anyrun.v1.DockerDevContainerPersistentState persistent_state = 2;
    */
   persistentState?: DockerDevContainerPersistentState;
 
   /**
-   * @generated from field: anyrun.v1.IsoEnvConfig env_config = 3;
+   * @generated from field: optional anyrun.v1.IsoEnvConfig env_config = 3;
    */
   envConfig?: IsoEnvConfig;
 
@@ -278,8 +278,8 @@ export class IsoDevContainerMetadata extends Message<IsoDevContainerMetadata> {
   static readonly typeName = "anyrun.v1.IsoDevContainerMetadata";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "persistent_state", kind: "message", T: DockerDevContainerPersistentState },
-    { no: 3, name: "env_config", kind: "message", T: IsoEnvConfig },
+    { no: 2, name: "persistent_state", kind: "message", T: DockerDevContainerPersistentState, opt: true },
+    { no: 3, name: "env_config", kind: "message", T: IsoEnvConfig, opt: true },
     { no: 4, name: "drive_descriptors", kind: "message", T: PersistedDriveDescriptor, repeated: true },
   ]);
 
@@ -315,9 +315,9 @@ export class IsoEnvBalloonConfig extends Message<IsoEnvBalloonConfig> {
   deflateOnOom = false;
 
   /**
-   * @generated from field: uint32 stats_polling_interval_s = 3;
+   * @generated from field: optional uint32 stats_polling_interval_s = 3;
    */
-  statsPollingIntervalS = 0;
+  statsPollingIntervalS?: number;
 
   constructor(data?: PartialMessage<IsoEnvBalloonConfig>) {
     super();
@@ -329,7 +329,7 @@ export class IsoEnvBalloonConfig extends Message<IsoEnvBalloonConfig> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "amount_mib", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
     { no: 2, name: "deflate_on_oom", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "stats_polling_interval_s", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 3, name: "stats_polling_interval_s", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): IsoEnvBalloonConfig {
@@ -364,14 +364,14 @@ export class IsoEnvConfig extends Message<IsoEnvConfig> {
   memSizeMib = 0;
 
   /**
-   * @generated from field: uint32 swap_size_mib = 3;
+   * @generated from field: optional uint32 swap_size_mib = 3;
    */
-  swapSizeMib = 0;
+  swapSizeMib?: number;
 
   /**
-   * @generated from field: uint32 rootfs_size_mib = 4;
+   * @generated from field: optional uint32 rootfs_size_mib = 4;
    */
-  rootfsSizeMib = 0;
+  rootfsSizeMib?: number;
 
   /**
    * @generated from field: repeated anyrun.v1.IsoEnvExtraDriveConfig extra_drives = 5;
@@ -379,7 +379,7 @@ export class IsoEnvConfig extends Message<IsoEnvConfig> {
   extraDrives: IsoEnvExtraDriveConfig[] = [];
 
   /**
-   * @generated from field: anyrun.v1.IsoEnvBalloonConfig balloon = 6;
+   * @generated from field: optional anyrun.v1.IsoEnvBalloonConfig balloon = 6;
    */
   balloon?: IsoEnvBalloonConfig;
 
@@ -398,10 +398,10 @@ export class IsoEnvConfig extends Message<IsoEnvConfig> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "vcpu_count", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
     { no: 2, name: "mem_size_mib", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 3, name: "swap_size_mib", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 4, name: "rootfs_size_mib", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 3, name: "swap_size_mib", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
+    { no: 4, name: "rootfs_size_mib", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
     { no: 5, name: "extra_drives", kind: "message", T: IsoEnvExtraDriveConfig, repeated: true },
-    { no: 6, name: "balloon", kind: "message", T: IsoEnvBalloonConfig },
+    { no: 6, name: "balloon", kind: "message", T: IsoEnvBalloonConfig, opt: true },
     { no: 7, name: "firecracker_version", kind: "enum", T: proto3.getEnumType(FirecrackerVersion) },
   ]);
 
@@ -555,14 +555,14 @@ export class PersistedDevContainerConfig extends Message<PersistedDevContainerCo
   shell = "";
 
   /**
-   * @generated from field: string user = 16;
+   * @generated from field: optional string user = 16;
    */
-  user = "";
+  user?: string;
 
   /**
-   * @generated from field: bool privileged = 17;
+   * @generated from field: optional bool privileged = 17;
    */
-  privileged = false;
+  privileged?: boolean;
 
   /**
    * @generated from field: repeated anyrun.v1.DevContainerExecCommand verify_commands = 19;
@@ -570,19 +570,19 @@ export class PersistedDevContainerConfig extends Message<PersistedDevContainerCo
   verifyCommands: DevContainerExecCommand[] = [];
 
   /**
-   * @generated from field: bool build_container = 22;
+   * @generated from field: optional bool build_container = 22;
    */
-  buildContainer = false;
+  buildContainer?: boolean;
 
   /**
-   * @generated from field: bool enable_checkpoint_scratch_drive = 25;
+   * @generated from field: optional bool enable_checkpoint_scratch_drive = 25;
    */
-  enableCheckpointScratchDrive = false;
+  enableCheckpointScratchDrive?: boolean;
 
   /**
-   * @generated from field: bool blob_client_resilience_enabled = 26;
+   * @generated from field: optional bool blob_client_resilience_enabled = 26;
    */
-  blobClientResilienceEnabled = false;
+  blobClientResilienceEnabled?: boolean;
 
   /**
    * @generated from field: anyrun.v1.ContainerRuntime container_runtime = 27;
@@ -595,14 +595,14 @@ export class PersistedDevContainerConfig extends Message<PersistedDevContainerCo
   firecrackerVersion = FirecrackerVersion.UNSPECIFIED;
 
   /**
-   * @generated from field: bool enable_lazy_v3_squashfs_snapshot_load = 29;
+   * @generated from field: optional bool enable_lazy_v3_squashfs_snapshot_load = 29;
    */
-  enableLazyV3SquashfsSnapshotLoad = false;
+  enableLazyV3SquashfsSnapshotLoad?: boolean;
 
   /**
-   * @generated from field: bool enable_lazy_v4_load = 30;
+   * @generated from field: optional bool enable_lazy_v4_load = 30;
    */
-  enableLazyV4Load = false;
+  enableLazyV4Load?: boolean;
 
   /**
    * @generated from oneof anyrun.v1.PersistedDevContainerConfig.image
@@ -717,16 +717,16 @@ export class PersistedDevContainerConfig extends Message<PersistedDevContainerCo
     { no: 13, name: "env", kind: "message", T: PersistedEnvVar, repeated: true },
     { no: 14, name: "ports", kind: "message", T: PortDefinition, repeated: true },
     { no: 15, name: "shell", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 16, name: "user", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 17, name: "privileged", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 16, name: "user", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 17, name: "privileged", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 19, name: "verify_commands", kind: "message", T: DevContainerExecCommand, repeated: true },
-    { no: 22, name: "build_container", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 25, name: "enable_checkpoint_scratch_drive", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 26, name: "blob_client_resilience_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 22, name: "build_container", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 25, name: "enable_checkpoint_scratch_drive", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 26, name: "blob_client_resilience_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 27, name: "container_runtime", kind: "enum", T: proto3.getEnumType(ContainerRuntime) },
     { no: 28, name: "firecracker_version", kind: "enum", T: proto3.getEnumType(FirecrackerVersion) },
-    { no: 29, name: "enable_lazy_v3_squashfs_snapshot_load", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 30, name: "enable_lazy_v4_load", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 29, name: "enable_lazy_v3_squashfs_snapshot_load", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 30, name: "enable_lazy_v4_load", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 5, name: "registry_reference", kind: "scalar", T: 9 /* ScalarType.STRING */, oneof: "image" },
     { no: 6, name: "build", kind: "message", T: Build, oneof: "image" },
     { no: 7, name: "snapshot_id", kind: "scalar", T: 9 /* ScalarType.STRING */, oneof: "image" },
@@ -863,9 +863,9 @@ export class PersistedExternalSnapshot extends Message<PersistedExternalSnapshot
   snapshotId = "";
 
   /**
-   * @generated from field: string cpu_baseline_id = 2;
+   * @generated from field: optional string cpu_baseline_id = 2;
    */
-  cpuBaselineId = "";
+  cpuBaselineId?: string;
 
   constructor(data?: PartialMessage<PersistedExternalSnapshot>) {
     super();
@@ -876,7 +876,7 @@ export class PersistedExternalSnapshot extends Message<PersistedExternalSnapshot
   static readonly typeName = "anyrun.v1.PersistedExternalSnapshot";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "snapshot_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "cpu_baseline_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "cpu_baseline_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PersistedExternalSnapshot {
@@ -921,9 +921,9 @@ export class PersistedFileDriveDescriptor extends Message<PersistedFileDriveDesc
   isRootDevice = false;
 
   /**
-   * @generated from field: uint32 size_mib = 5;
+   * @generated from field: optional uint32 size_mib = 5;
    */
-  sizeMib = 0;
+  sizeMib?: number;
 
   constructor(data?: PartialMessage<PersistedFileDriveDescriptor>) {
     super();
@@ -937,7 +937,7 @@ export class PersistedFileDriveDescriptor extends Message<PersistedFileDriveDesc
     { no: 2, name: "drive_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "guest_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "is_root_device", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "size_mib", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 5, name: "size_mib", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PersistedFileDriveDescriptor {
@@ -1106,12 +1106,12 @@ export class PersistedLazySquashfsDriveDescriptor extends Message<PersistedLazyS
   chunkSize = protoInt64.zero;
 
   /**
-   * @generated from field: anyrun.v1.BlobStorageFormat blob_storage_format = 6;
+   * @generated from field: optional anyrun.v1.BlobStorageFormat blob_storage_format = 6;
    */
-  blobStorageFormat = BlobStorageFormat.LEGACY_UNSPECIFIED;
+  blobStorageFormat?: BlobStorageFormat;
 
   /**
-   * @generated from field: anyrun.v1.V4RootArchiveOptions v4_root_archive_options = 7;
+   * @generated from field: optional anyrun.v1.V4RootArchiveOptions v4_root_archive_options = 7;
    */
   v4RootArchiveOptions?: V4RootArchiveOptions;
 
@@ -1143,8 +1143,8 @@ export class PersistedLazySquashfsDriveDescriptor extends Message<PersistedLazyS
     { no: 1, name: "drive_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "guest_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "chunk_size", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
-    { no: 6, name: "blob_storage_format", kind: "enum", T: proto3.getEnumType(BlobStorageFormat) },
-    { no: 7, name: "v4_root_archive_options", kind: "message", T: V4RootArchiveOptions },
+    { no: 6, name: "blob_storage_format", kind: "enum", T: proto3.getEnumType(BlobStorageFormat), opt: true },
+    { no: 7, name: "v4_root_archive_options", kind: "message", T: V4RootArchiveOptions, opt: true },
     { no: 3, name: "snapshot", kind: "message", T: PersistedLazySnapshotSource, oneof: "source" },
     { no: 5, name: "checkpoint", kind: "message", T: PersistedLazyCheckpointSource, oneof: "source" },
   ]);

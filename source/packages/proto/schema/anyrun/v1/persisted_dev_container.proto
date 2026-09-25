@@ -11,7 +11,7 @@ import "anyrun/v1/common.proto";
 
 message DaemonCommandHandlerPersistentState {
   int64 vpid = 1 [json_name = "vpid"];
-  string last_event_id = 2 [json_name = "lastEventId"];
+  optional string last_event_id = 2 [json_name = "lastEventId"];
 }
 
 message DockerContainerPersistentState {
@@ -20,44 +20,44 @@ message DockerContainerPersistentState {
   bool stopped = 3 [json_name = "stopped"];
   bool removed = 4 [json_name = "removed"];
   bool leaked = 5 [json_name = "leaked"];
-  uint64 post_pause_unpause_delay_ms = 6 [json_name = "postPauseUnpauseDelayMs"];
-  string isod_container_name = 8 [json_name = "isodContainerName"];
+  optional uint64 post_pause_unpause_delay_ms = 6 [json_name = "postPauseUnpauseDelayMs"];
+  optional string isod_container_name = 8 [json_name = "isodContainerName"];
 }
 
 message DockerDevContainerPersistentState {
   string name = 1 [json_name = "name"];
-  .anyrun.v1.DockerContainerPersistentState container = 2 [json_name = "container"];
-  .anyrun.v1.RuntimeStatePersistentState runtime_state = 3 [json_name = "runtimeState"];
-  .anyrun.v1.ImageMetadata image_metadata = 4 [json_name = "imageMetadata"];
-  .anyrun.v1.NetworkInfo network_info = 5 [json_name = "networkInfo"];
-  string user = 6 [json_name = "user"];
+  optional .anyrun.v1.DockerContainerPersistentState container = 2 [json_name = "container"];
+  optional .anyrun.v1.RuntimeStatePersistentState runtime_state = 3 [json_name = "runtimeState"];
+  optional .anyrun.v1.ImageMetadata image_metadata = 4 [json_name = "imageMetadata"];
+  optional .anyrun.v1.NetworkInfo network_info = 5 [json_name = "networkInfo"];
+  optional string user = 6 [json_name = "user"];
   string shell = 7 [json_name = "shell"];
   uint32 daemon_port = 8 [json_name = "daemonPort"];
-  .anyrun.v1.WorkspaceConfig workspace = 9 [json_name = "workspace"];
+  optional .anyrun.v1.WorkspaceConfig workspace = 9 [json_name = "workspace"];
   bool v2_hydrated = 10 [json_name = "v2Hydrated"];
-  string pod_daemon_auth_token = 11 [json_name = "podDaemonAuthToken"];
+  optional string pod_daemon_auth_token = 11 [json_name = "podDaemonAuthToken"];
 }
 
 message IsoDevContainerMetadata {
   string name = 1 [json_name = "name"];
-  .anyrun.v1.DockerDevContainerPersistentState persistent_state = 2 [json_name = "persistentState"];
-  .anyrun.v1.IsoEnvConfig env_config = 3 [json_name = "envConfig"];
+  optional .anyrun.v1.DockerDevContainerPersistentState persistent_state = 2 [json_name = "persistentState"];
+  optional .anyrun.v1.IsoEnvConfig env_config = 3 [json_name = "envConfig"];
   repeated .anyrun.v1.PersistedDriveDescriptor drive_descriptors = 4 [json_name = "driveDescriptors"];
 }
 
 message IsoEnvBalloonConfig {
   uint32 amount_mib = 1 [json_name = "amountMib"];
   bool deflate_on_oom = 2 [json_name = "deflateOnOom"];
-  uint32 stats_polling_interval_s = 3 [json_name = "statsPollingIntervalS"];
+  optional uint32 stats_polling_interval_s = 3 [json_name = "statsPollingIntervalS"];
 }
 
 message IsoEnvConfig {
   uint32 vcpu_count = 1 [json_name = "vcpuCount"];
   uint32 mem_size_mib = 2 [json_name = "memSizeMib"];
-  uint32 swap_size_mib = 3 [json_name = "swapSizeMib"];
-  uint32 rootfs_size_mib = 4 [json_name = "rootfsSizeMib"];
+  optional uint32 swap_size_mib = 3 [json_name = "swapSizeMib"];
+  optional uint32 rootfs_size_mib = 4 [json_name = "rootfsSizeMib"];
   repeated .anyrun.v1.IsoEnvExtraDriveConfig extra_drives = 5 [json_name = "extraDrives"];
-  .anyrun.v1.IsoEnvBalloonConfig balloon = 6 [json_name = "balloon"];
+  optional .anyrun.v1.IsoEnvBalloonConfig balloon = 6 [json_name = "balloon"];
   .anyrun.v1.FirecrackerVersion firecracker_version = 7 [json_name = "firecrackerVersion"];
 }
 
@@ -85,16 +85,16 @@ message PersistedDevContainerConfig {
   repeated .anyrun.v1.PersistedEnvVar env = 13 [json_name = "env"];
   repeated .anyrun.v1.PortDefinition ports = 14 [json_name = "ports"];
   string shell = 15 [json_name = "shell"];
-  string user = 16 [json_name = "user"];
-  bool privileged = 17 [json_name = "privileged"];
+  optional string user = 16 [json_name = "user"];
+  optional bool privileged = 17 [json_name = "privileged"];
   repeated .anyrun.v1.DevContainerExecCommand verify_commands = 19 [json_name = "verifyCommands"];
-  bool build_container = 22 [json_name = "buildContainer"];
-  bool enable_checkpoint_scratch_drive = 25 [json_name = "enableCheckpointScratchDrive"];
-  bool blob_client_resilience_enabled = 26 [json_name = "blobClientResilienceEnabled"];
+  optional bool build_container = 22 [json_name = "buildContainer"];
+  optional bool enable_checkpoint_scratch_drive = 25 [json_name = "enableCheckpointScratchDrive"];
+  optional bool blob_client_resilience_enabled = 26 [json_name = "blobClientResilienceEnabled"];
   .anyrun.v1.ContainerRuntime container_runtime = 27 [json_name = "containerRuntime"];
   .anyrun.v1.FirecrackerVersion firecracker_version = 28 [json_name = "firecrackerVersion"];
-  bool enable_lazy_v3_squashfs_snapshot_load = 29 [json_name = "enableLazyV3SquashfsSnapshotLoad"];
-  bool enable_lazy_v4_load = 30 [json_name = "enableLazyV4Load"];
+  optional bool enable_lazy_v3_squashfs_snapshot_load = 29 [json_name = "enableLazyV3SquashfsSnapshotLoad"];
+  optional bool enable_lazy_v4_load = 30 [json_name = "enableLazyV4Load"];
   oneof image {
     string registry_reference = 5 [json_name = "registryReference"];
     .anyrun.v1.Build build = 6 [json_name = "build"];
@@ -131,7 +131,7 @@ message PersistedEnvVar {
 
 message PersistedExternalSnapshot {
   string snapshot_id = 1 [json_name = "snapshotId"];
-  string cpu_baseline_id = 2 [json_name = "cpuBaselineId"];
+  optional string cpu_baseline_id = 2 [json_name = "cpuBaselineId"];
 }
 
 message PersistedFileDriveDescriptor {
@@ -139,7 +139,7 @@ message PersistedFileDriveDescriptor {
   string drive_id = 2 [json_name = "driveId"];
   string guest_path = 3 [json_name = "guestPath"];
   bool is_root_device = 4 [json_name = "isRootDevice"];
-  uint32 size_mib = 5 [json_name = "sizeMib"];
+  optional uint32 size_mib = 5 [json_name = "sizeMib"];
 }
 
 message PersistedGitRepoSource {
@@ -161,8 +161,8 @@ message PersistedLazySquashfsDriveDescriptor {
   string drive_id = 1 [json_name = "driveId"];
   string guest_path = 2 [json_name = "guestPath"];
   uint64 chunk_size = 4 [json_name = "chunkSize"];
-  .anyrun.v1.BlobStorageFormat blob_storage_format = 6 [json_name = "blobStorageFormat"];
-  .anyrun.v1.V4RootArchiveOptions v4_root_archive_options = 7 [json_name = "v4RootArchiveOptions"];
+  optional .anyrun.v1.BlobStorageFormat blob_storage_format = 6 [json_name = "blobStorageFormat"];
+  optional .anyrun.v1.V4RootArchiveOptions v4_root_archive_options = 7 [json_name = "v4RootArchiveOptions"];
   oneof source {
     .anyrun.v1.PersistedLazySnapshotSource snapshot = 3 [json_name = "snapshot"];
     .anyrun.v1.PersistedLazyCheckpointSource checkpoint = 5 [json_name = "checkpoint"];

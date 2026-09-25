@@ -147,9 +147,9 @@ export class ExplicitContext extends Message<ExplicitContext> {
   context = "";
 
   /**
-   * @generated from field: string repo_context = 2;
+   * @generated from field: optional string repo_context = 2;
    */
-  repoContext = "";
+  repoContext?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.CursorRule rules = 3;
@@ -157,9 +157,9 @@ export class ExplicitContext extends Message<ExplicitContext> {
   rules: CursorRule[] = [];
 
   /**
-   * @generated from field: string mode_specific_context = 4;
+   * @generated from field: optional string mode_specific_context = 4;
    */
-  modeSpecificContext = "";
+  modeSpecificContext?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.MCPInstructions mcp_instructions = 5;
@@ -175,9 +175,9 @@ export class ExplicitContext extends Message<ExplicitContext> {
   static readonly typeName = "aiserver.v1.ExplicitContext";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "context", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "repo_context", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "repo_context", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "rules", kind: "message", T: CursorRule, repeated: true },
-    { no: 4, name: "mode_specific_context", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "mode_specific_context", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 5, name: "mcp_instructions", kind: "message", T: MCPInstructions, repeated: true },
   ]);
 
@@ -213,29 +213,29 @@ export class CursorRule extends Message<CursorRule> {
   description = "";
 
   /**
-   * @generated from field: string body = 3;
+   * @generated from field: optional string body = 3;
    */
-  body = "";
+  body?: string;
 
   /**
-   * @generated from field: bool is_from_glob = 4;
+   * @generated from field: optional bool is_from_glob = 4;
    */
-  isFromGlob = false;
+  isFromGlob?: boolean;
 
   /**
-   * @generated from field: bool always_apply = 5;
+   * @generated from field: optional bool always_apply = 5;
    */
-  alwaysApply = false;
+  alwaysApply?: boolean;
 
   /**
-   * @generated from field: bool attach_to_background_agents = 6;
+   * @generated from field: optional bool attach_to_background_agents = 6;
    */
-  attachToBackgroundAgents = false;
+  attachToBackgroundAgents?: boolean;
 
   /**
-   * @generated from field: string full_path = 7;
+   * @generated from field: optional string full_path = 7;
    */
-  fullPath = "";
+  fullPath?: string;
 
   /**
    * @generated from field: repeated string environments = 8;
@@ -248,14 +248,14 @@ export class CursorRule extends Message<CursorRule> {
   disabledEnvironments: string[] = [];
 
   /**
-   * @generated from field: string plugin = 10;
+   * @generated from field: optional string plugin = 10;
    */
-  plugin = "";
+  plugin?: string;
 
   /**
-   * @generated from field: string marketplace = 11;
+   * @generated from field: optional string marketplace = 11;
    */
-  marketplace = "";
+  marketplace?: string;
 
   constructor(data?: PartialMessage<CursorRule>) {
     super();
@@ -267,15 +267,15 @@ export class CursorRule extends Message<CursorRule> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "body", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "is_from_glob", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "always_apply", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 6, name: "attach_to_background_agents", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 7, name: "full_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "body", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "is_from_glob", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 5, name: "always_apply", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 6, name: "attach_to_background_agents", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 7, name: "full_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 8, name: "environments", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 9, name: "disabled_environments", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 10, name: "plugin", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 11, name: "marketplace", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 10, name: "plugin", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 11, name: "marketplace", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CursorRule {
@@ -443,19 +443,19 @@ export class FileDiff extends Message<FileDiff> {
   removed = 0;
 
   /**
-   * @generated from field: string before_file_contents = 6;
+   * @generated from field: optional string before_file_contents = 6;
    */
-  beforeFileContents = "";
+  beforeFileContents?: string;
 
   /**
-   * @generated from field: string after_file_contents = 7;
+   * @generated from field: optional string after_file_contents = 7;
    */
-  afterFileContents = "";
+  afterFileContents?: string;
 
   /**
-   * @generated from field: bool is_generated = 8;
+   * @generated from field: optional bool is_generated = 8;
    */
-  isGenerated = false;
+  isGenerated?: boolean;
 
   constructor(data?: PartialMessage<FileDiff>) {
     super();
@@ -470,9 +470,9 @@ export class FileDiff extends Message<FileDiff> {
     { no: 3, name: "chunks", kind: "message", T: FileDiff_Chunk, repeated: true },
     { no: 4, name: "added", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 5, name: "removed", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 6, name: "before_file_contents", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "after_file_contents", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "is_generated", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 6, name: "before_file_contents", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "after_file_contents", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "is_generated", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): FileDiff {
@@ -629,7 +629,7 @@ export class CurrentFileInfo extends Message<CurrentFileInfo> {
   contents = "";
 
   /**
-   * @generated from field: aiserver.v1.CursorPosition cursor_position = 3;
+   * @generated from field: optional aiserver.v1.CursorPosition cursor_position = 3;
    */
   cursorPosition?: CursorPosition;
 
@@ -644,7 +644,7 @@ export class CurrentFileInfo extends Message<CurrentFileInfo> {
   languageId = "";
 
   /**
-   * @generated from field: aiserver.v1.CursorRange selection = 6;
+   * @generated from field: optional aiserver.v1.CursorRange selection = 6;
    */
   selection?: CursorRange;
 
@@ -669,14 +669,14 @@ export class CurrentFileInfo extends Message<CurrentFileInfo> {
   topChunks: BM25Chunk[] = [];
 
   /**
-   * @generated from field: int32 alternative_version_id = 11;
+   * @generated from field: optional int32 alternative_version_id = 11;
    */
-  alternativeVersionId = 0;
+  alternativeVersionId?: number;
 
   /**
-   * @generated from field: int32 file_version = 14;
+   * @generated from field: optional int32 file_version = 14;
    */
-  fileVersion = 0;
+  fileVersion?: number;
 
   /**
    * @generated from field: repeated int32 cell_start_lines = 15;
@@ -689,9 +689,9 @@ export class CurrentFileInfo extends Message<CurrentFileInfo> {
   cells: CurrentFileInfo_NotebookCell[] = [];
 
   /**
-   * @generated from field: string sha_256_hash = 17;
+   * @generated from field: optional string sha_256_hash = 17;
    */
-  sha256Hash = "";
+  sha256Hash?: string;
 
   /**
    * @generated from field: bool rely_on_filesync = 18;
@@ -704,9 +704,9 @@ export class CurrentFileInfo extends Message<CurrentFileInfo> {
   workspaceRootPath = "";
 
   /**
-   * @generated from field: string line_ending = 20;
+   * @generated from field: optional string line_ending = 20;
    */
-  lineEnding = "";
+  lineEnding?: string;
 
   constructor(data?: PartialMessage<CurrentFileInfo>) {
     super();
@@ -718,22 +718,22 @@ export class CurrentFileInfo extends Message<CurrentFileInfo> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "contents", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "cursor_position", kind: "message", T: CursorPosition },
+    { no: 3, name: "cursor_position", kind: "message", T: CursorPosition, opt: true },
     { no: 4, name: "dataframes", kind: "message", T: DataframeInfo, repeated: true },
     { no: 5, name: "language_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "selection", kind: "message", T: CursorRange },
+    { no: 6, name: "selection", kind: "message", T: CursorRange, opt: true },
     { no: 7, name: "diagnostics", kind: "message", T: Diagnostic, repeated: true },
     { no: 8, name: "total_number_of_lines", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 9, name: "contents_start_at_line", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 10, name: "top_chunks", kind: "message", T: BM25Chunk, repeated: true },
-    { no: 11, name: "alternative_version_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 14, name: "file_version", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 11, name: "alternative_version_id", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 14, name: "file_version", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 15, name: "cell_start_lines", kind: "scalar", T: 5 /* ScalarType.INT32 */, repeated: true },
     { no: 16, name: "cells", kind: "message", T: CurrentFileInfo_NotebookCell, repeated: true },
-    { no: 17, name: "sha_256_hash", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 17, name: "sha_256_hash", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 18, name: "rely_on_filesync", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 19, name: "workspace_root_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 20, name: "line_ending", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 20, name: "line_ending", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CurrentFileInfo {
@@ -794,12 +794,12 @@ export class CodeBlock extends Message<CodeBlock> {
   relativeWorkspacePath = "";
 
   /**
-   * @generated from field: string file_contents = 2;
+   * @generated from field: optional string file_contents = 2;
    */
-  fileContents = "";
+  fileContents?: string;
 
   /**
-   * @generated from field: aiserver.v1.CursorRange range = 3;
+   * @generated from field: optional aiserver.v1.CursorRange range = 3;
    */
   range?: CursorRange;
 
@@ -809,19 +809,19 @@ export class CodeBlock extends Message<CodeBlock> {
   contents = "";
 
   /**
-   * @generated from field: aiserver.v1.CodeBlock.Signatures signatures = 5;
+   * @generated from field: optional aiserver.v1.CodeBlock.Signatures signatures = 5;
    */
   signatures?: CodeBlock_Signatures;
 
   /**
-   * @generated from field: string override_contents = 6;
+   * @generated from field: optional string override_contents = 6;
    */
-  overrideContents = "";
+  overrideContents?: string;
 
   /**
-   * @generated from field: string original_contents = 7;
+   * @generated from field: optional string original_contents = 7;
    */
-  originalContents = "";
+  originalContents?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.DetailedLine detailed_lines = 8;
@@ -829,12 +829,12 @@ export class CodeBlock extends Message<CodeBlock> {
   detailedLines: DetailedLine[] = [];
 
   /**
-   * @generated from field: int32 file_contents_length = 9;
+   * @generated from field: optional int32 file_contents_length = 9;
    */
-  fileContentsLength = 0;
+  fileContentsLength?: number;
 
   /**
-   * @generated from field: aiserver.v1.FileGit file_git_context = 10;
+   * @generated from field: optional aiserver.v1.FileGit file_git_context = 10;
    */
   fileGitContext?: FileGit;
 
@@ -847,15 +847,15 @@ export class CodeBlock extends Message<CodeBlock> {
   static readonly typeName = "aiserver.v1.CodeBlock";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "file_contents", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "range", kind: "message", T: CursorRange },
+    { no: 2, name: "file_contents", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "range", kind: "message", T: CursorRange, opt: true },
     { no: 4, name: "contents", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "signatures", kind: "message", T: CodeBlock_Signatures },
-    { no: 6, name: "override_contents", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "original_contents", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "signatures", kind: "message", T: CodeBlock_Signatures, opt: true },
+    { no: 6, name: "override_contents", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "original_contents", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 8, name: "detailed_lines", kind: "message", T: DetailedLine, repeated: true },
-    { no: 9, name: "file_contents_length", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 10, name: "file_git_context", kind: "message", T: FileGit },
+    { no: 9, name: "file_contents_length", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 10, name: "file_git_context", kind: "message", T: FileGit, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CodeBlock {
@@ -917,44 +917,44 @@ export class CodeBlock_Signatures extends Message<CodeBlock_Signatures> {
  */
 export class ModelDetails extends Message<ModelDetails> {
   /**
-   * @generated from field: string model_name = 1;
+   * @generated from field: optional string model_name = 1;
    */
-  modelName = "";
+  modelName?: string;
 
   /**
-   * @generated from field: string api_key = 2;
+   * @generated from field: optional string api_key = 2;
    */
-  apiKey = "";
+  apiKey?: string;
 
   /**
-   * @generated from field: bool enable_ghost_mode = 3;
+   * @generated from field: optional bool enable_ghost_mode = 3;
    */
-  enableGhostMode = false;
+  enableGhostMode?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.AzureState azure_state = 4;
+   * @generated from field: optional aiserver.v1.AzureState azure_state = 4;
    */
   azureState?: AzureState;
 
   /**
-   * @generated from field: bool enable_slow_pool = 5;
+   * @generated from field: optional bool enable_slow_pool = 5;
    */
-  enableSlowPool = false;
+  enableSlowPool?: boolean;
 
   /**
-   * @generated from field: string openai_api_base_url = 6;
+   * @generated from field: optional string openai_api_base_url = 6;
    */
-  openaiApiBaseUrl = "";
+  openaiApiBaseUrl?: string;
 
   /**
-   * @generated from field: aiserver.v1.BedrockState bedrock_state = 7;
+   * @generated from field: optional aiserver.v1.BedrockState bedrock_state = 7;
    */
   bedrockState?: BedrockState;
 
   /**
-   * @generated from field: bool max_mode = 8;
+   * @generated from field: optional bool max_mode = 8;
    */
-  maxMode = false;
+  maxMode?: boolean;
 
   constructor(data?: PartialMessage<ModelDetails>) {
     super();
@@ -964,14 +964,14 @@ export class ModelDetails extends Message<ModelDetails> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ModelDetails";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "model_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "api_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "enable_ghost_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "azure_state", kind: "message", T: AzureState },
-    { no: 5, name: "enable_slow_pool", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 6, name: "openai_api_base_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "bedrock_state", kind: "message", T: BedrockState },
-    { no: 8, name: "max_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 1, name: "model_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "api_key", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "enable_ghost_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 4, name: "azure_state", kind: "message", T: AzureState, opt: true },
+    { no: 5, name: "enable_slow_pool", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 6, name: "openai_api_base_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "bedrock_state", kind: "message", T: BedrockState, opt: true },
+    { no: 8, name: "max_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ModelDetails {
@@ -1050,14 +1050,14 @@ export class LinterError extends Message<LinterError> {
   message = "";
 
   /**
-   * @generated from field: aiserver.v1.CursorRange range = 2;
+   * @generated from field: optional aiserver.v1.CursorRange range = 2;
    */
   range?: CursorRange;
 
   /**
-   * @generated from field: string source = 3;
+   * @generated from field: optional string source = 3;
    */
-  source = "";
+  source?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.Diagnostic.RelatedInformation related_information = 4;
@@ -1065,14 +1065,14 @@ export class LinterError extends Message<LinterError> {
   relatedInformation: Diagnostic_RelatedInformation[] = [];
 
   /**
-   * @generated from field: aiserver.v1.Diagnostic.DiagnosticSeverity severity = 5;
+   * @generated from field: optional aiserver.v1.Diagnostic.DiagnosticSeverity severity = 5;
    */
-  severity = Diagnostic_DiagnosticSeverity.UNSPECIFIED;
+  severity?: Diagnostic_DiagnosticSeverity;
 
   /**
-   * @generated from field: bool is_stale = 6;
+   * @generated from field: optional bool is_stale = 6;
    */
-  isStale = false;
+  isStale?: boolean;
 
   constructor(data?: PartialMessage<LinterError>) {
     super();
@@ -1083,11 +1083,11 @@ export class LinterError extends Message<LinterError> {
   static readonly typeName = "aiserver.v1.LinterError";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "range", kind: "message", T: CursorRange },
-    { no: 3, name: "source", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "range", kind: "message", T: CursorRange, opt: true },
+    { no: 3, name: "source", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 4, name: "related_information", kind: "message", T: Diagnostic_RelatedInformation, repeated: true },
-    { no: 5, name: "severity", kind: "enum", T: proto3.getEnumType(Diagnostic_DiagnosticSeverity) },
-    { no: 6, name: "is_stale", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 5, name: "severity", kind: "enum", T: proto3.getEnumType(Diagnostic_DiagnosticSeverity), opt: true },
+    { no: 6, name: "is_stale", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): LinterError {
@@ -1112,12 +1112,12 @@ export class LinterError extends Message<LinterError> {
  */
 export class CursorRange extends Message<CursorRange> {
   /**
-   * @generated from field: aiserver.v1.CursorPosition start_position = 1;
+   * @generated from field: optional aiserver.v1.CursorPosition start_position = 1;
    */
   startPosition?: CursorPosition;
 
   /**
-   * @generated from field: aiserver.v1.CursorPosition end_position = 2;
+   * @generated from field: optional aiserver.v1.CursorPosition end_position = 2;
    */
   endPosition?: CursorPosition;
 
@@ -1129,8 +1129,8 @@ export class CursorRange extends Message<CursorRange> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.CursorRange";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "start_position", kind: "message", T: CursorPosition },
-    { no: 2, name: "end_position", kind: "message", T: CursorPosition },
+    { no: 1, name: "start_position", kind: "message", T: CursorPosition, opt: true },
+    { no: 2, name: "end_position", kind: "message", T: CursorPosition, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CursorRange {
@@ -1460,7 +1460,7 @@ export class ImageProto extends Message<ImageProto> {
   data = new Uint8Array(0);
 
   /**
-   * @generated from field: aiserver.v1.ImageProto.Dimension dimension = 2;
+   * @generated from field: optional aiserver.v1.ImageProto.Dimension dimension = 2;
    */
   dimension?: ImageProto_Dimension;
 
@@ -1470,9 +1470,9 @@ export class ImageProto extends Message<ImageProto> {
   uuid = "";
 
   /**
-   * @generated from field: string task_specific_description = 4;
+   * @generated from field: optional string task_specific_description = 4;
    */
-  taskSpecificDescription = "";
+  taskSpecificDescription?: string;
 
   constructor(data?: PartialMessage<ImageProto>) {
     super();
@@ -1483,9 +1483,9 @@ export class ImageProto extends Message<ImageProto> {
   static readonly typeName = "aiserver.v1.ImageProto";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "data", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
-    { no: 2, name: "dimension", kind: "message", T: ImageProto_Dimension },
+    { no: 2, name: "dimension", kind: "message", T: ImageProto_Dimension, opt: true },
     { no: 3, name: "uuid", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "task_specific_description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "task_specific_description", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ImageProto {
@@ -1621,14 +1621,14 @@ export class RCPLogEntry extends Message<RCPLogEntry> {
   sessionId = "";
 
   /**
-   * @generated from field: aiserver.v1.RCPStackTrace stack_trace = 6;
+   * @generated from field: optional aiserver.v1.RCPStackTrace stack_trace = 6;
    */
   stackTrace?: RCPStackTrace;
 
   /**
-   * @generated from field: string object_data_json = 7;
+   * @generated from field: optional string object_data_json = 7;
    */
-  objectDataJson = "";
+  objectDataJson?: string;
 
   constructor(data?: PartialMessage<RCPLogEntry>) {
     super();
@@ -1643,8 +1643,8 @@ export class RCPLogEntry extends Message<RCPLogEntry> {
     { no: 3, name: "level", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "client_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "session_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "stack_trace", kind: "message", T: RCPStackTrace },
-    { no: 7, name: "object_data_json", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 6, name: "stack_trace", kind: "message", T: RCPStackTrace, opt: true },
+    { no: 7, name: "object_data_json", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RCPLogEntry {
@@ -1689,14 +1689,14 @@ export class RCPUIElementPicked extends Message<RCPUIElementPicked> {
   extra = "";
 
   /**
-   * @generated from field: string component = 5;
+   * @generated from field: optional string component = 5;
    */
-  component = "";
+  component?: string;
 
   /**
-   * @generated from field: string component_props_json = 6;
+   * @generated from field: optional string component_props_json = 6;
    */
-  componentPropsJson = "";
+  componentPropsJson?: string;
 
   constructor(data?: PartialMessage<RCPUIElementPicked>) {
     super();
@@ -1710,8 +1710,8 @@ export class RCPUIElementPicked extends Message<RCPUIElementPicked> {
     { no: 2, name: "xpath", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "text_content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "extra", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "component", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "component_props_json", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "component", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "component_props_json", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RCPUIElementPicked {
@@ -1746,19 +1746,19 @@ export class ComposerExternalLink extends Message<ComposerExternalLink> {
   uuid = "";
 
   /**
-   * @generated from field: string pdf_content = 3;
+   * @generated from field: optional string pdf_content = 3;
    */
-  pdfContent = "";
+  pdfContent?: string;
 
   /**
-   * @generated from field: bool is_pdf = 4;
+   * @generated from field: optional bool is_pdf = 4;
    */
-  isPdf = false;
+  isPdf?: boolean;
 
   /**
-   * @generated from field: string filename = 5;
+   * @generated from field: optional string filename = 5;
    */
-  filename = "";
+  filename?: string;
 
   constructor(data?: PartialMessage<ComposerExternalLink>) {
     super();
@@ -1770,9 +1770,9 @@ export class ComposerExternalLink extends Message<ComposerExternalLink> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "uuid", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "pdf_content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "is_pdf", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "filename", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "pdf_content", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "is_pdf", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 5, name: "filename", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ComposerExternalLink {
@@ -1882,9 +1882,9 @@ export class RCPStackTrace extends Message<RCPStackTrace> {
   callFrames: RCPCallFrame[] = [];
 
   /**
-   * @generated from field: string raw_stack_trace = 2;
+   * @generated from field: optional string raw_stack_trace = 2;
    */
-  rawStackTrace = "";
+  rawStackTrace?: string;
 
   constructor(data?: PartialMessage<RCPStackTrace>) {
     super();
@@ -1895,7 +1895,7 @@ export class RCPStackTrace extends Message<RCPStackTrace> {
   static readonly typeName = "aiserver.v1.RCPStackTrace";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "call_frames", kind: "message", T: RCPCallFrame, repeated: true },
-    { no: 2, name: "raw_stack_trace", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "raw_stack_trace", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RCPStackTrace {
@@ -1920,24 +1920,24 @@ export class RCPStackTrace extends Message<RCPStackTrace> {
  */
 export class RCPCallFrame extends Message<RCPCallFrame> {
   /**
-   * @generated from field: string function_name = 1;
+   * @generated from field: optional string function_name = 1;
    */
-  functionName = "";
+  functionName?: string;
 
   /**
-   * @generated from field: string url = 2;
+   * @generated from field: optional string url = 2;
    */
-  url = "";
+  url?: string;
 
   /**
-   * @generated from field: int32 line_number = 3;
+   * @generated from field: optional int32 line_number = 3;
    */
-  lineNumber = 0;
+  lineNumber?: number;
 
   /**
-   * @generated from field: int32 column_number = 4;
+   * @generated from field: optional int32 column_number = 4;
    */
-  columnNumber = 0;
+  columnNumber?: number;
 
   constructor(data?: PartialMessage<RCPCallFrame>) {
     super();
@@ -1947,10 +1947,10 @@ export class RCPCallFrame extends Message<RCPCallFrame> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.RCPCallFrame";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "function_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "line_number", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 4, name: "column_number", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 1, name: "function_name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "line_number", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 4, name: "column_number", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RCPCallFrame {
@@ -2033,9 +2033,9 @@ export class CodeChunk extends Message<CodeChunk> {
   lines: string[] = [];
 
   /**
-   * @generated from field: aiserver.v1.CodeChunk.SummarizationStrategy summarization_strategy = 4;
+   * @generated from field: optional aiserver.v1.CodeChunk.SummarizationStrategy summarization_strategy = 4;
    */
-  summarizationStrategy = CodeChunk_SummarizationStrategy.NONE_UNSPECIFIED;
+  summarizationStrategy?: CodeChunk_SummarizationStrategy;
 
   /**
    * @generated from field: string language_identifier = 5;
@@ -2043,19 +2043,19 @@ export class CodeChunk extends Message<CodeChunk> {
   languageIdentifier = "";
 
   /**
-   * @generated from field: aiserver.v1.CodeChunk.Intent intent = 6;
+   * @generated from field: optional aiserver.v1.CodeChunk.Intent intent = 6;
    */
-  intent = CodeChunk_Intent.UNSPECIFIED;
+  intent?: CodeChunk_Intent;
 
   /**
-   * @generated from field: bool is_final_version = 7;
+   * @generated from field: optional bool is_final_version = 7;
    */
-  isFinalVersion = false;
+  isFinalVersion?: boolean;
 
   /**
-   * @generated from field: bool is_first_version = 8;
+   * @generated from field: optional bool is_first_version = 8;
    */
-  isFirstVersion = false;
+  isFirstVersion?: boolean;
 
   constructor(data?: PartialMessage<CodeChunk>) {
     super();
@@ -2068,11 +2068,11 @@ export class CodeChunk extends Message<CodeChunk> {
     { no: 1, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "start_line_number", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 3, name: "lines", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 4, name: "summarization_strategy", kind: "enum", T: proto3.getEnumType(CodeChunk_SummarizationStrategy) },
+    { no: 4, name: "summarization_strategy", kind: "enum", T: proto3.getEnumType(CodeChunk_SummarizationStrategy), opt: true },
     { no: 5, name: "language_identifier", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "intent", kind: "enum", T: proto3.getEnumType(CodeChunk_Intent) },
-    { no: 7, name: "is_final_version", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 8, name: "is_first_version", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 6, name: "intent", kind: "enum", T: proto3.getEnumType(CodeChunk_Intent), opt: true },
+    { no: 7, name: "is_final_version", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 8, name: "is_first_version", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CodeChunk {
@@ -2159,7 +2159,7 @@ export class File extends Message<File> {
   contents = "";
 
   /**
-   * @generated from field: aiserver.v1.FileGit file_git_context = 3;
+   * @generated from field: optional aiserver.v1.FileGit file_git_context = 3;
    */
   fileGitContext?: FileGit;
 
@@ -2173,7 +2173,7 @@ export class File extends Message<File> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "contents", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "file_git_context", kind: "message", T: FileGit },
+    { no: 3, name: "file_git_context", kind: "message", T: FileGit, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): File {
@@ -2203,7 +2203,7 @@ export class BM25Chunk extends Message<BM25Chunk> {
   content = "";
 
   /**
-   * @generated from field: aiserver.v1.SimplestRange range = 2;
+   * @generated from field: optional aiserver.v1.SimplestRange range = 2;
    */
   range?: SimplestRange;
 
@@ -2226,7 +2226,7 @@ export class BM25Chunk extends Message<BM25Chunk> {
   static readonly typeName = "aiserver.v1.BM25Chunk";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "range", kind: "message", T: SimplestRange },
+    { no: 2, name: "range", kind: "message", T: SimplestRange, opt: true },
     { no: 3, name: "score", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 4, name: "relative_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
@@ -2368,7 +2368,7 @@ export class Diagnostic extends Message<Diagnostic> {
   message = "";
 
   /**
-   * @generated from field: aiserver.v1.CursorRange range = 2;
+   * @generated from field: optional aiserver.v1.CursorRange range = 2;
    */
   range?: CursorRange;
 
@@ -2391,7 +2391,7 @@ export class Diagnostic extends Message<Diagnostic> {
   static readonly typeName = "aiserver.v1.Diagnostic";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "range", kind: "message", T: CursorRange },
+    { no: 2, name: "range", kind: "message", T: CursorRange, opt: true },
     { no: 3, name: "severity", kind: "enum", T: proto3.getEnumType(Diagnostic_DiagnosticSeverity) },
     { no: 4, name: "related_information", kind: "message", T: Diagnostic_RelatedInformation, repeated: true },
   ]);
@@ -2461,7 +2461,7 @@ export class Diagnostic_RelatedInformation extends Message<Diagnostic_RelatedInf
   message = "";
 
   /**
-   * @generated from field: aiserver.v1.CursorRange range = 2;
+   * @generated from field: optional aiserver.v1.CursorRange range = 2;
    */
   range?: CursorRange;
 
@@ -2474,7 +2474,7 @@ export class Diagnostic_RelatedInformation extends Message<Diagnostic_RelatedInf
   static readonly typeName = "aiserver.v1.Diagnostic.RelatedInformation";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "range", kind: "message", T: CursorRange },
+    { no: 2, name: "range", kind: "message", T: CursorRange, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Diagnostic_RelatedInformation {
@@ -2519,12 +2519,12 @@ export class DocumentSymbol extends Message<DocumentSymbol> {
   containerName = "";
 
   /**
-   * @generated from field: aiserver.v1.DocumentSymbol.Range range = 6;
+   * @generated from field: optional aiserver.v1.DocumentSymbol.Range range = 6;
    */
   range?: DocumentSymbol_Range;
 
   /**
-   * @generated from field: aiserver.v1.DocumentSymbol.Range selection_range = 7;
+   * @generated from field: optional aiserver.v1.DocumentSymbol.Range selection_range = 7;
    */
   selectionRange?: DocumentSymbol_Range;
 
@@ -2545,8 +2545,8 @@ export class DocumentSymbol extends Message<DocumentSymbol> {
     { no: 2, name: "detail", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "kind", kind: "enum", T: proto3.getEnumType(DocumentSymbol_SymbolKind) },
     { no: 5, name: "container_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "range", kind: "message", T: DocumentSymbol_Range },
-    { no: 7, name: "selection_range", kind: "message", T: DocumentSymbol_Range },
+    { no: 6, name: "range", kind: "message", T: DocumentSymbol_Range, opt: true },
+    { no: 7, name: "selection_range", kind: "message", T: DocumentSymbol_Range, opt: true },
     { no: 8, name: "children", kind: "message", T: DocumentSymbol, repeated: true },
   ]);
 
@@ -2908,9 +2908,9 @@ export class GetDiffRequest extends Message<GetDiffRequest> {
   targetPaths: string[] = [];
 
   /**
-   * @generated from field: int32 unified_context_lines = 6;
+   * @generated from field: optional int32 unified_context_lines = 6;
    */
-  unifiedContextLines = 0;
+  unifiedContextLines?: number;
 
   /**
    * @generated from field: int32 max_untracked_files = 7;
@@ -2918,9 +2918,9 @@ export class GetDiffRequest extends Message<GetDiffRequest> {
   maxUntrackedFiles = 0;
 
   /**
-   * @generated from field: aiserver.v1.GetDiffRequest.OutputFormat output_format = 8;
+   * @generated from field: optional aiserver.v1.GetDiffRequest.OutputFormat output_format = 8;
    */
-  outputFormat = GetDiffRequest_OutputFormat.UNSPECIFIED;
+  outputFormat?: GetDiffRequest_OutputFormat;
 
   /**
    * @generated from field: int32 submodule_recurse_depth = 9;
@@ -2943,14 +2943,14 @@ export class GetDiffRequest extends Message<GetDiffRequest> {
   computePatchId = false;
 
   /**
-   * @generated from field: bool return_head_sha = 13;
+   * @generated from field: optional bool return_head_sha = 13;
    */
-  returnHeadSha = false;
+  returnHeadSha?: boolean;
 
   /**
-   * @generated from field: int32 max_response_bytes = 14;
+   * @generated from field: optional int32 max_response_bytes = 14;
    */
-  maxResponseBytes = 0;
+  maxResponseBytes?: number;
 
   constructor(data?: PartialMessage<GetDiffRequest>) {
     super();
@@ -2965,15 +2965,15 @@ export class GetDiffRequest extends Message<GetDiffRequest> {
     { no: 3, name: "base_ref", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "merge_base", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 5, name: "target_paths", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 6, name: "unified_context_lines", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 6, name: "unified_context_lines", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 7, name: "max_untracked_files", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 8, name: "output_format", kind: "enum", T: proto3.getEnumType(GetDiffRequest_OutputFormat) },
+    { no: 8, name: "output_format", kind: "enum", T: proto3.getEnumType(GetDiffRequest_OutputFormat), opt: true },
     { no: 9, name: "submodule_recurse_depth", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 10, name: "include_space_changes", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 11, name: "committed_only", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 12, name: "compute_patch_id", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 13, name: "return_head_sha", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 14, name: "max_response_bytes", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 13, name: "return_head_sha", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 14, name: "max_response_bytes", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetDiffRequest {
@@ -3036,7 +3036,7 @@ proto3.util.setEnumType(GetDiffRequest_OutputFormat, "aiserver.v1.GetDiffRequest
  */
 export class GetDiffResponse extends Message<GetDiffResponse> {
   /**
-   * @generated from field: aiserver.v1.GitDiff diff = 1;
+   * @generated from field: optional aiserver.v1.GitDiff diff = 1;
    */
   diff?: GitDiff;
 
@@ -3046,19 +3046,19 @@ export class GetDiffResponse extends Message<GetDiffResponse> {
   submoduleDiffs: GetDiffResponse_SubmoduleDiff[] = [];
 
   /**
-   * @generated from field: string patch_id = 3;
+   * @generated from field: optional string patch_id = 3;
    */
-  patchId = "";
+  patchId?: string;
 
   /**
-   * @generated from field: string head_sha = 4;
+   * @generated from field: optional string head_sha = 4;
    */
-  headSha = "";
+  headSha?: string;
 
   /**
-   * @generated from field: bool has_uncommitted_changes = 5;
+   * @generated from field: optional bool has_uncommitted_changes = 5;
    */
-  hasUncommittedChanges = false;
+  hasUncommittedChanges?: boolean;
 
   constructor(data?: PartialMessage<GetDiffResponse>) {
     super();
@@ -3068,11 +3068,11 @@ export class GetDiffResponse extends Message<GetDiffResponse> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.GetDiffResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "diff", kind: "message", T: GitDiff },
+    { no: 1, name: "diff", kind: "message", T: GitDiff, opt: true },
     { no: 2, name: "submodule_diffs", kind: "message", T: GetDiffResponse_SubmoduleDiff, repeated: true },
-    { no: 3, name: "patch_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "head_sha", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "has_uncommitted_changes", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 3, name: "patch_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "head_sha", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "has_uncommitted_changes", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetDiffResponse {
@@ -3102,7 +3102,7 @@ export class GetDiffResponse_SubmoduleDiff extends Message<GetDiffResponse_Submo
   relativePath = "";
 
   /**
-   * @generated from field: aiserver.v1.GitDiff diff = 2;
+   * @generated from field: optional aiserver.v1.GitDiff diff = 2;
    */
   diff?: GitDiff;
 
@@ -3120,7 +3120,7 @@ export class GetDiffResponse_SubmoduleDiff extends Message<GetDiffResponse_Submo
   static readonly typeName = "aiserver.v1.GetDiffResponse.SubmoduleDiff";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "relative_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "diff", kind: "message", T: GitDiff },
+    { no: 2, name: "diff", kind: "message", T: GitDiff, opt: true },
     { no: 3, name: "errored", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
@@ -3547,19 +3547,19 @@ export class ChatExternalLink extends Message<ChatExternalLink> {
   uuid = "";
 
   /**
-   * @generated from field: string pdf_content = 3;
+   * @generated from field: optional string pdf_content = 3;
    */
-  pdfContent = "";
+  pdfContent?: string;
 
   /**
-   * @generated from field: bool is_pdf = 4;
+   * @generated from field: optional bool is_pdf = 4;
    */
-  isPdf = false;
+  isPdf?: boolean;
 
   /**
-   * @generated from field: string filename = 5;
+   * @generated from field: optional string filename = 5;
    */
-  filename = "";
+  filename?: string;
 
   constructor(data?: PartialMessage<ChatExternalLink>) {
     super();
@@ -3571,9 +3571,9 @@ export class ChatExternalLink extends Message<ChatExternalLink> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "uuid", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "pdf_content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "is_pdf", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "filename", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "pdf_content", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "is_pdf", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 5, name: "filename", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ChatExternalLink {
@@ -3646,7 +3646,7 @@ export class Lint extends Message<Lint> {
   message = "";
 
   /**
-   * @generated from field: aiserver.v1.SimpleRange range = 2;
+   * @generated from field: optional aiserver.v1.SimpleRange range = 2;
    */
   range?: SimpleRange;
 
@@ -3664,7 +3664,7 @@ export class Lint extends Message<Lint> {
   static readonly typeName = "aiserver.v1.Lint";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "range", kind: "message", T: SimpleRange },
+    { no: 2, name: "range", kind: "message", T: SimpleRange, opt: true },
     { no: 3, name: "severity", kind: "enum", T: proto3.getEnumType(LintSeverity) },
   ]);
 
@@ -3700,9 +3700,9 @@ export class CloudAgentModelSelection extends Message<CloudAgentModelSelection> 
   parameters: CloudAgentModelSelection_ParameterValue[] = [];
 
   /**
-   * @generated from field: bool max_mode = 3;
+   * @generated from field: optional bool max_mode = 3;
    */
-  maxMode = false;
+  maxMode?: boolean;
 
   constructor(data?: PartialMessage<CloudAgentModelSelection>) {
     super();
@@ -3714,7 +3714,7 @@ export class CloudAgentModelSelection extends Message<CloudAgentModelSelection> 
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "model_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "parameters", kind: "message", T: CloudAgentModelSelection_ParameterValue, repeated: true },
-    { no: 3, name: "max_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 3, name: "max_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CloudAgentModelSelection {
@@ -3787,14 +3787,14 @@ export class ErrorDetails extends Message<ErrorDetails> {
   error = ErrorDetails_Error.UNSPECIFIED;
 
   /**
-   * @generated from field: aiserver.v1.CustomErrorDetails details = 2;
+   * @generated from field: optional aiserver.v1.CustomErrorDetails details = 2;
    */
   details?: CustomErrorDetails;
 
   /**
-   * @generated from field: bool is_expected = 3;
+   * @generated from field: optional bool is_expected = 3;
    */
-  isExpected = false;
+  isExpected?: boolean;
 
   constructor(data?: PartialMessage<ErrorDetails>) {
     super();
@@ -3805,8 +3805,8 @@ export class ErrorDetails extends Message<ErrorDetails> {
   static readonly typeName = "aiserver.v1.ErrorDetails";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "error", kind: "enum", T: proto3.getEnumType(ErrorDetails_Error) },
-    { no: 2, name: "details", kind: "message", T: CustomErrorDetails },
-    { no: 3, name: "is_expected", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "details", kind: "message", T: CustomErrorDetails, opt: true },
+    { no: 3, name: "is_expected", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ErrorDetails {
@@ -4197,24 +4197,24 @@ export class CustomErrorDetails extends Message<CustomErrorDetails> {
   detail = "";
 
   /**
-   * @generated from field: bool allow_command_links_potentially_unsafe_please_only_use_for_handwritten_trusted_markdown = 3;
+   * @generated from field: optional bool allow_command_links_potentially_unsafe_please_only_use_for_handwritten_trusted_markdown = 3;
    */
-  allowCommandLinksPotentiallyUnsafePleaseOnlyUseForHandwrittenTrustedMarkdown = false;
+  allowCommandLinksPotentiallyUnsafePleaseOnlyUseForHandwrittenTrustedMarkdown?: boolean;
 
   /**
-   * @generated from field: bool is_retryable = 4;
+   * @generated from field: optional bool is_retryable = 4;
    */
-  isRetryable = false;
+  isRetryable?: boolean;
 
   /**
-   * @generated from field: bool show_request_id = 5;
+   * @generated from field: optional bool show_request_id = 5;
    */
-  showRequestId = false;
+  showRequestId?: boolean;
 
   /**
-   * @generated from field: bool should_show_immediate_error = 6;
+   * @generated from field: optional bool should_show_immediate_error = 6;
    */
-  shouldShowImmediateError = false;
+  shouldShowImmediateError?: boolean;
 
   /**
    * @generated from field: map<string, string> additional_info = 7;
@@ -4232,7 +4232,7 @@ export class CustomErrorDetails extends Message<CustomErrorDetails> {
   planChoices: PlanChoice[] = [];
 
   /**
-   * @generated from field: aiserver.v1.ErrorAnalyticsMetadata analytics_metadata = 10;
+   * @generated from field: optional aiserver.v1.ErrorAnalyticsMetadata analytics_metadata = 10;
    */
   analyticsMetadata?: ErrorAnalyticsMetadata;
 
@@ -4246,14 +4246,14 @@ export class CustomErrorDetails extends Message<CustomErrorDetails> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "detail", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "allow_command_links_potentially_unsafe_please_only_use_for_handwritten_trusted_markdown", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "is_retryable", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "show_request_id", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 6, name: "should_show_immediate_error", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 3, name: "allow_command_links_potentially_unsafe_please_only_use_for_handwritten_trusted_markdown", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 4, name: "is_retryable", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 5, name: "show_request_id", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 6, name: "should_show_immediate_error", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 7, name: "additional_info", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
     { no: 8, name: "buttons", kind: "message", T: ErrorButton, repeated: true },
     { no: 9, name: "plan_choices", kind: "message", T: PlanChoice, repeated: true },
-    { no: 10, name: "analytics_metadata", kind: "message", T: ErrorAnalyticsMetadata },
+    { no: 10, name: "analytics_metadata", kind: "message", T: ErrorAnalyticsMetadata, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CustomErrorDetails {
@@ -4381,14 +4381,14 @@ export class PlanChoice extends Message<PlanChoice> {
   label = "";
 
   /**
-   * @generated from field: string sublabel = 2;
+   * @generated from field: optional string sublabel = 2;
    */
-  sublabel = "";
+  sublabel?: string;
 
   /**
-   * @generated from field: string description = 3;
+   * @generated from field: optional string description = 3;
    */
-  description = "";
+  description?: string;
 
   /**
    * @generated from field: string value = 4;
@@ -4404,8 +4404,8 @@ export class PlanChoice extends Message<PlanChoice> {
   static readonly typeName = "aiserver.v1.PlanChoice";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "label", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "sublabel", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "sublabel", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 4, name: "value", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
@@ -4431,9 +4431,9 @@ export class PlanChoice extends Message<PlanChoice> {
  */
 export class ErrorAnalyticsMetadata extends Message<ErrorAnalyticsMetadata> {
   /**
-   * @generated from field: string action_required = 1;
+   * @generated from field: optional string action_required = 1;
    */
-  actionRequired = "";
+  actionRequired?: string;
 
   constructor(data?: PartialMessage<ErrorAnalyticsMetadata>) {
     super();
@@ -4443,7 +4443,7 @@ export class ErrorAnalyticsMetadata extends Message<ErrorAnalyticsMetadata> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.ErrorAnalyticsMetadata";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "action_required", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "action_required", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ErrorAnalyticsMetadata {
@@ -4473,14 +4473,14 @@ export class UpgradeAction extends Message<UpgradeAction> {
   membershipToUpgradeTo = "";
 
   /**
-   * @generated from field: bool try_immediate_upgrade = 2;
+   * @generated from field: optional bool try_immediate_upgrade = 2;
    */
-  tryImmediateUpgrade = false;
+  tryImmediateUpgrade?: boolean;
 
   /**
-   * @generated from field: bool allow_trial = 3;
+   * @generated from field: optional bool allow_trial = 3;
    */
-  allowTrial = false;
+  allowTrial?: boolean;
 
   constructor(data?: PartialMessage<UpgradeAction>) {
     super();
@@ -4491,8 +4491,8 @@ export class UpgradeAction extends Message<UpgradeAction> {
   static readonly typeName = "aiserver.v1.UpgradeAction";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "membership_to_upgrade_to", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "try_immediate_upgrade", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "allow_trial", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "try_immediate_upgrade", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 3, name: "allow_trial", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpgradeAction {
@@ -4517,9 +4517,9 @@ export class UpgradeAction extends Message<UpgradeAction> {
  */
 export class SwitchModelAction extends Message<SwitchModelAction> {
   /**
-   * @generated from field: string suggested_model = 1;
+   * @generated from field: optional string suggested_model = 1;
    */
-  suggestedModel = "";
+  suggestedModel?: string;
 
   /**
    * @generated from field: repeated aiserver.v1.SwitchModelAction.ModelParameterValue parameters = 2;
@@ -4527,9 +4527,9 @@ export class SwitchModelAction extends Message<SwitchModelAction> {
   parameters: SwitchModelAction_ModelParameterValue[] = [];
 
   /**
-   * @generated from field: bool max_mode = 3;
+   * @generated from field: optional bool max_mode = 3;
    */
-  maxMode = false;
+  maxMode?: boolean;
 
   constructor(data?: PartialMessage<SwitchModelAction>) {
     super();
@@ -4539,9 +4539,9 @@ export class SwitchModelAction extends Message<SwitchModelAction> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SwitchModelAction";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "suggested_model", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "suggested_model", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "parameters", kind: "message", T: SwitchModelAction_ModelParameterValue, repeated: true },
-    { no: 3, name: "max_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 3, name: "max_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SwitchModelAction {
@@ -4724,9 +4724,9 @@ export class DashboardAction extends Message<DashboardAction> {
   args: { [key: string]: string } = {};
 
   /**
-   * @generated from field: string success_message = 3;
+   * @generated from field: optional string success_message = 3;
    */
-  successMessage = "";
+  successMessage?: string;
 
   constructor(data?: PartialMessage<DashboardAction>) {
     super();
@@ -4738,7 +4738,7 @@ export class DashboardAction extends Message<DashboardAction> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "action", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "args", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
-    { no: 3, name: "success_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "success_message", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DashboardAction {
@@ -4837,29 +4837,29 @@ export class ClientAction extends Message<ClientAction> {
  */
 export class EnvironmentInfo extends Message<EnvironmentInfo> {
   /**
-   * @generated from field: string exthost_platform = 1;
+   * @generated from field: optional string exthost_platform = 1;
    */
-  exthostPlatform = "";
+  exthostPlatform?: string;
 
   /**
-   * @generated from field: string exthost_arch = 2;
+   * @generated from field: optional string exthost_arch = 2;
    */
-  exthostArch = "";
+  exthostArch?: string;
 
   /**
-   * @generated from field: string exthost_release = 3;
+   * @generated from field: optional string exthost_release = 3;
    */
-  exthostRelease = "";
+  exthostRelease?: string;
 
   /**
-   * @generated from field: string exthost_shell = 4;
+   * @generated from field: optional string exthost_shell = 4;
    */
-  exthostShell = "";
+  exthostShell?: string;
 
   /**
-   * @generated from field: string local_timestamp = 5;
+   * @generated from field: optional string local_timestamp = 5;
    */
-  localTimestamp = "";
+  localTimestamp?: string;
 
   /**
    * @generated from field: repeated string workspace_uris = 6;
@@ -4867,29 +4867,29 @@ export class EnvironmentInfo extends Message<EnvironmentInfo> {
   workspaceUris: string[] = [];
 
   /**
-   * @generated from field: string cursor_version = 7;
+   * @generated from field: optional string cursor_version = 7;
    */
-  cursorVersion = "";
+  cursorVersion?: string;
 
   /**
-   * @generated from field: bool is_remote = 8;
+   * @generated from field: optional bool is_remote = 8;
    */
-  isRemote = false;
+  isRemote?: boolean;
 
   /**
-   * @generated from field: string local_os_type = 9;
+   * @generated from field: optional string local_os_type = 9;
    */
-  localOsType = "";
+  localOsType?: string;
 
   /**
-   * @generated from field: string home_directory = 10;
+   * @generated from field: optional string home_directory = 10;
    */
-  homeDirectory = "";
+  homeDirectory?: string;
 
   /**
-   * @generated from field: string local_timezone = 11;
+   * @generated from field: optional string local_timezone = 11;
    */
-  localTimezone = "";
+  localTimezone?: string;
 
   constructor(data?: PartialMessage<EnvironmentInfo>) {
     super();
@@ -4899,17 +4899,17 @@ export class EnvironmentInfo extends Message<EnvironmentInfo> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.EnvironmentInfo";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "exthost_platform", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "exthost_arch", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "exthost_release", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "exthost_shell", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "local_timestamp", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "exthost_platform", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "exthost_arch", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "exthost_release", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "exthost_shell", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "local_timestamp", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 6, name: "workspace_uris", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 7, name: "cursor_version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "is_remote", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 9, name: "local_os_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "home_directory", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 11, name: "local_timezone", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 7, name: "cursor_version", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "is_remote", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 9, name: "local_os_type", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 10, name: "home_directory", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 11, name: "local_timezone", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): EnvironmentInfo {
@@ -4989,7 +4989,7 @@ export class SelectionWithOrientation extends Message<SelectionWithOrientation> 
  */
 export class DocumentSymbolWithText extends Message<DocumentSymbolWithText> {
   /**
-   * @generated from field: aiserver.v1.DocumentSymbol symbol = 1;
+   * @generated from field: optional aiserver.v1.DocumentSymbol symbol = 1;
    */
   symbol?: DocumentSymbol;
 
@@ -5004,7 +5004,7 @@ export class DocumentSymbolWithText extends Message<DocumentSymbolWithText> {
   textInSymbolRange = "";
 
   /**
-   * @generated from field: aiserver.v1.UriComponents uri_components = 4;
+   * @generated from field: optional aiserver.v1.UriComponents uri_components = 4;
    */
   uriComponents?: UriComponents;
 
@@ -5016,10 +5016,10 @@ export class DocumentSymbolWithText extends Message<DocumentSymbolWithText> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.DocumentSymbolWithText";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "symbol", kind: "message", T: DocumentSymbol },
+    { no: 1, name: "symbol", kind: "message", T: DocumentSymbol, opt: true },
     { no: 2, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "text_in_symbol_range", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "uri_components", kind: "message", T: UriComponents },
+    { no: 4, name: "uri_components", kind: "message", T: UriComponents, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DocumentSymbolWithText {
@@ -5092,24 +5092,24 @@ export class UriComponents extends Message<UriComponents> {
   scheme = "";
 
   /**
-   * @generated from field: string authority = 2;
+   * @generated from field: optional string authority = 2;
    */
-  authority = "";
+  authority?: string;
 
   /**
-   * @generated from field: string path = 3;
+   * @generated from field: optional string path = 3;
    */
-  path = "";
+  path?: string;
 
   /**
-   * @generated from field: string query = 4;
+   * @generated from field: optional string query = 4;
    */
-  query = "";
+  query?: string;
 
   /**
-   * @generated from field: string fragment = 5;
+   * @generated from field: optional string fragment = 5;
    */
-  fragment = "";
+  fragment?: string;
 
   constructor(data?: PartialMessage<UriComponents>) {
     super();
@@ -5120,10 +5120,10 @@ export class UriComponents extends Message<UriComponents> {
   static readonly typeName = "aiserver.v1.UriComponents";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "scheme", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "authority", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "query", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "fragment", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "authority", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "query", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "fragment", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UriComponents {
@@ -5500,7 +5500,7 @@ export class SimpleFileChunk extends Message<SimpleFileChunk> {
   relativeWorkspacePath = "";
 
   /**
-   * @generated from field: aiserver.v1.SimplestRange range = 2;
+   * @generated from field: optional aiserver.v1.SimplestRange range = 2;
    */
   range?: SimplestRange;
 
@@ -5518,7 +5518,7 @@ export class SimpleFileChunk extends Message<SimpleFileChunk> {
   static readonly typeName = "aiserver.v1.SimpleFileChunk";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "range", kind: "message", T: SimplestRange },
+    { no: 2, name: "range", kind: "message", T: SimplestRange, opt: true },
     { no: 3, name: "chunk_hash", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
@@ -5549,12 +5549,12 @@ export class SimpleUnaryCrossExtensionHostMessage extends Message<SimpleUnaryCro
   message = new Uint8Array(0);
 
   /**
-   * @generated from field: aiserver.v1.CrossExtHostHeaders header = 2;
+   * @generated from field: optional aiserver.v1.CrossExtHostHeaders header = 2;
    */
   header?: CrossExtHostHeaders;
 
   /**
-   * @generated from field: aiserver.v1.CrossExtHostHeaders trailer = 3;
+   * @generated from field: optional aiserver.v1.CrossExtHostHeaders trailer = 3;
    */
   trailer?: CrossExtHostHeaders;
 
@@ -5577,8 +5577,8 @@ export class SimpleUnaryCrossExtensionHostMessage extends Message<SimpleUnaryCro
   static readonly typeName = "aiserver.v1.SimpleUnaryCrossExtensionHostMessage";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "message", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
-    { no: 2, name: "header", kind: "message", T: CrossExtHostHeaders },
-    { no: 3, name: "trailer", kind: "message", T: CrossExtHostHeaders },
+    { no: 2, name: "header", kind: "message", T: CrossExtHostHeaders, opt: true },
+    { no: 3, name: "trailer", kind: "message", T: CrossExtHostHeaders, opt: true },
     { no: 4, name: "is_error", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 5, name: "connect_error", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);

@@ -18,7 +18,7 @@ message AiAttributionResult {
 
 message AiAttributionSuccess {
   string attribution_text = 1 [json_name = "attributionText"];
-  .agent.v1.OutputLocation output_location = 2 [json_name = "outputLocation"];
+  optional .agent.v1.OutputLocation output_location = 2 [json_name = "outputLocation"];
 }
 
 message AiAttributionError {
@@ -26,16 +26,16 @@ message AiAttributionError {
 }
 
 message AiAttributionToolCall {
-  .agent.v1.AiAttributionArgs args = 1 [json_name = "args"];
-  .agent.v1.AiAttributionResult result = 2 [json_name = "result"];
+  optional .agent.v1.AiAttributionArgs args = 1 [json_name = "args"];
+  optional .agent.v1.AiAttributionResult result = 2 [json_name = "result"];
 }
 
 message AiAttributionArgs {
-  int32 start_line = 2 [json_name = "startLine"];
-  int32 end_line = 3 [json_name = "endLine"];
+  optional int32 start_line = 2 [json_name = "startLine"];
+  optional int32 end_line = 3 [json_name = "endLine"];
   repeated string file_paths = 5 [json_name = "filePaths"];
   repeated string commit_hashes = 6 [json_name = "commitHashes"];
-  string output_mode = 7 [json_name = "outputMode"];
-  int32 max_commits = 9 [json_name = "maxCommits"];
-  bool include_line_ranges = 10 [json_name = "includeLineRanges"];
+  optional string output_mode = 7 [json_name = "outputMode"];
+  optional int32 max_commits = 9 [json_name = "maxCommits"];
+  optional bool include_line_ranges = 10 [json_name = "includeLineRanges"];
 }

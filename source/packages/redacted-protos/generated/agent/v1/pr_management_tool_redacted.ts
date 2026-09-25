@@ -14,11 +14,11 @@ function toRedactedCreatePrAction(msg, privacyMode) {
     _privacyMode: privacyMode,
     title: createRedactedString(msg.title, DataClassification.CODE, "title", privacyMode),
     body: createRedactedString(msg.body, DataClassification.CODE, "body", privacyMode),
-    baseBranch: createRedactedString(msg.baseBranch, DataClassification.PATH, "base_branch", privacyMode),
+    baseBranch: msg.baseBranch !== void 0 ? createRedactedString(msg.baseBranch, DataClassification.PATH, "base_branch", privacyMode) : void 0,
     draft: msg.draft,
     branchName: createRedactedString(msg.branchName, DataClassification.PATH, "branch_name", privacyMode),
     addLabels: msg.addLabels.map((v2) => createRedactedString(v2, DataClassification.PATH, "add_labels", privacyMode)),
-    repoUrl: createRedactedString(msg.repoUrl, DataClassification.PATH, "repo_url", privacyMode),
+    repoUrl: msg.repoUrl !== void 0 ? createRedactedString(msg.repoUrl, DataClassification.PATH, "repo_url", privacyMode) : void 0,
     skipBranchPrefixCheck: msg.skipBranchPrefixCheck,
     stackOnPrNumber: msg.stackOnPrNumber,
   };
@@ -30,11 +30,11 @@ function fromRedactedCreatePrAction(msg, purpose, opts) {
   return new CreatePrAction({
     title: msg.title.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     body: msg.body.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    baseBranch: msg.baseBranch.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    baseBranch: msg.baseBranch?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     draft: msg.draft,
     branchName: msg.branchName.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     addLabels: msg.addLabels.map((v2) => v2.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing })),
-    repoUrl: msg.repoUrl.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    repoUrl: msg.repoUrl?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     skipBranchPrefixCheck: msg.skipBranchPrefixCheck,
     stackOnPrNumber: msg.stackOnPrNumber,
   });
@@ -44,8 +44,8 @@ function toRedactedGetCiStatusAction(msg, privacyMode) {
   return {
     _privacyMode: privacyMode,
     prUrl: msg.prUrl,
-    branchName: createRedactedString(msg.branchName, DataClassification.PATH, "branch_name", privacyMode),
-    repoUrl: createRedactedString(msg.repoUrl, DataClassification.PATH, "repo_url", privacyMode),
+    branchName: msg.branchName !== void 0 ? createRedactedString(msg.branchName, DataClassification.PATH, "branch_name", privacyMode) : void 0,
+    repoUrl: msg.repoUrl !== void 0 ? createRedactedString(msg.repoUrl, DataClassification.PATH, "repo_url", privacyMode) : void 0,
   };
 }
 
@@ -54,8 +54,8 @@ function fromRedactedGetCiStatusAction(msg, purpose, opts) {
   const enforcing = opts?.enforcing;
   return new GetCiStatusAction({
     prUrl: msg.prUrl,
-    branchName: msg.branchName.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    repoUrl: msg.repoUrl.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    branchName: msg.branchName?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    repoUrl: msg.repoUrl?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
   });
 }
 
@@ -63,11 +63,11 @@ function toRedactedPostCommentAction(msg, privacyMode) {
   return {
     _privacyMode: privacyMode,
     prUrl: msg.prUrl,
-    branchName: createRedactedString(msg.branchName, DataClassification.PATH, "branch_name", privacyMode),
+    branchName: msg.branchName !== void 0 ? createRedactedString(msg.branchName, DataClassification.PATH, "branch_name", privacyMode) : void 0,
     body: createRedactedString(msg.body, DataClassification.CODE, "body", privacyMode),
-    repoUrl: createRedactedString(msg.repoUrl, DataClassification.PATH, "repo_url", privacyMode),
+    repoUrl: msg.repoUrl !== void 0 ? createRedactedString(msg.repoUrl, DataClassification.PATH, "repo_url", privacyMode) : void 0,
     inReplyTo: msg.inReplyTo,
-    path: createRedactedString(msg.path, DataClassification.PATH, "path", privacyMode),
+    path: msg.path !== void 0 ? createRedactedString(msg.path, DataClassification.PATH, "path", privacyMode) : void 0,
     line: msg.line,
     startLine: msg.startLine,
     side: msg.side,
@@ -80,11 +80,11 @@ function fromRedactedPostCommentAction(msg, purpose, opts) {
   const enforcing = opts?.enforcing;
   return new PostCommentAction({
     prUrl: msg.prUrl,
-    branchName: msg.branchName.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    branchName: msg.branchName?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     body: msg.body.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    repoUrl: msg.repoUrl.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    repoUrl: msg.repoUrl?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     inReplyTo: msg.inReplyTo,
-    path: msg.path.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    path: msg.path?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     line: msg.line,
     startLine: msg.startLine,
     side: msg.side,
@@ -199,7 +199,7 @@ function toRedactedPrManagementRegistered(msg, privacyMode) {
     message: createRedactedString(msg.message, DataClassification.CODE, "message", privacyMode),
     title: createRedactedString(msg.title, DataClassification.CODE, "title", privacyMode),
     body: createRedactedString(msg.body, DataClassification.CODE, "body", privacyMode),
-    baseBranch: createRedactedString(msg.baseBranch, DataClassification.PATH, "base_branch", privacyMode),
+    baseBranch: msg.baseBranch !== void 0 ? createRedactedString(msg.baseBranch, DataClassification.PATH, "base_branch", privacyMode) : void 0,
     draft: msg.draft,
     branchName: createRedactedString(msg.branchName, DataClassification.PATH, "branch_name", privacyMode),
   };
@@ -212,7 +212,7 @@ function fromRedactedPrManagementRegistered(msg, purpose, opts) {
     message: msg.message.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     title: msg.title.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     body: msg.body.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    baseBranch: msg.baseBranch.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    baseBranch: msg.baseBranch?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     draft: msg.draft,
     branchName: msg.branchName.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
   });
@@ -345,9 +345,9 @@ function toRedactedResolveCommentAction(msg, privacyMode) {
   return {
     _privacyMode: privacyMode,
     prUrl: msg.prUrl,
-    branchName: createRedactedString(msg.branchName, DataClassification.PATH, "branch_name", privacyMode),
+    branchName: msg.branchName !== void 0 ? createRedactedString(msg.branchName, DataClassification.PATH, "branch_name", privacyMode) : void 0,
     commentId: msg.commentId,
-    repoUrl: createRedactedString(msg.repoUrl, DataClassification.PATH, "repo_url", privacyMode),
+    repoUrl: msg.repoUrl !== void 0 ? createRedactedString(msg.repoUrl, DataClassification.PATH, "repo_url", privacyMode) : void 0,
     commentReference: msg.commentReference,
   };
 }
@@ -357,9 +357,9 @@ function fromRedactedResolveCommentAction(msg, purpose, opts) {
   const enforcing = opts?.enforcing;
   return new ResolveCommentAction({
     prUrl: msg.prUrl,
-    branchName: msg.branchName.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    branchName: msg.branchName?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     commentId: msg.commentId,
-    repoUrl: msg.repoUrl.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    repoUrl: msg.repoUrl?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     commentReference: msg.commentReference,
   });
 }
@@ -368,8 +368,8 @@ function toRedactedSetPrStatusAction(msg, privacyMode) {
   return {
     _privacyMode: privacyMode,
     prUrl: msg.prUrl,
-    branchName: createRedactedString(msg.branchName, DataClassification.PATH, "branch_name", privacyMode),
-    repoUrl: createRedactedString(msg.repoUrl, DataClassification.PATH, "repo_url", privacyMode),
+    branchName: msg.branchName !== void 0 ? createRedactedString(msg.branchName, DataClassification.PATH, "branch_name", privacyMode) : void 0,
+    repoUrl: msg.repoUrl !== void 0 ? createRedactedString(msg.repoUrl, DataClassification.PATH, "repo_url", privacyMode) : void 0,
     status: msg.status,
   };
 }
@@ -379,8 +379,8 @@ function fromRedactedSetPrStatusAction(msg, purpose, opts) {
   const enforcing = opts?.enforcing;
   return new SetPrStatusAction({
     prUrl: msg.prUrl,
-    branchName: msg.branchName.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    repoUrl: msg.repoUrl.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    branchName: msg.branchName?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    repoUrl: msg.repoUrl?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     status: msg.status,
   });
 }
@@ -389,13 +389,13 @@ function toRedactedUpdatePrAction(msg, privacyMode) {
   return {
     _privacyMode: privacyMode,
     prUrl: msg.prUrl,
-    title: createRedactedString(msg.title, DataClassification.CODE, "title", privacyMode),
-    body: createRedactedString(msg.body, DataClassification.CODE, "body", privacyMode),
-    baseBranch: createRedactedString(msg.baseBranch, DataClassification.PATH, "base_branch", privacyMode),
-    branchName: createRedactedString(msg.branchName, DataClassification.PATH, "branch_name", privacyMode),
+    title: msg.title !== void 0 ? createRedactedString(msg.title, DataClassification.CODE, "title", privacyMode) : void 0,
+    body: msg.body !== void 0 ? createRedactedString(msg.body, DataClassification.CODE, "body", privacyMode) : void 0,
+    baseBranch: msg.baseBranch !== void 0 ? createRedactedString(msg.baseBranch, DataClassification.PATH, "base_branch", privacyMode) : void 0,
+    branchName: msg.branchName !== void 0 ? createRedactedString(msg.branchName, DataClassification.PATH, "branch_name", privacyMode) : void 0,
     addLabels: msg.addLabels.map((v2) => createRedactedString(v2, DataClassification.PATH, "add_labels", privacyMode)),
     removeLabels: msg.removeLabels.map((v2) => createRedactedString(v2, DataClassification.PATH, "remove_labels", privacyMode)),
-    repoUrl: createRedactedString(msg.repoUrl, DataClassification.PATH, "repo_url", privacyMode),
+    repoUrl: msg.repoUrl !== void 0 ? createRedactedString(msg.repoUrl, DataClassification.PATH, "repo_url", privacyMode) : void 0,
     stackOnPrNumber: msg.stackOnPrNumber,
     clearStack: msg.clearStack,
     draft: msg.draft,
@@ -407,13 +407,13 @@ function fromRedactedUpdatePrAction(msg, purpose, opts) {
   const enforcing = opts?.enforcing;
   return new UpdatePrAction({
     prUrl: msg.prUrl,
-    title: msg.title.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    body: msg.body.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    baseBranch: msg.baseBranch.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
-    branchName: msg.branchName.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    title: msg.title?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    body: msg.body?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    baseBranch: msg.baseBranch?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    branchName: msg.branchName?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     addLabels: msg.addLabels.map((v2) => v2.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing })),
     removeLabels: msg.removeLabels.map((v2) => v2.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing })),
-    repoUrl: msg.repoUrl.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    repoUrl: msg.repoUrl?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
     stackOnPrNumber: msg.stackOnPrNumber,
     clearStack: msg.clearStack,
     draft: msg.draft,

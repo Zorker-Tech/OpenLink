@@ -144,7 +144,7 @@ export class SingleUpdateRequest extends Message<SingleUpdateRequest> {
   replacedString = "";
 
   /**
-   * @generated from field: aiserver.v1.SimpleRange range = 5;
+   * @generated from field: optional aiserver.v1.SimpleRange range = 5;
    */
   range?: SimpleRange;
 
@@ -160,7 +160,7 @@ export class SingleUpdateRequest extends Message<SingleUpdateRequest> {
     { no: 2, name: "end_position", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 3, name: "change_length", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 4, name: "replaced_string", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "range", kind: "message", T: SimpleRange },
+    { no: 5, name: "range", kind: "message", T: SimpleRange, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SingleUpdateRequest {
@@ -221,89 +221,89 @@ export class FSConfigResponse extends Message<FSConfigResponse> {
   checkFilesyncHashPercent = 0;
 
   /**
-   * @generated from field: int32 rate_limiter_breaker_reset_time_ms = 2;
+   * @generated from field: optional int32 rate_limiter_breaker_reset_time_ms = 2;
    */
-  rateLimiterBreakerResetTimeMs = 0;
+  rateLimiterBreakerResetTimeMs?: number;
 
   /**
-   * @generated from field: int32 rate_limiter_rps = 3;
+   * @generated from field: optional int32 rate_limiter_rps = 3;
    */
-  rateLimiterRps = 0;
+  rateLimiterRps?: number;
 
   /**
-   * @generated from field: int32 rate_limiter_burst_capacity = 4;
+   * @generated from field: optional int32 rate_limiter_burst_capacity = 4;
    */
-  rateLimiterBurstCapacity = 0;
+  rateLimiterBurstCapacity?: number;
 
   /**
-   * @generated from field: int32 max_recent_updates_stored = 5;
+   * @generated from field: optional int32 max_recent_updates_stored = 5;
    */
-  maxRecentUpdatesStored = 0;
+  maxRecentUpdatesStored?: number;
 
   /**
-   * @generated from field: int32 max_model_version_cache_size = 6;
+   * @generated from field: optional int32 max_model_version_cache_size = 6;
    */
-  maxModelVersionCacheSize = 0;
+  maxModelVersionCacheSize?: number;
 
   /**
-   * @generated from field: int32 max_file_size_to_sync_bytes = 7;
+   * @generated from field: optional int32 max_file_size_to_sync_bytes = 7;
    */
-  maxFileSizeToSyncBytes = 0;
+  maxFileSizeToSyncBytes?: number;
 
   /**
-   * @generated from field: int32 sync_retry_max_attempts = 8;
+   * @generated from field: optional int32 sync_retry_max_attempts = 8;
    */
-  syncRetryMaxAttempts = 0;
+  syncRetryMaxAttempts?: number;
 
   /**
-   * @generated from field: int32 sync_retry_initial_delay_ms = 9;
+   * @generated from field: optional int32 sync_retry_initial_delay_ms = 9;
    */
-  syncRetryInitialDelayMs = 0;
+  syncRetryInitialDelayMs?: number;
 
   /**
-   * @generated from field: int32 sync_retry_time_multiplier = 10;
+   * @generated from field: optional int32 sync_retry_time_multiplier = 10;
    */
-  syncRetryTimeMultiplier = 0;
+  syncRetryTimeMultiplier?: number;
 
   /**
-   * @generated from field: int32 file_sync_status_max_cache_size = 11;
+   * @generated from field: optional int32 file_sync_status_max_cache_size = 11;
    */
-  fileSyncStatusMaxCacheSize = 0;
+  fileSyncStatusMaxCacheSize?: number;
 
   /**
-   * @generated from field: int32 successive_syncs_required_for_reliance = 12;
+   * @generated from field: optional int32 successive_syncs_required_for_reliance = 12;
    */
-  successiveSyncsRequiredForReliance = 0;
+  successiveSyncsRequiredForReliance?: number;
 
   /**
-   * @generated from field: int32 extra_successful_syncs_needed_after_errors = 13;
+   * @generated from field: optional int32 extra_successful_syncs_needed_after_errors = 13;
    */
-  extraSuccessfulSyncsNeededAfterErrors = 0;
+  extraSuccessfulSyncsNeededAfterErrors?: number;
 
   /**
-   * @generated from field: int32 big_change_stripping_threshold_bytes = 14;
+   * @generated from field: optional int32 big_change_stripping_threshold_bytes = 14;
    */
-  bigChangeStrippingThresholdBytes = 0;
+  bigChangeStrippingThresholdBytes?: number;
 
   /**
-   * @generated from field: int32 last_n_updates_to_send = 15;
+   * @generated from field: optional int32 last_n_updates_to_send = 15;
    */
-  lastNUpdatesToSend = 0;
+  lastNUpdatesToSend?: number;
 
   /**
-   * @generated from field: int32 file_sync_status_ttl_ms = 16;
+   * @generated from field: optional int32 file_sync_status_ttl_ms = 16;
    */
-  fileSyncStatusTtlMs = 0;
+  fileSyncStatusTtlMs?: number;
 
   /**
-   * @generated from field: int32 sync_debounce_ms = 17;
+   * @generated from field: optional int32 sync_debounce_ms = 17;
    */
-  syncDebounceMs = 0;
+  syncDebounceMs?: number;
 
   /**
-   * @generated from field: int32 sync_update_threshold = 18;
+   * @generated from field: optional int32 sync_update_threshold = 18;
    */
-  syncUpdateThreshold = 0;
+  syncUpdateThreshold?: number;
 
   constructor(data?: PartialMessage<FSConfigResponse>) {
     super();
@@ -314,23 +314,23 @@ export class FSConfigResponse extends Message<FSConfigResponse> {
   static readonly typeName = "aiserver.v1.FSConfigResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "check_filesync_hash_percent", kind: "scalar", T: 2 /* ScalarType.FLOAT */ },
-    { no: 2, name: "rate_limiter_breaker_reset_time_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "rate_limiter_rps", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 4, name: "rate_limiter_burst_capacity", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 5, name: "max_recent_updates_stored", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 6, name: "max_model_version_cache_size", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 7, name: "max_file_size_to_sync_bytes", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 8, name: "sync_retry_max_attempts", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 9, name: "sync_retry_initial_delay_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 10, name: "sync_retry_time_multiplier", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 11, name: "file_sync_status_max_cache_size", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 12, name: "successive_syncs_required_for_reliance", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 13, name: "extra_successful_syncs_needed_after_errors", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 14, name: "big_change_stripping_threshold_bytes", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 15, name: "last_n_updates_to_send", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 16, name: "file_sync_status_ttl_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 17, name: "sync_debounce_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 18, name: "sync_update_threshold", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 2, name: "rate_limiter_breaker_reset_time_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 3, name: "rate_limiter_rps", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 4, name: "rate_limiter_burst_capacity", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 5, name: "max_recent_updates_stored", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 6, name: "max_model_version_cache_size", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 7, name: "max_file_size_to_sync_bytes", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 8, name: "sync_retry_max_attempts", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 9, name: "sync_retry_initial_delay_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 10, name: "sync_retry_time_multiplier", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 11, name: "file_sync_status_max_cache_size", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 12, name: "successive_syncs_required_for_reliance", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 13, name: "extra_successful_syncs_needed_after_errors", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 14, name: "big_change_stripping_threshold_bytes", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 15, name: "last_n_updates_to_send", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 16, name: "file_sync_status_ttl_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 17, name: "sync_debounce_ms", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 18, name: "sync_update_threshold", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): FSConfigResponse {
@@ -380,12 +380,12 @@ export class FSGetFileContentsRequest extends Message<FSGetFileContentsRequest> 
   filesyncUpdates: FilesyncUpdateWithModelVersion[] = [];
 
   /**
-   * @generated from field: string sha256_hash = 6;
+   * @generated from field: optional string sha256_hash = 6;
    */
-  sha256Hash = "";
+  sha256Hash?: string;
 
   /**
-   * @generated from field: google.protobuf.Timestamp earliest_time = 7;
+   * @generated from field: optional google.protobuf.Timestamp earliest_time = 7;
    */
   earliestTime?: Timestamp;
 
@@ -402,8 +402,8 @@ export class FSGetFileContentsRequest extends Message<FSGetFileContentsRequest> 
     { no: 3, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "model_version", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 5, name: "filesync_updates", kind: "message", T: FilesyncUpdateWithModelVersion, repeated: true },
-    { no: 6, name: "sha256_hash", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "earliest_time", kind: "message", T: Timestamp },
+    { no: 6, name: "sha256_hash", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "earliest_time", kind: "message", T: Timestamp, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): FSGetFileContentsRequest {
@@ -433,9 +433,9 @@ export class FSGetFileContentsResponse extends Message<FSGetFileContentsResponse
   contents = "";
 
   /**
-   * @generated from field: string sha256_hash = 2;
+   * @generated from field: optional string sha256_hash = 2;
    */
-  sha256Hash = "";
+  sha256Hash?: string;
 
   constructor(data?: PartialMessage<FSGetFileContentsResponse>) {
     super();
@@ -446,7 +446,7 @@ export class FSGetFileContentsResponse extends Message<FSGetFileContentsResponse
   static readonly typeName = "aiserver.v1.FSGetFileContentsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "contents", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "sha256_hash", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "sha256_hash", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): FSGetFileContentsResponse {
@@ -563,9 +563,9 @@ export class FSGetMultiFileContentsResponse extends Message<FSGetMultiFileConten
  */
 export class FSInternalHealthCheckRequest extends Message<FSInternalHealthCheckRequest> {
   /**
-   * @generated from field: bool from_server = 1;
+   * @generated from field: optional bool from_server = 1;
    */
-  fromServer = false;
+  fromServer?: boolean;
 
   constructor(data?: PartialMessage<FSInternalHealthCheckRequest>) {
     super();
@@ -575,7 +575,7 @@ export class FSInternalHealthCheckRequest extends Message<FSInternalHealthCheckR
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.FSInternalHealthCheckRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "from_server", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 1, name: "from_server", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): FSInternalHealthCheckRequest {
@@ -829,9 +829,9 @@ export class FSUploadFileRequest extends Message<FSUploadFileRequest> {
   modelVersion = 0;
 
   /**
-   * @generated from field: string sha256_hash = 5;
+   * @generated from field: optional string sha256_hash = 5;
    */
-  sha256Hash = "";
+  sha256Hash?: string;
 
   constructor(data?: PartialMessage<FSUploadFileRequest>) {
     super();
@@ -845,7 +845,7 @@ export class FSUploadFileRequest extends Message<FSUploadFileRequest> {
     { no: 2, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "contents", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "model_version", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 5, name: "sha256_hash", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "sha256_hash", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): FSUploadFileRequest {
@@ -912,14 +912,14 @@ export class FileRequest extends Message<FileRequest> {
   relativeWorkspacePath = "";
 
   /**
-   * @generated from field: int32 requested_version = 2;
+   * @generated from field: optional int32 requested_version = 2;
    */
-  requestedVersion = 0;
+  requestedVersion?: number;
 
   /**
-   * @generated from field: string sha256_hash = 3;
+   * @generated from field: optional string sha256_hash = 3;
    */
-  sha256Hash = "";
+  sha256Hash?: string;
 
   /**
    * @generated from field: bool required = 4;
@@ -927,7 +927,7 @@ export class FileRequest extends Message<FileRequest> {
   required = false;
 
   /**
-   * @generated from field: google.protobuf.Timestamp earliest_time = 5;
+   * @generated from field: optional google.protobuf.Timestamp earliest_time = 5;
    */
   earliestTime?: Timestamp;
 
@@ -940,10 +940,10 @@ export class FileRequest extends Message<FileRequest> {
   static readonly typeName = "aiserver.v1.FileRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "requested_version", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 3, name: "sha256_hash", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "requested_version", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 3, name: "sha256_hash", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 4, name: "required", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 5, name: "earliest_time", kind: "message", T: Timestamp },
+    { no: 5, name: "earliest_time", kind: "message", T: Timestamp, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): FileRequest {
@@ -983,7 +983,7 @@ export class FileRetrieved extends Message<FileRetrieved> {
   modelVersion = 0;
 
   /**
-   * @generated from field: google.protobuf.Timestamp last_modified = 4;
+   * @generated from field: optional google.protobuf.Timestamp last_modified = 4;
    */
   lastModified?: Timestamp;
 
@@ -998,7 +998,7 @@ export class FileRetrieved extends Message<FileRetrieved> {
     { no: 1, name: "relative_workspace_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "contents", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "model_version", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 4, name: "last_modified", kind: "message", T: Timestamp },
+    { no: 4, name: "last_modified", kind: "message", T: Timestamp, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): FileRetrieved {

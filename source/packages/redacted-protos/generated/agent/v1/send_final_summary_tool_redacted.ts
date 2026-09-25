@@ -12,7 +12,7 @@ import { SendFinalSummaryArgs, SendFinalSummaryError, SendFinalSummaryResult, Se
 function toRedactedSendFinalSummaryArgs(msg, privacyMode) {
   return {
     _privacyMode: privacyMode,
-    finalSummary: createRedactedString(msg.finalSummary, DataClassification.CODE, "final_summary", privacyMode),
+    finalSummary: msg.finalSummary !== void 0 ? createRedactedString(msg.finalSummary, DataClassification.CODE, "final_summary", privacyMode) : void 0,
   };
 }
 
@@ -20,7 +20,7 @@ function fromRedactedSendFinalSummaryArgs(msg, purpose, opts) {
   const redactUnallowedFieldsInsteadOfThrowing = opts?.redactUnallowedFieldsInsteadOfThrowing ?? false;
   const enforcing = opts?.enforcing;
   return new SendFinalSummaryArgs({
-    finalSummary: msg.finalSummary.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    finalSummary: msg.finalSummary?.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
   });
 }
 

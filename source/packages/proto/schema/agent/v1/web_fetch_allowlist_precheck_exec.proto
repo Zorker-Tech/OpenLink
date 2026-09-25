@@ -9,7 +9,7 @@ package agent.v1;
 
 message WebFetchAllowlistPrecheckArgs {
   string url = 1 [json_name = "url"];
-  string tool_call_id = 2 [json_name = "toolCallId"];
+  optional string tool_call_id = 2 [json_name = "toolCallId"];
 }
 
 message WebFetchAllowlistPrecheckResult {

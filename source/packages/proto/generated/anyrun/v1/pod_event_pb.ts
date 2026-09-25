@@ -825,9 +825,9 @@ export class InstallCommand extends Message<InstallCommand> {
   command = "";
 
   /**
-   * @generated from field: string user = 3;
+   * @generated from field: optional string user = 3;
    */
-  user = "";
+  user?: string;
 
   /**
    * @generated from field: bool is_system = 4;
@@ -849,7 +849,7 @@ export class InstallCommand extends Message<InstallCommand> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "command", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "user", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "user", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 4, name: "is_system", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 5, name: "failure_tolerant", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
@@ -1309,14 +1309,14 @@ export class SpanStarted extends Message<SpanStarted> {
   name = "";
 
   /**
-   * @generated from field: string parent_span_id = 3;
+   * @generated from field: optional string parent_span_id = 3;
    */
-  parentSpanId = "";
+  parentSpanId?: string;
 
   /**
-   * @generated from field: string href = 5;
+   * @generated from field: optional string href = 5;
    */
-  href = "";
+  href?: string;
 
   constructor(data?: PartialMessage<SpanStarted>) {
     super();
@@ -1328,8 +1328,8 @@ export class SpanStarted extends Message<SpanStarted> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "span_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "parent_span_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "href", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "parent_span_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "href", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SpanStarted {

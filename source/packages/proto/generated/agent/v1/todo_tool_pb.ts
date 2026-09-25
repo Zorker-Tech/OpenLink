@@ -54,12 +54,12 @@ proto3.util.setEnumType(TodoStatus, "agent.v1.TodoStatus", [
  */
 export class UpdateTodosToolCall extends Message<UpdateTodosToolCall> {
   /**
-   * @generated from field: agent.v1.UpdateTodosArgs args = 1;
+   * @generated from field: optional agent.v1.UpdateTodosArgs args = 1;
    */
   args?: UpdateTodosArgs;
 
   /**
-   * @generated from field: agent.v1.UpdateTodosResult result = 2;
+   * @generated from field: optional agent.v1.UpdateTodosResult result = 2;
    */
   result?: UpdateTodosResult;
 
@@ -71,8 +71,8 @@ export class UpdateTodosToolCall extends Message<UpdateTodosToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.UpdateTodosToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: UpdateTodosArgs },
-    { no: 2, name: "result", kind: "message", T: UpdateTodosResult },
+    { no: 1, name: "args", kind: "message", T: UpdateTodosArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: UpdateTodosResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateTodosToolCall {
@@ -97,12 +97,12 @@ export class UpdateTodosToolCall extends Message<UpdateTodosToolCall> {
  */
 export class ReadTodosToolCall extends Message<ReadTodosToolCall> {
   /**
-   * @generated from field: agent.v1.ReadTodosArgs args = 1;
+   * @generated from field: optional agent.v1.ReadTodosArgs args = 1;
    */
   args?: ReadTodosArgs;
 
   /**
-   * @generated from field: agent.v1.ReadTodosResult result = 2;
+   * @generated from field: optional agent.v1.ReadTodosResult result = 2;
    */
   result?: ReadTodosResult;
 
@@ -114,8 +114,8 @@ export class ReadTodosToolCall extends Message<ReadTodosToolCall> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.ReadTodosToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: ReadTodosArgs },
-    { no: 2, name: "result", kind: "message", T: ReadTodosResult },
+    { no: 1, name: "args", kind: "message", T: ReadTodosArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: ReadTodosResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ReadTodosToolCall {

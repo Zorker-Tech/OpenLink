@@ -12,9 +12,9 @@ import "agent/v1/shell_exec.proto";
 message ShellAllowlistPrecheckArgs {
   string command = 1 [json_name = "command"];
   string working_directory = 2 [json_name = "workingDirectory"];
-  .agent.v1.ShellCommandParsingResult parsing_result = 3 [json_name = "parsingResult"];
-  .agent.v1.CommandClassifierResult classifier_result = 4 [json_name = "classifierResult"];
-  string tool_call_id = 5 [json_name = "toolCallId"];
+  optional .agent.v1.ShellCommandParsingResult parsing_result = 3 [json_name = "parsingResult"];
+  optional .agent.v1.CommandClassifierResult classifier_result = 4 [json_name = "classifierResult"];
+  optional string tool_call_id = 5 [json_name = "toolCallId"];
 }
 
 message ShellAllowlistPrecheckResult {

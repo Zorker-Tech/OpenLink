@@ -11,14 +11,14 @@ import "google/protobuf/struct.proto";
 
 message SmartModeClassifierArgs {
   string tool_call_id = 1 [json_name = "toolCallId"];
-  string parent_conversation_id = 2 [json_name = "parentConversationId"];
-  .agent.v1.SmartModeRiskTarget target = 3 [json_name = "target"];
+  optional string parent_conversation_id = 2 [json_name = "parentConversationId"];
+  optional .agent.v1.SmartModeRiskTarget target = 3 [json_name = "target"];
   repeated .agent.v1.SmartModeClassifierConversationMessage conversation_context = 4 [json_name = "conversationContext"];
 }
 
 message SmartModeRiskTarget {
   string action = 1 [json_name = "action"];
-  .google.protobuf.Struct arguments = 2 [json_name = "arguments"];
+  optional .google.protobuf.Struct arguments = 2 [json_name = "arguments"];
 }
 
 message SmartModeClassifierConversationMessage {
@@ -35,8 +35,8 @@ message SmartModeClassifierResult {
 
 message SmartModeClassifierSuccess {
   .agent.v1.SmartModeClassifierDecision decision = 1 [json_name = "decision"];
-  string block_reason = 2 [json_name = "blockReason"];
-  string proposed_allow_rule = 3 [json_name = "proposedAllowRule"];
+  optional string block_reason = 2 [json_name = "blockReason"];
+  optional string proposed_allow_rule = 3 [json_name = "proposedAllowRule"];
 }
 
 message SmartModeClassifierError {

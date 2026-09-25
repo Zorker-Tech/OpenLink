@@ -16,12 +16,12 @@ import { Message, proto3 } from "@bufbuild/protobuf";
  */
 export class SendFinalSummaryToolCall extends Message<SendFinalSummaryToolCall> {
   /**
-   * @generated from field: agent.v1.SendFinalSummaryArgs args = 1;
+   * @generated from field: optional agent.v1.SendFinalSummaryArgs args = 1;
    */
   args?: SendFinalSummaryArgs;
 
   /**
-   * @generated from field: agent.v1.SendFinalSummaryResult result = 2;
+   * @generated from field: optional agent.v1.SendFinalSummaryResult result = 2;
    */
   result?: SendFinalSummaryResult;
 
@@ -33,8 +33,8 @@ export class SendFinalSummaryToolCall extends Message<SendFinalSummaryToolCall> 
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.SendFinalSummaryToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "args", kind: "message", T: SendFinalSummaryArgs },
-    { no: 2, name: "result", kind: "message", T: SendFinalSummaryResult },
+    { no: 1, name: "args", kind: "message", T: SendFinalSummaryArgs, opt: true },
+    { no: 2, name: "result", kind: "message", T: SendFinalSummaryResult, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SendFinalSummaryToolCall {
@@ -59,9 +59,9 @@ export class SendFinalSummaryToolCall extends Message<SendFinalSummaryToolCall> 
  */
 export class SendFinalSummaryArgs extends Message<SendFinalSummaryArgs> {
   /**
-   * @generated from field: string final_summary = 1;
+   * @generated from field: optional string final_summary = 1;
    */
-  finalSummary = "";
+  finalSummary?: string;
 
   constructor(data?: PartialMessage<SendFinalSummaryArgs>) {
     super();
@@ -71,7 +71,7 @@ export class SendFinalSummaryArgs extends Message<SendFinalSummaryArgs> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.SendFinalSummaryArgs";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "final_summary", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "final_summary", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SendFinalSummaryArgs {

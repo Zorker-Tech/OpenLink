@@ -10,7 +10,7 @@ package agent.v1;
 message ConversationSearchArgs {
   string query = 1 [json_name = "query"];
   string tool_call_id = 2 [json_name = "toolCallId"];
-  int32 limit = 3 [json_name = "limit"];
+  optional int32 limit = 3 [json_name = "limit"];
 }
 
 message ConversationSearchResult {
@@ -36,7 +36,7 @@ message ConversationSearchHit {
   string title = 2 [json_name = "title"];
   .agent.v1.ConversationSearchSource source = 3 [json_name = "source"];
   int64 updated_at_ms = 4 [json_name = "updatedAtMs"];
-  string snippet = 5 [json_name = "snippet"];
+  optional string snippet = 5 [json_name = "snippet"];
 }
 
 enum ConversationSearchSource {

@@ -1,4 +1,4 @@
-// aiserver.v1 — aiserver/v1/sand_box messages, enums and services.
+// aiserver.v1 — aiserver/v1/sandbox messages, enums and services.
 //
 // Generated from this repository's schema (source/packages/proto/schema) by
 // `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
@@ -724,29 +724,29 @@ export class AdminSandBoxHostStatusResponse extends Message<AdminSandBoxHostStat
   gatewayReachable = false;
 
   /**
-   * @generated from field: string host_version = 2;
+   * @generated from field: optional string host_version = 2;
    */
-  hostVersion = "";
+  hostVersion?: string;
 
   /**
-   * @generated from field: bool host_update_available = 3;
+   * @generated from field: optional bool host_update_available = 3;
    */
-  hostUpdateAvailable = false;
+  hostUpdateAvailable?: boolean;
 
   /**
-   * @generated from field: string latest_host_version = 4;
+   * @generated from field: optional string latest_host_version = 4;
    */
-  latestHostVersion = "";
+  latestHostVersion?: string;
 
   /**
-   * @generated from field: bool is_busy = 5;
+   * @generated from field: optional bool is_busy = 5;
    */
-  isBusy = false;
+  isBusy?: boolean;
 
   /**
-   * @generated from field: int64 last_busy_at_ms = 6;
+   * @generated from field: optional int64 last_busy_at_ms = 6;
    */
-  lastBusyAtMs = protoInt64.zero;
+  lastBusyAtMs?: bigint;
 
   constructor(data?: PartialMessage<AdminSandBoxHostStatusResponse>) {
     super();
@@ -757,11 +757,11 @@ export class AdminSandBoxHostStatusResponse extends Message<AdminSandBoxHostStat
   static readonly typeName = "aiserver.v1.AdminSandBoxHostStatusResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "gateway_reachable", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 2, name: "host_version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "host_update_available", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 4, name: "latest_host_version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "is_busy", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 6, name: "last_busy_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
+    { no: 2, name: "host_version", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "host_update_available", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 4, name: "latest_host_version", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 5, name: "is_busy", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 6, name: "last_busy_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AdminSandBoxHostStatusResponse {
@@ -1354,9 +1354,9 @@ export class EnsureSandBoxResponse extends Message<EnsureSandBoxResponse> {
   terminalsFolder = "";
 
   /**
-   * @generated from field: bool image_update_available = 9;
+   * @generated from field: optional bool image_update_available = 9;
    */
-  imageUpdateAvailable = false;
+  imageUpdateAvailable?: boolean;
 
   /**
    * @generated from field: string gateway_url = 10;
@@ -1389,7 +1389,7 @@ export class EnsureSandBoxResponse extends Message<EnsureSandBoxResponse> {
     { no: 6, name: "exec_daemon_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 7, name: "vnc_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 8, name: "terminals_folder", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "image_update_available", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 9, name: "image_update_available", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 10, name: "gateway_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 11, name: "gateway_token", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 12, name: "fork_vnc_base_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
@@ -1521,9 +1521,9 @@ export class GetSandBoxRunStateResponse extends Message<GetSandBoxRunStateRespon
   state = SandBoxRunState.UNSPECIFIED;
 
   /**
-   * @generated from field: bool image_update_available = 2;
+   * @generated from field: optional bool image_update_available = 2;
    */
-  imageUpdateAvailable = false;
+  imageUpdateAvailable?: boolean;
 
   constructor(data?: PartialMessage<GetSandBoxRunStateResponse>) {
     super();
@@ -1534,7 +1534,7 @@ export class GetSandBoxRunStateResponse extends Message<GetSandBoxRunStateRespon
   static readonly typeName = "aiserver.v1.GetSandBoxRunStateResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "state", kind: "enum", T: proto3.getEnumType(SandBoxRunState) },
-    { no: 2, name: "image_update_available", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "image_update_available", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetSandBoxRunStateResponse {
@@ -2959,7 +2959,7 @@ export class SandBoxStoreMultipartUploadedPart extends Message<SandBoxStoreMulti
  */
 export class SandBoxStoreMultipartWriteAbort extends Message<SandBoxStoreMultipartWriteAbort> {
   /**
-   * @generated from field: aiserver.v1.SandBoxStoreMultipartUploadContext context = 1;
+   * @generated from field: optional aiserver.v1.SandBoxStoreMultipartUploadContext context = 1;
    */
   context?: SandBoxStoreMultipartUploadContext;
 
@@ -2971,7 +2971,7 @@ export class SandBoxStoreMultipartWriteAbort extends Message<SandBoxStoreMultipa
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SandBoxStoreMultipartWriteAbort";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "context", kind: "message", T: SandBoxStoreMultipartUploadContext },
+    { no: 1, name: "context", kind: "message", T: SandBoxStoreMultipartUploadContext, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SandBoxStoreMultipartWriteAbort {
@@ -2996,7 +2996,7 @@ export class SandBoxStoreMultipartWriteAbort extends Message<SandBoxStoreMultipa
  */
 export class SandBoxStoreMultipartWriteCompletion extends Message<SandBoxStoreMultipartWriteCompletion> {
   /**
-   * @generated from field: aiserver.v1.SandBoxStoreMultipartUploadContext context = 1;
+   * @generated from field: optional aiserver.v1.SandBoxStoreMultipartUploadContext context = 1;
    */
   context?: SandBoxStoreMultipartUploadContext;
 
@@ -3013,7 +3013,7 @@ export class SandBoxStoreMultipartWriteCompletion extends Message<SandBoxStoreMu
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SandBoxStoreMultipartWriteCompletion";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "context", kind: "message", T: SandBoxStoreMultipartUploadContext },
+    { no: 1, name: "context", kind: "message", T: SandBoxStoreMultipartUploadContext, opt: true },
     { no: 2, name: "parts", kind: "message", T: SandBoxStoreMultipartUploadedPart, repeated: true },
   ]);
 
@@ -3039,7 +3039,7 @@ export class SandBoxStoreMultipartWriteCompletion extends Message<SandBoxStoreMu
  */
 export class SandBoxStoreMultipartWriteInstruction extends Message<SandBoxStoreMultipartWriteInstruction> {
   /**
-   * @generated from field: aiserver.v1.SandBoxStoreMultipartUploadContext context = 1;
+   * @generated from field: optional aiserver.v1.SandBoxStoreMultipartUploadContext context = 1;
    */
   context?: SandBoxStoreMultipartUploadContext;
 
@@ -3061,7 +3061,7 @@ export class SandBoxStoreMultipartWriteInstruction extends Message<SandBoxStoreM
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SandBoxStoreMultipartWriteInstruction";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "context", kind: "message", T: SandBoxStoreMultipartUploadContext },
+    { no: 1, name: "context", kind: "message", T: SandBoxStoreMultipartUploadContext, opt: true },
     { no: 2, name: "parts", kind: "message", T: SandBoxStoreMultipartUploadPartInstruction, repeated: true },
     { no: 3, name: "part_urls_expires_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
   ]);
@@ -3384,7 +3384,7 @@ export class SandBoxStoreWriteInstruction extends Message<SandBoxStoreWriteInstr
   expiresAtMs = protoInt64.zero;
 
   /**
-   * @generated from field: aiserver.v1.SandBoxStoreMultipartWriteInstruction multipart = 5;
+   * @generated from field: optional aiserver.v1.SandBoxStoreMultipartWriteInstruction multipart = 5;
    */
   multipart?: SandBoxStoreMultipartWriteInstruction;
 
@@ -3400,7 +3400,7 @@ export class SandBoxStoreWriteInstruction extends Message<SandBoxStoreWriteInstr
     { no: 2, name: "url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "headers", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
     { no: 4, name: "expires_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 5, name: "multipart", kind: "message", T: SandBoxStoreMultipartWriteInstruction },
+    { no: 5, name: "multipart", kind: "message", T: SandBoxStoreMultipartWriteInstruction, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SandBoxStoreWriteInstruction {
@@ -3435,9 +3435,9 @@ export class SandSetupManifestEntry extends Message<SandSetupManifestEntry> {
   setup = "";
 
   /**
-   * @generated from field: string check = 3;
+   * @generated from field: optional string check = 3;
    */
-  check = "";
+  check?: string;
 
   constructor(data?: PartialMessage<SandSetupManifestEntry>) {
     super();
@@ -3449,7 +3449,7 @@ export class SandSetupManifestEntry extends Message<SandSetupManifestEntry> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "setup", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "check", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "check", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SandSetupManifestEntry {
@@ -3578,7 +3578,7 @@ export class SaveTeamSandSetupManifestRequest extends Message<SaveTeamSandSetupM
  */
 export class SaveTeamSandSetupManifestResponse extends Message<SaveTeamSandSetupManifestResponse> {
   /**
-   * @generated from field: aiserver.v1.SandTeamSetupManifest manifest = 1;
+   * @generated from field: optional aiserver.v1.SandTeamSetupManifest manifest = 1;
    */
   manifest?: SandTeamSetupManifest;
 
@@ -3590,7 +3590,7 @@ export class SaveTeamSandSetupManifestResponse extends Message<SaveTeamSandSetup
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "aiserver.v1.SaveTeamSandSetupManifestResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "manifest", kind: "message", T: SandTeamSetupManifest },
+    { no: 1, name: "manifest", kind: "message", T: SandTeamSetupManifest, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SaveTeamSandSetupManifestResponse {
@@ -3732,29 +3732,29 @@ export class TeamMemberSandBoxPod extends Message<TeamMemberSandBoxPod> {
   runState = "";
 
   /**
-   * @generated from field: string image_tag = 6;
+   * @generated from field: optional string image_tag = 6;
    */
-  imageTag = "";
+  imageTag?: string;
 
   /**
-   * @generated from field: int64 created_at_ms = 7;
+   * @generated from field: optional int64 created_at_ms = 7;
    */
-  createdAtMs = protoInt64.zero;
+  createdAtMs?: bigint;
 
   /**
-   * @generated from field: int64 last_active_at_ms = 8;
+   * @generated from field: optional int64 last_active_at_ms = 8;
    */
-  lastActiveAtMs = protoInt64.zero;
+  lastActiveAtMs?: bigint;
 
   /**
-   * @generated from field: string node_id = 9;
+   * @generated from field: optional string node_id = 9;
    */
-  nodeId = "";
+  nodeId?: string;
 
   /**
-   * @generated from field: string failure_reason = 10;
+   * @generated from field: optional string failure_reason = 10;
    */
-  failureReason = "";
+  failureReason?: string;
 
   constructor(data?: PartialMessage<TeamMemberSandBoxPod>) {
     super();
@@ -3769,11 +3769,11 @@ export class TeamMemberSandBoxPod extends Message<TeamMemberSandBoxPod> {
     { no: 3, name: "tenant_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "flavor", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "run_state", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "image_tag", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 7, name: "created_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 8, name: "last_active_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 9, name: "node_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "failure_reason", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 6, name: "image_tag", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 7, name: "created_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
+    { no: 8, name: "last_active_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
+    { no: 9, name: "node_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 10, name: "failure_reason", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): TeamMemberSandBoxPod {

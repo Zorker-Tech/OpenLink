@@ -43,7 +43,7 @@ export class McpArgs extends Message<McpArgs> {
   toolName = "";
 
   /**
-   * @generated from field: agent.v1.SmartModeApproval smart_mode_approval = 6;
+   * @generated from field: optional agent.v1.SmartModeApproval smart_mode_approval = 6;
    */
   smartModeApproval?: SmartModeApproval;
 
@@ -75,7 +75,7 @@ export class McpArgs extends Message<McpArgs> {
     { no: 3, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "provider_identifier", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "tool_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "smart_mode_approval", kind: "message", T: SmartModeApproval },
+    { no: 6, name: "smart_mode_approval", kind: "message", T: SmartModeApproval, opt: true },
     { no: 7, name: "smart_mode_approval_only", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 8, name: "skip_approval", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 9, name: "server_identifier", kind: "scalar", T: 9 /* ScalarType.STRING */ },
@@ -103,9 +103,9 @@ export class McpArgs extends Message<McpArgs> {
  */
 export class ListMcpResourcesExecArgs extends Message<ListMcpResourcesExecArgs> {
   /**
-   * @generated from field: string server = 1;
+   * @generated from field: optional string server = 1;
    */
-  server = "";
+  server?: string;
 
   constructor(data?: PartialMessage<ListMcpResourcesExecArgs>) {
     super();
@@ -115,7 +115,7 @@ export class ListMcpResourcesExecArgs extends Message<ListMcpResourcesExecArgs> 
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "agent.v1.ListMcpResourcesExecArgs";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "server", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "server", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListMcpResourcesExecArgs {
@@ -150,9 +150,9 @@ export class ReadMcpResourceExecArgs extends Message<ReadMcpResourceExecArgs> {
   uri = "";
 
   /**
-   * @generated from field: string download_path = 3;
+   * @generated from field: optional string download_path = 3;
    */
-  downloadPath = "";
+  downloadPath?: string;
 
   /**
    * @generated from field: string tool_call_id = 4;
@@ -160,7 +160,7 @@ export class ReadMcpResourceExecArgs extends Message<ReadMcpResourceExecArgs> {
   toolCallId = "";
 
   /**
-   * @generated from field: agent.v1.SmartModeApproval smart_mode_approval = 5;
+   * @generated from field: optional agent.v1.SmartModeApproval smart_mode_approval = 5;
    */
   smartModeApproval?: SmartModeApproval;
 
@@ -174,9 +174,9 @@ export class ReadMcpResourceExecArgs extends Message<ReadMcpResourceExecArgs> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "server", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "uri", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "download_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "download_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 4, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "smart_mode_approval", kind: "message", T: SmartModeApproval },
+    { no: 5, name: "smart_mode_approval", kind: "message", T: SmartModeApproval, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ReadMcpResourceExecArgs {
@@ -391,19 +391,19 @@ export class ListMcpResourcesExecResult_McpResource extends Message<ListMcpResou
   uri = "";
 
   /**
-   * @generated from field: string name = 2;
+   * @generated from field: optional string name = 2;
    */
-  name = "";
+  name?: string;
 
   /**
-   * @generated from field: string description = 3;
+   * @generated from field: optional string description = 3;
    */
-  description = "";
+  description?: string;
 
   /**
-   * @generated from field: string mime_type = 4;
+   * @generated from field: optional string mime_type = 4;
    */
-  mimeType = "";
+  mimeType?: string;
 
   /**
    * @generated from field: string server = 5;
@@ -424,9 +424,9 @@ export class ListMcpResourcesExecResult_McpResource extends Message<ListMcpResou
   static readonly typeName = "agent.v1.ListMcpResourcesExecResult.McpResource";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "uri", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "mime_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "mime_type", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 5, name: "server", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 6, name: "annotations", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
   ]);
@@ -695,14 +695,14 @@ export class McpStateServer extends Message<McpStateServer> {
   serverIdentifier = "";
 
   /**
-   * @generated from field: string plugin = 3;
+   * @generated from field: optional string plugin = 3;
    */
-  plugin = "";
+  plugin?: string;
 
   /**
-   * @generated from field: string marketplace = 4;
+   * @generated from field: optional string marketplace = 4;
    */
-  marketplace = "";
+  marketplace?: string;
 
   /**
    * @generated from field: repeated agent.v1.McpToolDefinition tools = 5;
@@ -715,14 +715,14 @@ export class McpStateServer extends Message<McpStateServer> {
   instructions: McpInstructions[] = [];
 
   /**
-   * @generated from field: string status = 7;
+   * @generated from field: optional string status = 7;
    */
-  status = "";
+  status?: string;
 
   /**
-   * @generated from field: string error_message = 8;
+   * @generated from field: optional string error_message = 8;
    */
-  errorMessage = "";
+  errorMessage?: string;
 
   constructor(data?: PartialMessage<McpStateServer>) {
     super();
@@ -734,12 +734,12 @@ export class McpStateServer extends Message<McpStateServer> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "server_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "server_identifier", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "plugin", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "marketplace", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "plugin", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "marketplace", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 5, name: "tools", kind: "message", T: McpToolDefinition, repeated: true },
     { no: 6, name: "instructions", kind: "message", T: McpInstructions, repeated: true },
-    { no: 7, name: "status", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 7, name: "status", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 8, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): McpStateServer {
@@ -769,19 +769,19 @@ export class ReadMcpResourceSuccess extends Message<ReadMcpResourceSuccess> {
   uri = "";
 
   /**
-   * @generated from field: string name = 2;
+   * @generated from field: optional string name = 2;
    */
-  name = "";
+  name?: string;
 
   /**
-   * @generated from field: string description = 3;
+   * @generated from field: optional string description = 3;
    */
-  description = "";
+  description?: string;
 
   /**
-   * @generated from field: string mime_type = 4;
+   * @generated from field: optional string mime_type = 4;
    */
-  mimeType = "";
+  mimeType?: string;
 
   /**
    * @generated from field: map<string, string> annotations = 7;
@@ -789,12 +789,12 @@ export class ReadMcpResourceSuccess extends Message<ReadMcpResourceSuccess> {
   annotations: { [key: string]: string } = {};
 
   /**
-   * @generated from field: string download_path = 8;
+   * @generated from field: optional string download_path = 8;
    */
-  downloadPath = "";
+  downloadPath?: string;
 
   /**
-   * @generated from field: agent.v1.OutputLocation output_location = 9;
+   * @generated from field: optional agent.v1.OutputLocation output_location = 9;
    */
   outputLocation?: OutputLocation;
 
@@ -824,12 +824,12 @@ export class ReadMcpResourceSuccess extends Message<ReadMcpResourceSuccess> {
   static readonly typeName = "agent.v1.ReadMcpResourceSuccess";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "uri", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "mime_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 3, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 4, name: "mime_type", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 7, name: "annotations", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
-    { no: 8, name: "download_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "output_location", kind: "message", T: OutputLocation },
+    { no: 8, name: "download_path", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 9, name: "output_location", kind: "message", T: OutputLocation, opt: true },
     { no: 5, name: "text", kind: "scalar", T: 9 /* ScalarType.STRING */, oneof: "content" },
     { no: 6, name: "blob", kind: "scalar", T: 12 /* ScalarType.BYTES */, oneof: "content" },
   ]);
@@ -1100,7 +1100,7 @@ export class McpSuccess extends Message<McpSuccess> {
   isError = false;
 
   /**
-   * @generated from field: google.protobuf.Struct structured_content = 3;
+   * @generated from field: optional google.protobuf.Struct structured_content = 3;
    */
   structuredContent?: Struct;
 
@@ -1114,7 +1114,7 @@ export class McpSuccess extends Message<McpSuccess> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "content", kind: "message", T: McpToolResultContentItem, repeated: true },
     { no: 2, name: "is_error", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "structured_content", kind: "message", T: Struct },
+    { no: 3, name: "structured_content", kind: "message", T: Struct, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): McpSuccess {
@@ -1434,7 +1434,7 @@ export class McpTextContent extends Message<McpTextContent> {
   text = "";
 
   /**
-   * @generated from field: agent.v1.OutputLocation output_location = 2;
+   * @generated from field: optional agent.v1.OutputLocation output_location = 2;
    */
   outputLocation?: OutputLocation;
 
@@ -1447,7 +1447,7 @@ export class McpTextContent extends Message<McpTextContent> {
   static readonly typeName = "agent.v1.McpTextContent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "text", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "output_location", kind: "message", T: OutputLocation },
+    { no: 2, name: "output_location", kind: "message", T: OutputLocation, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): McpTextContent {

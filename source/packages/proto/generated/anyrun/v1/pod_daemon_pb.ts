@@ -111,19 +111,19 @@ export class ProcessSupervision extends Message<ProcessSupervision> {
   restartPolicy = RestartPolicy.UNSPECIFIED;
 
   /**
-   * @generated from field: anyrun.v1.RestartBackoff backoff = 2;
+   * @generated from field: optional anyrun.v1.RestartBackoff backoff = 2;
    */
   backoff?: RestartBackoff;
 
   /**
-   * @generated from field: anyrun.v1.HttpHealthCheck health_check = 3;
+   * @generated from field: optional anyrun.v1.HttpHealthCheck health_check = 3;
    */
   healthCheck?: HttpHealthCheck;
 
   /**
-   * @generated from field: string exclusive_group = 4;
+   * @generated from field: optional string exclusive_group = 4;
    */
-  exclusiveGroup = "";
+  exclusiveGroup?: string;
 
   constructor(data?: PartialMessage<ProcessSupervision>) {
     super();
@@ -134,9 +134,9 @@ export class ProcessSupervision extends Message<ProcessSupervision> {
   static readonly typeName = "anyrun.v1.ProcessSupervision";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "restart_policy", kind: "enum", T: proto3.getEnumType(RestartPolicy) },
-    { no: 2, name: "backoff", kind: "message", T: RestartBackoff },
-    { no: 3, name: "health_check", kind: "message", T: HttpHealthCheck },
-    { no: 4, name: "exclusive_group", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "backoff", kind: "message", T: RestartBackoff, opt: true },
+    { no: 3, name: "health_check", kind: "message", T: HttpHealthCheck, opt: true },
+    { no: 4, name: "exclusive_group", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ProcessSupervision {
@@ -300,9 +300,9 @@ export class AttachProcessRequest extends Message<AttachProcessRequest> {
   pid = protoInt64.zero;
 
   /**
-   * @generated from field: string last_event_id = 2;
+   * @generated from field: optional string last_event_id = 2;
    */
-  lastEventId = "";
+  lastEventId?: string;
 
   constructor(data?: PartialMessage<AttachProcessRequest>) {
     super();
@@ -313,7 +313,7 @@ export class AttachProcessRequest extends Message<AttachProcessRequest> {
   static readonly typeName = "anyrun.v1.AttachProcessRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "pid", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 2, name: "last_event_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "last_event_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): AttachProcessRequest {
@@ -358,12 +358,12 @@ export class CreateProcessRequest extends Message<CreateProcessRequest> {
   env: { [key: string]: string } = {};
 
   /**
-   * @generated from field: string idempotency_key = 5;
+   * @generated from field: optional string idempotency_key = 5;
    */
-  idempotencyKey = "";
+  idempotencyKey?: string;
 
   /**
-   * @generated from field: anyrun.v1.ProcessSupervision supervision = 6;
+   * @generated from field: optional anyrun.v1.ProcessSupervision supervision = 6;
    */
   supervision?: ProcessSupervision;
 
@@ -379,8 +379,8 @@ export class CreateProcessRequest extends Message<CreateProcessRequest> {
     { no: 2, name: "user", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "working_directory", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "env", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "scalar", T: 9 /* ScalarType.STRING */} },
-    { no: 5, name: "idempotency_key", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "supervision", kind: "message", T: ProcessSupervision },
+    { no: 5, name: "idempotency_key", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 6, name: "supervision", kind: "message", T: ProcessSupervision, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CreateProcessRequest {
@@ -415,9 +415,9 @@ export class CreateProcessResponse extends Message<CreateProcessResponse> {
   reusedExistingPid = false;
 
   /**
-   * @generated from field: int64 process_pid = 3;
+   * @generated from field: optional int64 process_pid = 3;
    */
-  processPid = protoInt64.zero;
+  processPid?: bigint;
 
   constructor(data?: PartialMessage<CreateProcessResponse>) {
     super();
@@ -429,7 +429,7 @@ export class CreateProcessResponse extends Message<CreateProcessResponse> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "pid", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 2, name: "reused_existing_pid", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "process_pid", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
+    { no: 3, name: "process_pid", kind: "scalar", T: 3 /* ScalarType.INT64 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CreateProcessResponse {
@@ -823,7 +823,7 @@ export class ListedProcess extends Message<ListedProcess> {
   pid = protoInt64.zero;
 
   /**
-   * @generated from field: anyrun.v1.GetProcessStatusResponse status = 2;
+   * @generated from field: optional anyrun.v1.GetProcessStatusResponse status = 2;
    */
   status?: GetProcessStatusResponse;
 
@@ -836,7 +836,7 @@ export class ListedProcess extends Message<ListedProcess> {
   static readonly typeName = "anyrun.v1.ListedProcess";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "pid", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
-    { no: 2, name: "status", kind: "message", T: GetProcessStatusResponse },
+    { no: 2, name: "status", kind: "message", T: GetProcessStatusResponse, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListedProcess {
@@ -926,19 +926,19 @@ export class PodMemoryBreakdown extends Message<PodMemoryBreakdown> {
   processRssCount = protoInt64.zero;
 
   /**
-   * @generated from field: uint64 cgroup_anon_bytes = 3;
+   * @generated from field: optional uint64 cgroup_anon_bytes = 3;
    */
-  cgroupAnonBytes = protoInt64.zero;
+  cgroupAnonBytes?: bigint;
 
   /**
-   * @generated from field: uint64 cgroup_file_bytes = 4;
+   * @generated from field: optional uint64 cgroup_file_bytes = 4;
    */
-  cgroupFileBytes = protoInt64.zero;
+  cgroupFileBytes?: bigint;
 
   /**
-   * @generated from field: uint64 cgroup_kernel_bytes = 5;
+   * @generated from field: optional uint64 cgroup_kernel_bytes = 5;
    */
-  cgroupKernelBytes = protoInt64.zero;
+  cgroupKernelBytes?: bigint;
 
   constructor(data?: PartialMessage<PodMemoryBreakdown>) {
     super();
@@ -950,9 +950,9 @@ export class PodMemoryBreakdown extends Message<PodMemoryBreakdown> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "all_process_rss_bytes", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
     { no: 2, name: "process_rss_count", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
-    { no: 3, name: "cgroup_anon_bytes", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
-    { no: 4, name: "cgroup_file_bytes", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
-    { no: 5, name: "cgroup_kernel_bytes", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
+    { no: 3, name: "cgroup_anon_bytes", kind: "scalar", T: 4 /* ScalarType.UINT64 */, opt: true },
+    { no: 4, name: "cgroup_file_bytes", kind: "scalar", T: 4 /* ScalarType.UINT64 */, opt: true },
+    { no: 5, name: "cgroup_kernel_bytes", kind: "scalar", T: 4 /* ScalarType.UINT64 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PodMemoryBreakdown {
@@ -1087,7 +1087,7 @@ export class PodMetricsSample extends Message<PodMetricsSample> {
   cpuPsiSomeAvg10 = 0;
 
   /**
-   * @generated from field: anyrun.v1.PodMemoryBreakdown memory_breakdown = 24;
+   * @generated from field: optional anyrun.v1.PodMemoryBreakdown memory_breakdown = 24;
    */
   memoryBreakdown?: PodMemoryBreakdown;
 
@@ -1121,7 +1121,7 @@ export class PodMetricsSample extends Message<PodMetricsSample> {
     { no: 21, name: "disk_usage_by_device", kind: "message", T: PodDiskUsage, repeated: true },
     { no: 22, name: "event_stream_subscribers_fell_behind_total", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
     { no: 23, name: "cpu_psi_some_avg10", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 24, name: "memory_breakdown", kind: "message", T: PodMemoryBreakdown },
+    { no: 24, name: "memory_breakdown", kind: "message", T: PodMemoryBreakdown, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PodMetricsSample {

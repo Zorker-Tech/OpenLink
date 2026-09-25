@@ -174,7 +174,7 @@ export class Diagnostic extends Message<Diagnostic> {
   severity = DiagnosticSeverity.UNSPECIFIED;
 
   /**
-   * @generated from field: agent.v1.Range range = 2;
+   * @generated from field: optional agent.v1.Range range = 2;
    */
   range?: Range;
 
@@ -207,7 +207,7 @@ export class Diagnostic extends Message<Diagnostic> {
   static readonly typeName = "agent.v1.Diagnostic";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "severity", kind: "enum", T: proto3.getEnumType(DiagnosticSeverity) },
-    { no: 2, name: "range", kind: "message", T: Range },
+    { no: 2, name: "range", kind: "message", T: Range, opt: true },
     { no: 3, name: "message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "source", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "code", kind: "scalar", T: 9 /* ScalarType.STRING */ },

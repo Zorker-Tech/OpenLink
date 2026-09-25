@@ -20,13 +20,13 @@ message SwitchModeRequestResponse {
 }
 
 message SwitchModeToolCall {
-  .agent.v1.SwitchModeArgs args = 1 [json_name = "args"];
-  .agent.v1.SwitchModeResult result = 2 [json_name = "result"];
+  optional .agent.v1.SwitchModeArgs args = 1 [json_name = "args"];
+  optional .agent.v1.SwitchModeResult result = 2 [json_name = "result"];
 }
 
 message SwitchModeArgs {
   string target_mode_id = 1 [json_name = "targetModeId"];
-  string explanation = 2 [json_name = "explanation"];
+  optional string explanation = 2 [json_name = "explanation"];
   string tool_call_id = 3 [json_name = "toolCallId"];
 }
 
@@ -52,5 +52,5 @@ message SwitchModeRejected {
 }
 
 message SwitchModeRequestQuery {
-  .agent.v1.SwitchModeArgs args = 1 [json_name = "args"];
+  optional .agent.v1.SwitchModeArgs args = 1 [json_name = "args"];
 }
