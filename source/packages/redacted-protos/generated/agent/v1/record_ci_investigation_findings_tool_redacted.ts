@@ -1,0 +1,206 @@
+// @ts-nocheck -- generated runtime: redaction changes a field's type structurally, so the
+// declaration pass for these modules is a separate mechanical step.
+//
+// @generated from this repository's schema and redaction annotations. Do not edit.
+//
+// Regenerate with `pnpm --filter @slate/work-host redaction:generate`.
+// Sensitive fields arrive as RedactedString/RedactedBytes; `fromRedacted*` asks for a purpose.
+import { DataClassification } from "../../../../redaction/classification.ts";
+import { createRedactedString } from "../../../../redaction/create.ts";
+import { RecordCiInvestigationFinding, RecordCiInvestigationFindingsArgs, RecordCiInvestigationFindingsError, RecordCiInvestigationFindingsResult, RecordCiInvestigationFindingsSuccess, RecordCiInvestigationFindingsToolCall, RecordCiInvestigationOverall } from "../../../../proto/generated/agent/v1/record_ci_investigation_findings_tool_pb.ts";
+
+function toRedactedRecordCiInvestigationFinding(msg, privacyMode) {
+  return {
+    _privacyMode: privacyMode,
+    checkName: msg.checkName,
+    detailsUrl: createRedactedString(msg.detailsUrl, DataClassification.PATH, "details_url", privacyMode),
+    tldr: createRedactedString(msg.tldr, DataClassification.CODE, "tldr", privacyMode),
+    rootCause: createRedactedString(msg.rootCause, DataClassification.CODE, "root_cause", privacyMode),
+    failingSignal: createRedactedString(msg.failingSignal, DataClassification.CODE, "failing_signal", privacyMode),
+    suggestedNextStep: createRedactedString(msg.suggestedNextStep, DataClassification.CODE, "suggested_next_step", privacyMode),
+    diffRelation: msg.diffRelation,
+    diffRelationEvidence: createRedactedString(msg.diffRelationEvidence, DataClassification.CODE, "diff_relation_evidence", privacyMode),
+    flakeAssessment: msg.flakeAssessment,
+    flakeEvidence: createRedactedString(msg.flakeEvidence, DataClassification.CODE, "flake_evidence", privacyMode),
+    rerunAvailable: msg.rerunAvailable,
+    rerunEvidence: createRedactedString(msg.rerunEvidence, DataClassification.CODE, "rerun_evidence", privacyMode),
+    recommendedAction: msg.recommendedAction,
+    recommendedActionEvidence: createRedactedString(msg.recommendedActionEvidence, DataClassification.CODE, "recommended_action_evidence", privacyMode),
+    confidence: msg.confidence,
+  };
+}
+
+function fromRedactedRecordCiInvestigationFinding(msg, purpose, opts) {
+  const redactUnallowedFieldsInsteadOfThrowing = opts?.redactUnallowedFieldsInsteadOfThrowing ?? false;
+  const enforcing = opts?.enforcing;
+  return new RecordCiInvestigationFinding({
+    checkName: msg.checkName,
+    detailsUrl: msg.detailsUrl.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    tldr: msg.tldr.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    rootCause: msg.rootCause.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    failingSignal: msg.failingSignal.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    suggestedNextStep: msg.suggestedNextStep.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    diffRelation: msg.diffRelation,
+    diffRelationEvidence: msg.diffRelationEvidence.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    flakeAssessment: msg.flakeAssessment,
+    flakeEvidence: msg.flakeEvidence.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    rerunAvailable: msg.rerunAvailable,
+    rerunEvidence: msg.rerunEvidence.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    recommendedAction: msg.recommendedAction,
+    recommendedActionEvidence: msg.recommendedActionEvidence.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    confidence: msg.confidence,
+  });
+}
+
+function toRedactedRecordCiInvestigationFindingsArgs(msg, privacyMode) {
+  return {
+    _privacyMode: privacyMode,
+    findings: msg.findings.map((v2) => toRedactedRecordCiInvestigationFinding(v2, privacyMode)),
+    overall: msg.overall !== void 0 ? toRedactedRecordCiInvestigationOverall(msg.overall, privacyMode) : void 0,
+    toolCallId: msg.toolCallId,
+  };
+}
+
+function fromRedactedRecordCiInvestigationFindingsArgs(msg, purpose, opts) {
+  const redactUnallowedFieldsInsteadOfThrowing = opts?.redactUnallowedFieldsInsteadOfThrowing ?? false;
+  const enforcing = opts?.enforcing;
+  return new RecordCiInvestigationFindingsArgs({
+    findings: msg.findings.map((v2) => fromRedactedRecordCiInvestigationFinding(v2, purpose, opts)),
+    overall: msg.overall !== void 0 ? fromRedactedRecordCiInvestigationOverall(msg.overall, purpose, opts) : void 0,
+    toolCallId: msg.toolCallId,
+  });
+}
+
+function toRedactedRecordCiInvestigationFindingsError(msg, privacyMode) {
+  return {
+    _privacyMode: privacyMode,
+    error: createRedactedString(msg.error, DataClassification.CODE, "error", privacyMode),
+  };
+}
+
+function fromRedactedRecordCiInvestigationFindingsError(msg, purpose, opts) {
+  const redactUnallowedFieldsInsteadOfThrowing = opts?.redactUnallowedFieldsInsteadOfThrowing ?? false;
+  const enforcing = opts?.enforcing;
+  return new RecordCiInvestigationFindingsError({
+    error: msg.error.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+  });
+}
+
+function toRedactedRecordCiInvestigationFindingsResult_result(oneof, privacyMode) {
+  if (oneof === void 0) {
+    return { case: void 0, value: void 0 };
+  }
+  switch (oneof.case) {
+    case "success":
+      return { case: "success", value: toRedactedRecordCiInvestigationFindingsSuccess(oneof.value, privacyMode) };
+    case "error":
+      return { case: "error", value: toRedactedRecordCiInvestigationFindingsError(oneof.value, privacyMode) };
+    default:
+      return { case: void 0, value: void 0 };
+  }
+}
+
+function fromRedactedRecordCiInvestigationFindingsResult_result(oneof, purpose, opts) {
+  const redactUnallowedFieldsInsteadOfThrowing = opts?.redactUnallowedFieldsInsteadOfThrowing ?? false;
+  const enforcing = opts?.enforcing;
+  if (oneof === void 0) {
+    return { case: void 0, value: void 0 };
+  }
+  switch (oneof.case) {
+    case "success":
+      return { case: "success", value: fromRedactedRecordCiInvestigationFindingsSuccess(oneof.value, purpose, opts) };
+    case "error":
+      return { case: "error", value: fromRedactedRecordCiInvestigationFindingsError(oneof.value, purpose, opts) };
+    default:
+      return { case: void 0, value: void 0 };
+  }
+}
+
+function toRedactedRecordCiInvestigationFindingsResult(msg, privacyMode) {
+  return {
+    _privacyMode: privacyMode,
+    result: toRedactedRecordCiInvestigationFindingsResult_result(msg.result, privacyMode),
+  };
+}
+
+function fromRedactedRecordCiInvestigationFindingsResult(msg, purpose, opts) {
+  const redactUnallowedFieldsInsteadOfThrowing = opts?.redactUnallowedFieldsInsteadOfThrowing ?? false;
+  const enforcing = opts?.enforcing;
+  return new RecordCiInvestigationFindingsResult({
+    result: fromRedactedRecordCiInvestigationFindingsResult_result(msg.result, purpose, opts),
+  });
+}
+
+function toRedactedRecordCiInvestigationFindingsSuccess(msg, privacyMode) {
+  return {
+    _privacyMode: privacyMode,
+    message: createRedactedString(msg.message, DataClassification.CODE, "message", privacyMode),
+  };
+}
+
+function fromRedactedRecordCiInvestigationFindingsSuccess(msg, purpose, opts) {
+  const redactUnallowedFieldsInsteadOfThrowing = opts?.redactUnallowedFieldsInsteadOfThrowing ?? false;
+  const enforcing = opts?.enforcing;
+  return new RecordCiInvestigationFindingsSuccess({
+    message: msg.message.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+  });
+}
+
+function toRedactedRecordCiInvestigationFindingsToolCall(msg, privacyMode) {
+  return {
+    _privacyMode: privacyMode,
+    args: msg.args !== void 0 ? toRedactedRecordCiInvestigationFindingsArgs(msg.args, privacyMode) : void 0,
+    result: msg.result !== void 0 ? toRedactedRecordCiInvestigationFindingsResult(msg.result, privacyMode) : void 0,
+  };
+}
+
+function fromRedactedRecordCiInvestigationFindingsToolCall(msg, purpose, opts) {
+  const redactUnallowedFieldsInsteadOfThrowing = opts?.redactUnallowedFieldsInsteadOfThrowing ?? false;
+  const enforcing = opts?.enforcing;
+  return new RecordCiInvestigationFindingsToolCall({
+    args: msg.args !== void 0 ? fromRedactedRecordCiInvestigationFindingsArgs(msg.args, purpose, opts) : void 0,
+    result: msg.result !== void 0 ? fromRedactedRecordCiInvestigationFindingsResult(msg.result, purpose, opts) : void 0,
+  });
+}
+
+function toRedactedRecordCiInvestigationOverall(msg, privacyMode) {
+  return {
+    _privacyMode: privacyMode,
+    summary: createRedactedString(msg.summary, DataClassification.CODE, "summary", privacyMode),
+    themes: msg.themes.map((v2) => createRedactedString(v2, DataClassification.CODE, "themes", privacyMode)),
+    recommendedAction: msg.recommendedAction,
+    recommendedActionEvidence: createRedactedString(msg.recommendedActionEvidence, DataClassification.CODE, "recommended_action_evidence", privacyMode),
+    checkKeys: msg.checkKeys,
+  };
+}
+
+function fromRedactedRecordCiInvestigationOverall(msg, purpose, opts) {
+  const redactUnallowedFieldsInsteadOfThrowing = opts?.redactUnallowedFieldsInsteadOfThrowing ?? false;
+  const enforcing = opts?.enforcing;
+  return new RecordCiInvestigationOverall({
+    summary: msg.summary.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    themes: msg.themes.map((v2) => v2.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing })),
+    recommendedAction: msg.recommendedAction,
+    recommendedActionEvidence: msg.recommendedActionEvidence.unwrap(purpose, { redactUnallowedFieldsInsteadOfThrowing, enforcing }),
+    checkKeys: msg.checkKeys,
+  });
+}
+
+export {
+  toRedactedRecordCiInvestigationFinding,
+  fromRedactedRecordCiInvestigationFinding,
+  toRedactedRecordCiInvestigationFindingsArgs,
+  fromRedactedRecordCiInvestigationFindingsArgs,
+  toRedactedRecordCiInvestigationFindingsError,
+  fromRedactedRecordCiInvestigationFindingsError,
+  toRedactedRecordCiInvestigationFindingsResult,
+  fromRedactedRecordCiInvestigationFindingsResult,
+  toRedactedRecordCiInvestigationFindingsResult_result,
+  fromRedactedRecordCiInvestigationFindingsResult_result,
+  toRedactedRecordCiInvestigationFindingsSuccess,
+  fromRedactedRecordCiInvestigationFindingsSuccess,
+  toRedactedRecordCiInvestigationFindingsToolCall,
+  fromRedactedRecordCiInvestigationFindingsToolCall,
+  toRedactedRecordCiInvestigationOverall,
+  fromRedactedRecordCiInvestigationOverall,
+};
