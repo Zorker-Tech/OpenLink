@@ -189,11 +189,18 @@ function parseJsonArgsWithZodSchema(args: string, schema: ZodTypeAny): unknown {
   return parsed.data
 }
 
+/** The kind of call a tool was invoked as, which is all this wrapper reads off it. */
+function toolCallCase(value: unknown): string {
+  if (value === null || typeof value !== "object") return "unknown"
+  const tool = (value as { tool?: { case?: unknown } }).tool
+  return typeof tool?.case === "string" ? tool.case : "unknown"
+}
+
 /** Collects the streamed arguments, parses them, and only then runs the tool's own execution. */
 export const withSafeParsedArgs = (
   parametersSchema: ZodTypeAny | ((meta: ToolExecutionMetaLike) => ZodTypeAny),
   execute: (ctx: Context, interactionHandler: unknown, args: unknown, meta: ToolExecutionMetaLike) => Promise<unknown>,
-  initialToolCall: { tool?: { case?: string } | undefined },
+  initialToolCall: unknown,
   options?: { emitInitialPartialToolCall?: boolean },
 ) => async (
   ctx: Context,
@@ -206,15 +213,15 @@ export const withSafeParsedArgs = (
   let parsedArgs: unknown
   try {
     for await (const chunk of argsStream) args += chunk
-    const toolName = initialToolCall.tool?.case ?? "unknown"
+    const toolName = toolCallCase(initialToolCall)
     args = stripMarkerTokensFromArgs({ ctx, args, toolName, strip: needsMarkerTokenStripping(meta) })
     parsedArgs = parseJsonArgsWithZodSchema(args, typeof parametersSchema === "function" ? parametersSchema(meta) : parametersSchema)
   } catch (error) {
-    toolArgsParseSuccessRate.histogram(ctx, 0, { tool_name: initialToolCall.tool?.case ?? "unknown" })
+    toolArgsParseSuccessRate.histogram(ctx, 0, { tool_name: toolCallCase(initialToolCall) })
     if (error instanceof ToolCallArgParseError) throw error
     throw new ToolCallArgParseError(error instanceof Error ? error.message : "Invalid arguments")
   }
-  toolArgsParseSuccessRate.histogram(ctx, 1, { tool_name: initialToolCall.tool?.case ?? "unknown" })
+  toolArgsParseSuccessRate.histogram(ctx, 1, { tool_name: toolCallCase(initialToolCall) })
   using coreExecuteSpan = createSpan(ctx.withName("coreExecute"))
   return await execute(coreExecuteSpan.ctx, interactionHandler, parsedArgs, meta)
 }
