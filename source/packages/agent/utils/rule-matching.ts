@@ -21,7 +21,8 @@ export interface RulePathInput {
 }
 
 const SEP = "/"
-const RULES_SEGMENT = ".slate/rules"
+/** The directory rules live in on disk; it is the workspace's convention, not ours to rename. */
+const RULES_SEGMENT = ".cursor/rules"
 
 const normalizePath = (value: string): string => {
   const normalized = path.posix.normalize(normalizeToUnixPath(value))
@@ -35,7 +36,7 @@ function getRuleDir(rulePath: string): string {
   const literalRuleDir = path.posix.normalize(path.posix.dirname(normalizedPath))
   const segments = literalRuleDir.split(SEP)
   for (let index = segments.length - 2; index >= 0; index--) {
-    if (segments[index] === ".slate" && segments[index + 1] === "rules") {
+    if (segments[index] === ".cursor" && segments[index + 1] === "rules") {
       const parentSegments = segments.slice(0, index)
       return parentSegments.length === 0 ? SEP : parentSegments.join(SEP)
     }

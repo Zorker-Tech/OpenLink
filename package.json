@@ -23,9 +23,11 @@
     "@opentelemetry/api": "^1.9.0",
     "@slate/work-protocol": "workspace:*",
     "ai": "^4.3.17",
+    "gray-matter": "^4.0.3",
     "iconv-lite": "^0.7.0",
     "jschardet": "^3.1.4",
     "lru-cache": "^11.5.2",
+    "minimatch": "^9.0.9",
     "rxjs": "^7.8.1",
     "zod": "^3.25.76",
     "zod-to-json-schema": "^3.24.5"
