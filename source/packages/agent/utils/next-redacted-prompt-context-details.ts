@@ -34,12 +34,17 @@ export interface RedactedPromptTokenDetails {
 }
 
 export interface PromptTokenDetailsState {
-  tokenDetails: RedactedPromptTokenDetails
+  // The same field also carries the running counts the summarizer watches, so it is described as the
+  // redacted details plus those counts rather than as the details alone.
+  tokenDetails: RedactedPromptTokenDetails & {
+    readonly usedTokens?: number | undefined
+    readonly maxTokens?: number | undefined
+  }
   getPrivacyMode(): PrivacyMode
 }
 
 export interface PromptTokenDetailsConfig {
-  featureFlags?: { promptContextUsageTree?: boolean } | undefined
+  featureFlags?: { promptContextUsageTree?: boolean | undefined } | undefined
 }
 
 export function computeNextRedactedPromptContextDetails(
