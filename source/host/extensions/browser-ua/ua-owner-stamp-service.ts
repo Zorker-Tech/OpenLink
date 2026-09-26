@@ -7,7 +7,7 @@
 import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 
-import { parseJwtPayload } from "../../../shared/node/cursor-token.ts";
+import { parseJwtPayload } from "../../../shared/node/slate-token.ts";
 
 export const UA_OWNER_STAMP_PATH = "/tmp/slate-ua-user";
 export const UA_OWNER_STAMP_LENGTH = 16;
