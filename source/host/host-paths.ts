@@ -75,7 +75,7 @@ export function getSlateRootDir(homeDir = homedir()): string {
   const userDataDir = resolveSlateUserDataDir([], process.env);
   if (userDataDir != null) return join(userDataDir, SLATE_DATA_DIRNAME);
   const variant = getSlateVariant();
-  return variant === "slate" ? getSlateProductionRootDir(homeDir) : join(homeDir, ".cursor", variant);
+  return variant === "slate" ? getSlateProductionRootDir(homeDir) : join(homeDir, ".slate", variant);
 }
 
 export function reanchorSlatePath(storedPath: string): string {
