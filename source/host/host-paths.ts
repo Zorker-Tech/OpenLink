@@ -13,7 +13,7 @@ import { isPathWithin } from "../shared/node/paths.ts";
 import { findSystemErrno } from "../shared/system-errno.ts";
 
 export const SLATE_DATA_ROOT_ENV = "SLATE_DATA_ROOT";
-export const SLATE_PRODUCTION_DATA_DIRNAME = ".grokbot";
+export const SLATE_PRODUCTION_DATA_DIRNAME = ".slate";
 export const SLATE_USER_DATA_DIR_ENV = "SLATE_USER_DATA_DIR";
 export const SLATE_DATA_DIRNAME = "slate-data";
 export const USER_DATA_DIR_FLAG = "--user-data-dir";
@@ -81,7 +81,7 @@ export function getSlateRootDir(homeDir = homedir()): string {
 export function reanchorSlatePath(storedPath: string): string {
   const root = getSlateRootDir();
   if (isPathWithin(root, storedPath, { isInclusive: true })) return storedPath;
-  const match = /(?:[/\\]\.cursor[/\\]slate(?:-[^/\\]+)?|[/\\]\.grokbot)[/\\](.+)$/.exec(storedPath);
+  const match = /[/\\]\.slate(?:-[^/\\]+)?[/\\](.+)$/.exec(storedPath);
   if (match?.[1] == null) return storedPath;
   const segments = match[1].split(/[/\\]+/);
   if (segments.some((segment) => segment === "." || segment === "..")) return storedPath;
