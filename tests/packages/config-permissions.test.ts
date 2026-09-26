@@ -6,18 +6,18 @@ import path from "node:path"
 
 import {
   PermissionsFileProvider,
-} from "../../source/packages/cursor-config/permissions-file-provider.ts"
+} from "../../source/packages/config/permissions-file-provider.ts"
 import {
   parsePermissionsAutoRunConfig,
   parseProjectPermissionsFileConfig,
-} from "../../source/packages/cursor-config/project-permissions-file-provider.ts"
+} from "../../source/packages/config/project-permissions-file-provider.ts"
 import {
   getConfigDir,
   HASH_LENGTH,
   MAX_FULL_PATH_LENGTH,
   MAX_PREFIX_LENGTH_BEFORE_HASH,
   MAX_SOCKET_PATH_LENGTH,
-} from "../../source/packages/cursor-config/paths.ts"
+} from "../../source/packages/config/paths.ts"
 
 // ---------------------------------------------------------------------------------------------
 // where the configuration lives

@@ -8,7 +8,7 @@
 /* eslint-disable */
 // @ts-nocheck
 
-import { ApplyAutomationSpecRequest, ApplyAutomationSpecResponse, BuilderCompletionRequest, BuilderCompletionResponse, CancelAllAutomationRunsRequest, CancelAllAutomationRunsResponse, CancelAutomationRunRequest, CancelAutomationRunResponse, ConnectSentryCallbackRequest, ConnectSentryCallbackResponse, CreateAutomationRequest, CreateAutomationResponse, CreateWorkflowFromTemplateRequest, CreateWorkflowFromTemplateResponse, DeleteAutomationMemoryRequest, DeleteAutomationMemoryResponse, DeleteAutomationRequest, DeleteAutomationResponse, DisableAutomationForTeamShutdownRequest, DisableAutomationForTeamShutdownResponse, DisconnectSentryRequest, DisconnectSentryResponse, GetApprovalAgentAnalyticsRequest, GetApprovalAgentAnalyticsResponse, GetAutomationMemoryRequest, GetAutomationMemoryResponse, GetAutomationRequest, GetAutomationResponse, GetAutomationRunRequest, GetAutomationRunResponse, GetManagedAutomationTeamSettingsRequest, GetManagedAutomationTeamSettingsResponse, GetRunSummaryRequest, GetRunSummaryResponse, GetSecuritybotResolutionStatsRequest, GetSecuritybotResolutionStatsResponse, GetSentryAuthUrlRequest, GetSentryAuthUrlResponse, GetSentryProjectsRequest, GetSentryProjectsResponse, GetSentryStatusRequest, GetSentryStatusResponse, GetWorkflowTemplateRequest, GetWorkflowTemplateResponse, ListAllRunsRequest, ListAllRunsResponse, ListAutomationMemoriesRequest, ListAutomationMemoriesResponse, ListAutomationRunsRequest, ListAutomationRunsResponse, ListAutomationsRequest, ListAutomationsResponse, ListSandAutomationsRequest, ListWorkflowTemplatesRequest, ListWorkflowTemplatesResponse, ReassignAutomationOwnerRequest, ReassignAutomationOwnerResponse, RetryAutomationRunRequest, RetryAutomationRunResponse, TestAutomationFilterRequest, TestAutomationFilterResponse, TestAutomationRequest, TestAutomationResponse, UpdateAutomationAuthoringModeRequest, UpdateAutomationAuthoringModeResponse, UpdateAutomationMemoryRequest, UpdateAutomationMemoryResponse, UpdateAutomationRequest, UpdateAutomationResponse, UpdateManagedAutomationTeamSettingsRequest, UpdateManagedAutomationTeamSettingsResponse, ValidateAutomationSpecRequest, ValidateAutomationSpecResponse, ValidateAutomationToolsRequest, ValidateAutomationToolsResponse } from "./automations_pb.ts";
+import { ApplyAutomationSpecRequest, ApplyAutomationSpecResponse, BuilderCompletionRequest, BuilderCompletionResponse, CancelAllAutomationRunsRequest, CancelAllAutomationRunsResponse, CancelAutomationRunRequest, CancelAutomationRunResponse, ConnectSentryCallbackRequest, ConnectSentryCallbackResponse, CreateAutomationRequest, CreateAutomationResponse, CreateWorkflowFromTemplateRequest, CreateWorkflowFromTemplateResponse, DeleteAutomationMemoryRequest, DeleteAutomationMemoryResponse, DeleteAutomationRequest, DeleteAutomationResponse, DisableAutomationForTeamShutdownRequest, DisableAutomationForTeamShutdownResponse, DisconnectSentryRequest, DisconnectSentryResponse, GetApprovalAgentAnalyticsRequest, GetApprovalAgentAnalyticsResponse, GetAutomationMemoryRequest, GetAutomationMemoryResponse, GetAutomationRequest, GetAutomationResponse, GetAutomationRunRequest, GetAutomationRunResponse, GetManagedAutomationTeamSettingsRequest, GetManagedAutomationTeamSettingsResponse, GetRunSummaryRequest, GetRunSummaryResponse, GetSecuritybotResolutionStatsRequest, GetSecuritybotResolutionStatsResponse, GetSentryAuthUrlRequest, GetSentryAuthUrlResponse, GetSentryProjectsRequest, GetSentryProjectsResponse, GetSentryStatusRequest, GetSentryStatusResponse, GetWorkflowTemplateRequest, GetWorkflowTemplateResponse, ListAllRunsRequest, ListAllRunsResponse, ListAutomationMemoriesRequest, ListAutomationMemoriesResponse, ListAutomationRunsRequest, ListAutomationRunsResponse, ListAutomationsRequest, ListAutomationsResponse, ListSlateAutomationsRequest, ListWorkflowTemplatesRequest, ListWorkflowTemplatesResponse, ReassignAutomationOwnerRequest, ReassignAutomationOwnerResponse, RetryAutomationRunRequest, RetryAutomationRunResponse, TestAutomationFilterRequest, TestAutomationFilterResponse, TestAutomationRequest, TestAutomationResponse, UpdateAutomationAuthoringModeRequest, UpdateAutomationAuthoringModeResponse, UpdateAutomationMemoryRequest, UpdateAutomationMemoryResponse, UpdateAutomationRequest, UpdateAutomationResponse, UpdateManagedAutomationTeamSettingsRequest, UpdateManagedAutomationTeamSettingsResponse, ValidateAutomationSpecRequest, ValidateAutomationSpecResponse, ValidateAutomationToolsRequest, ValidateAutomationToolsResponse } from "./automations_pb.ts";
 import { MethodKind } from "@bufbuild/protobuf";
 
 /**
@@ -54,46 +54,46 @@ export const AutomationsService = {
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.AutomationsService.CreateSandAutomation
+     * @generated from rpc aiserver.v1.AutomationsService.CreateSlateAutomation
      */
-    createSandAutomation: {
-      name: "CreateSandAutomation",
+    createSlateAutomation: {
+      name: "CreateSlateAutomation",
       I: CreateAutomationRequest,
       O: CreateAutomationResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.AutomationsService.ListSandAutomations
+     * @generated from rpc aiserver.v1.AutomationsService.ListSlateAutomations
      */
-    listSandAutomations: {
-      name: "ListSandAutomations",
-      I: ListSandAutomationsRequest,
+    listSlateAutomations: {
+      name: "ListSlateAutomations",
+      I: ListSlateAutomationsRequest,
       O: ListAutomationsResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.AutomationsService.GetSandAutomation
+     * @generated from rpc aiserver.v1.AutomationsService.GetSlateAutomation
      */
-    getSandAutomation: {
-      name: "GetSandAutomation",
+    getSlateAutomation: {
+      name: "GetSlateAutomation",
       I: GetAutomationRequest,
       O: GetAutomationResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.AutomationsService.UpdateSandAutomation
+     * @generated from rpc aiserver.v1.AutomationsService.UpdateSlateAutomation
      */
-    updateSandAutomation: {
-      name: "UpdateSandAutomation",
+    updateSlateAutomation: {
+      name: "UpdateSlateAutomation",
       I: UpdateAutomationRequest,
       O: UpdateAutomationResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.AutomationsService.DeleteSandAutomation
+     * @generated from rpc aiserver.v1.AutomationsService.DeleteSlateAutomation
      */
-    deleteSandAutomation: {
-      name: "DeleteSandAutomation",
+    deleteSlateAutomation: {
+      name: "DeleteSlateAutomation",
       I: DeleteAutomationRequest,
       O: DeleteAutomationResponse,
       kind: MethodKind.Unary,

@@ -13,7 +13,7 @@ import grayMatter from "gray-matter";
 import { detectHookConfigDialect, transformForeignHookConfig, type HookConfig } from "../hooks/foreign-hook-config.ts";
 import { validateHookConfig } from "../hooks/hook-config-validation.ts";
 import { PluginComponentDiscovery, type PluginComponentDescriptor, type PluginFileFetcher } from "./component-discovery.ts";
-import { DefaultPluginCacheManager } from "./cursor-marketplace.ts";
+import { DefaultPluginCacheManager } from "./marketplace.ts";
 import { isPathSafe, parsePluginManifest, PLUGIN_MANIFEST_PATHS, type PluginManifest, type PluginVariableSchema } from "./manifest-parser.ts";
 import { resolvePluginMcpConfigPaths, resolvePluginMcpConfigWithManifestLookup, type McpParserOptions, type ResolvedMcpConfig } from "./mcp-parser.ts";
 import { expandPluginVariables } from "./plugin-variables.ts";

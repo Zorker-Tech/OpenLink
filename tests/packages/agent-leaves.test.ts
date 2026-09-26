@@ -124,8 +124,8 @@ test("driving the desktop by script is refused, with the tool to use instead", (
 })
 
 test("the platform taking a screenshot through its own host is allowed", () => {
-  assert.equal(isInternalHostScreenshotShellCommand("control-sand screenshot --out /tmp/a.png"), true)
-  assert.equal(checkModelFacingShellUiAutomation("control-sand screenshot --out /tmp/a.png").allow, true)
+  assert.equal(isInternalHostScreenshotShellCommand("control-slate screenshot --out /tmp/a.png"), true)
+  assert.equal(checkModelFacingShellUiAutomation("control-slate screenshot --out /tmp/a.png").allow, true)
   assert.equal(isInternalHostScreenshotShellCommand("ls"), false)
 })
 

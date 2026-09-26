@@ -8,283 +8,283 @@
 /* eslint-disable */
 // @ts-nocheck
 
-import { AbortSandBoxStoreMultipartWritesRequest, AbortSandBoxStoreMultipartWritesResponse, AdminForceRecreateSandBoxRequest, AdminGetSandAgentTranscriptPageRequest, AdminGetSandAgentTranscriptPageResponse, AdminHibernateSandBoxRequest, AdminHibernateSandBoxResponse, AdminListSandAgentsRequest, AdminListSandAgentsResponse, AdminRecreateSandBoxRequest, AdminSandBoxHostStatusRequest, AdminSandBoxHostStatusResponse, AdminSandBoxStoreStatusRequest, AdminSandBoxStoreStatusResponse, AdminSnapshotSandBoxStoreRequest, AdminSnapshotSandBoxStoreResponse, AdminUpdateSandBoxHostRequest, AdminUpdateSandBoxHostResponse, AdminWatchSandBoxMigrationRequest, CompleteSandBoxStoreMultipartWritesRequest, CompleteSandBoxStoreMultipartWritesResponse, DeleteTeamSandSetupManifestRequest, DeleteTeamSandSetupManifestResponse, EnsureSandBoxRequest, EnsureSandBoxResponse, EnsureSandBoxWindowRequest, ForceRecreateSandBoxRequest, GetSandBoxRunStateRequest, GetSandBoxRunStateResponse, KillTeamMemberSandBoxRequest, KillTeamMemberSandBoxResponse, ListSandBoxesRequest, ListSandBoxesResponse, ListSandBoxStoreObjectsRequest, ListSandBoxStoreObjectsResponse, ListSandSetupManifestsRequest, ListSandSetupManifestsResponse, ListTeamMemberSandBoxesRequest, ListTeamMemberSandBoxesResponse, ListTeamSandSetupManifestsRequest, ListTeamSandSetupManifestsResponse, NotifySandAgentTurnFinishedRequest, NotifySandAgentTurnFinishedResponse, PresignSandBoxStoreReadsRequest, PresignSandBoxStoreReadsResponse, PresignSandBoxStoreWritesRequest, PresignSandBoxStoreWritesResponse, RecreateSandBoxRequest, RecreateSandBoxResponse, SandBoxMigrationEvent, SaveTeamSandSetupManifestRequest, SaveTeamSandSetupManifestResponse, StatSandBoxStoreObjectRequest, StatSandBoxStoreObjectResponse, WatchSandBoxMigrationRequest } from "./sandbox_pb.ts";
+import { AbortBoxStoreMultipartWritesRequest, AbortBoxStoreMultipartWritesResponse, AdminBoxHostStatusRequest, AdminBoxHostStatusResponse, AdminBoxStoreStatusRequest, AdminBoxStoreStatusResponse, AdminForceRecreateBoxRequest, AdminGetSlateAgentTranscriptPageRequest, AdminGetSlateAgentTranscriptPageResponse, AdminHibernateBoxRequest, AdminHibernateBoxResponse, AdminListSlateAgentsRequest, AdminListSlateAgentsResponse, AdminRecreateBoxRequest, AdminSnapshotBoxStoreRequest, AdminSnapshotBoxStoreResponse, AdminUpdateBoxHostRequest, AdminUpdateBoxHostResponse, AdminWatchBoxMigrationRequest, BoxMigrationEvent, CompleteBoxStoreMultipartWritesRequest, CompleteBoxStoreMultipartWritesResponse, DeleteTeamSlateSetupManifestRequest, DeleteTeamSlateSetupManifestResponse, EnsureBoxRequest, EnsureBoxResponse, EnsureBoxWindowRequest, ForceRecreateBoxRequest, GetBoxRunStateRequest, GetBoxRunStateResponse, KillTeamMemberBoxRequest, KillTeamMemberBoxResponse, ListBoxesRequest, ListBoxesResponse, ListBoxStoreObjectsRequest, ListBoxStoreObjectsResponse, ListSlateSetupManifestsRequest, ListSlateSetupManifestsResponse, ListTeamMemberBoxesRequest, ListTeamMemberBoxesResponse, ListTeamSlateSetupManifestsRequest, ListTeamSlateSetupManifestsResponse, NotifySlateAgentTurnFinishedRequest, NotifySlateAgentTurnFinishedResponse, PresignBoxStoreReadsRequest, PresignBoxStoreReadsResponse, PresignBoxStoreWritesRequest, PresignBoxStoreWritesResponse, RecreateBoxRequest, RecreateBoxResponse, SaveTeamSlateSetupManifestRequest, SaveTeamSlateSetupManifestResponse, StatBoxStoreObjectRequest, StatBoxStoreObjectResponse, WatchBoxMigrationRequest } from "./box_pb.ts";
 import { MethodKind } from "@bufbuild/protobuf";
 
 /**
- * @generated from service aiserver.v1.GrokBotService
+ * @generated from service aiserver.v1.SlateBotService
  */
-export const GrokBotService = {
-  typeName: "aiserver.v1.GrokBotService",
+export const SlateBotService = {
+  typeName: "aiserver.v1.SlateBotService",
   methods: {
     /**
-     * @generated from rpc aiserver.v1.GrokBotService.EnsureSandBox
+     * @generated from rpc aiserver.v1.SlateBotService.EnsureBox
      */
-    ensureSandBox: {
-      name: "EnsureSandBox",
-      I: EnsureSandBoxRequest,
-      O: EnsureSandBoxResponse,
+    ensureBox: {
+      name: "EnsureBox",
+      I: EnsureBoxRequest,
+      O: EnsureBoxResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.GrokBotService.EnsureSandBoxWindow
+     * @generated from rpc aiserver.v1.SlateBotService.EnsureBoxWindow
      */
-    ensureSandBoxWindow: {
-      name: "EnsureSandBoxWindow",
-      I: EnsureSandBoxWindowRequest,
-      O: EnsureSandBoxResponse,
+    ensureBoxWindow: {
+      name: "EnsureBoxWindow",
+      I: EnsureBoxWindowRequest,
+      O: EnsureBoxResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.GrokBotService.RecreateSandBox
+     * @generated from rpc aiserver.v1.SlateBotService.RecreateBox
      */
-    recreateSandBox: {
-      name: "RecreateSandBox",
-      I: RecreateSandBoxRequest,
-      O: RecreateSandBoxResponse,
+    recreateBox: {
+      name: "RecreateBox",
+      I: RecreateBoxRequest,
+      O: RecreateBoxResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.GrokBotService.ForceRecreateSandBox
+     * @generated from rpc aiserver.v1.SlateBotService.ForceRecreateBox
      */
-    forceRecreateSandBox: {
-      name: "ForceRecreateSandBox",
-      I: ForceRecreateSandBoxRequest,
-      O: RecreateSandBoxResponse,
+    forceRecreateBox: {
+      name: "ForceRecreateBox",
+      I: ForceRecreateBoxRequest,
+      O: RecreateBoxResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.GrokBotService.AdminRecreateSandBox
+     * @generated from rpc aiserver.v1.SlateBotService.AdminRecreateBox
      */
-    adminRecreateSandBox: {
-      name: "AdminRecreateSandBox",
-      I: AdminRecreateSandBoxRequest,
-      O: RecreateSandBoxResponse,
+    adminRecreateBox: {
+      name: "AdminRecreateBox",
+      I: AdminRecreateBoxRequest,
+      O: RecreateBoxResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.GrokBotService.AdminForceRecreateSandBox
+     * @generated from rpc aiserver.v1.SlateBotService.AdminForceRecreateBox
      */
-    adminForceRecreateSandBox: {
-      name: "AdminForceRecreateSandBox",
-      I: AdminForceRecreateSandBoxRequest,
-      O: RecreateSandBoxResponse,
+    adminForceRecreateBox: {
+      name: "AdminForceRecreateBox",
+      I: AdminForceRecreateBoxRequest,
+      O: RecreateBoxResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.GrokBotService.PresignSandBoxStoreWrites
+     * @generated from rpc aiserver.v1.SlateBotService.PresignBoxStoreWrites
      */
-    presignSandBoxStoreWrites: {
-      name: "PresignSandBoxStoreWrites",
-      I: PresignSandBoxStoreWritesRequest,
-      O: PresignSandBoxStoreWritesResponse,
+    presignBoxStoreWrites: {
+      name: "PresignBoxStoreWrites",
+      I: PresignBoxStoreWritesRequest,
+      O: PresignBoxStoreWritesResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.GrokBotService.CompleteSandBoxStoreMultipartWrites
+     * @generated from rpc aiserver.v1.SlateBotService.CompleteBoxStoreMultipartWrites
      */
-    completeSandBoxStoreMultipartWrites: {
-      name: "CompleteSandBoxStoreMultipartWrites",
-      I: CompleteSandBoxStoreMultipartWritesRequest,
-      O: CompleteSandBoxStoreMultipartWritesResponse,
+    completeBoxStoreMultipartWrites: {
+      name: "CompleteBoxStoreMultipartWrites",
+      I: CompleteBoxStoreMultipartWritesRequest,
+      O: CompleteBoxStoreMultipartWritesResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.GrokBotService.AbortSandBoxStoreMultipartWrites
+     * @generated from rpc aiserver.v1.SlateBotService.AbortBoxStoreMultipartWrites
      */
-    abortSandBoxStoreMultipartWrites: {
-      name: "AbortSandBoxStoreMultipartWrites",
-      I: AbortSandBoxStoreMultipartWritesRequest,
-      O: AbortSandBoxStoreMultipartWritesResponse,
+    abortBoxStoreMultipartWrites: {
+      name: "AbortBoxStoreMultipartWrites",
+      I: AbortBoxStoreMultipartWritesRequest,
+      O: AbortBoxStoreMultipartWritesResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.GrokBotService.PresignSandBoxStoreReads
+     * @generated from rpc aiserver.v1.SlateBotService.PresignBoxStoreReads
      */
-    presignSandBoxStoreReads: {
-      name: "PresignSandBoxStoreReads",
-      I: PresignSandBoxStoreReadsRequest,
-      O: PresignSandBoxStoreReadsResponse,
+    presignBoxStoreReads: {
+      name: "PresignBoxStoreReads",
+      I: PresignBoxStoreReadsRequest,
+      O: PresignBoxStoreReadsResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.GrokBotService.StatSandBoxStoreObject
+     * @generated from rpc aiserver.v1.SlateBotService.StatBoxStoreObject
      */
-    statSandBoxStoreObject: {
-      name: "StatSandBoxStoreObject",
-      I: StatSandBoxStoreObjectRequest,
-      O: StatSandBoxStoreObjectResponse,
+    statBoxStoreObject: {
+      name: "StatBoxStoreObject",
+      I: StatBoxStoreObjectRequest,
+      O: StatBoxStoreObjectResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.GrokBotService.ListSandBoxStoreObjects
+     * @generated from rpc aiserver.v1.SlateBotService.ListBoxStoreObjects
      */
-    listSandBoxStoreObjects: {
-      name: "ListSandBoxStoreObjects",
-      I: ListSandBoxStoreObjectsRequest,
-      O: ListSandBoxStoreObjectsResponse,
+    listBoxStoreObjects: {
+      name: "ListBoxStoreObjects",
+      I: ListBoxStoreObjectsRequest,
+      O: ListBoxStoreObjectsResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.GrokBotService.AdminGetSandBoxStoreStatus
+     * @generated from rpc aiserver.v1.SlateBotService.AdminGetBoxStoreStatus
      */
-    adminGetSandBoxStoreStatus: {
-      name: "AdminGetSandBoxStoreStatus",
-      I: AdminSandBoxStoreStatusRequest,
-      O: AdminSandBoxStoreStatusResponse,
+    adminGetBoxStoreStatus: {
+      name: "AdminGetBoxStoreStatus",
+      I: AdminBoxStoreStatusRequest,
+      O: AdminBoxStoreStatusResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.GrokBotService.AdminUpdateSandBoxHost
+     * @generated from rpc aiserver.v1.SlateBotService.AdminUpdateBoxHost
      */
-    adminUpdateSandBoxHost: {
-      name: "AdminUpdateSandBoxHost",
-      I: AdminUpdateSandBoxHostRequest,
-      O: AdminUpdateSandBoxHostResponse,
+    adminUpdateBoxHost: {
+      name: "AdminUpdateBoxHost",
+      I: AdminUpdateBoxHostRequest,
+      O: AdminUpdateBoxHostResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.GrokBotService.AdminGetSandBoxHostStatus
+     * @generated from rpc aiserver.v1.SlateBotService.AdminGetBoxHostStatus
      */
-    adminGetSandBoxHostStatus: {
-      name: "AdminGetSandBoxHostStatus",
-      I: AdminSandBoxHostStatusRequest,
-      O: AdminSandBoxHostStatusResponse,
+    adminGetBoxHostStatus: {
+      name: "AdminGetBoxHostStatus",
+      I: AdminBoxHostStatusRequest,
+      O: AdminBoxHostStatusResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.GrokBotService.AdminSnapshotSandBoxStore
+     * @generated from rpc aiserver.v1.SlateBotService.AdminSnapshotBoxStore
      */
-    adminSnapshotSandBoxStore: {
-      name: "AdminSnapshotSandBoxStore",
-      I: AdminSnapshotSandBoxStoreRequest,
-      O: AdminSnapshotSandBoxStoreResponse,
+    adminSnapshotBoxStore: {
+      name: "AdminSnapshotBoxStore",
+      I: AdminSnapshotBoxStoreRequest,
+      O: AdminSnapshotBoxStoreResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.GrokBotService.AdminHibernateSandBox
+     * @generated from rpc aiserver.v1.SlateBotService.AdminHibernateBox
      */
-    adminHibernateSandBox: {
-      name: "AdminHibernateSandBox",
-      I: AdminHibernateSandBoxRequest,
-      O: AdminHibernateSandBoxResponse,
+    adminHibernateBox: {
+      name: "AdminHibernateBox",
+      I: AdminHibernateBoxRequest,
+      O: AdminHibernateBoxResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.GrokBotService.AdminListSandAgents
+     * @generated from rpc aiserver.v1.SlateBotService.AdminListSlateAgents
      */
-    adminListSandAgents: {
-      name: "AdminListSandAgents",
-      I: AdminListSandAgentsRequest,
-      O: AdminListSandAgentsResponse,
+    adminListSlateAgents: {
+      name: "AdminListSlateAgents",
+      I: AdminListSlateAgentsRequest,
+      O: AdminListSlateAgentsResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.GrokBotService.AdminGetSandAgentTranscriptPage
+     * @generated from rpc aiserver.v1.SlateBotService.AdminGetSlateAgentTranscriptPage
      */
-    adminGetSandAgentTranscriptPage: {
-      name: "AdminGetSandAgentTranscriptPage",
-      I: AdminGetSandAgentTranscriptPageRequest,
-      O: AdminGetSandAgentTranscriptPageResponse,
+    adminGetSlateAgentTranscriptPage: {
+      name: "AdminGetSlateAgentTranscriptPage",
+      I: AdminGetSlateAgentTranscriptPageRequest,
+      O: AdminGetSlateAgentTranscriptPageResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.GrokBotService.WatchSandBoxMigration
+     * @generated from rpc aiserver.v1.SlateBotService.WatchBoxMigration
      */
-    watchSandBoxMigration: {
-      name: "WatchSandBoxMigration",
-      I: WatchSandBoxMigrationRequest,
-      O: SandBoxMigrationEvent,
+    watchBoxMigration: {
+      name: "WatchBoxMigration",
+      I: WatchBoxMigrationRequest,
+      O: BoxMigrationEvent,
       kind: MethodKind.ServerStreaming,
     },
     /**
-     * @generated from rpc aiserver.v1.GrokBotService.AdminWatchSandBoxMigration
+     * @generated from rpc aiserver.v1.SlateBotService.AdminWatchBoxMigration
      */
-    adminWatchSandBoxMigration: {
-      name: "AdminWatchSandBoxMigration",
-      I: AdminWatchSandBoxMigrationRequest,
-      O: SandBoxMigrationEvent,
+    adminWatchBoxMigration: {
+      name: "AdminWatchBoxMigration",
+      I: AdminWatchBoxMigrationRequest,
+      O: BoxMigrationEvent,
       kind: MethodKind.ServerStreaming,
     },
     /**
-     * @generated from rpc aiserver.v1.GrokBotService.GetSandBoxRunState
+     * @generated from rpc aiserver.v1.SlateBotService.GetBoxRunState
      */
-    getSandBoxRunState: {
-      name: "GetSandBoxRunState",
-      I: GetSandBoxRunStateRequest,
-      O: GetSandBoxRunStateResponse,
+    getBoxRunState: {
+      name: "GetBoxRunState",
+      I: GetBoxRunStateRequest,
+      O: GetBoxRunStateResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.GrokBotService.ListSandBoxes
+     * @generated from rpc aiserver.v1.SlateBotService.ListBoxes
      */
-    listSandBoxes: {
-      name: "ListSandBoxes",
-      I: ListSandBoxesRequest,
-      O: ListSandBoxesResponse,
+    listBoxes: {
+      name: "ListBoxes",
+      I: ListBoxesRequest,
+      O: ListBoxesResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.GrokBotService.NotifySandAgentTurnFinished
+     * @generated from rpc aiserver.v1.SlateBotService.NotifySlateAgentTurnFinished
      */
-    notifySandAgentTurnFinished: {
-      name: "NotifySandAgentTurnFinished",
-      I: NotifySandAgentTurnFinishedRequest,
-      O: NotifySandAgentTurnFinishedResponse,
+    notifySlateAgentTurnFinished: {
+      name: "NotifySlateAgentTurnFinished",
+      I: NotifySlateAgentTurnFinishedRequest,
+      O: NotifySlateAgentTurnFinishedResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.GrokBotService.ListSandSetupManifests
+     * @generated from rpc aiserver.v1.SlateBotService.ListSlateSetupManifests
      */
-    listSandSetupManifests: {
-      name: "ListSandSetupManifests",
-      I: ListSandSetupManifestsRequest,
-      O: ListSandSetupManifestsResponse,
+    listSlateSetupManifests: {
+      name: "ListSlateSetupManifests",
+      I: ListSlateSetupManifestsRequest,
+      O: ListSlateSetupManifestsResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.GrokBotService.ListTeamSandSetupManifests
+     * @generated from rpc aiserver.v1.SlateBotService.ListTeamSlateSetupManifests
      */
-    listTeamSandSetupManifests: {
-      name: "ListTeamSandSetupManifests",
-      I: ListTeamSandSetupManifestsRequest,
-      O: ListTeamSandSetupManifestsResponse,
+    listTeamSlateSetupManifests: {
+      name: "ListTeamSlateSetupManifests",
+      I: ListTeamSlateSetupManifestsRequest,
+      O: ListTeamSlateSetupManifestsResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.GrokBotService.SaveTeamSandSetupManifest
+     * @generated from rpc aiserver.v1.SlateBotService.SaveTeamSlateSetupManifest
      */
-    saveTeamSandSetupManifest: {
-      name: "SaveTeamSandSetupManifest",
-      I: SaveTeamSandSetupManifestRequest,
-      O: SaveTeamSandSetupManifestResponse,
+    saveTeamSlateSetupManifest: {
+      name: "SaveTeamSlateSetupManifest",
+      I: SaveTeamSlateSetupManifestRequest,
+      O: SaveTeamSlateSetupManifestResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.GrokBotService.DeleteTeamSandSetupManifest
+     * @generated from rpc aiserver.v1.SlateBotService.DeleteTeamSlateSetupManifest
      */
-    deleteTeamSandSetupManifest: {
-      name: "DeleteTeamSandSetupManifest",
-      I: DeleteTeamSandSetupManifestRequest,
-      O: DeleteTeamSandSetupManifestResponse,
+    deleteTeamSlateSetupManifest: {
+      name: "DeleteTeamSlateSetupManifest",
+      I: DeleteTeamSlateSetupManifestRequest,
+      O: DeleteTeamSlateSetupManifestResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.GrokBotService.ListTeamMemberSandBoxes
+     * @generated from rpc aiserver.v1.SlateBotService.ListTeamMemberBoxes
      */
-    listTeamMemberSandBoxes: {
-      name: "ListTeamMemberSandBoxes",
-      I: ListTeamMemberSandBoxesRequest,
-      O: ListTeamMemberSandBoxesResponse,
+    listTeamMemberBoxes: {
+      name: "ListTeamMemberBoxes",
+      I: ListTeamMemberBoxesRequest,
+      O: ListTeamMemberBoxesResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.GrokBotService.KillTeamMemberSandBox
+     * @generated from rpc aiserver.v1.SlateBotService.KillTeamMemberBox
      */
-    killTeamMemberSandBox: {
-      name: "KillTeamMemberSandBox",
-      I: KillTeamMemberSandBoxRequest,
-      O: KillTeamMemberSandBoxResponse,
+    killTeamMemberBox: {
+      name: "KillTeamMemberBox",
+      I: KillTeamMemberBoxRequest,
+      O: KillTeamMemberBoxResponse,
       kind: MethodKind.Unary,
     },
   }

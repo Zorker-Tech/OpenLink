@@ -320,8 +320,8 @@ message CreateAutomationRequest {
   optional int32 team_id = 8 [json_name = "teamId"];
   .aiserver.v1.AutomationCreationSource creation_source = 9 [json_name = "creationSource"];
   optional bool enabled = 10 [json_name = "enabled"];
-  optional string sand_agent_id = 11 [json_name = "sandAgentId"];
-  optional string sand_automation_id = 12 [json_name = "sandAutomationId"];
+  optional string slate_agent_id = 11 [json_name = "slateAgentId"];
+  optional string slate_automation_id = 12 [json_name = "slateAutomationId"];
 }
 
 message CreateAutomationResponse {
@@ -758,8 +758,8 @@ message ListAutomationsResponse {
   repeated .aiserver.v1.AutomationWithOwner workflows = 1 [json_name = "workflows"];
 }
 
-message ListSandAutomationsRequest {
-  string sand_agent_id = 1 [json_name = "sandAgentId"];
+message ListSlateAutomationsRequest {
+  string slate_agent_id = 1 [json_name = "slateAgentId"];
 }
 
 message ListWorkflowTemplatesRequest {
@@ -1394,11 +1394,11 @@ service AutomationsService {
   rpc ListAutomations(.aiserver.v1.ListAutomationsRequest) returns (.aiserver.v1.ListAutomationsResponse);
   rpc GetAutomation(.aiserver.v1.GetAutomationRequest) returns (.aiserver.v1.GetAutomationResponse);
   rpc UpdateAutomation(.aiserver.v1.UpdateAutomationRequest) returns (.aiserver.v1.UpdateAutomationResponse);
-  rpc CreateSandAutomation(.aiserver.v1.CreateAutomationRequest) returns (.aiserver.v1.CreateAutomationResponse);
-  rpc ListSandAutomations(.aiserver.v1.ListSandAutomationsRequest) returns (.aiserver.v1.ListAutomationsResponse);
-  rpc GetSandAutomation(.aiserver.v1.GetAutomationRequest) returns (.aiserver.v1.GetAutomationResponse);
-  rpc UpdateSandAutomation(.aiserver.v1.UpdateAutomationRequest) returns (.aiserver.v1.UpdateAutomationResponse);
-  rpc DeleteSandAutomation(.aiserver.v1.DeleteAutomationRequest) returns (.aiserver.v1.DeleteAutomationResponse);
+  rpc CreateSlateAutomation(.aiserver.v1.CreateAutomationRequest) returns (.aiserver.v1.CreateAutomationResponse);
+  rpc ListSlateAutomations(.aiserver.v1.ListSlateAutomationsRequest) returns (.aiserver.v1.ListAutomationsResponse);
+  rpc GetSlateAutomation(.aiserver.v1.GetAutomationRequest) returns (.aiserver.v1.GetAutomationResponse);
+  rpc UpdateSlateAutomation(.aiserver.v1.UpdateAutomationRequest) returns (.aiserver.v1.UpdateAutomationResponse);
+  rpc DeleteSlateAutomation(.aiserver.v1.DeleteAutomationRequest) returns (.aiserver.v1.DeleteAutomationResponse);
   rpc ReassignAutomationOwner(.aiserver.v1.ReassignAutomationOwnerRequest) returns (.aiserver.v1.ReassignAutomationOwnerResponse);
   rpc UpdateAutomationAuthoringMode(.aiserver.v1.UpdateAutomationAuthoringModeRequest) returns (.aiserver.v1.UpdateAutomationAuthoringModeResponse);
   rpc ValidateAutomationSpec(.aiserver.v1.ValidateAutomationSpecRequest) returns (.aiserver.v1.ValidateAutomationSpecResponse);

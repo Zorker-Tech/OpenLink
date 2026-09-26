@@ -78,7 +78,7 @@ export const AgentType = {
   IDE: "ide",
   CLI: "cli",
   BACKGROUND: "background",
-  BUGBOT: "bugbot",
+  BUGBOT: "bug_report",
 } as const
 
 export type AgentType = (typeof AgentType)[keyof typeof AgentType]

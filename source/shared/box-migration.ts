@@ -1,17 +1,17 @@
 /** A box migration is identified by its own id, and two operations are the same when their ids are. */
-export interface SandBoxMigrationOperationId {
+export interface BoxMigrationOperationId {
   readonly value: string;
 }
 
-export function parseSandBoxMigrationOperationId(
+export function parseBoxMigrationOperationId(
   value: unknown,
-): SandBoxMigrationOperationId | null {
+): BoxMigrationOperationId | null {
   return typeof value === "string" && value.length > 0 ? { value } : null;
 }
 
-export function isSameSandBoxMigrationOperation(
-  left: SandBoxMigrationOperationId | null | undefined,
-  right: SandBoxMigrationOperationId | null | undefined,
+export function isSameBoxMigrationOperation(
+  left: BoxMigrationOperationId | null | undefined,
+  right: BoxMigrationOperationId | null | undefined,
 ): boolean {
   return left != null && right != null && left.value === right.value;
 }

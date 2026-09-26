@@ -191,9 +191,9 @@ export class UsageEventDetails extends Message<UsageEventDetails> {
     case: "toolCallComposer";
   } | {
     /**
-     * @generated from field: aiserver.v1.UsageEventDetails.BugBot bug_bot = 14;
+     * @generated from field: aiserver.v1.UsageEventDetails.BugReport bug_bot = 14;
      */
-    value: UsageEventDetails_BugBot;
+    value: UsageEventDetails_BugReport;
     case: "bugBot";
   } | {
     /**
@@ -228,7 +228,7 @@ export class UsageEventDetails extends Message<UsageEventDetails> {
     { no: 10, name: "warm_composer", kind: "message", T: UsageEventDetails_WarmComposer, oneof: "feature" },
     { no: 11, name: "bug_finder_trigger_v1", kind: "message", T: UsageEventDetails_BugFinderTriggerV1, oneof: "feature" },
     { no: 12, name: "tool_call_composer", kind: "message", T: UsageEventDetails_ToolCallComposer, oneof: "feature" },
-    { no: 14, name: "bug_bot", kind: "message", T: UsageEventDetails_BugBot, oneof: "feature" },
+    { no: 14, name: "bug_bot", kind: "message", T: UsageEventDetails_BugReport, oneof: "feature" },
     { no: 15, name: "prompt_hook", kind: "message", T: UsageEventDetails_PromptHook, oneof: "feature" },
   ]);
 
@@ -898,9 +898,9 @@ export class UsageEventDetails_ToolCallComposer extends Message<UsageEventDetail
 }
 
 /**
- * @generated from message aiserver.v1.UsageEventDetails.BugBot
+ * @generated from message aiserver.v1.UsageEventDetails.BugReport
  */
-export class UsageEventDetails_BugBot extends Message<UsageEventDetails_BugBot> {
+export class UsageEventDetails_BugReport extends Message<UsageEventDetails_BugReport> {
   /**
    * @generated from field: string model_intent = 1;
    */
@@ -927,7 +927,7 @@ export class UsageEventDetails_BugBot extends Message<UsageEventDetails_BugBot> 
   billingMode = "";
 
   /**
-   * @generated from oneof aiserver.v1.UsageEventDetails.BugBot.discount
+   * @generated from oneof aiserver.v1.UsageEventDetails.BugReport.discount
    */
   discount: {
     /**
@@ -943,13 +943,13 @@ export class UsageEventDetails_BugBot extends Message<UsageEventDetails_BugBot> 
     case: "free";
   } | { case: undefined; value?: undefined } = { case: undefined };
 
-  constructor(data?: PartialMessage<UsageEventDetails_BugBot>) {
+  constructor(data?: PartialMessage<UsageEventDetails_BugReport>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.UsageEventDetails.BugBot";
+  static readonly typeName = "aiserver.v1.UsageEventDetails.BugReport";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "model_intent", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "token_usage", kind: "message", T: TokenUsage, opt: true },
@@ -960,20 +960,20 @@ export class UsageEventDetails_BugBot extends Message<UsageEventDetails_BugBot> 
     { no: 6, name: "free", kind: "message", T: Empty, oneof: "discount" },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UsageEventDetails_BugBot {
-    return new UsageEventDetails_BugBot().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UsageEventDetails_BugReport {
+    return new UsageEventDetails_BugReport().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UsageEventDetails_BugBot {
-    return new UsageEventDetails_BugBot().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UsageEventDetails_BugReport {
+    return new UsageEventDetails_BugReport().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UsageEventDetails_BugBot {
-    return new UsageEventDetails_BugBot().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UsageEventDetails_BugReport {
+    return new UsageEventDetails_BugReport().fromJsonString(jsonString, options);
   }
 
-  static equals(a: UsageEventDetails_BugBot | PlainMessage<UsageEventDetails_BugBot> | undefined, b: UsageEventDetails_BugBot | PlainMessage<UsageEventDetails_BugBot> | undefined): boolean {
-    return proto3.util.equals(UsageEventDetails_BugBot, a, b);
+  static equals(a: UsageEventDetails_BugReport | PlainMessage<UsageEventDetails_BugReport> | undefined, b: UsageEventDetails_BugReport | PlainMessage<UsageEventDetails_BugReport> | undefined): boolean {
+    return proto3.util.equals(UsageEventDetails_BugReport, a, b);
   }
 }
 

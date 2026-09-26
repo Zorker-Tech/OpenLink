@@ -1,7 +1,7 @@
 /**
  * Which rules, skills and plugins a run is allowed to see, by the environment it runs in.
  *
- * A bugbot run is not scoped at all: it works on the codebase as it is and has no environment to
+ * A bug_report run is not scoped at all: it works on the codebase as it is and has no environment to
  * belong to. Every other kind of run has one — the cloud is not a developer's machine — and the items
  * that were written for a different one are dropped rather than shown and then refused.
  */

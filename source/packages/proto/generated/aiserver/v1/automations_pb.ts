@@ -2541,14 +2541,14 @@ export class CreateAutomationRequest extends Message<CreateAutomationRequest> {
   enabled?: boolean;
 
   /**
-   * @generated from field: optional string sand_agent_id = 11;
+   * @generated from field: optional string slate_agent_id = 11;
    */
-  sandAgentId?: string;
+  slateAgentId?: string;
 
   /**
-   * @generated from field: optional string sand_automation_id = 12;
+   * @generated from field: optional string slate_automation_id = 12;
    */
-  sandAutomationId?: string;
+  slateAutomationId?: string;
 
   constructor(data?: PartialMessage<CreateAutomationRequest>) {
     super();
@@ -2568,8 +2568,8 @@ export class CreateAutomationRequest extends Message<CreateAutomationRequest> {
     { no: 8, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 9, name: "creation_source", kind: "enum", T: proto3.getEnumType(AutomationCreationSource) },
     { no: 10, name: "enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
-    { no: 11, name: "sand_agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
-    { no: 12, name: "sand_automation_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 11, name: "slate_agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 12, name: "slate_automation_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CreateAutomationRequest {
@@ -5966,39 +5966,39 @@ export class ListAutomationsResponse extends Message<ListAutomationsResponse> {
 }
 
 /**
- * @generated from message aiserver.v1.ListSandAutomationsRequest
+ * @generated from message aiserver.v1.ListSlateAutomationsRequest
  */
-export class ListSandAutomationsRequest extends Message<ListSandAutomationsRequest> {
+export class ListSlateAutomationsRequest extends Message<ListSlateAutomationsRequest> {
   /**
-   * @generated from field: string sand_agent_id = 1;
+   * @generated from field: string slate_agent_id = 1;
    */
-  sandAgentId = "";
+  slateAgentId = "";
 
-  constructor(data?: PartialMessage<ListSandAutomationsRequest>) {
+  constructor(data?: PartialMessage<ListSlateAutomationsRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.ListSandAutomationsRequest";
+  static readonly typeName = "aiserver.v1.ListSlateAutomationsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "sand_agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "slate_agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListSandAutomationsRequest {
-    return new ListSandAutomationsRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListSlateAutomationsRequest {
+    return new ListSlateAutomationsRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ListSandAutomationsRequest {
-    return new ListSandAutomationsRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ListSlateAutomationsRequest {
+    return new ListSlateAutomationsRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ListSandAutomationsRequest {
-    return new ListSandAutomationsRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ListSlateAutomationsRequest {
+    return new ListSlateAutomationsRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: ListSandAutomationsRequest | PlainMessage<ListSandAutomationsRequest> | undefined, b: ListSandAutomationsRequest | PlainMessage<ListSandAutomationsRequest> | undefined): boolean {
-    return proto3.util.equals(ListSandAutomationsRequest, a, b);
+  static equals(a: ListSlateAutomationsRequest | PlainMessage<ListSlateAutomationsRequest> | undefined, b: ListSlateAutomationsRequest | PlainMessage<ListSlateAutomationsRequest> | undefined): boolean {
+    return proto3.util.equals(ListSlateAutomationsRequest, a, b);
   }
 }
 

@@ -11,31 +11,31 @@ import {
   DEFAULT_MCP_TOOL_CALL_MAX_TOTAL_TIMEOUT_MS,
   LEGACY_MCP_TOOL_CALL_TIMEOUT_MS,
 } from "../../source/packages/mcp-core/config/mcp-tool-call-timeout.ts"
-import { isSecretPluginVariableName } from "../../source/packages/cursor-plugins/secret-variable-names.ts"
-import { CapabilitiesSchema } from "../../source/packages/cursor-plugins/capabilities.ts"
-import { expandPluginVariables } from "../../source/packages/cursor-plugins/plugin-variables.ts"
-import { getPluginDbId, type PluginIdentifier } from "../../source/packages/cursor-plugins/identifiers.ts"
+import { isSecretPluginVariableName } from "../../source/packages/plugin-install/secret-variable-names.ts"
+import { CapabilitiesSchema } from "../../source/packages/plugin-install/capabilities.ts"
+import { expandPluginVariables } from "../../source/packages/plugin-install/plugin-variables.ts"
+import { getPluginDbId, type PluginIdentifier } from "../../source/packages/plugin-install/identifiers.ts"
 import {
   extractSchemaVersion,
   readSchemaId,
   resolveSchemaVersion,
   schemaVersionsDisagree,
   SUPPORTED_SCHEMA_IDS,
-} from "../../source/packages/cursor-plugins/schema-version.ts"
-import { validateAndResolveSubpath } from "../../source/packages/cursor-plugins/validate-subpath.ts"
-import { expandEnvVarsWithLookup, recordToCaseInsensitiveLookup } from "../../source/packages/cursor-plugins/env-expansion.ts"
-import { packPluginArtifact } from "../../source/packages/cursor-plugins/tarball.ts"
-import { buildOriginTokenGitConfig, PREFER_ORIGIN_READS_HEADER } from "../../source/packages/cursor-plugins/origin-git-auth.ts"
-import { mcpConfigSchema, noopPluginMetricsLogger } from "../../source/packages/cursor-plugins/types.ts"
-import { execGitNonInteractive, resolveExtraGitConfig } from "../../source/packages/cursor-plugins/git-subprocess-env.ts"
-import { synthesizeInlinePluginDir } from "../../source/packages/cursor-plugins/inline-plugin-synthesizer.ts"
-import { restoreSkillsFromPluginDir } from "../../source/packages/cursor-plugins/skill-plugin-restore.ts"
-import { canonicalRepoHost, parseAndValidateScmUrl, parseGitUrl, toScmSshUrl } from "../../source/packages/cursor-plugins/git-url-parsing.ts"
+} from "../../source/packages/plugin-install/schema-version.ts"
+import { validateAndResolveSubpath } from "../../source/packages/plugin-install/validate-subpath.ts"
+import { expandEnvVarsWithLookup, recordToCaseInsensitiveLookup } from "../../source/packages/plugin-install/env-expansion.ts"
+import { packPluginArtifact } from "../../source/packages/plugin-install/tarball.ts"
+import { buildOriginTokenGitConfig, PREFER_ORIGIN_READS_HEADER } from "../../source/packages/plugin-install/origin-git-auth.ts"
+import { mcpConfigSchema, noopPluginMetricsLogger } from "../../source/packages/plugin-install/types.ts"
+import { execGitNonInteractive, resolveExtraGitConfig } from "../../source/packages/plugin-install/git-subprocess-env.ts"
+import { synthesizeInlinePluginDir } from "../../source/packages/plugin-install/inline-plugin-synthesizer.ts"
+import { restoreSkillsFromPluginDir } from "../../source/packages/plugin-install/skill-plugin-restore.ts"
+import { canonicalRepoHost, parseAndValidateScmUrl, parseGitUrl, toScmSshUrl } from "../../source/packages/plugin-install/git-url-parsing.ts"
 import {
   getPluginInstallCachePath,
   PLUGIN_CACHE_SENTINEL,
   PLUGINS_CACHE_ROOT,
-} from "../../source/packages/cursor-plugins/cursor-marketplace.ts"
+} from "../../source/packages/plugin-install/marketplace.ts"
 
 // ---------------------------------------------------------------------------------------------
 // The numbers the MCP core waits by

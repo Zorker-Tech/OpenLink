@@ -301,7 +301,7 @@ test("the platform's own strings carry no other product's name", () => {
     WORKSPACE_IGNORE_FILE_NAME,
     ...BOX_WORKSPACE_DEFAULT_IGNORE_PATTERNS,
   ])
-  for (const foreign of ["Cursor", "cursor", "Grok", "anysphere", "sand-"]) {
+  for (const foreign of ["Cursor", "cursor", "Grok", "grok", "anysphere", "Anysphere", "Bugbot", "bugbot"]) {
     assert.equal(ours.includes(foreign), false, `${foreign} must not appear in our own strings`)
   }
   assert.equal(USAGE_PANEL_COPY.includedTitle.length > 0, true)

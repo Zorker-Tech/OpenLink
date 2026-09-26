@@ -32,11 +32,11 @@ export function describeLocalExecBytes(bytes: number): string {
 }
 
 export function localExecFileTooLargeMessage(actualBytes: number, maxBytes: number): string {
-  return `File is ${describeLocalExecBytes(actualBytes)}, which exceeds Grok Bot's ${describeLocalExecBytes(maxBytes)} limit for reading or transferring a single file over local-exec. Read a slice with offset/limit, or use a shell command (grep, head, tail) to extract just what you need.`;
+  return `File is ${describeLocalExecBytes(actualBytes)}, which exceeds Slate's ${describeLocalExecBytes(maxBytes)} limit for reading or transferring a single file over local-exec. Read a slice with offset/limit, or use a shell command (grep, head, tail) to extract just what you need.`;
 }
 
 export function localExecUploadFrameTooLargeMessage(maxBytes: number): string {
-  return `The upload exceeds Grok Bot's ${describeLocalExecBytes(maxBytes)} limit for transferring a single file over local-exec and was refused before being read into memory. Transfer a smaller file, or split it into parts.`;
+  return `The upload exceeds Slate's ${describeLocalExecBytes(maxBytes)} limit for transferring a single file over local-exec and was refused before being read into memory. Transfer a smaller file, or split it into parts.`;
 }
 
 export function maxLocalExecUploadFrameBytes(maxFileBytes: number): number {

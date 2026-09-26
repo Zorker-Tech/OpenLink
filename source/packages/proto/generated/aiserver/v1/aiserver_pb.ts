@@ -24,7 +24,7 @@ import { RunTerminalCommandEndedReason, ToolCall, ToolResult } from "./tools_pb.
 import { AiLintBug, AiLintRule, LintDiscriminator, LintGenerator } from "./lint_pb.ts";
 import { FastApplySource } from "./fastapply_pb.ts";
 import { StreamCmdKResponse } from "./cmdk_pb.ts";
-import { BugReports, StreamBugBotRequest } from "./bugbot_pb.ts";
+import { BugReports, StreamBugReportRequest } from "./bug_reports_pb.ts";
 import { ExecClientControlMessage, ExecClientMessage, ExecServerMessage } from "../../agent/v1/exec_pb.ts";
 import { ExecServerControlMessage } from "../../agent/v1/agent_service_pb.ts";
 import { LspSubgraphFullContext } from "./lsp_subgraph_pb.ts";
@@ -3522,13 +3522,13 @@ export class BackgroundCmdKResponse extends Message<BackgroundCmdKResponse> {
 }
 
 /**
- * @generated from message aiserver.v1.BugBotStatus
+ * @generated from message aiserver.v1.BugReportStatus
  */
-export class BugBotStatus extends Message<BugBotStatus> {
+export class BugReportStatus extends Message<BugReportStatus> {
   /**
-   * @generated from field: aiserver.v1.BugBotStatus.Status status = 1;
+   * @generated from field: aiserver.v1.BugReportStatus.Status status = 1;
    */
-  status = BugBotStatus_Status.UNSPECIFIED;
+  status = BugReportStatus_Status.UNSPECIFIED;
 
   /**
    * @generated from field: string message = 2;
@@ -3570,15 +3570,15 @@ export class BugBotStatus extends Message<BugBotStatus> {
    */
   thinkingCost?: number;
 
-  constructor(data?: PartialMessage<BugBotStatus>) {
+  constructor(data?: PartialMessage<BugReportStatus>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugBotStatus";
+  static readonly typeName = "aiserver.v1.BugReportStatus";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "status", kind: "enum", T: proto3.getEnumType(BugBotStatus_Status) },
+    { no: 1, name: "status", kind: "enum", T: proto3.getEnumType(BugReportStatus_Status) },
     { no: 2, name: "message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "iterations_completed", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
     { no: 4, name: "total_iterations", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
@@ -3589,27 +3589,27 @@ export class BugBotStatus extends Message<BugBotStatus> {
     { no: 9, name: "thinking_cost", kind: "scalar", T: 2 /* ScalarType.FLOAT */, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugBotStatus {
-    return new BugBotStatus().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportStatus {
+    return new BugReportStatus().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugBotStatus {
-    return new BugBotStatus().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportStatus {
+    return new BugReportStatus().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugBotStatus {
-    return new BugBotStatus().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportStatus {
+    return new BugReportStatus().fromJsonString(jsonString, options);
   }
 
-  static equals(a: BugBotStatus | PlainMessage<BugBotStatus> | undefined, b: BugBotStatus | PlainMessage<BugBotStatus> | undefined): boolean {
-    return proto3.util.equals(BugBotStatus, a, b);
+  static equals(a: BugReportStatus | PlainMessage<BugReportStatus> | undefined, b: BugReportStatus | PlainMessage<BugReportStatus> | undefined): boolean {
+    return proto3.util.equals(BugReportStatus, a, b);
   }
 }
 
 /**
- * @generated from enum aiserver.v1.BugBotStatus.Status
+ * @generated from enum aiserver.v1.BugReportStatus.Status
  */
-export enum BugBotStatus_Status {
+export enum BugReportStatus_Status {
   /**
    * @generated from enum value: STATUS_UNSPECIFIED = 0;
    */
@@ -3635,8 +3635,8 @@ export enum BugBotStatus_Status {
    */
   ERROR = 4,
 }
-// Retrieve enum metadata with: proto3.getEnumType(BugBotStatus_Status)
-proto3.util.setEnumType(BugBotStatus_Status, "aiserver.v1.BugBotStatus.Status", [
+// Retrieve enum metadata with: proto3.getEnumType(BugReportStatus_Status)
+proto3.util.setEnumType(BugReportStatus_Status, "aiserver.v1.BugReportStatus.Status", [
   { no: 0, name: "STATUS_UNSPECIFIED" },
   { no: 1, name: "STATUS_IN_PROGRESS" },
   { no: 2, name: "STATUS_IN_PROGRESS_ITERATIONS" },
@@ -3815,9 +3815,9 @@ export class BugReportScreenshot extends Message<BugReportScreenshot> {
 }
 
 /**
- * @generated from message aiserver.v1.BugbotTrialNotification
+ * @generated from message aiserver.v1.BugReportTrialNotification
  */
-export class BugbotTrialNotification extends Message<BugbotTrialNotification> {
+export class BugReportTrialNotification extends Message<BugReportTrialNotification> {
   /**
    * @generated from field: bool show = 1;
    */
@@ -3833,33 +3833,33 @@ export class BugbotTrialNotification extends Message<BugbotTrialNotification> {
    */
   learnMoreUrl?: string;
 
-  constructor(data?: PartialMessage<BugbotTrialNotification>) {
+  constructor(data?: PartialMessage<BugReportTrialNotification>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugbotTrialNotification";
+  static readonly typeName = "aiserver.v1.BugReportTrialNotification";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "show", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 2, name: "message", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "learn_more_url", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugbotTrialNotification {
-    return new BugbotTrialNotification().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportTrialNotification {
+    return new BugReportTrialNotification().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugbotTrialNotification {
-    return new BugbotTrialNotification().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportTrialNotification {
+    return new BugReportTrialNotification().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugbotTrialNotification {
-    return new BugbotTrialNotification().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportTrialNotification {
+    return new BugReportTrialNotification().fromJsonString(jsonString, options);
   }
 
-  static equals(a: BugbotTrialNotification | PlainMessage<BugbotTrialNotification> | undefined, b: BugbotTrialNotification | PlainMessage<BugbotTrialNotification> | undefined): boolean {
-    return proto3.util.equals(BugbotTrialNotification, a, b);
+  static equals(a: BugReportTrialNotification | PlainMessage<BugReportTrialNotification> | undefined, b: BugReportTrialNotification | PlainMessage<BugReportTrialNotification> | undefined): boolean {
+    return proto3.util.equals(BugReportTrialNotification, a, b);
   }
 }
 
@@ -4146,9 +4146,9 @@ export class ChatSuggestionItem extends Message<ChatSuggestionItem> {
 }
 
 /**
- * @generated from message aiserver.v1.CheckBugBotPriceRequest
+ * @generated from message aiserver.v1.CheckBugReportPriceRequest
  */
-export class CheckBugBotPriceRequest extends Message<CheckBugBotPriceRequest> {
+export class CheckBugReportPriceRequest extends Message<CheckBugReportPriceRequest> {
   /**
    * @generated from field: int32 diff_char_len = 1;
    */
@@ -4169,13 +4169,13 @@ export class CheckBugBotPriceRequest extends Message<CheckBugBotPriceRequest> {
    */
   sessionId?: string;
 
-  constructor(data?: PartialMessage<CheckBugBotPriceRequest>) {
+  constructor(data?: PartialMessage<CheckBugReportPriceRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.CheckBugBotPriceRequest";
+  static readonly typeName = "aiserver.v1.CheckBugReportPriceRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "diff_char_len", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 2, name: "iterations", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
@@ -4183,27 +4183,27 @@ export class CheckBugBotPriceRequest extends Message<CheckBugBotPriceRequest> {
     { no: 4, name: "session_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CheckBugBotPriceRequest {
-    return new CheckBugBotPriceRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CheckBugReportPriceRequest {
+    return new CheckBugReportPriceRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): CheckBugBotPriceRequest {
-    return new CheckBugBotPriceRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): CheckBugReportPriceRequest {
+    return new CheckBugReportPriceRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): CheckBugBotPriceRequest {
-    return new CheckBugBotPriceRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): CheckBugReportPriceRequest {
+    return new CheckBugReportPriceRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: CheckBugBotPriceRequest | PlainMessage<CheckBugBotPriceRequest> | undefined, b: CheckBugBotPriceRequest | PlainMessage<CheckBugBotPriceRequest> | undefined): boolean {
-    return proto3.util.equals(CheckBugBotPriceRequest, a, b);
+  static equals(a: CheckBugReportPriceRequest | PlainMessage<CheckBugReportPriceRequest> | undefined, b: CheckBugReportPriceRequest | PlainMessage<CheckBugReportPriceRequest> | undefined): boolean {
+    return proto3.util.equals(CheckBugReportPriceRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.CheckBugBotPriceResponse
+ * @generated from message aiserver.v1.CheckBugReportPriceResponse
  */
-export class CheckBugBotPriceResponse extends Message<CheckBugBotPriceResponse> {
+export class CheckBugReportPriceResponse extends Message<CheckBugReportPriceResponse> {
   /**
    * @generated from field: double cost = 1;
    */
@@ -4214,106 +4214,106 @@ export class CheckBugBotPriceResponse extends Message<CheckBugBotPriceResponse> 
    */
   priceId = "";
 
-  constructor(data?: PartialMessage<CheckBugBotPriceResponse>) {
+  constructor(data?: PartialMessage<CheckBugReportPriceResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.CheckBugBotPriceResponse";
+  static readonly typeName = "aiserver.v1.CheckBugReportPriceResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "cost", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
     { no: 2, name: "price_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CheckBugBotPriceResponse {
-    return new CheckBugBotPriceResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CheckBugReportPriceResponse {
+    return new CheckBugReportPriceResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): CheckBugBotPriceResponse {
-    return new CheckBugBotPriceResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): CheckBugReportPriceResponse {
+    return new CheckBugReportPriceResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): CheckBugBotPriceResponse {
-    return new CheckBugBotPriceResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): CheckBugReportPriceResponse {
+    return new CheckBugReportPriceResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: CheckBugBotPriceResponse | PlainMessage<CheckBugBotPriceResponse> | undefined, b: CheckBugBotPriceResponse | PlainMessage<CheckBugBotPriceResponse> | undefined): boolean {
-    return proto3.util.equals(CheckBugBotPriceResponse, a, b);
+  static equals(a: CheckBugReportPriceResponse | PlainMessage<CheckBugReportPriceResponse> | undefined, b: CheckBugReportPriceResponse | PlainMessage<CheckBugReportPriceResponse> | undefined): boolean {
+    return proto3.util.equals(CheckBugReportPriceResponse, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.CheckBugBotTelemetryHealthyRequest
+ * @generated from message aiserver.v1.CheckBugReportTelemetryHealthyRequest
  */
-export class CheckBugBotTelemetryHealthyRequest extends Message<CheckBugBotTelemetryHealthyRequest> {
+export class CheckBugReportTelemetryHealthyRequest extends Message<CheckBugReportTelemetryHealthyRequest> {
   /**
    * @generated from field: string session_id = 1;
    */
   sessionId = "";
 
-  constructor(data?: PartialMessage<CheckBugBotTelemetryHealthyRequest>) {
+  constructor(data?: PartialMessage<CheckBugReportTelemetryHealthyRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.CheckBugBotTelemetryHealthyRequest";
+  static readonly typeName = "aiserver.v1.CheckBugReportTelemetryHealthyRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "session_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CheckBugBotTelemetryHealthyRequest {
-    return new CheckBugBotTelemetryHealthyRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CheckBugReportTelemetryHealthyRequest {
+    return new CheckBugReportTelemetryHealthyRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): CheckBugBotTelemetryHealthyRequest {
-    return new CheckBugBotTelemetryHealthyRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): CheckBugReportTelemetryHealthyRequest {
+    return new CheckBugReportTelemetryHealthyRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): CheckBugBotTelemetryHealthyRequest {
-    return new CheckBugBotTelemetryHealthyRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): CheckBugReportTelemetryHealthyRequest {
+    return new CheckBugReportTelemetryHealthyRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: CheckBugBotTelemetryHealthyRequest | PlainMessage<CheckBugBotTelemetryHealthyRequest> | undefined, b: CheckBugBotTelemetryHealthyRequest | PlainMessage<CheckBugBotTelemetryHealthyRequest> | undefined): boolean {
-    return proto3.util.equals(CheckBugBotTelemetryHealthyRequest, a, b);
+  static equals(a: CheckBugReportTelemetryHealthyRequest | PlainMessage<CheckBugReportTelemetryHealthyRequest> | undefined, b: CheckBugReportTelemetryHealthyRequest | PlainMessage<CheckBugReportTelemetryHealthyRequest> | undefined): boolean {
+    return proto3.util.equals(CheckBugReportTelemetryHealthyRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.CheckBugBotTelemetryHealthyResponse
+ * @generated from message aiserver.v1.CheckBugReportTelemetryHealthyResponse
  */
-export class CheckBugBotTelemetryHealthyResponse extends Message<CheckBugBotTelemetryHealthyResponse> {
+export class CheckBugReportTelemetryHealthyResponse extends Message<CheckBugReportTelemetryHealthyResponse> {
   /**
    * @generated from field: bool is_healthy = 1;
    */
   isHealthy = false;
 
-  constructor(data?: PartialMessage<CheckBugBotTelemetryHealthyResponse>) {
+  constructor(data?: PartialMessage<CheckBugReportTelemetryHealthyResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.CheckBugBotTelemetryHealthyResponse";
+  static readonly typeName = "aiserver.v1.CheckBugReportTelemetryHealthyResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "is_healthy", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CheckBugBotTelemetryHealthyResponse {
-    return new CheckBugBotTelemetryHealthyResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CheckBugReportTelemetryHealthyResponse {
+    return new CheckBugReportTelemetryHealthyResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): CheckBugBotTelemetryHealthyResponse {
-    return new CheckBugBotTelemetryHealthyResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): CheckBugReportTelemetryHealthyResponse {
+    return new CheckBugReportTelemetryHealthyResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): CheckBugBotTelemetryHealthyResponse {
-    return new CheckBugBotTelemetryHealthyResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): CheckBugReportTelemetryHealthyResponse {
+    return new CheckBugReportTelemetryHealthyResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: CheckBugBotTelemetryHealthyResponse | PlainMessage<CheckBugBotTelemetryHealthyResponse> | undefined, b: CheckBugBotTelemetryHealthyResponse | PlainMessage<CheckBugBotTelemetryHealthyResponse> | undefined): boolean {
-    return proto3.util.equals(CheckBugBotTelemetryHealthyResponse, a, b);
+  static equals(a: CheckBugReportTelemetryHealthyResponse | PlainMessage<CheckBugReportTelemetryHealthyResponse> | undefined, b: CheckBugReportTelemetryHealthyResponse | PlainMessage<CheckBugReportTelemetryHealthyResponse> | undefined): boolean {
+    return proto3.util.equals(CheckBugReportTelemetryHealthyResponse, a, b);
   }
 }
 
@@ -10750,70 +10750,70 @@ export class GetDiffReviewRequest_SimpleFileDiff_Chunk extends Message<GetDiffRe
 }
 
 /**
- * @generated from message aiserver.v1.GetEditorBugbotAutoRunStatusRequest
+ * @generated from message aiserver.v1.GetEditorBugReportAutoRunStatusRequest
  */
-export class GetEditorBugbotAutoRunStatusRequest extends Message<GetEditorBugbotAutoRunStatusRequest> {
-  constructor(data?: PartialMessage<GetEditorBugbotAutoRunStatusRequest>) {
+export class GetEditorBugReportAutoRunStatusRequest extends Message<GetEditorBugReportAutoRunStatusRequest> {
+  constructor(data?: PartialMessage<GetEditorBugReportAutoRunStatusRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetEditorBugbotAutoRunStatusRequest";
+  static readonly typeName = "aiserver.v1.GetEditorBugReportAutoRunStatusRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetEditorBugbotAutoRunStatusRequest {
-    return new GetEditorBugbotAutoRunStatusRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetEditorBugReportAutoRunStatusRequest {
+    return new GetEditorBugReportAutoRunStatusRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetEditorBugbotAutoRunStatusRequest {
-    return new GetEditorBugbotAutoRunStatusRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetEditorBugReportAutoRunStatusRequest {
+    return new GetEditorBugReportAutoRunStatusRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetEditorBugbotAutoRunStatusRequest {
-    return new GetEditorBugbotAutoRunStatusRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetEditorBugReportAutoRunStatusRequest {
+    return new GetEditorBugReportAutoRunStatusRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetEditorBugbotAutoRunStatusRequest | PlainMessage<GetEditorBugbotAutoRunStatusRequest> | undefined, b: GetEditorBugbotAutoRunStatusRequest | PlainMessage<GetEditorBugbotAutoRunStatusRequest> | undefined): boolean {
-    return proto3.util.equals(GetEditorBugbotAutoRunStatusRequest, a, b);
+  static equals(a: GetEditorBugReportAutoRunStatusRequest | PlainMessage<GetEditorBugReportAutoRunStatusRequest> | undefined, b: GetEditorBugReportAutoRunStatusRequest | PlainMessage<GetEditorBugReportAutoRunStatusRequest> | undefined): boolean {
+    return proto3.util.equals(GetEditorBugReportAutoRunStatusRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetEditorBugbotAutoRunStatusResponse
+ * @generated from message aiserver.v1.GetEditorBugReportAutoRunStatusResponse
  */
-export class GetEditorBugbotAutoRunStatusResponse extends Message<GetEditorBugbotAutoRunStatusResponse> {
+export class GetEditorBugReportAutoRunStatusResponse extends Message<GetEditorBugReportAutoRunStatusResponse> {
   /**
    * @generated from field: bool should_auto_run = 1;
    */
   shouldAutoRun = false;
 
-  constructor(data?: PartialMessage<GetEditorBugbotAutoRunStatusResponse>) {
+  constructor(data?: PartialMessage<GetEditorBugReportAutoRunStatusResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetEditorBugbotAutoRunStatusResponse";
+  static readonly typeName = "aiserver.v1.GetEditorBugReportAutoRunStatusResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "should_auto_run", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetEditorBugbotAutoRunStatusResponse {
-    return new GetEditorBugbotAutoRunStatusResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetEditorBugReportAutoRunStatusResponse {
+    return new GetEditorBugReportAutoRunStatusResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetEditorBugbotAutoRunStatusResponse {
-    return new GetEditorBugbotAutoRunStatusResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetEditorBugReportAutoRunStatusResponse {
+    return new GetEditorBugReportAutoRunStatusResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetEditorBugbotAutoRunStatusResponse {
-    return new GetEditorBugbotAutoRunStatusResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetEditorBugReportAutoRunStatusResponse {
+    return new GetEditorBugReportAutoRunStatusResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetEditorBugbotAutoRunStatusResponse | PlainMessage<GetEditorBugbotAutoRunStatusResponse> | undefined, b: GetEditorBugbotAutoRunStatusResponse | PlainMessage<GetEditorBugbotAutoRunStatusResponse> | undefined): boolean {
-    return proto3.util.equals(GetEditorBugbotAutoRunStatusResponse, a, b);
+  static equals(a: GetEditorBugReportAutoRunStatusResponse | PlainMessage<GetEditorBugReportAutoRunStatusResponse> | undefined, b: GetEditorBugReportAutoRunStatusResponse | PlainMessage<GetEditorBugReportAutoRunStatusResponse> | undefined): boolean {
+    return proto3.util.equals(GetEditorBugReportAutoRunStatusResponse, a, b);
   }
 }
 
@@ -11552,9 +11552,9 @@ export class GetSimplePromptResponse extends Message<GetSimplePromptResponse> {
 }
 
 /**
- * @generated from message aiserver.v1.GetSuggestedBugBotIterationsRequest
+ * @generated from message aiserver.v1.GetSuggestedBugReportIterationsRequest
  */
-export class GetSuggestedBugBotIterationsRequest extends Message<GetSuggestedBugBotIterationsRequest> {
+export class GetSuggestedBugReportIterationsRequest extends Message<GetSuggestedBugReportIterationsRequest> {
   /**
    * @generated from field: int32 diff_char_len = 1;
    */
@@ -11565,69 +11565,69 @@ export class GetSuggestedBugBotIterationsRequest extends Message<GetSuggestedBug
    */
   modelDetails?: ModelDetails;
 
-  constructor(data?: PartialMessage<GetSuggestedBugBotIterationsRequest>) {
+  constructor(data?: PartialMessage<GetSuggestedBugReportIterationsRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetSuggestedBugBotIterationsRequest";
+  static readonly typeName = "aiserver.v1.GetSuggestedBugReportIterationsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "diff_char_len", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 2, name: "model_details", kind: "message", T: ModelDetails, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetSuggestedBugBotIterationsRequest {
-    return new GetSuggestedBugBotIterationsRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetSuggestedBugReportIterationsRequest {
+    return new GetSuggestedBugReportIterationsRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetSuggestedBugBotIterationsRequest {
-    return new GetSuggestedBugBotIterationsRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetSuggestedBugReportIterationsRequest {
+    return new GetSuggestedBugReportIterationsRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetSuggestedBugBotIterationsRequest {
-    return new GetSuggestedBugBotIterationsRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetSuggestedBugReportIterationsRequest {
+    return new GetSuggestedBugReportIterationsRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetSuggestedBugBotIterationsRequest | PlainMessage<GetSuggestedBugBotIterationsRequest> | undefined, b: GetSuggestedBugBotIterationsRequest | PlainMessage<GetSuggestedBugBotIterationsRequest> | undefined): boolean {
-    return proto3.util.equals(GetSuggestedBugBotIterationsRequest, a, b);
+  static equals(a: GetSuggestedBugReportIterationsRequest | PlainMessage<GetSuggestedBugReportIterationsRequest> | undefined, b: GetSuggestedBugReportIterationsRequest | PlainMessage<GetSuggestedBugReportIterationsRequest> | undefined): boolean {
+    return proto3.util.equals(GetSuggestedBugReportIterationsRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetSuggestedBugBotIterationsResponse
+ * @generated from message aiserver.v1.GetSuggestedBugReportIterationsResponse
  */
-export class GetSuggestedBugBotIterationsResponse extends Message<GetSuggestedBugBotIterationsResponse> {
+export class GetSuggestedBugReportIterationsResponse extends Message<GetSuggestedBugReportIterationsResponse> {
   /**
    * @generated from field: int32 iterations = 1;
    */
   iterations = 0;
 
-  constructor(data?: PartialMessage<GetSuggestedBugBotIterationsResponse>) {
+  constructor(data?: PartialMessage<GetSuggestedBugReportIterationsResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetSuggestedBugBotIterationsResponse";
+  static readonly typeName = "aiserver.v1.GetSuggestedBugReportIterationsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "iterations", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetSuggestedBugBotIterationsResponse {
-    return new GetSuggestedBugBotIterationsResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetSuggestedBugReportIterationsResponse {
+    return new GetSuggestedBugReportIterationsResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetSuggestedBugBotIterationsResponse {
-    return new GetSuggestedBugBotIterationsResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetSuggestedBugReportIterationsResponse {
+    return new GetSuggestedBugReportIterationsResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetSuggestedBugBotIterationsResponse {
-    return new GetSuggestedBugBotIterationsResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetSuggestedBugReportIterationsResponse {
+    return new GetSuggestedBugReportIterationsResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetSuggestedBugBotIterationsResponse | PlainMessage<GetSuggestedBugBotIterationsResponse> | undefined, b: GetSuggestedBugBotIterationsResponse | PlainMessage<GetSuggestedBugBotIterationsResponse> | undefined): boolean {
-    return proto3.util.equals(GetSuggestedBugBotIterationsResponse, a, b);
+  static equals(a: GetSuggestedBugReportIterationsResponse | PlainMessage<GetSuggestedBugReportIterationsResponse> | undefined, b: GetSuggestedBugReportIterationsResponse | PlainMessage<GetSuggestedBugReportIterationsResponse> | undefined): boolean {
+    return proto3.util.equals(GetSuggestedBugReportIterationsResponse, a, b);
   }
 }
 
@@ -17559,9 +17559,9 @@ export class ReportProcessMetricsV2Response extends Message<ReportProcessMetrics
 }
 
 /**
- * @generated from message aiserver.v1.ReportSandProcessMetricsRequest
+ * @generated from message aiserver.v1.ReportSlateProcessMetricsRequest
  */
-export class ReportSandProcessMetricsRequest extends Message<ReportSandProcessMetricsRequest> {
+export class ReportSlateProcessMetricsRequest extends Message<ReportSlateProcessMetricsRequest> {
   /**
    * @generated from field: int64 sample_start = 1;
    */
@@ -17588,9 +17588,9 @@ export class ReportSandProcessMetricsRequest extends Message<ReportSandProcessMe
   sessionId = "";
 
   /**
-   * @generated from field: repeated aiserver.v1.SandProcessMetricsRowRequest rows = 6;
+   * @generated from field: repeated aiserver.v1.SlateProcessMetricsRowRequest rows = 6;
    */
-  rows: SandProcessMetricsRowRequest[] = [];
+  rows: SlateProcessMetricsRowRequest[] = [];
 
   /**
    * @generated from field: string os = 7;
@@ -17617,20 +17617,20 @@ export class ReportSandProcessMetricsRequest extends Message<ReportSandProcessMe
    */
   clientId = "";
 
-  constructor(data?: PartialMessage<ReportSandProcessMetricsRequest>) {
+  constructor(data?: PartialMessage<ReportSlateProcessMetricsRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.ReportSandProcessMetricsRequest";
+  static readonly typeName = "aiserver.v1.ReportSlateProcessMetricsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "sample_start", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 2, name: "sample_end", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 3, name: "num_subsamples", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 4, name: "sample_seqno", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 5, name: "session_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "rows", kind: "message", T: SandProcessMetricsRowRequest, repeated: true },
+    { no: 6, name: "rows", kind: "message", T: SlateProcessMetricsRowRequest, repeated: true },
     { no: 7, name: "os", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 8, name: "os_version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 9, name: "arch", kind: "scalar", T: 9 /* ScalarType.STRING */ },
@@ -17638,51 +17638,51 @@ export class ReportSandProcessMetricsRequest extends Message<ReportSandProcessMe
     { no: 11, name: "client_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ReportSandProcessMetricsRequest {
-    return new ReportSandProcessMetricsRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ReportSlateProcessMetricsRequest {
+    return new ReportSlateProcessMetricsRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ReportSandProcessMetricsRequest {
-    return new ReportSandProcessMetricsRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ReportSlateProcessMetricsRequest {
+    return new ReportSlateProcessMetricsRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ReportSandProcessMetricsRequest {
-    return new ReportSandProcessMetricsRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ReportSlateProcessMetricsRequest {
+    return new ReportSlateProcessMetricsRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: ReportSandProcessMetricsRequest | PlainMessage<ReportSandProcessMetricsRequest> | undefined, b: ReportSandProcessMetricsRequest | PlainMessage<ReportSandProcessMetricsRequest> | undefined): boolean {
-    return proto3.util.equals(ReportSandProcessMetricsRequest, a, b);
+  static equals(a: ReportSlateProcessMetricsRequest | PlainMessage<ReportSlateProcessMetricsRequest> | undefined, b: ReportSlateProcessMetricsRequest | PlainMessage<ReportSlateProcessMetricsRequest> | undefined): boolean {
+    return proto3.util.equals(ReportSlateProcessMetricsRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.ReportSandProcessMetricsResponse
+ * @generated from message aiserver.v1.ReportSlateProcessMetricsResponse
  */
-export class ReportSandProcessMetricsResponse extends Message<ReportSandProcessMetricsResponse> {
-  constructor(data?: PartialMessage<ReportSandProcessMetricsResponse>) {
+export class ReportSlateProcessMetricsResponse extends Message<ReportSlateProcessMetricsResponse> {
+  constructor(data?: PartialMessage<ReportSlateProcessMetricsResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.ReportSandProcessMetricsResponse";
+  static readonly typeName = "aiserver.v1.ReportSlateProcessMetricsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ReportSandProcessMetricsResponse {
-    return new ReportSandProcessMetricsResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ReportSlateProcessMetricsResponse {
+    return new ReportSlateProcessMetricsResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ReportSandProcessMetricsResponse {
-    return new ReportSandProcessMetricsResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ReportSlateProcessMetricsResponse {
+    return new ReportSlateProcessMetricsResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ReportSandProcessMetricsResponse {
-    return new ReportSandProcessMetricsResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ReportSlateProcessMetricsResponse {
+    return new ReportSlateProcessMetricsResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: ReportSandProcessMetricsResponse | PlainMessage<ReportSandProcessMetricsResponse> | undefined, b: ReportSandProcessMetricsResponse | PlainMessage<ReportSandProcessMetricsResponse> | undefined): boolean {
-    return proto3.util.equals(ReportSandProcessMetricsResponse, a, b);
+  static equals(a: ReportSlateProcessMetricsResponse | PlainMessage<ReportSlateProcessMetricsResponse> | undefined, b: ReportSlateProcessMetricsResponse | PlainMessage<ReportSlateProcessMetricsResponse> | undefined): boolean {
+    return proto3.util.equals(ReportSlateProcessMetricsResponse, a, b);
   }
 }
 
@@ -18616,9 +18616,9 @@ export class RunWebSearchResponse extends Message<RunWebSearchResponse> {
 }
 
 /**
- * @generated from message aiserver.v1.SandProcessMetricsRowRequest
+ * @generated from message aiserver.v1.SlateProcessMetricsRowRequest
  */
-export class SandProcessMetricsRowRequest extends Message<SandProcessMetricsRowRequest> {
+export class SlateProcessMetricsRowRequest extends Message<SlateProcessMetricsRowRequest> {
   /**
    * @generated from field: int32 pid = 1;
    */
@@ -18669,13 +18669,13 @@ export class SandProcessMetricsRowRequest extends Message<SandProcessMetricsRowR
    */
   cpuDuringSamplePeakPct = 0;
 
-  constructor(data?: PartialMessage<SandProcessMetricsRowRequest>) {
+  constructor(data?: PartialMessage<SlateProcessMetricsRowRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.SandProcessMetricsRowRequest";
+  static readonly typeName = "aiserver.v1.SlateProcessMetricsRowRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "pid", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 2, name: "ppid", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
@@ -18689,20 +18689,20 @@ export class SandProcessMetricsRowRequest extends Message<SandProcessMetricsRowR
     { no: 10, name: "cpu_during_sample_peak_pct", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SandProcessMetricsRowRequest {
-    return new SandProcessMetricsRowRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SlateProcessMetricsRowRequest {
+    return new SlateProcessMetricsRowRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): SandProcessMetricsRowRequest {
-    return new SandProcessMetricsRowRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): SlateProcessMetricsRowRequest {
+    return new SlateProcessMetricsRowRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): SandProcessMetricsRowRequest {
-    return new SandProcessMetricsRowRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): SlateProcessMetricsRowRequest {
+    return new SlateProcessMetricsRowRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: SandProcessMetricsRowRequest | PlainMessage<SandProcessMetricsRowRequest> | undefined, b: SandProcessMetricsRowRequest | PlainMessage<SandProcessMetricsRowRequest> | undefined): boolean {
-    return proto3.util.equals(SandProcessMetricsRowRequest, a, b);
+  static equals(a: SlateProcessMetricsRowRequest | PlainMessage<SlateProcessMetricsRowRequest> | undefined, b: SlateProcessMetricsRowRequest | PlainMessage<SlateProcessMetricsRowRequest> | undefined): boolean {
+    return proto3.util.equals(SlateProcessMetricsRowRequest, a, b);
   }
 }
 
@@ -20174,17 +20174,17 @@ export class StreamAiLintBugResponse extends Message<StreamAiLintBugResponse> {
 }
 
 /**
- * @generated from message aiserver.v1.StreamBugBotAgenticClientMessage
+ * @generated from message aiserver.v1.StreamBugReportAgenticClientMessage
  */
-export class StreamBugBotAgenticClientMessage extends Message<StreamBugBotAgenticClientMessage> {
+export class StreamBugReportAgenticClientMessage extends Message<StreamBugReportAgenticClientMessage> {
   /**
-   * @generated from oneof aiserver.v1.StreamBugBotAgenticClientMessage.message
+   * @generated from oneof aiserver.v1.StreamBugReportAgenticClientMessage.message
    */
   message: {
     /**
-     * @generated from field: aiserver.v1.StreamBugBotRequest start = 1;
+     * @generated from field: aiserver.v1.StreamBugReportRequest start = 1;
      */
-    value: StreamBugBotRequest;
+    value: StreamBugReportRequest;
     case: "start";
   } | {
     /**
@@ -20200,49 +20200,49 @@ export class StreamBugBotAgenticClientMessage extends Message<StreamBugBotAgenti
     case: "execClientControlMessage";
   } | { case: undefined; value?: undefined } = { case: undefined };
 
-  constructor(data?: PartialMessage<StreamBugBotAgenticClientMessage>) {
+  constructor(data?: PartialMessage<StreamBugReportAgenticClientMessage>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.StreamBugBotAgenticClientMessage";
+  static readonly typeName = "aiserver.v1.StreamBugReportAgenticClientMessage";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "start", kind: "message", T: StreamBugBotRequest, oneof: "message" },
+    { no: 1, name: "start", kind: "message", T: StreamBugReportRequest, oneof: "message" },
     { no: 2, name: "exec_client_message", kind: "message", T: ExecClientMessage, oneof: "message" },
     { no: 3, name: "exec_client_control_message", kind: "message", T: ExecClientControlMessage, oneof: "message" },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StreamBugBotAgenticClientMessage {
-    return new StreamBugBotAgenticClientMessage().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StreamBugReportAgenticClientMessage {
+    return new StreamBugReportAgenticClientMessage().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): StreamBugBotAgenticClientMessage {
-    return new StreamBugBotAgenticClientMessage().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): StreamBugReportAgenticClientMessage {
+    return new StreamBugReportAgenticClientMessage().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): StreamBugBotAgenticClientMessage {
-    return new StreamBugBotAgenticClientMessage().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): StreamBugReportAgenticClientMessage {
+    return new StreamBugReportAgenticClientMessage().fromJsonString(jsonString, options);
   }
 
-  static equals(a: StreamBugBotAgenticClientMessage | PlainMessage<StreamBugBotAgenticClientMessage> | undefined, b: StreamBugBotAgenticClientMessage | PlainMessage<StreamBugBotAgenticClientMessage> | undefined): boolean {
-    return proto3.util.equals(StreamBugBotAgenticClientMessage, a, b);
+  static equals(a: StreamBugReportAgenticClientMessage | PlainMessage<StreamBugReportAgenticClientMessage> | undefined, b: StreamBugReportAgenticClientMessage | PlainMessage<StreamBugReportAgenticClientMessage> | undefined): boolean {
+    return proto3.util.equals(StreamBugReportAgenticClientMessage, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.StreamBugBotAgenticServerMessage
+ * @generated from message aiserver.v1.StreamBugReportAgenticServerMessage
  */
-export class StreamBugBotAgenticServerMessage extends Message<StreamBugBotAgenticServerMessage> {
+export class StreamBugReportAgenticServerMessage extends Message<StreamBugReportAgenticServerMessage> {
   /**
-   * @generated from oneof aiserver.v1.StreamBugBotAgenticServerMessage.message
+   * @generated from oneof aiserver.v1.StreamBugReportAgenticServerMessage.message
    */
   message: {
     /**
-     * @generated from field: aiserver.v1.StreamBugBotResponse bugbot_response = 1;
+     * @generated from field: aiserver.v1.StreamBugReportResponse bug_report_response = 1;
      */
-    value: StreamBugBotResponse;
-    case: "bugbotResponse";
+    value: StreamBugReportResponse;
+    case: "bugReportResponse";
   } | {
     /**
      * @generated from field: agent.v1.ExecServerMessage exec_server_message = 2;
@@ -20257,49 +20257,49 @@ export class StreamBugBotAgenticServerMessage extends Message<StreamBugBotAgenti
     case: "execServerControlMessage";
   } | { case: undefined; value?: undefined } = { case: undefined };
 
-  constructor(data?: PartialMessage<StreamBugBotAgenticServerMessage>) {
+  constructor(data?: PartialMessage<StreamBugReportAgenticServerMessage>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.StreamBugBotAgenticServerMessage";
+  static readonly typeName = "aiserver.v1.StreamBugReportAgenticServerMessage";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "bugbot_response", kind: "message", T: StreamBugBotResponse, oneof: "message" },
+    { no: 1, name: "bug_report_response", kind: "message", T: StreamBugReportResponse, oneof: "message" },
     { no: 2, name: "exec_server_message", kind: "message", T: ExecServerMessage, oneof: "message" },
     { no: 3, name: "exec_server_control_message", kind: "message", T: ExecServerControlMessage, oneof: "message" },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StreamBugBotAgenticServerMessage {
-    return new StreamBugBotAgenticServerMessage().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StreamBugReportAgenticServerMessage {
+    return new StreamBugReportAgenticServerMessage().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): StreamBugBotAgenticServerMessage {
-    return new StreamBugBotAgenticServerMessage().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): StreamBugReportAgenticServerMessage {
+    return new StreamBugReportAgenticServerMessage().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): StreamBugBotAgenticServerMessage {
-    return new StreamBugBotAgenticServerMessage().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): StreamBugReportAgenticServerMessage {
+    return new StreamBugReportAgenticServerMessage().fromJsonString(jsonString, options);
   }
 
-  static equals(a: StreamBugBotAgenticServerMessage | PlainMessage<StreamBugBotAgenticServerMessage> | undefined, b: StreamBugBotAgenticServerMessage | PlainMessage<StreamBugBotAgenticServerMessage> | undefined): boolean {
-    return proto3.util.equals(StreamBugBotAgenticServerMessage, a, b);
+  static equals(a: StreamBugReportAgenticServerMessage | PlainMessage<StreamBugReportAgenticServerMessage> | undefined, b: StreamBugReportAgenticServerMessage | PlainMessage<StreamBugReportAgenticServerMessage> | undefined): boolean {
+    return proto3.util.equals(StreamBugReportAgenticServerMessage, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.StreamBugBotResponse
+ * @generated from message aiserver.v1.StreamBugReportResponse
  */
-export class StreamBugBotResponse extends Message<StreamBugBotResponse> {
+export class StreamBugReportResponse extends Message<StreamBugReportResponse> {
   /**
    * @generated from field: optional aiserver.v1.BugReports bug_reports = 1;
    */
   bugReports?: BugReports;
 
   /**
-   * @generated from field: optional aiserver.v1.BugBotStatus status = 2;
+   * @generated from field: optional aiserver.v1.BugReportStatus status = 2;
    */
-  status?: BugBotStatus;
+  status?: BugReportStatus;
 
   /**
    * @generated from field: optional string summary = 3;
@@ -20307,44 +20307,44 @@ export class StreamBugBotResponse extends Message<StreamBugBotResponse> {
   summary?: string;
 
   /**
-   * @generated from field: optional aiserver.v1.BugbotTrialNotification trial_notification = 4;
+   * @generated from field: optional aiserver.v1.BugReportTrialNotification trial_notification = 4;
    */
-  trialNotification?: BugbotTrialNotification;
+  trialNotification?: BugReportTrialNotification;
 
   /**
    * @generated from field: optional int32 num_turns = 5;
    */
   numTurns?: number;
 
-  constructor(data?: PartialMessage<StreamBugBotResponse>) {
+  constructor(data?: PartialMessage<StreamBugReportResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.StreamBugBotResponse";
+  static readonly typeName = "aiserver.v1.StreamBugReportResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bug_reports", kind: "message", T: BugReports, opt: true },
-    { no: 2, name: "status", kind: "message", T: BugBotStatus, opt: true },
+    { no: 2, name: "status", kind: "message", T: BugReportStatus, opt: true },
     { no: 3, name: "summary", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
-    { no: 4, name: "trial_notification", kind: "message", T: BugbotTrialNotification, opt: true },
+    { no: 4, name: "trial_notification", kind: "message", T: BugReportTrialNotification, opt: true },
     { no: 5, name: "num_turns", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StreamBugBotResponse {
-    return new StreamBugBotResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StreamBugReportResponse {
+    return new StreamBugReportResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): StreamBugBotResponse {
-    return new StreamBugBotResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): StreamBugReportResponse {
+    return new StreamBugReportResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): StreamBugBotResponse {
-    return new StreamBugBotResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): StreamBugReportResponse {
+    return new StreamBugReportResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: StreamBugBotResponse | PlainMessage<StreamBugBotResponse> | undefined, b: StreamBugBotResponse | PlainMessage<StreamBugBotResponse> | undefined): boolean {
-    return proto3.util.equals(StreamBugBotResponse, a, b);
+  static equals(a: StreamBugReportResponse | PlainMessage<StreamBugReportResponse> | undefined, b: StreamBugReportResponse | PlainMessage<StreamBugReportResponse> | undefined): boolean {
+    return proto3.util.equals(StreamBugReportResponse, a, b);
   }
 }
 

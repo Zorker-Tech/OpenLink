@@ -26,7 +26,7 @@ import type { McpDescriptor, McpFileSystemOptions, McpInstructions } from "../..
 import { jsx, jsxs, Fragment, type PromptNode, type PromptProps } from "../../prompt-jsx/index.ts"
 import { renderContent } from "../../prompt-jsx/index.ts"
 import { AgentType } from "../utils/agent-config.ts"
-import { materializeAutomationMemoryInstruction } from "./bugbot/automations.ts"
+import { materializeAutomationMemoryInstruction } from "./bug_report/automations.ts"
 import { isNamedAgentHomePromptSession } from "./cloud-meta-agent/named-agent-sessions.ts"
 import { getCloudTestingSectionElements, getCloudTestingSectionsPlacement } from "./cloud-testing-sections.ts"
 import { CloudInstructionsSection, CloudTaskInstructions } from "./cloud-task-instructions.ts"
@@ -64,7 +64,7 @@ interface UserInfoModelInfo {
   readonly promptVersion?: string | undefined
   readonly isComposerMatterhorn?: boolean | undefined
   readonly isRawTrainingSlug?: boolean | undefined
-  readonly isGrok45ProductPrompt?: boolean | undefined
+  readonly isSlateProductPrompt?: boolean | undefined
   readonly isComposer2?: boolean | undefined
   readonly isComposer15?: boolean | undefined
   readonly isGpt56?: boolean | undefined
@@ -98,7 +98,7 @@ interface UserInfoFeatureFlags {
   readonly enableComposer2CustomUserRules?: boolean | undefined
   readonly enableMatterhornPromptTweaks?: boolean | undefined
   readonly enableGrepBroadGlobGuard?: boolean | undefined
-  readonly grokCloudTestingInSystemPrompt?: boolean | undefined
+  readonly slateCloudTestingInSystemPrompt?: boolean | undefined
   readonly [key: string]: unknown
 }
 

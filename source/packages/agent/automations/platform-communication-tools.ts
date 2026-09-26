@@ -19,7 +19,7 @@ import {
   SLACK_START_STREAMING_MCP_TOOL_NAME,
   START_SLACK_STREAMING_TOOL_NAME,
 } from "../constants.ts"
-import { automationToolNameToSnakeCase } from "../prompts/bugbot/automations.ts"
+import { automationToolNameToSnakeCase } from "../prompts/bug_report/automations.ts"
 
 const PLATFORM_COMMUNICATION_TOOL_NAMES = [
   "SendSlackMessage",

@@ -5,14 +5,14 @@ import os from "node:os"
 import path from "node:path"
 import { execFileSync } from "node:child_process"
 
-import { synthesizeSkillPluginDir } from "../../source/packages/cursor-plugins/skill-plugin-synthesizer.ts"
-import { isSparseCheckoutRepo, materializeSpecForGitPaths, serverIgnoredFilter } from "../../source/packages/cursor-plugins/git-sparse-clone.ts"
+import { synthesizeSkillPluginDir } from "../../source/packages/plugin-install/skill-plugin-synthesizer.ts"
+import { isSparseCheckoutRepo, materializeSpecForGitPaths, serverIgnoredFilter } from "../../source/packages/plugin-install/git-sparse-clone.ts"
 import {
   PLUGIN_MCP_CONFIG_FILE_NAMES,
   resolvePluginMcpConfigFromReader,
   resolvePluginMcpConfigPaths,
   resolvePluginMcpConfigWithManifestLookup,
-} from "../../source/packages/cursor-plugins/mcp-parser.ts"
+} from "../../source/packages/plugin-install/mcp-parser.ts"
 
 // ---------------------------------------------------------------------------------------------
 // Skills written out as a plugin
