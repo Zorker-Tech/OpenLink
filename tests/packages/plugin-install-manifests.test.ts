@@ -5,8 +5,8 @@ import os from "node:os"
 import path from "node:path"
 import { execFileSync } from "node:child_process"
 
-import { inferMcpPlaceholderVariables } from "../../source/packages/cursor-plugins/mcp-placeholder-variables.ts"
-import { resolveGitRemoteRef } from "../../source/packages/cursor-plugins/git-remote-ref-resolve.ts"
+import { inferMcpPlaceholderVariables } from "../../source/packages/plugin-install/mcp-placeholder-variables.ts"
+import { resolveGitRemoteRef } from "../../source/packages/plugin-install/git-remote-ref-resolve.ts"
 import {
   containsPluginRootDir,
   isPathSafe,
@@ -18,7 +18,7 @@ import {
   PLUGIN_MANIFEST_PATHS,
   PLUGIN_ROOT_DIR_NAMES,
   resolvePluginSourcePath,
-} from "../../source/packages/cursor-plugins/manifest-parser.ts"
+} from "../../source/packages/plugin-install/manifest-parser.ts"
 
 // ---------------------------------------------------------------------------------------------
 // The values a plugin's MCP configuration asks for

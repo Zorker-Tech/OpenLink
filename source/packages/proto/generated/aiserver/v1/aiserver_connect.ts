@@ -8,7 +8,7 @@
 /* eslint-disable */
 // @ts-nocheck
 
-import { AcknowledgeGracePeriodDisclaimerRequest, AcknowledgeGracePeriodDisclaimerResponse, AiProjectRequest, AiProjectResponse, AutoContextRequest, AutoContextResponse, AvailableDocsRequest, AvailableDocsResponse, AvailableModelsRequest, AvailableModelsResponse, BackgroundCmdKEvalRequest, BackgroundCmdKEvalResponse, BackgroundCmdKRequest, BackgroundCmdKResponse, BulkEmbedRequest, BulkEmbedResponse, CalculateAutoSelectionRequest, CalculateAutoSelectionResponse, CheckBugBotPriceRequest, CheckBugBotPriceResponse, CheckBugBotTelemetryHealthyRequest, CheckBugBotTelemetryHealthyResponse, CheckDoableAsTaskRequest, CheckDoableAsTaskResponse, CheckFeaturesStatusRequest, CheckFeaturesStatusResponse, CheckFeatureStatusRequest, CheckFeatureStatusResponse, CheckLongFilesFitResponse, CheckNumberConfigRequest, CheckNumberConfigResponse, CheckNumberConfigsRequest, CheckNumberConfigsResponse, CheckQueuePositionRequest, CheckQueuePositionResponse, CheckUsageBasedPriceRequest, CheckUsageBasedPriceResponse, ComposerEnhancerClientMessage, ComposerEnhancerServerMessage, ContextRerankingRequest, ContextRerankingResponse, ContextScoresRequest, ContextScoresResponse, CountTokensRequest, CountTokensResponse, DevOnlyGetPastRequestIdsRequest, DevOnlyGetPastRequestIdsResponse, DoThisForMeCheckRequest, DoThisForMeCheckResponse, DoThisForMeRequest, DoThisForMeResponseWrapped, EvaluatePromptHookRequest, EvaluatePromptHookResponse, FetchRelevantKnowledgeForConversationRequest, FetchRelevantKnowledgeForConversationResponse, FindBugsRequest, FindBugsResponse, FixMarkersRequest, FixMarkersResponse, GenerateTldrRequest, GenerateTldrResponse, GetAtSymbolSuggestionsRequest, GetAtSymbolSuggestionsResponse, GetBackgroundComposerFeedbackLinkRequest, GetBackgroundComposerFeedbackLinkResponse, GetChatRequest, GetChatSuggestionsRequest, GetChatSuggestionsResponse, GetChatTitleRequest, GetChatTitleResponse, GetCloudSetupBlockersRequest, GetCloudSetupBlockersResponse, GetCodebaseQuestionsResponse, GetCompletionRequest, GetCompletionResponse, GetComposerAutocompleteRequest, GetComposerAutocompleteResponse, GetComposerChatRequest, GetDefaultModelNudgeDataRequest, GetDefaultModelNudgeDataResponse, GetDefaultModelRequest, GetDefaultModelResponse, GetDiffReviewRequest, GetEditorBugbotAutoRunStatusRequest, GetEditorBugbotAutoRunStatusResponse, GetEffectiveTokenLimitRequest, GetEffectiveTokenLimitResponse, GetEvaluationPromptRequest, GetEvaluationPromptResponse, GetFilesForComposerRequest, GetFilesForComposerResponse, GetLastDefaultModelNudgeRequest, GetLastDefaultModelNudgeResponse, GetModelLabelsRequest, GetModelLabelsResponse, GetPassthroughPromptRequest, GetPassthroughPromptResponse, GetSimplePromptRequest, GetSimplePromptResponse, GetSuggestedBugBotIterationsRequest, GetSuggestedBugBotIterationsResponse, GetTerminalCompletionRequest, GetTerminalCompletionResponse, GetThoughtAnnotationRequest, GetThoughtAnnotationResponse, GetUserInfoRequest, GetUserInfoResponse, GetUserInstructionsRequest, GetUserInstructionsResponse, HealthCheckRequest, HealthCheckResponse, InferBackgroundComposerScriptsRequest, InferBackgroundComposerScriptsResponse, IntentPredictionRequest, IntentPredictionResponse, InterfaceAgentInitRequest, InterfaceAgentInitResponse, IsCursorPredictionEnabledRequest, IsCursorPredictionEnabledResponse, IsolatedTreesitterRequest, IsolatedTreesitterResponse, IsTerminalFinishedRequest, IsTerminalFinishedResponseV2, KeepComposerCacheWarmRequest, KeepComposerCacheWarmResponse, KnowledgeBaseAddRequest, KnowledgeBaseAddResponse, KnowledgeBaseListRequest, KnowledgeBaseListResponse, KnowledgeBaseRemoveRequest, KnowledgeBaseRemoveResponse, KnowledgeBaseUpdateRequest, KnowledgeBaseUpdateResponse, LogLinterExplicitUserFeedbackRequest, LogLinterExplicitUserFeedbackResponse, LogUserLintReplyRequest, LogUserLintReplyResponse, ModelQueryRequest, ModelQueryResponse, ModelQueryResponseV2, NameTabRequest, NameTabResponse, PotentialLocsInitialQueriesRequest, PotentialLocsInitialQueriesResponse, PotentialLocsRequest, PotentialLocsResponse, PotentialLocsUnderneathRequest, PotentialLocsUnderneathResponse, PotentiallyGenerateMemoryRequest, PotentiallyGenerateMemoryResponse, PreloadEditRequest, PreloadEditResponse, PrivacyCheckRequest, PrivacyCheckResponse, PushAiThoughtRequest, PushAiThoughtResponse, RecordIdeBugReactionRequest, RecordIdeBugReactionResponse, ReportAgentFeedbackRequest, ReportAgentFeedbackResponse, ReportAgentMessageFeedbackRequest, ReportAgentMessageFeedbackResponse, ReportAiCodeChangeMetricsRequest, ReportAiCodeChangeMetricsResponse, ReportAutoRoutingResultFeedbackRequest, ReportAutoRoutingResultFeedbackResponse, ReportBugRequest, ReportBugResponse, ReportClientNumericMetricsRequest, ReportClientNumericMetricsResponse, ReportCmdKFateRequest, ReportCmdKFateResponse, ReportCommitAiAnalyticsRequest, ReportCommitAiAnalyticsResponse, ReportFeedbackRequest, ReportFeedbackResponse, ReportGenerationFeedbackRequest, ReportGenerationFeedbackResponse, ReportGroundTruthCandidateRequest, ReportGroundTruthCandidateResponse, ReportProcessMetricsRequest, ReportProcessMetricsResponse, ReportProcessMetricsV2Request, ReportProcessMetricsV2Response, ReportSandProcessMetricsRequest, ReportSandProcessMetricsResponse, RerankerRequest, RerankerResponse, ReviewChatRequest, ReviewChatResponse, ReviewRequest, ReviewResponse, RunGenerateImageRequest, RunGenerateImageResponse, RunWebFetchRequest, RunWebFetchResponse, RunWebSearchRequest, RunWebSearchResponse, ServerTimeRequest, ServerTimeResponse, ShowWelcomeScreenRequest, ShowWelcomeScreenResponse, SlashEditFollowUpWithPreviousEditsRequest, SlashEditRequest, SlashEditResponse, StreamAiCursorHelpRequest, StreamAiCursorHelpResponse, StreamAiLintBugRequest, StreamAiLintBugResponse, StreamBugBotAgenticClientMessage, StreamBugBotAgenticServerMessage, StreamBugBotResponse, StreamChatContextRequest, StreamChatContextResponse, StreamChatDeepContextRequest, StreamChatDeepContextResponse, StreamChatResponse, StreamChatToolformerContinueRequest, StreamChatToolformerResponse, StreamCursorTutorRequest, StreamCursorTutorResponse, StreamDiffReviewByFileResponse, StreamDiffReviewResponse, StreamEditRequest, StreamFastEditRequest, StreamFastEditResponse, StreamGenerateRequest, StreamInterfaceAgentStatusRequest, StreamInterfaceAgentStatusResponse, StreamLintRequest, StreamNewRuleRequest, StreamNextCursorPredictionRequest, StreamNextCursorPredictionResponse, StreamPriomptPromptRequest, StreamPriomptPromptResponse, StreamPseudocodeGeneratorRequest, StreamPseudocodeGeneratorResponse, StreamPseudocodeMapperRequest, StreamPseudocodeMapperResponse, StreamSlashEditFollowUpWithPreviousEditsResponse, StreamTerminalAutocompleteRequest, StreamTerminalAutocompleteResponse, StreamUiBestOfNJudgeClientMessage, StreamUiBestOfNJudgeServerMessage, StreamWebCmdKV1Request, StreamWebCmdKV1Response, SttClientMessage, SttServerMessage, SuggestQuickActionsRequest, SuggestQuickActionsResponse, TakeNotesOnCommitDiffRequest, TakeNotesOnCommitDiffResponse, TaskGetInterfaceAgentStatusRequest, TaskGetInterfaceAgentStatusResponseWrapped, TaskInfoRequest, TaskInfoResponse, TaskInitRequest, TaskInitResponse, TaskPauseRequest, TaskPauseResponse, TaskProvideResultRequest, TaskProvideResultResponse, TaskSendMessageRequest, TaskSendMessageResponse, TaskStreamChatContextRequest, TaskStreamChatContextResponseWrapped, TaskStreamLogRequest, TaskStreamLogResponse, TestBedrockCredentialsRequest, TestBedrockCredentialsResponse, TestBidiRequest, TestBidiResponse, TestModelStatusRequest, TestModelStatusResponse, ThrowErrorCheckRequest, ThrowErrorCheckResponse, TimeLeftHealthCheckResponse, ToCamelCaseRequest, ToCamelCaseResponse, TranscribeAudioRequest, TranscribeAudioResponse, TryParseTypeScriptTreeSitterRequest, TryParseTypeScriptTreeSitterResponse, UpdateVscodeProfileRequest, UpdateVscodeProfileResponse, WarmChatCacheRequest, WarmChatCacheResponse, WarmComposerCacheResponse, WriteGitBranchNameRequest, WriteGitBranchNameResponse, WriteGitCommitMessageRequest, WriteGitCommitMessageResponse } from "./aiserver_pb.ts";
+import { AcknowledgeGracePeriodDisclaimerRequest, AcknowledgeGracePeriodDisclaimerResponse, AiProjectRequest, AiProjectResponse, AutoContextRequest, AutoContextResponse, AvailableDocsRequest, AvailableDocsResponse, AvailableModelsRequest, AvailableModelsResponse, BackgroundCmdKEvalRequest, BackgroundCmdKEvalResponse, BackgroundCmdKRequest, BackgroundCmdKResponse, BulkEmbedRequest, BulkEmbedResponse, CalculateAutoSelectionRequest, CalculateAutoSelectionResponse, CheckBugReportPriceRequest, CheckBugReportPriceResponse, CheckBugReportTelemetryHealthyRequest, CheckBugReportTelemetryHealthyResponse, CheckDoableAsTaskRequest, CheckDoableAsTaskResponse, CheckFeaturesStatusRequest, CheckFeaturesStatusResponse, CheckFeatureStatusRequest, CheckFeatureStatusResponse, CheckLongFilesFitResponse, CheckNumberConfigRequest, CheckNumberConfigResponse, CheckNumberConfigsRequest, CheckNumberConfigsResponse, CheckQueuePositionRequest, CheckQueuePositionResponse, CheckUsageBasedPriceRequest, CheckUsageBasedPriceResponse, ComposerEnhancerClientMessage, ComposerEnhancerServerMessage, ContextRerankingRequest, ContextRerankingResponse, ContextScoresRequest, ContextScoresResponse, CountTokensRequest, CountTokensResponse, DevOnlyGetPastRequestIdsRequest, DevOnlyGetPastRequestIdsResponse, DoThisForMeCheckRequest, DoThisForMeCheckResponse, DoThisForMeRequest, DoThisForMeResponseWrapped, EvaluatePromptHookRequest, EvaluatePromptHookResponse, FetchRelevantKnowledgeForConversationRequest, FetchRelevantKnowledgeForConversationResponse, FindBugsRequest, FindBugsResponse, FixMarkersRequest, FixMarkersResponse, GenerateTldrRequest, GenerateTldrResponse, GetAtSymbolSuggestionsRequest, GetAtSymbolSuggestionsResponse, GetBackgroundComposerFeedbackLinkRequest, GetBackgroundComposerFeedbackLinkResponse, GetChatRequest, GetChatSuggestionsRequest, GetChatSuggestionsResponse, GetChatTitleRequest, GetChatTitleResponse, GetCloudSetupBlockersRequest, GetCloudSetupBlockersResponse, GetCodebaseQuestionsResponse, GetCompletionRequest, GetCompletionResponse, GetComposerAutocompleteRequest, GetComposerAutocompleteResponse, GetComposerChatRequest, GetDefaultModelNudgeDataRequest, GetDefaultModelNudgeDataResponse, GetDefaultModelRequest, GetDefaultModelResponse, GetDiffReviewRequest, GetEditorBugReportAutoRunStatusRequest, GetEditorBugReportAutoRunStatusResponse, GetEffectiveTokenLimitRequest, GetEffectiveTokenLimitResponse, GetEvaluationPromptRequest, GetEvaluationPromptResponse, GetFilesForComposerRequest, GetFilesForComposerResponse, GetLastDefaultModelNudgeRequest, GetLastDefaultModelNudgeResponse, GetModelLabelsRequest, GetModelLabelsResponse, GetPassthroughPromptRequest, GetPassthroughPromptResponse, GetSimplePromptRequest, GetSimplePromptResponse, GetSuggestedBugReportIterationsRequest, GetSuggestedBugReportIterationsResponse, GetTerminalCompletionRequest, GetTerminalCompletionResponse, GetThoughtAnnotationRequest, GetThoughtAnnotationResponse, GetUserInfoRequest, GetUserInfoResponse, GetUserInstructionsRequest, GetUserInstructionsResponse, HealthCheckRequest, HealthCheckResponse, InferBackgroundComposerScriptsRequest, InferBackgroundComposerScriptsResponse, IntentPredictionRequest, IntentPredictionResponse, InterfaceAgentInitRequest, InterfaceAgentInitResponse, IsCursorPredictionEnabledRequest, IsCursorPredictionEnabledResponse, IsolatedTreesitterRequest, IsolatedTreesitterResponse, IsTerminalFinishedRequest, IsTerminalFinishedResponseV2, KeepComposerCacheWarmRequest, KeepComposerCacheWarmResponse, KnowledgeBaseAddRequest, KnowledgeBaseAddResponse, KnowledgeBaseListRequest, KnowledgeBaseListResponse, KnowledgeBaseRemoveRequest, KnowledgeBaseRemoveResponse, KnowledgeBaseUpdateRequest, KnowledgeBaseUpdateResponse, LogLinterExplicitUserFeedbackRequest, LogLinterExplicitUserFeedbackResponse, LogUserLintReplyRequest, LogUserLintReplyResponse, ModelQueryRequest, ModelQueryResponse, ModelQueryResponseV2, NameTabRequest, NameTabResponse, PotentialLocsInitialQueriesRequest, PotentialLocsInitialQueriesResponse, PotentialLocsRequest, PotentialLocsResponse, PotentialLocsUnderneathRequest, PotentialLocsUnderneathResponse, PotentiallyGenerateMemoryRequest, PotentiallyGenerateMemoryResponse, PreloadEditRequest, PreloadEditResponse, PrivacyCheckRequest, PrivacyCheckResponse, PushAiThoughtRequest, PushAiThoughtResponse, RecordIdeBugReactionRequest, RecordIdeBugReactionResponse, ReportAgentFeedbackRequest, ReportAgentFeedbackResponse, ReportAgentMessageFeedbackRequest, ReportAgentMessageFeedbackResponse, ReportAiCodeChangeMetricsRequest, ReportAiCodeChangeMetricsResponse, ReportAutoRoutingResultFeedbackRequest, ReportAutoRoutingResultFeedbackResponse, ReportBugRequest, ReportBugResponse, ReportClientNumericMetricsRequest, ReportClientNumericMetricsResponse, ReportCmdKFateRequest, ReportCmdKFateResponse, ReportCommitAiAnalyticsRequest, ReportCommitAiAnalyticsResponse, ReportFeedbackRequest, ReportFeedbackResponse, ReportGenerationFeedbackRequest, ReportGenerationFeedbackResponse, ReportGroundTruthCandidateRequest, ReportGroundTruthCandidateResponse, ReportProcessMetricsRequest, ReportProcessMetricsResponse, ReportProcessMetricsV2Request, ReportProcessMetricsV2Response, ReportSlateProcessMetricsRequest, ReportSlateProcessMetricsResponse, RerankerRequest, RerankerResponse, ReviewChatRequest, ReviewChatResponse, ReviewRequest, ReviewResponse, RunGenerateImageRequest, RunGenerateImageResponse, RunWebFetchRequest, RunWebFetchResponse, RunWebSearchRequest, RunWebSearchResponse, ServerTimeRequest, ServerTimeResponse, ShowWelcomeScreenRequest, ShowWelcomeScreenResponse, SlashEditFollowUpWithPreviousEditsRequest, SlashEditRequest, SlashEditResponse, StreamAiCursorHelpRequest, StreamAiCursorHelpResponse, StreamAiLintBugRequest, StreamAiLintBugResponse, StreamBugReportAgenticClientMessage, StreamBugReportAgenticServerMessage, StreamBugReportResponse, StreamChatContextRequest, StreamChatContextResponse, StreamChatDeepContextRequest, StreamChatDeepContextResponse, StreamChatResponse, StreamChatToolformerContinueRequest, StreamChatToolformerResponse, StreamCursorTutorRequest, StreamCursorTutorResponse, StreamDiffReviewByFileResponse, StreamDiffReviewResponse, StreamEditRequest, StreamFastEditRequest, StreamFastEditResponse, StreamGenerateRequest, StreamInterfaceAgentStatusRequest, StreamInterfaceAgentStatusResponse, StreamLintRequest, StreamNewRuleRequest, StreamNextCursorPredictionRequest, StreamNextCursorPredictionResponse, StreamPriomptPromptRequest, StreamPriomptPromptResponse, StreamPseudocodeGeneratorRequest, StreamPseudocodeGeneratorResponse, StreamPseudocodeMapperRequest, StreamPseudocodeMapperResponse, StreamSlashEditFollowUpWithPreviousEditsResponse, StreamTerminalAutocompleteRequest, StreamTerminalAutocompleteResponse, StreamUiBestOfNJudgeClientMessage, StreamUiBestOfNJudgeServerMessage, StreamWebCmdKV1Request, StreamWebCmdKV1Response, SttClientMessage, SttServerMessage, SuggestQuickActionsRequest, SuggestQuickActionsResponse, TakeNotesOnCommitDiffRequest, TakeNotesOnCommitDiffResponse, TaskGetInterfaceAgentStatusRequest, TaskGetInterfaceAgentStatusResponseWrapped, TaskInfoRequest, TaskInfoResponse, TaskInitRequest, TaskInitResponse, TaskPauseRequest, TaskPauseResponse, TaskProvideResultRequest, TaskProvideResultResponse, TaskSendMessageRequest, TaskSendMessageResponse, TaskStreamChatContextRequest, TaskStreamChatContextResponseWrapped, TaskStreamLogRequest, TaskStreamLogResponse, TestBedrockCredentialsRequest, TestBedrockCredentialsResponse, TestBidiRequest, TestBidiResponse, TestModelStatusRequest, TestModelStatusResponse, ThrowErrorCheckRequest, ThrowErrorCheckResponse, TimeLeftHealthCheckResponse, ToCamelCaseRequest, ToCamelCaseResponse, TranscribeAudioRequest, TranscribeAudioResponse, TryParseTypeScriptTreeSitterRequest, TryParseTypeScriptTreeSitterResponse, UpdateVscodeProfileRequest, UpdateVscodeProfileResponse, WarmChatCacheRequest, WarmChatCacheResponse, WarmComposerCacheResponse, WriteGitBranchNameRequest, WriteGitBranchNameResponse, WriteGitCommitMessageRequest, WriteGitCommitMessageResponse } from "./aiserver_pb.ts";
 import { MethodKind } from "@bufbuild/protobuf";
 import { RerankDocumentsRequest, RerankDocumentsResponse } from "./chat_pb.ts";
 import { StreamInlineLongCompletionRequest } from "./inline_gpt4_pb.ts";
@@ -17,7 +17,7 @@ import { CppAppendRequest, CppAppendResponse, CppConfigRequest, CppConfigRespons
 import { ChooseCodeReferencesRequest, ComputeIndexTopoSortRequest, ComputeIndexTopoSortResponse, CreateExperimentalIndexRequest, CreateExperimentalIndexResponse, ExtractPathsRequest, ExtractPathsResponse, ListenExperimentalIndexRequest, ListenExperimentalIndexResponse, ListExperimentalIndexFilesRequest, ListExperimentalIndexFilesResponse, RegisterCodeReferencesRequest, RegisterCodeReferencesResponse, RegisterFileToIndexRequest, RequestReceivedResponse, SetupIndexDependenciesRequest, SetupIndexDependenciesResponse, SummarizeWithReferencesRequest } from "./symbolic_context_pb.ts";
 import { DocumentationQueryRequest, DocumentationQueryResponse } from "./docs_pb.ts";
 import { ReportInlineActionRequest, ReportInlineActionResponse } from "./telemetry_pb.ts";
-import { StreamBugBotRequest } from "./bugbot_pb.ts";
+import { StreamBugReportRequest } from "./bug_reports_pb.ts";
 import { BidiPollRequest, BidiPollResponse, BidiRequestId } from "./bidi_pb.ts";
 import { GetDefaultModelForCliRequest, GetDefaultModelForCliResponse, GetUsableModelsRequest, GetUsableModelsResponse, NameAgentRequest, NameAgentResponse } from "../../agent/v1/agent_service_pb.ts";
 
@@ -1342,37 +1342,37 @@ export const AiService = {
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.AiService.StreamBugBot
+     * @generated from rpc aiserver.v1.AiService.StreamBugReport
      */
-    streamBugBot: {
-      name: "StreamBugBot",
-      I: StreamBugBotRequest,
-      O: StreamBugBotResponse,
+    streamBugReport: {
+      name: "StreamBugReport",
+      I: StreamBugReportRequest,
+      O: StreamBugReportResponse,
       kind: MethodKind.ServerStreaming,
     },
     /**
-     * @generated from rpc aiserver.v1.AiService.StreamBugBotAgentic
+     * @generated from rpc aiserver.v1.AiService.StreamBugReportAgentic
      */
-    streamBugBotAgentic: {
-      name: "StreamBugBotAgentic",
-      I: StreamBugBotAgenticClientMessage,
-      O: StreamBugBotAgenticServerMessage,
+    streamBugReportAgentic: {
+      name: "StreamBugReportAgentic",
+      I: StreamBugReportAgenticClientMessage,
+      O: StreamBugReportAgenticServerMessage,
       kind: MethodKind.BiDiStreaming,
     },
     /**
-     * @generated from rpc aiserver.v1.AiService.StreamBugBotAgenticSSE
+     * @generated from rpc aiserver.v1.AiService.StreamBugReportAgenticSSE
      */
-    streamBugBotAgenticSSE: {
-      name: "StreamBugBotAgenticSSE",
+    streamBugReportAgenticSSE: {
+      name: "StreamBugReportAgenticSSE",
       I: BidiRequestId,
-      O: StreamBugBotAgenticServerMessage,
+      O: StreamBugReportAgenticServerMessage,
       kind: MethodKind.ServerStreaming,
     },
     /**
-     * @generated from rpc aiserver.v1.AiService.StreamBugBotAgenticPoll
+     * @generated from rpc aiserver.v1.AiService.StreamBugReportAgenticPoll
      */
-    streamBugBotAgenticPoll: {
-      name: "StreamBugBotAgenticPoll",
+    streamBugReportAgenticPoll: {
+      name: "StreamBugReportAgenticPoll",
       I: BidiPollRequest,
       O: BidiPollResponse,
       kind: MethodKind.ServerStreaming,
@@ -1405,21 +1405,21 @@ export const AiService = {
       kind: MethodKind.ServerStreaming,
     },
     /**
-     * @generated from rpc aiserver.v1.AiService.CheckBugBotPrice
+     * @generated from rpc aiserver.v1.AiService.CheckBugReportPrice
      */
-    checkBugBotPrice: {
-      name: "CheckBugBotPrice",
-      I: CheckBugBotPriceRequest,
-      O: CheckBugBotPriceResponse,
+    checkBugReportPrice: {
+      name: "CheckBugReportPrice",
+      I: CheckBugReportPriceRequest,
+      O: CheckBugReportPriceResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.AiService.CheckBugBotTelemetryHealthy
+     * @generated from rpc aiserver.v1.AiService.CheckBugReportTelemetryHealthy
      */
-    checkBugBotTelemetryHealthy: {
-      name: "CheckBugBotTelemetryHealthy",
-      I: CheckBugBotTelemetryHealthyRequest,
-      O: CheckBugBotTelemetryHealthyResponse,
+    checkBugReportTelemetryHealthy: {
+      name: "CheckBugReportTelemetryHealthy",
+      I: CheckBugReportTelemetryHealthyRequest,
+      O: CheckBugReportTelemetryHealthyResponse,
       kind: MethodKind.Unary,
     },
     /**
@@ -1432,21 +1432,21 @@ export const AiService = {
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.AiService.GetSuggestedBugBotIterations
+     * @generated from rpc aiserver.v1.AiService.GetSuggestedBugReportIterations
      */
-    getSuggestedBugBotIterations: {
-      name: "GetSuggestedBugBotIterations",
-      I: GetSuggestedBugBotIterationsRequest,
-      O: GetSuggestedBugBotIterationsResponse,
+    getSuggestedBugReportIterations: {
+      name: "GetSuggestedBugReportIterations",
+      I: GetSuggestedBugReportIterationsRequest,
+      O: GetSuggestedBugReportIterationsResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.AiService.GetEditorBugbotAutoRunStatus
+     * @generated from rpc aiserver.v1.AiService.GetEditorBugReportAutoRunStatus
      */
-    getEditorBugbotAutoRunStatus: {
-      name: "GetEditorBugbotAutoRunStatus",
-      I: GetEditorBugbotAutoRunStatusRequest,
-      O: GetEditorBugbotAutoRunStatusResponse,
+    getEditorBugReportAutoRunStatus: {
+      name: "GetEditorBugReportAutoRunStatus",
+      I: GetEditorBugReportAutoRunStatusRequest,
+      O: GetEditorBugReportAutoRunStatusResponse,
       kind: MethodKind.Unary,
     },
     /**
@@ -1558,12 +1558,12 @@ export const AiService = {
       kind: MethodKind.Unary,
     },
     /**
-     * @generated from rpc aiserver.v1.AiService.ReportSandProcessMetrics
+     * @generated from rpc aiserver.v1.AiService.ReportSlateProcessMetrics
      */
-    reportSandProcessMetrics: {
-      name: "ReportSandProcessMetrics",
-      I: ReportSandProcessMetricsRequest,
-      O: ReportSandProcessMetricsResponse,
+    reportSlateProcessMetrics: {
+      name: "ReportSlateProcessMetrics",
+      I: ReportSlateProcessMetricsRequest,
+      O: ReportSlateProcessMetricsResponse,
       kind: MethodKind.Unary,
     },
     /**

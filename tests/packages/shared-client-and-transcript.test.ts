@@ -18,7 +18,7 @@ import {
   SLATE_REACTION_SELF,
 } from "../../source/shared/transcript.ts"
 import {
-  getSandBoxNamespace,
+  getBoxNamespace,
   getSlateClientBaseVersion,
   getSlateClientVersion,
   SLATE_BOX_NAMESPACE_HEADER,
@@ -26,9 +26,9 @@ import {
 } from "../../source/shared/node/slate-client-metadata.ts"
 import { SLATE_NO_WEBAUTHN_MACHINE_MESSAGE } from "../../source/shared/webauthn-gateway.ts"
 import {
-  encodeSandBoxBlockedMessage,
-  findSandBoxBlockedMessage,
-  hasSandBoxBlockedMarker,
+  encodeBoxBlockedMessage,
+  findBoxBlockedMessage,
+  hasBoxBlockedMarker,
   GATEWAY_NO_STORAGE_MESSAGE_MARKER,
   SLATE_BOX_BLOCKED,
   SLATE_BOX_BLOCK_REASON_KEY,
@@ -150,18 +150,18 @@ test("the client says which build it is and which box it belongs to", () => {
   assert.equal(getSlateClientBaseVersion({} as NodeJS.ProcessEnv).length > 0, true)
 
   // The namespace comes from the environment when it names one, and from the build's variant otherwise.
-  assert.equal(getSandBoxNamespace({ SLATE_BOX_OWNER_NAMESPACE: "lab" } as NodeJS.ProcessEnv), "lab")
-  const namespace = getSandBoxNamespace({} as NodeJS.ProcessEnv)
+  assert.equal(getBoxNamespace({ SLATE_BOX_OWNER_NAMESPACE: "lab" } as NodeJS.ProcessEnv), "lab")
+  const namespace = getBoxNamespace({} as NodeJS.ProcessEnv)
   assert.equal(["dev", "lab", "prod"].includes(namespace), true)
   assert.equal(getSlateClientVersion({ SLATE_CLIENT_APP_VERSION: "1.2.3" } as NodeJS.ProcessEnv).startsWith("1.2.3"), true)
 })
 
 test("a box that is blocked says why, and the reason is read back", () => {
-  const message = encodeSandBoxBlockedMessage({ reason: "SLATE_CLIENT_PAUSE", title: "Paused", detail: "Resume it" })
-  assert.equal(hasSandBoxBlockedMarker(message), true)
-  assert.equal(findSandBoxBlockedMessage(new Error(message)), message)
-  assert.equal(findSandBoxBlockedMessage(new Error("something else")), null)
-  assert.equal(hasSandBoxBlockedMarker("something else"), false)
+  const message = encodeBoxBlockedMessage({ reason: "SLATE_CLIENT_PAUSE", title: "Paused", detail: "Resume it" })
+  assert.equal(hasBoxBlockedMarker(message), true)
+  assert.equal(findBoxBlockedMessage(new Error(message)), message)
+  assert.equal(findBoxBlockedMessage(new Error("something else")), null)
+  assert.equal(hasBoxBlockedMarker("something else"), false)
   assert.equal(SLATE_BOX_BLOCKED, "SLATE_BOX_BLOCKED")
   assert.equal(SLATE_BOX_BLOCK_REASON_KEY, "slateBoxBlockReason")
   // The markers the platform looks for are its own.

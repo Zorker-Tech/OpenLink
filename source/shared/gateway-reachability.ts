@@ -12,29 +12,29 @@ export const SLATE_BOX_BLOCK_REASON_KEY = "slateBoxBlockReason";
 export const GATEWAY_BOX_BLOCKED_PREFIX = "slate box blocked by kill switch: ";
 const UNIT_SEPARATOR_NEVER_IN_COPY = "\u001f";
 
-export interface SandBoxBlockedInfo {
+export interface BoxBlockedInfo {
   reason: string;
   title: string;
   detail: string;
 }
 
-export function encodeSandBoxBlockedMessage(info: SandBoxBlockedInfo): string {
+export function encodeBoxBlockedMessage(info: BoxBlockedInfo): string {
   const fields = [info.reason, info.title, info.detail].join(UNIT_SEPARATOR_NEVER_IN_COPY);
   return `${GATEWAY_BOX_BLOCKED_PREFIX}${fields}`;
 }
 
-export function hasSandBoxBlockedMarker(message: string): boolean {
+export function hasBoxBlockedMarker(message: string): boolean {
   return message.includes(GATEWAY_BOX_BLOCKED_PREFIX);
 }
 
 export const SLATE_CLIENT_PAUSE_REASON = "SLATE_CLIENT_PAUSE";
-export const SLATE_CLIENT_PAUSE_BLOCKED_MESSAGE = encodeSandBoxBlockedMessage({
+export const SLATE_CLIENT_PAUSE_BLOCKED_MESSAGE = encodeBoxBlockedMessage({
   reason: SLATE_CLIENT_PAUSE_REASON,
   title: "",
   detail: ""
 });
 
-export function findSandBoxBlockedMessage(error: unknown): string | null {
+export function findBoxBlockedMessage(error: unknown): string | null {
   const seen = new Set<object>();
   let current = error;
   while (current != null && typeof current === "object" && !seen.has(current)) {

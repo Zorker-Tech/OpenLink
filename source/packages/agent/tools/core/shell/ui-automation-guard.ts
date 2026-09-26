@@ -18,7 +18,7 @@ const UI_AUTOMATION_TOOL_PATTERN =
   /\b(xdotool|wmctrl|xte|ydotool|osascript|cliclick|pyautogui|pynput|robotjs|sikuli)\b|Quartz\.CGEvent|ApplicationServices\.framework/i
 const BROWSER_REMOTE_DEBUG_PATTERN =
   /--remote-debugging-port\b|--remote-debugging-pipe\b|chrome-devtools-protocol|puppeteer|playwright(?:@[^\s]+)?\s+(?:codegen|open)\b|chromedriver\b|selenium-server\b/i
-const INTERNAL_HOST_SCREENSHOT_PATTERN = /control-sand(?:\.mjs)?\b[^\n]*\bscreenshot\b/i
+const INTERNAL_HOST_SCREENSHOT_PATTERN = /control-slate(?:\.mjs)?\b[^\n]*\bscreenshot\b/i
 
 export function isInternalHostScreenshotShellCommand(command: string): boolean {
   return INTERNAL_HOST_SCREENSHOT_PATTERN.test(command)

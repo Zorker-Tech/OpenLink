@@ -13,7 +13,7 @@ import "agent/v1/agent.proto";
 import "agent/v1/agent_service.proto";
 import "agent/v1/exec.proto";
 import "aiserver/v1/bidi.proto";
-import "aiserver/v1/bugbot.proto";
+import "aiserver/v1/bug_reports.proto";
 import "aiserver/v1/chat.proto";
 import "aiserver/v1/cmdk.proto";
 import "aiserver/v1/context.proto";
@@ -474,8 +474,8 @@ message BackgroundCmdKResponse {
   string proposed_change = 1 [json_name = "proposedChange"];
 }
 
-message BugBotStatus {
-  .aiserver.v1.BugBotStatus.Status status = 1 [json_name = "status"];
+message BugReportStatus {
+  .aiserver.v1.BugReportStatus.Status status = 1 [json_name = "status"];
   string message = 2 [json_name = "message"];
   optional int32 iterations_completed = 3 [json_name = "iterationsCompleted"];
   optional int32 total_iterations = 4 [json_name = "totalIterations"];
@@ -517,7 +517,7 @@ message BugReportScreenshot {
   string mime_type = 2 [json_name = "mimeType"];
 }
 
-message BugbotTrialNotification {
+message BugReportTrialNotification {
   bool show = 1 [json_name = "show"];
   optional string message = 2 [json_name = "message"];
   optional string learn_more_url = 3 [json_name = "learnMoreUrl"];
@@ -557,23 +557,23 @@ message ChatSuggestionItem {
   string category = 4 [json_name = "category"];
 }
 
-message CheckBugBotPriceRequest {
+message CheckBugReportPriceRequest {
   int32 diff_char_len = 1 [json_name = "diffCharLen"];
   int32 iterations = 2 [json_name = "iterations"];
   optional .aiserver.v1.ModelDetails model_details = 3 [json_name = "modelDetails"];
   optional string session_id = 4 [json_name = "sessionId"];
 }
 
-message CheckBugBotPriceResponse {
+message CheckBugReportPriceResponse {
   double cost = 1 [json_name = "cost"];
   string price_id = 2 [json_name = "priceId"];
 }
 
-message CheckBugBotTelemetryHealthyRequest {
+message CheckBugReportTelemetryHealthyRequest {
   string session_id = 1 [json_name = "sessionId"];
 }
 
-message CheckBugBotTelemetryHealthyResponse {
+message CheckBugReportTelemetryHealthyResponse {
   bool is_healthy = 1 [json_name = "isHealthy"];
 }
 
@@ -1345,10 +1345,10 @@ message GetDiffReviewRequest {
   }
 }
 
-message GetEditorBugbotAutoRunStatusRequest {
+message GetEditorBugReportAutoRunStatusRequest {
 }
 
-message GetEditorBugbotAutoRunStatusResponse {
+message GetEditorBugReportAutoRunStatusResponse {
   bool should_auto_run = 1 [json_name = "shouldAutoRun"];
 }
 
@@ -1443,12 +1443,12 @@ message GetSimplePromptResponse {
   string result = 1 [json_name = "result"];
 }
 
-message GetSuggestedBugBotIterationsRequest {
+message GetSuggestedBugReportIterationsRequest {
   int32 diff_char_len = 1 [json_name = "diffCharLen"];
   optional .aiserver.v1.ModelDetails model_details = 2 [json_name = "modelDetails"];
 }
 
-message GetSuggestedBugBotIterationsResponse {
+message GetSuggestedBugReportIterationsResponse {
   int32 iterations = 1 [json_name = "iterations"];
 }
 
@@ -2184,13 +2184,13 @@ message ReportProcessMetricsV2Request {
 message ReportProcessMetricsV2Response {
 }
 
-message ReportSandProcessMetricsRequest {
+message ReportSlateProcessMetricsRequest {
   int64 sample_start = 1 [json_name = "sampleStart"];
   int64 sample_end = 2 [json_name = "sampleEnd"];
   int32 num_subsamples = 3 [json_name = "numSubsamples"];
   int64 sample_seqno = 4 [json_name = "sampleSeqno"];
   string session_id = 5 [json_name = "sessionId"];
-  repeated .aiserver.v1.SandProcessMetricsRowRequest rows = 6 [json_name = "rows"];
+  repeated .aiserver.v1.SlateProcessMetricsRowRequest rows = 6 [json_name = "rows"];
   string os = 7 [json_name = "os"];
   string os_version = 8 [json_name = "osVersion"];
   string arch = 9 [json_name = "arch"];
@@ -2198,7 +2198,7 @@ message ReportSandProcessMetricsRequest {
   string client_id = 11 [json_name = "clientId"];
 }
 
-message ReportSandProcessMetricsResponse {
+message ReportSlateProcessMetricsResponse {
 }
 
 message RerankerRequest {
@@ -2320,7 +2320,7 @@ message RunWebSearchResponse {
   repeated .aiserver.v1.WebSearchDocument documents = 2 [json_name = "documents"];
 }
 
-message SandProcessMetricsRowRequest {
+message SlateProcessMetricsRowRequest {
   int32 pid = 1 [json_name = "pid"];
   int32 ppid = 2 [json_name = "ppid"];
   string process_name = 3 [json_name = "processName"];
@@ -2524,27 +2524,27 @@ message StreamAiLintBugResponse {
   }
 }
 
-message StreamBugBotAgenticClientMessage {
+message StreamBugReportAgenticClientMessage {
   oneof message {
-    .aiserver.v1.StreamBugBotRequest start = 1 [json_name = "start"];
+    .aiserver.v1.StreamBugReportRequest start = 1 [json_name = "start"];
     .agent.v1.ExecClientMessage exec_client_message = 2 [json_name = "execClientMessage"];
     .agent.v1.ExecClientControlMessage exec_client_control_message = 3 [json_name = "execClientControlMessage"];
   }
 }
 
-message StreamBugBotAgenticServerMessage {
+message StreamBugReportAgenticServerMessage {
   oneof message {
-    .aiserver.v1.StreamBugBotResponse bugbot_response = 1 [json_name = "bugbotResponse"];
+    .aiserver.v1.StreamBugReportResponse bug_report_response = 1 [json_name = "bugReportResponse"];
     .agent.v1.ExecServerMessage exec_server_message = 2 [json_name = "execServerMessage"];
     .agent.v1.ExecServerControlMessage exec_server_control_message = 3 [json_name = "execServerControlMessage"];
   }
 }
 
-message StreamBugBotResponse {
+message StreamBugReportResponse {
   optional .aiserver.v1.BugReports bug_reports = 1 [json_name = "bugReports"];
-  optional .aiserver.v1.BugBotStatus status = 2 [json_name = "status"];
+  optional .aiserver.v1.BugReportStatus status = 2 [json_name = "status"];
   optional string summary = 3 [json_name = "summary"];
-  optional .aiserver.v1.BugbotTrialNotification trial_notification = 4 [json_name = "trialNotification"];
+  optional .aiserver.v1.BugReportTrialNotification trial_notification = 4 [json_name = "trialNotification"];
   optional int32 num_turns = 5 [json_name = "numTurns"];
 }
 
@@ -3526,18 +3526,18 @@ service AiService {
   rpc AutoContext(.aiserver.v1.AutoContextRequest) returns (.aiserver.v1.AutoContextResponse);
   rpc WriteGitCommitMessage(.aiserver.v1.WriteGitCommitMessageRequest) returns (.aiserver.v1.WriteGitCommitMessageResponse);
   rpc WriteGitBranchName(.aiserver.v1.WriteGitBranchNameRequest) returns (.aiserver.v1.WriteGitBranchNameResponse);
-  rpc StreamBugBot(.aiserver.v1.StreamBugBotRequest) returns (stream .aiserver.v1.StreamBugBotResponse);
-  rpc StreamBugBotAgentic(stream .aiserver.v1.StreamBugBotAgenticClientMessage) returns (stream .aiserver.v1.StreamBugBotAgenticServerMessage);
-  rpc StreamBugBotAgenticSSE(.aiserver.v1.BidiRequestId) returns (stream .aiserver.v1.StreamBugBotAgenticServerMessage);
-  rpc StreamBugBotAgenticPoll(.aiserver.v1.BidiPollRequest) returns (stream .aiserver.v1.BidiPollResponse);
+  rpc StreamBugReport(.aiserver.v1.StreamBugReportRequest) returns (stream .aiserver.v1.StreamBugReportResponse);
+  rpc StreamBugReportAgentic(stream .aiserver.v1.StreamBugReportAgenticClientMessage) returns (stream .aiserver.v1.StreamBugReportAgenticServerMessage);
+  rpc StreamBugReportAgenticSSE(.aiserver.v1.BidiRequestId) returns (stream .aiserver.v1.StreamBugReportAgenticServerMessage);
+  rpc StreamBugReportAgenticPoll(.aiserver.v1.BidiPollRequest) returns (stream .aiserver.v1.BidiPollResponse);
   rpc StreamUiBestOfNJudge(stream .aiserver.v1.StreamUiBestOfNJudgeClientMessage) returns (stream .aiserver.v1.StreamUiBestOfNJudgeServerMessage);
   rpc StreamUiBestOfNJudgeSSE(.aiserver.v1.BidiRequestId) returns (stream .aiserver.v1.StreamUiBestOfNJudgeServerMessage);
   rpc StreamUiBestOfNJudgePoll(.aiserver.v1.BidiPollRequest) returns (stream .aiserver.v1.BidiPollResponse);
-  rpc CheckBugBotPrice(.aiserver.v1.CheckBugBotPriceRequest) returns (.aiserver.v1.CheckBugBotPriceResponse);
-  rpc CheckBugBotTelemetryHealthy(.aiserver.v1.CheckBugBotTelemetryHealthyRequest) returns (.aiserver.v1.CheckBugBotTelemetryHealthyResponse);
+  rpc CheckBugReportPrice(.aiserver.v1.CheckBugReportPriceRequest) returns (.aiserver.v1.CheckBugReportPriceResponse);
+  rpc CheckBugReportTelemetryHealthy(.aiserver.v1.CheckBugReportTelemetryHealthyRequest) returns (.aiserver.v1.CheckBugReportTelemetryHealthyResponse);
   rpc RecordIdeBugReaction(.aiserver.v1.RecordIdeBugReactionRequest) returns (.aiserver.v1.RecordIdeBugReactionResponse);
-  rpc GetSuggestedBugBotIterations(.aiserver.v1.GetSuggestedBugBotIterationsRequest) returns (.aiserver.v1.GetSuggestedBugBotIterationsResponse);
-  rpc GetEditorBugbotAutoRunStatus(.aiserver.v1.GetEditorBugbotAutoRunStatusRequest) returns (.aiserver.v1.GetEditorBugbotAutoRunStatusResponse);
+  rpc GetSuggestedBugReportIterations(.aiserver.v1.GetSuggestedBugReportIterationsRequest) returns (.aiserver.v1.GetSuggestedBugReportIterationsResponse);
+  rpc GetEditorBugReportAutoRunStatus(.aiserver.v1.GetEditorBugReportAutoRunStatusRequest) returns (.aiserver.v1.GetEditorBugReportAutoRunStatusResponse);
   rpc TestBidi(stream .aiserver.v1.TestBidiRequest) returns (stream .aiserver.v1.TestBidiResponse);
   rpc StreamDiffReview(.aiserver.v1.GetDiffReviewRequest) returns (stream .aiserver.v1.StreamDiffReviewResponse);
   rpc StreamDiffReviewByFile(.aiserver.v1.GetDiffReviewRequest) returns (stream .aiserver.v1.StreamDiffReviewByFileResponse);
@@ -3550,7 +3550,7 @@ service AiService {
   rpc ReportAiCodeChangeMetrics(.aiserver.v1.ReportAiCodeChangeMetricsRequest) returns (.aiserver.v1.ReportAiCodeChangeMetricsResponse);
   rpc ReportProcessMetrics(.aiserver.v1.ReportProcessMetricsRequest) returns (.aiserver.v1.ReportProcessMetricsResponse);
   rpc ReportProcessMetricsV2(.aiserver.v1.ReportProcessMetricsV2Request) returns (.aiserver.v1.ReportProcessMetricsV2Response);
-  rpc ReportSandProcessMetrics(.aiserver.v1.ReportSandProcessMetricsRequest) returns (.aiserver.v1.ReportSandProcessMetricsResponse);
+  rpc ReportSlateProcessMetrics(.aiserver.v1.ReportSlateProcessMetricsRequest) returns (.aiserver.v1.ReportSlateProcessMetricsResponse);
   rpc ReportClientNumericMetrics(.aiserver.v1.ReportClientNumericMetricsRequest) returns (.aiserver.v1.ReportClientNumericMetricsResponse);
   rpc PotentiallyGenerateMemory(.aiserver.v1.PotentiallyGenerateMemoryRequest) returns (.aiserver.v1.PotentiallyGenerateMemoryResponse);
   rpc KnowledgeBaseAdd(.aiserver.v1.KnowledgeBaseAddRequest) returns (.aiserver.v1.KnowledgeBaseAddResponse);

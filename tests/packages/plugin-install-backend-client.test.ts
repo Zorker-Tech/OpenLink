@@ -1,7 +1,7 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 
-import { normalizeEffectiveUserPluginsResponse } from "../../source/packages/cursor-plugins/backend-marketplace-client.ts"
+import { normalizeEffectiveUserPluginsResponse } from "../../source/packages/plugin-install/backend-marketplace-client.ts"
 
 // What a backend says a user has is normalized before it is used, since the response is written by a
 // service that may be older or newer than the client.

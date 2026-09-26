@@ -28,7 +28,7 @@ message UsageEventDetails {
     .aiserver.v1.UsageEventDetails.WarmComposer warm_composer = 10 [json_name = "warmComposer"];
     .aiserver.v1.UsageEventDetails.BugFinderTriggerV1 bug_finder_trigger_v1 = 11 [json_name = "bugFinderTriggerV1"];
     .aiserver.v1.UsageEventDetails.ToolCallComposer tool_call_composer = 12 [json_name = "toolCallComposer"];
-    .aiserver.v1.UsageEventDetails.BugBot bug_bot = 14 [json_name = "bugBot"];
+    .aiserver.v1.UsageEventDetails.BugReport bug_bot = 14 [json_name = "bugBot"];
     .aiserver.v1.UsageEventDetails.PromptHook prompt_hook = 15 [json_name = "promptHook"];
   }
   message Chat {
@@ -101,7 +101,7 @@ message UsageEventDetails {
     optional .aiserver.v1.TokenUsage token_usage = 5 [json_name = "tokenUsage"];
     optional bool max_mode = 6 [json_name = "maxMode"];
   }
-  message BugBot {
+  message BugReport {
     string model_intent = 1 [json_name = "modelIntent"];
     optional .aiserver.v1.TokenUsage token_usage = 2 [json_name = "tokenUsage"];
     bool is_token_based_call = 3 [json_name = "isTokenBasedCall"];

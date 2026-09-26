@@ -5,13 +5,13 @@
  * because they gave it back deliberately; anything else is no decision at all, and a hand-over that is no longer the
  * current one is not resumed.
  */
-export interface SandBoxHandoff {
+export interface BoxHandoff {
   readonly requestId: string;
 }
 
-export type SandBoxHandBackTrigger = "dismissed" | string;
+export type BoxHandBackTrigger = "dismissed" | string;
 
-export type SandBoxHandBackDecision =
+export type BoxHandBackDecision =
   | { readonly kind: "none" }
   | {
       readonly kind: "resume";
@@ -21,9 +21,9 @@ export type SandBoxHandBackDecision =
     };
 
 export function decideBoxHandBack(
-  handoff: SandBoxHandoff | null | undefined,
-  trigger: SandBoxHandBackTrigger,
-): SandBoxHandBackDecision {
+  handoff: BoxHandoff | null | undefined,
+  trigger: BoxHandBackTrigger,
+): BoxHandBackDecision {
   if (handoff == null) return { kind: "none" };
   return {
     kind: "resume",

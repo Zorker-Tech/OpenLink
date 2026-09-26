@@ -182,36 +182,36 @@ proto3.util.setEnumType(BackgroundComposerSecretLevel, "aiserver.v1.BackgroundCo
 ]);
 
 /**
- * @generated from enum aiserver.v1.BugbotAutofixMode
+ * @generated from enum aiserver.v1.BugReportAutofixMode
  */
-export enum BugbotAutofixMode {
+export enum BugReportAutofixMode {
   /**
    * @generated from enum value: BUGBOT_AUTOFIX_MODE_UNSPECIFIED = 0;
    */
-  UNSPECIFIED = 0,
+  BUGBOT_AUTOFIX_MODE_UNSPECIFIED = 0,
 
   /**
    * @generated from enum value: BUGBOT_AUTOFIX_MODE_OFF = 1;
    */
-  OFF = 1,
+  BUGBOT_AUTOFIX_MODE_OFF = 1,
 
   /**
    * @generated from enum value: BUGBOT_AUTOFIX_MODE_MANUAL = 2;
    */
-  MANUAL = 2,
+  BUGBOT_AUTOFIX_MODE_MANUAL = 2,
 
   /**
    * @generated from enum value: BUGBOT_AUTOFIX_MODE_AUTO_PR = 3;
    */
-  AUTO_PR = 3,
+  BUGBOT_AUTOFIX_MODE_AUTO_PR = 3,
 
   /**
    * @generated from enum value: BUGBOT_AUTOFIX_MODE_AUTO_MERGE = 4;
    */
-  AUTO_MERGE = 4,
+  BUGBOT_AUTOFIX_MODE_AUTO_MERGE = 4,
 }
-// Retrieve enum metadata with: proto3.getEnumType(BugbotAutofixMode)
-proto3.util.setEnumType(BugbotAutofixMode, "aiserver.v1.BugbotAutofixMode", [
+// Retrieve enum metadata with: proto3.getEnumType(BugReportAutofixMode)
+proto3.util.setEnumType(BugReportAutofixMode, "aiserver.v1.BugReportAutofixMode", [
   { no: 0, name: "BUGBOT_AUTOFIX_MODE_UNSPECIFIED" },
   { no: 1, name: "BUGBOT_AUTOFIX_MODE_OFF" },
   { no: 2, name: "BUGBOT_AUTOFIX_MODE_MANUAL" },
@@ -220,31 +220,31 @@ proto3.util.setEnumType(BugbotAutofixMode, "aiserver.v1.BugbotAutofixMode", [
 ]);
 
 /**
- * @generated from enum aiserver.v1.BugbotBackfillStatus
+ * @generated from enum aiserver.v1.BugReportBackfillStatus
  */
-export enum BugbotBackfillStatus {
+export enum BugReportBackfillStatus {
   /**
    * @generated from enum value: BUGBOT_BACKFILL_STATUS_UNSPECIFIED = 0;
    */
-  UNSPECIFIED = 0,
+  BUGBOT_BACKFILL_STATUS_UNSPECIFIED = 0,
 
   /**
    * @generated from enum value: BUGBOT_BACKFILL_STATUS_RUNNING = 1;
    */
-  RUNNING = 1,
+  BUGBOT_BACKFILL_STATUS_RUNNING = 1,
 
   /**
    * @generated from enum value: BUGBOT_BACKFILL_STATUS_COMPLETED = 2;
    */
-  COMPLETED = 2,
+  BUGBOT_BACKFILL_STATUS_COMPLETED = 2,
 
   /**
    * @generated from enum value: BUGBOT_BACKFILL_STATUS_FAILED = 3;
    */
-  FAILED = 3,
+  BUGBOT_BACKFILL_STATUS_FAILED = 3,
 }
-// Retrieve enum metadata with: proto3.getEnumType(BugbotBackfillStatus)
-proto3.util.setEnumType(BugbotBackfillStatus, "aiserver.v1.BugbotBackfillStatus", [
+// Retrieve enum metadata with: proto3.getEnumType(BugReportBackfillStatus)
+proto3.util.setEnumType(BugReportBackfillStatus, "aiserver.v1.BugReportBackfillStatus", [
   { no: 0, name: "BUGBOT_BACKFILL_STATUS_UNSPECIFIED" },
   { no: 1, name: "BUGBOT_BACKFILL_STATUS_RUNNING" },
   { no: 2, name: "BUGBOT_BACKFILL_STATUS_COMPLETED" },
@@ -252,62 +252,62 @@ proto3.util.setEnumType(BugbotBackfillStatus, "aiserver.v1.BugbotBackfillStatus"
 ]);
 
 /**
- * @generated from enum aiserver.v1.BugbotBillingMode
+ * @generated from enum aiserver.v1.BugReportBillingMode
  */
-export enum BugbotBillingMode {
+export enum BugReportBillingMode {
   /**
    * @generated from enum value: BUGBOT_BILLING_MODE_UNSPECIFIED = 0;
    */
-  UNSPECIFIED = 0,
+  BUGBOT_BILLING_MODE_UNSPECIFIED = 0,
 
   /**
    * @generated from enum value: BUGBOT_BILLING_MODE_SEAT = 1;
    */
-  SEAT = 1,
+  BUGBOT_BILLING_MODE_SEAT = 1,
 
   /**
    * @generated from enum value: BUGBOT_BILLING_MODE_TOKEN = 2;
    */
-  TOKEN = 2,
+  BUGBOT_BILLING_MODE_TOKEN = 2,
 }
-// Retrieve enum metadata with: proto3.getEnumType(BugbotBillingMode)
-proto3.util.setEnumType(BugbotBillingMode, "aiserver.v1.BugbotBillingMode", [
+// Retrieve enum metadata with: proto3.getEnumType(BugReportBillingMode)
+proto3.util.setEnumType(BugReportBillingMode, "aiserver.v1.BugReportBillingMode", [
   { no: 0, name: "BUGBOT_BILLING_MODE_UNSPECIFIED" },
   { no: 1, name: "BUGBOT_BILLING_MODE_SEAT" },
   { no: 2, name: "BUGBOT_BILLING_MODE_TOKEN" },
 ]);
 
 /**
- * @generated from enum aiserver.v1.BugbotMode
+ * @generated from enum aiserver.v1.BugReportMode
  */
-export enum BugbotMode {
+export enum BugReportMode {
   /**
    * @generated from enum value: BUGBOT_MODE_UNSPECIFIED = 0;
    */
-  UNSPECIFIED = 0,
+  BUGBOT_MODE_UNSPECIFIED = 0,
 
   /**
    * @generated from enum value: BUGBOT_MODE_DEFAULT = 1;
    */
-  DEFAULT = 1,
+  BUGBOT_MODE_DEFAULT = 1,
 
   /**
    * @generated from enum value: BUGBOT_MODE_HIGH = 2;
    */
-  HIGH = 2,
+  BUGBOT_MODE_HIGH = 2,
 
   /**
    * @generated from enum value: BUGBOT_MODE_AUTO = 3;
    */
-  AUTO = 3,
+  BUGBOT_MODE_AUTO = 3,
 
   /**
    * @generated from enum value: BUGBOT_MODE_FRONTIER = 4;
    */
-  FRONTIER = 4,
+  BUGBOT_MODE_FRONTIER = 4,
 }
-// Retrieve enum metadata with: proto3.getEnumType(BugbotMode)
-proto3.util.setEnumType(BugbotMode, "aiserver.v1.BugbotMode", [
+// Retrieve enum metadata with: proto3.getEnumType(BugReportMode)
+proto3.util.setEnumType(BugReportMode, "aiserver.v1.BugReportMode", [
   { no: 0, name: "BUGBOT_MODE_UNSPECIFIED" },
   { no: 1, name: "BUGBOT_MODE_DEFAULT" },
   { no: 2, name: "BUGBOT_MODE_HIGH" },
@@ -316,31 +316,31 @@ proto3.util.setEnumType(BugbotMode, "aiserver.v1.BugbotMode", [
 ]);
 
 /**
- * @generated from enum aiserver.v1.BugbotUsageTier
+ * @generated from enum aiserver.v1.BugReportUsageTier
  */
-export enum BugbotUsageTier {
+export enum BugReportUsageTier {
   /**
    * @generated from enum value: BUGBOT_USAGE_TIER_UNSPECIFIED = 0;
    */
-  UNSPECIFIED = 0,
+  BUGBOT_USAGE_TIER_UNSPECIFIED = 0,
 
   /**
    * @generated from enum value: BUGBOT_USAGE_TIER_FREE_TIER = 1;
    */
-  FREE_TIER = 1,
+  BUGBOT_USAGE_TIER_FREE_TIER = 1,
 
   /**
    * @generated from enum value: BUGBOT_USAGE_TIER_TRIAL = 2;
    */
-  TRIAL = 2,
+  BUGBOT_USAGE_TIER_TRIAL = 2,
 
   /**
    * @generated from enum value: BUGBOT_USAGE_TIER_PAID = 3;
    */
-  PAID = 3,
+  BUGBOT_USAGE_TIER_PAID = 3,
 }
-// Retrieve enum metadata with: proto3.getEnumType(BugbotUsageTier)
-proto3.util.setEnumType(BugbotUsageTier, "aiserver.v1.BugbotUsageTier", [
+// Retrieve enum metadata with: proto3.getEnumType(BugReportUsageTier)
+proto3.util.setEnumType(BugReportUsageTier, "aiserver.v1.BugReportUsageTier", [
   { no: 0, name: "BUGBOT_USAGE_TIER_UNSPECIFIED" },
   { no: 1, name: "BUGBOT_USAGE_TIER_FREE_TIER" },
   { no: 2, name: "BUGBOT_USAGE_TIER_TRIAL" },
@@ -528,26 +528,26 @@ proto3.util.setEnumType(CycleType, "aiserver.v1.CycleType", [
 ]);
 
 /**
- * @generated from enum aiserver.v1.DiamondToBugbotMigrationMode
+ * @generated from enum aiserver.v1.DiamondToBugReportMigrationMode
  */
-export enum DiamondToBugbotMigrationMode {
+export enum DiamondToBugReportMigrationMode {
   /**
    * @generated from enum value: DIAMOND_TO_BUGBOT_MIGRATION_MODE_UNSPECIFIED = 0;
    */
-  UNSPECIFIED = 0,
+  DIAMOND_TO_BUGBOT_MIGRATION_MODE_UNSPECIFIED = 0,
 
   /**
    * @generated from enum value: DIAMOND_TO_BUGBOT_MIGRATION_MODE_DRY_RUN = 1;
    */
-  DRY_RUN = 1,
+  DIAMOND_TO_BUGBOT_MIGRATION_MODE_DRY_RUN = 1,
 
   /**
    * @generated from enum value: DIAMOND_TO_BUGBOT_MIGRATION_MODE_APPLY = 2;
    */
-  APPLY = 2,
+  DIAMOND_TO_BUGBOT_MIGRATION_MODE_APPLY = 2,
 }
-// Retrieve enum metadata with: proto3.getEnumType(DiamondToBugbotMigrationMode)
-proto3.util.setEnumType(DiamondToBugbotMigrationMode, "aiserver.v1.DiamondToBugbotMigrationMode", [
+// Retrieve enum metadata with: proto3.getEnumType(DiamondToBugReportMigrationMode)
+proto3.util.setEnumType(DiamondToBugReportMigrationMode, "aiserver.v1.DiamondToBugReportMigrationMode", [
   { no: 0, name: "DIAMOND_TO_BUGBOT_MIGRATION_MODE_UNSPECIFIED" },
   { no: 1, name: "DIAMOND_TO_BUGBOT_MIGRATION_MODE_DRY_RUN" },
   { no: 2, name: "DIAMOND_TO_BUGBOT_MIGRATION_MODE_APPLY" },
@@ -5493,9 +5493,9 @@ export class BrowserSettings extends Message<BrowserSettings> {
 }
 
 /**
- * @generated from message aiserver.v1.BugBotPRAnalytics
+ * @generated from message aiserver.v1.BugReportPRAnalytics
  */
-export class BugBotPRAnalytics extends Message<BugBotPRAnalytics> {
+export class BugReportPRAnalytics extends Message<BugReportPRAnalytics> {
   /**
    * @generated from field: string github_repo_node_id = 1;
    */
@@ -5556,13 +5556,13 @@ export class BugBotPRAnalytics extends Message<BugBotPRAnalytics> {
    */
   lowSevResolvedBugs = 0;
 
-  constructor(data?: PartialMessage<BugBotPRAnalytics>) {
+  constructor(data?: PartialMessage<BugReportPRAnalytics>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugBotPRAnalytics";
+  static readonly typeName = "aiserver.v1.BugReportPRAnalytics";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "github_repo_node_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "pr_number", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
@@ -5578,27 +5578,27 @@ export class BugBotPRAnalytics extends Message<BugBotPRAnalytics> {
     { no: 12, name: "low_sev_resolved_bugs", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugBotPRAnalytics {
-    return new BugBotPRAnalytics().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportPRAnalytics {
+    return new BugReportPRAnalytics().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugBotPRAnalytics {
-    return new BugBotPRAnalytics().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportPRAnalytics {
+    return new BugReportPRAnalytics().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugBotPRAnalytics {
-    return new BugBotPRAnalytics().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportPRAnalytics {
+    return new BugReportPRAnalytics().fromJsonString(jsonString, options);
   }
 
-  static equals(a: BugBotPRAnalytics | PlainMessage<BugBotPRAnalytics> | undefined, b: BugBotPRAnalytics | PlainMessage<BugBotPRAnalytics> | undefined): boolean {
-    return proto3.util.equals(BugBotPRAnalytics, a, b);
+  static equals(a: BugReportPRAnalytics | PlainMessage<BugReportPRAnalytics> | undefined, b: BugReportPRAnalytics | PlainMessage<BugReportPRAnalytics> | undefined): boolean {
+    return proto3.util.equals(BugReportPRAnalytics, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.BugBotPRData
+ * @generated from message aiserver.v1.BugReportPRData
  */
-export class BugBotPRData extends Message<BugBotPRData> {
+export class BugReportPRData extends Message<BugReportPRData> {
   /**
    * @generated from field: optional string start_date = 1;
    */
@@ -5614,40 +5614,40 @@ export class BugBotPRData extends Message<BugBotPRData> {
    */
   grouping?: string;
 
-  constructor(data?: PartialMessage<BugBotPRData>) {
+  constructor(data?: PartialMessage<BugReportPRData>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugBotPRData";
+  static readonly typeName = "aiserver.v1.BugReportPRData";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "start_date", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "end_date", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "grouping", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugBotPRData {
-    return new BugBotPRData().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportPRData {
+    return new BugReportPRData().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugBotPRData {
-    return new BugBotPRData().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportPRData {
+    return new BugReportPRData().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugBotPRData {
-    return new BugBotPRData().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportPRData {
+    return new BugReportPRData().fromJsonString(jsonString, options);
   }
 
-  static equals(a: BugBotPRData | PlainMessage<BugBotPRData> | undefined, b: BugBotPRData | PlainMessage<BugBotPRData> | undefined): boolean {
-    return proto3.util.equals(BugBotPRData, a, b);
+  static equals(a: BugReportPRData | PlainMessage<BugReportPRData> | undefined, b: BugReportPRData | PlainMessage<BugReportPRData> | undefined): boolean {
+    return proto3.util.equals(BugReportPRData, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.BugbotAnalyticsDataPoint
+ * @generated from message aiserver.v1.BugReportAnalyticsDataPoint
  */
-export class BugbotAnalyticsDataPoint extends Message<BugbotAnalyticsDataPoint> {
+export class BugReportAnalyticsDataPoint extends Message<BugReportAnalyticsDataPoint> {
   /**
    * @generated from field: int64 date = 1;
    */
@@ -5658,39 +5658,39 @@ export class BugbotAnalyticsDataPoint extends Message<BugbotAnalyticsDataPoint> 
    */
   value = 0;
 
-  constructor(data?: PartialMessage<BugbotAnalyticsDataPoint>) {
+  constructor(data?: PartialMessage<BugReportAnalyticsDataPoint>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugbotAnalyticsDataPoint";
+  static readonly typeName = "aiserver.v1.BugReportAnalyticsDataPoint";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "date", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 2, name: "value", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugbotAnalyticsDataPoint {
-    return new BugbotAnalyticsDataPoint().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportAnalyticsDataPoint {
+    return new BugReportAnalyticsDataPoint().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugbotAnalyticsDataPoint {
-    return new BugbotAnalyticsDataPoint().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportAnalyticsDataPoint {
+    return new BugReportAnalyticsDataPoint().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugbotAnalyticsDataPoint {
-    return new BugbotAnalyticsDataPoint().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportAnalyticsDataPoint {
+    return new BugReportAnalyticsDataPoint().fromJsonString(jsonString, options);
   }
 
-  static equals(a: BugbotAnalyticsDataPoint | PlainMessage<BugbotAnalyticsDataPoint> | undefined, b: BugbotAnalyticsDataPoint | PlainMessage<BugbotAnalyticsDataPoint> | undefined): boolean {
-    return proto3.util.equals(BugbotAnalyticsDataPoint, a, b);
+  static equals(a: BugReportAnalyticsDataPoint | PlainMessage<BugReportAnalyticsDataPoint> | undefined, b: BugReportAnalyticsDataPoint | PlainMessage<BugReportAnalyticsDataPoint> | undefined): boolean {
+    return proto3.util.equals(BugReportAnalyticsDataPoint, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.BugbotAutofixCapabilities
+ * @generated from message aiserver.v1.BugReportAutofixCapabilities
  */
-export class BugbotAutofixCapabilities extends Message<BugbotAutofixCapabilities> {
+export class BugReportAutofixCapabilities extends Message<BugReportAutofixCapabilities> {
   /**
    * @generated from field: bool direct_push = 1;
    */
@@ -5701,39 +5701,39 @@ export class BugbotAutofixCapabilities extends Message<BugbotAutofixCapabilities
    */
   sideBranchDelivery = false;
 
-  constructor(data?: PartialMessage<BugbotAutofixCapabilities>) {
+  constructor(data?: PartialMessage<BugReportAutofixCapabilities>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugbotAutofixCapabilities";
+  static readonly typeName = "aiserver.v1.BugReportAutofixCapabilities";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "direct_push", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 2, name: "side_branch_delivery", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugbotAutofixCapabilities {
-    return new BugbotAutofixCapabilities().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportAutofixCapabilities {
+    return new BugReportAutofixCapabilities().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugbotAutofixCapabilities {
-    return new BugbotAutofixCapabilities().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportAutofixCapabilities {
+    return new BugReportAutofixCapabilities().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugbotAutofixCapabilities {
-    return new BugbotAutofixCapabilities().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportAutofixCapabilities {
+    return new BugReportAutofixCapabilities().fromJsonString(jsonString, options);
   }
 
-  static equals(a: BugbotAutofixCapabilities | PlainMessage<BugbotAutofixCapabilities> | undefined, b: BugbotAutofixCapabilities | PlainMessage<BugbotAutofixCapabilities> | undefined): boolean {
-    return proto3.util.equals(BugbotAutofixCapabilities, a, b);
+  static equals(a: BugReportAutofixCapabilities | PlainMessage<BugReportAutofixCapabilities> | undefined, b: BugReportAutofixCapabilities | PlainMessage<BugReportAutofixCapabilities> | undefined): boolean {
+    return proto3.util.equals(BugReportAutofixCapabilities, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.BugbotLearnedRule
+ * @generated from message aiserver.v1.BugReportLearnedRule
  */
-export class BugbotLearnedRule extends Message<BugbotLearnedRule> {
+export class BugReportLearnedRule extends Message<BugReportLearnedRule> {
   /**
    * @generated from field: string id = 1;
    */
@@ -5789,13 +5789,13 @@ export class BugbotLearnedRule extends Message<BugbotLearnedRule> {
    */
   scopedPaths: string[] = [];
 
-  constructor(data?: PartialMessage<BugbotLearnedRule>) {
+  constructor(data?: PartialMessage<BugReportLearnedRule>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugbotLearnedRule";
+  static readonly typeName = "aiserver.v1.BugReportLearnedRule";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
@@ -5810,27 +5810,27 @@ export class BugbotLearnedRule extends Message<BugbotLearnedRule> {
     { no: 12, name: "scoped_paths", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugbotLearnedRule {
-    return new BugbotLearnedRule().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportLearnedRule {
+    return new BugReportLearnedRule().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugbotLearnedRule {
-    return new BugbotLearnedRule().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportLearnedRule {
+    return new BugReportLearnedRule().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugbotLearnedRule {
-    return new BugbotLearnedRule().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportLearnedRule {
+    return new BugReportLearnedRule().fromJsonString(jsonString, options);
   }
 
-  static equals(a: BugbotLearnedRule | PlainMessage<BugbotLearnedRule> | undefined, b: BugbotLearnedRule | PlainMessage<BugbotLearnedRule> | undefined): boolean {
-    return proto3.util.equals(BugbotLearnedRule, a, b);
+  static equals(a: BugReportLearnedRule | PlainMessage<BugReportLearnedRule> | undefined, b: BugReportLearnedRule | PlainMessage<BugReportLearnedRule> | undefined): boolean {
+    return proto3.util.equals(BugReportLearnedRule, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.BugbotLicenseUsage
+ * @generated from message aiserver.v1.BugReportLicenseUsage
  */
-export class BugbotLicenseUsage extends Message<BugbotLicenseUsage> {
+export class BugReportLicenseUsage extends Message<BugReportLicenseUsage> {
   /**
    * @generated from field: string github_username = 1;
    */
@@ -5846,40 +5846,40 @@ export class BugbotLicenseUsage extends Message<BugbotLicenseUsage> {
    */
   githubUserNodeId?: string;
 
-  constructor(data?: PartialMessage<BugbotLicenseUsage>) {
+  constructor(data?: PartialMessage<BugReportLicenseUsage>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugbotLicenseUsage";
+  static readonly typeName = "aiserver.v1.BugReportLicenseUsage";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "github_username", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "first_review_timestamp", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 3, name: "github_user_node_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugbotLicenseUsage {
-    return new BugbotLicenseUsage().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportLicenseUsage {
+    return new BugReportLicenseUsage().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugbotLicenseUsage {
-    return new BugbotLicenseUsage().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportLicenseUsage {
+    return new BugReportLicenseUsage().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugbotLicenseUsage {
-    return new BugbotLicenseUsage().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportLicenseUsage {
+    return new BugReportLicenseUsage().fromJsonString(jsonString, options);
   }
 
-  static equals(a: BugbotLicenseUsage | PlainMessage<BugbotLicenseUsage> | undefined, b: BugbotLicenseUsage | PlainMessage<BugbotLicenseUsage> | undefined): boolean {
-    return proto3.util.equals(BugbotLicenseUsage, a, b);
+  static equals(a: BugReportLicenseUsage | PlainMessage<BugReportLicenseUsage> | undefined, b: BugReportLicenseUsage | PlainMessage<BugReportLicenseUsage> | undefined): boolean {
+    return proto3.util.equals(BugReportLicenseUsage, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.BugbotManualRepositoryRule
+ * @generated from message aiserver.v1.BugReportManualRepositoryRule
  */
-export class BugbotManualRepositoryRule extends Message<BugbotManualRepositoryRule> {
+export class BugReportManualRepositoryRule extends Message<BugReportManualRepositoryRule> {
   /**
    * @generated from field: string id = 1;
    */
@@ -5930,13 +5930,13 @@ export class BugbotManualRepositoryRule extends Message<BugbotManualRepositoryRu
    */
   scopedPaths: string[] = [];
 
-  constructor(data?: PartialMessage<BugbotManualRepositoryRule>) {
+  constructor(data?: PartialMessage<BugReportManualRepositoryRule>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugbotManualRepositoryRule";
+  static readonly typeName = "aiserver.v1.BugReportManualRepositoryRule";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
@@ -5950,27 +5950,27 @@ export class BugbotManualRepositoryRule extends Message<BugbotManualRepositoryRu
     { no: 10, name: "scoped_paths", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugbotManualRepositoryRule {
-    return new BugbotManualRepositoryRule().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportManualRepositoryRule {
+    return new BugReportManualRepositoryRule().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugbotManualRepositoryRule {
-    return new BugbotManualRepositoryRule().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportManualRepositoryRule {
+    return new BugReportManualRepositoryRule().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugbotManualRepositoryRule {
-    return new BugbotManualRepositoryRule().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportManualRepositoryRule {
+    return new BugReportManualRepositoryRule().fromJsonString(jsonString, options);
   }
 
-  static equals(a: BugbotManualRepositoryRule | PlainMessage<BugbotManualRepositoryRule> | undefined, b: BugbotManualRepositoryRule | PlainMessage<BugbotManualRepositoryRule> | undefined): boolean {
-    return proto3.util.equals(BugbotManualRepositoryRule, a, b);
+  static equals(a: BugReportManualRepositoryRule | PlainMessage<BugReportManualRepositoryRule> | undefined, b: BugReportManualRepositoryRule | PlainMessage<BugReportManualRepositoryRule> | undefined): boolean {
+    return proto3.util.equals(BugReportManualRepositoryRule, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.BugbotModePrompt
+ * @generated from message aiserver.v1.BugReportModePrompt
  */
-export class BugbotModePrompt extends Message<BugbotModePrompt> {
+export class BugReportModePrompt extends Message<BugReportModePrompt> {
   /**
    * @generated from field: string content = 1;
    */
@@ -5981,39 +5981,39 @@ export class BugbotModePrompt extends Message<BugbotModePrompt> {
    */
   sortOrder = 0;
 
-  constructor(data?: PartialMessage<BugbotModePrompt>) {
+  constructor(data?: PartialMessage<BugReportModePrompt>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugbotModePrompt";
+  static readonly typeName = "aiserver.v1.BugReportModePrompt";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "sort_order", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugbotModePrompt {
-    return new BugbotModePrompt().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportModePrompt {
+    return new BugReportModePrompt().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugbotModePrompt {
-    return new BugbotModePrompt().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportModePrompt {
+    return new BugReportModePrompt().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugbotModePrompt {
-    return new BugbotModePrompt().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportModePrompt {
+    return new BugReportModePrompt().fromJsonString(jsonString, options);
   }
 
-  static equals(a: BugbotModePrompt | PlainMessage<BugbotModePrompt> | undefined, b: BugbotModePrompt | PlainMessage<BugbotModePrompt> | undefined): boolean {
-    return proto3.util.equals(BugbotModePrompt, a, b);
+  static equals(a: BugReportModePrompt | PlainMessage<BugReportModePrompt> | undefined, b: BugReportModePrompt | PlainMessage<BugReportModePrompt> | undefined): boolean {
+    return proto3.util.equals(BugReportModePrompt, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.BugbotRule
+ * @generated from message aiserver.v1.BugReportRule
  */
-export class BugbotRule extends Message<BugbotRule> {
+export class BugReportRule extends Message<BugReportRule> {
   /**
    * @generated from field: string id = 1;
    */
@@ -6049,13 +6049,13 @@ export class BugbotRule extends Message<BugbotRule> {
    */
   updatedAt = "";
 
-  constructor(data?: PartialMessage<BugbotRule>) {
+  constructor(data?: PartialMessage<BugReportRule>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugbotRule";
+  static readonly typeName = "aiserver.v1.BugReportRule";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
@@ -6066,27 +6066,27 @@ export class BugbotRule extends Message<BugbotRule> {
     { no: 7, name: "updated_at", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugbotRule {
-    return new BugbotRule().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportRule {
+    return new BugReportRule().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugbotRule {
-    return new BugbotRule().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportRule {
+    return new BugReportRule().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugbotRule {
-    return new BugbotRule().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportRule {
+    return new BugReportRule().fromJsonString(jsonString, options);
   }
 
-  static equals(a: BugbotRule | PlainMessage<BugbotRule> | undefined, b: BugbotRule | PlainMessage<BugbotRule> | undefined): boolean {
-    return proto3.util.equals(BugbotRule, a, b);
+  static equals(a: BugReportRule | PlainMessage<BugReportRule> | undefined, b: BugReportRule | PlainMessage<BugReportRule> | undefined): boolean {
+    return proto3.util.equals(BugReportRule, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.BugbotRuleAnalytics
+ * @generated from message aiserver.v1.BugReportRuleAnalytics
  */
-export class BugbotRuleAnalytics extends Message<BugbotRuleAnalytics> {
+export class BugReportRuleAnalytics extends Message<BugReportRuleAnalytics> {
   /**
    * @generated from field: string rule_id = 1;
    */
@@ -6152,13 +6152,13 @@ export class BugbotRuleAnalytics extends Message<BugbotRuleAnalytics> {
    */
   createdAt = "";
 
-  constructor(data?: PartialMessage<BugbotRuleAnalytics>) {
+  constructor(data?: PartialMessage<BugReportRuleAnalytics>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugbotRuleAnalytics";
+  static readonly typeName = "aiserver.v1.BugReportRuleAnalytics";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "rule_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "rule_type", kind: "scalar", T: 9 /* ScalarType.STRING */ },
@@ -6175,27 +6175,27 @@ export class BugbotRuleAnalytics extends Message<BugbotRuleAnalytics> {
     { no: 13, name: "created_at", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugbotRuleAnalytics {
-    return new BugbotRuleAnalytics().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportRuleAnalytics {
+    return new BugReportRuleAnalytics().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugbotRuleAnalytics {
-    return new BugbotRuleAnalytics().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportRuleAnalytics {
+    return new BugReportRuleAnalytics().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugbotRuleAnalytics {
-    return new BugbotRuleAnalytics().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportRuleAnalytics {
+    return new BugReportRuleAnalytics().fromJsonString(jsonString, options);
   }
 
-  static equals(a: BugbotRuleAnalytics | PlainMessage<BugbotRuleAnalytics> | undefined, b: BugbotRuleAnalytics | PlainMessage<BugbotRuleAnalytics> | undefined): boolean {
-    return proto3.util.equals(BugbotRuleAnalytics, a, b);
+  static equals(a: BugReportRuleAnalytics | PlainMessage<BugReportRuleAnalytics> | undefined, b: BugReportRuleAnalytics | PlainMessage<BugReportRuleAnalytics> | undefined): boolean {
+    return proto3.util.equals(BugReportRuleAnalytics, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.BugbotSettingsCapabilities
+ * @generated from message aiserver.v1.BugReportSettingsCapabilities
  */
-export class BugbotSettingsCapabilities extends Message<BugbotSettingsCapabilities> {
+export class BugReportSettingsCapabilities extends Message<BugReportSettingsCapabilities> {
   /**
    * @generated from field: bool auto_enable_new_repos = 1;
    */
@@ -6206,32 +6206,32 @@ export class BugbotSettingsCapabilities extends Message<BugbotSettingsCapabiliti
    */
   learnedRules = false;
 
-  constructor(data?: PartialMessage<BugbotSettingsCapabilities>) {
+  constructor(data?: PartialMessage<BugReportSettingsCapabilities>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugbotSettingsCapabilities";
+  static readonly typeName = "aiserver.v1.BugReportSettingsCapabilities";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "auto_enable_new_repos", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 2, name: "learned_rules", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugbotSettingsCapabilities {
-    return new BugbotSettingsCapabilities().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportSettingsCapabilities {
+    return new BugReportSettingsCapabilities().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugbotSettingsCapabilities {
-    return new BugbotSettingsCapabilities().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportSettingsCapabilities {
+    return new BugReportSettingsCapabilities().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugbotSettingsCapabilities {
-    return new BugbotSettingsCapabilities().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportSettingsCapabilities {
+    return new BugReportSettingsCapabilities().fromJsonString(jsonString, options);
   }
 
-  static equals(a: BugbotSettingsCapabilities | PlainMessage<BugbotSettingsCapabilities> | undefined, b: BugbotSettingsCapabilities | PlainMessage<BugbotSettingsCapabilities> | undefined): boolean {
-    return proto3.util.equals(BugbotSettingsCapabilities, a, b);
+  static equals(a: BugReportSettingsCapabilities | PlainMessage<BugReportSettingsCapabilities> | undefined, b: BugReportSettingsCapabilities | PlainMessage<BugReportSettingsCapabilities> | undefined): boolean {
+    return proto3.util.equals(BugReportSettingsCapabilities, a, b);
   }
 }
 
@@ -6537,64 +6537,64 @@ export class CancelPendingTeamSubscriptionNowResponse extends Message<CancelPend
 }
 
 /**
- * @generated from message aiserver.v1.CancelSandTrialRequest
+ * @generated from message aiserver.v1.CancelSlateTrialRequest
  */
-export class CancelSandTrialRequest extends Message<CancelSandTrialRequest> {
-  constructor(data?: PartialMessage<CancelSandTrialRequest>) {
+export class CancelSlateTrialRequest extends Message<CancelSlateTrialRequest> {
+  constructor(data?: PartialMessage<CancelSlateTrialRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.CancelSandTrialRequest";
+  static readonly typeName = "aiserver.v1.CancelSlateTrialRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CancelSandTrialRequest {
-    return new CancelSandTrialRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CancelSlateTrialRequest {
+    return new CancelSlateTrialRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): CancelSandTrialRequest {
-    return new CancelSandTrialRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): CancelSlateTrialRequest {
+    return new CancelSlateTrialRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): CancelSandTrialRequest {
-    return new CancelSandTrialRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): CancelSlateTrialRequest {
+    return new CancelSlateTrialRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: CancelSandTrialRequest | PlainMessage<CancelSandTrialRequest> | undefined, b: CancelSandTrialRequest | PlainMessage<CancelSandTrialRequest> | undefined): boolean {
-    return proto3.util.equals(CancelSandTrialRequest, a, b);
+  static equals(a: CancelSlateTrialRequest | PlainMessage<CancelSlateTrialRequest> | undefined, b: CancelSlateTrialRequest | PlainMessage<CancelSlateTrialRequest> | undefined): boolean {
+    return proto3.util.equals(CancelSlateTrialRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.CancelSandTrialResponse
+ * @generated from message aiserver.v1.CancelSlateTrialResponse
  */
-export class CancelSandTrialResponse extends Message<CancelSandTrialResponse> {
-  constructor(data?: PartialMessage<CancelSandTrialResponse>) {
+export class CancelSlateTrialResponse extends Message<CancelSlateTrialResponse> {
+  constructor(data?: PartialMessage<CancelSlateTrialResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.CancelSandTrialResponse";
+  static readonly typeName = "aiserver.v1.CancelSlateTrialResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CancelSandTrialResponse {
-    return new CancelSandTrialResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CancelSlateTrialResponse {
+    return new CancelSlateTrialResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): CancelSandTrialResponse {
-    return new CancelSandTrialResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): CancelSlateTrialResponse {
+    return new CancelSlateTrialResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): CancelSandTrialResponse {
-    return new CancelSandTrialResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): CancelSlateTrialResponse {
+    return new CancelSlateTrialResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: CancelSandTrialResponse | PlainMessage<CancelSandTrialResponse> | undefined, b: CancelSandTrialResponse | PlainMessage<CancelSandTrialResponse> | undefined): boolean {
-    return proto3.util.equals(CancelSandTrialResponse, a, b);
+  static equals(a: CancelSlateTrialResponse | PlainMessage<CancelSlateTrialResponse> | undefined, b: CancelSlateTrialResponse | PlainMessage<CancelSlateTrialResponse> | undefined): boolean {
+    return proto3.util.equals(CancelSlateTrialResponse, a, b);
   }
 }
 
@@ -7404,9 +7404,9 @@ export class ClaimUserProfileHandleResponse extends Message<ClaimUserProfileHand
 }
 
 /**
- * @generated from message aiserver.v1.ClassifySandAutoReviewRequest
+ * @generated from message aiserver.v1.ClassifySlateAutoReviewRequest
  */
-export class ClassifySandAutoReviewRequest extends Message<ClassifySandAutoReviewRequest> {
+export class ClassifySlateAutoReviewRequest extends Message<ClassifySlateAutoReviewRequest> {
   /**
    * @generated from field: optional agent.v1.SmartModeClassifierArgs args = 1;
    */
@@ -7422,70 +7422,70 @@ export class ClassifySandAutoReviewRequest extends Message<ClassifySandAutoRevie
    */
   mode?: string;
 
-  constructor(data?: PartialMessage<ClassifySandAutoReviewRequest>) {
+  constructor(data?: PartialMessage<ClassifySlateAutoReviewRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.ClassifySandAutoReviewRequest";
+  static readonly typeName = "aiserver.v1.ClassifySlateAutoReviewRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "args", kind: "message", T: SmartModeClassifierArgs, opt: true },
     { no: 2, name: "attempt_index", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
     { no: 3, name: "mode", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ClassifySandAutoReviewRequest {
-    return new ClassifySandAutoReviewRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ClassifySlateAutoReviewRequest {
+    return new ClassifySlateAutoReviewRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ClassifySandAutoReviewRequest {
-    return new ClassifySandAutoReviewRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ClassifySlateAutoReviewRequest {
+    return new ClassifySlateAutoReviewRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ClassifySandAutoReviewRequest {
-    return new ClassifySandAutoReviewRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ClassifySlateAutoReviewRequest {
+    return new ClassifySlateAutoReviewRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: ClassifySandAutoReviewRequest | PlainMessage<ClassifySandAutoReviewRequest> | undefined, b: ClassifySandAutoReviewRequest | PlainMessage<ClassifySandAutoReviewRequest> | undefined): boolean {
-    return proto3.util.equals(ClassifySandAutoReviewRequest, a, b);
+  static equals(a: ClassifySlateAutoReviewRequest | PlainMessage<ClassifySlateAutoReviewRequest> | undefined, b: ClassifySlateAutoReviewRequest | PlainMessage<ClassifySlateAutoReviewRequest> | undefined): boolean {
+    return proto3.util.equals(ClassifySlateAutoReviewRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.ClassifySandAutoReviewResponse
+ * @generated from message aiserver.v1.ClassifySlateAutoReviewResponse
  */
-export class ClassifySandAutoReviewResponse extends Message<ClassifySandAutoReviewResponse> {
+export class ClassifySlateAutoReviewResponse extends Message<ClassifySlateAutoReviewResponse> {
   /**
    * @generated from field: optional agent.v1.SmartModeClassifierResult result = 1;
    */
   result?: SmartModeClassifierResult;
 
-  constructor(data?: PartialMessage<ClassifySandAutoReviewResponse>) {
+  constructor(data?: PartialMessage<ClassifySlateAutoReviewResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.ClassifySandAutoReviewResponse";
+  static readonly typeName = "aiserver.v1.ClassifySlateAutoReviewResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "result", kind: "message", T: SmartModeClassifierResult, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ClassifySandAutoReviewResponse {
-    return new ClassifySandAutoReviewResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ClassifySlateAutoReviewResponse {
+    return new ClassifySlateAutoReviewResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ClassifySandAutoReviewResponse {
-    return new ClassifySandAutoReviewResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ClassifySlateAutoReviewResponse {
+    return new ClassifySlateAutoReviewResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ClassifySandAutoReviewResponse {
-    return new ClassifySandAutoReviewResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ClassifySlateAutoReviewResponse {
+    return new ClassifySlateAutoReviewResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: ClassifySandAutoReviewResponse | PlainMessage<ClassifySandAutoReviewResponse> | undefined, b: ClassifySandAutoReviewResponse | PlainMessage<ClassifySandAutoReviewResponse> | undefined): boolean {
-    return proto3.util.equals(ClassifySandAutoReviewResponse, a, b);
+  static equals(a: ClassifySlateAutoReviewResponse | PlainMessage<ClassifySlateAutoReviewResponse> | undefined, b: ClassifySlateAutoReviewResponse | PlainMessage<ClassifySlateAutoReviewResponse> | undefined): boolean {
+    return proto3.util.equals(ClassifySlateAutoReviewResponse, a, b);
   }
 }
 
@@ -9480,9 +9480,9 @@ export class CreateBackgroundComposerSecretResponse extends Message<CreateBackgr
 }
 
 /**
- * @generated from message aiserver.v1.CreateBugbotManualRepositoryRuleRequest
+ * @generated from message aiserver.v1.CreateBugReportManualRepositoryRuleRequest
  */
-export class CreateBugbotManualRepositoryRuleRequest extends Message<CreateBugbotManualRepositoryRuleRequest> {
+export class CreateBugReportManualRepositoryRuleRequest extends Message<CreateBugReportManualRepositoryRuleRequest> {
   /**
    * @generated from field: int64 installation_id = 1;
    */
@@ -9518,13 +9518,13 @@ export class CreateBugbotManualRepositoryRuleRequest extends Message<CreateBugbo
    */
   scopedPaths: string[] = [];
 
-  constructor(data?: PartialMessage<CreateBugbotManualRepositoryRuleRequest>) {
+  constructor(data?: PartialMessage<CreateBugReportManualRepositoryRuleRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.CreateBugbotManualRepositoryRuleRequest";
+  static readonly typeName = "aiserver.v1.CreateBugReportManualRepositoryRuleRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "installation_id", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 2, name: "ghe_application", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
@@ -9535,64 +9535,64 @@ export class CreateBugbotManualRepositoryRuleRequest extends Message<CreateBugbo
     { no: 7, name: "scoped_paths", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CreateBugbotManualRepositoryRuleRequest {
-    return new CreateBugbotManualRepositoryRuleRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CreateBugReportManualRepositoryRuleRequest {
+    return new CreateBugReportManualRepositoryRuleRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): CreateBugbotManualRepositoryRuleRequest {
-    return new CreateBugbotManualRepositoryRuleRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): CreateBugReportManualRepositoryRuleRequest {
+    return new CreateBugReportManualRepositoryRuleRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): CreateBugbotManualRepositoryRuleRequest {
-    return new CreateBugbotManualRepositoryRuleRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): CreateBugReportManualRepositoryRuleRequest {
+    return new CreateBugReportManualRepositoryRuleRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: CreateBugbotManualRepositoryRuleRequest | PlainMessage<CreateBugbotManualRepositoryRuleRequest> | undefined, b: CreateBugbotManualRepositoryRuleRequest | PlainMessage<CreateBugbotManualRepositoryRuleRequest> | undefined): boolean {
-    return proto3.util.equals(CreateBugbotManualRepositoryRuleRequest, a, b);
+  static equals(a: CreateBugReportManualRepositoryRuleRequest | PlainMessage<CreateBugReportManualRepositoryRuleRequest> | undefined, b: CreateBugReportManualRepositoryRuleRequest | PlainMessage<CreateBugReportManualRepositoryRuleRequest> | undefined): boolean {
+    return proto3.util.equals(CreateBugReportManualRepositoryRuleRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.CreateBugbotManualRepositoryRuleResponse
+ * @generated from message aiserver.v1.CreateBugReportManualRepositoryRuleResponse
  */
-export class CreateBugbotManualRepositoryRuleResponse extends Message<CreateBugbotManualRepositoryRuleResponse> {
+export class CreateBugReportManualRepositoryRuleResponse extends Message<CreateBugReportManualRepositoryRuleResponse> {
   /**
-   * @generated from field: optional aiserver.v1.BugbotManualRepositoryRule rule = 1;
+   * @generated from field: optional aiserver.v1.BugReportManualRepositoryRule rule = 1;
    */
-  rule?: BugbotManualRepositoryRule;
+  rule?: BugReportManualRepositoryRule;
 
-  constructor(data?: PartialMessage<CreateBugbotManualRepositoryRuleResponse>) {
+  constructor(data?: PartialMessage<CreateBugReportManualRepositoryRuleResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.CreateBugbotManualRepositoryRuleResponse";
+  static readonly typeName = "aiserver.v1.CreateBugReportManualRepositoryRuleResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "rule", kind: "message", T: BugbotManualRepositoryRule, opt: true },
+    { no: 1, name: "rule", kind: "message", T: BugReportManualRepositoryRule, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CreateBugbotManualRepositoryRuleResponse {
-    return new CreateBugbotManualRepositoryRuleResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CreateBugReportManualRepositoryRuleResponse {
+    return new CreateBugReportManualRepositoryRuleResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): CreateBugbotManualRepositoryRuleResponse {
-    return new CreateBugbotManualRepositoryRuleResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): CreateBugReportManualRepositoryRuleResponse {
+    return new CreateBugReportManualRepositoryRuleResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): CreateBugbotManualRepositoryRuleResponse {
-    return new CreateBugbotManualRepositoryRuleResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): CreateBugReportManualRepositoryRuleResponse {
+    return new CreateBugReportManualRepositoryRuleResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: CreateBugbotManualRepositoryRuleResponse | PlainMessage<CreateBugbotManualRepositoryRuleResponse> | undefined, b: CreateBugbotManualRepositoryRuleResponse | PlainMessage<CreateBugbotManualRepositoryRuleResponse> | undefined): boolean {
-    return proto3.util.equals(CreateBugbotManualRepositoryRuleResponse, a, b);
+  static equals(a: CreateBugReportManualRepositoryRuleResponse | PlainMessage<CreateBugReportManualRepositoryRuleResponse> | undefined, b: CreateBugReportManualRepositoryRuleResponse | PlainMessage<CreateBugReportManualRepositoryRuleResponse> | undefined): boolean {
+    return proto3.util.equals(CreateBugReportManualRepositoryRuleResponse, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.CreateBugbotTeamRuleRequest
+ * @generated from message aiserver.v1.CreateBugReportTeamRuleRequest
  */
-export class CreateBugbotTeamRuleRequest extends Message<CreateBugbotTeamRuleRequest> {
+export class CreateBugReportTeamRuleRequest extends Message<CreateBugReportTeamRuleRequest> {
   /**
    * @generated from field: string name = 1;
    */
@@ -9618,13 +9618,13 @@ export class CreateBugbotTeamRuleRequest extends Message<CreateBugbotTeamRuleReq
    */
   teamId?: number;
 
-  constructor(data?: PartialMessage<CreateBugbotTeamRuleRequest>) {
+  constructor(data?: PartialMessage<CreateBugReportTeamRuleRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.CreateBugbotTeamRuleRequest";
+  static readonly typeName = "aiserver.v1.CreateBugReportTeamRuleRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
@@ -9633,57 +9633,57 @@ export class CreateBugbotTeamRuleRequest extends Message<CreateBugbotTeamRuleReq
     { no: 5, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CreateBugbotTeamRuleRequest {
-    return new CreateBugbotTeamRuleRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CreateBugReportTeamRuleRequest {
+    return new CreateBugReportTeamRuleRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): CreateBugbotTeamRuleRequest {
-    return new CreateBugbotTeamRuleRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): CreateBugReportTeamRuleRequest {
+    return new CreateBugReportTeamRuleRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): CreateBugbotTeamRuleRequest {
-    return new CreateBugbotTeamRuleRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): CreateBugReportTeamRuleRequest {
+    return new CreateBugReportTeamRuleRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: CreateBugbotTeamRuleRequest | PlainMessage<CreateBugbotTeamRuleRequest> | undefined, b: CreateBugbotTeamRuleRequest | PlainMessage<CreateBugbotTeamRuleRequest> | undefined): boolean {
-    return proto3.util.equals(CreateBugbotTeamRuleRequest, a, b);
+  static equals(a: CreateBugReportTeamRuleRequest | PlainMessage<CreateBugReportTeamRuleRequest> | undefined, b: CreateBugReportTeamRuleRequest | PlainMessage<CreateBugReportTeamRuleRequest> | undefined): boolean {
+    return proto3.util.equals(CreateBugReportTeamRuleRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.CreateBugbotTeamRuleResponse
+ * @generated from message aiserver.v1.CreateBugReportTeamRuleResponse
  */
-export class CreateBugbotTeamRuleResponse extends Message<CreateBugbotTeamRuleResponse> {
+export class CreateBugReportTeamRuleResponse extends Message<CreateBugReportTeamRuleResponse> {
   /**
-   * @generated from field: optional aiserver.v1.BugbotRule rule = 1;
+   * @generated from field: optional aiserver.v1.BugReportRule rule = 1;
    */
-  rule?: BugbotRule;
+  rule?: BugReportRule;
 
-  constructor(data?: PartialMessage<CreateBugbotTeamRuleResponse>) {
+  constructor(data?: PartialMessage<CreateBugReportTeamRuleResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.CreateBugbotTeamRuleResponse";
+  static readonly typeName = "aiserver.v1.CreateBugReportTeamRuleResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "rule", kind: "message", T: BugbotRule, opt: true },
+    { no: 1, name: "rule", kind: "message", T: BugReportRule, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CreateBugbotTeamRuleResponse {
-    return new CreateBugbotTeamRuleResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CreateBugReportTeamRuleResponse {
+    return new CreateBugReportTeamRuleResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): CreateBugbotTeamRuleResponse {
-    return new CreateBugbotTeamRuleResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): CreateBugReportTeamRuleResponse {
+    return new CreateBugReportTeamRuleResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): CreateBugbotTeamRuleResponse {
-    return new CreateBugbotTeamRuleResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): CreateBugReportTeamRuleResponse {
+    return new CreateBugReportTeamRuleResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: CreateBugbotTeamRuleResponse | PlainMessage<CreateBugbotTeamRuleResponse> | undefined, b: CreateBugbotTeamRuleResponse | PlainMessage<CreateBugbotTeamRuleResponse> | undefined): boolean {
-    return proto3.util.equals(CreateBugbotTeamRuleResponse, a, b);
+  static equals(a: CreateBugReportTeamRuleResponse | PlainMessage<CreateBugReportTeamRuleResponse> | undefined, b: CreateBugReportTeamRuleResponse | PlainMessage<CreateBugReportTeamRuleResponse> | undefined): boolean {
+    return proto3.util.equals(CreateBugReportTeamRuleResponse, a, b);
   }
 }
 
@@ -14071,9 +14071,9 @@ export class DailyMetrics extends Message<DailyMetrics> {
   usageBasedReqs = 0;
 
   /**
-   * @generated from field: int32 bugbot_usages = 19;
+   * @generated from field: int32 bug_report_usages = 19;
    */
-  bugbotUsages = 0;
+  bugReportUsages = 0;
 
   /**
    * @generated from field: repeated aiserver.v1.StringCount model_usage = 20;
@@ -14121,7 +14121,7 @@ export class DailyMetrics extends Message<DailyMetrics> {
     { no: 16, name: "subscription_included_reqs", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 17, name: "api_key_reqs", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 18, name: "usage_based_reqs", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 19, name: "bugbot_usages", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 19, name: "bug_report_usages", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 20, name: "model_usage", kind: "message", T: StringCount, repeated: true },
     { no: 21, name: "extension_usage", kind: "message", T: StringCount, repeated: true },
     { no: 22, name: "tab_extension_usage", kind: "message", T: StringCount, repeated: true },
@@ -14615,9 +14615,9 @@ export class DeleteBitbucketServerInstanceResponse extends Message<DeleteBitbuck
 }
 
 /**
- * @generated from message aiserver.v1.DeleteBugbotLearnedRuleRequest
+ * @generated from message aiserver.v1.DeleteBugReportLearnedRuleRequest
  */
-export class DeleteBugbotLearnedRuleRequest extends Message<DeleteBugbotLearnedRuleRequest> {
+export class DeleteBugReportLearnedRuleRequest extends Message<DeleteBugReportLearnedRuleRequest> {
   /**
    * @generated from field: string rule_id = 1;
    */
@@ -14633,71 +14633,71 @@ export class DeleteBugbotLearnedRuleRequest extends Message<DeleteBugbotLearnedR
    */
   gheApplication?: string;
 
-  constructor(data?: PartialMessage<DeleteBugbotLearnedRuleRequest>) {
+  constructor(data?: PartialMessage<DeleteBugReportLearnedRuleRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.DeleteBugbotLearnedRuleRequest";
+  static readonly typeName = "aiserver.v1.DeleteBugReportLearnedRuleRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "rule_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "installation_id", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 3, name: "ghe_application", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DeleteBugbotLearnedRuleRequest {
-    return new DeleteBugbotLearnedRuleRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DeleteBugReportLearnedRuleRequest {
+    return new DeleteBugReportLearnedRuleRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): DeleteBugbotLearnedRuleRequest {
-    return new DeleteBugbotLearnedRuleRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): DeleteBugReportLearnedRuleRequest {
+    return new DeleteBugReportLearnedRuleRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): DeleteBugbotLearnedRuleRequest {
-    return new DeleteBugbotLearnedRuleRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): DeleteBugReportLearnedRuleRequest {
+    return new DeleteBugReportLearnedRuleRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: DeleteBugbotLearnedRuleRequest | PlainMessage<DeleteBugbotLearnedRuleRequest> | undefined, b: DeleteBugbotLearnedRuleRequest | PlainMessage<DeleteBugbotLearnedRuleRequest> | undefined): boolean {
-    return proto3.util.equals(DeleteBugbotLearnedRuleRequest, a, b);
+  static equals(a: DeleteBugReportLearnedRuleRequest | PlainMessage<DeleteBugReportLearnedRuleRequest> | undefined, b: DeleteBugReportLearnedRuleRequest | PlainMessage<DeleteBugReportLearnedRuleRequest> | undefined): boolean {
+    return proto3.util.equals(DeleteBugReportLearnedRuleRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.DeleteBugbotLearnedRuleResponse
+ * @generated from message aiserver.v1.DeleteBugReportLearnedRuleResponse
  */
-export class DeleteBugbotLearnedRuleResponse extends Message<DeleteBugbotLearnedRuleResponse> {
-  constructor(data?: PartialMessage<DeleteBugbotLearnedRuleResponse>) {
+export class DeleteBugReportLearnedRuleResponse extends Message<DeleteBugReportLearnedRuleResponse> {
+  constructor(data?: PartialMessage<DeleteBugReportLearnedRuleResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.DeleteBugbotLearnedRuleResponse";
+  static readonly typeName = "aiserver.v1.DeleteBugReportLearnedRuleResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DeleteBugbotLearnedRuleResponse {
-    return new DeleteBugbotLearnedRuleResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DeleteBugReportLearnedRuleResponse {
+    return new DeleteBugReportLearnedRuleResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): DeleteBugbotLearnedRuleResponse {
-    return new DeleteBugbotLearnedRuleResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): DeleteBugReportLearnedRuleResponse {
+    return new DeleteBugReportLearnedRuleResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): DeleteBugbotLearnedRuleResponse {
-    return new DeleteBugbotLearnedRuleResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): DeleteBugReportLearnedRuleResponse {
+    return new DeleteBugReportLearnedRuleResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: DeleteBugbotLearnedRuleResponse | PlainMessage<DeleteBugbotLearnedRuleResponse> | undefined, b: DeleteBugbotLearnedRuleResponse | PlainMessage<DeleteBugbotLearnedRuleResponse> | undefined): boolean {
-    return proto3.util.equals(DeleteBugbotLearnedRuleResponse, a, b);
+  static equals(a: DeleteBugReportLearnedRuleResponse | PlainMessage<DeleteBugReportLearnedRuleResponse> | undefined, b: DeleteBugReportLearnedRuleResponse | PlainMessage<DeleteBugReportLearnedRuleResponse> | undefined): boolean {
+    return proto3.util.equals(DeleteBugReportLearnedRuleResponse, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.DeleteBugbotManualRepositoryRuleRequest
+ * @generated from message aiserver.v1.DeleteBugReportManualRepositoryRuleRequest
  */
-export class DeleteBugbotManualRepositoryRuleRequest extends Message<DeleteBugbotManualRepositoryRuleRequest> {
+export class DeleteBugReportManualRepositoryRuleRequest extends Message<DeleteBugReportManualRepositoryRuleRequest> {
   /**
    * @generated from field: string rule_id = 1;
    */
@@ -14713,71 +14713,71 @@ export class DeleteBugbotManualRepositoryRuleRequest extends Message<DeleteBugbo
    */
   gheApplication?: string;
 
-  constructor(data?: PartialMessage<DeleteBugbotManualRepositoryRuleRequest>) {
+  constructor(data?: PartialMessage<DeleteBugReportManualRepositoryRuleRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.DeleteBugbotManualRepositoryRuleRequest";
+  static readonly typeName = "aiserver.v1.DeleteBugReportManualRepositoryRuleRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "rule_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "installation_id", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 3, name: "ghe_application", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DeleteBugbotManualRepositoryRuleRequest {
-    return new DeleteBugbotManualRepositoryRuleRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DeleteBugReportManualRepositoryRuleRequest {
+    return new DeleteBugReportManualRepositoryRuleRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): DeleteBugbotManualRepositoryRuleRequest {
-    return new DeleteBugbotManualRepositoryRuleRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): DeleteBugReportManualRepositoryRuleRequest {
+    return new DeleteBugReportManualRepositoryRuleRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): DeleteBugbotManualRepositoryRuleRequest {
-    return new DeleteBugbotManualRepositoryRuleRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): DeleteBugReportManualRepositoryRuleRequest {
+    return new DeleteBugReportManualRepositoryRuleRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: DeleteBugbotManualRepositoryRuleRequest | PlainMessage<DeleteBugbotManualRepositoryRuleRequest> | undefined, b: DeleteBugbotManualRepositoryRuleRequest | PlainMessage<DeleteBugbotManualRepositoryRuleRequest> | undefined): boolean {
-    return proto3.util.equals(DeleteBugbotManualRepositoryRuleRequest, a, b);
+  static equals(a: DeleteBugReportManualRepositoryRuleRequest | PlainMessage<DeleteBugReportManualRepositoryRuleRequest> | undefined, b: DeleteBugReportManualRepositoryRuleRequest | PlainMessage<DeleteBugReportManualRepositoryRuleRequest> | undefined): boolean {
+    return proto3.util.equals(DeleteBugReportManualRepositoryRuleRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.DeleteBugbotManualRepositoryRuleResponse
+ * @generated from message aiserver.v1.DeleteBugReportManualRepositoryRuleResponse
  */
-export class DeleteBugbotManualRepositoryRuleResponse extends Message<DeleteBugbotManualRepositoryRuleResponse> {
-  constructor(data?: PartialMessage<DeleteBugbotManualRepositoryRuleResponse>) {
+export class DeleteBugReportManualRepositoryRuleResponse extends Message<DeleteBugReportManualRepositoryRuleResponse> {
+  constructor(data?: PartialMessage<DeleteBugReportManualRepositoryRuleResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.DeleteBugbotManualRepositoryRuleResponse";
+  static readonly typeName = "aiserver.v1.DeleteBugReportManualRepositoryRuleResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DeleteBugbotManualRepositoryRuleResponse {
-    return new DeleteBugbotManualRepositoryRuleResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DeleteBugReportManualRepositoryRuleResponse {
+    return new DeleteBugReportManualRepositoryRuleResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): DeleteBugbotManualRepositoryRuleResponse {
-    return new DeleteBugbotManualRepositoryRuleResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): DeleteBugReportManualRepositoryRuleResponse {
+    return new DeleteBugReportManualRepositoryRuleResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): DeleteBugbotManualRepositoryRuleResponse {
-    return new DeleteBugbotManualRepositoryRuleResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): DeleteBugReportManualRepositoryRuleResponse {
+    return new DeleteBugReportManualRepositoryRuleResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: DeleteBugbotManualRepositoryRuleResponse | PlainMessage<DeleteBugbotManualRepositoryRuleResponse> | undefined, b: DeleteBugbotManualRepositoryRuleResponse | PlainMessage<DeleteBugbotManualRepositoryRuleResponse> | undefined): boolean {
-    return proto3.util.equals(DeleteBugbotManualRepositoryRuleResponse, a, b);
+  static equals(a: DeleteBugReportManualRepositoryRuleResponse | PlainMessage<DeleteBugReportManualRepositoryRuleResponse> | undefined, b: DeleteBugReportManualRepositoryRuleResponse | PlainMessage<DeleteBugReportManualRepositoryRuleResponse> | undefined): boolean {
+    return proto3.util.equals(DeleteBugReportManualRepositoryRuleResponse, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.DeleteBugbotTeamRuleRequest
+ * @generated from message aiserver.v1.DeleteBugReportTeamRuleRequest
  */
-export class DeleteBugbotTeamRuleRequest extends Message<DeleteBugbotTeamRuleRequest> {
+export class DeleteBugReportTeamRuleRequest extends Message<DeleteBugReportTeamRuleRequest> {
   /**
    * @generated from field: string rule_id = 1;
    */
@@ -14788,63 +14788,63 @@ export class DeleteBugbotTeamRuleRequest extends Message<DeleteBugbotTeamRuleReq
    */
   teamId?: number;
 
-  constructor(data?: PartialMessage<DeleteBugbotTeamRuleRequest>) {
+  constructor(data?: PartialMessage<DeleteBugReportTeamRuleRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.DeleteBugbotTeamRuleRequest";
+  static readonly typeName = "aiserver.v1.DeleteBugReportTeamRuleRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "rule_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DeleteBugbotTeamRuleRequest {
-    return new DeleteBugbotTeamRuleRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DeleteBugReportTeamRuleRequest {
+    return new DeleteBugReportTeamRuleRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): DeleteBugbotTeamRuleRequest {
-    return new DeleteBugbotTeamRuleRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): DeleteBugReportTeamRuleRequest {
+    return new DeleteBugReportTeamRuleRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): DeleteBugbotTeamRuleRequest {
-    return new DeleteBugbotTeamRuleRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): DeleteBugReportTeamRuleRequest {
+    return new DeleteBugReportTeamRuleRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: DeleteBugbotTeamRuleRequest | PlainMessage<DeleteBugbotTeamRuleRequest> | undefined, b: DeleteBugbotTeamRuleRequest | PlainMessage<DeleteBugbotTeamRuleRequest> | undefined): boolean {
-    return proto3.util.equals(DeleteBugbotTeamRuleRequest, a, b);
+  static equals(a: DeleteBugReportTeamRuleRequest | PlainMessage<DeleteBugReportTeamRuleRequest> | undefined, b: DeleteBugReportTeamRuleRequest | PlainMessage<DeleteBugReportTeamRuleRequest> | undefined): boolean {
+    return proto3.util.equals(DeleteBugReportTeamRuleRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.DeleteBugbotTeamRuleResponse
+ * @generated from message aiserver.v1.DeleteBugReportTeamRuleResponse
  */
-export class DeleteBugbotTeamRuleResponse extends Message<DeleteBugbotTeamRuleResponse> {
-  constructor(data?: PartialMessage<DeleteBugbotTeamRuleResponse>) {
+export class DeleteBugReportTeamRuleResponse extends Message<DeleteBugReportTeamRuleResponse> {
+  constructor(data?: PartialMessage<DeleteBugReportTeamRuleResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.DeleteBugbotTeamRuleResponse";
+  static readonly typeName = "aiserver.v1.DeleteBugReportTeamRuleResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DeleteBugbotTeamRuleResponse {
-    return new DeleteBugbotTeamRuleResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DeleteBugReportTeamRuleResponse {
+    return new DeleteBugReportTeamRuleResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): DeleteBugbotTeamRuleResponse {
-    return new DeleteBugbotTeamRuleResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): DeleteBugReportTeamRuleResponse {
+    return new DeleteBugReportTeamRuleResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): DeleteBugbotTeamRuleResponse {
-    return new DeleteBugbotTeamRuleResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): DeleteBugReportTeamRuleResponse {
+    return new DeleteBugReportTeamRuleResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: DeleteBugbotTeamRuleResponse | PlainMessage<DeleteBugbotTeamRuleResponse> | undefined, b: DeleteBugbotTeamRuleResponse | PlainMessage<DeleteBugbotTeamRuleResponse> | undefined): boolean {
-    return proto3.util.equals(DeleteBugbotTeamRuleResponse, a, b);
+  static equals(a: DeleteBugReportTeamRuleResponse | PlainMessage<DeleteBugReportTeamRuleResponse> | undefined, b: DeleteBugReportTeamRuleResponse | PlainMessage<DeleteBugReportTeamRuleResponse> | undefined): boolean {
+    return proto3.util.equals(DeleteBugReportTeamRuleResponse, a, b);
   }
 }
 
@@ -17566,9 +17566,9 @@ export class EnrollInGlassEarlyPreviewResponse extends Message<EnrollInGlassEarl
 }
 
 /**
- * @generated from message aiserver.v1.ExecuteSandMcpToolRequest
+ * @generated from message aiserver.v1.ExecuteSlateMcpToolRequest
  */
-export class ExecuteSandMcpToolRequest extends Message<ExecuteSandMcpToolRequest> {
+export class ExecuteSlateMcpToolRequest extends Message<ExecuteSlateMcpToolRequest> {
   /**
    * @generated from field: string server_identifier = 1;
    */
@@ -17599,13 +17599,13 @@ export class ExecuteSandMcpToolRequest extends Message<ExecuteSandMcpToolRequest
    */
   turnId = "";
 
-  constructor(data?: PartialMessage<ExecuteSandMcpToolRequest>) {
+  constructor(data?: PartialMessage<ExecuteSlateMcpToolRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.ExecuteSandMcpToolRequest";
+  static readonly typeName = "aiserver.v1.ExecuteSlateMcpToolRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "server_identifier", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "tool_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
@@ -17615,57 +17615,57 @@ export class ExecuteSandMcpToolRequest extends Message<ExecuteSandMcpToolRequest
     { no: 6, name: "turn_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ExecuteSandMcpToolRequest {
-    return new ExecuteSandMcpToolRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ExecuteSlateMcpToolRequest {
+    return new ExecuteSlateMcpToolRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ExecuteSandMcpToolRequest {
-    return new ExecuteSandMcpToolRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ExecuteSlateMcpToolRequest {
+    return new ExecuteSlateMcpToolRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ExecuteSandMcpToolRequest {
-    return new ExecuteSandMcpToolRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ExecuteSlateMcpToolRequest {
+    return new ExecuteSlateMcpToolRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: ExecuteSandMcpToolRequest | PlainMessage<ExecuteSandMcpToolRequest> | undefined, b: ExecuteSandMcpToolRequest | PlainMessage<ExecuteSandMcpToolRequest> | undefined): boolean {
-    return proto3.util.equals(ExecuteSandMcpToolRequest, a, b);
+  static equals(a: ExecuteSlateMcpToolRequest | PlainMessage<ExecuteSlateMcpToolRequest> | undefined, b: ExecuteSlateMcpToolRequest | PlainMessage<ExecuteSlateMcpToolRequest> | undefined): boolean {
+    return proto3.util.equals(ExecuteSlateMcpToolRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.ExecuteSandMcpToolResponse
+ * @generated from message aiserver.v1.ExecuteSlateMcpToolResponse
  */
-export class ExecuteSandMcpToolResponse extends Message<ExecuteSandMcpToolResponse> {
+export class ExecuteSlateMcpToolResponse extends Message<ExecuteSlateMcpToolResponse> {
   /**
    * @generated from field: optional agent.v1.McpResult result = 1;
    */
   result?: McpResult;
 
-  constructor(data?: PartialMessage<ExecuteSandMcpToolResponse>) {
+  constructor(data?: PartialMessage<ExecuteSlateMcpToolResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.ExecuteSandMcpToolResponse";
+  static readonly typeName = "aiserver.v1.ExecuteSlateMcpToolResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "result", kind: "message", T: McpResult, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ExecuteSandMcpToolResponse {
-    return new ExecuteSandMcpToolResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ExecuteSlateMcpToolResponse {
+    return new ExecuteSlateMcpToolResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ExecuteSandMcpToolResponse {
-    return new ExecuteSandMcpToolResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ExecuteSlateMcpToolResponse {
+    return new ExecuteSlateMcpToolResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ExecuteSandMcpToolResponse {
-    return new ExecuteSandMcpToolResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ExecuteSlateMcpToolResponse {
+    return new ExecuteSlateMcpToolResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: ExecuteSandMcpToolResponse | PlainMessage<ExecuteSandMcpToolResponse> | undefined, b: ExecuteSandMcpToolResponse | PlainMessage<ExecuteSandMcpToolResponse> | undefined): boolean {
-    return proto3.util.equals(ExecuteSandMcpToolResponse, a, b);
+  static equals(a: ExecuteSlateMcpToolResponse | PlainMessage<ExecuteSlateMcpToolResponse> | undefined, b: ExecuteSlateMcpToolResponse | PlainMessage<ExecuteSlateMcpToolResponse> | undefined): boolean {
+    return proto3.util.equals(ExecuteSlateMcpToolResponse, a, b);
   }
 }
 
@@ -18364,9 +18364,9 @@ export class GetActivationCheckoutUrlRequest extends Message<GetActivationChecko
   radarSessionId?: string;
 
   /**
-   * @generated from field: optional bool include_bugbot = 7;
+   * @generated from field: optional bool include_bug_report = 7;
    */
-  includeBugbot?: boolean;
+  includeBugReport?: boolean;
 
   /**
    * @generated from field: optional aiserver.v1.TeamMemberBillingTier billing_tier = 8;
@@ -18387,7 +18387,7 @@ export class GetActivationCheckoutUrlRequest extends Message<GetActivationChecko
     { no: 4, name: "request_quota_per_seat", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 5, name: "code", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 6, name: "radar_session_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
-    { no: 7, name: "include_bugbot", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 7, name: "include_bug_report", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 8, name: "billing_tier", kind: "enum", T: proto3.getEnumType(TeamMemberBillingTier), opt: true },
   ]);
 
@@ -19658,9 +19658,9 @@ export class GetBitbucketForgeStatusResponse extends Message<GetBitbucketForgeSt
 }
 
 /**
- * @generated from message aiserver.v1.GetBugBotPRAnalyticsRequest
+ * @generated from message aiserver.v1.GetBugReportPRAnalyticsRequest
  */
-export class GetBugBotPRAnalyticsRequest extends Message<GetBugBotPRAnalyticsRequest> {
+export class GetBugReportPRAnalyticsRequest extends Message<GetBugReportPRAnalyticsRequest> {
   /**
    * @generated from field: optional string github_repo_node_id = 1;
    */
@@ -19701,13 +19701,13 @@ export class GetBugBotPRAnalyticsRequest extends Message<GetBugBotPRAnalyticsReq
    */
   teamId?: number;
 
-  constructor(data?: PartialMessage<GetBugBotPRAnalyticsRequest>) {
+  constructor(data?: PartialMessage<GetBugReportPRAnalyticsRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetBugBotPRAnalyticsRequest";
+  static readonly typeName = "aiserver.v1.GetBugReportPRAnalyticsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "github_repo_node_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "status", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
@@ -19719,110 +19719,110 @@ export class GetBugBotPRAnalyticsRequest extends Message<GetBugBotPRAnalyticsReq
     { no: 8, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugBotPRAnalyticsRequest {
-    return new GetBugBotPRAnalyticsRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugReportPRAnalyticsRequest {
+    return new GetBugReportPRAnalyticsRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugBotPRAnalyticsRequest {
-    return new GetBugBotPRAnalyticsRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugReportPRAnalyticsRequest {
+    return new GetBugReportPRAnalyticsRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugBotPRAnalyticsRequest {
-    return new GetBugBotPRAnalyticsRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugReportPRAnalyticsRequest {
+    return new GetBugReportPRAnalyticsRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetBugBotPRAnalyticsRequest | PlainMessage<GetBugBotPRAnalyticsRequest> | undefined, b: GetBugBotPRAnalyticsRequest | PlainMessage<GetBugBotPRAnalyticsRequest> | undefined): boolean {
-    return proto3.util.equals(GetBugBotPRAnalyticsRequest, a, b);
+  static equals(a: GetBugReportPRAnalyticsRequest | PlainMessage<GetBugReportPRAnalyticsRequest> | undefined, b: GetBugReportPRAnalyticsRequest | PlainMessage<GetBugReportPRAnalyticsRequest> | undefined): boolean {
+    return proto3.util.equals(GetBugReportPRAnalyticsRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetBugBotPRAnalyticsResponse
+ * @generated from message aiserver.v1.GetBugReportPRAnalyticsResponse
  */
-export class GetBugBotPRAnalyticsResponse extends Message<GetBugBotPRAnalyticsResponse> {
+export class GetBugReportPRAnalyticsResponse extends Message<GetBugReportPRAnalyticsResponse> {
   /**
-   * @generated from field: repeated aiserver.v1.BugBotPRAnalytics prs = 2;
+   * @generated from field: repeated aiserver.v1.BugReportPRAnalytics prs = 2;
    */
-  prs: BugBotPRAnalytics[] = [];
+  prs: BugReportPRAnalytics[] = [];
 
   /**
    * @generated from field: repeated aiserver.v1.PRUserOption user_options = 3;
    */
   userOptions: PRUserOption[] = [];
 
-  constructor(data?: PartialMessage<GetBugBotPRAnalyticsResponse>) {
+  constructor(data?: PartialMessage<GetBugReportPRAnalyticsResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetBugBotPRAnalyticsResponse";
+  static readonly typeName = "aiserver.v1.GetBugReportPRAnalyticsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 2, name: "prs", kind: "message", T: BugBotPRAnalytics, repeated: true },
+    { no: 2, name: "prs", kind: "message", T: BugReportPRAnalytics, repeated: true },
     { no: 3, name: "user_options", kind: "message", T: PRUserOption, repeated: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugBotPRAnalyticsResponse {
-    return new GetBugBotPRAnalyticsResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugReportPRAnalyticsResponse {
+    return new GetBugReportPRAnalyticsResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugBotPRAnalyticsResponse {
-    return new GetBugBotPRAnalyticsResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugReportPRAnalyticsResponse {
+    return new GetBugReportPRAnalyticsResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugBotPRAnalyticsResponse {
-    return new GetBugBotPRAnalyticsResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugReportPRAnalyticsResponse {
+    return new GetBugReportPRAnalyticsResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetBugBotPRAnalyticsResponse | PlainMessage<GetBugBotPRAnalyticsResponse> | undefined, b: GetBugBotPRAnalyticsResponse | PlainMessage<GetBugBotPRAnalyticsResponse> | undefined): boolean {
-    return proto3.util.equals(GetBugBotPRAnalyticsResponse, a, b);
+  static equals(a: GetBugReportPRAnalyticsResponse | PlainMessage<GetBugReportPRAnalyticsResponse> | undefined, b: GetBugReportPRAnalyticsResponse | PlainMessage<GetBugReportPRAnalyticsResponse> | undefined): boolean {
+    return proto3.util.equals(GetBugReportPRAnalyticsResponse, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetBugBotProUserModeRequest
+ * @generated from message aiserver.v1.GetBugReportProUserModeRequest
  */
-export class GetBugBotProUserModeRequest extends Message<GetBugBotProUserModeRequest> {
-  constructor(data?: PartialMessage<GetBugBotProUserModeRequest>) {
+export class GetBugReportProUserModeRequest extends Message<GetBugReportProUserModeRequest> {
+  constructor(data?: PartialMessage<GetBugReportProUserModeRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetBugBotProUserModeRequest";
+  static readonly typeName = "aiserver.v1.GetBugReportProUserModeRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugBotProUserModeRequest {
-    return new GetBugBotProUserModeRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugReportProUserModeRequest {
+    return new GetBugReportProUserModeRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugBotProUserModeRequest {
-    return new GetBugBotProUserModeRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugReportProUserModeRequest {
+    return new GetBugReportProUserModeRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugBotProUserModeRequest {
-    return new GetBugBotProUserModeRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugReportProUserModeRequest {
+    return new GetBugReportProUserModeRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetBugBotProUserModeRequest | PlainMessage<GetBugBotProUserModeRequest> | undefined, b: GetBugBotProUserModeRequest | PlainMessage<GetBugBotProUserModeRequest> | undefined): boolean {
-    return proto3.util.equals(GetBugBotProUserModeRequest, a, b);
+  static equals(a: GetBugReportProUserModeRequest | PlainMessage<GetBugReportProUserModeRequest> | undefined, b: GetBugReportProUserModeRequest | PlainMessage<GetBugReportProUserModeRequest> | undefined): boolean {
+    return proto3.util.equals(GetBugReportProUserModeRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetBugBotProUserModeResponse
+ * @generated from message aiserver.v1.GetBugReportProUserModeResponse
  */
-export class GetBugBotProUserModeResponse extends Message<GetBugBotProUserModeResponse> {
+export class GetBugReportProUserModeResponse extends Message<GetBugReportProUserModeResponse> {
   /**
-   * @generated from field: aiserver.v1.BugbotMode mode = 1;
+   * @generated from field: aiserver.v1.BugReportMode mode = 1;
    */
-  mode = BugbotMode.UNSPECIFIED;
+  mode = BugReportMode.BUGBOT_MODE_UNSPECIFIED;
 
   /**
-   * @generated from field: repeated aiserver.v1.BugbotModePrompt prompts = 2;
+   * @generated from field: repeated aiserver.v1.BugReportModePrompt prompts = 2;
    */
-  prompts: BugbotModePrompt[] = [];
+  prompts: BugReportModePrompt[] = [];
 
   /**
    * @generated from field: bool smart_frontier_enabled = 3;
@@ -19834,91 +19834,91 @@ export class GetBugBotProUserModeResponse extends Message<GetBugBotProUserModeRe
    */
   frontierAvailable = false;
 
-  constructor(data?: PartialMessage<GetBugBotProUserModeResponse>) {
+  constructor(data?: PartialMessage<GetBugReportProUserModeResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetBugBotProUserModeResponse";
+  static readonly typeName = "aiserver.v1.GetBugReportProUserModeResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "mode", kind: "enum", T: proto3.getEnumType(BugbotMode) },
-    { no: 2, name: "prompts", kind: "message", T: BugbotModePrompt, repeated: true },
+    { no: 1, name: "mode", kind: "enum", T: proto3.getEnumType(BugReportMode) },
+    { no: 2, name: "prompts", kind: "message", T: BugReportModePrompt, repeated: true },
     { no: 3, name: "smart_frontier_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 4, name: "frontier_available", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugBotProUserModeResponse {
-    return new GetBugBotProUserModeResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugReportProUserModeResponse {
+    return new GetBugReportProUserModeResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugBotProUserModeResponse {
-    return new GetBugBotProUserModeResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugReportProUserModeResponse {
+    return new GetBugReportProUserModeResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugBotProUserModeResponse {
-    return new GetBugBotProUserModeResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugReportProUserModeResponse {
+    return new GetBugReportProUserModeResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetBugBotProUserModeResponse | PlainMessage<GetBugBotProUserModeResponse> | undefined, b: GetBugBotProUserModeResponse | PlainMessage<GetBugBotProUserModeResponse> | undefined): boolean {
-    return proto3.util.equals(GetBugBotProUserModeResponse, a, b);
+  static equals(a: GetBugReportProUserModeResponse | PlainMessage<GetBugReportProUserModeResponse> | undefined, b: GetBugReportProUserModeResponse | PlainMessage<GetBugReportProUserModeResponse> | undefined): boolean {
+    return proto3.util.equals(GetBugReportProUserModeResponse, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetBugBotProUserSettingsRequest
+ * @generated from message aiserver.v1.GetBugReportProUserSettingsRequest
  */
-export class GetBugBotProUserSettingsRequest extends Message<GetBugBotProUserSettingsRequest> {
-  constructor(data?: PartialMessage<GetBugBotProUserSettingsRequest>) {
+export class GetBugReportProUserSettingsRequest extends Message<GetBugReportProUserSettingsRequest> {
+  constructor(data?: PartialMessage<GetBugReportProUserSettingsRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetBugBotProUserSettingsRequest";
+  static readonly typeName = "aiserver.v1.GetBugReportProUserSettingsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugBotProUserSettingsRequest {
-    return new GetBugBotProUserSettingsRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugReportProUserSettingsRequest {
+    return new GetBugReportProUserSettingsRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugBotProUserSettingsRequest {
-    return new GetBugBotProUserSettingsRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugReportProUserSettingsRequest {
+    return new GetBugReportProUserSettingsRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugBotProUserSettingsRequest {
-    return new GetBugBotProUserSettingsRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugReportProUserSettingsRequest {
+    return new GetBugReportProUserSettingsRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetBugBotProUserSettingsRequest | PlainMessage<GetBugBotProUserSettingsRequest> | undefined, b: GetBugBotProUserSettingsRequest | PlainMessage<GetBugBotProUserSettingsRequest> | undefined): boolean {
-    return proto3.util.equals(GetBugBotProUserSettingsRequest, a, b);
+  static equals(a: GetBugReportProUserSettingsRequest | PlainMessage<GetBugReportProUserSettingsRequest> | undefined, b: GetBugReportProUserSettingsRequest | PlainMessage<GetBugReportProUserSettingsRequest> | undefined): boolean {
+    return proto3.util.equals(GetBugReportProUserSettingsRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetBugBotProUserSettingsResponse
+ * @generated from message aiserver.v1.GetBugReportProUserSettingsResponse
  */
-export class GetBugBotProUserSettingsResponse extends Message<GetBugBotProUserSettingsResponse> {
+export class GetBugReportProUserSettingsResponse extends Message<GetBugReportProUserSettingsResponse> {
   /**
    * @generated from field: bool enabled = 1;
    */
   enabled = false;
 
   /**
-   * @generated from field: bool bugbot_was_enabled_in_this_billing_cycle = 2;
+   * @generated from field: bool bug_report_was_enabled_in_this_billing_cycle = 2;
    */
-  bugbotWasEnabledInThisBillingCycle = false;
+  bugReportWasEnabledInThisBillingCycle = false;
 
   /**
-   * @generated from field: aiserver.v1.BugbotUsageTier bugbot_usage_tier = 3;
+   * @generated from field: aiserver.v1.BugReportUsageTier bug_report_usage_tier = 3;
    */
-  bugbotUsageTier = BugbotUsageTier.UNSPECIFIED;
+  bugReportUsageTier = BugReportUsageTier.BUGBOT_USAGE_TIER_UNSPECIFIED;
 
   /**
-   * @generated from field: aiserver.v1.BugbotBillingMode bugbot_billing_mode = 4;
+   * @generated from field: aiserver.v1.BugReportBillingMode bug_report_billing_mode = 4;
    */
-  bugbotBillingMode = BugbotBillingMode.UNSPECIFIED;
+  bugReportBillingMode = BugReportBillingMode.BUGBOT_BILLING_MODE_UNSPECIFIED;
 
   /**
    * @generated from field: bool can_migrate_to_usage_based = 5;
@@ -19931,54 +19931,54 @@ export class GetBugBotProUserSettingsResponse extends Message<GetBugBotProUserSe
   seatLicenseCount = 0;
 
   /**
-   * @generated from field: bool bugbot_usage_based_on_enable = 7;
+   * @generated from field: bool bug_report_usage_based_on_enable = 7;
    */
-  bugbotUsageBasedOnEnable = false;
+  bugReportUsageBasedOnEnable = false;
 
   /**
-   * @generated from field: bool bugbot_migration_credit_already_granted = 8;
+   * @generated from field: bool bug_report_migration_credit_already_granted = 8;
    */
-  bugbotMigrationCreditAlreadyGranted = false;
+  bugReportMigrationCreditAlreadyGranted = false;
 
-  constructor(data?: PartialMessage<GetBugBotProUserSettingsResponse>) {
+  constructor(data?: PartialMessage<GetBugReportProUserSettingsResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetBugBotProUserSettingsResponse";
+  static readonly typeName = "aiserver.v1.GetBugReportProUserSettingsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 2, name: "bugbot_was_enabled_in_this_billing_cycle", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "bugbot_usage_tier", kind: "enum", T: proto3.getEnumType(BugbotUsageTier) },
-    { no: 4, name: "bugbot_billing_mode", kind: "enum", T: proto3.getEnumType(BugbotBillingMode) },
+    { no: 2, name: "bug_report_was_enabled_in_this_billing_cycle", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 3, name: "bug_report_usage_tier", kind: "enum", T: proto3.getEnumType(BugReportUsageTier) },
+    { no: 4, name: "bug_report_billing_mode", kind: "enum", T: proto3.getEnumType(BugReportBillingMode) },
     { no: 5, name: "can_migrate_to_usage_based", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 6, name: "seat_license_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 7, name: "bugbot_usage_based_on_enable", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 8, name: "bugbot_migration_credit_already_granted", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 7, name: "bug_report_usage_based_on_enable", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 8, name: "bug_report_migration_credit_already_granted", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugBotProUserSettingsResponse {
-    return new GetBugBotProUserSettingsResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugReportProUserSettingsResponse {
+    return new GetBugReportProUserSettingsResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugBotProUserSettingsResponse {
-    return new GetBugBotProUserSettingsResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugReportProUserSettingsResponse {
+    return new GetBugReportProUserSettingsResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugBotProUserSettingsResponse {
-    return new GetBugBotProUserSettingsResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugReportProUserSettingsResponse {
+    return new GetBugReportProUserSettingsResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetBugBotProUserSettingsResponse | PlainMessage<GetBugBotProUserSettingsResponse> | undefined, b: GetBugBotProUserSettingsResponse | PlainMessage<GetBugBotProUserSettingsResponse> | undefined): boolean {
-    return proto3.util.equals(GetBugBotProUserSettingsResponse, a, b);
+  static equals(a: GetBugReportProUserSettingsResponse | PlainMessage<GetBugReportProUserSettingsResponse> | undefined, b: GetBugReportProUserSettingsResponse | PlainMessage<GetBugReportProUserSettingsResponse> | undefined): boolean {
+    return proto3.util.equals(GetBugReportProUserSettingsResponse, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetBugbotAnalyticsV2Request
+ * @generated from message aiserver.v1.GetBugReportAnalyticsV2Request
  */
-export class GetBugbotAnalyticsV2Request extends Message<GetBugbotAnalyticsV2Request> {
+export class GetBugReportAnalyticsV2Request extends Message<GetBugReportAnalyticsV2Request> {
   /**
    * @generated from field: optional string start_date = 1;
    */
@@ -19999,13 +19999,13 @@ export class GetBugbotAnalyticsV2Request extends Message<GetBugbotAnalyticsV2Req
    */
   teamId?: number;
 
-  constructor(data?: PartialMessage<GetBugbotAnalyticsV2Request>) {
+  constructor(data?: PartialMessage<GetBugReportAnalyticsV2Request>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetBugbotAnalyticsV2Request";
+  static readonly typeName = "aiserver.v1.GetBugReportAnalyticsV2Request";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "start_date", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "end_date", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
@@ -20013,51 +20013,51 @@ export class GetBugbotAnalyticsV2Request extends Message<GetBugbotAnalyticsV2Req
     { no: 4, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugbotAnalyticsV2Request {
-    return new GetBugbotAnalyticsV2Request().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugReportAnalyticsV2Request {
+    return new GetBugReportAnalyticsV2Request().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugbotAnalyticsV2Request {
-    return new GetBugbotAnalyticsV2Request().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugReportAnalyticsV2Request {
+    return new GetBugReportAnalyticsV2Request().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugbotAnalyticsV2Request {
-    return new GetBugbotAnalyticsV2Request().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugReportAnalyticsV2Request {
+    return new GetBugReportAnalyticsV2Request().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetBugbotAnalyticsV2Request | PlainMessage<GetBugbotAnalyticsV2Request> | undefined, b: GetBugbotAnalyticsV2Request | PlainMessage<GetBugbotAnalyticsV2Request> | undefined): boolean {
-    return proto3.util.equals(GetBugbotAnalyticsV2Request, a, b);
+  static equals(a: GetBugReportAnalyticsV2Request | PlainMessage<GetBugReportAnalyticsV2Request> | undefined, b: GetBugReportAnalyticsV2Request | PlainMessage<GetBugReportAnalyticsV2Request> | undefined): boolean {
+    return proto3.util.equals(GetBugReportAnalyticsV2Request, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetBugbotAnalyticsV2Response
+ * @generated from message aiserver.v1.GetBugReportAnalyticsV2Response
  */
-export class GetBugbotAnalyticsV2Response extends Message<GetBugbotAnalyticsV2Response> {
+export class GetBugReportAnalyticsV2Response extends Message<GetBugReportAnalyticsV2Response> {
   /**
    * @generated from field: bool should_see_analytics = 1;
    */
   shouldSeeAnalytics = false;
 
   /**
-   * @generated from field: repeated aiserver.v1.BugbotAnalyticsDataPoint prs_reviewed_series = 2;
+   * @generated from field: repeated aiserver.v1.BugReportAnalyticsDataPoint prs_reviewed_series = 2;
    */
-  prsReviewedSeries: BugbotAnalyticsDataPoint[] = [];
+  prsReviewedSeries: BugReportAnalyticsDataPoint[] = [];
 
   /**
-   * @generated from field: repeated aiserver.v1.BugbotAnalyticsDataPoint bugs_found_series = 3;
+   * @generated from field: repeated aiserver.v1.BugReportAnalyticsDataPoint bugs_found_series = 3;
    */
-  bugsFoundSeries: BugbotAnalyticsDataPoint[] = [];
+  bugsFoundSeries: BugReportAnalyticsDataPoint[] = [];
 
   /**
-   * @generated from field: repeated aiserver.v1.BugbotAnalyticsDataPoint num_runs_series = 4;
+   * @generated from field: repeated aiserver.v1.BugReportAnalyticsDataPoint num_runs_series = 4;
    */
-  numRunsSeries: BugbotAnalyticsDataPoint[] = [];
+  numRunsSeries: BugReportAnalyticsDataPoint[] = [];
 
   /**
-   * @generated from field: repeated aiserver.v1.BugbotAnalyticsDataPoint bugs_resolved_series = 5;
+   * @generated from field: repeated aiserver.v1.BugReportAnalyticsDataPoint bugs_resolved_series = 5;
    */
-  bugsResolvedSeries: BugbotAnalyticsDataPoint[] = [];
+  bugsResolvedSeries: BugReportAnalyticsDataPoint[] = [];
 
   /**
    * @generated from field: double pct_resolution_rate = 6;
@@ -20065,9 +20065,9 @@ export class GetBugbotAnalyticsV2Response extends Message<GetBugbotAnalyticsV2Re
   pctResolutionRate = 0;
 
   /**
-   * @generated from field: repeated aiserver.v1.BugbotAnalyticsDataPoint unique_users_series = 7;
+   * @generated from field: repeated aiserver.v1.BugReportAnalyticsDataPoint unique_users_series = 7;
    */
-  uniqueUsersSeries: BugbotAnalyticsDataPoint[] = [];
+  uniqueUsersSeries: BugReportAnalyticsDataPoint[] = [];
 
   /**
    * @generated from field: int32 unique_users_total = 8;
@@ -20075,24 +20075,24 @@ export class GetBugbotAnalyticsV2Response extends Message<GetBugbotAnalyticsV2Re
   uniqueUsersTotal = 0;
 
   /**
-   * @generated from field: repeated aiserver.v1.BugbotAnalyticsDataPoint high_sev_resolved_series = 9;
+   * @generated from field: repeated aiserver.v1.BugReportAnalyticsDataPoint high_sev_resolved_series = 9;
    */
-  highSevResolvedSeries: BugbotAnalyticsDataPoint[] = [];
+  highSevResolvedSeries: BugReportAnalyticsDataPoint[] = [];
 
   /**
-   * @generated from field: repeated aiserver.v1.BugbotAnalyticsDataPoint medium_sev_resolved_series = 10;
+   * @generated from field: repeated aiserver.v1.BugReportAnalyticsDataPoint medium_sev_resolved_series = 10;
    */
-  mediumSevResolvedSeries: BugbotAnalyticsDataPoint[] = [];
+  mediumSevResolvedSeries: BugReportAnalyticsDataPoint[] = [];
 
   /**
-   * @generated from field: repeated aiserver.v1.BugbotAnalyticsDataPoint low_sev_resolved_series = 11;
+   * @generated from field: repeated aiserver.v1.BugReportAnalyticsDataPoint low_sev_resolved_series = 11;
    */
-  lowSevResolvedSeries: BugbotAnalyticsDataPoint[] = [];
+  lowSevResolvedSeries: BugReportAnalyticsDataPoint[] = [];
 
   /**
-   * @generated from field: repeated aiserver.v1.BugbotAnalyticsDataPoint autofix_prs_merged_series = 12;
+   * @generated from field: repeated aiserver.v1.BugReportAnalyticsDataPoint autofix_prs_merged_series = 12;
    */
-  autofixPrsMergedSeries: BugbotAnalyticsDataPoint[] = [];
+  autofixPrsMergedSeries: BugReportAnalyticsDataPoint[] = [];
 
   /**
    * @generated from field: int32 total_autofix_runs = 13;
@@ -20100,14 +20100,14 @@ export class GetBugbotAnalyticsV2Response extends Message<GetBugbotAnalyticsV2Re
   totalAutofixRuns = 0;
 
   /**
-   * @generated from field: repeated aiserver.v1.BugbotAnalyticsDataPoint cost_cents_series = 14;
+   * @generated from field: repeated aiserver.v1.BugReportAnalyticsDataPoint cost_cents_series = 14;
    */
-  costCentsSeries: BugbotAnalyticsDataPoint[] = [];
+  costCentsSeries: BugReportAnalyticsDataPoint[] = [];
 
   /**
-   * @generated from field: repeated aiserver.v1.BugbotAnalyticsDataPoint num_billed_runs_series = 15;
+   * @generated from field: repeated aiserver.v1.BugReportAnalyticsDataPoint num_billed_runs_series = 15;
    */
-  numBilledRunsSeries: BugbotAnalyticsDataPoint[] = [];
+  numBilledRunsSeries: BugReportAnalyticsDataPoint[] = [];
 
   /**
    * @generated from field: int32 total_bugs_found = 16;
@@ -20120,100 +20120,100 @@ export class GetBugbotAnalyticsV2Response extends Message<GetBugbotAnalyticsV2Re
   totalBugsEvaluated = 0;
 
   /**
-   * @generated from field: repeated aiserver.v1.BugbotAnalyticsDataPoint bugs_evaluated_series = 18;
+   * @generated from field: repeated aiserver.v1.BugReportAnalyticsDataPoint bugs_evaluated_series = 18;
    */
-  bugsEvaluatedSeries: BugbotAnalyticsDataPoint[] = [];
+  bugsEvaluatedSeries: BugReportAnalyticsDataPoint[] = [];
 
-  constructor(data?: PartialMessage<GetBugbotAnalyticsV2Response>) {
+  constructor(data?: PartialMessage<GetBugReportAnalyticsV2Response>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetBugbotAnalyticsV2Response";
+  static readonly typeName = "aiserver.v1.GetBugReportAnalyticsV2Response";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "should_see_analytics", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 2, name: "prs_reviewed_series", kind: "message", T: BugbotAnalyticsDataPoint, repeated: true },
-    { no: 3, name: "bugs_found_series", kind: "message", T: BugbotAnalyticsDataPoint, repeated: true },
-    { no: 4, name: "num_runs_series", kind: "message", T: BugbotAnalyticsDataPoint, repeated: true },
-    { no: 5, name: "bugs_resolved_series", kind: "message", T: BugbotAnalyticsDataPoint, repeated: true },
+    { no: 2, name: "prs_reviewed_series", kind: "message", T: BugReportAnalyticsDataPoint, repeated: true },
+    { no: 3, name: "bugs_found_series", kind: "message", T: BugReportAnalyticsDataPoint, repeated: true },
+    { no: 4, name: "num_runs_series", kind: "message", T: BugReportAnalyticsDataPoint, repeated: true },
+    { no: 5, name: "bugs_resolved_series", kind: "message", T: BugReportAnalyticsDataPoint, repeated: true },
     { no: 6, name: "pct_resolution_rate", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
-    { no: 7, name: "unique_users_series", kind: "message", T: BugbotAnalyticsDataPoint, repeated: true },
+    { no: 7, name: "unique_users_series", kind: "message", T: BugReportAnalyticsDataPoint, repeated: true },
     { no: 8, name: "unique_users_total", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 9, name: "high_sev_resolved_series", kind: "message", T: BugbotAnalyticsDataPoint, repeated: true },
-    { no: 10, name: "medium_sev_resolved_series", kind: "message", T: BugbotAnalyticsDataPoint, repeated: true },
-    { no: 11, name: "low_sev_resolved_series", kind: "message", T: BugbotAnalyticsDataPoint, repeated: true },
-    { no: 12, name: "autofix_prs_merged_series", kind: "message", T: BugbotAnalyticsDataPoint, repeated: true },
+    { no: 9, name: "high_sev_resolved_series", kind: "message", T: BugReportAnalyticsDataPoint, repeated: true },
+    { no: 10, name: "medium_sev_resolved_series", kind: "message", T: BugReportAnalyticsDataPoint, repeated: true },
+    { no: 11, name: "low_sev_resolved_series", kind: "message", T: BugReportAnalyticsDataPoint, repeated: true },
+    { no: 12, name: "autofix_prs_merged_series", kind: "message", T: BugReportAnalyticsDataPoint, repeated: true },
     { no: 13, name: "total_autofix_runs", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 14, name: "cost_cents_series", kind: "message", T: BugbotAnalyticsDataPoint, repeated: true },
-    { no: 15, name: "num_billed_runs_series", kind: "message", T: BugbotAnalyticsDataPoint, repeated: true },
+    { no: 14, name: "cost_cents_series", kind: "message", T: BugReportAnalyticsDataPoint, repeated: true },
+    { no: 15, name: "num_billed_runs_series", kind: "message", T: BugReportAnalyticsDataPoint, repeated: true },
     { no: 16, name: "total_bugs_found", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 17, name: "total_bugs_evaluated", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 18, name: "bugs_evaluated_series", kind: "message", T: BugbotAnalyticsDataPoint, repeated: true },
+    { no: 18, name: "bugs_evaluated_series", kind: "message", T: BugReportAnalyticsDataPoint, repeated: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugbotAnalyticsV2Response {
-    return new GetBugbotAnalyticsV2Response().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugReportAnalyticsV2Response {
+    return new GetBugReportAnalyticsV2Response().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugbotAnalyticsV2Response {
-    return new GetBugbotAnalyticsV2Response().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugReportAnalyticsV2Response {
+    return new GetBugReportAnalyticsV2Response().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugbotAnalyticsV2Response {
-    return new GetBugbotAnalyticsV2Response().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugReportAnalyticsV2Response {
+    return new GetBugReportAnalyticsV2Response().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetBugbotAnalyticsV2Response | PlainMessage<GetBugbotAnalyticsV2Response> | undefined, b: GetBugbotAnalyticsV2Response | PlainMessage<GetBugbotAnalyticsV2Response> | undefined): boolean {
-    return proto3.util.equals(GetBugbotAnalyticsV2Response, a, b);
+  static equals(a: GetBugReportAnalyticsV2Response | PlainMessage<GetBugReportAnalyticsV2Response> | undefined, b: GetBugReportAnalyticsV2Response | PlainMessage<GetBugReportAnalyticsV2Response> | undefined): boolean {
+    return proto3.util.equals(GetBugReportAnalyticsV2Response, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetBugbotBackfillStatusRequest
+ * @generated from message aiserver.v1.GetBugReportBackfillStatusRequest
  */
-export class GetBugbotBackfillStatusRequest extends Message<GetBugbotBackfillStatusRequest> {
+export class GetBugReportBackfillStatusRequest extends Message<GetBugReportBackfillStatusRequest> {
   /**
    * @generated from field: string workflow_id = 1;
    */
   workflowId = "";
 
-  constructor(data?: PartialMessage<GetBugbotBackfillStatusRequest>) {
+  constructor(data?: PartialMessage<GetBugReportBackfillStatusRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetBugbotBackfillStatusRequest";
+  static readonly typeName = "aiserver.v1.GetBugReportBackfillStatusRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "workflow_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugbotBackfillStatusRequest {
-    return new GetBugbotBackfillStatusRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugReportBackfillStatusRequest {
+    return new GetBugReportBackfillStatusRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugbotBackfillStatusRequest {
-    return new GetBugbotBackfillStatusRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugReportBackfillStatusRequest {
+    return new GetBugReportBackfillStatusRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugbotBackfillStatusRequest {
-    return new GetBugbotBackfillStatusRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugReportBackfillStatusRequest {
+    return new GetBugReportBackfillStatusRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetBugbotBackfillStatusRequest | PlainMessage<GetBugbotBackfillStatusRequest> | undefined, b: GetBugbotBackfillStatusRequest | PlainMessage<GetBugbotBackfillStatusRequest> | undefined): boolean {
-    return proto3.util.equals(GetBugbotBackfillStatusRequest, a, b);
+  static equals(a: GetBugReportBackfillStatusRequest | PlainMessage<GetBugReportBackfillStatusRequest> | undefined, b: GetBugReportBackfillStatusRequest | PlainMessage<GetBugReportBackfillStatusRequest> | undefined): boolean {
+    return proto3.util.equals(GetBugReportBackfillStatusRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetBugbotBackfillStatusResponse
+ * @generated from message aiserver.v1.GetBugReportBackfillStatusResponse
  */
-export class GetBugbotBackfillStatusResponse extends Message<GetBugbotBackfillStatusResponse> {
+export class GetBugReportBackfillStatusResponse extends Message<GetBugReportBackfillStatusResponse> {
   /**
-   * @generated from field: aiserver.v1.BugbotBackfillStatus status = 1;
+   * @generated from field: aiserver.v1.BugReportBackfillStatus status = 1;
    */
-  status = BugbotBackfillStatus.UNSPECIFIED;
+  status = BugReportBackfillStatus.BUGBOT_BACKFILL_STATUS_UNSPECIFIED;
 
   /**
    * @generated from field: optional string error_message = 2;
@@ -20225,40 +20225,40 @@ export class GetBugbotBackfillStatusResponse extends Message<GetBugbotBackfillSt
    */
   rulesGenerated?: number;
 
-  constructor(data?: PartialMessage<GetBugbotBackfillStatusResponse>) {
+  constructor(data?: PartialMessage<GetBugReportBackfillStatusResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetBugbotBackfillStatusResponse";
+  static readonly typeName = "aiserver.v1.GetBugReportBackfillStatusResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "status", kind: "enum", T: proto3.getEnumType(BugbotBackfillStatus) },
+    { no: 1, name: "status", kind: "enum", T: proto3.getEnumType(BugReportBackfillStatus) },
     { no: 2, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "rules_generated", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugbotBackfillStatusResponse {
-    return new GetBugbotBackfillStatusResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugReportBackfillStatusResponse {
+    return new GetBugReportBackfillStatusResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugbotBackfillStatusResponse {
-    return new GetBugbotBackfillStatusResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugReportBackfillStatusResponse {
+    return new GetBugReportBackfillStatusResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugbotBackfillStatusResponse {
-    return new GetBugbotBackfillStatusResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugReportBackfillStatusResponse {
+    return new GetBugReportBackfillStatusResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetBugbotBackfillStatusResponse | PlainMessage<GetBugbotBackfillStatusResponse> | undefined, b: GetBugbotBackfillStatusResponse | PlainMessage<GetBugbotBackfillStatusResponse> | undefined): boolean {
-    return proto3.util.equals(GetBugbotBackfillStatusResponse, a, b);
+  static equals(a: GetBugReportBackfillStatusResponse | PlainMessage<GetBugReportBackfillStatusResponse> | undefined, b: GetBugReportBackfillStatusResponse | PlainMessage<GetBugReportBackfillStatusResponse> | undefined): boolean {
+    return proto3.util.equals(GetBugReportBackfillStatusResponse, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetBugbotLearnedRulesRequest
+ * @generated from message aiserver.v1.GetBugReportLearnedRulesRequest
  */
-export class GetBugbotLearnedRulesRequest extends Message<GetBugbotLearnedRulesRequest> {
+export class GetBugReportLearnedRulesRequest extends Message<GetBugReportLearnedRulesRequest> {
   /**
    * @generated from field: int64 installation_id = 1;
    */
@@ -20274,77 +20274,77 @@ export class GetBugbotLearnedRulesRequest extends Message<GetBugbotLearnedRulesR
    */
   repoNodeIdFilter?: string;
 
-  constructor(data?: PartialMessage<GetBugbotLearnedRulesRequest>) {
+  constructor(data?: PartialMessage<GetBugReportLearnedRulesRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetBugbotLearnedRulesRequest";
+  static readonly typeName = "aiserver.v1.GetBugReportLearnedRulesRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "installation_id", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 2, name: "ghe_application", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "repo_node_id_filter", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugbotLearnedRulesRequest {
-    return new GetBugbotLearnedRulesRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugReportLearnedRulesRequest {
+    return new GetBugReportLearnedRulesRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugbotLearnedRulesRequest {
-    return new GetBugbotLearnedRulesRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugReportLearnedRulesRequest {
+    return new GetBugReportLearnedRulesRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugbotLearnedRulesRequest {
-    return new GetBugbotLearnedRulesRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugReportLearnedRulesRequest {
+    return new GetBugReportLearnedRulesRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetBugbotLearnedRulesRequest | PlainMessage<GetBugbotLearnedRulesRequest> | undefined, b: GetBugbotLearnedRulesRequest | PlainMessage<GetBugbotLearnedRulesRequest> | undefined): boolean {
-    return proto3.util.equals(GetBugbotLearnedRulesRequest, a, b);
+  static equals(a: GetBugReportLearnedRulesRequest | PlainMessage<GetBugReportLearnedRulesRequest> | undefined, b: GetBugReportLearnedRulesRequest | PlainMessage<GetBugReportLearnedRulesRequest> | undefined): boolean {
+    return proto3.util.equals(GetBugReportLearnedRulesRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetBugbotLearnedRulesResponse
+ * @generated from message aiserver.v1.GetBugReportLearnedRulesResponse
  */
-export class GetBugbotLearnedRulesResponse extends Message<GetBugbotLearnedRulesResponse> {
+export class GetBugReportLearnedRulesResponse extends Message<GetBugReportLearnedRulesResponse> {
   /**
-   * @generated from field: repeated aiserver.v1.BugbotLearnedRule rules = 1;
+   * @generated from field: repeated aiserver.v1.BugReportLearnedRule rules = 1;
    */
-  rules: BugbotLearnedRule[] = [];
+  rules: BugReportLearnedRule[] = [];
 
-  constructor(data?: PartialMessage<GetBugbotLearnedRulesResponse>) {
+  constructor(data?: PartialMessage<GetBugReportLearnedRulesResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetBugbotLearnedRulesResponse";
+  static readonly typeName = "aiserver.v1.GetBugReportLearnedRulesResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "rules", kind: "message", T: BugbotLearnedRule, repeated: true },
+    { no: 1, name: "rules", kind: "message", T: BugReportLearnedRule, repeated: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugbotLearnedRulesResponse {
-    return new GetBugbotLearnedRulesResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugReportLearnedRulesResponse {
+    return new GetBugReportLearnedRulesResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugbotLearnedRulesResponse {
-    return new GetBugbotLearnedRulesResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugReportLearnedRulesResponse {
+    return new GetBugReportLearnedRulesResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugbotLearnedRulesResponse {
-    return new GetBugbotLearnedRulesResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugReportLearnedRulesResponse {
+    return new GetBugReportLearnedRulesResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetBugbotLearnedRulesResponse | PlainMessage<GetBugbotLearnedRulesResponse> | undefined, b: GetBugbotLearnedRulesResponse | PlainMessage<GetBugbotLearnedRulesResponse> | undefined): boolean {
-    return proto3.util.equals(GetBugbotLearnedRulesResponse, a, b);
+  static equals(a: GetBugReportLearnedRulesResponse | PlainMessage<GetBugReportLearnedRulesResponse> | undefined, b: GetBugReportLearnedRulesResponse | PlainMessage<GetBugReportLearnedRulesResponse> | undefined): boolean {
+    return proto3.util.equals(GetBugReportLearnedRulesResponse, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetBugbotManualRepositoryRulesRequest
+ * @generated from message aiserver.v1.GetBugReportManualRepositoryRulesRequest
  */
-export class GetBugbotManualRepositoryRulesRequest extends Message<GetBugbotManualRepositoryRulesRequest> {
+export class GetBugReportManualRepositoryRulesRequest extends Message<GetBugReportManualRepositoryRulesRequest> {
   /**
    * @generated from field: int64 installation_id = 1;
    */
@@ -20360,114 +20360,114 @@ export class GetBugbotManualRepositoryRulesRequest extends Message<GetBugbotManu
    */
   repoNodeIdFilter?: string;
 
-  constructor(data?: PartialMessage<GetBugbotManualRepositoryRulesRequest>) {
+  constructor(data?: PartialMessage<GetBugReportManualRepositoryRulesRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetBugbotManualRepositoryRulesRequest";
+  static readonly typeName = "aiserver.v1.GetBugReportManualRepositoryRulesRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "installation_id", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 2, name: "ghe_application", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "repo_node_id_filter", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugbotManualRepositoryRulesRequest {
-    return new GetBugbotManualRepositoryRulesRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugReportManualRepositoryRulesRequest {
+    return new GetBugReportManualRepositoryRulesRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugbotManualRepositoryRulesRequest {
-    return new GetBugbotManualRepositoryRulesRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugReportManualRepositoryRulesRequest {
+    return new GetBugReportManualRepositoryRulesRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugbotManualRepositoryRulesRequest {
-    return new GetBugbotManualRepositoryRulesRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugReportManualRepositoryRulesRequest {
+    return new GetBugReportManualRepositoryRulesRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetBugbotManualRepositoryRulesRequest | PlainMessage<GetBugbotManualRepositoryRulesRequest> | undefined, b: GetBugbotManualRepositoryRulesRequest | PlainMessage<GetBugbotManualRepositoryRulesRequest> | undefined): boolean {
-    return proto3.util.equals(GetBugbotManualRepositoryRulesRequest, a, b);
+  static equals(a: GetBugReportManualRepositoryRulesRequest | PlainMessage<GetBugReportManualRepositoryRulesRequest> | undefined, b: GetBugReportManualRepositoryRulesRequest | PlainMessage<GetBugReportManualRepositoryRulesRequest> | undefined): boolean {
+    return proto3.util.equals(GetBugReportManualRepositoryRulesRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetBugbotManualRepositoryRulesResponse
+ * @generated from message aiserver.v1.GetBugReportManualRepositoryRulesResponse
  */
-export class GetBugbotManualRepositoryRulesResponse extends Message<GetBugbotManualRepositoryRulesResponse> {
+export class GetBugReportManualRepositoryRulesResponse extends Message<GetBugReportManualRepositoryRulesResponse> {
   /**
-   * @generated from field: repeated aiserver.v1.BugbotManualRepositoryRule rules = 1;
+   * @generated from field: repeated aiserver.v1.BugReportManualRepositoryRule rules = 1;
    */
-  rules: BugbotManualRepositoryRule[] = [];
+  rules: BugReportManualRepositoryRule[] = [];
 
-  constructor(data?: PartialMessage<GetBugbotManualRepositoryRulesResponse>) {
+  constructor(data?: PartialMessage<GetBugReportManualRepositoryRulesResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetBugbotManualRepositoryRulesResponse";
+  static readonly typeName = "aiserver.v1.GetBugReportManualRepositoryRulesResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "rules", kind: "message", T: BugbotManualRepositoryRule, repeated: true },
+    { no: 1, name: "rules", kind: "message", T: BugReportManualRepositoryRule, repeated: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugbotManualRepositoryRulesResponse {
-    return new GetBugbotManualRepositoryRulesResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugReportManualRepositoryRulesResponse {
+    return new GetBugReportManualRepositoryRulesResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugbotManualRepositoryRulesResponse {
-    return new GetBugbotManualRepositoryRulesResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugReportManualRepositoryRulesResponse {
+    return new GetBugReportManualRepositoryRulesResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugbotManualRepositoryRulesResponse {
-    return new GetBugbotManualRepositoryRulesResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugReportManualRepositoryRulesResponse {
+    return new GetBugReportManualRepositoryRulesResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetBugbotManualRepositoryRulesResponse | PlainMessage<GetBugbotManualRepositoryRulesResponse> | undefined, b: GetBugbotManualRepositoryRulesResponse | PlainMessage<GetBugbotManualRepositoryRulesResponse> | undefined): boolean {
-    return proto3.util.equals(GetBugbotManualRepositoryRulesResponse, a, b);
+  static equals(a: GetBugReportManualRepositoryRulesResponse | PlainMessage<GetBugReportManualRepositoryRulesResponse> | undefined, b: GetBugReportManualRepositoryRulesResponse | PlainMessage<GetBugReportManualRepositoryRulesResponse> | undefined): boolean {
+    return proto3.util.equals(GetBugReportManualRepositoryRulesResponse, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetBugbotMergedPrScanSummaryRequest
+ * @generated from message aiserver.v1.GetBugReportMergedPrScanSummaryRequest
  */
-export class GetBugbotMergedPrScanSummaryRequest extends Message<GetBugbotMergedPrScanSummaryRequest> {
+export class GetBugReportMergedPrScanSummaryRequest extends Message<GetBugReportMergedPrScanSummaryRequest> {
   /**
    * @generated from field: int32 team_id = 1;
    */
   teamId = 0;
 
-  constructor(data?: PartialMessage<GetBugbotMergedPrScanSummaryRequest>) {
+  constructor(data?: PartialMessage<GetBugReportMergedPrScanSummaryRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetBugbotMergedPrScanSummaryRequest";
+  static readonly typeName = "aiserver.v1.GetBugReportMergedPrScanSummaryRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugbotMergedPrScanSummaryRequest {
-    return new GetBugbotMergedPrScanSummaryRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugReportMergedPrScanSummaryRequest {
+    return new GetBugReportMergedPrScanSummaryRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugbotMergedPrScanSummaryRequest {
-    return new GetBugbotMergedPrScanSummaryRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugReportMergedPrScanSummaryRequest {
+    return new GetBugReportMergedPrScanSummaryRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugbotMergedPrScanSummaryRequest {
-    return new GetBugbotMergedPrScanSummaryRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugReportMergedPrScanSummaryRequest {
+    return new GetBugReportMergedPrScanSummaryRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetBugbotMergedPrScanSummaryRequest | PlainMessage<GetBugbotMergedPrScanSummaryRequest> | undefined, b: GetBugbotMergedPrScanSummaryRequest | PlainMessage<GetBugbotMergedPrScanSummaryRequest> | undefined): boolean {
-    return proto3.util.equals(GetBugbotMergedPrScanSummaryRequest, a, b);
+  static equals(a: GetBugReportMergedPrScanSummaryRequest | PlainMessage<GetBugReportMergedPrScanSummaryRequest> | undefined, b: GetBugReportMergedPrScanSummaryRequest | PlainMessage<GetBugReportMergedPrScanSummaryRequest> | undefined): boolean {
+    return proto3.util.equals(GetBugReportMergedPrScanSummaryRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetBugbotMergedPrScanSummaryResponse
+ * @generated from message aiserver.v1.GetBugReportMergedPrScanSummaryResponse
  */
-export class GetBugbotMergedPrScanSummaryResponse extends Message<GetBugbotMergedPrScanSummaryResponse> {
+export class GetBugReportMergedPrScanSummaryResponse extends Message<GetBugReportMergedPrScanSummaryResponse> {
   /**
    * @generated from field: bool has_scan = 1;
    */
@@ -20499,22 +20499,22 @@ export class GetBugbotMergedPrScanSummaryResponse extends Message<GetBugbotMerge
   bugsFound = 0;
 
   /**
-   * @generated from field: repeated aiserver.v1.GetBugbotMergedPrScanSummaryResponse.Finding findings = 7;
+   * @generated from field: repeated aiserver.v1.GetBugReportMergedPrScanSummaryResponse.Finding findings = 7;
    */
-  findings: GetBugbotMergedPrScanSummaryResponse_Finding[] = [];
+  findings: GetBugReportMergedPrScanSummaryResponse_Finding[] = [];
 
   /**
    * @generated from field: int32 total_merged_prs = 8;
    */
   totalMergedPrs = 0;
 
-  constructor(data?: PartialMessage<GetBugbotMergedPrScanSummaryResponse>) {
+  constructor(data?: PartialMessage<GetBugReportMergedPrScanSummaryResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetBugbotMergedPrScanSummaryResponse";
+  static readonly typeName = "aiserver.v1.GetBugReportMergedPrScanSummaryResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "has_scan", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 2, name: "scanned_at_epoch_millis", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
@@ -20522,31 +20522,31 @@ export class GetBugbotMergedPrScanSummaryResponse extends Message<GetBugbotMerge
     { no: 4, name: "prs_sampled", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 5, name: "prs_with_findings", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 6, name: "bugs_found", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 7, name: "findings", kind: "message", T: GetBugbotMergedPrScanSummaryResponse_Finding, repeated: true },
+    { no: 7, name: "findings", kind: "message", T: GetBugReportMergedPrScanSummaryResponse_Finding, repeated: true },
     { no: 8, name: "total_merged_prs", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugbotMergedPrScanSummaryResponse {
-    return new GetBugbotMergedPrScanSummaryResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugReportMergedPrScanSummaryResponse {
+    return new GetBugReportMergedPrScanSummaryResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugbotMergedPrScanSummaryResponse {
-    return new GetBugbotMergedPrScanSummaryResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugReportMergedPrScanSummaryResponse {
+    return new GetBugReportMergedPrScanSummaryResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugbotMergedPrScanSummaryResponse {
-    return new GetBugbotMergedPrScanSummaryResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugReportMergedPrScanSummaryResponse {
+    return new GetBugReportMergedPrScanSummaryResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetBugbotMergedPrScanSummaryResponse | PlainMessage<GetBugbotMergedPrScanSummaryResponse> | undefined, b: GetBugbotMergedPrScanSummaryResponse | PlainMessage<GetBugbotMergedPrScanSummaryResponse> | undefined): boolean {
-    return proto3.util.equals(GetBugbotMergedPrScanSummaryResponse, a, b);
+  static equals(a: GetBugReportMergedPrScanSummaryResponse | PlainMessage<GetBugReportMergedPrScanSummaryResponse> | undefined, b: GetBugReportMergedPrScanSummaryResponse | PlainMessage<GetBugReportMergedPrScanSummaryResponse> | undefined): boolean {
+    return proto3.util.equals(GetBugReportMergedPrScanSummaryResponse, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetBugbotMergedPrScanSummaryResponse.Finding
+ * @generated from message aiserver.v1.GetBugReportMergedPrScanSummaryResponse.Finding
  */
-export class GetBugbotMergedPrScanSummaryResponse_Finding extends Message<GetBugbotMergedPrScanSummaryResponse_Finding> {
+export class GetBugReportMergedPrScanSummaryResponse_Finding extends Message<GetBugReportMergedPrScanSummaryResponse_Finding> {
   /**
    * @generated from field: string description = 1;
    */
@@ -20627,13 +20627,13 @@ export class GetBugbotMergedPrScanSummaryResponse_Finding extends Message<GetBug
    */
   diffHunk = "";
 
-  constructor(data?: PartialMessage<GetBugbotMergedPrScanSummaryResponse_Finding>) {
+  constructor(data?: PartialMessage<GetBugReportMergedPrScanSummaryResponse_Finding>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetBugbotMergedPrScanSummaryResponse.Finding";
+  static readonly typeName = "aiserver.v1.GetBugReportMergedPrScanSummaryResponse.Finding";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "description", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "severity", kind: "scalar", T: 9 /* ScalarType.STRING */ },
@@ -20653,67 +20653,67 @@ export class GetBugbotMergedPrScanSummaryResponse_Finding extends Message<GetBug
     { no: 16, name: "diff_hunk", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugbotMergedPrScanSummaryResponse_Finding {
-    return new GetBugbotMergedPrScanSummaryResponse_Finding().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugReportMergedPrScanSummaryResponse_Finding {
+    return new GetBugReportMergedPrScanSummaryResponse_Finding().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugbotMergedPrScanSummaryResponse_Finding {
-    return new GetBugbotMergedPrScanSummaryResponse_Finding().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugReportMergedPrScanSummaryResponse_Finding {
+    return new GetBugReportMergedPrScanSummaryResponse_Finding().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugbotMergedPrScanSummaryResponse_Finding {
-    return new GetBugbotMergedPrScanSummaryResponse_Finding().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugReportMergedPrScanSummaryResponse_Finding {
+    return new GetBugReportMergedPrScanSummaryResponse_Finding().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetBugbotMergedPrScanSummaryResponse_Finding | PlainMessage<GetBugbotMergedPrScanSummaryResponse_Finding> | undefined, b: GetBugbotMergedPrScanSummaryResponse_Finding | PlainMessage<GetBugbotMergedPrScanSummaryResponse_Finding> | undefined): boolean {
-    return proto3.util.equals(GetBugbotMergedPrScanSummaryResponse_Finding, a, b);
+  static equals(a: GetBugReportMergedPrScanSummaryResponse_Finding | PlainMessage<GetBugReportMergedPrScanSummaryResponse_Finding> | undefined, b: GetBugReportMergedPrScanSummaryResponse_Finding | PlainMessage<GetBugReportMergedPrScanSummaryResponse_Finding> | undefined): boolean {
+    return proto3.util.equals(GetBugReportMergedPrScanSummaryResponse_Finding, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetBugbotModeRequest
+ * @generated from message aiserver.v1.GetBugReportModeRequest
  */
-export class GetBugbotModeRequest extends Message<GetBugbotModeRequest> {
-  constructor(data?: PartialMessage<GetBugbotModeRequest>) {
+export class GetBugReportModeRequest extends Message<GetBugReportModeRequest> {
+  constructor(data?: PartialMessage<GetBugReportModeRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetBugbotModeRequest";
+  static readonly typeName = "aiserver.v1.GetBugReportModeRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugbotModeRequest {
-    return new GetBugbotModeRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugReportModeRequest {
+    return new GetBugReportModeRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugbotModeRequest {
-    return new GetBugbotModeRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugReportModeRequest {
+    return new GetBugReportModeRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugbotModeRequest {
-    return new GetBugbotModeRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugReportModeRequest {
+    return new GetBugReportModeRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetBugbotModeRequest | PlainMessage<GetBugbotModeRequest> | undefined, b: GetBugbotModeRequest | PlainMessage<GetBugbotModeRequest> | undefined): boolean {
-    return proto3.util.equals(GetBugbotModeRequest, a, b);
+  static equals(a: GetBugReportModeRequest | PlainMessage<GetBugReportModeRequest> | undefined, b: GetBugReportModeRequest | PlainMessage<GetBugReportModeRequest> | undefined): boolean {
+    return proto3.util.equals(GetBugReportModeRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetBugbotModeResponse
+ * @generated from message aiserver.v1.GetBugReportModeResponse
  */
-export class GetBugbotModeResponse extends Message<GetBugbotModeResponse> {
+export class GetBugReportModeResponse extends Message<GetBugReportModeResponse> {
   /**
-   * @generated from field: aiserver.v1.BugbotMode mode = 1;
+   * @generated from field: aiserver.v1.BugReportMode mode = 1;
    */
-  mode = BugbotMode.UNSPECIFIED;
+  mode = BugReportMode.BUGBOT_MODE_UNSPECIFIED;
 
   /**
-   * @generated from field: repeated aiserver.v1.BugbotModePrompt prompts = 2;
+   * @generated from field: repeated aiserver.v1.BugReportModePrompt prompts = 2;
    */
-  prompts: BugbotModePrompt[] = [];
+  prompts: BugReportModePrompt[] = [];
 
   /**
    * @generated from field: bool smart_frontier_enabled = 3;
@@ -20725,41 +20725,41 @@ export class GetBugbotModeResponse extends Message<GetBugbotModeResponse> {
    */
   frontierAvailable = false;
 
-  constructor(data?: PartialMessage<GetBugbotModeResponse>) {
+  constructor(data?: PartialMessage<GetBugReportModeResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetBugbotModeResponse";
+  static readonly typeName = "aiserver.v1.GetBugReportModeResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "mode", kind: "enum", T: proto3.getEnumType(BugbotMode) },
-    { no: 2, name: "prompts", kind: "message", T: BugbotModePrompt, repeated: true },
+    { no: 1, name: "mode", kind: "enum", T: proto3.getEnumType(BugReportMode) },
+    { no: 2, name: "prompts", kind: "message", T: BugReportModePrompt, repeated: true },
     { no: 3, name: "smart_frontier_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 4, name: "frontier_available", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugbotModeResponse {
-    return new GetBugbotModeResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugReportModeResponse {
+    return new GetBugReportModeResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugbotModeResponse {
-    return new GetBugbotModeResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugReportModeResponse {
+    return new GetBugReportModeResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugbotModeResponse {
-    return new GetBugbotModeResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugReportModeResponse {
+    return new GetBugReportModeResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetBugbotModeResponse | PlainMessage<GetBugbotModeResponse> | undefined, b: GetBugbotModeResponse | PlainMessage<GetBugbotModeResponse> | undefined): boolean {
-    return proto3.util.equals(GetBugbotModeResponse, a, b);
+  static equals(a: GetBugReportModeResponse | PlainMessage<GetBugReportModeResponse> | undefined, b: GetBugReportModeResponse | PlainMessage<GetBugReportModeResponse> | undefined): boolean {
+    return proto3.util.equals(GetBugReportModeResponse, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetBugbotRuleAnalyticsRequest
+ * @generated from message aiserver.v1.GetBugReportRuleAnalyticsRequest
  */
-export class GetBugbotRuleAnalyticsRequest extends Message<GetBugbotRuleAnalyticsRequest> {
+export class GetBugReportRuleAnalyticsRequest extends Message<GetBugReportRuleAnalyticsRequest> {
   /**
    * @generated from field: optional string date_range_start = 1;
    */
@@ -20775,77 +20775,77 @@ export class GetBugbotRuleAnalyticsRequest extends Message<GetBugbotRuleAnalytic
    */
   teamId?: number;
 
-  constructor(data?: PartialMessage<GetBugbotRuleAnalyticsRequest>) {
+  constructor(data?: PartialMessage<GetBugReportRuleAnalyticsRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetBugbotRuleAnalyticsRequest";
+  static readonly typeName = "aiserver.v1.GetBugReportRuleAnalyticsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "date_range_start", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "date_range_end", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 3, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugbotRuleAnalyticsRequest {
-    return new GetBugbotRuleAnalyticsRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugReportRuleAnalyticsRequest {
+    return new GetBugReportRuleAnalyticsRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugbotRuleAnalyticsRequest {
-    return new GetBugbotRuleAnalyticsRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugReportRuleAnalyticsRequest {
+    return new GetBugReportRuleAnalyticsRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugbotRuleAnalyticsRequest {
-    return new GetBugbotRuleAnalyticsRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugReportRuleAnalyticsRequest {
+    return new GetBugReportRuleAnalyticsRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetBugbotRuleAnalyticsRequest | PlainMessage<GetBugbotRuleAnalyticsRequest> | undefined, b: GetBugbotRuleAnalyticsRequest | PlainMessage<GetBugbotRuleAnalyticsRequest> | undefined): boolean {
-    return proto3.util.equals(GetBugbotRuleAnalyticsRequest, a, b);
+  static equals(a: GetBugReportRuleAnalyticsRequest | PlainMessage<GetBugReportRuleAnalyticsRequest> | undefined, b: GetBugReportRuleAnalyticsRequest | PlainMessage<GetBugReportRuleAnalyticsRequest> | undefined): boolean {
+    return proto3.util.equals(GetBugReportRuleAnalyticsRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetBugbotRuleAnalyticsResponse
+ * @generated from message aiserver.v1.GetBugReportRuleAnalyticsResponse
  */
-export class GetBugbotRuleAnalyticsResponse extends Message<GetBugbotRuleAnalyticsResponse> {
+export class GetBugReportRuleAnalyticsResponse extends Message<GetBugReportRuleAnalyticsResponse> {
   /**
-   * @generated from field: repeated aiserver.v1.BugbotRuleAnalytics rules = 1;
+   * @generated from field: repeated aiserver.v1.BugReportRuleAnalytics rules = 1;
    */
-  rules: BugbotRuleAnalytics[] = [];
+  rules: BugReportRuleAnalytics[] = [];
 
-  constructor(data?: PartialMessage<GetBugbotRuleAnalyticsResponse>) {
+  constructor(data?: PartialMessage<GetBugReportRuleAnalyticsResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetBugbotRuleAnalyticsResponse";
+  static readonly typeName = "aiserver.v1.GetBugReportRuleAnalyticsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "rules", kind: "message", T: BugbotRuleAnalytics, repeated: true },
+    { no: 1, name: "rules", kind: "message", T: BugReportRuleAnalytics, repeated: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugbotRuleAnalyticsResponse {
-    return new GetBugbotRuleAnalyticsResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugReportRuleAnalyticsResponse {
+    return new GetBugReportRuleAnalyticsResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugbotRuleAnalyticsResponse {
-    return new GetBugbotRuleAnalyticsResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugReportRuleAnalyticsResponse {
+    return new GetBugReportRuleAnalyticsResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugbotRuleAnalyticsResponse {
-    return new GetBugbotRuleAnalyticsResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugReportRuleAnalyticsResponse {
+    return new GetBugReportRuleAnalyticsResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetBugbotRuleAnalyticsResponse | PlainMessage<GetBugbotRuleAnalyticsResponse> | undefined, b: GetBugbotRuleAnalyticsResponse | PlainMessage<GetBugbotRuleAnalyticsResponse> | undefined): boolean {
-    return proto3.util.equals(GetBugbotRuleAnalyticsResponse, a, b);
+  static equals(a: GetBugReportRuleAnalyticsResponse | PlainMessage<GetBugReportRuleAnalyticsResponse> | undefined, b: GetBugReportRuleAnalyticsResponse | PlainMessage<GetBugReportRuleAnalyticsResponse> | undefined): boolean {
+    return proto3.util.equals(GetBugReportRuleAnalyticsResponse, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetBugbotRuleByIdRequest
+ * @generated from message aiserver.v1.GetBugReportRuleByIdRequest
  */
-export class GetBugbotRuleByIdRequest extends Message<GetBugbotRuleByIdRequest> {
+export class GetBugReportRuleByIdRequest extends Message<GetBugReportRuleByIdRequest> {
   /**
    * @generated from field: string rule_id = 1;
    */
@@ -20856,125 +20856,125 @@ export class GetBugbotRuleByIdRequest extends Message<GetBugbotRuleByIdRequest> 
    */
   teamId?: number;
 
-  constructor(data?: PartialMessage<GetBugbotRuleByIdRequest>) {
+  constructor(data?: PartialMessage<GetBugReportRuleByIdRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetBugbotRuleByIdRequest";
+  static readonly typeName = "aiserver.v1.GetBugReportRuleByIdRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "rule_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugbotRuleByIdRequest {
-    return new GetBugbotRuleByIdRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugReportRuleByIdRequest {
+    return new GetBugReportRuleByIdRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugbotRuleByIdRequest {
-    return new GetBugbotRuleByIdRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugReportRuleByIdRequest {
+    return new GetBugReportRuleByIdRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugbotRuleByIdRequest {
-    return new GetBugbotRuleByIdRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugReportRuleByIdRequest {
+    return new GetBugReportRuleByIdRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetBugbotRuleByIdRequest | PlainMessage<GetBugbotRuleByIdRequest> | undefined, b: GetBugbotRuleByIdRequest | PlainMessage<GetBugbotRuleByIdRequest> | undefined): boolean {
-    return proto3.util.equals(GetBugbotRuleByIdRequest, a, b);
+  static equals(a: GetBugReportRuleByIdRequest | PlainMessage<GetBugReportRuleByIdRequest> | undefined, b: GetBugReportRuleByIdRequest | PlainMessage<GetBugReportRuleByIdRequest> | undefined): boolean {
+    return proto3.util.equals(GetBugReportRuleByIdRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetBugbotRuleByIdResponse
+ * @generated from message aiserver.v1.GetBugReportRuleByIdResponse
  */
-export class GetBugbotRuleByIdResponse extends Message<GetBugbotRuleByIdResponse> {
+export class GetBugReportRuleByIdResponse extends Message<GetBugReportRuleByIdResponse> {
   /**
-   * @generated from field: optional aiserver.v1.BugbotRule team_rule = 1;
+   * @generated from field: optional aiserver.v1.BugReportRule team_rule = 1;
    */
-  teamRule?: BugbotRule;
+  teamRule?: BugReportRule;
 
   /**
-   * @generated from field: optional aiserver.v1.BugbotLearnedRule learned_rule = 2;
+   * @generated from field: optional aiserver.v1.BugReportLearnedRule learned_rule = 2;
    */
-  learnedRule?: BugbotLearnedRule;
+  learnedRule?: BugReportLearnedRule;
 
   /**
-   * @generated from field: optional aiserver.v1.BugbotRuleAnalytics analytics = 3;
+   * @generated from field: optional aiserver.v1.BugReportRuleAnalytics analytics = 3;
    */
-  analytics?: BugbotRuleAnalytics;
+  analytics?: BugReportRuleAnalytics;
 
   /**
-   * @generated from field: optional aiserver.v1.BugbotManualRepositoryRule manual_rule = 4;
+   * @generated from field: optional aiserver.v1.BugReportManualRepositoryRule manual_rule = 4;
    */
-  manualRule?: BugbotManualRepositoryRule;
+  manualRule?: BugReportManualRepositoryRule;
 
-  constructor(data?: PartialMessage<GetBugbotRuleByIdResponse>) {
+  constructor(data?: PartialMessage<GetBugReportRuleByIdResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetBugbotRuleByIdResponse";
+  static readonly typeName = "aiserver.v1.GetBugReportRuleByIdResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "team_rule", kind: "message", T: BugbotRule, opt: true },
-    { no: 2, name: "learned_rule", kind: "message", T: BugbotLearnedRule, opt: true },
-    { no: 3, name: "analytics", kind: "message", T: BugbotRuleAnalytics, opt: true },
-    { no: 4, name: "manual_rule", kind: "message", T: BugbotManualRepositoryRule, opt: true },
+    { no: 1, name: "team_rule", kind: "message", T: BugReportRule, opt: true },
+    { no: 2, name: "learned_rule", kind: "message", T: BugReportLearnedRule, opt: true },
+    { no: 3, name: "analytics", kind: "message", T: BugReportRuleAnalytics, opt: true },
+    { no: 4, name: "manual_rule", kind: "message", T: BugReportManualRepositoryRule, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugbotRuleByIdResponse {
-    return new GetBugbotRuleByIdResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugReportRuleByIdResponse {
+    return new GetBugReportRuleByIdResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugbotRuleByIdResponse {
-    return new GetBugbotRuleByIdResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugReportRuleByIdResponse {
+    return new GetBugReportRuleByIdResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugbotRuleByIdResponse {
-    return new GetBugbotRuleByIdResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugReportRuleByIdResponse {
+    return new GetBugReportRuleByIdResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetBugbotRuleByIdResponse | PlainMessage<GetBugbotRuleByIdResponse> | undefined, b: GetBugbotRuleByIdResponse | PlainMessage<GetBugbotRuleByIdResponse> | undefined): boolean {
-    return proto3.util.equals(GetBugbotRuleByIdResponse, a, b);
+  static equals(a: GetBugReportRuleByIdResponse | PlainMessage<GetBugReportRuleByIdResponse> | undefined, b: GetBugReportRuleByIdResponse | PlainMessage<GetBugReportRuleByIdResponse> | undefined): boolean {
+    return proto3.util.equals(GetBugReportRuleByIdResponse, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetBugbotSettingsRequest
+ * @generated from message aiserver.v1.GetBugReportSettingsRequest
  */
-export class GetBugbotSettingsRequest extends Message<GetBugbotSettingsRequest> {
-  constructor(data?: PartialMessage<GetBugbotSettingsRequest>) {
+export class GetBugReportSettingsRequest extends Message<GetBugReportSettingsRequest> {
+  constructor(data?: PartialMessage<GetBugReportSettingsRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetBugbotSettingsRequest";
+  static readonly typeName = "aiserver.v1.GetBugReportSettingsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugbotSettingsRequest {
-    return new GetBugbotSettingsRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugReportSettingsRequest {
+    return new GetBugReportSettingsRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugbotSettingsRequest {
-    return new GetBugbotSettingsRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugReportSettingsRequest {
+    return new GetBugReportSettingsRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugbotSettingsRequest {
-    return new GetBugbotSettingsRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugReportSettingsRequest {
+    return new GetBugReportSettingsRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetBugbotSettingsRequest | PlainMessage<GetBugbotSettingsRequest> | undefined, b: GetBugbotSettingsRequest | PlainMessage<GetBugbotSettingsRequest> | undefined): boolean {
-    return proto3.util.equals(GetBugbotSettingsRequest, a, b);
+  static equals(a: GetBugReportSettingsRequest | PlainMessage<GetBugReportSettingsRequest> | undefined, b: GetBugReportSettingsRequest | PlainMessage<GetBugReportSettingsRequest> | undefined): boolean {
+    return proto3.util.equals(GetBugReportSettingsRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetBugbotSettingsResponse
+ * @generated from message aiserver.v1.GetBugReportSettingsResponse
  */
-export class GetBugbotSettingsResponse extends Message<GetBugbotSettingsResponse> {
+export class GetBugReportSettingsResponse extends Message<GetBugReportSettingsResponse> {
   /**
    * @generated from field: bool available = 1;
    */
@@ -20990,40 +20990,40 @@ export class GetBugbotSettingsResponse extends Message<GetBugbotSettingsResponse
    */
   prUrls: string[] = [];
 
-  constructor(data?: PartialMessage<GetBugbotSettingsResponse>) {
+  constructor(data?: PartialMessage<GetBugReportSettingsResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetBugbotSettingsResponse";
+  static readonly typeName = "aiserver.v1.GetBugReportSettingsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "available", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 2, name: "enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 3, name: "pr_urls", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugbotSettingsResponse {
-    return new GetBugbotSettingsResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugReportSettingsResponse {
+    return new GetBugReportSettingsResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugbotSettingsResponse {
-    return new GetBugbotSettingsResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugReportSettingsResponse {
+    return new GetBugReportSettingsResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugbotSettingsResponse {
-    return new GetBugbotSettingsResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugReportSettingsResponse {
+    return new GetBugReportSettingsResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetBugbotSettingsResponse | PlainMessage<GetBugbotSettingsResponse> | undefined, b: GetBugbotSettingsResponse | PlainMessage<GetBugbotSettingsResponse> | undefined): boolean {
-    return proto3.util.equals(GetBugbotSettingsResponse, a, b);
+  static equals(a: GetBugReportSettingsResponse | PlainMessage<GetBugReportSettingsResponse> | undefined, b: GetBugReportSettingsResponse | PlainMessage<GetBugReportSettingsResponse> | undefined): boolean {
+    return proto3.util.equals(GetBugReportSettingsResponse, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetBugbotSuggestedReposRequest
+ * @generated from message aiserver.v1.GetBugReportSuggestedReposRequest
  */
-export class GetBugbotSuggestedReposRequest extends Message<GetBugbotSuggestedReposRequest> {
+export class GetBugReportSuggestedReposRequest extends Message<GetBugReportSuggestedReposRequest> {
   /**
    * @generated from field: optional string ghe_application = 1;
    */
@@ -21034,82 +21034,82 @@ export class GetBugbotSuggestedReposRequest extends Message<GetBugbotSuggestedRe
    */
   limit?: number;
 
-  constructor(data?: PartialMessage<GetBugbotSuggestedReposRequest>) {
+  constructor(data?: PartialMessage<GetBugReportSuggestedReposRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetBugbotSuggestedReposRequest";
+  static readonly typeName = "aiserver.v1.GetBugReportSuggestedReposRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "ghe_application", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 2, name: "limit", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugbotSuggestedReposRequest {
-    return new GetBugbotSuggestedReposRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugReportSuggestedReposRequest {
+    return new GetBugReportSuggestedReposRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugbotSuggestedReposRequest {
-    return new GetBugbotSuggestedReposRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugReportSuggestedReposRequest {
+    return new GetBugReportSuggestedReposRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugbotSuggestedReposRequest {
-    return new GetBugbotSuggestedReposRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugReportSuggestedReposRequest {
+    return new GetBugReportSuggestedReposRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetBugbotSuggestedReposRequest | PlainMessage<GetBugbotSuggestedReposRequest> | undefined, b: GetBugbotSuggestedReposRequest | PlainMessage<GetBugbotSuggestedReposRequest> | undefined): boolean {
-    return proto3.util.equals(GetBugbotSuggestedReposRequest, a, b);
+  static equals(a: GetBugReportSuggestedReposRequest | PlainMessage<GetBugReportSuggestedReposRequest> | undefined, b: GetBugReportSuggestedReposRequest | PlainMessage<GetBugReportSuggestedReposRequest> | undefined): boolean {
+    return proto3.util.equals(GetBugReportSuggestedReposRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetBugbotSuggestedReposResponse
+ * @generated from message aiserver.v1.GetBugReportSuggestedReposResponse
  */
-export class GetBugbotSuggestedReposResponse extends Message<GetBugbotSuggestedReposResponse> {
+export class GetBugReportSuggestedReposResponse extends Message<GetBugReportSuggestedReposResponse> {
   /**
-   * @generated from field: repeated aiserver.v1.GetBugbotSuggestedReposResponse.SuggestedRepo repos = 1;
+   * @generated from field: repeated aiserver.v1.GetBugReportSuggestedReposResponse.SuggestedRepo repos = 1;
    */
-  repos: GetBugbotSuggestedReposResponse_SuggestedRepo[] = [];
+  repos: GetBugReportSuggestedReposResponse_SuggestedRepo[] = [];
 
   /**
    * @generated from field: bool can_enable = 2;
    */
   canEnable = false;
 
-  constructor(data?: PartialMessage<GetBugbotSuggestedReposResponse>) {
+  constructor(data?: PartialMessage<GetBugReportSuggestedReposResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetBugbotSuggestedReposResponse";
+  static readonly typeName = "aiserver.v1.GetBugReportSuggestedReposResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "repos", kind: "message", T: GetBugbotSuggestedReposResponse_SuggestedRepo, repeated: true },
+    { no: 1, name: "repos", kind: "message", T: GetBugReportSuggestedReposResponse_SuggestedRepo, repeated: true },
     { no: 2, name: "can_enable", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugbotSuggestedReposResponse {
-    return new GetBugbotSuggestedReposResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugReportSuggestedReposResponse {
+    return new GetBugReportSuggestedReposResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugbotSuggestedReposResponse {
-    return new GetBugbotSuggestedReposResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugReportSuggestedReposResponse {
+    return new GetBugReportSuggestedReposResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugbotSuggestedReposResponse {
-    return new GetBugbotSuggestedReposResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugReportSuggestedReposResponse {
+    return new GetBugReportSuggestedReposResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetBugbotSuggestedReposResponse | PlainMessage<GetBugbotSuggestedReposResponse> | undefined, b: GetBugbotSuggestedReposResponse | PlainMessage<GetBugbotSuggestedReposResponse> | undefined): boolean {
-    return proto3.util.equals(GetBugbotSuggestedReposResponse, a, b);
+  static equals(a: GetBugReportSuggestedReposResponse | PlainMessage<GetBugReportSuggestedReposResponse> | undefined, b: GetBugReportSuggestedReposResponse | PlainMessage<GetBugReportSuggestedReposResponse> | undefined): boolean {
+    return proto3.util.equals(GetBugReportSuggestedReposResponse, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetBugbotSuggestedReposResponse.SuggestedRepo
+ * @generated from message aiserver.v1.GetBugReportSuggestedReposResponse.SuggestedRepo
  */
-export class GetBugbotSuggestedReposResponse_SuggestedRepo extends Message<GetBugbotSuggestedReposResponse_SuggestedRepo> {
+export class GetBugReportSuggestedReposResponse_SuggestedRepo extends Message<GetBugReportSuggestedReposResponse_SuggestedRepo> {
   /**
    * @generated from field: int64 installation_id = 1;
    */
@@ -21140,13 +21140,13 @@ export class GetBugbotSuggestedReposResponse_SuggestedRepo extends Message<GetBu
    */
   prCountLastWeek = 0;
 
-  constructor(data?: PartialMessage<GetBugbotSuggestedReposResponse_SuggestedRepo>) {
+  constructor(data?: PartialMessage<GetBugReportSuggestedReposResponse_SuggestedRepo>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetBugbotSuggestedReposResponse.SuggestedRepo";
+  static readonly typeName = "aiserver.v1.GetBugReportSuggestedReposResponse.SuggestedRepo";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "installation_id", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 2, name: "repo_node_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
@@ -21156,27 +21156,27 @@ export class GetBugbotSuggestedReposResponse_SuggestedRepo extends Message<GetBu
     { no: 6, name: "pr_count_last_week", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugbotSuggestedReposResponse_SuggestedRepo {
-    return new GetBugbotSuggestedReposResponse_SuggestedRepo().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugReportSuggestedReposResponse_SuggestedRepo {
+    return new GetBugReportSuggestedReposResponse_SuggestedRepo().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugbotSuggestedReposResponse_SuggestedRepo {
-    return new GetBugbotSuggestedReposResponse_SuggestedRepo().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugReportSuggestedReposResponse_SuggestedRepo {
+    return new GetBugReportSuggestedReposResponse_SuggestedRepo().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugbotSuggestedReposResponse_SuggestedRepo {
-    return new GetBugbotSuggestedReposResponse_SuggestedRepo().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugReportSuggestedReposResponse_SuggestedRepo {
+    return new GetBugReportSuggestedReposResponse_SuggestedRepo().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetBugbotSuggestedReposResponse_SuggestedRepo | PlainMessage<GetBugbotSuggestedReposResponse_SuggestedRepo> | undefined, b: GetBugbotSuggestedReposResponse_SuggestedRepo | PlainMessage<GetBugbotSuggestedReposResponse_SuggestedRepo> | undefined): boolean {
-    return proto3.util.equals(GetBugbotSuggestedReposResponse_SuggestedRepo, a, b);
+  static equals(a: GetBugReportSuggestedReposResponse_SuggestedRepo | PlainMessage<GetBugReportSuggestedReposResponse_SuggestedRepo> | undefined, b: GetBugReportSuggestedReposResponse_SuggestedRepo | PlainMessage<GetBugReportSuggestedReposResponse_SuggestedRepo> | undefined): boolean {
+    return proto3.util.equals(GetBugReportSuggestedReposResponse_SuggestedRepo, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetBugbotTeamRulesRequest
+ * @generated from message aiserver.v1.GetBugReportTeamRulesRequest
  */
-export class GetBugbotTeamRulesRequest extends Message<GetBugbotTeamRulesRequest> {
+export class GetBugReportTeamRulesRequest extends Message<GetBugReportTeamRulesRequest> {
   /**
    * @generated from field: optional bool active_only = 1;
    */
@@ -21187,113 +21187,113 @@ export class GetBugbotTeamRulesRequest extends Message<GetBugbotTeamRulesRequest
    */
   teamId?: number;
 
-  constructor(data?: PartialMessage<GetBugbotTeamRulesRequest>) {
+  constructor(data?: PartialMessage<GetBugReportTeamRulesRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetBugbotTeamRulesRequest";
+  static readonly typeName = "aiserver.v1.GetBugReportTeamRulesRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "active_only", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 2, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugbotTeamRulesRequest {
-    return new GetBugbotTeamRulesRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugReportTeamRulesRequest {
+    return new GetBugReportTeamRulesRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugbotTeamRulesRequest {
-    return new GetBugbotTeamRulesRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugReportTeamRulesRequest {
+    return new GetBugReportTeamRulesRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugbotTeamRulesRequest {
-    return new GetBugbotTeamRulesRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugReportTeamRulesRequest {
+    return new GetBugReportTeamRulesRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetBugbotTeamRulesRequest | PlainMessage<GetBugbotTeamRulesRequest> | undefined, b: GetBugbotTeamRulesRequest | PlainMessage<GetBugbotTeamRulesRequest> | undefined): boolean {
-    return proto3.util.equals(GetBugbotTeamRulesRequest, a, b);
+  static equals(a: GetBugReportTeamRulesRequest | PlainMessage<GetBugReportTeamRulesRequest> | undefined, b: GetBugReportTeamRulesRequest | PlainMessage<GetBugReportTeamRulesRequest> | undefined): boolean {
+    return proto3.util.equals(GetBugReportTeamRulesRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetBugbotTeamRulesResponse
+ * @generated from message aiserver.v1.GetBugReportTeamRulesResponse
  */
-export class GetBugbotTeamRulesResponse extends Message<GetBugbotTeamRulesResponse> {
+export class GetBugReportTeamRulesResponse extends Message<GetBugReportTeamRulesResponse> {
   /**
-   * @generated from field: repeated aiserver.v1.BugbotRule rules = 1;
+   * @generated from field: repeated aiserver.v1.BugReportRule rules = 1;
    */
-  rules: BugbotRule[] = [];
+  rules: BugReportRule[] = [];
 
-  constructor(data?: PartialMessage<GetBugbotTeamRulesResponse>) {
+  constructor(data?: PartialMessage<GetBugReportTeamRulesResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetBugbotTeamRulesResponse";
+  static readonly typeName = "aiserver.v1.GetBugReportTeamRulesResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "rules", kind: "message", T: BugbotRule, repeated: true },
+    { no: 1, name: "rules", kind: "message", T: BugReportRule, repeated: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugbotTeamRulesResponse {
-    return new GetBugbotTeamRulesResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugReportTeamRulesResponse {
+    return new GetBugReportTeamRulesResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugbotTeamRulesResponse {
-    return new GetBugbotTeamRulesResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugReportTeamRulesResponse {
+    return new GetBugReportTeamRulesResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugbotTeamRulesResponse {
-    return new GetBugbotTeamRulesResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugReportTeamRulesResponse {
+    return new GetBugReportTeamRulesResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetBugbotTeamRulesResponse | PlainMessage<GetBugbotTeamRulesResponse> | undefined, b: GetBugbotTeamRulesResponse | PlainMessage<GetBugbotTeamRulesResponse> | undefined): boolean {
-    return proto3.util.equals(GetBugbotTeamRulesResponse, a, b);
+  static equals(a: GetBugReportTeamRulesResponse | PlainMessage<GetBugReportTeamRulesResponse> | undefined, b: GetBugReportTeamRulesResponse | PlainMessage<GetBugReportTeamRulesResponse> | undefined): boolean {
+    return proto3.util.equals(GetBugReportTeamRulesResponse, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetBugbotUserSettingsRequest
+ * @generated from message aiserver.v1.GetBugReportUserSettingsRequest
  */
-export class GetBugbotUserSettingsRequest extends Message<GetBugbotUserSettingsRequest> {
+export class GetBugReportUserSettingsRequest extends Message<GetBugReportUserSettingsRequest> {
   /**
    * @generated from field: optional int32 team_id = 1;
    */
   teamId?: number;
 
-  constructor(data?: PartialMessage<GetBugbotUserSettingsRequest>) {
+  constructor(data?: PartialMessage<GetBugReportUserSettingsRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetBugbotUserSettingsRequest";
+  static readonly typeName = "aiserver.v1.GetBugReportUserSettingsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugbotUserSettingsRequest {
-    return new GetBugbotUserSettingsRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugReportUserSettingsRequest {
+    return new GetBugReportUserSettingsRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugbotUserSettingsRequest {
-    return new GetBugbotUserSettingsRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugReportUserSettingsRequest {
+    return new GetBugReportUserSettingsRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugbotUserSettingsRequest {
-    return new GetBugbotUserSettingsRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugReportUserSettingsRequest {
+    return new GetBugReportUserSettingsRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetBugbotUserSettingsRequest | PlainMessage<GetBugbotUserSettingsRequest> | undefined, b: GetBugbotUserSettingsRequest | PlainMessage<GetBugbotUserSettingsRequest> | undefined): boolean {
-    return proto3.util.equals(GetBugbotUserSettingsRequest, a, b);
+  static equals(a: GetBugReportUserSettingsRequest | PlainMessage<GetBugReportUserSettingsRequest> | undefined, b: GetBugReportUserSettingsRequest | PlainMessage<GetBugReportUserSettingsRequest> | undefined): boolean {
+    return proto3.util.equals(GetBugReportUserSettingsRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetBugbotUserSettingsResponse
+ * @generated from message aiserver.v1.GetBugReportUserSettingsResponse
  */
-export class GetBugbotUserSettingsResponse extends Message<GetBugbotUserSettingsResponse> {
+export class GetBugReportUserSettingsResponse extends Message<GetBugReportUserSettingsResponse> {
   /**
    * @generated from field: bool manual_trigger_only = 1;
    */
@@ -21320,9 +21320,9 @@ export class GetBugbotUserSettingsResponse extends Message<GetBugbotUserSettings
   isPrSummaryEnabled?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.BugbotAutofixMode bugbot_autofix_mode = 6;
+   * @generated from field: aiserver.v1.BugReportAutofixMode bug_report_autofix_mode = 6;
    */
-  bugbotAutofixMode = BugbotAutofixMode.UNSPECIFIED;
+  bugReportAutofixMode = BugReportAutofixMode.BUGBOT_AUTOFIX_MODE_UNSPECIFIED;
 
   /**
    * @generated from field: bool enable_vm_run = 7;
@@ -21330,14 +21330,14 @@ export class GetBugbotUserSettingsResponse extends Message<GetBugbotUserSettings
   enableVmRun = false;
 
   /**
-   * @generated from field: bool fail_github_action_on_bugbot_findings = 8;
+   * @generated from field: bool fail_github_action_on_bug_report_findings = 8;
    */
-  failGithubActionOnBugbotFindings = false;
+  failGithubActionOnBugReportFindings = false;
 
   /**
-   * @generated from field: repeated string bugbot_autofix_severity_filter = 9;
+   * @generated from field: repeated string bug_report_autofix_severity_filter = 9;
    */
-  bugbotAutofixSeverityFilter: string[] = [];
+  bugReportAutofixSeverityFilter: string[] = [];
 
   /**
    * @generated from field: optional bool installation_default_enable_draft = 10;
@@ -21350,14 +21350,14 @@ export class GetBugbotUserSettingsResponse extends Message<GetBugbotUserSettings
   installationDefaultIsPrSummaryEnabled?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.BugbotAutofixMode installation_default_bugbot_autofix_mode = 12;
+   * @generated from field: aiserver.v1.BugReportAutofixMode installation_default_bug_report_autofix_mode = 12;
    */
-  installationDefaultBugbotAutofixMode = BugbotAutofixMode.UNSPECIFIED;
+  installationDefaultBugReportAutofixMode = BugReportAutofixMode.BUGBOT_AUTOFIX_MODE_UNSPECIFIED;
 
   /**
-   * @generated from field: repeated string installation_default_bugbot_autofix_severity_filter = 13;
+   * @generated from field: repeated string installation_default_bug_report_autofix_severity_filter = 13;
    */
-  installationDefaultBugbotAutofixSeverityFilter: string[] = [];
+  installationDefaultBugReportAutofixSeverityFilter: string[] = [];
 
   /**
    * @generated from field: optional bool is_incremental_review_enabled = 14;
@@ -21379,47 +21379,47 @@ export class GetBugbotUserSettingsResponse extends Message<GetBugbotUserSettings
    */
   installationDefaultIsPrRiskScoreEnabled?: boolean;
 
-  constructor(data?: PartialMessage<GetBugbotUserSettingsResponse>) {
+  constructor(data?: PartialMessage<GetBugReportUserSettingsResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetBugbotUserSettingsResponse";
+  static readonly typeName = "aiserver.v1.GetBugReportUserSettingsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "manual_trigger_only", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 2, name: "run_only_once", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 3, name: "suppress_no_bugs_comments", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 4, name: "enable_draft", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 5, name: "is_pr_summary_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
-    { no: 6, name: "bugbot_autofix_mode", kind: "enum", T: proto3.getEnumType(BugbotAutofixMode) },
+    { no: 6, name: "bug_report_autofix_mode", kind: "enum", T: proto3.getEnumType(BugReportAutofixMode) },
     { no: 7, name: "enable_vm_run", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 8, name: "fail_github_action_on_bugbot_findings", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 9, name: "bugbot_autofix_severity_filter", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
+    { no: 8, name: "fail_github_action_on_bug_report_findings", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 9, name: "bug_report_autofix_severity_filter", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 10, name: "installation_default_enable_draft", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 11, name: "installation_default_is_pr_summary_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
-    { no: 12, name: "installation_default_bugbot_autofix_mode", kind: "enum", T: proto3.getEnumType(BugbotAutofixMode) },
-    { no: 13, name: "installation_default_bugbot_autofix_severity_filter", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
+    { no: 12, name: "installation_default_bug_report_autofix_mode", kind: "enum", T: proto3.getEnumType(BugReportAutofixMode) },
+    { no: 13, name: "installation_default_bug_report_autofix_severity_filter", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 14, name: "is_incremental_review_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 15, name: "team_default_is_incremental_review_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 16, name: "is_pr_risk_score_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 17, name: "installation_default_is_pr_risk_score_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugbotUserSettingsResponse {
-    return new GetBugbotUserSettingsResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetBugReportUserSettingsResponse {
+    return new GetBugReportUserSettingsResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugbotUserSettingsResponse {
-    return new GetBugbotUserSettingsResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetBugReportUserSettingsResponse {
+    return new GetBugReportUserSettingsResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugbotUserSettingsResponse {
-    return new GetBugbotUserSettingsResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetBugReportUserSettingsResponse {
+    return new GetBugReportUserSettingsResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetBugbotUserSettingsResponse | PlainMessage<GetBugbotUserSettingsResponse> | undefined, b: GetBugbotUserSettingsResponse | PlainMessage<GetBugbotUserSettingsResponse> | undefined): boolean {
-    return proto3.util.equals(GetBugbotUserSettingsResponse, a, b);
+  static equals(a: GetBugReportUserSettingsResponse | PlainMessage<GetBugReportUserSettingsResponse> | undefined, b: GetBugReportUserSettingsResponse | PlainMessage<GetBugReportUserSettingsResponse> | undefined): boolean {
+    return proto3.util.equals(GetBugReportUserSettingsResponse, a, b);
   }
 }
 
@@ -24199,9 +24199,9 @@ export class GetGithubInstallationsResponse extends Message<GetGithubInstallatio
   githubConnected = false;
 
   /**
-   * @generated from field: bool team_has_bugbot_repos = 3;
+   * @generated from field: bool team_has_bug_report_repos = 3;
    */
-  teamHasBugbotRepos = false;
+  teamHasBugReportRepos = false;
 
   /**
    * @generated from field: repeated string github_usernames = 4;
@@ -24243,7 +24243,7 @@ export class GetGithubInstallationsResponse extends Message<GetGithubInstallatio
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "installations", kind: "message", T: GetGithubInstallationsResponse_Installation, repeated: true },
     { no: 2, name: "github_connected", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 3, name: "team_has_bugbot_repos", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 3, name: "team_has_bug_report_repos", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 4, name: "github_usernames", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 5, name: "ghe_hostname", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 6, name: "ghe_app_slug", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
@@ -24324,9 +24324,9 @@ export class GetGithubInstallationsResponse_Installation extends Message<GetGith
   accountLogin?: string;
 
   /**
-   * @generated from field: optional aiserver.v1.BugbotAutofixCapabilities autofix_capabilities = 12;
+   * @generated from field: optional aiserver.v1.BugReportAutofixCapabilities autofix_capabilities = 12;
    */
-  autofixCapabilities?: BugbotAutofixCapabilities;
+  autofixCapabilities?: BugReportAutofixCapabilities;
 
   /**
    * @generated from field: optional bool team_owned = 13;
@@ -24334,9 +24334,9 @@ export class GetGithubInstallationsResponse_Installation extends Message<GetGith
   teamOwned?: boolean;
 
   /**
-   * @generated from field: optional aiserver.v1.BugbotSettingsCapabilities settings_capabilities = 14;
+   * @generated from field: optional aiserver.v1.BugReportSettingsCapabilities settings_capabilities = 14;
    */
-  settingsCapabilities?: BugbotSettingsCapabilities;
+  settingsCapabilities?: BugReportSettingsCapabilities;
 
   /**
    * @generated from field: optional bool azure_devops_managed = 15;
@@ -24361,9 +24361,9 @@ export class GetGithubInstallationsResponse_Installation extends Message<GetGith
     { no: 9, name: "needs_team_scope", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 10, name: "can_modify_installation_settings", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 11, name: "account_login", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
-    { no: 12, name: "autofix_capabilities", kind: "message", T: BugbotAutofixCapabilities, opt: true },
+    { no: 12, name: "autofix_capabilities", kind: "message", T: BugReportAutofixCapabilities, opt: true },
     { no: 13, name: "team_owned", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
-    { no: 14, name: "settings_capabilities", kind: "message", T: BugbotSettingsCapabilities, opt: true },
+    { no: 14, name: "settings_capabilities", kind: "message", T: BugReportSettingsCapabilities, opt: true },
     { no: 15, name: "azure_devops_managed", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
@@ -31242,141 +31242,141 @@ export class GetRepoSourcePreferenceResponse extends Message<GetRepoSourcePrefer
 }
 
 /**
- * @generated from message aiserver.v1.GetSandAccessStatusRequest
+ * @generated from message aiserver.v1.GetSlateAccessStatusRequest
  */
-export class GetSandAccessStatusRequest extends Message<GetSandAccessStatusRequest> {
-  constructor(data?: PartialMessage<GetSandAccessStatusRequest>) {
+export class GetSlateAccessStatusRequest extends Message<GetSlateAccessStatusRequest> {
+  constructor(data?: PartialMessage<GetSlateAccessStatusRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetSandAccessStatusRequest";
+  static readonly typeName = "aiserver.v1.GetSlateAccessStatusRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetSandAccessStatusRequest {
-    return new GetSandAccessStatusRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetSlateAccessStatusRequest {
+    return new GetSlateAccessStatusRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetSandAccessStatusRequest {
-    return new GetSandAccessStatusRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetSlateAccessStatusRequest {
+    return new GetSlateAccessStatusRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetSandAccessStatusRequest {
-    return new GetSandAccessStatusRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetSlateAccessStatusRequest {
+    return new GetSlateAccessStatusRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetSandAccessStatusRequest | PlainMessage<GetSandAccessStatusRequest> | undefined, b: GetSandAccessStatusRequest | PlainMessage<GetSandAccessStatusRequest> | undefined): boolean {
-    return proto3.util.equals(GetSandAccessStatusRequest, a, b);
+  static equals(a: GetSlateAccessStatusRequest | PlainMessage<GetSlateAccessStatusRequest> | undefined, b: GetSlateAccessStatusRequest | PlainMessage<GetSlateAccessStatusRequest> | undefined): boolean {
+    return proto3.util.equals(GetSlateAccessStatusRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetSandAccessStatusResponse
+ * @generated from message aiserver.v1.GetSlateAccessStatusResponse
  */
-export class GetSandAccessStatusResponse extends Message<GetSandAccessStatusResponse> {
+export class GetSlateAccessStatusResponse extends Message<GetSlateAccessStatusResponse> {
   /**
-   * @generated from field: aiserver.v1.GetSandAccessStatusResponse.SandAccessState state = 1;
+   * @generated from field: aiserver.v1.GetSlateAccessStatusResponse.SlateAccessState state = 1;
    */
-  state = GetSandAccessStatusResponse_SandAccessState.UNSPECIFIED;
+  state = GetSlateAccessStatusResponse_SlateAccessState.SAND_ACCESS_STATE_UNSPECIFIED;
 
   /**
-   * @generated from field: aiserver.v1.GetSandAccessStatusResponse.SandPurchaseChannel purchase_channel = 2;
+   * @generated from field: aiserver.v1.GetSlateAccessStatusResponse.SlatePurchaseChannel purchase_channel = 2;
    */
-  purchaseChannel = GetSandAccessStatusResponse_SandPurchaseChannel.UNSPECIFIED;
+  purchaseChannel = GetSlateAccessStatusResponse_SlatePurchaseChannel.SAND_PURCHASE_CHANNEL_UNSPECIFIED;
 
   /**
-   * @generated from field: aiserver.v1.GetSandAccessStatusResponse.SandAccessBlockReason block_reason = 3;
+   * @generated from field: aiserver.v1.GetSlateAccessStatusResponse.SlateAccessBlockReason block_reason = 3;
    */
-  blockReason = GetSandAccessStatusResponse_SandAccessBlockReason.UNSPECIFIED;
+  blockReason = GetSlateAccessStatusResponse_SlateAccessBlockReason.SAND_ACCESS_BLOCK_REASON_UNSPECIFIED;
 
-  constructor(data?: PartialMessage<GetSandAccessStatusResponse>) {
+  constructor(data?: PartialMessage<GetSlateAccessStatusResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetSandAccessStatusResponse";
+  static readonly typeName = "aiserver.v1.GetSlateAccessStatusResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "state", kind: "enum", T: proto3.getEnumType(GetSandAccessStatusResponse_SandAccessState) },
-    { no: 2, name: "purchase_channel", kind: "enum", T: proto3.getEnumType(GetSandAccessStatusResponse_SandPurchaseChannel) },
-    { no: 3, name: "block_reason", kind: "enum", T: proto3.getEnumType(GetSandAccessStatusResponse_SandAccessBlockReason) },
+    { no: 1, name: "state", kind: "enum", T: proto3.getEnumType(GetSlateAccessStatusResponse_SlateAccessState) },
+    { no: 2, name: "purchase_channel", kind: "enum", T: proto3.getEnumType(GetSlateAccessStatusResponse_SlatePurchaseChannel) },
+    { no: 3, name: "block_reason", kind: "enum", T: proto3.getEnumType(GetSlateAccessStatusResponse_SlateAccessBlockReason) },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetSandAccessStatusResponse {
-    return new GetSandAccessStatusResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetSlateAccessStatusResponse {
+    return new GetSlateAccessStatusResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetSandAccessStatusResponse {
-    return new GetSandAccessStatusResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetSlateAccessStatusResponse {
+    return new GetSlateAccessStatusResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetSandAccessStatusResponse {
-    return new GetSandAccessStatusResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetSlateAccessStatusResponse {
+    return new GetSlateAccessStatusResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetSandAccessStatusResponse | PlainMessage<GetSandAccessStatusResponse> | undefined, b: GetSandAccessStatusResponse | PlainMessage<GetSandAccessStatusResponse> | undefined): boolean {
-    return proto3.util.equals(GetSandAccessStatusResponse, a, b);
+  static equals(a: GetSlateAccessStatusResponse | PlainMessage<GetSlateAccessStatusResponse> | undefined, b: GetSlateAccessStatusResponse | PlainMessage<GetSlateAccessStatusResponse> | undefined): boolean {
+    return proto3.util.equals(GetSlateAccessStatusResponse, a, b);
   }
 }
 
 /**
- * @generated from enum aiserver.v1.GetSandAccessStatusResponse.SandAccessBlockReason
+ * @generated from enum aiserver.v1.GetSlateAccessStatusResponse.SlateAccessBlockReason
  */
-export enum GetSandAccessStatusResponse_SandAccessBlockReason {
+export enum GetSlateAccessStatusResponse_SlateAccessBlockReason {
   /**
    * @generated from enum value: SAND_ACCESS_BLOCK_REASON_UNSPECIFIED = 0;
    */
-  UNSPECIFIED = 0,
+  SAND_ACCESS_BLOCK_REASON_UNSPECIFIED = 0,
 
   /**
    * @generated from enum value: SAND_ACCESS_BLOCK_REASON_NONE = 1;
    */
-  NONE = 1,
+  SAND_ACCESS_BLOCK_REASON_NONE = 1,
 
   /**
    * @generated from enum value: SAND_ACCESS_BLOCK_REASON_TEAM_PRIVACY_MODE = 2;
    */
-  TEAM_PRIVACY_MODE = 2,
+  SAND_ACCESS_BLOCK_REASON_TEAM_PRIVACY_MODE = 2,
 
   /**
    * @generated from enum value: SAND_ACCESS_BLOCK_REASON_TEAM_SETUP_REQUIRED = 3;
    */
-  TEAM_SETUP_REQUIRED = 3,
+  SAND_ACCESS_BLOCK_REASON_TEAM_SETUP_REQUIRED = 3,
 
   /**
    * @generated from enum value: SAND_ACCESS_BLOCK_REASON_TEAM_ACCESS_REQUIRED = 4;
    */
-  TEAM_ACCESS_REQUIRED = 4,
+  SAND_ACCESS_BLOCK_REASON_TEAM_ACCESS_REQUIRED = 4,
 
   /**
    * @generated from enum value: SAND_ACCESS_BLOCK_REASON_NOT_OFFERED = 5;
    */
-  NOT_OFFERED = 5,
+  SAND_ACCESS_BLOCK_REASON_NOT_OFFERED = 5,
 
   /**
    * @generated from enum value: SAND_ACCESS_BLOCK_REASON_FREE_TRIAL_AVAILABLE = 6;
    */
-  FREE_TRIAL_AVAILABLE = 6,
+  SAND_ACCESS_BLOCK_REASON_FREE_TRIAL_AVAILABLE = 6,
 
   /**
    * @generated from enum value: SAND_ACCESS_BLOCK_REASON_PAYWALL_INDIVIDUAL = 7;
    */
-  PAYWALL_INDIVIDUAL = 7,
+  SAND_ACCESS_BLOCK_REASON_PAYWALL_INDIVIDUAL = 7,
 
   /**
    * @generated from enum value: SAND_ACCESS_BLOCK_REASON_PAYWALL_TEAM_MEMBER = 8;
    */
-  PAYWALL_TEAM_MEMBER = 8,
+  SAND_ACCESS_BLOCK_REASON_PAYWALL_TEAM_MEMBER = 8,
 
   /**
    * @generated from enum value: SAND_ACCESS_BLOCK_REASON_PAYWALL_TEAM_ADMIN = 9;
    */
-  PAYWALL_TEAM_ADMIN = 9,
+  SAND_ACCESS_BLOCK_REASON_PAYWALL_TEAM_ADMIN = 9,
 }
-// Retrieve enum metadata with: proto3.getEnumType(GetSandAccessStatusResponse_SandAccessBlockReason)
-proto3.util.setEnumType(GetSandAccessStatusResponse_SandAccessBlockReason, "aiserver.v1.GetSandAccessStatusResponse.SandAccessBlockReason", [
+// Retrieve enum metadata with: proto3.getEnumType(GetSlateAccessStatusResponse_SlateAccessBlockReason)
+proto3.util.setEnumType(GetSlateAccessStatusResponse_SlateAccessBlockReason, "aiserver.v1.GetSlateAccessStatusResponse.SlateAccessBlockReason", [
   { no: 0, name: "SAND_ACCESS_BLOCK_REASON_UNSPECIFIED" },
   { no: 1, name: "SAND_ACCESS_BLOCK_REASON_NONE" },
   { no: 2, name: "SAND_ACCESS_BLOCK_REASON_TEAM_PRIVACY_MODE" },
@@ -31390,31 +31390,31 @@ proto3.util.setEnumType(GetSandAccessStatusResponse_SandAccessBlockReason, "aise
 ]);
 
 /**
- * @generated from enum aiserver.v1.GetSandAccessStatusResponse.SandAccessState
+ * @generated from enum aiserver.v1.GetSlateAccessStatusResponse.SlateAccessState
  */
-export enum GetSandAccessStatusResponse_SandAccessState {
+export enum GetSlateAccessStatusResponse_SlateAccessState {
   /**
    * @generated from enum value: SAND_ACCESS_STATE_UNSPECIFIED = 0;
    */
-  UNSPECIFIED = 0,
+  SAND_ACCESS_STATE_UNSPECIFIED = 0,
 
   /**
    * @generated from enum value: SAND_ACCESS_STATE_GRANTED = 1;
    */
-  GRANTED = 1,
+  SAND_ACCESS_STATE_GRANTED = 1,
 
   /**
    * @generated from enum value: SAND_ACCESS_STATE_UNAVAILABLE = 2;
    */
-  UNAVAILABLE = 2,
+  SAND_ACCESS_STATE_UNAVAILABLE = 2,
 
   /**
    * @generated from enum value: SAND_ACCESS_STATE_PAYMENT_REQUIRED = 3;
    */
-  PAYMENT_REQUIRED = 3,
+  SAND_ACCESS_STATE_PAYMENT_REQUIRED = 3,
 }
-// Retrieve enum metadata with: proto3.getEnumType(GetSandAccessStatusResponse_SandAccessState)
-proto3.util.setEnumType(GetSandAccessStatusResponse_SandAccessState, "aiserver.v1.GetSandAccessStatusResponse.SandAccessState", [
+// Retrieve enum metadata with: proto3.getEnumType(GetSlateAccessStatusResponse_SlateAccessState)
+proto3.util.setEnumType(GetSlateAccessStatusResponse_SlateAccessState, "aiserver.v1.GetSlateAccessStatusResponse.SlateAccessState", [
   { no: 0, name: "SAND_ACCESS_STATE_UNSPECIFIED" },
   { no: 1, name: "SAND_ACCESS_STATE_GRANTED" },
   { no: 2, name: "SAND_ACCESS_STATE_UNAVAILABLE" },
@@ -31422,31 +31422,31 @@ proto3.util.setEnumType(GetSandAccessStatusResponse_SandAccessState, "aiserver.v
 ]);
 
 /**
- * @generated from enum aiserver.v1.GetSandAccessStatusResponse.SandPurchaseChannel
+ * @generated from enum aiserver.v1.GetSlateAccessStatusResponse.SlatePurchaseChannel
  */
-export enum GetSandAccessStatusResponse_SandPurchaseChannel {
+export enum GetSlateAccessStatusResponse_SlatePurchaseChannel {
   /**
    * @generated from enum value: SAND_PURCHASE_CHANNEL_UNSPECIFIED = 0;
    */
-  UNSPECIFIED = 0,
+  SAND_PURCHASE_CHANNEL_UNSPECIFIED = 0,
 
   /**
    * @generated from enum value: SAND_PURCHASE_CHANNEL_IN_APP = 1;
    */
-  IN_APP = 1,
+  SAND_PURCHASE_CHANNEL_IN_APP = 1,
 
   /**
    * @generated from enum value: SAND_PURCHASE_CHANNEL_MANAGE_IN_CURSOR = 2;
    */
-  MANAGE_IN_CURSOR = 2,
+  SAND_PURCHASE_CHANNEL_MANAGE_IN_CURSOR = 2,
 
   /**
    * @generated from enum value: SAND_PURCHASE_CHANNEL_MANAGE_ON_WEB = 3;
    */
-  MANAGE_ON_WEB = 3,
+  SAND_PURCHASE_CHANNEL_MANAGE_ON_WEB = 3,
 }
-// Retrieve enum metadata with: proto3.getEnumType(GetSandAccessStatusResponse_SandPurchaseChannel)
-proto3.util.setEnumType(GetSandAccessStatusResponse_SandPurchaseChannel, "aiserver.v1.GetSandAccessStatusResponse.SandPurchaseChannel", [
+// Retrieve enum metadata with: proto3.getEnumType(GetSlateAccessStatusResponse_SlatePurchaseChannel)
+proto3.util.setEnumType(GetSlateAccessStatusResponse_SlatePurchaseChannel, "aiserver.v1.GetSlateAccessStatusResponse.SlatePurchaseChannel", [
   { no: 0, name: "SAND_PURCHASE_CHANNEL_UNSPECIFIED" },
   { no: 1, name: "SAND_PURCHASE_CHANNEL_IN_APP" },
   { no: 2, name: "SAND_PURCHASE_CHANNEL_MANAGE_IN_CURSOR" },
@@ -31454,109 +31454,109 @@ proto3.util.setEnumType(GetSandAccessStatusResponse_SandPurchaseChannel, "aiserv
 ]);
 
 /**
- * @generated from message aiserver.v1.GetSandTrialClaimStatusRequest
+ * @generated from message aiserver.v1.GetSlateTrialClaimStatusRequest
  */
-export class GetSandTrialClaimStatusRequest extends Message<GetSandTrialClaimStatusRequest> {
-  constructor(data?: PartialMessage<GetSandTrialClaimStatusRequest>) {
+export class GetSlateTrialClaimStatusRequest extends Message<GetSlateTrialClaimStatusRequest> {
+  constructor(data?: PartialMessage<GetSlateTrialClaimStatusRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetSandTrialClaimStatusRequest";
+  static readonly typeName = "aiserver.v1.GetSlateTrialClaimStatusRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetSandTrialClaimStatusRequest {
-    return new GetSandTrialClaimStatusRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetSlateTrialClaimStatusRequest {
+    return new GetSlateTrialClaimStatusRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetSandTrialClaimStatusRequest {
-    return new GetSandTrialClaimStatusRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetSlateTrialClaimStatusRequest {
+    return new GetSlateTrialClaimStatusRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetSandTrialClaimStatusRequest {
-    return new GetSandTrialClaimStatusRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetSlateTrialClaimStatusRequest {
+    return new GetSlateTrialClaimStatusRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetSandTrialClaimStatusRequest | PlainMessage<GetSandTrialClaimStatusRequest> | undefined, b: GetSandTrialClaimStatusRequest | PlainMessage<GetSandTrialClaimStatusRequest> | undefined): boolean {
-    return proto3.util.equals(GetSandTrialClaimStatusRequest, a, b);
+  static equals(a: GetSlateTrialClaimStatusRequest | PlainMessage<GetSlateTrialClaimStatusRequest> | undefined, b: GetSlateTrialClaimStatusRequest | PlainMessage<GetSlateTrialClaimStatusRequest> | undefined): boolean {
+    return proto3.util.equals(GetSlateTrialClaimStatusRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetSandTrialClaimStatusResponse
+ * @generated from message aiserver.v1.GetSlateTrialClaimStatusResponse
  */
-export class GetSandTrialClaimStatusResponse extends Message<GetSandTrialClaimStatusResponse> {
+export class GetSlateTrialClaimStatusResponse extends Message<GetSlateTrialClaimStatusResponse> {
   /**
-   * @generated from field: aiserver.v1.GetSandTrialClaimStatusResponse.SandTrialClaimStatus status = 1;
+   * @generated from field: aiserver.v1.GetSlateTrialClaimStatusResponse.SlateTrialClaimStatus status = 1;
    */
-  status = GetSandTrialClaimStatusResponse_SandTrialClaimStatus.UNSPECIFIED;
+  status = GetSlateTrialClaimStatusResponse_SlateTrialClaimStatus.SAND_TRIAL_CLAIM_STATUS_UNSPECIFIED;
 
-  constructor(data?: PartialMessage<GetSandTrialClaimStatusResponse>) {
+  constructor(data?: PartialMessage<GetSlateTrialClaimStatusResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetSandTrialClaimStatusResponse";
+  static readonly typeName = "aiserver.v1.GetSlateTrialClaimStatusResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "status", kind: "enum", T: proto3.getEnumType(GetSandTrialClaimStatusResponse_SandTrialClaimStatus) },
+    { no: 1, name: "status", kind: "enum", T: proto3.getEnumType(GetSlateTrialClaimStatusResponse_SlateTrialClaimStatus) },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetSandTrialClaimStatusResponse {
-    return new GetSandTrialClaimStatusResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetSlateTrialClaimStatusResponse {
+    return new GetSlateTrialClaimStatusResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetSandTrialClaimStatusResponse {
-    return new GetSandTrialClaimStatusResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetSlateTrialClaimStatusResponse {
+    return new GetSlateTrialClaimStatusResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetSandTrialClaimStatusResponse {
-    return new GetSandTrialClaimStatusResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetSlateTrialClaimStatusResponse {
+    return new GetSlateTrialClaimStatusResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetSandTrialClaimStatusResponse | PlainMessage<GetSandTrialClaimStatusResponse> | undefined, b: GetSandTrialClaimStatusResponse | PlainMessage<GetSandTrialClaimStatusResponse> | undefined): boolean {
-    return proto3.util.equals(GetSandTrialClaimStatusResponse, a, b);
+  static equals(a: GetSlateTrialClaimStatusResponse | PlainMessage<GetSlateTrialClaimStatusResponse> | undefined, b: GetSlateTrialClaimStatusResponse | PlainMessage<GetSlateTrialClaimStatusResponse> | undefined): boolean {
+    return proto3.util.equals(GetSlateTrialClaimStatusResponse, a, b);
   }
 }
 
 /**
- * @generated from enum aiserver.v1.GetSandTrialClaimStatusResponse.SandTrialClaimStatus
+ * @generated from enum aiserver.v1.GetSlateTrialClaimStatusResponse.SlateTrialClaimStatus
  */
-export enum GetSandTrialClaimStatusResponse_SandTrialClaimStatus {
+export enum GetSlateTrialClaimStatusResponse_SlateTrialClaimStatus {
   /**
    * @generated from enum value: SAND_TRIAL_CLAIM_STATUS_UNSPECIFIED = 0;
    */
-  UNSPECIFIED = 0,
+  SAND_TRIAL_CLAIM_STATUS_UNSPECIFIED = 0,
 
   /**
    * @generated from enum value: SAND_TRIAL_CLAIM_STATUS_NONE = 1;
    */
-  NONE = 1,
+  SAND_TRIAL_CLAIM_STATUS_NONE = 1,
 
   /**
    * @generated from enum value: SAND_TRIAL_CLAIM_STATUS_PENDING_CARD = 2;
    */
-  PENDING_CARD = 2,
+  SAND_TRIAL_CLAIM_STATUS_PENDING_CARD = 2,
 
   /**
    * @generated from enum value: SAND_TRIAL_CLAIM_STATUS_GRANTED = 3;
    */
-  GRANTED = 3,
+  SAND_TRIAL_CLAIM_STATUS_GRANTED = 3,
 
   /**
    * @generated from enum value: SAND_TRIAL_CLAIM_STATUS_REJECTED_DUPLICATE_CARD = 4;
    */
-  REJECTED_DUPLICATE_CARD = 4,
+  SAND_TRIAL_CLAIM_STATUS_REJECTED_DUPLICATE_CARD = 4,
 
   /**
    * @generated from enum value: SAND_TRIAL_CLAIM_STATUS_BLOCKED = 5;
    */
-  BLOCKED = 5,
+  SAND_TRIAL_CLAIM_STATUS_BLOCKED = 5,
 }
-// Retrieve enum metadata with: proto3.getEnumType(GetSandTrialClaimStatusResponse_SandTrialClaimStatus)
-proto3.util.setEnumType(GetSandTrialClaimStatusResponse_SandTrialClaimStatus, "aiserver.v1.GetSandTrialClaimStatusResponse.SandTrialClaimStatus", [
+// Retrieve enum metadata with: proto3.getEnumType(GetSlateTrialClaimStatusResponse_SlateTrialClaimStatus)
+proto3.util.setEnumType(GetSlateTrialClaimStatusResponse_SlateTrialClaimStatus, "aiserver.v1.GetSlateTrialClaimStatusResponse.SlateTrialClaimStatus", [
   { no: 0, name: "SAND_TRIAL_CLAIM_STATUS_UNSPECIFIED" },
   { no: 1, name: "SAND_TRIAL_CLAIM_STATUS_NONE" },
   { no: 2, name: "SAND_TRIAL_CLAIM_STATUS_PENDING_CARD" },
@@ -31566,40 +31566,40 @@ proto3.util.setEnumType(GetSandTrialClaimStatusResponse_SandTrialClaimStatus, "a
 ]);
 
 /**
- * @generated from message aiserver.v1.GetSandUsageStatusRequest
+ * @generated from message aiserver.v1.GetSlateUsageStatusRequest
  */
-export class GetSandUsageStatusRequest extends Message<GetSandUsageStatusRequest> {
-  constructor(data?: PartialMessage<GetSandUsageStatusRequest>) {
+export class GetSlateUsageStatusRequest extends Message<GetSlateUsageStatusRequest> {
+  constructor(data?: PartialMessage<GetSlateUsageStatusRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetSandUsageStatusRequest";
+  static readonly typeName = "aiserver.v1.GetSlateUsageStatusRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetSandUsageStatusRequest {
-    return new GetSandUsageStatusRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetSlateUsageStatusRequest {
+    return new GetSlateUsageStatusRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetSandUsageStatusRequest {
-    return new GetSandUsageStatusRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetSlateUsageStatusRequest {
+    return new GetSlateUsageStatusRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetSandUsageStatusRequest {
-    return new GetSandUsageStatusRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetSlateUsageStatusRequest {
+    return new GetSlateUsageStatusRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetSandUsageStatusRequest | PlainMessage<GetSandUsageStatusRequest> | undefined, b: GetSandUsageStatusRequest | PlainMessage<GetSandUsageStatusRequest> | undefined): boolean {
-    return proto3.util.equals(GetSandUsageStatusRequest, a, b);
+  static equals(a: GetSlateUsageStatusRequest | PlainMessage<GetSlateUsageStatusRequest> | undefined, b: GetSlateUsageStatusRequest | PlainMessage<GetSlateUsageStatusRequest> | undefined): boolean {
+    return proto3.util.equals(GetSlateUsageStatusRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetSandUsageStatusResponse
+ * @generated from message aiserver.v1.GetSlateUsageStatusResponse
  */
-export class GetSandUsageStatusResponse extends Message<GetSandUsageStatusResponse> {
+export class GetSlateUsageStatusResponse extends Message<GetSlateUsageStatusResponse> {
   /**
    * @generated from field: optional google.protobuf.Timestamp current_period_start = 1;
    */
@@ -31641,27 +31641,27 @@ export class GetSandUsageStatusResponse extends Message<GetSandUsageStatusRespon
   hasNonZeroIncludedLimit = false;
 
   /**
-   * @generated from field: optional aiserver.v1.SandUpgradeRecommendation upgrade_recommendation = 9;
+   * @generated from field: optional aiserver.v1.SlateUpgradeRecommendation upgrade_recommendation = 9;
    */
-  upgradeRecommendation?: SandUpgradeRecommendation;
+  upgradeRecommendation?: SlateUpgradeRecommendation;
 
   /**
-   * @generated from field: optional google.protobuf.Timestamp sand_trial_expires_at = 10;
+   * @generated from field: optional google.protobuf.Timestamp slate_trial_expires_at = 10;
    */
-  sandTrialExpiresAt?: Timestamp;
+  slateTrialExpiresAt?: Timestamp;
 
   /**
-   * @generated from field: bool sand_trial_cancelable = 11;
+   * @generated from field: bool slate_trial_cancelable = 11;
    */
-  sandTrialCancelable = false;
+  slateTrialCancelable = false;
 
-  constructor(data?: PartialMessage<GetSandUsageStatusResponse>) {
+  constructor(data?: PartialMessage<GetSlateUsageStatusResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetSandUsageStatusResponse";
+  static readonly typeName = "aiserver.v1.GetSlateUsageStatusResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "current_period_start", kind: "message", T: Timestamp, opt: true },
     { no: 2, name: "next_reset_timestamp_utc", kind: "message", T: Timestamp, opt: true },
@@ -31671,25 +31671,25 @@ export class GetSandUsageStatusResponse extends Message<GetSandUsageStatusRespon
     { no: 6, name: "uses_pooled_enterprise_allowance", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 7, name: "has_available_usage", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 8, name: "has_non_zero_included_limit", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 9, name: "upgrade_recommendation", kind: "message", T: SandUpgradeRecommendation, opt: true },
-    { no: 10, name: "sand_trial_expires_at", kind: "message", T: Timestamp, opt: true },
-    { no: 11, name: "sand_trial_cancelable", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 9, name: "upgrade_recommendation", kind: "message", T: SlateUpgradeRecommendation, opt: true },
+    { no: 10, name: "slate_trial_expires_at", kind: "message", T: Timestamp, opt: true },
+    { no: 11, name: "slate_trial_cancelable", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetSandUsageStatusResponse {
-    return new GetSandUsageStatusResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetSlateUsageStatusResponse {
+    return new GetSlateUsageStatusResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetSandUsageStatusResponse {
-    return new GetSandUsageStatusResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetSlateUsageStatusResponse {
+    return new GetSlateUsageStatusResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetSandUsageStatusResponse {
-    return new GetSandUsageStatusResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetSlateUsageStatusResponse {
+    return new GetSlateUsageStatusResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetSandUsageStatusResponse | PlainMessage<GetSandUsageStatusResponse> | undefined, b: GetSandUsageStatusResponse | PlainMessage<GetSandUsageStatusResponse> | undefined): boolean {
-    return proto3.util.equals(GetSandUsageStatusResponse, a, b);
+  static equals(a: GetSlateUsageStatusResponse | PlainMessage<GetSlateUsageStatusResponse> | undefined, b: GetSlateUsageStatusResponse | PlainMessage<GetSlateUsageStatusResponse> | undefined): boolean {
+    return proto3.util.equals(GetSlateUsageStatusResponse, a, b);
   }
 }
 
@@ -33517,14 +33517,14 @@ export class GetTeamAdminSettingsResponse extends Message<GetTeamAdminSettingsRe
   localToolControls?: LocalToolControls;
 
   /**
-   * @generated from field: optional aiserver.v1.SandActionAuditSettings sand_action_audit_settings = 61;
+   * @generated from field: optional aiserver.v1.SlateActionAuditSettings slate_action_audit_settings = 61;
    */
-  sandActionAuditSettings?: SandActionAuditSettings;
+  slateActionAuditSettings?: SlateActionAuditSettings;
 
   /**
-   * @generated from field: optional aiserver.v1.SandOnboardingState sand_onboarding = 62;
+   * @generated from field: optional aiserver.v1.SlateOnboardingState slate_onboarding = 62;
    */
-  sandOnboarding?: SandOnboardingState;
+  slateOnboarding?: SlateOnboardingState;
 
   /**
    * @generated from field: optional bool origin_disabled = 63;
@@ -33599,8 +33599,8 @@ export class GetTeamAdminSettingsResponse extends Message<GetTeamAdminSettingsRe
     { no: 58, name: "enforce_hooks_readiness", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 59, name: "llm_gateway", kind: "message", T: LlmGatewaySettings, opt: true },
     { no: 60, name: "local_tool_controls", kind: "message", T: LocalToolControls, opt: true },
-    { no: 61, name: "sand_action_audit_settings", kind: "message", T: SandActionAuditSettings, opt: true },
-    { no: 62, name: "sand_onboarding", kind: "message", T: SandOnboardingState, opt: true },
+    { no: 61, name: "slate_action_audit_settings", kind: "message", T: SlateActionAuditSettings, opt: true },
+    { no: 62, name: "slate_onboarding", kind: "message", T: SlateOnboardingState, opt: true },
     { no: 63, name: "origin_disabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
@@ -33800,55 +33800,55 @@ export class GetTeamBackgroundAgentSettingsResponse extends Message<GetTeamBackg
 }
 
 /**
- * @generated from message aiserver.v1.GetTeamBugbotSettingsRequest
+ * @generated from message aiserver.v1.GetTeamBugReportSettingsRequest
  */
-export class GetTeamBugbotSettingsRequest extends Message<GetTeamBugbotSettingsRequest> {
+export class GetTeamBugReportSettingsRequest extends Message<GetTeamBugReportSettingsRequest> {
   /**
    * @generated from field: int32 team_id = 1;
    */
   teamId = 0;
 
-  constructor(data?: PartialMessage<GetTeamBugbotSettingsRequest>) {
+  constructor(data?: PartialMessage<GetTeamBugReportSettingsRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetTeamBugbotSettingsRequest";
+  static readonly typeName = "aiserver.v1.GetTeamBugReportSettingsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetTeamBugbotSettingsRequest {
-    return new GetTeamBugbotSettingsRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetTeamBugReportSettingsRequest {
+    return new GetTeamBugReportSettingsRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetTeamBugbotSettingsRequest {
-    return new GetTeamBugbotSettingsRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetTeamBugReportSettingsRequest {
+    return new GetTeamBugReportSettingsRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetTeamBugbotSettingsRequest {
-    return new GetTeamBugbotSettingsRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetTeamBugReportSettingsRequest {
+    return new GetTeamBugReportSettingsRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetTeamBugbotSettingsRequest | PlainMessage<GetTeamBugbotSettingsRequest> | undefined, b: GetTeamBugbotSettingsRequest | PlainMessage<GetTeamBugbotSettingsRequest> | undefined): boolean {
-    return proto3.util.equals(GetTeamBugbotSettingsRequest, a, b);
+  static equals(a: GetTeamBugReportSettingsRequest | PlainMessage<GetTeamBugReportSettingsRequest> | undefined, b: GetTeamBugReportSettingsRequest | PlainMessage<GetTeamBugReportSettingsRequest> | undefined): boolean {
+    return proto3.util.equals(GetTeamBugReportSettingsRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.GetTeamBugbotSettingsResponse
+ * @generated from message aiserver.v1.GetTeamBugReportSettingsResponse
  */
-export class GetTeamBugbotSettingsResponse extends Message<GetTeamBugbotSettingsResponse> {
+export class GetTeamBugReportSettingsResponse extends Message<GetTeamBugReportSettingsResponse> {
   /**
-   * @generated from field: int32 bugbot_licenses_hard_limit = 1;
+   * @generated from field: int32 bug_report_licenses_hard_limit = 1;
    */
-  bugbotLicensesHardLimit = 0;
+  bugReportLicensesHardLimit = 0;
 
   /**
-   * @generated from field: bool bugbot_plan_enabled = 2;
+   * @generated from field: bool bug_report_plan_enabled = 2;
    */
-  bugbotPlanEnabled = false;
+  bugReportPlanEnabled = false;
 
   /**
    * @generated from field: repeated string allowlist = 3;
@@ -33861,9 +33861,9 @@ export class GetTeamBugbotSettingsResponse extends Message<GetTeamBugbotSettings
   currentCycleUniqueUsers = 0;
 
   /**
-   * @generated from field: int32 bugbot_license_count = 5;
+   * @generated from field: int32 bug_report_license_count = 5;
    */
-  bugbotLicenseCount = 0;
+  bugReportLicenseCount = 0;
 
   /**
    * @generated from field: aiserver.v1.AllowlistConfig allowlist_config = 6;
@@ -33871,24 +33871,24 @@ export class GetTeamBugbotSettingsResponse extends Message<GetTeamBugbotSettings
   allowlistConfig = AllowlistConfig.UNSPECIFIED;
 
   /**
-   * @generated from field: bool bugbot_was_enabled_in_this_billing_cycle = 7;
+   * @generated from field: bool bug_report_was_enabled_in_this_billing_cycle = 7;
    */
-  bugbotWasEnabledInThisBillingCycle = false;
+  bugReportWasEnabledInThisBillingCycle = false;
 
   /**
-   * @generated from field: repeated aiserver.v1.BugbotLicenseUsage license_usage = 8;
+   * @generated from field: repeated aiserver.v1.BugReportLicenseUsage license_usage = 8;
    */
-  licenseUsage: BugbotLicenseUsage[] = [];
+  licenseUsage: BugReportLicenseUsage[] = [];
 
   /**
-   * @generated from field: aiserver.v1.BugbotUsageTier bugbot_usage_tier = 9;
+   * @generated from field: aiserver.v1.BugReportUsageTier bug_report_usage_tier = 9;
    */
-  bugbotUsageTier = BugbotUsageTier.UNSPECIFIED;
+  bugReportUsageTier = BugReportUsageTier.BUGBOT_USAGE_TIER_UNSPECIFIED;
 
   /**
-   * @generated from field: bool bugbot_globally_disabled = 10;
+   * @generated from field: bool bug_report_globally_disabled = 10;
    */
-  bugbotGloballyDisabled = false;
+  bugReportGloballyDisabled = false;
 
   /**
    * @generated from field: repeated string mcp_server_names = 11;
@@ -33896,14 +33896,14 @@ export class GetTeamBugbotSettingsResponse extends Message<GetTeamBugbotSettings
   mcpServerNames: string[] = [];
 
   /**
-   * @generated from field: aiserver.v1.BugbotBillingMode bugbot_billing_mode = 12;
+   * @generated from field: aiserver.v1.BugReportBillingMode bug_report_billing_mode = 12;
    */
-  bugbotBillingMode = BugbotBillingMode.UNSPECIFIED;
+  bugReportBillingMode = BugReportBillingMode.BUGBOT_BILLING_MODE_UNSPECIFIED;
 
   /**
-   * @generated from field: bool bugbot_usage_based_on_enable = 13;
+   * @generated from field: bool bug_report_usage_based_on_enable = 13;
    */
-  bugbotUsageBasedOnEnable = false;
+  bugReportUsageBasedOnEnable = false;
 
   /**
    * @generated from field: bool can_migrate_to_usage_based = 14;
@@ -33916,9 +33916,9 @@ export class GetTeamBugbotSettingsResponse extends Message<GetTeamBugbotSettings
   seatLicenseCount = 0;
 
   /**
-   * @generated from field: bool bugbot_migration_credit_already_granted = 16;
+   * @generated from field: bool bug_report_migration_credit_already_granted = 16;
    */
-  bugbotMigrationCreditAlreadyGranted = false;
+  bugReportMigrationCreditAlreadyGranted = false;
 
   /**
    * @generated from field: bool is_incremental_review_enabled = 17;
@@ -33950,30 +33950,30 @@ export class GetTeamBugbotSettingsResponse extends Message<GetTeamBugbotSettings
    */
   maxRunsPerPr?: number;
 
-  constructor(data?: PartialMessage<GetTeamBugbotSettingsResponse>) {
+  constructor(data?: PartialMessage<GetTeamBugReportSettingsResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.GetTeamBugbotSettingsResponse";
+  static readonly typeName = "aiserver.v1.GetTeamBugReportSettingsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "bugbot_licenses_hard_limit", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 2, name: "bugbot_plan_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 1, name: "bug_report_licenses_hard_limit", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 2, name: "bug_report_plan_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 3, name: "allowlist", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 4, name: "current_cycle_unique_users", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 5, name: "bugbot_license_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 5, name: "bug_report_license_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 6, name: "allowlist_config", kind: "enum", T: proto3.getEnumType(AllowlistConfig) },
-    { no: 7, name: "bugbot_was_enabled_in_this_billing_cycle", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 8, name: "license_usage", kind: "message", T: BugbotLicenseUsage, repeated: true },
-    { no: 9, name: "bugbot_usage_tier", kind: "enum", T: proto3.getEnumType(BugbotUsageTier) },
-    { no: 10, name: "bugbot_globally_disabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 7, name: "bug_report_was_enabled_in_this_billing_cycle", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 8, name: "license_usage", kind: "message", T: BugReportLicenseUsage, repeated: true },
+    { no: 9, name: "bug_report_usage_tier", kind: "enum", T: proto3.getEnumType(BugReportUsageTier) },
+    { no: 10, name: "bug_report_globally_disabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 11, name: "mcp_server_names", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 12, name: "bugbot_billing_mode", kind: "enum", T: proto3.getEnumType(BugbotBillingMode) },
-    { no: 13, name: "bugbot_usage_based_on_enable", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 12, name: "bug_report_billing_mode", kind: "enum", T: proto3.getEnumType(BugReportBillingMode) },
+    { no: 13, name: "bug_report_usage_based_on_enable", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 14, name: "can_migrate_to_usage_based", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 15, name: "seat_license_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 16, name: "bugbot_migration_credit_already_granted", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 16, name: "bug_report_migration_credit_already_granted", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 17, name: "is_incremental_review_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 18, name: "merged_pr_scan_opted_out", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 19, name: "cost_controls_available", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
@@ -33982,20 +33982,20 @@ export class GetTeamBugbotSettingsResponse extends Message<GetTeamBugbotSettings
     { no: 22, name: "max_runs_per_pr", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetTeamBugbotSettingsResponse {
-    return new GetTeamBugbotSettingsResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetTeamBugReportSettingsResponse {
+    return new GetTeamBugReportSettingsResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetTeamBugbotSettingsResponse {
-    return new GetTeamBugbotSettingsResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetTeamBugReportSettingsResponse {
+    return new GetTeamBugReportSettingsResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetTeamBugbotSettingsResponse {
-    return new GetTeamBugbotSettingsResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetTeamBugReportSettingsResponse {
+    return new GetTeamBugReportSettingsResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetTeamBugbotSettingsResponse | PlainMessage<GetTeamBugbotSettingsResponse> | undefined, b: GetTeamBugbotSettingsResponse | PlainMessage<GetTeamBugbotSettingsResponse> | undefined): boolean {
-    return proto3.util.equals(GetTeamBugbotSettingsResponse, a, b);
+  static equals(a: GetTeamBugReportSettingsResponse | PlainMessage<GetTeamBugReportSettingsResponse> | undefined, b: GetTeamBugReportSettingsResponse | PlainMessage<GetTeamBugReportSettingsResponse> | undefined): boolean {
+    return proto3.util.equals(GetTeamBugReportSettingsResponse, a, b);
   }
 }
 
@@ -40607,9 +40607,9 @@ export class InstallationSettings extends Message<InstallationSettings> {
   isLearningEnabled = false;
 
   /**
-   * @generated from field: aiserver.v1.BugbotAutofixMode bugbot_autofix_mode = 10;
+   * @generated from field: aiserver.v1.BugReportAutofixMode bug_report_autofix_mode = 10;
    */
-  bugbotAutofixMode = BugbotAutofixMode.UNSPECIFIED;
+  bugReportAutofixMode = BugReportAutofixMode.BUGBOT_AUTOFIX_MODE_UNSPECIFIED;
 
   /**
    * @generated from field: bool enable_draft = 11;
@@ -40617,14 +40617,14 @@ export class InstallationSettings extends Message<InstallationSettings> {
   enableDraft = false;
 
   /**
-   * @generated from field: bool fail_github_action_on_bugbot_findings = 12;
+   * @generated from field: bool fail_github_action_on_bug_report_findings = 12;
    */
-  failGithubActionOnBugbotFindings = false;
+  failGithubActionOnBugReportFindings = false;
 
   /**
-   * @generated from field: repeated string bugbot_autofix_severity_filter = 13;
+   * @generated from field: repeated string bug_report_autofix_severity_filter = 13;
    */
-  bugbotAutofixSeverityFilter: string[] = [];
+  bugReportAutofixSeverityFilter: string[] = [];
 
   /**
    * @generated from field: optional bool is_pr_risk_score_enabled = 14;
@@ -40648,10 +40648,10 @@ export class InstallationSettings extends Message<InstallationSettings> {
     { no: 7, name: "is_pr_summary_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 8, name: "pr_summary_use_comment", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 9, name: "is_learning_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 10, name: "bugbot_autofix_mode", kind: "enum", T: proto3.getEnumType(BugbotAutofixMode) },
+    { no: 10, name: "bug_report_autofix_mode", kind: "enum", T: proto3.getEnumType(BugReportAutofixMode) },
     { no: 11, name: "enable_draft", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 12, name: "fail_github_action_on_bugbot_findings", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 13, name: "bugbot_autofix_severity_filter", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
+    { no: 12, name: "fail_github_action_on_bug_report_findings", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 13, name: "bug_report_autofix_severity_filter", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 14, name: "is_pr_risk_score_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
@@ -40924,70 +40924,70 @@ export class IsAllowedFreeTrialUsageResponse extends Message<IsAllowedFreeTrialU
 }
 
 /**
- * @generated from message aiserver.v1.IsEligibleForSandTrialRequest
+ * @generated from message aiserver.v1.IsEligibleForSlateTrialRequest
  */
-export class IsEligibleForSandTrialRequest extends Message<IsEligibleForSandTrialRequest> {
-  constructor(data?: PartialMessage<IsEligibleForSandTrialRequest>) {
+export class IsEligibleForSlateTrialRequest extends Message<IsEligibleForSlateTrialRequest> {
+  constructor(data?: PartialMessage<IsEligibleForSlateTrialRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.IsEligibleForSandTrialRequest";
+  static readonly typeName = "aiserver.v1.IsEligibleForSlateTrialRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): IsEligibleForSandTrialRequest {
-    return new IsEligibleForSandTrialRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): IsEligibleForSlateTrialRequest {
+    return new IsEligibleForSlateTrialRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): IsEligibleForSandTrialRequest {
-    return new IsEligibleForSandTrialRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): IsEligibleForSlateTrialRequest {
+    return new IsEligibleForSlateTrialRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): IsEligibleForSandTrialRequest {
-    return new IsEligibleForSandTrialRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): IsEligibleForSlateTrialRequest {
+    return new IsEligibleForSlateTrialRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: IsEligibleForSandTrialRequest | PlainMessage<IsEligibleForSandTrialRequest> | undefined, b: IsEligibleForSandTrialRequest | PlainMessage<IsEligibleForSandTrialRequest> | undefined): boolean {
-    return proto3.util.equals(IsEligibleForSandTrialRequest, a, b);
+  static equals(a: IsEligibleForSlateTrialRequest | PlainMessage<IsEligibleForSlateTrialRequest> | undefined, b: IsEligibleForSlateTrialRequest | PlainMessage<IsEligibleForSlateTrialRequest> | undefined): boolean {
+    return proto3.util.equals(IsEligibleForSlateTrialRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.IsEligibleForSandTrialResponse
+ * @generated from message aiserver.v1.IsEligibleForSlateTrialResponse
  */
-export class IsEligibleForSandTrialResponse extends Message<IsEligibleForSandTrialResponse> {
+export class IsEligibleForSlateTrialResponse extends Message<IsEligibleForSlateTrialResponse> {
   /**
    * @generated from field: bool is_eligible = 1;
    */
   isEligible = false;
 
-  constructor(data?: PartialMessage<IsEligibleForSandTrialResponse>) {
+  constructor(data?: PartialMessage<IsEligibleForSlateTrialResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.IsEligibleForSandTrialResponse";
+  static readonly typeName = "aiserver.v1.IsEligibleForSlateTrialResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "is_eligible", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): IsEligibleForSandTrialResponse {
-    return new IsEligibleForSandTrialResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): IsEligibleForSlateTrialResponse {
+    return new IsEligibleForSlateTrialResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): IsEligibleForSandTrialResponse {
-    return new IsEligibleForSandTrialResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): IsEligibleForSlateTrialResponse {
+    return new IsEligibleForSlateTrialResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): IsEligibleForSandTrialResponse {
-    return new IsEligibleForSandTrialResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): IsEligibleForSlateTrialResponse {
+    return new IsEligibleForSlateTrialResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: IsEligibleForSandTrialResponse | PlainMessage<IsEligibleForSandTrialResponse> | undefined, b: IsEligibleForSandTrialResponse | PlainMessage<IsEligibleForSandTrialResponse> | undefined): boolean {
-    return proto3.util.equals(IsEligibleForSandTrialResponse, a, b);
+  static equals(a: IsEligibleForSlateTrialResponse | PlainMessage<IsEligibleForSlateTrialResponse> | undefined, b: IsEligibleForSlateTrialResponse | PlainMessage<IsEligibleForSlateTrialResponse> | undefined): boolean {
+    return proto3.util.equals(IsEligibleForSlateTrialResponse, a, b);
   }
 }
 
@@ -44648,151 +44648,151 @@ export class ListPendingUserAccessRequestsResponse extends Message<ListPendingUs
 }
 
 /**
- * @generated from message aiserver.v1.ListSandBankedResetsRequest
+ * @generated from message aiserver.v1.ListSlateBankedResetsRequest
  */
-export class ListSandBankedResetsRequest extends Message<ListSandBankedResetsRequest> {
-  constructor(data?: PartialMessage<ListSandBankedResetsRequest>) {
+export class ListSlateBankedResetsRequest extends Message<ListSlateBankedResetsRequest> {
+  constructor(data?: PartialMessage<ListSlateBankedResetsRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.ListSandBankedResetsRequest";
+  static readonly typeName = "aiserver.v1.ListSlateBankedResetsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListSandBankedResetsRequest {
-    return new ListSandBankedResetsRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListSlateBankedResetsRequest {
+    return new ListSlateBankedResetsRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ListSandBankedResetsRequest {
-    return new ListSandBankedResetsRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ListSlateBankedResetsRequest {
+    return new ListSlateBankedResetsRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ListSandBankedResetsRequest {
-    return new ListSandBankedResetsRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ListSlateBankedResetsRequest {
+    return new ListSlateBankedResetsRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: ListSandBankedResetsRequest | PlainMessage<ListSandBankedResetsRequest> | undefined, b: ListSandBankedResetsRequest | PlainMessage<ListSandBankedResetsRequest> | undefined): boolean {
-    return proto3.util.equals(ListSandBankedResetsRequest, a, b);
+  static equals(a: ListSlateBankedResetsRequest | PlainMessage<ListSlateBankedResetsRequest> | undefined, b: ListSlateBankedResetsRequest | PlainMessage<ListSlateBankedResetsRequest> | undefined): boolean {
+    return proto3.util.equals(ListSlateBankedResetsRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.ListSandBankedResetsResponse
+ * @generated from message aiserver.v1.ListSlateBankedResetsResponse
  */
-export class ListSandBankedResetsResponse extends Message<ListSandBankedResetsResponse> {
+export class ListSlateBankedResetsResponse extends Message<ListSlateBankedResetsResponse> {
   /**
-   * @generated from field: repeated aiserver.v1.SandBankedReset resets = 1;
+   * @generated from field: repeated aiserver.v1.SlateBankedReset resets = 1;
    */
-  resets: SandBankedReset[] = [];
+  resets: SlateBankedReset[] = [];
 
-  constructor(data?: PartialMessage<ListSandBankedResetsResponse>) {
+  constructor(data?: PartialMessage<ListSlateBankedResetsResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.ListSandBankedResetsResponse";
+  static readonly typeName = "aiserver.v1.ListSlateBankedResetsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "resets", kind: "message", T: SandBankedReset, repeated: true },
+    { no: 1, name: "resets", kind: "message", T: SlateBankedReset, repeated: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListSandBankedResetsResponse {
-    return new ListSandBankedResetsResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListSlateBankedResetsResponse {
+    return new ListSlateBankedResetsResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ListSandBankedResetsResponse {
-    return new ListSandBankedResetsResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ListSlateBankedResetsResponse {
+    return new ListSlateBankedResetsResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ListSandBankedResetsResponse {
-    return new ListSandBankedResetsResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ListSlateBankedResetsResponse {
+    return new ListSlateBankedResetsResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: ListSandBankedResetsResponse | PlainMessage<ListSandBankedResetsResponse> | undefined, b: ListSandBankedResetsResponse | PlainMessage<ListSandBankedResetsResponse> | undefined): boolean {
-    return proto3.util.equals(ListSandBankedResetsResponse, a, b);
+  static equals(a: ListSlateBankedResetsResponse | PlainMessage<ListSlateBankedResetsResponse> | undefined, b: ListSlateBankedResetsResponse | PlainMessage<ListSlateBankedResetsResponse> | undefined): boolean {
+    return proto3.util.equals(ListSlateBankedResetsResponse, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.ListSandMcpToolsRequest
+ * @generated from message aiserver.v1.ListSlateMcpToolsRequest
  */
-export class ListSandMcpToolsRequest extends Message<ListSandMcpToolsRequest> {
+export class ListSlateMcpToolsRequest extends Message<ListSlateMcpToolsRequest> {
   /**
    * @generated from field: repeated string server_identifiers = 1;
    */
   serverIdentifiers: string[] = [];
 
-  constructor(data?: PartialMessage<ListSandMcpToolsRequest>) {
+  constructor(data?: PartialMessage<ListSlateMcpToolsRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.ListSandMcpToolsRequest";
+  static readonly typeName = "aiserver.v1.ListSlateMcpToolsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "server_identifiers", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListSandMcpToolsRequest {
-    return new ListSandMcpToolsRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListSlateMcpToolsRequest {
+    return new ListSlateMcpToolsRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ListSandMcpToolsRequest {
-    return new ListSandMcpToolsRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ListSlateMcpToolsRequest {
+    return new ListSlateMcpToolsRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ListSandMcpToolsRequest {
-    return new ListSandMcpToolsRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ListSlateMcpToolsRequest {
+    return new ListSlateMcpToolsRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: ListSandMcpToolsRequest | PlainMessage<ListSandMcpToolsRequest> | undefined, b: ListSandMcpToolsRequest | PlainMessage<ListSandMcpToolsRequest> | undefined): boolean {
-    return proto3.util.equals(ListSandMcpToolsRequest, a, b);
+  static equals(a: ListSlateMcpToolsRequest | PlainMessage<ListSlateMcpToolsRequest> | undefined, b: ListSlateMcpToolsRequest | PlainMessage<ListSlateMcpToolsRequest> | undefined): boolean {
+    return proto3.util.equals(ListSlateMcpToolsRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.ListSandMcpToolsResponse
+ * @generated from message aiserver.v1.ListSlateMcpToolsResponse
  */
-export class ListSandMcpToolsResponse extends Message<ListSandMcpToolsResponse> {
+export class ListSlateMcpToolsResponse extends Message<ListSlateMcpToolsResponse> {
   /**
-   * @generated from field: repeated aiserver.v1.ListSandMcpToolsResponse.Server servers = 1;
+   * @generated from field: repeated aiserver.v1.ListSlateMcpToolsResponse.Server servers = 1;
    */
-  servers: ListSandMcpToolsResponse_Server[] = [];
+  servers: ListSlateMcpToolsResponse_Server[] = [];
 
-  constructor(data?: PartialMessage<ListSandMcpToolsResponse>) {
+  constructor(data?: PartialMessage<ListSlateMcpToolsResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.ListSandMcpToolsResponse";
+  static readonly typeName = "aiserver.v1.ListSlateMcpToolsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "servers", kind: "message", T: ListSandMcpToolsResponse_Server, repeated: true },
+    { no: 1, name: "servers", kind: "message", T: ListSlateMcpToolsResponse_Server, repeated: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListSandMcpToolsResponse {
-    return new ListSandMcpToolsResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListSlateMcpToolsResponse {
+    return new ListSlateMcpToolsResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ListSandMcpToolsResponse {
-    return new ListSandMcpToolsResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ListSlateMcpToolsResponse {
+    return new ListSlateMcpToolsResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ListSandMcpToolsResponse {
-    return new ListSandMcpToolsResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ListSlateMcpToolsResponse {
+    return new ListSlateMcpToolsResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: ListSandMcpToolsResponse | PlainMessage<ListSandMcpToolsResponse> | undefined, b: ListSandMcpToolsResponse | PlainMessage<ListSandMcpToolsResponse> | undefined): boolean {
-    return proto3.util.equals(ListSandMcpToolsResponse, a, b);
+  static equals(a: ListSlateMcpToolsResponse | PlainMessage<ListSlateMcpToolsResponse> | undefined, b: ListSlateMcpToolsResponse | PlainMessage<ListSlateMcpToolsResponse> | undefined): boolean {
+    return proto3.util.equals(ListSlateMcpToolsResponse, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.ListSandMcpToolsResponse.Server
+ * @generated from message aiserver.v1.ListSlateMcpToolsResponse.Server
  */
-export class ListSandMcpToolsResponse_Server extends Message<ListSandMcpToolsResponse_Server> {
+export class ListSlateMcpToolsResponse_Server extends Message<ListSlateMcpToolsResponse_Server> {
   /**
    * @generated from field: string server_identifier = 1;
    */
@@ -44818,13 +44818,13 @@ export class ListSandMcpToolsResponse_Server extends Message<ListSandMcpToolsRes
    */
   rowServerIdentifier = "";
 
-  constructor(data?: PartialMessage<ListSandMcpToolsResponse_Server>) {
+  constructor(data?: PartialMessage<ListSlateMcpToolsResponse_Server>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.ListSandMcpToolsResponse.Server";
+  static readonly typeName = "aiserver.v1.ListSlateMcpToolsResponse.Server";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "server_identifier", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "status", kind: "scalar", T: 9 /* ScalarType.STRING */ },
@@ -44833,20 +44833,20 @@ export class ListSandMcpToolsResponse_Server extends Message<ListSandMcpToolsRes
     { no: 5, name: "row_server_identifier", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListSandMcpToolsResponse_Server {
-    return new ListSandMcpToolsResponse_Server().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListSlateMcpToolsResponse_Server {
+    return new ListSlateMcpToolsResponse_Server().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ListSandMcpToolsResponse_Server {
-    return new ListSandMcpToolsResponse_Server().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ListSlateMcpToolsResponse_Server {
+    return new ListSlateMcpToolsResponse_Server().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ListSandMcpToolsResponse_Server {
-    return new ListSandMcpToolsResponse_Server().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ListSlateMcpToolsResponse_Server {
+    return new ListSlateMcpToolsResponse_Server().fromJsonString(jsonString, options);
   }
 
-  static equals(a: ListSandMcpToolsResponse_Server | PlainMessage<ListSandMcpToolsResponse_Server> | undefined, b: ListSandMcpToolsResponse_Server | PlainMessage<ListSandMcpToolsResponse_Server> | undefined): boolean {
-    return proto3.util.equals(ListSandMcpToolsResponse_Server, a, b);
+  static equals(a: ListSlateMcpToolsResponse_Server | PlainMessage<ListSlateMcpToolsResponse_Server> | undefined, b: ListSlateMcpToolsResponse_Server | PlainMessage<ListSlateMcpToolsResponse_Server> | undefined): boolean {
+    return proto3.util.equals(ListSlateMcpToolsResponse_Server, a, b);
   }
 }
 
@@ -47143,70 +47143,70 @@ export class MarkMcpServersSeenResponse extends Message<MarkMcpServersSeenRespon
 }
 
 /**
- * @generated from message aiserver.v1.MarkTeamSandOnboardingSeenRequest
+ * @generated from message aiserver.v1.MarkTeamSlateOnboardingSeenRequest
  */
-export class MarkTeamSandOnboardingSeenRequest extends Message<MarkTeamSandOnboardingSeenRequest> {
+export class MarkTeamSlateOnboardingSeenRequest extends Message<MarkTeamSlateOnboardingSeenRequest> {
   /**
    * @generated from field: int32 team_id = 1;
    */
   teamId = 0;
 
-  constructor(data?: PartialMessage<MarkTeamSandOnboardingSeenRequest>) {
+  constructor(data?: PartialMessage<MarkTeamSlateOnboardingSeenRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.MarkTeamSandOnboardingSeenRequest";
+  static readonly typeName = "aiserver.v1.MarkTeamSlateOnboardingSeenRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): MarkTeamSandOnboardingSeenRequest {
-    return new MarkTeamSandOnboardingSeenRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): MarkTeamSlateOnboardingSeenRequest {
+    return new MarkTeamSlateOnboardingSeenRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): MarkTeamSandOnboardingSeenRequest {
-    return new MarkTeamSandOnboardingSeenRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): MarkTeamSlateOnboardingSeenRequest {
+    return new MarkTeamSlateOnboardingSeenRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): MarkTeamSandOnboardingSeenRequest {
-    return new MarkTeamSandOnboardingSeenRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): MarkTeamSlateOnboardingSeenRequest {
+    return new MarkTeamSlateOnboardingSeenRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: MarkTeamSandOnboardingSeenRequest | PlainMessage<MarkTeamSandOnboardingSeenRequest> | undefined, b: MarkTeamSandOnboardingSeenRequest | PlainMessage<MarkTeamSandOnboardingSeenRequest> | undefined): boolean {
-    return proto3.util.equals(MarkTeamSandOnboardingSeenRequest, a, b);
+  static equals(a: MarkTeamSlateOnboardingSeenRequest | PlainMessage<MarkTeamSlateOnboardingSeenRequest> | undefined, b: MarkTeamSlateOnboardingSeenRequest | PlainMessage<MarkTeamSlateOnboardingSeenRequest> | undefined): boolean {
+    return proto3.util.equals(MarkTeamSlateOnboardingSeenRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.MarkTeamSandOnboardingSeenResponse
+ * @generated from message aiserver.v1.MarkTeamSlateOnboardingSeenResponse
  */
-export class MarkTeamSandOnboardingSeenResponse extends Message<MarkTeamSandOnboardingSeenResponse> {
-  constructor(data?: PartialMessage<MarkTeamSandOnboardingSeenResponse>) {
+export class MarkTeamSlateOnboardingSeenResponse extends Message<MarkTeamSlateOnboardingSeenResponse> {
+  constructor(data?: PartialMessage<MarkTeamSlateOnboardingSeenResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.MarkTeamSandOnboardingSeenResponse";
+  static readonly typeName = "aiserver.v1.MarkTeamSlateOnboardingSeenResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): MarkTeamSandOnboardingSeenResponse {
-    return new MarkTeamSandOnboardingSeenResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): MarkTeamSlateOnboardingSeenResponse {
+    return new MarkTeamSlateOnboardingSeenResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): MarkTeamSandOnboardingSeenResponse {
-    return new MarkTeamSandOnboardingSeenResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): MarkTeamSlateOnboardingSeenResponse {
+    return new MarkTeamSlateOnboardingSeenResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): MarkTeamSandOnboardingSeenResponse {
-    return new MarkTeamSandOnboardingSeenResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): MarkTeamSlateOnboardingSeenResponse {
+    return new MarkTeamSlateOnboardingSeenResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: MarkTeamSandOnboardingSeenResponse | PlainMessage<MarkTeamSandOnboardingSeenResponse> | undefined, b: MarkTeamSandOnboardingSeenResponse | PlainMessage<MarkTeamSandOnboardingSeenResponse> | undefined): boolean {
-    return proto3.util.equals(MarkTeamSandOnboardingSeenResponse, a, b);
+  static equals(a: MarkTeamSlateOnboardingSeenResponse | PlainMessage<MarkTeamSlateOnboardingSeenResponse> | undefined, b: MarkTeamSlateOnboardingSeenResponse | PlainMessage<MarkTeamSlateOnboardingSeenResponse> | undefined): boolean {
+    return proto3.util.equals(MarkTeamSlateOnboardingSeenResponse, a, b);
   }
 }
 
@@ -48012,77 +48012,77 @@ export class MidConversationModelRecommendationContext extends Message<MidConver
 }
 
 /**
- * @generated from message aiserver.v1.MigrateBugBotProUserToUsageBasedBillingRequest
+ * @generated from message aiserver.v1.MigrateBugReportProUserToUsageBasedBillingRequest
  */
-export class MigrateBugBotProUserToUsageBasedBillingRequest extends Message<MigrateBugBotProUserToUsageBasedBillingRequest> {
+export class MigrateBugReportProUserToUsageBasedBillingRequest extends Message<MigrateBugReportProUserToUsageBasedBillingRequest> {
   /**
    * @generated from field: optional bool keep_high_effort_default = 1;
    */
   keepHighEffortDefault?: boolean;
 
-  constructor(data?: PartialMessage<MigrateBugBotProUserToUsageBasedBillingRequest>) {
+  constructor(data?: PartialMessage<MigrateBugReportProUserToUsageBasedBillingRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.MigrateBugBotProUserToUsageBasedBillingRequest";
+  static readonly typeName = "aiserver.v1.MigrateBugReportProUserToUsageBasedBillingRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "keep_high_effort_default", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): MigrateBugBotProUserToUsageBasedBillingRequest {
-    return new MigrateBugBotProUserToUsageBasedBillingRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): MigrateBugReportProUserToUsageBasedBillingRequest {
+    return new MigrateBugReportProUserToUsageBasedBillingRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): MigrateBugBotProUserToUsageBasedBillingRequest {
-    return new MigrateBugBotProUserToUsageBasedBillingRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): MigrateBugReportProUserToUsageBasedBillingRequest {
+    return new MigrateBugReportProUserToUsageBasedBillingRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): MigrateBugBotProUserToUsageBasedBillingRequest {
-    return new MigrateBugBotProUserToUsageBasedBillingRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): MigrateBugReportProUserToUsageBasedBillingRequest {
+    return new MigrateBugReportProUserToUsageBasedBillingRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: MigrateBugBotProUserToUsageBasedBillingRequest | PlainMessage<MigrateBugBotProUserToUsageBasedBillingRequest> | undefined, b: MigrateBugBotProUserToUsageBasedBillingRequest | PlainMessage<MigrateBugBotProUserToUsageBasedBillingRequest> | undefined): boolean {
-    return proto3.util.equals(MigrateBugBotProUserToUsageBasedBillingRequest, a, b);
+  static equals(a: MigrateBugReportProUserToUsageBasedBillingRequest | PlainMessage<MigrateBugReportProUserToUsageBasedBillingRequest> | undefined, b: MigrateBugReportProUserToUsageBasedBillingRequest | PlainMessage<MigrateBugReportProUserToUsageBasedBillingRequest> | undefined): boolean {
+    return proto3.util.equals(MigrateBugReportProUserToUsageBasedBillingRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.MigrateBugBotProUserToUsageBasedBillingResponse
+ * @generated from message aiserver.v1.MigrateBugReportProUserToUsageBasedBillingResponse
  */
-export class MigrateBugBotProUserToUsageBasedBillingResponse extends Message<MigrateBugBotProUserToUsageBasedBillingResponse> {
-  constructor(data?: PartialMessage<MigrateBugBotProUserToUsageBasedBillingResponse>) {
+export class MigrateBugReportProUserToUsageBasedBillingResponse extends Message<MigrateBugReportProUserToUsageBasedBillingResponse> {
+  constructor(data?: PartialMessage<MigrateBugReportProUserToUsageBasedBillingResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.MigrateBugBotProUserToUsageBasedBillingResponse";
+  static readonly typeName = "aiserver.v1.MigrateBugReportProUserToUsageBasedBillingResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): MigrateBugBotProUserToUsageBasedBillingResponse {
-    return new MigrateBugBotProUserToUsageBasedBillingResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): MigrateBugReportProUserToUsageBasedBillingResponse {
+    return new MigrateBugReportProUserToUsageBasedBillingResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): MigrateBugBotProUserToUsageBasedBillingResponse {
-    return new MigrateBugBotProUserToUsageBasedBillingResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): MigrateBugReportProUserToUsageBasedBillingResponse {
+    return new MigrateBugReportProUserToUsageBasedBillingResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): MigrateBugBotProUserToUsageBasedBillingResponse {
-    return new MigrateBugBotProUserToUsageBasedBillingResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): MigrateBugReportProUserToUsageBasedBillingResponse {
+    return new MigrateBugReportProUserToUsageBasedBillingResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: MigrateBugBotProUserToUsageBasedBillingResponse | PlainMessage<MigrateBugBotProUserToUsageBasedBillingResponse> | undefined, b: MigrateBugBotProUserToUsageBasedBillingResponse | PlainMessage<MigrateBugBotProUserToUsageBasedBillingResponse> | undefined): boolean {
-    return proto3.util.equals(MigrateBugBotProUserToUsageBasedBillingResponse, a, b);
+  static equals(a: MigrateBugReportProUserToUsageBasedBillingResponse | PlainMessage<MigrateBugReportProUserToUsageBasedBillingResponse> | undefined, b: MigrateBugReportProUserToUsageBasedBillingResponse | PlainMessage<MigrateBugReportProUserToUsageBasedBillingResponse> | undefined): boolean {
+    return proto3.util.equals(MigrateBugReportProUserToUsageBasedBillingResponse, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.MigrateTeamBugbotToUsageBasedBillingRequest
+ * @generated from message aiserver.v1.MigrateTeamBugReportToUsageBasedBillingRequest
  */
-export class MigrateTeamBugbotToUsageBasedBillingRequest extends Message<MigrateTeamBugbotToUsageBasedBillingRequest> {
+export class MigrateTeamBugReportToUsageBasedBillingRequest extends Message<MigrateTeamBugReportToUsageBasedBillingRequest> {
   /**
    * @generated from field: int32 team_id = 1;
    */
@@ -48093,63 +48093,63 @@ export class MigrateTeamBugbotToUsageBasedBillingRequest extends Message<Migrate
    */
   keepHighEffortDefault?: boolean;
 
-  constructor(data?: PartialMessage<MigrateTeamBugbotToUsageBasedBillingRequest>) {
+  constructor(data?: PartialMessage<MigrateTeamBugReportToUsageBasedBillingRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.MigrateTeamBugbotToUsageBasedBillingRequest";
+  static readonly typeName = "aiserver.v1.MigrateTeamBugReportToUsageBasedBillingRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 2, name: "keep_high_effort_default", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): MigrateTeamBugbotToUsageBasedBillingRequest {
-    return new MigrateTeamBugbotToUsageBasedBillingRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): MigrateTeamBugReportToUsageBasedBillingRequest {
+    return new MigrateTeamBugReportToUsageBasedBillingRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): MigrateTeamBugbotToUsageBasedBillingRequest {
-    return new MigrateTeamBugbotToUsageBasedBillingRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): MigrateTeamBugReportToUsageBasedBillingRequest {
+    return new MigrateTeamBugReportToUsageBasedBillingRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): MigrateTeamBugbotToUsageBasedBillingRequest {
-    return new MigrateTeamBugbotToUsageBasedBillingRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): MigrateTeamBugReportToUsageBasedBillingRequest {
+    return new MigrateTeamBugReportToUsageBasedBillingRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: MigrateTeamBugbotToUsageBasedBillingRequest | PlainMessage<MigrateTeamBugbotToUsageBasedBillingRequest> | undefined, b: MigrateTeamBugbotToUsageBasedBillingRequest | PlainMessage<MigrateTeamBugbotToUsageBasedBillingRequest> | undefined): boolean {
-    return proto3.util.equals(MigrateTeamBugbotToUsageBasedBillingRequest, a, b);
+  static equals(a: MigrateTeamBugReportToUsageBasedBillingRequest | PlainMessage<MigrateTeamBugReportToUsageBasedBillingRequest> | undefined, b: MigrateTeamBugReportToUsageBasedBillingRequest | PlainMessage<MigrateTeamBugReportToUsageBasedBillingRequest> | undefined): boolean {
+    return proto3.util.equals(MigrateTeamBugReportToUsageBasedBillingRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.MigrateTeamBugbotToUsageBasedBillingResponse
+ * @generated from message aiserver.v1.MigrateTeamBugReportToUsageBasedBillingResponse
  */
-export class MigrateTeamBugbotToUsageBasedBillingResponse extends Message<MigrateTeamBugbotToUsageBasedBillingResponse> {
-  constructor(data?: PartialMessage<MigrateTeamBugbotToUsageBasedBillingResponse>) {
+export class MigrateTeamBugReportToUsageBasedBillingResponse extends Message<MigrateTeamBugReportToUsageBasedBillingResponse> {
+  constructor(data?: PartialMessage<MigrateTeamBugReportToUsageBasedBillingResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.MigrateTeamBugbotToUsageBasedBillingResponse";
+  static readonly typeName = "aiserver.v1.MigrateTeamBugReportToUsageBasedBillingResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): MigrateTeamBugbotToUsageBasedBillingResponse {
-    return new MigrateTeamBugbotToUsageBasedBillingResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): MigrateTeamBugReportToUsageBasedBillingResponse {
+    return new MigrateTeamBugReportToUsageBasedBillingResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): MigrateTeamBugbotToUsageBasedBillingResponse {
-    return new MigrateTeamBugbotToUsageBasedBillingResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): MigrateTeamBugReportToUsageBasedBillingResponse {
+    return new MigrateTeamBugReportToUsageBasedBillingResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): MigrateTeamBugbotToUsageBasedBillingResponse {
-    return new MigrateTeamBugbotToUsageBasedBillingResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): MigrateTeamBugReportToUsageBasedBillingResponse {
+    return new MigrateTeamBugReportToUsageBasedBillingResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: MigrateTeamBugbotToUsageBasedBillingResponse | PlainMessage<MigrateTeamBugbotToUsageBasedBillingResponse> | undefined, b: MigrateTeamBugbotToUsageBasedBillingResponse | PlainMessage<MigrateTeamBugbotToUsageBasedBillingResponse> | undefined): boolean {
-    return proto3.util.equals(MigrateTeamBugbotToUsageBasedBillingResponse, a, b);
+  static equals(a: MigrateTeamBugReportToUsageBasedBillingResponse | PlainMessage<MigrateTeamBugReportToUsageBasedBillingResponse> | undefined, b: MigrateTeamBugReportToUsageBasedBillingResponse | PlainMessage<MigrateTeamBugReportToUsageBasedBillingResponse> | undefined): boolean {
+    return proto3.util.equals(MigrateTeamBugReportToUsageBasedBillingResponse, a, b);
   }
 }
 
@@ -51332,9 +51332,9 @@ export class PluginMinClientVersions extends Message<PluginMinClientVersions> {
   cursor?: string;
 
   /**
-   * @generated from field: optional string sand = 2;
+   * @generated from field: optional string slate = 2;
    */
-  sand?: string;
+  slate?: string;
 
   constructor(data?: PartialMessage<PluginMinClientVersions>) {
     super();
@@ -51345,7 +51345,7 @@ export class PluginMinClientVersions extends Message<PluginMinClientVersions> {
   static readonly typeName = "aiserver.v1.PluginMinClientVersions";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "cursor", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
-    { no: 2, name: "sand", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
+    { no: 2, name: "slate", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PluginMinClientVersions {
@@ -53538,9 +53538,9 @@ export class RawUserData extends Message<RawUserData> {
   usageBasedReqs = 0;
 
   /**
-   * @generated from field: int32 bugbot_usages = 20;
+   * @generated from field: int32 bug_report_usages = 20;
    */
-  bugbotUsages = 0;
+  bugReportUsages = 0;
 
   /**
    * @generated from field: optional string most_used_model = 21;
@@ -53594,7 +53594,7 @@ export class RawUserData extends Message<RawUserData> {
     { no: 17, name: "subscription_included_reqs", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 18, name: "api_key_reqs", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 19, name: "usage_based_reqs", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 20, name: "bugbot_usages", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 20, name: "bug_report_usages", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 21, name: "most_used_model", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 22, name: "apply_most_used_extension", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 23, name: "tab_most_used_extension", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
@@ -53620,90 +53620,90 @@ export class RawUserData extends Message<RawUserData> {
 }
 
 /**
- * @generated from message aiserver.v1.RecordBugbotDeeplinkEventRequest
+ * @generated from message aiserver.v1.RecordBugReportDeeplinkEventRequest
  */
-export class RecordBugbotDeeplinkEventRequest extends Message<RecordBugbotDeeplinkEventRequest> {
+export class RecordBugReportDeeplinkEventRequest extends Message<RecordBugReportDeeplinkEventRequest> {
   /**
    * @generated from field: string bug_id = 1;
    */
   bugId = "";
 
   /**
-   * @generated from field: aiserver.v1.RecordBugbotDeeplinkEventRequest.BugbotDeeplinkEvent event = 2;
+   * @generated from field: aiserver.v1.RecordBugReportDeeplinkEventRequest.BugReportDeeplinkEvent event = 2;
    */
-  event = RecordBugbotDeeplinkEventRequest_BugbotDeeplinkEvent.UNSPECIFIED;
+  event = RecordBugReportDeeplinkEventRequest_BugReportDeeplinkEvent.BUGBOT_DEEPLINK_EVENT_UNSPECIFIED;
 
   /**
    * @generated from field: optional string comment_id = 3;
    */
   commentId?: string;
 
-  constructor(data?: PartialMessage<RecordBugbotDeeplinkEventRequest>) {
+  constructor(data?: PartialMessage<RecordBugReportDeeplinkEventRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.RecordBugbotDeeplinkEventRequest";
+  static readonly typeName = "aiserver.v1.RecordBugReportDeeplinkEventRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bug_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "event", kind: "enum", T: proto3.getEnumType(RecordBugbotDeeplinkEventRequest_BugbotDeeplinkEvent) },
+    { no: 2, name: "event", kind: "enum", T: proto3.getEnumType(RecordBugReportDeeplinkEventRequest_BugReportDeeplinkEvent) },
     { no: 3, name: "comment_id", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RecordBugbotDeeplinkEventRequest {
-    return new RecordBugbotDeeplinkEventRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RecordBugReportDeeplinkEventRequest {
+    return new RecordBugReportDeeplinkEventRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): RecordBugbotDeeplinkEventRequest {
-    return new RecordBugbotDeeplinkEventRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): RecordBugReportDeeplinkEventRequest {
+    return new RecordBugReportDeeplinkEventRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): RecordBugbotDeeplinkEventRequest {
-    return new RecordBugbotDeeplinkEventRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): RecordBugReportDeeplinkEventRequest {
+    return new RecordBugReportDeeplinkEventRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: RecordBugbotDeeplinkEventRequest | PlainMessage<RecordBugbotDeeplinkEventRequest> | undefined, b: RecordBugbotDeeplinkEventRequest | PlainMessage<RecordBugbotDeeplinkEventRequest> | undefined): boolean {
-    return proto3.util.equals(RecordBugbotDeeplinkEventRequest, a, b);
+  static equals(a: RecordBugReportDeeplinkEventRequest | PlainMessage<RecordBugReportDeeplinkEventRequest> | undefined, b: RecordBugReportDeeplinkEventRequest | PlainMessage<RecordBugReportDeeplinkEventRequest> | undefined): boolean {
+    return proto3.util.equals(RecordBugReportDeeplinkEventRequest, a, b);
   }
 }
 
 /**
- * @generated from enum aiserver.v1.RecordBugbotDeeplinkEventRequest.BugbotDeeplinkEvent
+ * @generated from enum aiserver.v1.RecordBugReportDeeplinkEventRequest.BugReportDeeplinkEvent
  */
-export enum RecordBugbotDeeplinkEventRequest_BugbotDeeplinkEvent {
+export enum RecordBugReportDeeplinkEventRequest_BugReportDeeplinkEvent {
   /**
    * @generated from enum value: BUGBOT_DEEPLINK_EVENT_UNSPECIFIED = 0;
    */
-  UNSPECIFIED = 0,
+  BUGBOT_DEEPLINK_EVENT_UNSPECIFIED = 0,
 
   /**
    * @generated from enum value: BUGBOT_DEEPLINK_EVENT_CLICKED = 1;
    */
-  CLICKED = 1,
+  BUGBOT_DEEPLINK_EVENT_CLICKED = 1,
 
   /**
    * @generated from enum value: BUGBOT_DEEPLINK_EVENT_HANDLED_DIALOG_SHOWN = 2;
    */
-  HANDLED_DIALOG_SHOWN = 2,
+  BUGBOT_DEEPLINK_EVENT_HANDLED_DIALOG_SHOWN = 2,
 
   /**
    * @generated from enum value: BUGBOT_DEEPLINK_EVENT_HANDLED_CHAT_CREATED = 3;
    */
-  HANDLED_CHAT_CREATED = 3,
+  BUGBOT_DEEPLINK_EVENT_HANDLED_CHAT_CREATED = 3,
 
   /**
    * @generated from enum value: BUGBOT_DEEPLINK_EVENT_ERROR = 4;
    */
-  ERROR = 4,
+  BUGBOT_DEEPLINK_EVENT_ERROR = 4,
 
   /**
    * @generated from enum value: BUGBOT_DEEPLINK_EVENT_HANDLED_FIX_IN_WEB = 5;
    */
-  HANDLED_FIX_IN_WEB = 5,
+  BUGBOT_DEEPLINK_EVENT_HANDLED_FIX_IN_WEB = 5,
 }
-// Retrieve enum metadata with: proto3.getEnumType(RecordBugbotDeeplinkEventRequest_BugbotDeeplinkEvent)
-proto3.util.setEnumType(RecordBugbotDeeplinkEventRequest_BugbotDeeplinkEvent, "aiserver.v1.RecordBugbotDeeplinkEventRequest.BugbotDeeplinkEvent", [
+// Retrieve enum metadata with: proto3.getEnumType(RecordBugReportDeeplinkEventRequest_BugReportDeeplinkEvent)
+proto3.util.setEnumType(RecordBugReportDeeplinkEventRequest_BugReportDeeplinkEvent, "aiserver.v1.RecordBugReportDeeplinkEventRequest.BugReportDeeplinkEvent", [
   { no: 0, name: "BUGBOT_DEEPLINK_EVENT_UNSPECIFIED" },
   { no: 1, name: "BUGBOT_DEEPLINK_EVENT_CLICKED" },
   { no: 2, name: "BUGBOT_DEEPLINK_EVENT_HANDLED_DIALOG_SHOWN" },
@@ -53713,107 +53713,107 @@ proto3.util.setEnumType(RecordBugbotDeeplinkEventRequest_BugbotDeeplinkEvent, "a
 ]);
 
 /**
- * @generated from message aiserver.v1.RecordBugbotDeeplinkEventResponse
+ * @generated from message aiserver.v1.RecordBugReportDeeplinkEventResponse
  */
-export class RecordBugbotDeeplinkEventResponse extends Message<RecordBugbotDeeplinkEventResponse> {
-  constructor(data?: PartialMessage<RecordBugbotDeeplinkEventResponse>) {
+export class RecordBugReportDeeplinkEventResponse extends Message<RecordBugReportDeeplinkEventResponse> {
+  constructor(data?: PartialMessage<RecordBugReportDeeplinkEventResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.RecordBugbotDeeplinkEventResponse";
+  static readonly typeName = "aiserver.v1.RecordBugReportDeeplinkEventResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RecordBugbotDeeplinkEventResponse {
-    return new RecordBugbotDeeplinkEventResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RecordBugReportDeeplinkEventResponse {
+    return new RecordBugReportDeeplinkEventResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): RecordBugbotDeeplinkEventResponse {
-    return new RecordBugbotDeeplinkEventResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): RecordBugReportDeeplinkEventResponse {
+    return new RecordBugReportDeeplinkEventResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): RecordBugbotDeeplinkEventResponse {
-    return new RecordBugbotDeeplinkEventResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): RecordBugReportDeeplinkEventResponse {
+    return new RecordBugReportDeeplinkEventResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: RecordBugbotDeeplinkEventResponse | PlainMessage<RecordBugbotDeeplinkEventResponse> | undefined, b: RecordBugbotDeeplinkEventResponse | PlainMessage<RecordBugbotDeeplinkEventResponse> | undefined): boolean {
-    return proto3.util.equals(RecordBugbotDeeplinkEventResponse, a, b);
+  static equals(a: RecordBugReportDeeplinkEventResponse | PlainMessage<RecordBugReportDeeplinkEventResponse> | undefined, b: RecordBugReportDeeplinkEventResponse | PlainMessage<RecordBugReportDeeplinkEventResponse> | undefined): boolean {
+    return proto3.util.equals(RecordBugReportDeeplinkEventResponse, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.RecordSandAuditEventsRequest
+ * @generated from message aiserver.v1.RecordSlateAuditEventsRequest
  */
-export class RecordSandAuditEventsRequest extends Message<RecordSandAuditEventsRequest> {
+export class RecordSlateAuditEventsRequest extends Message<RecordSlateAuditEventsRequest> {
   /**
-   * @generated from field: repeated aiserver.v1.SandAuditEvent events = 1;
+   * @generated from field: repeated aiserver.v1.SlateAuditEvent events = 1;
    */
-  events: SandAuditEvent[] = [];
+  events: SlateAuditEvent[] = [];
 
-  constructor(data?: PartialMessage<RecordSandAuditEventsRequest>) {
+  constructor(data?: PartialMessage<RecordSlateAuditEventsRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.RecordSandAuditEventsRequest";
+  static readonly typeName = "aiserver.v1.RecordSlateAuditEventsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "events", kind: "message", T: SandAuditEvent, repeated: true },
+    { no: 1, name: "events", kind: "message", T: SlateAuditEvent, repeated: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RecordSandAuditEventsRequest {
-    return new RecordSandAuditEventsRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RecordSlateAuditEventsRequest {
+    return new RecordSlateAuditEventsRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): RecordSandAuditEventsRequest {
-    return new RecordSandAuditEventsRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): RecordSlateAuditEventsRequest {
+    return new RecordSlateAuditEventsRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): RecordSandAuditEventsRequest {
-    return new RecordSandAuditEventsRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): RecordSlateAuditEventsRequest {
+    return new RecordSlateAuditEventsRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: RecordSandAuditEventsRequest | PlainMessage<RecordSandAuditEventsRequest> | undefined, b: RecordSandAuditEventsRequest | PlainMessage<RecordSandAuditEventsRequest> | undefined): boolean {
-    return proto3.util.equals(RecordSandAuditEventsRequest, a, b);
+  static equals(a: RecordSlateAuditEventsRequest | PlainMessage<RecordSlateAuditEventsRequest> | undefined, b: RecordSlateAuditEventsRequest | PlainMessage<RecordSlateAuditEventsRequest> | undefined): boolean {
+    return proto3.util.equals(RecordSlateAuditEventsRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.RecordSandAuditEventsResponse
+ * @generated from message aiserver.v1.RecordSlateAuditEventsResponse
  */
-export class RecordSandAuditEventsResponse extends Message<RecordSandAuditEventsResponse> {
+export class RecordSlateAuditEventsResponse extends Message<RecordSlateAuditEventsResponse> {
   /**
    * @generated from field: int32 recorded_count = 1;
    */
   recordedCount = 0;
 
-  constructor(data?: PartialMessage<RecordSandAuditEventsResponse>) {
+  constructor(data?: PartialMessage<RecordSlateAuditEventsResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.RecordSandAuditEventsResponse";
+  static readonly typeName = "aiserver.v1.RecordSlateAuditEventsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "recorded_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RecordSandAuditEventsResponse {
-    return new RecordSandAuditEventsResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RecordSlateAuditEventsResponse {
+    return new RecordSlateAuditEventsResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): RecordSandAuditEventsResponse {
-    return new RecordSandAuditEventsResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): RecordSlateAuditEventsResponse {
+    return new RecordSlateAuditEventsResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): RecordSandAuditEventsResponse {
-    return new RecordSandAuditEventsResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): RecordSlateAuditEventsResponse {
+    return new RecordSlateAuditEventsResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: RecordSandAuditEventsResponse | PlainMessage<RecordSandAuditEventsResponse> | undefined, b: RecordSandAuditEventsResponse | PlainMessage<RecordSandAuditEventsResponse> | undefined): boolean {
-    return proto3.util.equals(RecordSandAuditEventsResponse, a, b);
+  static equals(a: RecordSlateAuditEventsResponse | PlainMessage<RecordSlateAuditEventsResponse> | undefined, b: RecordSlateAuditEventsResponse | PlainMessage<RecordSlateAuditEventsResponse> | undefined): boolean {
+    return proto3.util.equals(RecordSlateAuditEventsResponse, a, b);
   }
 }
 
@@ -55821,70 +55821,70 @@ export class RequestIndividualLimitsOptOutResponse extends Message<RequestIndivi
 }
 
 /**
- * @generated from message aiserver.v1.RequestSandTeamAccessRequest
+ * @generated from message aiserver.v1.RequestSlateTeamAccessRequest
  */
-export class RequestSandTeamAccessRequest extends Message<RequestSandTeamAccessRequest> {
+export class RequestSlateTeamAccessRequest extends Message<RequestSlateTeamAccessRequest> {
   /**
    * @generated from field: int32 team_id = 1;
    */
   teamId = 0;
 
-  constructor(data?: PartialMessage<RequestSandTeamAccessRequest>) {
+  constructor(data?: PartialMessage<RequestSlateTeamAccessRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.RequestSandTeamAccessRequest";
+  static readonly typeName = "aiserver.v1.RequestSlateTeamAccessRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RequestSandTeamAccessRequest {
-    return new RequestSandTeamAccessRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RequestSlateTeamAccessRequest {
+    return new RequestSlateTeamAccessRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): RequestSandTeamAccessRequest {
-    return new RequestSandTeamAccessRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): RequestSlateTeamAccessRequest {
+    return new RequestSlateTeamAccessRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): RequestSandTeamAccessRequest {
-    return new RequestSandTeamAccessRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): RequestSlateTeamAccessRequest {
+    return new RequestSlateTeamAccessRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: RequestSandTeamAccessRequest | PlainMessage<RequestSandTeamAccessRequest> | undefined, b: RequestSandTeamAccessRequest | PlainMessage<RequestSandTeamAccessRequest> | undefined): boolean {
-    return proto3.util.equals(RequestSandTeamAccessRequest, a, b);
+  static equals(a: RequestSlateTeamAccessRequest | PlainMessage<RequestSlateTeamAccessRequest> | undefined, b: RequestSlateTeamAccessRequest | PlainMessage<RequestSlateTeamAccessRequest> | undefined): boolean {
+    return proto3.util.equals(RequestSlateTeamAccessRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.RequestSandTeamAccessResponse
+ * @generated from message aiserver.v1.RequestSlateTeamAccessResponse
  */
-export class RequestSandTeamAccessResponse extends Message<RequestSandTeamAccessResponse> {
-  constructor(data?: PartialMessage<RequestSandTeamAccessResponse>) {
+export class RequestSlateTeamAccessResponse extends Message<RequestSlateTeamAccessResponse> {
+  constructor(data?: PartialMessage<RequestSlateTeamAccessResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.RequestSandTeamAccessResponse";
+  static readonly typeName = "aiserver.v1.RequestSlateTeamAccessResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RequestSandTeamAccessResponse {
-    return new RequestSandTeamAccessResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RequestSlateTeamAccessResponse {
+    return new RequestSlateTeamAccessResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): RequestSandTeamAccessResponse {
-    return new RequestSandTeamAccessResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): RequestSlateTeamAccessResponse {
+    return new RequestSlateTeamAccessResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): RequestSandTeamAccessResponse {
-    return new RequestSandTeamAccessResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): RequestSlateTeamAccessResponse {
+    return new RequestSlateTeamAccessResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: RequestSandTeamAccessResponse | PlainMessage<RequestSandTeamAccessResponse> | undefined, b: RequestSandTeamAccessResponse | PlainMessage<RequestSandTeamAccessResponse> | undefined): boolean {
-    return proto3.util.equals(RequestSandTeamAccessResponse, a, b);
+  static equals(a: RequestSlateTeamAccessResponse | PlainMessage<RequestSlateTeamAccessResponse> | undefined, b: RequestSlateTeamAccessResponse | PlainMessage<RequestSlateTeamAccessResponse> | undefined): boolean {
+    return proto3.util.equals(RequestSlateTeamAccessResponse, a, b);
   }
 }
 
@@ -56167,9 +56167,9 @@ export class RevokeBackgroundComposerSecretResponse extends Message<RevokeBackgr
 }
 
 /**
- * @generated from message aiserver.v1.RevokeBugBotLicensesRequest
+ * @generated from message aiserver.v1.RevokeBugReportLicensesRequest
  */
-export class RevokeBugBotLicensesRequest extends Message<RevokeBugBotLicensesRequest> {
+export class RevokeBugReportLicensesRequest extends Message<RevokeBugReportLicensesRequest> {
   /**
    * @generated from field: int32 team_id = 1;
    */
@@ -56180,63 +56180,63 @@ export class RevokeBugBotLicensesRequest extends Message<RevokeBugBotLicensesReq
    */
   newNumLicenses = 0;
 
-  constructor(data?: PartialMessage<RevokeBugBotLicensesRequest>) {
+  constructor(data?: PartialMessage<RevokeBugReportLicensesRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.RevokeBugBotLicensesRequest";
+  static readonly typeName = "aiserver.v1.RevokeBugReportLicensesRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 2, name: "new_num_licenses", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RevokeBugBotLicensesRequest {
-    return new RevokeBugBotLicensesRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RevokeBugReportLicensesRequest {
+    return new RevokeBugReportLicensesRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): RevokeBugBotLicensesRequest {
-    return new RevokeBugBotLicensesRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): RevokeBugReportLicensesRequest {
+    return new RevokeBugReportLicensesRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): RevokeBugBotLicensesRequest {
-    return new RevokeBugBotLicensesRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): RevokeBugReportLicensesRequest {
+    return new RevokeBugReportLicensesRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: RevokeBugBotLicensesRequest | PlainMessage<RevokeBugBotLicensesRequest> | undefined, b: RevokeBugBotLicensesRequest | PlainMessage<RevokeBugBotLicensesRequest> | undefined): boolean {
-    return proto3.util.equals(RevokeBugBotLicensesRequest, a, b);
+  static equals(a: RevokeBugReportLicensesRequest | PlainMessage<RevokeBugReportLicensesRequest> | undefined, b: RevokeBugReportLicensesRequest | PlainMessage<RevokeBugReportLicensesRequest> | undefined): boolean {
+    return proto3.util.equals(RevokeBugReportLicensesRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.RevokeBugBotLicensesResponse
+ * @generated from message aiserver.v1.RevokeBugReportLicensesResponse
  */
-export class RevokeBugBotLicensesResponse extends Message<RevokeBugBotLicensesResponse> {
-  constructor(data?: PartialMessage<RevokeBugBotLicensesResponse>) {
+export class RevokeBugReportLicensesResponse extends Message<RevokeBugReportLicensesResponse> {
+  constructor(data?: PartialMessage<RevokeBugReportLicensesResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.RevokeBugBotLicensesResponse";
+  static readonly typeName = "aiserver.v1.RevokeBugReportLicensesResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RevokeBugBotLicensesResponse {
-    return new RevokeBugBotLicensesResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RevokeBugReportLicensesResponse {
+    return new RevokeBugReportLicensesResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): RevokeBugBotLicensesResponse {
-    return new RevokeBugBotLicensesResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): RevokeBugReportLicensesResponse {
+    return new RevokeBugReportLicensesResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): RevokeBugBotLicensesResponse {
-    return new RevokeBugBotLicensesResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): RevokeBugReportLicensesResponse {
+    return new RevokeBugReportLicensesResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: RevokeBugBotLicensesResponse | PlainMessage<RevokeBugBotLicensesResponse> | undefined, b: RevokeBugBotLicensesResponse | PlainMessage<RevokeBugBotLicensesResponse> | undefined): boolean {
-    return proto3.util.equals(RevokeBugBotLicensesResponse, a, b);
+  static equals(a: RevokeBugReportLicensesResponse | PlainMessage<RevokeBugReportLicensesResponse> | undefined, b: RevokeBugReportLicensesResponse | PlainMessage<RevokeBugReportLicensesResponse> | undefined): boolean {
+    return proto3.util.equals(RevokeBugReportLicensesResponse, a, b);
   }
 }
 
@@ -56525,9 +56525,9 @@ export class RevokeUserApiKeyResponse extends Message<RevokeUserApiKeyResponse> 
 }
 
 /**
- * @generated from message aiserver.v1.RevokeUserBugbotLicenseRequest
+ * @generated from message aiserver.v1.RevokeUserBugReportLicenseRequest
  */
-export class RevokeUserBugbotLicenseRequest extends Message<RevokeUserBugbotLicenseRequest> {
+export class RevokeUserBugReportLicenseRequest extends Message<RevokeUserBugReportLicenseRequest> {
   /**
    * @generated from field: int32 team_id = 1;
    */
@@ -56538,63 +56538,63 @@ export class RevokeUserBugbotLicenseRequest extends Message<RevokeUserBugbotLice
    */
   githubUserNodeId = "";
 
-  constructor(data?: PartialMessage<RevokeUserBugbotLicenseRequest>) {
+  constructor(data?: PartialMessage<RevokeUserBugReportLicenseRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.RevokeUserBugbotLicenseRequest";
+  static readonly typeName = "aiserver.v1.RevokeUserBugReportLicenseRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 2, name: "github_user_node_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RevokeUserBugbotLicenseRequest {
-    return new RevokeUserBugbotLicenseRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RevokeUserBugReportLicenseRequest {
+    return new RevokeUserBugReportLicenseRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): RevokeUserBugbotLicenseRequest {
-    return new RevokeUserBugbotLicenseRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): RevokeUserBugReportLicenseRequest {
+    return new RevokeUserBugReportLicenseRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): RevokeUserBugbotLicenseRequest {
-    return new RevokeUserBugbotLicenseRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): RevokeUserBugReportLicenseRequest {
+    return new RevokeUserBugReportLicenseRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: RevokeUserBugbotLicenseRequest | PlainMessage<RevokeUserBugbotLicenseRequest> | undefined, b: RevokeUserBugbotLicenseRequest | PlainMessage<RevokeUserBugbotLicenseRequest> | undefined): boolean {
-    return proto3.util.equals(RevokeUserBugbotLicenseRequest, a, b);
+  static equals(a: RevokeUserBugReportLicenseRequest | PlainMessage<RevokeUserBugReportLicenseRequest> | undefined, b: RevokeUserBugReportLicenseRequest | PlainMessage<RevokeUserBugReportLicenseRequest> | undefined): boolean {
+    return proto3.util.equals(RevokeUserBugReportLicenseRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.RevokeUserBugbotLicenseResponse
+ * @generated from message aiserver.v1.RevokeUserBugReportLicenseResponse
  */
-export class RevokeUserBugbotLicenseResponse extends Message<RevokeUserBugbotLicenseResponse> {
-  constructor(data?: PartialMessage<RevokeUserBugbotLicenseResponse>) {
+export class RevokeUserBugReportLicenseResponse extends Message<RevokeUserBugReportLicenseResponse> {
+  constructor(data?: PartialMessage<RevokeUserBugReportLicenseResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.RevokeUserBugbotLicenseResponse";
+  static readonly typeName = "aiserver.v1.RevokeUserBugReportLicenseResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RevokeUserBugbotLicenseResponse {
-    return new RevokeUserBugbotLicenseResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RevokeUserBugReportLicenseResponse {
+    return new RevokeUserBugReportLicenseResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): RevokeUserBugbotLicenseResponse {
-    return new RevokeUserBugbotLicenseResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): RevokeUserBugReportLicenseResponse {
+    return new RevokeUserBugReportLicenseResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): RevokeUserBugbotLicenseResponse {
-    return new RevokeUserBugbotLicenseResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): RevokeUserBugReportLicenseResponse {
+    return new RevokeUserBugReportLicenseResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: RevokeUserBugbotLicenseResponse | PlainMessage<RevokeUserBugbotLicenseResponse> | undefined, b: RevokeUserBugbotLicenseResponse | PlainMessage<RevokeUserBugbotLicenseResponse> | undefined): boolean {
-    return proto3.util.equals(RevokeUserBugbotLicenseResponse, a, b);
+  static equals(a: RevokeUserBugReportLicenseResponse | PlainMessage<RevokeUserBugReportLicenseResponse> | undefined, b: RevokeUserBugReportLicenseResponse | PlainMessage<RevokeUserBugReportLicenseResponse> | undefined): boolean {
+    return proto3.util.equals(RevokeUserBugReportLicenseResponse, a, b);
   }
 }
 
@@ -56887,9 +56887,9 @@ export class RuleDescriptor extends Message<RuleDescriptor> {
 }
 
 /**
- * @generated from message aiserver.v1.RunDiamondToBugbotMigrationRequest
+ * @generated from message aiserver.v1.RunDiamondToBugReportMigrationRequest
  */
-export class RunDiamondToBugbotMigrationRequest extends Message<RunDiamondToBugbotMigrationRequest> {
+export class RunDiamondToBugReportMigrationRequest extends Message<RunDiamondToBugReportMigrationRequest> {
   /**
    * @generated from field: int32 team_id = 1;
    */
@@ -56911,9 +56911,9 @@ export class RunDiamondToBugbotMigrationRequest extends Message<RunDiamondToBugb
   graphiteWorkspaceId = "";
 
   /**
-   * @generated from field: aiserver.v1.DiamondToBugbotMigrationMode mode = 5;
+   * @generated from field: aiserver.v1.DiamondToBugReportMigrationMode mode = 5;
    */
-  mode = DiamondToBugbotMigrationMode.UNSPECIFIED;
+  mode = DiamondToBugReportMigrationMode.DIAMOND_TO_BUGBOT_MIGRATION_MODE_UNSPECIFIED;
 
   /**
    * @generated from field: optional string approved_preview_hash = 6;
@@ -56925,44 +56925,44 @@ export class RunDiamondToBugbotMigrationRequest extends Message<RunDiamondToBugb
    */
   extractedSettings?: Struct;
 
-  constructor(data?: PartialMessage<RunDiamondToBugbotMigrationRequest>) {
+  constructor(data?: PartialMessage<RunDiamondToBugReportMigrationRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.RunDiamondToBugbotMigrationRequest";
+  static readonly typeName = "aiserver.v1.RunDiamondToBugReportMigrationRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 2, name: "installation_id", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 3, name: "ghe_application", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 4, name: "graphite_workspace_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "mode", kind: "enum", T: proto3.getEnumType(DiamondToBugbotMigrationMode) },
+    { no: 5, name: "mode", kind: "enum", T: proto3.getEnumType(DiamondToBugReportMigrationMode) },
     { no: 6, name: "approved_preview_hash", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
     { no: 7, name: "extracted_settings", kind: "message", T: Struct, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RunDiamondToBugbotMigrationRequest {
-    return new RunDiamondToBugbotMigrationRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RunDiamondToBugReportMigrationRequest {
+    return new RunDiamondToBugReportMigrationRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): RunDiamondToBugbotMigrationRequest {
-    return new RunDiamondToBugbotMigrationRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): RunDiamondToBugReportMigrationRequest {
+    return new RunDiamondToBugReportMigrationRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): RunDiamondToBugbotMigrationRequest {
-    return new RunDiamondToBugbotMigrationRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): RunDiamondToBugReportMigrationRequest {
+    return new RunDiamondToBugReportMigrationRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: RunDiamondToBugbotMigrationRequest | PlainMessage<RunDiamondToBugbotMigrationRequest> | undefined, b: RunDiamondToBugbotMigrationRequest | PlainMessage<RunDiamondToBugbotMigrationRequest> | undefined): boolean {
-    return proto3.util.equals(RunDiamondToBugbotMigrationRequest, a, b);
+  static equals(a: RunDiamondToBugReportMigrationRequest | PlainMessage<RunDiamondToBugReportMigrationRequest> | undefined, b: RunDiamondToBugReportMigrationRequest | PlainMessage<RunDiamondToBugReportMigrationRequest> | undefined): boolean {
+    return proto3.util.equals(RunDiamondToBugReportMigrationRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.RunDiamondToBugbotMigrationResponse
+ * @generated from message aiserver.v1.RunDiamondToBugReportMigrationResponse
  */
-export class RunDiamondToBugbotMigrationResponse extends Message<RunDiamondToBugbotMigrationResponse> {
+export class RunDiamondToBugReportMigrationResponse extends Message<RunDiamondToBugReportMigrationResponse> {
   /**
    * @generated from field: string status = 1;
    */
@@ -57018,13 +57018,13 @@ export class RunDiamondToBugbotMigrationResponse extends Message<RunDiamondToBug
    */
   resolvedTeamId = 0;
 
-  constructor(data?: PartialMessage<RunDiamondToBugbotMigrationResponse>) {
+  constructor(data?: PartialMessage<RunDiamondToBugReportMigrationResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.RunDiamondToBugbotMigrationResponse";
+  static readonly typeName = "aiserver.v1.RunDiamondToBugReportMigrationResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "status", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "preview_hash", kind: "scalar", T: 9 /* ScalarType.STRING */ },
@@ -57039,64 +57039,64 @@ export class RunDiamondToBugbotMigrationResponse extends Message<RunDiamondToBug
     { no: 11, name: "resolved_team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RunDiamondToBugbotMigrationResponse {
-    return new RunDiamondToBugbotMigrationResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RunDiamondToBugReportMigrationResponse {
+    return new RunDiamondToBugReportMigrationResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): RunDiamondToBugbotMigrationResponse {
-    return new RunDiamondToBugbotMigrationResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): RunDiamondToBugReportMigrationResponse {
+    return new RunDiamondToBugReportMigrationResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): RunDiamondToBugbotMigrationResponse {
-    return new RunDiamondToBugbotMigrationResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): RunDiamondToBugReportMigrationResponse {
+    return new RunDiamondToBugReportMigrationResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: RunDiamondToBugbotMigrationResponse | PlainMessage<RunDiamondToBugbotMigrationResponse> | undefined, b: RunDiamondToBugbotMigrationResponse | PlainMessage<RunDiamondToBugbotMigrationResponse> | undefined): boolean {
-    return proto3.util.equals(RunDiamondToBugbotMigrationResponse, a, b);
+  static equals(a: RunDiamondToBugReportMigrationResponse | PlainMessage<RunDiamondToBugReportMigrationResponse> | undefined, b: RunDiamondToBugReportMigrationResponse | PlainMessage<RunDiamondToBugReportMigrationResponse> | undefined): boolean {
+    return proto3.util.equals(RunDiamondToBugReportMigrationResponse, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.SandActionAuditSettings
+ * @generated from message aiserver.v1.SlateActionAuditSettings
  */
-export class SandActionAuditSettings extends Message<SandActionAuditSettings> {
+export class SlateActionAuditSettings extends Message<SlateActionAuditSettings> {
   /**
    * @generated from field: optional bool enabled = 1;
    */
   enabled?: boolean;
 
-  constructor(data?: PartialMessage<SandActionAuditSettings>) {
+  constructor(data?: PartialMessage<SlateActionAuditSettings>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.SandActionAuditSettings";
+  static readonly typeName = "aiserver.v1.SlateActionAuditSettings";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SandActionAuditSettings {
-    return new SandActionAuditSettings().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SlateActionAuditSettings {
+    return new SlateActionAuditSettings().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): SandActionAuditSettings {
-    return new SandActionAuditSettings().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): SlateActionAuditSettings {
+    return new SlateActionAuditSettings().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): SandActionAuditSettings {
-    return new SandActionAuditSettings().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): SlateActionAuditSettings {
+    return new SlateActionAuditSettings().fromJsonString(jsonString, options);
   }
 
-  static equals(a: SandActionAuditSettings | PlainMessage<SandActionAuditSettings> | undefined, b: SandActionAuditSettings | PlainMessage<SandActionAuditSettings> | undefined): boolean {
-    return proto3.util.equals(SandActionAuditSettings, a, b);
+  static equals(a: SlateActionAuditSettings | PlainMessage<SlateActionAuditSettings> | undefined, b: SlateActionAuditSettings | PlainMessage<SlateActionAuditSettings> | undefined): boolean {
+    return proto3.util.equals(SlateActionAuditSettings, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.SandAuditEvent
+ * @generated from message aiserver.v1.SlateAuditEvent
  */
-export class SandAuditEvent extends Message<SandAuditEvent> {
+export class SlateAuditEvent extends Message<SlateAuditEvent> {
   /**
    * @generated from field: string event_id = 1;
    */
@@ -57123,74 +57123,74 @@ export class SandAuditEvent extends Message<SandAuditEvent> {
   boxId = "";
 
   /**
-   * @generated from oneof aiserver.v1.SandAuditEvent.action
+   * @generated from oneof aiserver.v1.SlateAuditEvent.action
    */
   action: {
     /**
-     * @generated from field: aiserver.v1.SandAuditEvent.McpToolCall mcp_tool_call = 6;
+     * @generated from field: aiserver.v1.SlateAuditEvent.McpToolCall mcp_tool_call = 6;
      */
-    value: SandAuditEvent_McpToolCall;
+    value: SlateAuditEvent_McpToolCall;
     case: "mcpToolCall";
   } | {
     /**
-     * @generated from field: aiserver.v1.SandAuditEvent.ShellCommand shell_command = 7;
+     * @generated from field: aiserver.v1.SlateAuditEvent.ShellCommand shell_command = 7;
      */
-    value: SandAuditEvent_ShellCommand;
+    value: SlateAuditEvent_ShellCommand;
     case: "shellCommand";
   } | {
     /**
-     * @generated from field: aiserver.v1.SandAuditEvent.BrowserNavigation browser_navigation = 8;
+     * @generated from field: aiserver.v1.SlateAuditEvent.BrowserNavigation browser_navigation = 8;
      */
-    value: SandAuditEvent_BrowserNavigation;
+    value: SlateAuditEvent_BrowserNavigation;
     case: "browserNavigation";
   } | {
     /**
-     * @generated from field: aiserver.v1.SandAuditEvent.ComputerUseSession computer_use_session = 9;
+     * @generated from field: aiserver.v1.SlateAuditEvent.ComputerUseSession computer_use_session = 9;
      */
-    value: SandAuditEvent_ComputerUseSession;
+    value: SlateAuditEvent_ComputerUseSession;
     case: "computerUseSession";
   } | { case: undefined; value?: undefined } = { case: undefined };
 
-  constructor(data?: PartialMessage<SandAuditEvent>) {
+  constructor(data?: PartialMessage<SlateAuditEvent>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.SandAuditEvent";
+  static readonly typeName = "aiserver.v1.SlateAuditEvent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "event_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "occurred_at_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 3, name: "agent_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "turn_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "box_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 6, name: "mcp_tool_call", kind: "message", T: SandAuditEvent_McpToolCall, oneof: "action" },
-    { no: 7, name: "shell_command", kind: "message", T: SandAuditEvent_ShellCommand, oneof: "action" },
-    { no: 8, name: "browser_navigation", kind: "message", T: SandAuditEvent_BrowserNavigation, oneof: "action" },
-    { no: 9, name: "computer_use_session", kind: "message", T: SandAuditEvent_ComputerUseSession, oneof: "action" },
+    { no: 6, name: "mcp_tool_call", kind: "message", T: SlateAuditEvent_McpToolCall, oneof: "action" },
+    { no: 7, name: "shell_command", kind: "message", T: SlateAuditEvent_ShellCommand, oneof: "action" },
+    { no: 8, name: "browser_navigation", kind: "message", T: SlateAuditEvent_BrowserNavigation, oneof: "action" },
+    { no: 9, name: "computer_use_session", kind: "message", T: SlateAuditEvent_ComputerUseSession, oneof: "action" },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SandAuditEvent {
-    return new SandAuditEvent().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SlateAuditEvent {
+    return new SlateAuditEvent().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): SandAuditEvent {
-    return new SandAuditEvent().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): SlateAuditEvent {
+    return new SlateAuditEvent().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): SandAuditEvent {
-    return new SandAuditEvent().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): SlateAuditEvent {
+    return new SlateAuditEvent().fromJsonString(jsonString, options);
   }
 
-  static equals(a: SandAuditEvent | PlainMessage<SandAuditEvent> | undefined, b: SandAuditEvent | PlainMessage<SandAuditEvent> | undefined): boolean {
-    return proto3.util.equals(SandAuditEvent, a, b);
+  static equals(a: SlateAuditEvent | PlainMessage<SlateAuditEvent> | undefined, b: SlateAuditEvent | PlainMessage<SlateAuditEvent> | undefined): boolean {
+    return proto3.util.equals(SlateAuditEvent, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.SandAuditEvent.BrowserNavigation
+ * @generated from message aiserver.v1.SlateAuditEvent.BrowserNavigation
  */
-export class SandAuditEvent_BrowserNavigation extends Message<SandAuditEvent_BrowserNavigation> {
+export class SlateAuditEvent_BrowserNavigation extends Message<SlateAuditEvent_BrowserNavigation> {
   /**
    * @generated from field: string url = 1;
    */
@@ -57201,39 +57201,39 @@ export class SandAuditEvent_BrowserNavigation extends Message<SandAuditEvent_Bro
    */
   pageTitle = "";
 
-  constructor(data?: PartialMessage<SandAuditEvent_BrowserNavigation>) {
+  constructor(data?: PartialMessage<SlateAuditEvent_BrowserNavigation>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.SandAuditEvent.BrowserNavigation";
+  static readonly typeName = "aiserver.v1.SlateAuditEvent.BrowserNavigation";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "page_title", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SandAuditEvent_BrowserNavigation {
-    return new SandAuditEvent_BrowserNavigation().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SlateAuditEvent_BrowserNavigation {
+    return new SlateAuditEvent_BrowserNavigation().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): SandAuditEvent_BrowserNavigation {
-    return new SandAuditEvent_BrowserNavigation().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): SlateAuditEvent_BrowserNavigation {
+    return new SlateAuditEvent_BrowserNavigation().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): SandAuditEvent_BrowserNavigation {
-    return new SandAuditEvent_BrowserNavigation().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): SlateAuditEvent_BrowserNavigation {
+    return new SlateAuditEvent_BrowserNavigation().fromJsonString(jsonString, options);
   }
 
-  static equals(a: SandAuditEvent_BrowserNavigation | PlainMessage<SandAuditEvent_BrowserNavigation> | undefined, b: SandAuditEvent_BrowserNavigation | PlainMessage<SandAuditEvent_BrowserNavigation> | undefined): boolean {
-    return proto3.util.equals(SandAuditEvent_BrowserNavigation, a, b);
+  static equals(a: SlateAuditEvent_BrowserNavigation | PlainMessage<SlateAuditEvent_BrowserNavigation> | undefined, b: SlateAuditEvent_BrowserNavigation | PlainMessage<SlateAuditEvent_BrowserNavigation> | undefined): boolean {
+    return proto3.util.equals(SlateAuditEvent_BrowserNavigation, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.SandAuditEvent.ComputerUseSession
+ * @generated from message aiserver.v1.SlateAuditEvent.ComputerUseSession
  */
-export class SandAuditEvent_ComputerUseSession extends Message<SandAuditEvent_ComputerUseSession> {
+export class SlateAuditEvent_ComputerUseSession extends Message<SlateAuditEvent_ComputerUseSession> {
   /**
    * @generated from field: string tool_call_id = 1;
    */
@@ -57259,13 +57259,13 @@ export class SandAuditEvent_ComputerUseSession extends Message<SandAuditEvent_Co
    */
   screenshotCount = protoInt64.zero;
 
-  constructor(data?: PartialMessage<SandAuditEvent_ComputerUseSession>) {
+  constructor(data?: PartialMessage<SlateAuditEvent_ComputerUseSession>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.SandAuditEvent.ComputerUseSession";
+  static readonly typeName = "aiserver.v1.SlateAuditEvent.ComputerUseSession";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "action_count", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
@@ -57274,27 +57274,27 @@ export class SandAuditEvent_ComputerUseSession extends Message<SandAuditEvent_Co
     { no: 5, name: "screenshot_count", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SandAuditEvent_ComputerUseSession {
-    return new SandAuditEvent_ComputerUseSession().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SlateAuditEvent_ComputerUseSession {
+    return new SlateAuditEvent_ComputerUseSession().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): SandAuditEvent_ComputerUseSession {
-    return new SandAuditEvent_ComputerUseSession().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): SlateAuditEvent_ComputerUseSession {
+    return new SlateAuditEvent_ComputerUseSession().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): SandAuditEvent_ComputerUseSession {
-    return new SandAuditEvent_ComputerUseSession().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): SlateAuditEvent_ComputerUseSession {
+    return new SlateAuditEvent_ComputerUseSession().fromJsonString(jsonString, options);
   }
 
-  static equals(a: SandAuditEvent_ComputerUseSession | PlainMessage<SandAuditEvent_ComputerUseSession> | undefined, b: SandAuditEvent_ComputerUseSession | PlainMessage<SandAuditEvent_ComputerUseSession> | undefined): boolean {
-    return proto3.util.equals(SandAuditEvent_ComputerUseSession, a, b);
+  static equals(a: SlateAuditEvent_ComputerUseSession | PlainMessage<SlateAuditEvent_ComputerUseSession> | undefined, b: SlateAuditEvent_ComputerUseSession | PlainMessage<SlateAuditEvent_ComputerUseSession> | undefined): boolean {
+    return proto3.util.equals(SlateAuditEvent_ComputerUseSession, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.SandAuditEvent.McpToolCall
+ * @generated from message aiserver.v1.SlateAuditEvent.McpToolCall
  */
-export class SandAuditEvent_McpToolCall extends Message<SandAuditEvent_McpToolCall> {
+export class SlateAuditEvent_McpToolCall extends Message<SlateAuditEvent_McpToolCall> {
   /**
    * @generated from field: string tool_call_id = 1;
    */
@@ -57325,13 +57325,13 @@ export class SandAuditEvent_McpToolCall extends Message<SandAuditEvent_McpToolCa
    */
   durationMs = protoInt64.zero;
 
-  constructor(data?: PartialMessage<SandAuditEvent_McpToolCall>) {
+  constructor(data?: PartialMessage<SlateAuditEvent_McpToolCall>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.SandAuditEvent.McpToolCall";
+  static readonly typeName = "aiserver.v1.SlateAuditEvent.McpToolCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "tool_call_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "server_identifier", kind: "scalar", T: 9 /* ScalarType.STRING */ },
@@ -57341,27 +57341,27 @@ export class SandAuditEvent_McpToolCall extends Message<SandAuditEvent_McpToolCa
     { no: 6, name: "duration_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SandAuditEvent_McpToolCall {
-    return new SandAuditEvent_McpToolCall().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SlateAuditEvent_McpToolCall {
+    return new SlateAuditEvent_McpToolCall().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): SandAuditEvent_McpToolCall {
-    return new SandAuditEvent_McpToolCall().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): SlateAuditEvent_McpToolCall {
+    return new SlateAuditEvent_McpToolCall().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): SandAuditEvent_McpToolCall {
-    return new SandAuditEvent_McpToolCall().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): SlateAuditEvent_McpToolCall {
+    return new SlateAuditEvent_McpToolCall().fromJsonString(jsonString, options);
   }
 
-  static equals(a: SandAuditEvent_McpToolCall | PlainMessage<SandAuditEvent_McpToolCall> | undefined, b: SandAuditEvent_McpToolCall | PlainMessage<SandAuditEvent_McpToolCall> | undefined): boolean {
-    return proto3.util.equals(SandAuditEvent_McpToolCall, a, b);
+  static equals(a: SlateAuditEvent_McpToolCall | PlainMessage<SlateAuditEvent_McpToolCall> | undefined, b: SlateAuditEvent_McpToolCall | PlainMessage<SlateAuditEvent_McpToolCall> | undefined): boolean {
+    return proto3.util.equals(SlateAuditEvent_McpToolCall, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.SandAuditEvent.ShellCommand
+ * @generated from message aiserver.v1.SlateAuditEvent.ShellCommand
  */
-export class SandAuditEvent_ShellCommand extends Message<SandAuditEvent_ShellCommand> {
+export class SlateAuditEvent_ShellCommand extends Message<SlateAuditEvent_ShellCommand> {
   /**
    * @generated from field: string command = 1;
    */
@@ -57392,13 +57392,13 @@ export class SandAuditEvent_ShellCommand extends Message<SandAuditEvent_ShellCom
    */
   classificationReasons: string[] = [];
 
-  constructor(data?: PartialMessage<SandAuditEvent_ShellCommand>) {
+  constructor(data?: PartialMessage<SlateAuditEvent_ShellCommand>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.SandAuditEvent.ShellCommand";
+  static readonly typeName = "aiserver.v1.SlateAuditEvent.ShellCommand";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "command", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "kind", kind: "scalar", T: 9 /* ScalarType.STRING */ },
@@ -57408,27 +57408,27 @@ export class SandAuditEvent_ShellCommand extends Message<SandAuditEvent_ShellCom
     { no: 6, name: "classification_reasons", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SandAuditEvent_ShellCommand {
-    return new SandAuditEvent_ShellCommand().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SlateAuditEvent_ShellCommand {
+    return new SlateAuditEvent_ShellCommand().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): SandAuditEvent_ShellCommand {
-    return new SandAuditEvent_ShellCommand().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): SlateAuditEvent_ShellCommand {
+    return new SlateAuditEvent_ShellCommand().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): SandAuditEvent_ShellCommand {
-    return new SandAuditEvent_ShellCommand().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): SlateAuditEvent_ShellCommand {
+    return new SlateAuditEvent_ShellCommand().fromJsonString(jsonString, options);
   }
 
-  static equals(a: SandAuditEvent_ShellCommand | PlainMessage<SandAuditEvent_ShellCommand> | undefined, b: SandAuditEvent_ShellCommand | PlainMessage<SandAuditEvent_ShellCommand> | undefined): boolean {
-    return proto3.util.equals(SandAuditEvent_ShellCommand, a, b);
+  static equals(a: SlateAuditEvent_ShellCommand | PlainMessage<SlateAuditEvent_ShellCommand> | undefined, b: SlateAuditEvent_ShellCommand | PlainMessage<SlateAuditEvent_ShellCommand> | undefined): boolean {
+    return proto3.util.equals(SlateAuditEvent_ShellCommand, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.SandBankedReset
+ * @generated from message aiserver.v1.SlateBankedReset
  */
-export class SandBankedReset extends Message<SandBankedReset> {
+export class SlateBankedReset extends Message<SlateBankedReset> {
   /**
    * @generated from field: int64 id = 1;
    */
@@ -57444,40 +57444,40 @@ export class SandBankedReset extends Message<SandBankedReset> {
    */
   expiresAt?: Timestamp;
 
-  constructor(data?: PartialMessage<SandBankedReset>) {
+  constructor(data?: PartialMessage<SlateBankedReset>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.SandBankedReset";
+  static readonly typeName = "aiserver.v1.SlateBankedReset";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "id", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 2, name: "created_at", kind: "message", T: Timestamp, opt: true },
     { no: 3, name: "expires_at", kind: "message", T: Timestamp, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SandBankedReset {
-    return new SandBankedReset().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SlateBankedReset {
+    return new SlateBankedReset().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): SandBankedReset {
-    return new SandBankedReset().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): SlateBankedReset {
+    return new SlateBankedReset().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): SandBankedReset {
-    return new SandBankedReset().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): SlateBankedReset {
+    return new SlateBankedReset().fromJsonString(jsonString, options);
   }
 
-  static equals(a: SandBankedReset | PlainMessage<SandBankedReset> | undefined, b: SandBankedReset | PlainMessage<SandBankedReset> | undefined): boolean {
-    return proto3.util.equals(SandBankedReset, a, b);
+  static equals(a: SlateBankedReset | PlainMessage<SlateBankedReset> | undefined, b: SlateBankedReset | PlainMessage<SlateBankedReset> | undefined): boolean {
+    return proto3.util.equals(SlateBankedReset, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.SandOnboardingState
+ * @generated from message aiserver.v1.SlateOnboardingState
  */
-export class SandOnboardingState extends Message<SandOnboardingState> {
+export class SlateOnboardingState extends Message<SlateOnboardingState> {
   /**
    * @generated from field: bool completed = 1;
    */
@@ -57488,138 +57488,138 @@ export class SandOnboardingState extends Message<SandOnboardingState> {
    */
   seen = false;
 
-  constructor(data?: PartialMessage<SandOnboardingState>) {
+  constructor(data?: PartialMessage<SlateOnboardingState>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.SandOnboardingState";
+  static readonly typeName = "aiserver.v1.SlateOnboardingState";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "completed", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 2, name: "seen", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SandOnboardingState {
-    return new SandOnboardingState().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SlateOnboardingState {
+    return new SlateOnboardingState().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): SandOnboardingState {
-    return new SandOnboardingState().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): SlateOnboardingState {
+    return new SlateOnboardingState().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): SandOnboardingState {
-    return new SandOnboardingState().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): SlateOnboardingState {
+    return new SlateOnboardingState().fromJsonString(jsonString, options);
   }
 
-  static equals(a: SandOnboardingState | PlainMessage<SandOnboardingState> | undefined, b: SandOnboardingState | PlainMessage<SandOnboardingState> | undefined): boolean {
-    return proto3.util.equals(SandOnboardingState, a, b);
+  static equals(a: SlateOnboardingState | PlainMessage<SlateOnboardingState> | undefined, b: SlateOnboardingState | PlainMessage<SlateOnboardingState> | undefined): boolean {
+    return proto3.util.equals(SlateOnboardingState, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.SandResetAlreadyAppliedError
+ * @generated from message aiserver.v1.SlateResetAlreadyAppliedError
  */
-export class SandResetAlreadyAppliedError extends Message<SandResetAlreadyAppliedError> {
-  constructor(data?: PartialMessage<SandResetAlreadyAppliedError>) {
+export class SlateResetAlreadyAppliedError extends Message<SlateResetAlreadyAppliedError> {
+  constructor(data?: PartialMessage<SlateResetAlreadyAppliedError>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.SandResetAlreadyAppliedError";
+  static readonly typeName = "aiserver.v1.SlateResetAlreadyAppliedError";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SandResetAlreadyAppliedError {
-    return new SandResetAlreadyAppliedError().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SlateResetAlreadyAppliedError {
+    return new SlateResetAlreadyAppliedError().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): SandResetAlreadyAppliedError {
-    return new SandResetAlreadyAppliedError().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): SlateResetAlreadyAppliedError {
+    return new SlateResetAlreadyAppliedError().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): SandResetAlreadyAppliedError {
-    return new SandResetAlreadyAppliedError().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): SlateResetAlreadyAppliedError {
+    return new SlateResetAlreadyAppliedError().fromJsonString(jsonString, options);
   }
 
-  static equals(a: SandResetAlreadyAppliedError | PlainMessage<SandResetAlreadyAppliedError> | undefined, b: SandResetAlreadyAppliedError | PlainMessage<SandResetAlreadyAppliedError> | undefined): boolean {
-    return proto3.util.equals(SandResetAlreadyAppliedError, a, b);
+  static equals(a: SlateResetAlreadyAppliedError | PlainMessage<SlateResetAlreadyAppliedError> | undefined, b: SlateResetAlreadyAppliedError | PlainMessage<SlateResetAlreadyAppliedError> | undefined): boolean {
+    return proto3.util.equals(SlateResetAlreadyAppliedError, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.SandResetTooRecentError
+ * @generated from message aiserver.v1.SlateResetTooRecentError
  */
-export class SandResetTooRecentError extends Message<SandResetTooRecentError> {
+export class SlateResetTooRecentError extends Message<SlateResetTooRecentError> {
   /**
    * @generated from field: optional google.protobuf.Timestamp retry_after = 1;
    */
   retryAfter?: Timestamp;
 
-  constructor(data?: PartialMessage<SandResetTooRecentError>) {
+  constructor(data?: PartialMessage<SlateResetTooRecentError>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.SandResetTooRecentError";
+  static readonly typeName = "aiserver.v1.SlateResetTooRecentError";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "retry_after", kind: "message", T: Timestamp, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SandResetTooRecentError {
-    return new SandResetTooRecentError().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SlateResetTooRecentError {
+    return new SlateResetTooRecentError().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): SandResetTooRecentError {
-    return new SandResetTooRecentError().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): SlateResetTooRecentError {
+    return new SlateResetTooRecentError().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): SandResetTooRecentError {
-    return new SandResetTooRecentError().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): SlateResetTooRecentError {
+    return new SlateResetTooRecentError().fromJsonString(jsonString, options);
   }
 
-  static equals(a: SandResetTooRecentError | PlainMessage<SandResetTooRecentError> | undefined, b: SandResetTooRecentError | PlainMessage<SandResetTooRecentError> | undefined): boolean {
-    return proto3.util.equals(SandResetTooRecentError, a, b);
+  static equals(a: SlateResetTooRecentError | PlainMessage<SlateResetTooRecentError> | undefined, b: SlateResetTooRecentError | PlainMessage<SlateResetTooRecentError> | undefined): boolean {
+    return proto3.util.equals(SlateResetTooRecentError, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.SandResetUnavailableError
+ * @generated from message aiserver.v1.SlateResetUnavailableError
  */
-export class SandResetUnavailableError extends Message<SandResetUnavailableError> {
-  constructor(data?: PartialMessage<SandResetUnavailableError>) {
+export class SlateResetUnavailableError extends Message<SlateResetUnavailableError> {
+  constructor(data?: PartialMessage<SlateResetUnavailableError>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.SandResetUnavailableError";
+  static readonly typeName = "aiserver.v1.SlateResetUnavailableError";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SandResetUnavailableError {
-    return new SandResetUnavailableError().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SlateResetUnavailableError {
+    return new SlateResetUnavailableError().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): SandResetUnavailableError {
-    return new SandResetUnavailableError().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): SlateResetUnavailableError {
+    return new SlateResetUnavailableError().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): SandResetUnavailableError {
-    return new SandResetUnavailableError().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): SlateResetUnavailableError {
+    return new SlateResetUnavailableError().fromJsonString(jsonString, options);
   }
 
-  static equals(a: SandResetUnavailableError | PlainMessage<SandResetUnavailableError> | undefined, b: SandResetUnavailableError | PlainMessage<SandResetUnavailableError> | undefined): boolean {
-    return proto3.util.equals(SandResetUnavailableError, a, b);
+  static equals(a: SlateResetUnavailableError | PlainMessage<SlateResetUnavailableError> | undefined, b: SlateResetUnavailableError | PlainMessage<SlateResetUnavailableError> | undefined): boolean {
+    return proto3.util.equals(SlateResetUnavailableError, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.SandUpgradeRecommendation
+ * @generated from message aiserver.v1.SlateUpgradeRecommendation
  */
-export class SandUpgradeRecommendation extends Message<SandUpgradeRecommendation> {
+export class SlateUpgradeRecommendation extends Message<SlateUpgradeRecommendation> {
   /**
    * @generated from field: optional aiserver.v1.ErrorButton cta = 1;
    */
@@ -57630,32 +57630,32 @@ export class SandUpgradeRecommendation extends Message<SandUpgradeRecommendation
    */
   disabled = false;
 
-  constructor(data?: PartialMessage<SandUpgradeRecommendation>) {
+  constructor(data?: PartialMessage<SlateUpgradeRecommendation>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.SandUpgradeRecommendation";
+  static readonly typeName = "aiserver.v1.SlateUpgradeRecommendation";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "cta", kind: "message", T: ErrorButton, opt: true },
     { no: 2, name: "disabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SandUpgradeRecommendation {
-    return new SandUpgradeRecommendation().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SlateUpgradeRecommendation {
+    return new SlateUpgradeRecommendation().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): SandUpgradeRecommendation {
-    return new SandUpgradeRecommendation().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): SlateUpgradeRecommendation {
+    return new SlateUpgradeRecommendation().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): SandUpgradeRecommendation {
-    return new SandUpgradeRecommendation().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): SlateUpgradeRecommendation {
+    return new SlateUpgradeRecommendation().fromJsonString(jsonString, options);
   }
 
-  static equals(a: SandUpgradeRecommendation | PlainMessage<SandUpgradeRecommendation> | undefined, b: SandUpgradeRecommendation | PlainMessage<SandUpgradeRecommendation> | undefined): boolean {
-    return proto3.util.equals(SandUpgradeRecommendation, a, b);
+  static equals(a: SlateUpgradeRecommendation | PlainMessage<SlateUpgradeRecommendation> | undefined, b: SlateUpgradeRecommendation | PlainMessage<SlateUpgradeRecommendation> | undefined): boolean {
+    return proto3.util.equals(SlateUpgradeRecommendation, a, b);
   }
 }
 
@@ -63402,9 +63402,9 @@ export class SpendLimitPolicy extends Message<SpendLimitPolicy> {
 }
 
 /**
- * @generated from message aiserver.v1.StartBugbotBackfillLearningRequest
+ * @generated from message aiserver.v1.StartBugReportBackfillLearningRequest
  */
-export class StartBugbotBackfillLearningRequest extends Message<StartBugbotBackfillLearningRequest> {
+export class StartBugReportBackfillLearningRequest extends Message<StartBugReportBackfillLearningRequest> {
   /**
    * @generated from field: int64 installation_id = 1;
    */
@@ -63425,13 +63425,13 @@ export class StartBugbotBackfillLearningRequest extends Message<StartBugbotBackf
    */
   skipWriteAccessCheck?: boolean;
 
-  constructor(data?: PartialMessage<StartBugbotBackfillLearningRequest>) {
+  constructor(data?: PartialMessage<StartBugReportBackfillLearningRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.StartBugbotBackfillLearningRequest";
+  static readonly typeName = "aiserver.v1.StartBugReportBackfillLearningRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "installation_id", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
     { no: 2, name: "repo_node_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
@@ -63439,51 +63439,51 @@ export class StartBugbotBackfillLearningRequest extends Message<StartBugbotBackf
     { no: 4, name: "skip_write_access_check", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StartBugbotBackfillLearningRequest {
-    return new StartBugbotBackfillLearningRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StartBugReportBackfillLearningRequest {
+    return new StartBugReportBackfillLearningRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): StartBugbotBackfillLearningRequest {
-    return new StartBugbotBackfillLearningRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): StartBugReportBackfillLearningRequest {
+    return new StartBugReportBackfillLearningRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): StartBugbotBackfillLearningRequest {
-    return new StartBugbotBackfillLearningRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): StartBugReportBackfillLearningRequest {
+    return new StartBugReportBackfillLearningRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: StartBugbotBackfillLearningRequest | PlainMessage<StartBugbotBackfillLearningRequest> | undefined, b: StartBugbotBackfillLearningRequest | PlainMessage<StartBugbotBackfillLearningRequest> | undefined): boolean {
-    return proto3.util.equals(StartBugbotBackfillLearningRequest, a, b);
+  static equals(a: StartBugReportBackfillLearningRequest | PlainMessage<StartBugReportBackfillLearningRequest> | undefined, b: StartBugReportBackfillLearningRequest | PlainMessage<StartBugReportBackfillLearningRequest> | undefined): boolean {
+    return proto3.util.equals(StartBugReportBackfillLearningRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.StartBugbotBackfillLearningResponse
+ * @generated from message aiserver.v1.StartBugReportBackfillLearningResponse
  */
-export class StartBugbotBackfillLearningResponse extends Message<StartBugbotBackfillLearningResponse> {
-  constructor(data?: PartialMessage<StartBugbotBackfillLearningResponse>) {
+export class StartBugReportBackfillLearningResponse extends Message<StartBugReportBackfillLearningResponse> {
+  constructor(data?: PartialMessage<StartBugReportBackfillLearningResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.StartBugbotBackfillLearningResponse";
+  static readonly typeName = "aiserver.v1.StartBugReportBackfillLearningResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StartBugbotBackfillLearningResponse {
-    return new StartBugbotBackfillLearningResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StartBugReportBackfillLearningResponse {
+    return new StartBugReportBackfillLearningResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): StartBugbotBackfillLearningResponse {
-    return new StartBugbotBackfillLearningResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): StartBugReportBackfillLearningResponse {
+    return new StartBugReportBackfillLearningResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): StartBugbotBackfillLearningResponse {
-    return new StartBugbotBackfillLearningResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): StartBugReportBackfillLearningResponse {
+    return new StartBugReportBackfillLearningResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: StartBugbotBackfillLearningResponse | PlainMessage<StartBugbotBackfillLearningResponse> | undefined, b: StartBugbotBackfillLearningResponse | PlainMessage<StartBugbotBackfillLearningResponse> | undefined): boolean {
-    return proto3.util.equals(StartBugbotBackfillLearningResponse, a, b);
+  static equals(a: StartBugReportBackfillLearningResponse | PlainMessage<StartBugReportBackfillLearningResponse> | undefined, b: StartBugReportBackfillLearningResponse | PlainMessage<StartBugReportBackfillLearningResponse> | undefined): boolean {
+    return proto3.util.equals(StartBugReportBackfillLearningResponse, a, b);
   }
 }
 
@@ -63568,90 +63568,90 @@ export class StartBulkMoveOrganizationMembersResponse extends Message<StartBulkM
 }
 
 /**
- * @generated from message aiserver.v1.StartSandTrialRequest
+ * @generated from message aiserver.v1.StartSlateTrialRequest
  */
-export class StartSandTrialRequest extends Message<StartSandTrialRequest> {
-  constructor(data?: PartialMessage<StartSandTrialRequest>) {
+export class StartSlateTrialRequest extends Message<StartSlateTrialRequest> {
+  constructor(data?: PartialMessage<StartSlateTrialRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.StartSandTrialRequest";
+  static readonly typeName = "aiserver.v1.StartSlateTrialRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StartSandTrialRequest {
-    return new StartSandTrialRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StartSlateTrialRequest {
+    return new StartSlateTrialRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): StartSandTrialRequest {
-    return new StartSandTrialRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): StartSlateTrialRequest {
+    return new StartSlateTrialRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): StartSandTrialRequest {
-    return new StartSandTrialRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): StartSlateTrialRequest {
+    return new StartSlateTrialRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: StartSandTrialRequest | PlainMessage<StartSandTrialRequest> | undefined, b: StartSandTrialRequest | PlainMessage<StartSandTrialRequest> | undefined): boolean {
-    return proto3.util.equals(StartSandTrialRequest, a, b);
+  static equals(a: StartSlateTrialRequest | PlainMessage<StartSlateTrialRequest> | undefined, b: StartSlateTrialRequest | PlainMessage<StartSlateTrialRequest> | undefined): boolean {
+    return proto3.util.equals(StartSlateTrialRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.StartSandTrialResponse
+ * @generated from message aiserver.v1.StartSlateTrialResponse
  */
-export class StartSandTrialResponse extends Message<StartSandTrialResponse> {
+export class StartSlateTrialResponse extends Message<StartSlateTrialResponse> {
   /**
-   * @generated from oneof aiserver.v1.StartSandTrialResponse.outcome
+   * @generated from oneof aiserver.v1.StartSlateTrialResponse.outcome
    */
   outcome: {
     /**
-     * @generated from field: aiserver.v1.StartSandTrialResponse.Activated activated = 1;
+     * @generated from field: aiserver.v1.StartSlateTrialResponse.Activated activated = 1;
      */
-    value: StartSandTrialResponse_Activated;
+    value: StartSlateTrialResponse_Activated;
     case: "activated";
   } | {
     /**
-     * @generated from field: aiserver.v1.StartSandTrialResponse.CardVerificationRequired card_verification_required = 2;
+     * @generated from field: aiserver.v1.StartSlateTrialResponse.CardVerificationRequired card_verification_required = 2;
      */
-    value: StartSandTrialResponse_CardVerificationRequired;
+    value: StartSlateTrialResponse_CardVerificationRequired;
     case: "cardVerificationRequired";
   } | { case: undefined; value?: undefined } = { case: undefined };
 
-  constructor(data?: PartialMessage<StartSandTrialResponse>) {
+  constructor(data?: PartialMessage<StartSlateTrialResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.StartSandTrialResponse";
+  static readonly typeName = "aiserver.v1.StartSlateTrialResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "activated", kind: "message", T: StartSandTrialResponse_Activated, oneof: "outcome" },
-    { no: 2, name: "card_verification_required", kind: "message", T: StartSandTrialResponse_CardVerificationRequired, oneof: "outcome" },
+    { no: 1, name: "activated", kind: "message", T: StartSlateTrialResponse_Activated, oneof: "outcome" },
+    { no: 2, name: "card_verification_required", kind: "message", T: StartSlateTrialResponse_CardVerificationRequired, oneof: "outcome" },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StartSandTrialResponse {
-    return new StartSandTrialResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StartSlateTrialResponse {
+    return new StartSlateTrialResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): StartSandTrialResponse {
-    return new StartSandTrialResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): StartSlateTrialResponse {
+    return new StartSlateTrialResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): StartSandTrialResponse {
-    return new StartSandTrialResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): StartSlateTrialResponse {
+    return new StartSlateTrialResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: StartSandTrialResponse | PlainMessage<StartSandTrialResponse> | undefined, b: StartSandTrialResponse | PlainMessage<StartSandTrialResponse> | undefined): boolean {
-    return proto3.util.equals(StartSandTrialResponse, a, b);
+  static equals(a: StartSlateTrialResponse | PlainMessage<StartSlateTrialResponse> | undefined, b: StartSlateTrialResponse | PlainMessage<StartSlateTrialResponse> | undefined): boolean {
+    return proto3.util.equals(StartSlateTrialResponse, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.StartSandTrialResponse.Activated
+ * @generated from message aiserver.v1.StartSlateTrialResponse.Activated
  */
-export class StartSandTrialResponse_Activated extends Message<StartSandTrialResponse_Activated> {
+export class StartSlateTrialResponse_Activated extends Message<StartSlateTrialResponse_Activated> {
   /**
    * @generated from field: int32 amount_cents = 1;
    */
@@ -63662,69 +63662,69 @@ export class StartSandTrialResponse_Activated extends Message<StartSandTrialResp
    */
   expiresAt?: Timestamp;
 
-  constructor(data?: PartialMessage<StartSandTrialResponse_Activated>) {
+  constructor(data?: PartialMessage<StartSlateTrialResponse_Activated>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.StartSandTrialResponse.Activated";
+  static readonly typeName = "aiserver.v1.StartSlateTrialResponse.Activated";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "amount_cents", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 2, name: "expires_at", kind: "message", T: Timestamp, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StartSandTrialResponse_Activated {
-    return new StartSandTrialResponse_Activated().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StartSlateTrialResponse_Activated {
+    return new StartSlateTrialResponse_Activated().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): StartSandTrialResponse_Activated {
-    return new StartSandTrialResponse_Activated().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): StartSlateTrialResponse_Activated {
+    return new StartSlateTrialResponse_Activated().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): StartSandTrialResponse_Activated {
-    return new StartSandTrialResponse_Activated().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): StartSlateTrialResponse_Activated {
+    return new StartSlateTrialResponse_Activated().fromJsonString(jsonString, options);
   }
 
-  static equals(a: StartSandTrialResponse_Activated | PlainMessage<StartSandTrialResponse_Activated> | undefined, b: StartSandTrialResponse_Activated | PlainMessage<StartSandTrialResponse_Activated> | undefined): boolean {
-    return proto3.util.equals(StartSandTrialResponse_Activated, a, b);
+  static equals(a: StartSlateTrialResponse_Activated | PlainMessage<StartSlateTrialResponse_Activated> | undefined, b: StartSlateTrialResponse_Activated | PlainMessage<StartSlateTrialResponse_Activated> | undefined): boolean {
+    return proto3.util.equals(StartSlateTrialResponse_Activated, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.StartSandTrialResponse.CardVerificationRequired
+ * @generated from message aiserver.v1.StartSlateTrialResponse.CardVerificationRequired
  */
-export class StartSandTrialResponse_CardVerificationRequired extends Message<StartSandTrialResponse_CardVerificationRequired> {
+export class StartSlateTrialResponse_CardVerificationRequired extends Message<StartSlateTrialResponse_CardVerificationRequired> {
   /**
    * @generated from field: string checkout_url = 1;
    */
   checkoutUrl = "";
 
-  constructor(data?: PartialMessage<StartSandTrialResponse_CardVerificationRequired>) {
+  constructor(data?: PartialMessage<StartSlateTrialResponse_CardVerificationRequired>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.StartSandTrialResponse.CardVerificationRequired";
+  static readonly typeName = "aiserver.v1.StartSlateTrialResponse.CardVerificationRequired";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "checkout_url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StartSandTrialResponse_CardVerificationRequired {
-    return new StartSandTrialResponse_CardVerificationRequired().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StartSlateTrialResponse_CardVerificationRequired {
+    return new StartSlateTrialResponse_CardVerificationRequired().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): StartSandTrialResponse_CardVerificationRequired {
-    return new StartSandTrialResponse_CardVerificationRequired().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): StartSlateTrialResponse_CardVerificationRequired {
+    return new StartSlateTrialResponse_CardVerificationRequired().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): StartSandTrialResponse_CardVerificationRequired {
-    return new StartSandTrialResponse_CardVerificationRequired().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): StartSlateTrialResponse_CardVerificationRequired {
+    return new StartSlateTrialResponse_CardVerificationRequired().fromJsonString(jsonString, options);
   }
 
-  static equals(a: StartSandTrialResponse_CardVerificationRequired | PlainMessage<StartSandTrialResponse_CardVerificationRequired> | undefined, b: StartSandTrialResponse_CardVerificationRequired | PlainMessage<StartSandTrialResponse_CardVerificationRequired> | undefined): boolean {
-    return proto3.util.equals(StartSandTrialResponse_CardVerificationRequired, a, b);
+  static equals(a: StartSlateTrialResponse_CardVerificationRequired | PlainMessage<StartSlateTrialResponse_CardVerificationRequired> | undefined, b: StartSlateTrialResponse_CardVerificationRequired | PlainMessage<StartSlateTrialResponse_CardVerificationRequired> | undefined): boolean {
+    return proto3.util.equals(StartSlateTrialResponse_CardVerificationRequired, a, b);
   }
 }
 
@@ -67708,67 +67708,67 @@ export class UpdateBitbucketServerInstanceTokenResponse extends Message<UpdateBi
 }
 
 /**
- * @generated from message aiserver.v1.UpdateBugBotProUserModeRequest
+ * @generated from message aiserver.v1.UpdateBugReportProUserModeRequest
  */
-export class UpdateBugBotProUserModeRequest extends Message<UpdateBugBotProUserModeRequest> {
+export class UpdateBugReportProUserModeRequest extends Message<UpdateBugReportProUserModeRequest> {
   /**
-   * @generated from field: aiserver.v1.BugbotMode mode = 1;
+   * @generated from field: aiserver.v1.BugReportMode mode = 1;
    */
-  mode = BugbotMode.UNSPECIFIED;
+  mode = BugReportMode.BUGBOT_MODE_UNSPECIFIED;
 
   /**
-   * @generated from field: repeated aiserver.v1.BugbotModePrompt prompts = 2;
+   * @generated from field: repeated aiserver.v1.BugReportModePrompt prompts = 2;
    */
-  prompts: BugbotModePrompt[] = [];
+  prompts: BugReportModePrompt[] = [];
 
   /**
    * @generated from field: optional bool smart_frontier_enabled = 3;
    */
   smartFrontierEnabled?: boolean;
 
-  constructor(data?: PartialMessage<UpdateBugBotProUserModeRequest>) {
+  constructor(data?: PartialMessage<UpdateBugReportProUserModeRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.UpdateBugBotProUserModeRequest";
+  static readonly typeName = "aiserver.v1.UpdateBugReportProUserModeRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "mode", kind: "enum", T: proto3.getEnumType(BugbotMode) },
-    { no: 2, name: "prompts", kind: "message", T: BugbotModePrompt, repeated: true },
+    { no: 1, name: "mode", kind: "enum", T: proto3.getEnumType(BugReportMode) },
+    { no: 2, name: "prompts", kind: "message", T: BugReportModePrompt, repeated: true },
     { no: 3, name: "smart_frontier_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateBugBotProUserModeRequest {
-    return new UpdateBugBotProUserModeRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateBugReportProUserModeRequest {
+    return new UpdateBugReportProUserModeRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateBugBotProUserModeRequest {
-    return new UpdateBugBotProUserModeRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateBugReportProUserModeRequest {
+    return new UpdateBugReportProUserModeRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateBugBotProUserModeRequest {
-    return new UpdateBugBotProUserModeRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateBugReportProUserModeRequest {
+    return new UpdateBugReportProUserModeRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: UpdateBugBotProUserModeRequest | PlainMessage<UpdateBugBotProUserModeRequest> | undefined, b: UpdateBugBotProUserModeRequest | PlainMessage<UpdateBugBotProUserModeRequest> | undefined): boolean {
-    return proto3.util.equals(UpdateBugBotProUserModeRequest, a, b);
+  static equals(a: UpdateBugReportProUserModeRequest | PlainMessage<UpdateBugReportProUserModeRequest> | undefined, b: UpdateBugReportProUserModeRequest | PlainMessage<UpdateBugReportProUserModeRequest> | undefined): boolean {
+    return proto3.util.equals(UpdateBugReportProUserModeRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.UpdateBugBotProUserModeResponse
+ * @generated from message aiserver.v1.UpdateBugReportProUserModeResponse
  */
-export class UpdateBugBotProUserModeResponse extends Message<UpdateBugBotProUserModeResponse> {
+export class UpdateBugReportProUserModeResponse extends Message<UpdateBugReportProUserModeResponse> {
   /**
-   * @generated from field: aiserver.v1.BugbotMode mode = 1;
+   * @generated from field: aiserver.v1.BugReportMode mode = 1;
    */
-  mode = BugbotMode.UNSPECIFIED;
+  mode = BugReportMode.BUGBOT_MODE_UNSPECIFIED;
 
   /**
-   * @generated from field: repeated aiserver.v1.BugbotModePrompt prompts = 2;
+   * @generated from field: repeated aiserver.v1.BugReportModePrompt prompts = 2;
    */
-  prompts: BugbotModePrompt[] = [];
+  prompts: BugReportModePrompt[] = [];
 
   /**
    * @generated from field: bool smart_frontier_enabled = 3;
@@ -67780,109 +67780,109 @@ export class UpdateBugBotProUserModeResponse extends Message<UpdateBugBotProUser
    */
   frontierAvailable = false;
 
-  constructor(data?: PartialMessage<UpdateBugBotProUserModeResponse>) {
+  constructor(data?: PartialMessage<UpdateBugReportProUserModeResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.UpdateBugBotProUserModeResponse";
+  static readonly typeName = "aiserver.v1.UpdateBugReportProUserModeResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "mode", kind: "enum", T: proto3.getEnumType(BugbotMode) },
-    { no: 2, name: "prompts", kind: "message", T: BugbotModePrompt, repeated: true },
+    { no: 1, name: "mode", kind: "enum", T: proto3.getEnumType(BugReportMode) },
+    { no: 2, name: "prompts", kind: "message", T: BugReportModePrompt, repeated: true },
     { no: 3, name: "smart_frontier_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 4, name: "frontier_available", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateBugBotProUserModeResponse {
-    return new UpdateBugBotProUserModeResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateBugReportProUserModeResponse {
+    return new UpdateBugReportProUserModeResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateBugBotProUserModeResponse {
-    return new UpdateBugBotProUserModeResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateBugReportProUserModeResponse {
+    return new UpdateBugReportProUserModeResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateBugBotProUserModeResponse {
-    return new UpdateBugBotProUserModeResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateBugReportProUserModeResponse {
+    return new UpdateBugReportProUserModeResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: UpdateBugBotProUserModeResponse | PlainMessage<UpdateBugBotProUserModeResponse> | undefined, b: UpdateBugBotProUserModeResponse | PlainMessage<UpdateBugBotProUserModeResponse> | undefined): boolean {
-    return proto3.util.equals(UpdateBugBotProUserModeResponse, a, b);
+  static equals(a: UpdateBugReportProUserModeResponse | PlainMessage<UpdateBugReportProUserModeResponse> | undefined, b: UpdateBugReportProUserModeResponse | PlainMessage<UpdateBugReportProUserModeResponse> | undefined): boolean {
+    return proto3.util.equals(UpdateBugReportProUserModeResponse, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.UpdateBugBotProUserSettingsRequest
+ * @generated from message aiserver.v1.UpdateBugReportProUserSettingsRequest
  */
-export class UpdateBugBotProUserSettingsRequest extends Message<UpdateBugBotProUserSettingsRequest> {
+export class UpdateBugReportProUserSettingsRequest extends Message<UpdateBugReportProUserSettingsRequest> {
   /**
    * @generated from field: bool enabled = 1;
    */
   enabled = false;
 
-  constructor(data?: PartialMessage<UpdateBugBotProUserSettingsRequest>) {
+  constructor(data?: PartialMessage<UpdateBugReportProUserSettingsRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.UpdateBugBotProUserSettingsRequest";
+  static readonly typeName = "aiserver.v1.UpdateBugReportProUserSettingsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateBugBotProUserSettingsRequest {
-    return new UpdateBugBotProUserSettingsRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateBugReportProUserSettingsRequest {
+    return new UpdateBugReportProUserSettingsRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateBugBotProUserSettingsRequest {
-    return new UpdateBugBotProUserSettingsRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateBugReportProUserSettingsRequest {
+    return new UpdateBugReportProUserSettingsRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateBugBotProUserSettingsRequest {
-    return new UpdateBugBotProUserSettingsRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateBugReportProUserSettingsRequest {
+    return new UpdateBugReportProUserSettingsRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: UpdateBugBotProUserSettingsRequest | PlainMessage<UpdateBugBotProUserSettingsRequest> | undefined, b: UpdateBugBotProUserSettingsRequest | PlainMessage<UpdateBugBotProUserSettingsRequest> | undefined): boolean {
-    return proto3.util.equals(UpdateBugBotProUserSettingsRequest, a, b);
+  static equals(a: UpdateBugReportProUserSettingsRequest | PlainMessage<UpdateBugReportProUserSettingsRequest> | undefined, b: UpdateBugReportProUserSettingsRequest | PlainMessage<UpdateBugReportProUserSettingsRequest> | undefined): boolean {
+    return proto3.util.equals(UpdateBugReportProUserSettingsRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.UpdateBugBotProUserSettingsResponse
+ * @generated from message aiserver.v1.UpdateBugReportProUserSettingsResponse
  */
-export class UpdateBugBotProUserSettingsResponse extends Message<UpdateBugBotProUserSettingsResponse> {
-  constructor(data?: PartialMessage<UpdateBugBotProUserSettingsResponse>) {
+export class UpdateBugReportProUserSettingsResponse extends Message<UpdateBugReportProUserSettingsResponse> {
+  constructor(data?: PartialMessage<UpdateBugReportProUserSettingsResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.UpdateBugBotProUserSettingsResponse";
+  static readonly typeName = "aiserver.v1.UpdateBugReportProUserSettingsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateBugBotProUserSettingsResponse {
-    return new UpdateBugBotProUserSettingsResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateBugReportProUserSettingsResponse {
+    return new UpdateBugReportProUserSettingsResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateBugBotProUserSettingsResponse {
-    return new UpdateBugBotProUserSettingsResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateBugReportProUserSettingsResponse {
+    return new UpdateBugReportProUserSettingsResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateBugBotProUserSettingsResponse {
-    return new UpdateBugBotProUserSettingsResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateBugReportProUserSettingsResponse {
+    return new UpdateBugReportProUserSettingsResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: UpdateBugBotProUserSettingsResponse | PlainMessage<UpdateBugBotProUserSettingsResponse> | undefined, b: UpdateBugBotProUserSettingsResponse | PlainMessage<UpdateBugBotProUserSettingsResponse> | undefined): boolean {
-    return proto3.util.equals(UpdateBugBotProUserSettingsResponse, a, b);
+  static equals(a: UpdateBugReportProUserSettingsResponse | PlainMessage<UpdateBugReportProUserSettingsResponse> | undefined, b: UpdateBugReportProUserSettingsResponse | PlainMessage<UpdateBugReportProUserSettingsResponse> | undefined): boolean {
+    return proto3.util.equals(UpdateBugReportProUserSettingsResponse, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.UpdateBugbotLearnedRuleRequest
+ * @generated from message aiserver.v1.UpdateBugReportLearnedRuleRequest
  */
-export class UpdateBugbotLearnedRuleRequest extends Message<UpdateBugbotLearnedRuleRequest> {
+export class UpdateBugReportLearnedRuleRequest extends Message<UpdateBugReportLearnedRuleRequest> {
   /**
    * @generated from field: string rule_id = 1;
    */
@@ -67918,13 +67918,13 @@ export class UpdateBugbotLearnedRuleRequest extends Message<UpdateBugbotLearnedR
    */
   scopedPaths: string[] = [];
 
-  constructor(data?: PartialMessage<UpdateBugbotLearnedRuleRequest>) {
+  constructor(data?: PartialMessage<UpdateBugReportLearnedRuleRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.UpdateBugbotLearnedRuleRequest";
+  static readonly typeName = "aiserver.v1.UpdateBugReportLearnedRuleRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "rule_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "installation_id", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
@@ -67935,64 +67935,64 @@ export class UpdateBugbotLearnedRuleRequest extends Message<UpdateBugbotLearnedR
     { no: 7, name: "scoped_paths", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateBugbotLearnedRuleRequest {
-    return new UpdateBugbotLearnedRuleRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateBugReportLearnedRuleRequest {
+    return new UpdateBugReportLearnedRuleRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateBugbotLearnedRuleRequest {
-    return new UpdateBugbotLearnedRuleRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateBugReportLearnedRuleRequest {
+    return new UpdateBugReportLearnedRuleRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateBugbotLearnedRuleRequest {
-    return new UpdateBugbotLearnedRuleRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateBugReportLearnedRuleRequest {
+    return new UpdateBugReportLearnedRuleRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: UpdateBugbotLearnedRuleRequest | PlainMessage<UpdateBugbotLearnedRuleRequest> | undefined, b: UpdateBugbotLearnedRuleRequest | PlainMessage<UpdateBugbotLearnedRuleRequest> | undefined): boolean {
-    return proto3.util.equals(UpdateBugbotLearnedRuleRequest, a, b);
+  static equals(a: UpdateBugReportLearnedRuleRequest | PlainMessage<UpdateBugReportLearnedRuleRequest> | undefined, b: UpdateBugReportLearnedRuleRequest | PlainMessage<UpdateBugReportLearnedRuleRequest> | undefined): boolean {
+    return proto3.util.equals(UpdateBugReportLearnedRuleRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.UpdateBugbotLearnedRuleResponse
+ * @generated from message aiserver.v1.UpdateBugReportLearnedRuleResponse
  */
-export class UpdateBugbotLearnedRuleResponse extends Message<UpdateBugbotLearnedRuleResponse> {
+export class UpdateBugReportLearnedRuleResponse extends Message<UpdateBugReportLearnedRuleResponse> {
   /**
-   * @generated from field: optional aiserver.v1.BugbotLearnedRule rule = 1;
+   * @generated from field: optional aiserver.v1.BugReportLearnedRule rule = 1;
    */
-  rule?: BugbotLearnedRule;
+  rule?: BugReportLearnedRule;
 
-  constructor(data?: PartialMessage<UpdateBugbotLearnedRuleResponse>) {
+  constructor(data?: PartialMessage<UpdateBugReportLearnedRuleResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.UpdateBugbotLearnedRuleResponse";
+  static readonly typeName = "aiserver.v1.UpdateBugReportLearnedRuleResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "rule", kind: "message", T: BugbotLearnedRule, opt: true },
+    { no: 1, name: "rule", kind: "message", T: BugReportLearnedRule, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateBugbotLearnedRuleResponse {
-    return new UpdateBugbotLearnedRuleResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateBugReportLearnedRuleResponse {
+    return new UpdateBugReportLearnedRuleResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateBugbotLearnedRuleResponse {
-    return new UpdateBugbotLearnedRuleResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateBugReportLearnedRuleResponse {
+    return new UpdateBugReportLearnedRuleResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateBugbotLearnedRuleResponse {
-    return new UpdateBugbotLearnedRuleResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateBugReportLearnedRuleResponse {
+    return new UpdateBugReportLearnedRuleResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: UpdateBugbotLearnedRuleResponse | PlainMessage<UpdateBugbotLearnedRuleResponse> | undefined, b: UpdateBugbotLearnedRuleResponse | PlainMessage<UpdateBugbotLearnedRuleResponse> | undefined): boolean {
-    return proto3.util.equals(UpdateBugbotLearnedRuleResponse, a, b);
+  static equals(a: UpdateBugReportLearnedRuleResponse | PlainMessage<UpdateBugReportLearnedRuleResponse> | undefined, b: UpdateBugReportLearnedRuleResponse | PlainMessage<UpdateBugReportLearnedRuleResponse> | undefined): boolean {
+    return proto3.util.equals(UpdateBugReportLearnedRuleResponse, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.UpdateBugbotManualRepositoryRuleRequest
+ * @generated from message aiserver.v1.UpdateBugReportManualRepositoryRuleRequest
  */
-export class UpdateBugbotManualRepositoryRuleRequest extends Message<UpdateBugbotManualRepositoryRuleRequest> {
+export class UpdateBugReportManualRepositoryRuleRequest extends Message<UpdateBugReportManualRepositoryRuleRequest> {
   /**
    * @generated from field: string rule_id = 1;
    */
@@ -68028,13 +68028,13 @@ export class UpdateBugbotManualRepositoryRuleRequest extends Message<UpdateBugbo
    */
   scopedPaths: string[] = [];
 
-  constructor(data?: PartialMessage<UpdateBugbotManualRepositoryRuleRequest>) {
+  constructor(data?: PartialMessage<UpdateBugReportManualRepositoryRuleRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.UpdateBugbotManualRepositoryRuleRequest";
+  static readonly typeName = "aiserver.v1.UpdateBugReportManualRepositoryRuleRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "rule_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "installation_id", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
@@ -68045,73 +68045,73 @@ export class UpdateBugbotManualRepositoryRuleRequest extends Message<UpdateBugbo
     { no: 7, name: "scoped_paths", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateBugbotManualRepositoryRuleRequest {
-    return new UpdateBugbotManualRepositoryRuleRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateBugReportManualRepositoryRuleRequest {
+    return new UpdateBugReportManualRepositoryRuleRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateBugbotManualRepositoryRuleRequest {
-    return new UpdateBugbotManualRepositoryRuleRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateBugReportManualRepositoryRuleRequest {
+    return new UpdateBugReportManualRepositoryRuleRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateBugbotManualRepositoryRuleRequest {
-    return new UpdateBugbotManualRepositoryRuleRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateBugReportManualRepositoryRuleRequest {
+    return new UpdateBugReportManualRepositoryRuleRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: UpdateBugbotManualRepositoryRuleRequest | PlainMessage<UpdateBugbotManualRepositoryRuleRequest> | undefined, b: UpdateBugbotManualRepositoryRuleRequest | PlainMessage<UpdateBugbotManualRepositoryRuleRequest> | undefined): boolean {
-    return proto3.util.equals(UpdateBugbotManualRepositoryRuleRequest, a, b);
+  static equals(a: UpdateBugReportManualRepositoryRuleRequest | PlainMessage<UpdateBugReportManualRepositoryRuleRequest> | undefined, b: UpdateBugReportManualRepositoryRuleRequest | PlainMessage<UpdateBugReportManualRepositoryRuleRequest> | undefined): boolean {
+    return proto3.util.equals(UpdateBugReportManualRepositoryRuleRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.UpdateBugbotManualRepositoryRuleResponse
+ * @generated from message aiserver.v1.UpdateBugReportManualRepositoryRuleResponse
  */
-export class UpdateBugbotManualRepositoryRuleResponse extends Message<UpdateBugbotManualRepositoryRuleResponse> {
+export class UpdateBugReportManualRepositoryRuleResponse extends Message<UpdateBugReportManualRepositoryRuleResponse> {
   /**
-   * @generated from field: optional aiserver.v1.BugbotManualRepositoryRule rule = 1;
+   * @generated from field: optional aiserver.v1.BugReportManualRepositoryRule rule = 1;
    */
-  rule?: BugbotManualRepositoryRule;
+  rule?: BugReportManualRepositoryRule;
 
-  constructor(data?: PartialMessage<UpdateBugbotManualRepositoryRuleResponse>) {
+  constructor(data?: PartialMessage<UpdateBugReportManualRepositoryRuleResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.UpdateBugbotManualRepositoryRuleResponse";
+  static readonly typeName = "aiserver.v1.UpdateBugReportManualRepositoryRuleResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "rule", kind: "message", T: BugbotManualRepositoryRule, opt: true },
+    { no: 1, name: "rule", kind: "message", T: BugReportManualRepositoryRule, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateBugbotManualRepositoryRuleResponse {
-    return new UpdateBugbotManualRepositoryRuleResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateBugReportManualRepositoryRuleResponse {
+    return new UpdateBugReportManualRepositoryRuleResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateBugbotManualRepositoryRuleResponse {
-    return new UpdateBugbotManualRepositoryRuleResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateBugReportManualRepositoryRuleResponse {
+    return new UpdateBugReportManualRepositoryRuleResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateBugbotManualRepositoryRuleResponse {
-    return new UpdateBugbotManualRepositoryRuleResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateBugReportManualRepositoryRuleResponse {
+    return new UpdateBugReportManualRepositoryRuleResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: UpdateBugbotManualRepositoryRuleResponse | PlainMessage<UpdateBugbotManualRepositoryRuleResponse> | undefined, b: UpdateBugbotManualRepositoryRuleResponse | PlainMessage<UpdateBugbotManualRepositoryRuleResponse> | undefined): boolean {
-    return proto3.util.equals(UpdateBugbotManualRepositoryRuleResponse, a, b);
+  static equals(a: UpdateBugReportManualRepositoryRuleResponse | PlainMessage<UpdateBugReportManualRepositoryRuleResponse> | undefined, b: UpdateBugReportManualRepositoryRuleResponse | PlainMessage<UpdateBugReportManualRepositoryRuleResponse> | undefined): boolean {
+    return proto3.util.equals(UpdateBugReportManualRepositoryRuleResponse, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.UpdateBugbotModeRequest
+ * @generated from message aiserver.v1.UpdateBugReportModeRequest
  */
-export class UpdateBugbotModeRequest extends Message<UpdateBugbotModeRequest> {
+export class UpdateBugReportModeRequest extends Message<UpdateBugReportModeRequest> {
   /**
-   * @generated from field: aiserver.v1.BugbotMode mode = 1;
+   * @generated from field: aiserver.v1.BugReportMode mode = 1;
    */
-  mode = BugbotMode.UNSPECIFIED;
+  mode = BugReportMode.BUGBOT_MODE_UNSPECIFIED;
 
   /**
-   * @generated from field: repeated aiserver.v1.BugbotModePrompt prompts = 2;
+   * @generated from field: repeated aiserver.v1.BugReportModePrompt prompts = 2;
    */
-  prompts: BugbotModePrompt[] = [];
+  prompts: BugReportModePrompt[] = [];
 
   /**
    * @generated from field: optional bool smart_frontier_enabled = 3;
@@ -68123,50 +68123,50 @@ export class UpdateBugbotModeRequest extends Message<UpdateBugbotModeRequest> {
    */
   teamId?: number;
 
-  constructor(data?: PartialMessage<UpdateBugbotModeRequest>) {
+  constructor(data?: PartialMessage<UpdateBugReportModeRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.UpdateBugbotModeRequest";
+  static readonly typeName = "aiserver.v1.UpdateBugReportModeRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "mode", kind: "enum", T: proto3.getEnumType(BugbotMode) },
-    { no: 2, name: "prompts", kind: "message", T: BugbotModePrompt, repeated: true },
+    { no: 1, name: "mode", kind: "enum", T: proto3.getEnumType(BugReportMode) },
+    { no: 2, name: "prompts", kind: "message", T: BugReportModePrompt, repeated: true },
     { no: 3, name: "smart_frontier_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 4, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateBugbotModeRequest {
-    return new UpdateBugbotModeRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateBugReportModeRequest {
+    return new UpdateBugReportModeRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateBugbotModeRequest {
-    return new UpdateBugbotModeRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateBugReportModeRequest {
+    return new UpdateBugReportModeRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateBugbotModeRequest {
-    return new UpdateBugbotModeRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateBugReportModeRequest {
+    return new UpdateBugReportModeRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: UpdateBugbotModeRequest | PlainMessage<UpdateBugbotModeRequest> | undefined, b: UpdateBugbotModeRequest | PlainMessage<UpdateBugbotModeRequest> | undefined): boolean {
-    return proto3.util.equals(UpdateBugbotModeRequest, a, b);
+  static equals(a: UpdateBugReportModeRequest | PlainMessage<UpdateBugReportModeRequest> | undefined, b: UpdateBugReportModeRequest | PlainMessage<UpdateBugReportModeRequest> | undefined): boolean {
+    return proto3.util.equals(UpdateBugReportModeRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.UpdateBugbotModeResponse
+ * @generated from message aiserver.v1.UpdateBugReportModeResponse
  */
-export class UpdateBugbotModeResponse extends Message<UpdateBugbotModeResponse> {
+export class UpdateBugReportModeResponse extends Message<UpdateBugReportModeResponse> {
   /**
-   * @generated from field: aiserver.v1.BugbotMode mode = 1;
+   * @generated from field: aiserver.v1.BugReportMode mode = 1;
    */
-  mode = BugbotMode.UNSPECIFIED;
+  mode = BugReportMode.BUGBOT_MODE_UNSPECIFIED;
 
   /**
-   * @generated from field: repeated aiserver.v1.BugbotModePrompt prompts = 2;
+   * @generated from field: repeated aiserver.v1.BugReportModePrompt prompts = 2;
    */
-  prompts: BugbotModePrompt[] = [];
+  prompts: BugReportModePrompt[] = [];
 
   /**
    * @generated from field: bool smart_frontier_enabled = 3;
@@ -68178,41 +68178,41 @@ export class UpdateBugbotModeResponse extends Message<UpdateBugbotModeResponse> 
    */
   frontierAvailable = false;
 
-  constructor(data?: PartialMessage<UpdateBugbotModeResponse>) {
+  constructor(data?: PartialMessage<UpdateBugReportModeResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.UpdateBugbotModeResponse";
+  static readonly typeName = "aiserver.v1.UpdateBugReportModeResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "mode", kind: "enum", T: proto3.getEnumType(BugbotMode) },
-    { no: 2, name: "prompts", kind: "message", T: BugbotModePrompt, repeated: true },
+    { no: 1, name: "mode", kind: "enum", T: proto3.getEnumType(BugReportMode) },
+    { no: 2, name: "prompts", kind: "message", T: BugReportModePrompt, repeated: true },
     { no: 3, name: "smart_frontier_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 4, name: "frontier_available", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateBugbotModeResponse {
-    return new UpdateBugbotModeResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateBugReportModeResponse {
+    return new UpdateBugReportModeResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateBugbotModeResponse {
-    return new UpdateBugbotModeResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateBugReportModeResponse {
+    return new UpdateBugReportModeResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateBugbotModeResponse {
-    return new UpdateBugbotModeResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateBugReportModeResponse {
+    return new UpdateBugReportModeResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: UpdateBugbotModeResponse | PlainMessage<UpdateBugbotModeResponse> | undefined, b: UpdateBugbotModeResponse | PlainMessage<UpdateBugbotModeResponse> | undefined): boolean {
-    return proto3.util.equals(UpdateBugbotModeResponse, a, b);
+  static equals(a: UpdateBugReportModeResponse | PlainMessage<UpdateBugReportModeResponse> | undefined, b: UpdateBugReportModeResponse | PlainMessage<UpdateBugReportModeResponse> | undefined): boolean {
+    return proto3.util.equals(UpdateBugReportModeResponse, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.UpdateBugbotTeamRuleRequest
+ * @generated from message aiserver.v1.UpdateBugReportTeamRuleRequest
  */
-export class UpdateBugbotTeamRuleRequest extends Message<UpdateBugbotTeamRuleRequest> {
+export class UpdateBugReportTeamRuleRequest extends Message<UpdateBugReportTeamRuleRequest> {
   /**
    * @generated from field: string rule_id = 1;
    */
@@ -68243,13 +68243,13 @@ export class UpdateBugbotTeamRuleRequest extends Message<UpdateBugbotTeamRuleReq
    */
   teamId?: number;
 
-  constructor(data?: PartialMessage<UpdateBugbotTeamRuleRequest>) {
+  constructor(data?: PartialMessage<UpdateBugReportTeamRuleRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.UpdateBugbotTeamRuleRequest";
+  static readonly typeName = "aiserver.v1.UpdateBugReportTeamRuleRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "rule_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */, opt: true },
@@ -68259,64 +68259,64 @@ export class UpdateBugbotTeamRuleRequest extends Message<UpdateBugbotTeamRuleReq
     { no: 6, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateBugbotTeamRuleRequest {
-    return new UpdateBugbotTeamRuleRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateBugReportTeamRuleRequest {
+    return new UpdateBugReportTeamRuleRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateBugbotTeamRuleRequest {
-    return new UpdateBugbotTeamRuleRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateBugReportTeamRuleRequest {
+    return new UpdateBugReportTeamRuleRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateBugbotTeamRuleRequest {
-    return new UpdateBugbotTeamRuleRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateBugReportTeamRuleRequest {
+    return new UpdateBugReportTeamRuleRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: UpdateBugbotTeamRuleRequest | PlainMessage<UpdateBugbotTeamRuleRequest> | undefined, b: UpdateBugbotTeamRuleRequest | PlainMessage<UpdateBugbotTeamRuleRequest> | undefined): boolean {
-    return proto3.util.equals(UpdateBugbotTeamRuleRequest, a, b);
+  static equals(a: UpdateBugReportTeamRuleRequest | PlainMessage<UpdateBugReportTeamRuleRequest> | undefined, b: UpdateBugReportTeamRuleRequest | PlainMessage<UpdateBugReportTeamRuleRequest> | undefined): boolean {
+    return proto3.util.equals(UpdateBugReportTeamRuleRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.UpdateBugbotTeamRuleResponse
+ * @generated from message aiserver.v1.UpdateBugReportTeamRuleResponse
  */
-export class UpdateBugbotTeamRuleResponse extends Message<UpdateBugbotTeamRuleResponse> {
+export class UpdateBugReportTeamRuleResponse extends Message<UpdateBugReportTeamRuleResponse> {
   /**
-   * @generated from field: optional aiserver.v1.BugbotRule rule = 1;
+   * @generated from field: optional aiserver.v1.BugReportRule rule = 1;
    */
-  rule?: BugbotRule;
+  rule?: BugReportRule;
 
-  constructor(data?: PartialMessage<UpdateBugbotTeamRuleResponse>) {
+  constructor(data?: PartialMessage<UpdateBugReportTeamRuleResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.UpdateBugbotTeamRuleResponse";
+  static readonly typeName = "aiserver.v1.UpdateBugReportTeamRuleResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "rule", kind: "message", T: BugbotRule, opt: true },
+    { no: 1, name: "rule", kind: "message", T: BugReportRule, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateBugbotTeamRuleResponse {
-    return new UpdateBugbotTeamRuleResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateBugReportTeamRuleResponse {
+    return new UpdateBugReportTeamRuleResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateBugbotTeamRuleResponse {
-    return new UpdateBugbotTeamRuleResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateBugReportTeamRuleResponse {
+    return new UpdateBugReportTeamRuleResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateBugbotTeamRuleResponse {
-    return new UpdateBugbotTeamRuleResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateBugReportTeamRuleResponse {
+    return new UpdateBugReportTeamRuleResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: UpdateBugbotTeamRuleResponse | PlainMessage<UpdateBugbotTeamRuleResponse> | undefined, b: UpdateBugbotTeamRuleResponse | PlainMessage<UpdateBugbotTeamRuleResponse> | undefined): boolean {
-    return proto3.util.equals(UpdateBugbotTeamRuleResponse, a, b);
+  static equals(a: UpdateBugReportTeamRuleResponse | PlainMessage<UpdateBugReportTeamRuleResponse> | undefined, b: UpdateBugReportTeamRuleResponse | PlainMessage<UpdateBugReportTeamRuleResponse> | undefined): boolean {
+    return proto3.util.equals(UpdateBugReportTeamRuleResponse, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.UpdateBugbotUserSettingsRequest
+ * @generated from message aiserver.v1.UpdateBugReportUserSettingsRequest
  */
-export class UpdateBugbotUserSettingsRequest extends Message<UpdateBugbotUserSettingsRequest> {
+export class UpdateBugReportUserSettingsRequest extends Message<UpdateBugReportUserSettingsRequest> {
   /**
    * @generated from field: bool manual_trigger_only = 1;
    */
@@ -68343,9 +68343,9 @@ export class UpdateBugbotUserSettingsRequest extends Message<UpdateBugbotUserSet
   isPrSummaryEnabled?: boolean;
 
   /**
-   * @generated from field: aiserver.v1.BugbotAutofixMode bugbot_autofix_mode = 6;
+   * @generated from field: aiserver.v1.BugReportAutofixMode bug_report_autofix_mode = 6;
    */
-  bugbotAutofixMode = BugbotAutofixMode.UNSPECIFIED;
+  bugReportAutofixMode = BugReportAutofixMode.BUGBOT_AUTOFIX_MODE_UNSPECIFIED;
 
   /**
    * @generated from field: bool enable_vm_run = 7;
@@ -68353,14 +68353,14 @@ export class UpdateBugbotUserSettingsRequest extends Message<UpdateBugbotUserSet
   enableVmRun = false;
 
   /**
-   * @generated from field: bool fail_github_action_on_bugbot_findings = 8;
+   * @generated from field: bool fail_github_action_on_bug_report_findings = 8;
    */
-  failGithubActionOnBugbotFindings = false;
+  failGithubActionOnBugReportFindings = false;
 
   /**
-   * @generated from field: repeated string bugbot_autofix_severity_filter = 9;
+   * @generated from field: repeated string bug_report_autofix_severity_filter = 9;
    */
-  bugbotAutofixSeverityFilter: string[] = [];
+  bugReportAutofixSeverityFilter: string[] = [];
 
   /**
    * @generated from field: optional bool is_incremental_review_enabled = 10;
@@ -68372,72 +68372,72 @@ export class UpdateBugbotUserSettingsRequest extends Message<UpdateBugbotUserSet
    */
   isPrRiskScoreEnabled?: boolean;
 
-  constructor(data?: PartialMessage<UpdateBugbotUserSettingsRequest>) {
+  constructor(data?: PartialMessage<UpdateBugReportUserSettingsRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.UpdateBugbotUserSettingsRequest";
+  static readonly typeName = "aiserver.v1.UpdateBugReportUserSettingsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "manual_trigger_only", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 2, name: "run_only_once", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 3, name: "suppress_no_bugs_comments", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 4, name: "enable_draft", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 5, name: "is_pr_summary_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
-    { no: 6, name: "bugbot_autofix_mode", kind: "enum", T: proto3.getEnumType(BugbotAutofixMode) },
+    { no: 6, name: "bug_report_autofix_mode", kind: "enum", T: proto3.getEnumType(BugReportAutofixMode) },
     { no: 7, name: "enable_vm_run", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 8, name: "fail_github_action_on_bugbot_findings", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
-    { no: 9, name: "bugbot_autofix_severity_filter", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
+    { no: 8, name: "fail_github_action_on_bug_report_findings", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 9, name: "bug_report_autofix_severity_filter", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 10, name: "is_incremental_review_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 11, name: "is_pr_risk_score_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateBugbotUserSettingsRequest {
-    return new UpdateBugbotUserSettingsRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateBugReportUserSettingsRequest {
+    return new UpdateBugReportUserSettingsRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateBugbotUserSettingsRequest {
-    return new UpdateBugbotUserSettingsRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateBugReportUserSettingsRequest {
+    return new UpdateBugReportUserSettingsRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateBugbotUserSettingsRequest {
-    return new UpdateBugbotUserSettingsRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateBugReportUserSettingsRequest {
+    return new UpdateBugReportUserSettingsRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: UpdateBugbotUserSettingsRequest | PlainMessage<UpdateBugbotUserSettingsRequest> | undefined, b: UpdateBugbotUserSettingsRequest | PlainMessage<UpdateBugbotUserSettingsRequest> | undefined): boolean {
-    return proto3.util.equals(UpdateBugbotUserSettingsRequest, a, b);
+  static equals(a: UpdateBugReportUserSettingsRequest | PlainMessage<UpdateBugReportUserSettingsRequest> | undefined, b: UpdateBugReportUserSettingsRequest | PlainMessage<UpdateBugReportUserSettingsRequest> | undefined): boolean {
+    return proto3.util.equals(UpdateBugReportUserSettingsRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.UpdateBugbotUserSettingsResponse
+ * @generated from message aiserver.v1.UpdateBugReportUserSettingsResponse
  */
-export class UpdateBugbotUserSettingsResponse extends Message<UpdateBugbotUserSettingsResponse> {
-  constructor(data?: PartialMessage<UpdateBugbotUserSettingsResponse>) {
+export class UpdateBugReportUserSettingsResponse extends Message<UpdateBugReportUserSettingsResponse> {
+  constructor(data?: PartialMessage<UpdateBugReportUserSettingsResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.UpdateBugbotUserSettingsResponse";
+  static readonly typeName = "aiserver.v1.UpdateBugReportUserSettingsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateBugbotUserSettingsResponse {
-    return new UpdateBugbotUserSettingsResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateBugReportUserSettingsResponse {
+    return new UpdateBugReportUserSettingsResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateBugbotUserSettingsResponse {
-    return new UpdateBugbotUserSettingsResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateBugReportUserSettingsResponse {
+    return new UpdateBugReportUserSettingsResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateBugbotUserSettingsResponse {
-    return new UpdateBugbotUserSettingsResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateBugReportUserSettingsResponse {
+    return new UpdateBugReportUserSettingsResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: UpdateBugbotUserSettingsResponse | PlainMessage<UpdateBugbotUserSettingsResponse> | undefined, b: UpdateBugbotUserSettingsResponse | PlainMessage<UpdateBugbotUserSettingsResponse> | undefined): boolean {
-    return proto3.util.equals(UpdateBugbotUserSettingsResponse, a, b);
+  static equals(a: UpdateBugReportUserSettingsResponse | PlainMessage<UpdateBugReportUserSettingsResponse> | undefined, b: UpdateBugReportUserSettingsResponse | PlainMessage<UpdateBugReportUserSettingsResponse> | undefined): boolean {
+    return proto3.util.equals(UpdateBugReportUserSettingsResponse, a, b);
   }
 }
 
@@ -71863,9 +71863,9 @@ export class UpdateTeamAdminSettingsRequest extends Message<UpdateTeamAdminSetti
   localToolControls?: LocalToolControls;
 
   /**
-   * @generated from field: optional aiserver.v1.SandActionAuditSettings sand_action_audit_settings = 60;
+   * @generated from field: optional aiserver.v1.SlateActionAuditSettings slate_action_audit_settings = 60;
    */
-  sandActionAuditSettings?: SandActionAuditSettings;
+  slateActionAuditSettings?: SlateActionAuditSettings;
 
   /**
    * @generated from field: optional bool origin_disabled = 63;
@@ -71939,7 +71939,7 @@ export class UpdateTeamAdminSettingsRequest extends Message<UpdateTeamAdminSetti
     { no: 57, name: "update_permissions_file_paths", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 58, name: "llm_gateway", kind: "message", T: LlmGatewaySettings, opt: true },
     { no: 59, name: "local_tool_controls", kind: "message", T: LocalToolControls, opt: true },
-    { no: 60, name: "sand_action_audit_settings", kind: "message", T: SandActionAuditSettings, opt: true },
+    { no: 60, name: "slate_action_audit_settings", kind: "message", T: SlateActionAuditSettings, opt: true },
     { no: 63, name: "origin_disabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
   ]);
 
@@ -72066,23 +72066,23 @@ export class UpdateTeamBackgroundAgentSettingsResponse extends Message<UpdateTea
 }
 
 /**
- * @generated from message aiserver.v1.UpdateTeamBugbotSettingsRequest
+ * @generated from message aiserver.v1.UpdateTeamBugReportSettingsRequest
  */
-export class UpdateTeamBugbotSettingsRequest extends Message<UpdateTeamBugbotSettingsRequest> {
+export class UpdateTeamBugReportSettingsRequest extends Message<UpdateTeamBugReportSettingsRequest> {
   /**
    * @generated from field: int32 team_id = 1;
    */
   teamId = 0;
 
   /**
-   * @generated from field: optional int32 bugbot_licenses_hard_limit = 2;
+   * @generated from field: optional int32 bug_report_licenses_hard_limit = 2;
    */
-  bugbotLicensesHardLimit?: number;
+  bugReportLicensesHardLimit?: number;
 
   /**
-   * @generated from field: optional bool bugbot_plan_enabled = 3;
+   * @generated from field: optional bool bug_report_plan_enabled = 3;
    */
-  bugbotPlanEnabled?: boolean;
+  bugReportPlanEnabled?: boolean;
 
   /**
    * @generated from field: repeated string allowlist = 4;
@@ -72095,9 +72095,9 @@ export class UpdateTeamBugbotSettingsRequest extends Message<UpdateTeamBugbotSet
   allowlistConfig?: AllowlistConfig;
 
   /**
-   * @generated from field: optional bool bugbot_globally_disabled = 6;
+   * @generated from field: optional bool bug_report_globally_disabled = 6;
    */
-  bugbotGloballyDisabled?: boolean;
+  bugReportGloballyDisabled?: boolean;
 
   /**
    * @generated from field: repeated string mcp_server_names = 7;
@@ -72134,20 +72134,20 @@ export class UpdateTeamBugbotSettingsRequest extends Message<UpdateTeamBugbotSet
    */
   maxRunsPerPr?: number;
 
-  constructor(data?: PartialMessage<UpdateTeamBugbotSettingsRequest>) {
+  constructor(data?: PartialMessage<UpdateTeamBugReportSettingsRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.UpdateTeamBugbotSettingsRequest";
+  static readonly typeName = "aiserver.v1.UpdateTeamBugReportSettingsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 2, name: "bugbot_licenses_hard_limit", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
-    { no: 3, name: "bugbot_plan_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 2, name: "bug_report_licenses_hard_limit", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
+    { no: 3, name: "bug_report_plan_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 4, name: "allowlist", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 5, name: "allowlist_config", kind: "enum", T: proto3.getEnumType(AllowlistConfig), opt: true },
-    { no: 6, name: "bugbot_globally_disabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
+    { no: 6, name: "bug_report_globally_disabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 7, name: "mcp_server_names", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 8, name: "is_incremental_review_enabled", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
     { no: 9, name: "merged_pr_scan_opt_out", kind: "scalar", T: 8 /* ScalarType.BOOL */, opt: true },
@@ -72157,51 +72157,51 @@ export class UpdateTeamBugbotSettingsRequest extends Message<UpdateTeamBugbotSet
     { no: 13, name: "max_runs_per_pr", kind: "scalar", T: 5 /* ScalarType.INT32 */, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateTeamBugbotSettingsRequest {
-    return new UpdateTeamBugbotSettingsRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateTeamBugReportSettingsRequest {
+    return new UpdateTeamBugReportSettingsRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateTeamBugbotSettingsRequest {
-    return new UpdateTeamBugbotSettingsRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateTeamBugReportSettingsRequest {
+    return new UpdateTeamBugReportSettingsRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateTeamBugbotSettingsRequest {
-    return new UpdateTeamBugbotSettingsRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateTeamBugReportSettingsRequest {
+    return new UpdateTeamBugReportSettingsRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: UpdateTeamBugbotSettingsRequest | PlainMessage<UpdateTeamBugbotSettingsRequest> | undefined, b: UpdateTeamBugbotSettingsRequest | PlainMessage<UpdateTeamBugbotSettingsRequest> | undefined): boolean {
-    return proto3.util.equals(UpdateTeamBugbotSettingsRequest, a, b);
+  static equals(a: UpdateTeamBugReportSettingsRequest | PlainMessage<UpdateTeamBugReportSettingsRequest> | undefined, b: UpdateTeamBugReportSettingsRequest | PlainMessage<UpdateTeamBugReportSettingsRequest> | undefined): boolean {
+    return proto3.util.equals(UpdateTeamBugReportSettingsRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.UpdateTeamBugbotSettingsResponse
+ * @generated from message aiserver.v1.UpdateTeamBugReportSettingsResponse
  */
-export class UpdateTeamBugbotSettingsResponse extends Message<UpdateTeamBugbotSettingsResponse> {
-  constructor(data?: PartialMessage<UpdateTeamBugbotSettingsResponse>) {
+export class UpdateTeamBugReportSettingsResponse extends Message<UpdateTeamBugReportSettingsResponse> {
+  constructor(data?: PartialMessage<UpdateTeamBugReportSettingsResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.UpdateTeamBugbotSettingsResponse";
+  static readonly typeName = "aiserver.v1.UpdateTeamBugReportSettingsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateTeamBugbotSettingsResponse {
-    return new UpdateTeamBugbotSettingsResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateTeamBugReportSettingsResponse {
+    return new UpdateTeamBugReportSettingsResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateTeamBugbotSettingsResponse {
-    return new UpdateTeamBugbotSettingsResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateTeamBugReportSettingsResponse {
+    return new UpdateTeamBugReportSettingsResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateTeamBugbotSettingsResponse {
-    return new UpdateTeamBugbotSettingsResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateTeamBugReportSettingsResponse {
+    return new UpdateTeamBugReportSettingsResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: UpdateTeamBugbotSettingsResponse | PlainMessage<UpdateTeamBugbotSettingsResponse> | undefined, b: UpdateTeamBugbotSettingsResponse | PlainMessage<UpdateTeamBugbotSettingsResponse> | undefined): boolean {
-    return proto3.util.equals(UpdateTeamBugbotSettingsResponse, a, b);
+  static equals(a: UpdateTeamBugReportSettingsResponse | PlainMessage<UpdateTeamBugReportSettingsResponse> | undefined, b: UpdateTeamBugReportSettingsResponse | PlainMessage<UpdateTeamBugReportSettingsResponse> | undefined): boolean {
+    return proto3.util.equals(UpdateTeamBugReportSettingsResponse, a, b);
   }
 }
 
@@ -74342,9 +74342,9 @@ export class UpdateTeamRuleResponse extends Message<UpdateTeamRuleResponse> {
 }
 
 /**
- * @generated from message aiserver.v1.UpdateTeamSandOnboardingCompletedRequest
+ * @generated from message aiserver.v1.UpdateTeamSlateOnboardingCompletedRequest
  */
-export class UpdateTeamSandOnboardingCompletedRequest extends Message<UpdateTeamSandOnboardingCompletedRequest> {
+export class UpdateTeamSlateOnboardingCompletedRequest extends Message<UpdateTeamSlateOnboardingCompletedRequest> {
   /**
    * @generated from field: int32 team_id = 1;
    */
@@ -74355,63 +74355,63 @@ export class UpdateTeamSandOnboardingCompletedRequest extends Message<UpdateTeam
    */
   completed = false;
 
-  constructor(data?: PartialMessage<UpdateTeamSandOnboardingCompletedRequest>) {
+  constructor(data?: PartialMessage<UpdateTeamSlateOnboardingCompletedRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.UpdateTeamSandOnboardingCompletedRequest";
+  static readonly typeName = "aiserver.v1.UpdateTeamSlateOnboardingCompletedRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "team_id", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 2, name: "completed", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateTeamSandOnboardingCompletedRequest {
-    return new UpdateTeamSandOnboardingCompletedRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateTeamSlateOnboardingCompletedRequest {
+    return new UpdateTeamSlateOnboardingCompletedRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateTeamSandOnboardingCompletedRequest {
-    return new UpdateTeamSandOnboardingCompletedRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateTeamSlateOnboardingCompletedRequest {
+    return new UpdateTeamSlateOnboardingCompletedRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateTeamSandOnboardingCompletedRequest {
-    return new UpdateTeamSandOnboardingCompletedRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateTeamSlateOnboardingCompletedRequest {
+    return new UpdateTeamSlateOnboardingCompletedRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: UpdateTeamSandOnboardingCompletedRequest | PlainMessage<UpdateTeamSandOnboardingCompletedRequest> | undefined, b: UpdateTeamSandOnboardingCompletedRequest | PlainMessage<UpdateTeamSandOnboardingCompletedRequest> | undefined): boolean {
-    return proto3.util.equals(UpdateTeamSandOnboardingCompletedRequest, a, b);
+  static equals(a: UpdateTeamSlateOnboardingCompletedRequest | PlainMessage<UpdateTeamSlateOnboardingCompletedRequest> | undefined, b: UpdateTeamSlateOnboardingCompletedRequest | PlainMessage<UpdateTeamSlateOnboardingCompletedRequest> | undefined): boolean {
+    return proto3.util.equals(UpdateTeamSlateOnboardingCompletedRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.UpdateTeamSandOnboardingCompletedResponse
+ * @generated from message aiserver.v1.UpdateTeamSlateOnboardingCompletedResponse
  */
-export class UpdateTeamSandOnboardingCompletedResponse extends Message<UpdateTeamSandOnboardingCompletedResponse> {
-  constructor(data?: PartialMessage<UpdateTeamSandOnboardingCompletedResponse>) {
+export class UpdateTeamSlateOnboardingCompletedResponse extends Message<UpdateTeamSlateOnboardingCompletedResponse> {
+  constructor(data?: PartialMessage<UpdateTeamSlateOnboardingCompletedResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.UpdateTeamSandOnboardingCompletedResponse";
+  static readonly typeName = "aiserver.v1.UpdateTeamSlateOnboardingCompletedResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateTeamSandOnboardingCompletedResponse {
-    return new UpdateTeamSandOnboardingCompletedResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UpdateTeamSlateOnboardingCompletedResponse {
+    return new UpdateTeamSlateOnboardingCompletedResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateTeamSandOnboardingCompletedResponse {
-    return new UpdateTeamSandOnboardingCompletedResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UpdateTeamSlateOnboardingCompletedResponse {
+    return new UpdateTeamSlateOnboardingCompletedResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateTeamSandOnboardingCompletedResponse {
-    return new UpdateTeamSandOnboardingCompletedResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UpdateTeamSlateOnboardingCompletedResponse {
+    return new UpdateTeamSlateOnboardingCompletedResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: UpdateTeamSandOnboardingCompletedResponse | PlainMessage<UpdateTeamSandOnboardingCompletedResponse> | undefined, b: UpdateTeamSandOnboardingCompletedResponse | PlainMessage<UpdateTeamSandOnboardingCompletedResponse> | undefined): boolean {
-    return proto3.util.equals(UpdateTeamSandOnboardingCompletedResponse, a, b);
+  static equals(a: UpdateTeamSlateOnboardingCompletedResponse | PlainMessage<UpdateTeamSlateOnboardingCompletedResponse> | undefined, b: UpdateTeamSlateOnboardingCompletedResponse | PlainMessage<UpdateTeamSlateOnboardingCompletedResponse> | undefined): boolean {
+    return proto3.util.equals(UpdateTeamSlateOnboardingCompletedResponse, a, b);
   }
 }
 
@@ -75675,76 +75675,76 @@ export class UsageAlert extends Message<UsageAlert> {
 }
 
 /**
- * @generated from message aiserver.v1.UseSandBankedResetRequest
+ * @generated from message aiserver.v1.UseSlateBankedResetRequest
  */
-export class UseSandBankedResetRequest extends Message<UseSandBankedResetRequest> {
+export class UseSlateBankedResetRequest extends Message<UseSlateBankedResetRequest> {
   /**
    * @generated from field: int64 expected_current_period_start_ms = 1;
    */
   expectedCurrentPeriodStartMs = protoInt64.zero;
 
-  constructor(data?: PartialMessage<UseSandBankedResetRequest>) {
+  constructor(data?: PartialMessage<UseSlateBankedResetRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.UseSandBankedResetRequest";
+  static readonly typeName = "aiserver.v1.UseSlateBankedResetRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "expected_current_period_start_ms", kind: "scalar", T: 3 /* ScalarType.INT64 */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UseSandBankedResetRequest {
-    return new UseSandBankedResetRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UseSlateBankedResetRequest {
+    return new UseSlateBankedResetRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UseSandBankedResetRequest {
-    return new UseSandBankedResetRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UseSlateBankedResetRequest {
+    return new UseSlateBankedResetRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UseSandBankedResetRequest {
-    return new UseSandBankedResetRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UseSlateBankedResetRequest {
+    return new UseSlateBankedResetRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: UseSandBankedResetRequest | PlainMessage<UseSandBankedResetRequest> | undefined, b: UseSandBankedResetRequest | PlainMessage<UseSandBankedResetRequest> | undefined): boolean {
-    return proto3.util.equals(UseSandBankedResetRequest, a, b);
+  static equals(a: UseSlateBankedResetRequest | PlainMessage<UseSlateBankedResetRequest> | undefined, b: UseSlateBankedResetRequest | PlainMessage<UseSlateBankedResetRequest> | undefined): boolean {
+    return proto3.util.equals(UseSlateBankedResetRequest, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.UseSandBankedResetResponse
+ * @generated from message aiserver.v1.UseSlateBankedResetResponse
  */
-export class UseSandBankedResetResponse extends Message<UseSandBankedResetResponse> {
+export class UseSlateBankedResetResponse extends Message<UseSlateBankedResetResponse> {
   /**
    * @generated from field: optional google.protobuf.Timestamp new_current_period_start = 1;
    */
   newCurrentPeriodStart?: Timestamp;
 
-  constructor(data?: PartialMessage<UseSandBankedResetResponse>) {
+  constructor(data?: PartialMessage<UseSlateBankedResetResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.UseSandBankedResetResponse";
+  static readonly typeName = "aiserver.v1.UseSlateBankedResetResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "new_current_period_start", kind: "message", T: Timestamp, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UseSandBankedResetResponse {
-    return new UseSandBankedResetResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): UseSlateBankedResetResponse {
+    return new UseSlateBankedResetResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UseSandBankedResetResponse {
-    return new UseSandBankedResetResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): UseSlateBankedResetResponse {
+    return new UseSlateBankedResetResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UseSandBankedResetResponse {
-    return new UseSandBankedResetResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): UseSlateBankedResetResponse {
+    return new UseSlateBankedResetResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: UseSandBankedResetResponse | PlainMessage<UseSandBankedResetResponse> | undefined, b: UseSandBankedResetResponse | PlainMessage<UseSandBankedResetResponse> | undefined): boolean {
-    return proto3.util.equals(UseSandBankedResetResponse, a, b);
+  static equals(a: UseSlateBankedResetResponse | PlainMessage<UseSlateBankedResetResponse> | undefined, b: UseSlateBankedResetResponse | PlainMessage<UseSlateBankedResetResponse> | undefined): boolean {
+    return proto3.util.equals(UseSlateBankedResetResponse, a, b);
   }
 }
 

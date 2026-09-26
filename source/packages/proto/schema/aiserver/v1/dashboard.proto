@@ -420,7 +420,7 @@ message BrowserSettings {
   optional .aiserver.v1.BrowserAccessControl access_control = 1 [json_name = "accessControl"];
 }
 
-message BugBotPRAnalytics {
+message BugReportPRAnalytics {
   string github_repo_node_id = 1 [json_name = "githubRepoNodeId"];
   int32 pr_number = 2 [json_name = "prNumber"];
   int64 request_time = 3 [json_name = "requestTime"];
@@ -435,23 +435,23 @@ message BugBotPRAnalytics {
   int32 low_sev_resolved_bugs = 12 [json_name = "lowSevResolvedBugs"];
 }
 
-message BugBotPRData {
+message BugReportPRData {
   optional string start_date = 1 [json_name = "startDate"];
   optional string end_date = 2 [json_name = "endDate"];
   optional string grouping = 3 [json_name = "grouping"];
 }
 
-message BugbotAnalyticsDataPoint {
+message BugReportAnalyticsDataPoint {
   int64 date = 1 [json_name = "date"];
   int32 value = 2 [json_name = "value"];
 }
 
-message BugbotAutofixCapabilities {
+message BugReportAutofixCapabilities {
   bool direct_push = 1 [json_name = "directPush"];
   bool side_branch_delivery = 2 [json_name = "sideBranchDelivery"];
 }
 
-enum BugbotAutofixMode {
+enum BugReportAutofixMode {
   BUGBOT_AUTOFIX_MODE_UNSPECIFIED = 0;
   BUGBOT_AUTOFIX_MODE_OFF = 1;
   BUGBOT_AUTOFIX_MODE_MANUAL = 2;
@@ -459,20 +459,20 @@ enum BugbotAutofixMode {
   BUGBOT_AUTOFIX_MODE_AUTO_MERGE = 4;
 }
 
-enum BugbotBackfillStatus {
+enum BugReportBackfillStatus {
   BUGBOT_BACKFILL_STATUS_UNSPECIFIED = 0;
   BUGBOT_BACKFILL_STATUS_RUNNING = 1;
   BUGBOT_BACKFILL_STATUS_COMPLETED = 2;
   BUGBOT_BACKFILL_STATUS_FAILED = 3;
 }
 
-enum BugbotBillingMode {
+enum BugReportBillingMode {
   BUGBOT_BILLING_MODE_UNSPECIFIED = 0;
   BUGBOT_BILLING_MODE_SEAT = 1;
   BUGBOT_BILLING_MODE_TOKEN = 2;
 }
 
-message BugbotLearnedRule {
+message BugReportLearnedRule {
   string id = 1 [json_name = "id"];
   string name = 2 [json_name = "name"];
   string content = 3 [json_name = "content"];
@@ -486,13 +486,13 @@ message BugbotLearnedRule {
   repeated string scoped_paths = 12 [json_name = "scopedPaths"];
 }
 
-message BugbotLicenseUsage {
+message BugReportLicenseUsage {
   string github_username = 1 [json_name = "githubUsername"];
   int64 first_review_timestamp = 2 [json_name = "firstReviewTimestamp"];
   optional string github_user_node_id = 3 [json_name = "githubUserNodeId"];
 }
 
-message BugbotManualRepositoryRule {
+message BugReportManualRepositoryRule {
   string id = 1 [json_name = "id"];
   string name = 2 [json_name = "name"];
   string content = 3 [json_name = "content"];
@@ -505,7 +505,7 @@ message BugbotManualRepositoryRule {
   repeated string scoped_paths = 10 [json_name = "scopedPaths"];
 }
 
-enum BugbotMode {
+enum BugReportMode {
   BUGBOT_MODE_UNSPECIFIED = 0;
   BUGBOT_MODE_DEFAULT = 1;
   BUGBOT_MODE_HIGH = 2;
@@ -513,12 +513,12 @@ enum BugbotMode {
   BUGBOT_MODE_FRONTIER = 4;
 }
 
-message BugbotModePrompt {
+message BugReportModePrompt {
   string content = 1 [json_name = "content"];
   int32 sort_order = 2 [json_name = "sortOrder"];
 }
 
-message BugbotRule {
+message BugReportRule {
   string id = 1 [json_name = "id"];
   string name = 2 [json_name = "name"];
   string content = 3 [json_name = "content"];
@@ -528,7 +528,7 @@ message BugbotRule {
   string updated_at = 7 [json_name = "updatedAt"];
 }
 
-message BugbotRuleAnalytics {
+message BugReportRuleAnalytics {
   string rule_id = 1 [json_name = "ruleId"];
   string rule_type = 2 [json_name = "ruleType"];
   string name = 3 [json_name = "name"];
@@ -544,12 +544,12 @@ message BugbotRuleAnalytics {
   string created_at = 13 [json_name = "createdAt"];
 }
 
-message BugbotSettingsCapabilities {
+message BugReportSettingsCapabilities {
   bool auto_enable_new_repos = 1 [json_name = "autoEnableNewRepos"];
   bool learned_rules = 2 [json_name = "learnedRules"];
 }
 
-enum BugbotUsageTier {
+enum BugReportUsageTier {
   BUGBOT_USAGE_TIER_UNSPECIFIED = 0;
   BUGBOT_USAGE_TIER_FREE_TIER = 1;
   BUGBOT_USAGE_TIER_TRIAL = 2;
@@ -591,10 +591,10 @@ message CancelPendingTeamSubscriptionNowRequest {
 message CancelPendingTeamSubscriptionNowResponse {
 }
 
-message CancelSandTrialRequest {
+message CancelSlateTrialRequest {
 }
 
-message CancelSandTrialResponse {
+message CancelSlateTrialResponse {
 }
 
 message CancelXaiTeamLinkProposalRequest {
@@ -689,13 +689,13 @@ message ClaimUserProfileHandleResponse {
   optional .aiserver.v1.UserProfile profile = 1 [json_name = "profile"];
 }
 
-message ClassifySandAutoReviewRequest {
+message ClassifySlateAutoReviewRequest {
   optional .agent.v1.SmartModeClassifierArgs args = 1 [json_name = "args"];
   optional uint32 attempt_index = 2 [json_name = "attemptIndex"];
   optional string mode = 3 [json_name = "mode"];
 }
 
-message ClassifySandAutoReviewResponse {
+message ClassifySlateAutoReviewResponse {
   optional .agent.v1.SmartModeClassifierResult result = 1 [json_name = "result"];
 }
 
@@ -977,7 +977,7 @@ message CreateBackgroundComposerSecretRequest {
 message CreateBackgroundComposerSecretResponse {
 }
 
-message CreateBugbotManualRepositoryRuleRequest {
+message CreateBugReportManualRepositoryRuleRequest {
   int64 installation_id = 1 [json_name = "installationId"];
   optional string ghe_application = 2 [json_name = "gheApplication"];
   string repo_node_id = 3 [json_name = "repoNodeId"];
@@ -987,11 +987,11 @@ message CreateBugbotManualRepositoryRuleRequest {
   repeated string scoped_paths = 7 [json_name = "scopedPaths"];
 }
 
-message CreateBugbotManualRepositoryRuleResponse {
-  optional .aiserver.v1.BugbotManualRepositoryRule rule = 1 [json_name = "rule"];
+message CreateBugReportManualRepositoryRuleResponse {
+  optional .aiserver.v1.BugReportManualRepositoryRule rule = 1 [json_name = "rule"];
 }
 
-message CreateBugbotTeamRuleRequest {
+message CreateBugReportTeamRuleRequest {
   string name = 1 [json_name = "name"];
   string content = 2 [json_name = "content"];
   optional bool is_active = 3 [json_name = "isActive"];
@@ -999,8 +999,8 @@ message CreateBugbotTeamRuleRequest {
   optional int32 team_id = 5 [json_name = "teamId"];
 }
 
-message CreateBugbotTeamRuleResponse {
-  optional .aiserver.v1.BugbotRule rule = 1 [json_name = "rule"];
+message CreateBugReportTeamRuleResponse {
+  optional .aiserver.v1.BugReportRule rule = 1 [json_name = "rule"];
 }
 
 message CreateCrewRequest {
@@ -1569,7 +1569,7 @@ message DailyMetrics {
   int32 subscription_included_reqs = 16 [json_name = "subscriptionIncludedReqs"];
   int32 api_key_reqs = 17 [json_name = "apiKeyReqs"];
   int32 usage_based_reqs = 18 [json_name = "usageBasedReqs"];
-  int32 bugbot_usages = 19 [json_name = "bugbotUsages"];
+  int32 bug_report_usages = 19 [json_name = "bugReportUsages"];
   repeated .aiserver.v1.StringCount model_usage = 20 [json_name = "modelUsage"];
   repeated .aiserver.v1.StringCount extension_usage = 21 [json_name = "extensionUsage"];
   repeated .aiserver.v1.StringCount tab_extension_usage = 22 [json_name = "tabExtensionUsage"];
@@ -1627,30 +1627,30 @@ message DeleteBitbucketServerInstanceRequest {
 message DeleteBitbucketServerInstanceResponse {
 }
 
-message DeleteBugbotLearnedRuleRequest {
+message DeleteBugReportLearnedRuleRequest {
   string rule_id = 1 [json_name = "ruleId"];
   int64 installation_id = 2 [json_name = "installationId"];
   optional string ghe_application = 3 [json_name = "gheApplication"];
 }
 
-message DeleteBugbotLearnedRuleResponse {
+message DeleteBugReportLearnedRuleResponse {
 }
 
-message DeleteBugbotManualRepositoryRuleRequest {
+message DeleteBugReportManualRepositoryRuleRequest {
   string rule_id = 1 [json_name = "ruleId"];
   int64 installation_id = 2 [json_name = "installationId"];
   optional string ghe_application = 3 [json_name = "gheApplication"];
 }
 
-message DeleteBugbotManualRepositoryRuleResponse {
+message DeleteBugReportManualRepositoryRuleResponse {
 }
 
-message DeleteBugbotTeamRuleRequest {
+message DeleteBugReportTeamRuleRequest {
   string rule_id = 1 [json_name = "ruleId"];
   optional int32 team_id = 2 [json_name = "teamId"];
 }
 
-message DeleteBugbotTeamRuleResponse {
+message DeleteBugReportTeamRuleResponse {
 }
 
 message DeleteCrewRequest {
@@ -1856,7 +1856,7 @@ message DetachGroupFromDirectoryResponse {
   optional .aiserver.v1.Group group = 1 [json_name = "group"];
 }
 
-enum DiamondToBugbotMigrationMode {
+enum DiamondToBugReportMigrationMode {
   DIAMOND_TO_BUGBOT_MIGRATION_MODE_UNSPECIFIED = 0;
   DIAMOND_TO_BUGBOT_MIGRATION_MODE_DRY_RUN = 1;
   DIAMOND_TO_BUGBOT_MIGRATION_MODE_APPLY = 2;
@@ -1974,7 +1974,7 @@ enum EventCodeClaimState {
   EVENT_CODE_CLAIM_STATE_DISABLED = 5;
 }
 
-message ExecuteSandMcpToolRequest {
+message ExecuteSlateMcpToolRequest {
   string server_identifier = 1 [json_name = "serverIdentifier"];
   string tool_name = 2 [json_name = "toolName"];
   optional .google.protobuf.Struct args = 3 [json_name = "args"];
@@ -1983,7 +1983,7 @@ message ExecuteSandMcpToolRequest {
   string turn_id = 6 [json_name = "turnId"];
 }
 
-message ExecuteSandMcpToolResponse {
+message ExecuteSlateMcpToolResponse {
   optional .agent.v1.McpResult result = 1 [json_name = "result"];
 }
 
@@ -2090,7 +2090,7 @@ message GetActivationCheckoutUrlRequest {
   int32 request_quota_per_seat = 4 [json_name = "requestQuotaPerSeat"];
   optional string code = 5 [json_name = "code"];
   optional string radar_session_id = 6 [json_name = "radarSessionId"];
-  optional bool include_bugbot = 7 [json_name = "includeBugbot"];
+  optional bool include_bug_report = 7 [json_name = "includeBugReport"];
   optional .aiserver.v1.TeamMemberBillingTier billing_tier = 8 [json_name = "billingTier"];
 }
 
@@ -2245,7 +2245,7 @@ message GetBitbucketForgeStatusResponse {
   optional string workspace_settings_url = 4 [json_name = "workspaceSettingsUrl"];
 }
 
-message GetBugBotPRAnalyticsRequest {
+message GetBugReportPRAnalyticsRequest {
   optional string github_repo_node_id = 1 [json_name = "githubRepoNodeId"];
   optional string status = 2 [json_name = "status"];
   optional string github_user_node_id = 3 [json_name = "githubUserNodeId"];
@@ -2256,105 +2256,105 @@ message GetBugBotPRAnalyticsRequest {
   optional int32 team_id = 8 [json_name = "teamId"];
 }
 
-message GetBugBotPRAnalyticsResponse {
-  repeated .aiserver.v1.BugBotPRAnalytics prs = 2 [json_name = "prs"];
+message GetBugReportPRAnalyticsResponse {
+  repeated .aiserver.v1.BugReportPRAnalytics prs = 2 [json_name = "prs"];
   repeated .aiserver.v1.PRUserOption user_options = 3 [json_name = "userOptions"];
 }
 
-message GetBugBotProUserModeRequest {
+message GetBugReportProUserModeRequest {
 }
 
-message GetBugBotProUserModeResponse {
-  .aiserver.v1.BugbotMode mode = 1 [json_name = "mode"];
-  repeated .aiserver.v1.BugbotModePrompt prompts = 2 [json_name = "prompts"];
+message GetBugReportProUserModeResponse {
+  .aiserver.v1.BugReportMode mode = 1 [json_name = "mode"];
+  repeated .aiserver.v1.BugReportModePrompt prompts = 2 [json_name = "prompts"];
   bool smart_frontier_enabled = 3 [json_name = "smartFrontierEnabled"];
   bool frontier_available = 4 [json_name = "frontierAvailable"];
 }
 
-message GetBugBotProUserSettingsRequest {
+message GetBugReportProUserSettingsRequest {
 }
 
-message GetBugBotProUserSettingsResponse {
+message GetBugReportProUserSettingsResponse {
   bool enabled = 1 [json_name = "enabled"];
-  bool bugbot_was_enabled_in_this_billing_cycle = 2 [json_name = "bugbotWasEnabledInThisBillingCycle"];
-  .aiserver.v1.BugbotUsageTier bugbot_usage_tier = 3 [json_name = "bugbotUsageTier"];
-  .aiserver.v1.BugbotBillingMode bugbot_billing_mode = 4 [json_name = "bugbotBillingMode"];
+  bool bug_report_was_enabled_in_this_billing_cycle = 2 [json_name = "bugReportWasEnabledInThisBillingCycle"];
+  .aiserver.v1.BugReportUsageTier bug_report_usage_tier = 3 [json_name = "bugReportUsageTier"];
+  .aiserver.v1.BugReportBillingMode bug_report_billing_mode = 4 [json_name = "bugReportBillingMode"];
   bool can_migrate_to_usage_based = 5 [json_name = "canMigrateToUsageBased"];
   int32 seat_license_count = 6 [json_name = "seatLicenseCount"];
-  bool bugbot_usage_based_on_enable = 7 [json_name = "bugbotUsageBasedOnEnable"];
-  bool bugbot_migration_credit_already_granted = 8 [json_name = "bugbotMigrationCreditAlreadyGranted"];
+  bool bug_report_usage_based_on_enable = 7 [json_name = "bugReportUsageBasedOnEnable"];
+  bool bug_report_migration_credit_already_granted = 8 [json_name = "bugReportMigrationCreditAlreadyGranted"];
 }
 
-message GetBugbotAnalyticsV2Request {
+message GetBugReportAnalyticsV2Request {
   optional string start_date = 1 [json_name = "startDate"];
   optional string end_date = 2 [json_name = "endDate"];
   optional string grouping = 3 [json_name = "grouping"];
   optional int32 team_id = 4 [json_name = "teamId"];
 }
 
-message GetBugbotAnalyticsV2Response {
+message GetBugReportAnalyticsV2Response {
   bool should_see_analytics = 1 [json_name = "shouldSeeAnalytics"];
-  repeated .aiserver.v1.BugbotAnalyticsDataPoint prs_reviewed_series = 2 [json_name = "prsReviewedSeries"];
-  repeated .aiserver.v1.BugbotAnalyticsDataPoint bugs_found_series = 3 [json_name = "bugsFoundSeries"];
-  repeated .aiserver.v1.BugbotAnalyticsDataPoint num_runs_series = 4 [json_name = "numRunsSeries"];
-  repeated .aiserver.v1.BugbotAnalyticsDataPoint bugs_resolved_series = 5 [json_name = "bugsResolvedSeries"];
+  repeated .aiserver.v1.BugReportAnalyticsDataPoint prs_reviewed_series = 2 [json_name = "prsReviewedSeries"];
+  repeated .aiserver.v1.BugReportAnalyticsDataPoint bugs_found_series = 3 [json_name = "bugsFoundSeries"];
+  repeated .aiserver.v1.BugReportAnalyticsDataPoint num_runs_series = 4 [json_name = "numRunsSeries"];
+  repeated .aiserver.v1.BugReportAnalyticsDataPoint bugs_resolved_series = 5 [json_name = "bugsResolvedSeries"];
   double pct_resolution_rate = 6 [json_name = "pctResolutionRate"];
-  repeated .aiserver.v1.BugbotAnalyticsDataPoint unique_users_series = 7 [json_name = "uniqueUsersSeries"];
+  repeated .aiserver.v1.BugReportAnalyticsDataPoint unique_users_series = 7 [json_name = "uniqueUsersSeries"];
   int32 unique_users_total = 8 [json_name = "uniqueUsersTotal"];
-  repeated .aiserver.v1.BugbotAnalyticsDataPoint high_sev_resolved_series = 9 [json_name = "highSevResolvedSeries"];
-  repeated .aiserver.v1.BugbotAnalyticsDataPoint medium_sev_resolved_series = 10 [json_name = "mediumSevResolvedSeries"];
-  repeated .aiserver.v1.BugbotAnalyticsDataPoint low_sev_resolved_series = 11 [json_name = "lowSevResolvedSeries"];
-  repeated .aiserver.v1.BugbotAnalyticsDataPoint autofix_prs_merged_series = 12 [json_name = "autofixPrsMergedSeries"];
+  repeated .aiserver.v1.BugReportAnalyticsDataPoint high_sev_resolved_series = 9 [json_name = "highSevResolvedSeries"];
+  repeated .aiserver.v1.BugReportAnalyticsDataPoint medium_sev_resolved_series = 10 [json_name = "mediumSevResolvedSeries"];
+  repeated .aiserver.v1.BugReportAnalyticsDataPoint low_sev_resolved_series = 11 [json_name = "lowSevResolvedSeries"];
+  repeated .aiserver.v1.BugReportAnalyticsDataPoint autofix_prs_merged_series = 12 [json_name = "autofixPrsMergedSeries"];
   int32 total_autofix_runs = 13 [json_name = "totalAutofixRuns"];
-  repeated .aiserver.v1.BugbotAnalyticsDataPoint cost_cents_series = 14 [json_name = "costCentsSeries"];
-  repeated .aiserver.v1.BugbotAnalyticsDataPoint num_billed_runs_series = 15 [json_name = "numBilledRunsSeries"];
+  repeated .aiserver.v1.BugReportAnalyticsDataPoint cost_cents_series = 14 [json_name = "costCentsSeries"];
+  repeated .aiserver.v1.BugReportAnalyticsDataPoint num_billed_runs_series = 15 [json_name = "numBilledRunsSeries"];
   int32 total_bugs_found = 16 [json_name = "totalBugsFound"];
   int32 total_bugs_evaluated = 17 [json_name = "totalBugsEvaluated"];
-  repeated .aiserver.v1.BugbotAnalyticsDataPoint bugs_evaluated_series = 18 [json_name = "bugsEvaluatedSeries"];
+  repeated .aiserver.v1.BugReportAnalyticsDataPoint bugs_evaluated_series = 18 [json_name = "bugsEvaluatedSeries"];
 }
 
-message GetBugbotBackfillStatusRequest {
+message GetBugReportBackfillStatusRequest {
   string workflow_id = 1 [json_name = "workflowId"];
 }
 
-message GetBugbotBackfillStatusResponse {
-  .aiserver.v1.BugbotBackfillStatus status = 1 [json_name = "status"];
+message GetBugReportBackfillStatusResponse {
+  .aiserver.v1.BugReportBackfillStatus status = 1 [json_name = "status"];
   optional string error_message = 2 [json_name = "errorMessage"];
   optional int32 rules_generated = 3 [json_name = "rulesGenerated"];
 }
 
-message GetBugbotLearnedRulesRequest {
+message GetBugReportLearnedRulesRequest {
   int64 installation_id = 1 [json_name = "installationId"];
   optional string ghe_application = 2 [json_name = "gheApplication"];
   optional string repo_node_id_filter = 3 [json_name = "repoNodeIdFilter"];
 }
 
-message GetBugbotLearnedRulesResponse {
-  repeated .aiserver.v1.BugbotLearnedRule rules = 1 [json_name = "rules"];
+message GetBugReportLearnedRulesResponse {
+  repeated .aiserver.v1.BugReportLearnedRule rules = 1 [json_name = "rules"];
 }
 
-message GetBugbotManualRepositoryRulesRequest {
+message GetBugReportManualRepositoryRulesRequest {
   int64 installation_id = 1 [json_name = "installationId"];
   optional string ghe_application = 2 [json_name = "gheApplication"];
   optional string repo_node_id_filter = 3 [json_name = "repoNodeIdFilter"];
 }
 
-message GetBugbotManualRepositoryRulesResponse {
-  repeated .aiserver.v1.BugbotManualRepositoryRule rules = 1 [json_name = "rules"];
+message GetBugReportManualRepositoryRulesResponse {
+  repeated .aiserver.v1.BugReportManualRepositoryRule rules = 1 [json_name = "rules"];
 }
 
-message GetBugbotMergedPrScanSummaryRequest {
+message GetBugReportMergedPrScanSummaryRequest {
   int32 team_id = 1 [json_name = "teamId"];
 }
 
-message GetBugbotMergedPrScanSummaryResponse {
+message GetBugReportMergedPrScanSummaryResponse {
   bool has_scan = 1 [json_name = "hasScan"];
   int64 scanned_at_epoch_millis = 2 [json_name = "scannedAtEpochMillis"];
   int32 window_days = 3 [json_name = "windowDays"];
   int32 prs_sampled = 4 [json_name = "prsSampled"];
   int32 prs_with_findings = 5 [json_name = "prsWithFindings"];
   int32 bugs_found = 6 [json_name = "bugsFound"];
-  repeated .aiserver.v1.GetBugbotMergedPrScanSummaryResponse.Finding findings = 7 [json_name = "findings"];
+  repeated .aiserver.v1.GetBugReportMergedPrScanSummaryResponse.Finding findings = 7 [json_name = "findings"];
   int32 total_merged_prs = 8 [json_name = "totalMergedPrs"];
   message Finding {
     string description = 1 [json_name = "description"];
@@ -2376,54 +2376,54 @@ message GetBugbotMergedPrScanSummaryResponse {
   }
 }
 
-message GetBugbotModeRequest {
+message GetBugReportModeRequest {
 }
 
-message GetBugbotModeResponse {
-  .aiserver.v1.BugbotMode mode = 1 [json_name = "mode"];
-  repeated .aiserver.v1.BugbotModePrompt prompts = 2 [json_name = "prompts"];
+message GetBugReportModeResponse {
+  .aiserver.v1.BugReportMode mode = 1 [json_name = "mode"];
+  repeated .aiserver.v1.BugReportModePrompt prompts = 2 [json_name = "prompts"];
   bool smart_frontier_enabled = 3 [json_name = "smartFrontierEnabled"];
   bool frontier_available = 4 [json_name = "frontierAvailable"];
 }
 
-message GetBugbotRuleAnalyticsRequest {
+message GetBugReportRuleAnalyticsRequest {
   optional string date_range_start = 1 [json_name = "dateRangeStart"];
   optional string date_range_end = 2 [json_name = "dateRangeEnd"];
   optional int32 team_id = 3 [json_name = "teamId"];
 }
 
-message GetBugbotRuleAnalyticsResponse {
-  repeated .aiserver.v1.BugbotRuleAnalytics rules = 1 [json_name = "rules"];
+message GetBugReportRuleAnalyticsResponse {
+  repeated .aiserver.v1.BugReportRuleAnalytics rules = 1 [json_name = "rules"];
 }
 
-message GetBugbotRuleByIdRequest {
+message GetBugReportRuleByIdRequest {
   string rule_id = 1 [json_name = "ruleId"];
   optional int32 team_id = 2 [json_name = "teamId"];
 }
 
-message GetBugbotRuleByIdResponse {
-  optional .aiserver.v1.BugbotRule team_rule = 1 [json_name = "teamRule"];
-  optional .aiserver.v1.BugbotLearnedRule learned_rule = 2 [json_name = "learnedRule"];
-  optional .aiserver.v1.BugbotRuleAnalytics analytics = 3 [json_name = "analytics"];
-  optional .aiserver.v1.BugbotManualRepositoryRule manual_rule = 4 [json_name = "manualRule"];
+message GetBugReportRuleByIdResponse {
+  optional .aiserver.v1.BugReportRule team_rule = 1 [json_name = "teamRule"];
+  optional .aiserver.v1.BugReportLearnedRule learned_rule = 2 [json_name = "learnedRule"];
+  optional .aiserver.v1.BugReportRuleAnalytics analytics = 3 [json_name = "analytics"];
+  optional .aiserver.v1.BugReportManualRepositoryRule manual_rule = 4 [json_name = "manualRule"];
 }
 
-message GetBugbotSettingsRequest {
+message GetBugReportSettingsRequest {
 }
 
-message GetBugbotSettingsResponse {
+message GetBugReportSettingsResponse {
   bool available = 1 [json_name = "available"];
   bool enabled = 2 [json_name = "enabled"];
   repeated string pr_urls = 3 [json_name = "prUrls"];
 }
 
-message GetBugbotSuggestedReposRequest {
+message GetBugReportSuggestedReposRequest {
   optional string ghe_application = 1 [json_name = "gheApplication"];
   optional int32 limit = 2 [json_name = "limit"];
 }
 
-message GetBugbotSuggestedReposResponse {
-  repeated .aiserver.v1.GetBugbotSuggestedReposResponse.SuggestedRepo repos = 1 [json_name = "repos"];
+message GetBugReportSuggestedReposResponse {
+  repeated .aiserver.v1.GetBugReportSuggestedReposResponse.SuggestedRepo repos = 1 [json_name = "repos"];
   bool can_enable = 2 [json_name = "canEnable"];
   message SuggestedRepo {
     int64 installation_id = 1 [json_name = "installationId"];
@@ -2435,33 +2435,33 @@ message GetBugbotSuggestedReposResponse {
   }
 }
 
-message GetBugbotTeamRulesRequest {
+message GetBugReportTeamRulesRequest {
   optional bool active_only = 1 [json_name = "activeOnly"];
   optional int32 team_id = 2 [json_name = "teamId"];
 }
 
-message GetBugbotTeamRulesResponse {
-  repeated .aiserver.v1.BugbotRule rules = 1 [json_name = "rules"];
+message GetBugReportTeamRulesResponse {
+  repeated .aiserver.v1.BugReportRule rules = 1 [json_name = "rules"];
 }
 
-message GetBugbotUserSettingsRequest {
+message GetBugReportUserSettingsRequest {
   optional int32 team_id = 1 [json_name = "teamId"];
 }
 
-message GetBugbotUserSettingsResponse {
+message GetBugReportUserSettingsResponse {
   bool manual_trigger_only = 1 [json_name = "manualTriggerOnly"];
   bool run_only_once = 2 [json_name = "runOnlyOnce"];
   bool suppress_no_bugs_comments = 3 [json_name = "suppressNoBugsComments"];
   optional bool enable_draft = 4 [json_name = "enableDraft"];
   optional bool is_pr_summary_enabled = 5 [json_name = "isPrSummaryEnabled"];
-  .aiserver.v1.BugbotAutofixMode bugbot_autofix_mode = 6 [json_name = "bugbotAutofixMode"];
+  .aiserver.v1.BugReportAutofixMode bug_report_autofix_mode = 6 [json_name = "bugReportAutofixMode"];
   bool enable_vm_run = 7 [json_name = "enableVmRun"];
-  bool fail_github_action_on_bugbot_findings = 8 [json_name = "failGithubActionOnBugbotFindings"];
-  repeated string bugbot_autofix_severity_filter = 9 [json_name = "bugbotAutofixSeverityFilter"];
+  bool fail_github_action_on_bug_report_findings = 8 [json_name = "failGithubActionOnBugReportFindings"];
+  repeated string bug_report_autofix_severity_filter = 9 [json_name = "bugReportAutofixSeverityFilter"];
   optional bool installation_default_enable_draft = 10 [json_name = "installationDefaultEnableDraft"];
   optional bool installation_default_is_pr_summary_enabled = 11 [json_name = "installationDefaultIsPrSummaryEnabled"];
-  .aiserver.v1.BugbotAutofixMode installation_default_bugbot_autofix_mode = 12 [json_name = "installationDefaultBugbotAutofixMode"];
-  repeated string installation_default_bugbot_autofix_severity_filter = 13 [json_name = "installationDefaultBugbotAutofixSeverityFilter"];
+  .aiserver.v1.BugReportAutofixMode installation_default_bug_report_autofix_mode = 12 [json_name = "installationDefaultBugReportAutofixMode"];
+  repeated string installation_default_bug_report_autofix_severity_filter = 13 [json_name = "installationDefaultBugReportAutofixSeverityFilter"];
   optional bool is_incremental_review_enabled = 14 [json_name = "isIncrementalReviewEnabled"];
   optional bool team_default_is_incremental_review_enabled = 15 [json_name = "teamDefaultIsIncrementalReviewEnabled"];
   optional bool is_pr_risk_score_enabled = 16 [json_name = "isPrRiskScoreEnabled"];
@@ -2810,7 +2810,7 @@ message GetGithubInstallationsRequest {
 message GetGithubInstallationsResponse {
   repeated .aiserver.v1.GetGithubInstallationsResponse.Installation installations = 1 [json_name = "installations"];
   bool github_connected = 2 [json_name = "githubConnected"];
-  bool team_has_bugbot_repos = 3 [json_name = "teamHasBugbotRepos"];
+  bool team_has_bug_report_repos = 3 [json_name = "teamHasBugReportRepos"];
   repeated string github_usernames = 4 [json_name = "githubUsernames"];
   optional string ghe_hostname = 5 [json_name = "gheHostname"];
   optional string ghe_app_slug = 6 [json_name = "gheAppSlug"];
@@ -2828,9 +2828,9 @@ message GetGithubInstallationsResponse {
     optional bool needs_team_scope = 9 [json_name = "needsTeamScope"];
     bool can_modify_installation_settings = 10 [json_name = "canModifyInstallationSettings"];
     optional string account_login = 11 [json_name = "accountLogin"];
-    optional .aiserver.v1.BugbotAutofixCapabilities autofix_capabilities = 12 [json_name = "autofixCapabilities"];
+    optional .aiserver.v1.BugReportAutofixCapabilities autofix_capabilities = 12 [json_name = "autofixCapabilities"];
     optional bool team_owned = 13 [json_name = "teamOwned"];
-    optional .aiserver.v1.BugbotSettingsCapabilities settings_capabilities = 14 [json_name = "settingsCapabilities"];
+    optional .aiserver.v1.BugReportSettingsCapabilities settings_capabilities = 14 [json_name = "settingsCapabilities"];
     optional bool azure_devops_managed = 15 [json_name = "azureDevopsManaged"];
   }
   message Repository {
@@ -3645,14 +3645,14 @@ message GetRepoSourcePreferenceResponse {
   bool origin_repos_enabled = 5 [json_name = "originReposEnabled"];
 }
 
-message GetSandAccessStatusRequest {
+message GetSlateAccessStatusRequest {
 }
 
-message GetSandAccessStatusResponse {
-  .aiserver.v1.GetSandAccessStatusResponse.SandAccessState state = 1 [json_name = "state"];
-  .aiserver.v1.GetSandAccessStatusResponse.SandPurchaseChannel purchase_channel = 2 [json_name = "purchaseChannel"];
-  .aiserver.v1.GetSandAccessStatusResponse.SandAccessBlockReason block_reason = 3 [json_name = "blockReason"];
-  enum SandAccessBlockReason {
+message GetSlateAccessStatusResponse {
+  .aiserver.v1.GetSlateAccessStatusResponse.SlateAccessState state = 1 [json_name = "state"];
+  .aiserver.v1.GetSlateAccessStatusResponse.SlatePurchaseChannel purchase_channel = 2 [json_name = "purchaseChannel"];
+  .aiserver.v1.GetSlateAccessStatusResponse.SlateAccessBlockReason block_reason = 3 [json_name = "blockReason"];
+  enum SlateAccessBlockReason {
     SAND_ACCESS_BLOCK_REASON_UNSPECIFIED = 0;
     SAND_ACCESS_BLOCK_REASON_NONE = 1;
     SAND_ACCESS_BLOCK_REASON_TEAM_PRIVACY_MODE = 2;
@@ -3664,13 +3664,13 @@ message GetSandAccessStatusResponse {
     SAND_ACCESS_BLOCK_REASON_PAYWALL_TEAM_MEMBER = 8;
     SAND_ACCESS_BLOCK_REASON_PAYWALL_TEAM_ADMIN = 9;
   }
-  enum SandAccessState {
+  enum SlateAccessState {
     SAND_ACCESS_STATE_UNSPECIFIED = 0;
     SAND_ACCESS_STATE_GRANTED = 1;
     SAND_ACCESS_STATE_UNAVAILABLE = 2;
     SAND_ACCESS_STATE_PAYMENT_REQUIRED = 3;
   }
-  enum SandPurchaseChannel {
+  enum SlatePurchaseChannel {
     SAND_PURCHASE_CHANNEL_UNSPECIFIED = 0;
     SAND_PURCHASE_CHANNEL_IN_APP = 1;
     SAND_PURCHASE_CHANNEL_MANAGE_IN_CURSOR = 2;
@@ -3678,12 +3678,12 @@ message GetSandAccessStatusResponse {
   }
 }
 
-message GetSandTrialClaimStatusRequest {
+message GetSlateTrialClaimStatusRequest {
 }
 
-message GetSandTrialClaimStatusResponse {
-  .aiserver.v1.GetSandTrialClaimStatusResponse.SandTrialClaimStatus status = 1 [json_name = "status"];
-  enum SandTrialClaimStatus {
+message GetSlateTrialClaimStatusResponse {
+  .aiserver.v1.GetSlateTrialClaimStatusResponse.SlateTrialClaimStatus status = 1 [json_name = "status"];
+  enum SlateTrialClaimStatus {
     SAND_TRIAL_CLAIM_STATUS_UNSPECIFIED = 0;
     SAND_TRIAL_CLAIM_STATUS_NONE = 1;
     SAND_TRIAL_CLAIM_STATUS_PENDING_CARD = 2;
@@ -3693,10 +3693,10 @@ message GetSandTrialClaimStatusResponse {
   }
 }
 
-message GetSandUsageStatusRequest {
+message GetSlateUsageStatusRequest {
 }
 
-message GetSandUsageStatusResponse {
+message GetSlateUsageStatusResponse {
   optional .google.protobuf.Timestamp current_period_start = 1 [json_name = "currentPeriodStart"];
   optional .google.protobuf.Timestamp next_reset_timestamp_utc = 2 [json_name = "nextResetTimestampUtc"];
   optional double usage_percent = 3 [json_name = "usagePercent"];
@@ -3705,9 +3705,9 @@ message GetSandUsageStatusResponse {
   bool uses_pooled_enterprise_allowance = 6 [json_name = "usesPooledEnterpriseAllowance"];
   bool has_available_usage = 7 [json_name = "hasAvailableUsage"];
   bool has_non_zero_included_limit = 8 [json_name = "hasNonZeroIncludedLimit"];
-  optional .aiserver.v1.SandUpgradeRecommendation upgrade_recommendation = 9 [json_name = "upgradeRecommendation"];
-  optional .google.protobuf.Timestamp sand_trial_expires_at = 10 [json_name = "sandTrialExpiresAt"];
-  bool sand_trial_cancelable = 11 [json_name = "sandTrialCancelable"];
+  optional .aiserver.v1.SlateUpgradeRecommendation upgrade_recommendation = 9 [json_name = "upgradeRecommendation"];
+  optional .google.protobuf.Timestamp slate_trial_expires_at = 10 [json_name = "slateTrialExpiresAt"];
+  bool slate_trial_cancelable = 11 [json_name = "slateTrialCancelable"];
 }
 
 message GetScimConfigurationLinksRequest {
@@ -3949,8 +3949,8 @@ message GetTeamAdminSettingsResponse {
   optional bool enforce_hooks_readiness = 58 [json_name = "enforceHooksReadiness"];
   optional .aiserver.v1.LlmGatewaySettings llm_gateway = 59 [json_name = "llmGateway"];
   optional .aiserver.v1.LocalToolControls local_tool_controls = 60 [json_name = "localToolControls"];
-  optional .aiserver.v1.SandActionAuditSettings sand_action_audit_settings = 61 [json_name = "sandActionAuditSettings"];
-  optional .aiserver.v1.SandOnboardingState sand_onboarding = 62 [json_name = "sandOnboarding"];
+  optional .aiserver.v1.SlateActionAuditSettings slate_action_audit_settings = 61 [json_name = "slateActionAuditSettings"];
+  optional .aiserver.v1.SlateOnboardingState slate_onboarding = 62 [json_name = "slateOnboarding"];
   optional bool origin_disabled = 63 [json_name = "originDisabled"];
 }
 
@@ -3975,27 +3975,27 @@ message GetTeamBackgroundAgentSettingsResponse {
   optional .aiserver.v1.BackgroundAgentSettings settings = 1 [json_name = "settings"];
 }
 
-message GetTeamBugbotSettingsRequest {
+message GetTeamBugReportSettingsRequest {
   int32 team_id = 1 [json_name = "teamId"];
 }
 
-message GetTeamBugbotSettingsResponse {
-  int32 bugbot_licenses_hard_limit = 1 [json_name = "bugbotLicensesHardLimit"];
-  bool bugbot_plan_enabled = 2 [json_name = "bugbotPlanEnabled"];
+message GetTeamBugReportSettingsResponse {
+  int32 bug_report_licenses_hard_limit = 1 [json_name = "bugReportLicensesHardLimit"];
+  bool bug_report_plan_enabled = 2 [json_name = "bugReportPlanEnabled"];
   repeated string allowlist = 3 [json_name = "allowlist"];
   int32 current_cycle_unique_users = 4 [json_name = "currentCycleUniqueUsers"];
-  int32 bugbot_license_count = 5 [json_name = "bugbotLicenseCount"];
+  int32 bug_report_license_count = 5 [json_name = "bugReportLicenseCount"];
   .aiserver.v1.AllowlistConfig allowlist_config = 6 [json_name = "allowlistConfig"];
-  bool bugbot_was_enabled_in_this_billing_cycle = 7 [json_name = "bugbotWasEnabledInThisBillingCycle"];
-  repeated .aiserver.v1.BugbotLicenseUsage license_usage = 8 [json_name = "licenseUsage"];
-  .aiserver.v1.BugbotUsageTier bugbot_usage_tier = 9 [json_name = "bugbotUsageTier"];
-  bool bugbot_globally_disabled = 10 [json_name = "bugbotGloballyDisabled"];
+  bool bug_report_was_enabled_in_this_billing_cycle = 7 [json_name = "bugReportWasEnabledInThisBillingCycle"];
+  repeated .aiserver.v1.BugReportLicenseUsage license_usage = 8 [json_name = "licenseUsage"];
+  .aiserver.v1.BugReportUsageTier bug_report_usage_tier = 9 [json_name = "bugReportUsageTier"];
+  bool bug_report_globally_disabled = 10 [json_name = "bugReportGloballyDisabled"];
   repeated string mcp_server_names = 11 [json_name = "mcpServerNames"];
-  .aiserver.v1.BugbotBillingMode bugbot_billing_mode = 12 [json_name = "bugbotBillingMode"];
-  bool bugbot_usage_based_on_enable = 13 [json_name = "bugbotUsageBasedOnEnable"];
+  .aiserver.v1.BugReportBillingMode bug_report_billing_mode = 12 [json_name = "bugReportBillingMode"];
+  bool bug_report_usage_based_on_enable = 13 [json_name = "bugReportUsageBasedOnEnable"];
   bool can_migrate_to_usage_based = 14 [json_name = "canMigrateToUsageBased"];
   int32 seat_license_count = 15 [json_name = "seatLicenseCount"];
-  bool bugbot_migration_credit_already_granted = 16 [json_name = "bugbotMigrationCreditAlreadyGranted"];
+  bool bug_report_migration_credit_already_granted = 16 [json_name = "bugReportMigrationCreditAlreadyGranted"];
   bool is_incremental_review_enabled = 17 [json_name = "isIncrementalReviewEnabled"];
   bool merged_pr_scan_opted_out = 18 [json_name = "mergedPrScanOptedOut"];
   bool cost_controls_available = 19 [json_name = "costControlsAvailable"];
@@ -4867,10 +4867,10 @@ message InstallationSettings {
   bool is_pr_summary_enabled = 7 [json_name = "isPrSummaryEnabled"];
   bool pr_summary_use_comment = 8 [json_name = "prSummaryUseComment"];
   bool is_learning_enabled = 9 [json_name = "isLearningEnabled"];
-  .aiserver.v1.BugbotAutofixMode bugbot_autofix_mode = 10 [json_name = "bugbotAutofixMode"];
+  .aiserver.v1.BugReportAutofixMode bug_report_autofix_mode = 10 [json_name = "bugReportAutofixMode"];
   bool enable_draft = 11 [json_name = "enableDraft"];
-  bool fail_github_action_on_bugbot_findings = 12 [json_name = "failGithubActionOnBugbotFindings"];
-  repeated string bugbot_autofix_severity_filter = 13 [json_name = "bugbotAutofixSeverityFilter"];
+  bool fail_github_action_on_bug_report_findings = 12 [json_name = "failGithubActionOnBugReportFindings"];
+  repeated string bug_report_autofix_severity_filter = 13 [json_name = "bugReportAutofixSeverityFilter"];
   optional bool is_pr_risk_score_enabled = 14 [json_name = "isPrRiskScoreEnabled"];
 }
 
@@ -4905,10 +4905,10 @@ message IsAllowedFreeTrialUsageResponse {
   bool is_allowed = 1 [json_name = "isAllowed"];
 }
 
-message IsEligibleForSandTrialRequest {
+message IsEligibleForSlateTrialRequest {
 }
 
-message IsEligibleForSandTrialResponse {
+message IsEligibleForSlateTrialResponse {
   bool is_eligible = 1 [json_name = "isEligible"];
 }
 
@@ -5376,19 +5376,19 @@ message ListPendingUserAccessRequestsResponse {
   repeated .aiserver.v1.PendingUserAccessRequest requests = 1 [json_name = "requests"];
 }
 
-message ListSandBankedResetsRequest {
+message ListSlateBankedResetsRequest {
 }
 
-message ListSandBankedResetsResponse {
-  repeated .aiserver.v1.SandBankedReset resets = 1 [json_name = "resets"];
+message ListSlateBankedResetsResponse {
+  repeated .aiserver.v1.SlateBankedReset resets = 1 [json_name = "resets"];
 }
 
-message ListSandMcpToolsRequest {
+message ListSlateMcpToolsRequest {
   repeated string server_identifiers = 1 [json_name = "serverIdentifiers"];
 }
 
-message ListSandMcpToolsResponse {
-  repeated .aiserver.v1.ListSandMcpToolsResponse.Server servers = 1 [json_name = "servers"];
+message ListSlateMcpToolsResponse {
+  repeated .aiserver.v1.ListSlateMcpToolsResponse.Server servers = 1 [json_name = "servers"];
   message Server {
     string server_identifier = 1 [json_name = "serverIdentifier"];
     string status = 2 [json_name = "status"];
@@ -5681,11 +5681,11 @@ message MarkMcpServersSeenRequest {
 message MarkMcpServersSeenResponse {
 }
 
-message MarkTeamSandOnboardingSeenRequest {
+message MarkTeamSlateOnboardingSeenRequest {
   int32 team_id = 1 [json_name = "teamId"];
 }
 
-message MarkTeamSandOnboardingSeenResponse {
+message MarkTeamSlateOnboardingSeenResponse {
 }
 
 message Marketplace {
@@ -5818,19 +5818,19 @@ message MidConversationModelRecommendationContext {
   optional .agent.v1.RequestedModel current_model = 1 [json_name = "currentModel"];
 }
 
-message MigrateBugBotProUserToUsageBasedBillingRequest {
+message MigrateBugReportProUserToUsageBasedBillingRequest {
   optional bool keep_high_effort_default = 1 [json_name = "keepHighEffortDefault"];
 }
 
-message MigrateBugBotProUserToUsageBasedBillingResponse {
+message MigrateBugReportProUserToUsageBasedBillingResponse {
 }
 
-message MigrateTeamBugbotToUsageBasedBillingRequest {
+message MigrateTeamBugReportToUsageBasedBillingRequest {
   int32 team_id = 1 [json_name = "teamId"];
   optional bool keep_high_effort_default = 2 [json_name = "keepHighEffortDefault"];
 }
 
-message MigrateTeamBugbotToUsageBasedBillingResponse {
+message MigrateTeamBugReportToUsageBasedBillingResponse {
 }
 
 message MigrateTeamMcpServersToDefaultMarketplaceRequest {
@@ -6271,7 +6271,7 @@ message PluginMcpConfigEntry {
 
 message PluginMinClientVersions {
   optional string cursor = 1 [json_name = "cursor"];
-  optional string sand = 2 [json_name = "sand"];
+  optional string slate = 2 [json_name = "slate"];
 }
 
 enum PluginPrimitiveType {
@@ -6621,7 +6621,7 @@ message RawUserData {
   int32 subscription_included_reqs = 17 [json_name = "subscriptionIncludedReqs"];
   int32 api_key_reqs = 18 [json_name = "apiKeyReqs"];
   int32 usage_based_reqs = 19 [json_name = "usageBasedReqs"];
-  int32 bugbot_usages = 20 [json_name = "bugbotUsages"];
+  int32 bug_report_usages = 20 [json_name = "bugReportUsages"];
   optional string most_used_model = 21 [json_name = "mostUsedModel"];
   optional string apply_most_used_extension = 22 [json_name = "applyMostUsedExtension"];
   optional string tab_most_used_extension = 23 [json_name = "tabMostUsedExtension"];
@@ -6629,11 +6629,11 @@ message RawUserData {
   optional string email = 25 [json_name = "email"];
 }
 
-message RecordBugbotDeeplinkEventRequest {
+message RecordBugReportDeeplinkEventRequest {
   string bug_id = 1 [json_name = "bugId"];
-  .aiserver.v1.RecordBugbotDeeplinkEventRequest.BugbotDeeplinkEvent event = 2 [json_name = "event"];
+  .aiserver.v1.RecordBugReportDeeplinkEventRequest.BugReportDeeplinkEvent event = 2 [json_name = "event"];
   optional string comment_id = 3 [json_name = "commentId"];
-  enum BugbotDeeplinkEvent {
+  enum BugReportDeeplinkEvent {
     BUGBOT_DEEPLINK_EVENT_UNSPECIFIED = 0;
     BUGBOT_DEEPLINK_EVENT_CLICKED = 1;
     BUGBOT_DEEPLINK_EVENT_HANDLED_DIALOG_SHOWN = 2;
@@ -6643,14 +6643,14 @@ message RecordBugbotDeeplinkEventRequest {
   }
 }
 
-message RecordBugbotDeeplinkEventResponse {
+message RecordBugReportDeeplinkEventResponse {
 }
 
-message RecordSandAuditEventsRequest {
-  repeated .aiserver.v1.SandAuditEvent events = 1 [json_name = "events"];
+message RecordSlateAuditEventsRequest {
+  repeated .aiserver.v1.SlateAuditEvent events = 1 [json_name = "events"];
 }
 
-message RecordSandAuditEventsResponse {
+message RecordSlateAuditEventsResponse {
   int32 recorded_count = 1 [json_name = "recordedCount"];
 }
 
@@ -6899,11 +6899,11 @@ message RequestIndividualLimitsOptOutResponse {
   repeated .aiserver.v1.IndividualLimitsOptOutTeamResult team_results = 1 [json_name = "teamResults"];
 }
 
-message RequestSandTeamAccessRequest {
+message RequestSlateTeamAccessRequest {
   int32 team_id = 1 [json_name = "teamId"];
 }
 
-message RequestSandTeamAccessResponse {
+message RequestSlateTeamAccessResponse {
 }
 
 message ResolvePluginsByRefRequest {
@@ -6940,12 +6940,12 @@ message RevokeBackgroundComposerSecretRequest {
 message RevokeBackgroundComposerSecretResponse {
 }
 
-message RevokeBugBotLicensesRequest {
+message RevokeBugReportLicensesRequest {
   int32 team_id = 1 [json_name = "teamId"];
   int32 new_num_licenses = 2 [json_name = "newNumLicenses"];
 }
 
-message RevokeBugBotLicensesResponse {
+message RevokeBugReportLicensesResponse {
 }
 
 message RevokeOrganizationApiKeyRequest {
@@ -6978,12 +6978,12 @@ message RevokeUserApiKeyRequest {
 message RevokeUserApiKeyResponse {
 }
 
-message RevokeUserBugbotLicenseRequest {
+message RevokeUserBugReportLicenseRequest {
   int32 team_id = 1 [json_name = "teamId"];
   string github_user_node_id = 2 [json_name = "githubUserNodeId"];
 }
 
-message RevokeUserBugbotLicenseResponse {
+message RevokeUserBugReportLicenseResponse {
 }
 
 message RotateGitlabEnterpriseWebhookSecretRequest {
@@ -7021,17 +7021,17 @@ message RuleDescriptor {
   optional string source_url = 4 [json_name = "sourceUrl"];
 }
 
-message RunDiamondToBugbotMigrationRequest {
+message RunDiamondToBugReportMigrationRequest {
   int32 team_id = 1 [json_name = "teamId"];
   int64 installation_id = 2 [json_name = "installationId"];
   optional string ghe_application = 3 [json_name = "gheApplication"];
   string graphite_workspace_id = 4 [json_name = "graphiteWorkspaceId"];
-  .aiserver.v1.DiamondToBugbotMigrationMode mode = 5 [json_name = "mode"];
+  .aiserver.v1.DiamondToBugReportMigrationMode mode = 5 [json_name = "mode"];
   optional string approved_preview_hash = 6 [json_name = "approvedPreviewHash"];
   optional .google.protobuf.Struct extracted_settings = 7 [json_name = "extractedSettings"];
 }
 
-message RunDiamondToBugbotMigrationResponse {
+message RunDiamondToBugReportMigrationResponse {
   string status = 1 [json_name = "status"];
   string preview_hash = 2 [json_name = "previewHash"];
   string preview_json = 3 [json_name = "previewJson"];
@@ -7045,21 +7045,21 @@ message RunDiamondToBugbotMigrationResponse {
   int32 resolved_team_id = 11 [json_name = "resolvedTeamId"];
 }
 
-message SandActionAuditSettings {
+message SlateActionAuditSettings {
   optional bool enabled = 1 [json_name = "enabled"];
 }
 
-message SandAuditEvent {
+message SlateAuditEvent {
   string event_id = 1 [json_name = "eventId"];
   int64 occurred_at_ms = 2 [json_name = "occurredAtMs"];
   string agent_id = 3 [json_name = "agentId"];
   string turn_id = 4 [json_name = "turnId"];
   string box_id = 5 [json_name = "boxId"];
   oneof action {
-    .aiserver.v1.SandAuditEvent.McpToolCall mcp_tool_call = 6 [json_name = "mcpToolCall"];
-    .aiserver.v1.SandAuditEvent.ShellCommand shell_command = 7 [json_name = "shellCommand"];
-    .aiserver.v1.SandAuditEvent.BrowserNavigation browser_navigation = 8 [json_name = "browserNavigation"];
-    .aiserver.v1.SandAuditEvent.ComputerUseSession computer_use_session = 9 [json_name = "computerUseSession"];
+    .aiserver.v1.SlateAuditEvent.McpToolCall mcp_tool_call = 6 [json_name = "mcpToolCall"];
+    .aiserver.v1.SlateAuditEvent.ShellCommand shell_command = 7 [json_name = "shellCommand"];
+    .aiserver.v1.SlateAuditEvent.BrowserNavigation browser_navigation = 8 [json_name = "browserNavigation"];
+    .aiserver.v1.SlateAuditEvent.ComputerUseSession computer_use_session = 9 [json_name = "computerUseSession"];
   }
   message BrowserNavigation {
     string url = 1 [json_name = "url"];
@@ -7090,28 +7090,28 @@ message SandAuditEvent {
   }
 }
 
-message SandBankedReset {
+message SlateBankedReset {
   int64 id = 1 [json_name = "id"];
   optional .google.protobuf.Timestamp created_at = 2 [json_name = "createdAt"];
   optional .google.protobuf.Timestamp expires_at = 3 [json_name = "expiresAt"];
 }
 
-message SandOnboardingState {
+message SlateOnboardingState {
   bool completed = 1 [json_name = "completed"];
   bool seen = 2 [json_name = "seen"];
 }
 
-message SandResetAlreadyAppliedError {
+message SlateResetAlreadyAppliedError {
 }
 
-message SandResetTooRecentError {
+message SlateResetTooRecentError {
   optional .google.protobuf.Timestamp retry_after = 1 [json_name = "retryAfter"];
 }
 
-message SandResetUnavailableError {
+message SlateResetUnavailableError {
 }
 
-message SandUpgradeRecommendation {
+message SlateUpgradeRecommendation {
   optional .aiserver.v1.ErrorButton cta = 1 [json_name = "cta"];
   bool disabled = 2 [json_name = "disabled"];
 }
@@ -7938,14 +7938,14 @@ enum SpendType {
   SPEND_TYPE_ALL = 3;
 }
 
-message StartBugbotBackfillLearningRequest {
+message StartBugReportBackfillLearningRequest {
   int64 installation_id = 1 [json_name = "installationId"];
   string repo_node_id = 2 [json_name = "repoNodeId"];
   optional string ghe_application = 3 [json_name = "gheApplication"];
   optional bool skip_write_access_check = 4 [json_name = "skipWriteAccessCheck"];
 }
 
-message StartBugbotBackfillLearningResponse {
+message StartBugReportBackfillLearningResponse {
 }
 
 message StartBulkMoveOrganizationMembersRequest {
@@ -7957,13 +7957,13 @@ message StartBulkMoveOrganizationMembersResponse {
   string job_handle = 1 [json_name = "jobHandle"];
 }
 
-message StartSandTrialRequest {
+message StartSlateTrialRequest {
 }
 
-message StartSandTrialResponse {
+message StartSlateTrialResponse {
   oneof outcome {
-    .aiserver.v1.StartSandTrialResponse.Activated activated = 1 [json_name = "activated"];
-    .aiserver.v1.StartSandTrialResponse.CardVerificationRequired card_verification_required = 2 [json_name = "cardVerificationRequired"];
+    .aiserver.v1.StartSlateTrialResponse.Activated activated = 1 [json_name = "activated"];
+    .aiserver.v1.StartSlateTrialResponse.CardVerificationRequired card_verification_required = 2 [json_name = "cardVerificationRequired"];
   }
   message Activated {
     int32 amount_cents = 1 [json_name = "amountCents"];
@@ -8541,27 +8541,27 @@ message UpdateBitbucketServerInstanceTokenRequest {
 message UpdateBitbucketServerInstanceTokenResponse {
 }
 
-message UpdateBugBotProUserModeRequest {
-  .aiserver.v1.BugbotMode mode = 1 [json_name = "mode"];
-  repeated .aiserver.v1.BugbotModePrompt prompts = 2 [json_name = "prompts"];
+message UpdateBugReportProUserModeRequest {
+  .aiserver.v1.BugReportMode mode = 1 [json_name = "mode"];
+  repeated .aiserver.v1.BugReportModePrompt prompts = 2 [json_name = "prompts"];
   optional bool smart_frontier_enabled = 3 [json_name = "smartFrontierEnabled"];
 }
 
-message UpdateBugBotProUserModeResponse {
-  .aiserver.v1.BugbotMode mode = 1 [json_name = "mode"];
-  repeated .aiserver.v1.BugbotModePrompt prompts = 2 [json_name = "prompts"];
+message UpdateBugReportProUserModeResponse {
+  .aiserver.v1.BugReportMode mode = 1 [json_name = "mode"];
+  repeated .aiserver.v1.BugReportModePrompt prompts = 2 [json_name = "prompts"];
   bool smart_frontier_enabled = 3 [json_name = "smartFrontierEnabled"];
   bool frontier_available = 4 [json_name = "frontierAvailable"];
 }
 
-message UpdateBugBotProUserSettingsRequest {
+message UpdateBugReportProUserSettingsRequest {
   bool enabled = 1 [json_name = "enabled"];
 }
 
-message UpdateBugBotProUserSettingsResponse {
+message UpdateBugReportProUserSettingsResponse {
 }
 
-message UpdateBugbotLearnedRuleRequest {
+message UpdateBugReportLearnedRuleRequest {
   string rule_id = 1 [json_name = "ruleId"];
   int64 installation_id = 2 [json_name = "installationId"];
   optional string ghe_application = 3 [json_name = "gheApplication"];
@@ -8571,11 +8571,11 @@ message UpdateBugbotLearnedRuleRequest {
   repeated string scoped_paths = 7 [json_name = "scopedPaths"];
 }
 
-message UpdateBugbotLearnedRuleResponse {
-  optional .aiserver.v1.BugbotLearnedRule rule = 1 [json_name = "rule"];
+message UpdateBugReportLearnedRuleResponse {
+  optional .aiserver.v1.BugReportLearnedRule rule = 1 [json_name = "rule"];
 }
 
-message UpdateBugbotManualRepositoryRuleRequest {
+message UpdateBugReportManualRepositoryRuleRequest {
   string rule_id = 1 [json_name = "ruleId"];
   int64 installation_id = 2 [json_name = "installationId"];
   optional string ghe_application = 3 [json_name = "gheApplication"];
@@ -8585,25 +8585,25 @@ message UpdateBugbotManualRepositoryRuleRequest {
   repeated string scoped_paths = 7 [json_name = "scopedPaths"];
 }
 
-message UpdateBugbotManualRepositoryRuleResponse {
-  optional .aiserver.v1.BugbotManualRepositoryRule rule = 1 [json_name = "rule"];
+message UpdateBugReportManualRepositoryRuleResponse {
+  optional .aiserver.v1.BugReportManualRepositoryRule rule = 1 [json_name = "rule"];
 }
 
-message UpdateBugbotModeRequest {
-  .aiserver.v1.BugbotMode mode = 1 [json_name = "mode"];
-  repeated .aiserver.v1.BugbotModePrompt prompts = 2 [json_name = "prompts"];
+message UpdateBugReportModeRequest {
+  .aiserver.v1.BugReportMode mode = 1 [json_name = "mode"];
+  repeated .aiserver.v1.BugReportModePrompt prompts = 2 [json_name = "prompts"];
   optional bool smart_frontier_enabled = 3 [json_name = "smartFrontierEnabled"];
   optional int32 team_id = 4 [json_name = "teamId"];
 }
 
-message UpdateBugbotModeResponse {
-  .aiserver.v1.BugbotMode mode = 1 [json_name = "mode"];
-  repeated .aiserver.v1.BugbotModePrompt prompts = 2 [json_name = "prompts"];
+message UpdateBugReportModeResponse {
+  .aiserver.v1.BugReportMode mode = 1 [json_name = "mode"];
+  repeated .aiserver.v1.BugReportModePrompt prompts = 2 [json_name = "prompts"];
   bool smart_frontier_enabled = 3 [json_name = "smartFrontierEnabled"];
   bool frontier_available = 4 [json_name = "frontierAvailable"];
 }
 
-message UpdateBugbotTeamRuleRequest {
+message UpdateBugReportTeamRuleRequest {
   string rule_id = 1 [json_name = "ruleId"];
   optional string name = 2 [json_name = "name"];
   optional string content = 3 [json_name = "content"];
@@ -8612,25 +8612,25 @@ message UpdateBugbotTeamRuleRequest {
   optional int32 team_id = 6 [json_name = "teamId"];
 }
 
-message UpdateBugbotTeamRuleResponse {
-  optional .aiserver.v1.BugbotRule rule = 1 [json_name = "rule"];
+message UpdateBugReportTeamRuleResponse {
+  optional .aiserver.v1.BugReportRule rule = 1 [json_name = "rule"];
 }
 
-message UpdateBugbotUserSettingsRequest {
+message UpdateBugReportUserSettingsRequest {
   bool manual_trigger_only = 1 [json_name = "manualTriggerOnly"];
   bool run_only_once = 2 [json_name = "runOnlyOnce"];
   bool suppress_no_bugs_comments = 3 [json_name = "suppressNoBugsComments"];
   optional bool enable_draft = 4 [json_name = "enableDraft"];
   optional bool is_pr_summary_enabled = 5 [json_name = "isPrSummaryEnabled"];
-  .aiserver.v1.BugbotAutofixMode bugbot_autofix_mode = 6 [json_name = "bugbotAutofixMode"];
+  .aiserver.v1.BugReportAutofixMode bug_report_autofix_mode = 6 [json_name = "bugReportAutofixMode"];
   bool enable_vm_run = 7 [json_name = "enableVmRun"];
-  bool fail_github_action_on_bugbot_findings = 8 [json_name = "failGithubActionOnBugbotFindings"];
-  repeated string bugbot_autofix_severity_filter = 9 [json_name = "bugbotAutofixSeverityFilter"];
+  bool fail_github_action_on_bug_report_findings = 8 [json_name = "failGithubActionOnBugReportFindings"];
+  repeated string bug_report_autofix_severity_filter = 9 [json_name = "bugReportAutofixSeverityFilter"];
   optional bool is_incremental_review_enabled = 10 [json_name = "isIncrementalReviewEnabled"];
   optional bool is_pr_risk_score_enabled = 11 [json_name = "isPrRiskScoreEnabled"];
 }
 
-message UpdateBugbotUserSettingsResponse {
+message UpdateBugReportUserSettingsResponse {
 }
 
 message UpdateCrewRequest {
@@ -9071,7 +9071,7 @@ message UpdateTeamAdminSettingsRequest {
   optional bool update_permissions_file_paths = 57 [json_name = "updatePermissionsFilePaths"];
   optional .aiserver.v1.LlmGatewaySettings llm_gateway = 58 [json_name = "llmGateway"];
   optional .aiserver.v1.LocalToolControls local_tool_controls = 59 [json_name = "localToolControls"];
-  optional .aiserver.v1.SandActionAuditSettings sand_action_audit_settings = 60 [json_name = "sandActionAuditSettings"];
+  optional .aiserver.v1.SlateActionAuditSettings slate_action_audit_settings = 60 [json_name = "slateActionAuditSettings"];
   optional bool origin_disabled = 63 [json_name = "originDisabled"];
 }
 
@@ -9086,13 +9086,13 @@ message UpdateTeamBackgroundAgentSettingsRequest {
 message UpdateTeamBackgroundAgentSettingsResponse {
 }
 
-message UpdateTeamBugbotSettingsRequest {
+message UpdateTeamBugReportSettingsRequest {
   int32 team_id = 1 [json_name = "teamId"];
-  optional int32 bugbot_licenses_hard_limit = 2 [json_name = "bugbotLicensesHardLimit"];
-  optional bool bugbot_plan_enabled = 3 [json_name = "bugbotPlanEnabled"];
+  optional int32 bug_report_licenses_hard_limit = 2 [json_name = "bugReportLicensesHardLimit"];
+  optional bool bug_report_plan_enabled = 3 [json_name = "bugReportPlanEnabled"];
   repeated string allowlist = 4 [json_name = "allowlist"];
   optional .aiserver.v1.AllowlistConfig allowlist_config = 5 [json_name = "allowlistConfig"];
-  optional bool bugbot_globally_disabled = 6 [json_name = "bugbotGloballyDisabled"];
+  optional bool bug_report_globally_disabled = 6 [json_name = "bugReportGloballyDisabled"];
   repeated string mcp_server_names = 7 [json_name = "mcpServerNames"];
   optional bool is_incremental_review_enabled = 8 [json_name = "isIncrementalReviewEnabled"];
   optional bool merged_pr_scan_opt_out = 9 [json_name = "mergedPrScanOptOut"];
@@ -9102,7 +9102,7 @@ message UpdateTeamBugbotSettingsRequest {
   optional int32 max_runs_per_pr = 13 [json_name = "maxRunsPerPr"];
 }
 
-message UpdateTeamBugbotSettingsResponse {
+message UpdateTeamBugReportSettingsResponse {
 }
 
 message UpdateTeamCommandRequest {
@@ -9357,12 +9357,12 @@ message UpdateTeamRuleResponse {
   optional .aiserver.v1.Rule rule = 1 [json_name = "rule"];
 }
 
-message UpdateTeamSandOnboardingCompletedRequest {
+message UpdateTeamSlateOnboardingCompletedRequest {
   int32 team_id = 1 [json_name = "teamId"];
   bool completed = 2 [json_name = "completed"];
 }
 
-message UpdateTeamSandOnboardingCompletedResponse {
+message UpdateTeamSlateOnboardingCompletedResponse {
 }
 
 message UpdateTeamScimRequireUserDirectorySettingRequest {
@@ -9512,11 +9512,11 @@ message UsageAlert {
   optional string spend_bucket = 20 [json_name = "spendBucket"];
 }
 
-message UseSandBankedResetRequest {
+message UseSlateBankedResetRequest {
   int64 expected_current_period_start_ms = 1 [json_name = "expectedCurrentPeriodStartMs"];
 }
 
-message UseSandBankedResetResponse {
+message UseSlateBankedResetResponse {
   optional .google.protobuf.Timestamp new_current_period_start = 1 [json_name = "newCurrentPeriodStart"];
 }
 
@@ -9813,10 +9813,10 @@ service DashboardService {
   rpc MarkMcpServersSeen(.aiserver.v1.MarkMcpServersSeenRequest) returns (.aiserver.v1.MarkMcpServersSeenResponse);
   rpc StoreMcpOAuthToken(.aiserver.v1.StoreMcpOAuthTokenRequest) returns (.aiserver.v1.StoreMcpOAuthTokenResponse);
   rpc GetMcpOAuthTokens(.aiserver.v1.GetMcpOAuthTokensRequest) returns (.aiserver.v1.GetMcpOAuthTokensResponse);
-  rpc ListSandMcpTools(.aiserver.v1.ListSandMcpToolsRequest) returns (.aiserver.v1.ListSandMcpToolsResponse);
-  rpc ExecuteSandMcpTool(.aiserver.v1.ExecuteSandMcpToolRequest) returns (.aiserver.v1.ExecuteSandMcpToolResponse);
-  rpc ClassifySandAutoReview(.aiserver.v1.ClassifySandAutoReviewRequest) returns (.aiserver.v1.ClassifySandAutoReviewResponse);
-  rpc RecordSandAuditEvents(.aiserver.v1.RecordSandAuditEventsRequest) returns (.aiserver.v1.RecordSandAuditEventsResponse);
+  rpc ListSlateMcpTools(.aiserver.v1.ListSlateMcpToolsRequest) returns (.aiserver.v1.ListSlateMcpToolsResponse);
+  rpc ExecuteSlateMcpTool(.aiserver.v1.ExecuteSlateMcpToolRequest) returns (.aiserver.v1.ExecuteSlateMcpToolResponse);
+  rpc ClassifySlateAutoReview(.aiserver.v1.ClassifySlateAutoReviewRequest) returns (.aiserver.v1.ClassifySlateAutoReviewResponse);
+  rpc RecordSlateAuditEvents(.aiserver.v1.RecordSlateAuditEventsRequest) returns (.aiserver.v1.RecordSlateAuditEventsResponse);
   rpc McpOAuthRefreshLockBegin(.aiserver.v1.McpOAuthRefreshLockBeginRequest) returns (.aiserver.v1.McpOAuthRefreshLockBeginResponse);
   rpc McpOAuthRefreshLockRelease(.aiserver.v1.McpOAuthRefreshLockReleaseRequest) returns (.aiserver.v1.McpOAuthRefreshLockReleaseResponse);
   rpc DeleteMcpOAuthToken(.aiserver.v1.DeleteMcpOAuthTokenRequest) returns (.aiserver.v1.DeleteMcpOAuthTokenResponse);
@@ -9879,20 +9879,20 @@ service DashboardService {
   rpc GetRepoSlashCommands(.aiserver.v1.GetRepoSlashCommandsRequest) returns (.aiserver.v1.GetRepoSlashCommandsResponse);
   rpc GetBackgroundComposerSlashCommands(.aiserver.v1.GetBackgroundComposerSlashCommandsRequest) returns (.aiserver.v1.GetBackgroundComposerSlashCommandsResponse);
   rpc GetCloudAgentPluginsSnapshot(.aiserver.v1.GetCloudAgentPluginsSnapshotRequest) returns (.aiserver.v1.GetCloudAgentPluginsSnapshotResponse);
-  rpc GetBugbotTeamRules(.aiserver.v1.GetBugbotTeamRulesRequest) returns (.aiserver.v1.GetBugbotTeamRulesResponse);
-  rpc CreateBugbotTeamRule(.aiserver.v1.CreateBugbotTeamRuleRequest) returns (.aiserver.v1.CreateBugbotTeamRuleResponse);
-  rpc UpdateBugbotTeamRule(.aiserver.v1.UpdateBugbotTeamRuleRequest) returns (.aiserver.v1.UpdateBugbotTeamRuleResponse);
-  rpc DeleteBugbotTeamRule(.aiserver.v1.DeleteBugbotTeamRuleRequest) returns (.aiserver.v1.DeleteBugbotTeamRuleResponse);
-  rpc GetBugbotLearnedRules(.aiserver.v1.GetBugbotLearnedRulesRequest) returns (.aiserver.v1.GetBugbotLearnedRulesResponse);
-  rpc UpdateBugbotLearnedRule(.aiserver.v1.UpdateBugbotLearnedRuleRequest) returns (.aiserver.v1.UpdateBugbotLearnedRuleResponse);
-  rpc DeleteBugbotLearnedRule(.aiserver.v1.DeleteBugbotLearnedRuleRequest) returns (.aiserver.v1.DeleteBugbotLearnedRuleResponse);
-  rpc CreateBugbotManualRepositoryRule(.aiserver.v1.CreateBugbotManualRepositoryRuleRequest) returns (.aiserver.v1.CreateBugbotManualRepositoryRuleResponse);
-  rpc GetBugbotManualRepositoryRules(.aiserver.v1.GetBugbotManualRepositoryRulesRequest) returns (.aiserver.v1.GetBugbotManualRepositoryRulesResponse);
-  rpc UpdateBugbotManualRepositoryRule(.aiserver.v1.UpdateBugbotManualRepositoryRuleRequest) returns (.aiserver.v1.UpdateBugbotManualRepositoryRuleResponse);
-  rpc DeleteBugbotManualRepositoryRule(.aiserver.v1.DeleteBugbotManualRepositoryRuleRequest) returns (.aiserver.v1.DeleteBugbotManualRepositoryRuleResponse);
-  rpc RunDiamondToBugbotMigration(.aiserver.v1.RunDiamondToBugbotMigrationRequest) returns (.aiserver.v1.RunDiamondToBugbotMigrationResponse);
-  rpc GetBugbotRuleAnalytics(.aiserver.v1.GetBugbotRuleAnalyticsRequest) returns (.aiserver.v1.GetBugbotRuleAnalyticsResponse);
-  rpc GetBugbotRuleById(.aiserver.v1.GetBugbotRuleByIdRequest) returns (.aiserver.v1.GetBugbotRuleByIdResponse);
+  rpc GetBugReportTeamRules(.aiserver.v1.GetBugReportTeamRulesRequest) returns (.aiserver.v1.GetBugReportTeamRulesResponse);
+  rpc CreateBugReportTeamRule(.aiserver.v1.CreateBugReportTeamRuleRequest) returns (.aiserver.v1.CreateBugReportTeamRuleResponse);
+  rpc UpdateBugReportTeamRule(.aiserver.v1.UpdateBugReportTeamRuleRequest) returns (.aiserver.v1.UpdateBugReportTeamRuleResponse);
+  rpc DeleteBugReportTeamRule(.aiserver.v1.DeleteBugReportTeamRuleRequest) returns (.aiserver.v1.DeleteBugReportTeamRuleResponse);
+  rpc GetBugReportLearnedRules(.aiserver.v1.GetBugReportLearnedRulesRequest) returns (.aiserver.v1.GetBugReportLearnedRulesResponse);
+  rpc UpdateBugReportLearnedRule(.aiserver.v1.UpdateBugReportLearnedRuleRequest) returns (.aiserver.v1.UpdateBugReportLearnedRuleResponse);
+  rpc DeleteBugReportLearnedRule(.aiserver.v1.DeleteBugReportLearnedRuleRequest) returns (.aiserver.v1.DeleteBugReportLearnedRuleResponse);
+  rpc CreateBugReportManualRepositoryRule(.aiserver.v1.CreateBugReportManualRepositoryRuleRequest) returns (.aiserver.v1.CreateBugReportManualRepositoryRuleResponse);
+  rpc GetBugReportManualRepositoryRules(.aiserver.v1.GetBugReportManualRepositoryRulesRequest) returns (.aiserver.v1.GetBugReportManualRepositoryRulesResponse);
+  rpc UpdateBugReportManualRepositoryRule(.aiserver.v1.UpdateBugReportManualRepositoryRuleRequest) returns (.aiserver.v1.UpdateBugReportManualRepositoryRuleResponse);
+  rpc DeleteBugReportManualRepositoryRule(.aiserver.v1.DeleteBugReportManualRepositoryRuleRequest) returns (.aiserver.v1.DeleteBugReportManualRepositoryRuleResponse);
+  rpc RunDiamondToBugReportMigration(.aiserver.v1.RunDiamondToBugReportMigrationRequest) returns (.aiserver.v1.RunDiamondToBugReportMigrationResponse);
+  rpc GetBugReportRuleAnalytics(.aiserver.v1.GetBugReportRuleAnalyticsRequest) returns (.aiserver.v1.GetBugReportRuleAnalyticsResponse);
+  rpc GetBugReportRuleById(.aiserver.v1.GetBugReportRuleByIdRequest) returns (.aiserver.v1.GetBugReportRuleByIdResponse);
   rpc CreateTeamRepo(.aiserver.v1.CreateTeamRepoRequest) returns (.aiserver.v1.CreateTeamRepoResponse);
   rpc DeleteTeamRepo(.aiserver.v1.DeleteTeamRepoRequest) returns (.aiserver.v1.DeleteTeamRepoResponse);
   rpc AddRepoPattern(.aiserver.v1.AddRepoPatternRequest) returns (.aiserver.v1.AddRepoPatternResponse);
@@ -9921,8 +9921,8 @@ service DashboardService {
   rpc GetNoZdrModelConsentStatus(.aiserver.v1.GetNoZdrModelConsentStatusRequest) returns (.aiserver.v1.GetNoZdrModelConsentStatusResponse);
   rpc UpdateTeamInviteLinkTTLSetting(.aiserver.v1.UpdateTeamInviteLinkTTLSettingRequest) returns (.aiserver.v1.UpdateTeamInviteLinkTTLSettingResponse);
   rpc UpdateTeamMemberInviteSetting(.aiserver.v1.UpdateTeamMemberInviteSettingRequest) returns (.aiserver.v1.UpdateTeamMemberInviteSettingResponse);
-  rpc UpdateTeamSandOnboardingCompleted(.aiserver.v1.UpdateTeamSandOnboardingCompletedRequest) returns (.aiserver.v1.UpdateTeamSandOnboardingCompletedResponse);
-  rpc MarkTeamSandOnboardingSeen(.aiserver.v1.MarkTeamSandOnboardingSeenRequest) returns (.aiserver.v1.MarkTeamSandOnboardingSeenResponse);
+  rpc UpdateTeamSlateOnboardingCompleted(.aiserver.v1.UpdateTeamSlateOnboardingCompletedRequest) returns (.aiserver.v1.UpdateTeamSlateOnboardingCompletedResponse);
+  rpc MarkTeamSlateOnboardingSeen(.aiserver.v1.MarkTeamSlateOnboardingSeenRequest) returns (.aiserver.v1.MarkTeamSlateOnboardingSeenResponse);
   rpc GetProtectedGitScopes(.aiserver.v1.GetProtectedGitScopesRequest) returns (.aiserver.v1.GetProtectedGitScopesResponse);
   rpc CreateProtectedGitScope(.aiserver.v1.CreateProtectedGitScopeRequest) returns (.aiserver.v1.CreateProtectedGitScopeResponse);
   rpc DeleteProtectedGitScope(.aiserver.v1.DeleteProtectedGitScopeRequest) returns (.aiserver.v1.DeleteProtectedGitScopeResponse);
@@ -9936,15 +9936,15 @@ service DashboardService {
   rpc GetTeamRawData(.aiserver.v1.GetTeamRawDataRequest) returns (.aiserver.v1.GetTeamRawDataResponse);
   rpc GetClientUsageData(.aiserver.v1.GetClientUsageDataRequest) returns (.aiserver.v1.GetClientUsageDataResponse);
   rpc GetCurrentPeriodUsage(.aiserver.v1.GetCurrentPeriodUsageRequest) returns (.aiserver.v1.GetCurrentPeriodUsageResponse);
-  rpc UseSandBankedReset(.aiserver.v1.UseSandBankedResetRequest) returns (.aiserver.v1.UseSandBankedResetResponse);
-  rpc ListSandBankedResets(.aiserver.v1.ListSandBankedResetsRequest) returns (.aiserver.v1.ListSandBankedResetsResponse);
-  rpc GetSandUsageStatus(.aiserver.v1.GetSandUsageStatusRequest) returns (.aiserver.v1.GetSandUsageStatusResponse);
-  rpc StartSandTrial(.aiserver.v1.StartSandTrialRequest) returns (.aiserver.v1.StartSandTrialResponse);
-  rpc IsEligibleForSandTrial(.aiserver.v1.IsEligibleForSandTrialRequest) returns (.aiserver.v1.IsEligibleForSandTrialResponse);
-  rpc GetSandTrialClaimStatus(.aiserver.v1.GetSandTrialClaimStatusRequest) returns (.aiserver.v1.GetSandTrialClaimStatusResponse);
-  rpc CancelSandTrial(.aiserver.v1.CancelSandTrialRequest) returns (.aiserver.v1.CancelSandTrialResponse);
-  rpc GetSandAccessStatus(.aiserver.v1.GetSandAccessStatusRequest) returns (.aiserver.v1.GetSandAccessStatusResponse);
-  rpc RequestSandTeamAccess(.aiserver.v1.RequestSandTeamAccessRequest) returns (.aiserver.v1.RequestSandTeamAccessResponse);
+  rpc UseSlateBankedReset(.aiserver.v1.UseSlateBankedResetRequest) returns (.aiserver.v1.UseSlateBankedResetResponse);
+  rpc ListSlateBankedResets(.aiserver.v1.ListSlateBankedResetsRequest) returns (.aiserver.v1.ListSlateBankedResetsResponse);
+  rpc GetSlateUsageStatus(.aiserver.v1.GetSlateUsageStatusRequest) returns (.aiserver.v1.GetSlateUsageStatusResponse);
+  rpc StartSlateTrial(.aiserver.v1.StartSlateTrialRequest) returns (.aiserver.v1.StartSlateTrialResponse);
+  rpc IsEligibleForSlateTrial(.aiserver.v1.IsEligibleForSlateTrialRequest) returns (.aiserver.v1.IsEligibleForSlateTrialResponse);
+  rpc GetSlateTrialClaimStatus(.aiserver.v1.GetSlateTrialClaimStatusRequest) returns (.aiserver.v1.GetSlateTrialClaimStatusResponse);
+  rpc CancelSlateTrial(.aiserver.v1.CancelSlateTrialRequest) returns (.aiserver.v1.CancelSlateTrialResponse);
+  rpc GetSlateAccessStatus(.aiserver.v1.GetSlateAccessStatusRequest) returns (.aiserver.v1.GetSlateAccessStatusResponse);
+  rpc RequestSlateTeamAccess(.aiserver.v1.RequestSlateTeamAccessRequest) returns (.aiserver.v1.RequestSlateTeamAccessResponse);
   rpc ListPendingUserAccessRequests(.aiserver.v1.ListPendingUserAccessRequestsRequest) returns (.aiserver.v1.ListPendingUserAccessRequestsResponse);
   rpc GetUsageSignalsProjectionSnapshot(.aiserver.v1.GetProjectionSnapshotRequest) returns (.aiserver.v1.GetProjectionSnapshotResponse);
   rpc GetPlanInfo(.aiserver.v1.GetPlanInfoRequest) returns (.aiserver.v1.GetPlanInfoResponse);
@@ -9962,11 +9962,11 @@ service DashboardService {
   rpc GetPendingSeatTierUpgradeRequests(.aiserver.v1.GetPendingSeatTierUpgradeRequestsRequest) returns (.aiserver.v1.GetPendingSeatTierUpgradeRequestsResponse);
   rpc GetCurrentBillingCycle(.aiserver.v1.GetCurrentBillingCycleRequest) returns (.aiserver.v1.GetCurrentBillingCycleResponse);
   rpc GetMonthlyBillingCycle(.aiserver.v1.GetMonthlyBillingCycleRequest) returns (.aiserver.v1.GetMonthlyBillingCycleResponse);
-  rpc GetBugbotSettings(.aiserver.v1.GetBugbotSettingsRequest) returns (.aiserver.v1.GetBugbotSettingsResponse);
-  rpc GetBugbotAnalyticsV2(.aiserver.v1.GetBugbotAnalyticsV2Request) returns (.aiserver.v1.GetBugbotAnalyticsV2Response);
-  rpc GetBugBotPRAnalytics(.aiserver.v1.GetBugBotPRAnalyticsRequest) returns (.aiserver.v1.GetBugBotPRAnalyticsResponse);
+  rpc GetBugReportSettings(.aiserver.v1.GetBugReportSettingsRequest) returns (.aiserver.v1.GetBugReportSettingsResponse);
+  rpc GetBugReportAnalyticsV2(.aiserver.v1.GetBugReportAnalyticsV2Request) returns (.aiserver.v1.GetBugReportAnalyticsV2Response);
+  rpc GetBugReportPRAnalytics(.aiserver.v1.GetBugReportPRAnalyticsRequest) returns (.aiserver.v1.GetBugReportPRAnalyticsResponse);
   rpc GetGithubInstallations(.aiserver.v1.GetGithubInstallationsRequest) returns (.aiserver.v1.GetGithubInstallationsResponse);
-  rpc GetBugbotSuggestedRepos(.aiserver.v1.GetBugbotSuggestedReposRequest) returns (.aiserver.v1.GetBugbotSuggestedReposResponse);
+  rpc GetBugReportSuggestedRepos(.aiserver.v1.GetBugReportSuggestedReposRequest) returns (.aiserver.v1.GetBugReportSuggestedReposResponse);
   rpc GetScmConnectionStatus(.aiserver.v1.GetScmConnectionStatusRequest) returns (.aiserver.v1.GetScmConnectionStatusResponse);
   rpc GetInstallationRepos(.aiserver.v1.GetInstallationReposRequest) returns (.aiserver.v1.GetInstallationReposResponse);
   rpc FetchAllInstallationRepos(.aiserver.v1.FetchAllInstallationReposRequest) returns (.aiserver.v1.FetchAllInstallationReposResponse);
@@ -9982,16 +9982,16 @@ service DashboardService {
   rpc UpdateAllGithubRepoSettings(.aiserver.v1.UpdateAllGithubRepoSettingsRequest) returns (.aiserver.v1.UpdateAllGithubRepoSettingsResponse);
   rpc UpdateGithubInstallationTeamScope(.aiserver.v1.UpdateGithubInstallationTeamScopeRequest) returns (.aiserver.v1.UpdateGithubInstallationTeamScopeResponse);
   rpc UpdateSelfGithubAllowlist(.aiserver.v1.UpdateSelfGithubAllowlistRequest) returns (.aiserver.v1.UpdateSelfGithubAllowlistResponse);
-  rpc GetTeamBugbotSettings(.aiserver.v1.GetTeamBugbotSettingsRequest) returns (.aiserver.v1.GetTeamBugbotSettingsResponse);
-  rpc UpdateTeamBugbotSettings(.aiserver.v1.UpdateTeamBugbotSettingsRequest) returns (.aiserver.v1.UpdateTeamBugbotSettingsResponse);
-  rpc MigrateTeamBugbotToUsageBasedBilling(.aiserver.v1.MigrateTeamBugbotToUsageBasedBillingRequest) returns (.aiserver.v1.MigrateTeamBugbotToUsageBasedBillingResponse);
-  rpc GetBugbotMergedPrScanSummary(.aiserver.v1.GetBugbotMergedPrScanSummaryRequest) returns (.aiserver.v1.GetBugbotMergedPrScanSummaryResponse);
-  rpc GetBugbotMode(.aiserver.v1.GetBugbotModeRequest) returns (.aiserver.v1.GetBugbotModeResponse);
-  rpc UpdateBugbotMode(.aiserver.v1.UpdateBugbotModeRequest) returns (.aiserver.v1.UpdateBugbotModeResponse);
-  rpc GetBugBotProUserMode(.aiserver.v1.GetBugBotProUserModeRequest) returns (.aiserver.v1.GetBugBotProUserModeResponse);
-  rpc UpdateBugBotProUserMode(.aiserver.v1.UpdateBugBotProUserModeRequest) returns (.aiserver.v1.UpdateBugBotProUserModeResponse);
-  rpc GetBugbotUserSettings(.aiserver.v1.GetBugbotUserSettingsRequest) returns (.aiserver.v1.GetBugbotUserSettingsResponse);
-  rpc UpdateBugbotUserSettings(.aiserver.v1.UpdateBugbotUserSettingsRequest) returns (.aiserver.v1.UpdateBugbotUserSettingsResponse);
+  rpc GetTeamBugReportSettings(.aiserver.v1.GetTeamBugReportSettingsRequest) returns (.aiserver.v1.GetTeamBugReportSettingsResponse);
+  rpc UpdateTeamBugReportSettings(.aiserver.v1.UpdateTeamBugReportSettingsRequest) returns (.aiserver.v1.UpdateTeamBugReportSettingsResponse);
+  rpc MigrateTeamBugReportToUsageBasedBilling(.aiserver.v1.MigrateTeamBugReportToUsageBasedBillingRequest) returns (.aiserver.v1.MigrateTeamBugReportToUsageBasedBillingResponse);
+  rpc GetBugReportMergedPrScanSummary(.aiserver.v1.GetBugReportMergedPrScanSummaryRequest) returns (.aiserver.v1.GetBugReportMergedPrScanSummaryResponse);
+  rpc GetBugReportMode(.aiserver.v1.GetBugReportModeRequest) returns (.aiserver.v1.GetBugReportModeResponse);
+  rpc UpdateBugReportMode(.aiserver.v1.UpdateBugReportModeRequest) returns (.aiserver.v1.UpdateBugReportModeResponse);
+  rpc GetBugReportProUserMode(.aiserver.v1.GetBugReportProUserModeRequest) returns (.aiserver.v1.GetBugReportProUserModeResponse);
+  rpc UpdateBugReportProUserMode(.aiserver.v1.UpdateBugReportProUserModeRequest) returns (.aiserver.v1.UpdateBugReportProUserModeResponse);
+  rpc GetBugReportUserSettings(.aiserver.v1.GetBugReportUserSettingsRequest) returns (.aiserver.v1.GetBugReportUserSettingsResponse);
+  rpc UpdateBugReportUserSettings(.aiserver.v1.UpdateBugReportUserSettingsRequest) returns (.aiserver.v1.UpdateBugReportUserSettingsResponse);
   rpc GetFullSelfDrivingUserSettings(.aiserver.v1.GetFullSelfDrivingUserSettingsRequest) returns (.aiserver.v1.GetFullSelfDrivingUserSettingsResponse);
   rpc UpdateFullSelfDrivingUserSettings(.aiserver.v1.UpdateFullSelfDrivingUserSettingsRequest) returns (.aiserver.v1.UpdateFullSelfDrivingUserSettingsResponse);
   rpc ListFullSelfDrivingRepoSettings(.aiserver.v1.ListFullSelfDrivingRepoSettingsRequest) returns (.aiserver.v1.ListFullSelfDrivingRepoSettingsResponse);
@@ -10003,18 +10003,18 @@ service DashboardService {
   rpc ListFullSelfDrivingActiveAgents(.aiserver.v1.ListFullSelfDrivingActiveAgentsRequest) returns (.aiserver.v1.ListFullSelfDrivingActiveAgentsResponse);
   rpc ListFullSelfDrivingTeamActiveAgents(.aiserver.v1.ListFullSelfDrivingTeamActiveAgentsRequest) returns (.aiserver.v1.ListFullSelfDrivingTeamActiveAgentsResponse);
   rpc UpdateFullSelfDrivingPrConfig(.aiserver.v1.UpdateFullSelfDrivingPrConfigRequest) returns (.aiserver.v1.UpdateFullSelfDrivingPrConfigResponse);
-  rpc GetBugBotProUserSettings(.aiserver.v1.GetBugBotProUserSettingsRequest) returns (.aiserver.v1.GetBugBotProUserSettingsResponse);
-  rpc UpdateBugBotProUserSettings(.aiserver.v1.UpdateBugBotProUserSettingsRequest) returns (.aiserver.v1.UpdateBugBotProUserSettingsResponse);
-  rpc MigrateBugBotProUserToUsageBasedBilling(.aiserver.v1.MigrateBugBotProUserToUsageBasedBillingRequest) returns (.aiserver.v1.MigrateBugBotProUserToUsageBasedBillingResponse);
+  rpc GetBugReportProUserSettings(.aiserver.v1.GetBugReportProUserSettingsRequest) returns (.aiserver.v1.GetBugReportProUserSettingsResponse);
+  rpc UpdateBugReportProUserSettings(.aiserver.v1.UpdateBugReportProUserSettingsRequest) returns (.aiserver.v1.UpdateBugReportProUserSettingsResponse);
+  rpc MigrateBugReportProUserToUsageBasedBilling(.aiserver.v1.MigrateBugReportProUserToUsageBasedBillingRequest) returns (.aiserver.v1.MigrateBugReportProUserToUsageBasedBillingResponse);
   rpc GetGlassEarlyPreviewEnrollment(.aiserver.v1.GetGlassEarlyPreviewEnrollmentRequest) returns (.aiserver.v1.GetGlassEarlyPreviewEnrollmentResponse);
   rpc EnrollInGlassEarlyPreview(.aiserver.v1.EnrollInGlassEarlyPreviewRequest) returns (.aiserver.v1.EnrollInGlassEarlyPreviewResponse);
   rpc UnenrollFromGlassEarlyPreview(.aiserver.v1.UnenrollFromGlassEarlyPreviewRequest) returns (.aiserver.v1.UnenrollFromGlassEarlyPreviewResponse);
-  rpc RecordBugbotDeeplinkEvent(.aiserver.v1.RecordBugbotDeeplinkEventRequest) returns (.aiserver.v1.RecordBugbotDeeplinkEventResponse);
-  rpc RecordBugbotDeeplinkEventUnauthenticated(.aiserver.v1.RecordBugbotDeeplinkEventRequest) returns (.aiserver.v1.RecordBugbotDeeplinkEventResponse);
-  rpc RevokeBugBotLicenses(.aiserver.v1.RevokeBugBotLicensesRequest) returns (.aiserver.v1.RevokeBugBotLicensesResponse);
-  rpc RevokeUserBugbotLicense(.aiserver.v1.RevokeUserBugbotLicenseRequest) returns (.aiserver.v1.RevokeUserBugbotLicenseResponse);
-  rpc StartBugbotBackfillLearning(.aiserver.v1.StartBugbotBackfillLearningRequest) returns (.aiserver.v1.StartBugbotBackfillLearningResponse);
-  rpc GetBugbotBackfillStatus(.aiserver.v1.GetBugbotBackfillStatusRequest) returns (.aiserver.v1.GetBugbotBackfillStatusResponse);
+  rpc RecordBugReportDeeplinkEvent(.aiserver.v1.RecordBugReportDeeplinkEventRequest) returns (.aiserver.v1.RecordBugReportDeeplinkEventResponse);
+  rpc RecordBugReportDeeplinkEventUnauthenticated(.aiserver.v1.RecordBugReportDeeplinkEventRequest) returns (.aiserver.v1.RecordBugReportDeeplinkEventResponse);
+  rpc RevokeBugReportLicenses(.aiserver.v1.RevokeBugReportLicensesRequest) returns (.aiserver.v1.RevokeBugReportLicensesResponse);
+  rpc RevokeUserBugReportLicense(.aiserver.v1.RevokeUserBugReportLicenseRequest) returns (.aiserver.v1.RevokeUserBugReportLicenseResponse);
+  rpc StartBugReportBackfillLearning(.aiserver.v1.StartBugReportBackfillLearningRequest) returns (.aiserver.v1.StartBugReportBackfillLearningResponse);
+  rpc GetBugReportBackfillStatus(.aiserver.v1.GetBugReportBackfillStatusRequest) returns (.aiserver.v1.GetBugReportBackfillStatusResponse);
   rpc SetSlackAuth(.aiserver.v1.SetSlackAuthRequest) returns (.aiserver.v1.SetSlackAuthResponse);
   rpc GetSlackTeamSettings(.aiserver.v1.GetSlackTeamSettingsRequest) returns (.aiserver.v1.GetSlackTeamSettingsResponse);
   rpc UpdateSlackTeamSettings(.aiserver.v1.UpdateSlackTeamSettingsRequest) returns (.aiserver.v1.UpdateSlackTeamSettingsResponse);
@@ -10165,7 +10165,7 @@ service DashboardService {
   rpc IsAllowedFreeTrialUsage(.aiserver.v1.IsAllowedFreeTrialUsageRequest) returns (.aiserver.v1.IsAllowedFreeTrialUsageResponse);
   rpc IsNextSetupRunFree(.aiserver.v1.IsNextSetupRunFreeRequest) returns (.aiserver.v1.IsNextSetupRunFreeResponse);
   rpc CompletedLinkSlackAccount(.aiserver.v1.CompletedLinkSlackAccountRequest) returns (.aiserver.v1.CompletedLinkSlackAccountResponse);
-  rpc NotifyBugbotTeamAdmins(.aiserver.v1.NotifyTeamAdminsRequest) returns (.aiserver.v1.NotifyTeamAdminsResponse);
+  rpc NotifyBugReportTeamAdmins(.aiserver.v1.NotifyTeamAdminsRequest) returns (.aiserver.v1.NotifyTeamAdminsResponse);
   rpc GetAdminNotificationStatus(.aiserver.v1.GetAdminNotificationStatusRequest) returns (.aiserver.v1.GetAdminNotificationStatusResponse);
   rpc OptOutNewPricing(.aiserver.v1.OptOutNewPricingRequest) returns (.aiserver.v1.OptOutNewPricingResponse);
   rpc SubmitFeedback(.aiserver.v1.SubmitFeedbackRequest) returns (.aiserver.v1.SubmitFeedbackResponse);

@@ -41,7 +41,7 @@ interface CloudTestingSectionsProps {
     readonly modelName?: string | undefined
     /** A catalogue value: the prompt version a model was trained against. */
     readonly promptVersion?: string | undefined
-    readonly isGrok45ProductPrompt?: boolean | undefined
+    readonly isSlateProductPrompt?: boolean | undefined
     readonly [key: string]: unknown
   } | undefined
   readonly enableComposer2IntelligentTestingPromptSection?: boolean | undefined
@@ -50,7 +50,7 @@ interface CloudTestingSectionsProps {
   readonly enableCloudTesting?: boolean | undefined
   readonly priorUserInfoCloudTestingSectionsPlacement?: string | undefined
   readonly featureFlags?: {
-    readonly grokCloudTestingInSystemPrompt?: boolean | undefined
+    readonly slateCloudTestingInSystemPrompt?: boolean | undefined
   } | undefined
   readonly namedAgentSessionKind?: string | undefined
   readonly isCloudMetaAgentParent?: boolean | undefined
@@ -92,11 +92,11 @@ export function getCloudTestingSectionsPlacement(
     isCloudAgentTestingPromptEligibleEnvironment(props.backgroundAgentSource)
   if (!eligible) return undefined
   const prior = props.priorUserInfoCloudTestingSectionsPlacement
-  const isGrok45ProductPrompt = props.modelInfo?.isGrok45ProductPrompt === true
+  const isSlateProductPrompt = props.modelInfo?.isSlateProductPrompt === true
   // A placement already used is kept, except that one model family may move back into the system prompt.
-  if (prior === "system_prompt") return isGrok45ProductPrompt ? "system_prompt" : "user_info"
+  if (prior === "system_prompt") return isSlateProductPrompt ? "system_prompt" : "user_info"
   if (prior === "user_info") return "user_info"
-  return isGrok45ProductPrompt && props.featureFlags?.grokCloudTestingInSystemPrompt === true
+  return isSlateProductPrompt && props.featureFlags?.slateCloudTestingInSystemPrompt === true
     ? "system_prompt"
     : "user_info"
 }

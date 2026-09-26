@@ -1,8 +1,8 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 
-import { PluginComponentDiscovery } from "../../source/packages/cursor-plugins/component-discovery.ts"
-import { classifyCloneError, getCanonicalMarketplacePathSegments, isKilledSubprocessError, LS_REMOTE_TIMEOUT_MS, REMOTE_GIT_TIMEOUT_MS } from "../../source/packages/cursor-plugins/marketplace-cache.ts"
+import { PluginComponentDiscovery } from "../../source/packages/plugin-install/component-discovery.ts"
+import { classifyCloneError, getCanonicalMarketplacePathSegments, isKilledSubprocessError, LS_REMOTE_TIMEOUT_MS, REMOTE_GIT_TIMEOUT_MS } from "../../source/packages/plugin-install/marketplace-cache.ts"
 import { CoreShellFactory } from "../../source/packages/local-exec/background-shell.ts"
 
 // ---------------------------------------------------------------------------------------------

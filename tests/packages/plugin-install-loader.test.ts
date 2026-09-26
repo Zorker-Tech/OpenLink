@@ -4,7 +4,7 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 
-import { createLocalPluginFileFetcher, loadPluginFromPath } from "../../source/packages/cursor-plugins/loader.ts"
+import { createLocalPluginFileFetcher, loadPluginFromPath } from "../../source/packages/plugin-install/loader.ts"
 
 // Loading a plugin is reading what is in its directory. The fetcher is what the loader reads through, so
 // these tests drive both: what the fetcher refuses, and what a plugin directory turns into.

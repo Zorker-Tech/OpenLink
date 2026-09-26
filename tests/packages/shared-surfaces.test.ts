@@ -10,7 +10,7 @@ import { pinExperimentsDiagnosticsReporter, reportExperimentsDiagnostic } from "
 import { findMissingRequiredCatalogFields, humanizeVariableName, pluginVariablesSchemaToFields } from "../../source/shared/node/mcp/mcp-plugin-variables.ts"
 import { isSlateClientPersistenceSlice, SLATE_CLIENT_PERSISTENCE_SLICES } from "../../source/shared/observability/telemetry.ts"
 import { isSlateUpdateTrack } from "../../source/shared/update.ts"
-import { DEFAULT_SLATE_BOX_RUNTIME, isSandBoxRuntime } from "../../source/shared/box-runtime.ts"
+import { DEFAULT_SLATE_BOX_RUNTIME, isBoxRuntime } from "../../source/shared/box-runtime.ts"
 import { buildSlatePluginDeepLink, DEFAULT_SLATE_THEME_PREFERENCE, isSlateDeepLinkPluginId, isSlateThemePreference } from "../../source/shared/desktop.ts"
 import { attachmentExtension } from "../../source/shared/media/attachment-open-policy.ts"
 import { transcriptReplicaKey, ORDERED_REPLICAS_V1, ROSTER_REPLICA_KEY } from "../../source/shared/ordering.ts"
@@ -135,8 +135,8 @@ test("the names the platform's own reports use are a fixed set", () => {
   assert.equal(isSlateUpdateTrack("nightly"), true)
   assert.equal(isSlateUpdateTrack("beta"), false)
   assert.equal(DEFAULT_SLATE_BOX_RUNTIME, "remote")
-  assert.equal(isSandBoxRuntime("local-docker"), true)
-  assert.equal(isSandBoxRuntime("somewhere"), false)
+  assert.equal(isBoxRuntime("local-docker"), true)
+  assert.equal(isBoxRuntime("somewhere"), false)
   assert.equal(DEFAULT_SLATE_THEME_PREFERENCE, "system")
   assert.equal(isSlateThemePreference("dark"), true)
   assert.equal(isSlateThemePreference("solarized"), false)

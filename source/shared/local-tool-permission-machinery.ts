@@ -38,11 +38,11 @@ export interface SlateLocalToolApproval {
 
 export interface SlateLocalToolScope { readonly agentId: string; readonly toolCallId?: string; readonly action?: SlateLocalToolAction; readonly directionEpoch?: number; }
 export const slateLocalToolScopeKey: ContextKey<SlateLocalToolScope | undefined> = createKey(
-  Symbol("sand.local-tool.scope"),
+  Symbol("slate.local-tool.scope"),
   undefined,
 );
 export const slateTurnDirectionEpochKey: ContextKey<number | undefined> = createKey(
-  Symbol("sand.local-tool.direction-epoch"),
+  Symbol("slate.local-tool.direction-epoch"),
   undefined,
 );
 export interface SlateLocalToolGate {

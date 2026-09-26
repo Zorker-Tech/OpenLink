@@ -52,7 +52,7 @@ export type PluginSource = z.infer<typeof PluginSourceSchema>;
 const MIN_CLIENT_VERSION_PATTERN = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
 const MinClientVersionsSchema = z.object({
   cursor: z.string().regex(MIN_CLIENT_VERSION_PATTERN, "Must be a semver version (X.Y.Z)").optional(),
-  sand: z.string().regex(MIN_CLIENT_VERSION_PATTERN, "Must be a semver version (X.Y.Z)").optional(),
+  slate: z.string().regex(MIN_CLIENT_VERSION_PATTERN, "Must be a semver version (X.Y.Z)").optional(),
 });
 const AuthorSchema = z.object({ name: z.string().min(1, "Author name is required"), email: z.string().email().optional() });
 const PluginVariablePrimitiveTypeSchema = z.enum(["string", "number", "integer", "boolean", "object", "array", "null"]);
@@ -136,7 +136,7 @@ export type PluginManifest = z.infer<typeof PluginManifestSchema>;
 
 function parsePluginMinClientVersions(value: unknown): z.infer<typeof MinClientVersionsSchema> | undefined {
   const result = MinClientVersionsSchema.safeParse(value);
-  return !result.success || (result.data.cursor === undefined && result.data.sand === undefined) ? undefined : result.data;
+  return !result.success || (result.data.cursor === undefined && result.data.slate === undefined) ? undefined : result.data;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }

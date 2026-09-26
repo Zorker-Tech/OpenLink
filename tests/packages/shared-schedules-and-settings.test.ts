@@ -27,7 +27,7 @@ import { isBoxVncMethod, BOX_VNC_METHOD_TABLE } from "../../source/shared/rpc/vn
 import { BoxSettingsField } from "../../source/shared/host-settings-field.ts"
 import { introductionFailedTrayKey, SLATE_ONBOARDING_KICKSTART_PROMPT } from "../../source/shared/agents/onboarding.ts"
 import { boundedConnectorTag, connectorAuthTelemetry, OTHER_CONNECTOR_TAG, UNKNOWN_CONNECTOR_TAG } from "../../source/shared/observability/connector-auth-telemetry.ts"
-import { isSameSandBoxMigrationOperation, parseSandBoxMigrationOperationId } from "../../source/shared/box-migration.ts"
+import { isSameBoxMigrationOperation, parseBoxMigrationOperationId } from "../../source/shared/box-migration.ts"
 import { hasNonPublicHostnameSuffix } from "../../source/shared/link-preview-policy.ts"
 import {
   buildMcpCustomInstructionsSystemPromptSection,
@@ -142,13 +142,13 @@ test("a box answers the VNC methods it declares, and nothing else", () => {
 })
 
 test("a box migration is the same operation only when its id is", () => {
-  const parsed = parseSandBoxMigrationOperationId("op-1")
+  const parsed = parseBoxMigrationOperationId("op-1")
   assert.deepEqual(parsed, { value: "op-1" })
-  assert.equal(parseSandBoxMigrationOperationId(""), null)
-  assert.equal(parseSandBoxMigrationOperationId(42), null)
-  assert.equal(isSameSandBoxMigrationOperation(parsed, { value: "op-1" }), true)
-  assert.equal(isSameSandBoxMigrationOperation(parsed, { value: "op-2" }), false)
-  assert.equal(isSameSandBoxMigrationOperation(null, parsed), false)
+  assert.equal(parseBoxMigrationOperationId(""), null)
+  assert.equal(parseBoxMigrationOperationId(42), null)
+  assert.equal(isSameBoxMigrationOperation(parsed, { value: "op-1" }), true)
+  assert.equal(isSameBoxMigrationOperation(parsed, { value: "op-2" }), false)
+  assert.equal(isSameBoxMigrationOperation(null, parsed), false)
 })
 
 // ---------------------------------------------------------------------------------------------

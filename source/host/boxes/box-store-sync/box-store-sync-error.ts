@@ -6,9 +6,9 @@
  * box was unreachable or the store refused the write.
  */
 
-export class SandBoxStoreSyncError extends Error {
+export class BoxStoreSyncError extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options)
-    this.name = "SandBoxStoreSyncError"
+    this.name = "BoxStoreSyncError"
   }
 }

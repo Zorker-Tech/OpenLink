@@ -10,7 +10,7 @@ import type { RequestContextResources } from "../../utils/request-context.ts";
 import { createSpan } from "../../../context/telemetry.ts";
 import { createLogger } from "../../../context/logging.ts";
 import { ProactiveSummarizationThresholdError, InputTokenLimitError, OutputTokensLimitExceededError } from "../../../chat-inference/prompt-executor.ts";
-import { PermissionsFileProvider } from "../../../cursor-config/permissions-file-provider.ts";
+import { PermissionsFileProvider } from "../../../config/permissions-file-provider.ts";
 import { createCounter, createHistogram } from "../../../metrics/index.ts";
 import { DataClassification, PrivacyCapability } from "../../../redaction/classification.ts";
 import { fromRedactedCoreMessages, toRedactedCoreMessages, type CoreMessageLike } from "../../../redaction/message-redaction.ts";

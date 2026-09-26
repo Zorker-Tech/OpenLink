@@ -21,7 +21,7 @@ import { existsSync } from "node:fs"
 import { readFile } from "node:fs/promises"
 import { join } from "node:path"
 
-import { parseProjectPermissionsFileConfig } from "../cursor-config/project-permissions-file-provider.ts"
+import { parseProjectPermissionsFileConfig } from "../config/project-permissions-file-provider.ts"
 
 const MAX_PROJECT_PERMISSION_INSTRUCTIONS_PER_WORKSPACE = 20
 const MAX_USER_AUTO_RUN_INSTRUCTIONS = 20

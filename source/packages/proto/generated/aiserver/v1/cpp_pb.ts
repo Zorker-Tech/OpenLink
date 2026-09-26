@@ -11,7 +11,7 @@
 import type { BinaryReadOptions, FieldList, JsonReadOptions, JsonValue, PartialMessage, PlainMessage } from "@bufbuild/protobuf";
 import { Message, proto3 } from "@bufbuild/protobuf";
 import { CurrentFileInfo, CursorPosition, LineRange, LinterError, LinterErrors, ModelDetails, SelectionWithOrientation, SimpleRange } from "./utils_pb.ts";
-import { BugLocation, BugReport, BugReports } from "./bugbot_pb.ts";
+import { BugLocation, BugReport, BugReports } from "./bug_reports_pb.ts";
 import { CodeResult, RepositoryInfo } from "./repository_pb.ts";
 import { LspSubgraphFullContext } from "./lsp_subgraph_pb.ts";
 import { FilesyncUpdateWithModelVersion } from "./filesyncserver_pb.ts";
@@ -1493,128 +1493,128 @@ proto3.util.setEnumType(BrowserEvent_ToolAction_Source, "aiserver.v1.BrowserEven
 ]);
 
 /**
- * @generated from message aiserver.v1.BugBotEvent
+ * @generated from message aiserver.v1.BugReportEvent
  */
-export class BugBotEvent extends Message<BugBotEvent> {
+export class BugReportEvent extends Message<BugReportEvent> {
   /**
    * @generated from field: string request_id = 1;
    */
   requestId = "";
 
   /**
-   * @generated from oneof aiserver.v1.BugBotEvent.event_type
+   * @generated from oneof aiserver.v1.BugReportEvent.event_type
    */
   eventType: {
     /**
-     * @generated from field: aiserver.v1.BugBotEvent.Started started = 2;
+     * @generated from field: aiserver.v1.BugReportEvent.Started started = 2;
      */
-    value: BugBotEvent_Started;
+    value: BugReportEvent_Started;
     case: "started";
   } | {
     /**
-     * @generated from field: aiserver.v1.BugBotEvent.ReportsGenerated reports_generated = 3;
+     * @generated from field: aiserver.v1.BugReportEvent.ReportsGenerated reports_generated = 3;
      */
-    value: BugBotEvent_ReportsGenerated;
+    value: BugReportEvent_ReportsGenerated;
     case: "reportsGenerated";
   } | {
     /**
-     * @generated from field: aiserver.v1.BugBotEvent.PressedFixInComposer pressed_fix_in_composer = 4;
+     * @generated from field: aiserver.v1.BugReportEvent.PressedFixInComposer pressed_fix_in_composer = 4;
      */
-    value: BugBotEvent_PressedFixInComposer;
+    value: BugReportEvent_PressedFixInComposer;
     case: "pressedFixInComposer";
   } | {
     /**
-     * @generated from field: aiserver.v1.BugBotEvent.PressedOpenInEditor pressed_open_in_editor = 5;
+     * @generated from field: aiserver.v1.BugReportEvent.PressedOpenInEditor pressed_open_in_editor = 5;
      */
-    value: BugBotEvent_PressedOpenInEditor;
+    value: BugReportEvent_PressedOpenInEditor;
     case: "pressedOpenInEditor";
   } | {
     /**
-     * @generated from field: aiserver.v1.BugBotEvent.ViewedReport viewed_report = 6;
+     * @generated from field: aiserver.v1.BugReportEvent.ViewedReport viewed_report = 6;
      */
-    value: BugBotEvent_ViewedReport;
+    value: BugReportEvent_ViewedReport;
     case: "viewedReport";
   } | {
     /**
-     * @generated from field: aiserver.v1.BugBotEvent.UserFeedback user_feedback = 7;
+     * @generated from field: aiserver.v1.BugReportEvent.UserFeedback user_feedback = 7;
      */
-    value: BugBotEvent_UserFeedback;
+    value: BugReportEvent_UserFeedback;
     case: "userFeedback";
   } | {
     /**
-     * @generated from field: aiserver.v1.BugBotEvent.PressedAddToChat pressed_add_to_chat = 8;
+     * @generated from field: aiserver.v1.BugReportEvent.PressedAddToChat pressed_add_to_chat = 8;
      */
-    value: BugBotEvent_PressedAddToChat;
+    value: BugReportEvent_PressedAddToChat;
     case: "pressedAddToChat";
   } | {
     /**
-     * @generated from field: aiserver.v1.BugBotEvent.BackgroundIntervalStarted background_interval_started = 9;
+     * @generated from field: aiserver.v1.BugReportEvent.BackgroundIntervalStarted background_interval_started = 9;
      */
-    value: BugBotEvent_BackgroundIntervalStarted;
+    value: BugReportEvent_BackgroundIntervalStarted;
     case: "backgroundIntervalStarted";
   } | {
     /**
-     * @generated from field: aiserver.v1.BugBotEvent.BackgroundIntervalEnded background_interval_ended = 10;
+     * @generated from field: aiserver.v1.BugReportEvent.BackgroundIntervalEnded background_interval_ended = 10;
      */
-    value: BugBotEvent_BackgroundIntervalEnded;
+    value: BugReportEvent_BackgroundIntervalEnded;
     case: "backgroundIntervalEnded";
   } | {
     /**
-     * @generated from field: aiserver.v1.BugBotEvent.BackgroundIntervalInterrupted background_interval_interrupted = 11;
+     * @generated from field: aiserver.v1.BugReportEvent.BackgroundIntervalInterrupted background_interval_interrupted = 11;
      */
-    value: BugBotEvent_BackgroundIntervalInterrupted;
+    value: BugReportEvent_BackgroundIntervalInterrupted;
     case: "backgroundIntervalInterrupted";
   } | {
     /**
-     * @generated from field: aiserver.v1.BugBotEvent.BackgroundIntervalErrored background_interval_errored = 12;
+     * @generated from field: aiserver.v1.BugReportEvent.BackgroundIntervalErrored background_interval_errored = 12;
      */
-    value: BugBotEvent_BackgroundIntervalErrored;
+    value: BugReportEvent_BackgroundIntervalErrored;
     case: "backgroundIntervalErrored";
   } | { case: undefined; value?: undefined } = { case: undefined };
 
-  constructor(data?: PartialMessage<BugBotEvent>) {
+  constructor(data?: PartialMessage<BugReportEvent>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugBotEvent";
+  static readonly typeName = "aiserver.v1.BugReportEvent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "request_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "started", kind: "message", T: BugBotEvent_Started, oneof: "event_type" },
-    { no: 3, name: "reports_generated", kind: "message", T: BugBotEvent_ReportsGenerated, oneof: "event_type" },
-    { no: 4, name: "pressed_fix_in_composer", kind: "message", T: BugBotEvent_PressedFixInComposer, oneof: "event_type" },
-    { no: 5, name: "pressed_open_in_editor", kind: "message", T: BugBotEvent_PressedOpenInEditor, oneof: "event_type" },
-    { no: 6, name: "viewed_report", kind: "message", T: BugBotEvent_ViewedReport, oneof: "event_type" },
-    { no: 7, name: "user_feedback", kind: "message", T: BugBotEvent_UserFeedback, oneof: "event_type" },
-    { no: 8, name: "pressed_add_to_chat", kind: "message", T: BugBotEvent_PressedAddToChat, oneof: "event_type" },
-    { no: 9, name: "background_interval_started", kind: "message", T: BugBotEvent_BackgroundIntervalStarted, oneof: "event_type" },
-    { no: 10, name: "background_interval_ended", kind: "message", T: BugBotEvent_BackgroundIntervalEnded, oneof: "event_type" },
-    { no: 11, name: "background_interval_interrupted", kind: "message", T: BugBotEvent_BackgroundIntervalInterrupted, oneof: "event_type" },
-    { no: 12, name: "background_interval_errored", kind: "message", T: BugBotEvent_BackgroundIntervalErrored, oneof: "event_type" },
+    { no: 2, name: "started", kind: "message", T: BugReportEvent_Started, oneof: "event_type" },
+    { no: 3, name: "reports_generated", kind: "message", T: BugReportEvent_ReportsGenerated, oneof: "event_type" },
+    { no: 4, name: "pressed_fix_in_composer", kind: "message", T: BugReportEvent_PressedFixInComposer, oneof: "event_type" },
+    { no: 5, name: "pressed_open_in_editor", kind: "message", T: BugReportEvent_PressedOpenInEditor, oneof: "event_type" },
+    { no: 6, name: "viewed_report", kind: "message", T: BugReportEvent_ViewedReport, oneof: "event_type" },
+    { no: 7, name: "user_feedback", kind: "message", T: BugReportEvent_UserFeedback, oneof: "event_type" },
+    { no: 8, name: "pressed_add_to_chat", kind: "message", T: BugReportEvent_PressedAddToChat, oneof: "event_type" },
+    { no: 9, name: "background_interval_started", kind: "message", T: BugReportEvent_BackgroundIntervalStarted, oneof: "event_type" },
+    { no: 10, name: "background_interval_ended", kind: "message", T: BugReportEvent_BackgroundIntervalEnded, oneof: "event_type" },
+    { no: 11, name: "background_interval_interrupted", kind: "message", T: BugReportEvent_BackgroundIntervalInterrupted, oneof: "event_type" },
+    { no: 12, name: "background_interval_errored", kind: "message", T: BugReportEvent_BackgroundIntervalErrored, oneof: "event_type" },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugBotEvent {
-    return new BugBotEvent().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportEvent {
+    return new BugReportEvent().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugBotEvent {
-    return new BugBotEvent().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportEvent {
+    return new BugReportEvent().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugBotEvent {
-    return new BugBotEvent().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportEvent {
+    return new BugReportEvent().fromJsonString(jsonString, options);
   }
 
-  static equals(a: BugBotEvent | PlainMessage<BugBotEvent> | undefined, b: BugBotEvent | PlainMessage<BugBotEvent> | undefined): boolean {
-    return proto3.util.equals(BugBotEvent, a, b);
+  static equals(a: BugReportEvent | PlainMessage<BugReportEvent> | undefined, b: BugReportEvent | PlainMessage<BugReportEvent> | undefined): boolean {
+    return proto3.util.equals(BugReportEvent, a, b);
   }
 }
 
 /**
- * @generated from enum aiserver.v1.BugBotEvent.BackgroundIntervalInterruptedReason
+ * @generated from enum aiserver.v1.BugReportEvent.BackgroundIntervalInterruptedReason
  */
-export enum BugBotEvent_BackgroundIntervalInterruptedReason {
+export enum BugReportEvent_BackgroundIntervalInterruptedReason {
   /**
    * @generated from enum value: BACKGROUND_INTERVAL_INTERRUPTED_REASON_UNSPECIFIED = 0;
    */
@@ -1680,8 +1680,8 @@ export enum BugBotEvent_BackgroundIntervalInterruptedReason {
    */
   TELEMETRY_UNHEALTHY = 12,
 }
-// Retrieve enum metadata with: proto3.getEnumType(BugBotEvent_BackgroundIntervalInterruptedReason)
-proto3.util.setEnumType(BugBotEvent_BackgroundIntervalInterruptedReason, "aiserver.v1.BugBotEvent.BackgroundIntervalInterruptedReason", [
+// Retrieve enum metadata with: proto3.getEnumType(BugReportEvent_BackgroundIntervalInterruptedReason)
+proto3.util.setEnumType(BugReportEvent_BackgroundIntervalInterruptedReason, "aiserver.v1.BugReportEvent.BackgroundIntervalInterruptedReason", [
   { no: 0, name: "BACKGROUND_INTERVAL_INTERRUPTED_REASON_UNSPECIFIED" },
   { no: 1, name: "BACKGROUND_INTERVAL_INTERRUPTED_REASON_DISABLED" },
   { no: 2, name: "BACKGROUND_INTERVAL_INTERRUPTED_REASON_TOO_RECENT" },
@@ -1698,225 +1698,225 @@ proto3.util.setEnumType(BugBotEvent_BackgroundIntervalInterruptedReason, "aiserv
 ]);
 
 /**
- * @generated from message aiserver.v1.BugBotEvent.BackgroundIntervalEnded
+ * @generated from message aiserver.v1.BugReportEvent.BackgroundIntervalEnded
  */
-export class BugBotEvent_BackgroundIntervalEnded extends Message<BugBotEvent_BackgroundIntervalEnded> {
+export class BugReportEvent_BackgroundIntervalEnded extends Message<BugReportEvent_BackgroundIntervalEnded> {
   /**
    * @generated from field: bool success = 1;
    */
   success = false;
 
-  constructor(data?: PartialMessage<BugBotEvent_BackgroundIntervalEnded>) {
+  constructor(data?: PartialMessage<BugReportEvent_BackgroundIntervalEnded>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugBotEvent.BackgroundIntervalEnded";
+  static readonly typeName = "aiserver.v1.BugReportEvent.BackgroundIntervalEnded";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "success", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugBotEvent_BackgroundIntervalEnded {
-    return new BugBotEvent_BackgroundIntervalEnded().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportEvent_BackgroundIntervalEnded {
+    return new BugReportEvent_BackgroundIntervalEnded().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugBotEvent_BackgroundIntervalEnded {
-    return new BugBotEvent_BackgroundIntervalEnded().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportEvent_BackgroundIntervalEnded {
+    return new BugReportEvent_BackgroundIntervalEnded().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugBotEvent_BackgroundIntervalEnded {
-    return new BugBotEvent_BackgroundIntervalEnded().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportEvent_BackgroundIntervalEnded {
+    return new BugReportEvent_BackgroundIntervalEnded().fromJsonString(jsonString, options);
   }
 
-  static equals(a: BugBotEvent_BackgroundIntervalEnded | PlainMessage<BugBotEvent_BackgroundIntervalEnded> | undefined, b: BugBotEvent_BackgroundIntervalEnded | PlainMessage<BugBotEvent_BackgroundIntervalEnded> | undefined): boolean {
-    return proto3.util.equals(BugBotEvent_BackgroundIntervalEnded, a, b);
+  static equals(a: BugReportEvent_BackgroundIntervalEnded | PlainMessage<BugReportEvent_BackgroundIntervalEnded> | undefined, b: BugReportEvent_BackgroundIntervalEnded | PlainMessage<BugReportEvent_BackgroundIntervalEnded> | undefined): boolean {
+    return proto3.util.equals(BugReportEvent_BackgroundIntervalEnded, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.BugBotEvent.BackgroundIntervalErrored
+ * @generated from message aiserver.v1.BugReportEvent.BackgroundIntervalErrored
  */
-export class BugBotEvent_BackgroundIntervalErrored extends Message<BugBotEvent_BackgroundIntervalErrored> {
+export class BugReportEvent_BackgroundIntervalErrored extends Message<BugReportEvent_BackgroundIntervalErrored> {
   /**
    * @generated from field: string error_message = 1;
    */
   errorMessage = "";
 
-  constructor(data?: PartialMessage<BugBotEvent_BackgroundIntervalErrored>) {
+  constructor(data?: PartialMessage<BugReportEvent_BackgroundIntervalErrored>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugBotEvent.BackgroundIntervalErrored";
+  static readonly typeName = "aiserver.v1.BugReportEvent.BackgroundIntervalErrored";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugBotEvent_BackgroundIntervalErrored {
-    return new BugBotEvent_BackgroundIntervalErrored().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportEvent_BackgroundIntervalErrored {
+    return new BugReportEvent_BackgroundIntervalErrored().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugBotEvent_BackgroundIntervalErrored {
-    return new BugBotEvent_BackgroundIntervalErrored().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportEvent_BackgroundIntervalErrored {
+    return new BugReportEvent_BackgroundIntervalErrored().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugBotEvent_BackgroundIntervalErrored {
-    return new BugBotEvent_BackgroundIntervalErrored().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportEvent_BackgroundIntervalErrored {
+    return new BugReportEvent_BackgroundIntervalErrored().fromJsonString(jsonString, options);
   }
 
-  static equals(a: BugBotEvent_BackgroundIntervalErrored | PlainMessage<BugBotEvent_BackgroundIntervalErrored> | undefined, b: BugBotEvent_BackgroundIntervalErrored | PlainMessage<BugBotEvent_BackgroundIntervalErrored> | undefined): boolean {
-    return proto3.util.equals(BugBotEvent_BackgroundIntervalErrored, a, b);
+  static equals(a: BugReportEvent_BackgroundIntervalErrored | PlainMessage<BugReportEvent_BackgroundIntervalErrored> | undefined, b: BugReportEvent_BackgroundIntervalErrored | PlainMessage<BugReportEvent_BackgroundIntervalErrored> | undefined): boolean {
+    return proto3.util.equals(BugReportEvent_BackgroundIntervalErrored, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.BugBotEvent.BackgroundIntervalInterrupted
+ * @generated from message aiserver.v1.BugReportEvent.BackgroundIntervalInterrupted
  */
-export class BugBotEvent_BackgroundIntervalInterrupted extends Message<BugBotEvent_BackgroundIntervalInterrupted> {
+export class BugReportEvent_BackgroundIntervalInterrupted extends Message<BugReportEvent_BackgroundIntervalInterrupted> {
   /**
-   * @generated from field: aiserver.v1.BugBotEvent.BackgroundIntervalInterruptedReason reason = 1;
+   * @generated from field: aiserver.v1.BugReportEvent.BackgroundIntervalInterruptedReason reason = 1;
    */
-  reason = BugBotEvent_BackgroundIntervalInterruptedReason.UNSPECIFIED;
+  reason = BugReportEvent_BackgroundIntervalInterruptedReason.UNSPECIFIED;
 
-  constructor(data?: PartialMessage<BugBotEvent_BackgroundIntervalInterrupted>) {
+  constructor(data?: PartialMessage<BugReportEvent_BackgroundIntervalInterrupted>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugBotEvent.BackgroundIntervalInterrupted";
+  static readonly typeName = "aiserver.v1.BugReportEvent.BackgroundIntervalInterrupted";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "reason", kind: "enum", T: proto3.getEnumType(BugBotEvent_BackgroundIntervalInterruptedReason) },
+    { no: 1, name: "reason", kind: "enum", T: proto3.getEnumType(BugReportEvent_BackgroundIntervalInterruptedReason) },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugBotEvent_BackgroundIntervalInterrupted {
-    return new BugBotEvent_BackgroundIntervalInterrupted().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportEvent_BackgroundIntervalInterrupted {
+    return new BugReportEvent_BackgroundIntervalInterrupted().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugBotEvent_BackgroundIntervalInterrupted {
-    return new BugBotEvent_BackgroundIntervalInterrupted().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportEvent_BackgroundIntervalInterrupted {
+    return new BugReportEvent_BackgroundIntervalInterrupted().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugBotEvent_BackgroundIntervalInterrupted {
-    return new BugBotEvent_BackgroundIntervalInterrupted().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportEvent_BackgroundIntervalInterrupted {
+    return new BugReportEvent_BackgroundIntervalInterrupted().fromJsonString(jsonString, options);
   }
 
-  static equals(a: BugBotEvent_BackgroundIntervalInterrupted | PlainMessage<BugBotEvent_BackgroundIntervalInterrupted> | undefined, b: BugBotEvent_BackgroundIntervalInterrupted | PlainMessage<BugBotEvent_BackgroundIntervalInterrupted> | undefined): boolean {
-    return proto3.util.equals(BugBotEvent_BackgroundIntervalInterrupted, a, b);
+  static equals(a: BugReportEvent_BackgroundIntervalInterrupted | PlainMessage<BugReportEvent_BackgroundIntervalInterrupted> | undefined, b: BugReportEvent_BackgroundIntervalInterrupted | PlainMessage<BugReportEvent_BackgroundIntervalInterrupted> | undefined): boolean {
+    return proto3.util.equals(BugReportEvent_BackgroundIntervalInterrupted, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.BugBotEvent.BackgroundIntervalStarted
+ * @generated from message aiserver.v1.BugReportEvent.BackgroundIntervalStarted
  */
-export class BugBotEvent_BackgroundIntervalStarted extends Message<BugBotEvent_BackgroundIntervalStarted> {
-  constructor(data?: PartialMessage<BugBotEvent_BackgroundIntervalStarted>) {
+export class BugReportEvent_BackgroundIntervalStarted extends Message<BugReportEvent_BackgroundIntervalStarted> {
+  constructor(data?: PartialMessage<BugReportEvent_BackgroundIntervalStarted>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugBotEvent.BackgroundIntervalStarted";
+  static readonly typeName = "aiserver.v1.BugReportEvent.BackgroundIntervalStarted";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugBotEvent_BackgroundIntervalStarted {
-    return new BugBotEvent_BackgroundIntervalStarted().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportEvent_BackgroundIntervalStarted {
+    return new BugReportEvent_BackgroundIntervalStarted().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugBotEvent_BackgroundIntervalStarted {
-    return new BugBotEvent_BackgroundIntervalStarted().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportEvent_BackgroundIntervalStarted {
+    return new BugReportEvent_BackgroundIntervalStarted().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugBotEvent_BackgroundIntervalStarted {
-    return new BugBotEvent_BackgroundIntervalStarted().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportEvent_BackgroundIntervalStarted {
+    return new BugReportEvent_BackgroundIntervalStarted().fromJsonString(jsonString, options);
   }
 
-  static equals(a: BugBotEvent_BackgroundIntervalStarted | PlainMessage<BugBotEvent_BackgroundIntervalStarted> | undefined, b: BugBotEvent_BackgroundIntervalStarted | PlainMessage<BugBotEvent_BackgroundIntervalStarted> | undefined): boolean {
-    return proto3.util.equals(BugBotEvent_BackgroundIntervalStarted, a, b);
+  static equals(a: BugReportEvent_BackgroundIntervalStarted | PlainMessage<BugReportEvent_BackgroundIntervalStarted> | undefined, b: BugReportEvent_BackgroundIntervalStarted | PlainMessage<BugReportEvent_BackgroundIntervalStarted> | undefined): boolean {
+    return proto3.util.equals(BugReportEvent_BackgroundIntervalStarted, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.BugBotEvent.PressedAddToChat
+ * @generated from message aiserver.v1.BugReportEvent.PressedAddToChat
  */
-export class BugBotEvent_PressedAddToChat extends Message<BugBotEvent_PressedAddToChat> {
-  /**
-   * @generated from field: string bug_report_id = 1;
-   */
-  bugReportId = "";
-
-  constructor(data?: PartialMessage<BugBotEvent_PressedAddToChat>) {
-    super();
-    proto3.util.initPartial(data, this);
-  }
-
-  static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugBotEvent.PressedAddToChat";
-  static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "bug_report_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-  ]);
-
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugBotEvent_PressedAddToChat {
-    return new BugBotEvent_PressedAddToChat().fromBinary(bytes, options);
-  }
-
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugBotEvent_PressedAddToChat {
-    return new BugBotEvent_PressedAddToChat().fromJson(jsonValue, options);
-  }
-
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugBotEvent_PressedAddToChat {
-    return new BugBotEvent_PressedAddToChat().fromJsonString(jsonString, options);
-  }
-
-  static equals(a: BugBotEvent_PressedAddToChat | PlainMessage<BugBotEvent_PressedAddToChat> | undefined, b: BugBotEvent_PressedAddToChat | PlainMessage<BugBotEvent_PressedAddToChat> | undefined): boolean {
-    return proto3.util.equals(BugBotEvent_PressedAddToChat, a, b);
-  }
-}
-
-/**
- * @generated from message aiserver.v1.BugBotEvent.PressedFixInComposer
- */
-export class BugBotEvent_PressedFixInComposer extends Message<BugBotEvent_PressedFixInComposer> {
+export class BugReportEvent_PressedAddToChat extends Message<BugReportEvent_PressedAddToChat> {
   /**
    * @generated from field: string bug_report_id = 1;
    */
   bugReportId = "";
 
-  constructor(data?: PartialMessage<BugBotEvent_PressedFixInComposer>) {
+  constructor(data?: PartialMessage<BugReportEvent_PressedAddToChat>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugBotEvent.PressedFixInComposer";
+  static readonly typeName = "aiserver.v1.BugReportEvent.PressedAddToChat";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bug_report_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugBotEvent_PressedFixInComposer {
-    return new BugBotEvent_PressedFixInComposer().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportEvent_PressedAddToChat {
+    return new BugReportEvent_PressedAddToChat().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugBotEvent_PressedFixInComposer {
-    return new BugBotEvent_PressedFixInComposer().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportEvent_PressedAddToChat {
+    return new BugReportEvent_PressedAddToChat().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugBotEvent_PressedFixInComposer {
-    return new BugBotEvent_PressedFixInComposer().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportEvent_PressedAddToChat {
+    return new BugReportEvent_PressedAddToChat().fromJsonString(jsonString, options);
   }
 
-  static equals(a: BugBotEvent_PressedFixInComposer | PlainMessage<BugBotEvent_PressedFixInComposer> | undefined, b: BugBotEvent_PressedFixInComposer | PlainMessage<BugBotEvent_PressedFixInComposer> | undefined): boolean {
-    return proto3.util.equals(BugBotEvent_PressedFixInComposer, a, b);
+  static equals(a: BugReportEvent_PressedAddToChat | PlainMessage<BugReportEvent_PressedAddToChat> | undefined, b: BugReportEvent_PressedAddToChat | PlainMessage<BugReportEvent_PressedAddToChat> | undefined): boolean {
+    return proto3.util.equals(BugReportEvent_PressedAddToChat, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.BugBotEvent.PressedOpenInEditor
+ * @generated from message aiserver.v1.BugReportEvent.PressedFixInComposer
  */
-export class BugBotEvent_PressedOpenInEditor extends Message<BugBotEvent_PressedOpenInEditor> {
+export class BugReportEvent_PressedFixInComposer extends Message<BugReportEvent_PressedFixInComposer> {
+  /**
+   * @generated from field: string bug_report_id = 1;
+   */
+  bugReportId = "";
+
+  constructor(data?: PartialMessage<BugReportEvent_PressedFixInComposer>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "aiserver.v1.BugReportEvent.PressedFixInComposer";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "bug_report_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportEvent_PressedFixInComposer {
+    return new BugReportEvent_PressedFixInComposer().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportEvent_PressedFixInComposer {
+    return new BugReportEvent_PressedFixInComposer().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportEvent_PressedFixInComposer {
+    return new BugReportEvent_PressedFixInComposer().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: BugReportEvent_PressedFixInComposer | PlainMessage<BugReportEvent_PressedFixInComposer> | undefined, b: BugReportEvent_PressedFixInComposer | PlainMessage<BugReportEvent_PressedFixInComposer> | undefined): boolean {
+    return proto3.util.equals(BugReportEvent_PressedFixInComposer, a, b);
+  }
+}
+
+/**
+ * @generated from message aiserver.v1.BugReportEvent.PressedOpenInEditor
+ */
+export class BugReportEvent_PressedOpenInEditor extends Message<BugReportEvent_PressedOpenInEditor> {
   /**
    * @generated from field: optional aiserver.v1.BugLocation bug_location = 1;
    */
@@ -1927,107 +1927,107 @@ export class BugBotEvent_PressedOpenInEditor extends Message<BugBotEvent_Pressed
    */
   bugReportId = "";
 
-  constructor(data?: PartialMessage<BugBotEvent_PressedOpenInEditor>) {
+  constructor(data?: PartialMessage<BugReportEvent_PressedOpenInEditor>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugBotEvent.PressedOpenInEditor";
+  static readonly typeName = "aiserver.v1.BugReportEvent.PressedOpenInEditor";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bug_location", kind: "message", T: BugLocation, opt: true },
     { no: 2, name: "bug_report_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugBotEvent_PressedOpenInEditor {
-    return new BugBotEvent_PressedOpenInEditor().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportEvent_PressedOpenInEditor {
+    return new BugReportEvent_PressedOpenInEditor().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugBotEvent_PressedOpenInEditor {
-    return new BugBotEvent_PressedOpenInEditor().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportEvent_PressedOpenInEditor {
+    return new BugReportEvent_PressedOpenInEditor().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugBotEvent_PressedOpenInEditor {
-    return new BugBotEvent_PressedOpenInEditor().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportEvent_PressedOpenInEditor {
+    return new BugReportEvent_PressedOpenInEditor().fromJsonString(jsonString, options);
   }
 
-  static equals(a: BugBotEvent_PressedOpenInEditor | PlainMessage<BugBotEvent_PressedOpenInEditor> | undefined, b: BugBotEvent_PressedOpenInEditor | PlainMessage<BugBotEvent_PressedOpenInEditor> | undefined): boolean {
-    return proto3.util.equals(BugBotEvent_PressedOpenInEditor, a, b);
+  static equals(a: BugReportEvent_PressedOpenInEditor | PlainMessage<BugReportEvent_PressedOpenInEditor> | undefined, b: BugReportEvent_PressedOpenInEditor | PlainMessage<BugReportEvent_PressedOpenInEditor> | undefined): boolean {
+    return proto3.util.equals(BugReportEvent_PressedOpenInEditor, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.BugBotEvent.ReportsGenerated
+ * @generated from message aiserver.v1.BugReportEvent.ReportsGenerated
  */
-export class BugBotEvent_ReportsGenerated extends Message<BugBotEvent_ReportsGenerated> {
+export class BugReportEvent_ReportsGenerated extends Message<BugReportEvent_ReportsGenerated> {
   /**
    * @generated from field: optional aiserver.v1.BugReports bug_reports = 1;
    */
   bugReports?: BugReports;
 
-  constructor(data?: PartialMessage<BugBotEvent_ReportsGenerated>) {
+  constructor(data?: PartialMessage<BugReportEvent_ReportsGenerated>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugBotEvent.ReportsGenerated";
+  static readonly typeName = "aiserver.v1.BugReportEvent.ReportsGenerated";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bug_reports", kind: "message", T: BugReports, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugBotEvent_ReportsGenerated {
-    return new BugBotEvent_ReportsGenerated().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportEvent_ReportsGenerated {
+    return new BugReportEvent_ReportsGenerated().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugBotEvent_ReportsGenerated {
-    return new BugBotEvent_ReportsGenerated().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportEvent_ReportsGenerated {
+    return new BugReportEvent_ReportsGenerated().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugBotEvent_ReportsGenerated {
-    return new BugBotEvent_ReportsGenerated().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportEvent_ReportsGenerated {
+    return new BugReportEvent_ReportsGenerated().fromJsonString(jsonString, options);
   }
 
-  static equals(a: BugBotEvent_ReportsGenerated | PlainMessage<BugBotEvent_ReportsGenerated> | undefined, b: BugBotEvent_ReportsGenerated | PlainMessage<BugBotEvent_ReportsGenerated> | undefined): boolean {
-    return proto3.util.equals(BugBotEvent_ReportsGenerated, a, b);
+  static equals(a: BugReportEvent_ReportsGenerated | PlainMessage<BugReportEvent_ReportsGenerated> | undefined, b: BugReportEvent_ReportsGenerated | PlainMessage<BugReportEvent_ReportsGenerated> | undefined): boolean {
+    return proto3.util.equals(BugReportEvent_ReportsGenerated, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.BugBotEvent.Started
+ * @generated from message aiserver.v1.BugReportEvent.Started
  */
-export class BugBotEvent_Started extends Message<BugBotEvent_Started> {
-  constructor(data?: PartialMessage<BugBotEvent_Started>) {
+export class BugReportEvent_Started extends Message<BugReportEvent_Started> {
+  constructor(data?: PartialMessage<BugReportEvent_Started>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugBotEvent.Started";
+  static readonly typeName = "aiserver.v1.BugReportEvent.Started";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugBotEvent_Started {
-    return new BugBotEvent_Started().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportEvent_Started {
+    return new BugReportEvent_Started().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugBotEvent_Started {
-    return new BugBotEvent_Started().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportEvent_Started {
+    return new BugReportEvent_Started().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugBotEvent_Started {
-    return new BugBotEvent_Started().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportEvent_Started {
+    return new BugReportEvent_Started().fromJsonString(jsonString, options);
   }
 
-  static equals(a: BugBotEvent_Started | PlainMessage<BugBotEvent_Started> | undefined, b: BugBotEvent_Started | PlainMessage<BugBotEvent_Started> | undefined): boolean {
-    return proto3.util.equals(BugBotEvent_Started, a, b);
+  static equals(a: BugReportEvent_Started | PlainMessage<BugReportEvent_Started> | undefined, b: BugReportEvent_Started | PlainMessage<BugReportEvent_Started> | undefined): boolean {
+    return proto3.util.equals(BugReportEvent_Started, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.BugBotEvent.UserFeedback
+ * @generated from message aiserver.v1.BugReportEvent.UserFeedback
  */
-export class BugBotEvent_UserFeedback extends Message<BugBotEvent_UserFeedback> {
+export class BugReportEvent_UserFeedback extends Message<BugReportEvent_UserFeedback> {
   /**
    * @generated from field: string bug_report_id = 1;
    */
@@ -2038,82 +2038,82 @@ export class BugBotEvent_UserFeedback extends Message<BugBotEvent_UserFeedback> 
    */
   feedback = "";
 
-  constructor(data?: PartialMessage<BugBotEvent_UserFeedback>) {
+  constructor(data?: PartialMessage<BugReportEvent_UserFeedback>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugBotEvent.UserFeedback";
+  static readonly typeName = "aiserver.v1.BugReportEvent.UserFeedback";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bug_report_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "feedback", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugBotEvent_UserFeedback {
-    return new BugBotEvent_UserFeedback().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportEvent_UserFeedback {
+    return new BugReportEvent_UserFeedback().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugBotEvent_UserFeedback {
-    return new BugBotEvent_UserFeedback().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportEvent_UserFeedback {
+    return new BugReportEvent_UserFeedback().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugBotEvent_UserFeedback {
-    return new BugBotEvent_UserFeedback().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportEvent_UserFeedback {
+    return new BugReportEvent_UserFeedback().fromJsonString(jsonString, options);
   }
 
-  static equals(a: BugBotEvent_UserFeedback | PlainMessage<BugBotEvent_UserFeedback> | undefined, b: BugBotEvent_UserFeedback | PlainMessage<BugBotEvent_UserFeedback> | undefined): boolean {
-    return proto3.util.equals(BugBotEvent_UserFeedback, a, b);
+  static equals(a: BugReportEvent_UserFeedback | PlainMessage<BugReportEvent_UserFeedback> | undefined, b: BugReportEvent_UserFeedback | PlainMessage<BugReportEvent_UserFeedback> | undefined): boolean {
+    return proto3.util.equals(BugReportEvent_UserFeedback, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.BugBotEvent.ViewedReport
+ * @generated from message aiserver.v1.BugReportEvent.ViewedReport
  */
-export class BugBotEvent_ViewedReport extends Message<BugBotEvent_ViewedReport> {
+export class BugReportEvent_ViewedReport extends Message<BugReportEvent_ViewedReport> {
   /**
    * @generated from field: int32 seconds_viewed = 1;
    */
   secondsViewed = 0;
 
   /**
-   * @generated from field: repeated aiserver.v1.BugBotEvent.ViewedReport.ReportView report_views = 2;
+   * @generated from field: repeated aiserver.v1.BugReportEvent.ViewedReport.ReportView report_views = 2;
    */
-  reportViews: BugBotEvent_ViewedReport_ReportView[] = [];
+  reportViews: BugReportEvent_ViewedReport_ReportView[] = [];
 
-  constructor(data?: PartialMessage<BugBotEvent_ViewedReport>) {
+  constructor(data?: PartialMessage<BugReportEvent_ViewedReport>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugBotEvent.ViewedReport";
+  static readonly typeName = "aiserver.v1.BugReportEvent.ViewedReport";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "seconds_viewed", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
-    { no: 2, name: "report_views", kind: "message", T: BugBotEvent_ViewedReport_ReportView, repeated: true },
+    { no: 2, name: "report_views", kind: "message", T: BugReportEvent_ViewedReport_ReportView, repeated: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugBotEvent_ViewedReport {
-    return new BugBotEvent_ViewedReport().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportEvent_ViewedReport {
+    return new BugReportEvent_ViewedReport().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugBotEvent_ViewedReport {
-    return new BugBotEvent_ViewedReport().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportEvent_ViewedReport {
+    return new BugReportEvent_ViewedReport().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugBotEvent_ViewedReport {
-    return new BugBotEvent_ViewedReport().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportEvent_ViewedReport {
+    return new BugReportEvent_ViewedReport().fromJsonString(jsonString, options);
   }
 
-  static equals(a: BugBotEvent_ViewedReport | PlainMessage<BugBotEvent_ViewedReport> | undefined, b: BugBotEvent_ViewedReport | PlainMessage<BugBotEvent_ViewedReport> | undefined): boolean {
-    return proto3.util.equals(BugBotEvent_ViewedReport, a, b);
+  static equals(a: BugReportEvent_ViewedReport | PlainMessage<BugReportEvent_ViewedReport> | undefined, b: BugReportEvent_ViewedReport | PlainMessage<BugReportEvent_ViewedReport> | undefined): boolean {
+    return proto3.util.equals(BugReportEvent_ViewedReport, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.BugBotEvent.ViewedReport.ReportView
+ * @generated from message aiserver.v1.BugReportEvent.ViewedReport.ReportView
  */
-export class BugBotEvent_ViewedReport_ReportView extends Message<BugBotEvent_ViewedReport_ReportView> {
+export class BugReportEvent_ViewedReport_ReportView extends Message<BugReportEvent_ViewedReport_ReportView> {
   /**
    * @generated from field: string bug_report_id = 1;
    */
@@ -2129,40 +2129,40 @@ export class BugBotEvent_ViewedReport_ReportView extends Message<BugBotEvent_Vie
    */
   textPercentage = 0;
 
-  constructor(data?: PartialMessage<BugBotEvent_ViewedReport_ReportView>) {
+  constructor(data?: PartialMessage<BugReportEvent_ViewedReport_ReportView>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugBotEvent.ViewedReport.ReportView";
+  static readonly typeName = "aiserver.v1.BugReportEvent.ViewedReport.ReportView";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bug_report_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "view_percentage", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
     { no: 3, name: "text_percentage", kind: "scalar", T: 1 /* ScalarType.DOUBLE */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugBotEvent_ViewedReport_ReportView {
-    return new BugBotEvent_ViewedReport_ReportView().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportEvent_ViewedReport_ReportView {
+    return new BugReportEvent_ViewedReport_ReportView().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugBotEvent_ViewedReport_ReportView {
-    return new BugBotEvent_ViewedReport_ReportView().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportEvent_ViewedReport_ReportView {
+    return new BugReportEvent_ViewedReport_ReportView().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugBotEvent_ViewedReport_ReportView {
-    return new BugBotEvent_ViewedReport_ReportView().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportEvent_ViewedReport_ReportView {
+    return new BugReportEvent_ViewedReport_ReportView().fromJsonString(jsonString, options);
   }
 
-  static equals(a: BugBotEvent_ViewedReport_ReportView | PlainMessage<BugBotEvent_ViewedReport_ReportView> | undefined, b: BugBotEvent_ViewedReport_ReportView | PlainMessage<BugBotEvent_ViewedReport_ReportView> | undefined): boolean {
-    return proto3.util.equals(BugBotEvent_ViewedReport_ReportView, a, b);
+  static equals(a: BugReportEvent_ViewedReport_ReportView | PlainMessage<BugReportEvent_ViewedReport_ReportView> | undefined, b: BugReportEvent_ViewedReport_ReportView | PlainMessage<BugReportEvent_ViewedReport_ReportView> | undefined): boolean {
+    return proto3.util.equals(BugReportEvent_ViewedReport_ReportView, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.BugBotLinterEvent
+ * @generated from message aiserver.v1.BugReportLinterEvent
  */
-export class BugBotLinterEvent extends Message<BugBotLinterEvent> {
+export class BugReportLinterEvent extends Message<BugReportLinterEvent> {
   /**
    * @generated from field: string request_id = 1;
    */
@@ -2174,203 +2174,203 @@ export class BugBotLinterEvent extends Message<BugBotLinterEvent> {
   pointInTimeModel?: PointInTimeModel;
 
   /**
-   * @generated from oneof aiserver.v1.BugBotLinterEvent.event_type
+   * @generated from oneof aiserver.v1.BugReportLinterEvent.event_type
    */
   eventType: {
     /**
-     * @generated from field: aiserver.v1.BugBotLinterEvent.LintGenerated lint_generated = 3;
+     * @generated from field: aiserver.v1.BugReportLinterEvent.LintGenerated lint_generated = 3;
      */
-    value: BugBotLinterEvent_LintGenerated;
+    value: BugReportLinterEvent_LintGenerated;
     case: "lintGenerated";
   } | {
     /**
-     * @generated from field: aiserver.v1.BugBotLinterEvent.LintDismissed lint_dismissed = 4;
+     * @generated from field: aiserver.v1.BugReportLinterEvent.LintDismissed lint_dismissed = 4;
      */
-    value: BugBotLinterEvent_LintDismissed;
+    value: BugReportLinterEvent_LintDismissed;
     case: "lintDismissed";
   } | {
     /**
-     * @generated from field: aiserver.v1.BugBotLinterEvent.UserFeedback user_feedback = 5;
+     * @generated from field: aiserver.v1.BugReportLinterEvent.UserFeedback user_feedback = 5;
      */
-    value: BugBotLinterEvent_UserFeedback;
+    value: BugReportLinterEvent_UserFeedback;
     case: "userFeedback";
   } | {
     /**
-     * @generated from field: aiserver.v1.BugBotLinterEvent.ViewedReport viewed_report = 6;
+     * @generated from field: aiserver.v1.BugReportLinterEvent.ViewedReport viewed_report = 6;
      */
-    value: BugBotLinterEvent_ViewedReport;
+    value: BugReportLinterEvent_ViewedReport;
     case: "viewedReport";
   } | {
     /**
-     * @generated from field: aiserver.v1.BugBotLinterEvent.UnviewedReport unviewed_report = 7;
+     * @generated from field: aiserver.v1.BugReportLinterEvent.UnviewedReport unviewed_report = 7;
      */
-    value: BugBotLinterEvent_UnviewedReport;
+    value: BugReportLinterEvent_UnviewedReport;
     case: "unviewedReport";
   } | {
     /**
-     * @generated from field: aiserver.v1.BugBotLinterEvent.Started started = 8;
+     * @generated from field: aiserver.v1.BugReportLinterEvent.Started started = 8;
      */
-    value: BugBotLinterEvent_Started;
+    value: BugReportLinterEvent_Started;
     case: "started";
   } | {
     /**
-     * @generated from field: aiserver.v1.BugBotLinterEvent.NotShownBecauseHeuristic not_shown_because_heuristic = 9;
+     * @generated from field: aiserver.v1.BugReportLinterEvent.NotShownBecauseHeuristic not_shown_because_heuristic = 9;
      */
-    value: BugBotLinterEvent_NotShownBecauseHeuristic;
+    value: BugReportLinterEvent_NotShownBecauseHeuristic;
     case: "notShownBecauseHeuristic";
   } | { case: undefined; value?: undefined } = { case: undefined };
 
-  constructor(data?: PartialMessage<BugBotLinterEvent>) {
+  constructor(data?: PartialMessage<BugReportLinterEvent>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugBotLinterEvent";
+  static readonly typeName = "aiserver.v1.BugReportLinterEvent";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "request_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "point_in_time_model", kind: "message", T: PointInTimeModel, opt: true },
-    { no: 3, name: "lint_generated", kind: "message", T: BugBotLinterEvent_LintGenerated, oneof: "event_type" },
-    { no: 4, name: "lint_dismissed", kind: "message", T: BugBotLinterEvent_LintDismissed, oneof: "event_type" },
-    { no: 5, name: "user_feedback", kind: "message", T: BugBotLinterEvent_UserFeedback, oneof: "event_type" },
-    { no: 6, name: "viewed_report", kind: "message", T: BugBotLinterEvent_ViewedReport, oneof: "event_type" },
-    { no: 7, name: "unviewed_report", kind: "message", T: BugBotLinterEvent_UnviewedReport, oneof: "event_type" },
-    { no: 8, name: "started", kind: "message", T: BugBotLinterEvent_Started, oneof: "event_type" },
-    { no: 9, name: "not_shown_because_heuristic", kind: "message", T: BugBotLinterEvent_NotShownBecauseHeuristic, oneof: "event_type" },
+    { no: 3, name: "lint_generated", kind: "message", T: BugReportLinterEvent_LintGenerated, oneof: "event_type" },
+    { no: 4, name: "lint_dismissed", kind: "message", T: BugReportLinterEvent_LintDismissed, oneof: "event_type" },
+    { no: 5, name: "user_feedback", kind: "message", T: BugReportLinterEvent_UserFeedback, oneof: "event_type" },
+    { no: 6, name: "viewed_report", kind: "message", T: BugReportLinterEvent_ViewedReport, oneof: "event_type" },
+    { no: 7, name: "unviewed_report", kind: "message", T: BugReportLinterEvent_UnviewedReport, oneof: "event_type" },
+    { no: 8, name: "started", kind: "message", T: BugReportLinterEvent_Started, oneof: "event_type" },
+    { no: 9, name: "not_shown_because_heuristic", kind: "message", T: BugReportLinterEvent_NotShownBecauseHeuristic, oneof: "event_type" },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugBotLinterEvent {
-    return new BugBotLinterEvent().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportLinterEvent {
+    return new BugReportLinterEvent().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugBotLinterEvent {
-    return new BugBotLinterEvent().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportLinterEvent {
+    return new BugReportLinterEvent().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugBotLinterEvent {
-    return new BugBotLinterEvent().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportLinterEvent {
+    return new BugReportLinterEvent().fromJsonString(jsonString, options);
   }
 
-  static equals(a: BugBotLinterEvent | PlainMessage<BugBotLinterEvent> | undefined, b: BugBotLinterEvent | PlainMessage<BugBotLinterEvent> | undefined): boolean {
-    return proto3.util.equals(BugBotLinterEvent, a, b);
+  static equals(a: BugReportLinterEvent | PlainMessage<BugReportLinterEvent> | undefined, b: BugReportLinterEvent | PlainMessage<BugReportLinterEvent> | undefined): boolean {
+    return proto3.util.equals(BugReportLinterEvent, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.BugBotLinterEvent.LintDismissed
+ * @generated from message aiserver.v1.BugReportLinterEvent.LintDismissed
  */
-export class BugBotLinterEvent_LintDismissed extends Message<BugBotLinterEvent_LintDismissed> {
+export class BugReportLinterEvent_LintDismissed extends Message<BugReportLinterEvent_LintDismissed> {
   /**
    * @generated from field: string bug_report_id = 1;
    */
   bugReportId = "";
 
-  constructor(data?: PartialMessage<BugBotLinterEvent_LintDismissed>) {
+  constructor(data?: PartialMessage<BugReportLinterEvent_LintDismissed>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugBotLinterEvent.LintDismissed";
+  static readonly typeName = "aiserver.v1.BugReportLinterEvent.LintDismissed";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bug_report_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugBotLinterEvent_LintDismissed {
-    return new BugBotLinterEvent_LintDismissed().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportLinterEvent_LintDismissed {
+    return new BugReportLinterEvent_LintDismissed().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugBotLinterEvent_LintDismissed {
-    return new BugBotLinterEvent_LintDismissed().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportLinterEvent_LintDismissed {
+    return new BugReportLinterEvent_LintDismissed().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugBotLinterEvent_LintDismissed {
-    return new BugBotLinterEvent_LintDismissed().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportLinterEvent_LintDismissed {
+    return new BugReportLinterEvent_LintDismissed().fromJsonString(jsonString, options);
   }
 
-  static equals(a: BugBotLinterEvent_LintDismissed | PlainMessage<BugBotLinterEvent_LintDismissed> | undefined, b: BugBotLinterEvent_LintDismissed | PlainMessage<BugBotLinterEvent_LintDismissed> | undefined): boolean {
-    return proto3.util.equals(BugBotLinterEvent_LintDismissed, a, b);
+  static equals(a: BugReportLinterEvent_LintDismissed | PlainMessage<BugReportLinterEvent_LintDismissed> | undefined, b: BugReportLinterEvent_LintDismissed | PlainMessage<BugReportLinterEvent_LintDismissed> | undefined): boolean {
+    return proto3.util.equals(BugReportLinterEvent_LintDismissed, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.BugBotLinterEvent.LintGenerated
+ * @generated from message aiserver.v1.BugReportLinterEvent.LintGenerated
  */
-export class BugBotLinterEvent_LintGenerated extends Message<BugBotLinterEvent_LintGenerated> {
+export class BugReportLinterEvent_LintGenerated extends Message<BugReportLinterEvent_LintGenerated> {
   /**
    * @generated from field: optional aiserver.v1.BugReport bug_report = 1;
    */
   bugReport?: BugReport;
 
-  constructor(data?: PartialMessage<BugBotLinterEvent_LintGenerated>) {
+  constructor(data?: PartialMessage<BugReportLinterEvent_LintGenerated>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugBotLinterEvent.LintGenerated";
+  static readonly typeName = "aiserver.v1.BugReportLinterEvent.LintGenerated";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bug_report", kind: "message", T: BugReport, opt: true },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugBotLinterEvent_LintGenerated {
-    return new BugBotLinterEvent_LintGenerated().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportLinterEvent_LintGenerated {
+    return new BugReportLinterEvent_LintGenerated().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugBotLinterEvent_LintGenerated {
-    return new BugBotLinterEvent_LintGenerated().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportLinterEvent_LintGenerated {
+    return new BugReportLinterEvent_LintGenerated().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugBotLinterEvent_LintGenerated {
-    return new BugBotLinterEvent_LintGenerated().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportLinterEvent_LintGenerated {
+    return new BugReportLinterEvent_LintGenerated().fromJsonString(jsonString, options);
   }
 
-  static equals(a: BugBotLinterEvent_LintGenerated | PlainMessage<BugBotLinterEvent_LintGenerated> | undefined, b: BugBotLinterEvent_LintGenerated | PlainMessage<BugBotLinterEvent_LintGenerated> | undefined): boolean {
-    return proto3.util.equals(BugBotLinterEvent_LintGenerated, a, b);
+  static equals(a: BugReportLinterEvent_LintGenerated | PlainMessage<BugReportLinterEvent_LintGenerated> | undefined, b: BugReportLinterEvent_LintGenerated | PlainMessage<BugReportLinterEvent_LintGenerated> | undefined): boolean {
+    return proto3.util.equals(BugReportLinterEvent_LintGenerated, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.BugBotLinterEvent.NotShownBecauseHeuristic
+ * @generated from message aiserver.v1.BugReportLinterEvent.NotShownBecauseHeuristic
  */
-export class BugBotLinterEvent_NotShownBecauseHeuristic extends Message<BugBotLinterEvent_NotShownBecauseHeuristic> {
+export class BugReportLinterEvent_NotShownBecauseHeuristic extends Message<BugReportLinterEvent_NotShownBecauseHeuristic> {
   /**
-   * @generated from field: aiserver.v1.BugBotLinterEvent.NotShownBecauseHeuristic.Heuristic heuristic = 1;
+   * @generated from field: aiserver.v1.BugReportLinterEvent.NotShownBecauseHeuristic.Heuristic heuristic = 1;
    */
-  heuristic = BugBotLinterEvent_NotShownBecauseHeuristic_Heuristic.UNSPECIFIED;
+  heuristic = BugReportLinterEvent_NotShownBecauseHeuristic_Heuristic.UNSPECIFIED;
 
-  constructor(data?: PartialMessage<BugBotLinterEvent_NotShownBecauseHeuristic>) {
+  constructor(data?: PartialMessage<BugReportLinterEvent_NotShownBecauseHeuristic>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugBotLinterEvent.NotShownBecauseHeuristic";
+  static readonly typeName = "aiserver.v1.BugReportLinterEvent.NotShownBecauseHeuristic";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "heuristic", kind: "enum", T: proto3.getEnumType(BugBotLinterEvent_NotShownBecauseHeuristic_Heuristic) },
+    { no: 1, name: "heuristic", kind: "enum", T: proto3.getEnumType(BugReportLinterEvent_NotShownBecauseHeuristic_Heuristic) },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugBotLinterEvent_NotShownBecauseHeuristic {
-    return new BugBotLinterEvent_NotShownBecauseHeuristic().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportLinterEvent_NotShownBecauseHeuristic {
+    return new BugReportLinterEvent_NotShownBecauseHeuristic().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugBotLinterEvent_NotShownBecauseHeuristic {
-    return new BugBotLinterEvent_NotShownBecauseHeuristic().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportLinterEvent_NotShownBecauseHeuristic {
+    return new BugReportLinterEvent_NotShownBecauseHeuristic().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugBotLinterEvent_NotShownBecauseHeuristic {
-    return new BugBotLinterEvent_NotShownBecauseHeuristic().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportLinterEvent_NotShownBecauseHeuristic {
+    return new BugReportLinterEvent_NotShownBecauseHeuristic().fromJsonString(jsonString, options);
   }
 
-  static equals(a: BugBotLinterEvent_NotShownBecauseHeuristic | PlainMessage<BugBotLinterEvent_NotShownBecauseHeuristic> | undefined, b: BugBotLinterEvent_NotShownBecauseHeuristic | PlainMessage<BugBotLinterEvent_NotShownBecauseHeuristic> | undefined): boolean {
-    return proto3.util.equals(BugBotLinterEvent_NotShownBecauseHeuristic, a, b);
+  static equals(a: BugReportLinterEvent_NotShownBecauseHeuristic | PlainMessage<BugReportLinterEvent_NotShownBecauseHeuristic> | undefined, b: BugReportLinterEvent_NotShownBecauseHeuristic | PlainMessage<BugReportLinterEvent_NotShownBecauseHeuristic> | undefined): boolean {
+    return proto3.util.equals(BugReportLinterEvent_NotShownBecauseHeuristic, a, b);
   }
 }
 
 /**
- * @generated from enum aiserver.v1.BugBotLinterEvent.NotShownBecauseHeuristic.Heuristic
+ * @generated from enum aiserver.v1.BugReportLinterEvent.NotShownBecauseHeuristic.Heuristic
  */
-export enum BugBotLinterEvent_NotShownBecauseHeuristic_Heuristic {
+export enum BugReportLinterEvent_NotShownBecauseHeuristic_Heuristic {
   /**
    * @generated from enum value: HEURISTIC_UNSPECIFIED = 0;
    */
@@ -2386,85 +2386,85 @@ export enum BugBotLinterEvent_NotShownBecauseHeuristic_Heuristic {
    */
   LINES_MISMATCH = 2,
 }
-// Retrieve enum metadata with: proto3.getEnumType(BugBotLinterEvent_NotShownBecauseHeuristic_Heuristic)
-proto3.util.setEnumType(BugBotLinterEvent_NotShownBecauseHeuristic_Heuristic, "aiserver.v1.BugBotLinterEvent.NotShownBecauseHeuristic.Heuristic", [
+// Retrieve enum metadata with: proto3.getEnumType(BugReportLinterEvent_NotShownBecauseHeuristic_Heuristic)
+proto3.util.setEnumType(BugReportLinterEvent_NotShownBecauseHeuristic_Heuristic, "aiserver.v1.BugReportLinterEvent.NotShownBecauseHeuristic.Heuristic", [
   { no: 0, name: "HEURISTIC_UNSPECIFIED" },
   { no: 1, name: "HEURISTIC_LINT_OVERLAP" },
   { no: 2, name: "HEURISTIC_LINES_MISMATCH" },
 ]);
 
 /**
- * @generated from message aiserver.v1.BugBotLinterEvent.Started
+ * @generated from message aiserver.v1.BugReportLinterEvent.Started
  */
-export class BugBotLinterEvent_Started extends Message<BugBotLinterEvent_Started> {
-  constructor(data?: PartialMessage<BugBotLinterEvent_Started>) {
+export class BugReportLinterEvent_Started extends Message<BugReportLinterEvent_Started> {
+  constructor(data?: PartialMessage<BugReportLinterEvent_Started>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugBotLinterEvent.Started";
+  static readonly typeName = "aiserver.v1.BugReportLinterEvent.Started";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugBotLinterEvent_Started {
-    return new BugBotLinterEvent_Started().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportLinterEvent_Started {
+    return new BugReportLinterEvent_Started().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugBotLinterEvent_Started {
-    return new BugBotLinterEvent_Started().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportLinterEvent_Started {
+    return new BugReportLinterEvent_Started().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugBotLinterEvent_Started {
-    return new BugBotLinterEvent_Started().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportLinterEvent_Started {
+    return new BugReportLinterEvent_Started().fromJsonString(jsonString, options);
   }
 
-  static equals(a: BugBotLinterEvent_Started | PlainMessage<BugBotLinterEvent_Started> | undefined, b: BugBotLinterEvent_Started | PlainMessage<BugBotLinterEvent_Started> | undefined): boolean {
-    return proto3.util.equals(BugBotLinterEvent_Started, a, b);
+  static equals(a: BugReportLinterEvent_Started | PlainMessage<BugReportLinterEvent_Started> | undefined, b: BugReportLinterEvent_Started | PlainMessage<BugReportLinterEvent_Started> | undefined): boolean {
+    return proto3.util.equals(BugReportLinterEvent_Started, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.BugBotLinterEvent.UnviewedReport
+ * @generated from message aiserver.v1.BugReportLinterEvent.UnviewedReport
  */
-export class BugBotLinterEvent_UnviewedReport extends Message<BugBotLinterEvent_UnviewedReport> {
+export class BugReportLinterEvent_UnviewedReport extends Message<BugReportLinterEvent_UnviewedReport> {
   /**
    * @generated from field: string bug_report_id = 1;
    */
   bugReportId = "";
 
-  constructor(data?: PartialMessage<BugBotLinterEvent_UnviewedReport>) {
+  constructor(data?: PartialMessage<BugReportLinterEvent_UnviewedReport>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugBotLinterEvent.UnviewedReport";
+  static readonly typeName = "aiserver.v1.BugReportLinterEvent.UnviewedReport";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bug_report_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugBotLinterEvent_UnviewedReport {
-    return new BugBotLinterEvent_UnviewedReport().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportLinterEvent_UnviewedReport {
+    return new BugReportLinterEvent_UnviewedReport().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugBotLinterEvent_UnviewedReport {
-    return new BugBotLinterEvent_UnviewedReport().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportLinterEvent_UnviewedReport {
+    return new BugReportLinterEvent_UnviewedReport().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugBotLinterEvent_UnviewedReport {
-    return new BugBotLinterEvent_UnviewedReport().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportLinterEvent_UnviewedReport {
+    return new BugReportLinterEvent_UnviewedReport().fromJsonString(jsonString, options);
   }
 
-  static equals(a: BugBotLinterEvent_UnviewedReport | PlainMessage<BugBotLinterEvent_UnviewedReport> | undefined, b: BugBotLinterEvent_UnviewedReport | PlainMessage<BugBotLinterEvent_UnviewedReport> | undefined): boolean {
-    return proto3.util.equals(BugBotLinterEvent_UnviewedReport, a, b);
+  static equals(a: BugReportLinterEvent_UnviewedReport | PlainMessage<BugReportLinterEvent_UnviewedReport> | undefined, b: BugReportLinterEvent_UnviewedReport | PlainMessage<BugReportLinterEvent_UnviewedReport> | undefined): boolean {
+    return proto3.util.equals(BugReportLinterEvent_UnviewedReport, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.BugBotLinterEvent.UserFeedback
+ * @generated from message aiserver.v1.BugReportLinterEvent.UserFeedback
  */
-export class BugBotLinterEvent_UserFeedback extends Message<BugBotLinterEvent_UserFeedback> {
+export class BugReportLinterEvent_UserFeedback extends Message<BugReportLinterEvent_UserFeedback> {
   /**
    * @generated from field: string bug_report_id = 1;
    */
@@ -2475,69 +2475,69 @@ export class BugBotLinterEvent_UserFeedback extends Message<BugBotLinterEvent_Us
    */
   feedback = "";
 
-  constructor(data?: PartialMessage<BugBotLinterEvent_UserFeedback>) {
+  constructor(data?: PartialMessage<BugReportLinterEvent_UserFeedback>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugBotLinterEvent.UserFeedback";
+  static readonly typeName = "aiserver.v1.BugReportLinterEvent.UserFeedback";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bug_report_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "feedback", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugBotLinterEvent_UserFeedback {
-    return new BugBotLinterEvent_UserFeedback().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportLinterEvent_UserFeedback {
+    return new BugReportLinterEvent_UserFeedback().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugBotLinterEvent_UserFeedback {
-    return new BugBotLinterEvent_UserFeedback().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportLinterEvent_UserFeedback {
+    return new BugReportLinterEvent_UserFeedback().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugBotLinterEvent_UserFeedback {
-    return new BugBotLinterEvent_UserFeedback().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportLinterEvent_UserFeedback {
+    return new BugReportLinterEvent_UserFeedback().fromJsonString(jsonString, options);
   }
 
-  static equals(a: BugBotLinterEvent_UserFeedback | PlainMessage<BugBotLinterEvent_UserFeedback> | undefined, b: BugBotLinterEvent_UserFeedback | PlainMessage<BugBotLinterEvent_UserFeedback> | undefined): boolean {
-    return proto3.util.equals(BugBotLinterEvent_UserFeedback, a, b);
+  static equals(a: BugReportLinterEvent_UserFeedback | PlainMessage<BugReportLinterEvent_UserFeedback> | undefined, b: BugReportLinterEvent_UserFeedback | PlainMessage<BugReportLinterEvent_UserFeedback> | undefined): boolean {
+    return proto3.util.equals(BugReportLinterEvent_UserFeedback, a, b);
   }
 }
 
 /**
- * @generated from message aiserver.v1.BugBotLinterEvent.ViewedReport
+ * @generated from message aiserver.v1.BugReportLinterEvent.ViewedReport
  */
-export class BugBotLinterEvent_ViewedReport extends Message<BugBotLinterEvent_ViewedReport> {
+export class BugReportLinterEvent_ViewedReport extends Message<BugReportLinterEvent_ViewedReport> {
   /**
    * @generated from field: string bug_report_id = 1;
    */
   bugReportId = "";
 
-  constructor(data?: PartialMessage<BugBotLinterEvent_ViewedReport>) {
+  constructor(data?: PartialMessage<BugReportLinterEvent_ViewedReport>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "aiserver.v1.BugBotLinterEvent.ViewedReport";
+  static readonly typeName = "aiserver.v1.BugReportLinterEvent.ViewedReport";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bug_report_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugBotLinterEvent_ViewedReport {
-    return new BugBotLinterEvent_ViewedReport().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BugReportLinterEvent_ViewedReport {
+    return new BugReportLinterEvent_ViewedReport().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugBotLinterEvent_ViewedReport {
-    return new BugBotLinterEvent_ViewedReport().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): BugReportLinterEvent_ViewedReport {
+    return new BugReportLinterEvent_ViewedReport().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugBotLinterEvent_ViewedReport {
-    return new BugBotLinterEvent_ViewedReport().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): BugReportLinterEvent_ViewedReport {
+    return new BugReportLinterEvent_ViewedReport().fromJsonString(jsonString, options);
   }
 
-  static equals(a: BugBotLinterEvent_ViewedReport | PlainMessage<BugBotLinterEvent_ViewedReport> | undefined, b: BugBotLinterEvent_ViewedReport | PlainMessage<BugBotLinterEvent_ViewedReport> | undefined): boolean {
-    return proto3.util.equals(BugBotLinterEvent_ViewedReport, a, b);
+  static equals(a: BugReportLinterEvent_ViewedReport | PlainMessage<BugReportLinterEvent_ViewedReport> | undefined, b: BugReportLinterEvent_ViewedReport | PlainMessage<BugReportLinterEvent_ViewedReport> | undefined): boolean {
+    return proto3.util.equals(BugReportLinterEvent_ViewedReport, a, b);
   }
 }
 
@@ -4752,9 +4752,9 @@ export class CppSessionEvent extends Message<CppSessionEvent> {
     case: "finishedCppGenerationEvent";
   } | {
     /**
-     * @generated from field: aiserver.v1.BugBotEvent bug_bot_event = 32;
+     * @generated from field: aiserver.v1.BugReportEvent bug_bot_event = 32;
      */
-    value: BugBotEvent;
+    value: BugReportEvent;
     case: "bugBotEvent";
   } | {
     /**
@@ -4764,9 +4764,9 @@ export class CppSessionEvent extends Message<CppSessionEvent> {
     case: "modelAddedEvent";
   } | {
     /**
-     * @generated from field: aiserver.v1.BugBotLinterEvent bug_bot_linter_event = 34;
+     * @generated from field: aiserver.v1.BugReportLinterEvent bug_bot_linter_event = 34;
      */
-    value: BugBotLinterEvent;
+    value: BugReportLinterEvent;
     case: "bugBotLinterEvent";
   } | {
     /**
@@ -4882,9 +4882,9 @@ export class CppSessionEvent extends Message<CppSessionEvent> {
     { no: 29, name: "suggest_cursor_prediction_event", kind: "message", T: SuggestCursorPredictionEvent, oneof: "event" },
     { no: 30, name: "cpp_trigger_event", kind: "message", T: CppTriggerEvent, oneof: "event" },
     { no: 31, name: "finished_cpp_generation_event", kind: "message", T: FinishedCppGenerationEvent, oneof: "event" },
-    { no: 32, name: "bug_bot_event", kind: "message", T: BugBotEvent, oneof: "event" },
+    { no: 32, name: "bug_bot_event", kind: "message", T: BugReportEvent, oneof: "event" },
     { no: 33, name: "model_added_event", kind: "message", T: ModelAddedEvent, oneof: "event" },
-    { no: 34, name: "bug_bot_linter_event", kind: "message", T: BugBotLinterEvent, oneof: "event" },
+    { no: 34, name: "bug_bot_linter_event", kind: "message", T: BugReportLinterEvent, oneof: "event" },
     { no: 35, name: "anything_quick_access_selection_event", kind: "message", T: AnythingQuickAccessSelectionEvent, oneof: "event" },
     { no: 36, name: "lsp_suggestion_event", kind: "message", T: LspSuggestionEvent, oneof: "event" },
     { no: 37, name: "ntp_event", kind: "message", T: NtpEvent, oneof: "event" },

@@ -7,7 +7,7 @@ syntax = "proto3";
 
 package aiserver.v1;
 
-import "aiserver/v1/bugbot.proto";
+import "aiserver/v1/bug_reports.proto";
 import "aiserver/v1/filesyncserver.proto";
 import "aiserver/v1/lsp_subgraph.proto";
 import "aiserver/v1/repository.proto";
@@ -182,20 +182,20 @@ message BrowserEvent {
   }
 }
 
-message BugBotEvent {
+message BugReportEvent {
   string request_id = 1 [json_name = "requestId"];
   oneof event_type {
-    .aiserver.v1.BugBotEvent.Started started = 2 [json_name = "started"];
-    .aiserver.v1.BugBotEvent.ReportsGenerated reports_generated = 3 [json_name = "reportsGenerated"];
-    .aiserver.v1.BugBotEvent.PressedFixInComposer pressed_fix_in_composer = 4 [json_name = "pressedFixInComposer"];
-    .aiserver.v1.BugBotEvent.PressedOpenInEditor pressed_open_in_editor = 5 [json_name = "pressedOpenInEditor"];
-    .aiserver.v1.BugBotEvent.ViewedReport viewed_report = 6 [json_name = "viewedReport"];
-    .aiserver.v1.BugBotEvent.UserFeedback user_feedback = 7 [json_name = "userFeedback"];
-    .aiserver.v1.BugBotEvent.PressedAddToChat pressed_add_to_chat = 8 [json_name = "pressedAddToChat"];
-    .aiserver.v1.BugBotEvent.BackgroundIntervalStarted background_interval_started = 9 [json_name = "backgroundIntervalStarted"];
-    .aiserver.v1.BugBotEvent.BackgroundIntervalEnded background_interval_ended = 10 [json_name = "backgroundIntervalEnded"];
-    .aiserver.v1.BugBotEvent.BackgroundIntervalInterrupted background_interval_interrupted = 11 [json_name = "backgroundIntervalInterrupted"];
-    .aiserver.v1.BugBotEvent.BackgroundIntervalErrored background_interval_errored = 12 [json_name = "backgroundIntervalErrored"];
+    .aiserver.v1.BugReportEvent.Started started = 2 [json_name = "started"];
+    .aiserver.v1.BugReportEvent.ReportsGenerated reports_generated = 3 [json_name = "reportsGenerated"];
+    .aiserver.v1.BugReportEvent.PressedFixInComposer pressed_fix_in_composer = 4 [json_name = "pressedFixInComposer"];
+    .aiserver.v1.BugReportEvent.PressedOpenInEditor pressed_open_in_editor = 5 [json_name = "pressedOpenInEditor"];
+    .aiserver.v1.BugReportEvent.ViewedReport viewed_report = 6 [json_name = "viewedReport"];
+    .aiserver.v1.BugReportEvent.UserFeedback user_feedback = 7 [json_name = "userFeedback"];
+    .aiserver.v1.BugReportEvent.PressedAddToChat pressed_add_to_chat = 8 [json_name = "pressedAddToChat"];
+    .aiserver.v1.BugReportEvent.BackgroundIntervalStarted background_interval_started = 9 [json_name = "backgroundIntervalStarted"];
+    .aiserver.v1.BugReportEvent.BackgroundIntervalEnded background_interval_ended = 10 [json_name = "backgroundIntervalEnded"];
+    .aiserver.v1.BugReportEvent.BackgroundIntervalInterrupted background_interval_interrupted = 11 [json_name = "backgroundIntervalInterrupted"];
+    .aiserver.v1.BugReportEvent.BackgroundIntervalErrored background_interval_errored = 12 [json_name = "backgroundIntervalErrored"];
   }
   message BackgroundIntervalEnded {
     bool success = 1 [json_name = "success"];
@@ -204,7 +204,7 @@ message BugBotEvent {
     string error_message = 1 [json_name = "errorMessage"];
   }
   message BackgroundIntervalInterrupted {
-    .aiserver.v1.BugBotEvent.BackgroundIntervalInterruptedReason reason = 1 [json_name = "reason"];
+    .aiserver.v1.BugReportEvent.BackgroundIntervalInterruptedReason reason = 1 [json_name = "reason"];
   }
   enum BackgroundIntervalInterruptedReason {
     BACKGROUND_INTERVAL_INTERRUPTED_REASON_UNSPECIFIED = 0;
@@ -244,7 +244,7 @@ message BugBotEvent {
   }
   message ViewedReport {
     int32 seconds_viewed = 1 [json_name = "secondsViewed"];
-    repeated .aiserver.v1.BugBotEvent.ViewedReport.ReportView report_views = 2 [json_name = "reportViews"];
+    repeated .aiserver.v1.BugReportEvent.ViewedReport.ReportView report_views = 2 [json_name = "reportViews"];
     message ReportView {
       string bug_report_id = 1 [json_name = "bugReportId"];
       double view_percentage = 2 [json_name = "viewPercentage"];
@@ -253,17 +253,17 @@ message BugBotEvent {
   }
 }
 
-message BugBotLinterEvent {
+message BugReportLinterEvent {
   string request_id = 1 [json_name = "requestId"];
   optional .aiserver.v1.PointInTimeModel point_in_time_model = 2 [json_name = "pointInTimeModel"];
   oneof event_type {
-    .aiserver.v1.BugBotLinterEvent.LintGenerated lint_generated = 3 [json_name = "lintGenerated"];
-    .aiserver.v1.BugBotLinterEvent.LintDismissed lint_dismissed = 4 [json_name = "lintDismissed"];
-    .aiserver.v1.BugBotLinterEvent.UserFeedback user_feedback = 5 [json_name = "userFeedback"];
-    .aiserver.v1.BugBotLinterEvent.ViewedReport viewed_report = 6 [json_name = "viewedReport"];
-    .aiserver.v1.BugBotLinterEvent.UnviewedReport unviewed_report = 7 [json_name = "unviewedReport"];
-    .aiserver.v1.BugBotLinterEvent.Started started = 8 [json_name = "started"];
-    .aiserver.v1.BugBotLinterEvent.NotShownBecauseHeuristic not_shown_because_heuristic = 9 [json_name = "notShownBecauseHeuristic"];
+    .aiserver.v1.BugReportLinterEvent.LintGenerated lint_generated = 3 [json_name = "lintGenerated"];
+    .aiserver.v1.BugReportLinterEvent.LintDismissed lint_dismissed = 4 [json_name = "lintDismissed"];
+    .aiserver.v1.BugReportLinterEvent.UserFeedback user_feedback = 5 [json_name = "userFeedback"];
+    .aiserver.v1.BugReportLinterEvent.ViewedReport viewed_report = 6 [json_name = "viewedReport"];
+    .aiserver.v1.BugReportLinterEvent.UnviewedReport unviewed_report = 7 [json_name = "unviewedReport"];
+    .aiserver.v1.BugReportLinterEvent.Started started = 8 [json_name = "started"];
+    .aiserver.v1.BugReportLinterEvent.NotShownBecauseHeuristic not_shown_because_heuristic = 9 [json_name = "notShownBecauseHeuristic"];
   }
   message LintDismissed {
     string bug_report_id = 1 [json_name = "bugReportId"];
@@ -272,7 +272,7 @@ message BugBotLinterEvent {
     optional .aiserver.v1.BugReport bug_report = 1 [json_name = "bugReport"];
   }
   message NotShownBecauseHeuristic {
-    .aiserver.v1.BugBotLinterEvent.NotShownBecauseHeuristic.Heuristic heuristic = 1 [json_name = "heuristic"];
+    .aiserver.v1.BugReportLinterEvent.NotShownBecauseHeuristic.Heuristic heuristic = 1 [json_name = "heuristic"];
     enum Heuristic {
       HEURISTIC_UNSPECIFIED = 0;
       HEURISTIC_LINT_OVERLAP = 1;
@@ -570,9 +570,9 @@ message CppSessionEvent {
     .aiserver.v1.SuggestCursorPredictionEvent suggest_cursor_prediction_event = 29 [json_name = "suggestCursorPredictionEvent"];
     .aiserver.v1.CppTriggerEvent cpp_trigger_event = 30 [json_name = "cppTriggerEvent"];
     .aiserver.v1.FinishedCppGenerationEvent finished_cpp_generation_event = 31 [json_name = "finishedCppGenerationEvent"];
-    .aiserver.v1.BugBotEvent bug_bot_event = 32 [json_name = "bugBotEvent"];
+    .aiserver.v1.BugReportEvent bug_bot_event = 32 [json_name = "bugBotEvent"];
     .aiserver.v1.ModelAddedEvent model_added_event = 33 [json_name = "modelAddedEvent"];
-    .aiserver.v1.BugBotLinterEvent bug_bot_linter_event = 34 [json_name = "bugBotLinterEvent"];
+    .aiserver.v1.BugReportLinterEvent bug_bot_linter_event = 34 [json_name = "bugBotLinterEvent"];
     .aiserver.v1.AnythingQuickAccessSelectionEvent anything_quick_access_selection_event = 35 [json_name = "anythingQuickAccessSelectionEvent"];
     .aiserver.v1.LspSuggestionEvent lsp_suggestion_event = 36 [json_name = "lspSuggestionEvent"];
     .aiserver.v1.NtpEvent ntp_event = 37 [json_name = "ntpEvent"];
