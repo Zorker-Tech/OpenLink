@@ -4,7 +4,7 @@
  * It is a development feature: the switch that turns it on is read from the environment, and against the production
  * backend it needs a second switch, so a development build cannot share into production by accident.
  */
-import { DEFAULT_BACKEND_URL } from "../../shared/node/cursor-token.ts";
+import { DEFAULT_BACKEND_URL } from "../../shared/node/slate-token.ts";
 
 export const SLATE_DEV_XUSER_SHARING_ENV = "SLATE_DEV_XUSER_SHARING";
 export const SLATE_XUSER_SHARING_ALLOW_PROD_ENV = "SLATE_XUSER_SHARING_ALLOW_PROD";
