@@ -16,7 +16,7 @@ import { describe, it } from "node:test";
 const root = new URL("../../source", import.meta.url).pathname.replace(/\/$/, "");
 
 /** A word that belongs to another product: their product, their company, their bug reviewer, their box. */
-const FOREIGN = /(Grok|grok|Anysphere|anysphere|Bugbot|bugbot|Sand[A-Z]|sand[-_]|\bSand\b)/;
+const FOREIGN = /(Grok|grok|Anysphere|anysphere|Bugbot|bugbot|Sand[A-Z]|sand[-_.]|\bSand\b)/;
 
 /** Values a third party defines, which we keep verbatim because they are not ours to rename. */
 const KEPT_WIRE_VALUES = [
