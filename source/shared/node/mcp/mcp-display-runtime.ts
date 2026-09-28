@@ -1,0 +1,16 @@
+/**
+ * An MCP server as the runtime describes it to the rest of the platform.
+ *
+ * What a server needs — its address, how it is reached, the headers and the account it belongs to — is checked before it
+ * is used, and a server that does not hold what it must is refused rather than half-described.
+ */
+import { normalizeMcpAccountLabel } from "../../mcp.ts"; import { SlateMcpConfigError } from "./mcp-config-error.ts";
+export type McpServerConfig = { url: string; type?: "sse" | "http"; headers?: Record<string, string> } | { command: string; args?: string[]; env?: Record<string, string> };
+export interface DisplayServer { id: string; name: string; serverIdentifier?: string; config: McpServerConfig; isTeamServer: boolean; disabledByTeamAdminPolicy?: boolean; pluginId?: string; isRequired?: boolean; managedByTeamPluginPolicy?: boolean; accounts?: Array<{ accountKey: string; hasToken: boolean; serverIdentifier?: string }> }
+export interface AccountDisplayConfig { servers: DisplayServer[]; cacheScope?: string; unavailable?: boolean; unresolvedServerIds?: string[] }
+export function normalizeAccountKey(raw: string): string { const key = normalizeMcpAccountLabel(raw); if (key.length === 0) throw new SlateMcpConfigError("MCP account label is required."); return key; }
+export function runtimeConfigFromDisplay(display: AccountDisplayConfig | null): { mcpServers: Record<string, McpServerConfig> } | null { if (display == null) return null; return { mcpServers: Object.fromEntries(display.servers.flatMap((server) => server.serverIdentifier != null && !server.disabledByTeamAdminPolicy ? [[server.serverIdentifier, server.config]] : [])) }; }
+export function validateMarketplacePluginId(raw: string): string { const value = raw.trim(); if (!/^\d+$/.test(value)) throw new SlateMcpConfigError(`Invalid marketplace plugin id "${raw}".`); return value; }
+export function pluginAttributionFromDisplayServer(server: DisplayServer): Record<string, unknown> { return { ...(server.pluginId == null ? {} : { pluginId: server.pluginId }), ...(server.isRequired === true ? { isRequired: true } : {}), ...(server.managedByTeamPluginPolicy === true ? { managedByTeamPluginPolicy: true } : {}) }; }
+export function statusFromBackendListStatus(status: string | undefined) { switch (status) { case "connected": return { status: "connected" }; case "needsAuth": return { status: "needsAuth", statusDetail: "Authentication required" }; case "loading": return { status: "initializing" }; case "error": return { status: "error", statusDetail: "Failed to load MCP server" }; default: return { status: "error", statusDetail: "Not reported by backend" }; } }
+export function statusFromBoxListStatus(status: string | undefined, unavailable = false, detail?: string) { switch (status) { case "connected": return { status: "connected" }; case "needsAuth": return { status: "needsAuth", statusDetail: "Authentication required" }; case "loading": return { status: "initializing" }; case "error": return { status: "error", statusDetail: detail != null && detail.length > 0 ? detail : "Failed to load MCP server" }; default: return unavailable ? { status: "error", statusDetail: "Slate's computer unreachable" } : { status: "error", statusDetail: "Not reported by Slate's computer" }; } }
