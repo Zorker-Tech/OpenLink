@@ -7,7 +7,7 @@
 import { BaseMiddleware, type PromptExecutor, type PromptMessage } from "../base.ts";
 
 const logger = {
-  name: "@anysphere/chat-inference/continuation-injector-middleware",
+  name: "@slate/chat-inference/continuation-injector-middleware",
   info(_ctx: unknown, message: string, metadata: unknown): void { console.info(message, metadata); },
 };
 export const CONTINUATION_MESSAGE = "Your previous response was interrupted. Continue from where you left off.";
