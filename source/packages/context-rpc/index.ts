@@ -35,7 +35,7 @@ export interface ContextPropagationOptions {
 }
 
 const callerContextKey = createContextKey<Context | undefined>(undefined, {
-  description: "anysphere.callerContext",
+  description: "slate.callerContext",
 });
 
 function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
