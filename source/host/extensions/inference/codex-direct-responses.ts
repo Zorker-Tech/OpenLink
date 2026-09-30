@@ -126,7 +126,7 @@ export async function* streamCodexDirectResponses(options: CodexDirectOptions): 
     const declaredTools = requestTools(options.tools);
     const response = await options.fetch(options.endpoint, {
       method: "POST",
-      headers: { "content-type": "application/json", accept: "text/event-stream", "user-agent": "grok-bot-router/1" },
+      headers: { "content-type": "application/json", accept: "text/event-stream", "user-agent": "slate-router/1" },
       body: JSON.stringify({
         model: options.model,
         instructions: options.instructions,
