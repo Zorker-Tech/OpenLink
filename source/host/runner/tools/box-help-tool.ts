@@ -23,7 +23,7 @@ export const requestBoxHelpParameters = z.object({
     'Destination app/site the user is trying to access (e.g. "salesforce.com", "google.com"). On a normal login page this is the browser-bar host. On an SSO/IdP page (Okta, Google accounts, Azure AD, …) this is the *destination* app that started SSO — NOT the IdP host (put that in idp_domain). Omit when unknown or the step is not on a website.',
   ),
   idp_domain: z.string().trim().optional().catch(undefined).describe(
-    'When the browser is on an SSO/IdP page, the IdP host from the URL bar (e.g. "anysphere.okta.com", "accounts.google.com", "login.microsoftonline.com"). Omit on a direct app login with no separate IdP.',
+    'When the browser is on an SSO/IdP page, the IdP host from the URL bar (e.g. "example.okta.com", "accounts.google.com", "login.microsoftonline.com"). Omit on a direct app login with no separate IdP.',
   ),
 });
 
