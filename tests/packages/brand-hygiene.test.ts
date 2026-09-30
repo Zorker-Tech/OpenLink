@@ -15,8 +15,10 @@ import { describe, it } from "node:test";
 
 const root = new URL("../../source", import.meta.url).pathname.replace(/\/$/, "");
 
-/** A word that belongs to another product: their product, their company, their bug reviewer, their box. */
-const FOREIGN = /(\bGrok|\bgrok|Anysphere|anysphere|Bugbot|bugbot|\bSand[A-Z]|\bsand[-_.]|\bSand\b)/;
+/** A word that belongs to another product: their product, their company, their bug reviewer, their box.
+ * Their product name is refused as a whole word too, so a leftover log scope or endpoint path such as
+ * `[sand:sharing]` is caught and not only the joined forms. */
+const FOREIGN = /(\bGrok|\bgrok|Anysphere|anysphere|Bugbot|bugbot|\bSand\b|\bSand[A-Z]|\bsand\b|\bsand[A-Z_])/;
 
 /** Values a third party defines, which we keep verbatim because they are not ours to rename. */
 const KEPT_WIRE_VALUES = [
