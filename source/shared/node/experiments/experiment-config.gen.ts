@@ -21,7 +21,7 @@ export function parseStringArray(value: unknown): string[] { if (!Array.isArray(
 const DEFAULT_FIRST_WINDOW_REACTIVATION_INACTIVE_DAYS = 7;
 const DEFAULT_ENVIRONMENT_SETUP_MAX_RESUME_AGE_MS = 7 * 24 * 60 * 60 * 1_000;
 const AUTO_SPILLOVER_UI_DEFAULTS = {
-  autoTitle: "Cursor Models", autoDescription: "Includes Cursor Grok 4.5 and Composer 2.5",
+  autoTitle: "Slate Models", autoDescription: "Includes the models the platform runs",
   apiTitle: "Other Models", apiDescription: "Consumed by named models.",
   autoBeyondLimitDescription: "Additional usage beyond limits consumes Other Models quota or on-demand spend.",
   autoUsageBarLabel: "your included total usage", apiUsageBarLabel: "your included API usage"
@@ -146,7 +146,7 @@ export const FLAGS = {
         client: true,
         default: false
       },
-      grok_bot_dynamic_tools: {
+      slate_dynamic_tools: {
         client: true,
         default: false
       },
@@ -216,7 +216,7 @@ export const FLAGS = {
       },
       // Server-controlled rollout of Slate's product-analytics pipeline (DAU / WAU,
       // messages-per-user, and the starter set of product events). When ON for the
-      // signed-in Cursor user, the Slate host activates its analytics buffer and ships
+      // signed-in Slate user, the Slate host activates its analytics buffer and ships
       // events to AnalyticsService.TrackEvents; when OFF (the default for everyone)
       // the host holds then drops events and trackEvent is a no-op. Evaluated in the
       // Slate host via its SlateExperimentService — a rollout/kill switch with no app
@@ -233,7 +233,7 @@ export const FLAGS = {
         default: true
       },
       // Rollout of Slate's customer-facing action audit trail: when ON for the
-      // signed-in Cursor user, the Slate host reports agent actions (stdio MCP tool
+      // signed-in Slate user, the Slate host reports agent actions (stdio MCP tool
       // calls, shell commands, browser navigations, computer-use session summaries)
       // to DashboardService.RecordSlateAuditEvents, and the backend emits
       // server-observed audit events for HTTP MCP calls inside ExecuteSlateMcpTool.
@@ -280,7 +280,7 @@ export const FLAGS = {
       // Slate conversation-bundle size limits: background reachability GC over
       // conversation-blobs.db past the soft threshold, plus the turn-start hard
       // cap that compacts and refuses turns when the bundle stays over the limit.
-      grok_bot_conversation_gc: {
+      slate_conversation_gc: {
         client: true,
         default: false
       },
@@ -332,7 +332,7 @@ export const FLAGS = {
         client: true,
         default: false
       },
-      // Kill switch for the GrokAgent UA token stamped onto box Chrome browsing
+      // Kill switch for the agent UA token stamped onto box Chrome browsing
       // (box-chrome's --user-agent suffix and the special-treatment CDP override,
       // including the opaque `(u:<owner>)` stamp). KILL polarity: passing makes
       // the Slate host write the /tmp/slate-ua-token-disabled marker, which drops
@@ -404,7 +404,7 @@ export const FLAGS = {
       },
       // Slate desktop's "Get Slate for iOS" account-menu row (opens the iOS
       // download page). When OFF (the default) the row is absent from the menu.
-      slate_get_grok_bot_ios: {
+      slate_ios_app: {
         client: true,
         default: false
       },
@@ -669,7 +669,7 @@ export const FLAGS = {
       },
       // Lets the managed `automations` service account request reviewers on Origin
       // changes. When on, the Origin reviewer-candidate list + RequestReview
-      // validation switch from caller-scoped to team-scoped for managed Cursor
+      // validation switch from caller-scoped to team-scoped for managed Slate
       // service accounts (which have no org membership of their own), so an
       // automation can request any reviewer candidate of the repo-owner team.
       // Client exposure keeps the Automations editor aligned with this rollout.
@@ -749,7 +749,7 @@ export const FLAGS = {
         default: false
       },
       // Perf Loop (E3): default-off kill switch that defers activation of
-      // anysphere.cursor-agent-exec from the eager "*" activation event to
+      // slate.plugin-activation from the eager "*" activation event to
       // "onStartupFinished". cursor-agent-exec dominates the eager-activation
       // window on Glass root cold boots (~800ms code-load + ~9ms activate call),
       // so moving it out of the startup-critical eager window reclaims that time.
@@ -890,7 +890,7 @@ export const FLAGS = {
         client: true,
         default: false
       },
-      // Portal team-rules UI: agent type picker (Cursor / Slate / Both) and list badges.
+      // Portal team-rules UI: agent type picker (Slate / Slate / Both) and list badges.
       // Backend agentType field stays available regardless; this gate only hides the
       // dashboard controls until rollout. Read via useGateValue in portal-website.
       team_rule_agent_type_ui: {
@@ -1017,7 +1017,7 @@ export const FLAGS = {
         default: false
       },
       // Consolidated review-agents growth kit on the portal (shared enable CTAs,
-      // From Cursor cards, deep links, invite-modal CTA, upsell destinations for
+      // From Slate cards, deep links, invite-modal CTA, upsell destinations for
       // bug_report / security / pr-routing / self-driving). OFF: every BugReport growth
       // surface runs its pre-kit code path byte-for-byte. ON: the wrapped
       // surfaces route through the agent-parameterized kit in
@@ -1211,8 +1211,8 @@ export const FLAGS = {
         client: true,
         default: true
       },
-      // Anysphere-internal-only CPU monitor: detects sustained high CPU usage
-      // across the Cursor process tree and offers to capture and upload a process
+      // Slate-internal-only CPU monitor: detects sustained high CPU usage
+      // across the Slate process tree and offers to capture and upload a process
       // snapshot (similar to the memory monitor's heap snapshot flow). The client
       // additionally requires the server-provided internal/dev flag, so enabling
       // this gate for external users has no effect. Default OFF; tuned via the
@@ -1473,7 +1473,7 @@ export const FLAGS = {
       },
       /**
        * Freehand annotation on PromptInput attached images (Glass, composer
-       * message edit, Cursor Review). When off, the image lightbox stays
+       * message edit, Slate Review). When off, the image lightbox stays
        * available without a drawing canvas.
        */
       prompt_input_image_annotation: {
@@ -2050,7 +2050,7 @@ export const FLAGS = {
         default: false
       },
       /**
-       * Gates the Cursor Organization <-> xAI team billing link + credit
+       * Gates the Slate Organization <-> xAI team billing link + credit
        * transfer integration (org admin xAI Console, the link/unlink/transfer
        * RPCs, and the start-link flow that mints callback states). When OFF: the
        * portal hides the integration and the RPCs reject, which also starves the
@@ -2470,7 +2470,7 @@ export const FLAGS = {
         default: false
       },
       // Routes built-in Gemini video subagents through the Developer API Files
-      // path, including the larger signed-URL attachment limit and Cursor's
+      // path, including the larger signed-URL attachment limit and Slate's
       // Google AI Studio credential. Keep disabled until the backend and client
       // changes have landed.
       gemini_video_developer_api: {
@@ -2899,7 +2899,7 @@ export const FLAGS = {
         client: true,
         default: false
       },
-      /** Per-user Slack default-worker rules (repo -> My Machines worker): launch-path injection, the `@Cursor worker` management command, and the dashboard "Default Workers" section (client-read for the portal UI gate). */
+      /** Per-user Slack default-worker rules (repo -> My Machines worker): launch-path injection, the `@Slate worker` management command, and the dashboard "Default Workers" section (client-read for the portal UI gate). */
       cloud_agent_slack_default_worker: {
         client: true,
         default: false
@@ -3031,10 +3031,10 @@ export const FLAGS = {
         client: true,
         default: true
       },
-      // Extends the SEV-1252 AwaitShell subagent-wait mitigation to Grok 4.6,
+      // Extends the SEV-1252 AwaitShell subagent-wait mitigation to the newer model,
       // which vacuously slept on AwaitShell instead of ending its turn to collect
       // background Task subagent results (same failure mode Fable had).
-      fix_grok_subagent_await: {
+      fix_slate_subagent_await: {
         client: true,
         default: false
       },
@@ -3186,10 +3186,10 @@ export const FLAGS = {
         default: false
       },
       /**
-       * Internal Anysphere: default tsgo on for engineers who have not previously
+       * Internal: default tsgo on for engineers who have not previously
        * installed native-preview. When on, installs `typescriptteam.native-preview`
        * when missing and sets `js/ts.experimental.useTsgo` at user scope. Scoped
-       * to team 1 in Statsig; client also guards with `isAnysphereUser()`.
+       * to team 1 in Statsig; client also guards with `isInternalUser()`.
        */
       default_tsgo_internal: {
         client: true,
@@ -3451,7 +3451,7 @@ export const FLAGS = {
       },
       // Rollout of sparse partial clones + subprocess kill budgets for plugin
       // repos, so plugins in large monorepos install without hitting the legacy
-      // 30s full-clone timeout. See @anysphere/cursor-plugins.
+      // 30s full-clone timeout. See @slate/plugin-install.
       enable_sparse_plugin_clones: {
         client: true,
         default: true
@@ -3609,7 +3609,7 @@ export const EXPERIMENTS = {
           enabled: parseBoolean
         }
       },
-      // Internal Anysphere user-level tsgo memory experiment. Control preserves
+      // Internal user-level tsgo memory experiment. Control preserves
       // auto imports; treatment disables their default and restarts native-preview.
       tsgo_disable_auto_imports_internal: {
         client: true,
@@ -3680,7 +3680,7 @@ export const EXPERIMENTS = {
         },
         parseValue: {
           group: parseEnum(["control", "treatment"]),
-          copy: parseEnum(["cursor_models", "grok_45"])
+          copy: parseEnum(["slate_models", "slate_45"])
         }
       },
       // Controls whether the Automations entrypoint row is shown in the editor/IDE
@@ -4249,7 +4249,7 @@ export const EXPERIMENTS = {
           ])
         }
       },
-      free_user_composer_grok_picker_2026_07: {
+      free_user_composer_slate_picker_2026_07: {
         client: true,
         fallbackValues: {
           group: "control"
@@ -4272,7 +4272,7 @@ export const EXPERIMENTS = {
         parseValue: {
           variant: parseEnum([
             "control",
-            "grok_primary",
+            "slate_primary",
             "pinned_selection"
           ])
         }
@@ -4344,7 +4344,7 @@ export const EXPERIMENTS = {
         client: true,
         fallbackValues: {
           enabled: false,
-          message: "Install Cursor CLI?",
+          message: "Install Slate CLI?",
           action: "curl https://cursor.com/install -fsS | bash",
           show_every_hours: 0,
           show_count: 0
@@ -4359,7 +4359,7 @@ export const EXPERIMENTS = {
       },
       /**
        * Experiment for the CLI install in-app ad.
-       * Shows an ad to users who have claude/codex CLI but not Cursor agent CLI.
+       * Shows an ad to users who have claude/codex CLI but not Slate agent CLI.
        * This is a separate experiment from terminal_tip to keep assignment close to exposure.
        */
       cli_install_ad: {
@@ -4774,10 +4774,10 @@ export const DYNAMIC_CONFIGS = {
         client: true,
         fallbackValues: {
           products: {
-            "co.anysphere.cursor.pro.monthly": "pro",
-            "co.anysphere.cursor.proplus.monthly": "pro_plus",
-            "co.anysphere.cursor.ultra.monthly": "ultra",
-            "co.anysphere.slate.ultra.monthly": "ultra"
+            "co.slate.cursor.pro.monthly": "pro",
+            "co.slate.cursor.proplus.monthly": "pro_plus",
+            "co.slate.cursor.ultra.monthly": "ultra",
+            "co.slate.slate.ultra.monthly": "ultra"
           }
         }
       },
@@ -5195,7 +5195,7 @@ export const DYNAMIC_CONFIGS = {
           ]
         }
       },
-      grok_bot_conversation_size_limits: {
+      slate_conversation_size_limits: {
         client: true,
         fallbackValues: {
           soft_limit_mb: 256,
@@ -5327,7 +5327,7 @@ export const DYNAMIC_CONFIGS = {
         client: true,
         fallbackValues: {
           authToolDescription: "Authenticate this MCP server so its tools can be used. Call this tool through your MCP tool-calling interface when STATUS.md indicates this server needs authentication.",
-          errorStatusMessage: "The MCP server errored. If this server is important for completing the task, concisely inform the user and ask them to check the MCP status in Cursor's Customize page > MCPs; otherwise continue with a different approach.",
+          errorStatusMessage: "The MCP server errored. If this server is important for completing the task, concisely inform the user and ask them to check the MCP status in Slate's Customize page > MCPs; otherwise continue with a different approach.",
           needsAuthStatusMessageWithAuthTool: 'The MCP server needs authentication. Authenticate it by calling the `{authToolName}` tool for server "{serverIdentifier}" through your MCP tool-calling interface using an empty arguments object. If this server is important for completing the task, authenticate it first; otherwise continue with a different approach.'
         }
       },
@@ -5908,7 +5908,7 @@ Requirements:
       canvas_prompt_text_config: {
         client: true,
         fallbackValues: {
-          skillDescription: "A Cursor Canvas is a live React app that the user can open beside the chat. You MUST use a canvas when the agent produces a standalone analytical artifact \u2014 quantitative analyses, billing investigations, security audits, architecture reviews, data-heavy content, timelines, charts, tables, interactive explorations, repeatable tools, or any response that benefits from visual layout. Especially prefer a canvas when presenting results from MCP tools (Datadog, Databricks, Linear, Sentry, Slack, etc.) where the data is the deliverable \u2014 render it in a rich canvas rather than dumping it into a markdown table or code block. If you catch yourself about to write a markdown table, stop and use a canvas instead. You MUST also read this skill whenever you create, edit, or debug any .canvas.tsx file.",
+          skillDescription: "A Slate Canvas is a live React app that the user can open beside the chat. You MUST use a canvas when the agent produces a standalone analytical artifact \u2014 quantitative analyses, billing investigations, security audits, architecture reviews, data-heavy content, timelines, charts, tables, interactive explorations, repeatable tools, or any response that benefits from visual layout. Especially prefer a canvas when presenting results from MCP tools (Datadog, Databricks, Linear, Sentry, Slack, etc.) where the data is the deliverable \u2014 render it in a rich canvas rather than dumping it into a markdown table or code block. If you catch yourself about to write a markdown table, stop and use a canvas instead. You MUST also read this skill whenever you create, edit, or debug any .canvas.tsx file.",
           errorFixPromptTemplate: [
             "The canvas at `{canvasPath}` has the following error:",
             "",
@@ -6052,12 +6052,12 @@ export const LAYERS = {
         fallbackValues: {
           promote_first_party_variant: "control",
           effort_first_variant: "control",
-          effort_first_compact_model_ids: ["slate-4.5", "grok-4.6"]
+          effort_first_compact_model_ids: ["slate-4.5", "slate-4.6"]
         },
         parseValue: {
           promote_first_party_variant: parseEnum([
             "control",
-            "grok_primary",
+            "slate_primary",
             "pinned_selection",
             "grouped_auto_expand"
           ]),
