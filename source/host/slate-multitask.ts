@@ -11,12 +11,12 @@ export const EXECUTOR_SUBAGENT_TYPE = "executor";
 
 export function resolveMultitaskEnabled(
   envOverride: string | undefined,
-  checkStatsigGate: () => boolean,
+  checkFeatureGate: () => boolean,
 ): boolean {
   if (envOverride != null && envOverride.length > 0) {
     return envOverride !== "0" && envOverride.toLowerCase() !== "false";
   }
-  return checkStatsigGate();
+  return checkFeatureGate();
 }
 
 const EXECUTOR_SUBAGENT_DESCRIPTION = [

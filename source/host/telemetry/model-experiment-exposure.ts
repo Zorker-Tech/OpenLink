@@ -8,8 +8,8 @@ import { readSlateModelExperimentEnvOverride } from "../../shared/node/experimen
 export const HYDRATION_WAIT_MS = 60_000;
 export interface ModelExperimentExposureDeps {
   experiments: {
-    hasHydratedStatsigUserId(): boolean;
-    waitForHydratedStatsigUserId(timeoutMs: number): Promise<boolean>;
+    hasHydratedExperimentUser(): boolean;
+    waitForHydratedExperimentUser(timeoutMs: number): Promise<boolean>;
     getSlateModelExperimentState():
       { active: boolean; arm: string } | null | undefined;
     logSlateModelExperimentExposure(): boolean;
@@ -29,9 +29,9 @@ export function createModelExperimentExposureLatch(
     const envOverride = readSlateModelExperimentEnvOverride(
       deps.env ?? process.env,
     );
-    if (envOverride == null && !deps.experiments.hasHydratedStatsigUserId()) {
+    if (envOverride == null && !deps.experiments.hasHydratedExperimentUser()) {
       const ready =
-        await deps.experiments.waitForHydratedStatsigUserId(HYDRATION_WAIT_MS);
+        await deps.experiments.waitForHydratedExperimentUser(HYDRATION_WAIT_MS);
       if (logged || !ready) return;
     }
     const state = envOverride ?? deps.experiments.getSlateModelExperimentState();
