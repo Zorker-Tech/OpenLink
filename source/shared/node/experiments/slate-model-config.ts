@@ -13,8 +13,8 @@ export const SLATE_MODEL_FILTER_CONFIG_NAME = "slate_model_filter";
 export const MAX_MODEL_ID_LENGTH = 128; export const MAX_PARAMETERS = 16; export const MAX_PARAMETER_VALUE_LENGTH = 64;
 export const ROUTED_MODEL_IDS = new Set(["default", "premium", "auto-low", "auto-medium", "auto-high", "auto-smart"]);
 export type ModelConfigRejection = "identity_unhydrated" | "malformed" | "invalid_model_id" | "parameters_out_of_bounds" | "duplicate_parameter" | "routed_model_parameters";
-export function resolveSlateDefaultModelConfig(inputs: { raw: unknown; hasHydratedStatsigUserId: boolean }): { selection?: SlateAgentModelSelection; rejection?: ModelConfigRejection } {
-  if (!inputs.hasHydratedStatsigUserId) return { rejection: "identity_unhydrated" };
+export function resolveSlateDefaultModelConfig(inputs: { raw: unknown; hasHydratedExperimentUser: boolean }): { selection?: SlateAgentModelSelection; rejection?: ModelConfigRejection } {
+  if (!inputs.hasHydratedExperimentUser) return { rejection: "identity_unhydrated" };
   if (typeof inputs.raw !== "object" || inputs.raw == null || Array.isArray(inputs.raw)) return { rejection: "malformed" };
   const raw = inputs.raw as Record<string, unknown>; if (typeof raw.modelId !== "string" || typeof raw.maxMode !== "boolean" || !Array.isArray(raw.parameters)) return { rejection: "malformed" };
   const parameters: Array<{ id: string; value: string }> = [];
