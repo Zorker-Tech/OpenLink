@@ -125,7 +125,8 @@ describe("the OpenAI-compatible chat model", () => {
     assert.deepEqual(generated.toolCalls?.map((entry) => [entry.toolCallId, entry.toolName, entry.args]), [["call-1", "run", "{}"]]);
     const sent = endpoint.calls[0];
     assert.deepEqual([sent?.url, sent?.headers.authorization, sent?.headers["X-Title"]], ["https://openrouter.ai/api/v1/chat/completions", "Bearer key-1", "Slate"]);
-    assert.deepEqual(sent?.body.messages, [{ role: "system", content: [{ type: "text", text: "be brief" }] }, { role: "user", content: [{ type: "text", text: "say hi" }] }]);
+    // A message that is one string is sent as that string; one that is parts is sent as parts.
+    assert.deepEqual(sent?.body.messages, [{ role: "system", content: "be brief" }, { role: "user", content: [{ type: "text", text: "say hi" }] }]);
     assert.deepEqual([sent?.body.model, sent?.body.stream, sent?.body.max_tokens, sent?.body.tool_choice], ["openai/gpt-5.2", false, 100, { type: "function", function: { name: "run" } }]);
   });
 
