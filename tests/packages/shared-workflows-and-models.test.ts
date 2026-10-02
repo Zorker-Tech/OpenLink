@@ -47,19 +47,19 @@ test("the model an agent runs on by default is one the platform names", () => {
 
 test("a model configuration is checked before it is used", () => {
   const selection = { modelId: "some-model", maxMode: true, parameters: [{ id: "effort", value: "high" }] }
-  assert.deepEqual(resolveSlateDefaultModelConfig({ raw: selection, hasHydratedStatsigUserId: true }).selection?.modelId, "some-model")
+  assert.deepEqual(resolveSlateDefaultModelConfig({ raw: selection, hasHydratedExperimentUser: true }).selection?.modelId, "some-model")
   // Nothing is read before the identity behind the configuration is known.
-  assert.equal(resolveSlateDefaultModelConfig({ raw: selection, hasHydratedStatsigUserId: false }).rejection, "identity_unhydrated")
-  assert.equal(resolveSlateDefaultModelConfig({ raw: "nope", hasHydratedStatsigUserId: true }).rejection, "malformed")
-  assert.equal(resolveSlateDefaultModelConfig({ raw: { modelId: "x", maxMode: "yes", parameters: [] }, hasHydratedStatsigUserId: true }).rejection, "malformed")
-  assert.equal(resolveSlateDefaultModelConfig({ raw: { modelId: "x".repeat(MAX_MODEL_ID_LENGTH + 1), maxMode: true, parameters: [] }, hasHydratedStatsigUserId: true }).rejection, "invalid_model_id")
-  assert.equal(resolveSlateDefaultModelConfig({ raw: { modelId: "x", maxMode: true, parameters: Array.from({ length: MAX_PARAMETERS + 1 }, () => ({ id: "a", value: "b" })) }, hasHydratedStatsigUserId: true }).rejection, "parameters_out_of_bounds")
+  assert.equal(resolveSlateDefaultModelConfig({ raw: selection, hasHydratedExperimentUser: false }).rejection, "identity_unhydrated")
+  assert.equal(resolveSlateDefaultModelConfig({ raw: "nope", hasHydratedExperimentUser: true }).rejection, "malformed")
+  assert.equal(resolveSlateDefaultModelConfig({ raw: { modelId: "x", maxMode: "yes", parameters: [] }, hasHydratedExperimentUser: true }).rejection, "malformed")
+  assert.equal(resolveSlateDefaultModelConfig({ raw: { modelId: "x".repeat(MAX_MODEL_ID_LENGTH + 1), maxMode: true, parameters: [] }, hasHydratedExperimentUser: true }).rejection, "invalid_model_id")
+  assert.equal(resolveSlateDefaultModelConfig({ raw: { modelId: "x", maxMode: true, parameters: Array.from({ length: MAX_PARAMETERS + 1 }, () => ({ id: "a", value: "b" })) }, hasHydratedExperimentUser: true }).rejection, "parameters_out_of_bounds")
   // A model the platform routes by itself may not carry parameters.
   const routed = [...ROUTED_MODEL_IDS][0] as string
-  assert.equal(resolveSlateDefaultModelConfig({ raw: { modelId: routed, maxMode: true, parameters: [{ id: "a", value: "b" }] }, hasHydratedStatsigUserId: true }).rejection, "routed_model_parameters")
+  assert.equal(resolveSlateDefaultModelConfig({ raw: { modelId: routed, maxMode: true, parameters: [{ id: "a", value: "b" }] }, hasHydratedExperimentUser: true }).rejection, "routed_model_parameters")
   // An empty id is no configuration rather than a broken one.
-  assert.equal(resolveSlateDefaultModelConfig({ raw: { modelId: "", maxMode: true, parameters: [] }, hasHydratedStatsigUserId: true }).selection, undefined)
-  assert.equal(resolveSlateDefaultModelConfig({ raw: { modelId: "", maxMode: true, parameters: [] }, hasHydratedStatsigUserId: true }).rejection, undefined)
+  assert.equal(resolveSlateDefaultModelConfig({ raw: { modelId: "", maxMode: true, parameters: [] }, hasHydratedExperimentUser: true }).selection, undefined)
+  assert.equal(resolveSlateDefaultModelConfig({ raw: { modelId: "", maxMode: true, parameters: [] }, hasHydratedExperimentUser: true }).rejection, undefined)
 })
 
 // ---------------------------------------------------------------------------------------------
