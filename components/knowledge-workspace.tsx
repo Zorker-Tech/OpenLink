@@ -1,5 +1,7 @@
 'use client'
 
+import type { ChatSessionSummary } from '@/lib/chat-session-types'
+
 import { Sidebar } from '@/components/app-workspace'
 import { PageTransition } from '@/components/ui/page-transition'
 import { useSidebarCollapsed } from '@/lib/use-sidebar-collapsed'
@@ -109,6 +111,7 @@ interface KnowledgeBackend {
 }
 
 interface KnowledgeWorkspaceProps {
+  chatSessions?: ChatSessionSummary[]
   activeWorkspace: ActiveWorkspaceSummary
   workspaceId: string
   avatarUrl: string | null
@@ -215,13 +218,14 @@ function EmptyState({ action, description, icon: Icon, title }: { action?: React
   )
 }
 
-export function KnowledgeWorkspace({ activeWorkspace, avatarUrl, email, initialPath, knowledgeEnabled = true, nickname, organizations, personalWorkspace, workspaceId }: KnowledgeWorkspaceProps) {
+export function KnowledgeWorkspace({ chatSessions = [], activeWorkspace, avatarUrl, email, initialPath, knowledgeEnabled = true, nickname, organizations, personalWorkspace, workspaceId }: KnowledgeWorkspaceProps) {
   const router = useRouter()
   const t = useT()
   const [themeMode, setThemeMode] = useState<ThemeMode>('system')
   const [systemLight, setSystemLight] = useState(false)
   const [collapsed, setCollapsed] = useSidebarCollapsed()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [knowledgeNavOpen, setKnowledgeNavOpen] = useState(false)
   const [collections, setCollections] = useState<KnowledgeCollection[]>([])
   const [documents, setDocuments] = useState<KnowledgeDocument[]>([])
   const [backend, setBackend] = useState<KnowledgeBackend | null>(null)
@@ -281,8 +285,9 @@ export function KnowledgeWorkspace({ activeWorkspace, avatarUrl, email, initialP
 
   return (
     <OpenLinkThemeProvider theme={theme}>
-      <div className="openlink-app-shell flex h-dvh min-h-[520px] overflow-hidden bg-[var(--app-background)]" data-theme={theme}>
+      <div className="openlink-app-shell workspace-navigation-shell flex h-dvh min-h-[520px] overflow-hidden bg-[var(--app-background)]" data-theme={theme}>
         <Sidebar
+          chatSessions={chatSessions}
           activeNavLabel={t("知识库")}
           activeWorkspace={activeWorkspace}
           avatarUrl={avatarUrl}
@@ -292,61 +297,60 @@ export function KnowledgeWorkspace({ activeWorkspace, avatarUrl, email, initialP
           nickname={nickname}
           onCloseMobile={() => setMobileOpen(false)}
           onThemeChange={(mode) => { setThemeMode(mode); window.localStorage.setItem('openlink-theme', mode) }}
-          onToggle={() => setCollapsed((value) => !value)}
+          onToggle={() => { if (mobileOpen) setMobileOpen(false); else setCollapsed((value) => !value) }}
           organizations={organizations}
           personalWorkspace={personalWorkspace}
           themeMode={themeMode}
-          secondaryPanel={
-            <KnowledgeSecondarySidebar
-              activeCollectionId={selectedCollection?.id}
-              activeView={current.view}
-              collections={collections}
-              loading={loading}
-              mobileOpen={mobileOpen}
-              onCloseMobile={() => setMobileOpen(false)}
-              onGo={go}
-              onReload={load}
-              onBack={() => router.push(`/app/${activeWorkspace.slug}`)}
-            />
-          }
         />
-        <main className="relative min-w-0 flex-1 overflow-y-auto bg-[var(--app-background)]">
-          <button aria-label={t("打开知识库导航")} className="absolute left-3 top-3 z-20 flex size-8 items-center justify-center rounded-md border border-[var(--app-control-border)] bg-[var(--app-background)] text-[var(--app-muted)] hover:bg-[var(--app-surface)] lg:hidden" onClick={() => setMobileOpen(true)} type="button"><PanelLeft className="size-4" /></button>
-          {collapsed && <button aria-label={t("展开侧边栏")} className="absolute left-3 top-3 z-20 hidden size-8 items-center justify-center rounded-md hover:bg-[var(--app-surface)] lg:flex" onClick={() => setCollapsed(false)} type="button"><PanelLeft className="size-4" /></button>}
-          <PageTransition className="flex min-h-full min-w-0 flex-col">
-            {!knowledgeEnabled ? (
-              <EmptyState
-                description={t("Core 是明确的精简部署规格，不启动内置 Knowledge Service 与 Zero。切换到 Standard 或 Dense 后即可启用完整知识库。")}
-                icon={BookOpen}
-                title={t("Core 模式未启用内置知识库")}
-              />
-            ) : error ? <ErrorBanner message={error} onRetry={load} /> : null}
-            {knowledgeEnabled && (loading && current.view !== 'create' ? <KnowledgeSkeleton /> : current.view === 'home' ? (
-              <KnowledgeHome collections={collections} documents={documents} onGo={go} />
-            ) : current.view === 'create' ? (
-              <KnowledgeCreate collections={collections} onCreated={async (collectionId, documentId) => { await load(); go(documentId ? `/documents/${documentId}` : collectionId ? `/folders/${collectionId}` : '') }} workspaceId={workspaceId} />
-            ) : current.view === 'folder' ? (
-              <FolderPage collection={selectedCollection} documents={documents.filter((document) => document.collection_id === current.id)} onGo={go} onReload={load} workspaceId={workspaceId} />
-            ) : current.view === 'document' ? (
-              <DocumentPage document={selectedDocument} onGo={go} workspaceId={workspaceId} />
-            ) : current.view === 'source' ? (
-              <SourcePage document={selectedDocument} onGo={go} workspaceId={workspaceId} />
-            ) : (
-              <ZeroManagement backend={backend} onRefresh={load} workspaceId={workspaceId} />
-            ))}
-          </PageTransition>
-        </main>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <header className="flex h-[52px] shrink-0 items-center gap-2 border-b border-[var(--app-border)] px-3">
+            <button aria-label={t('打开侧边栏')} className="flex size-8 items-center justify-center rounded-md hover:bg-[var(--app-hover)] md:hidden" onClick={() => setMobileOpen(true)} type="button"><PanelLeft className="size-4" /></button>
+            {collapsed && <span aria-hidden="true" className="hidden w-11 md:block" />}
+            <button aria-expanded={knowledgeNavOpen} className="flex h-8 items-center gap-2 rounded-md px-2 text-sm hover:bg-[var(--app-hover)]" onClick={() => setKnowledgeNavOpen((value) => !value)} type="button"><BookOpen className="size-4" />{t('知识库')}<ChevronRight className={cn('size-3.5 transition-transform', knowledgeNavOpen && 'rotate-90')} /></button>
+          </header>
+          <div className="relative flex min-h-0 flex-1">
+            {knowledgeNavOpen && <>
+              <button aria-label={t('关闭知识库导航')} className="absolute inset-0 z-10 bg-[var(--app-overlay)] lg:hidden" onClick={() => setKnowledgeNavOpen(false)} type="button" />
+              <div className="absolute inset-y-0 left-0 z-20 flex w-60 shrink-0 border-r border-[var(--app-border)] lg:relative">
+                <KnowledgeSecondarySidebar activeCollectionId={selectedCollection?.id} activeView={current.view} collections={collections} loading={loading} onCloseMobile={() => setKnowledgeNavOpen(false)} onGo={go} onReload={load} onBack={() => setKnowledgeNavOpen(false)} />
+              </div>
+            </>}
+            <main className="relative min-w-0 flex-1 overflow-y-auto bg-[var(--app-background)]">
+              <PageTransition className="flex min-h-full min-w-0 flex-col">
+                {!knowledgeEnabled ? (
+                  <EmptyState
+                    description={t("Core 是明确的精简部署规格，不启动内置 Knowledge Service 与 Zero。切换到 Standard 或 Dense 后即可启用完整知识库。")}
+                    icon={BookOpen}
+                    title={t("Core 模式未启用内置知识库")}
+                  />
+                ) : error ? <ErrorBanner message={error} onRetry={load} /> : null}
+                {knowledgeEnabled && (loading && current.view !== 'create' ? <KnowledgeSkeleton /> : current.view === 'home' ? (
+                  <KnowledgeHome collections={collections} documents={documents} onGo={go} />
+                ) : current.view === 'create' ? (
+                  <KnowledgeCreate collections={collections} onCreated={async (collectionId, documentId) => { await load(); go(documentId ? `/documents/${documentId}` : collectionId ? `/folders/${collectionId}` : '') }} workspaceId={workspaceId} />
+                ) : current.view === 'folder' ? (
+                  <FolderPage collection={selectedCollection} documents={documents.filter((document) => document.collection_id === current.id)} onGo={go} onReload={load} workspaceId={workspaceId} />
+                ) : current.view === 'document' ? (
+                  <DocumentPage document={selectedDocument} onGo={go} workspaceId={workspaceId} />
+                ) : current.view === 'source' ? (
+                  <SourcePage document={selectedDocument} onGo={go} workspaceId={workspaceId} />
+                ) : (
+                  <ZeroManagement backend={backend} onRefresh={load} workspaceId={workspaceId} />
+                ))}
+              </PageTransition>
+            </main>
+          </div>
+        </div>
       </div>
     </OpenLinkThemeProvider>
   )
 }
 
-function KnowledgeSecondarySidebar({ activeCollectionId, activeView, collections, loading, mobileOpen, onCloseMobile, onGo, onReload, onBack }: {
+function KnowledgeSecondarySidebar({ activeCollectionId, activeView, collections, loading, onCloseMobile, onGo, onReload, onBack }: {
   activeCollectionId?: string
   activeView: View
   collections: KnowledgeCollection[]
   loading: boolean
-  mobileOpen: boolean
   onCloseMobile: () => void
   onGo: (path?: string) => void
   onReload: () => void

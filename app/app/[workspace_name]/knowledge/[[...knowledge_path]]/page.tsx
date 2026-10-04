@@ -1,3 +1,4 @@
+import { listChatSessions } from '@/lib/chat-sessions'
 import { KnowledgeWorkspace } from '@/components/knowledge-workspace'
 import { getT } from '@/lib/i18n/server'
 import { listOrganizations } from '@/lib/organizations'
@@ -38,6 +39,8 @@ export default async function KnowledgePage({
 
   if (!workspace || !personalWorkspace) redirect('/app')
 
+  const chatSessions = await listChatSessions(supabase, user.id, workspace.id)
+
   const nickname = (profile.data as { nickname?: string } | null)?.nickname ?? workspace.name
 
   return (
@@ -49,6 +52,7 @@ export default async function KnowledgePage({
         organizationId: workspace.organization_id,
       }}
       avatarUrl={getAvatarUrl(user)}
+      chatSessions={chatSessions}
       email={user.email ?? nickname}
       initialPath={knowledgePath}
       knowledgeEnabled={process.env.OPENLINK_KNOWLEDGE_ENABLED !== '0' && process.env.OPENLINK_DEPLOYMENT_PROFILE !== 'core'}
