@@ -4,7 +4,8 @@ import { WorkspacePrompt } from '@/components/workspace-prompt'
 import { PageTransition } from '@/components/ui/page-transition'
 import { useSidebarCollapsed } from '@/lib/use-sidebar-collapsed'
 import type { ThemeMode } from '@/components/account-drawer'
-import { AppSidebarFrame } from '@/components/app-sidebar-frame'
+import { WorkspaceNavigation } from '@/components/workspace-navigation'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AppSidebarAccountFooter, AppSidebarWorkspaceHeader } from '@/components/app-sidebar-controls'
 import { OrganizationDialog } from '@/components/organization-dialog'
 import { ThinkingOrb, type OrbState } from '@/components/thinking/src'
@@ -17,7 +18,6 @@ import {
 import { OpenLinkThemeProvider } from '@/components/ui/theme-scope'
 import { deleteChatSessionAction } from '@/app/chat/actions'
 import { useT } from '@/lib/i18n/client'
-import type { Translator } from '@/lib/i18n/messages'
 import type { ActiveWorkspaceSummary, PersonalWorkspaceSummary } from '@/components/workspace-switcher'
 import type { OrganizationSummary } from '@/lib/organizations'
 import type { ProjectSummary } from '@/lib/projects'
@@ -41,22 +41,6 @@ interface AppWorkspaceProps {
   initialProjectId?: string
   projects: ProjectSummary[]
   workspaceSlug: string
-}
-
-/**
- * Primary navigation entries. Labels are translated here; `activeNavLabel`
- * arrives as a source label from the other workspaces, so the active state
- * compares translated labels while routing keys off the stable id.
- */
-function primaryNavigation(t: Translator) {
-  return [
-    { id: 'search', label: t('搜索'), icon: '/openlink/app/search.svg' },
-    { id: 'home', label: t('首页'), icon: '/openlink/app/home.svg' },
-    { id: 'projects', label: t('项目'), icon: '/openlink/app/projects.svg' },
-    { id: 'library', label: t('库'), icon: '/openlink/app/library.svg' },
-    { id: 'knowledge', label: t('知识库'), icon: '/openlink/app/design-system.svg' },
-    { id: 'templates', label: t('模板'), icon: '/openlink/app/templates.svg' },
-  ]
 }
 
 interface SidebarChatMenuProps {
@@ -125,8 +109,8 @@ function SidebarItem({
   onClick?: () => void
 }) {
   return (
-    <div className={`group relative flex h-8 w-full items-center rounded-md text-sm tracking-[-0.1504px] transition-colors ${active ? 'bg-[var(--app-selected,var(--app-active))] text-[var(--app-foreground)]' : 'text-[var(--app-muted)] hover:bg-[var(--app-surface)] hover:text-[var(--app-foreground)]'}`} data-chat-row={chatMenu ? '' : undefined}>
-      <button aria-current={active ? 'page' : undefined} className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md pl-2 pr-2 text-inherit" onClick={onClick} type="button">
+    <div className={`group relative flex h-9 w-full items-center rounded-md text-sm tracking-[-0.1504px] transition-colors ${active ? 'bg-[var(--app-selected,var(--app-active))] text-[var(--app-foreground)]' : 'text-[var(--app-muted)] hover:bg-[var(--app-surface)] hover:text-[var(--app-foreground)]'}`} data-chat-row={chatMenu ? '' : undefined}>
+      <button aria-current={active ? 'page' : undefined} className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md pl-2 pr-2 text-inherit" onClick={onClick} type="button">
         <span className="min-w-0 flex-1 truncate text-left">{label}</span>
         {chatRuntime
           ? <span className={`flex size-5 shrink-0 items-center justify-center transition-opacity duration-150 ease-out ${chatMenu ? 'group-hover:opacity-0 group-focus-within:opacity-0' : ''}`} data-chat-status-orb>
@@ -166,7 +150,6 @@ export function Sidebar({
   onDeleteActiveChat,
   onDeleteChat,
   projects,
-  secondaryPanel,
 }: {
   collapsed: boolean
   mobileOpen: boolean
@@ -190,13 +173,13 @@ export function Sidebar({
   onDeleteActiveChat?: () => void
   onDeleteChat?: (chatId: string) => void
   projects?: ProjectSummary[]
-  /** Replaces the primary workspace navigation inside this same sidebar. */
-  secondaryPanel?: React.ReactNode
 }) {
   const t = useT()
   const router = useRouter()
   const [organizationDialogOpen, setOrganizationDialogOpen] = useState(false)
   const [recentChatsOpen, setRecentChatsOpen] = useState(true)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const [collapsedChatGroups, setCollapsedChatGroups] = useState<Record<string, boolean>>({})
   const visibleProjects = useMemo(
     () => (projects ?? []).filter((project) => !project.is_default),
@@ -246,84 +229,20 @@ export function Sidebar({
 
   return (
     <>
-      <AppSidebarFrame collapsed={collapsed} mobileOpen={mobileOpen} onCloseMobile={onCloseMobile}>
-        {secondaryPanel ? secondaryPanel : <>
-        <div className="flex flex-col gap-3 py-2">
-          <AppSidebarWorkspaceHeader activeWorkspace={activeWorkspace} onAddOrganization={() => setOrganizationDialogOpen(true)} onToggle={onToggle} organizations={organizations} personalWorkspace={personalWorkspace} />
-
-          <div className="px-2">
-            <button className="flex h-8 w-full items-center justify-center rounded-md bg-[var(--app-surface)] pl-7 pr-2 text-sm font-medium tracking-[-0.1504px] text-[var(--app-foreground)]" onClick={onNewChat ?? (() => router.push(`/app/${activeWorkspace.slug}`))} type="button">
-              <span className="flex-1">{t('新建聊天')}</span>
-              <img alt="" className="app-control-icon size-4" src="/openlink/app/new-chat-chevron.svg" />
-            </button>
-          </div>
-
-          <nav aria-label={t('工作区导航')} className="-mt-0.5 flex flex-col gap-0.5 px-2">
-            {primaryNavigation(t).map((item) => (
-              <SidebarItem
-                key={item.id}
-                label={item.label}
-                icon={item.icon}
-                active={activeNavLabel ? t(activeNavLabel) === item.label : false}
-                onClick={item.id === 'home'
-                  ? () => router.push(`/app/${activeWorkspace.slug}`)
-                  : item.id === 'projects'
-                    ? () => router.push(`/app/${activeWorkspace.slug}/projects`)
-                    : item.id === 'knowledge'
-                      ? () => router.push(`/app/${activeWorkspace.slug}/knowledge`)
-                    : undefined}
-              />
-            ))}
-          </nav>
+      <WorkspaceNavigation activePage={activeNavLabel} collapsed={collapsed} mobileOpen={mobileOpen} onCloseMobile={onCloseMobile} onHistory={() => setSearchOpen(true)} onToggle={onToggle} workspaceSlug={activeWorkspace.slug}
+        footer={<AppSidebarAccountFooter compact activeWorkspace={activeWorkspace} avatarUrl={avatarUrl} email={email} nickname={nickname} onOpenOrganization={() => setOrganizationDialogOpen(true)} onThemeChange={onThemeChange} organizations={organizations} themeMode={themeMode} />}>
+        <div className="flex shrink-0 flex-col gap-2 px-1.5 pt-2 pb-1">
+          <AppSidebarWorkspaceHeader activeWorkspace={activeWorkspace} onAddOrganization={() => setOrganizationDialogOpen(true)} onSearch={() => setSearchOpen(true)} onToggle={onToggle} organizations={organizations} personalWorkspace={personalWorkspace} />
+          <button className="flex h-[35px] w-full items-center gap-1.5 rounded-lg px-2.5 text-sm tracking-[-0.1504px] text-[var(--app-foreground)] hover:bg-[var(--app-hover)]" onClick={() => { onCloseMobile(); (onNewChat ?? (() => router.push(`/app/${activeWorkspace.slug}`)))() }} type="button">
+            <span aria-hidden="true" className="relative size-5 shrink-0">
+              <img alt="" className="app-control-icon absolute left-[2.502px] top-[2.502px]" src="/openlink/navigation/new-chat-base.svg" />
+              <img alt="" className="app-control-icon absolute left-[6.798px] top-[2.398px]" src="/openlink/navigation/new-chat-pen.svg" />
+            </span>
+            <span>{t('新建聊天')}</span>
+          </button>
         </div>
-        </>}
-
-        {!secondaryPanel && <div className="min-h-0 flex-1 overflow-y-auto px-2 pt-[13px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <section>
-            <button
-              aria-controls="sidebar-recent-chats-content"
-              aria-expanded={recentChatsOpen}
-              className="flex h-[30px] w-full items-start justify-between rounded-md px-2 text-[13px] font-medium tracking-[-0.0762px] text-[var(--app-muted)] outline-none hover:text-[var(--app-foreground)] focus-visible:ring-2 focus-visible:ring-[var(--app-control-border)]"
-              onClick={() => setRecentChatsOpen((value) => !value)}
-              type="button"
-            >
-              <span>{t('最近聊天')}</span>
-              <img alt="" className={`app-control-icon size-4 transition-transform duration-200 ${recentChatsOpen ? 'rotate-90' : ''}`} src="/openlink/app/section-chevron.svg" />
-            </button>
-            <div className={`grid transition-[grid-template-rows,opacity] duration-200 ${recentChatsOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`} id="sidebar-recent-chats-content">
-              <div className="flex flex-col gap-2 overflow-hidden">
-                {chatGroups.map((group) => {
-                  const groupOpen = collapsedChatGroups[group.projectId] !== true
-                  const groupLabel = group.projectIsDefault ? 'Draft' : group.projectName
-                  return (
-                    <section key={group.projectId}>
-                      <button
-                        aria-controls={`sidebar-project-chats-${group.projectId}`}
-                        aria-expanded={groupOpen}
-                        className="flex h-6 w-full items-center gap-1 rounded-md px-2 text-[12px] font-medium tracking-[-0.05px] text-[var(--app-subtle-foreground)] outline-none hover:bg-[var(--app-surface)] hover:text-[var(--app-muted)] focus-visible:ring-2 focus-visible:ring-[var(--app-control-border)]"
-                        onClick={() => setCollapsedChatGroups((current) => ({ ...current, [group.projectId]: groupOpen }))}
-                        type="button"
-                      >
-                        <img alt="" className={`app-control-icon size-3 transition-transform duration-200 ${groupOpen ? 'rotate-90' : ''}`} src="/openlink/app/section-chevron.svg" />
-                        <span className="min-w-0 flex-1 truncate text-left">{groupLabel}</span>
-                      </button>
-                      <div className={`grid transition-[grid-template-rows,opacity] duration-200 ${groupOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`} id={`sidebar-project-chats-${group.projectId}`}>
-                        <div className="flex min-w-0 flex-col gap-1.5 overflow-hidden pl-4">
-                          {group.chats.map((chat) => {
-                            const active = activeChatId === chat.id
-                            return <SidebarItem active={active} chatMenu={chatMenuFor(chat, active)} chatRuntime={active ? activeChatRuntime ?? IDLE_CHAT_RUNTIME : IDLE_CHAT_RUNTIME} icon="/openlink/app/chat.svg" key={chat.id} label={active && activeChatLabel ? activeChatLabel : chat.title} onClick={() => router.push(`/${chat.userId}/chat/${chat.id}`)} />
-                          })}
-                        </div>
-                      </div>
-                    </section>
-                  )
-                })}
-                {!chatSessions.length && <p className="px-2 py-1 text-xs text-[var(--app-subtle-foreground)]">{t('暂无聊天')}</p>}
-              </div>
-            </div>
-          </section>
-
-          {projects !== undefined && <section className="mt-5">
+        <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pt-4 pb-3 [scrollbar-width:thin]">
+          {projects !== undefined && <section className="mb-5">
             <div className="flex h-[30px] items-start justify-between px-2 text-[13px] font-medium tracking-[-0.0762px] text-[var(--app-muted)]">
               <span>{t('项目')}</span>
               <button aria-label={t('查看项目')} className="flex size-5 items-center justify-center rounded hover:bg-[var(--app-surface)]" onClick={() => router.push(`/app/${activeWorkspace.slug}/projects`)} type="button"><Plus className="size-3.5" /></button>
@@ -340,14 +259,65 @@ export function Sidebar({
                 ))}
               </div>
             ) : (
-              <button className="flex h-12 w-full items-center justify-center rounded-lg border border-dashed border-[var(--app-control-border)] text-xs text-[var(--app-subtle-foreground)] hover:bg-[var(--app-surface)]" onClick={() => router.push(`/app/${activeWorkspace.slug}/projects`)} type="button">{t('暂无项目')}</button>
+              <button className="flex h-9 w-full items-center rounded-lg px-2 text-xs text-[var(--app-subtle-foreground)] hover:bg-[var(--app-surface)]" onClick={() => router.push(`/app/${activeWorkspace.slug}/projects`)} type="button">{t('暂无项目')}</button>
             )}
           </section>}
-        </div>}
+          <section>
+            <button
+              aria-controls="sidebar-recent-chats-content"
+              aria-expanded={recentChatsOpen}
+              className="flex h-[30px] w-full items-start justify-between rounded-md px-2 text-[13px] font-medium tracking-[-0.0762px] text-[var(--app-muted)] outline-none hover:text-[var(--app-foreground)] focus-visible:ring-2 focus-visible:ring-[var(--app-control-border)]"
+              onClick={() => setRecentChatsOpen((value) => !value)}
+              type="button"
+            >
+              <span>{t('最近聊天')}</span>
+              <img alt="" className={`app-control-icon size-4 transition-transform duration-200 ${recentChatsOpen ? 'rotate-90' : ''}`} src="/openlink/app/section-chevron.svg" />
+            </button>
+            <div className={`grid transition-[grid-template-rows,opacity] duration-200 ${recentChatsOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`} id="sidebar-recent-chats-content" inert={!recentChatsOpen}>
+              <div className="flex flex-col gap-2 overflow-hidden">
+                {chatGroups.map((group) => {
+                  const groupOpen = collapsedChatGroups[group.projectId] !== true
+                  const groupLabel = group.projectIsDefault ? 'Draft' : group.projectName
+                  return (
+                    <section key={group.projectId}>
+                      <button
+                        aria-controls={`sidebar-project-chats-${group.projectId}`}
+                        aria-expanded={groupOpen}
+                        className="flex h-6 w-full items-center gap-1 rounded-md px-2 text-[12px] font-medium tracking-[-0.05px] text-[var(--app-subtle-foreground)] outline-none hover:bg-[var(--app-surface)] hover:text-[var(--app-muted)] focus-visible:ring-2 focus-visible:ring-[var(--app-control-border)]"
+                        onClick={() => setCollapsedChatGroups((current) => ({ ...current, [group.projectId]: groupOpen }))}
+                        type="button"
+                      >
+                        <img alt="" className={`app-control-icon size-3 transition-transform duration-200 ${groupOpen ? 'rotate-90' : ''}`} src="/openlink/app/section-chevron.svg" />
+                        <span className="min-w-0 flex-1 truncate text-left">{groupLabel}</span>
+                      </button>
+                      <div className={`grid transition-[grid-template-rows,opacity] duration-200 ${groupOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`} id={`sidebar-project-chats-${group.projectId}`} inert={!groupOpen}>
+                        <div className="flex min-w-0 flex-col gap-1.5 overflow-hidden pl-4">
+                          {group.chats.map((chat) => {
+                            const active = activeChatId === chat.id
+                            return <SidebarItem active={active} chatMenu={chatMenuFor(chat, active)} chatRuntime={active ? activeChatRuntime ?? IDLE_CHAT_RUNTIME : IDLE_CHAT_RUNTIME} icon="/openlink/app/chat.svg" key={chat.id} label={active && activeChatLabel ? activeChatLabel : chat.title} onClick={() => { onCloseMobile(); router.push(`/${chat.userId}/chat/${chat.id}`) }} />
+                          })}
+                        </div>
+                      </div>
+                    </section>
+                  )
+                })}
+                {!chatSessions.length && <p className="px-2 py-1 text-xs text-[var(--app-subtle-foreground)]">{t('暂无聊天')}</p>}
+              </div>
+            </div>
+          </section>
 
-        <AppSidebarAccountFooter activeWorkspace={activeWorkspace} avatarUrl={avatarUrl} email={email} nickname={nickname} onOpenOrganization={() => setOrganizationDialogOpen(true)} onThemeChange={onThemeChange} organizations={organizations} themeMode={themeMode} />
-
-      </AppSidebarFrame>
+        </div>
+      </WorkspaceNavigation>
+      <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader><DialogTitle>{t('搜索聊天')}</DialogTitle></DialogHeader>
+          <input aria-label={t('搜索聊天')} autoFocus className="h-10 w-full rounded-lg border border-[var(--app-control-border)] bg-[var(--app-surface)] px-3 text-sm outline-none focus:border-[var(--app-focus-ring)]" onChange={(event) => setSearchQuery(event.target.value)} placeholder={t('搜索聊天')} type="search" value={searchQuery} />
+          <div className="max-h-[50vh] overflow-y-auto">
+            {chatSessions.filter((chat) => `${chat.title} ${chat.projectName}`.toLocaleLowerCase().includes(searchQuery.trim().toLocaleLowerCase())).map((chat) => <button className="flex w-full flex-col gap-1 rounded-lg px-3 py-2 text-left hover:bg-[var(--app-hover)]" key={chat.id} onClick={() => { setSearchOpen(false); onCloseMobile(); router.push(`/${chat.userId}/chat/${chat.id}`) }} type="button"><span className="w-full truncate text-sm">{chat.title}</span><span className="text-xs text-[var(--app-muted)]">{chat.projectName}</span></button>)}
+            {!chatSessions.some((chat) => `${chat.title} ${chat.projectName}`.toLocaleLowerCase().includes(searchQuery.trim().toLocaleLowerCase())) && <p className="px-3 py-6 text-center text-sm text-[var(--app-muted)]">{t('暂无聊天')}</p>}
+          </div>
+        </DialogContent>
+      </Dialog>
       <OrganizationDialog onOpenChange={setOrganizationDialogOpen} open={organizationDialogOpen} />
     </>
   )
@@ -418,7 +388,7 @@ export function AppWorkspace({
 
   return (
     <OpenLinkThemeProvider theme={activeTheme}>
-      <div className="openlink-app-shell flex h-dvh min-h-[500px] overflow-hidden" data-theme={activeTheme}>
+      <div className="openlink-app-shell workspace-navigation-shell flex h-dvh min-h-[500px] overflow-hidden" data-theme={activeTheme}>
         <Sidebar
           activeWorkspace={activeWorkspace}
           avatarUrl={avatarUrl}
@@ -454,11 +424,6 @@ export function AppWorkspace({
               <span className="flex w-4 flex-col gap-1"><i className="h-px w-4 bg-[var(--app-muted)]" /><i className="h-px w-4 bg-[var(--app-muted)]" /><i className="h-px w-4 bg-[var(--app-muted)]" /></span>
             </button>
             <span className="ml-2 truncate text-sm font-medium text-[var(--app-foreground)] md:hidden">{activeWorkspace.name}</span>
-            {collapsed && (
-              <button aria-label={t('展开侧边栏')} className="hidden size-8 items-center justify-center rounded-md hover:bg-[var(--app-surface)] md:flex" onClick={() => setCollapsed(false)} type="button">
-                <img alt="" className="app-control-icon size-4" src="/openlink/app/sidebar-expand.svg" />
-              </button>
-            )}
           </header>
           <PageTransition className="flex w-full justify-center">
             <WorkspacePrompt

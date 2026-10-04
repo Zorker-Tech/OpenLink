@@ -336,7 +336,6 @@ function ChatTopbar({
   chatCollapsed,
   onOpenSidebar,
   onToggleChat,
-  onToggleSidebar,
   dataSurface,
   onToggleDataSurface,
   localRuntime,
@@ -356,7 +355,6 @@ function ChatTopbar({
   chatCollapsed: boolean
   onOpenSidebar: () => void
   onToggleChat: () => void
-  onToggleSidebar: () => void
   dataSurface: 'panel' | 'studio'
   onToggleDataSurface: () => void
   localRuntime: boolean
@@ -446,7 +444,7 @@ function ChatTopbar({
         <button aria-label={t('打开侧边栏')} className="flex size-7 items-center justify-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-active)] md:hidden" onClick={onOpenSidebar} type="button">
           <PanelLeft className="size-4" />
         </button>
-        {collapsed && <button aria-label={t('展开侧边栏')} className="hidden size-7 items-center justify-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-active)] md:flex" onClick={onToggleSidebar} type="button"><PanelLeft className="size-4" /></button>}
+        {collapsed && <span aria-hidden="true" className="hidden w-11 shrink-0 md:block" />}
         {context && (() => {
           const contextUsage = {
             ...context.usage,
@@ -561,7 +559,7 @@ function ChatTopbar({
       {side === 'workspace' && (
       <div className="flex min-w-0 flex-1 items-center" data-header-region="workspace-tabs">
         <div className="flex size-full min-w-0 items-center gap-1.5 pl-3 pr-1.5">
-          {chatCollapsed && collapsed && <ToolbarButton label={t('展开侧边栏')} onClick={onToggleSidebar}><PanelLeft className="size-4" /></ToolbarButton>}
+          {chatCollapsed && collapsed && <span aria-hidden="true" className="w-11 shrink-0" />}
           <ToolbarButton aria-pressed={chatCollapsed} className={chatCollapsed ? 'bg-[var(--app-active)] text-[var(--app-foreground)]' : ''} label={t('评论')} onClick={onToggleChat}><MessageCircle className="size-4" /></ToolbarButton>
           <WorkspaceTabs activeTab={activeTab} onClose={onCloseWorkspaceTab} onSelect={onSelectWorkspaceTab} openTabs={openTabs} />
           <WorkspaceTabLauncher onSelect={onSelectWorkspaceTab} />
@@ -2082,7 +2080,6 @@ export function ChatWorkspace({
     onSessionTitleChange: updateSessionTitle,
     onToggleChat: toggleChatPanel,
     onToggleDataSurface: () => setDataSurface((surface) => surface === 'studio' ? 'panel' : 'studio'),
-    onToggleSidebar: () => setCollapsed(false),
     onSelectWorkspaceTab: selectWorkspaceTab,
     openTabs: openWorkspaceTabs,
     renameRequestVersion,
@@ -2092,7 +2089,7 @@ export function ChatWorkspace({
 
   return (
     <OpenLinkThemeProvider theme={activeTheme}>
-      <div className="openlink-app-shell flex h-dvh min-h-[500px] overflow-hidden" data-theme={activeTheme}>
+      <div className="openlink-app-shell workspace-navigation-shell flex h-dvh min-h-[500px] overflow-hidden" data-theme={activeTheme}>
         <Sidebar
           activeChatId={sessionId}
           activeChatLabel={currentSessionTitle}
