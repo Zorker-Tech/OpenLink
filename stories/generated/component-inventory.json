@@ -104,6 +104,8 @@
   "ui/hover-card",
   "ui/input",
   "ui/input-group",
+  "ui/motion-provider",
+  "ui/page-transition",
   "ui/popover",
   "ui/progress",
   "ui/resizable",
@@ -118,6 +120,7 @@
   "ui/tooltip",
   "work-model-selector",
   "work-model-selector-motion",
+  "workspace-navigation",
   "workspace-prompt",
   "workspace-switcher",
   "zorker-logo"

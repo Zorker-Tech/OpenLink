@@ -1,3 +1,4 @@
+import { listChatSessions } from '@/lib/chat-sessions'
 import { ProjectsWorkspace } from '@/components/projects-workspace'
 import { getT } from '@/lib/i18n/server'
 import { listOrganizations } from '@/lib/organizations'
@@ -32,7 +33,7 @@ export default async function ProjectsPage({
   ])
   if (!workspace || !personalWorkspace) redirect('/app')
 
-  const [projects, profile] = await Promise.all([
+  const [projects, profile, chatSessions] = await Promise.all([
     listProjects(supabase, workspace.id),
     supabase
       .schema('openlink')
@@ -40,6 +41,7 @@ export default async function ProjectsPage({
       .select('nickname')
       .eq('user_id', user.id)
       .maybeSingle(),
+    listChatSessions(supabase, user.id, workspace.id),
   ])
 
   const nickname = (profile.data as { nickname?: string } | null)?.nickname ?? workspace.name
@@ -60,6 +62,7 @@ export default async function ProjectsPage({
       }}
       avatarUrl={getAvatarUrl(user)}
       canManageProjects={canManageProjects}
+      chatSessions={chatSessions}
       email={user.email ?? nickname}
       nickname={nickname}
       organizations={organizations}

@@ -4,6 +4,7 @@ import { OpenLinkThemeProvider } from '@/components/ui/theme-scope'
 import { AppSidebarFrame } from '@/components/app-sidebar-frame'
 import { AppSidebarAccountFooter, AppSidebarWorkspaceHeader } from '@/components/app-sidebar-controls'
 import { OrganizationDialog } from '@/components/organization-dialog'
+import { WorkspaceNavigationRail } from '@/components/workspace-navigation'
 import type { ActiveWorkspaceSummary, PersonalWorkspaceSummary } from '@/components/workspace-switcher'
 import { useT } from '@/lib/i18n/client'
 import type { Translator } from '@/lib/i18n/messages'
@@ -23,7 +24,7 @@ import {
   Zap,
 } from 'lucide-react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 
 interface SettingsShellProps {
@@ -65,6 +66,7 @@ function settingsSections(t: Translator) {
 export function SettingsShell({ activeWorkspace, avatarUrl, children, email, nickname, organizations, personalWorkspace, preferences }: SettingsShellProps) {
   const t = useT()
   const pathname = usePathname()
+  const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [organizationDialogOpen, setOrganizationDialogOpen] = useState(false)
@@ -136,17 +138,23 @@ export function SettingsShell({ activeWorkspace, avatarUrl, children, email, nic
           ))}
         </div>
       </nav>
-      <AppSidebarAccountFooter activeWorkspace={activeWorkspace} avatarUrl={avatarUrl} email={email} nickname={nickname} onOpenOrganization={() => setOrganizationDialogOpen(true)} onThemeChange={(mode) => { setThemeMode(mode); window.localStorage.setItem('openlink-theme', mode) }} organizations={organizations} themeMode={themeMode} />
     </>
-  ), [activeWorkspace, avatarUrl, email, nickname, organizations, pathname, personalWorkspace, t, themeMode])
+  ), [activeWorkspace, organizations, pathname, personalWorkspace, t])
 
   const providerSettings = pathname.startsWith('/settings/ai-providers')
   const skillSettings = pathname.startsWith('/settings/skills')
 
   return (
     <OpenLinkThemeProvider theme={theme}>
-      <div className="openlink-app-shell flex h-dvh min-h-[520px] overflow-hidden bg-[var(--app-background)]" data-theme={theme}>
-        <AppSidebarFrame collapsed={collapsed} mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)}>{navigation}</AppSidebarFrame>
+      <div className="openlink-app-shell workspace-navigation-shell flex h-dvh min-h-[520px] overflow-hidden bg-[var(--app-background)]" data-theme={theme}>
+        <WorkspaceNavigationRail
+          activePage={t('更多')}
+          footer={<AppSidebarAccountFooter compact activeWorkspace={activeWorkspace} avatarUrl={avatarUrl} email={email} nickname={nickname} onOpenOrganization={() => setOrganizationDialogOpen(true)} onThemeChange={(mode) => { setThemeMode(mode); window.localStorage.setItem('openlink-theme', mode) }} organizations={organizations} themeMode={themeMode} />}
+          onCloseMobile={() => setMobileOpen(false)}
+          onHistory={() => router.push(`/app/${activeWorkspace.slug}`)}
+          workspaceSlug={activeWorkspace.slug}
+        />
+        <AppSidebarFrame collapsed={collapsed} mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)} railOffset>{navigation}</AppSidebarFrame>
         <main className="relative min-w-0 flex-1 overflow-hidden">
           <button aria-label={t('打开设置导航')} className={`absolute left-3 top-[10px] z-30 flex size-8 items-center justify-center rounded-md border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-muted)] shadow-sm transition-[left,opacity,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${collapsed ? `${skillSettings ? 'md:left-[294px]' : providerSettings ? 'md:left-[286px]' : 'md:left-3'} md:translate-x-0 md:opacity-100` : 'md:pointer-events-none md:translate-x-[-8px] md:opacity-0'}`} onClick={() => { if (window.innerWidth >= 768) setCollapsed(false); else setMobileOpen(true) }} type="button"><img alt="" className="app-control-icon size-4 rotate-180" src="/openlink/app/sidebar-toggle.svg" /></button>
           {children}
