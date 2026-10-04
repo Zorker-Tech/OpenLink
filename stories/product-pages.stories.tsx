@@ -4,6 +4,7 @@ import { AuthPage } from '@/components/auth-page'
 import { OrganizationSetup } from '@/components/organization-setup'
 import { OrganizationDialog } from '@/components/organization-dialog'
 import { NewProjectDialog } from '@/components/new-project-dialog'
+import { OpenLinkMotionProvider } from '@/components/ui/motion-provider'
 import { AppWorkspace, Sidebar } from '@/components/app-workspace'
 import { ProjectsWorkspace } from '@/components/projects-workspace'
 import { OpenLinkHome } from '@/components/openlink-home'
@@ -29,8 +30,17 @@ export const AnonymousComposer: Story = { render: () => <div className="p-12"><P
 export const ProjectsEmpty: Story = { render: () => <ProjectsWorkspace {...workspace} projects={[]} canManageProjects /> }
 export const ProjectLifecycle: Story = { render: () => <ProjectsWorkspace {...workspace} projects={[project, ...(['queued', 'starting_vm', 'retry_wait', 'failed', 'stopped'] as const).map((phase, index) => ({ ...project, id: `fixture-${index}`, name: `项目 · ${phase}`, is_default: false, runtime_phase: phase, runtime_status: phase === 'failed' ? 'error' as const : phase === 'stopped' ? 'stopped' as const : 'provisioning' as const, status: 'waiting' as const }))]} canManageProjects /> }
 export const ProjectsReadOnly: Story = { render: () => <ProjectsWorkspace {...workspace} projects={[project]} canManageProjects={false} /> }
-function SidebarFixture() { const [collapsed, setCollapsed] = useState(false); const [themeMode, setTheme] = useState<'dark' | 'light' | 'system'>('dark'); return <div className="flex h-screen"><Sidebar {...workspace} collapsed={collapsed} mobileOpen={false} onToggle={() => setCollapsed(!collapsed)} onCloseMobile={() => {}} onThemeChange={setTheme} themeMode={themeMode} projects={[project]} /><main className="p-8">侧栏可折叠；工作区和账户菜单均可交互。</main></div> }
+function SidebarFixture({ initialCollapsed = false, light = false }: { initialCollapsed?: boolean; light?: boolean }) {
+  const [collapsed, setCollapsed] = useState(initialCollapsed)
+  const [themeMode, setTheme] = useState<'dark' | 'light' | 'system'>(light ? 'light' : 'dark')
+  return <OpenLinkMotionProvider><div className="openlink-app-shell workspace-navigation-shell flex h-screen" data-theme={themeMode === 'light' ? 'light' : 'dark'}>
+    <Sidebar {...workspace} collapsed={collapsed} mobileOpen={false} onToggle={() => setCollapsed(!collapsed)} onCloseMobile={() => {}} onThemeChange={setTheme} themeMode={themeMode} projects={[project]} />
+    <main className="min-w-0 flex-1 p-16">侧栏可折叠；工作区和账户菜单均可交互。</main>
+  </div></OpenLinkMotionProvider>
+}
 export const SidebarAndAccount: Story = { render: () => <SidebarFixture /> }
+export const SidebarCollapsed: Story = { render: () => <SidebarFixture initialCollapsed /> }
+export const SidebarLight: Story = { render: () => <SidebarFixture light /> }
 export const CodePreview: Story = { render: () => <div className="h-96"><ChatCodePreview path="src/app.ts" content={'export const title = "OpenLink"\n'} language="typescript" /></div> }
 export const CodeStreaming: Story = { render: () => <div className="h-96"><ChatCodePreview path="src/app.ts" content={'export const title ='} language="typescript" streaming /></div> }
 export const Brand: Story = { render: () => <div className="p-12"><ZorkerLogo /></div> }

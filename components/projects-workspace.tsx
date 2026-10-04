@@ -1,5 +1,6 @@
 'use client'
 
+import type { ChatSessionSummary } from '@/lib/chat-session-types'
 import { Sidebar } from '@/components/app-workspace'
 import { PageTransition } from '@/components/ui/page-transition'
 import { useSidebarCollapsed } from '@/lib/use-sidebar-collapsed'
@@ -25,6 +26,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 
 interface ProjectsWorkspaceProps {
+  chatSessions?: ChatSessionSummary[]
   activeWorkspace: ActiveWorkspaceSummary
   personalWorkspace: PersonalWorkspaceSummary
   organizations: OrganizationSummary[]
@@ -97,6 +99,7 @@ function ProjectCard({ project, workspaceSlug }: { project: ProjectSummary; work
 }
 
 export function ProjectsWorkspace({
+  chatSessions = [],
   activeWorkspace,
   personalWorkspace,
   organizations,
@@ -151,8 +154,9 @@ export function ProjectsWorkspace({
 
   return (
     <OpenLinkThemeProvider theme={activeTheme}>
-      <div className="openlink-app-shell flex h-dvh min-h-[500px] overflow-hidden" data-theme={activeTheme}>
+      <div className="openlink-app-shell workspace-navigation-shell flex h-dvh min-h-[500px] overflow-hidden" data-theme={activeTheme}>
         <Sidebar
+          chatSessions={chatSessions}
           activeNavLabel={t('项目')}
           activeWorkspace={activeWorkspace}
           avatarUrl={avatarUrl}
@@ -186,12 +190,6 @@ export function ProjectsWorkspace({
             </button>
             <span className="ml-2 truncate text-sm font-medium text-[var(--app-foreground)]">{t('Projects')}</span>
           </header>
-
-          {collapsed && (
-            <button aria-label={t('展开侧边栏')} className="absolute left-3 top-3 z-20 hidden size-8 items-center justify-center rounded-md hover:bg-[var(--app-surface)] md:flex" onClick={() => setCollapsed(false)} type="button">
-              <img alt="" className="app-control-icon size-4" src="/openlink/app/sidebar-expand.svg" />
-            </button>
-          )}
 
           <PageTransition className="mx-auto w-full max-w-[1166px] px-6 pb-16 pt-8 sm:px-8 md:px-12 md:pt-10">
             <h1 className="pb-4 text-[32px] font-semibold leading-10 tracking-[-0.8737px] text-[var(--app-foreground)]">{t('Projects')}</h1>
