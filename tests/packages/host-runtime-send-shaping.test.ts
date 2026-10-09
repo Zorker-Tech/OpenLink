@@ -139,5 +139,22 @@ describe("a message the agent sent, as the conversation keeps it", () => {
     mkdirSync(join(directory, "a-directory"));
     const sizes = await statAttachedFileSizes([file, join(directory, "missing.txt"), join(directory, "a-directory")]);
     assert.deepEqual([...sizes.entries()], [[file, 5]]);
+    // Several files come back in the order they were given, however the lookups happen to finish.
+    const bigger = join(directory, "bigger.bin");
+    const smaller = join(directory, "smaller.bin");
+    writeFileSync(bigger, "0123456789", "utf8");
+    writeFileSync(smaller, "01", "utf8");
+    const ordered = await statAttachedFileSizes([bigger, smaller, join(directory, "missing.txt"), file]);
+    assert.deepEqual([...ordered.entries()], [[bigger, 10], [smaller, 2], [file, 5]]);
+    assert.deepEqual([...ordered.keys()], [bigger, smaller, file]);
+    // A path that takes longer to resolve is still reported where the caller put it.
+    const deepDirectory = join(directory, ...Array.from({ length: 120 }, (_, index) => `d${index}`));
+    mkdirSync(deepDirectory, { recursive: true });
+    const deep = join(deepDirectory, "deep.bin");
+    writeFileSync(deep, "0123456789", "utf8");
+    for (let round = 0; round < 8; round += 1) {
+      const slowFirst = await statAttachedFileSizes([deep, smaller]);
+      assert.deepEqual([...slowFirst.keys()], [deep, smaller], `round ${round}`);
+    }
   });
 });
