@@ -56,6 +56,8 @@ const EMPTY_SETTINGS: McpManagerSettingsPort = {
 
 /** A tool as the backend's own listing names it; whatever else it carries rides along untouched. */
 export interface McpBackendTool {
+  readonly name: string;
+  readonly providerIdentifier: string;
   readonly toolName: string;
 }
 
@@ -106,8 +108,8 @@ export interface McpBoxRuntimePort {
 
 /** The signed-in account's own MCP configuration, as the writer reads and writes it. */
 export interface McpAccountWriterPort {
-  getConfigForEdit(): Promise<{ config: { mcpServers: Record<string, McpServerConfig> }; serverIdsByName: Record<string, string | number> }>;
-  setConfig(config: { mcpServers: Record<string, McpServerConfig> }, serverIdsByName: Record<string, string | number>): Promise<void>;
+  getConfigForEdit(): Promise<{ config: { mcpServers: Record<string, unknown> }; serverIdsByName: Record<string, string | number | bigint> }>;
+  setConfig(config: { mcpServers: Record<string, unknown> }, serverIdsByName: Record<string, string | number | bigint>): Promise<void>;
   uninstallPlugin(args: { pluginId: bigint }): Promise<void>;
 }
 
