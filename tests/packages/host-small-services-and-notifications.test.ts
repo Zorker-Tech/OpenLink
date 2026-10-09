@@ -34,15 +34,30 @@ function policies(): {
 function privacyWorld(load: (authId: string) => Promise<number> = async () => PrivacyModes.NoTraining) {
   const logged: string[] = [];
   const loads: string[] = [];
+  let pollingDisposals = 0;
   const mode = createCodebaseTelemetryPrivacyMode({
     load: async ({ auth: account }: { auth: { authId: string } }) => {
       loads.push(account.authId);
       return await load(account.authId);
     },
     ...policies(),
+    refreshPolling: {
+      start: () => ({
+        dispose: () => {
+          pollingDisposals += 1;
+        },
+      }),
+    },
     logger: { error: (message: string) => void logged.push(message), warn: (message: string) => void logged.push(message) },
   } as never);
-  return { mode, loads, logged };
+  return {
+    mode,
+    loads,
+    logged,
+    get pollingDisposals() {
+      return pollingDisposals;
+    },
+  };
 }
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 5));
@@ -100,7 +115,8 @@ describe("the privacy mode a codebase's telemetry is allowed under", () => {
     unknown.mode.setAuth(auth("account-1") as never);
     await settle();
     assert.equal(unknown.mode.receiver.get(), PrivacyModes.Unspecified);
-    // Nothing is looked up after it was let go, and letting go twice is nothing.
+    // Nothing is looked up after it was let go, and letting go twice is nothing — and the polling it started is
+    // stopped with it, exactly once.
     const stopped = privacyWorld();
     stopped.mode.setAuth(auth("account-1") as never);
     await settle();
@@ -108,7 +124,31 @@ describe("the privacy mode a codebase's telemetry is allowed under", () => {
     stopped.mode.dispose();
     stopped.mode.setAuth(auth("account-2") as never);
     await settle();
-    assert.deepEqual(stopped.loads, ["account-1"]);
+    assert.deepEqual([stopped.loads, stopped.pollingDisposals], [["account-1"], 1]);
+  });
+
+  it("does not adopt a reading that no longer belongs to the account it was made for", async () => {
+    const answers: { authId: string; settle: (mode: number) => void }[] = [];
+    const world = privacyWorld(async (authId: string) => await new Promise<number>((resolve) => void answers.push({ authId, settle: resolve })));
+    world.mode.setAuth(auth("account-1") as never);
+    await settle();
+    assert.deepEqual(answers.map((answer) => answer.authId), ["account-1"]);
+    // The account left while its reading was still on its way: the answer is not adopted.
+    world.mode.clearAuth();
+    answers[0]!.settle(PrivacyModes.NoTraining);
+    await settle();
+    assert.equal(world.mode.receiver.get(), PrivacyModes.Unspecified);
+    // A reading made for an account that was replaced does not overwrite the one that replaced it.
+    world.mode.setAuth(auth("account-2") as never);
+    await settle();
+    world.mode.setAuth(auth("account-3") as never);
+    await settle();
+    answers[1]!.settle(PrivacyModes.NoTraining);
+    await settle();
+    assert.equal(world.mode.receiver.get(), PrivacyModes.Unspecified);
+    answers[2]!.settle(PrivacyModes.UsageDataTrainingAllowed);
+    await settle();
+    assert.equal(world.mode.receiver.get(), PrivacyModes.UsageDataTrainingAllowed);
   });
 });
 
