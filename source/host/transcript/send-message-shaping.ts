@@ -310,14 +310,20 @@ export async function loadAgentInboundImages(
 export async function statAttachedFileSizes(
   paths: readonly string[],
 ): Promise<Map<string, number>> {
-  const sizes = new Map<string, number>();
-  await Promise.all(
+  // The measurements are taken together but put in the caller's order: a map filled as each stat landed would hand
+  // its order to whichever lookup finished first.
+  const measured = await Promise.all(
     paths.map(async (path) => {
       try {
         const info = await stat(path);
-        if (info.isFile()) sizes.set(path, info.size);
-      } catch {}
+        return info.isFile() ? ([path, info.size] as const) : null;
+      } catch {
+        return null;
+      }
     }),
   );
+  const sizes = new Map<string, number>();
+  for (const measuredPath of measured)
+    if (measuredPath !== null) sizes.set(measuredPath[0], measuredPath[1]);
   return sizes;
 }
