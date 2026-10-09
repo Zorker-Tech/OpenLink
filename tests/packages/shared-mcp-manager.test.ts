@@ -72,7 +72,7 @@ function boxRuntimeSpy(options: { wired?: boolean; servers?: Array<{ serverIdent
 }
 
 /** The backend's own MCP side: what it lists, and what it says about a connector's sign-in. */
-function backendExecSpy(options: { entries?: Array<{ accountLabel: string; serverIdentifier: string; rowServerIdentifier: string; status?: string; tools: Array<{ toolName: string }> }>; authStatus?: Record<string, unknown>; throwOnTools?: boolean } = {}) {
+function backendExecSpy(options: { entries?: Array<{ accountLabel: string; serverIdentifier: string; rowServerIdentifier: string; status?: string; tools: Array<{ name: string; providerIdentifier: string; toolName: string }> }>; authStatus?: Record<string, unknown>; throwOnTools?: boolean } = {}) {
   const calls: string[] = [];
   return {
     exec: {
@@ -225,7 +225,7 @@ describe("the manager's own ports and views", () => {
 describe("listing the servers", () => {
   it("builds the listing out of the account's display, dropping the platform's own rows", async () => {
     const builtinName = [...BUILTIN_MCP_SERVER_NAMES][0]!;
-    const backend = backendExecSpy({ entries: [{ accountLabel: "default", serverIdentifier: "remote", rowServerIdentifier: "remote", status: "connected", tools: [{ toolName: "search" }, { toolName: "fetch" }] }] });
+    const backend = backendExecSpy({ entries: [{ accountLabel: "default", serverIdentifier: "remote", rowServerIdentifier: "remote", status: "connected", tools: [{ name: "search", providerIdentifier: "remote", toolName: "search" }, { name: "fetch", providerIdentifier: "remote", toolName: "fetch" }] }] });
     const world = managerWorld({ displays: true, backend });
     world.pushDisplay(display([httpRow("11", "remote"), stdioRow("12", "local"), { ...httpRow("13", builtinName), serverIdentifier: builtinName }]));
     const state = await world.manager.listServers();
@@ -249,17 +249,17 @@ describe("listing the servers", () => {
 
   it("asks the backend only when there is an http row, and keeps the tools a user may still call", async () => {
     const backend = backendExecSpy({ entries: [
-      { accountLabel: "default", serverIdentifier: "remote", rowServerIdentifier: "remote", tools: [{ toolName: "search" }, { toolName: "blocked" }, { toolName: "fetch" }] },
-      { accountLabel: "default", serverIdentifier: "unknown", rowServerIdentifier: "someone-else", tools: [{ toolName: "ghost" }] },
+      { accountLabel: "default", serverIdentifier: "remote", rowServerIdentifier: "remote", tools: [{ name: "search", providerIdentifier: "remote", toolName: "search" }, { name: "blocked", providerIdentifier: "remote", toolName: "blocked" }, { name: "fetch", providerIdentifier: "remote", toolName: "fetch" }] },
+      { accountLabel: "default", serverIdentifier: "unknown", rowServerIdentifier: "someone-else", tools: [{ name: "ghost", providerIdentifier: "remote", toolName: "ghost" }] },
     ] });
     const settings = settingsSpy({ disabled: { "11": ["blocked"] } });
     const world = managerWorld({ displays: true, backend, settings });
     world.pushDisplay(display([httpRow("11", "remote")]));
     await world.manager.listServers();
     // Only the tools that are still enabled are handed on, and an entry no row owns is dropped.
-    assert.deepEqual(await world.manager.listConnectedBackendTools(), [{ toolName: "search" }, { toolName: "fetch" }]);
+    assert.deepEqual(await world.manager.listConnectedBackendTools(), [{ name: "search", providerIdentifier: "remote", toolName: "search" }, { name: "fetch", providerIdentifier: "remote", toolName: "fetch" }]);
     const first = await world.manager.listConnectedBackendTools();
-    first.push({ toolName: "invented" });
+    first.push({ name: "invented", providerIdentifier: "remote", toolName: "invented" });
     assert.equal((await world.manager.listConnectedBackendTools()).length, 2);
     // A display with nothing on the http side asks the backend nothing at all.
     const quiet = managerWorld({ displays: true, backend: backendExecSpy() });
@@ -293,7 +293,7 @@ describe("listing the servers", () => {
   });
 
   it("reports an admin-disabled row as disabled, and a connector that needs a sign-in as such", async () => {
-    const backend = backendExecSpy({ entries: [{ accountLabel: "work", serverIdentifier: "slotted-work", rowServerIdentifier: "slotted", status: "connected", tools: [{ toolName: "search" }] }] });
+    const backend = backendExecSpy({ entries: [{ accountLabel: "work", serverIdentifier: "slotted-work", rowServerIdentifier: "slotted", status: "connected", tools: [{ name: "search", providerIdentifier: "remote", toolName: "search" }] }] });
     const world = managerWorld({ displays: true, backend });
     world.pushDisplay(display([
       httpRow("11", "blocked-by-admin", { disabledByTeamAdminPolicy: true }),

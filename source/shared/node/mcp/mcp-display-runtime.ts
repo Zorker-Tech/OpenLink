@@ -5,8 +5,8 @@
  * is used, and a server that does not hold what it must is refused rather than half-described.
  */
 import { normalizeMcpAccountLabel } from "../../mcp.ts"; import { SlateMcpConfigError } from "./mcp-config-error.ts";
-export type McpServerConfig = { url: string; type?: "sse" | "http"; headers?: Record<string, string> } | { command: string; args?: string[]; env?: Record<string, string> };
-export interface DisplayServer { id: string; name: string; serverIdentifier?: string; config: McpServerConfig; isTeamServer: boolean; disabledByTeamAdminPolicy?: boolean; pluginId?: string; isRequired?: boolean; managedByTeamPluginPolicy?: boolean; accounts?: Array<{ accountKey: string; hasToken: boolean; serverIdentifier?: string }> }
+export type McpServerConfig = { url: string; type?: "sse" | "http"; headers?: Readonly<Record<string, string>> } | { command: string; args?: readonly string[]; env?: Readonly<Record<string, string>> };
+export interface DisplayServer { id: string; name: string; serverIdentifier?: string; config: McpServerConfig; isTeamServer: boolean; disabledByTeamAdminPolicy?: boolean; pluginId?: string; isRequired?: boolean; managedByTeamPluginPolicy?: boolean; accounts?: readonly { accountKey: string; hasToken: boolean; serverIdentifier?: string }[] }
 export interface AccountDisplayConfig { servers: DisplayServer[]; cacheScope?: string; unavailable?: boolean; unresolvedServerIds?: string[] }
 export function normalizeAccountKey(raw: string): string { const key = normalizeMcpAccountLabel(raw); if (key.length === 0) throw new SlateMcpConfigError("MCP account label is required."); return key; }
 export function runtimeConfigFromDisplay(display: AccountDisplayConfig | null): { mcpServers: Record<string, McpServerConfig> } | null { if (display == null) return null; return { mcpServers: Object.fromEntries(display.servers.flatMap((server) => server.serverIdentifier != null && !server.disabledByTeamAdminPolicy ? [[server.serverIdentifier, server.config]] : [])) }; }
