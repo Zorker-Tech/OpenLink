@@ -40,7 +40,8 @@ interface FireWire { readonly id: string; readonly slateAgentId: string; readonl
 interface FireTarget { readonly agentId: string; readonly automation: ScheduledCloudAutomation & { readonly lastRunAt?: number | null; readonly runs?: readonly { id: string; coalescedRunIds?: readonly string[]; status: string; detail?: string }[] } }
 export class SlateAutomationFireConsumer {
   private readonly fetchImpl: typeof fetch;
-  private readonly telemetry: { reportAutomationFireDropped(value: Record<string, unknown>): void; reportAgentError(value: Record<string, unknown>): void };
+  /** What a poll reports to. A reporter the caller did not have is not one this consumer may insist on. */
+  private readonly telemetry: { reportAutomationFireDropped(value: Record<string, unknown>): void; reportAgentError?(value: Record<string, unknown>): void };
   private ticking = false;
   private stopped = false;
   private backoffUntil = 0;
@@ -65,7 +66,7 @@ export class SlateAutomationFireConsumer {
     readonly isNotifySafetyPollEnabled?: () => boolean;
   }) {
     this.fetchImpl = deps.fetchImpl ?? fetch;
-    this.telemetry = (deps.telemetry ?? createNoopSlateTelemetry()) as { reportAutomationFireDropped(value: Record<string, unknown>): void; reportAgentError(value: Record<string, unknown>): void };
+    this.telemetry = deps.telemetry ?? createNoopSlateTelemetry();
     this.notifyGate = createNotifyDrainGate({ isConnected: () => deps.isNotifyConnected?.() ?? false, isSafetyPollEnabled: () => deps.isNotifySafetyPollEnabled?.() ?? true, now: Date.now });
   }
 
@@ -97,7 +98,7 @@ export class SlateAutomationFireConsumer {
       this.pollNotBefore = events.length === 0 && this.states.size === 0 && typeof result.nextPollAfterMs === "number" && Number.isFinite(result.nextPollAfterMs) && result.nextPollAfterMs > 0 ? Date.now() + Math.min(result.nextPollAfterMs, MAX_NEXT_POLL_DELAY_MS) : 0;
     } catch (error) {
       this.backoffUntil = Date.now() + ERROR_BACKOFF_MS;
-      this.telemetry.reportAgentError({ source: "automation_fire_poll", error: classifyDeliveryError(error), detail: slateErrorDetail(error) });
+      this.telemetry.reportAgentError?.({ source: "automation_fire_poll", error: classifyDeliveryError(error), detail: slateErrorDetail(error) });
     } finally { this.ticking = false; }
   }
 

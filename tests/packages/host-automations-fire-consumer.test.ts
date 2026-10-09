@@ -139,27 +139,18 @@ describe("what a fire's event is allowed to be", () => {
     const slackEvent = parseFireTriggerEvent({ source: "slack", channel: "C1", sender: "octocat", text: "hi", isMention: true, isSelf: true, reactionEmoji: "tada", ts: "1.2", threadTs: "1.1", timestampMs: 10 });
     assert.deepEqual(slackEvent, { source: "slack", channel: "C1", sender: "octocat", text: "hi", isMention: true, isSelf: true, reactionEmoji: "tada", ts: "1.2", threadTs: "1.1", timestampMs: 10 });
     // Only the fields the platform may send are kept, and only when they are there.
-    assert.deepEqual(parseFireTriggerEvent({ source: "slack", channel: "C1" }), { source: "slack", channel: "C1", sender: "someone", text: "", isMention: false, timestampMs: parseFireTriggerEvent({ source: "slack", channel: "C1" })?.timestampMs });
-    assert.deepEqual(parseFireTriggerEvent({ source: "github", repo: "o/r", kind: "pr-opened", title: "t", actor: "a", url: "u", branch: "b" }), {
-      source: "github",
-      repo: "o/r",
-      kind: "pr-opened",
-      title: "t",
-      actor: "a",
-      url: "u",
-      branch: "b",
-      timestampMs: parseFireTriggerEvent({ source: "github", repo: "o/r", kind: "pr-opened" })?.timestampMs,
-    });
-    assert.deepEqual(parseFireTriggerEvent({ source: "microsoftTeams", tenantId: "t", teamId: "team", channelId: "c", text: "hi" }), {
-      source: "microsoftTeams",
-      tenantId: "t",
-      teamId: "team",
-      channelId: "c",
-      text: "hi",
-      aadObjectId: "unknown",
-      activityId: "unknown",
-      timestampMs: parseFireTriggerEvent({ source: "microsoftTeams", tenantId: "t", teamId: "team", channelId: "c" })?.timestampMs,
-    });
+    // A platform that sent no timestamp gets one from this host: the shape is checked without it, and then the
+    // stamp itself is checked as what it is, so the assertion cannot race the clock between two parses.
+    const bareSlack = parseFireTriggerEvent({ source: "slack", channel: "C1" });
+    assert.deepEqual({ ...bareSlack, timestampMs: 0 }, { source: "slack", channel: "C1", sender: "someone", text: "", isMention: false, timestampMs: 0 });
+    const bareGithub = parseFireTriggerEvent({ source: "github", repo: "o/r", kind: "pr-opened", title: "t", actor: "a", url: "u", branch: "b" });
+    assert.deepEqual({ ...bareGithub, timestampMs: 0 }, { source: "github", repo: "o/r", kind: "pr-opened", title: "t", actor: "a", url: "u", branch: "b", timestampMs: 0 });
+    const bareTeams = parseFireTriggerEvent({ source: "microsoftTeams", tenantId: "t", teamId: "team", channelId: "c", text: "hi" });
+    assert.deepEqual({ ...bareTeams, timestampMs: 0 }, { source: "microsoftTeams", tenantId: "t", teamId: "team", channelId: "c", text: "hi", aadObjectId: "unknown", activityId: "unknown", timestampMs: 0 });
+    for (const stamped of [bareSlack, bareGithub, bareTeams]) {
+      assert.equal(typeof stamped?.["timestampMs"], "number");
+      assert.equal((stamped?.["timestampMs"] as number) > 0, true);
+    }
     const linear = parseFireTriggerEvent({ source: "linear", event: "statusChanged", issueIdentifier: "ENG-1", status: "Done", ignored: "dropped" });
     assert.deepEqual([linear?.["event"], linear?.["issueIdentifier"], linear?.["status"], "ignored" in (linear ?? {})], ["statusChanged", "ENG-1", "Done", false]);
     const sentry = parseFireTriggerEvent({ source: "sentry", event: "issueCreated", issueId: "1", shortId: "S-1", title: "boom" });
@@ -246,6 +237,25 @@ describe("polling for fires", () => {
     const odd = world({ failFetch: new Error("something else") });
     await odd.consumer.tick();
     assert.equal((odd.errors[0]?.error as { code: string }).code, SlateError.backendDeliveryFailed().code);
+  });
+
+  it("works for a caller whose telemetry has no agent-error reporter", async () => {
+    const consumer = new SlateAutomationFireConsumer({
+      getAccessToken: async () => "token",
+      getBackendUrl: () => "https://backend.invalid",
+      getTimeZone: () => undefined,
+      getBoxUptimeMs: () => undefined,
+      isReady: async () => true,
+      listAutomations: async () => [],
+      fire: async () => undefined,
+      fireForEvent: async () => undefined,
+      fetchImpl: (async () => {
+        throw Object.assign(new Error("refused"), { code: "ECONNREFUSED" });
+      }) as unknown as typeof fetch,
+      // The reporter is optional where the consumer is constructed from, so a poll that fails may not insist on it.
+      telemetry: { reportAutomationFireDropped: () => {} },
+    });
+    await consumer.tick();
   });
 
   it("waits as long as the backend asked before polling again", async () => {
