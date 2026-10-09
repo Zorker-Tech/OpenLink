@@ -5,12 +5,11 @@
  * it talks over cannot disagree about them.
  */
 /**
- * Defaults shared by the agent-store sync client and its BCS transport.
+ * The numbers the sync client and its transport run on.
  *
- * This is the exact host package boundary recovered from the immutable
- * `agent-store-sync/dist/sync-client-config.js` carrier.  The transport uses
- * `rpcTimeoutMs`; the remaining values are consumed by the later sync engine
- * and are kept here so that one config object is shared across the closure.
+ * One object holds them so that the client, the transport and the sync engine behind them cannot disagree about a
+ * timeout, a concurrency or a retry count. What the transport reads today is `rpcTimeoutMs`; the rest are read as the
+ * parts that need them land, which is why they are all here rather than beside their first reader.
  */
 
 const DEFAULT_MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024;
