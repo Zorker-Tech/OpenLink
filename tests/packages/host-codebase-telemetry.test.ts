@@ -30,6 +30,7 @@ import {
   type CsnapsState,
 } from "../../source/host/extensions/codebase-telemetry/codebase-telemetry-adapter.ts";
 import { resolveCsnapsCapability } from "../../source/host/extensions/codebase-telemetry/csnaps-capability.ts";
+import type { Clock } from "../../source/host/extensions/scheduling.ts";
 
 /** A scratch directory the capability check can look at. */
 const scratch = mkdtempSync(join(tmpdir(), "slate-csnaps-capability-"));
@@ -160,7 +161,7 @@ function csnapsHandle(options: { initialState?: CsnapsState; rejected?: readonly
 }
 
 async function adapterWorld(
-  options: { initialState?: CsnapsState; rejected?: readonly unknown[]; signal?: AbortSignal; failClose?: boolean; failPollingDispose?: boolean; clock?: unknown } = {},
+  options: { initialState?: CsnapsState; rejected?: readonly unknown[]; signal?: AbortSignal; failClose?: boolean; failPollingDispose?: boolean; clock?: Clock } = {},
 ) {
   const csnaps = csnapsHandle(options);
   const spawned: { executablePath: string; initializeParams: Record<string, unknown>; deadlines: { name: string }[]; hasSignal: boolean; signal?: AbortSignal }[] = [];
@@ -361,7 +362,7 @@ describe("the adapter in front of the helper", () => {  it("starts the helper wi
     const recorded: number[] = [];
     const clock = { now: () => 0, monotonicNow: () => 0, schedule: (delayMs: number) => { recorded.push(delayMs); return { dispose: () => {} }; } };
     const timed = await adapterWorld({ clock });
-    for (const deadline of timed.spawned[0]!.deadlines as { run<T>(work: (signal: AbortSignal) => Promise<T>): Promise<T> }[]) await deadline.run(async () => {});
+    for (const deadline of timed.spawned[0]!.deadlines as unknown as { run<T>(work: (signal: AbortSignal) => Promise<T>): Promise<T> }[]) await deadline.run(async () => {});
     assert.deepEqual(recorded, [10_000, 120_000, 600_000, 600_000, 30_000, 1_800_000, 15_000, 3_000]);
   });
 
@@ -489,7 +490,7 @@ describe("whether the helper is there to be run", () => {
     const absent = resolveCsnapsCapability({ SLATE_CSNAPS_BIN: join(scratch, "not-there") } as NodeJS.ProcessEnv);
     assert.deepEqual(absent, { available: false, executablePath: join(scratch, "not-there"), reason: "missing" });
     const directory = mkdtempSync(join(scratch, "a-directory-"));
-    assert.deepEqual(resolveCsnapsCapability({ SLATE_CSNAPS_BIN: directory } as NodeJS.ProcessEnv).reason, "not-file");
+    assert.deepEqual(resolveCsnapsCapability({ SLATE_CSNAPS_BIN: directory } as NodeJS.ProcessEnv), { available: false, executablePath: directory, reason: "not-file" });
     const readable = join(scratch, "read-but-not-runnable");
     writeFileSync(readable, "#!/bin/sh\n");
     chmodSync(readable, 0o644);
