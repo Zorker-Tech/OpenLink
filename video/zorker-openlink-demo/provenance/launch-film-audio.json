@@ -1,0 +1,906 @@
+{
+  "music": false,
+  "voiceover": false,
+  "durationSeconds": 71,
+  "sampleRate": 48000,
+  "channels": 2,
+  "keyboardCues": 103,
+  "cues": [
+    {
+      "type": "transition",
+      "timeSeconds": 9.98,
+      "durationSeconds": 0.36,
+      "pan": 0.1
+    },
+    {
+      "type": "transition",
+      "timeSeconds": 43,
+      "durationSeconds": 0.44,
+      "pan": -0.12
+    },
+    {
+      "type": "transition",
+      "timeSeconds": 64,
+      "durationSeconds": 0.38,
+      "pan": 0.08
+    },
+    {
+      "type": "click",
+      "shotId": "ask",
+      "sourceFrame": 405,
+      "at": 17.05,
+      "durationSeconds": 0.14
+    },
+    {
+      "type": "click",
+      "shotId": "refine",
+      "sourceFrame": 312,
+      "at": 42.5,
+      "durationSeconds": 0.14
+    },
+    {
+      "type": "click",
+      "shotId": "inspect",
+      "sourceFrame": 35,
+      "at": 55.5875,
+      "durationSeconds": 0.14
+    },
+    {
+      "type": "click",
+      "shotId": "inspect",
+      "sourceFrame": 75,
+      "at": 56.0875,
+      "durationSeconds": 0.14
+    },
+    {
+      "type": "click",
+      "shotId": "inspect",
+      "sourceFrame": 220,
+      "at": 57.9,
+      "durationSeconds": 0.14
+    },
+    {
+      "type": "click",
+      "shotId": "inspect",
+      "sourceFrame": 612,
+      "at": 62.8,
+      "durationSeconds": 0.14
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 54.6875,
+      "at": 11.211458333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 59.375,
+      "at": 11.289583333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 64.0625,
+      "at": 11.367708333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 68.75,
+      "at": 11.445833333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 73.4375,
+      "at": 11.523958333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 78.125,
+      "at": 11.602083333333333,
+      "durationSeconds": 0.076,
+      "key": "space"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 82.8125,
+      "at": 11.680208333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 87.5,
+      "at": 11.758333333333333,
+      "durationSeconds": 0.076,
+      "key": "space"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 92.1875,
+      "at": 11.836458333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 96.875,
+      "at": 11.914583333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 101.5625,
+      "at": 11.992708333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 106.25,
+      "at": 12.070833333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 110.9375,
+      "at": 12.148958333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 115.625,
+      "at": 12.227083333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 120.3125,
+      "at": 12.305208333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 125,
+      "at": 12.383333333333333,
+      "durationSeconds": 0.076,
+      "key": "space"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 129.6875,
+      "at": 12.461458333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 134.375,
+      "at": 12.539583333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 139.0625,
+      "at": 12.617708333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 143.75,
+      "at": 12.695833333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 148.4375,
+      "at": 12.773958333333333,
+      "durationSeconds": 0.076,
+      "key": "space"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 153.125,
+      "at": 12.852083333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 157.8125,
+      "at": 12.930208333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 162.5,
+      "at": 13.008333333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 167.1875,
+      "at": 13.086458333333333,
+      "durationSeconds": 0.076,
+      "key": "space"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 171.875,
+      "at": 13.164583333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 176.5625,
+      "at": 13.242708333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 181.25,
+      "at": 13.320833333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 185.9375,
+      "at": 13.398958333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 190.625,
+      "at": 13.477083333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 195.3125,
+      "at": 13.555208333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 200,
+      "at": 13.633333333333333,
+      "durationSeconds": 0.076,
+      "key": "space"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 204.6875,
+      "at": 13.711458333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 209.375,
+      "at": 13.789583333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 214.0625,
+      "at": 13.867708333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 218.75,
+      "at": 13.945833333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 223.4375,
+      "at": 14.023958333333333,
+      "durationSeconds": 0.076,
+      "key": "space"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 228.125,
+      "at": 14.102083333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 232.8125,
+      "at": 14.180208333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 237.5,
+      "at": 14.258333333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 242.1875,
+      "at": 14.336458333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 246.875,
+      "at": 14.414583333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 251.5625,
+      "at": 14.492708333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 256.25,
+      "at": 14.570833333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 260.9375,
+      "at": 14.648958333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 265.625,
+      "at": 14.727083333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 270.3125,
+      "at": 14.805208333333333,
+      "durationSeconds": 0.076,
+      "key": "space"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 275,
+      "at": 14.883333333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 279.6875,
+      "at": 14.961458333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 284.375,
+      "at": 15.039583333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 289.0625,
+      "at": 15.117708333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 293.75,
+      "at": 15.195833333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 298.4375,
+      "at": 15.273958333333333,
+      "durationSeconds": 0.076,
+      "key": "space"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 303.125,
+      "at": 15.352083333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 307.8125,
+      "at": 15.430208333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 312.5,
+      "at": 15.508333333333333,
+      "durationSeconds": 0.076,
+      "key": "space"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 317.1875,
+      "at": 15.586458333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 321.875,
+      "at": 15.664583333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 326.5625,
+      "at": 15.742708333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 331.25,
+      "at": 15.820833333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 335.9375,
+      "at": 15.898958333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 340.625,
+      "at": 15.977083333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 345.3125,
+      "at": 16.055208333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "ask",
+      "sourceFrame": 350,
+      "at": 16.133333333333333,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 34.15384615384615,
+      "at": 37.86923076923077,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 38.30769230769231,
+      "at": 37.93846153846154,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 42.46153846153846,
+      "at": 38.00769230769231,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 46.61538461538461,
+      "at": 38.07692307692308,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 50.769230769230774,
+      "at": 38.146153846153844,
+      "durationSeconds": 0.076,
+      "key": "space"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 54.92307692307692,
+      "at": 38.215384615384615,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 59.07692307692308,
+      "at": 38.284615384615385,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 63.23076923076923,
+      "at": 38.353846153846156,
+      "durationSeconds": 0.076,
+      "key": "space"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 67.38461538461539,
+      "at": 38.42307692307692,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 71.53846153846155,
+      "at": 38.49230769230769,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 75.6923076923077,
+      "at": 38.56153846153846,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 79.84615384615384,
+      "at": 38.63076923076923,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 84,
+      "at": 38.7,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 88.15384615384616,
+      "at": 38.76923076923077,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 92.3076923076923,
+      "at": 38.83846153846154,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 96.46153846153847,
+      "at": 38.90769230769231,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 100.61538461538461,
+      "at": 38.97692307692308,
+      "durationSeconds": 0.076,
+      "key": "space"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 104.76923076923077,
+      "at": 39.04615384615384,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 108.92307692307692,
+      "at": 39.11538461538461,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 113.07692307692308,
+      "at": 39.184615384615384,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 117.23076923076923,
+      "at": 39.253846153846155,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 121.38461538461539,
+      "at": 39.323076923076925,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 125.53846153846153,
+      "at": 39.392307692307696,
+      "durationSeconds": 0.076,
+      "key": "space"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 129.69230769230768,
+      "at": 39.46153846153846,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 133.84615384615384,
+      "at": 39.53076923076923,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 138,
+      "at": 39.6,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 142.15384615384616,
+      "at": 39.66923076923077,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 146.30769230769232,
+      "at": 39.738461538461536,
+      "durationSeconds": 0.076,
+      "key": "space"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 150.46153846153845,
+      "at": 39.80769230769231,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 154.6153846153846,
+      "at": 39.87692307692308,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 158.76923076923077,
+      "at": 39.94615384615385,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 162.92307692307693,
+      "at": 40.01538461538462,
+      "durationSeconds": 0.076,
+      "key": "space"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 167.07692307692307,
+      "at": 40.08461538461538,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 171.23076923076923,
+      "at": 40.15384615384615,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 175.3846153846154,
+      "at": 40.223076923076924,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 179.53846153846155,
+      "at": 40.292307692307695,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 183.69230769230768,
+      "at": 40.36153846153846,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 187.84615384615384,
+      "at": 40.43076923076923,
+      "durationSeconds": 0.076,
+      "key": "key"
+    },
+    {
+      "type": "typing",
+      "shotId": "refine",
+      "sourceFrame": 192,
+      "at": 40.5,
+      "durationSeconds": 0.076,
+      "key": "key"
+    }
+  ],
+  "finalSilenceFrames": 4,
+  "finalSilenceSamples": 1600,
+  "peakDbFS": -16.088504478009824,
+  "rmsDbFS": -46.27992727902001,
+  "silenceRatio": 0.8649404342723005,
+  "clippedSamples": 0,
+  "finalSamples": [
+    0,
+    0
+  ],
+  "rights": "Original procedural synthesis; no external audio sources.",
+  "listeningReview": false
+}

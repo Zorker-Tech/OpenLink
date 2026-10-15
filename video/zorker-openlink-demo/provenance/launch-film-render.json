@@ -1,0 +1,82 @@
+{
+  "createdLocalDate": "2026-10-12",
+  "storyboard": "src/launch-film/storyboard.json",
+  "renderScript": "scripts/render-launch-film.mjs",
+  "compatibilityScript": "scripts/create-launch-compat.mjs",
+  "remotionVersion": "4.0.521",
+  "outputs": [
+    {
+      "path": "/Users/yikewang/Movies/Zorker-OpenLink-Launch-20261012/Zorker-OpenLink-Launch-4K120.mp4",
+      "sha256": "25fb1037d00856d7db0625b16f2301f5e7dab3087c38e03eca7797fcc7a37b60",
+      "sizeBytes": 36561530,
+      "container": "MP4",
+      "video": {
+        "codec": "H.264",
+        "width": 3840,
+        "height": 2160,
+        "pixelFormat": "yuv420p",
+        "fps": 120,
+        "durationSeconds": 71,
+        "framesExpected": 8520,
+        "framesDecoded": 8520,
+        "presentationCadenceVerified": true
+      },
+      "audio": {
+        "codec": "AAC",
+        "sampleRate": 48000,
+        "channels": 2,
+        "streamDurationSeconds": 71.061333
+      }
+    },
+    {
+      "path": "/Users/yikewang/Movies/Zorker-OpenLink-Launch-20261012/Zorker-OpenLink-Launch-4K60.mp4",
+      "sha256": "c03a13c6ab1a3290385f4a5c576d765f91640b5c09262b4ae1ec89754083e2da",
+      "sizeBytes": 28326844,
+      "container": "MP4",
+      "video": {
+        "codec": "H.264",
+        "width": 3840,
+        "height": 2160,
+        "pixelFormat": "yuv420p",
+        "fps": 60,
+        "durationSeconds": 71,
+        "framesExpected": 4260,
+        "framesDecoded": 4260,
+        "derivation": "Every other 120 fps master frame; no duplicated frames.",
+        "presentationTimestampsMatchMasterEvenFrames": true
+      },
+      "audio": {
+        "codec": "AAC",
+        "sampleRate": 48000,
+        "channels": 2,
+        "streamDurationSeconds": 70.997333,
+        "derivation": "Copied from the master and muxed to the 71 second video duration."
+      }
+    }
+  ],
+  "audioSource": {
+    "path": "public/audio/openlink-launch-sfx-only.wav",
+    "durationSeconds": 71,
+    "sampleRate": 48000,
+    "channels": 2,
+    "sampleFramesPerChannel": 3408000,
+    "typingCues": 103,
+    "totalSfxCues": 112,
+    "music": false,
+    "voiceover": false,
+    "lastFour120FpsFramesAreExactSilence": true
+  },
+  "visualQa": {
+    "report": "/Users/yikewang/Movies/Zorker-OpenLink-Launch-20261012/qa/launch-film-render-report.json",
+    "contactSheet": "/Users/yikewang/Movies/Zorker-OpenLink-Launch-20261012/qa/launch-contact-sheet.jpg",
+    "sampledFrames": 51,
+    "sampleScale": 0.25,
+    "fullResolutionDetailFrames": 9,
+    "browserErrors": [],
+    "review": "All 11 storyboard sections were visually reviewed from the contact sheet and 4K detail captures."
+  },
+  "limitations": [
+    "The Forma page, GPT-6 Luna label, conversation events, source changes, inspector, and versions are deterministic illustrative fixtures.",
+    "This render does not establish live provider execution, authentication, external sharing, publishing, or integrations."
+  ]
+}

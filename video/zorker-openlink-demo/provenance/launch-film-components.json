@@ -1,0 +1,119 @@
+{
+  "composition": "OpenLinkLaunchFilm120",
+  "product": "Zorker OpenLink",
+  "sourceRepository": "/Volumes/Net/OpenLink",
+  "sourceCheckout": {
+    "branch": "dev",
+    "checkoutHead": "70b8d95efac1d60489040223998d44cf0025457d",
+    "extractedUiBaseline": "7d920292f7",
+    "dirtyPathsAtStart": [
+      "video/zorker-openlink-demo/scripts/render-fluid.mjs",
+      "video/zorker-openlink-demo/scripts/verify-fluid-delivery.mjs",
+      "video/zorker-openlink-demo/provenance/revision-10-render.json"
+    ]
+  },
+  "sourceManifests": [
+    "provenance/current-composers.json",
+    "provenance/reference-preview-extraction.json",
+    "provenance/reference-film.json",
+    "provenance/faithful-manifest.json"
+  ],
+  "components": [
+    {
+      "source": "components/workspace-prompt.tsx",
+      "symbol": "WorkspacePrompt",
+      "sourceSha256": "e74483e6f8b264eba8dfc9b4bdf897e7f99714ae5469c31648827823164b23d6",
+      "extractedFile": "src/reference-film/current-ui/components/film-home-composer.js",
+      "adapter": "src/reference-film/Native.tsx:CurrentHomeComposer / NativePrompt",
+      "shot": "ask",
+      "method": "Existing current-source presentation extraction; retained JSX/classes and theme, with measured text geometry, deterministic fixture copy, and inert submit callback."
+    },
+    {
+      "source": "components/chat-workspace.tsx",
+      "symbol": "ChatComposer / ComposerSubmitButton / ComposerAttachments",
+      "sourceSha256": "8d261377ec292108f2ae7fe78f8f337f919eb997dd126dba8589025933b740a6",
+      "extractedFile": "src/reference-film/current-ui/components/film-chat-composer.js",
+      "adapter": "src/reference-film/Native.tsx:CurrentSessionComposer / NativePrompt",
+      "shots": ["refine", "workspace"],
+      "method": "Existing current-source presentation extraction; current chat composer state and styles are retained, with fixture text and inert actions."
+    },
+    {
+      "source": "components/chat-timeline.tsx",
+      "symbol": "ChatTimeline / ChangeItem",
+      "sourceSha256": "38fdda3d58e82f9ae2a529faef918a3efb7ab766dd0961df72a2247246e0c3f6",
+      "extractedFile": "src/reference-film/source/timeline.js",
+      "adapter": "src/reference-film/Native.tsx:NativeTimeline / NativeChanges",
+      "shots": ["work", "evidence", "workspace", "inspect"],
+      "method": "Existing source-snapshot JSX/classes and timeline structure; time, messages, task state, file changes, and callbacks are deterministic presentation props."
+    },
+    {
+      "source": "components/chat-workspace.tsx",
+      "symbols": ["ChatTopbar.chat", "ChatTopbar.workspace", "WorkspaceTabs", "BrowserNavigationBar", "PreviewCanvas"],
+      "sourceSha256": "8d261377ec292108f2ae7fe78f8f337f919eb997dd126dba8589025933b740a6",
+      "extractedFile": "src/reference-film/source/preview.js",
+      "adapter": "src/reference-film/ProductPreview.tsx:SourceChatTopbar / SourceTopbar / SourcePreviewCanvas",
+      "shots": ["workspace", "customize", "inspect"],
+      "method": "Current JSX/classes retained; live browser, iframe, portal, and event wiring are excluded."
+    },
+    {
+      "source": "components/browser/browser-workbench.tsx",
+      "symbol": "BrowserWorkbench ready-state structure",
+      "sourceSha256": "645d59f57de4572288eb7f35304b2006a4de4a9cd7bd5489ab805390dc680405",
+      "extractedFile": "src/reference-film/source/preview.js",
+      "adapter": "src/reference-film/ProductPreview.tsx:SourcePreviewCanvas",
+      "shots": ["workspace", "customize"],
+      "method": "Ready-state wrapper is retained; its live connection state is replaced by explicit illustrative content."
+    },
+    {
+      "source": "components/browser/chromium-stream-surface.tsx",
+      "symbol": "Selection overlay",
+      "sourceSha256": "19880bc2a315f1c333de334ff1136fa3810d7245702b78ad778cacbb997b16cc",
+      "extractedFile": "src/reference-film/source/preview.js",
+      "adapter": "src/reference-film/ProductPreview.tsx:SourceInspectorOverlay",
+      "shot": "inspect",
+      "method": "Original overlay structure and classes retained; selection bounds and source label are fixture props."
+    },
+    {
+      "source": "components/chat-workspace.tsx",
+      "symbol": "BrowserNavigationBar > DropdownMenuContent",
+      "sourceSha256": "8d261377ec292108f2ae7fe78f8f337f919eb997dd126dba8589025933b740a6",
+      "extractedFile": "src/reference-film/source/preview.js",
+      "adapter": "src/reference-film/Features.tsx:SourceVersionMenu",
+      "shot": "inspect",
+      "method": "Native menu subtree and styles retained; portal behavior is replaced with inert presentation markup, as documented by scripts/extract-reference-preview.mjs."
+    }
+  ],
+  "assets": [
+    {
+      "file": "public/brand/zorker-logo-dark.svg",
+      "usage": "Opening and closing brand mark",
+      "rights": "Existing user-provided brand asset."
+    },
+    {
+      "file": "public/fonts/geist-latin.woff2",
+      "usage": "OpenLink Geist typography",
+      "rights": "Existing app font; bundled font license applies."
+    },
+    {
+      "file": "src/scenes/SampleSite.tsx",
+      "usage": "Illustrative Forma website preview, not a source-derived customer website",
+      "rights": "Deterministic demo artwork."
+    },
+    {
+      "file": "public/audio/openlink-launch-sfx-only.wav",
+      "usage": "Procedural clicks, typing, and selected transition air cues; no music",
+      "rights": "Original procedural synthesis."
+    }
+  ],
+  "adaptations": [
+    "This launch film reuses the existing source-extracted presentation trees and does not change application business logic.",
+    "Network, authentication, browser streaming, provider execution, and external actions are absent; UI callbacks remain inert.",
+    "The Forma page, GPT-6 Luna label, conversation events, changed files, inspector state, and version data are illustrative fixtures.",
+    "The video adapts the supplied narrative form and does not reproduce ChatGPT product UI, logos, integrations, data dashboards, or claims."
+  ],
+  "sameViewportEvidence": "The source extraction manifests and parity compositions are preserved in the cited provenance files; the launch composition imports those unchanged presentation trees.",
+  "limitations": [
+    "This proves use of the extracted UI presentation components; it is not an authenticated, live-session, or live-provider acceptance result.",
+    "No licensed music, stock footage, paid media generation, or external service was used."
+  ]
+}
