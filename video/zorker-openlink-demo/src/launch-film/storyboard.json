@@ -1,0 +1,178 @@
+{
+  "title": "Zorker OpenLink — Build in Context",
+  "sourceDocument": "/Users/yikewang/Downloads/chatgpt-launch-video-reverse-prompt.md",
+  "narrative": "One developer task, followed from brief through work, result, refinement, and review.",
+  "runtimeSeconds": 71,
+  "designFps": 60,
+  "master": {
+    "width": 3840,
+    "height": 2160,
+    "fps": 120,
+    "durationInFrames": 8520
+  },
+  "compatibility": {
+    "width": 3840,
+    "height": 2160,
+    "fps": 60,
+    "durationInFrames": 4260
+  },
+  "visualRules": {
+    "canvas": "White, high-key typography shots; native light-theme OpenLink UI for product shots.",
+    "camera": "Continuous lateral tracking in the opening; locked UI stages; one lateral title-to-workspace wipe; hard cuts between acts.",
+    "focus": "One reading target per beat. No blur, stock footage, 3D render, fake integrations, or copied ChatGPT marks.",
+    "productCopy": "No editorial headline over settled product UI. Small illustrative-workflow disclosure remains visible on product shots.",
+    "evidence": "The UI uses deterministic fixtures and is disclosed as illustrative, time-compressed workflow."
+  },
+  "audio": {
+    "music": false,
+    "voiceover": false,
+    "sampleRate": 48000,
+    "channels": 2,
+    "silentEndFramesAtMasterFps": 4,
+    "swishes": [
+      {"timeSeconds": 9.98, "durationSeconds": 0.36, "pan": 0.1},
+      {"timeSeconds": 43.0, "durationSeconds": 0.44, "pan": -0.12},
+      {"timeSeconds": 64.0, "durationSeconds": 0.38, "pan": 0.08}
+    ],
+    "clicks": [
+      {"shotId": "ask", "sourceFrame": 405},
+      {"shotId": "refine", "sourceFrame": 312},
+      {"shotId": "inspect", "sourceFrame": 35},
+      {"shotId": "inspect", "sourceFrame": 75},
+      {"shotId": "inspect", "sourceFrame": 220},
+      {"shotId": "inspect", "sourceFrame": 612}
+    ],
+    "typing": [
+      {"shotId": "ask", "copy": "PROMPT", "startSourceFrame": 50, "durationSourceFrames": 300},
+      {"shotId": "refine", "copy": "REVISION", "startSourceFrame": 30, "durationSourceFrames": 162}
+    ]
+  },
+  "shots": [
+    {
+      "id": "opening",
+      "title": "01 · Who builds",
+      "startSeconds": 0,
+      "durationSeconds": 8,
+      "component": "OpeningRun",
+      "purpose": "Widen the audience, then introduce the product in one continuous lateral move.",
+      "copy": ["Builders.", "Designers.", "Product teams.", "Developers.", "Zorker OpenLink."],
+      "camera": "Constant leftward track over a white world canvas."
+    },
+    {
+      "id": "thesis",
+      "title": "02 · Thesis",
+      "startSeconds": 8,
+      "durationSeconds": 2,
+      "component": "Thesis",
+      "purpose": "State the film's claim before proving it.",
+      "copy": "Every good build starts with a clear brief.",
+      "camera": "Locked, centered, generous negative space."
+    },
+    {
+      "id": "ask",
+      "title": "03 · The brief",
+      "startSeconds": 10,
+      "durationSeconds": 8,
+      "component": "Intent",
+      "sourceFrames": 480,
+      "sourceLead": 18,
+      "sourceComponent": "CurrentHomeComposer / WorkspacePrompt",
+      "purpose": "Type and submit the existing Forma landing-page brief in the real extracted home composer.",
+      "camera": "Native input framing, measured typing front, one send click."
+    },
+    {
+      "id": "work",
+      "title": "04 · The work",
+      "startSeconds": 18,
+      "durationSeconds": 9,
+      "component": "Execution",
+      "sourceFrames": 660,
+      "sourceLead": 16,
+      "sourceComponent": "ChatTimeline / ChangeItem / NativeTimeline",
+      "purpose": "Show the visible conversation, task rows, completed reply, and file-change card in order.",
+      "camera": "One top-to-bottom scan, then a readable completed state."
+    },
+    {
+      "id": "result",
+      "title": "05 · The result",
+      "startSeconds": 27,
+      "durationSeconds": 4,
+      "component": "Resolution",
+      "sourceFrames": 240,
+      "sourceLead": 16,
+      "sourceComponent": "PreviewCanvas / illustrative Forma site fixture",
+      "purpose": "Let the initial website preview register before the revision.",
+      "camera": "Stable product view with restrained camera movement."
+    },
+    {
+      "id": "evidence",
+      "title": "06 · Inspect the change",
+      "startSeconds": 31,
+      "durationSeconds": 6,
+      "component": "ProofBeat",
+      "purpose": "Move from a short white-space statement to the source-derived file-change card.",
+      "copy": "See what changed.",
+      "sourceComponent": "SourceGitSnapshot / ChangeItem",
+      "camera": "Statement holds first; a single card rises and settles."
+    },
+    {
+      "id": "refine",
+      "title": "07 · Refine",
+      "startSeconds": 37,
+      "durationSeconds": 6,
+      "component": "Refinement",
+      "sourceFrames": 360,
+      "sourceLead": 18,
+      "sourceComponent": "CurrentSessionComposer / ChatComposer",
+      "purpose": "Send the existing follow-up that changes the Forma palette while preserving its layout.",
+      "camera": "Track the second typing front and land on the submit feedback."
+    },
+    {
+      "id": "workspace",
+      "title": "08 · One workspace",
+      "startSeconds": 43,
+      "durationSeconds": 6,
+      "component": "WorkspaceReveal",
+      "purpose": "Show the actual split conversation-and-preview workspace as one connected view.",
+      "sourceComponent": "SourceTopbar / SourceChatTopbar / SourcePreviewCanvas / NativeTimeline / CurrentSessionComposer",
+      "camera": "One lateral wipe: title exits frame-left as the source UI enters from frame-right; UI settles before its internal entrance animation."
+    },
+    {
+      "id": "customize",
+      "title": "09 · Make it yours",
+      "startSeconds": 49,
+      "durationSeconds": 6,
+      "component": "ThemeMontage",
+      "purpose": "Show the same illustrative site changing from warm neutrals to electric blue, with identical structure and content.",
+      "sourceComponent": "ProductPreview / SampleSite",
+      "camera": "One 1.5-second cross-dissolve between matched source-UI states, followed by a hold."
+    },
+    {
+      "id": "inspect",
+      "title": "10 · Review the project",
+      "startSeconds": 55,
+      "durationSeconds": 9,
+      "component": "Features",
+      "sourceFrames": 720,
+      "sourceLead": 12,
+      "sourceComponent": "SourceInspectorOverlay / SourceGitSnapshot / SourceVersionMenu",
+      "purpose": "Prove component inspection, code-diff viewing, and version selection through native UI states.",
+      "camera": "Three concise, motivated inserts; cursor marks the control and its visible feedback."
+    },
+    {
+      "id": "close",
+      "title": "11 · Brand close",
+      "startSeconds": 64,
+      "durationSeconds": 7,
+      "component": "LaunchCloser",
+      "purpose": "Return to the Zorker OpenLink mark and leave a clean end hold.",
+      "copy": "Build in context.",
+      "camera": "Locked typography, then the existing logo lockup on white."
+    }
+  ],
+  "limitations": [
+    "The Forma website, conversation events, displayed source changes, and version state are deterministic illustrative demo fixtures, not a live agent or provider run.",
+    "No Snowflake, Tableau, Teams, data-dashboard, publishing, or external sharing capability is claimed.",
+    "This composition is an adaptation of the supplied creative template, not a recreation of ChatGPT branding or product UI."
+  ]
+}

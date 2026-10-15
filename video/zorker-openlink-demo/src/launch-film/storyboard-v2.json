@@ -1,0 +1,160 @@
+{
+  "title": "Zorker OpenLink — Keep the Next Step in View",
+  "version": 2,
+  "sourceDocument": "/Users/yikewang/Downloads/chatgpt-launch-video-reverse-prompt.md",
+  "adaptation": "Keeps the supplied 71-second, 11-act narrative and motion grammar. The ChatGPT data-analysis case becomes an illustrative OpenLink code-project story: repair a mobile purchase flow, understand why it failed, show the result, then leave a review-ready project state.",
+  "narrative": "A shopper chooses a size and loses the next step. OpenLink traces the break, explains the cause, keeps the action beside the choice, and makes the changed project ready to review.",
+  "runtimeSeconds": 71,
+  "designFps": 60,
+  "master": {
+    "width": 3840,
+    "height": 2160,
+    "fps": 120,
+    "durationInFrames": 8520
+  },
+  "compatibility": {
+    "width": 3840,
+    "height": 2160,
+    "fps": 60,
+    "durationInFrames": 4260
+  },
+  "visualRules": {
+    "canvas": "Pure-white typography acts; airy full-bleed pastel gradient mesh behind product UI; a single dark product reveal.",
+    "camera": "One continuous constant-speed lateral move in the opening; locked UI stages; exactly one lateral wipe into the product result; hard cuts between all other acts.",
+    "focus": "One reading target per beat. No blur, vignette, grain, stock footage, 3D, or third-party product branding.",
+    "text": "Hero lines stay concise and exceed 24px at 1080p. Typography acts preserve broad white space. User prompt is the only typewriter passage.",
+    "theme": "The same mobile page and content appear in three palettes. The only cross-dissolves are the two matched theme changes.",
+    "truthfulness": "OpenLink interface components are source-derived. The Dash XV product, code changes, assistant events, and version record are deterministic illustrative fixtures, not a live provider or repository run."
+  },
+  "audio": {
+    "music": true,
+    "musicDescription": "Original restrained electronic keynote score: a warm pulse, soft synth chords, low bass, short transition risers, a gentle closing downbeat, and a brief logo sting.",
+    "voiceover": false,
+    "sampleRate": 48000,
+    "channels": 2,
+    "integratedLufsTarget": -8,
+    "truePeakDbtpTarget": -0.1,
+    "loudnessRangeLuTarget": 4.5,
+    "silentEndFramesAtMasterFps": 4,
+    "sfx": {
+      "clicks": [
+        {"timeSeconds": 14.53, "purpose": "Send the user's brief"},
+        {"timeSeconds": 34.28, "purpose": "Open the native change card"},
+        {"timeSeconds": 59.54, "purpose": "Select the review version"}
+      ],
+      "typing": {
+        "startSeconds": 10.45,
+        "endSeconds": 14.15,
+        "copy": "HERO_QUESTION"
+      },
+      "risersAtSeconds": [8, 10, 15, 18, 20, 28, 37, 49, 56, 63],
+      "logoStingSeconds": 66.7
+    }
+  },
+  "shots": [
+    {
+      "id": "opening",
+      "title": "00 · Everyone",
+      "startSeconds": 0,
+      "durationSeconds": 8,
+      "purpose": "Widen the audience before introducing Zorker OpenLink.",
+      "copy": ["Founders.", "Designers.", "Product teams.", "Developers.", "Everyone can move an idea forward.", "With Zorker.", "OpenLink.", "[Idea | Working build]"],
+      "camera": "One continuous leftward track. Each word passes through the same center point; the last two states resolve into a sliding segmented pill."
+    },
+    {
+      "id": "thesis",
+      "title": "01 · Thesis",
+      "startSeconds": 8,
+      "durationSeconds": 2,
+      "purpose": "State the promise before proving it.",
+      "copy": "Every new product begins with a question.",
+      "camera": "Hard cut to a locked, centered white field."
+    },
+    {
+      "id": "ask",
+      "title": "02 · The ask",
+      "startSeconds": 10,
+      "durationSeconds": 5,
+      "purpose": "A recognizable product problem arrives as a plain-language brief.",
+      "copy": "On Dash XV mobile, shoppers choose a size, then lose the buy button. Keep the next step in view.",
+      "camera": "A source-derived OpenLink composer rises on a soft periwinkle mesh. Type only this prompt at roughly 40ms per character, then one cursor click."
+    },
+    {
+      "id": "thinking",
+      "title": "03 · The work",
+      "startSeconds": 15,
+      "durationSeconds": 3,
+      "purpose": "Show a coherent investigation that follows the purchase path instead of a generic feature list.",
+      "copy": ["Trace the size selection.", "Check the mobile viewport.", "Keep the action with the choice.", "Prepare a focused patch."],
+      "camera": "Native OpenLink timeline. Reveal four related rows in sequence, then hold the completed chain for one second."
+    },
+    {
+      "id": "answer",
+      "title": "04 · The answer",
+      "startSeconds": 18,
+      "durationSeconds": 2,
+      "purpose": "Name the cause, then make the missing relationship visible.",
+      "copy": "The choice worked. The buy action fell below the mobile viewport.",
+      "camera": "Hard cut to two concise lines and a small viewport diagram showing the action slipping below the fold."
+    },
+    {
+      "id": "why",
+      "title": "05 · Why",
+      "startSeconds": 20,
+      "durationSeconds": 8,
+      "purpose": "Explain the product insight rather than merely listing edits.",
+      "copy": ["Not just what changed.", "Not just how.", "But why.", "The choice and the next step had lost context."],
+      "camera": "Word-by-word typography on white. Exactly one elastic 'why' stretch, held for 1.2 seconds, then one insight card rises with the second and final slow push-in."
+    },
+    {
+      "id": "action",
+      "title": "06 · Action",
+      "startSeconds": 28,
+      "durationSeconds": 9,
+      "purpose": "Turn the explanation into a focused, reviewable change.",
+      "copy": ["Keep the next step in view.", "Pin the buy action to the selected size.", "Review the mobile patch."],
+      "camera": "Hard cut to a periwinkle mesh. The native OpenLink change card assembles from source file to diff; one cursor click opens the diff."
+    },
+    {
+      "id": "result",
+      "title": "07 · The result",
+      "startSeconds": 37,
+      "durationSeconds": 12,
+      "purpose": "Let the repaired mobile product page become the hero.",
+      "copy": ["One choice.", "One next step.", "Dash XV · mobile product page"],
+      "camera": "The film's sole lateral wipe: large type exits left as the completed mobile page enters from the right. The page settles on a single dark campaign field."
+    },
+    {
+      "id": "themes",
+      "title": "08 · Make it yours",
+      "startSeconds": 49,
+      "durationSeconds": 7,
+      "purpose": "Show that one structure can take on different brand voices.",
+      "copy": ["Warm / Clay", "Electric / Sky", "Citrus / Chalk"],
+      "camera": "The same mobile page, copy, sizes, and sticky action in three palettes. Two matched 1.5-second cross-dissolves; gentle parallax only."
+    },
+    {
+      "id": "review",
+      "title": "09 · Review-ready",
+      "startSeconds": 56,
+      "durationSeconds": 7,
+      "purpose": "Close the loop at the native project and version state without inventing external publishing or sharing.",
+      "copy": ["The change is in the project.", "Preview it. Inspect the diff. Review the version.", "Ready for review."],
+      "camera": "Hard cut to the source-derived OpenLink workspace with the illustrative Dash XV preview, conversation, change card, and version menu."
+    },
+    {
+      "id": "close",
+      "title": "10 · Closer",
+      "startSeconds": 63,
+      "durationSeconds": 8,
+      "purpose": "Return to the promise and resolve to the Zorker OpenLink mark.",
+      "copy": ["Now anyone can turn a question into a working product.", "Zorker OpenLink"],
+      "camera": "White field; 2.5-second text hold; orange dot bloom to the lockup; logo hold; final four master frames black and silent."
+    }
+  ],
+  "illustrativeFixtureLimits": [
+    "Dash XV, its product artwork, size selector, purchase button, price, viewport diagnosis, code diff, assistant activity, and review version are fictional deterministic demo data.",
+    "The film does not claim live model execution, analytics, conversion results, external publishing, or external sharing.",
+    "The depicted OpenLink product chrome is source-derived; decorative art and Dash XV page content are original film assets."
+  ]
+}

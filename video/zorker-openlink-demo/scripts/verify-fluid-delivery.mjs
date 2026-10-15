@@ -11,13 +11,15 @@ const file=path.join(output,'OpenLink-4K60-Paced-GPT-6-Luna.mp4'),ffprobe=path.j
 const result=JSON.parse(execFileSync(ffprobe,['-v','error','-count_frames','-show_entries','format=duration,size:stream=codec_name,width,height,r_frame_rate,duration,nb_frames,nb_read_frames,sample_rate,channels','-of','json',file],{env,encoding:'utf8'}));
 const video=result.streams.find(s=>s.codec_name==='h264'),audio=result.streams.find(s=>s.codec_name==='aac');
 assert.deepEqual([video.width,video.height,video.r_frame_rate,Number(video.nb_read_frames)],[board.format.width,board.format.height,'60/1',board.runtimeFrames]);
-assert.ok(Math.abs(Number(result.format.duration)-board.runtimeSeconds)<1/board.format.fps);
+const pictureDuration=Number(video.duration),containerDuration=Number(result.format.duration);
+assert.ok(Math.abs(pictureDuration-board.runtimeFrames/board.format.fps)<1/board.format.fps);
+assert.ok(containerDuration>=pictureDuration&&containerDuration-pictureDuration<.1,'AAC packet padding must remain below 100ms');
 assert.equal(audio.channels,2);assert.equal(Number(audio.sample_rate),48000);
 for(const [index,second] of [1.2,4.7,8.1,11.7,15.8,19.4,23.5,28].entries())execFileSync(ffmpeg,['-hide_banner','-loglevel','error','-y','-ss',String(second),'-i',file,'-frames:v','1',path.join(qa,`encoded-shot-${index+1}.png`)],{env});
 execFileSync(ffmpeg,['-v','error','-i',file,'-map','0:v:0','-an','-c:v','rawvideo','-pix_fmt','yuv420p','-f','null','-'],{env,stdio:'pipe'});
 execFileSync(ffmpeg,['-v','error','-i',file,'-map','0:a:0','-vn','-c:a','pcm_s16le','-f','null','-'],{env,stdio:'pipe'});
 const sha256=crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
-const report={revision:board.revision,file,sha256,bytes:Number(result.format.size),durationSeconds:Number(result.format.duration),decodedFrames:Number(video.nb_read_frames),resolution:[video.width,video.height],fps:video.r_frame_rate,videoCodec:video.codec_name,pixelFormat:'yuv420p',audioCodec:audio.codec_name,audioChannels:audio.channels,audioSampleRate:Number(audio.sample_rate),music:false,videoFullDecode:true,audioFullDecode:true,modelFixture:board.model,liveProviderCall:false,sourceAudit:'provenance/fluid-verification.json',visualAudit:path.join(qa,'render-report.json'),note:'Native 4K rasterization from current DOM/SVG product UI; execution and GPT-6 Luna selection are deterministic demonstration fixtures.'};
+const report={revision:board.revision,file,sha256,bytes:Number(result.format.size),durationSeconds:pictureDuration,containerDurationSeconds:containerDuration,aacPaddingSeconds:containerDuration-pictureDuration,decodedFrames:Number(video.nb_read_frames),resolution:[video.width,video.height],fps:video.r_frame_rate,videoCodec:video.codec_name,pixelFormat:'yuv420p',audioCodec:audio.codec_name,audioChannels:audio.channels,audioSampleRate:Number(audio.sample_rate),music:false,videoFullDecode:true,audioFullDecode:true,modelFixture:board.model,liveProviderCall:false,sourceAudit:'provenance/fluid-verification.json',visualAudit:path.join(qa,'render-report.json'),note:'Native 4K rasterization from current DOM/SVG product UI; execution and GPT-6 Luna selection are deterministic demonstration fixtures.'};
 fs.writeFileSync(path.join(qa,'delivery-metadata.json'),JSON.stringify({...result,...report},null,2));
 fs.writeFileSync('provenance/revision-10-render.json',JSON.stringify(report,null,2));
 console.log(JSON.stringify(report,null,2));

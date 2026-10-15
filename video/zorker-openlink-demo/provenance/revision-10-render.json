@@ -1,0 +1,28 @@
+{
+  "revision": 10,
+  "file": "/Users/yikewang/Movies/OpenLink-Reference-20260923/revision-10-paced-gpt6-luna/OpenLink-4K60-Paced-GPT-6-Luna.mp4",
+  "sha256": "6316ba0bd88aa466fce14678702feb44e88b27a34ad4c1e0ce6ec719a33cd77f",
+  "bytes": 20544462,
+  "durationSeconds": 29.833333,
+  "containerDurationSeconds": 29.888,
+  "aacPaddingSeconds": 0.05466700000000202,
+  "decodedFrames": 1790,
+  "resolution": [
+    3840,
+    2160
+  ],
+  "fps": "60/1",
+  "videoCodec": "h264",
+  "pixelFormat": "yuv420p",
+  "audioCodec": "aac",
+  "audioChannels": 2,
+  "audioSampleRate": 48000,
+  "music": false,
+  "videoFullDecode": true,
+  "audioFullDecode": true,
+  "modelFixture": "GPT-6 Luna",
+  "liveProviderCall": false,
+  "sourceAudit": "provenance/fluid-verification.json",
+  "visualAudit": "/Volumes/Net/OpenLink/video/zorker-openlink-demo/out/revision-10-qa/render-report.json",
+  "note": "Native 4K rasterization from current DOM/SVG product UI; execution and GPT-6 Luna selection are deterministic demonstration fixtures."
+}
