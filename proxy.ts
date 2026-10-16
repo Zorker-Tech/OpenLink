@@ -10,6 +10,10 @@ function requestHostname(request: NextRequest): string {
 }
 
 export async function proxy(request: NextRequest) {
+  if (request.nextUrl.pathname.startsWith('/api/openlink-zokerbase/')) {
+    return NextResponse.next()
+  }
+
   // Supabase Studio is hard-wired to serve from `/`. It is therefore given its
   // own origin (a second port on the same `localhost` host, tagged here) so its
   // root-relative `_next/*` assets stay isolated from the application. Do not

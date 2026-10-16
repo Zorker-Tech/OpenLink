@@ -63,7 +63,7 @@ import type { ConfiguredModelOption } from '@/lib/ai-provider-types'
 import type { ClaimedChatPrompt, PromptModelSelection, QueuedChatPrompt } from '@/lib/chat-prompt-queue'
 import type { ChatSessionSummary } from '@/lib/chat-session-types'
 import type { CodexComposerResources, ComposerResources, RuntimeComposerResources, RuntimePromptResource } from '@/lib/composer-resources'
-import { hasPersistedUserMessage } from '@/lib/chat-auto-start'
+import { deferInitialPromptSubmission, hasPersistedUserMessage } from '@/lib/chat-auto-start'
 import { theme } from '@/lib/theme'
 import { useRouter } from 'next/navigation'
 import { updateChatSessionAccessModeAction } from '@/app/chat/actions'
@@ -1465,7 +1465,7 @@ export function ChatWorkspace({
   const activeRequestAbortRef = useRef<AbortController | null>(null)
   const pendingOptimisticUserRef = useRef<OptimisticUserMessage | null>(null)
   const nextClientSequenceRef = useRef(agentEvents.reduce((maximum, event) => Math.max(maximum, event.sequence), -1) + 1)
-  const autoStartHandledRef = useRef(false)
+  const autoStartHandledSessionRef = useRef<string | null>(null)
   const chatPanelRef = useRef<PanelImperativeHandle | null>(null)
   const browserWorkbenchRef = useRef<BrowserWorkbenchHandle | null>(null)
   const [panelMotionActive, setPanelMotionActive] = useState(false)
@@ -1918,9 +1918,12 @@ export function ChatWorkspace({
   }, [agentStreamStatus, appendAgentEvents, browserState.browserSessionId, enqueueStreamEvent, router, sessionId, workspaceView])
 
   useEffect(() => {
-    if (!autoStart || autoStartHandledRef.current || !initialPrompt.trim()) return
-    if (hasPersistedUserMessage(agentEvents)) {
-      autoStartHandledRef.current = true
+    if (!autoStart || autoStartHandledSessionRef.current === sessionId || !initialPrompt.trim()) return
+    // Only the server-provided snapshot proves durable receipt. agentEvents
+    // also contains optimistic messages, which must not suppress replay after
+    // a canceled initial request.
+    if (hasPersistedUserMessage(initialEvents)) {
+      autoStartHandledSessionRef.current = sessionId
       const url = new URL(window.location.href)
       url.searchParams.delete('run')
       window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
@@ -1928,14 +1931,24 @@ export function ChatWorkspace({
     }
     // Browser tools are installed before a capability exists and hot-bound
     // independently. Receipt/rendering of a turn must never await the canvas.
-    autoStartHandledRef.current = true
-    // Keep ?run until durable receipt so reloading during a failed network
-    // submission does not strand initial_prompt without an event.
     const selectedModel = configuredModels.find((model) => (
       model.providerId === autoStartModel?.providerId && model.modelId === autoStartModel.modelId
     )) ?? configuredModels.find((model) => model.modelId === autoStartModel?.modelId) ?? null
-    void submitAgentMessage(initialPrompt, selectedModel, { initialPrompt: true })
-  }, [agentEvents, autoStart, autoStartModel, configuredModels, initialPrompt, submitAgentMessage])
+    // Next.js development uses React Strict Mode, which runs mount effects,
+    // cleanup, then setup again. Defer the request one task so the first
+    // Strict Mode cleanup can cancel its timer before the request becomes
+    // active and is aborted by the component's unmount cleanup.
+    return deferInitialPromptSubmission(
+      () => {
+        autoStartHandledSessionRef.current = sessionId
+        // Keep ?run until durable receipt so a reload after a failed request
+        // can still replay the initial prompt.
+        void submitAgentMessage(initialPrompt, selectedModel, { initialPrompt: true })
+      },
+      (callback) => window.setTimeout(callback, 0),
+      (timer) => window.clearTimeout(timer),
+    )
+  }, [autoStart, autoStartModel, configuredModels, initialEvents, initialPrompt, sessionId, submitAgentMessage])
 
   const resolveConfirmation = useCallback(async (confirmationId: string, approved: boolean, value?: string) => {
     const response = await fetch(`/api/chat/${encodeURIComponent(sessionId)}/extension-ui-response`, {

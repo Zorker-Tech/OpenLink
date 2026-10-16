@@ -2,13 +2,30 @@ import { createHash, randomBytes } from 'node:crypto'
 import { cp, lstat, mkdir, mkdtemp, readFile, readdir, readlink, rename, rm, writeFile } from 'node:fs/promises'
 import { resolve, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { localRuntimeCacheRoot } from './lib/local-runtime-cache.mjs'
 import { ensurePodmanBuilder, run, stopPodmanBuilder } from './lib/podman-builder.mjs'
+import { ensureDockerEngine } from './lib/docker-runtime.mjs'
 import { configureBundledPodmanRuntime } from './lib/bundled-podman-runtime.mjs'
 
 const root = resolve(fileURLToPath(new URL('../', import.meta.url)))
-await configureBundledPodmanRuntime(root)
-const imageRoot = resolve(root, '.openlink-runtime/images')
+const imageRoot = process.env.OPENLINK_RUNTIME_IMAGE_ROOT?.trim()
+  ? resolve(process.env.OPENLINK_RUNTIME_IMAGE_ROOT)
+  : process.platform === 'linux' && process.env.OPENLINK_BUILD_ARTIFACTS !== '1'
+    ? resolve(localRuntimeCacheRoot(), 'project-images')
+    : resolve(root, '.openlink-runtime/images')
 const manifestPath = resolve(imageRoot, 'manifest.json')
+const requestedBuilder = process.env.OPENLINK_IMAGE_BUILDER?.trim().toLowerCase()
+const builderKind = requestedBuilder || (process.platform === 'linux' ? 'docker' : 'podman')
+if (!['docker', 'podman'].includes(builderKind)) throw new Error('OPENLINK_IMAGE_BUILDER must be docker or podman')
+const nativeArchitecture = process.arch === 'x64' ? 'amd64' : process.arch === 'arm64' ? 'arm64' : undefined
+if (!nativeArchitecture) throw new Error(`Unsupported runtime image build architecture ${process.arch}`)
+const platform = process.env.OPENLINK_IMAGE_PLATFORM || `linux/${nativeArchitecture}`
+if (!/^linux\/(amd64|arm64)$/.test(platform)) throw new Error('OPENLINK_IMAGE_PLATFORM must be linux/amd64 or linux/arm64')
+const imageBuildNetwork = process.env.OPENLINK_IMAGE_BUILD_NETWORK?.trim()
+if (imageBuildNetwork && !['default', 'host', 'none'].includes(imageBuildNetwork)) {
+  throw new Error('OPENLINK_IMAGE_BUILD_NETWORK must be default, host, or none')
+}
+if (builderKind === 'podman') await configureBundledPodmanRuntime(root)
 const podman = process.env.OPENLINK_PODMAN_COMMAND || resolve(root, '.openlink-runtime/toolchain/bin/podman')
 const force = process.env.OPENLINK_FORCE_RUNTIME_IMAGES === '1'
 const requestedImages = process.env.OPENLINK_RUNTIME_IMAGES
@@ -172,7 +189,7 @@ async function hashPath(hash, absolutePath) {
 
 async function fingerprint(spec) {
   const hash = createHash('sha256')
-  hash.update(JSON.stringify({ schemaVersion: 1, image: spec.image, dockerfile: spec.dockerfile, context: spec.context }))
+  hash.update(JSON.stringify({ schemaVersion: 2, image: spec.image, dockerfile: spec.dockerfile, context: spec.context, platform }))
   for (const input of spec.inputs) await hashPath(hash, resolve(root, input))
   return hash.digest('hex')
 }
@@ -265,7 +282,7 @@ async function buildInDedicatedMachine(builder, spec, context) {
 await mkdir(imageRoot, { recursive: true, mode: 0o700 })
 let previous = { schemaVersion: 1, images: {} }
 try { previous = JSON.parse(await readFile(manifestPath, 'utf8')) } catch {}
-if (previous.schemaVersion !== 1 || typeof previous.images !== 'object') previous = { schemaVersion: 1, images: {} }
+if (![1, 2].includes(previous.schemaVersion) || typeof previous.images !== 'object') previous = { schemaVersion: 1, images: {} }
 
 const resolved = []
 for (const spec of specs.filter((item) => !requestedImages || requestedImages.has(item.image))) {
@@ -280,18 +297,34 @@ for (const spec of resolved) {
 }
 
 if (changed.length) {
-  const builder = await ensurePodmanBuilder(podman, { cwd: root })
+  const docker = builderKind === 'docker' ? await ensureDockerEngine() : undefined
+  const builder = builderKind === 'podman' ? await ensurePodmanBuilder(podman, { cwd: root }) : undefined
   try {
-    const manifest = { ...previous, schemaVersion: 1, builderMachine: builder.machineName, images: { ...previous.images } }
+    const manifest = {
+      ...previous,
+      schemaVersion: 2,
+      builder: builderKind,
+      platform,
+      ...(builderKind === 'podman' ? { builderMachine: builder.machineName } : { builderMachine: undefined }),
+      images: { ...previous.images },
+    }
     for (const spec of changed) {
       const context = await materializeContext(spec)
       try {
-        if (builder.machineName) {
+        if (builder?.machineName) {
           await buildInDedicatedMachine(builder, spec, context)
+        } else if (builderKind === 'docker') {
+          const buildArgs = ['build', '--platform', platform, '--tag', spec.image]
+          if (imageBuildNetwork) buildArgs.push('--network', imageBuildNetwork)
+          buildArgs.push('--file', resolve(root, spec.dockerfile), context.path)
+          await run(docker, [
+            ...buildArgs,
+          ], { cwd: root, timeout: 60 * 60 * 1000 })
         } else {
           await run(podman, [
             ...builder.connectionArgs,
             'build',
+            '--platform', platform,
             '--tag', spec.image,
             '--file', resolve(root, spec.dockerfile),
             context.path,
@@ -300,7 +333,12 @@ if (changed.length) {
       } finally {
         await context.cleanup()
       }
-      if (!builder.machineName) {
+      if (builderKind === 'docker') {
+        const temporaryArchive = `${spec.archive}.${process.pid}.tmp`
+        await rm(temporaryArchive, { force: true })
+        await run(docker, ['image', 'save', '--platform', platform, '--output', temporaryArchive, spec.image], { cwd: root, timeout: 15 * 60 * 1000 })
+        await rename(temporaryArchive, spec.archive)
+      } else if (!builder?.machineName) {
         const temporaryArchive = `${spec.archive}.${process.pid}.tmp`
         await rm(temporaryArchive, { force: true })
         await run(podman, [...builder.connectionArgs, 'save', '--output', temporaryArchive, spec.image], { cwd: root })
@@ -309,13 +347,14 @@ if (changed.length) {
       manifest.images[spec.image] = {
         fingerprint: spec.fingerprint,
         archive: spec.archive,
+        platform,
         builtAt: new Date().toISOString(),
       }
       await persistManifest(manifest)
     }
   } finally {
-    await stopPodmanBuilder(podman, builder.machineName, { cwd: root })
+    if (builderKind === 'podman') await stopPodmanBuilder(podman, builder?.machineName, { cwd: root })
   }
 }
 
-process.stdout.write(`${JSON.stringify({ archives, rebuilt: changed.map(({ image }) => image), reused: resolved.filter(({ image }) => !changed.some((item) => item.image === image)).map(({ image }) => image) })}\n`)
+process.stdout.write(`${JSON.stringify({ builder: builderKind, platform, archives, rebuilt: changed.map(({ image }) => image), reused: resolved.filter(({ image }) => !changed.some((item) => item.image === image)).map(({ image }) => image) })}\n`)

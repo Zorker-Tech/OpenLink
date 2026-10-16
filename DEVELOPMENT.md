@@ -30,6 +30,26 @@ pnpm runtime:zero:status
 subset and claim the application is ready unless the task explicitly targets
 that isolated service.
 
+### Electron desktop shell
+
+The desktop shell uses Electron and its own Vite build while loading the same
+OpenLink Web/BFF page used by the browser. Product screens and components stay
+in the existing application; `desktop/src/renderer` only forwards Electron to
+the configured application URL. Start the full local stack first, then run the
+desktop shell in a second terminal:
+
+```bash
+pnpm --dir desktop install --frozen-lockfile
+pnpm dev:local
+# In another terminal:
+pnpm desktop:dev
+```
+
+`OPENLINK_DESKTOP_URL` selects the page to load and defaults to
+`http://127.0.0.1:3000`. `pnpm desktop:build` builds the Electron/Vite shell;
+the OpenLink application server and its services remain managed by the normal
+product lifecycle.
+
 ### Native desktop host setup
 
 Local development uses two independent host boundaries. Docker Desktop owns
@@ -95,6 +115,13 @@ pnpm runtime:project-supabase:sync
 pnpm runtime:project-supabase:images
 pnpm runtime:project-supabase:test
 ```
+
+On Linux, Project runtime image archives, Project Supabase artifacts, and
+temporary image build inputs use `~/.cache/openlink` by default. Set
+`OPENLINK_LOCAL_RUNTIME_CACHE_ROOT` to keep them on another mounted volume.
+Linux Docker image builds use the host network by default so build containers
+can use the host DNS resolver; set `OPENLINK_IMAGE_BUILD_NETWORK=default` to
+use Docker's default build network instead.
 
 If direct GitHub access is restricted, `OPENLINK_SUPABASE_FETCH_REPOSITORY`
 may point at a trusted Git transport mirror. This changes transport only: the

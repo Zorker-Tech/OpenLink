@@ -55,6 +55,10 @@ async function compose(args, options = {}) {
     OPENLINK_ZERO_MINIO_SOURCE: process.env.OPENLINK_ZERO_MINIO_SOURCE || `${dataRoot}/minio`,
     OPENLINK_ZERO_ENGINE_SOURCE: process.env.OPENLINK_ZERO_ENGINE_SOURCE || `${dataRoot}/zero`,
     OPENLINK_ZERO_IMAGE_VERSION: imageVersion,
+    OPENLINK_ZERO_CONTAINER_USER: process.env.OPENLINK_ZERO_CONTAINER_USER?.trim()
+      || (process.platform === 'linux' && typeof process.getuid === 'function' && typeof process.getgid === 'function'
+        ? `${process.getuid()}:999`
+        : 'milvus'),
   }, ...options })
 }
 async function waitHealthy(timeoutMs = 180_000) {

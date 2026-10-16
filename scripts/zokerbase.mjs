@@ -142,6 +142,24 @@ async function migrateNamedVolume(source, destination) {
   ])
 }
 
+async function ensureDbDataVolume(env) {
+  const volumeName = env.get('OPENLINK_ZOKERBASE_DB_DATA_VOLUME_NAME') || 'zokerbase_db-data'
+  if (await dockerVolumeExists(volumeName)) return
+  await run(await docker(), ['volume', 'create', volumeName])
+
+  const dataSource = process.env.OPENLINK_ZOKERBASE_DB_DATA_SOURCE || env.get('OPENLINK_ZOKERBASE_DB_DATA_SOURCE')
+  if (dataSource !== 'db-data') return
+  const bindSource = resolve(stackRoot, 'volumes/db/data')
+  if ((await readdir(bindSource).catch(() => [])).length === 0) return
+  await run(await docker(), [
+    'run', '--rm', '--entrypoint', 'sh',
+    '--volume', `${bindSource}:/source:ro`,
+    '--volume', `${volumeName}:/destination`,
+    'zokerbase/postgres:2026.08.10',
+    '-c', 'cp -a /source/. /destination/',
+  ])
+}
+
 async function migrateLegacyLocalRuntime() {
   // The old local runtime used the same official topology under a
   // Supabase-branded state directory. Adopt it once so changing the product
@@ -218,6 +236,8 @@ async function ensureSecrets() {
     SITE_URL: process.env.OPENLINK_APP_URL || 'http://127.0.0.1:3000',
     ADDITIONAL_REDIRECT_URLS: [
       process.env.OPENLINK_APP_URL,
+      'http://localhost:*/**',
+      'http://127.0.0.1:*/**',
       'http://127.0.0.1:3000/**',
       'http://localhost:3000/**',
       'http://127.0.0.1:3002/**',
@@ -425,6 +445,7 @@ export async function ensureZokerbase() {
   // copied the old key into the same destination name.
   await migrateNamedVolume('supabase_db-config', 'zokerbase_db-config')
   await ensureZokerbaseImages()
+  await ensureDbDataVolume(env)
   // Start the database and the official services without making PostgREST's
   // health gate block the process. OpenLink exposes the project schema in
   // PGRST_DB_SCHEMAS, but that schema is created by our migrations and is not

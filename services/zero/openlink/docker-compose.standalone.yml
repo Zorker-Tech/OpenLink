@@ -24,9 +24,9 @@ services:
       MINIO_ROOT_PASSWORD: minioadmin
     volumes:
       - ${OPENLINK_ZERO_MINIO_SOURCE:-./minio}:/minio_data
-    command: minio server /minio_data --console-address ":9001"
+    command: ["server", "/minio_data", "--console-address", ":9001"]
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/minio/health/ready"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -34,6 +34,7 @@ services:
   zero:
     image: zokerbase/zero:${OPENLINK_ZERO_IMAGE_VERSION:-3.0.0}
     container_name: openlink-zero
+    user: "${OPENLINK_ZERO_CONTAINER_USER:-milvus}"
     entrypoint: ["zero"]
     command: ["run", "standalone"]
     security_opt:
