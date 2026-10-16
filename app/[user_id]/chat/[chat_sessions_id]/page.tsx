@@ -62,6 +62,7 @@ export default async function ChatSessionPage({
 
   return (
     <ChatWorkspace
+      key={session.id}
       activeWorkspace={{
         name: workspace.name,
         slug: workspace.slug,

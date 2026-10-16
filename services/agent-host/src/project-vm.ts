@@ -785,6 +785,13 @@ export class PodmanMachineDriver implements ProjectVmMachineDriver {
           }
           if (spec.diskMode === 'thin') await this.cloneDisk(this.projectBaseDisk, destination)
           else await this.materializeDisk(this.projectBaseDisk, destination)
+          // The direct AppleHV boot marker is tied to the previous VM disk.
+          // Podman machine removal leaves this product state directory intact,
+          // so a recreated machine must run Ignition against its fresh Golden
+          // Disk even when an older VM with the same name booted successfully.
+          if (this.directAppleHv) {
+            await rm(resolve(this.appleHvStateDirectory(name), 'first-boot-complete'), { force: true })
+          }
           await this.startMachine(name)
         } catch (error) {
           if (!this.preserveFailedMachine) await this.run(this.command, ['machine', 'rm', '--force', name]).catch(() => undefined)
@@ -1146,7 +1153,9 @@ export class PodmanMachineDriver implements ProjectVmMachineDriver {
   }
 
   private async waitForAppleHvSsh(config: AppleHvMachineConfig, vfkitPid?: number): Promise<void> {
-    const deadline = Date.now() + 180_000
+    // The sealed OpenLink Golden Disk can need just over three minutes for
+    // first boot on AppleHV while systemd provisions its immutable root.
+    const deadline = Date.now() + 300_000
     let lastError: unknown
     while (Date.now() < deadline) {
       if (vfkitPid && !processIsRunning(vfkitPid)) throw new Error('vfkit exited before SSH became ready')

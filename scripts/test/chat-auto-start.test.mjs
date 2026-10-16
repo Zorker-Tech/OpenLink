@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+  deferInitialPromptSubmission,
   hasPersistedUserMessage,
   shouldAutoStartInitialPrompt,
 } from '../../lib/chat-auto-start.ts'
@@ -30,4 +31,24 @@ test('message text is not used for de-duplication', () => {
   // This helper only gates the initial one-shot run. Normal message submission
   // does not call it, so users remain free to send identical text deliberately.
   assert.equal(shouldAutoStartInitialPrompt(undefined, 'same text', [event('message.user')]), false)
+})
+
+test('initial prompt survives the Strict Mode setup-cleanup-setup cycle', () => {
+  const scheduled = new Map()
+  let nextTimerId = 0
+  let submissions = 0
+  const schedule = (callback) => {
+    const id = nextTimerId++
+    scheduled.set(id, callback)
+    return id
+  }
+  const cancel = (id) => scheduled.delete(id)
+  const submit = () => { submissions += 1 }
+
+  const strictModeFirstSetupCleanup = deferInitialPromptSubmission(submit, schedule, cancel)
+  strictModeFirstSetupCleanup()
+  deferInitialPromptSubmission(submit, schedule, cancel)
+
+  for (const callback of scheduled.values()) callback()
+  assert.equal(submissions, 1)
 })

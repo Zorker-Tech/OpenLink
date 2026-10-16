@@ -5,6 +5,7 @@
 | Path | Classification | Rules |
 | --- | --- | --- |
 | `app/`, `components/`, `lib/`, `utils/` | OpenLink Web/BFF | Root pnpm/Next.js conventions; no privileged runtime imports |
+| `desktop/` | Electron/Vite shell | Loads the existing Web/BFF; no duplicated product UI or backend credentials |
 | `packages/` | OpenLink shared packages/artifacts | Must have an explicit consumer and stable contract |
 | `services/agent-host`, `agent-worker`, `agent-rpc-worker`, `browser-host`, `knowledge-service` | OpenLink-owned services | Independent package/build boundary; communicate through contracts |
 | `services/pi`, `opensandbox`, `sandbox-runtime`, `code-server`, `linux`, `zero` | Vendored runtime source | No nested `.git`; no casual refactor; update from pinned upstream with review |

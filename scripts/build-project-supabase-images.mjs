@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
-import { mkdir, readFile, rename, rm, stat, statfs, writeFile } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { copyFile, link, lstat, mkdir, readFile, rename, rm, stat, statfs, writeFile } from 'node:fs/promises'
+import { relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { readProjectSupabaseLock } from './lib/project-supabase-lock.mjs'
@@ -15,7 +15,8 @@ const lockPath = resolve(root, 'services/project-supabase/runtime.lock.json')
 const lock = await readProjectSupabaseLock(lockPath)
 const architectureArgument = process.argv.find((value) => value.startsWith('--architecture='))?.slice('--architecture='.length)
 const architecture = targetArchitecture(architectureArgument)
-const outputRoot = resolve(root, '.openlink-runtime/project-supabase/images', architecture)
+const artifactRoot = resolve(process.env.OPENLINK_PROJECT_SUPABASE_ROOT || resolve(root, '.openlink-runtime/project-supabase'))
+const outputRoot = resolve(process.env.OPENLINK_PROJECT_SUPABASE_IMAGE_OUTPUT_ROOT || resolve(artifactRoot, 'images', architecture))
 const manifestPath = resolve(outputRoot, 'manifest.json')
 const force = process.argv.includes('--force')
 const docker = await ensureDockerEngine()
@@ -122,4 +123,31 @@ const temporaryManifest = `${manifestPath}.${process.pid}.tmp`
 await writeFile(temporaryManifest, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 })
 await rename(temporaryManifest, manifestPath)
 await readImageArtifactManifest(manifestPath, lock)
+await mkdir(artifactRoot, { recursive: true, mode: 0o700 })
+await copyFile(lockPath, resolve(artifactRoot, 'runtime.lock.json'))
+const archiveRoot = relative(artifactRoot, outputRoot).split(sep).join('/')
+if (!archiveRoot || archiveRoot === '..' || archiveRoot.startsWith('../')) throw new Error('Project Supabase image output root must be inside the artifact root')
+const runtimeManifest = {
+  ...next,
+  images: next.images.map((image) => ({ ...image })),
+}
+for (const image of runtimeManifest.images) {
+  const source = resolve(outputRoot, image.archive)
+  const destination = resolve(artifactRoot, image.archive)
+  try {
+    const existing = await lstat(destination)
+    const metadata = await stat(destination)
+    if (!existing.isFile() || metadata.size !== image.archiveBytes || await sha256File(destination) !== image.archiveSha256) {
+      throw new Error(`Project Supabase runtime archive ${image.archive} already exists with different content`)
+    }
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error
+    await link(source, destination)
+  }
+}
+const runtimeManifestPath = resolve(artifactRoot, 'image-manifest.json')
+const temporaryRuntimeManifest = `${runtimeManifestPath}.${process.pid}.tmp`
+await writeFile(temporaryRuntimeManifest, `${JSON.stringify(runtimeManifest, null, 2)}\n`, { mode: 0o600 })
+await rename(temporaryRuntimeManifest, runtimeManifestPath)
+await readImageArtifactManifest(runtimeManifestPath, lock)
 process.stdout.write(`${JSON.stringify({ architecture, manifest: manifestPath, images: images.length, bytes: images.reduce((total, image) => total + image.archiveBytes, 0) })}\n`)

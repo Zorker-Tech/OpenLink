@@ -382,9 +382,16 @@ function buildTimeline(events: OpenLinkAgentEvent[]): TimelineState {
           state.lastExecutionStartedAt = Date.parse(event.timestamp)
         }
         break
-      case 'status.updated':
-        state.items = replaceItem(state.items, event.statusId, () => ({ id: event.statusId, kind: 'status', label: event.label, detail: event.detail, state: event.status }))
+      case 'status.updated': {
+        // Retry notifications are emitted once per attempt with distinct event
+        // ids. Keep only the latest retry row within this user turn; each
+        // failed attempt is already retained in the grouped error details.
+        const statusId = event.statusId.includes(':retry:') && state.activeRoundId
+          ? `${state.activeRoundId}:retry-status`
+          : event.statusId
+        state.items = replaceItem(state.items, statusId, () => ({ id: statusId, kind: 'status', label: event.label, detail: event.detail, state: event.status }))
         break
+      }
       case 'confirmation.requested':
         state.items = replaceItem(state.items, event.confirmationId, () => ({ id: event.confirmationId, kind: 'confirmation', title: event.title, message: event.message, options: event.options }))
         break
@@ -646,7 +653,7 @@ function TaskPositionCapsule({ activeFlow }: { activeFlow: ActiveFlowStatus | nu
   return (
     <button
       aria-label={activeFlow ? t('返回正在工作的位置') : t('返回任务位置')}
-      className="absolute bottom-3 left-1/2 z-30 flex h-10 max-w-[calc(100%_-_24px)] -translate-x-1/2 items-center gap-1.5 overflow-hidden rounded-full border border-[var(--app-status-glass-border)] bg-[var(--app-status-glass)] py-1 pl-1.5 pr-3 text-left text-[var(--app-status-glass-foreground)] shadow-[inset_0_0_50px_rgb(255_255_255_/_1%),0_16px_48px_var(--app-shadow)] backdrop-blur-xl transition-transform active:scale-[0.98]"
+      className="absolute bottom-3 left-1/2 z-30 flex h-10 max-w-[calc(100%_-_24px)] -translate-x-1/2 items-center gap-1.5 overflow-hidden rounded-full border border-[var(--app-status-glass-border)] bg-[var(--app-status-glass)] py-1 pl-1.5 pr-3 text-left text-[var(--app-status-glass-foreground)] shadow-[inset_0_0_50px_rgb(255_255_255_/_1%),0_16px_48px_var(--app-shadow)] backdrop-blur-xl"
       onClick={() => scrollToBottom()}
       type="button"
     >
@@ -797,9 +804,12 @@ function StatusItem({ item }: { item: Extract<TimelineItem, { kind: 'status' }> 
   const t = useT()
   const stateSuffix = item.state === 'active' ? t('中') : item.state === 'failed' ? t('失败') : t('已完成')
   return (
-    <div className="flex h-7 items-center gap-2 text-[13px] leading-[21px] tracking-[-0.0762px] text-[var(--app-muted)]">
-      <StatusGlyph doneIcon={BadgeCheckIcon} label={`${item.label}${stateSuffix}`} running={item.state === 'active'} />
-      <div className="min-w-0 leading-[21px]"><p>{item.label}</p>{item.detail ? <p className="text-[12px] text-[var(--app-subtle-foreground)]">{item.detail}</p> : null}</div>
+    <div className="flex min-h-7 min-w-0 items-start gap-2 text-[13px] leading-[21px] tracking-[-0.0762px] text-[var(--app-muted)]">
+      <span className="mt-0.5"><StatusGlyph doneIcon={BadgeCheckIcon} label={`${item.label}${stateSuffix}`} running={item.state === 'active'} /></span>
+      <div className="min-w-0 flex-1 leading-[21px]">
+        <p className="break-words [overflow-wrap:anywhere]">{item.label}</p>
+        {item.detail ? <p className="whitespace-pre-wrap break-words text-[12px] text-[var(--app-subtle-foreground)] [overflow-wrap:anywhere]">{item.detail}</p> : null}
+      </div>
     </div>
   )
 }
@@ -949,7 +959,7 @@ function TimelineMessageItem({ item }: { item: Extract<TimelineItem, { kind: 'me
         ? 'relative isolate min-h-[34px] overflow-hidden rounded-xl! border border-[var(--app-control-border)] bg-[var(--app-active)]! px-3! py-1.5! text-[13px] leading-[21.125px] text-[var(--app-foreground)]! before:hidden after:hidden'
         : 'w-full gap-0 overflow-visible text-[13px] leading-[21.125px]'}>
         {item.role === 'assistant'
-          ? <MessageResponse key={item.id} className="chat-message-markdown text-[13px] leading-[21.125px] [&_li]:my-1 [&_p]:my-0 [&_ul]:list-outside [&_ul]:pl-[1.5em] [&_ul]:my-1 [&_ol]:list-outside [&_ol]:pl-[1.5em] [&_ol]:my-1 [&_li>p]:inline">{item.text}</MessageResponse>
+          ? <MessageResponse key={item.id} className="chat-message-markdown min-w-0 max-w-full break-words text-[13px] leading-[21.125px] [overflow-wrap:anywhere] [&_li]:my-1 [&_p]:my-0 [&_ul]:list-outside [&_ul]:pl-[1.5em] [&_ul]:my-1 [&_ol]:list-outside [&_ol]:pl-[1.5em] [&_ol]:my-1 [&_li>p]:inline [&_pre]:max-w-full [&_pre]:whitespace-pre-wrap [&_pre]:break-words">{item.text}</MessageResponse>
           : <>{item.attachments?.length ? <UserPromptAttachments attachments={item.attachments} /> : null}{item.text ? <p className="whitespace-pre-wrap break-words">{item.text}</p> : null}</>}
         {item.streaming && <span className="inline-block h-3 w-1 animate-pulse bg-[var(--app-foreground)]" />}
       </MessageContent>
@@ -1127,20 +1137,20 @@ function WorkFlowGroup({
             sideOffset={8}
           >
             <DropdownMenuSub>
-              <DropdownMenuSubTrigger className="h-8 cursor-pointer gap-2.5 rounded-md px-2.5 text-[13px] focus:bg-[var(--app-hover)] data-popup-open:bg-[var(--app-hover)]">
+              <DropdownMenuSubTrigger data-no-press-motion className="h-8 cursor-pointer gap-2.5 rounded-md px-2.5 text-[13px] focus:bg-[var(--app-hover)] data-popup-open:bg-[var(--app-hover)]">
                 <RefreshCw className="size-4 text-[var(--app-muted)]" />
                 <span>{t('重试')}</span>
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="w-[144px] rounded-lg border border-[var(--app-border)] bg-[var(--app-elevated)] p-1 shadow-[0_12px_36px_var(--app-shadow)] ring-0">
-                <DropdownMenuItem className="h-8 cursor-pointer rounded-md px-2.5 text-[13px] focus:bg-[var(--app-hover)]" onClick={() => requestRetry('from-checkpoint')}>{t('从此处重试')}</DropdownMenuItem>
-                <DropdownMenuItem className="h-8 cursor-pointer rounded-md px-2.5 text-[13px] focus:bg-[var(--app-hover)]" onClick={() => requestRetry('same-model')}>{t('使用相同模型')}</DropdownMenuItem>
+                <DropdownMenuItem data-no-press-motion className="h-8 cursor-pointer rounded-md px-2.5 text-[13px] focus:bg-[var(--app-hover)]" onClick={() => requestRetry('from-checkpoint')}>{t('从此处重试')}</DropdownMenuItem>
+                <DropdownMenuItem data-no-press-motion className="h-8 cursor-pointer rounded-md px-2.5 text-[13px] focus:bg-[var(--app-hover)]" onClick={() => requestRetry('same-model')}>{t('使用相同模型')}</DropdownMenuItem>
               </DropdownMenuSubContent>
             </DropdownMenuSub>
-            <DropdownMenuItem className="h-8 cursor-pointer gap-2.5 rounded-md px-2.5 text-[13px] focus:bg-[var(--app-hover)]" onClick={() => { void navigator.clipboard.writeText(checkpointText) }}>
+            <DropdownMenuItem data-no-press-motion className="h-8 cursor-pointer gap-2.5 rounded-md px-2.5 text-[13px] focus:bg-[var(--app-hover)]" onClick={() => { void navigator.clipboard.writeText(checkpointText) }}>
               <Copy className="size-4 text-[var(--app-muted)]" />
               <span>{t('复制')}</span>
             </DropdownMenuItem>
-            <DropdownMenuItem className="h-8 cursor-pointer gap-2.5 rounded-md px-2.5 text-[13px] focus:bg-[var(--app-hover)]" onClick={copyCheckpointLink}>
+            <DropdownMenuItem data-no-press-motion className="h-8 cursor-pointer gap-2.5 rounded-md px-2.5 text-[13px] focus:bg-[var(--app-hover)]" onClick={copyCheckpointLink}>
               <Link2 className="size-4 text-[var(--app-muted)]" />
               <span>{t('Copy Link')}</span>
             </DropdownMenuItem>
@@ -1195,7 +1205,7 @@ export function ChatTimeline({
   }, [activeFlow, onFlowStatusChange])
 
   return (
-    <Conversation className="min-h-0 flex-1">
+    <Conversation className="min-h-0 flex-1" data-no-press-motion-scope>
       <ConversationContent className="min-h-full gap-5 px-3 pb-6 pt-20 text-[13px] leading-[21.125px] tracking-[-0.0762px]">
         {rounds.map((round) => (
           <section className="flex w-full flex-col gap-3" data-round-state={round.state} key={round.id}>

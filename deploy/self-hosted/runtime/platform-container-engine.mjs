@@ -132,7 +132,8 @@ async function startDirectAppleHv({ config, identity, stateRoot, helperRoot, run
     if (!vfkit.pid) throw new Error('Unable to launch the bundled Apple Hypervisor runtime')
     vfkit.unref()
     await writeFile(statePath, `${JSON.stringify({ machineName: identity.machineName, vfkitPid: vfkit.pid, gvproxyPid: gvproxy.pid })}\n`, { mode: 0o600 })
-    const deadline = Date.now() + 180_000
+    const readyTimeoutMs = Math.max(300_000, Number(process.env.OPENLINK_PLATFORM_VM_READY_TIMEOUT_MS) || 0)
+    const deadline = Date.now() + readyTimeoutMs
     let ready = false
     while (Date.now() < deadline) {
       if (!processRunning(vfkit.pid)) {
@@ -147,7 +148,7 @@ async function startDirectAppleHv({ config, identity, stateRoot, helperRoot, run
         break
       } catch { await new Promise((resolveDelay) => setTimeout(resolveDelay, 1000)) }
     }
-    if (!ready) throw new Error('AppleHV platform VM did not become ready within 180 seconds')
+    if (!ready) throw new Error(`AppleHV platform VM did not become ready within ${Math.round(readyTimeoutMs / 1000)} seconds`)
     await writeFile(firstBootMarker, `${new Date().toISOString()}\n`, { mode: 0o600 })
     await closeServer(readyServer)
     return { apiSocket, reused: false }
@@ -254,6 +255,10 @@ export async function ensureMacPlatformContainerEngine(options) {
         ?? resolve(dataRoot, 'containers/podman/machine/applehv', `${identity.machineName}-${process.arch}.raw`)
       if (!destination) throw new Error('Podman did not expose the generated platform disk path')
       await cloneCowDisk(baseDisk, destination, runner)
+      // This marker belongs to the VM lifecycle, not the persistent project
+      // state. A newly initialized machine must receive its Ignition config
+      // even when a previous VM left the marker behind.
+      await rm(resolve(stateRoot, 'platform-engine', 'first-boot-complete'), { force: true })
     } catch (error) {
       await runner(podman, ['machine', 'rm', '--force', identity.machineName], { env: commandEnvironment, timeout: 120_000 }).catch(() => undefined)
       throw error
@@ -269,21 +274,17 @@ export async function ensureMacPlatformContainerEngine(options) {
   const directStarter = options.startDirectAppleHv ?? startDirectAppleHv
   const direct = await directStarter({ config: inspection, identity, stateRoot, helperRoot, runner })
   commandEnvironment.CONTAINER_HOST = `unix://${direct.apiSocket}`
-  commandEnvironment.DOCKER_HOST = commandEnvironment.CONTAINER_HOST
   delete commandEnvironment.CONTAINER_CONNECTION
   await runner(podman, ['info', '--format', '{{json .Version.Version}}'], { env: commandEnvironment, timeout: 30_000 })
 
+  // Docker Desktop remains the Compose control plane for ZOKERBASE and Zero.
+  // CONTAINER_HOST scopes the bundled Podman client used for project runtime
+  // operations; routing Docker through it would create a second data store.
   Object.assign(env, commandEnvironment, {
     OPENLINK_PODMAN_COMMAND: podman,
-    OPENLINK_DOCKER_COMMAND: podman,
     CONTAINERS_MACHINE_PROVIDER: 'applehv',
-    OPENLINK_ZOKERBASE_STACK_ROOT: `${identity.guestReleaseRoot}/backend/docker`,
+    OPENLINK_ZOKERBASE_STACK_ROOT: resolve(stateRoot, 'zokerbase/stack'),
     OPENLINK_ZOKERBASE_DB_DATA_SOURCE: 'db-data',
-    OPENLINK_ZOKERBASE_STORAGE_SOURCE: 'storage-data',
-    OPENLINK_ZERO_GUEST_DATA_ROOT: `${identity.guestStateRoot}/knowledge/zero`,
-    OPENLINK_ZERO_ETCD_SOURCE: 'zero-etcd',
-    OPENLINK_ZERO_MINIO_SOURCE: 'zero-minio',
-    OPENLINK_ZERO_ENGINE_SOURCE: 'zero-engine',
   })
   return { managed: true, ...identity, connection, podman, apiSocket: direct.apiSocket }
 }
