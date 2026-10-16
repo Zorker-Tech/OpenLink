@@ -1,5 +1,20 @@
 /** @type {import('next').NextConfig} */
+const localZokerbaseUrl = (
+  process.env.OPENLINK_LOCAL_ZOKERBASE_URL || process.env.OPENLINK_LOCAL_SUPABASE_URL
+)?.replace(/\/+$/, '')
+
 const nextConfig = {
+  async rewrites() {
+    if (!localZokerbaseUrl) return []
+    return {
+      beforeFiles: [
+        {
+          source: '/api/openlink-zokerbase/:path*',
+          destination: `${localZokerbaseUrl}/:path*`,
+        },
+      ],
+    }
+  },
   // Customer self-hosted releases run the prebuilt standalone server. Source
   // compilation and dependency installation remain internal release tasks.
   output: 'standalone',

@@ -37,6 +37,7 @@ function harness(hostFetch, history = []) {
     }
   }
   const modules = {
+    '@/lib/i18n/server': { getT: async () => ({ t: (value) => value }) },
     '@/lib/agent-runtime/prompt-attachments': {
       parsePromptAttachments: (value) => value === undefined ? [] : Array.isArray(value) ? value : null,
     },

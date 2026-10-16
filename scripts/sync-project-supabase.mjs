@@ -24,7 +24,7 @@ const repository = 'https://github.com/supabase/supabase.git'
 // configuration tree and runtime contract hashes are all checked below.
 const fetchRepository = process.env.OPENLINK_SUPABASE_FETCH_REPOSITORY?.trim() || repository
 const lockPath = resolve(root, 'services/project-supabase/runtime.lock.json')
-const outputRoot = resolve(root, '.openlink-runtime/project-supabase')
+const outputRoot = resolve(process.env.OPENLINK_PROJECT_SUPABASE_ROOT || resolve(root, '.openlink-runtime/project-supabase'))
 const argumentsSet = new Set(process.argv.slice(2))
 const updateLock = argumentsSet.has('--update-lock')
 const refreshRuntimeSpec = argumentsSet.has('--refresh-runtime-spec')

@@ -25,15 +25,16 @@ export function OrganizationSetup({
   const [mode, setMode] = useState<'create' | 'join'>('create')
   const [createState, createAction, isCreating] = useActionState(createOrganizationAction, initialState)
   const [joinState, joinAction, isJoining] = useActionState(joinOrganizationAction, initialState)
-  const inputClassName = 'h-10 rounded-lg border-input bg-background px-3 text-[15px]! text-foreground shadow-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/25'
-  const primaryButtonClassName = 'h-10 w-full rounded-lg bg-primary text-primary-foreground hover:bg-primary/90'
+  const [skipState, skipAction, isSkipping] = useActionState(skipOrganizationAction, initialState)
+  const inputClassName = 'h-14 rounded-xl border-input bg-background px-4 text-[15px]! text-foreground shadow-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/25'
+  const primaryButtonClassName = 'h-14 w-full rounded-xl bg-primary text-primary-foreground hover:bg-primary/90'
 
   return (
     <div className="space-y-4">
-      <div aria-label={t('组织操作')} className="grid grid-cols-2 rounded-lg bg-muted p-1" role="tablist">
+      <div aria-label={t('组织操作')} className="grid grid-cols-2 rounded-xl bg-muted p-1.5" role="tablist">
         <button
           aria-selected={mode === 'create'}
-          className={`flex h-9 items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors ${mode === 'create' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'}`}
+          className={`flex h-11 items-center justify-center gap-2 rounded-lg text-sm font-medium transition-colors ${mode === 'create' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'}`}
           onClick={() => setMode('create')}
           role="tab"
           type="button"
@@ -42,7 +43,7 @@ export function OrganizationSetup({
         </button>
         <button
           aria-selected={mode === 'join'}
-          className={`flex h-9 items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors ${mode === 'join' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'}`}
+          className={`flex h-11 items-center justify-center gap-2 rounded-lg text-sm font-medium transition-colors ${mode === 'join' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'}`}
           onClick={() => setMode('join')}
           role="tab"
           type="button"
@@ -97,10 +98,11 @@ export function OrganizationSetup({
       )}
 
       {showSkip && (
-        <form action={skipOrganizationAction}>
+        <form action={skipAction} aria-busy={isSkipping}>
           <input name="prompt" type="hidden" value={prompt} />
-          <Button className="h-10 w-full rounded-lg text-muted-foreground hover:bg-accent hover:text-accent-foreground" type="submit" variant="ghost">
-            {t('暂时跳过，使用个人工作区')}
+          {skipState.error && <p className="mb-2 text-center text-sm text-destructive" role="alert">{skipState.error}</p>}
+          <Button className="h-12 w-full rounded-xl text-muted-foreground hover:bg-accent hover:text-accent-foreground" disabled={isSkipping} type="submit" variant="ghost">
+            {isSkipping ? t('正在进入个人工作区…') : t('暂时跳过，使用个人工作区')}
           </Button>
         </form>
       )}

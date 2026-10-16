@@ -49,6 +49,8 @@ Browser
 ## Repository boundaries
 
 - Product Web/BFF: `app/`, `components/`, `lib/`, `utils/`.
+- Desktop UI shell: `desktop/`; it loads the existing Web/BFF and does not
+  own product screens or backend credentials.
 - Owned privileged services: `services/agent-*`, `services/browser-host`,
   `services/knowledge-service`.
 - Vendored runtime source: `services/pi`, `opensandbox`, `sandbox-runtime`,
