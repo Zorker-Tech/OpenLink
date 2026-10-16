@@ -59,12 +59,21 @@ The current ADR set covers these areas:
   isolation and a strict separation between tenant entitlements in OpenLink
   Settings and global capacity in ZOKERBASE Platform Console
   ([ADR-0022](./ADR-0022-production-deployment-profiles-and-resource-governance.md)).
+- Electron as a thin desktop shell that loads the existing OpenLink Web/BFF
+  ([ADR-0024](./ADR-0024-electron-desktop-shell.md)).
+- A separate Linux Web/BFF source checkout for local development while the
+  existing checkout owns backend services and runtime artifacts
+  ([ADR-0025](./ADR-0025-split-web-source-local-development.md)).
 
 New decisions use the format below and the next unused ADR number:
 
 The proposed Cloud SDK migration is tracked in
 [ADR-0023](./ADR-0023-cloud-platform-sdk.md); it is not an accepted replacement for
 the existing Local/Cloud identity or runtime contracts.
+
+Local development can run the Next.js Web/BFF from a separate Linux source
+checkout while the existing checkout supervises services and runtime artifacts
+([ADR-0025](./ADR-0025-split-web-source-local-development.md)).
 
 ```text
 # ADR-NNNN: Decision title

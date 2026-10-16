@@ -5,6 +5,7 @@ import {
   completeOrganizationOnboarding,
   ensureWorkspace,
   getDefaultNickname,
+  type OpenLinkWorkspace,
 } from '@/lib/workspaces'
 import { createClient } from '@/utils/supabase/server'
 import { getT } from '@/lib/i18n/server'
@@ -84,21 +85,31 @@ export async function joinOrganizationAction(
   redirect(withPrompt(`/app/${result.workspace_slug}`, prompt))
 }
 
-export async function skipOrganizationAction(formData: FormData) {
+export async function skipOrganizationAction(
+  _previousState: OrganizationActionState,
+  formData: FormData,
+): Promise<OrganizationActionState> {
+  const { t } = await getT()
   const prompt = String(formData.get('prompt') ?? '').trim()
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login?next=/app')
 
-  const { data: profile } = await supabase
-    .schema('openlink')
-    .from('profiles')
-    .select('nickname')
-    .eq('user_id', user.id)
-    .maybeSingle()
+  let workspace: OpenLinkWorkspace
+  try {
+    const { data: profile, error } = await supabase
+      .schema('openlink')
+      .from('profiles')
+      .select('nickname')
+      .eq('user_id', user.id)
+      .maybeSingle()
+    if (error) throw error
 
-  const nickname = (profile as { nickname?: string } | null)?.nickname ?? getDefaultNickname(user)
-  const workspace = await ensureWorkspace(supabase, user, nickname)
-  await completeOrganizationOnboarding(supabase, user.id)
+    const nickname = (profile as { nickname?: string } | null)?.nickname ?? getDefaultNickname(user)
+    workspace = await ensureWorkspace(supabase, user, nickname)
+    await completeOrganizationOnboarding(supabase, user.id)
+  } catch (error) {
+    return { error: organizationErrorMessage(error, t) }
+  }
   redirect(withPrompt(`/app/${workspace.slug}`, prompt))
 }

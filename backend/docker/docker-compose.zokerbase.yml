@@ -69,3 +69,6 @@ volumes:
   db-config:
     external: true
     name: zokerbase_db-config
+  db-data:
+    external: true
+    name: ${OPENLINK_ZOKERBASE_DB_DATA_VOLUME_NAME:-zokerbase_db-data}

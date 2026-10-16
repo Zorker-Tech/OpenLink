@@ -57,6 +57,7 @@ export default async function RootLayout({
         />
       </head>
       <body className={`${geist.className} antialiased`}>
+        <meta content={staticUi ? 'static' : local ? 'local' : 'cloud'} name="openlink-runtime-mode" />
         <meta content={supabaseUrl || ''} name="openlink-supabase-url" />
         <meta content={publishableKey || ''} name="openlink-supabase-publishable-key" />
         <OpenLinkMotionProvider>

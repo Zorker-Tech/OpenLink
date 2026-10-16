@@ -54,6 +54,46 @@ export interface SidebarChatRuntime {
   state: OrbState
 }
 
+type ProjectRuntimeSnapshot = Pick<ProjectSummary,
+  | 'id'
+  | 'status'
+  | 'runtime_status'
+  | 'runtime_error'
+  | 'runtime_phase'
+  | 'runtime_phase_updated_at'
+  | 'runtime_provisioning_attempts'
+  | 'runtime_provisioning_next_attempt_at'
+  | 'runtime_provisioning_lease_expires_at'
+  | 'runtime_claimed'
+>
+
+const PROJECT_RUNTIME_FIELDS: Array<keyof Omit<ProjectRuntimeSnapshot, 'id'>> = [
+  'status',
+  'runtime_status',
+  'runtime_error',
+  'runtime_phase',
+  'runtime_phase_updated_at',
+  'runtime_provisioning_attempts',
+  'runtime_provisioning_next_attempt_at',
+  'runtime_provisioning_lease_expires_at',
+  'runtime_claimed',
+]
+
+function projectRuntimeSnapshot(project: ProjectSummary): ProjectRuntimeSnapshot {
+  return {
+    id: project.id,
+    status: project.status,
+    runtime_status: project.runtime_status,
+    runtime_error: project.runtime_error,
+    runtime_phase: project.runtime_phase,
+    runtime_phase_updated_at: project.runtime_phase_updated_at,
+    runtime_provisioning_attempts: project.runtime_provisioning_attempts,
+    runtime_provisioning_next_attempt_at: project.runtime_provisioning_next_attempt_at,
+    runtime_provisioning_lease_expires_at: project.runtime_provisioning_lease_expires_at,
+    runtime_claimed: project.runtime_claimed,
+  }
+}
+
 const IDLE_CHAT_RUNTIME: SidebarChatRuntime = { speed: 0.25, state: 'solving' }
 
 function SidebarChatMenu({ onRename, onShare, onDelete }: SidebarChatMenuProps) {
@@ -345,6 +385,25 @@ export function AppWorkspace({
   const [themeMode, setThemeMode] = useState<ThemeMode>('dark')
   const [systemLight, setSystemLight] = useState(false)
   const [composerVersion, setComposerVersion] = useState(0)
+  const [runtimeSnapshots, setRuntimeSnapshots] = useState<Record<string, ProjectRuntimeSnapshot>>(() => (
+    Object.fromEntries([defaultProject, ...projects].map((project) => [project.id, projectRuntimeSnapshot(project)]))
+  ))
+
+  const applyRuntimeSnapshot = useCallback((project: ProjectSummary) => {
+    const snapshot = runtimeSnapshots[project.id]
+    return snapshot ? { ...project, ...snapshot } : project
+  }, [runtimeSnapshots])
+  const currentDefaultProject = useMemo(() => applyRuntimeSnapshot(defaultProject), [applyRuntimeSnapshot, defaultProject])
+  const currentProjects = useMemo(() => projects.map(applyRuntimeSnapshot), [applyRuntimeSnapshot, projects])
+  const hasUnsettledRuntime = useMemo(() => [currentDefaultProject, ...currentProjects].some((project) => (
+    project.runtime_phase !== 'failed'
+    && (project.status === 'waiting'
+      || project.runtime_status === 'provisioning'
+      || project.runtime_status === 'error'
+      || project.runtime_status === 'stopped'
+      || project.runtime_status === 'deleting'
+      || project.runtime_claimed)
+  )), [currentDefaultProject, currentProjects])
 
   const deleteChat = useCallback(async (chatId: string) => {
     if (!window.confirm(t('确定要删除这个会话吗？删除后不可恢复。'))) return
@@ -357,11 +416,55 @@ export function AppWorkspace({
   }, [router, t])
 
   useEffect(() => {
-    const runtimes = [defaultProject, ...projects]
-    if (!runtimes.some((project) => project.status === 'waiting' || project.runtime_status !== 'ready')) return
-    const refresh = window.setInterval(() => router.refresh(), 2_500)
-    return () => window.clearInterval(refresh)
-  }, [defaultProject, projects, router])
+    if (!hasUnsettledRuntime) return
+    let active = true
+    let inFlight = false
+    const controller = new AbortController()
+
+    const refreshRuntimeStatus = async () => {
+      if (!active || inFlight || document.visibilityState !== 'visible') return
+      inFlight = true
+      try {
+        const response = await fetch(`/api/workspaces/${encodeURIComponent(workspaceSlug)}/project-runtimes`, {
+          cache: 'no-store',
+          signal: controller.signal,
+        })
+        if (!response.ok) return
+        const payload = await response.json() as { projects?: ProjectRuntimeSnapshot[] }
+        if (!Array.isArray(payload.projects)) return
+        setRuntimeSnapshots((current) => {
+          let changed = false
+          const next = { ...current }
+          for (const snapshot of payload.projects!) {
+            if (!snapshot || typeof snapshot.id !== 'string') continue
+            const previous = current[snapshot.id]
+            if (previous && PROJECT_RUNTIME_FIELDS.every((field) => previous[field] === snapshot[field])) continue
+            next[snapshot.id] = snapshot
+            changed = true
+          }
+          return changed ? next : current
+        })
+      } catch {
+        // Runtime status is background information; transient failures should
+        // not interrupt the workspace or surface as a composer error.
+      } finally {
+        inFlight = false
+      }
+    }
+
+    void refreshRuntimeStatus()
+    const interval = window.setInterval(() => { void refreshRuntimeStatus() }, 15_000)
+    const refreshWhenVisible = () => { void refreshRuntimeStatus() }
+    window.addEventListener('focus', refreshWhenVisible)
+    document.addEventListener('visibilitychange', refreshWhenVisible)
+    return () => {
+      active = false
+      controller.abort()
+      window.clearInterval(interval)
+      window.removeEventListener('focus', refreshWhenVisible)
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
+    }
+  }, [hasUnsettledRuntime, workspaceSlug])
 
   useEffect(() => {
     const savedTheme = window.localStorage.getItem('openlink-theme') as ThemeMode | null
@@ -406,7 +509,7 @@ export function AppWorkspace({
           onDeleteChat={(chatId) => { void deleteChat(chatId) }}
           organizations={organizations}
           personalWorkspace={personalWorkspace}
-          projects={projects}
+          projects={currentProjects}
           themeMode={themeMode}
           activeNavLabel={t('首页')}
           onToggle={() => {
@@ -428,11 +531,12 @@ export function AppWorkspace({
           <PageTransition className="flex w-full justify-center">
             <WorkspacePrompt
               configuredModels={configuredModels}
-              defaultProject={defaultProject}
+              defaultProject={currentDefaultProject}
               key={composerVersion}
               initialProjectId={initialProjectId}
               initialPrompt={initialPrompt}
-              projects={projects}
+              pollRuntimeStatus={false}
+              projects={currentProjects}
               workspaceSlug={workspaceSlug}
             />
           </PageTransition>

@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { ensureZokerbase } from './zokerbase.mjs'
 import { ensureZero, stopZero } from './zero.mjs'
 import { ensureBundledPodmanPlatformEngine } from './lib/bundled-podman-runtime.mjs'
+import { localRuntimeCacheRoot } from './lib/local-runtime-cache.mjs'
 import { bundledToolchainPaths, packageManagerCommand, prependPath, resolveHostPlatform, resolveUserStateRoot } from './lib/host-platform.mjs'
 import { assertProjectVmArtifactManifest, projectVmArtifactContract } from './lib/project-vm-artifact.mjs'
 import { hardenUserOnlySecret } from './lib/windows-security.mjs'
@@ -21,7 +22,10 @@ const sandboxRuntimeDirectory = new URL('../services/sandbox-runtime/', import.m
 const browserProtocolDirectory = new URL('../packages/browser-protocol/', import.meta.url)
 const knowledgeServiceDirectory = new URL('../services/knowledge-service/', import.meta.url)
 const rootPath = fileURLToPath(root)
+const configuredWebRoot = process.env.OPENLINK_WEB_ROOT?.trim()
+const webRootPath = resolve(configuredWebRoot || rootPath)
 const hostPlatform = resolveHostPlatform()
+const localRuntimeCache = localRuntimeCacheRoot()
 const projectVmArtifact = projectVmArtifactContract({ host: hostPlatform })
 const toolchain = bundledToolchainPaths(rootPath)
 const legacyProviderSecretPath = fileURLToPath(new URL('../.openlink-runtime/provider-secret.key', import.meta.url))
@@ -45,7 +49,19 @@ process.env.CONTAINERS_CONF ||= podmanContainersConfig
 process.env.CONTAINERS_POLICY ||= podmanPolicy
 process.env.PODMAN_CONNECTIONS_CONF ||= podmanConnections
 const projectVmStateRoot = fileURLToPath(new URL('../.openlink-runtime/project-vms', import.meta.url))
-const projectImageRoot = fileURLToPath(new URL('../.openlink-runtime/images/', import.meta.url))
+const projectImageRoot = process.env.OPENLINK_RUNTIME_IMAGE_ROOT?.trim()
+  ? resolve(process.env.OPENLINK_RUNTIME_IMAGE_ROOT)
+  : hostPlatform.platform === 'linux'
+    ? resolve(localRuntimeCache, 'project-images')
+    : fileURLToPath(new URL('../.openlink-runtime/images/', import.meta.url))
+const projectSupabaseArtifactRoot = process.env.OPENLINK_PROJECT_SUPABASE_ROOT?.trim()
+  ? resolve(process.env.OPENLINK_PROJECT_SUPABASE_ROOT)
+  : hostPlatform.platform === 'linux'
+    ? resolve(localRuntimeCache, 'project-supabase')
+    : fileURLToPath(new URL('../.openlink-runtime/project-supabase/', import.meta.url))
+const projectSupabaseImageOutputRoot = process.env.OPENLINK_PROJECT_SUPABASE_IMAGE_OUTPUT_ROOT?.trim()
+  ? resolve(process.env.OPENLINK_PROJECT_SUPABASE_IMAGE_OUTPUT_ROOT)
+  : resolve(projectSupabaseArtifactRoot, 'images', hostPlatform.architecture === 'x64' ? 'amd64' : 'arm64')
 const projectVmBaseRoot = fileURLToPath(new URL('../.openlink-runtime/project-vm-base/', import.meta.url))
 const projectVmBaseManifestPath = `${projectVmBaseRoot}/manifest.json`
 const apiToken = await persistentRuntimeSecret('browser-api-token', process.env.OPENLINK_BROWSER_API_TOKEN)
@@ -103,6 +119,34 @@ function lifecycleMode(argv) {
 }
 
 const mode = lifecycleMode(process.argv.slice(2))
+const splitWebRequested = process.argv.includes('--split-web')
+if (splitWebRequested && !configuredWebRoot) {
+  throw new Error('Set OPENLINK_WEB_ROOT to a separate Linux filesystem checkout before running `pnpm dev:split`')
+}
+if (splitWebRequested && webRootPath === rootPath) {
+  throw new Error('OPENLINK_WEB_ROOT must point to a checkout separate from the backend/runtime checkout')
+}
+if (webRootPath !== rootPath) {
+  if (mode !== 'development') {
+    throw new Error('OPENLINK_WEB_ROOT is supported only by the development supervisor; production uses the sealed Web artifact')
+  }
+  let webPackage
+  try {
+    webPackage = JSON.parse(await readFile(resolve(webRootPath, 'package.json'), 'utf8'))
+  } catch {
+    throw new Error(`OPENLINK_WEB_ROOT must contain an OpenLink checkout with package.json: ${webRootPath}`)
+  }
+  const runtimePackage = JSON.parse(await readFile(resolve(rootPath, 'package.json'), 'utf8'))
+  if (webPackage.scripts?.['dev:web'] !== runtimePackage.scripts?.['dev:web'] || webPackage.dependencies?.next !== runtimePackage.dependencies?.next) {
+    throw new Error('The Web checkout must use the same dev:web command and Next.js version as the backend/runtime checkout')
+  }
+  try {
+    await access(resolve(webRootPath, 'node_modules', 'next'))
+  } catch {
+    throw new Error(`Install Web dependencies on the Linux filesystem first: cd ${webRootPath} && pnpm install --frozen-lockfile`)
+  }
+  process.stdout.write(`Using Web/BFF source from ${webRootPath}\n`)
+}
 const runtimeMode = (process.env.OPENLINK_RUNTIME_MODE ?? 'local').trim().toLowerCase()
 if (runtimeMode !== 'local' && runtimeMode !== 'cloud') throw new Error('OPENLINK_RUNTIME_MODE must be either local or cloud')
 let projectVmBase
@@ -445,7 +489,11 @@ if (process.env.OPENLINK_BUILD_ARTIFACTS === '1') {
   if (runtimeMode === 'local') {
     const zeroImageBuild = run(process.execPath, ['scripts/build-zero-images.mjs'], {
       cwd: root,
-      env: { ...process.env, OPENLINK_ZERO_ALLOW_UPSTREAM_ACQUISITION: process.env.OPENLINK_ZERO_ALLOW_UPSTREAM_ACQUISITION || '0' },
+      env: {
+        ...process.env,
+        OPENLINK_ZERO_ALLOW_UPSTREAM_ACQUISITION: process.env.OPENLINK_ZERO_ALLOW_UPSTREAM_ACQUISITION || '0',
+        OPENLINK_IMAGE_BUILD_NETWORK: process.env.OPENLINK_IMAGE_BUILD_NETWORK || (process.platform === 'linux' ? 'host' : ''),
+      },
     })
     await waitForExit(zeroImageBuild, 'Zero image artifact build')
   }
@@ -465,14 +513,25 @@ if (process.env.OPENLINK_BUILD_ARTIFACTS === '1') {
   await waitForExit(rpcWorkerBuild, 'Agent RPC Worker build')
   const knowledgeBuild = run(packageManagerCommand('npm'), ['run', 'build'], { cwd: knowledgeServiceDirectory })
   await waitForExit(knowledgeBuild, 'Knowledge Service build')
-  const projectSupabaseSync = run(process.execPath, ['scripts/sync-project-supabase.mjs'], { cwd: root, env: process.env })
+  const projectSupabaseSync = run(process.execPath, ['scripts/sync-project-supabase.mjs'], {
+    cwd: root,
+    env: { ...process.env, OPENLINK_PROJECT_SUPABASE_ROOT: projectSupabaseArtifactRoot },
+  })
   await waitForExit(projectSupabaseSync, 'Project Supabase release sync')
-  const projectSupabaseImages = run(process.execPath, ['scripts/build-project-supabase-images.mjs'], { cwd: root, env: process.env })
+  const projectSupabaseImages = run(process.execPath, ['scripts/build-project-supabase-images.mjs'], {
+    cwd: root,
+    env: {
+      ...process.env,
+      OPENLINK_PROJECT_SUPABASE_ROOT: projectSupabaseArtifactRoot,
+      OPENLINK_PROJECT_SUPABASE_IMAGE_OUTPUT_ROOT: projectSupabaseImageOutputRoot,
+    },
+  })
   await waitForExit(projectSupabaseImages, 'Project Supabase image artifacts')
   const projectVmBaseBuild = run(process.execPath, ['scripts/build-project-vm-base.mjs'], {
     cwd: root,
     env: {
       ...process.env,
+      OPENLINK_PROJECT_SUPABASE_ROOT: projectSupabaseArtifactRoot,
       OPENLINK_PODMAN_COMMAND: podmanCommand,
       XDG_CONFIG_HOME: podmanConfigRoot,
       XDG_DATA_HOME: podmanDataRoot,
@@ -488,6 +547,8 @@ if (process.env.OPENLINK_BUILD_ARTIFACTS === '1') {
     env: {
       ...process.env,
       OPENLINK_PODMAN_COMMAND: podmanCommand,
+      OPENLINK_RUNTIME_IMAGE_ROOT: projectImageRoot,
+      OPENLINK_IMAGE_BUILD_NETWORK: process.env.OPENLINK_IMAGE_BUILD_NETWORK || (process.platform === 'linux' ? 'host' : ''),
       XDG_CONFIG_HOME: podmanConfigRoot,
       XDG_DATA_HOME: podmanDataRoot,
       CONTAINERS_HELPER_BINARY_DIR: podmanHelperBinariesDir,
@@ -548,6 +609,8 @@ projectVmBase ||= await loadProjectVmBase()
 
 const shared = {
   ...process.env,
+  OPENLINK_RUNTIME_IMAGE_ROOT: projectImageRoot,
+  OPENLINK_PROJECT_SUPABASE_ROOT: projectSupabaseArtifactRoot,
   OPENLINK_RUNTIME_MODE: runtimeMode,
   NEXT_PUBLIC_OPENLINK_RUNTIME_MODE: runtimeMode,
   OPENLINK_KNOWLEDGE_SERVICE_URL: knowledgeServiceUrl,
@@ -670,7 +733,7 @@ const agentHost = run(process.execPath, ['dist/src/main.js'], { cwd: agentHostDi
 await waitForHealth(agentHostUrl, agentHost, 'Agent Host')
 const desktopAgentHost = run(process.execPath, ['dist/src/desktop-main.js'], { cwd: agentHostDirectory, env: shared })
 await waitForHealth(desktopAgentHostUrl, desktopAgentHost, 'Desktop Agent Host')
-const next = run('npm', ['run', mode === 'production' ? 'start:web' : 'dev:web'], { cwd: root, env: shared })
+const next = run('npm', ['run', mode === 'production' ? 'start:web' : 'dev:web'], { cwd: webRootPath, env: shared })
 // Studio is served on a second port of the same `localhost` host so its
 // SameSite cookie flows into the embedding iframe (same host => same site,
 // ports are not part of the site). See scripts/studio-origin-proxy.mjs.

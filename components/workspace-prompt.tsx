@@ -59,6 +59,7 @@ export interface WorkspacePromptProps {
   initialProjectId?: string
   projects: ProjectSummary[]
   workspaceSlug: string
+  pollRuntimeStatus?: boolean
   /**
    * Optional extra controls rendered in the composer footer (e.g. voice
    * input on the marketing page). Left unset for the in-app workspace so the
@@ -85,6 +86,7 @@ export function WorkspacePrompt({
   initialProjectId,
   projects,
   workspaceSlug,
+  pollRuntimeStatus = true,
   renderExtraTools,
   onUnauthenticated,
   value,
@@ -126,7 +128,7 @@ export function WorkspacePrompt({
   const runtimeDisplay = projectRuntimeDisplay(runtimeProject, t)
   const runtimeReady = runtimeDisplay.ready
   useEffect(() => {
-    if (runtimeReady || runtimeProject.status === 'archived') return
+    if (!pollRuntimeStatus || runtimeReady || runtimeProject.status === 'archived') return
 
     // The Project VM is provisioned out of band. Server-component props are a
     // snapshot, so keep the home composer in sync until the runtime reaches a
@@ -140,7 +142,7 @@ export function WorkspacePrompt({
       window.removeEventListener('focus', refresh)
       document.removeEventListener('visibilitychange', refresh)
     }
-  }, [router, runtimeProject.id, runtimeProject.status, runtimeReady])
+  }, [pollRuntimeStatus, router, runtimeProject.id, runtimeProject.status, runtimeReady])
   // Agent resources are session-scoped. Before a session exists there is no
   // runtime protocol to expose, so the home composer intentionally has none.
   const promptSuggestions: AgentPromptSuggestion[] = []

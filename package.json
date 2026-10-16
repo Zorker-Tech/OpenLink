@@ -5,8 +5,11 @@
   "scripts": {
     "dev": "node scripts/openlink.mjs --mode development",
     "dev:web": "next dev --webpack",
+    "dev:split": "node scripts/openlink.mjs --mode development --split-web",
     "dev:browser": "node scripts/openlink.mjs --mode development",
     "dev:local": "node scripts/openlink.mjs --mode development",
+    "desktop:dev": "npm --prefix desktop run dev",
+    "desktop:build": "npm --prefix desktop run build",
     "build": "next build",
     "build:web": "next build",
     "start": "node scripts/openlink.mjs --mode production",
