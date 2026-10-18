@@ -1,4 +1,4 @@
-// Copyright 2026 Alibaba Group Holding Ltd.
+// Copyright 2026 The OpenSandbox Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,39 @@ public interface IIsolationSession
         string code,
         IsolatedRunOpts? opts = null,
         ExecutionHandlers? handlers = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Starts <paramref name="code"/> detached inside the session and returns a run handle.
+    /// The run's combined stdout/stderr and exit code are captured by execd; poll them
+    /// with <see cref="GetRunStatusAsync"/> and <see cref="GetRunLogsAsync"/>. The run is
+    /// not time-limited and idle GC is suspended while it is active. Background runs
+    /// require a writable log location, so sessions with a read-only (ro) workspace
+    /// reject them.
+    /// </summary>
+    Task<IsolatedBackgroundRun> RunBackgroundAsync(
+        string code,
+        IsolatedRunOpts? opts = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns the lifecycle state of a background run started with
+    /// <see cref="RunBackgroundAsync"/>.
+    /// </summary>
+    Task<IsolatedRunStatus> GetRunStatusAsync(
+        string runId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns the background run's combined output from <paramref name="cursor"/>
+    /// plus the next byte cursor. Each call returns at most 16 MiB; pass the returned
+    /// <see cref="RunLogs.Cursor"/> to fetch the remainder. Per-run log retention is
+    /// capped at 16 MiB (output beyond it is discarded when the run finishes), so drain
+    /// incrementally while the run is active if more than one page is needed.
+    /// </summary>
+    Task<RunLogs> GetRunLogsAsync(
+        string runId,
+        long cursor = 0,
         CancellationToken cancellationToken = default);
 
     Task<IsolatedSessionState> GetAsync(

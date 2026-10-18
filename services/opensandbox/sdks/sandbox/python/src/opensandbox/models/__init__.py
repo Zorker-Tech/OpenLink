@@ -1,5 +1,5 @@
 #
-# Copyright 2025 Alibaba Group Holding Ltd.
+# Copyright 2025 The OpenSandbox Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -46,6 +46,7 @@ from opensandbox.models.isolated import (
     CreateIsolatedSessionRequest,
     EnvPassthroughSpec,
     IsolatedCapabilities,
+    IsolatedOverlaySpec,
     IsolatedRunOpts,
     IsolatedSessionInfo,
     IsolatedSessionState,
@@ -54,6 +55,7 @@ from opensandbox.models.isolated import (
 )
 from opensandbox.models.sandboxes import (
     PVC,
+    ActivityProbe,
     Credential,
     CredentialAuth,
     CredentialBinding,
@@ -70,18 +72,23 @@ from opensandbox.models.sandboxes import (
     CredentialVaultState,
     CustomHeaderEntry,
     Host,
+    IdlePolicy,
     InlineCredentialSource,
+    LifecycleHook,
     NetworkPolicy,
     NetworkRule,
     PagedSandboxInfos,
     PaginationInfo,
+    PeriodicLifecycleHook,
     PlatformSpec,
+    SandboxAllocation,
     SandboxCreateResponse,
     SandboxEndpoint,
     SandboxFilter,
     SandboxImageAuth,
     SandboxImageSpec,
     SandboxInfo,
+    SandboxLifecycle,
     SandboxMetrics,
     SandboxState,
     SandboxStatus,
@@ -105,6 +112,7 @@ __all__ = [
     "CreateIsolatedSessionRequest",
     "EnvPassthroughSpec",
     "IsolatedCapabilities",
+    "IsolatedOverlaySpec",
     "IsolatedRunOpts",
     "IsolatedSessionInfo",
     "IsolatedSessionState",
@@ -121,6 +129,7 @@ __all__ = [
     "SearchEntry",
     # Sandbox models
     "SandboxInfo",
+    "SandboxAllocation",
     "SandboxStatus",
     "SandboxState",
     "NetworkPolicy",
@@ -128,6 +137,11 @@ __all__ = [
     "CredentialProxyConfig",
     "CredentialSubstitution",
     "InlineCredentialSource",
+    "LifecycleHook",
+    "PeriodicLifecycleHook",
+    "SandboxLifecycle",
+    "IdlePolicy",
+    "ActivityProbe",
     "Credential",
     "CredentialMatch",
     "CustomHeaderEntry",

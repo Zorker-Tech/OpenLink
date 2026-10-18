@@ -1,5 +1,5 @@
 #
-# Copyright 2026 Alibaba Group Holding Ltd.
+# Copyright 2026 The OpenSandbox Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -101,6 +101,22 @@ class CredentialVaultEchoHandler(BaseHTTPRequestHandler):
             )
             return
 
+        # Artifact-store download URLs double-encode their coordinate paths
+        # (e.g. ``%252F``), so the exact route varies with the encoded
+        # coordinates; match on the binding prefix instead.
+        if route.startswith("/pypi-proxy/"):
+            received = {name.lower(): value for name, value in self.headers.items()}
+            self._write_json(
+                HTTPStatus.OK,
+                {
+                    "ok": True,
+                    "case": "pypi-proxy",
+                    "receivedPath": route,
+                    "authorization": received.get("authorization"),
+                },
+            )
+            return
+
         if route == "/tenant/vault-path-secret/resource":
             query = parse_qs(parsed.query, keep_blank_values=True)
             ok = query.get("tenant") == ["__path_secret__"]
@@ -138,6 +154,24 @@ class CredentialVaultEchoHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
         parsed = urlsplit(self.path)
+        if parsed.path == "/large-body":
+            length = int(self.headers.get("content-length", "0") or "0")
+            raw_body = self.rfile.read(length)
+            received = {name.lower(): value for name, value in self.headers.items()}
+            expected_value = EXPECTED_HEADERS["/api-key"]["x-api-key"]
+            ok = received.get("x-api-key") == expected_value
+            self._write_json(
+                HTTPStatus.OK if ok else HTTPStatus.UNAUTHORIZED,
+                {
+                    "ok": ok,
+                    "case": "large-body",
+                    "contentLength": length,
+                    "bodyReceivedLength": len(raw_body),
+                    "missingOrInvalid": [] if ok else ["x-api-key"],
+                },
+            )
+            return
+
         if parsed.path != "/body-substitution":
             self._write_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "unknown path"})
             return

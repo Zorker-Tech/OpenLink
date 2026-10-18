@@ -1,4 +1,4 @@
-# Copyright 2026 Alibaba Group Holding Ltd.
+# Copyright 2026 The OpenSandbox Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,18 +16,11 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 import click
 from opensandbox.models.diagnostics import DiagnosticContent
 
 from opensandbox_cli.client import ClientContext
 from opensandbox_cli.utils import handle_errors, output_option, prepare_output
-
-
-def _diagnostic_to_dict(content: DiagnosticContent) -> dict[str, Any]:
-    """Convert SDK diagnostics content to a CLI-friendly dict."""
-    return content.model_dump(mode="json")
 
 
 def render_diagnostic_content(
@@ -46,15 +39,21 @@ def render_diagnostic_content(
     )
 
     if output.fmt == "raw":
+        if content.truncated:
+            click.echo("Warning: diagnostic content was truncated.", err=True)
+        for warning in content.warnings or []:
+            click.echo(f"Warning: {warning}", err=True)
         if content.delivery == "inline":
             click.echo(content.content or "")
             return
         if content.content_url:
             click.echo(content.content_url)
             return
-        raise click.ClickException("Diagnostic response did not include inline content or a content URL.")
+        raise click.ClickException(
+            "Diagnostic response did not include inline content or a content URL."
+        )
 
-    output.print_dict(_diagnostic_to_dict(content), title=title)
+    output.print_dict(content.model_dump(mode="json"), title=title)
 
 
 @click.group("diagnostics", invoke_without_command=True)
@@ -72,8 +71,8 @@ def diagnostics_group(ctx: click.Context) -> None:
     "-s",
     required=True,
     help=(
-        "Diagnostic log scope. Common scopes: lifecycle for manager logs, "
-        "container for sandbox stdout; other scopes are server-defined."
+        "Diagnostic log scope. Built-in server scopes: container and all; "
+        "other scopes are server-defined."
     ),
 )
 @output_option(
@@ -92,7 +91,6 @@ def diagnostics_logs(
     output_format: str | None,
 ) -> None:
     """Retrieve diagnostic logs for a sandbox."""
-    sandbox_id = obj.resolve_sandbox_id(sandbox_id)
     content = obj.get_manager().get_diagnostic_logs(sandbox_id, scope=scope)
     render_diagnostic_content(obj, content, output_format, title="Diagnostic Logs")
 
@@ -104,8 +102,8 @@ def diagnostics_logs(
     "-s",
     required=True,
     help=(
-        "Diagnostic event scope. Common scopes: lifecycle for audit events, "
-        "runtime for scheduler/container events; other scopes are server-defined."
+        "Diagnostic event scope. Built-in server scopes: runtime and all; "
+        "other scopes are server-defined."
     ),
 )
 @output_option(
@@ -124,6 +122,5 @@ def diagnostics_events(
     output_format: str | None,
 ) -> None:
     """Retrieve diagnostic events for a sandbox."""
-    sandbox_id = obj.resolve_sandbox_id(sandbox_id)
     content = obj.get_manager().get_diagnostic_events(sandbox_id, scope=scope)
     render_diagnostic_content(obj, content, output_format, title="Diagnostic Events")

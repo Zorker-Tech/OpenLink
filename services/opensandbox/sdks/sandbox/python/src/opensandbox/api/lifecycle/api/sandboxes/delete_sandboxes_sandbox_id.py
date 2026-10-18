@@ -1,5 +1,5 @@
 #
-# Copyright 2026 Alibaba Group Holding Ltd.
+# Copyright 2026 The OpenSandbox Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -91,8 +91,9 @@ def sync_detailed(
 ) -> Response[Any | ErrorResponse]:
     """Delete a sandbox
 
-     Delete a sandbox, terminating its execution. The sandbox will transition through Stopping state to
-    Terminated.
+     Request sandbox deletion. Runtime cleanup may continue after the response.
+    For Kubernetes BatchSandbox workloads, queries report Stopping during cleanup
+    and return 404 once the resource is removed.
 
     Args:
         sandbox_id (str):
@@ -123,8 +124,9 @@ def sync(
 ) -> Any | ErrorResponse | None:
     """Delete a sandbox
 
-     Delete a sandbox, terminating its execution. The sandbox will transition through Stopping state to
-    Terminated.
+     Request sandbox deletion. Runtime cleanup may continue after the response.
+    For Kubernetes BatchSandbox workloads, queries report Stopping during cleanup
+    and return 404 once the resource is removed.
 
     Args:
         sandbox_id (str):
@@ -150,8 +152,9 @@ async def asyncio_detailed(
 ) -> Response[Any | ErrorResponse]:
     """Delete a sandbox
 
-     Delete a sandbox, terminating its execution. The sandbox will transition through Stopping state to
-    Terminated.
+     Request sandbox deletion. Runtime cleanup may continue after the response.
+    For Kubernetes BatchSandbox workloads, queries report Stopping during cleanup
+    and return 404 once the resource is removed.
 
     Args:
         sandbox_id (str):
@@ -180,8 +183,9 @@ async def asyncio(
 ) -> Any | ErrorResponse | None:
     """Delete a sandbox
 
-     Delete a sandbox, terminating its execution. The sandbox will transition through Stopping state to
-    Terminated.
+     Request sandbox deletion. Runtime cleanup may continue after the response.
+    For Kubernetes BatchSandbox workloads, queries report Stopping during cleanup
+    and return 404 once the resource is removed.
 
     Args:
         sandbox_id (str):
