@@ -1,4 +1,4 @@
-# Copyright 2026 Alibaba Group Holding Ltd.
+# Copyright 2026 The OpenSandbox Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,15 +17,18 @@
 Docker cannot update labels on running containers, so user metadata patches
 and expiration overrides are persisted to individual JSON files under
 ``~/.opensandbox/metadata/``. Atomic writes (tmp + rename) guard against
-truncation during crash.
+truncation during crash, and one lock serializes every read-modify-write so
+concurrent patches of one sandbox neither fail nor drop each other's keys.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import threading
 from datetime import datetime
 from pathlib import Path
+from uuid import uuid4
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +47,6 @@ def _is_user_label(key: str) -> bool:
 
 
 def _extract_user_labels(labels: dict) -> dict:
-    """Return only user-facing labels from a raw container label dict."""
     return {k: v for k, v in labels.items() if _is_user_label(k)}
 
 
@@ -53,10 +55,9 @@ class DockerMetadataStore:
 
     def __init__(self, root: Path | None = None) -> None:
         self._root = root or DEFAULT_STORE_DIR
-
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
+        # Request threads and expiration timers write the same files; the
+        # lock keeps each read-modify-write whole.
+        self._lock = threading.Lock()
 
     def get(self, sandbox_id: str, container_labels: dict) -> dict | None:
         """Return effective user metadata for a sandbox.
@@ -84,23 +85,23 @@ class DockerMetadataStore:
         """
         path = self._sandbox_path(sandbox_id)
 
-        # Build current effective state: container user labels + persisted file
-        current = _extract_user_labels(container_labels)
-        if path.exists():
-            overrides = self._read_file(path)
-            if overrides:
-                current.update(overrides)
+        with self._lock:
+            # The override file holds the full effective metadata (see get()), so
+            # it replaces the container labels rather than being merged onto them;
+            # merging would resurrect keys removed by an earlier patch.
+            current = self._read_file(path)
+            if not isinstance(current, dict):
+                current = _extract_user_labels(container_labels)
 
-        for key, value in patch.items():
-            if value is None:
-                current.pop(key, None)
-            else:
-                current[key] = str(value)
+            for key, value in patch.items():
+                if value is None:
+                    current.pop(key, None)
+                else:
+                    current[key] = str(value)
 
-        self._write_file(path, current)
+            self._write_file(path, current)
 
     def get_expiration(self, sandbox_id: str) -> str | None:
-        """Return a persisted expiration override when one exists."""
         payload = self._read_file(self._expiration_path(sandbox_id))
         if not isinstance(payload, dict):
             return None
@@ -110,23 +111,19 @@ class DockerMetadataStore:
         return None
 
     def set_expiration(self, sandbox_id: str, expires_at: datetime) -> None:
-        """Persist the latest sandbox expiration override atomically."""
-        self._write_file(
-            self._expiration_path(sandbox_id),
-            {"expires_at": expires_at.isoformat()},
-        )
+        with self._lock:
+            self._write_file(
+                self._expiration_path(sandbox_id),
+                {"expires_at": expires_at.isoformat()},
+            )
 
     def delete(self, sandbox_id: str) -> None:
-        """Remove persisted overrides for a sandbox."""
-        for path in (self._sandbox_path(sandbox_id), self._expiration_path(sandbox_id)):
-            try:
-                path.unlink(missing_ok=True)
-            except OSError as exc:
-                logger.warning("Failed to delete metadata file %s: %s", path, exc)
-
-    # ------------------------------------------------------------------
-    # Internal
-    # ------------------------------------------------------------------
+        with self._lock:
+            for path in (self._sandbox_path(sandbox_id), self._expiration_path(sandbox_id)):
+                try:
+                    path.unlink(missing_ok=True)
+                except OSError as exc:
+                    logger.warning(f"Failed to delete metadata file {path}: {exc}")
 
     def _sandbox_path(self, sandbox_id: str) -> Path:
         return self._root / f"{sandbox_id}.json"
@@ -140,12 +137,13 @@ class DockerMetadataStore:
             if path.exists():
                 return json.loads(path.read_text())
         except (json.JSONDecodeError, OSError) as exc:
-            logger.warning("Failed to read metadata file %s: %s", path, exc)
+            logger.warning(f"Failed to read metadata file {path}: {exc}")
         return None
 
     @staticmethod
     def _write_file(path: Path, data: dict) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".tmp")
+        # A temporary name of its own per write: two writers never race on one.
+        tmp = path.with_name(f"{path.stem}.{uuid4().hex}.tmp")
         tmp.write_text(json.dumps(data))
         tmp.replace(path)

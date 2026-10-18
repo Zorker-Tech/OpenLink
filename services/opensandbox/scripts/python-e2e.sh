@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2025 Alibaba Group Holding Ltd.
+# Copyright 2025 The OpenSandbox Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -90,5 +90,7 @@ if [ "${RUN_CODE_INTERPRETER_E2E}" = "true" ]; then
 else
   uv run pytest \
     --ignore=tests/test_code_interpreter_e2e.py \
-    --ignore=tests/test_code_interpreter_e2e_sync.py
+    --ignore=tests/test_code_interpreter_e2e_sync.py \
+    --ignore=tests/test_execd_init_e2e.py \
+    --ignore=tests/test_execd_hardening_e2e.py
 fi

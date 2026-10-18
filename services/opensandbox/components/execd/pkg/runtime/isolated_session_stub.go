@@ -1,4 +1,4 @@
-// Copyright 2026 Alibaba Group Holding Ltd.
+// Copyright 2026 The OpenSandbox Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ type IsolatedSessionOptions struct {
 	Profile            string
 	WorkspacePath      string
 	WorkspaceMode      string
+	Overlays           []IsolatedOverlayOptions
 	ExtraWritable      []string
 	Binds              []isolation.BindMount
 	ShareNet           *bool
@@ -39,6 +40,13 @@ type IsolatedSessionOptions struct {
 	Gid                *uint32
 	UidMode            string
 	IdleTimeoutSeconds int
+}
+
+// IsolatedOverlayOptions describes one overlay mount (Windows stub).
+type IsolatedOverlayOptions struct {
+	Path    string
+	Mode    string
+	Persist *bool
 }
 
 // StdoutCallback is called per line of stdout (Windows stub).
@@ -54,6 +62,12 @@ func NewIsolatedRunner(_ *Controller, _ isolation.Isolator, _ isolation.Config) 
 
 // StopGC is a no-op on Windows.
 func (r *IsolatedRunner) StopGC() {}
+
+// Close is a no-op on platforms without isolated-session support.
+func (r *IsolatedRunner) Close() error { return nil }
+
+// Reset is a no-op on platforms without isolated-session support.
+func (r *IsolatedRunner) Reset() error { return nil }
 
 // Available reports false on Windows.
 func (r *IsolatedRunner) Available() bool { return false }
@@ -77,6 +91,37 @@ func (r *IsolatedRunner) ListIsolatedSessions() []IsolatedSessionSummary {
 func (r *IsolatedRunner) RunInIsolatedSession(_ context.Context, _ string, _ string, _ map[string]string, _ StdoutCallback) error {
 	return ErrContextNotFound
 }
+
+// RunInIsolatedSessionBackground returns an error on Windows.
+func (r *IsolatedRunner) RunInIsolatedSessionBackground(_ string, _ string, _ map[string]string) (string, time.Time, error) {
+	return "", time.Time{}, ErrContextNotFound
+}
+
+// IsolatedBackgroundRunSnapshot describes a background run (Windows stub —
+// kept in sync with the non-Windows build so controller code compiles on both).
+type IsolatedBackgroundRunSnapshot struct {
+	RunID      string
+	SessionID  string
+	Running    bool
+	ExitCode   *int
+	Error      string
+	StartedAt  time.Time
+	FinishedAt *time.Time
+}
+
+// GetIsolatedBackgroundRun returns an error on Windows.
+func (r *IsolatedRunner) GetIsolatedBackgroundRun(_ string, _ string) (*IsolatedBackgroundRunSnapshot, error) {
+	return nil, ErrContextNotFound
+}
+
+// SeekIsolatedBackgroundOutput returns an error on Windows.
+func (r *IsolatedRunner) SeekIsolatedBackgroundOutput(_ string, _ string, _ int64) ([]byte, int64, error) {
+	return nil, -1, ErrContextNotFound
+}
+
+// removeSessionBackgroundRuns is a no-op on Windows.
+// (Takes the session ID rather than the !windows-only isolatedSession type.)
+func (r *IsolatedRunner) removeSessionBackgroundRuns(_ string) {}
 
 // DeleteIsolatedSession returns an error on Windows.
 func (r *IsolatedRunner) DeleteIsolatedSession(_ string) error {
@@ -119,8 +164,7 @@ type IsolatedSessionState struct {
 	// Creation-parameter echoes. Never populated on Windows (isolation
 	// is unavailable) but kept to match the non-Windows struct layout.
 	Profile            string
-	WorkspacePath      string
-	WorkspaceMode      string
+	Overlays           []IsolatedOverlayOptions
 	ExtraWritable      []string
 	Binds              []isolation.BindMount
 	ShareNet           *bool
