@@ -1,5 +1,5 @@
 #
-# Copyright 2025 Alibaba Group Holding Ltd.
+# Copyright 2025 The OpenSandbox Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncIterator
 from datetime import timedelta
 
 import httpx
@@ -23,10 +24,27 @@ import pytest
 
 from opensandbox.adapters.command_adapter import CommandsAdapter
 from opensandbox.config import ConnectionConfig
-from opensandbox.exceptions import InvalidArgumentException, SandboxApiException
+from opensandbox.exceptions import (
+    InvalidArgumentException,
+    SandboxApiException,
+    SandboxConnectionException,
+)
+from opensandbox.models.execd import RunCommandOpts
 from opensandbox.models.sandboxes import SandboxEndpoint
 
 _UNICODE_SEPARATORS = "before\u0085middle\u2028middle\u2029after"
+
+# Arguments a shell would rewrite: a literal "$HOME", an embedded space, a
+# single quote, and an empty string. They must reach the process verbatim.
+LITERAL_ARGV = [
+    "python3",
+    "-c",
+    "import sys; print(sys.argv[1:])",
+    "a b",
+    "$HOME",
+    "x'y",
+    "",
+]
 
 
 class _SseTransport(httpx.AsyncBaseTransport):
@@ -61,6 +79,32 @@ class _SseTransport(httpx.AsyncBaseTransport):
             events = [
                 {"type": "init", "text": "exec-unicode", "timestamp": 1},
                 {"type": "stdout", "text": _UNICODE_SEPARATORS, "timestamp": 2},
+                {
+                    "type": "execution_complete",
+                    "timestamp": 3,
+                    "execution_time": 4,
+                },
+            ]
+            sse = b"".join(
+                f"{json.dumps(event, ensure_ascii=False)}\n\n".encode()
+                for event in events
+            )
+            return httpx.Response(
+                200,
+                headers={"Content-Type": "text/event-stream"},
+                content=sse,
+                request=request,
+            )
+
+        if request.url.path == "/command" and payload.get("argv") == LITERAL_ARGV:
+            # Simulate execd's native argv execution: run the payload as
+            # `python3 -c <code> <args...>` directly (no shell) and stream
+            # back what `print(sys.argv[1:])` produces — with -c, Python's
+            # sys.argv[1:] is exactly the trailing literal arguments.
+            printed = str(payload["argv"][3:]) + "\n"
+            events = [
+                {"type": "init", "text": "exec-argv", "timestamp": 1},
+                {"type": "stdout", "text": printed, "timestamp": 2},
                 {
                     "type": "execution_complete",
                     "timestamp": 3,
@@ -152,6 +196,26 @@ async def test_run_command_streaming_preserves_unicode_separators() -> None:
 
 
 @pytest.mark.asyncio
+async def test_run_command_argv_streams_literal_arguments() -> None:
+    transport = _SseTransport()
+    cfg = ConnectionConfig(protocol="http", transport=transport)
+    endpoint = SandboxEndpoint(endpoint="localhost:44772", port=44772)
+    adapter = CommandsAdapter(cfg, endpoint)
+
+    execution = await adapter.run(LITERAL_ARGV)
+
+    assert execution.id == "exec-argv"
+    assert execution.logs.stdout[0].text == str(LITERAL_ARGV[3:]) + "\n"
+    assert "$HOME" in execution.logs.stdout[0].text
+    assert execution.complete is not None
+    assert execution.exit_code == 0
+
+    assert transport.last_request is not None
+    body = json.loads(transport.last_request.content.decode("utf-8"))
+    assert body == {"argv": LITERAL_ARGV}
+
+
+@pytest.mark.asyncio
 async def test_run_command_streaming_non_zero_exit_updates_exit_code() -> None:
     class _ErrorTransport(httpx.AsyncBaseTransport):
         async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
@@ -201,6 +265,20 @@ async def test_run_command_rejects_blank_command() -> None:
 
     with pytest.raises(InvalidArgumentException):
         await adapter.run("   ")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "timeout",
+    [timedelta(milliseconds=-1), timedelta(microseconds=-1), timedelta(microseconds=-999)],
+)
+async def test_run_command_rejects_negative_timeout(timeout: timedelta) -> None:
+    cfg = ConnectionConfig(protocol="http")
+    endpoint = SandboxEndpoint(endpoint="localhost:44772", port=44772)
+    adapter = CommandsAdapter(cfg, endpoint)
+
+    with pytest.raises(InvalidArgumentException):
+        await adapter.run("pwd", opts=RunCommandOpts(timeout=timeout))
 
 
 @pytest.mark.asyncio
@@ -256,3 +334,155 @@ async def test_run_in_session_non_zero_exit_updates_exit_code() -> None:
     assert execution.error.value == "7"
     assert execution.complete is None
     assert execution.exit_code == 7
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "timeout",
+    [timedelta(milliseconds=-1), timedelta(microseconds=-1), timedelta(microseconds=-999)],
+)
+async def test_run_in_session_rejects_negative_timeout(timeout: timedelta) -> None:
+    transport = _SseTransport()
+    cfg = ConnectionConfig(protocol="http", transport=transport)
+    endpoint = SandboxEndpoint(endpoint="localhost:44772", port=44772)
+    adapter = CommandsAdapter(cfg, endpoint)
+
+    with pytest.raises(InvalidArgumentException):
+        await adapter.run_in_session("sess-1", "pwd", timeout=timeout)
+    assert transport.last_request is None
+
+
+class _EarlyCloseAfterCompleteStream(httpx.AsyncByteStream):
+    """Yields SSE bytes then simulates the connection closing before the
+    chunked terminator arrives (regression case for #1528)."""
+
+    def __init__(self, sse: bytes) -> None:
+        self._sse = sse
+
+    async def __aiter__(self):
+        yield self._sse
+        raise httpx.RemoteProtocolError(
+            "peer closed connection without sending complete message body "
+            "(incomplete chunked read)"
+        )
+
+
+class _EarlyCloseTransport(httpx.AsyncBaseTransport):
+    """Transport whose SSE response body closes early right after the
+    ``execution_complete`` event, before the chunked terminator is sent."""
+
+    def __init__(self, sse: bytes) -> None:
+        self._sse = sse
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            headers={"Content-Type": "text/event-stream"},
+            stream=_EarlyCloseAfterCompleteStream(self._sse),
+            request=request,
+        )
+
+
+_EARLY_CLOSE_SSE = (
+    b'data: {"type":"init","text":"exec-bg","timestamp":1}\n\n'
+    b'data: {"type":"execution_complete","timestamp":2,"execution_time":3}\n\n'
+)
+
+
+@pytest.mark.asyncio
+async def test_run_background_command_breaks_on_complete_before_terminator() -> None:
+    """Background commands must not wait for the chunked terminator: once
+    ``execution_complete`` arrives, the SDK should stop reading the stream
+    even if the connection is closed early (#1528)."""
+    cfg = ConnectionConfig(
+        protocol="http", transport=_EarlyCloseTransport(_EARLY_CLOSE_SSE)
+    )
+    endpoint = SandboxEndpoint(endpoint="localhost:44772", port=44772)
+    adapter = CommandsAdapter(cfg, endpoint)
+
+    execution = await adapter.run("sleep 1", opts=RunCommandOpts(background=True))
+
+    assert execution.id == "exec-bg"
+    assert execution.complete is not None
+    assert execution.complete.execution_time_in_millis == 3
+    # Background executions do not synthesize an exit code from the stream.
+    assert execution.exit_code is None
+
+
+@pytest.mark.asyncio
+async def test_run_foreground_command_still_waits_for_terminator() -> None:
+    """Foreground commands must keep waiting for the stream terminator
+    after ``execution_complete`` — an early close is still surfaced as an
+    error, proving the background early-break did not change this path."""
+    cfg = ConnectionConfig(
+        protocol="http", transport=_EarlyCloseTransport(_EARLY_CLOSE_SSE)
+    )
+    endpoint = SandboxEndpoint(endpoint="localhost:44772", port=44772)
+    adapter = CommandsAdapter(cfg, endpoint)
+
+    with pytest.raises(SandboxConnectionException):
+        await adapter.run("sleep 1", opts=RunCommandOpts(background=False))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("command", [("tool", "arg"), None, 123])
+async def test_run_rejects_unsupported_command_types(command) -> None:
+    cfg = ConnectionConfig(protocol="http", transport=_SseTransport())
+    endpoint = SandboxEndpoint(endpoint="localhost:44772", port=44772)
+    adapter = CommandsAdapter(cfg, endpoint)
+
+    with pytest.raises(InvalidArgumentException, match="shell text or an argv list"):
+        await adapter.run(command)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", [False, True])
+@pytest.mark.parametrize("late_output", [False, True])
+async def test_foreground_drains_terminal_response_and_closes_stream(
+    failure: bool, late_output: bool
+) -> None:
+    """Handle immediate EOF from fixed execd and trailing output from older execd."""
+    terminal = (
+        {"type": "error", "error": {"ename": "CommandExecError", "evalue": "7", "traceback": []}}
+        if failure else
+        {"type": "execution_complete", "execution_time": 5}
+    )
+    output = [
+        {"type": "stdout", "text": "last stdout"},
+        {"type": "stderr", "text": "last stderr"},
+    ]
+    events = [terminal, *output] if late_output else [*output, terminal]
+
+    class Stream(httpx.AsyncByteStream):
+        closed = False
+        exhausted = False
+
+        async def __aiter__(self) -> AsyncIterator[bytes]:
+            for timestamp, event in enumerate(events, start=1):
+                frame = f"data: {json.dumps({'timestamp': timestamp, **event})}\n\n".encode()
+                # Split frames across reads to exercise incremental SSE decoding.
+                yield frame[:7]
+                yield frame[7:]
+            self.exhausted = True
+
+        async def aclose(self) -> None:
+            self.closed = True
+
+    stream = Stream()
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200, headers={"Content-Type": "text/event-stream"}, stream=stream
+        )
+    )
+    cfg = ConnectionConfig(protocol="http", transport=transport)
+    endpoint = SandboxEndpoint(endpoint="localhost:44772", port=44772)
+    adapter = CommandsAdapter(cfg, endpoint)
+
+    execution = await adapter.run("echo test")
+
+    assert [item.text for item in execution.logs.stdout] == ["last stdout"]
+    assert [item.text for item in execution.logs.stderr] == ["last stderr"]
+    assert execution.exit_code == (7 if failure else 0)
+    assert (execution.complete is None) == failure
+    assert stream.exhausted
+    assert stream.closed

@@ -1,5 +1,5 @@
 #
-# Copyright 2026 Alibaba Group Holding Ltd.
+# Copyright 2026 The OpenSandbox Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -31,6 +31,28 @@ class IsolatedWorkspaceSpec(BaseModel):
     mode: str | None = Field(
         default=None,
         description="Bind mode: 'rw' (read-write), 'overlay' (copy-on-write), or 'ro' (read-only). None = server default.",
+    )
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class IsolatedOverlaySpec(BaseModel):
+    """One overlay mount inside the isolated namespace.
+
+    ``mode='overlay'`` mounts a copy-on-write view: ``persist=True``
+    (default) uses a host upper directory, ``persist=False`` an ephemeral
+    tmpfs discarded with the session. ``rw``/``ro`` bind directly and must
+    leave ``persist`` unset.
+    """
+
+    path: str = Field(description="Mount destination inside the namespace (absolute)")
+    mode: str | None = Field(
+        default=None,
+        description="Mount mode: 'rw' (read-write), 'overlay' (copy-on-write), or 'ro' (read-only). None = server default ('overlay').",
+    )
+    persist: bool | None = Field(
+        default=None,
+        description="Overlay mode only. True (default) allocates a host upper directory; False uses an ephemeral tmpfs upper. None = server default.",
     )
 
     model_config = ConfigDict(populate_by_name=True)
@@ -68,10 +90,24 @@ class BindMount(BaseModel):
 
 
 class CreateIsolatedSessionRequest(BaseModel):
-    """Request to create an isolated bash session."""
+    """Request to create an isolated bash session.
 
-    workspace: IsolatedWorkspaceSpec = Field(
-        description="Workspace bind configuration"
+    ``workspace`` is legacy sugar: at least one of ``workspace`` or
+    ``overlays`` is required, and ``workspace`` is prepended when both are
+    set.
+    """
+
+    workspace: IsolatedWorkspaceSpec | None = Field(
+        default=None,
+        description="Workspace bind configuration (legacy single-workspace sugar)",
+    )
+    overlays: list[IsolatedOverlaySpec] | None = Field(
+        default=None,
+        description=(
+            "Independent overlay mounts inside one namespace. bubblewrap applies "
+            "mounts shallow-first, so a nested overlay shadows its ancestors "
+            "within its own subtree. Paths must be absolute and unique."
+        ),
     )
     profile: str | None = Field(
         default=None,
@@ -134,7 +170,11 @@ class IsolatedSessionInfo(BaseModel):
     )
     workspace: IsolatedWorkspaceSpec | None = Field(
         default=None,
-        description="Workspace bind configuration used at session creation.",
+        description="Workspace bind configuration used at session creation (single-overlay sessions only).",
+    )
+    overlays: list[IsolatedOverlaySpec] | None = Field(
+        default=None,
+        description="Effective overlay mounts of the session.",
     )
     extra_writable: list[str] | None = Field(
         default=None,
@@ -199,7 +239,11 @@ class IsolatedSessionState(BaseModel):
     )
     workspace: IsolatedWorkspaceSpec | None = Field(
         default=None,
-        description="Workspace bind configuration used at session creation.",
+        description="Workspace bind configuration used at session creation (single-overlay sessions only).",
+    )
+    overlays: list[IsolatedOverlaySpec] | None = Field(
+        default=None,
+        description="Effective overlay mounts of the session.",
     )
     extra_writable: list[str] | None = Field(
         default=None,
@@ -254,7 +298,12 @@ class IsolatedSessionSummary(BaseModel):
 
 
 class IsolatedRunOpts(BaseModel):
-    """Options for running code in an isolated session."""
+    """Options for running code in an isolated session.
+
+    Background execution is only available through
+    :meth:`IsolationSession.run_background`; this opts type carries no
+    background flag because :meth:`IsolationSession.run` is foreground-only.
+    """
 
     envs: dict[str, str] | None = Field(
         default=None,
@@ -262,7 +311,97 @@ class IsolatedRunOpts(BaseModel):
     )
     timeout_seconds: int | None = Field(
         default=None,
-        description="Maximum execution time in seconds",
+        description="Maximum execution time in seconds (foreground runs only)",
+    )
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class IsolatedBackgroundRun(BaseModel):
+    """Handle returned when a run is started with background: true.
+
+    Background runs require a writable log location under the first
+    overlay, so sessions whose first overlay is read-only (``ro``) or an
+    ephemeral overlay (``persist=False``) reject them with an error.
+    """
+
+    session_id: str = Field(description="Session the run was started in")
+    run_id: str = Field(description="Run ID for status and logs polling")
+    started_at: datetime | None = Field(
+        default=None, description="Run start timestamp"
+    )
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class IsolatedRunStatus(BaseModel):
+    """Lifecycle state of an isolated background run."""
+
+    session_id: str = Field(description="Session the run belongs to")
+    run_id: str = Field(description="Run identifier")
+    running: bool = Field(description="Whether the run is still executing")
+    exit_code: int | None = Field(
+        default=None, description="Exit code if the run has finished"
+    )
+    error: str | None = Field(
+        default=None, description="Error message if the run failed"
+    )
+    started_at: datetime | None = Field(
+        default=None, description="Run start timestamp"
+    )
+    finished_at: datetime | None = Field(
+        default=None,
+        description="Run finish timestamp (null while still running)",
+    )
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class IsolatedRunLogs(BaseModel):
+    """Incremental log read of an isolated background run."""
+
+    text: str = Field(description="Log content from the requested cursor")
+    cursor: int = Field(
+        description="Next byte cursor for incremental reads (pass to the next run_logs call)"
+    )
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class HardeningLayerState(BaseModel):
+    """Whether one hardening layer is actually enforced (OSEP-0018)."""
+
+    state: str | None = Field(
+        default=None,
+        description="active | disabled (not configured) | degraded | unsupported",
+    )
+    message: str | None = Field(
+        default=None,
+        description="Concrete reason whenever state is not active",
+    )
+
+
+class HardeningStatus(BaseModel):
+    """execd init-mode and workload-hardening state (OSEP-0018)."""
+
+    init_mode: str | None = Field(
+        default=None, description='"pid1" | "subreaper" | "none"'
+    )
+    signal_shield: bool = Field(
+        default=False,
+        description="Whether the kernel PID 1 signal shield is active",
+    )
+    cap_drop: HardeningLayerState | None = Field(
+        default=None, description="Capability/bounding-set reduction on user code"
+    )
+    seccomp: HardeningLayerState | None = Field(
+        default=None, description="Seccomp floor installed on user code"
+    )
+    landlock: HardeningLayerState | None = Field(
+        default=None, description="Landlock filesystem confinement"
+    )
+    ebpf: HardeningLayerState | None = Field(
+        default=None, description="eBPF exec/connect/privilege observation"
     )
 
     model_config = ConfigDict(populate_by_name=True)
@@ -299,6 +438,10 @@ class IsolatedCapabilities(BaseModel):
     )
     diff_supported: bool = Field(
         default=False, description="Whether diff is supported"
+    )
+    hardening: HardeningStatus | None = Field(
+        default=None,
+        description="execd init-mode and workload-hardening state (OSEP-0018)",
     )
 
     model_config = ConfigDict(populate_by_name=True)

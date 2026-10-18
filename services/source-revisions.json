@@ -8,8 +8,14 @@
     },
     "opensandbox": {
       "path": "services/opensandbox",
-      "upstream": "https://git.haokir/hydite/openlink/opensandbox",
-      "sourceCommit": "f2d110800b90c4f1160a420b5210cf658205d4b7"
+      "upstream": "https://github.com/opensandbox-group/OpenSandbox.git",
+      "sourceCommit": "bce6e5df55f41347a482ae7ba26d107044351cff",
+      "openlinkPatches": [
+        "Keep OpenSandbox sandbox and Egress sidecar containers restartable across Project VM reboots.",
+        "Retry Egress sidecar host-port conflicts with the upstream port reservation and conflict detection helpers.",
+        "Retain rootless Podman integration: userns_mode/security_opts forwarding, in-VM egress endpoint resolution, and sidecar loopback readiness probing.",
+        "Limit remote Podman image build contexts with .containerignore."
+      ]
     },
     "sandbox-runtime": {
       "path": "services/sandbox-runtime",
