@@ -1,5 +1,5 @@
 #
-# Copyright 2025 Alibaba Group Holding Ltd.
+# Copyright 2025 The OpenSandbox Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ from typing import TypedDict
 
 import httpx
 
+from opensandbox._httpx import build_async_redirect_client_options
 from opensandbox.adapters.converter.exception_converter import (
     ExceptionConverter,
 )
@@ -40,6 +41,7 @@ from opensandbox.adapters.converter.response_handler import (
     extract_request_id,
     handle_api_error,
 )
+from opensandbox.adapters.filesystem_identity import filesystem_identity_path
 from opensandbox.config import ConnectionConfig
 from opensandbox.exceptions import InvalidArgumentException, SandboxApiException
 from opensandbox.models.filesystem import (
@@ -92,7 +94,8 @@ class FilesystemAdapter(Filesystem):
     FILESYSTEM_DOWNLOAD_PATH = "/files/download"
 
     def __init__(
-        self, connection_config: ConnectionConfig, execd_endpoint: SandboxEndpoint
+        self, connection_config: ConnectionConfig, execd_endpoint: SandboxEndpoint,
+        *, _identity_prefix: str = "",
     ) -> None:
         """
         Initialize the filesystem service adapter.
@@ -103,47 +106,52 @@ class FilesystemAdapter(Filesystem):
         """
         self.connection_config = connection_config
         self.execd_endpoint = execd_endpoint
+        self._identity_prefix = _identity_prefix
         from opensandbox.api.execd import Client
 
         base_url = self._get_execd_base_url()
         timeout_seconds = self.connection_config.request_timeout.total_seconds()
         timeout = httpx.Timeout(timeout_seconds)
-        headers = {
-            "User-Agent": self.connection_config.user_agent,
-            **self.connection_config.headers,
-            **self.execd_endpoint.headers,
-        }
+        headers = self.execd_endpoint.build_request_headers(self.connection_config)
 
         self._httpx_client = httpx.AsyncClient(
             base_url=base_url,
             headers=headers,
             timeout=timeout,
             transport=self.connection_config.transport,
+            **build_async_redirect_client_options(self.connection_config, base_url),
         )
 
-        # Execd API does not require authentication
         self._client = Client(
             base_url=base_url,
             timeout=timeout,
+            follow_redirects=self.connection_config.follow_redirects,
         )
         self._client.set_async_httpx_client(self._httpx_client)
 
+    def with_identity(self, uid: int, gid: int) -> "FilesystemAdapter":
+        """Create an independent filesystem client with explicit Linux credentials."""
+        return FilesystemAdapter(
+            self.connection_config,
+            self.execd_endpoint,
+            _identity_prefix=filesystem_identity_path(uid, gid),
+        )
+
     def _get_execd_base_url(self) -> str:
         protocol = self.connection_config.protocol
-        return f"{protocol}://{self.execd_endpoint.endpoint}"
+        return f"{protocol}://{self.execd_endpoint.endpoint.rstrip('/')}{self._identity_prefix}"
 
     async def _get_httpx_client(self) -> httpx.AsyncClient:
-        """Return adapter-owned httpx client for execd (no auth required)."""
+        """Return adapter-owned httpx client for execd."""
         return self._httpx_client
 
     async def _get_client(self):
-        """Return the client for execd API (no auth required)."""
+        """Return the client for execd API."""
         return self._client
 
     def _get_execd_url(self, path: str) -> str:
         """Build URL for execd endpoint."""
-        protocol = self.connection_config.protocol
-        return f"{protocol}://{self.execd_endpoint.endpoint}{path}"
+        return f"{self._get_execd_base_url()}{path}"
 
     async def read_file(
         self,
@@ -324,7 +332,11 @@ class FilesystemAdapter(Filesystem):
 
             multipart_parts.append(("file", (entry.path, content, content_type)))
 
-        return await client.post(url, files=multipart_parts)
+        return await client.post(
+            url,
+            files=multipart_parts,
+            follow_redirects=False,
+        )
 
     async def _write_files_chunked(
         self,
@@ -409,6 +421,7 @@ class FilesystemAdapter(Filesystem):
             url,
             content=_body(),
             headers={"content-type": f"multipart/form-data; boundary={boundary}"},
+            follow_redirects=False,
         )
 
     async def write_file(
@@ -535,19 +548,14 @@ class FilesystemAdapter(Filesystem):
     async def replace_contents(self, entries: list[ContentReplaceEntry]) -> None:
         """Replace file contents using auto-generated API."""
         try:
-            from json import JSONDecodeError
-
             from opensandbox.api.execd.api.filesystem import replace_content
 
             client = await self._get_client()
-            try:
-                response_obj = await replace_content.asyncio_detailed(
-                    client=client,
-                    body=FilesystemModelConverter.to_api_replace_content_body(entries),
-                )
-                handle_api_error(response_obj, "Replace contents")
-            except JSONDecodeError:
-                pass
+            response_obj = await replace_content.asyncio_detailed(
+                client=client,
+                body=FilesystemModelConverter.to_api_replace_content_body(entries),
+            )
+            handle_api_error(response_obj, "Replace contents")
 
         except Exception as e:
             logger.error("Failed to replace contents", exc_info=e)

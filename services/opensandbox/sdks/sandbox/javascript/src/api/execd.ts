@@ -1,4 +1,4 @@
-// Copyright 2026 Alibaba Group Holding Ltd..
+// Copyright 2026 The OpenSandbox Authors
 // 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -225,10 +225,13 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Execute shell command
-         * @description Executes a shell command and streams the output in real-time using SSE (Server-Sent Events).
+         * Execute shell command or native argv
+         * @description Executes shell text (`command`) or native arguments (`argv`) and streams output using SSE; supply exactly one input mode.
          *     The command can run in foreground or background mode. The response includes stdout, stderr,
          *     execution status, and completion events.
+         *     In foreground mode, stdout and stderr event text preserves the original line endings
+         *     (`\n`, `\r`, or `\r\n`). Concatenate text from each stream's events to recover its output;
+         *     the final event may contain an unterminated fragment.
          *     Optionally specify `timeout` (milliseconds) to enforce a maximum runtime; the server will
          *     terminate the process when the timeout is reached. You can also pass `uid`/`gid` to run
          *     with specific user/group IDs, and `envs` to inject environment variables.
@@ -256,6 +259,8 @@ export interface paths {
          * Get command running status
          * @description Returns the current status of a command (foreground or background) by command ID.
          *     Includes running flag, exit code, error (if any), and start/finish timestamps.
+         *     Completed command metadata is retained for at least 24 hours and then removed
+         *     by an hourly cleanup. Running commands are never removed by retention cleanup.
          */
         get: operations["getCommandStatus"];
         put?: never;
@@ -282,6 +287,8 @@ export interface paths {
          *     tail cursor for the next poll. When no starting line is provided, the full logs are returned.
          *     Response body is plain text so it can be rendered directly in browsers; the latest line index
          *     is provided via response header `EXECD-COMMANDS-TAIL-CURSOR` for subsequent incremental requests.
+         *     Completed background command output is retained for at least 24 hours and then
+         *     removed by an hourly cleanup. Running command output is never removed by retention cleanup.
          */
         get: operations["getBackgroundCommandLogs"];
         put?: never;
@@ -536,6 +543,300 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/filesystem/{uid}/{gid}/files/info": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Linux UID performing the operation, separate from target-file ownership. */
+                uid: components["parameters"]["FilesystemUid"];
+                /** @description Primary Linux GID performing the operation. */
+                gid: components["parameters"]["FilesystemGid"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Get file metadata
+         * @description Retrieves detailed metadata for one or multiple files including permissions, owner,
+         *     group, size, and modification time. Returns a map of file paths to their corresponding
+         *     FileInfo objects.
+         */
+        get: operations["identityGetFilesInfo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/filesystem/{uid}/{gid}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Linux UID performing the operation, separate from target-file ownership. */
+                uid: components["parameters"]["FilesystemUid"];
+                /** @description Primary Linux GID performing the operation. */
+                gid: components["parameters"]["FilesystemGid"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete files
+         * @description Deletes one or multiple files from the sandbox. Only removes files, not directories.
+         *     Use RemoveDirs for directory removal.
+         */
+        delete: operations["identityRemoveFiles"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/filesystem/{uid}/{gid}/files/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Linux UID performing the operation, separate from target-file ownership. */
+                uid: components["parameters"]["FilesystemUid"];
+                /** @description Primary Linux GID performing the operation. */
+                gid: components["parameters"]["FilesystemGid"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change file permissions
+         * @description Changes permissions (mode), owner, and group for one or multiple files.
+         *     Accepts a map of file paths to permission settings including octal mode,
+         *     owner username, and group name.
+         */
+        post: operations["identityChmodFiles"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/filesystem/{uid}/{gid}/files/mv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Linux UID performing the operation, separate from target-file ownership. */
+                uid: components["parameters"]["FilesystemUid"];
+                /** @description Primary Linux GID performing the operation. */
+                gid: components["parameters"]["FilesystemGid"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rename or move files
+         * @description Renames or moves one or multiple files to new paths. Can be used for both
+         *     renaming within the same directory and moving to different directories.
+         *     Target directory must exist.
+         */
+        post: operations["identityRenameFiles"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/filesystem/{uid}/{gid}/files/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Linux UID performing the operation, separate from target-file ownership. */
+                uid: components["parameters"]["FilesystemUid"];
+                /** @description Primary Linux GID performing the operation. */
+                gid: components["parameters"]["FilesystemGid"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Search for files
+         * @description Searches for files matching a glob pattern within a specified directory and
+         *     its subdirectories. Returns file metadata including path, permissions, owner,
+         *     and group. Supports glob patterns like **, *.txt, etc. Default pattern is ** (all files).
+         */
+        get: operations["identitySearchFiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/filesystem/{uid}/{gid}/files/replace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Linux UID performing the operation, separate from target-file ownership. */
+                uid: components["parameters"]["FilesystemUid"];
+                /** @description Primary Linux GID performing the operation. */
+                gid: components["parameters"]["FilesystemGid"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replace file content
+         * @description Performs text replacement in one or multiple files. Replaces all occurrences
+         *     of the old string with the new string (similar to strings.ReplaceAll).
+         *     Preserves file permissions. Useful for batch text substitution across files.
+         *
+         *     When `verbose=true` is set, the response includes per-file replacement counts.
+         *     Without this parameter, the response body is empty (backward-compatible behavior).
+         */
+        post: operations["identityReplaceContent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/filesystem/{uid}/{gid}/files/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Linux UID performing the operation, separate from target-file ownership. */
+                uid: components["parameters"]["FilesystemUid"];
+                /** @description Primary Linux GID performing the operation. */
+                gid: components["parameters"]["FilesystemGid"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload files to sandbox
+         * @description Uploads one or multiple files to specified paths within the sandbox.
+         *     Reads metadata and file content from multipart form parts in sequence.
+         *     Each file upload consists of two parts: a metadata part (JSON) followed
+         *     by the actual file part.
+         */
+        post: operations["identityUploadFile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/filesystem/{uid}/{gid}/files/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Linux UID performing the operation, separate from target-file ownership. */
+                uid: components["parameters"]["FilesystemUid"];
+                /** @description Primary Linux GID performing the operation. */
+                gid: components["parameters"]["FilesystemGid"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Download file from sandbox
+         * @description Downloads a file from the specified path within the sandbox. Supports HTTP
+         *     range requests for resumable downloads and partial content retrieval.
+         *     Returns file as octet-stream with appropriate headers.
+         *
+         *     When offset/limit query parameters are provided, the endpoint performs
+         *     line-based reading and returns text/plain content instead. Line-based
+         *     parameters are mutually exclusive with the Range header.
+         */
+        get: operations["identityDownloadFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/filesystem/{uid}/{gid}/directories/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Linux UID performing the operation, separate from target-file ownership. */
+                uid: components["parameters"]["FilesystemUid"];
+                /** @description Primary Linux GID performing the operation. */
+                gid: components["parameters"]["FilesystemGid"];
+            };
+            cookie?: never;
+        };
+        /**
+         * List directory contents
+         * @description Lists entries under a directory with optional depth control. By default,
+         *     only immediate children are returned (`depth=1`). Set `depth` to a larger
+         *     value to include descendants up to that many levels below `path`. The
+         *     root directory itself is not included in the response.
+         *
+         *     Symbolic links are reported with `type=symlink` and are not traversed:
+         *     the listing never descends into a link target, even when `depth` would
+         *     otherwise allow it. For the same reason, when `path` itself resolves to
+         *     a symbolic link the request is rejected with `400`; callers must pass
+         *     the real directory path they want listed.
+         *
+         *     Entries are returned in lexical order by entry name within each
+         *     directory. Descendants reported via `depth>1` follow their parent in
+         *     the same lexical order, so a depth-2 listing yields stable, predictable
+         *     output for file-browser style clients.
+         */
+        get: operations["identityListDirectory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/filesystem/{uid}/{gid}/directories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Linux UID performing the operation, separate from target-file ownership. */
+                uid: components["parameters"]["FilesystemUid"];
+                /** @description Primary Linux GID performing the operation. */
+                gid: components["parameters"]["FilesystemGid"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create directories
+         * @description Creates one or multiple directories with specified permissions. Creates parent
+         *     directories as needed (similar to mkdir -p). Accepts a map of directory paths
+         *     to permission objects.
+         */
+        post: operations["identityMakeDirs"];
+        /**
+         * Delete directories
+         * @description Recursively deletes one or multiple directories and all their contents.
+         *     Similar to rm -rf. Use with caution as this operation cannot be undone.
+         */
+        delete: operations["identityRemoveDirs"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/metrics": {
         parameters: {
             query?: never;
@@ -662,8 +963,66 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Run code in an isolated session (SSE streaming) */
+        /**
+         * Run code in an isolated session
+         * @description Runs code inside an existing isolated session. Foreground mode (default) streams output via SSE (200). Background mode (`background: true`) starts the command detached and returns a JSON run handle with 202 Accepted for polling status and logs via `/v1/isolated/session/{sessionId}/runs/{runId}` and `.../runs/{runId}/logs`. `timeout_seconds` applies to foreground runs only; background runs are not time-limited (idle GC is suspended while one is active) and are bounded by the session lifetime.
+         */
         post: operations["runInIsolatedSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/isolated/session/{sessionId}/runs/{runId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get isolated background run status
+         * @description Returns the lifecycle state of a background run started with
+         *     `background: true` on the run endpoint. Includes the running flag,
+         *     exit code (when finished), error (if any), and start/finish timestamps.
+         *     Run records live as long as their session; they are removed when the
+         *     session is deleted or garbage-collected.
+         */
+        get: operations["getIsolatedRunStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/isolated/session/{sessionId}/runs/{runId}/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get isolated background run logs (non-streamed)
+         * @description Returns the combined stdout/stderr of a background run as plain text.
+         *     Supports incremental reads similar to a file seek: pass a byte offset
+         *     via the `cursor` query parameter to fetch output after that position
+         *     and receive the latest tail cursor via the
+         *     `EXECD-ISOLATED-TAIL-CURSOR` response header for the next poll.
+         *     When no cursor is provided, the log is returned from the start. At
+         *     most 16 MiB are returned per request; use the returned cursor to
+         *     fetch the remainder.
+         *     Per-run log retention is capped at 16 MiB: output beyond the cap is
+         *     discarded when the run completes, so clients that need more than the
+         *     first page should drain incrementally while the run is active.
+         *     Response body is plain text so it can be rendered directly in browsers.
+         */
+        get: operations["getIsolatedRunLogs"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -946,15 +1305,24 @@ export interface components {
              */
             code: string;
         };
-        /** @description Request to execute a shell command */
+        /** @description Execute exactly one of command (shell text) or argv (native arguments). */
         RunCommandRequest: {
             /**
-             * @description Shell command to execute
+             * @description Shell command to execute. Mutually exclusive with argv.
              * @example ls -la /workspace
              */
-            command: string;
+            command?: string;
             /**
-             * @description Working directory for command execution
+             * @description Executable and literal arguments, mutually exclusive with command. argv[0] must be non-empty; NUL is invalid and arguments are not shell-expanded. Relative paths use cwd; bare names search absolute entries in the child PATH. Windows uses standard argument encoding and adds .exe to extensionless names; batch files require a shell.
+             * @example [
+             *       "python3",
+             *       "-c",
+             *       "print('hello')"
+             *     ]
+             */
+            argv?: string[];
+            /**
+             * @description Working directory, defaulting to the daemon directory. Expands $NAME and ${NAME} using the command environment, and leading ~ using the daemon user's home. Undefined variables fail validation.
              * @example /workspace
              */
             cwd?: string;
@@ -983,7 +1351,7 @@ export interface components {
              */
             gid?: number;
             /**
-             * @description Environment variables injected into the command process.
+             * @description Literal request values overriding EXECD_ENVS and daemon variables, in that order. Names are case-insensitive on Windows.
              * @example {
              *       "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
              *       "PYTHONUNBUFFERED": "1"
@@ -992,7 +1360,7 @@ export interface components {
             envs?: {
                 [key: string]: string;
             };
-        };
+        } & (unknown | unknown);
         /** @description Command execution status (foreground or background) */
         CommandStatusResponse: {
             /**
@@ -1265,10 +1633,13 @@ export interface components {
              */
             message: string;
         };
+        /** @description Creates an isolated session with one or more overlay mounts. The legacy `workspace` field is kept as sugar for a single-element `overlays` list: at least one of `workspace` or `overlays` must be provided, and when both are present `workspace` is prepended to `overlays`. */
         CreateIsolatedSessionRequest: {
             /** @enum {string} */
             profile?: "strict" | "balanced";
-            workspace: components["schemas"]["IsolatedWorkspaceSpec"];
+            workspace?: components["schemas"]["IsolatedWorkspaceSpec"];
+            /** @description Independent overlay mounts inside one namespace. Each entry gets its own copy-on-write upper (or a direct/ro bind for rw/ro modes). bubblewrap applies mounts shallow-first, so a nested overlay (for example `/workspace` on top of a `/` root overlay) shadows its ancestors within its own subtree. Paths must be absolute, unique, and clean (no trailing slash, `.` or `..` segments); at most 16 mounts per session (including the legacy `workspace`). */
+            overlays?: components["schemas"]["IsolatedOverlaySpec"][];
             extra_writable?: string[];
             /** @description Additional host paths bind-mounted into the namespace with an explicit source-to-destination mapping. Unlike extra_writable (which mounts source==destination read-write), each entry may map a distinct destination path and be mounted read-only. The source path of every entry must fall within the configured writable allowlist. */
             binds?: components["schemas"]["BindMount"][];
@@ -1289,6 +1660,21 @@ export interface components {
             path: string;
             /** @enum {string} */
             mode?: "rw" | "overlay" | "ro";
+        };
+        /** @description One overlay mount inside the isolated namespace. `mode=overlay` mounts a copy-on-write view: with `persist=true` (default) writes land in a host upper directory tracked and usage-accounted by execd (the substrate for the diff/commit endpoints); with `persist=false` the upper is an ephemeral tmpfs whose writes are discarded when the session ends. `rw` and `ro` bind the host path directly; `persist` applies to overlay mode only and must be omitted for them (execd rejects the request otherwise). */
+        IsolatedOverlaySpec: {
+            /**
+             * @description Mount destination inside the namespace (absolute).
+             * @example /workspace
+             */
+            path: string;
+            /**
+             * @description Mount mode. Defaults to `overlay`.
+             * @enum {string}
+             */
+            mode?: "rw" | "overlay" | "ro";
+            /** @description Overlay mode only. When true (default; execd treats an omitted value as true) the copy-on-write upper is a host directory allocated per session; when false it is an ephemeral tmpfs whose writes are discarded when the session ends. Must be omitted for `rw` and `ro` modes (execd rejects the request otherwise). Because an ephemeral upper lives inside the namespace only, the filesystem API serves `persist=false` overlays from their host-side (lower) content: in-session writes under such an overlay are not observable through the files API and files-API writes into the overlay are rejected. Overlay mounts with `persist=false` also cannot host background-run logs, so background runs are rejected unless the first overlay is `rw` or `overlay` with `persist=true`. */
+            persist?: boolean;
         };
         BindMount: {
             /** @description Host path to bind-mount into the namespace. */
@@ -1313,13 +1699,98 @@ export interface components {
             created_at?: string;
         };
         IsolatedRunRequest: {
+            /**
+             * @description Shell code to execute inside the session
+             * @example echo hello
+             */
             code: string;
+            /** @description Environment variables exported into the shell before the code runs */
             envs?: {
                 [key: string]: string;
             };
+            /**
+             * @description Foreground-only timeout. The run is interrupted after this many
+             *     seconds. Ignored for background runs: a background run is not
+             *     time-limited, and idle GC is suspended while it is active, so a
+             *     long-running background command keeps the session alive until it
+             *     finishes (then the normal idle window applies) or the session is
+             *     deleted.
+             * @example 60
+             */
             timeout_seconds?: number;
+            /**
+             * @description When true (default false), start the code detached inside the
+             *     session and return a 202 run handle instead of streaming output.
+             *     The run's combined stdout/stderr is captured to a log file that
+             *     can be polled via the run logs endpoint; its lifecycle is tracked
+             *     via the run status endpoint.
+             *     Background runs share the session's process group, so session-
+             *     level signals (for example the SIGINT sent when a foreground run
+             *     times out or is cancelled) also reach them; execd cannot signal
+             *     individual in-namespace processes.
+             *     Background runs require a writable log location under the first
+             *     overlay, so sessions whose first overlay is read-only (`ro`) or
+             *     an ephemeral overlay (`persist: false`) reject them with 400.
+             *     rw overlays and persistent (`persist: true`) overlays are
+             *     supported.
+             * @example false
+             */
+            background?: boolean;
         };
-        /** @description State of an isolated session. Runtime status fields (status, created_at, last_run_at, idle_remaining_seconds) are always present. Creation-parameter fields (profile, workspace, binds, share_net, env_passthrough, uid, gid, uid_mode, extra_writable, idle_timeout_seconds) echo the parameters used to create the session and let a stateless client rebuild a session handle from just a session ID (e.g. after a client restart or in serverless workers). Older execd builds may omit the creation-parameter fields; clients must tolerate them being absent. */
+        /** @description Handle returned when a run is started with background: true */
+        IsolatedBackgroundRunResponse: {
+            /**
+             * Format: uuid
+             * @description Session the run was started in
+             */
+            session_id: string;
+            /**
+             * Format: uuid
+             * @description Run ID for status and logs polling
+             */
+            run_id: string;
+            /**
+             * Format: date-time
+             * @description Run start time in RFC3339 format
+             */
+            started_at: string;
+        };
+        /** @description Lifecycle state of an isolated background run */
+        IsolatedRunStatus: {
+            /** Format: uuid */
+            session_id: string;
+            /** Format: uuid */
+            run_id: string;
+            /**
+             * @description Whether the run is still executing
+             * @example false
+             */
+            running: boolean;
+            /**
+             * Format: int32
+             * @description Exit code of the code if the run has finished
+             * @example 0
+             */
+            exit_code?: number | null;
+            /**
+             * @description Error message if the run failed (e.g. session terminated)
+             * @example session terminated
+             */
+            error?: string;
+            /**
+             * Format: date-time
+             * @description Run start time in RFC3339 format
+             * @example 2025-12-22T09:08:05Z
+             */
+            started_at: string;
+            /**
+             * Format: date-time
+             * @description Run finish time in RFC3339 format (null if still running)
+             * @example 2025-12-22T09:08:09Z
+             */
+            finished_at?: string | null;
+        };
+        /** @description State of an isolated session. Runtime status fields (status, created_at, last_run_at, idle_remaining_seconds) are always present. Creation-parameter fields (profile, workspace, overlays, binds, share_net, env_passthrough, uid, gid, uid_mode, extra_writable, idle_timeout_seconds) echo the parameters used to create the session and let a stateless client rebuild a session handle from just a session ID (e.g. after a client restart or in serverless workers). `overlays` lists the effective mounts; for sessions created via the legacy `workspace` field it repeats that workspace as a single element, and `workspace` itself is only echoed for such single-overlay sessions. Older execd builds may omit the creation-parameter fields; clients must tolerate them being absent. */
         SessionState: {
             /** @enum {string} */
             status?: "active" | "dead" | "destroyed";
@@ -1334,6 +1805,8 @@ export interface components {
              */
             profile?: "strict" | "balanced";
             workspace?: components["schemas"]["IsolatedWorkspaceSpec"];
+            /** @description Effective overlay mounts of the session. */
+            overlays?: components["schemas"]["IsolatedOverlaySpec"][];
             extra_writable?: string[];
             binds?: components["schemas"]["BindMount"][];
             share_net?: boolean;
@@ -1372,6 +1845,30 @@ export interface components {
             userns_available?: boolean;
             commit_supported?: boolean;
             diff_supported?: boolean;
+            /** @description execd init-mode and workload-hardening state (OSEP-0018): whether execd is the sandbox init and which of its controls are in effect. Not an isolation capability; reported here so operators see enforcement state in one place. */
+            hardening?: {
+                /**
+                 * @description How execd supervises the sandbox process tree. pid1: execd is the kernel init of the container. subreaper: execd reaps orphans but lacks the PID 1 kernel signal shield. none: init mode is off (default).
+                 * @enum {string}
+                 */
+                init_mode?: "pid1" | "subreaper" | "none";
+                /** @description Whether the kernel PID 1 signal shield protects execd from in-namespace signals (true only in init_mode pid1). */
+                signal_shield?: boolean;
+                /** @description Capability/bounding-set reduction on user code. */
+                cap_drop?: components["schemas"]["HardeningLayerState"];
+                /** @description Seccomp floor installed on user code. */
+                seccomp?: components["schemas"]["HardeningLayerState"];
+                /** @description Landlock filesystem confinement on user code. */
+                landlock?: components["schemas"]["HardeningLayerState"];
+                /** @description eBPF exec/connect/privilege observation. */
+                ebpf?: components["schemas"]["HardeningLayerState"];
+            };
+        };
+        /** @description Whether one hardening layer is actually enforced. state is "active" | "disabled" (not configured) | "degraded" (configured but a prerequisite is missing) | "unsupported" (kernel/build cannot provide it). message gives the concrete reason whenever state is not active. */
+        HardeningLayerState: {
+            /** @enum {string} */
+            state?: "active" | "disabled" | "degraded" | "unsupported";
+            message?: string;
         };
     };
     responses: {
@@ -1430,7 +1927,12 @@ export interface components {
             };
         };
     };
-    parameters: never;
+    parameters: {
+        /** @description Linux UID performing the operation, separate from target-file ownership. */
+        FilesystemUid: number;
+        /** @description Primary Linux GID performing the operation. */
+        FilesystemGid: number;
+    };
     requestBodies: never;
     headers: never;
     pathItems: never;
@@ -1620,8 +2122,11 @@ export interface operations {
         parameters: {
             query: {
                 /**
-                 * @description Session ID of the execution context to interrupt
-                 * @example session-123
+                 * @description Execution session ID of the running code execution to interrupt
+                 *     (the `init` event's id for the current run). Passing an unknown
+                 *     id fails loudly with a 500 "no such session" error; it is not
+                 *     silently ignored.
+                 * @example exec-123
                  */
                 id: string;
             };
@@ -2305,6 +2810,670 @@ export interface operations {
             500: components["responses"]["InternalServerError"];
         };
     };
+    identityGetFilesInfo: {
+        parameters: {
+            query: {
+                /** @description File path(s) to get info for (can be specified multiple times) */
+                path: string[];
+            };
+            header?: never;
+            path: {
+                /** @description Linux UID performing the operation, separate from target-file ownership. */
+                uid: components["parameters"]["FilesystemUid"];
+                /** @description Primary Linux GID performing the operation. */
+                gid: components["parameters"]["FilesystemGid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Map of file paths to FileInfo objects */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: components["schemas"]["FileInfo"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+            /** @description Filesystem execution identity requires Linux. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The requested identity could not be established or the worker failed; no fallback to Execd identity occurs. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    identityRemoveFiles: {
+        parameters: {
+            query: {
+                /**
+                 * @description File path(s) to delete (can be specified multiple times)
+                 * @example [
+                 *       "/workspace/temp.txt"
+                 *     ]
+                 */
+                path: string[];
+            };
+            header?: never;
+            path: {
+                /** @description Linux UID performing the operation, separate from target-file ownership. */
+                uid: components["parameters"]["FilesystemUid"];
+                /** @description Primary Linux GID performing the operation. */
+                gid: components["parameters"]["FilesystemGid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Files deleted successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            500: components["responses"]["InternalServerError"];
+            /** @description Filesystem execution identity requires Linux. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The requested identity could not be established or the worker failed; no fallback to Execd identity occurs. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    identityChmodFiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Linux UID performing the operation, separate from target-file ownership. */
+                uid: components["parameters"]["FilesystemUid"];
+                /** @description Primary Linux GID performing the operation. */
+                gid: components["parameters"]["FilesystemGid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "/workspace/script.sh": {
+                 *         "owner": "admin",
+                 *         "group": "admin",
+                 *         "mode": 755
+                 *       },
+                 *       "/workspace/config.json": {
+                 *         "owner": "admin",
+                 *         "group": "admin",
+                 *         "mode": 755
+                 *       }
+                 *     }
+                 */
+                "application/json": {
+                    [key: string]: components["schemas"]["Permission"];
+                };
+            };
+        };
+        responses: {
+            /** @description Permissions changed successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            500: components["responses"]["InternalServerError"];
+            /** @description Filesystem execution identity requires Linux. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The requested identity could not be established or the worker failed; no fallback to Execd identity occurs. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    identityRenameFiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Linux UID performing the operation, separate from target-file ownership. */
+                uid: components["parameters"]["FilesystemUid"];
+                /** @description Primary Linux GID performing the operation. */
+                gid: components["parameters"]["FilesystemGid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example [
+                 *       {
+                 *         "src": "/workspace/old_name.txt",
+                 *         "dest": "/workspace/new_name.txt"
+                 *       },
+                 *       {
+                 *         "src": "/workspace/file.py",
+                 *         "dest": "/archive/file.py"
+                 *       }
+                 *     ]
+                 */
+                "application/json": components["schemas"]["RenameFileItem"][];
+            };
+        };
+        responses: {
+            /** @description Files renamed/moved successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+            /** @description Filesystem execution identity requires Linux. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The requested identity could not be established or the worker failed; no fallback to Execd identity occurs. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    identitySearchFiles: {
+        parameters: {
+            query: {
+                /** @description Root directory path to search in */
+                path: string;
+                /** @description Glob pattern to match files (default is **) */
+                pattern?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Linux UID performing the operation, separate from target-file ownership. */
+                uid: components["parameters"]["FilesystemUid"];
+                /** @description Primary Linux GID performing the operation. */
+                gid: components["parameters"]["FilesystemGid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Array of matching files with metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileInfo"][];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+            /** @description Filesystem execution identity requires Linux. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The requested identity could not be established or the worker failed; no fallback to Execd identity occurs. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    identityReplaceContent: {
+        parameters: {
+            query?: {
+                /** @description When true, return per-file replacement counts in the response body. */
+                verbose?: boolean;
+            };
+            header?: never;
+            path: {
+                /** @description Linux UID performing the operation, separate from target-file ownership. */
+                uid: components["parameters"]["FilesystemUid"];
+                /** @description Primary Linux GID performing the operation. */
+                gid: components["parameters"]["FilesystemGid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "/workspace/config.yaml": {
+                 *         "old": "localhost:8080",
+                 *         "new": "0.0.0.0:9090"
+                 *       },
+                 *       "/workspace/app.py": {
+                 *         "old": "DEBUG = True",
+                 *         "new": "DEBUG = False"
+                 *       }
+                 *     }
+                 */
+                "application/json": {
+                    [key: string]: components["schemas"]["ReplaceFileContentItem"];
+                };
+            };
+        };
+        responses: {
+            /**
+             * @description Content replaced successfully. When `verbose=true`, returns per-file
+             *     replacement counts. Otherwise, the response body is empty.
+             */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "/workspace/config.yaml": {
+                     *         "replacedCount": 1
+                     *       },
+                     *       "/workspace/app.py": {
+                     *         "replacedCount": 0
+                     *       }
+                     *     }
+                     */
+                    "application/json": {
+                        [key: string]: components["schemas"]["ReplaceFileContentResult"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            500: components["responses"]["InternalServerError"];
+            /** @description Filesystem execution identity requires Linux. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The requested identity could not be established or the worker failed; no fallback to Execd identity occurs. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    identityUploadFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Linux UID performing the operation, separate from target-file ownership. */
+                uid: components["parameters"]["FilesystemUid"];
+                /** @description Primary Linux GID performing the operation. */
+                gid: components["parameters"]["FilesystemGid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * @description JSON-encoded file metadata (FileMetadata object)
+                     * @example {"path":"/workspace/file.txt","owner":"admin","group":"admin","mode":755}
+                     */
+                    metadata?: string;
+                    /**
+                     * Format: binary
+                     * @description File to upload
+                     */
+                    file?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Files uploaded successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            500: components["responses"]["InternalServerError"];
+            /** @description Filesystem execution identity requires Linux. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The requested identity could not be established or the worker failed; no fallback to Execd identity occurs. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    identityDownloadFile: {
+        parameters: {
+            query: {
+                /**
+                 * @description Absolute or relative path of the file to download
+                 * @example /workspace/data.csv
+                 */
+                path: string;
+                /**
+                 * @description Starting line number (1-based) for line-based reading. Mutually exclusive with the Range header.
+                 * @example 100
+                 */
+                offset?: number;
+                /**
+                 * @description Number of lines to return for line-based reading. Mutually exclusive with the Range header.
+                 * @example 20
+                 */
+                limit?: number;
+            };
+            header?: {
+                /**
+                 * @description HTTP Range header for partial content requests. Mutually exclusive with offset/limit.
+                 * @example bytes=0-1023
+                 */
+                Range?: string;
+            };
+            path: {
+                /** @description Linux UID performing the operation, separate from target-file ownership. */
+                uid: components["parameters"]["FilesystemUid"];
+                /** @description Primary Linux GID performing the operation. */
+                gid: components["parameters"]["FilesystemGid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /**
+             * @description File content. Returns application/octet-stream for full or byte-range
+             *     downloads, or text/plain for line-based reads (when offset/limit are provided).
+             */
+            200: {
+                headers: {
+                    /** @description Attachment header with filename (byte-range mode only) */
+                    "Content-Disposition"?: string;
+                    /** @description File size in bytes (byte-range mode only) */
+                    "Content-Length"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                    "text/plain": string;
+                };
+            };
+            /** @description Partial file content (when Range header is provided) */
+            206: {
+                headers: {
+                    /** @description Range of bytes being returned */
+                    "Content-Range"?: string;
+                    /** @description Length of the returned range */
+                    "Content-Length"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            /** @description Requested range not satisfiable */
+            416: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            500: components["responses"]["InternalServerError"];
+            /** @description Filesystem execution identity requires Linux. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The requested identity could not be established or the worker failed; no fallback to Execd identity occurs. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    identityListDirectory: {
+        parameters: {
+            query: {
+                /**
+                 * @description Directory path to list
+                 * @example /workspace/project
+                 */
+                path: string;
+                /**
+                 * @description Maximum child depth to include. `1` lists immediate children only.
+                 * @example 2
+                 */
+                depth?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Linux UID performing the operation, separate from target-file ownership. */
+                uid: components["parameters"]["FilesystemUid"];
+                /** @description Primary Linux GID performing the operation. */
+                gid: components["parameters"]["FilesystemGid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Array of directory entries with metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "path": "/workspace/project/src",
+                     *         "type": "directory",
+                     *         "size": 0,
+                     *         "modified_at": "2025-11-16T14:30:45Z",
+                     *         "created_at": "2025-11-16T14:30:45Z",
+                     *         "owner": "admin",
+                     *         "group": "admin",
+                     *         "mode": 755
+                     *       },
+                     *       {
+                     *         "path": "/workspace/project/README.md",
+                     *         "type": "file",
+                     *         "size": 2048,
+                     *         "modified_at": "2025-11-16T14:30:45Z",
+                     *         "created_at": "2025-11-16T14:30:45Z",
+                     *         "owner": "admin",
+                     *         "group": "admin",
+                     *         "mode": 644
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["FileInfo"][];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+            /** @description Filesystem execution identity requires Linux. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The requested identity could not be established or the worker failed; no fallback to Execd identity occurs. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    identityMakeDirs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Linux UID performing the operation, separate from target-file ownership. */
+                uid: components["parameters"]["FilesystemUid"];
+                /** @description Primary Linux GID performing the operation. */
+                gid: components["parameters"]["FilesystemGid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "/workspace/project": {
+                 *         "owner": "admin",
+                 *         "group": "admin",
+                 *         "mode": 755
+                 *       },
+                 *       "/workspace/logs": {
+                 *         "owner": "admin",
+                 *         "group": "admin",
+                 *         "mode": 755
+                 *       }
+                 *     }
+                 */
+                "application/json": {
+                    [key: string]: components["schemas"]["Permission"];
+                };
+            };
+        };
+        responses: {
+            /** @description Directories created successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            500: components["responses"]["InternalServerError"];
+            /** @description Filesystem execution identity requires Linux. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The requested identity could not be established or the worker failed; no fallback to Execd identity occurs. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    identityRemoveDirs: {
+        parameters: {
+            query: {
+                /**
+                 * @description Directory path(s) to delete (can be specified multiple times)
+                 * @example [
+                 *       "/workspace/temp"
+                 *     ]
+                 */
+                path: string[];
+            };
+            header?: never;
+            path: {
+                /** @description Linux UID performing the operation, separate from target-file ownership. */
+                uid: components["parameters"]["FilesystemUid"];
+                /** @description Primary Linux GID performing the operation. */
+                gid: components["parameters"]["FilesystemGid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Directories deleted successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            500: components["responses"]["InternalServerError"];
+            /** @description Filesystem execution identity requires Linux. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The requested identity could not be established or the worker failed; no fallback to Execd identity occurs. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getMetrics: {
         parameters: {
             query?: never;
@@ -2475,13 +3644,93 @@ export interface operations {
             };
         };
         responses: {
-            /** @description SSE stream of execution output */
+            /** @description SSE stream of execution events (foreground runs only) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "text/event-stream": components["schemas"]["ServerStreamEvent"];
+                };
+            };
+            /** @description JSON run handle for background runs (background: true). The run was accepted and started detached; poll status and logs via `/v1/isolated/session/{sessionId}/runs/{runId}`. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IsolatedBackgroundRunResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getIsolatedRunStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+                /** @description Run ID returned by the background run endpoint */
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Background run status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IsolatedRunStatus"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getIsolatedRunLogs: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Optional byte offset (behaves like a file seek). When provided,
+                 *     only log bytes after this offset are returned. The response
+                 *     includes the latest offset (`EXECD-ISOLATED-TAIL-CURSOR`) so the
+                 *     client can request incremental output on subsequent calls.
+                 *     At most 16 MiB are returned per request.
+                 *     If omitted, the log is returned from the start.
+                 * @example 120
+                 */
+                cursor?: number;
+            };
+            header?: never;
+            path: {
+                sessionId: string;
+                /** @description Run ID returned by the background run endpoint */
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Background run log (plain text) and tail cursor via header */
+            200: {
+                headers: {
+                    /** @description Highest available byte offset after applying the request cursor (use as the next cursor for incremental reads) */
+                    "EXECD-ISOLATED-TAIL-CURSOR"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example line1
+                     *     line2
+                     *     warn: something on stderr
+                     */
+                    "text/plain": string;
                 };
             };
             400: components["responses"]["BadRequest"];

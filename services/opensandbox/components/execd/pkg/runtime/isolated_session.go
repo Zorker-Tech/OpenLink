@@ -1,4 +1,4 @@
-// Copyright 2026 Alibaba Group Holding Ltd.
+// Copyright 2026 The OpenSandbox Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"sync"
 	"sync/atomic"
@@ -29,13 +30,26 @@ import (
 
 	"github.com/alibaba/opensandbox/execd/pkg/isolation"
 	"github.com/alibaba/opensandbox/execd/pkg/log"
+	"github.com/alibaba/opensandbox/execd/pkg/sessionresource"
 )
+
+// IsolatedOverlayOptions describes one overlay mount requested for a
+// session. Mode defaults to overlay; Persist (overlay mode only) defaults
+// to true.
+type IsolatedOverlayOptions struct {
+	Path    string
+	Mode    string // "" (default overlay) | "rw" | "overlay" | "ro"
+	Persist *bool  // overlay mode only; nil defaults to true
+}
 
 // IsolatedSessionOptions bundles the parameters for creating an isolated session.
 type IsolatedSessionOptions struct {
-	Profile            string
+	Profile string
+	// Legacy single-workspace sugar, merged into Overlays by
+	// normalizeIsolatedOptions.
 	WorkspacePath      string
 	WorkspaceMode      string
+	Overlays           []IsolatedOverlayOptions
 	ExtraWritable      []string
 	Binds              []isolation.BindMount
 	ShareNet           *bool
@@ -46,6 +60,54 @@ type IsolatedSessionOptions struct {
 	UidMode            string // "setpriv" (default) or "userns"
 	IdleTimeoutSeconds int
 }
+
+// sessionOverlay is one resolved overlay mount of a live session. For
+// overlay-mode mounts persist reports whether a host upper directory was
+// requested; upperDir/workDir are otherwise empty.
+type sessionOverlay struct {
+	path     string
+	mode     isolation.WorkspaceMode
+	persist  bool
+	upperDir string
+	workDir  string
+}
+
+// resolveSessionOverlays merges the legacy workspace fields into Overlays
+// and applies the same defaults as normalizeIsolatedOptions.
+func resolveSessionOverlays(opts *IsolatedSessionOptions) []sessionOverlay {
+	raw := make([]IsolatedOverlayOptions, 0, len(opts.Overlays)+1)
+	if opts.WorkspacePath != "" {
+		raw = append(raw, IsolatedOverlayOptions{Path: opts.WorkspacePath, Mode: opts.WorkspaceMode})
+	}
+	raw = append(raw, opts.Overlays...)
+
+	overlays := make([]sessionOverlay, 0, len(raw))
+	for _, ov := range raw {
+		mode := isolation.WorkspaceOverlay
+		switch isolation.WorkspaceMode(ov.Mode) {
+		case isolation.WorkspaceRW:
+			mode = isolation.WorkspaceRW
+		case isolation.WorkspaceRO:
+			mode = isolation.WorkspaceRO
+		}
+		persist := mode == isolation.WorkspaceOverlay && (ov.Persist == nil || *ov.Persist)
+		overlays = append(overlays, sessionOverlay{path: ov.Path, mode: mode, persist: persist})
+	}
+	return overlays
+}
+
+type sessionNamespacePins interface {
+	Directory() string
+	NetPath() string
+	UserPath() string
+	Identity() sessionresource.NamespaceIdentity
+	Close() error
+}
+
+type sessionNamespacePinner func(
+	context.Context,
+	isolation.WorkloadIdentity,
+) (sessionNamespacePins, error)
 
 // isolatedSession holds a long-running shell process inside a bwrap namespace.
 type isolatedSession struct {
@@ -67,13 +129,18 @@ type isolatedSession struct {
 	doneCh               chan struct{} // closed after process wait and lifecycle drain
 	lifecycleMonitorDone chan struct{} // closed after drain-failure monitor exits
 	upperID              string        // key in UpperManager, used for Release/Remove
-	upperDir             string
-	workDir              string
+	overlays             []sessionOverlay
 	createdAt            time.Time
 	lastRunAt            time.Time
 	isolator             isolation.Isolator
 	lifecycle            isolation.WorkloadLifecycle
 	identity             isolation.WorkloadIdentity
+	// activeBackgroundRuns: in-flight detached runs. While non-zero, idle GC
+	// must not collect the session (background processes die with the bwrap
+	// process group).
+	activeBackgroundRuns atomic.Int64
+	namespacePinner      sessionNamespacePinner
+	namespacePins        sessionNamespacePins
 }
 
 const isolatedSessionStartupTimeout = 10 * time.Second
@@ -85,15 +152,22 @@ var (
 	}
 )
 
-func newIsolatedSession(id string, opts *IsolatedSessionOptions, iso isolation.Isolator) *isolatedSession {
+func newIsolatedSession(
+	id string,
+	opts *IsolatedSessionOptions,
+	iso isolation.Isolator,
+	namespacePinner sessionNamespacePinner,
+) *isolatedSession {
 	return &isolatedSession{
-		id:            id,
-		opts:          opts,
-		isolator:      iso,
-		processWaited: make(chan struct{}),
-		doneCh:        make(chan struct{}),
-		createdAt:     time.Now(),
-		lastRunAt:     time.Now(),
+		id:              id,
+		opts:            opts,
+		overlays:        resolveSessionOverlays(opts),
+		isolator:        iso,
+		namespacePinner: namespacePinner,
+		processWaited:   make(chan struct{}),
+		doneCh:          make(chan struct{}),
+		createdAt:       time.Now(),
+		lastRunAt:       time.Now(),
 	}
 }
 
@@ -119,14 +193,15 @@ func (s *isolatedSession) start() error {
 		return fmt.Errorf("unknown isolation profile %q", s.opts.Profile)
 	}
 
-	wrapOpts.Workspace.Path = s.opts.WorkspacePath
-	switch isolation.WorkspaceMode(s.opts.WorkspaceMode) {
-	case isolation.WorkspaceRW:
-		wrapOpts.Workspace.Mode = isolation.WorkspaceRW
-	case isolation.WorkspaceRO:
-		wrapOpts.Workspace.Mode = isolation.WorkspaceRO
-	default:
-		wrapOpts.Workspace.Mode = isolation.WorkspaceOverlay
+	// One mount segment per resolved overlay.
+	wrapOpts.Overlays = make([]isolation.OverlaySpec, 0, len(s.overlays))
+	for _, ov := range s.overlays {
+		wrapOpts.Overlays = append(wrapOpts.Overlays, isolation.OverlaySpec{
+			Path:     ov.path,
+			Mode:     ov.mode,
+			UpperDir: ov.upperDir,
+			WorkDir:  ov.workDir,
+		})
 	}
 
 	if s.opts.ShareNet != nil {
@@ -143,8 +218,6 @@ func (s *isolatedSession) start() error {
 	if s.opts.UidMode != "" {
 		wrapOpts.UidMode = isolation.UidMode(s.opts.UidMode)
 	}
-	wrapOpts.UpperDir = s.upperDir
-	wrapOpts.WorkDir = s.workDir
 
 	lifecycleIsolator, ok := s.isolator.(isolation.LifecycleIsolator)
 	if !ok {
@@ -165,29 +238,48 @@ func (s *isolatedSession) start() error {
 	}
 	s.lifecycle = lifecycle
 
-	stdin, err := cmd.StdinPipe()
+	stdinR, stdinW, err := os.Pipe()
 	if err != nil {
 		closeCommandExtraFiles(cmd)
 		return s.failStartup(err)
 	}
-	s.stdin = stdin
-	stdout, err := cmd.StdoutPipe()
+	s.stdin = stdinW
+	stdoutR, stdoutW, err := os.Pipe()
 	if err != nil {
+		_ = stdinR.Close()
+		_ = stdinW.Close()
 		closeCommandExtraFiles(cmd)
 		return s.failStartup(err)
 	}
-	s.stdout = stdout
-	cmd.Stderr = cmd.Stdout
+	s.stdout = stdoutR
+	cmd.Stdin = stdinR
+	cmd.Stdout = stdoutW
+	cmd.Stderr = stdoutW
 
-	if err := cmd.Start(); err != nil {
+	mp, err := launchManaged(
+		cmd,
+		withPreReap(func() { s.markProcessExitedBeforeReap(nil) }),
+		// bwrap needs unshare/mount + capabilities to build the namespace;
+		// its workload is already reduced inside by bwrap's own seccomp and
+		// the session gate.
+		withoutHardening(),
+	)
+	if err != nil {
+		_ = stdinR.Close()
+		_ = stdinW.Close()
+		_ = stdoutR.Close()
+		_ = stdoutW.Close()
 		closeCommandExtraFiles(cmd)
 		return s.failStartup(fmt.Errorf("start %s: %w", shell, err))
 	}
 
+	// Close the child-side ends in the parent — the child has its own copies.
+	_ = stdinR.Close()
+	_ = stdoutW.Close()
 	closeCommandExtraFiles(cmd)
 
 	go func() {
-		_ = waitCommandWithExitBarrier(cmd, s.markProcessExitedBeforeReap)
+		_ = waitManagedWithBarrier(mp, s.markProcessExitedBeforeReap)
 		// Publish process reaping before waiting for lifecycle accounting.
 		// Once Wait returns, the numeric PID/PGID may be reused and must never
 		// be signalled again.
@@ -222,12 +314,15 @@ func (s *isolatedSession) start() error {
 		context.Background(),
 		isolatedSessionStartupTimeout,
 	)
-	identity, err := lifecycle.WaitForIdentity(startupCtx)
+	prepareErr := s.prepareStartupIdentity(
+		startupCtx,
+		lifecycle,
+		wrapOpts,
+	)
 	cancelStartup()
-	if err != nil {
-		return s.failStartup(fmt.Errorf("wait for isolated workload identity: %w", err))
+	if prepareErr != nil {
+		return s.failStartup(prepareErr)
 	}
-	s.identity = identity
 
 	if err := lifecycle.MarkReady(); err != nil {
 		return s.failStartup(fmt.Errorf("release isolated workload gate: %w", err))
@@ -261,6 +356,53 @@ func (s *isolatedSession) start() error {
 	}
 
 	return nil
+}
+
+func (s *isolatedSession) prepareStartupIdentity(
+	ctx context.Context,
+	lifecycle isolation.WorkloadLifecycle,
+	wrapOpts isolation.WrapOptions,
+) error {
+	identity, err := lifecycle.WaitForIdentity(ctx)
+	if err != nil {
+		return fmt.Errorf("wait for isolated workload identity: %w", err)
+	}
+	s.identity = identity
+
+	if !s.requiresNamespacePins(wrapOpts) {
+		return nil
+	}
+	if s.namespacePinner == nil {
+		return ErrSessionNamespaceUnavailable
+	}
+
+	pins, err := s.namespacePinner(ctx, identity)
+	if pins != nil {
+		// A pinner can return ownership with an error when its rollback was
+		// incomplete. Retain it so failStartup and later GC retries can finish
+		// cleanup after the workload has stopped.
+		s.namespacePins = pins
+	}
+	if err != nil {
+		return errors.Join(
+			ErrSessionNamespaceUnavailable,
+			fmt.Errorf("pin isolated session namespaces: %w", err),
+		)
+	}
+	if pins == nil {
+		return ErrSessionNamespaceUnavailable
+	}
+	return nil
+}
+
+func (s *isolatedSession) requiresNamespacePins(
+	wrapOpts isolation.WrapOptions,
+) bool {
+	// This phase preserves the legacy share_net default. Every explicitly
+	// private NetNS is pinned, including the legacy setpriv loopback-only
+	// topology. A later network-profile PR will make private+userns the secure
+	// default and reject setpriv for the network backend.
+	return !wrapOpts.ShareNet
 }
 
 func (s *isolatedSession) startupTerminalError(
@@ -321,9 +463,11 @@ func (s *isolatedSession) stop() error {
 		// leader and return EPERM on some kernels. Once both cmd.Wait and the
 		// trusted lifecycle drain are complete, teardown is confirmed and the
 		// transient signal error must not turn a successful delete into 500.
-		log.Warn("%v; session process and lifecycle are fully reaped", processGroupKillErr)
+		log.Warn("isolated session: %v; process and lifecycle fully reaped", processGroupKillErr)
 	}
-	return s.closeLifecycle()
+	namespaceErr := s.closeNamespacePins()
+	lifecycleErr := s.closeLifecycle()
+	return errors.Join(namespaceErr, lifecycleErr)
 }
 
 func (s *isolatedSession) stopProcess(hasProcess bool) (bool, error) {
@@ -405,6 +549,20 @@ func (s *isolatedSession) closeLifecycle() error {
 	return cleanupErr
 }
 
+func (s *isolatedSession) closeNamespacePins() error {
+	if s.namespacePins == nil {
+		return nil
+	}
+	if err := s.namespacePins.Close(); err != nil {
+		return errors.Join(
+			ErrSessionNamespaceCleanup,
+			fmt.Errorf("close isolated session namespace pins: %w", err),
+		)
+	}
+	s.namespacePins = nil
+	return nil
+}
+
 // markProcessExitedBeforeReap publishes the Linux WNOWAIT exit barrier before
 // cmd.Wait can reap and release the numeric PID/PGID. If the kernel barrier
 // itself fails, disable numeric group signals rather than risk targeting a
@@ -414,7 +572,7 @@ func (s *isolatedSession) markProcessExitedBeforeReap(barrierErr error) {
 	defer s.processSignalMu.Unlock()
 
 	if barrierErr != nil {
-		log.Error("isolated session exit barrier failed: %v", barrierErr)
+		log.Error("isolated session: exit barrier failed: %v", barrierErr)
 	}
 	s.processExited = true
 }

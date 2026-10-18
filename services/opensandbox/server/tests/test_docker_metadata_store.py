@@ -1,4 +1,4 @@
-# Copyright 2026 Alibaba Group Holding Ltd.
+# Copyright 2026 The OpenSandbox Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 
 """Unit tests for DockerMetadataStore (per-sandbox file-backed)."""
 
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -141,6 +142,35 @@ class TestDockerMetadataStore:
         result = store.get("sbx-001", labels)
         assert result == {"team": "platform", "old": "remove", "project": "new"}
 
+    def test_patch_after_delete_does_not_restore_deleted_key(self, tmp_path: Path):
+        store = self._make_store(tmp_path)
+        labels = {"team": "infra", "env": "dev"}
+        store.patch("sbx-001", labels, {"env": None})
+        store.patch("sbx-001", labels, {"owner": "alice"})
+        result = store.get("sbx-001", labels)
+        assert result == {"team": "infra", "owner": "alice"}
+
+    def test_patch_after_deleting_all_keys_does_not_restore_labels(self, tmp_path: Path):
+        store = self._make_store(tmp_path)
+        labels = {"team": "infra", "env": "dev"}
+        store.patch("sbx-001", labels, {"team": None, "env": None})
+        assert store.get("sbx-001", labels) is None
+
+        store.patch("sbx-001", labels, {"owner": "alice"})
+        result = store.get("sbx-001", labels)
+        assert result == {"owner": "alice"}
+
+    def test_patch_non_object_override_falls_back_to_labels(self, tmp_path: Path):
+        store = self._make_store(tmp_path)
+        labels = {"team": "infra"}
+        override = tmp_path / "metadata" / "sbx-001.json"
+        override.parent.mkdir(parents=True)
+        override.write_text("[]")
+
+        store.patch("sbx-001", labels, {"owner": "alice"})
+        result = store.get("sbx-001", labels)
+        assert result == {"team": "infra", "owner": "alice"}
+
     def test_patch_ignores_system_labels(self, tmp_path: Path):
         store = self._make_store(tmp_path)
         labels = {
@@ -208,3 +238,32 @@ class TestDockerMetadataStore:
         store2 = DockerMetadataStore(root=root)
         result = store2.get("sbx-001", {"hello": "world"})
         assert result == {"hello": "world", "team": "platform"}
+
+    # -- concurrency ---------------------------------------------------------
+
+    def test_concurrent_patches_of_distinct_keys_keep_every_key(self, tmp_path: Path):
+        """Concurrent patches of one sandbox must neither fail nor drop each other's keys."""
+        store = self._make_store(tmp_path)
+        labels = {"team": "infra"}
+        writers, rounds = 8, 40
+        barrier = threading.Barrier(writers)
+        errors: list[Exception] = []
+
+        def run(writer: int) -> None:
+            for round_no in range(rounds):
+                barrier.wait()
+                try:
+                    store.patch("sbx-001", labels, {f"w{writer}-r{round_no}": "x"})
+                except Exception as exc:
+                    errors.append(exc)
+
+        threads = [threading.Thread(target=run, args=(writer,)) for writer in range(writers)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        assert errors == []
+        result = store.get("sbx-001", labels) or {}
+        expected = {f"w{writer}-r{round_no}" for writer in range(writers) for round_no in range(rounds)}
+        assert expected - set(result) == set()

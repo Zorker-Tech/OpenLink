@@ -1,5 +1,5 @@
 #
-# Copyright 2026 Alibaba Group Holding Ltd.
+# Copyright 2026 The OpenSandbox Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -62,6 +62,7 @@ SECRET_VALUES = {
     "runtime-token": "vault-runtime-token",
     "runtime-token-replaced": "vault-runtime-token-replaced",
     "npm-scoped-token": "vault-npm-scoped-token",
+    "pypi-proxy-token": "vault-pypi-proxy-token",
 }
 
 
@@ -174,6 +175,55 @@ def test_credential_vault_allows_npm_scoped_package_encoded_slash(
         assert response["case"] == "npm-scoped"
         assert response["authorization"] == (
             f"Bearer {SECRET_VALUES['npm-scoped-token']}"
+        )
+    finally:
+        _close_sandbox(cfg, sandbox)
+
+
+def test_credential_vault_allows_double_encoded_artifact_url(
+    credential_vault_target_ip: str,
+) -> None:
+    """Regression for the ``%252f`` false-positive on artifact-store URLs.
+
+    Some artifact stores (e.g. internal pypi proxies) double-encode their
+    coordinate paths on the wire, producing download URLs like
+    ``/pypi-proxy/requests/%252Fcentral-proxy%252Fpackages%252Fa0/pkg.whl``.
+    The credential proxy used to reject these as ambiguous because nested
+    encodings were refused by decode depth. Now a double-encoded path passes
+    when every percent-decoding depth matches the same binding, so pip
+    downloads from such stores work inside sandboxes with Credential Vault
+    active.
+    """
+    cfg, sandbox = _create_credential_proxy_sandbox(credential_vault_target_ip)
+    try:
+        sandbox.credential_vault.create(
+            credentials=[
+                Credential(
+                    name="pypi-proxy-token",
+                    source={"value": SECRET_VALUES["pypi-proxy-token"]},
+                )
+            ],
+            bindings=[
+                _binding(
+                    "pypi-proxy",
+                    "/pypi-proxy/*",
+                    {"type": "bearer", "credential": "pypi-proxy-token"},
+                ),
+            ],
+        )
+
+        response = _curl_json(
+            sandbox,
+            credential_vault_target_ip,
+            "/pypi-proxy/requests/"
+            "%252Fcentral-proxy%252Fpackages%252Fa0%252Ff4"
+            "%252Fc67b0b3f1b9245e8d266f0f112c500d50e5b4e83cb6f3b71b6528104182a"
+            "/requests-2.34.2-py3-none-any.whl",
+        )
+        assert response["ok"] is True
+        assert response["case"] == "pypi-proxy"
+        assert response["authorization"] == (
+            f"Bearer {SECRET_VALUES['pypi-proxy-token']}"
         )
     finally:
         _close_sandbox(cfg, sandbox)
@@ -441,6 +491,51 @@ def test_credential_vault_runtime_mutation_adds_replaces_and_deletes_binding(
         _close_sandbox(cfg, sandbox)
 
 
+def test_credential_vault_large_bodies_across_streaming_threshold(
+    credential_vault_target_ip: str,
+) -> None:
+    """Regression for the stream_large_bodies=1m header-injection bug.
+
+    mitmproxy streams request bodies above 1 MiB upstream and the credential
+    proxy used to inject auth headers in the request hook, which fires only
+    after a streamed body has been forwarded — so large requests reached the
+    upstream without credentials and returned 403. Injection now happens in
+    the requestheaders hook; 1 MiB - 1, exactly 1 MiB, 1 MiB + 1 and 2 MiB
+    must all reach the upstream with the API key injected.
+    """
+    cfg, sandbox = _create_credential_proxy_sandbox(credential_vault_target_ip)
+    try:
+        sandbox.credential_vault.create(
+            credentials=[
+                Credential(
+                    name="api-key-token",
+                    source={"value": SECRET_VALUES["api-key-token"]},
+                )
+            ],
+            bindings=[
+                _binding(
+                    "large-body",
+                    "/large-body",
+                    {
+                        "type": "apiKey",
+                        "name": "X-Api-Key",
+                        "credential": "api-key-token",
+                    },
+                    methods=["POST"],
+                ),
+            ],
+        )
+
+        for size in [1024 * 1024 - 1, 1024 * 1024, 1024 * 1024 + 1, 2 * 1024 * 1024]:
+            response = _curl_json_file(sandbox, credential_vault_target_ip, "/large-body", size)
+            assert response["ok"] is True
+            assert response["case"] == "large-body"
+            assert response["missingOrInvalid"] == []
+            assert response["bodyReceivedLength"] == size
+    finally:
+        _close_sandbox(cfg, sandbox)
+
+
 def _create_credential_proxy_sandbox(target_ip: str) -> tuple[object, SandboxSync]:
     cfg = create_connection_config_sync()
     sandbox = SandboxSync.create(
@@ -528,3 +623,31 @@ def _curl_json(
 
 def _shell_quote(value: str) -> str:
     return "'" + value.replace("'", "'\\''") + "'"
+
+
+def _curl_json_file(
+    sandbox: SandboxSync,
+    target_ip: str,
+    path: str,
+    size: int,
+) -> dict[str, object]:
+    payload_path = f"/tmp/credential-vault-large-{size}.bin"
+    create = sandbox.commands.run(
+        f"head -c {size} /dev/zero | tr '\\000' 'x' > {payload_path}"
+    )
+    assert create.error is None, create.error
+    command = (
+        "curl --fail --silent --show-error --connect-timeout 5 --max-time 60 "
+        f"--request POST --header 'content-type: text/plain' "
+        f"--data-binary @{payload_path} "
+        f"--resolve {TARGET_HOST}:80:{target_ip} "
+        f"http://{TARGET_HOST}{path}"
+    )
+    for secret in SECRET_VALUES.values():
+        assert secret not in command
+
+    result = sandbox.commands.run(command)
+    assert result.error is None, result.error
+    stdout = "".join(part.text for part in result.logs.stdout)
+    assert stdout
+    return json.loads(stdout)

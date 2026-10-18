@@ -1,4 +1,4 @@
-// Copyright 2026 Alibaba Group Holding Ltd.
+// Copyright 2026 The OpenSandbox Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -64,7 +64,7 @@ func TestIsolationSessionLifecycle(t *testing.T) {
 	ctx, sb := createIsolatedTestSandbox(t)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
 	})
 	require.NoError(t, err)
 	assert.NotEmpty(t, session.SessionID())
@@ -85,7 +85,7 @@ func TestIsolationAttachRoundtrip(t *testing.T) {
 	ctx, sb := createIsolatedTestSandbox(t)
 
 	created, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
 	})
 	require.NoError(t, err)
 	sessionID := created.SessionID()
@@ -137,13 +137,13 @@ func TestIsolationListSessions(t *testing.T) {
 
 	// Create two sessions and confirm both appear in the list.
 	sessionA, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
 	})
 	require.NoError(t, err)
 	defer sessionA.Delete(ctx)
 
 	sessionB, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
 	})
 	require.NoError(t, err)
 	defer sessionB.Delete(ctx)
@@ -178,7 +178,7 @@ func TestIsolationRunEcho(t *testing.T) {
 	ctx, sb := createIsolatedTestSandbox(t)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
 	})
 	require.NoError(t, err)
 	defer session.Delete(ctx)
@@ -192,7 +192,7 @@ func TestIsolationPIDIsolation(t *testing.T) {
 	ctx, sb := createIsolatedTestSandbox(t)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
 	})
 	require.NoError(t, err)
 	defer session.Delete(ctx)
@@ -208,7 +208,7 @@ func TestIsolationRunWithEnvs(t *testing.T) {
 	ctx, sb := createIsolatedTestSandbox(t)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
 	})
 	require.NoError(t, err)
 	defer session.Delete(ctx)
@@ -225,7 +225,7 @@ func TestIsolationSessionStatePersists(t *testing.T) {
 	ctx, sb := createIsolatedTestSandbox(t)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
 	})
 	require.NoError(t, err)
 	defer session.Delete(ctx)
@@ -244,14 +244,14 @@ func TestIsolationTmpIsolation(t *testing.T) {
 	sb.RunCommand(ctx, "mkdir -p /workspace", nil)
 
 	sessionA, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/workspace", Mode: "rw"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/workspace", Mode: "rw"},
 		Profile:   "strict",
 	})
 	require.NoError(t, err)
 	defer sessionA.Delete(ctx)
 
 	sessionB, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/workspace", Mode: "rw"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/workspace", Mode: "rw"},
 		Profile:   "strict",
 	})
 	require.NoError(t, err)
@@ -275,7 +275,7 @@ func TestIsolationRunWithHandlers(t *testing.T) {
 	ctx, sb := createIsolatedTestSandbox(t)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
 	})
 	require.NoError(t, err)
 	defer session.Delete(ctx)
@@ -297,7 +297,7 @@ func TestIsolationFilesViaRun(t *testing.T) {
 	ctx, sb := createIsolatedTestSandbox(t)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
 	})
 	require.NoError(t, err)
 	defer session.Delete(ctx)
@@ -315,7 +315,7 @@ func TestIsolationOverlayMode(t *testing.T) {
 
 	marker := "overlay_marker_file.txt"
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "overlay"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "overlay"},
 	})
 	require.NoError(t, err)
 	defer session.Delete(ctx)
@@ -340,7 +340,7 @@ func TestIsolationRWFilesUploadDownload(t *testing.T) {
 	ctx, sb := createIsolatedTestSandbox(t)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
 	})
 	require.NoError(t, err)
 	defer session.Delete(ctx)
@@ -367,7 +367,7 @@ func TestIsolationRWFilesInfo(t *testing.T) {
 	ctx, sb := createIsolatedTestSandbox(t)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
 	})
 	require.NoError(t, err)
 	defer session.Delete(ctx)
@@ -390,7 +390,7 @@ func TestIsolationRWFilesSearch(t *testing.T) {
 	ctx, sb := createIsolatedTestSandbox(t)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
 	})
 	require.NoError(t, err)
 	defer session.Delete(ctx)
@@ -422,7 +422,7 @@ func TestIsolationRWFilesMkdir(t *testing.T) {
 	ctx, sb := createIsolatedTestSandbox(t)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
 	})
 	require.NoError(t, err)
 	defer session.Delete(ctx)
@@ -442,7 +442,7 @@ func TestIsolationRWFilesDelete(t *testing.T) {
 	ctx, sb := createIsolatedTestSandbox(t)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
 	})
 	require.NoError(t, err)
 	defer session.Delete(ctx)
@@ -466,7 +466,7 @@ func TestIsolationRWFilesMove(t *testing.T) {
 	ctx, sb := createIsolatedTestSandbox(t)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
 	})
 	require.NoError(t, err)
 	defer session.Delete(ctx)
@@ -501,7 +501,7 @@ func TestIsolationRWFilesChmod(t *testing.T) {
 	ctx, sb := createIsolatedTestSandbox(t)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
 	})
 	require.NoError(t, err)
 	defer session.Delete(ctx)
@@ -529,7 +529,7 @@ func TestIsolationRWFilesReplace(t *testing.T) {
 	ctx, sb := createIsolatedTestSandbox(t)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
 	})
 	require.NoError(t, err)
 	defer session.Delete(ctx)
@@ -560,7 +560,7 @@ func TestIsolationRWFilesListDirectory(t *testing.T) {
 	ctx, sb := createIsolatedTestSandbox(t)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
 	})
 	require.NoError(t, err)
 	defer session.Delete(ctx)
@@ -595,7 +595,7 @@ func TestIsolationRWHostVisible(t *testing.T) {
 	ctx, sb := createIsolatedTestSandbox(t)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
 	})
 	require.NoError(t, err)
 	defer session.Delete(ctx)
@@ -629,7 +629,7 @@ func TestIsolationROCanReadExistingFiles(t *testing.T) {
 	require.NoError(t, err)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "ro"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "ro"},
 	})
 	require.NoError(t, err)
 	defer session.Delete(ctx)
@@ -645,7 +645,7 @@ func TestIsolationROCannotWrite(t *testing.T) {
 	ctx, sb := createIsolatedTestSandbox(t)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "ro"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "ro"},
 	})
 	require.NoError(t, err)
 	defer session.Delete(ctx)
@@ -676,7 +676,7 @@ func TestIsolationROFilesAPIRead(t *testing.T) {
 	require.NoError(t, err)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "ro"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "ro"},
 	})
 	require.NoError(t, err)
 	defer session.Delete(ctx)
@@ -700,7 +700,7 @@ func TestIsolationROFilesAPISearch(t *testing.T) {
 	require.NoError(t, err)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "ro"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "ro"},
 	})
 	require.NoError(t, err)
 	defer session.Delete(ctx)
@@ -729,7 +729,7 @@ func TestIsolationROFilesAPIListDirectory(t *testing.T) {
 	require.NoError(t, err)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "ro"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "ro"},
 	})
 	require.NoError(t, err)
 	defer session.Delete(ctx)
@@ -766,7 +766,7 @@ func TestIsolationOverlayWritesNotVisibleOnHost(t *testing.T) {
 	skipIfOverlayNotSupported(t, ctx, sb)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "overlay"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "overlay"},
 	})
 	require.NoError(t, err)
 	defer session.Delete(ctx)
@@ -798,7 +798,7 @@ func TestIsolationOverlayCanReadHostFiles(t *testing.T) {
 	require.NoError(t, err)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "overlay"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "overlay"},
 	})
 	require.NoError(t, err)
 	defer session.Delete(ctx)
@@ -822,7 +822,7 @@ func TestIsolationOverlayCOWDoesNotMutateHost(t *testing.T) {
 	require.NoError(t, err)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "overlay"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "overlay"},
 	})
 	require.NoError(t, err)
 	defer session.Delete(ctx)
@@ -850,7 +850,7 @@ func TestIsolationOverlayFilesAPIUploadDownload(t *testing.T) {
 	skipIfOverlayNotSupported(t, ctx, sb)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "overlay"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "overlay"},
 	})
 	require.NoError(t, err)
 	defer session.Delete(ctx)
@@ -885,7 +885,7 @@ func TestIsolationOverlayFilesAPISearch(t *testing.T) {
 	skipIfOverlayNotSupported(t, ctx, sb)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "overlay"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "overlay"},
 	})
 	require.NoError(t, err)
 	defer session.Delete(ctx)
@@ -918,7 +918,7 @@ func TestIsolationOverlayFilesAPIDelete(t *testing.T) {
 	skipIfOverlayNotSupported(t, ctx, sb)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "overlay"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "overlay"},
 	})
 	require.NoError(t, err)
 	defer session.Delete(ctx)
@@ -943,7 +943,7 @@ func TestIsolationOverlayFilesAPIMove(t *testing.T) {
 	skipIfOverlayNotSupported(t, ctx, sb)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "overlay"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "overlay"},
 	})
 	require.NoError(t, err)
 	defer session.Delete(ctx)
@@ -979,7 +979,7 @@ func TestIsolationOverlayFilesAPIChmod(t *testing.T) {
 	skipIfOverlayNotSupported(t, ctx, sb)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "overlay"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "overlay"},
 	})
 	require.NoError(t, err)
 	defer session.Delete(ctx)
@@ -1008,7 +1008,7 @@ func TestIsolationOverlayFilesAPIReplace(t *testing.T) {
 	skipIfOverlayNotSupported(t, ctx, sb)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "overlay"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "overlay"},
 	})
 	require.NoError(t, err)
 	defer session.Delete(ctx)
@@ -1040,7 +1040,7 @@ func TestIsolationOverlayFilesAPIListDirectory(t *testing.T) {
 	skipIfOverlayNotSupported(t, ctx, sb)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "overlay"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "overlay"},
 	})
 	require.NoError(t, err)
 	defer session.Delete(ctx)
@@ -1080,7 +1080,7 @@ func TestIsolationRunOnce(t *testing.T) {
 	ctx, sb := createIsolatedTestSandbox(t)
 
 	exec, err := sb.IsolationRunOnce(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
 	}, opensandbox.IsolatedRunRequest{Code: "echo run-once-e2e"}, nil)
 	require.NoError(t, err)
 	assert.Contains(t, exec.Text(), "run-once-e2e")
@@ -1090,7 +1090,7 @@ func TestIsolationRunOnceWithEnvs(t *testing.T) {
 	ctx, sb := createIsolatedTestSandbox(t)
 
 	exec, err := sb.IsolationRunOnce(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
 	}, opensandbox.IsolatedRunRequest{
 		Code: "echo $E2E_VAR",
 		Envs: map[string]string{"E2E_VAR": "run-once-val"},
@@ -1123,7 +1123,7 @@ func TestIsolationBindReadWriteHostVisible(t *testing.T) {
 	require.NoError(t, err)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
 		Binds: []opensandbox.BindMount{
 			{Source: srcDir, Dest: dest},
 		},
@@ -1150,7 +1150,7 @@ func TestIsolationBindIllegalRejected(t *testing.T) {
 	ctx, sb := createIsolatedTestSandbox(t)
 
 	_, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
 		Binds: []opensandbox.BindMount{
 			// /etc is not in the writable allowlist.
 			{Source: "/etc", Dest: "/mnt/etc"},
@@ -1179,7 +1179,7 @@ func TestIsolationBindReadOnlyReadable(t *testing.T) {
 	require.NoError(t, err)
 
 	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
 		Binds: []opensandbox.BindMount{
 			{Source: srcDir, Dest: dest, ReadOnly: true},
 		},
@@ -1213,7 +1213,7 @@ func TestIsolationWithSessionE2E(t *testing.T) {
 
 	var output string
 	err := sb.IsolationWithSession(ctx, opensandbox.CreateIsolatedSessionRequest{
-		Workspace: opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
 	}, func(session *opensandbox.IsolationSession) error {
 		_, err := session.Run(ctx, opensandbox.IsolatedRunRequest{Code: "export WS_VAR=with-session-val"}, nil)
 		if err != nil {
@@ -1228,4 +1228,115 @@ func TestIsolationWithSessionE2E(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Contains(t, output, "with-session-val")
+}
+
+// ---------------------------------------------------------------------------
+// Background run tests
+// ---------------------------------------------------------------------------
+
+// waitForBackgroundRun polls a background run's status until it is no longer
+// running or the timeout elapses.
+func waitForBackgroundRun(t *testing.T, ctx context.Context, session *opensandbox.IsolationSession, runID string) *opensandbox.IsolatedRunStatus {
+	t.Helper()
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		status, err := session.GetRunStatus(ctx, runID)
+		require.NoError(t, err)
+		if !status.Running {
+			return status
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	t.Fatalf("background run %s did not finish within 30s", runID)
+	return nil
+}
+
+func createIsolationSessionForTest(t *testing.T, ctx context.Context, sb *opensandbox.Sandbox) *opensandbox.IsolationSession {
+	t.Helper()
+	session, err := sb.IsolationCreate(ctx, opensandbox.CreateIsolatedSessionRequest{
+		Workspace: &opensandbox.IsolatedWorkspaceSpec{Path: "/tmp", Mode: "rw"},
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { session.Delete(ctx) })
+	return session
+}
+
+// TestIsolationBackgroundRunCompletes covers the full background lifecycle:
+// start a detached echo run, poll status until it finishes with exit code 0,
+// read the logs from the start, and verify an incremental read from the
+// returned cursor returns the remainder.
+func TestIsolationBackgroundRunCompletes(t *testing.T) {
+	ctx, sb := createIsolatedTestSandbox(t)
+	session := createIsolationSessionForTest(t, ctx, sb)
+
+	run, err := session.RunBackground(ctx, "echo hello-background")
+	require.NoError(t, err)
+	assert.NotEmpty(t, run.RunID)
+	assert.Equal(t, session.SessionID(), run.SessionID)
+	assert.False(t, run.StartedAt.IsZero(), "started_at should be populated")
+
+	status := waitForBackgroundRun(t, ctx, session, run.RunID)
+	assert.False(t, status.Running)
+	assert.NotNil(t, status.ExitCode)
+	assert.Equal(t, 0, *status.ExitCode)
+	assert.NotNil(t, status.FinishedAt)
+
+	logs, nextCursor, err := session.GetRunLogs(ctx, run.RunID, 0)
+	require.NoError(t, err)
+	assert.Contains(t, logs, "hello-background")
+	assert.Greater(t, nextCursor, int64(0))
+
+	// Incremental read from the returned cursor returns the remainder.
+	tail, tailCursor, err := session.GetRunLogs(ctx, run.RunID, nextCursor)
+	require.NoError(t, err)
+	assert.Equal(t, "", tail)
+	assert.Equal(t, nextCursor, tailCursor)
+}
+
+// TestIsolationBackgroundRunExitCode verifies exit code propagation for a
+// failing background run.
+func TestIsolationBackgroundRunExitCode(t *testing.T) {
+	ctx, sb := createIsolatedTestSandbox(t)
+	session := createIsolationSessionForTest(t, ctx, sb)
+
+	run, err := session.RunBackground(ctx, "exit 7")
+	require.NoError(t, err)
+
+	status := waitForBackgroundRun(t, ctx, session, run.RunID)
+	assert.False(t, status.Running)
+	assert.NotNil(t, status.ExitCode)
+	assert.Equal(t, 7, *status.ExitCode)
+	assert.Equal(t, "", status.Error)
+}
+
+// TestIsolationBackgroundRunDoesNotPolluteForeground verifies that background
+// output is captured to the run log and does not leak into a following
+// foreground run's output.
+func TestIsolationBackgroundRunDoesNotPolluteForeground(t *testing.T) {
+	ctx, sb := createIsolatedTestSandbox(t)
+	session := createIsolationSessionForTest(t, ctx, sb)
+
+	run, err := session.RunBackground(ctx, "echo bg-output-line")
+	require.NoError(t, err)
+	waitForBackgroundRun(t, ctx, session, run.RunID)
+
+	exec, err := session.Run(ctx, opensandbox.IsolatedRunRequest{Code: "echo fg-output-line"}, nil)
+	require.NoError(t, err)
+	assert.Contains(t, exec.Text(), "fg-output-line")
+	assert.NotContains(t, exec.Text(), "bg-output-line")
+
+	// The background output must live in the run log instead.
+	logs, _, err := session.GetRunLogs(ctx, run.RunID, 0)
+	require.NoError(t, err)
+	assert.Contains(t, logs, "bg-output-line")
+}
+
+// TestIsolationBackgroundRunStatusNotFound verifies that an unknown run ID
+// surfaces an error from the status endpoint.
+func TestIsolationBackgroundRunStatusNotFound(t *testing.T) {
+	ctx, sb := createIsolatedTestSandbox(t)
+	session := createIsolationSessionForTest(t, ctx, sb)
+
+	_, err := session.GetRunStatus(ctx, "no-such-run")
+	require.Error(t, err)
 }

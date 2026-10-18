@@ -1,4 +1,4 @@
-// Copyright 2026 Alibaba Group Holding Ltd.
+// Copyright 2026 The OpenSandbox Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -125,7 +125,7 @@ func TestFailedStartupTimeoutRetainsPrivateCleanupOwnership(t *testing.T) {
 				t.Fatalf("failed-start session leaked into List: %+v", sessions)
 			}
 
-			upperParent := filepath.Dir(session.upperDir)
+			upperParent := filepath.Dir(session.overlays[0].upperDir)
 			if _, err := os.Stat(upperParent); err != nil {
 				t.Fatalf("pending startup lost its upper: %v", err)
 			}
@@ -172,8 +172,13 @@ func TestDeleteTimeoutRetainsSessionAndUpperForRetry(t *testing.T) {
 		processWaited: processWaited,
 		doneCh:        doneCh,
 		upperID:       upperID,
-		upperDir:      upperDir,
-		workDir:       workDir,
+		overlays: []sessionOverlay{{
+			path:     "delete-timeout-ws",
+			mode:     isolation.WorkspaceOverlay,
+			persist:  true,
+			upperDir: upperDir,
+			workDir:  workDir,
+		}},
 	}
 	runner.ctrl.isolatedSessionMap.Store(session.id, session)
 
@@ -213,6 +218,60 @@ func TestDeleteTimeoutRetainsSessionAndUpperForRetry(t *testing.T) {
 	}
 }
 
+func TestDeleteNamespaceCleanupFailureRetainsSessionAndUpperForRetry(
+	t *testing.T,
+) {
+	runner := newTestRunner(t)
+	upperID, upperDir, workDir, err := runner.upperMgr.Allocate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pinErr := errors.New("namespace pin is busy")
+	pins := &lifecycleNamespacePins{closeErr: pinErr}
+	session := &isolatedSession{
+		id:            "delete-namespace-retry",
+		opts:          &IsolatedSessionOptions{},
+		processWaited: make(chan struct{}),
+		doneCh:        make(chan struct{}),
+		upperID:       upperID,
+		overlays: []sessionOverlay{{
+			path:     "delete-namespace-retry-ws",
+			mode:     isolation.WorkspaceOverlay,
+			persist:  true,
+			upperDir: upperDir,
+			workDir:  workDir,
+		}},
+		namespacePins: pins,
+	}
+	runner.ctrl.isolatedSessionMap.Store(session.id, session)
+	upperParent := filepath.Dir(upperDir)
+
+	err = runner.DeleteIsolatedSession(session.id)
+	if !errors.Is(err, ErrSessionNamespaceCleanup) ||
+		!errors.Is(err, pinErr) {
+		t.Fatalf("Delete error = %v", err)
+	}
+	if runner.lookup(session.id) != session {
+		t.Fatal("failed namespace cleanup discarded session ownership")
+	}
+	if _, err := os.Stat(upperParent); err != nil {
+		t.Fatalf("failed namespace cleanup discarded upper: %v", err)
+	}
+
+	pins.mu.Lock()
+	pins.closeErr = nil
+	pins.mu.Unlock()
+	if err := runner.DeleteIsolatedSession(session.id); err != nil {
+		t.Fatal(err)
+	}
+	if runner.lookup(session.id) != nil {
+		t.Fatal("successful retry retained session")
+	}
+	if _, err := os.Stat(upperParent); !os.IsNotExist(err) {
+		t.Fatalf("successful retry retained upper %s: %v", upperParent, err)
+	}
+}
+
 func TestFilesystemOperationLeaseRetainsUpperUntilIdleGCRetry(t *testing.T) {
 	runner := newTestRunner(t)
 	upperID, upperDir, workDir, err := runner.upperMgr.Allocate()
@@ -236,9 +295,14 @@ func TestFilesystemOperationLeaseRetainsUpperUntilIdleGCRetry(t *testing.T) {
 		processWaited: make(chan struct{}),
 		doneCh:        make(chan struct{}),
 		upperID:       upperID,
-		upperDir:      canonicalUpperDir,
-		workDir:       workDir,
-		lastRunAt:     time.Now(),
+		overlays: []sessionOverlay{{
+			path:     workspacePath,
+			mode:     isolation.WorkspaceOverlay,
+			persist:  true,
+			upperDir: canonicalUpperDir,
+			workDir:  workDir,
+		}},
+		lastRunAt: time.Now(),
 	}
 	runner.ctrl.isolatedSessionMap.Store(session.id, session)
 
@@ -350,9 +414,14 @@ func TestOpenFileRequestLeaseRetainsUpperUntilRelease(t *testing.T) {
 		processWaited: make(chan struct{}),
 		doneCh:        make(chan struct{}),
 		upperID:       upperID,
-		upperDir:      canonicalUpperDir,
-		workDir:       workDir,
-		lastRunAt:     time.Now(),
+		overlays: []sessionOverlay{{
+			path:     workspacePath,
+			mode:     isolation.WorkspaceOverlay,
+			persist:  true,
+			upperDir: canonicalUpperDir,
+			workDir:  workDir,
+		}},
+		lastRunAt: time.Now(),
 	}
 	runner.ctrl.isolatedSessionMap.Store(session.id, session)
 

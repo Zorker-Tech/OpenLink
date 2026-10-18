@@ -1,4 +1,4 @@
-# Copyright 2025 Alibaba Group Holding Ltd.
+# Copyright 2025 The OpenSandbox Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,18 +22,160 @@ from opensandbox_server.api.schema import (
     Host,
     ImageSpec,
     ListSnapshotsRequest,
+    LifecycleHook,
+    NetworkPolicy,
+    NetworkRule,
     OSSFS,
     PaginationInfo,
     PaginationRequest,
+    PeriodicLifecycleHook,
     PlatformSpec,
     PVC,
     ResourceLimits,
+    SandboxLifecycle,
     Snapshot,
     SnapshotFilter,
     SnapshotStatus,
     Volume,
 )
+from opensandbox_server.constants import OPENSANDBOX_LIFECYCLE
 
+
+class TestSandboxLifecycle:
+
+    def test_create_request_parses_lifecycle_aliases(self):
+        request = CreateSandboxRequest.model_validate(
+            {
+                "image": {"uri": "python:3.11"},
+                "entrypoint": ["python"],
+                "resourceLimits": {},
+                "lifecycle": {
+                    "preStart": {
+                        "command": ["/opt/hooks/restore.sh"],
+                        "timeoutSeconds": 30,
+                    },
+                    "periodic": [
+                        {
+                            "name": " checkpoint ",
+                            "schedule": " */5 * * * * ",
+                            "command": ["/opt/hooks/checkpoint.sh"],
+                        }
+                    ],
+                },
+            }
+        )
+
+        assert request.lifecycle is not None
+        assert request.lifecycle.pre_start is not None
+        assert request.lifecycle.pre_start.timeout_seconds == 30
+        assert request.lifecycle.periodic is not None
+        assert request.lifecycle.periodic[0].name == "checkpoint"
+        assert request.lifecycle.periodic[0].schedule == "*/5 * * * *"
+
+    def test_create_request_rejects_reserved_lifecycle_env(self):
+        with pytest.raises(ValidationError, match="is reserved"):
+            CreateSandboxRequest(
+                image=ImageSpec(uri="python:3.11"),
+                entrypoint=["python"],
+                resourceLimits=ResourceLimits(root={}),
+                env={OPENSANDBOX_LIFECYCLE: "{}"},
+            )
+
+    def test_create_request_rejects_lifecycle_with_pool_ref(self):
+        # OSEP-0024: lifecycle hooks conflict with pool mode, but the
+        # hooks-free idlePolicy container is allowed through.
+        with pytest.raises(
+            ValidationError,
+            match="lifecycle hooks cannot be used together with poolRef",
+        ):
+            CreateSandboxRequest(
+                extensions={"poolRef": "default/pool"},
+                lifecycle=SandboxLifecycle(
+                    preStart=LifecycleHook(command=["true"]),
+                ),
+            )
+
+        request = CreateSandboxRequest(
+            extensions={"poolRef": "default/pool"},
+            lifecycle=SandboxLifecycle(idlePolicy={"idleTimeoutSeconds": 300, "onIdle": "pause"}),
+        )
+        assert request.lifecycle is not None
+        assert request.lifecycle.idle_policy is not None
+
+    @pytest.mark.parametrize(
+        ("hook", "expected"),
+        [
+            (LifecycleHook(command=["true"], timeoutSeconds=10800), 10800),
+            (
+                PeriodicLifecycleHook(
+                    name="sync",
+                    schedule="@hourly",
+                    command=["true"],
+                    timeoutSeconds=300,
+                ),
+                300,
+            ),
+        ],
+    )
+    def test_lifecycle_accepts_maximum_timeout(self, hook, expected):
+        assert hook.timeout_seconds == expected
+
+    @pytest.mark.parametrize(
+        ("payload", "maximum"),
+        [
+            ({"preStart": {"command": ["true"], "timeoutSeconds": 10801}}, 10800),
+            (
+                {
+                    "periodic": [
+                        {
+                            "name": "sync",
+                            "schedule": "@hourly",
+                            "command": ["true"],
+                            "timeoutSeconds": 301,
+                        }
+                    ]
+                },
+                300,
+            ),
+        ],
+    )
+    def test_lifecycle_rejects_timeout_above_maximum(self, payload, maximum):
+        with pytest.raises(ValidationError, match=f"less than or equal to {maximum}"):
+            SandboxLifecycle.model_validate(payload)
+
+    @pytest.mark.parametrize("duplicate_name", ["sync", " sync "])
+    def test_lifecycle_rejects_duplicate_periodic_names(self, duplicate_name):
+        with pytest.raises(ValidationError, match="names must be unique"):
+            SandboxLifecycle.model_validate(
+                {
+                    "periodic": [
+                        {"name": "sync", "schedule": "@hourly", "command": ["true"]},
+                        {"name": duplicate_name, "schedule": "@daily", "command": ["true"]},
+                    ]
+                }
+            )
+
+    @pytest.mark.parametrize(
+        ("payload", "message"),
+        [
+            ({"preStart": {"command": [" "]}}, "command must not be empty"),
+            (
+                {"periodic": [{"name": " ", "schedule": "@hourly", "command": ["true"]}]},
+                "name must not be blank",
+            ),
+            (
+                {"periodic": [{"name": "sync", "schedule": "\t", "command": ["true"]}]},
+                "schedule must not be blank",
+            ),
+            (
+                {"periodic": [{"name": "sync", "schedule": "@hourly", "command": [" "]}]},
+                "command must not be empty",
+            ),
+        ],
+    )
+    def test_lifecycle_rejects_blank_required_values(self, payload, message):
+        with pytest.raises(ValidationError, match=message):
+            SandboxLifecycle.model_validate(payload)
 
 
 class TestHost:
@@ -84,7 +226,6 @@ class TestPVC:
         }
 
     def test_serialization_with_provisioning_hints(self):
-        """Provisioning hints should serialize with aliases."""
         backend = PVC(
             claim_name="my-pvc",
             storage_class="ssd",
@@ -674,7 +815,6 @@ class TestCreateSandboxRequestPoolMode:
         assert request.env == {"KEY": "value"}
 
     def test_pool_mode_rejects_snapshot_id_with_pool_ref(self):
-        """snapshotId and poolRef cannot be used together."""
         with pytest.raises(ValidationError) as exc_info:
             CreateSandboxRequest(
                 snapshotId="snap-001",
@@ -709,7 +849,6 @@ class TestCreateSandboxRequestPoolMode:
             )
 
     def test_pool_mode_normalizes_blank_snapshot_id(self):
-        """Blank snapshotId (e.g. whitespace) should be normalized to None in pool mode."""
         req = CreateSandboxRequest(
             extensions={"poolRef": "my-pool"},
             snapshotId="   ",
@@ -717,8 +856,161 @@ class TestCreateSandboxRequestPoolMode:
         assert req.snapshot_id is None
 
     def test_pool_mode_ignores_blank_pool_ref(self):
-        """Blank poolRef should not trigger pool mode."""
         with pytest.raises(ValidationError):
             CreateSandboxRequest(
                 extensions={"poolRef": "   "},
             )
+
+
+class TestNetworkRule:
+    """NetworkRule.target became optional so a rule can be scoped by `ports`
+    alone; these guard the target/ports combinations the API is meant to
+    accept or reject, and that pass-through to the egress sidecar (see
+    server/opensandbox_server/services/{docker/networking,k8s/egress_helper}.py,
+    which serialize with exclude_none=True) drops unset fields instead of
+    sending literal nulls.
+    """
+
+    def test_requires_target_or_ports(self):
+        with pytest.raises(ValidationError):
+            NetworkRule.model_validate({"action": "allow"})
+
+    def test_rejects_more_than_256_ports(self):
+        with pytest.raises(ValidationError):
+            NetworkRule.model_validate({"action": "allow", "ports": list(range(1, 258))})
+
+    def test_accepts_exactly_256_ports(self):
+        rule = NetworkRule.model_validate({"action": "allow", "ports": list(range(1, 257))})
+        assert len(rule.ports) == 256
+
+    def test_port_only_rule_omits_target(self):
+        rule = NetworkRule.model_validate({"action": "deny", "ports": [25]})
+        assert rule.target is None
+        assert rule.ports == [25]
+
+    def test_target_with_ports(self):
+        rule = NetworkRule.model_validate({"action": "allow", "target": "10.0.0.5", "ports": [22, 80]})
+        assert rule.target == "10.0.0.5"
+        assert rule.ports == [22, 80]
+
+    def test_cidr_target_with_ports(self):
+        rule = NetworkRule.model_validate({"action": "deny", "target": "10.0.0.0/8", "ports": [22]})
+        assert rule.target == "10.0.0.0/8"
+
+    def test_ipv6_target_with_ports(self):
+        rule = NetworkRule.model_validate({"action": "allow", "target": "2001:db8::1", "ports": [443]})
+        assert rule.target == "2001:db8::1"
+
+    def test_rejects_domain_target_with_ports(self):
+        """Regression: the sidecar (policy.go normalizePolicy) rejects
+        domain+ports, but the server validator did not mirror it, so an
+        invalid request would pass the API and only fail once Docker/K8s
+        started the egress sidecar with it — surfacing as a sandbox creation
+        failure instead of a clean 422 from the create-sandbox request."""
+        with pytest.raises(ValidationError):
+            NetworkRule.model_validate({"action": "allow", "target": "example.com", "ports": [443]})
+
+    def test_rejects_wildcard_domain_target_with_ports(self):
+        with pytest.raises(ValidationError):
+            NetworkRule.model_validate({"action": "allow", "target": "*.example.com", "ports": [443]})
+
+    def test_rejects_out_of_range_ports(self):
+        for bad_port in (0, -1, 65536):
+            with pytest.raises(ValidationError):
+                NetworkRule.model_validate({"action": "allow", "ports": [bad_port]})
+
+    def test_rejects_duplicate_ports(self):
+        with pytest.raises(ValidationError):
+            NetworkRule.model_validate({"action": "allow", "ports": [443, 443]})
+
+    def test_rejects_empty_ports_list(self):
+        """The specs declare minItems: 1 on ports; an empty list must not be
+        silently treated as unset, or clients could widen a rule's scope by
+        mistake (an allow rule for a target would apply to every port)."""
+        with pytest.raises(ValidationError):
+            NetworkRule.model_validate({"action": "allow", "target": "10.0.0.5", "ports": []})
+        with pytest.raises(ValidationError):
+            NetworkRule.model_validate({"action": "allow", "ports": []})
+
+    def test_rejects_netmask_cidr_with_ports(self):
+        """Regression: `10.0.0.0/255.0.0.0` parses via ipaddress.ip_network but
+        Go's netip.ParsePrefix rejects netmask notation, so the sidecar would
+        classify it as a domain target and fail startup with a confusing
+        "ports are not supported for domain targets" error."""
+        with pytest.raises(ValidationError):
+            NetworkRule.model_validate({"action": "allow", "target": "10.0.0.0/255.0.0.0", "ports": [22]})
+
+    def test_netmask_cidr_without_ports_still_accepted(self):
+        """Netmask notation is not port-scoped: it reaches the sidecar as a
+        domain rule, which both layers accept (evaluated as a literal string
+        by the DNS layer, like any other non-IP target)."""
+        rule = NetworkRule.model_validate({"action": "allow", "target": "10.0.0.0/255.0.0.0"})
+        assert rule.target == "10.0.0.0/255.0.0.0"
+
+    def test_target_is_trimmed_like_the_sidecar(self):
+        """policy.go trims the target before classifying; the server must too,
+        or " 10.0.0.5" would be classified as a domain and rejected with a
+        confusing domain+ports error. The trimmed value is what gets stored
+        and serialized."""
+        rule = NetworkRule.model_validate({"action": "allow", "target": "  10.0.0.5  ", "ports": [22]})
+        assert rule.target == "10.0.0.5"
+
+    def test_whitespace_target_counts_as_omitted(self):
+        """A whitespace-only target trims to empty, mirroring the sidecar:
+        with ports it degrades to a port-only rule; without ports it is
+        rejected like a rule with no target and no ports."""
+        rule = NetworkRule.model_validate({"action": "deny", "target": "   ", "ports": [25]})
+        assert rule.target is None
+        assert rule.ports == [25]
+        with pytest.raises(ValidationError):
+            NetworkRule.model_validate({"action": "allow", "target": "   "})
+
+    def test_domain_only_rule_still_requires_target(self):
+        rule = NetworkRule.model_validate({"action": "allow", "target": "example.com"})
+        assert rule.target == "example.com"
+        assert rule.ports is None
+
+    def test_serialization_omits_unset_target_and_ports(self):
+        rule = NetworkRule.model_validate({"action": "allow", "target": "example.com"})
+        assert rule.model_dump(by_alias=True, exclude_none=True) == {
+            "action": "allow",
+            "target": "example.com",
+        }
+
+    def test_network_policy_round_trips_port_only_rule(self):
+        policy = NetworkPolicy.model_validate(
+            {"defaultAction": "deny", "egress": [{"action": "deny", "ports": [25]}]}
+        )
+        dumped = policy.model_dump(by_alias=True, exclude_none=True)
+        assert dumped["egress"] == [{"action": "deny", "ports": [25]}]
+
+
+class TestNetworkRuleReadModifyWriteAndClassification:
+    """Review follow-ups: the sidecar marshals port-only rules as
+    "target": "" (no omitempty), so the schema must accept blank targets on
+    input (GET → PUT round-trip), and its IP/CIDR classification must match
+    Go's netip for the shapes the sidecar will re-classify.
+    """
+
+    def test_blank_target_with_ports_round_trips(self):
+        rule = NetworkRule.model_validate({"action": "deny", "target": "", "ports": [25]})
+        assert rule.target is None
+        assert rule.ports == [25]
+        assert NetworkPolicy.model_validate(
+            {"defaultAction": "deny", "egress": [{"action": "deny", "target": "", "ports": [25]}]}
+        ).model_dump(by_alias=True, exclude_none=True)["egress"] == [{"action": "deny", "ports": [25]}]
+
+    def test_blank_target_without_ports_rejected(self):
+        with pytest.raises(ValidationError):
+            NetworkRule.model_validate({"action": "allow", "target": ""})
+
+    def test_zoned_ipv6_prefix_with_ports_rejected(self):
+        """netip.ParsePrefix rejects scoped prefixes; the sidecar would see a
+        domain and fail at provisioning with a confusing error."""
+        with pytest.raises(ValidationError):
+            NetworkRule.model_validate({"action": "allow", "target": "fe80::1%eth0/64", "ports": [22]})
+
+    def test_zoned_ipv6_address_with_ports_accepted(self):
+        """Bare zoned addresses parse in both netip.ParseAddr and ipaddress."""
+        rule = NetworkRule.model_validate({"action": "allow", "target": "fe80::1%eth0", "ports": [22]})
+        assert rule.target == "fe80::1%eth0"

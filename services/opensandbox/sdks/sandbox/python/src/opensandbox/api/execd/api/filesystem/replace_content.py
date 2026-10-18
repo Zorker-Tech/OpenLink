@@ -1,5 +1,5 @@
 #
-# Copyright 2026 Alibaba Group Holding Ltd.
+# Copyright 2026 The OpenSandbox Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -58,6 +58,8 @@ def _parse_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
 ) -> ErrorResponse | ReplaceContentResponse200 | None:
     if response.status_code == 200:
+        if not response.content:
+            return None
         response_200 = ReplaceContentResponse200.from_dict(response.json())
 
         return response_200

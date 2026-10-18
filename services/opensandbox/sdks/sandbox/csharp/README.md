@@ -192,7 +192,106 @@ await sandbox.Files.DeleteDirectoriesAsync(new[] { "/tmp/demo" });
 await sandbox.Files.DeleteFilesAsync(new[] { "/tmp/demo/hello.txt" });
 ```
 
-### 5. Endpoints
+### 5. Snapshots
+
+Capture a sandbox's state and restore new sandboxes from it. Snapshots are
+administered through `SandboxManager` (the per-sandbox shortcut
+`sandbox.CreateSnapshotAsync(name)` also exists):
+
+```csharp
+await using var manager = SandboxManager.Create(new SandboxManagerOptions
+{
+    ConnectionConfig = config
+});
+
+var snapshot = await manager.CreateSnapshotAsync(sandboxId, "pre-migration");
+
+// Poll until Ready — C# has no built-in wait helper, so poll GetSnapshotAsync
+// and treat Failed as terminal
+SnapshotInfo ready;
+while (true)
+{
+    ready = await manager.GetSnapshotAsync(snapshot.Id);
+    if (ready.Status.State != "Creating") break;
+    await Task.Delay(TimeSpan.FromSeconds(2));
+}
+if (ready.Status.State != "Ready")
+    throw new InvalidOperationException(
+        $"snapshot not Ready: {ready.Status.State} ({ready.Status.Reason})");
+
+var list = await manager.ListSnapshotsAsync(new ListSnapshotsParams
+{
+    PageSize = 10
+});
+```
+
+Restore with `Sandbox.CreateAsync` — exactly one of `Image` or `SnapshotId`
+must be set (the SDK throws `InvalidArgumentException` otherwise, and
+`Entrypoint` must be omitted when restoring):
+
+```csharp
+await using var restored = await Sandbox.CreateAsync(new SandboxCreateOptions
+{
+    ConnectionConfig = config,
+    SnapshotId = ready.Id,
+});
+
+// Only delete the snapshot after the restore has succeeded
+await manager.DeleteSnapshotAsync(ready.Id);
+```
+
+### 6. Isolated Sessions
+
+Isolated sessions run multi-step code in a hardened, resource-bounded
+namespace with bind mounts — reachable through `sandbox.Isolation`. The
+`RunOnceAsync` / `WithSessionAsync` extension methods (create → run →
+best-effort delete in one call — both suppress delete failures, so the
+session can remain active if execd is unavailable) cover callers that
+don't need to keep the session around:
+
+```csharp
+var session = await sandbox.Isolation.CreateAsync(new CreateIsolatedSessionRequest(
+    Workspace: new IsolatedWorkspaceSpec(Path: "/workspace", Mode: "rw"),
+    Profile: "strict",
+    Binds: new List<BindMount>
+    {
+        new(Source: "/data", Dest: "/data", ReadOnly: true)
+    },
+    IdleTimeoutSeconds: 600  // auto-destroy when idle; omitting disables idle GC
+));
+
+try
+{
+    // Foreground run — TimeoutSeconds applies here only; background runs
+    // are deliberately not time-limited
+    var run = await session.RunAsync(
+        "python -c 'print(1+1)'",
+        new IsolatedRunOpts { TimeoutSeconds = 30 });
+    Console.WriteLine(run.Logs.Stdout[0].Text);
+
+    // Background runs: start, poll until finished, then drain logs
+    var bg = await session.RunBackgroundAsync("make build");
+    var status = await session.GetRunStatusAsync(bg.RunId);
+    while (status.Running)
+    {
+        await Task.Delay(TimeSpan.FromSeconds(2));
+        status = await session.GetRunStatusAsync(bg.RunId);
+    }
+    var logs = await session.GetRunLogsAsync(bg.RunId);
+    Console.WriteLine(logs.Text);
+}
+finally
+{
+    await session.DeleteAsync();
+}
+```
+
+`GetRunLogsAsync` is cursor-based: each call returns at most 16 MiB, and
+per-run retention is capped at 16 MiB, so drain incrementally with the
+returned `Cursor` while the run is active if the output may exceed one
+page.
+
+### 7. Endpoints
 
 `GetEndpointAsync()` returns an endpoint **without a scheme** (for example `"localhost:44772"`). Use `GetEndpointUrlAsync()` if you want a ready-to-use absolute URL.
 
@@ -204,7 +303,7 @@ var url = await sandbox.GetEndpointUrlAsync(44772);
 Console.WriteLine(url); // e.g., "http://localhost:44772"
 ```
 
-### 6. Sandbox Management (Admin)
+### 8. Sandbox Management (Admin)
 
 Use `SandboxManager` for administrative tasks and finding existing sandboxes.
 
@@ -226,11 +325,81 @@ foreach (var s in list.Items)
 }
 ```
 
+### 9. fsb Templates
+
+Manage fast-sandbox (fsb) golden-image templates and create sandboxes from them.
+The build is asynchronous: poll `GetTemplateAsync` until the phase is `Succeeded`.
+Template management requires a Kubernetes-backed runtime.
+
+```csharp
+await using var manager = SandboxManager.Create(new SandboxManagerOptions
+{
+    ConnectionConfig = config
+});
+
+var template = await manager.CreateTemplateAsync(new CreateTemplateRequest
+{
+    Image = "python:3.11",
+    Publish = "s3://bucket/publish"
+});
+
+while (template.Status.Phase != TemplatePhases.Succeeded)
+{
+    if (template.Status.Phase == TemplatePhases.Failed)
+    {
+        throw new Exception(template.Status.Message);
+    }
+    await Task.Delay(TimeSpan.FromSeconds(5));
+    template = await manager.GetTemplateAsync(template.TemplateId);
+}
+
+// Template mode fixes the workload shape on the server: only metadata,
+// network policy and extensions may be set, and the timeout is required.
+var fromTemplate = await Sandbox.CreateFromTemplateAsync(new SandboxCreateFromTemplateOptions
+{
+    TemplateId = template.TemplateId,
+    TimeoutSeconds = 600,
+    Metadata = new Dictionary<string, string> { ["team"] = "platform" }
+});
+
+Console.WriteLine(fromTemplate.Origin); // "template"
+```
+
+Template-backed sandboxes have no sandbox-side egress sidecar: egress policy
+operations route through the lifecycle control plane automatically, and
+Credential Vault is unavailable.
+
 ## Configuration
 
 ### 1. Connection Configuration
 
 The `ConnectionConfig` class manages API server connection settings.
+
+Transfer timeouts:
+
+- `RequestTimeoutSeconds` bounds the wait for response headers, not the whole
+  transfer. The deadline starts with the request (bounding the connect phase),
+  is cleared while the request body is written, and is re-armed once the body
+  of the current hop has been sent: a healthy upload or download that keeps
+  making progress is never cut off by it. A download that gets no response
+  headers, or an upload that gets none within the timeout after its body has
+  been sent, fails with a `TaskCanceledException` carrying a `TimeoutException`
+  instead of hanging (the Go SDK's `ResponseHeaderTimeout` contract); a caller
+  cancellation still surfaces as an `OperationCanceledException` with the
+  caller's token. All non-transfer calls keep the whole-call request timeout.
+- A request body that never finishes being sent, and a response body that stops
+  making progress after the headers have arrived, are bounded only by the
+  `CancellationToken` you pass to the call, so pass one when a transfer needs an
+  end-to-end cap.
+- A 307/308 redirect makes the transport resend the request body once per hop. A
+  seekable upload source (`FileStream`, `MemoryStream`, ...) is rewound and resent
+  in full; a non-seekable source cannot be replayed without buffering it, so the
+  upload fails with a clear error instead of sending an empty file part to the
+  redirected endpoint.
+- The upload guarantee assumes the HTTP handler streams the request body (for
+  example `SocketsHttpHandler` on .NET 5+). On .NET Framework the default
+  `HttpClientHandler` buffers the request body before sending it, so a slow but
+  progressing upload can still count against the header timeout there.
 
 | Parameter | Description | Default | Environment Variable |
 | --- | --- | --- | --- |
@@ -420,7 +589,7 @@ binding guidance, and Git/curl examples.
 
 ### 6. Timeout and Retry Behavior
 
-- `ConnectionConfig.RequestTimeoutSeconds` controls timeout for SDK HTTP calls.
+- `ConnectionConfig.RequestTimeoutSeconds` controls timeout for SDK HTTP calls. File uploads and downloads are exempt while they keep making progress; the timeout still bounds the connect phase and how long a transfer waits for response headers before failing.
 - `RunCommandOptions.TimeoutSeconds` controls command execution timeout for command runs.
 - `RunInSessionOptions.TimeoutSeconds` controls command execution timeout for session runs.
 - `SandboxCreateOptions.TimeoutSeconds` controls sandbox server-side TTL.

@@ -1,5 +1,5 @@
 #
-# Copyright 2025 Alibaba Group Holding Ltd.
+# Copyright 2025 The OpenSandbox Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,6 +32,12 @@ from opensandbox.models.sandboxes import (
     SandboxRenewResponse,
     SnapshotFilter,
     SnapshotInfo,
+)
+from opensandbox.models.templates import (
+    CreateTemplateRequest,
+    PagedTemplateInfos,
+    TemplateFilter,
+    TemplateInfo,
 )
 from opensandbox.sync.adapters.factory import AdapterFactorySync
 from opensandbox.sync.services.diagnostics import DiagnosticsSync
@@ -185,7 +191,8 @@ class SandboxManagerSync:
 
     def kill_sandbox(self, sandbox_id: str) -> None:
         """
-        Terminate a single sandbox.
+        Request irreversible termination of the remote sandbox. Returns when
+        deletion is accepted; runtime cleanup may continue afterward.
 
         Args:
             sandbox_id: Sandbox ID to terminate
@@ -195,7 +202,7 @@ class SandboxManagerSync:
         """
         logger.info(f"Terminating sandbox: {sandbox_id}")
         self._sandbox_service.kill_sandbox(sandbox_id)
-        logger.info(f"Successfully terminated sandbox: {sandbox_id}")
+        logger.info(f"Sandbox deletion accepted: {sandbox_id}")
 
     def renew_sandbox(
         self, sandbox_id: str, timeout: timedelta
@@ -262,6 +269,22 @@ class SandboxManagerSync:
     def delete_snapshot(self, snapshot_id: str) -> None:
         """Delete a snapshot by id (blocking)."""
         self._sandbox_service.delete_snapshot(snapshot_id)
+
+    def create_template(self, request: CreateTemplateRequest) -> TemplateInfo:
+        """Create a fsb template (golden-image build); the build is asynchronous (blocking)."""
+        return self._sandbox_service.create_template(request)
+
+    def get_template(self, template_id: str) -> TemplateInfo:
+        """Get a template with its latest build status by id (blocking)."""
+        return self._sandbox_service.get_template(template_id)
+
+    def list_templates(self, filter: TemplateFilter) -> PagedTemplateInfos:
+        """List templates with metadata filtering and pagination options (blocking)."""
+        return self._sandbox_service.list_templates(filter)
+
+    def delete_template(self, template_id: str) -> None:
+        """Delete a template by id (blocking). Running sandboxes are unaffected."""
+        self._sandbox_service.delete_template(template_id)
 
     def close(self) -> None:
         """
