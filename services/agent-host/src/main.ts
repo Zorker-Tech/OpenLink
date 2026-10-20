@@ -52,7 +52,21 @@ function networkDefaultAction(value: string | undefined): 'allow' | 'deny' {
   return action
 }
 
+function desktopRuntimeMode(value: string | undefined): 'ubuntu-container' | 'ubuntu-iso' {
+  const mode = value?.trim().toLowerCase() || 'ubuntu-container'
+  if (mode !== 'ubuntu-container' && mode !== 'ubuntu-iso') {
+    throw new Error('OPENLINK_DESKTOP_MODE must be ubuntu-container or ubuntu-iso')
+  }
+  return mode
+}
+
 const env = process.env
+const desktopMode = desktopRuntimeMode(env.OPENLINK_DESKTOP_MODE)
+const remoteProjectVmMemoryDefault = desktopMode === 'ubuntu-iso' ? 16_384 : 8_192
+const remoteProjectVmDiskDefault = desktopMode === 'ubuntu-iso' ? 128 : 64
+const ubuntuDesktopIsoSource = desktopMode === 'ubuntu-iso'
+  ? resolve(env.OPENLINK_UBUNTU_DESKTOP_ISO || '.openlink-runtime/ubuntu/26.10/ubuntu-26.10-desktop-amd64.iso')
+  : undefined
 const supabaseAccessResolver = createAccessModeResolver(env)
 const projectRuntimeBackend = env.OPENLINK_PROJECT_RUNTIME?.trim() || 'vm'
 if (!['vm', 'container'].includes(projectRuntimeBackend)) throw new Error('OPENLINK_PROJECT_RUNTIME must be vm or container')
@@ -135,10 +149,11 @@ const sshRuntimeRouter = new ProjectRuntimeRouter(
         browserAllowedOrigins: env.OPENLINK_BROWSER_ALLOWED_ORIGINS || 'http://localhost:3000',
         statusWriter: createSupabaseProjectRuntimeStatusWriter(env),
         projectVmCpus: integer(env.OPENLINK_PROJECT_VM_CPUS, 4, 1, 64),
-        projectVmMemoryMb: integer(env.OPENLINK_PROJECT_VM_MEMORY_MB, 8_192, 512, 262_144),
-        projectVmDiskGb: integer(env.OPENLINK_PROJECT_VM_DISK_GB, 64, 10, 4_096),
+        projectVmMemoryMb: integer(env.OPENLINK_PROJECT_VM_MEMORY_MB, remoteProjectVmMemoryDefault, 512, 262_144),
+        projectVmDiskGb: integer(env.OPENLINK_PROJECT_VM_DISK_GB, remoteProjectVmDiskDefault, 10, 4_096),
         httpProxy: env.OPENLINK_REMOTE_HTTP_PROXY,
         httpsProxy: env.OPENLINK_REMOTE_HTTPS_PROXY,
+        ...(ubuntuDesktopIsoSource ? { ubuntuDesktopIsoSource } : {}),
       })
     : undefined,
 )
@@ -153,6 +168,7 @@ const backend = new LocalOpenSandboxBackend({
   domain: env.OPEN_SANDBOX_DOMAIN || '127.0.0.1:43122',
   apiKey: required(env, 'OPEN_SANDBOX_API_KEY'),
   image: env.OPENLINK_AGENT_WORKER_IMAGE || 'openlink/agent-worker:dev',
+  desktopMode,
   workspaceRoot,
   storageRoot,
   // The Agent Host owns session cleanup. An OpenSandbox TTL can remove a

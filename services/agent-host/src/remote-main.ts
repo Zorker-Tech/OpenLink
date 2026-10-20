@@ -47,6 +47,14 @@ function networkDefaultAction(value: string | undefined): 'allow' | 'deny' {
   return action
 }
 
+function desktopRuntimeMode(value: string | undefined): 'ubuntu-container' | 'ubuntu-iso' {
+  const mode = value?.trim().toLowerCase() || 'ubuntu-iso'
+  if (mode !== 'ubuntu-container' && mode !== 'ubuntu-iso') {
+    throw new Error('OPENLINK_DESKTOP_MODE must be ubuntu-container or ubuntu-iso')
+  }
+  return mode
+}
+
 function origins(value: string | undefined): string[] {
   const result = value?.split(',').map((item) => item.trim()).filter(Boolean) ?? ['http://localhost:3000']
   for (const origin of result) {
@@ -94,6 +102,12 @@ function releaseManifest(value: unknown): ReleaseManifest {
 }
 
 const env = process.env
+const desktopMode = desktopRuntimeMode(env.OPENLINK_DESKTOP_MODE)
+const projectVmMemoryDefault = desktopMode === 'ubuntu-iso' ? 16_384 : 8_192
+const projectVmDiskDefault = desktopMode === 'ubuntu-iso' ? 128 : 64
+const ubuntuDesktopIsoSource = desktopMode === 'ubuntu-iso'
+  ? resolvePath(env.OPENLINK_UBUNTU_DESKTOP_ISO || '.openlink-runtime/ubuntu/26.10/ubuntu-26.10-desktop-amd64.iso')
+  : undefined
 const releaseDirectory = resolvePath(required(env, 'OPENLINK_REMOTE_RELEASE_DIR'))
 const manifest = releaseManifest(JSON.parse(await readFile(resolvePath(releaseDirectory, 'release.json'), 'utf8')) as unknown)
 const remoteRoot = safeRemotePath(required(env, 'OPENLINK_REMOTE_ROOT'), 'OPENLINK_REMOTE_ROOT')
@@ -138,8 +152,8 @@ const projectVmManager = new ProjectVmManager({
   guestWorkspaceRoot: safeRemotePath(env.OPENLINK_REMOTE_GUEST_WORKSPACE_ROOT || '/home/openlink/projects', 'OPENLINK_REMOTE_GUEST_WORKSPACE_ROOT'),
   machineSpec: {
     cpus: integer(env.OPENLINK_PROJECT_VM_CPUS, 4, 1, 64),
-    memoryMb: integer(env.OPENLINK_PROJECT_VM_MEMORY_MB, 8_192, 512, 262_144),
-    diskGb: integer(env.OPENLINK_PROJECT_VM_DISK_GB, 64, 10, 4_096),
+    memoryMb: integer(env.OPENLINK_PROJECT_VM_MEMORY_MB, projectVmMemoryDefault, 512, 262_144),
+    diskGb: integer(env.OPENLINK_PROJECT_VM_DISK_GB, projectVmDiskDefault, 10, 4_096),
     diskMode: 'thin',
   },
 })
@@ -159,6 +173,7 @@ const projectRuntimeManager = new ProjectRuntimeManager({
   agentWorkerImage: manifest.images.agentWorkerImage,
   agentRpcWorkerImage: manifest.images.rpcImage,
   codeServerImage: manifest.images.codeServerImage,
+  ...(ubuntuDesktopIsoSource ? { ubuntuDesktopIsoSource } : {}),
   imageArchives: {
     [manifest.images.serverImage]: imageArchive,
     [manifest.images.browserHostImage]: imageArchive,
@@ -195,6 +210,7 @@ const backend = new RemoteOpenSandboxRpcBackend({
   // remote workload while its Cloud session is still resumable.
   sessionTtlSeconds: null,
   networkDefaultAction: networkDefaultAction(env.OPENLINK_AGENT_NETWORK_DEFAULT_ACTION),
+  desktopMode,
 })
 const runtime = await startPromptHttpServer({
   host: env.OPENLINK_REMOTE_AGENT_HOST || '127.0.0.1',

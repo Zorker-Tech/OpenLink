@@ -1,10 +1,12 @@
-import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
-import { statSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { access, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
+import { createReadStream, createWriteStream, statSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
 import { resolve as resolveGuestPath } from 'node:path/posix'
 import { createHash, randomBytes } from 'node:crypto'
 import { Buffer } from 'node:buffer'
 import { createServer } from 'node:net'
+import { Readable, Transform } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
 import { AgentHostError } from './errors.js'
 import { isProjectId, type ProjectVmDescriptor, type ProjectVmDiskMode, type ProjectVmManager, type ProjectVmMachineDriver, type ProjectVmCommandResult, type ProjectVmPortForward } from './project-vm.js'
 import type { ProjectRuntimeStatusUpdate, ProjectRuntimeStatusWriter } from './project-runtime-status.js'
@@ -50,6 +52,8 @@ export interface ProjectRuntimeDescriptor extends ProjectVmDescriptor {
   /** Private Agent Host endpoint for the project's code-server workbench. */
   codeServerEndpoint: string
   sessionStorageRoot: string
+  /** Verified official Ubuntu Desktop ISO staged inside this Project VM. */
+  ubuntuDesktopIsoPath?: string
   agentWorkerImage: string
   /** Revision of the mutable worker image archive loaded into this Project VM. */
   agentWorkerRevision?: string
@@ -95,6 +99,10 @@ export interface ProjectRuntimeServiceInput {
   machineName: string
   workspacePath: string
   sessionStorageRoot: string
+  /** Guest-side ISO path, if this runtime has staged the official image. */
+  ubuntuDesktopIsoPath?: string
+  /** Optional host-side source copied into this Project VM during provisioning. */
+  ubuntuDesktopIsoSource?: string
   ports: ProjectRuntimeServicePorts
   opensandboxApiKey: string
   browserApiToken: string
@@ -142,6 +150,7 @@ export interface ProjectRuntimeManagerOptions {
   agentWorkerImage: string
   agentRpcWorkerImage?: string
   codeServerImage?: string
+  ubuntuDesktopIsoSource?: string
   imageArchives?: Record<string, string>
   projectPortBase?: number
   /** Number of consecutive base ports the scheduler may scan. */
@@ -212,6 +221,66 @@ function projectDiskMode(value: unknown): ProjectVmDiskMode | undefined {
   return value === 'thin' || value === 'thick' ? value : undefined
 }
 
+const UBUNTU_DESKTOP_ISO_NAME = 'ubuntu-26.10-desktop-amd64.iso'
+const UBUNTU_DESKTOP_ISO_URL = `https://releases.ubuntu.com/26.10/${UBUNTU_DESKTOP_ISO_NAME}`
+const UBUNTU_DESKTOP_ISO_SHA256 = '19efc38dde60055b192526bfbba075ac1da23992f1b006ddd41cbd30db0d9b0c'
+const UBUNTU_DESKTOP_ISO_SIZE = '6615449600'
+let ubuntuDesktopIsoDownload: Promise<void> | undefined
+
+async function validUbuntuDesktopIso(path: string): Promise<boolean> {
+  try {
+    if (statSync(path).size !== Number(UBUNTU_DESKTOP_ISO_SIZE)) return false
+    const marker = await readFile(`${path}.sha256`, 'utf8').catch(() => '')
+    if (marker.trim() === UBUNTU_DESKTOP_ISO_SHA256) return true
+    const digest = createHash('sha256')
+    for await (const chunk of createReadStream(path)) digest.update(chunk)
+    if (digest.digest('hex') !== UBUNTU_DESKTOP_ISO_SHA256) return false
+    await writeFile(`${path}.sha256`, `${UBUNTU_DESKTOP_ISO_SHA256}\n`, { mode: 0o600 })
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function ensureUbuntuDesktopIsoSource(path: string): Promise<void> {
+  if (await validUbuntuDesktopIso(path)) return
+  if (!ubuntuDesktopIsoDownload) {
+    ubuntuDesktopIsoDownload = (async () => {
+      await mkdir(dirname(path), { recursive: true, mode: 0o700 })
+      const partial = `${path}.partial-${process.pid}`
+      const signal = AbortSignal.timeout(30 * 60_000)
+      const response = await fetch(UBUNTU_DESKTOP_ISO_URL, { signal })
+      if (!response.ok || !response.body) {
+        await response.body?.cancel().catch(() => undefined)
+        throw new AgentHostError('PROVISIONING_FAILED', `Canonical Ubuntu Desktop ISO download failed (HTTP ${response.status})`, { retryable: true })
+      }
+      const digest = createHash('sha256')
+      const check = new Transform({
+        transform(chunk, _encoding, callback) {
+          digest.update(chunk)
+          callback(null, chunk)
+        },
+      })
+      try {
+        await pipeline(Readable.from(response.body), check, createWriteStream(partial, { flags: 'w', mode: 0o600 }), { signal })
+        if (statSync(partial).size !== Number(UBUNTU_DESKTOP_ISO_SIZE) || digest.digest('hex') !== UBUNTU_DESKTOP_ISO_SHA256) {
+          throw new AgentHostError('PROVISIONING_FAILED', 'Downloaded Ubuntu Desktop ISO failed Canonical SHA-256 verification', { retryable: true })
+        }
+        await rename(partial, path)
+        await writeFile(`${path}.sha256`, `${UBUNTU_DESKTOP_ISO_SHA256}\n`, { mode: 0o600 })
+      } catch (error) {
+        await rm(partial, { force: true }).catch(() => undefined)
+        throw error
+      }
+    })()
+  }
+  try {
+    await ubuntuDesktopIsoDownload
+  } finally {
+    ubuntuDesktopIsoDownload = undefined
+  }
+}
+
 /**
  * ProjectRuntimeManager is the boundary between durable project VMs and
  * ephemeral session workloads. It never exposes a host path supplied by a
@@ -222,6 +291,7 @@ export class ProjectRuntimeManager {
   private readonly vmManager: ProjectVmManager
   private readonly machineDriver: ProjectVmMachineDriver
   private readonly serviceDriver: ProjectRuntimeServiceDriver
+  private readonly ubuntuDesktopIsoSource?: string
   private readonly images: {
     opensandboxImage: string
     browserHostImage: string
@@ -268,6 +338,7 @@ export class ProjectRuntimeManager {
     this.vmManager = options.vmManager
     this.machineDriver = options.machineDriver
     this.serviceDriver = options.serviceDriver
+    this.ubuntuDesktopIsoSource = options.ubuntuDesktopIsoSource?.trim() || undefined
     this.images = {
       opensandboxImage: options.opensandboxImage,
       browserHostImage: options.browserHostImage,
@@ -312,8 +383,10 @@ export class ProjectRuntimeManager {
     if (!isProjectId(projectId)) throw new AgentHostError('INVALID_BODY', 'projectId is invalid')
     return this.withLifecycleLock(projectId, async () => {
       if (this.closing) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project runtime manager is shutting down', { retryable: true })
-      const existing = this.active.get(projectId)
+      let existing = this.active.get(projectId)
       if (existing) {
+        existing = await this.reconcileExistingRuntime(existing)
+        this.active.set(projectId, existing)
         if (requestedDiskMode && existing.diskMode !== requestedDiskMode) {
           throw new AgentHostError('PROVISIONING_FAILED', `Project runtime disk mode is immutable (${existing.diskMode} != ${requestedDiskMode})`)
         }
@@ -1152,6 +1225,7 @@ export class ProjectRuntimeManager {
         machineName: vm.machineName,
         workspacePath: vm.workspacePath,
         sessionStorageRoot: resolveGuestPath(vm.workspacePath, '.openlink', 'sessions'),
+        ...(this.ubuntuDesktopIsoSource ? { ubuntuDesktopIsoSource: this.ubuntuDesktopIsoSource } : {}),
         ports,
         ...secrets,
         browserAllowedOrigins: this.browserAllowedOrigins,
@@ -1166,6 +1240,8 @@ export class ProjectRuntimeManager {
         // Podman drivers always take the guest-path branch above.
         await mkdir(input.sessionStorageRoot, { recursive: true, mode: 0o700 })
       }
+      const ubuntuDesktopIsoPath = await this.stageUbuntuDesktopIso(input)
+      if (ubuntuDesktopIsoPath) input.ubuntuDesktopIsoPath = ubuntuDesktopIsoPath
       await this.writeStatus({ projectId, backend: vm.backend, machineName: vm.machineName, workspacePath: vm.workspacePath, status: 'provisioning', phase: 'starting_project_database', diskMode: vm.diskMode })
       const supabase = await this.ensureProjectSupabase(vm.machineName, projectId, vm.workspacePath, ports)
       await this.writeStatus({ projectId, backend: vm.backend, machineName: vm.machineName, workspacePath: vm.workspacePath, status: 'provisioning', phase: 'starting_agent_services', diskMode: vm.diskMode })
@@ -1205,6 +1281,7 @@ export class ProjectRuntimeManager {
         browserTokenSecret: secrets.browserTokenSecret,
         codeServerEndpoint: `http://${this.publicHost}:${endpointPorts.codeServer}`,
         sessionStorageRoot: input.sessionStorageRoot,
+        ...(ubuntuDesktopIsoPath ? { ubuntuDesktopIsoPath } : {}),
         agentWorkerImage: input.agentWorkerImage,
         agentWorkerRevision: input.imageArchiveVersions?.[input.agentWorkerImage],
         agentRpcWorkerImage: input.agentRpcWorkerImage,
@@ -1271,12 +1348,70 @@ export class ProjectRuntimeManager {
     }
   }
 
+  private async stageUbuntuDesktopIso(input: ProjectRuntimeServiceInput): Promise<string | undefined> {
+    const source = input.ubuntuDesktopIsoSource
+    if (!source) return undefined
+    await ensureUbuntuDesktopIsoSource(source)
+    const runner = this.machineDriver.runInMachine?.bind(this.machineDriver)
+    if (!runner) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project VM driver cannot stage the Ubuntu Desktop ISO')
+    const destination = resolveGuestPath(input.sessionStorageRoot, '.runtime', UBUNTU_DESKTOP_ISO_NAME)
+    const directory = resolveGuestPath(input.sessionStorageRoot, '.runtime')
+    const checksumMarker = `${destination}.sha256`
+    await runner(input.machineName, 'mkdir', ['-p', directory])
+
+    const marker = await runner(input.machineName, 'cat', [checksumMarker]).then((result) => result.stdout.trim()).catch(() => '')
+    const size = await runner(input.machineName, 'stat', ['-c', '%s', destination]).then((result) => result.stdout.trim()).catch(() => '')
+    if (marker === UBUNTU_DESKTOP_ISO_SHA256 && size === UBUNTU_DESKTOP_ISO_SIZE) return destination
+
+    const copyToMachine = this.machineDriver.copyToMachine?.bind(this.machineDriver)
+    if (!copyToMachine) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project VM cannot stage the Ubuntu Desktop ISO')
+    await runner(input.machineName, 'rm', ['-f', destination, checksumMarker]).catch(() => undefined)
+    await copyToMachine(input.machineName, source, destination)
+    await runner(input.machineName, 'chmod', ['0644', destination])
+    const digest = await runner(input.machineName, 'sha256sum', [destination]).then((result) => result.stdout.trim().split(/\s+/, 1)[0] ?? '')
+    if (digest !== UBUNTU_DESKTOP_ISO_SHA256) {
+      await runner(input.machineName, 'rm', ['-f', destination, checksumMarker]).catch(() => undefined)
+      throw new AgentHostError('PROVISIONING_FAILED', 'The staged Ubuntu Desktop ISO failed Canonical SHA-256 verification', { retryable: true })
+    }
+    await runner(input.machineName, 'bash', ['-lc', `printf %s ${JSON.stringify(UBUNTU_DESKTOP_ISO_SHA256)} > ${JSON.stringify(checksumMarker)}`])
+    return destination
+  }
+
+  private async reconcileExistingRuntime(descriptor: ProjectRuntimeDescriptor): Promise<ProjectRuntimeDescriptor> {
+    let updated = descriptor
+    let changed = false
+    const input = this.serviceInput(descriptor)
+    if (!descriptor.ubuntuDesktopIsoPath && input.ubuntuDesktopIsoSource) {
+      const ubuntuDesktopIsoPath = await this.stageUbuntuDesktopIso(input)
+      if (ubuntuDesktopIsoPath) {
+        updated = { ...updated, ubuntuDesktopIsoPath }
+        changed = true
+      }
+    }
+
+    const workerRevision = this.imageArchiveVersions()?.[this.images.agentWorkerImage]
+    const workerImageChanged = Boolean(workerRevision && workerRevision !== updated.agentWorkerRevision)
+    if (workerImageChanged) {
+      updated = { ...updated, agentWorkerRevision: workerRevision }
+      changed = true
+    }
+    if (!changed) return descriptor
+
+    // Refresh changed image archives and ISO mounts without replacing healthy
+    // Project services. Existing session workloads remain available; lease
+    // recovery replaces only workers whose durable image identity is stale.
+    await this.serviceDriver.ensureServices(this.serviceInput(updated))
+    await this.persistDescriptorState(updated, 'ready')
+    return updated
+  }
+
   private serviceInput(descriptor: ProjectRuntimeDescriptor): ProjectRuntimeServiceInput {
     return {
       projectId: descriptor.projectId,
       machineName: descriptor.machineName,
       workspacePath: descriptor.workspacePath,
       sessionStorageRoot: descriptor.sessionStorageRoot,
+      ...(descriptor.ubuntuDesktopIsoPath ? { ubuntuDesktopIsoPath: descriptor.ubuntuDesktopIsoPath } : {}),
       ports: descriptor.servicePorts,
       opensandboxApiKey: descriptor.opensandboxApiKey,
       browserApiToken: descriptor.browserApiToken,
@@ -1417,6 +1552,7 @@ export class ProjectRuntimeManager {
       browserHostEndpoint: descriptor.browserHostEndpoint,
       codeServerEndpoint: descriptor.codeServerEndpoint,
       sessionStorageRoot: descriptor.sessionStorageRoot,
+      ...(descriptor.ubuntuDesktopIsoPath ? { ubuntuDesktopIsoPath: descriptor.ubuntuDesktopIsoPath } : {}),
       agentWorkerImage: descriptor.agentWorkerImage,
       agentWorkerRevision: descriptor.agentWorkerRevision,
       agentRpcWorkerImage: descriptor.agentRpcWorkerImage,
@@ -1605,6 +1741,8 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
     await this.ensureImages(input)
     await this.ensureNetwork(runInMachine, input.machineName, network)
     const podmanSocketPath = await this.ensurePodmanSocket(runInMachine, input.machineName)
+    const kvmDeviceAvailable = Boolean(input.ubuntuDesktopIsoPath)
+      && await runInMachine(input.machineName, 'test', ['-c', '/dev/kvm']).then(() => true).catch(() => false)
     const openSandboxConfig = this.openSandboxConfig(input)
     await this.writeOpenSandboxConfig(runInMachine, input, openSandboxConfig)
     // The control plane stores its registry in the Project workspace. Keep
@@ -1664,6 +1802,7 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
         // to reject connects even when the numeric owner is correct.
         `${podmanSocketPath}:/var/run/docker.sock:rw`,
       ],
+      ...(kvmDeviceAvailable ? { devices: ['/dev/kvm:/dev/kvm:rwm'] } : {}),
       // Project VMs use rootless Podman. UID 0 inside a rootless container is
       // mapped to the guest's unprivileged Podman user, so it can open the
       // 0660 socket while never becoming host root. Passing the guest UID
@@ -1896,10 +2035,11 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
     const copyToMachine = this.machineDriver.copyToMachine?.bind(this.machineDriver)
     const copyRemoteToMachine = this.machineDriver.copyRemoteToMachine?.bind(this.machineDriver)
     const loadedArchives = new Set<string>()
-    // Recover from a host/process interruption during an earlier import. The
-    // staging directory is tmpfs on the Project VM, so even a few abandoned
-    // archives can block the next complete image set before retry begins.
+    // Recover from a host/process interruption during an earlier import.
+    // /tmp is a small tmpfs on Project VMs and can be smaller than one of the
+    // worker archives; stage large files on the disk-backed /var/tmp instead.
     await runInMachine(input.machineName, 'find', ['/tmp', '-maxdepth', '1', '-type', 'f', '-name', 'openlink-image-*.tar', '-delete'])
+    await runInMachine(input.machineName, 'find', ['/var/tmp', '-maxdepth', '1', '-type', 'f', '-name', 'openlink-image-*.tar', '-delete'])
     const imageNames = [input.opensandboxImage, input.browserHostImage, input.execdImage, input.egressImage, input.agentWorkerImage, input.agentRpcWorkerImage, input.codeServerImage]
     for (const image of imageNames) {
       const archive = input.imageArchives?.[image]
@@ -1932,7 +2072,7 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
       }
       if (!archive) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Image ' + image + ' is not loaded into project VM and no image archive is configured')
       if (loadedArchives.has(archive)) continue
-      const filename = '/tmp/openlink-image-' + image.replace(/[^A-Za-z0-9_.-]/g, '_') + '.tar'
+      const filename = '/var/tmp/openlink-image-' + image.replace(/[^A-Za-z0-9_.-]/g, '_') + '.tar'
       if (archive.startsWith('remote:')) {
         if (!copyRemoteToMachine) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Remote image archive ' + archive + ' cannot be copied into project VM')
         await copyRemoteToMachine(input.machineName, archive.slice('remote:'.length), filename)
@@ -1940,20 +2080,36 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
         if (!copyToMachine) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Image ' + image + ' is not loaded into project VM and no local image copier is configured')
         await copyToMachine(input.machineName, archive, filename)
       }
+      let loadedImageOutput = ''
       try {
-        await runInMachine(input.machineName, 'podman', ['load', '--input', filename])
+        const loaded = await runInMachine(input.machineName, 'podman', ['load', '--input', filename])
+        loadedImageOutput = `${loaded.stdout}\n${loaded.stderr}`
       } finally {
         // Image archives are staging artifacts, not runtime state. Keeping all
-        // seven tarballs in /tmp can exhaust a fresh 64 GB Project VM before
-        // code-server is imported, even though the loaded layers themselves
-        // still fit. Always remove complete and partial uploads immediately.
+        // seven tarballs on the VM disk can exhaust a fresh Project VM before
+        // code-server is imported, even though the loaded layers still fit.
+        // Always remove complete and partial uploads immediately.
         await runInMachine(input.machineName, 'rm', ['-f', filename]).catch(() => undefined)
       }
-      for (const candidate of [`localhost/${image}`, `docker.io/${image}`]) {
+      // The project image archives are saved with short names, which Podman
+      // imports as docker.io/<image>. A Project VM can also have an older
+      // localhost/<image> alias from its base disk. Prefer the reference
+      // reported by this load, then update all aliases so OpenSandbox cannot
+      // resolve the stale base-disk image on the next session.
+      const loadedReferences = [...loadedImageOutput.matchAll(/Loaded image(?:\(s\))?:\s*([^\s,]+)/g)]
+        .map((match) => match[1].trim())
+      const importedCandidates = [...new Set([...loadedReferences, `docker.io/${image}`, `localhost/${image}`])]
+      let importedImage: string | undefined
+      for (const candidate of importedCandidates) {
         const existsArgs = this.engine === 'docker' ? ['image', 'inspect', candidate] : ['image', 'exists', candidate]
         if (await runInMachine(input.machineName, 'podman', existsArgs).then(() => true).catch(() => false)) {
-          await runInMachine(input.machineName, 'podman', ['tag', candidate, image]).catch(() => undefined)
+          importedImage = candidate
           break
+        }
+      }
+      if (importedImage) {
+        for (const alias of [image, `localhost/${image}`, `docker.io/${image}`]) {
+          if (alias !== importedImage) await runInMachine(input.machineName, 'podman', ['tag', importedImage, alias]).catch(() => undefined)
         }
       }
       if (requestedRevision) {
@@ -2044,6 +2200,9 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
       '[egress]',
       `image = "${input.egressImage}"`,
       'mode = "dns+nft"',
+      // TCG Project VMs can take longer than the OpenSandbox default while
+      // mitmdump and the per-container trust store finish initializing.
+      'readiness_timeout_seconds = 90',
       'disable_ipv6 = true',
       '',
       '[ingress]',
@@ -2073,6 +2232,7 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
       network: string
       env: Record<string, string>
       volumes: string[]
+      devices?: string[]
       user?: string
       securityOpts?: string[]
       usernsMode?: string
@@ -2130,6 +2290,7 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
     if (input.usernsMode) args.push('--userns', input.usernsMode)
     if (input.user) args.push('--user', input.user)
     for (const securityOpt of input.securityOpts ?? []) args.push('--security-opt', securityOpt)
+    for (const device of input.devices ?? []) args.push('--device', device)
     for (const value of input.entrypoint ?? []) args.push('--entrypoint', value)
     for (const [key, value] of Object.entries(input.env)) args.push('--env', `${key}=${value}`)
     for (const volume of input.volumes) args.push('--volume', volume)
@@ -2146,6 +2307,7 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
     network: string
     env: Record<string, string>
     volumes: string[]
+    devices?: string[]
     user?: string
     securityOpts?: string[]
     usernsMode?: string
@@ -2159,6 +2321,7 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
       network: input.network,
       env: Object.fromEntries(Object.entries(input.env).sort(([left], [right]) => left.localeCompare(right))),
       volumes: input.volumes,
+      ...(input.devices?.length ? { devices: input.devices } : {}),
       user: input.user ?? null,
       securityOpts: input.securityOpts ?? [],
       usernsMode: input.usernsMode ?? null,

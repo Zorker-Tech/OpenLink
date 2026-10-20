@@ -23,14 +23,14 @@
     "test": "npm run build && node --test dist/test/*.test.js"
   },
   "dependencies": {
-    "@alibaba-group/opensandbox": "0.1.11",
+    "@alibaba-group/opensandbox": "1.1.1",
     "@anthropic-ai/sandbox-runtime": "file:../sandbox-runtime",
     "@openlink/browser-protocol": "file:../../packages/browser-protocol",
-    "ws": "8.21.2"
+    "ws": "8.22.0"
   },
   "devDependencies": {
-    "@types/node": "24.12.0",
-    "@types/ws": "8.18.1",
-    "typescript": "5.9.3"
+    "@types/node": "26.6.5",
+    "@types/ws": "8.18.2",
+    "typescript": "7.0.2"
   }
 }

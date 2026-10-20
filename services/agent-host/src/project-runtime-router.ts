@@ -164,6 +164,7 @@ export interface RemoteProjectRuntimeFactoryOptions {
   projectVmDiskGb?: number
   httpProxy?: string
   httpsProxy?: string
+  ubuntuDesktopIsoSource?: string
 }
 
 /** Creates a separate RemoteQEMU + OpenSandbox runtime manager for every SSH Project. */
@@ -244,6 +245,7 @@ export class RemoteProjectRuntimeFactory {
       agentRpcWorkerImage: release.images.rpcImage,
       codeServerImage: release.images.codeServerImage,
       imageArchives: Object.fromEntries(Object.values(release.images).map((image) => [image, archive])),
+      ubuntuDesktopIsoSource: this.options.ubuntuDesktopIsoSource,
       browserAllowedOrigins: this.options.browserAllowedOrigins,
       publicHost: '127.0.0.1',
     })
