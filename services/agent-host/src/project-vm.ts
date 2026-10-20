@@ -79,7 +79,7 @@ export interface PodmanMachineDriverOptions {
   /** Bootable local disk image produced by the OpenLink image pipeline. */
   projectBaseDisk?: string
   /** APFS/reflink clone hook; injectable for deterministic tests. */
-  cloneDisk?: (source: string, destination: string) => Promise<void>
+  cloneDisk?: (source: string, destination: string, expectedVirtualSizeBytes?: number) => Promise<void>
   /** Full independent disk materialization hook; injectable for tests. */
   materializeDisk?: (source: string, destination: string) => Promise<void>
   /** Resolve the Podman-owned target disk when inspect omits ImagePath. */
@@ -337,6 +337,14 @@ const PODMAN_EXPANDED_PLACEHOLDER_MAX_ALLOCATION_BYTES = 512 * 1024 * 1024
 const THIN_DISK_MATERIALIZATION_RATIO = 0.9
 const THIN_DISK_ALLOCATION_TOLERANCE_BYTES = 512 * 1024 * 1024
 
+interface Qcow2OverlayInfo {
+  format?: string
+  'virtual-size'?: number
+  'backing-filename'?: string
+  'full-backing-filename'?: string
+  'backing-filename-format'?: string
+}
+
 function diskAllocatedBytes(stats: { blocks: number }): number {
   const allocated = Number(stats.blocks) * 512
   if (!Number.isSafeInteger(allocated) || allocated < 0) {
@@ -500,12 +508,15 @@ async function validatePodmanDiskPlaceholder(path: string, expandedLogicalBytes?
 }
 
 /**
- * Publish a native CoW clone over Podman's tiny initialization disk.
- *
- * Thin mode is deliberately fail-closed: unsupported filesystems, sparse-hole
- * materialization and partial clones never become bootable Project VM disks.
+ * Publish a copy-on-write Project VM disk over Podman's initialization disk.
+ * Linux uses a native reflink when available, then a QCOW2 backing overlay on
+ * filesystems that do not support reflinks. macOS keeps using APFS clonefile.
  */
-export async function cloneThinProjectVmDisk(source: string, destination: string): Promise<void> {
+export async function cloneThinProjectVmDisk(
+  source: string,
+  destination: string,
+  expectedVirtualSizeBytes?: number,
+): Promise<void> {
   const sourcePath = resolve(source)
   const destinationPath = resolve(destination)
   if (sourcePath === destinationPath) {
@@ -529,24 +540,21 @@ export async function cloneThinProjectVmDisk(source: string, destination: string
     throw new AgentHostError('PROVISIONING_FAILED', 'Project VM Golden Disk is empty', { retryable: false })
   }
 
-  await validatePodmanDiskPlaceholder(destinationPath, sourceStats.size)
+  // QCOW2 files can be much shorter than the virtual disk they contain. Use
+  // the configured VM capacity for placeholder and thin-allocation checks;
+  // sourceStats.size remains the correct byte count for cloning the QCOW2 file.
+  const virtualSizeBytes = expectedVirtualSizeBytes ?? sourceStats.size
+  await validatePodmanDiskPlaceholder(destinationPath, virtualSizeBytes)
   const destinationStats = await lstat(destinationPath)
-  if (sourceStats.dev !== destinationStats.dev) {
-    throw new AgentHostError(
-      'PROVISIONING_FAILED',
-      'Thin Project VM Golden Disk and Podman data root must be on the same copy-on-write filesystem',
-      { retryable: true },
-    )
-  }
   if (sourceStats.dev === destinationStats.dev && sourceStats.ino === destinationStats.ino) {
     throw new AgentHostError('PROVISIONING_FAILED', 'Project VM Golden Disk and destination resolve to the same file', { retryable: false })
   }
 
   const sourceAllocated = diskAllocatedBytes(sourceStats)
-  if (sourceAllocated >= sourceStats.size * THIN_DISK_MATERIALIZATION_RATIO) {
+  if (sourceAllocated >= virtualSizeBytes * THIN_DISK_MATERIALIZATION_RATIO) {
     throw new AgentHostError(
       'PROVISIONING_FAILED',
-      `Project VM Golden Disk is not thin (${sourceAllocated}/${sourceStats.size} allocated bytes)`,
+      `Project VM Golden Disk is not thin (${sourceAllocated}/${virtualSizeBytes} virtual bytes)`,
       { retryable: false },
     )
   }
@@ -554,26 +562,59 @@ export async function cloneThinProjectVmDisk(source: string, destination: string
   const staging = resolve(dirname(destinationPath), `.${basename(destinationPath)}.clone-${process.pid}-${randomUUID()}.tmp`)
   let published = false
   try {
-    const args = process.platform === 'darwin'
-      ? ['-c', sourcePath, staging]
-      : ['--reflink=always', '--sparse=always', sourcePath, staging]
-    await runCommand('/bin/cp', args)
+    let qcow2Overlay = false
+    const qemuImg = process.env.OPENLINK_QEMU_IMG_COMMAND?.trim() || 'qemu-img'
+    try {
+      const args = process.platform === 'darwin'
+        ? ['-c', sourcePath, staging]
+        : ['--reflink=always', '--sparse=auto', sourcePath, staging]
+      await runCommand('/bin/cp', args)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      const reflinkUnavailable = process.platform === 'linux'
+        && /operation not supported|not supported|invalid cross-device link/i.test(message)
+      if (!reflinkUnavailable) throw error
+      // Some supported Linux filesystems (including iSCSI-backed ext4) cannot
+      // reflink. A QCOW2 overlay keeps the VM disk thin without copying the
+      // entire Golden Disk or depending on filesystem clone support.
+      await runCommand(qemuImg, ['create', '-f', 'qcow2', '-F', 'qcow2', '-b', sourcePath, staging])
+      qcow2Overlay = true
+    }
     await chmod(staging, 0o600)
 
     const stagingStats = await lstat(staging)
     if (!stagingStats.isFile() || stagingStats.isSymbolicLink()) {
-      throw new AgentHostError('PROVISIONING_FAILED', 'Native Project VM clone did not produce a regular staging file', { retryable: true })
+      throw new AgentHostError('PROVISIONING_FAILED', 'Project VM copy-on-write operation did not produce a regular staging file', { retryable: true })
     }
-    if (stagingStats.size !== sourceStats.size) {
+    if (!qcow2Overlay && stagingStats.size !== sourceStats.size) {
       throw new AgentHostError(
         'PROVISIONING_FAILED',
         `Native Project VM clone has unexpected logical size ${stagingStats.size}; expected ${sourceStats.size}`,
         { retryable: true },
       )
     }
+    if (qcow2Overlay) {
+      const infoResult = await runCommand(qemuImg, ['info', '--output=json', staging])
+      let info: Qcow2OverlayInfo
+      try {
+        info = JSON.parse(infoResult.stdout) as Qcow2OverlayInfo
+      } catch {
+        throw new AgentHostError('PROVISIONING_FAILED', 'QCOW2 Project VM overlay metadata is invalid', { retryable: true })
+      }
+      const backingFilename = info['full-backing-filename'] || info['backing-filename']
+      const backingPath = backingFilename
+        ? resolve(isAbsolute(backingFilename) ? backingFilename : resolve(dirname(staging), backingFilename))
+        : ''
+      if (info.format !== 'qcow2'
+        || info['virtual-size'] !== virtualSizeBytes
+        || info['backing-filename-format'] !== 'qcow2'
+        || backingPath !== sourcePath) {
+        throw new AgentHostError('PROVISIONING_FAILED', 'QCOW2 Project VM overlay does not point to the expected Golden Disk', { retryable: true })
+      }
+    }
     const stagingAllocated = diskAllocatedBytes(stagingStats)
     const allocationTolerance = Math.max(THIN_DISK_ALLOCATION_TOLERANCE_BYTES, Math.ceil(sourceAllocated * 0.1))
-    if (stagingAllocated >= stagingStats.size * THIN_DISK_MATERIALIZATION_RATIO
+    if (stagingAllocated >= virtualSizeBytes * THIN_DISK_MATERIALIZATION_RATIO
       || stagingAllocated > sourceAllocated + allocationTolerance) {
       throw new AgentHostError(
         'PROVISIONING_FAILED',
@@ -671,7 +712,7 @@ export class PodmanMachineDriver implements ProjectVmMachineDriver {
   private readonly bootstrapEnabled: boolean
   private readonly rootfulPodman: boolean
   private readonly projectBaseDisk?: string
-  private readonly cloneDisk: (source: string, destination: string) => Promise<void>
+  private readonly cloneDisk: (source: string, destination: string, expectedVirtualSizeBytes?: number) => Promise<void>
   private readonly materializeDisk: (source: string, destination: string) => Promise<void>
   private readonly resolveMachineDiskPath: (name: string) => string | undefined
   private readonly machineProvider: PodmanMachineProvider
@@ -783,7 +824,7 @@ export class PodmanMachineDriver implements ProjectVmMachineDriver {
           } else {
             await validatePodmanDiskPlaceholder(destination, spec.diskGb * 1024 * 1024 * 1024)
           }
-          if (spec.diskMode === 'thin') await this.cloneDisk(this.projectBaseDisk, destination)
+          if (spec.diskMode === 'thin') await this.cloneDisk(this.projectBaseDisk, destination, spec.diskGb * 1024 * 1024 * 1024)
           else await this.materializeDisk(this.projectBaseDisk, destination)
           // The direct AppleHV boot marker is tied to the previous VM disk.
           // Podman machine removal leaves this product state directory intact,

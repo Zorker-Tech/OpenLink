@@ -9,6 +9,7 @@ import {
   type AgentSession,
 } from '@earendil-works/pi-coding-agent'
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto'
+import { spawn, type ChildProcess } from 'node:child_process'
 import { access, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { relative, resolve } from 'node:path'
@@ -797,6 +798,26 @@ const runtime = worker.agent === 'codex'
     turnIdleTimeoutMs: worker.turnIdleTimeoutMs,
   })
   : new SdkAgentRuntime(worker)
+let desktopProcess: ChildProcess | undefined
+
+function startDesktopProcess(): void {
+  if (desktopProcess && desktopProcess.exitCode === null && desktopProcess.signalCode === null) return
+  const child = spawn('bash', ['/opt/openlink/desktop/start.sh'], {
+    cwd: worker.workspaceRoot,
+    env: process.env,
+    stdio: 'ignore',
+  })
+  desktopProcess = child
+  child.once('error', (error) => {
+    if (desktopProcess === child) desktopProcess = undefined
+    console.error(`OpenLink desktop process failed to start: ${error.message}`)
+  })
+  child.once('exit', (code, signal) => {
+    if (desktopProcess === child) desktopProcess = undefined
+    if (code !== 0 && code !== null) console.error(`OpenLink desktop process exited with code ${code}`)
+    if (signal) console.error(`OpenLink desktop process exited from signal ${signal}`)
+  })
+}
 let lifecycleState: 'starting' | 'ready' | 'error' = 'starting'
 let lifecycleError = ''
 let preparePromise: Promise<void> | undefined
@@ -839,6 +860,12 @@ const server = createServer((request, response) => {
     if (!authorized(request, worker.token)) {
       response.writeHead(403, { 'Content-Type': 'application/json' })
       response.end(JSON.stringify({ error: 'AUTH_DENIED' }))
+      return
+    }
+    if (request.method === 'POST' && url.pathname === '/desktop/start') {
+      startDesktopProcess()
+      response.writeHead(202, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
+      response.end(JSON.stringify({ ok: true }))
       return
     }
     if (request.method === 'POST' && url.pathname === '/v1/cancel') {
