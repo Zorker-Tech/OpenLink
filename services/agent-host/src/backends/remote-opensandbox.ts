@@ -1,6 +1,7 @@
 import { ConnectionConfig, Sandbox, type Endpoint } from '@alibaba-group/opensandbox'
 import { randomBytes } from 'node:crypto'
 import type { AgentExtensionUiResponse, AgentNativeSessionSnapshot, AgentProviderRuntimeConfiguration } from '../contracts.js'
+import type { DesktopEndpoint } from '../desktop-gateway.js'
 import type { BrowserAgentSession } from '../browser-client.js'
 import { browserAgentBinding, browserHostNetworkTarget, REMOTE_BROWSER_EXTENSION_PATH } from '../browser-binding.js'
 import { AgentHostError } from '../errors.js'
@@ -8,6 +9,7 @@ import type { ProjectRuntimeDescriptor } from '../project-runtime.js'
 import { disposeOpenSandbox } from './sandbox-cleanup.js'
 import { cleanupOpenSandboxSessionWorkloads } from './opensandbox-recovery.js'
 import { ambientProviderEnvironment, providerNetworkTargets } from '../provider-environment.js'
+import { ensureDesktopEndpoint } from './desktop-runtime.js'
 
 export interface RemoteOpenSandboxRpcConfig {
   domain: string
@@ -17,6 +19,7 @@ export interface RemoteOpenSandboxRpcConfig {
   storageRoot: string
   /** OpenSandbox workload lifetime. `null` delegates cleanup to Agent Host. */
   sessionTtlSeconds: number | null
+  desktopMode?: 'ubuntu-container' | 'ubuntu-iso'
   /** Outbound policy selected by the remote approval controller. */
   networkDefaultAction?: 'allow' | 'deny'
 }
@@ -25,6 +28,7 @@ export interface RemoteRpcPromptSession {
   readonly sandboxId: string
   pause(): Promise<void>
   resume(): Promise<void>
+  desktopEndpoint(): Promise<DesktopEndpoint>
   prompt(message: string, signal?: AbortSignal): Promise<Response>
   resolveExtensionUi(response: AgentExtensionUiResponse): Promise<void>
   networkAccess(hosts: string[], mode: 'temporary' | 'persistent', durationSeconds?: number): Promise<void>
@@ -96,6 +100,10 @@ export class RemoteOpenSandboxRpcBackend {
   }
 
   async createSession(userId: string, workspaceId: string, sessionId: string, runtimeConfiguration: AgentProviderRuntimeConfiguration, nativeSession?: AgentNativeSessionSnapshot, projectId?: string, projectRuntime?: ProjectRuntimeDescriptor, browserSession?: BrowserAgentSession): Promise<RemoteRpcPromptSession> {
+    const desktopMode = this.config.desktopMode ?? 'ubuntu-container'
+    if (desktopMode === 'ubuntu-iso' && !projectRuntime?.ubuntuDesktopIsoPath) {
+      throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Ubuntu ISO desktop mode is not ready. The verified desktop ISO has not been staged in this Project VM.', { retryable: true })
+    }
     const scopedProject = projectId ? remoteSegment(projectId, 'projectId') : 'draft'
     const scopedUser = remoteSegment(userId, 'userId')
     const scopedWorkspace = remoteSegment(workspaceId, 'workspaceId')
@@ -140,6 +148,8 @@ export class RemoteOpenSandboxRpcBackend {
         OPENLINK_AGENT_WORKSPACE_ROOT: '/workspace',
         OPENLINK_AGENT_SESSION_ROOT: '/openlink/session',
         OPENLINK_AGENT_SESSION_ID: sessionId,
+        OPENLINK_DESKTOP_MODE: desktopMode,
+        ...(desktopMode === 'ubuntu-iso' ? { OPENLINK_DESKTOP_ISO: '/opt/openlink/ubuntu-desktop.iso' } : {}),
         ...(nativeSession ? { OPENLINK_AGENT_SESSION_FILE: '/openlink/session/pi-sessions/cloud-session.jsonl' } : {}),
         NODE_EXTRA_CA_CERTS: '/opt/opensandbox/mitmproxy-ca-cert.pem',
         OPENLINK_AGENT_MODEL: model,
@@ -179,7 +189,10 @@ export class RemoteOpenSandboxRpcBackend {
       // Podman workload. The server applies CAP_SYS_ADMIN/seccomp/AppArmor
       // only for this explicit extension and keeps the control plane private
       // behind the SSH tunnel.
-      extensions: { 'bootstrap.execd.isolation': 'enable' },
+      extensions: {
+        'bootstrap.execd.isolation': 'enable',
+        ...(desktopMode === 'ubuntu-iso' ? { 'openlink.qemu-kvm': 'enable' } : {}),
+      },
       networkPolicy: {
         defaultAction: this.config.networkDefaultAction ?? 'deny',
         egress: [...providerHosts, browserHost]
@@ -190,8 +203,11 @@ export class RemoteOpenSandboxRpcBackend {
       volumes: [
         { name: 'workspace', host: { path: projectWorkspaceRoot }, mountPath: '/workspace', readOnly: false },
         { name: 'session', host: { path: sessionRoot }, mountPath: '/openlink/session', readOnly: false },
+        ...(desktopMode === 'ubuntu-iso' && projectRuntime?.ubuntuDesktopIsoPath ? [
+          { name: 'ubuntu-iso', host: { path: projectRuntime.ubuntuDesktopIsoPath }, mountPath: '/opt/openlink/ubuntu-desktop.iso', readOnly: true },
+        ] : []),
       ],
-      resource: { cpu: '2', memory: '4Gi' },
+      resource: desktopMode === 'ubuntu-iso' ? { cpu: '4', memory: '8Gi' } : { cpu: '2', memory: '4Gi' },
       readyTimeoutSeconds: 180,
     })
     try {
@@ -231,6 +247,8 @@ export class RemoteOpenSandboxRpcBackend {
       let paused = false
       let cleaned = false
       let cleanupPromise: Promise<void> | undefined
+      let desktopStarted = false
+      let desktopStarting: Promise<void> | undefined
       const networkTimers = new Set<ReturnType<typeof setTimeout>>()
       const ensureRunning = async (): Promise<void> => {
         if (cleaned) throw new AgentHostError('INVALID_SESSION', 'Agent Worker session has been cleaned up', { retryable: true })
@@ -239,7 +257,21 @@ export class RemoteOpenSandboxRpcBackend {
         endpoint = await activeSandbox.getEndpoint(43131)
         baseUrl = endpointUrl(connection, endpoint)
         await waitForRpcWorker(baseUrl, endpoint.headers)
+        desktopStarted = false
         paused = false
+      }
+      const desktopEndpoint = async (): Promise<DesktopEndpoint> => {
+        await ensureRunning()
+        if (!desktopStarted) {
+          if (!desktopStarting) {
+            desktopStarting = ensureDesktopEndpoint(activeSandbox, connection, 43131, workerToken, 'X-OpenLink-Agent-Token', desktopMode)
+              .then(() => { desktopStarted = true })
+              .finally(() => { desktopStarting = undefined })
+          }
+          await desktopStarting
+        }
+        const desktop = await activeSandbox.getEndpoint(6080)
+        return { url: endpointUrl(connection, desktop), headers: desktop.headers ?? {} }
       }
       return {
         sandboxId: sandbox.id as string,
@@ -249,6 +281,7 @@ export class RemoteOpenSandboxRpcBackend {
           paused = true
         },
         resume: ensureRunning,
+        desktopEndpoint,
         prompt: async (message, signal) => {
           await ensureRunning()
           const headers = { ...endpoint.headers, 'X-OpenLink-Agent-Token': workerToken, 'Content-Type': 'application/json' }

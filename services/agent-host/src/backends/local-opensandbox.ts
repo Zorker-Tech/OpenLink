@@ -7,6 +7,7 @@ import { dirname, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { AgentHostError } from '../errors.js'
 import type { AgentExtensionUiResponse, AgentNativeSessionSnapshot, AgentProviderRuntimeConfiguration } from '../contracts.js'
+import type { DesktopEndpoint } from '../desktop-gateway.js'
 import type { BrowserAgentSession } from '../browser-client.js'
 import { browserAgentBinding, browserHostNetworkTarget, LOCAL_BROWSER_EXTENSION_PATH, projectBrowserHostOrigin } from '../browser-binding.js'
 import type { ProjectRuntimeDescriptor } from '../project-runtime.js'
@@ -14,6 +15,7 @@ import { createSessionStorageLayout, ensureSessionStorage, type SessionStorageLa
 import { disposeOpenSandbox } from './sandbox-cleanup.js'
 import { cleanupOpenSandboxSessionWorkloads } from './opensandbox-recovery.js'
 import { ambientProviderEnvironment, providerNetworkTargets } from '../provider-environment.js'
+import { ensureDesktopEndpoint } from './desktop-runtime.js'
 import type { AgentResourceRequest, PromptAttachment, PromptRuntimeAgentOptions } from '../prompt-http-server.js'
 import type { CodexPluginSnapshot } from '../codex-plugin-snapshot.js'
 
@@ -23,6 +25,8 @@ export interface LocalOpenSandboxConfig {
   domain: string
   apiKey: string
   image: string
+  /** Prefer the official Ubuntu Desktop ISO; QEMU selects KVM or TCG per sandbox. */
+  desktopMode?: 'ubuntu-container' | 'ubuntu-iso'
   workspaceRoot: string
   storageRoot: string
   /** OpenSandbox workload lifetime. `null` delegates cleanup to Agent Host. */
@@ -54,6 +58,7 @@ export interface OpenSandboxPromptSession {
   resolveExtensionUi(response: AgentExtensionUiResponse): Promise<void>
   networkAccess(hosts: string[], mode: 'temporary' | 'persistent', durationSeconds?: number): Promise<void>
   resources(request?: AgentResourceRequest): Promise<unknown>
+  desktopEndpoint(): Promise<DesktopEndpoint>
   setBrowser(browser?: BrowserAgentSession): Promise<void>
   cleanup(): Promise<void>
 }
@@ -252,11 +257,21 @@ export class LocalOpenSandboxBackend {
     })
   }
 
+  private desktopModeFor(projectRuntime?: ProjectRuntimeDescriptor): 'ubuntu-container' | 'ubuntu-iso' {
+    const configured = this.config.desktopMode ?? 'ubuntu-container'
+    // The official ISO can also run without a forwarded KVM device through
+    // QEMU TCG. The start script chooses acceleration after the ISO is staged.
+    return configured === 'ubuntu-iso' && projectRuntime?.ubuntuDesktopIsoPath
+      ? 'ubuntu-iso'
+      : configured
+  }
+
   private leaseFile(userId: string, workspaceId: string, sessionId: string): string {
     return resolve(this.config.storageRoot, '.runtime-leases', userId, workspaceId, `${sessionId}.json`)
   }
 
   private leaseIdentity(runtimeConfiguration: AgentProviderRuntimeConfiguration, projectId?: string, _browserSession?: BrowserAgentSession, agentOptions?: PromptRuntimeAgentOptions, projectRuntime?: ProjectRuntimeDescriptor, codexPluginRevision?: string): string {
+    const desktopMode = this.desktopModeFor(projectRuntime)
     return JSON.stringify({
       projectId: projectId ?? null,
       providerId: runtimeConfiguration.providerId,
@@ -266,6 +281,7 @@ export class LocalOpenSandboxBackend {
       accessMode: agentOptions?.accessMode ?? 'restricted',
       workerImage: projectRuntime?.agentWorkerImage ?? this.config.image,
       workerRevision: projectRuntime?.agentWorkerRevision ?? null,
+      desktopRuntime: desktopMode === 'ubuntu-iso' ? 'ubuntu-desktop-iso-v1' : 'ubuntu-gnome-container-v1',
       // The projected environment is part of the durable worker identity. A
       // project container cannot consume host-published services through
       // loopback, so leases created before host-gateway projection must never
@@ -327,12 +343,15 @@ export class LocalOpenSandboxBackend {
     leaseFile: string,
     projectRuntime?: ProjectRuntimeDescriptor,
   ): Promise<OpenSandboxPromptSession> {
+    const desktopMode = this.desktopModeFor(projectRuntime)
     let activeSandbox = sandbox
     let endpoint = await activeSandbox.getEndpoint(43130)
     let baseUrl = workerUrl(connection, endpoint)
     let paused = false
     let cleaned = false
     let cleanupPromise: Promise<void> | undefined
+    let desktopStarted = false
+    let desktopStarting: Promise<void> | undefined
     const networkTimers = new Set<ReturnType<typeof setTimeout>>()
     const ensureRunning = async (): Promise<void> => {
       if (cleaned) throw new AgentHostError('INVALID_SESSION', 'Agent Worker session has been cleaned up', { retryable: true })
@@ -341,7 +360,21 @@ export class LocalOpenSandboxBackend {
       endpoint = await activeSandbox.getEndpoint(43130)
       baseUrl = workerUrl(connection, endpoint)
       await waitForWorker(baseUrl, endpoint.headers)
+      desktopStarted = false
       paused = false
+    }
+    const desktopEndpoint = async (): Promise<DesktopEndpoint> => {
+      await ensureRunning()
+      if (!desktopStarted) {
+        if (!desktopStarting) {
+          desktopStarting = ensureDesktopEndpoint(activeSandbox, connection, 43130, workerToken, 'X-OpenLink-Agent-Worker-Token', desktopMode)
+            .then(() => { desktopStarted = true })
+            .finally(() => { desktopStarting = undefined })
+        }
+        await desktopStarting
+      }
+      const desktop = await activeSandbox.getEndpoint(6080)
+      return { url: workerUrl(connection, desktop), headers: desktop.headers ?? {} }
     }
     const workerHeaders = () => ({
       ...endpoint.headers,
@@ -362,6 +395,7 @@ export class LocalOpenSandboxBackend {
         await ensureRunning()
         return requestWorkerPrompt(baseUrl, workerHeaders(), message, signal, attachments)
       },
+      desktopEndpoint,
       control: async (input) => {
         await ensureRunning()
         const result = await fetch(`${baseUrl}/v1/control`, {
@@ -517,6 +551,10 @@ export class LocalOpenSandboxBackend {
 
   async createSession(userId: string, workspaceId: string, sessionId: string, runtimeConfiguration: AgentProviderRuntimeConfiguration, nativeSession?: AgentNativeSessionSnapshot, projectId?: string, projectRuntime?: ProjectRuntimeDescriptor, browserSession?: BrowserAgentSession, agentOptions?: PromptRuntimeAgentOptions): Promise<OpenSandboxPromptSession> {
     const codexPluginSnapshot = await this.resolveCodexPluginSnapshot(agentOptions)
+    const desktopMode = this.desktopModeFor(projectRuntime)
+    if (desktopMode === 'ubuntu-iso' && !projectRuntime?.ubuntuDesktopIsoPath) {
+      throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Ubuntu ISO desktop mode is not ready. The verified desktop ISO has not been staged in this Project VM.', { retryable: true })
+    }
     const layout = createSessionStorageLayout(projectRuntime?.sessionStorageRoot ?? this.config.storageRoot, userId, workspaceId, sessionId)
     // A project runtime path is visible to the Linux VM's Podman daemon, not
     // to this Agent Host process. The OpenSandbox bind mount creates the
@@ -580,6 +618,8 @@ export class LocalOpenSandboxBackend {
         OPENLINK_AGENT_WORKER_PORT: '43130',
         OPENLINK_AGENT_WORKSPACE_ROOT: '/workspace',
         OPENLINK_AGENT_SESSION_ROOT: '/openlink/session',
+        OPENLINK_DESKTOP_MODE: desktopMode,
+        ...(desktopMode === 'ubuntu-iso' ? { OPENLINK_DESKTOP_ISO: '/opt/openlink/ubuntu-desktop.iso' } : {}),
         ...(nativeSession ? { OPENLINK_AGENT_SESSION_FILE: '/openlink/session/cloud-session.jsonl' } : {}),
         ...(egressEnabled ? { NODE_EXTRA_CA_CERTS: '/opt/opensandbox/mitmproxy-ca-cert.pem' } : {}),
         OPENLINK_AGENT_MODEL: model,
@@ -622,7 +662,10 @@ export class LocalOpenSandboxBackend {
       // capabilities and mounts required by execd's bubblewrap session
       // isolator. The provider keeps this opt-in per workload and still
       // applies the configured capability drops/limits to the container.
-      ...(egressEnabled ? { extensions: { 'bootstrap.execd.isolation': 'enable' } } : {}),
+      extensions: {
+        ...(egressEnabled ? { 'bootstrap.execd.isolation': 'enable' } : {}),
+        ...(desktopMode === 'ubuntu-iso' ? { 'openlink.qemu-kvm': 'enable' } : {}),
+      },
       ...(egressEnabled ? {
         networkPolicy: {
           defaultAction: (this.config.networkDefaultAction ?? 'deny') as 'allow' | 'deny',
@@ -635,8 +678,11 @@ export class LocalOpenSandboxBackend {
       volumes: [
         { name: 'workspace', host: { path: projectRuntime?.workspacePath ?? this.config.workspaceRoot }, mountPath: '/workspace', readOnly: false },
         { name: 'session', host: { path: layout.root }, mountPath: '/openlink/session', readOnly: false },
+        ...(desktopMode === 'ubuntu-iso' && projectRuntime?.ubuntuDesktopIsoPath ? [
+          { name: 'ubuntu-iso', host: { path: projectRuntime.ubuntuDesktopIsoPath }, mountPath: '/opt/openlink/ubuntu-desktop.iso', readOnly: true },
+        ] : []),
       ],
-      resource: { cpu: '2', memory: '4Gi' },
+      resource: desktopMode === 'ubuntu-iso' ? { cpu: '4', memory: '8Gi' } : { cpu: '2', memory: '4Gi' },
       readyTimeoutSeconds: 180,
     })
 
