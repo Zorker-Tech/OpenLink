@@ -7,13 +7,17 @@
  * accident through an error path.
  */
 
-/** Admits `value` when it is one of `values`, otherwise reports it as `fallback`. */
+/**
+ * A reader that admits one of `values` and reports anything else as `fallback`.
+ *
+ * The admitted values are a set, built once: a tag arriving ten thousand times is looked up, not scanned.
+ */
 export function brandedEnumOf<const Values extends readonly string[], const Fallback extends string>(
   values: Values,
   fallback: Fallback,
 ): (value: string | undefined) => Values[number] | Fallback | undefined {
-  const admitted = new Set<string>(values)
-  return value => {
+  const admitted: ReadonlySet<string> = new Set(values)
+  return (value) => {
     if (value === undefined) return undefined
     return admitted.has(value) ? (value as Values[number]) : fallback
   }
@@ -29,7 +33,8 @@ const OPAQUE_ID = /^[0-9A-Za-z._:|-]{1,128}$/
 
 /** An id that is safe to report, or `undefined` when the value is not one. */
 export function brandedId(value: string | undefined): string | undefined {
-  return value !== undefined && OPAQUE_ID.test(value) ? value : undefined
+  if (value === undefined || !OPAQUE_ID.test(value)) return undefined
+  return value
 }
 
 /** The errno values the platform reports; anything else collapses to the fallback. */

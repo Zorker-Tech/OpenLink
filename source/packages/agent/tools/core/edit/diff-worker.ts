@@ -10,54 +10,73 @@
  * does not produce a spurious final change.
  */
 
-import { structuredPatch } from "diff"
+import { structuredPatch } from "diff";
 
 export interface DiffWorkerInput {
-  readonly original: string
-  readonly new: string
-  readonly filePath?: string
-  readonly fileChangeType?: string
+  readonly original: string;
+  readonly new: string;
+  readonly filePath?: string;
+  readonly fileChangeType?: string;
 }
 
 export interface DiffWorkerResult {
-  readonly diffString: string
-  readonly linesAdded: number
-  readonly linesRemoved: number
+  readonly diffString: string;
+  readonly linesAdded: number;
+  readonly linesRemoved: number;
 }
 
-function withGitDiffPrefix(path: string, prefix: string): string {
-  if (path === "/dev/null") return path
-  return `${prefix}/${path}`
+/** The name git gives a side of the diff that does not exist. */
+const ABSENT = "/dev/null";
+
+/** How many lines of context a hunk carries either side: git's own default. */
+const CONTEXT_LINES = 3;
+
+/** A side of the diff as git writes it, unless that side is the one that does not exist. */
+function sideOf(path: string, prefix: string): string {
+  return path === ABSENT ? path : `${prefix}/${path}`;
 }
 
+/** The text as git compares it: a file that lacks a trailing newline would otherwise show a change it did not have. */
+function asLineTerminated(text: string): string {
+  return text === "" || text.endsWith("\n") ? text : `${text}\n`;
+}
+
+/** A hunk's range as git writes it: `start,count`, or the bare start for a single line and `start,0` for none. */
+function rangeOf(start: number, lineCount: number): string {
+  if (lineCount === 0) return `${start},0`;
+  if (lineCount === 1) return `${start}`;
+  return `${start},${lineCount}`;
+}
+
+/** The name the report gives the file: the one it was told, or a plain one nothing else may claim. */
+function reportedPath(filePath: string | undefined): string {
+  const trimmed = filePath?.trim();
+  return trimmed != null && trimmed.length > 0 ? trimmed : "file";
+}
+
+/** How many of a hunk's lines begin with this marker — the added ones, or the removed ones. */
+function linesMarked(hunks: readonly { readonly lines: readonly string[] }[], marker: string): number {
+  let count = 0;
+  for (const hunk of hunks) for (const line of hunk.lines) if (line.startsWith(marker)) count += 1;
+  return count;
+}
+
+/** The diff a change to a file produced, in the form git would print it, and what it added and removed. */
 export function calculateDiff(params: DiffWorkerInput): DiffWorkerResult {
-  const ensureNL = (value: string): string => (value === "" || value.endsWith("\n") ? value : `${value}\n`)
-  const { hunks } = structuredPatch("a", "b", ensureNL(params.original), ensureNL(params.new), "", "", { context: 3 })
-  const formatRange = (start: number, lineCount: number): string => {
-    if (lineCount === 0) return `${start},0`
-    if (lineCount === 1) return `${start}`
-    return `${start},${lineCount}`
-  }
-  const trimmedFilePath = params.filePath?.trim()
-  const normalizedFilePath = trimmedFilePath && trimmedFilePath.length > 0 ? trimmedFilePath : "file"
-  const fileChangeType = params.fileChangeType ?? "modified"
-  const oldPath = fileChangeType === "added" ? "/dev/null" : normalizedFilePath
-  const newPath = fileChangeType === "deleted" ? "/dev/null" : normalizedFilePath
-  const diffString = hunks.length === 0
-    ? ""
-    : [
-      `--- ${withGitDiffPrefix(oldPath, "a")}`,
-      `+++ ${withGitDiffPrefix(newPath, "b")}`,
-      ...hunks.flatMap(hunk => [
-        `@@ -${formatRange(hunk.oldStart, hunk.oldLines)} +${formatRange(hunk.newStart, hunk.newLines)} @@`,
-        ...hunk.lines,
-      ]),
-    ].join("\n")
-  return {
-    diffString,
-    linesAdded: hunks.reduce((sum, hunk) => sum + hunk.lines.filter(line => line.startsWith("+")).length, 0),
-    linesRemoved: hunks.reduce((sum, hunk) => sum + hunk.lines.filter(line => line.startsWith("-")).length, 0),
-  }
+  const { hunks } = structuredPatch("a", "b", asLineTerminated(params.original), asLineTerminated(params.new), "", "", { context: CONTEXT_LINES });
+  const path = reportedPath(params.filePath);
+  const changeType = params.fileChangeType ?? "modified";
+  const oldPath = changeType === "added" ? ABSENT : path;
+  const newPath = changeType === "deleted" ? ABSENT : path;
+  const diffString =
+    hunks.length === 0
+      ? ""
+      : [
+          `--- ${sideOf(oldPath, "a")}`,
+          `+++ ${sideOf(newPath, "b")}`,
+          ...hunks.flatMap((hunk) => [`@@ -${rangeOf(hunk.oldStart, hunk.oldLines)} +${rangeOf(hunk.newStart, hunk.newLines)} @@`, ...hunk.lines]),
+        ].join("\n");
+  return { diffString, linesAdded: linesMarked(hunks, "+"), linesRemoved: linesMarked(hunks, "-") };
 }
 
-export default calculateDiff
+export default calculateDiff;

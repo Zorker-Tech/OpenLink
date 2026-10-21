@@ -8,53 +8,46 @@
  * list of strings is not a list, so it is read as absent rather than as an empty rule.
  */
 
-import { parse, type ParseError } from "jsonc-parser"
+import { parse, type ParseError } from "jsonc-parser";
 
 export interface ParsedPermissionsAutoRunConfig {
-  readonly allowInstructions: readonly string[] | undefined
-  readonly blockInstructions: readonly string[] | undefined
+  readonly allowInstructions: readonly string[] | undefined;
+  readonly blockInstructions: readonly string[] | undefined;
 }
 
 export interface ProjectPermissionsFileConfig {
-  readonly autoRun: ParsedPermissionsAutoRunConfig | undefined
+  readonly autoRun: ParsedPermissionsAutoRunConfig | undefined;
 }
 
-function filterStrings(value: unknown): string[] | undefined {
-  if (!Array.isArray(value)) {
-    return undefined
-  }
-  return value.filter((entry): entry is string => typeof entry === "string")
+/** A configuration is an object; an array or a value is not one, however it was written. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-export function parsePermissionsAutoRunConfig(
-  value: unknown,
-): ParsedPermissionsAutoRunConfig | undefined {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    return undefined
-  }
-  const autoRun = value as Record<string, unknown>
+/** The strings a list holds, or nothing at all when what was written is not a list. */
+function stringsIn(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value.filter((entry): entry is string => typeof entry === "string");
+}
+
+export function parsePermissionsAutoRunConfig(value: unknown): ParsedPermissionsAutoRunConfig | undefined {
+  if (!isRecord(value)) return undefined;
   return {
-    allowInstructions: filterStrings(autoRun.allow_instructions),
-    blockInstructions: filterStrings(autoRun.block_instructions),
-  }
+    allowInstructions: stringsIn(value["allow_instructions"]),
+    blockInstructions: stringsIn(value["block_instructions"]),
+  };
 }
 
-/** A file that does not parse is not a configuration, so it is reported as absent. */
-export function parseProjectPermissionsFileConfig(
-  raw: string,
-): ProjectPermissionsFileConfig | undefined {
-  const errors: ParseError[] = []
-  const parsed = parse(raw, errors, { allowTrailingComma: true })
-  if (errors.length > 0) {
-    return undefined
-  }
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return undefined
-  }
-  const config = parsed as Record<string, unknown>
+/**
+ * A project's permissions file, read with its comments and trailing commas allowed.
+ *
+ * A file with a real error in it is reported as absent rather than half-read: a configuration that was meant to permit
+ * something and does not is worse than no configuration at all.
+ */
+export function parseProjectPermissionsFileConfig(raw: string): ProjectPermissionsFileConfig | undefined {
+  const errors: ParseError[] = [];
+  const parsed = parse(raw, errors, { allowTrailingComma: true });
+  if (errors.length > 0 || !isRecord(parsed)) return undefined;
   // Both spellings are read, since the older one is still written by hand.
-  const autoRunConfig = config.autoReview ?? config.autoRun
-  return {
-    autoRun: parsePermissionsAutoRunConfig(autoRunConfig),
-  }
+  return { autoRun: parsePermissionsAutoRunConfig(parsed["autoReview"] ?? parsed["autoRun"]) };
 }
