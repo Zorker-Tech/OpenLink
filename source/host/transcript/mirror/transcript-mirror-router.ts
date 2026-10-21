@@ -1,208 +1,143 @@
 /**
  * Which mirror a conversation's transcript is written through.
  *
- * A conversation belongs either to the journal or to the older store, and what the router does is ask the journal
- * first: a conversation it owns is written through it, and anything else takes the older path.
+ * A conversation is written by one of two writers — the journal, or the store that predates it — and once a conversation
+ * belongs to the journal it stays there: turning the journal off cannot move a transcript back, because a transcript split
+ * between two writers is worse than one written by the older one.
+ *
+ * The router is also the only place that knows what a checkpoint's lifecycle means across the two regimes:
+ *
+ * - **prepare** — the journal prepares the checkpoint; the older writer only remembers it, and remembering is not writing;
+ * - **commit** — the journal commits it; the older writer writes it *observationally*, so a failure there cannot roll back a
+ *   durable checkpoint or fail the turn;
+ * - **abort** — whoever was going to write is told to forget it;
+ * - **skip** — a conversation already owned by the journal must be recovered before its checkpoint is skipped.
+ *
+ * Routes are cached per conversation, so two concurrent first writes cannot claim a conversation twice or split it.
  */
-export type TranscriptMirrorRoute = "journal" | "legacy";
+export type MirrorRoute = "journal" | "legacy";
 
-export interface TranscriptJournalPort<Checkpoint, Store> {
+/** The journal's side of a conversation: ownership, claim, and the three checkpoint moments. */
+export interface JournalPort<Checkpoint, Store> {
   ownsConversation(conversationId: string): Promise<boolean>;
   claimConversation(conversationId: string): Promise<void>;
-  recover(
-    ctx: unknown,
-    conversationId: string,
-    checkpoint: Checkpoint,
-    blobStore: Store
-  ): Promise<unknown>;
-  prepareCheckpoint(
-    ctx: unknown,
-    conversationId: string,
-    checkpoint: Checkpoint,
-    blobStore: Store,
-    finalizeCheckpoint?: boolean
-  ): Promise<unknown>;
+  recover(ctx: unknown, conversationId: string, checkpoint: Checkpoint, blobStore: Store): Promise<unknown>;
+  prepareCheckpoint(ctx: unknown, conversationId: string, checkpoint: Checkpoint, blobStore: Store, finalizeCheckpoint?: boolean): Promise<unknown>;
   commitCheckpoint(ctx: unknown, conversationId: string): Promise<unknown>;
   abortCheckpoint(ctx: unknown, conversationId: string): Promise<unknown>;
-  skipCheckpoint(
-    ctx: unknown,
-    conversationId: string,
-    checkpoint: Checkpoint,
-    blobStore: Store
-  ): Promise<unknown>;
+  skipCheckpoint(ctx: unknown, conversationId: string, checkpoint: Checkpoint, blobStore: Store): Promise<unknown>;
 }
 
-export interface LegacyTranscriptMirrorPort<Checkpoint, Store> {
-  write(
-    ctx: unknown,
-    conversationId: string,
-    checkpoint: Checkpoint,
-    blobStore: Store,
-    stateBlobId: Uint8Array
-  ): Promise<unknown>;
+/** The writer that predates the journal: one call, and it does not care whether it worked. */
+export interface LegacyMirrorPort<Checkpoint, Store> {
+  write(ctx: unknown, conversationId: string, checkpoint: Checkpoint, blobStore: Store, stateBlobId: Uint8Array): Promise<unknown>;
 }
 
-interface LegacyPending<Checkpoint, Store> {
+interface PendingLegacyCheckpoint<Checkpoint, Store> {
   readonly checkpoint: Checkpoint;
   readonly blobStore: Store;
 }
 
-/**
- * Pins a conversation to one persistence regime. Once a journal marker owns a
- * conversation, turning the experiment off cannot route it back to the legacy
- * writer. Route promises are cached so concurrent first writes cannot race two
- * claims or split a transcript between implementations.
- */
-export class RoutedTranscriptMirror<Checkpoint, Store> {
-  readonly legacyPending = new Map<
-    string,
-    LegacyPending<Checkpoint, Store>
-  >();
+export class MirrorRouter<Checkpoint, Store> {
+  /** What the older writer was told to write, waiting for the commit that will actually write it. */
+  readonly legacyPending = new Map<string, PendingLegacyCheckpoint<Checkpoint, Store>>();
 
   constructor(
-    readonly journal: TranscriptJournalPort<Checkpoint, Store>,
-    readonly legacy: LegacyTranscriptMirrorPort<Checkpoint, Store>,
+    readonly journal: JournalPort<Checkpoint, Store>,
+    readonly legacy: LegacyMirrorPort<Checkpoint, Store>,
     readonly isJournalEnabled: () => Promise<boolean>,
-    readonly routes = new Map<string, Promise<TranscriptMirrorRoute>>()
+    readonly routes = new Map<string, Promise<MirrorRoute>>(),
   ) {}
 
-  route(conversationId: string): Promise<TranscriptMirrorRoute> {
+  /** The route for a conversation, decided once: a claim that ran twice could split a transcript. */
+  route(conversationId: string): Promise<MirrorRoute> {
     const selected = this.routes.get(conversationId);
     if (selected != null) return selected;
-
-    const route = this.selectRoute(conversationId);
-    this.routes.set(conversationId, route);
-    return route;
+    const decided = this.chooseRoute(conversationId);
+    this.routes.set(conversationId, decided);
+    return decided;
   }
 
-  private async selectRoute(
-    conversationId: string
-  ): Promise<TranscriptMirrorRoute> {
+  /** The journal keeps what it already owns; a new conversation goes to it only while the journal is on, and is claimed. */
+  private async chooseRoute(conversationId: string): Promise<MirrorRoute> {
     if (await this.journal.ownsConversation(conversationId)) return "journal";
-    if (!await this.isJournalEnabled()) return "legacy";
-
+    if (!(await this.isJournalEnabled())) return "legacy";
     await this.journal.claimConversation(conversationId);
     return "journal";
   }
 
-  async recover(
-    ctx: unknown,
-    conversationId: string,
-    checkpoint: Checkpoint,
-    blobStore: Store
-  ): Promise<void> {
-    if (await this.route(conversationId) !== "journal") return;
+  private async routesToJournal(conversationId: string): Promise<boolean> {
+    return (await this.route(conversationId)) === "journal";
+  }
+
+  async recover(ctx: unknown, conversationId: string, checkpoint: Checkpoint, blobStore: Store): Promise<void> {
+    if (!(await this.routesToJournal(conversationId))) return;
     await this.journal.recover(ctx, conversationId, checkpoint, blobStore);
   }
 
-  async prepareCheckpoint(
-    ctx: unknown,
-    conversationId: string,
-    checkpoint: Checkpoint,
-    blobStore: Store,
-    finalizeCheckpoint = false,
-    writeLegacyCheckpoint = finalizeCheckpoint
-  ): Promise<void> {
-    if (await this.route(conversationId) === "journal") {
-      await this.journal.prepareCheckpoint(
-        ctx,
-        conversationId,
-        checkpoint,
-        blobStore,
-        finalizeCheckpoint
-      );
+  async prepareCheckpoint(ctx: unknown, conversationId: string, checkpoint: Checkpoint, blobStore: Store, finalizeCheckpoint = false, writeLegacyCheckpoint = finalizeCheckpoint): Promise<void> {
+    if (await this.routesToJournal(conversationId)) {
+      await this.journal.prepareCheckpoint(ctx, conversationId, checkpoint, blobStore, finalizeCheckpoint);
       return;
     }
-
-    if (writeLegacyCheckpoint) {
-      this.legacyPending.set(conversationId, { checkpoint, blobStore });
-    }
+    // Preparing is remembering: the older writer is only told about a checkpoint it will be asked to commit.
+    if (writeLegacyCheckpoint) this.legacyPending.set(conversationId, { checkpoint, blobStore });
   }
 
-  async commitCheckpoint(
-    ctx: unknown,
-    conversationId: string,
-    stateBlobId: Uint8Array
-  ): Promise<void> {
-    if (await this.route(conversationId) === "journal") {
+  async commitCheckpoint(ctx: unknown, conversationId: string, stateBlobId: Uint8Array): Promise<void> {
+    if (await this.routesToJournal(conversationId)) {
       await this.journal.commitCheckpoint(ctx, conversationId);
       return;
     }
-
     const pending = this.legacyPending.get(conversationId);
     if (pending == null) return;
     this.legacyPending.delete(conversationId);
-
-    // The legacy mirror is observational. Failure must not roll back a durable
-    // agent-store checkpoint or fail the turn.
-    await this.legacy.write(
-      ctx,
-      conversationId,
-      pending.checkpoint,
-      pending.blobStore,
-      stateBlobId
-    ).then(
-      () => undefined,
-      () => undefined
-    );
+    await bestEffortLegacyWrite(() => this.legacy.write(ctx, conversationId, pending.checkpoint, pending.blobStore, stateBlobId));
   }
 
-  async abortCheckpoint(
-    ctx: unknown,
-    conversationId: string
-  ): Promise<void> {
-    if (await this.route(conversationId) === "journal") {
+  async abortCheckpoint(ctx: unknown, conversationId: string): Promise<void> {
+    if (await this.routesToJournal(conversationId)) {
       await this.journal.abortCheckpoint(ctx, conversationId);
       return;
     }
     this.legacyPending.delete(conversationId);
   }
 
-  async skipCheckpoint(
-    ctx: unknown,
-    conversationId: string,
-    checkpoint: Checkpoint,
-    blobStore: Store
-  ): Promise<void> {
+  /**
+   * A skipped checkpoint: the journal skips it, and a conversation the journal owns but this router has not routed yet is
+   * recovered first — the skip would otherwise be the first thing the journal heard about a conversation it lost.
+   */
+  async skipCheckpoint(ctx: unknown, conversationId: string, checkpoint: Checkpoint, blobStore: Store): Promise<void> {
     let selected = this.routes.get(conversationId);
-    let recoverOwnedJournal = false;
-
+    let recoverBeforeSkipping = false;
     if (selected == null) {
-      if (!await this.journal.ownsConversation(conversationId)) {
+      if (!(await this.journal.ownsConversation(conversationId))) {
         this.legacyPending.delete(conversationId);
         return;
       }
-
-      recoverOwnedJournal = true;
+      recoverBeforeSkipping = true;
       selected = Promise.resolve("journal");
       this.routes.set(conversationId, selected);
     }
-
-    if (await selected === "journal") {
-      if (recoverOwnedJournal) {
-        await this.journal.recover(
-          ctx,
-          conversationId,
-          checkpoint,
-          blobStore
-        );
-      }
-      await this.journal.skipCheckpoint(
-        ctx,
-        conversationId,
-        checkpoint,
-        blobStore
-      );
+    if ((await selected) !== "journal") {
+      this.legacyPending.delete(conversationId);
       return;
     }
-
-    this.legacyPending.delete(conversationId);
+    if (recoverBeforeSkipping) await this.journal.recover(ctx, conversationId, checkpoint, blobStore);
+    await this.journal.skipCheckpoint(ctx, conversationId, checkpoint, blobStore);
   }
+}
 
+/** The older writer is observational: a failure there must not roll back a durable checkpoint or fail the turn. */
+async function bestEffortLegacyWrite(write: () => Promise<unknown>): Promise<void> {
+  try {
+    await write();
+  } catch {
+    // Deliberately ignored: the durable checkpoint is the platform's, the mirror is a convenience.
+  }
 }
 
 // Compatibility names used by earlier recovered modules.
-export type TranscriptMirrorPort<Checkpoint, Store> =
-  TranscriptJournalPort<Checkpoint, Store>;
-export type LegacyMirrorPort<Checkpoint, Store> =
-  LegacyTranscriptMirrorPort<Checkpoint, Store>;
+export type TranscriptMirrorPort<Checkpoint, Store> = JournalPort<Checkpoint, Store>;
+export type LegacyTranscriptMirrorPort<Checkpoint, Store> = LegacyMirrorPort<Checkpoint, Store>;
+export type TranscriptMirrorRoute = MirrorRoute;
