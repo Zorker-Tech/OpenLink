@@ -47,7 +47,7 @@ describe("the order a surface is replicated in", () => {
     assert.equal(writer.processEpoch, epoch);
     assert.deepEqual(writer.nextStamp("members"), { replicaKey: "members", epoch, sequence: 1 });
     assert.deepEqual(writer.nextStamp("members"), { replicaKey: "members", epoch, sequence: 2 });
-    const snapshot = writer.captureSnapshot("members", "full", { cases: 1 });
+    const snapshot = writer.viewOf("members", "full", { cases: 1 });
     assert.equal(snapshot.epoch, epoch);
     assert.equal(snapshot.coverage, "full");
     assert.equal(typeof snapshot.throughSequence, "number");

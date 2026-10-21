@@ -6,13 +6,13 @@
  */
 import { randomUUID } from "node:crypto";
 
-export interface ReplicaStamp {
+export interface WriteStamp {
   replicaKey: string;
   epoch: string;
   sequence: number;
 }
 
-export interface ReplicaSnapshot<T, C = string> {
+export interface ReplicaView<T, C = string> {
   replicaKey: string;
   epoch: string;
   throughSequence: number;
@@ -20,10 +20,15 @@ export interface ReplicaSnapshot<T, C = string> {
   value: T;
 }
 
-/** Per-process ordering authority for every independently replicated surface. */
+/**
+ * The ordering authority for every independently replicated surface in this process.
+ *
+ * A sequence belongs to a surface, not to the process: two surfaces replicated at the same time count separately, and
+ * the epoch is what tells a reader that a different process is writing now.
+ */
 export class HostReplicaWriter {
   readonly #epoch: string;
-  readonly #sequences = new Map<string, number>();
+  readonly #counters = new Map<string, number>();
 
   constructor(epoch = randomUUID()) {
     this.#epoch = epoch;
@@ -33,28 +38,24 @@ export class HostReplicaWriter {
     return this.#epoch;
   }
 
-  /** Reserve before reading the content described by the stamp. */
-  nextStamp(replicaKey: string): ReplicaStamp {
-    const sequence = (this.#sequences.get(replicaKey) ?? 0) + 1;
-    this.#sequences.set(replicaKey, sequence);
+  /** The sequence a surface is at, without moving it. */
+  sequenceOf(replicaKey: string): number {
+    return this.#counters.get(replicaKey) ?? 0;
+  }
+
+  /** The next sequence for a surface: reserved before the content it describes is read. */
+  nextStamp(replicaKey: string): WriteStamp {
+    const sequence = this.sequenceOf(replicaKey) + 1;
+    this.#counters.set(replicaKey, sequence);
     return { replicaKey, epoch: this.#epoch, sequence };
   }
 
-  lastSequence(replicaKey: string): number {
-    return this.#sequences.get(replicaKey) ?? 0;
-  }
-
-  captureSnapshot<T, C = string>(
-    replicaKey: string,
-    coverage: C,
-    value: T,
-  ): ReplicaSnapshot<T, C> {
-    return {
-      replicaKey,
-      epoch: this.#epoch,
-      throughSequence: this.lastSequence(replicaKey),
-      coverage,
-      value,
-    };
+  /**
+   * What this surface looked like when it was read: the sequence it had reached, and the coverage it was read with.
+   *
+   * Taken without reserving a sequence — a snapshot describes a position, it does not take one.
+   */
+  viewOf<T, C = string>(replicaKey: string, coverage: C, value: T): ReplicaView<T, C> {
+    return { replicaKey, epoch: this.#epoch, throughSequence: this.sequenceOf(replicaKey), coverage, value };
   }
 }
