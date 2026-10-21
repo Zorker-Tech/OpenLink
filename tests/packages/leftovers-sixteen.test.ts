@@ -10,7 +10,7 @@ import { buildSlateAutoReviewAwaitingReason, SLATE_AUTO_REVIEW_AWAITING_TAB_ID }
 import { createAutoReviewGate, SlateAutoReviewPendingApprovalError } from "../../source/host/runner/auto-review-gate.ts";
 import { defineCommunicateTool, SLATE_TOOL_MARKER } from "../../source/host/runner/tools/communicate-tool.ts";
 import { MAX_TRAY_ACTIONS, PROVIDER_OVERLOAD_ERROR_TITLE, SLATE_WEBSITE_ORIGIN } from "../../source/host/transcript/agent-run-error.ts";
-import { RoutedTranscriptMirror } from "../../source/host/transcript/mirror/transcript-mirror-router.ts";
+import { MirrorRouter } from "../../source/host/transcript/mirror/transcript-mirror-router.ts";
 
 describe("an agent whose review is waiting", () => {
   it("is shown in the tab the platform keeps for it", () => {
@@ -44,6 +44,6 @@ describe("the errors a reader is shown", () => {
 
 describe("which mirror a transcript is written through", () => {
   it("is a router the host can build", () => {
-    assert.equal(typeof RoutedTranscriptMirror, "function");
+    assert.equal(typeof MirrorRouter, "function");
   });
 });

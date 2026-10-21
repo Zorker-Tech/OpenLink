@@ -8,7 +8,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, open, readFile, rename, stat, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { checkpointIdentity, fileIdentity, isMissingFile, parseDeferredStep, parsePendingCheckpoint, TranscriptJournalCorruptionError, writeAll, type DeferredTranscriptStep, type PendingTranscriptCheckpoint, type TranscriptCheckpoint } from "./transcript-journal-codec.ts";
-import { RoutedTranscriptMirror, type LegacyMirrorPort } from "./transcript-mirror-router.ts";
+import { MirrorRouter, type LegacyMirrorPort } from "./transcript-mirror-router.ts";
 import { SlateError } from "../../../shared/errors/registry.ts";
 import { brandedErrno } from "../../../shared/errors/bounded-values.ts";
 
@@ -25,7 +25,7 @@ export class FileTranscriptMirror<Store = unknown> {
   constructor(readonly transcriptsDir: string, readonly reportOutcome: (outcome: JournalOutcome) => void = () => {}, readonly deriver?: TranscriptDeriver<Store>) {}
   private requireDeriver(): TranscriptDeriver<Store> { if (this.deriver == null) throw new TranscriptJournalCorruptionError("transcript occurrence derivation is unavailable"); return this.deriver; }
   private async withOutcomeReport<T extends { entryCount?: number; bytes?: number } | void>(op: string, conversationId: string, mintCause: (errno?: string) => unknown, operation: () => Promise<T>): Promise<T> { const startedAt = performance.now(); try { const counts = await operation(); this.reportOutcome({ op, outcome: "ok", conversationId, ...(counts ?? {}), durationMs: performance.now() - startedAt }); return counts; } catch (error) { if (typeof error !== "object" || error == null || !this.reportedFailures.has(error)) { if (typeof error === "object" && error != null) this.reportedFailures.add(error); const code = typeof error === "object" && error != null && "code" in error && typeof error.code === "string" ? brandedErrno(error.code) : undefined; this.reportOutcome({ op, outcome: "failed", conversationId, cause: mintCause(code), durationMs: performance.now() - startedAt }); } throw error; } }
-  routed(legacy: LegacyMirrorPort<TranscriptCheckpoint, Store>, enabled: () => Promise<boolean>): RoutedTranscriptMirror<TranscriptCheckpoint, Store> { return new RoutedTranscriptMirror(this, legacy, enabled, this.routes); }
+  routed(legacy: LegacyMirrorPort<TranscriptCheckpoint, Store>, enabled: () => Promise<boolean>): MirrorRouter<TranscriptCheckpoint, Store> { return new MirrorRouter(this, legacy, enabled, this.routes); }
   jsonlPathFor(id: string): string { const safe = safeId(id); return join(this.transcriptsDir, safe, `${safe}.jsonl`); }
   pendingPathFor(id: string): string { const safe = safeId(id); return join(this.transcriptsDir, safe, `${safe}.journal-pending.json`); }
   cursorPathFor(id: string): string { const safe = safeId(id); return join(this.transcriptsDir, safe, `${safe}.journal-cursor.json`); }
