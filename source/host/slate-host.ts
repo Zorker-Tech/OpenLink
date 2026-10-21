@@ -36,13 +36,13 @@ import { SlateHostEventBus } from "./host-event-bus.ts";
 import { loadInitialTranscriptResiliently, type InitialTranscriptLoader } from "./host-initial-transcript-load.ts";
 import {
   createHostRosterBookkeeping,
-  type AttachmentRosterPort,
-  type BoxStoreSnapshotPort,
-  type ForeverBoxRosterPort,
+  type FallbackAgentApi,
+  type BoxStoreSnapshotApi,
+  type BoxBusyApi,
   type HostRosterBookkeeping,
-  type SnapshotBackstopPort,
-  type SourceMapRosterPort,
-  type TranscriptRosterPort,
+  type AgentSnapshotApi,
+  type AgentSourceMapApi,
+  type RunningAgentsApi,
 } from "./host-roster-bookkeeping.ts";
 
 /** Where the box writes the boot id it has already reported ready for, so a restart does not report twice. */
@@ -55,12 +55,12 @@ export type DynamicHostApi = Record<string, any>;
 
 export interface HostExtensionRegistry {
   readonly order: readonly string[];
-  api(id: "attachments"): AttachmentRosterPort & DynamicHostApi;
-  api(id: "transcript"): TranscriptRosterPort & DynamicHostApi;
-  api(id: "forever-box"): ForeverBoxRosterPort & DynamicHostApi;
-  api(id: "state-backstop"): SnapshotBackstopPort & DynamicHostApi;
-  api(id: "box-store-sync"): BoxStoreSnapshotPort & DynamicHostApi;
-  api(id: "source-map"): SourceMapRosterPort & DynamicHostApi;
+  api(id: "attachments"): FallbackAgentApi & DynamicHostApi;
+  api(id: "transcript"): RunningAgentsApi & DynamicHostApi;
+  api(id: "forever-box"): BoxBusyApi & DynamicHostApi;
+  api(id: "state-backstop"): AgentSnapshotApi & DynamicHostApi;
+  api(id: "box-store-sync"): BoxStoreSnapshotApi & DynamicHostApi;
+  api(id: "source-map"): AgentSourceMapApi & DynamicHostApi;
   api(id: string): DynamicHostApi;
   stop(): Promise<void>;
 }
