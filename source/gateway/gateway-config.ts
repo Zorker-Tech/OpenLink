@@ -6,9 +6,15 @@
  */
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { isLoopbackHost } from "./gateway-protocol.ts";
+
+export { isLoopbackHost };
 
 export class SlateGatewayConfigError extends Error {
-  constructor(message: string) { super(message); this.name = "SlateGatewayConfigError"; }
+  constructor(message: string) {
+    super(message);
+    this.name = "SlateGatewayConfigError";
+  }
 }
 
 export interface GatewayServerConfig {
@@ -18,43 +24,61 @@ export interface GatewayServerConfig {
   readonly tls?: { readonly cert: Buffer; readonly key: Buffer };
 }
 
-const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
-export function isLoopbackHost(host: string): boolean { return LOOPBACK_HOSTS.has(host.trim().toLowerCase()); }
+/** The values an environment may use to say yes. */
+const AFFIRMATIVES = new Set(["1", "true", "yes"]);
 
 function isTruthyEnv(value: string | undefined): boolean {
-  if (value == null) return false;
-  const normalized = value.trim().toLowerCase();
-  return normalized === "1" || normalized === "true" || normalized === "yes";
+  return value != null && AFFIRMATIVES.has(value.trim().toLowerCase());
 }
 
+/** A port is a positive whole number, and anything else is not a port at all. */
 function readPort(raw: string | undefined): number | undefined {
   if (raw == null || raw.length === 0) return undefined;
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+  const port = Number.parseInt(raw, 10);
+  return Number.isInteger(port) && port > 0 ? port : undefined;
 }
 
+/** A path from the environment, with the padding an environment can carry taken off. */
+function pathFromEnv(raw: string | undefined): string | undefined {
+  const trimmed = raw?.trim();
+  return trimmed == null || trimmed.length === 0 ? undefined : trimmed;
+}
+
+/** The certificate and key a gateway serves TLS with, when it was told to serve any. */
 function resolveTls(env: NodeJS.ProcessEnv): GatewayServerConfig["tls"] {
-  const certPath = env.SLATE_GATEWAY_TLS_CERT?.trim();
-  const keyPath = env.SLATE_GATEWAY_TLS_KEY?.trim();
-  if ((certPath == null || certPath.length === 0) && (keyPath == null || keyPath.length === 0)) return undefined;
-  if (certPath == null || certPath.length === 0 || keyPath == null || keyPath.length === 0) {
+  const certPath = pathFromEnv(env.SLATE_GATEWAY_TLS_CERT);
+  const keyPath = pathFromEnv(env.SLATE_GATEWAY_TLS_KEY);
+  if (certPath === undefined && keyPath === undefined) return undefined;
+  if (certPath === undefined || keyPath === undefined) {
     throw new SlateGatewayConfigError("Gateway TLS needs both SLATE_GATEWAY_TLS_CERT and SLATE_GATEWAY_TLS_KEY.");
   }
-  try { return { cert: readFileSync(certPath), key: readFileSync(keyPath) }; }
-  catch (error) { throw new SlateGatewayConfigError(`Failed to read gateway TLS cert/key (${certPath}, ${keyPath}): ${String(error)}`); }
+  try {
+    return { cert: readFileSync(certPath), key: readFileSync(keyPath) };
+  } catch (error) {
+    throw new SlateGatewayConfigError(`Failed to read gateway TLS cert/key (${certPath}, ${keyPath}): ${String(error)}`);
+  }
 }
 
+/**
+ * The configuration for this environment.
+ *
+ * A gateway is authenticated when it is reachable from somewhere other than this machine, when the environment asks for
+ * it, or when a token was pinned — and a pinned token is used rather than replaced, so a restart does not invalidate
+ * what clients already hold.
+ */
 export function resolveGatewayServerConfig(
   env: NodeJS.ProcessEnv = process.env,
-  generateToken: () => string = () => randomBytes(32).toString("base64url")
+  generateToken: () => string = () => randomBytes(32).toString("base64url"),
 ): GatewayServerConfig {
   const host = env.SLATE_GATEWAY_BIND_HOST?.trim() || "127.0.0.1";
   const port = readPort(env.SLATE_HOST_PORT);
   const tls = resolveTls(env);
-  const pinnedToken = env.SLATE_GATEWAY_TOKEN?.trim();
-  const requireAuth = !isLoopbackHost(host) || isTruthyEnv(env.SLATE_GATEWAY_REQUIRE_AUTH) || (pinnedToken != null && pinnedToken.length > 0);
-  const authToken = requireAuth ? (pinnedToken != null && pinnedToken.length > 0 ? pinnedToken : generateToken()) : undefined;
+  const pinnedToken = pathFromEnv(env.SLATE_GATEWAY_TOKEN);
+  const needsToken = !isLoopbackHost(host) || isTruthyEnv(env.SLATE_GATEWAY_REQUIRE_AUTH) || pinnedToken !== undefined;
+  const authToken = needsToken ? (pinnedToken ?? generateToken()) : undefined;
   return { host, ...(port === undefined ? {} : { port }), ...(authToken === undefined ? {} : { authToken }), ...(tls === undefined ? {} : { tls }) };
 }
 
-export function gatewayScheme(config: GatewayServerConfig): "http" | "https" { return config.tls == null ? "http" : "https"; }
+export function gatewayScheme(config: GatewayServerConfig): "http" | "https" {
+  return config.tls == null ? "http" : "https";
+}

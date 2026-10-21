@@ -9,7 +9,7 @@ import { branchReplyCounts, threadDescendants } from "../../source/shared/transc
 import { filePathFromFileUrl, isPathWithin } from "../../source/shared/node/paths.ts"
 import { parseTraceparent, SEND_TRACE_SAMPLE_RATIO } from "../../source/shared/observability/send-trace.ts"
 import { getWidgetAnswerLabel, slateWidgetSchema, summarizeWidget } from "../../source/shared/slate-widgets.ts"
-import { AUTOMATION_ACTION_VERB } from "../../source/shared/slate-timeline-events.ts"
+import { ACTION_VERB } from "../../source/shared/slate-timeline-events.ts"
 import { EGRESS_TUNNEL_WS_PORT } from "../../source/shared/node/egress-tunnel/box-connection.ts"
 
 // ---------------------------------------------------------------------------------------------
@@ -151,7 +151,7 @@ test("a choice widget is read against the schema it is rendered from", () => {
 })
 
 test("the timeline says what an automation did in words", () => {
-  assert.equal(AUTOMATION_ACTION_VERB.created, "Created")
-  assert.equal(AUTOMATION_ACTION_VERB.deleted, "Deleted")
-  assert.equal(Object.keys(AUTOMATION_ACTION_VERB).length, 5)
+  assert.equal(ACTION_VERB.created, "Created")
+  assert.equal(ACTION_VERB.deleted, "Deleted")
+  assert.equal(Object.keys(ACTION_VERB).length, 5)
 })
