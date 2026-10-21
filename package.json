@@ -7,6 +7,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-transform-types --no-warnings --test \"tests/**/*.test.ts\"",
+    "rewrite:overlap": "node scripts/rewrite-overlap.mjs",
     "schema:generate": "cd source/packages/proto && buf generate",
     "redaction:generate": "node --experimental-transform-types --no-warnings scripts/generate-redacted-protos.mjs",
     "build": "tsc -p tsconfig.build.json",

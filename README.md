@@ -43,11 +43,17 @@ Conventions:
 - dependencies are declared when the module that needs them lands, not in advance;
 - everything here is ours: file names, identifiers, package names and strings; no third-party
   product names, documentation links or telemetry endpoints;
-- `reference/` is local-only material and is never committed.
+- `reference/` is local-only material and is never committed;
+- a file counts as *rewritten* only under the token-overlap gate: `pnpm --filter @slate/work-host rewrite:overlap check`
+  refuses a claim while the file still reproduces 0.8 or more of the baseline's identifier pairs (adapters and generated
+  files are exempt with a reason on the list it prints); `report` and `queue` are the risk-first order of the rewrite pass;
+- the tests need Node **24.14.0**: `node:sqlite` accepts a zero-length blob from 24.22 on, and one behaviour suite pins
+  the refusal, so `node --test` on a later 24.x reports a failure the implementation does not have.
 
 ```bash
 pnpm --filter @slate/work-host typecheck   # strict, NodeNext-style source layout
 pnpm --filter @slate/work-host test        # behaviour tests, run straight from TypeScript
+pnpm --filter @slate/work-host rewrite:overlap check   # the gate on calling a file rewritten
 ```
 
 See [work-backend.md](../../docs/architecture/work-backend.md) for the architecture,
