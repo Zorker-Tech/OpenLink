@@ -55,17 +55,30 @@ export const DIVIDER_ANCHOR_ENTRY_FILTER_SQL = `
 
 export interface PreparedStatement { all(...parameters: unknown[]): unknown[]; get(...parameters: unknown[]): unknown; run(...parameters: unknown[]): unknown }
 export interface StatementDatabase { prepare(sql: string): PreparedStatement }
+/** Every statement the agent's database is read and written through, by the name the caller knows it by. */
+const STATEMENTS: Readonly<Record<string, string>> = {
+  getKv: "SELECT value FROM kv WHERE key = ?",
+  setKv: "INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+  compareAndSetKv: "UPDATE kv SET value = ? WHERE key = ? AND value = ?",
+  deleteKv: "DELETE FROM kv WHERE key = ?",
+  hasLegacyBlob: "SELECT 1 AS present FROM blobs LIMIT 1",
+  clearBlobs: "DELETE FROM blobs",
+  listTranscriptEntries: "SELECT entry FROM transcript_entries ORDER BY seq",
+  newestDividerAnchorTimestamp: `SELECT json_extract(entry, '$.timestampMs') AS timestampMs FROM transcript_entries WHERE json_extract(entry, '$.timestampMs') IS NOT NULL AND ${DIVIDER_ANCHOR_ENTRY_FILTER_SQL} ORDER BY seq DESC LIMIT 1`,
+  listTranscriptPage: `SELECT seq, entry FROM transcript_entries WHERE (? IS NULL OR seq < ?) AND (json_extract(entry, '$.timestampMs') IS NULL OR (? IS NULL OR json_extract(entry, '$.timestampMs') >= ?)) AND (json_extract(entry, '$.timestampMs') IS NULL OR json_extract(entry, '$.timestampMs') <= ?) AND ${MAIN_TRANSCRIPT_MESSAGE_FILTER_SQL} ORDER BY seq DESC LIMIT ?`,
+  listTranscriptWindow: `SELECT seq, entry FROM transcript_entries WHERE (? IS NULL OR seq < ?) AND ${WINDOW_ENTRY_FILTER_SQL} ORDER BY seq DESC LIMIT ?`,
+  listTranscriptTail: "SELECT seq, entry FROM transcript_entries WHERE (? IS NULL OR seq < ?) ORDER BY seq DESC LIMIT ?",
+  listBranchedEntries: `SELECT entry FROM transcript_entries WHERE ${BRANCHED_ENTRY_FILTER_SQL} ORDER BY seq`,
+  getTranscriptEntry: "SELECT entry FROM transcript_entries WHERE id = ?",
+  insertTranscriptEntry: "INSERT OR IGNORE INTO transcript_entries (id, entry) VALUES (?, ?)",
+  updateTranscriptEntry: "UPDATE transcript_entries SET entry = ? WHERE id = ?",
+  deleteTranscriptEntry: "DELETE FROM transcript_entries WHERE id = ?",
+  clearTranscriptEntries: "DELETE FROM transcript_entries",
+};
+
+/** Prepares them all against one connection, once per connection. */
 export function prepareStatements(db: StatementDatabase): Record<string, PreparedStatement> {
-  return {
-    getKv: db.prepare("SELECT value FROM kv WHERE key = ?"),
-    setKv: db.prepare("INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"),
-    compareAndSetKv: db.prepare("UPDATE kv SET value = ? WHERE key = ? AND value = ?"), deleteKv: db.prepare("DELETE FROM kv WHERE key = ?"),
-    hasLegacyBlob: db.prepare("SELECT 1 AS present FROM blobs LIMIT 1"), clearBlobs: db.prepare("DELETE FROM blobs"), listTranscriptEntries: db.prepare("SELECT entry FROM transcript_entries ORDER BY seq"),
-    newestDividerAnchorTimestamp: db.prepare(`SELECT json_extract(entry, '$.timestampMs') AS timestampMs FROM transcript_entries WHERE json_extract(entry, '$.timestampMs') IS NOT NULL AND ${DIVIDER_ANCHOR_ENTRY_FILTER_SQL} ORDER BY seq DESC LIMIT 1`),
-    listTranscriptPage: db.prepare(`SELECT seq, entry FROM transcript_entries WHERE (? IS NULL OR seq < ?) AND (json_extract(entry, '$.timestampMs') IS NULL OR (? IS NULL OR json_extract(entry, '$.timestampMs') >= ?)) AND (json_extract(entry, '$.timestampMs') IS NULL OR json_extract(entry, '$.timestampMs') <= ?) AND ${MAIN_TRANSCRIPT_MESSAGE_FILTER_SQL} ORDER BY seq DESC LIMIT ?`),
-    listTranscriptWindow: db.prepare(`SELECT seq, entry FROM transcript_entries WHERE (? IS NULL OR seq < ?) AND ${WINDOW_ENTRY_FILTER_SQL} ORDER BY seq DESC LIMIT ?`),
-    listTranscriptTail: db.prepare("SELECT seq, entry FROM transcript_entries WHERE (? IS NULL OR seq < ?) ORDER BY seq DESC LIMIT ?"),
-    listBranchedEntries: db.prepare(`SELECT entry FROM transcript_entries WHERE ${BRANCHED_ENTRY_FILTER_SQL} ORDER BY seq`), getTranscriptEntry: db.prepare("SELECT entry FROM transcript_entries WHERE id = ?"),
-    insertTranscriptEntry: db.prepare("INSERT OR IGNORE INTO transcript_entries (id, entry) VALUES (?, ?)"), updateTranscriptEntry: db.prepare("UPDATE transcript_entries SET entry = ? WHERE id = ?"), deleteTranscriptEntry: db.prepare("DELETE FROM transcript_entries WHERE id = ?"), clearTranscriptEntries: db.prepare("DELETE FROM transcript_entries")
-  };
+  const prepared: Record<string, PreparedStatement> = {};
+  for (const [name, sql] of Object.entries(STATEMENTS)) prepared[name] = db.prepare(sql);
+  return prepared;
 }
