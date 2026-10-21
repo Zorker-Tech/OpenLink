@@ -11,7 +11,8 @@
     "schema:generate": "cd source/packages/proto && buf generate",
     "redaction:generate": "node --experimental-transform-types --no-warnings scripts/generate-redacted-protos.mjs",
     "build": "tsc -p tsconfig.build.json",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "rewrite:triage": "node scripts/rewrite-triage.mjs"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^1.10.1",
