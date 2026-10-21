@@ -13,6 +13,9 @@
  * - **check** is the gate: no file may be recorded as rewritten in the ledger while it still reproduces the baseline at
  *   or above the threshold. Generated trees and the interop adapters (which must speak the counterpart's wire shape)
  *   are listed below with the reason they are exempt, and the report prints that list so the exemption stays auditable.
+ * - a **floor** claim is the third honest book: a file that was rewritten, measured, and found to sit above the threshold
+ *   because what is left is the interface other modules call. It needs its measured number and the reason in the ledger,
+ *   and `check` refuses a floor claim that could have been a plain rewrite — a floor is a finding, not a shelter.
  *
  * The baseline is local-only and never committed (`reference/` is git-ignored): on a machine without it this script
  * says so and does nothing. It reads the layout the port created — `reference/tools/port-layout.json` — and the
@@ -97,9 +100,12 @@ async function load() {
   }
   const rewritable = new Set(layout.files.map((file) => file.port));
   const ledgerEntries = (ledgerText === null ? { entries: {} } : JSON.parse(ledgerText)).entries;
-  // A claim only counts when the file is actually being called rewritten: a withdrawn one is back in the queue, and an
-  // exempt one was never a rewrite (an adapter, a generated file, or our own file with no baseline).
-  const ledger = new Map(Object.entries(ledgerEntries).filter(([, record]) => record.claim !== "withdrawn" && record.claim !== "exempt").map(([port]) => [port, "rewritten"]));
+  // A claim only counts when the file is actually being called rewritten: a withdrawn one is back in the queue, an
+  // exempt one was never a rewrite (an adapter, a generated file, or our own file with no baseline), and a floor one was
+  // rewritten as far as its interface allows and is recorded with that number and reason instead of as a plain rewrite.
+  const claimOf = ([, record]) => record.claim;
+  const ledger = new Map(Object.entries(ledgerEntries).filter((entry) => claimOf(entry) !== "withdrawn" && claimOf(entry) !== "exempt" && claimOf(entry) !== "floor").map(([port]) => [port, "rewritten"]));
+  const floors = new Map(Object.entries(ledgerEntries).filter((entry) => claimOf(entry) === "floor").map(([port, record]) => [port, record]));
   const landed = [];
   for (const module of checklist.modules) {
     for (const entry of module.entries) {
@@ -107,7 +113,7 @@ async function load() {
       landed.push({ port: entry.port, reference: entry.reference, lines: entry.lines, module: module.name, rewritten: entry.rewritten });
     }
   }
-  return { landed, rewritable, ledger };
+  return { landed, rewritable, ledger, floors };
 }
 
 /** Where our file for a landed entry lives: a renamed port records its own source path on the entry. */
@@ -149,8 +155,28 @@ if (command === "check") {
   for (const violation of violations) {
     console.log(`VIOLATION ${violation.port}  overlap ${violation.overlap.toFixed(3)}${violation.identical ? " (identical)" : ""} — recorded as rewritten, still reproduces the baseline`);
   }
-  console.log(violations.length === 0 ? `check: ${results.filter((result) => state.ledger.has(result.port)).length} rewritten files are below ${threshold}; nothing to fix` : `check: ${violations.length} file(s) to rewrite again before they may stay in the ledger`);
-  process.exit(violations.length === 0 ? 0 : 1);
+  // A floor claim is only allowed where it is true: it must say why, and it must actually sit at or above the threshold.
+  const floorProblems = [];
+  for (const [port, record] of state.floors) {
+    const result = results.find((entry) => entry.port === port);
+    if (result === undefined) {
+      floorProblems.push(`${port}  claimed at the floor but is not a landed file`);
+      continue;
+    }
+    if (typeof record.floorReason !== "string" || record.floorReason.trim().length === 0) floorProblems.push(`${port}  claimed at the floor without saying why`);
+    if (result.overlap < threshold) floorProblems.push(`${port}  measured ${result.overlap.toFixed(3)}, below ${threshold}: it can be recorded as rewritten`);
+    if (result.exempt !== undefined) floorProblems.push(`${port}  is exempt from the gate, so it cannot also be at the floor`);
+    if (typeof record.overlap !== "number") floorProblems.push(`${port}  claimed at the floor without its measured overlap`);
+    else if (Math.abs(record.overlap - result.overlap) > 0.01) floorProblems.push(`${port}  recorded at ${record.overlap}, measured ${result.overlap.toFixed(3)}`);
+  }
+  for (const problem of floorProblems) console.log(`FLOOR ${problem}`);
+  for (const violation of violations) {
+    console.log(`VIOLATION ${violation.port}  overlap ${violation.overlap.toFixed(3)}${violation.identical ? " (identical)" : ""} — recorded as rewritten, still reproduces the baseline`);
+  }
+  const rewritten = results.filter((result) => state.ledger.has(result.port)).length;
+  const failed = violations.length + floorProblems.length;
+  console.log(failed === 0 ? `check: ${rewritten} rewritten files are below ${threshold}, ${state.floors.size} are at the floor; nothing to fix` : `check: ${failed} problem(s) before the ledger may stand as it is`);
+  process.exit(failed === 0 ? 0 : 1);
 }
 
 const counts = new Map();
@@ -172,12 +198,16 @@ if (command === "report") {
   if (offenders.length > 0) console.log(`\nidentical to the baseline, largest first (the first rewrite queue):\n${offenders.map((result) => `  ${String(result.lines).padStart(5)}  ${result.port}`).join("\n")}`);
   const near = results.filter((result) => result.exempt === undefined && result.identical !== true && result.overlap >= 0.95).sort((left, right) => right.lines - left.lines).slice(0, limit);
   if (near.length > 0) console.log(`\n>= 0.95, largest first:\n${near.map((result) => `  ${String(result.lines).padStart(5)}  ${result.overlap.toFixed(3)}  ${result.port}`).join("\n")}`);
+  const floors = results.filter((result) => state.floors.has(result.port)).sort((left, right) => right.lines - left.lines);
+  if (floors.length > 0) {
+    console.log(`\nat the floor (rewritten as far as the interface allows):\n${floors.map((result) => `  ${String(result.lines).padStart(5)}  ${result.overlap.toFixed(3)}  ${result.port}  — ${state.floors.get(result.port).floorReason}`).join("\n")}`);
+  }
   console.log(`\nexempt from the gate:\n${EXEMPT.map(([prefix, reason]) => `  ${prefix} — ${reason}`).join("\n")}`);
 }
 
 if (command === "queue") {
   const bandRank = (result) => (result.identical === true ? 0 : result.overlap >= 0.95 ? 1 : result.overlap >= 0.8 ? 2 : 3);
-  const pending = results.filter((result) => result.exempt === undefined && result.missing === undefined && state.ledger.has(result.port) === false);
+  const pending = results.filter((result) => result.exempt === undefined && result.missing === undefined && state.ledger.has(result.port) === false && state.floors.has(result.port) === false);
   pending.sort((left, right) => bandRank(left) - bandRank(right) || right.lines - left.lines);
   console.log(`rewrite queue (risk first, then size): ${pending.length} landed files still to rewrite\n`);
   for (const result of pending.slice(0, limit)) {
