@@ -47,6 +47,9 @@ Conventions:
 - a file counts as *rewritten* only under the token-overlap gate: `pnpm --filter @slate/work-host rewrite:overlap check`
   refuses a claim while the file still reproduces 0.8 or more of the baseline's identifier pairs (adapters and generated
   files are exempt with a reason on the list it prints); `report` and `queue` are the risk-first order of the rewrite pass;
+- the ledger has three honest books, not two: a file is *rewritten*, *at the floor* (`claim: "floor"` with its measured
+  number and the reason the rest is the interface other modules import), or still waiting. `check` refuses a floor claim
+  that could have been a plain rewrite, one that does not say why, and one whose recorded number is not what it measures;
 - the tests need Node **24.14.0**: `node:sqlite` accepts a zero-length blob from 24.22 on, and one behaviour suite pins
   the refusal, so `node --test` on a later 24.x reports a failure the implementation does not have.
 
