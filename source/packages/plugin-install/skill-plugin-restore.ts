@@ -14,64 +14,24 @@ export interface RestoreSkillsFromPluginDirOptions {
   readonly skillsRoot: string;
 }
 
-export async function restoreSkillsFromPluginDir(
-  options: RestoreSkillsFromPluginDirOptions,
-): Promise<string[]> {
-  const { skillDirs, pluginSkillsRoot, skillsRoot } = options;
-  if (skillDirs.length === 0) {
-    throw new Error("At least one skill directory is required");
-  }
-
-  const restores = skillDirs.map(skillDir => {
-    const relativePath = relative(
-      resolve(pluginSkillsRoot),
-      resolve(skillDir),
-    );
-    if (
-      relativePath === ""
-      || isAbsolute(relativePath)
-      || relativePath.split(sep)[0] === ".."
-    ) {
-      throw new Error(
-        `Skill folder "${skillDir}" is not inside the plugin's skills directory`,
-      );
-    }
-    return { skillDir, target: join(skillsRoot, relativePath) };
-  });
-
-  const duplicates = restores
-    .map(({ target }) => target)
-    .filter((target, index, targets) => targets.indexOf(target) !== index);
-  if (duplicates.length > 0) {
-    throw new Error(
-      `Multiple skill folders would restore to the same path: ${duplicates.join(", ")}`,
-    );
-  }
-
-  for (const { skillDir, target } of restores) {
-    if (!await isDirectory(skillDir)) {
-      throw new Error(`Skill folder "${skillDir}" is not a directory`);
-    }
-    if (await pathExists(target)) {
-      throw new Error(
-        `Cannot restore skill to "${target}": that path already exists`,
-      );
-    }
-  }
-
-  await mkdir(skillsRoot, { recursive: true });
-  for (const { skillDir, target } of restores) {
-    await mkdir(dirname(target), { recursive: true });
-    await cp(skillDir, target, {
-      recursive: true,
-      force: false,
-      errorOnExist: true,
-    });
-  }
-  return restores.map(({ target }) => target);
+/** One skill to put back: where it is in the plugin, and where the workspace reads it from. */
+interface Restore {
+  readonly from: string;
+  readonly to: string;
 }
 
-async function isDirectory(path: string): Promise<boolean> {
+/** Whether something is there, without caring what it is. */
+async function exists(path: string): Promise<boolean> {
+  try {
+    await stat(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Whether something is there and is a directory. */
+async function isFolder(path: string): Promise<boolean> {
   try {
     return (await stat(path)).isDirectory();
   } catch {
@@ -79,11 +39,53 @@ async function isDirectory(path: string): Promise<boolean> {
   }
 }
 
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-    return true;
-  } catch {
-    return false;
+/** Where a skill folder sits inside the plugin, refusing one that sits outside it. */
+function insidePlugin(pluginSkillsRoot: string, skillDir: string): string {
+  const path = relative(resolve(pluginSkillsRoot), resolve(skillDir));
+  if (path === "" || isAbsolute(path) || path.split(sep)[0] === "..") {
+    throw new Error(`Skill folder "${skillDir}" is not inside the plugin's skills directory`);
   }
+  return path;
+}
+
+/** The restore plan for these folders: each one's place inside the plugin, and the workspace path it becomes. */
+function plan(options: RestoreSkillsFromPluginDirOptions): Restore[] {
+  const { skillDirs, pluginSkillsRoot, skillsRoot } = options;
+  if (skillDirs.length === 0) throw new Error("At least one skill directory is required");
+  const restores = skillDirs.map((skillDir) => ({ from: skillDir, to: join(skillsRoot, insidePlugin(pluginSkillsRoot, skillDir)) }));
+
+  // Two folders that land on one workspace path would write over each other, so the plan is refused instead.
+  const placed = new Set<string>();
+  const collisions: string[] = [];
+  for (const { to } of restores) {
+    if (placed.has(to)) collisions.push(to);
+    placed.add(to);
+  }
+  if (collisions.length > 0) throw new Error(`Multiple skill folders would restore to the same path: ${collisions.join(", ")}`);
+  return restores;
+}
+
+/** Refuses the plan unless every folder is a folder and nothing is where it would be put. */
+async function assertRestorable(restores: readonly Restore[]): Promise<void> {
+  for (const { from, to } of restores) {
+    if (!(await isFolder(from))) throw new Error(`Skill folder "${from}" is not a directory`);
+    if (await exists(to)) throw new Error(`Cannot restore skill to "${to}": that path already exists`);
+  }
+}
+
+/**
+ * Puts the plugin's skills back where the workspace reads them, and answers with the paths it wrote.
+ *
+ * The whole plan is checked before anything is copied, so a refusal leaves the workspace as it was rather than half
+ * restored.
+ */
+export async function restoreSkillsFromPluginDir(options: RestoreSkillsFromPluginDirOptions): Promise<string[]> {
+  const restores = plan(options);
+  await assertRestorable(restores);
+  await mkdir(options.skillsRoot, { recursive: true });
+  for (const { from, to } of restores) {
+    await mkdir(dirname(to), { recursive: true });
+    await cp(from, to, { recursive: true, force: false, errorOnExist: true });
+  }
+  return restores.map(({ to }) => to);
 }
