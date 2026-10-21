@@ -7,18 +7,21 @@
  */
 import { z } from "zod";
 
+/** What each style is for, as the model is told when it offers a choice. */
 export const widgetActionStyleSchema = z.enum(["default", "primary", "danger"]);
+
+/** How the model is told what the value of an option is for. */
+const VALUE_DESCRIPTION = "Text sent back to you when this option is picked. Defaults to the label. Make it read like something the user would naturally say in reply.";
+
+/** How the model is told it may let the user type an answer of their own. */
+const ALLOW_CUSTOM_DESCRIPTION = "When true, the user can type a custom free-text answer instead of choosing one of the options.";
+
+/** How the model is told a question may be dropped once the user moves on. */
+const DISMISS_ON_MOVE_ON_DESCRIPTION = "When true, this widget auto-dismisses (becomes inert, shows a muted Dismissed state) once the user sends a newer message without answering it. Omit/false to keep the question live and answerable indefinitely. Set true only for low-stakes questions that become moot if the user moves on; keep it off for real decisions you still need answered.";
 
 export const choiceOptionSchema = z.object({
   label: z.string().trim().min(1),
-  value: z
-    .string()
-    .trim()
-    .min(1)
-    .optional()
-    .describe(
-      "Text sent back to you when this option is picked. Defaults to the label. Make it read like something the user would naturally say in reply.",
-    ),
+  value: z.string().trim().min(1).optional().describe(VALUE_DESCRIPTION),
   description: z.string().trim().min(1).optional(),
   style: widgetActionStyleSchema.optional(),
 });
@@ -27,18 +30,8 @@ export const slateWidgetSchema = z.object({
   prompt: z.string().trim().min(1),
   helpText: z.string().trim().min(1).optional(),
   options: z.array(choiceOptionSchema).min(1).max(6),
-  allowCustom: z
-    .boolean()
-    .optional()
-    .describe(
-      "When true, the user can type a custom free-text answer instead of choosing one of the options.",
-    ),
-  dismissOnMoveOn: z
-    .boolean()
-    .optional()
-    .describe(
-      "When true, this widget auto-dismisses (becomes inert, shows a muted Dismissed state) once the user sends a newer message without answering it. Omit/false to keep the question live and answerable indefinitely. Set true only for low-stakes questions that become moot if the user moves on; keep it off for real decisions you still need answered.",
-    ),
+  allowCustom: z.boolean().optional().describe(ALLOW_CUSTOM_DESCRIPTION),
+  dismissOnMoveOn: z.boolean().optional().describe(DISMISS_ON_MOVE_ON_DESCRIPTION),
 });
 
 export type SlateWidget = z.infer<typeof slateWidgetSchema>;
@@ -48,19 +41,22 @@ interface WidgetLike {
   readonly options?: unknown;
 }
 
+/** The options a widget carries, or none when what it carries is not a list of them. */
+function optionsOf(widget: WidgetLike): readonly { readonly label?: unknown; readonly value?: unknown }[] {
+  return Array.isArray(widget.options) ? (widget.options as { readonly label?: unknown; readonly value?: unknown }[]) : [];
+}
+
+/** A widget in one line: the question, and the labels it offers beside it. */
 export function summarizeWidget(widget: WidgetLike): string {
   const prompt = typeof widget.prompt === "string" ? widget.prompt : "Question";
-  const options = Array.isArray(widget.options)
-    ? (widget.options as { readonly label?: unknown; readonly value?: unknown }[])
-    : [];
-  const labels = options.map((option) => option.label).join(" / ");
+  const labels = optionsOf(widget)
+    .map((option) => option.label)
+    .join(" / ");
   return labels.length > 0 ? `${prompt} — ${labels}` : prompt;
 }
 
+/** The label an answer came from: the option whose value (or label) was sent, or the answer itself when none was. */
 export function getWidgetAnswerLabel(widget: WidgetLike, answer: string): string {
-  const options = Array.isArray(widget.options)
-    ? (widget.options as { readonly label?: string; readonly value?: string }[])
-    : [];
-  const match = options.find((option) => (option.value ?? option.label) === answer);
-  return match?.label ?? answer;
+  const match = optionsOf(widget).find((option) => (option.value ?? option.label) === answer);
+  return (match?.label as string | undefined) ?? answer;
 }
