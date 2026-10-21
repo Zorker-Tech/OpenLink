@@ -11,7 +11,7 @@
 import { randomUUID } from "node:crypto";
 import { BackgroundComposerService } from "../../packages/proto/generated/aiserver/v1/background_composer_connect.ts";
 import { DashboardService } from "../../packages/proto/generated/aiserver/v1/dashboard_connect.ts";
-import type { SlateModelCatalogEntry } from "../../shared/agents/model-catalog.ts";
+import type { CatalogModel } from "../../shared/agents/model-catalog.ts";
 import { createSlateCursorBackendClient } from "../../shared/node/cursor-backend/cursor-inference.ts";
 import { SLATE_WEBSITE_ORIGIN } from "../transcript/agent-run-error.ts";
 import { SlateCloudAgentLaunchError } from "./cloud-agent-launch-error.ts";
@@ -159,7 +159,7 @@ export interface SlateCloudAgentManagerOptions {
   readonly convertConversationMessagesToTrace: (conversation: unknown) => readonly unknown[];
   readonly clientForTesting?: CloudAgentClient;
   readonly dashboardClientForTesting?: DashboardClient;
-  readonly modelCatalogForTesting?: readonly SlateModelCatalogEntry[];
+  readonly modelCatalogForTesting?: readonly CatalogModel[];
   readonly onRequestId?: (id: string) => void;
 }
 
@@ -193,7 +193,7 @@ export class SlateCloudAgentManager {
     this.completionPoller.dispose();
   }
 
-  listModels(): Promise<readonly SlateModelCatalogEntry[]> {
+  listModels(): Promise<readonly CatalogModel[]> {
     return this.modelCatalog.listModels();
   }
 
