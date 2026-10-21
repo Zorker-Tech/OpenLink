@@ -5,7 +5,7 @@
  * object's identity — its tag and size — rather than the shape the store happened to answer in.
  */
 import { normalizeS3Etag } from "./etag.ts";
-import { assertPresignedUrlSafe } from "./presigned-url.ts";
+import { assertAddressSafe } from "./presigned-url.ts";
 import { normalizeRelPath } from "./safe-paths.ts";
 
 interface PresignedRead {
@@ -58,7 +58,7 @@ export async function probeAgentStoreObject(args: ObjectProbeArgs): Promise<Agen
   if (canonicalPresignPath !== canonicalRequested) {
     throw new Error(`agent-store baseline probe relPath mismatch for ${args.relPath} (got ${presigned.relPath})`);
   }
-  assertPresignedUrlSafe({
+  assertAddressSafe({
     rawUrl: presigned.url,
     relPath: args.relPath,
     validatePresignedUrl: args.validatePresignedUrl,

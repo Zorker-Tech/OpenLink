@@ -8,7 +8,7 @@ import { describe, it } from "node:test";
 
 import { AGENT_STORE_CONFLICT_EVENTS_FILE_NAME, AGENT_STORE_CONFLICT_PENDING_FILE_NAME, AGENT_STORE_SYNC_DIR_NAME, isReservedRelPath } from "../../source/packages/agent-store-sync/paths.ts";
 import { UnsafeAgentStorePathError } from "../../source/packages/agent-store-sync/safe-paths.ts";
-import { assertPresignedUrlSafe, createAgentStorePresignedUrlValidatorForBackend } from "../../source/packages/agent-store-sync/presigned-url.ts";
+import { assertAddressSafe, validatorForBackend } from "../../source/packages/agent-store-sync/presigned-url.ts";
 
 describe("where an agent store keeps its own files", () => {
   it("keeps its sync state in a directory of its own, and knows which paths are reserved", () => {
@@ -32,7 +32,7 @@ describe("keeping a store path inside the store", () => {
 
 describe("the presigned address a store read or write is given", () => {
   it("is checked before it is used, and a refusal says which check it failed", () => {
-    assert.equal(typeof assertPresignedUrlSafe, "function");
-    assert.equal(typeof createAgentStorePresignedUrlValidatorForBackend, "function");
+    assert.equal(typeof assertAddressSafe, "function");
+    assert.equal(typeof validatorForBackend, "function");
   });
 });
