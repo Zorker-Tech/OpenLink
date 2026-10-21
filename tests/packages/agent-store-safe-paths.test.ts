@@ -186,11 +186,11 @@ describe("stating one child", () => {
         if (asString === "/store/notes" && swapped) return { dev: 7, ino: 999, size: 0, mtimeMs: 1, isFile: () => false, isDirectory: () => false, isSymbolicLink: () => true } as never;
         if (asString === "/store/notes" && !swapped) {
           swapped = true;
-          return fsModule.lstatSync(target);
+          return fsModule.lstatSync(target as never);
         }
-        return fsModule.lstatSync(target);
+        return fsModule.lstatSync(target as never);
       },
-      readdirSync: (target, options) => fsModule.readdirSync(target, options),
+      readdirSync: (target, options) => fsModule.readdirSync(target as never, options),
     };
     const result = safeStatChild({ base: "/store", relPath: "notes/a.txt", fs: swapping });
     assert.equal(result.kind, "refused");
