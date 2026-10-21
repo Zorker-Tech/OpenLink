@@ -5,37 +5,44 @@
  * transcript; a reply that stands on its own does not. The branch's root is found by walking the replies up, with a
  * cycle treated as no root rather than as an endless walk.
  */
-export interface BranchedTranscriptEntry {
+export interface ThreadEntry {
   readonly id: string;
   readonly replyTo?: string;
   readonly [key: string]: unknown;
 }
 
-function replyToOf(entry: BranchedTranscriptEntry): string | undefined {
+/** What an entry replies to, if it says. */
+function replyToOf(entry: ThreadEntry): string | undefined {
   return "replyTo" in entry ? entry.replyTo : undefined;
 }
 
-function resolveBranchRoot(
-  entry: BranchedTranscriptEntry,
-  branchedById: ReadonlyMap<string, BranchedTranscriptEntry>,
-): string | undefined {
-  let current = entry;
-  const seen = new Set([entry.id]);
-  for (;;) {
+/**
+ * The entry a branch hangs from, and nothing when it does not hang from one.
+ *
+ * The walk stops at the first entry that is not in the map, which is then the root itself — a reply to something this
+ * build does not hold is a branch of its own, not an orphan.
+ */
+function resolveBranchRoot(entry: ThreadEntry, branchedById: ReadonlyMap<string, ThreadEntry>): string | undefined {
+  const walked = new Set([entry.id]);
+  for (let current = entry; ; ) {
     const parentId = replyToOf(current);
     if (parentId === undefined) return undefined;
     const parent = branchedById.get(parentId);
     if (parent === undefined) return parentId;
-    if (seen.has(parentId)) return undefined;
-    seen.add(parentId);
+    if (walked.has(parentId)) return undefined;
+    walked.add(parentId);
     current = parent;
   }
 }
 
-export function branchReplyCounts(
-  branched: readonly BranchedTranscriptEntry[],
-): Map<string, number> {
-  const byId = new Map(branched.map((entry) => [entry.id, entry]));
+/** The entries by their own id, which every walk below is read against. */
+function indexById<T extends ThreadEntry>(branched: readonly T[]): Map<string, ThreadEntry> {
+  return new Map(branched.map((entry) => [entry.id, entry]));
+}
+
+/** How many replies each branch root has, by the root's id. */
+export function replyCountByBranch(branched: readonly ThreadEntry[]): Map<string, number> {
+  const byId = indexById(branched);
   const counts = new Map<string, number>();
   for (const entry of branched) {
     const root = resolveBranchRoot(entry, byId);
@@ -45,12 +52,8 @@ export function branchReplyCounts(
   return counts;
 }
 
-export function threadDescendants<T extends BranchedTranscriptEntry>(
-  rootId: string,
-  branched: readonly T[],
-): T[] {
-  const byId = new Map<string, BranchedTranscriptEntry>(
-    branched.map((entry) => [entry.id, entry]),
-  );
+/** Every entry in the branch this root hangs, in the order the transcript holds them. */
+export function branchEntries<T extends ThreadEntry>(rootId: string, branched: readonly T[]): T[] {
+  const byId = indexById(branched);
   return branched.filter((entry) => resolveBranchRoot(entry, byId) === rootId);
 }
