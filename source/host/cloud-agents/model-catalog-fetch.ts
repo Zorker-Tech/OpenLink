@@ -7,7 +7,7 @@
 
 import { AiService } from "../../packages/proto/generated/aiserver/v1/aiserver_connect.ts";
 import { AvailableModelsRequest, AvailableModelsScope, type AvailableModelsResponse } from "../../packages/proto/generated/aiserver/v1/aiserver_pb.ts";
-import { mapAvailableModels, type SlateModelCatalogEntry } from "../../shared/agents/model-catalog.ts";
+import { mapAvailableModels, type CatalogModel } from "../../shared/agents/model-catalog.ts";
 import { createSlateCursorBackendClient } from "../../shared/node/cursor-backend/cursor-inference.ts";
 
 /** The one backend call this read makes; a caller may hand one in instead of building it. */
@@ -22,7 +22,7 @@ export interface FetchSlateModelCatalogOptions {
   readonly client?: ModelCatalogClient;
 }
 
-export async function fetchSlateModelCatalog(options: FetchSlateModelCatalogOptions): Promise<SlateModelCatalogEntry[]> {
+export async function fetchSlateModelCatalog(options: FetchSlateModelCatalogOptions): Promise<CatalogModel[]> {
   const client = options.client ?? createSlateCursorBackendClient(AiService, options);
   const response = await client.availableModels(new AvailableModelsRequest({
     useModelParameters: true,

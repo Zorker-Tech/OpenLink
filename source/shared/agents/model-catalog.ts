@@ -1,35 +1,39 @@
 /**
  * The models the platform offers, and what each of them takes.
  *
- * A model names its parameters — a switch, a level, a number with its bounds — and what is chosen is checked against
- * them, so a selection that the model cannot take is refused before it is sent.
+ * A model's parameters are not free-form: each one is a switch or a fixed set of options, and the model only exists in the
+ * combinations its variants list. So a selection is checked twice — every value against its own parameter, and then the
+ * whole selection against the variants — and a selection the model cannot take is refused before it is sent, with a message
+ * that says which part to change.
  */
-export interface SlateModelCatalogValue {
+export interface ParameterOption {
   readonly value: string;
   readonly displayName?: string;
 }
 
-export interface SlateModelCatalogParameter {
+export interface ModelParameter {
   readonly id: string;
   readonly name?: string;
   readonly type: "boolean" | "enum";
-  readonly values: readonly SlateModelCatalogValue[];
+  readonly values: readonly ParameterOption[];
 }
 
-export interface SlateModelCatalogParameterValue {
+/** One parameter's chosen value: what a variant is made of. */
+export interface ParameterChoice {
   readonly id: string;
   readonly value: string;
 }
 
-export interface SlateModelCatalogEntry {
+export interface CatalogModel {
   readonly id: string;
   readonly displayName?: string;
   readonly aliases: readonly string[];
-  readonly params: readonly SlateModelCatalogParameter[];
-  readonly variants: readonly (readonly SlateModelCatalogParameterValue[])[];
+  readonly params: readonly ModelParameter[];
+  readonly variants: readonly (readonly ParameterChoice[])[];
 }
 
-export interface AvailableModelWire {
+/** A model as the backend describes it: parameter types nested under a `parameterType` case, variants under `parameterValues`. */
+export interface WireModel {
   readonly name: string;
   readonly clientDisplayName?: string | null;
   readonly idAliases: readonly string[];
@@ -37,176 +41,149 @@ export interface AvailableModelWire {
     readonly id: string;
     readonly name: string;
     readonly parameterType?: {
-      readonly booleanParameter?: {
-        readonly values: readonly SlateModelCatalogValue[];
-      };
-      readonly enumParameter?: {
-        readonly values: readonly SlateModelCatalogValue[];
-      };
+      readonly booleanParameter?: { readonly values: readonly ParameterOption[] };
+      readonly enumParameter?: { readonly values: readonly ParameterOption[] };
     };
   }[];
-  readonly variants: readonly {
-    readonly parameterValues: readonly SlateModelCatalogParameterValue[];
-  }[];
+  readonly variants: readonly { readonly parameterValues: readonly ParameterChoice[] }[];
 }
 
-export function findCatalogEntry(
-  catalog: readonly SlateModelCatalogEntry[],
-  modelId: string,
-): SlateModelCatalogEntry | undefined {
+/** The trimmed value, or nothing: a display name that is only spaces is no display name. */
+const trimmedOrUndefined = (value: string | null | undefined): string | undefined => {
+  const trimmed = value?.trim();
+  return trimmed !== undefined && trimmed.length > 0 ? trimmed : undefined;
+};
+
+/** A model's entry, by its own id or by one of its aliases — a case-insensitive match, and an empty id matches nothing. */
+export function findCatalogEntry(catalog: readonly CatalogModel[], modelId: string): CatalogModel | undefined {
   const needle = modelId.trim().toLowerCase();
   if (needle.length === 0) return undefined;
-  return catalog.find(
-    (entry) =>
-      entry.id.toLowerCase() === needle ||
-      entry.aliases.some((alias) => alias.toLowerCase() === needle),
-  );
+  return catalog.find((entry) => entry.id.toLowerCase() === needle || entry.aliases.some((alias) => alias.toLowerCase() === needle));
 }
 
-function variantMatchesRequested(
-  variant: readonly SlateModelCatalogParameterValue[],
-  requested: readonly (readonly [string, string])[],
-): boolean {
-  const byId = new Map(variant.map((parameter) => [parameter.id, parameter.value]));
+/** A variant's choices as a lookup, so "does this variant cover that selection" is one comparison per requested value. */
+function choicesById(choices: readonly ParameterChoice[]): Map<string, string> {
+  return new Map(choices.map((choice) => [choice.id, choice.value]));
+}
+
+function variantCovers(variant: readonly ParameterChoice[], requested: readonly (readonly [string, string])[]): boolean {
+  const byId = choicesById(variant);
   return requested.every(([id, value]) => byId.get(id) === value);
 }
 
-export function validateParamCombination(
-  entry: SlateModelCatalogEntry,
-  params: Readonly<Record<string, string>>,
-): string | null {
+/** The requested parameters that are the ones in the way: dropping one of them leaves a selection some variant still covers. */
+function conflictingIds(variants: readonly (readonly ParameterChoice[])[], requested: readonly (readonly [string, string])[]): string[] {
+  return requested
+    .filter(([dropId]) => variants.some((variant) => variantCovers(variant, requested.filter(([id]) => id !== dropId))))
+    .map(([id]) => id);
+}
+
+/**
+ * Whether the selection is one of the model's variants: nothing to say when the model has no variants, when nothing was
+ * selected, or when a variant covers it — and otherwise the message that names the parameters in the way.
+ */
+export function validateParamCombination(entry: CatalogModel, params: Readonly<Record<string, string>>): string | null {
   if (entry.variants.length === 0) return null;
   const requested = Object.entries(params);
   if (requested.length === 0) return null;
-  if (entry.variants.some((variant) => variantMatchesRequested(variant, requested))) {
-    return null;
-  }
-  const conflicting = requested
-    .filter(([dropId]) => {
-      const rest = requested.filter(([id]) => id !== dropId);
-      return entry.variants.some((variant) => variantMatchesRequested(variant, rest));
-    })
-    .map(([id]) => id);
-  const requestedString = requested
-    .map(([id, value]) => `${id}=${value}`)
-    .join(", ");
-  const hint =
-    conflicting.length > 1
-      ? ` These parameters can't be combined on ${entry.id}: ${conflicting.join(", ")}.`
-      : "";
+  if (entry.variants.some((variant) => variantCovers(variant, requested))) return null;
+  const conflicting = conflictingIds(entry.variants, requested);
+  const requestedText = requested.map(([id, value]) => `${id}=${value}`).join(", ");
+  const hint = conflicting.length > 1 ? ` These parameters can't be combined on ${entry.id}: ${conflicting.join(", ")}.` : "";
   return (
-    `{${requestedString}} is not a supported parameter combination for ${entry.id}.` +
+    `{${requestedText}} is not a supported parameter combination for ${entry.id}.` +
     hint +
     ` Change one of the conflicting parameters and retry (for example, on some models a 1M context can't be combined with the fast tier).`
   );
 }
 
-export function validateModelParams(
-  entry: SlateModelCatalogEntry,
-  params: Readonly<Record<string, string>>,
-): string[] {
+function unknownParameterMessage(entry: CatalogModel, id: string): string {
+  const allowedIds = entry.params.map((parameter) => parameter.id).join(", ");
+  return `'${id}' is not a parameter of ${entry.id}.` + (allowedIds.length > 0 ? ` Allowed parameters: ${allowedIds}.` : " This model takes no parameters.");
+}
+
+function invalidValueMessage(entry: CatalogModel, id: string, value: string, allowed: readonly ParameterOption[]): string {
+  return `'${value}' is not a valid value for '${id}' on ${entry.id}. Allowed: ${allowed.map((candidate) => candidate.value).join(", ")}.`;
+}
+
+/** Every value checked against its own parameter; the combination is only checked when every value was valid. */
+export function validateModelParams(entry: CatalogModel, params: Readonly<Record<string, string>>): string[] {
   const errors: string[] = [];
   for (const [id, value] of Object.entries(params)) {
     const definition = entry.params.find((parameter) => parameter.id === id);
     if (definition == null) {
-      const allowedIds = entry.params.map((parameter) => parameter.id).join(", ");
-      errors.push(
-        `'${id}' is not a parameter of ${entry.id}.` +
-          (allowedIds.length > 0
-            ? ` Allowed parameters: ${allowedIds}.`
-            : " This model takes no parameters."),
-      );
+      errors.push(unknownParameterMessage(entry, id));
       continue;
     }
-    if (!definition.values.some((candidate) => candidate.value === value)) {
-      const allowed = definition.values.map((candidate) => candidate.value).join(", ");
-      errors.push(
-        `'${value}' is not a valid value for '${id}' on ${entry.id}. Allowed: ${allowed}.`,
-      );
-    }
+    if (!definition.values.some((candidate) => candidate.value === value)) errors.push(invalidValueMessage(entry, id, value, definition.values));
   }
-  if (errors.length === 0) {
-    const combinationError = validateParamCombination(entry, params);
-    if (combinationError != null) errors.push(combinationError);
-  }
-  return errors;
+  if (errors.length > 0) return errors;
+  const combinationError = validateParamCombination(entry, params);
+  return combinationError == null ? errors : [...errors, combinationError];
 }
 
-export function describeParamIncompatibilities(
-  entry: SlateModelCatalogEntry,
-): string[] {
-  if (entry.variants.length === 0) return [];
-  const present: SlateModelCatalogParameterValue[] = [];
+/** Every choice the model's variants ever offer, once each: what the incompatibility notes are made of. */
+function distinctChoices(variants: readonly (readonly ParameterChoice[])[]): ParameterChoice[] {
   const seen = new Set<string>();
-  for (const variant of entry.variants) {
+  const choices: ParameterChoice[] = [];
+  for (const variant of variants) {
     for (const { id, value } of variant) {
       const key = `${id}=${value}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        present.push({ id, value });
-      }
+      if (seen.has(key)) continue;
+      seen.add(key);
+      choices.push({ id, value });
     }
   }
-  const coOccurs = (
-    a: SlateModelCatalogParameterValue,
-    b: SlateModelCatalogParameterValue,
-  ): boolean =>
-    entry.variants.some((variant) => {
-      const byId = new Map(variant.map((parameter) => [parameter.id, parameter.value]));
-      return byId.get(a.id) === a.value && byId.get(b.id) === b.value;
-    });
+  return choices;
+}
+
+/** The pairs of choices no variant offers together: what the model can be told it cannot combine. */
+export function describeParamIncompatibilities(entry: CatalogModel): string[] {
+  if (entry.variants.length === 0) return [];
+  const looksUps = entry.variants.map(choicesById);
+  const coOccurs = (a: ParameterChoice, b: ParameterChoice): boolean => looksUps.some((byId) => byId.get(a.id) === a.value && byId.get(b.id) === b.value);
+  const choices = distinctChoices(entry.variants);
   const notes: string[] = [];
-  for (const [index, a] of present.entries()) {
-    for (const b of present.slice(index + 1)) {
-      if (a.id !== b.id && !coOccurs(a, b)) {
-        notes.push(`${a.id}=${a.value} cannot be combined with ${b.id}=${b.value}`);
-      }
+  for (const [index, a] of choices.entries()) {
+    for (const b of choices.slice(index + 1)) {
+      // Two values of the same parameter never appear together, so they are not an incompatibility to report.
+      if (a.id !== b.id && !coOccurs(a, b)) notes.push(`${a.id}=${a.value} cannot be combined with ${b.id}=${b.value}`);
     }
   }
   return notes;
 }
 
-export function toSlateModelCatalogEntry(model: AvailableModelWire): SlateModelCatalogEntry {
-  const params: SlateModelCatalogParameter[] = [];
-  for (const definition of model.parameterDefinitions) {
-    const booleanDefinition = definition.parameterType?.booleanParameter;
-    const enumDefinition = definition.parameterType?.enumParameter;
-    const rawValues = booleanDefinition?.values ?? enumDefinition?.values ?? [];
-    const values = rawValues.map((value) => ({
-      value: value.value,
-      ...(value.displayName != null && value.displayName.trim().length > 0
-        ? { displayName: value.displayName.trim() }
-        : {}),
-    }));
-    if (values.length === 0) continue;
-    params.push({
-      id: definition.id,
-      ...(definition.name.trim().length > 0 ? { name: definition.name.trim() } : {}),
-      type: booleanDefinition != null ? "boolean" : "enum",
-      values,
-    });
-  }
-  const variants = model.variants.map((variant) =>
-    variant.parameterValues.map((parameter) => ({
-      id: parameter.id,
-      value: parameter.value,
-    })),
-  );
+/** One parameter of a wire model, or nothing when it offers no values at all (a parameter nothing can select is noise). */
+function parameterFrom(definition: WireModel["parameterDefinitions"][number]): ModelParameter | null {
+  const booleanDefinition = definition.parameterType?.booleanParameter;
+  const enumDefinition = definition.parameterType?.enumParameter;
+  const values = (booleanDefinition?.values ?? enumDefinition?.values ?? []).map((option) => {
+    const displayName = trimmedOrUndefined(option.displayName);
+    return { value: option.value, ...(displayName === undefined ? {} : { displayName }) };
+  });
+  if (values.length === 0) return null;
+  const name = trimmedOrUndefined(definition.name);
   return {
-    id: model.name,
-    ...(model.clientDisplayName != null && model.clientDisplayName.trim().length > 0
-      ? { displayName: model.clientDisplayName.trim() }
-      : {}),
-    aliases: [...model.idAliases],
-    params,
-    variants,
+    id: definition.id,
+    ...(name === undefined ? {} : { name }),
+    type: booleanDefinition != null ? "boolean" : "enum",
+    values,
   };
 }
 
-export function mapAvailableModels(
-  models: readonly AvailableModelWire[],
-): SlateModelCatalogEntry[] {
-  return models
-    .filter((model) => model.name.trim().length > 0)
-    .map(toSlateModelCatalogEntry);
+/** A wire model as the catalogue holds it. */
+export function toSlateModelCatalogEntry(model: WireModel): CatalogModel {
+  const displayName = trimmedOrUndefined(model.clientDisplayName);
+  return {
+    id: model.name,
+    ...(displayName === undefined ? {} : { displayName }),
+    aliases: [...model.idAliases],
+    params: model.parameterDefinitions.map(parameterFrom).filter((parameter): parameter is ModelParameter => parameter !== null),
+    variants: model.variants.map((variant) => variant.parameterValues.map(({ id, value }) => ({ id, value }))),
+  };
+}
+
+/** The catalogue of a backend's answer: a model with no name is not a model. */
+export function mapAvailableModels(models: readonly WireModel[]): CatalogModel[] {
+  return models.filter((model) => model.name.trim().length > 0).map(toSlateModelCatalogEntry);
 }

@@ -10,7 +10,7 @@
 
 import { SlateCloudAgentLaunchError } from "./cloud-agent-launch-error.ts";
 import { fetchSlateModelCatalog } from "./model-catalog-fetch.ts";
-import type { SlateModelCatalogEntry } from "../../shared/agents/model-catalog.ts";
+import type { CatalogModel } from "../../shared/agents/model-catalog.ts";
 
 export const CLOUD_AGENT_MAX_WAIT_MS = 5 * 60 * 60_000;
 export const CLOUD_AGENT_POLL_INTERVAL_MS = 10_000;
@@ -155,17 +155,17 @@ export interface Clock {
 
 /** The model catalog, kept for a while so a launch does not ask for it every time. */
 export class CloudAgentModelCatalogCache {
-  private cache?: { catalog: readonly SlateModelCatalogEntry[]; fetchedAtMs: number };
+  private cache?: { catalog: readonly CatalogModel[]; fetchedAtMs: number };
 
   constructor(private readonly options: {
     readonly clock: Clock;
     readonly getCursorAccessToken: (options: { readonly backendUrl: string }) => Promise<string>;
     readonly getMachineId: () => Promise<string>;
     readonly onRequestId?: (requestId: string) => void;
-    readonly modelCatalogForTesting?: readonly SlateModelCatalogEntry[];
+    readonly modelCatalogForTesting?: readonly CatalogModel[];
   }) {}
 
-  async listModels(): Promise<readonly SlateModelCatalogEntry[]> {
+  async listModels(): Promise<readonly CatalogModel[]> {
     if (this.options.modelCatalogForTesting != null) return this.options.modelCatalogForTesting;
     const now = this.options.clock.monotonicNow();
     if (this.cache != null && now - this.cache.fetchedAtMs < MODEL_CATALOG_TTL_MS) return this.cache.catalog;
