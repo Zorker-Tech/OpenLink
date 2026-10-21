@@ -22,42 +22,58 @@ export interface AsyncTask {
   startedAtMs: number;
   detail?: string;
 }
-export function markerLabel(marker: PendingWakeMarker): string {
-  if (marker.title != null && marker.title.length > 0) return marker.title;
-  switch (marker.kind) {
-    case "cloud-agent":
-      return `Cloud agent ${marker.workId}`;
-    case "shell":
-      return `Background command ${marker.workId}`;
-    case "subagent":
-      return `Background task ${marker.workId}`;
-  }
+/** What a task is called, by the kind of work it is, when it brought no title of its own. */
+const KIND_LABELS: Readonly<Record<PendingWakeKind, string>> = {
+  "cloud-agent": "Cloud agent",
+  shell: "Background command",
+  subagent: "Background task",
+};
+
+/** The title a marker brought, when it brought one. */
+function ownTitle(marker: PendingWakeMarker): string | undefined {
+  return marker.title != null && marker.title.length > 0 ? marker.title : undefined;
 }
-export function pendingWakeMarkerToAsyncTask(
-  marker: PendingWakeMarker,
-): AsyncTask {
+
+export function markerLabel(marker: PendingWakeMarker): string {
+  return ownTitle(marker) ?? `${KIND_LABELS[marker.kind]} ${marker.workId}`;
+}
+
+/** What a reader is told about a task the ledger knows and the live work does not. */
+function ledgerDetail(marker: PendingWakeMarker): string {
+  return marker.subagentType != null && marker.subagentType.length > 0
+    ? `${marker.subagentType} · ${LEDGER_ONLY_DETAIL}`
+    : LEDGER_ONLY_DETAIL;
+}
+
+/** A marker read as the task a transcript shows: the work is running, though only the ledger knows it. */
+export function pendingWakeMarkerToAsyncTask(marker: PendingWakeMarker): AsyncTask {
   return {
     kind: marker.kind,
     id: marker.workId,
     label: markerLabel(marker),
     status: "running",
     startedAtMs: marker.markedAtMs,
-    detail:
-      marker.subagentType != null && marker.subagentType.length > 0
-        ? `${marker.subagentType} · ${LEDGER_ONLY_DETAIL}`
-        : LEDGER_ONLY_DETAIL,
+    detail: ledgerDetail(marker),
   };
 }
-export function mergeAsyncTasks(
-  liveTasks: readonly AsyncTask[],
-  markers: readonly PendingWakeMarker[],
-): AsyncTask[] {
-  const seen = new Set(liveTasks.map((task) => `${task.kind}\0${task.id}`)),
-    merged = [...liveTasks];
-  for (const marker of markers)
-    if (!seen.has(`${marker.kind}\0${marker.workId}`))
-      merged.push(pendingWakeMarkerToAsyncTask(marker));
-  return merged.sort(
-    (a, b) => a.startedAtMs - b.startedAtMs || a.id.localeCompare(b.id),
-  );
+
+/** What tells two tasks apart: a task id is only an id within its own kind. */
+function identityOf(task: { readonly kind: string; readonly id: string }): string {
+  return `${task.kind}\u0000${task.id}`;
+}
+
+/**
+ * The tasks a transcript shows: the ones the live work knows, and the ones only the ledger knows — each once, ordered by
+ * when they started and then by id, so two tasks that started together keep a stable order.
+ */
+export function mergeAsyncTasks(liveTasks: readonly AsyncTask[], markers: readonly PendingWakeMarker[]): AsyncTask[] {
+  const known = new Set(liveTasks.map(identityOf));
+  const merged = [...liveTasks];
+  for (const marker of markers) {
+    const identity = identityOf({ kind: marker.kind, id: marker.workId });
+    if (known.has(identity)) continue;
+    known.add(identity);
+    merged.push(pendingWakeMarkerToAsyncTask(marker));
+  }
+  return merged.sort((left, right) => left.startedAtMs - right.startedAtMs || left.id.localeCompare(right.id));
 }
