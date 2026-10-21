@@ -35,12 +35,53 @@ export interface SummarizationImageMessage {
   readonly content: string | readonly SummarizationMessagePart[];
 }
 
-const DEFAULT_IMAGE_MIME_TYPE = "image/png";
-const DATA_OR_REMOTE_URL_PREFIX = /^(data:|https?:|blob:)/i;
+/** What an image is taken to be when nothing says otherwise. */
+const ASSUMED_MIME_TYPE = "image/png";
 
-function resolveImageMimeType(mimeType: unknown): string {
+/** An image that already points somewhere — at a data URL, a remote host or a blob — is not base64 to wrap. */
+const ALREADY_A_REFERENCE = /^(data:|https?:|blob:)/i;
+
+/** The mime type to name, trimmed, or the one an unlabelled image is assumed to have. */
+function namedMimeType(mimeType: unknown): string {
   const trimmed = (mimeType as string | null | undefined)?.trim();
-  return trimmed !== undefined && trimmed !== "" ? trimmed : DEFAULT_IMAGE_MIME_TYPE;
+  return trimmed !== undefined && trimmed !== "" ? trimmed : ASSUMED_MIME_TYPE;
+}
+
+/** A part carries its mime type only when the caller gave one at all, whatever it was. */
+function imagePart(image: unknown, mimeType: unknown): SummarizationImagePart {
+  return mimeType === undefined ? { image } : { image, mimeType };
+}
+
+/** The last image among a tool result's experimental parts, as the data it happened to carry. */
+function latestToolImage(parts: readonly SummarizationMessagePart[]): SummarizationImagePart | null {
+  for (let partIndex = parts.length - 1; partIndex >= 0; partIndex -= 1) {
+    const carried = parts[partIndex]?.experimental_content;
+    if (carried === undefined) continue;
+    for (let itemIndex = carried.length - 1; itemIndex >= 0; itemIndex -= 1) {
+      const item = carried[itemIndex];
+      if (item?.type === "image" && typeof item.data === "string") {
+        return imagePart(item.data, typeof item.mimeType === "string" ? item.mimeType : undefined);
+      }
+    }
+  }
+  return null;
+}
+
+/** The last image a user wrote, as the part it was written in. */
+function latestUserImage(parts: readonly SummarizationMessagePart[]): SummarizationImagePart | null {
+  for (let partIndex = parts.length - 1; partIndex >= 0; partIndex -= 1) {
+    const part = parts[partIndex];
+    if (part?.type === "image") return imagePart(part.image, part.mimeType);
+  }
+  return null;
+}
+
+/** An image a message holds, whether it came from the user or from a tool the user's turn ran. */
+function imageIn(message: SummarizationImageMessage): SummarizationImagePart | null {
+  const parts = message.content as readonly SummarizationMessagePart[];
+  if (message.role === "tool") return latestToolImage(parts);
+  if (message.role === "user" && Array.isArray(message.content)) return latestUserImage(message.content);
+  return null;
 }
 
 export function toUserMessageImagePart(part: SummarizationImagePart): {
@@ -48,52 +89,20 @@ export function toUserMessageImagePart(part: SummarizationImagePart): {
   image: unknown;
   mimeType?: unknown;
 } {
-  if (typeof part.image !== "string") {
-    return Object.assign(
-      { type: "image" as const, image: part.image },
-      part.mimeType !== undefined ? { mimeType: part.mimeType } : {},
-    );
-  }
-  const image = DATA_OR_REMOTE_URL_PREFIX.test(part.image)
-    ? part.image
-    : `data:${resolveImageMimeType(part.mimeType)};base64,${part.image}`;
-  return Object.assign(
-    { type: "image" as const, image },
-    part.mimeType !== undefined ? { mimeType: part.mimeType } : {},
-  );
+  const image =
+    typeof part.image === "string"
+      ? ALREADY_A_REFERENCE.test(part.image)
+        ? part.image
+        : `data:${namedMimeType(part.mimeType)};base64,${part.image}`
+      : part.image;
+  return { type: "image", ...imagePart(image, part.mimeType) };
 }
 
+/** The newest image in the conversation, or nothing when it holds none. */
 export function findLatestImagePart(messages: readonly SummarizationImageMessage[]): SummarizationImagePart | null {
-  for (let index = messages.length - 1; index >= 0; index--) {
-    const message = messages[index]!;
-    if (message.role === "tool") {
-      const content = message.content as readonly SummarizationMessagePart[];
-      for (let partIndex = content.length - 1; partIndex >= 0; partIndex--) {
-        const experimentalContent = content[partIndex]!.experimental_content;
-        if (experimentalContent === undefined) continue;
-        for (let itemIndex = experimentalContent.length - 1; itemIndex >= 0; itemIndex--) {
-          const item = experimentalContent[itemIndex]!;
-          if (item.type === "image" && typeof item.data === "string") {
-            return Object.assign(
-              { image: item.data },
-              typeof item.mimeType === "string" ? { mimeType: item.mimeType } : {},
-            );
-          }
-        }
-      }
-      continue;
-    }
-    if (message.role === "user" && Array.isArray(message.content)) {
-      for (let partIndex = message.content.length - 1; partIndex >= 0; partIndex--) {
-        const part = message.content[partIndex]!;
-        if (part.type === "image") {
-          return Object.assign(
-            { image: part.image },
-            part.mimeType !== undefined ? { mimeType: part.mimeType } : {},
-          );
-        }
-      }
-    }
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const found = imageIn(messages[index]!);
+    if (found !== null) return found;
   }
   return null;
 }
