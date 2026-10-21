@@ -28,35 +28,55 @@ export interface SelectedExtraContext {
   readonly extraContext: readonly string[]
 }
 
+/** One piece of text read out of an entry, or nothing when the entry pointed at nothing. */
+async function readEntry<Context>(
+  ctx: Context,
+  entry: ExtraContextEntry,
+  blobStore: ExtraContextBlobStore<Context> | undefined,
+): Promise<string | undefined> {
+  const source = entry.dataOrBlobId
+  if (source.case === undefined) return undefined
+  if (source.case === "data") return source.value
+  if (!blobStore) throw new Error("Blob store is required to hydrate extra context blob")
+  const blob = await blobStore.getBlob(ctx, source.value)
+  if (!blob) throw new Error("Extra context blob not found")
+  return new TextDecoder().decode(blob)
+}
+
+/**
+ * A list that takes a value once.
+ *
+ * Nothing to add is not an error: an entry that carried no text and a value already in the list are both simply not
+ * added, which is what makes the list safe to read as the prompt's extra context.
+ */
+function uniqueTexts(): { readonly add: (value: string | undefined) => void; readonly values: string[] } {
+  const seen = new Set<string>()
+  const values: string[] = []
+  return {
+    add: (value) => {
+      if (value === undefined || value.length === 0 || seen.has(value)) return
+      seen.add(value)
+      values.push(value)
+    },
+    values,
+  }
+}
+
+/**
+ * The extra context for a prompt: every entry read, then anything already spelled out, each value once and in the order
+ * it was attached.
+ *
+ * The entries are read at the same time — a blob store may be a worker call — and put in the list in the order they were
+ * given, so a slow entry cannot reorder the user's context.
+ */
 export async function hydrateSelectedExtraContext<Context>(
   ctx: Context,
   selectedContext: SelectedExtraContext,
   blobStore: ExtraContextBlobStore<Context> | undefined,
 ): Promise<string[]> {
-  const extraContextsToInclude: string[] = []
-  const seenExtraContexts = new Set<string>()
-  const textDecoder = new TextDecoder()
-  const appendExtraContext = (value: string): void => {
-    if (value.length === 0 || seenExtraContexts.has(value)) return
-    seenExtraContexts.add(value)
-    extraContextsToInclude.push(value)
-  }
-  const hydratedExtraContextEntries = await Promise.all(
-    selectedContext.extraContextEntries.map(async entry => {
-      if (entry.dataOrBlobId.case === undefined) return undefined
-      if (entry.dataOrBlobId.case === "data") return entry.dataOrBlobId.value
-      if (entry.dataOrBlobId.case === "blobId") {
-        if (!blobStore) throw new Error("Blob store is required to hydrate extra context blob")
-        const blob = await blobStore.getBlob(ctx, entry.dataOrBlobId.value)
-        if (!blob) throw new Error("Extra context blob not found")
-        return textDecoder.decode(blob)
-      }
-      return undefined
-    }),
-  )
-  for (const extraContext of hydratedExtraContextEntries) {
-    if (extraContext !== undefined) appendExtraContext(extraContext)
-  }
-  for (const extraContext of selectedContext.extraContext) appendExtraContext(extraContext)
-  return extraContextsToInclude
+  const read = await Promise.all(selectedContext.extraContextEntries.map((entry) => readEntry(ctx, entry, blobStore)))
+  const collected = uniqueTexts()
+  for (const value of read) collected.add(value)
+  for (const value of selectedContext.extraContext) collected.add(value)
+  return collected.values
 }
