@@ -13,7 +13,7 @@ import { imageResizingMiddleware } from "../../source/packages/chat-inference/mi
 import { tracingMiddleware } from "../../source/packages/chat-inference/middleware/tracing-middleware.ts";
 import { MockPromptExecutor } from "../../source/packages/chat-inference/mock-prompt-executor.ts";
 import { COORDINATOR_METHOD_TABLE, isCoordinatorMethod, parseCoordinatorAgentThreadRequest } from "../../source/shared/rpc/coordinator.ts";
-import { readImageFileDimensions, readPngDimensions } from "../../source/shared/media/image-dimensions.ts";
+import { imageFileSize, pngSize } from "../../source/shared/media/image-dimensions.ts";
 import { Mp4Dimensions } from "../../source/shared/media/video-dimensions.ts";
 import { LEARN_SKILL_NAME, TEACH_QUEUES_DIR, TEACH_SESSIONS_DIR } from "../../source/host/extensions/teach-recording/teach-recording-service.ts";
 
@@ -50,8 +50,8 @@ describe("the coordinator's own RPC surface", () => {
 
 describe("how large an image or a video is", () => {
   it("reads a PNG's size out of its own header, and refuses what it cannot read", () => {
-    assert.equal(readPngDimensions(Buffer.from([1, 2, 3, 4])), null);
-    assert.equal(typeof readImageFileDimensions, "function");
+    assert.equal(pngSize(Buffer.from([1, 2, 3, 4])), null);
+    assert.equal(typeof imageFileSize, "function");
   });
 
   it("reads a video's size out of its container", () => {

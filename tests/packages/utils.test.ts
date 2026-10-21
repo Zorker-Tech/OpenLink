@@ -38,7 +38,7 @@ import { buildWebSearchYearGuidance, getIsoDateYearString } from "../../source/p
 import { countLines, getFormatForFile, isVideoFilePath, readText } from "../../source/packages/utils/text-encoding.ts"
 import { LATIN1_ENCODING, mapToIconvEncoding, normalizeEncodingName, stripUtf8Bom, UTF8_ENCODING } from "../../source/packages/utils/encoding-names.ts"
 import { TTLCache } from "../../source/packages/utils/ttl-cache.ts"
-import { isWebp, readWebpDimensions, registerWebpCodec } from "../../source/packages/utils/webp.ts"
+import { isWebp, webpSize, registerWebpCodec } from "../../source/packages/utils/webp.ts"
 import { createWritableIterable, WriteIterableClosedError } from "../../source/packages/utils/writable-iterable.ts"
 
 async function withTempDirectory<T>(run: (directory: string) => Promise<T>): Promise<T> {
@@ -419,8 +419,8 @@ test("webp is recognized from its header, and needs a codec to decode", () => {
   header.writeUInt16LE(640, 26)
   header.writeUInt16LE(480, 28)
   assert.equal(isWebp(header), true)
-  assert.deepEqual(readWebpDimensions(header), { width: 640, height: 480 })
-  assert.equal(readWebpDimensions(Buffer.from("not a webp")), undefined)
+  assert.deepEqual(webpSize(header), { width: 640, height: 480 })
+  assert.equal(webpSize(Buffer.from("not a webp")), undefined)
 
   registerWebpCodec({
     decode: () => ({ data: new Uint8Array(4), width: 1, height: 1 }),

@@ -1,5 +1,5 @@
 /** What a link preview's image may be: the sizes and types the platform accepts, checked before the image is fetched. */
-import { readGifDimensions, readJpegDimensions, readPngDimensions, readWebpOrHeicDimensions } from "../../shared/media/image-dimensions.ts";
+import { gifSize, jpegSize, pngSize, webpOrHeicSize } from "../../shared/media/image-dimensions.ts";
 
 export interface ImageSize { readonly width: number; readonly height: number }
 export interface PreviewImageBounds { readonly maxDimension: number; readonly encoding: unknown }
@@ -20,7 +20,7 @@ export function readIcoSize(bytes: Buffer): ImageSize | null {
   for (let index = 0; index < entries; index += 1) {
     const entry = 6 + index * 16, payload = bytes.readUInt32LE(entry + 12);
     const side = (value: number | undefined) => value === 0 ? 256 : value ?? 0;
-    for (const candidate of [{ width: side(bytes[entry]), height: side(bytes[entry + 1]) }, payload < bytes.length ? readPngDimensions(bytes.subarray(payload)) : null, readIcoBitmapSize(bytes, payload)]) {
+    for (const candidate of [{ width: side(bytes[entry]), height: side(bytes[entry + 1]) }, payload < bytes.length ? pngSize(bytes.subarray(payload)) : null, readIcoBitmapSize(bytes, payload)]) {
       if (candidate == null) continue;
       const pixels = candidate.width * candidate.height;
       if (pixels > largestPixels) { largestPixels = pixels; largest = candidate; }
@@ -37,7 +37,7 @@ export function decodeBase64DataUrl(dataUrl: string): Buffer | null {
 export function readEncodedImageSize(dataUrl: string): ImageSize | null {
   const bytes = decodeBase64DataUrl(dataUrl);
   if (bytes == null) return null;
-  for (const read of [readPngDimensions, readJpegDimensions, readGifDimensions, readIcoSize, readWebpOrHeicDimensions]) {
+  for (const read of [pngSize, jpegSize, gifSize, readIcoSize, webpOrHeicSize]) {
     const size = read(bytes); if (size != null && size.width > 0 && size.height > 0) return size;
   }
   return null;
