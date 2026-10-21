@@ -24,7 +24,7 @@ import { slateMessageLengthBucket } from "../ports/slate-analytics-types.ts";
 import { setTurnTraceHostBundleVersion } from "../send-trace-host.ts";
 import { withAutomationRunAnalytics, type AnalyticsClient } from "./analytics-service.ts";
 import { BoxLogShipper, isBoxLogShippingEnabled } from "./box-log-shipper.ts";
-import { forwardDesktopHealthWith } from "./desktop-health-forwarder.ts";
+import { forwardDesktopHealth } from "./desktop-health-forwarder.ts";
 import { createEventLoopTelemetry } from "./event-loop-telemetry.ts";
 import { forwardHostCrashMarkerWith, type HostCrashMarkerStore } from "./host-crash-marker.ts";
 import { HostLifecycleProgress } from "./host-lifecycle-progress.ts";
@@ -343,7 +343,7 @@ export class HostTelemetryService {
   async forwardDesktopHealth(): Promise<void> {
     const path = this.options.desktopHealthPath ?? SLATE_SUPERVISOR_DESKTOP_HEALTH_PATH;
     try {
-      await forwardDesktopHealthWith({
+      await forwardDesktopHealth({
         heartbeatMs: DESKTOP_HEALTH_HEARTBEAT_MS,
         readRaw: async () => {
           try {
