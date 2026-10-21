@@ -1,191 +1,174 @@
 /**
  * Moving a command's output to the platform without drowning it.
  *
- * A command can print faster than the platform can deliver, and a burst of small writes costs more than the
- * same bytes written once. So output is buffered and written on a short timer: what arrives between two
- * flushes is written together, and adjacent writes of the same stream are joined into one — which is what
- * turns a thousand one-line writes into one, without changing what the reader sees.
+ * A command can print faster than the platform can deliver, and a thousand one-line writes cost more than the same bytes
+ * written once. Both are answered by the same idea: a chunk is put in a buffer, the buffer is delivered on a short timer,
+ * and chunks of the same stream that are delivered together go out as one — which changes how many writes there are, never
+ * what the reader sees.
  *
- * The buffer is bounded. A command that prints without pause would otherwise grow the buffer until the
- * process is holding more than it can afford, so reaching the bound flushes immediately rather than waiting
- * for the timer. A stream that ends is flushed too, and a caller that needs the output to have arrived can
- * wait for the pump and then flush what is left.
+ * Two bounds keep that honest:
  *
- * A stream that fails to write is not a reason to fail the command: output is an observation of the command
- * rather than part of it.
+ * - **the buffer is bounded** — a command that never pauses would otherwise grow it until the process holds more than it
+ *   can afford, so reaching the bound delivers at once rather than waiting for the timer;
+ * - **delivery is one at a time** — a second delivery waits for the one in flight, and then delivers whatever arrived in the
+ *   meantime, so two deliveries can never overtake each other.
+ *
+ * And one rule keeps the command's fate separate from its output's: **a failed delivery is a lost observation, not a failed
+ * command**. Output is how the command is watched, not part of what it did.
  */
 
-type ShellOutputType = "stdout" | "stderr"
-type ShellOutputEvent = { type: ShellOutputType; data: Buffer }
-type ShellOutputWritable = { write(event: ShellOutputEvent): Promise<void> }
-type ShellOutputStream = AsyncIterable<Buffer> & {
-  on(event: "data", listener: (data: Buffer) => void): unknown
-}
-type ShellOutputLimiterOptions = {
-  flushIntervalMs?: number | undefined
-  maxBufferedBytes?: number | undefined
-}
-type AttachShellOutputStreamsOptions = {
-  stdout?: ShellOutputStream | null | undefined
-  stderr?: ShellOutputStream | null | undefined
-  writable: ShellOutputWritable
-  bufferOutputEvents?: boolean | undefined
-  outputLimiterOptions?: ShellOutputLimiterOptions | undefined
-}
+type StreamName = "stdout" | "stderr";
+type OutputChunk = { readonly type: StreamName; readonly data: Buffer };
+type OutputSink = { write(chunk: OutputChunk): Promise<void> };
+type OutputStream = AsyncIterable<Buffer> & { on(event: "data", listener: (data: Buffer) => void): unknown };
+type LimiterOptions = { readonly flushIntervalMs?: number | undefined; readonly maxBufferedBytes?: number | undefined };
+type AttachOptions = {
+  readonly stdout?: OutputStream | null | undefined;
+  readonly stderr?: OutputStream | null | undefined;
+  readonly writable: OutputSink;
+  readonly bufferOutputEvents?: boolean | undefined;
+  readonly outputLimiterOptions?: LimiterOptions | undefined;
+};
 
-const SHELL_OUTPUT_LIMITER_DEFAULTS = {
-  flushIntervalMs: 50,
-  maxBufferedBytes: 256 * 1024,
-}
+const DEFAULTS = { flushIntervalMs: 50, maxBufferedBytes: 256 * 1024 } as const;
 
-/** Writes of the same stream that arrive together become one write, in the order they arrived. */
-function coalesceAdjacentShellOutputEvents(events: readonly ShellOutputEvent[]): ShellOutputEvent[] {
-  if (events.length === 0) {
-    return []
-  }
-  const coalesced: ShellOutputEvent[] = []
-  let currentType = events[0]!.type
-  let dataChunks = [events[0]!.data]
-  for (let index = 1; index < events.length; index += 1) {
-    const next = events[index]!
-    if (next.type === currentType) {
-      dataChunks.push(next.data)
-      continue
+/**
+ * Chunks of the same stream that are delivered together become one chunk, in the order they arrived: a run of stdout is a
+ * single write, and a switch to stderr starts the next one.
+ */
+function joinAdjacent(chunks: readonly OutputChunk[]): OutputChunk[] {
+  const joined: OutputChunk[] = [];
+  let current: { type: StreamName; parts: Buffer[] } | undefined;
+  for (const chunk of chunks) {
+    if (current !== undefined && chunk.type === current.type) {
+      current.parts.push(chunk.data);
+      continue;
     }
-    coalesced.push({ type: currentType, data: Buffer.concat(dataChunks) })
-    currentType = next.type
-    dataChunks = [next.data]
+    if (current !== undefined) joined.push({ type: current.type, data: Buffer.concat(current.parts) });
+    current = { type: chunk.type, parts: [chunk.data] };
   }
-  coalesced.push({ type: currentType, data: Buffer.concat(dataChunks) })
-  return coalesced
+  if (current !== undefined) joined.push({ type: current.type, data: Buffer.concat(current.parts) });
+  return joined;
 }
 
-function toError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error))
+const asError = (error: unknown): Error => (error instanceof Error ? error : new Error(String(error)));
+
+/** A record of what a command printed, delivered in as few writes as the buffer allows. */
+class BufferedOutput {
+  private buffered: OutputChunk[] = [];
+  private bufferedBytes = 0;
+  private timer: ReturnType<typeof setTimeout> | undefined;
+  private inFlight: Promise<void> | undefined;
+  private readonly flushIntervalMs: number;
+  private readonly maxBufferedBytes: number;
+
+  constructor(private readonly sink: OutputSink, options?: LimiterOptions) {
+    this.flushIntervalMs = options?.flushIntervalMs ?? DEFAULTS.flushIntervalMs;
+    this.maxBufferedBytes = options?.maxBufferedBytes ?? DEFAULTS.maxBufferedBytes;
+  }
+
+  /** A chunk is buffered, and delivered early when the buffer is at its bound: the buffer is what is at risk. */
+  async accept(type: StreamName, data: Buffer): Promise<void> {
+    if (data.length === 0) return;
+    this.buffered.push({ type, data });
+    this.bufferedBytes += data.length;
+    if (this.bufferedBytes >= this.maxBufferedBytes) {
+      await this.drain();
+      return;
+    }
+    this.armTimer();
+  }
+
+  async drain(): Promise<void> {
+    this.disarmTimer();
+    // A delivery already running is waited for, and whatever arrived meanwhile goes out right after it.
+    if (this.inFlight !== undefined) {
+      await this.inFlight;
+      if (this.bufferedBytes > 0) await this.drain();
+      return;
+    }
+    if (this.bufferedBytes === 0) return;
+    const delivery = this.buffered;
+    this.buffered = [];
+    this.bufferedBytes = 0;
+    this.inFlight = this.deliver(delivery);
+    try {
+      await this.inFlight;
+    } finally {
+      this.inFlight = undefined;
+    }
+  }
+
+  /** A stream that ends is drained: what it printed last is not worth dropping for the want of a timer tick. */
+  async close(): Promise<void> {
+    await this.drain();
+  }
+
+  private armTimer(): void {
+    if (this.timer !== undefined) return;
+    this.timer = setTimeout(() => {
+      this.timer = undefined;
+      void this.drain();
+    }, this.flushIntervalMs);
+  }
+
+  private disarmTimer(): void {
+    if (this.timer === undefined) return;
+    clearTimeout(this.timer);
+    this.timer = undefined;
+  }
+
+  /** Each joined chunk is written on its own, and a write that fails is swallowed: the command already ran. */
+  private async deliver(chunks: readonly OutputChunk[]): Promise<void> {
+    for (const chunk of joinAdjacent(chunks)) {
+      try {
+        await this.sink.write(chunk);
+      } catch {
+        // Deliberately ignored.
+      }
+    }
+  }
 }
 
-export function attachShellOutputStreams(options: AttachShellOutputStreamsOptions): {
-  waitForOutput(): Promise<void>
-  flush(): Promise<void>
-} {
-  // Without buffering every chunk is written as it arrives, which is what a command that is being watched
-  // closely wants and what a chatty one must not do.
+/**
+ * Attaches a command's output streams to the sink the platform reads them through.
+ *
+ * Without buffering every chunk is written as it arrives, which is what watching a command closely wants and what a chatty
+ * one must not do. With buffering, both streams feed one limiter, so what the reader sees is in the order it was produced.
+ */
+export function attachShellOutputStreams(options: AttachOptions): { waitForOutput(): Promise<void>; flush(): Promise<void> } {
   if (!options.bufferOutputEvents) {
-    const writeOutputEvent = (type: ShellOutputType, data: Buffer): void => {
-      void options.writable.write({ type, data }).catch(() => {})
-    }
-    options.stdout?.on("data", (data) => {
-      writeOutputEvent("stdout", data)
-    })
-    options.stderr?.on("data", (data) => {
-      writeOutputEvent("stderr", data)
-    })
-    return {
-      async waitForOutput() {},
-      async flush() {},
-    }
+    voidPump(options.stdout, "stdout", options.writable);
+    voidPump(options.stderr, "stderr", options.writable);
+    return { async waitForOutput() {}, async flush() {} };
   }
-  const limiter = new ShellOutputLimiter(options.writable, options.outputLimiterOptions)
-  let outputPumpError: unknown
-  // Both streams feed the same limiter, so what the reader sees is in the order it was produced.
-  const outputPumpPromise = Promise.all([
-    pumpShellOutputStream(options.stdout, "stdout", limiter),
-    pumpShellOutputStream(options.stderr, "stderr", limiter),
-  ]).then(() => undefined).catch((error: unknown) => {
-    outputPumpError = error
-  })
+  const limiter = new BufferedOutput(options.writable, options.outputLimiterOptions);
+  let pumpError: unknown;
+  const pumped = Promise.all([pump(options.stdout, "stdout", limiter), pump(options.stderr, "stderr", limiter)])
+    .then(() => undefined)
+    .catch((error: unknown) => {
+      // A stream that failed is remembered and reported by the caller that waits for it, not thrown at the command.
+      pumpError = error;
+    });
   return {
     async waitForOutput() {
-      await outputPumpPromise
-      if (outputPumpError !== undefined) {
-        throw toError(outputPumpError)
-      }
+      await pumped;
+      if (pumpError !== undefined) throw asError(pumpError);
     },
     async flush() {
-      await limiter.flush()
+      await limiter.drain();
     },
-  }
+  };
 }
 
-async function pumpShellOutputStream(stream: ShellOutputStream | null | undefined, type: ShellOutputType, limiter: ShellOutputLimiter): Promise<void> {
-  if (!stream) return
-  for await (const chunk of stream) {
-    await limiter.push(type, chunk)
-  }
+/** No buffering: each chunk is written as it arrives, and a failed write is not the command's problem. */
+function voidPump(stream: OutputStream | null | undefined, type: StreamName, sink: OutputSink): void {
+  stream?.on("data", (data) => {
+    void sink.write({ type, data }).catch(() => {});
+  });
 }
 
-class ShellOutputLimiter {
-  private pending: ShellOutputEvent[] = []
-  private pendingBytes = 0
-  private flushTimeout: ReturnType<typeof setTimeout> | undefined
-  private flushPromise: Promise<void> | undefined
-  private readonly flushIntervalMs: number
-  private readonly maxBufferedBytes: number
-
-  constructor(private readonly writable: ShellOutputWritable, options?: ShellOutputLimiterOptions) {
-    this.flushIntervalMs = options?.flushIntervalMs ?? SHELL_OUTPUT_LIMITER_DEFAULTS.flushIntervalMs
-    this.maxBufferedBytes = options?.maxBufferedBytes ?? SHELL_OUTPUT_LIMITER_DEFAULTS.maxBufferedBytes
-  }
-
-  async push(type: ShellOutputType, data: Buffer): Promise<void> {
-    if (data.length === 0) return
-    this.pending.push({ type, data })
-    this.pendingBytes += data.length
-    // Reaching the bound flushes now rather than waiting for the timer, since the buffer is what is at risk.
-    if (this.pendingBytes >= this.maxBufferedBytes) {
-      await this.flush()
-      return
-    }
-    this.scheduleFlush()
-  }
-
-  async flush(): Promise<void> {
-    this.clearFlushTimeout()
-    // A flush that is already running is waited for, and whatever arrived meanwhile is flushed after it.
-    if (this.flushPromise) {
-      await this.flushPromise
-      if (this.pendingBytes > 0) {
-        await this.flush()
-      }
-      return
-    }
-    if (this.pendingBytes === 0) return
-    const pendingEvents = this.pending
-    this.pending = []
-    this.pendingBytes = 0
-    this.flushPromise = this.writeBufferedOutput(pendingEvents)
-    try {
-      await this.flushPromise
-    } finally {
-      this.flushPromise = undefined
-    }
-  }
-
-  async close(): Promise<void> {
-    await this.flush()
-  }
-
-  private scheduleFlush(): void {
-    if (this.flushTimeout !== undefined) return
-    this.flushTimeout = setTimeout(() => {
-      this.flushTimeout = undefined
-      void this.flush()
-    }, this.flushIntervalMs)
-  }
-
-  private clearFlushTimeout(): void {
-    if (this.flushTimeout === undefined) return
-    clearTimeout(this.flushTimeout)
-    this.flushTimeout = undefined
-  }
-
-  private async writeBufferedOutput(events: readonly ShellOutputEvent[]): Promise<void> {
-    for (const event of coalesceAdjacentShellOutputEvents(events)) {
-      try {
-        await this.writable.write(event)
-      } catch {
-        // A write that fails is a lost observation, not a failed command.
-      }
-    }
-  }
+async function pump(stream: OutputStream | null | undefined, type: StreamName, limiter: BufferedOutput): Promise<void> {
+  if (!stream) return;
+  for await (const data of stream) await limiter.accept(type, data);
 }
