@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url"
 
 import { SLATE_BOX_READ_TOOL_NAME, SLATE_BOX_SHELL_TOOL_NAME, SLATE_DEFAULT_EXTERNAL_MACHINE_ID, SLATE_EXTERNAL_MACHINES, SLATE_EXTERNAL_SHELL_TOOL_NAME, resolveSlateExternalMachine } from "../../source/shared/agents/agent-tool-names.ts"
 import { EMPTY_SLATE_SHARING_STATE, formatRemoteAgentId, isPublishableShareAvatarDataUrl, isRemoteAgentId, parseRemoteAgentId, REMOTE_AGENT_ID_PREFIX, SLATE_SHARE_AVATAR_DATA_URL_MAX_LENGTH } from "../../source/shared/agents/sharing.ts"
-import { branchReplyCounts, threadDescendants } from "../../source/shared/transcript-threads.ts"
+import { replyCountByBranch, branchEntries } from "../../source/shared/transcript-threads.ts"
 import { filePathFromFileUrl, isPathWithin } from "../../source/shared/node/paths.ts"
 import { parseTraceparent, SEND_TRACE_SAMPLE_RATIO } from "../../source/shared/observability/send-trace.ts"
 import { getWidgetAnswerLabel, slateWidgetSchema, summarizeWidget } from "../../source/shared/slate-widgets.ts"
@@ -75,19 +75,22 @@ test("a thread's descendants and reply counts are read from the replies", () => 
   // What is passed is the branch's own entries — the root it hangs off is not among them — and a reply to a
   // reply is found through the root it hangs off.
   const branch = entries.filter(entry => entry.branched === true)
-  assert.deepEqual(threadDescendants("root", branch).map(entry => entry.id), ["a", "b", "c"])
+  assert.deepEqual(branchEntries("root", branch).map(entry => entry.id), ["a", "b", "c"])
   // The counts are per branch root: every reply in a branch counts towards the entry it hangs off.
-  const counts = branchReplyCounts(branch)
+  const counts = replyCountByBranch(branch)
   assert.equal(counts.get("root"), 3)
   assert.equal(counts.get("a"), undefined)
   assert.equal(counts.get("d"), undefined)
   // A reply whose parent is not among the branch's entries hangs off that parent, which is how a branch that
   // starts in the middle of a thread is read.
-  assert.deepEqual(threadDescendants("missing", [{ id: "x", replyTo: "missing" }]).map(entry => entry.id), ["x"])
+  assert.deepEqual(branchEntries("missing", [{ id: "x", replyTo: "missing" }]).map(entry => entry.id), ["x"])
+  // An entry that replies to nothing is not in a branch: it is neither counted nor given a root of its own.
+  assert.deepEqual([...replyCountByBranch([{ id: "alone" }])], [])
+  assert.deepEqual(branchEntries("alone", [{ id: "alone" }]), [])
   // A cycle has no root at all rather than being walked forever.
   const cyclic = [{ id: "p", replyTo: "q", branched: true }, { id: "q", replyTo: "p", branched: true }]
-  assert.deepEqual(threadDescendants("p", cyclic), [])
-  assert.deepEqual(threadDescendants("q", cyclic), [])
+  assert.deepEqual(branchEntries("p", cyclic), [])
+  assert.deepEqual(branchEntries("q", cyclic), [])
 })
 
 test("a path is compared as a path rather than as a string", () => {

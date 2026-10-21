@@ -8,7 +8,7 @@ import { mkdirSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { getMainTranscriptEntries } from "../../../shared/transcript.ts";
-import { branchReplyCounts, threadDescendants } from "../../../shared/transcript-threads.ts";
+import { replyCountByBranch, branchEntries } from "../../../shared/transcript-threads.ts";
 import {
   EMPTY_SPEND_GUARD_STATE,
   EMPTY_UNREAD_STATE,
@@ -248,9 +248,9 @@ export class SlateAgentDb {
   getTranscriptPage(query: { beforeSeq?: number; sinceMs?: number; untilMs: number; limit: number }) { return this.closed ? { entries: [] } : readTranscriptPage(this.transcriptPageStatements(), query); }
   getTranscriptWindow(query: { beforeSeq?: number; limit: number }) { return this.closed ? { entries: [] } : readTranscriptWindow(this.transcriptPageStatements(), query, entries => this.threadCountsFor(entries as TranscriptEntry[])); }
   getTranscriptTail(query: { beforeSeq?: number; limit: number }) { return this.closed ? { entries: [] } : readTranscriptTail(this.transcriptPageStatements(), query); }
-  getThread(rootId: string) { if (this.closed) return { entries: [] }; const root = this.getEntryById(rootId); const descendants = threadDescendants(rootId, this.getBranchedEntries()); return { entries: root == null ? descendants : [root, ...descendants] }; }
+  getThread(rootId: string) { if (this.closed) return { entries: [] }; const root = this.getEntryById(rootId); const descendants = branchEntries(rootId, this.getBranchedEntries()); return { entries: root == null ? descendants : [root, ...descendants] }; }
   getBranchedEntries(): TranscriptEntry[] { if (this.closed) return []; return (this.statements.listBranchedEntries!.all() as Array<{ entry?: unknown }>).flatMap((row) => typeof row.entry === "string" ? (parseTranscriptEntry(row.entry) as TranscriptEntry | null) ?? [] : []); }
-  threadCountsFor(entries: readonly TranscriptEntry[]): Record<string, number> { const counts = branchReplyCounts(this.getBranchedEntries()); const result: Record<string, number> = {}; for (const entry of entries) { const count = counts.get(entry.id); if (count !== undefined) result[entry.id] = count; } return result; }
+  threadCountsFor(entries: readonly TranscriptEntry[]): Record<string, number> { const counts = replyCountByBranch(this.getBranchedEntries()); const result: Record<string, number> = {}; for (const entry of entries) { const count = counts.get(entry.id); if (count !== undefined) result[entry.id] = count; } return result; }
   getEntryById(id: string): TranscriptEntry | null { if (this.closed) return null; const row = this.statements.getTranscriptEntry!.get(id) as { entry?: unknown } | undefined; return typeof row?.entry === "string" ? parseTranscriptEntry(row.entry) as TranscriptEntry | null : null; }
   appendTranscriptEntry(entry: TranscriptEntry): boolean { let inserted = false; const committed = this.runWrite("appendTranscriptEntry", () => { inserted = Number((this.statements.insertTranscriptEntry!.run(entry.id, JSON.stringify(entry)) as { changes?: unknown }).changes) > 0; }); if (committed && inserted) publishTranscriptMutation({ kind: "entries-upserted", agentId: this.agentDirName, entries: [entry] }); return committed && inserted; }
   appendTranscriptEntries(entries: readonly TranscriptEntry[]): boolean { if (!entries.length) return true; const inserted: TranscriptEntry[] = []; const committed = this.runWrite("appendTranscriptEntries", () => { this.db.exec("BEGIN IMMEDIATE"); try { for (const entry of entries) if (Number((this.statements.insertTranscriptEntry!.run(entry.id, JSON.stringify(entry)) as { changes?: unknown }).changes) > 0) inserted.push(entry); this.db.exec("COMMIT"); } catch (error) { this.db.exec("ROLLBACK"); throw error; } }); if (committed && inserted.length) publishTranscriptMutation({ kind: "entries-upserted", agentId: this.agentDirName, entries: inserted }); return committed; }
