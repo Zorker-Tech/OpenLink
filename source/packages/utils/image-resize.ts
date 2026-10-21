@@ -8,7 +8,7 @@
  */
 
 import { getImageCodecs } from "./image-codecs.ts"
-import { decodeWebp, encodeWebp, isWebp, readWebpDimensions } from "./webp.ts"
+import { decodeWebp, encodeWebp, isWebp, webpSize } from "./webp.ts"
 
 export const MAX_IMAGE_DIMENSION = 1024
 export const MAX_WEBP_IMAGE_DIMENSION = 1280
@@ -53,7 +53,7 @@ export function targetDimensions(
 }
 
 async function resizeWebp(imageData: Buffer): Promise<{ data: Uint8Array; mimeType: "image/webp" }> {
-  const dimensions = readWebpDimensions(imageData)
+  const dimensions = webpSize(imageData)
   const withinCap = dimensions !== undefined &&
     !targetDimensions(dimensions.width, dimensions.height, MAX_WEBP_IMAGE_DIMENSION).needsResize
   if (withinCap && imageData.length <= MAX_IMAGE_SIZE_BYTES) {

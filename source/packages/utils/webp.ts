@@ -41,7 +41,7 @@ export function isWebp(buffer: Buffer): boolean {
 }
 
 /** The dimensions in the container header, or `undefined` when this layout is not one we parse. */
-export function readWebpDimensions(buffer: Buffer): { width: number; height: number } | undefined {
+export function webpSize(buffer: Buffer): { width: number; height: number } | undefined {
   if (!isWebp(buffer) || buffer.length < 16) return undefined
   const layout = buffer.toString("ascii", 12, 16)
   if (layout === "VP8 ") {
