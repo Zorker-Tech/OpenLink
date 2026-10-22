@@ -5,12 +5,12 @@
  * when the platform decides it should be, and a card that went stale is retired on the session it belongs to. */
 import { errorLogTag } from "../../shared/errors/summary.ts";
 import {
-  getMainTranscriptEntries,
-  getThreadTranscriptEntries,
-  isAgentPeerMessageEntry,
+  mainTranscriptOf,
+  threadOf,
+  isPeerMessage,
   SLATE_REACTION_SELF,
-  settlePendingAutoReviewApprovalEntry,
-  settlePendingLocalToolPermissionEntry,
+  settledAutoReviewEntry,
+  settledToolPermissionEntry,
 } from "../../shared/transcript.ts";
 import { buildSecretProvidedAck } from "../runner/tools/slate-secret-request.ts";
 import { SPEND_GUARD_VALUE_PREFIX } from "./slate-automation-spend-guard.ts";
@@ -200,7 +200,7 @@ export class WidgetResponses {
     if (session == null) return false;
     let retired = false;
     for (const entry of session.db.getTranscriptEntries()) {
-      const settled = settlePendingAutoReviewApprovalEntry(
+      const settled = settledAutoReviewEntry(
         entry,
         args.status,
         args.requestId,
@@ -300,7 +300,7 @@ export class WidgetResponses {
         entry.timestampMs >= args.ifPendingBeforeMs
       )
         continue;
-      const settled = settlePendingLocalToolPermissionEntry(
+      const settled = settledToolPermissionEntry(
         entry,
         "expired",
         args.requestId,
@@ -433,7 +433,7 @@ export class WidgetResponses {
             .some(
               (entry) =>
                 (isUserMessageEntry(entry) &&
-                  !isAgentPeerMessageEntry(entry)) ||
+                  !isPeerMessage(entry)) ||
                 (entry.kind === "send-message" &&
                   (entry.message as any)?.type === "widget" &&
                   (entry.respondedValue != null ||
@@ -442,11 +442,11 @@ export class WidgetResponses {
         );
       };
       const surfaces: Array<readonly TranscriptEntry[]> = [];
-      const main = getMainTranscriptEntries(
+      const main = mainTranscriptOf(
         transcript,
       ) as readonly TranscriptEntry[];
       if (main.some((entry) => entry.id === entryId)) surfaces.push(main);
-      const thread = getThreadTranscriptEntries(
+      const thread = threadOf(
         transcript,
         entryId,
       ) as readonly TranscriptEntry[];

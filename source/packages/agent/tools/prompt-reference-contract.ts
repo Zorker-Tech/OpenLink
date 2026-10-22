@@ -11,72 +11,81 @@
  * form it was written in before are recognized.
  */
 
-import { createHash, randomInt } from "node:crypto"
+import { createHash, randomInt } from "node:crypto";
 
-export const PROMPT_REFERENCE_ID_LENGTH = 7
-export const PROMPT_REFERENCE_ID_ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+/** How many characters a reference is, and what it may be made of. */
+export const PROMPT_REFERENCE_ID_LENGTH = 7;
+export const PROMPT_REFERENCE_ID_ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
-const PROMPT_REFERENCE_ID_ALPHABET_LENGTH = PROMPT_REFERENCE_ID_ALPHABET.length
-const PROMPT_REFERENCE_ID_REGEX_SOURCE = `[A-Za-z0-9]{${PROMPT_REFERENCE_ID_LENGTH}}`
-const USER_MESSAGE_ID_TAG_TEXT_PREFIX = "<user_message_id>"
-const USER_MESSAGE_ID_TAG_TEXT_SUFFIX = "</user_message_id>"
-const TOOL_CALL_ID_TAG_TEXT_PREFIX = "<tool_call_id>"
-const TOOL_CALL_ID_TAG_TEXT_SUFFIX = "</tool_call_id>"
-const PROMPT_REFERENCE_ID_PATTERN = new RegExp(`^${PROMPT_REFERENCE_ID_REGEX_SOURCE}$`)
-const LEADING_USER_MESSAGE_ID_TAG_PATTERN = new RegExp(
-  `^${USER_MESSAGE_ID_TAG_TEXT_PREFIX}\\s*(${PROMPT_REFERENCE_ID_REGEX_SOURCE})\\s*${USER_MESSAGE_ID_TAG_TEXT_SUFFIX}\\n?`,
-)
-const LEADING_USER_MESSAGE_ID_TAG_LEGACY_PATTERN = new RegExp(
-  `^${USER_MESSAGE_ID_TAG_TEXT_PREFIX}\\s*message_id=(${PROMPT_REFERENCE_ID_REGEX_SOURCE})\\s*${USER_MESSAGE_ID_TAG_TEXT_SUFFIX}\\n?`,
-)
+const ALPHABET_LENGTH = PROMPT_REFERENCE_ID_ALPHABET.length;
 
-/** Derived rather than random, so the same message always has the same reference. */
-export function createPromptReferenceIdFromMessageId(messageId: string): string {
-  const digest = createHash("sha256").update(messageId).digest()
-  let id = ""
-  for (let index = 0; index < PROMPT_REFERENCE_ID_LENGTH; index++) {
-    id += PROMPT_REFERENCE_ID_ALPHABET[(digest[index] as number) % PROMPT_REFERENCE_ID_ALPHABET_LENGTH]
+/** A reference as a pattern body: exactly this many characters of the alphabet. */
+const REFERENCE_PATTERN = `[A-Za-z0-9]{${PROMPT_REFERENCE_ID_LENGTH}}`;
+
+/** The tag a user message's reference is carried in, and the tag a tool call's is. */
+const USER_TAG = { open: "<user_message_id>", close: "</user_message_id>" } as const;
+const TOOL_TAG = { open: "<tool_call_id>", close: "</tool_call_id>" } as const;
+
+const REFERENCE_ID = new RegExp(`^${REFERENCE_PATTERN}$`);
+const LEADING_USER_TAG = new RegExp(`^${USER_TAG.open}\\s*(${REFERENCE_PATTERN})\\s*${USER_TAG.close}\\n?`);
+const LEADING_USER_TAG_LEGACY = new RegExp(`^${USER_TAG.open}\\s*message_id=(${REFERENCE_PATTERN})\\s*${USER_TAG.close}\\n?`);
+
+/** Seven characters of the alphabet, taken from these bytes. */
+function referenceFrom(bytes: ArrayLike<number>): string {
+  let id = "";
+  for (let index = 0; index < PROMPT_REFERENCE_ID_LENGTH; index += 1) {
+    id += PROMPT_REFERENCE_ID_ALPHABET[(bytes[index] as number) % ALPHABET_LENGTH];
   }
-  return id
+  return id;
 }
 
+/** The reference a message id always gets: derived rather than random, so the same message always has the same one. */
+export function createPromptReferenceIdFromMessageId(messageId: string): string {
+  return referenceFrom(createHash("sha256").update(messageId).digest());
+}
+
+/** A reference for this message, or a fresh one when there is no id to derive it from. */
 export function createPromptReferenceId(messageId?: string | null): string {
-  const normalized = messageId?.trim()
-  if (normalized !== undefined && normalized.length > 0) return createPromptReferenceIdFromMessageId(normalized)
-  let id = ""
-  for (let index = 0; index < PROMPT_REFERENCE_ID_LENGTH; index++) {
-    id += PROMPT_REFERENCE_ID_ALPHABET[randomInt(0, PROMPT_REFERENCE_ID_ALPHABET_LENGTH)]
-  }
-  return id
+  const normalized = messageId?.trim();
+  if (normalized !== undefined && normalized.length > 0) return createPromptReferenceIdFromMessageId(normalized);
+  const bytes: number[] = [];
+  for (let index = 0; index < PROMPT_REFERENCE_ID_LENGTH; index += 1) bytes.push(randomInt(0, ALPHABET_LENGTH));
+  return referenceFrom(bytes);
 }
 
 export function isValidPromptReferenceId(id: string): boolean {
-  return PROMPT_REFERENCE_ID_PATTERN.test(id)
+  return REFERENCE_ID.test(id);
+}
+
+/** A reference in its tag, as a prompt carries it. */
+function tagged(tag: { readonly open: string; readonly close: string }, id: string): string {
+  return `${tag.open}${id}${tag.close}`;
 }
 
 export function renderUserMessageIdTag(id: string): string {
-  return `${USER_MESSAGE_ID_TAG_TEXT_PREFIX}${id}${USER_MESSAGE_ID_TAG_TEXT_SUFFIX}`
+  return tagged(USER_TAG, id);
 }
 
-/** A tool call id usually ends in a reference already; the id itself is the fallback. */
+/** The reference a tool call already carries, when its id ends in one, and the id itself when it does not. */
 export function createToolCallReferenceId(toolCallId: string): string {
-  const normalized = toolCallId.trim()
-  if (normalized.length === 0) return ""
-  const separatorIndex = normalized.lastIndexOf("_")
-  if (separatorIndex < 0) return normalized
-  const suffix = normalized.slice(separatorIndex + 1)
-  if (suffix.length >= PROMPT_REFERENCE_ID_LENGTH) {
-    const candidate = suffix.slice(0, PROMPT_REFERENCE_ID_LENGTH)
-    if (isValidPromptReferenceId(candidate)) return candidate
-  }
-  return normalized
+  const normalized = toolCallId.trim();
+  if (normalized.length === 0) return "";
+  const separator = normalized.lastIndexOf("_");
+  if (separator < 0) return normalized;
+  const suffix = normalized.slice(separator + 1);
+  if (suffix.length < PROMPT_REFERENCE_ID_LENGTH) return normalized;
+  const candidate = suffix.slice(0, PROMPT_REFERENCE_ID_LENGTH);
+  return isValidPromptReferenceId(candidate) ? candidate : normalized;
 }
 
 export function renderToolCallIdTag(id: string): string {
-  return `${TOOL_CALL_ID_TAG_TEXT_PREFIX}${id}${TOOL_CALL_ID_TAG_TEXT_SUFFIX}`
+  return tagged(TOOL_TAG, id);
 }
 
+/** The reference a message's text opens with, and the text without that tag — in either spelling the tag has had. */
 export function parseLeadingUserMessageIdTag(text: string): { id: string; strippedText: string } | undefined {
-  const match = LEADING_USER_MESSAGE_ID_TAG_PATTERN.exec(text) ?? LEADING_USER_MESSAGE_ID_TAG_LEGACY_PATTERN.exec(text)
-  return match?.[1] === undefined ? undefined : { id: match[1], strippedText: text.slice(match[0].length) }
+  const match = LEADING_USER_TAG.exec(text) ?? LEADING_USER_TAG_LEGACY.exec(text);
+  if (match === null) return undefined;
+  const id = match[1];
+  return id === undefined ? undefined : { id, strippedText: text.slice(match[0].length) };
 }

@@ -8,7 +8,7 @@ import {
   clampAgentMessage,
 } from "../agents/agent-messaging.ts";
 import { slateErrorDetail } from "../ports/telemetry.ts";
-import { entryRaisesUserActivitySignal } from "../../shared/transcript.ts";
+import { raisesUserActivity } from "../../shared/transcript.ts";
 import { describeAgentRunError } from "./agent-run-error.ts";
 import { loadAgentInboundImages } from "./send-message-shaping.ts";
 import { nextEntryId } from "./transcript-entry-ids.ts";
@@ -298,7 +298,7 @@ export class AgentToAgentMessaging {
         fromAgent: message.from,
         ...(message.images?.length ? { images: message.images } : {}),
       };
-      raisesActivity ||= entryRaisesUserActivitySignal(entry);
+      raisesActivity ||= raisesUserActivity(entry);
       if (isActive) this.tm.appendEntry(entry);
       else session.db.appendTranscriptEntry(entry);
     }
@@ -333,7 +333,7 @@ export class AgentToAgentMessaging {
     if (isActive) this.tm.appendEntry(entry);
     else {
       session.db.appendTranscriptEntry(entry);
-      if (entryRaisesUserActivitySignal(entry))
+      if (raisesUserActivity(entry))
         this.tm.sessionStore.markSessionActivity(session);
       void this.tm.roster.emitAgentUpdate(session.id);
     }

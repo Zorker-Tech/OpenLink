@@ -12,7 +12,7 @@ import {
   SLATE_DEFAULT_AGENT_NAME,
   isSlateDefaultAgentName,
 } from "../../shared/agents/agents.ts";
-import { entryRaisesUserActivitySignal } from "../../shared/transcript.ts";
+import { raisesUserActivity } from "../../shared/transcript.ts";
 import { SlateSendNotPersistedError } from "./send-not-persisted-error.ts";
 import { getTranscript } from "./transcript-store.ts";
 import type {
@@ -65,7 +65,7 @@ export function appendAddressedEcho(
   const durable = session.db.appendTranscriptEntry(entry);
   appendOptions.onPersistOutcome(durable);
   if (!durable) throw new SlateSendNotPersistedError();
-  if (entryRaisesUserActivitySignal(entry))
+  if (raisesUserActivity(entry))
     tm.sessionStore.markSessionActivity(session);
   return { entry, isOnActiveTranscript: false };
 }

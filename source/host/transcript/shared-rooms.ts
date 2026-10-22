@@ -7,7 +7,7 @@ import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
 import { dirname } from "node:path";
 
-import { entryRaisesUserActivitySignal } from "../../shared/transcript.ts";
+import { raisesUserActivity } from "../../shared/transcript.ts";
 import { clampAgentMessage } from "../agents/agent-messaging.ts";
 import {
   formatRemoteAgentId,
@@ -563,7 +563,7 @@ export class SharedRooms {
     if (isActive) this.tm.appendEntry(entry);
     else {
       session.db.appendTranscriptEntry(entry);
-      if (entryRaisesUserActivitySignal(entry))
+      if (raisesUserActivity(entry))
         this.tm.sessionStore.markSessionActivity(session);
       void this.tm.roster.emitAgentUpdate(session.id);
     }
