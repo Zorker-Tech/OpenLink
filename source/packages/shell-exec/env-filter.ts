@@ -8,15 +8,25 @@
  * session's services.
  */
 
+/** The session variables a command must not inherit: they name the user's desktop sockets. */
 export const SOCKET_ENV_VARS_TO_SCRUB = ["SSH_AUTH_SOCK", "DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR", "WAYLAND_DISPLAY"] as const
 
+/** The variable that makes an Electron binary behave as a plain node: a shell child must not see it. */
+const ELECTRON_RUN_AS_NODE_VARIABLE = "ELECTRON_RUN_AS_NODE"
+
+/** The environment a child starts with: the one given, or the process's own. */
+function inheritedEnvironment(env: NodeJS.ProcessEnv | undefined): NodeJS.ProcessEnv {
+  return env || process.env
+}
+
 export function filterElectronEnv(env?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const { ELECTRON_RUN_AS_NODE: _discarded, ...filteredEnv } = env || process.env
-  return filteredEnv
+  const filtered = { ...inheritedEnvironment(env) }
+  delete filtered[ELECTRON_RUN_AS_NODE_VARIABLE]
+  return filtered
 }
 
 export function scrubSocketEnvVars(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const result = { ...env }
-  for (const key of SOCKET_ENV_VARS_TO_SCRUB) delete result[key]
-  return result
+  const scrubbed = { ...env }
+  for (const variableName of SOCKET_ENV_VARS_TO_SCRUB) delete scrubbed[variableName]
+  return scrubbed
 }
