@@ -146,33 +146,36 @@ export function buildTaskParameterSchemas(configs: readonly TaskSchemaSubagentCo
     includeSelfHostedTargets: options.cloudSubagentTargeting === true,
   })
 
+  /** The older placement fields, kept so a call written against them still parses. */
+  const legacyPlacementFields = {
+    environment: environmentField,
+    cloud_base_branch: cloudBaseBranchField,
+    ...(options.requestedEnvironmentBuildParamForSubagent ? { cloud_requested_environment_build_id: cloudRequestedEnvironmentBuildIdField } : {}),
+  }
+  /** The placement fields a schema carries: the machine object, the older fields, or both while parsing. */
+  const placementFieldsFor = (forParsing: boolean): Record<string, z.ZodTypeAny> => {
+    if (options.cloudSubagentTargeting === true) return { machine: machineField, ...(forParsing ? legacyPlacementFields : {}) }
+    return { ...legacyPlacementFields, ...(forParsing ? { machine: machineField } : {}) }
+  }
+  /** Placement fields without the cloud environment would be dropped, so a call that names one is refused. */
+  const rejectPlacementWithoutCloud = (args: Record<string, unknown>, ctx: z.RefinementCtx): void => {
+    if ("environment" in args && args.environment === "cloud") return
+    if ("cloud_base_branch" in args && args.cloud_base_branch !== undefined) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["cloud_base_branch"], message: "cloud_base_branch may only be specified when environment equals cloud" })
+    if ("cloud_requested_environment_build_id" in args && args.cloud_requested_environment_build_id !== undefined) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["cloud_requested_environment_build_id"], message: "cloud_requested_environment_build_id may only be specified when environment equals cloud" })
+  }
+
   const buildSchema = (descriptionField: z.ZodTypeAny, subagentTypeField: z.ZodTypeAny, forParsing: boolean): z.ZodTypeAny => {
     const baseObjectSchema = z.object({ description: descriptionField, prompt: promptField, model: modelField, resume: resumeField, subagent_type: subagentTypeField, file_attachments: fileAttachmentsField })
-    const legacyPlacementFields = {
-      environment: environmentField,
-      cloud_base_branch: cloudBaseBranchField,
-      ...(options.requestedEnvironmentBuildParamForSubagent ? { cloud_requested_environment_build_id: cloudRequestedEnvironmentBuildIdField } : {}),
-    }
-    // Placement arrives either as a machine object or as the older environment fields. A session that
-    // targets cloud machines is shown the machine object and parses the old fields too, so a prompt
-    // written before the change still runs; every other session gets the older shape.
     const schemaWithEnvironment = !options.environmentParamForSubagent
       ? baseObjectSchema
-      : options.cloudSubagentTargeting === true
-        ? baseObjectSchema.extend({ machine: machineField, ...(forParsing ? legacyPlacementFields : {}) })
-        : baseObjectSchema.extend({ ...legacyPlacementFields, ...(forParsing ? { machine: machineField } : {}) })
+      : baseObjectSchema.extend(placementFieldsFor(forParsing))
     const schemaWithInterrupt = options.useClientSideSubagent && options.enableSubagentInterrupt ? schemaWithEnvironment.extend({ interrupt: interruptField }) : schemaWithEnvironment
     const objectSchema = options.includeRunInBackgroundInTaskSchema === true
       ? schemaWithInterrupt.extend({
         run_in_background: z.preprocess(value => value === "true" ? true : value === "false" ? false : value, z.boolean()).optional().describe("Run the agent in the background (returns output_file path to check later)." + (options.defaultSubagentsRunInBackground === true ? " Defaults true." : "") + " If this is false, you will be blocked until the agent completes." + (options.enableMultitaskMode ? " If the user is currently in Multitask Mode, always set this parameter to True." : "") + (options.taskToolNotificationHintsEnabled ? " When true, the background subagent will send a notification when it completes." : "")),
       })
       : schemaWithInterrupt
-    return objectSchema.superRefine((args, ctx) => {
-      if ("environment" in args && args.environment === "cloud") return
-      // A placement field without the cloud environment would be dropped, so it is refused instead.
-      if ("cloud_base_branch" in args && args.cloud_base_branch !== undefined) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["cloud_base_branch"], message: "cloud_base_branch may only be specified when environment equals cloud" })
-      if ("cloud_requested_environment_build_id" in args && args.cloud_requested_environment_build_id !== undefined) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["cloud_requested_environment_build_id"], message: "cloud_requested_environment_build_id may only be specified when environment equals cloud" })
-    })
+    return objectSchema.superRefine(rejectPlacementWithoutCloud)
   }
   const descriptionFieldDescription = "A short, user-friendly title for the subagent. This appears in the UI as the subagent's name. Make it concrete and distinct, consider recent titles to avoid reuse. For resumed subagents which you are prompting to work on a separate task, give an updated description based on the latest work the subagent is performing. (Do not rename if the subagent is continuing work on the same high-level task.)"
   return {
@@ -224,6 +227,17 @@ interface TaskDescriptionBaseOptions {
   readonly subagentExperimentGroup?: string | undefined
 }
 
+/** What a resumed agent does this turn: resume it, or answer with why it cannot be resumed. */
+function resumeBehaviorFor(args: TaskDescriptionBaseOptions): string {
+  return args.useClientSideSubagent ? args.enableSubagentInterrupt ? "This sends a follow-up message after the agent has completed, preserving existing context. If the agent is still running, the request fails unless `interrupt` is true. Set `interrupt` to true only when the user explicitly wants to interrupt the running agent." : "This sends a follow-up message after the agent has completed, preserving existing context. If the agent is still running, the request fails; wait for completion before resuming." : "When resumed, the agent continues with its full previous context preserved."
+}
+
+/** The note about where a background result goes, when notifications are on. */
+function resultVisibilityNoteFor(args: TaskDescriptionBaseOptions): string {
+  return args.taskToolNotificationHintsEnabled
+    ? args.hideAsyncSubagentTaskNotifications ? "- When the agent is done, it will return a single message back to you. Specify exactly what information the agent should return back to you." : "- When the agent is done, it will return a single message back to you. Specify exactly what information the agent should return back to you. Background subagent completion messages already include a user-visible summary portion; do not summarize or restate a single background subagent's result by default. Respond only when the user asks, multiple background subagents need synthesis, or the background subagent reports a blocker requiring parent action outside of the user-visible high level summary." : "- When the agent is done, it will return a single message back to you. Specify exactly what information the agent should return back to you. The result returned by the agent is not visible to the user. To show the user the result, you should send a text message back to the user with a concise summary of the result."
+}
+
 export function buildTaskToolDescriptionBase(args: TaskDescriptionBaseOptions): string {
   const includeExploreProactiveRecommendation = !args.subagentModelsInUserInfo && args.subagentExperimentGroup !== "no-subagent-unless-asked"
   const doNotUseExamples = [
@@ -242,9 +256,6 @@ Examples:
 - user: "What is the codebase structure?" assistant: [Uses the ${args.toolLabel} tool with subagent_type="${EXPLORE_SUBAGENT_TYPE}"]
 
 If it is possible to explore different areas of the codebase in parallel, you should launch multiple agents concurrently.` : ""
-  const resultVisibilityNote = args.taskToolNotificationHintsEnabled
-    ? args.hideAsyncSubagentTaskNotifications ? "- When the agent is done, it will return a single message back to you. Specify exactly what information the agent should return back to you." : "- When the agent is done, it will return a single message back to you. Specify exactly what information the agent should return back to you. Background subagent completion messages already include a user-visible summary portion; do not summarize or restate a single background subagent's result by default. Respond only when the user asks, multiple background subagents need synthesis, or the background subagent reports a blocker requiring parent action outside of the user-visible high level summary." : "- When the agent is done, it will return a single message back to you. Specify exactly what information the agent should return back to you. The result returned by the agent is not visible to the user. To show the user the result, you should send a text message back to the user with a concise summary of the result."
-  const resumeBehavior = args.useClientSideSubagent ? args.enableSubagentInterrupt ? "This sends a follow-up message after the agent has completed, preserving existing context. If the agent is still running, the request fails unless `interrupt` is true. Set `interrupt` to true only when the user explicitly wants to interrupt the running agent." : "This sends a follow-up message after the agent has completed, preserving existing context. If the agent is still running, the request fails; wait for completion before resuming." : "When resumed, the agent continues with its full previous context preserved."
   return `Launch a new agent to handle complex, multi-step tasks autonomously.
 
 The ${args.toolLabel} tool launches specialized subagents (subprocesses) that autonomously handle complex tasks. Each subagent_type has specific capabilities and tools available to it.
@@ -259,8 +270,8 @@ ${doNotUseExamples}` : ""}
 Usage notes:
 - Always include a short description (3-5 words) summarizing what the agent will do
 - Launch multiple agents concurrently whenever possible, to maximize performance; to do that, use a single message with multiple tool uses.
-${resultVisibilityNote}
-- Agents can be resumed using the \`resume\` parameter by passing the agent ID from a previous invocation. ${resumeBehavior}${args.allowResumeSelfFork ? ` You can also set \`resume\` to "${RESUME_SELF_SENTINEL}" to fork the current parent agent into a new child subagent.` : ""} When NOT resuming, each invocation starts fresh and you should provide a detailed task description with all necessary context for the agent to perform its task autonomously.
+${resultVisibilityNoteFor(args)}
+- Agents can be resumed using the \`resume\` parameter by passing the agent ID from a previous invocation. ${resumeBehaviorFor(args)}${args.allowResumeSelfFork ? ` You can also set \`resume\` to "${RESUME_SELF_SENTINEL}" to fork the current parent agent into a new child subagent.` : ""} When NOT resuming, each invocation starts fresh and you should provide a detailed task description with all necessary context for the agent to perform its task autonomously.
 ${args.enableAgentChatLinks ? "- In user-facing responses, you may link to agents and subagents with the `[Name](id)` format.\n" : ""}- When using the ${args.toolLabel} tool, the subagent invocation does not have access to the user's message or prior assistant steps. Therefore, you should provide a highly detailed task description with all necessary context for the subagent to perform its task autonomously.
 - The subagent's outputs should generally be trusted
 - Clearly tell the subagent which tasks you want it to perform, since it is not aware of the user's intent or your prior assistant steps (tool calls, messages, or context).
@@ -282,28 +293,19 @@ function formatSubagentConfigForDescription(config: TaskSchemaSubagentConfig, de
 export function buildTaskToolDescriptionParts(options: TaskDescriptionPartsOptions): TaskDescriptionParts {
   const catalogsInUserInfo = options.catalogsInUserInfo ?? options.subagentModelsInUserInfo
   const subagentInheritGuidance = options.subagentInheritGuidance ?? options.subagentModelsInUserInfo
+  const { configs, defaultResumeMode, subagentModels, ...baseOptions } = options
   const baseDescription = buildTaskToolDescriptionBase({
-    includeExploreSubagent: options.includeExploreSubagent && options.configs.some(config => getSubagentTypeName(config.subagent_type) === EXPLORE_SUBAGENT_TYPE),
-    subagentModelsInUserInfo: options.subagentModelsInUserInfo,
-    useClientSideSubagent: options.useClientSideSubagent,
-    enableSubagentInterrupt: options.enableSubagentInterrupt,
-    taskToolNotificationHintsEnabled: options.taskToolNotificationHintsEnabled,
-    hideAsyncSubagentTaskNotifications: options.hideAsyncSubagentTaskNotifications,
-    allowResumeSelfFork: options.allowResumeSelfFork,
-    enableAgentChatLinks: options.enableAgentChatLinks,
-    toolLabel: options.toolLabel,
-    readToolName: options.readToolName,
-    globToolName: options.globToolName,
-    subagentExperimentGroup: options.subagentExperimentGroup,
+    ...baseOptions,
+    includeExploreSubagent: options.includeExploreSubagent && configs.some(config => getSubagentTypeName(config.subagent_type) === EXPLORE_SUBAGENT_TYPE),
   })
   const sections = [baseDescription]
   let subagentTypeDescriptionsText = ""
-  if (options.configs.length > 0) {
-    subagentTypeDescriptionsText = `Available subagent_types and a quick description of what they do:\n${options.configs.map(config => formatSubagentConfigForDescription(config, options.defaultResumeMode)).join("\n")}`
+  if (configs.length > 0) {
+    subagentTypeDescriptionsText = `Available subagent_types and a quick description of what they do:\n${configs.map(config => formatSubagentConfigForDescription(config, defaultResumeMode)).join("\n")}`
     // A catalogue that lives in the user-info message is pointed at rather than repeated here.
     sections.push(catalogsInUserInfo ? "Available subagent_types and descriptions are listed in <available_subagent_types> in the initial user-info message at the start of this conversation." : subagentTypeDescriptionsText)
   }
-  const modelsDescription = buildAvailableModelsDescription(options.subagentModels, subagentInheritGuidance)
+  const modelsDescription = buildAvailableModelsDescription(subagentModels, subagentInheritGuidance)
   sections.push(catalogsInUserInfo ? "Available model slugs for subagents are listed in <available_subagent_models> in the initial user-info message at the start of this conversation." : modelsDescription)
   return { baseDescription, subagentTypeDescriptionsText, modelsDescription, fullDescription: sections.join("\n\n") }
 }
