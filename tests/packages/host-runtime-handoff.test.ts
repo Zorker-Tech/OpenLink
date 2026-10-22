@@ -15,7 +15,7 @@ import { SLATE_SUPERVISOR_COMMAND_PATH, SLATE_SUPERVISOR_DIR } from "../../sourc
 import { SlateConnectorSecretStore } from "../../source/host/extensions/session/connector-secret-store.ts";
 import { DEFAULT_HIDDEN_FROM_SIDEBAR, DEFAULT_NOTIFY_ON_AGENT_UPDATES, getSlateSettingsPath, agentSettingsAt, SLATE_SETTINGS_FILENAME, writeAgentSettings } from "../../source/host/agents/settings-file.ts";
 import { BOX_STORE_PACK_INDEX_KEY, PACK_MEMBER_MAX_BYTES, PACK_INDEX_VERSION } from "../../source/host/boxes/box-store-sync/box-store-pack.ts";
-import { resolveCsnapsBinPath } from "../../source/host/extensions/codebase-telemetry/csnaps-capability.ts";
+import { csnapsPath } from "../../source/host/extensions/codebase-telemetry/csnaps-capability.ts";
 import { tombstoneKey } from "../../source/host/rooms/xuser-room-tombstone-store.ts";
 import { FAILED_RESOLUTION_RETRY_MS, MAX_CACHED_RENDITIONS, VIDEO_TOOL_TIMEOUT_MS } from "../../source/host/attachments/video-playback-rendition.ts";
 import { TURN_EMPTY_DELIVERY_EVENT } from "../../source/host/telemetry/turn-empty-delivery-telemetry.ts";
@@ -100,8 +100,8 @@ describe("packing a box's store", () => {
 
 describe("the codebase-telemetry helper", () => {
   it("is looked for beside the host bundle unless an override names it", () => {
-    assert.equal(resolveCsnapsBinPath({ SLATE_CSNAPS_BIN: "/opt/csnaps" } as NodeJS.ProcessEnv), "/opt/csnaps");
-    assert.match(resolveCsnapsBinPath({} as NodeJS.ProcessEnv), /extensions\/codebase-telemetry\/csnaps$/);
+    assert.equal(csnapsPath({ SLATE_CSNAPS_BIN: "/opt/csnaps" } as NodeJS.ProcessEnv), "/opt/csnaps");
+    assert.match(csnapsPath({} as NodeJS.ProcessEnv), /extensions\/codebase-telemetry\/csnaps$/);
   });
 });
 

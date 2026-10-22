@@ -29,7 +29,7 @@ import {
   type CsnapsHandle,
   type CsnapsState,
 } from "../../source/host/extensions/codebase-telemetry/codebase-telemetry-adapter.ts";
-import { resolveCsnapsCapability } from "../../source/host/extensions/codebase-telemetry/csnaps-capability.ts";
+import { csnapsAvailability } from "../../source/host/extensions/codebase-telemetry/csnaps-capability.ts";
 import type { Clock } from "../../source/host/extensions/scheduling.ts";
 
 /** A scratch directory the capability check can look at. */
@@ -487,17 +487,17 @@ describe("the adapter in front of the helper", () => {  it("starts the helper wi
 
 describe("whether the helper is there to be run", () => {
   it("tells a helper that is not there from one that is there but cannot run", () => {
-    const absent = resolveCsnapsCapability({ SLATE_CSNAPS_BIN: join(scratch, "not-there") } as NodeJS.ProcessEnv);
+    const absent = csnapsAvailability({ SLATE_CSNAPS_BIN: join(scratch, "not-there") } as NodeJS.ProcessEnv);
     assert.deepEqual(absent, { available: false, executablePath: join(scratch, "not-there"), reason: "missing" });
     const directory = mkdtempSync(join(scratch, "a-directory-"));
-    assert.deepEqual(resolveCsnapsCapability({ SLATE_CSNAPS_BIN: directory } as NodeJS.ProcessEnv), { available: false, executablePath: directory, reason: "not-file" });
+    assert.deepEqual(csnapsAvailability({ SLATE_CSNAPS_BIN: directory } as NodeJS.ProcessEnv), { available: false, executablePath: directory, reason: "not-file" });
     const readable = join(scratch, "read-but-not-runnable");
     writeFileSync(readable, "#!/bin/sh\n");
     chmodSync(readable, 0o644);
-    assert.deepEqual(resolveCsnapsCapability({ SLATE_CSNAPS_BIN: readable } as NodeJS.ProcessEnv), { available: false, executablePath: readable, reason: "not-executable" });
+    assert.deepEqual(csnapsAvailability({ SLATE_CSNAPS_BIN: readable } as NodeJS.ProcessEnv), { available: false, executablePath: readable, reason: "not-executable" });
     const runnable = join(scratch, "runnable");
     writeFileSync(runnable, "#!/bin/sh\n");
     chmodSync(runnable, 0o755);
-    assert.deepEqual(resolveCsnapsCapability({ SLATE_CSNAPS_BIN: runnable } as NodeJS.ProcessEnv), { available: true, executablePath: runnable });
+    assert.deepEqual(csnapsAvailability({ SLATE_CSNAPS_BIN: runnable } as NodeJS.ProcessEnv), { available: true, executablePath: runnable });
   });
 });

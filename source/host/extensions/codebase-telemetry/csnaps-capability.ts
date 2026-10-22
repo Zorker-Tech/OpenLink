@@ -8,27 +8,32 @@ import { accessSync, constants, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export function resolveCsnapsBinPath(env: NodeJS.ProcessEnv = process.env): string {
-  const override = env.SLATE_CSNAPS_BIN?.trim();
-  if (override) return override;
-  const hostBundleDirectory =
-    typeof __dirname === "string"
-      ? __dirname
-      : dirname(fileURLToPath(import.meta.url));
-  return join(hostBundleDirectory, "extensions", "codebase-telemetry", "csnaps");
+/** Where a helper with this name lives, when a build lays it out beside the host bundle. */
+const HELPER_SEGMENTS: readonly string[] = ["extensions", "codebase-telemetry", "csnaps"];
+
+/** The directory the host bundle was loaded from, in a build that has a `__dirname` to name. */
+function hostBundleDirectory(): string {
+  return typeof __dirname === "string" ? __dirname : dirname(fileURLToPath(import.meta.url));
 }
 
-export function resolveCsnapsCapability(env: NodeJS.ProcessEnv = process.env):
+export function csnapsPath(env: NodeJS.ProcessEnv = process.env): string {
+  const override = env.SLATE_CSNAPS_BIN?.trim();
+  if (override) return override;
+  return join(hostBundleDirectory(), ...HELPER_SEGMENTS);
+}
+
+export function csnapsAvailability(env: NodeJS.ProcessEnv = process.env):
   | { readonly available: true; readonly executablePath: string }
   | { readonly available: false; readonly executablePath: string; readonly reason: "missing" | "not-file" | "not-executable" } {
-  const executablePath = resolveCsnapsBinPath(env);
+  const executablePath = csnapsPath(env);
+  // Three questions in the order they can be answered: is it there, is it a file, may it be run.
+  let isFile: boolean;
   try {
-    if (!statSync(executablePath).isFile()) {
-      return { available: false, executablePath, reason: "not-file" };
-    }
+    isFile = statSync(executablePath).isFile();
   } catch {
     return { available: false, executablePath, reason: "missing" };
   }
+  if (!isFile) return { available: false, executablePath, reason: "not-file" };
   try {
     accessSync(executablePath, constants.X_OK);
   } catch {

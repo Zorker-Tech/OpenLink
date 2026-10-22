@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { after, describe, it } from "node:test";
 
 import { codebaseTelemetryAdapterOptions, codebaseTelemetryExtension, CODEBASE_UUID_STATE_FILENAME, createCodebaseTelemetryPolicies, PRIVACY_REFRESH_INTERVAL_MS, SNAPSHOTS_BASE_DIR, SNAPSHOT_UPLOAD_INTERVAL_MS } from "../../source/host/extensions/codebase-telemetry/extension.ts";
-import { resolveCsnapsBinPath, resolveCsnapsCapability } from "../../source/host/extensions/codebase-telemetry/csnaps-capability.ts";
+import { csnapsPath, csnapsAvailability } from "../../source/host/extensions/codebase-telemetry/csnaps-capability.ts";
 import { HostExtensions } from "../../source/host/extensions/extension-ids.generated.ts";
 
 const scratch = mkdtempSync(join(tmpdir(), "slate-telemetry-extension-"));
@@ -101,8 +101,8 @@ describe("the codebase-telemetry extension", () => {
     assert.equal(codebaseTelemetryExtension.id, HostExtensions.CodebaseTelemetry);
     assert.deepEqual(codebaseTelemetryExtension.dependencies, [HostExtensions.Auth, HostExtensions.Experiments]);
     // The two readers the rest of the host uses are re-offered from here.
-    assert.equal(typeof resolveCsnapsBinPath, "function");
-    assert.equal(typeof resolveCsnapsCapability, "function");
+    assert.equal(typeof csnapsPath, "function");
+    assert.equal(typeof csnapsAvailability, "function");
     assert.deepEqual([CODEBASE_UUID_STATE_FILENAME, SNAPSHOTS_BASE_DIR, SNAPSHOT_UPLOAD_INTERVAL_MS, PRIVACY_REFRESH_INTERVAL_MS], ["telemetry/codebase-uuids.json", "/var/lib/slate/telemetry/codebase", 300_000, 300_000]);
   });
 
