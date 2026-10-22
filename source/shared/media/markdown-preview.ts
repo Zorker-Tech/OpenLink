@@ -3,8 +3,14 @@
  *
  * A preview shows what a document says rather than how it is written, so the transforms strip the marks: code fences,
  * emphasis, links and images, headings, quotes, list markers, and the math delimiters a document may use.
+ *
+ * The order matters — an image has to be recognised before the link inside it, and a bold run before the single
+ * asterisks it is made of — so the transforms are one list applied in order rather than a set of independent rules.
  */
-const PREVIEW_TRANSFORMS: ReadonlyArray<readonly [RegExp, string]> = [
+type PreviewTransform = readonly [pattern: RegExp, replacement: string];
+
+/** The marks a preview does not show, in the order they have to be removed. */
+const MARKS: readonly PreviewTransform[] = [
   [/`+/g, ""],
   [/!\[([^\]]*)\]\([^)]*\)/g, "$1"],
   [/\[([^\]]+)\]\([^)]*\)/g, "$1"],
@@ -23,10 +29,8 @@ const PREVIEW_TRANSFORMS: ReadonlyArray<readonly [RegExp, string]> = [
   [/\|/g, " "],
 ];
 
-export function markdownToPreviewText(input: string): string {
-  const flattened = PREVIEW_TRANSFORMS.reduce(
-    (text, [pattern, replacement]) => text.replace(pattern, replacement),
-    input,
-  );
-  return flattened.replace(/\s+/g, " ").trim();
+/** The marks removed, in order, leaving one run of text: applying the list is what keeps each rule where it belongs. */
+export function previewTextOf(input: string): string {
+  const stripped = MARKS.reduce((text, [pattern, replacement]) => text.replace(pattern, replacement), input);
+  return stripped.replace(/\s+/g, " ").trim();
 }

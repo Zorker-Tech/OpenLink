@@ -5,8 +5,8 @@ import { readSlateModelExperimentEnvOverride, resolveSlateModelExperimentState, 
 import { SLATE_DEFAULT_MODEL_ID, SLATE_DEFAULT_MODEL_SELECTION } from "../../source/shared/agents/agent-model.ts"
 import { MAX_MODEL_ID_LENGTH, MAX_PARAMETERS, resolveSlateDefaultModelConfig, ROUTED_MODEL_IDS } from "../../source/shared/node/experiments/slate-model-config.ts"
 import { imageContentType, readCappedImageBytes } from "../../source/shared/node/http-image.ts"
-import { LISTENER_INTEGRATIONS } from "../../source/shared/listener-integrations.ts"
-import { markdownToPreviewText } from "../../source/shared/media/markdown-preview.ts"
+import { LISTENER_PLATFORMS } from "../../source/shared/listener-integrations.ts"
+import { previewTextOf } from "../../source/shared/media/markdown-preview.ts"
 import { isWebUrl, openableExternalUrl } from "../../source/shared/external-url-policy.ts"
 import { decideBoxHandBack } from "../../source/shared/forever-box.ts"
 import { isValidVncLivenessReport, VNC_LIVENESS_CHANNEL, VNC_LIVENESS_MIN_IMPACTFUL_INPUTS, VNC_LIVENESS_WINDOW_MS } from "../../source/shared/vnc-liveness.ts"
@@ -82,12 +82,12 @@ test("an image is read only when the response says it is one, and only up to a l
 })
 
 test("the platforms an automation can listen to are the ones the platform offers", () => {
-  assert.deepEqual(LISTENER_INTEGRATIONS.map(integration => integration.platform), ["github", "slack"])
-  assert.equal(LISTENER_INTEGRATIONS.every(integration => integration.displayName.length > 0 && integration.blurb.length > 0), true)
+  assert.deepEqual(LISTENER_PLATFORMS.map(integration => integration.platform), ["github", "slack"])
+  assert.equal(LISTENER_PLATFORMS.every(integration => integration.displayName.length > 0 && integration.blurb.length > 0), true)
 })
 
 test("a markdown document's preview is its text", () => {
-  const preview = markdownToPreviewText("# Title\n\nSome **bold** and _italic_ text with a [link](https://example.com).\n\n- item\n")
+  const preview = previewTextOf("# Title\n\nSome **bold** and _italic_ text with a [link](https://example.com).\n\n- item\n")
   assert.match(preview, /Title/)
   assert.match(preview, /Some bold and italic text with a link\./)
   assert.equal(preview.includes("**"), false)
