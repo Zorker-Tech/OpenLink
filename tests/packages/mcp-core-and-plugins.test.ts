@@ -61,6 +61,27 @@ test("a variable is a secret when its name says so, not when it merely contains 
   assert.equal(isSecretPluginVariableName("PASSWORD"), true)
   assert.equal(isSecretPluginVariableName("KEYCHAIN"), false)
   assert.equal(isSecretPluginVariableName("monkey"), false)
+
+  // Words are cut at camel humps, acronym runs and separators before they are compared.
+  assert.equal(isSecretPluginVariableName("HTTPKey"), true, "an acronym followed by a word is two words")
+  assert.equal(isSecretPluginVariableName("apiKEY"), true)
+  assert.equal(isSecretPluginVariableName("api-key"), true)
+  assert.equal(isSecretPluginVariableName("api.key"), true)
+  assert.equal(isSecretPluginVariableName("api key"), true)
+  assert.equal(isSecretPluginVariableName("api/v1/key"), true)
+  assert.equal(isSecretPluginVariableName("api\\key"), true)
+  assert.equal(isSecretPluginVariableName("api:key"), true)
+  assert.equal(isSecretPluginVariableName("sEcReT"), false, "a mixed-case word is cut at every hump, so it never reads as one word")
+  assert.equal(isSecretPluginVariableName("CREDENTIALS"), true)
+  assert.equal(isSecretPluginVariableName("SECRETS"), false, "a plural that is not in the word list is not the word")
+  assert.equal(isSecretPluginVariableName("key2"), false)
+  assert.equal(isSecretPluginVariableName("key_2"), true)
+  assert.equal(isSecretPluginVariableName("x2Key"), true, "a digit followed by a capital is a hump too")
+  assert.equal(isSecretPluginVariableName(""), false)
+  assert.equal(isSecretPluginVariableName("---"), false)
+  assert.equal(isSecretPluginVariableName("ümlaut_key"), true, "a non-letter before the word is a separator")
+  assert.equal(isSecretPluginVariableName("KEYÉ"), true, "a letter outside ascii is a separator, so the name ends at the word")
+  assert.throws(() => isSecretPluginVariableName(7 as never), TypeError, "a name that is not a string is a caller's mistake")
 })
 
 test("a plugin's capabilities are the ones it may ask for, each of them once", () => {
