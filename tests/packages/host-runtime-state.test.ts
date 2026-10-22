@@ -23,7 +23,7 @@ import { createInMemoryXuserTurnDedupe, SlateXuserTurnDedupeStore, XUSER_TURN_DE
 import { loadSelectedImageInputs } from "../../source/host/selected-image-inputs.ts";
 import { assertMembersAreNotGroups, buildGroupMemberSystemPrompt, buildGroupRedriveNote, buildGroupTurnPrompt, describeGroup, formatGroupChatTag, formatGroupHistory, formatGroupLine, GROUP_CHAT_TAG_PREFIX, GROUP_CONFIG_VERSION, GROUP_MAX_MEMBER_TURNS, GROUP_MAX_MESSAGES_PER_TURN, GROUP_MAX_ROUNDS, GROUP_PROMPT_HISTORY_LIMIT, groupDisplayName, isGroupTurnPromptText, isPassContent, isPotentialPassPrefix, isSameMemberSet, memberMentionHandles, messagesSinceMemberLastSpoke, orderRoundSpeakers, parseGroupMentions, resolveResponders, SHARED_ROOM_HISTORY_LIMIT, SLATE_HIDDEN_PROMPT_MARKER, SlateGroupNestingError, type GroupMessage } from "../../source/host/groups/group-chat.ts";
 import { createProductionRunnerContext } from "../../source/host/runner-context-production-provider.ts";
-import { BROWSER_USE_SUBAGENT_TYPE, isBrowserUseSubagentType } from "../../source/host/runner/tools/slate-browser-use-subagent.ts";
+import { BROWSER_USE_SUBAGENT_DESCRIPTION, BROWSER_USE_SUBAGENT_TYPE, createSlateBrowserUseSubagentConfig, isBrowserUseSubagentType } from "../../source/host/runner/tools/slate-browser-use-subagent.ts";
 import { hostEventBusTelemetry, HOST_EVENT_BUS_EVENT } from "../../source/host/telemetry/host-event-bus-telemetry.ts";
 import { createInMemoryXuserPendingDepartures, departureKey, parseDepartureFile, SLATE_XUSER_PENDING_DEPARTURE_FILE_NAME, SlateXuserPendingDepartureStore } from "../../source/host/rooms/xuser-pending-departure-store.ts";
 import { SlateXuserStateReconcile, type XuserRoom, type XuserStateReconcileHost } from "../../source/host/rooms/xuser-state-reconcile.ts";
@@ -581,6 +581,43 @@ describe("the subagent that drives the box's browser", () => {
     assert.equal(isBrowserUseSubagentType("browseruse"), true);
     assert.equal(isBrowserUseSubagentType("computerUse"), false);
     assert.equal(isBrowserUseSubagentType(null), false);
+  });
+
+  it("folds separators and case away, and nothing else", () => {
+    assert.equal(isBrowserUseSubagentType(" Browser Use "), true, "a space is a separator wherever it sits");
+    assert.equal(isBrowserUseSubagentType("b r o w s e r u s e"), true, "every separator is dropped, not just the word breaks");
+    assert.equal(isBrowserUseSubagentType("browser_-_use"), true);
+    assert.equal(isBrowserUseSubagentType("browser\tuse"), false, "a tab is not one of the separators");
+    assert.equal(isBrowserUseSubagentType("browser usage"), false);
+    assert.equal(isBrowserUseSubagentType(""), false);
+    assert.equal(isBrowserUseSubagentType(undefined), false);
+  });
+
+  it("carries the words the model is given, joined into one description", () => {
+    assert.equal(BROWSER_USE_SUBAGENT_DESCRIPTION.includes("page level"), true);
+    assert.equal(BROWSER_USE_SUBAGENT_DESCRIPTION.includes("Prefer it over computerUse for browser-only work"), true);
+    assert.equal(BROWSER_USE_SUBAGENT_DESCRIPTION.includes("cannot act as the user"), true);
+    assert.equal(BROWSER_USE_SUBAGENT_DESCRIPTION.includes("request_box_help"), true);
+    assert.equal(BROWSER_USE_SUBAGENT_DESCRIPTION.includes("  "), false, "the lines are joined with single spaces");
+    assert.equal(BROWSER_USE_SUBAGENT_DESCRIPTION.includes("\n"), false);
+    assert.equal(BROWSER_USE_SUBAGENT_DESCRIPTION.length, 1134);
+    assert.equal(BROWSER_USE_SUBAGENT_DESCRIPTION.endsWith("continue."), true);
+  });
+
+  it("registers itself as a custom built-in subagent, with its own type and description each time", () => {
+    const config = createSlateBrowserUseSubagentConfig();
+    assert.deepEqual(config, {
+      subagent_type: { type: { case: "custom", value: { name: "browserUse" } } },
+      description: BROWSER_USE_SUBAGENT_DESCRIPTION,
+      preserveTaskTool: false,
+      subagentSource: "builtin",
+    });
+    assert.deepEqual(Object.keys(config), ["subagent_type", "description", "preserveTaskTool", "subagentSource"]);
+    const second = createSlateBrowserUseSubagentConfig();
+    assert.equal(config !== second, true, "every registration is its own object");
+    assert.equal(config.subagent_type !== second.subagent_type, true);
+    config.subagent_type.type.value.name = "changed";
+    assert.equal(second.subagent_type.type.value.name, "browserUse", "one registration cannot change the next");
   });
 });
 
