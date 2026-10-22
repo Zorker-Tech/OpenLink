@@ -155,6 +155,46 @@ test("a command run for the computer-use surface reports its output and its fail
   await assert.rejects(() => exec("/bin/sh", ["-c", "sleep 5"], { timeoutMs: 50 }))
 })
 
+test("a command's arguments are text, its environment is the caller's laid over this process's, and its output is the stdout text", async () => {
+  assert.equal(await exec("/bin/echo", [42]), "42\n", "a number argument is run as its text")
+  assert.equal(await exec("/bin/sh", ["-c", "printf '%s' \"$1\"", "sh", "a b"]), "a b", "an argument with a space stays one argument")
+  assert.equal(await exec("/bin/echo", ["ünïcode"]), "ünïcode\n")
+  assert.equal(await exec("/bin/sh", ["-c", "printf out; printf err >&2"]), "out", "the error text is not the answer")
+  assert.equal(await exec("/bin/sh", ["-c", "printf zero"], { timeoutMs: 0 }), "zero", "a zero timeout is no timeout")
+  assert.equal(await exec("/bin/sh", ["-c", "sleep 0.2; printf slow"]), "slow", "the default timeout leaves room for a slow command")
+
+  const inherited = process.env.SLATE_PROBE_INHERITED
+  const shadow = process.env.SLATE_PROBE_SHADOW
+  process.env.SLATE_PROBE_INHERITED = "inherited"
+  process.env.SLATE_PROBE_SHADOW = "process"
+  try {
+    assert.equal(await exec("/bin/sh", ["-c", "printf %s \"$SLATE_PROBE_INHERITED\""]), "inherited")
+    assert.equal(
+      await exec("/bin/sh", ["-c", "printf %s \"$SLATE_PROBE_INHERITED:$SLATE_PROBE_EXTRA\""], { env: { SLATE_PROBE_EXTRA: "extra" } }),
+      "inherited:extra",
+      "the caller's environment is laid over this process's own",
+    )
+    assert.equal(await exec("/bin/sh", ["-c", "printf %s \"$SLATE_PROBE_SHADOW\""], { env: { SLATE_PROBE_SHADOW: "caller" } }), "caller")
+  } finally {
+    if (inherited === undefined) delete process.env.SLATE_PROBE_INHERITED
+    else process.env.SLATE_PROBE_INHERITED = inherited
+    if (shadow === undefined) delete process.env.SLATE_PROBE_SHADOW
+    else process.env.SLATE_PROBE_SHADOW = shadow
+  }
+})
+
+test("a command that could kill itself is refused as a rejected promise with the code and the signal", async () => {
+  await assert.rejects(() => exec("/bin/sh", ["-c", "exit 3"]), (error: unknown) => (error as { code?: unknown }).code === 3)
+  await assert.rejects(
+    () => exec("/bin/sh", ["-c", "sleep 5"], { timeoutMs: 50 }),
+    (error: unknown) => (error as { killed?: unknown }).killed === true && (error as { signal?: unknown }).signal === "SIGTERM",
+  )
+  await assert.rejects(() => exec("/nonexistent-slate-probe", []), (error: unknown) => (error as { code?: unknown }).code === "ENOENT")
+  const refusing = exec(123 as unknown as string, [])
+  assert.equal(refusing instanceof Promise, true, "a refusal is a rejected promise, not a throw")
+  await assert.rejects(refusing, TypeError)
+})
+
 // ---------------------------------------------------------------------------------------------
 // Listing a directory
 // ---------------------------------------------------------------------------------------------
