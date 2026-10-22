@@ -7,5 +7,8 @@
  * a delay percentile is only as meaningful as the resolution it was sampled at.
  */
 
+/** The thresholds at which the loop counts as under pressure: a delay percentile, and a utilization. */
 export enum EventLoopPressureThresholdDefault { EventLoopDelayP95Ms = 50, EventLoopUtilization = 0.7 }
+
+/** How often the loop is sampled, and the resolution a sampled delay is reported at. */
 export enum EventLoopPressureTrackerDefault { SampleIntervalMs = 250, EventLoopResolutionMs = 20 }

@@ -213,6 +213,7 @@ test("a command's output is not streamed faster than it is worth watching", () =
 
 test("the pressure thresholds are the ones the tracker samples at", () => {
   assert.equal(EventLoopPressureThresholdDefault.EventLoopDelayP95Ms, 50)
+  assert.equal(EventLoopPressureThresholdDefault.EventLoopUtilization, 0.7, "a loop that is seven-tenths busy is under pressure")
   assert.equal(EventLoopPressureTrackerDefault.SampleIntervalMs, 250)
   assert.equal(EventLoopPressureTrackerDefault.EventLoopResolutionMs, 20)
 })
