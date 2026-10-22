@@ -128,6 +128,63 @@ describe("the executor a host's turns run on", () => {
     assert.equal(registry.createRunner({}, {}), "runner");
     assert.throws(() => registry.bindExecutor(executor), (error: unknown) => (error as Error).message === DOUBLE_BIND_MESSAGE);
   });
+
+  it("answers readiness from the bound executor, and answers no before one is bound", async () => {
+    const registry = new TurnExecutionRegistry();
+    assert.equal(await registry.isRunReady(), false, "nothing can run before an executor is bound");
+    let ready = true;
+    const asked: number[] = [];
+    const executor = {
+      isInferenceReady: async (...args: unknown[]) => { asked.push(args.length); return ready; },
+      createRunner: () => "runner",
+      createGroupMemberRunner: () => "member-runner",
+    };
+    registry.bindExecutor(executor);
+    assert.equal(await registry.isRunReady(), true);
+    ready = false;
+    assert.equal(await registry.isRunReady(), false);
+    assert.deepEqual(asked, [0, 0], "the bound executor is asked with no arguments");
+    const failure = new Error("inference is down");
+    const broken = { isInferenceReady: async () => { throw failure; }, createRunner: () => "runner", createGroupMemberRunner: () => "member-runner" };
+    const brokenRegistry = new TurnExecutionRegistry();
+    brokenRegistry.bindExecutor(broken);
+    await assert.rejects(brokenRegistry.isRunReady(), (error: unknown) => error === failure);
+  });
+
+  it("mints both kinds of runner on the bound executor, with the executor as the receiver", () => {
+    const seen: Array<[string, boolean, number]> = [];
+    const session = { conversationId: "c1" };
+    const hooks = { onTurn: () => undefined };
+    const overrides = { model: "slate" };
+    const executor = {
+      isInferenceReady: async () => true,
+      createRunner(...args: unknown[]) { seen.push(["createRunner", this === executor, args.length]); return { runner: args[0] === session && args[1] === hooks }; },
+      createGroupMemberRunner(...args: unknown[]) { seen.push(["createGroupMemberRunner", this === executor, args.length]); return { runner: args[0] === session && args[1] === hooks && args[2] === overrides }; },
+    };
+    const registry = new TurnExecutionRegistry();
+    registry.bindExecutor(executor);
+    assert.deepEqual(registry.createRunner(session, hooks), { runner: true });
+    assert.deepEqual(registry.createGroupMemberRunner(session, hooks, overrides), { runner: true });
+    assert.deepEqual(seen, [["createRunner", true, 2], ["createGroupMemberRunner", true, 3]]);
+  });
+
+  it("keeps the first executor when the second bind is refused, and reads canExecute without asking it", () => {
+    const first = { isInferenceReady: async () => true, createRunner: () => "first", createGroupMemberRunner: () => "first-member" };
+    const second = { isInferenceReady: async () => true, createRunner: () => "second", createGroupMemberRunner: () => "second-member" };
+    const registry = new TurnExecutionRegistry();
+    registry.bindExecutor(first);
+    assert.throws(() => registry.bindExecutor(second), (error: unknown) => error instanceof Error && error.name === "Error" && error.message === DOUBLE_BIND_MESSAGE);
+    assert.equal(registry.createRunner({}, {}), "first");
+    assert.equal(registry.createGroupMemberRunner({}, {}, {}), "first-member");
+    assert.deepEqual(Object.keys(registry), ["executor"], "the bound slot is the one own property an instance has");
+    assert.equal(new TurnExecutionRegistry().canExecute, false, "a second registry is not bound by the first");
+  });
+
+  it("refuses a group-member runner before it was bound, with the same message", () => {
+    const registry = new TurnExecutionRegistry();
+    assert.throws(() => registry.createGroupMemberRunner({}, {}, {}), (error: unknown) => error instanceof Error && error.message === UNBOUND_EXECUTION_MESSAGE);
+    assert.equal(registry.canExecute, false);
+  });
 });
 
 describe("what an agent is doing right now", () => {
