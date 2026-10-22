@@ -17,6 +17,9 @@ import {
   parsePluginManifest,
   PLUGIN_MANIFEST_PATHS,
   PLUGIN_ROOT_DIR_NAMES,
+  parsePluginVariablesJsonSchema,
+  PluginSourceSchema,
+  MARKETPLACE_MANIFEST_PATHS,
   resolvePluginSourcePath,
 } from "../../source/packages/plugin-install/manifest-parser.ts"
 
@@ -193,4 +196,114 @@ test("the entries a marketplace lists are classified by what they are", () => {
   assert.equal(classified[1]?.kind === "local" && classified[1].localPath, path.join("/repo", "plugins", "local"))
   // A pinned commit is what is fetched, rather than the ref beside it.
   assert.equal(classified[2]?.kind === "external-url" && classified[2].effectiveRef, "a".repeat(40))
+})
+
+// ---------------------------------------------------------------------------------------------
+// The rest of the format's contract
+// ---------------------------------------------------------------------------------------------
+
+test("the paths and the source schema are the ones the format defines", () => {
+  assert.deepEqual(PLUGIN_MANIFEST_PATHS, [".cursor-plugin/plugin.json", ".claude-plugin/plugin.json", "plugin.json"])
+  assert.deepEqual(MARKETPLACE_MANIFEST_PATHS, [".cursor-plugin/marketplace.json", ".claude-plugin/marketplace.json"])
+  assert.deepEqual(PLUGIN_ROOT_DIR_NAMES, [".cursor-plugin", ".claude-plugin"])
+  assert.equal(MAX_MANIFEST_SIZE_BYTES, 10 * 1024 * 1024)
+
+  assert.equal(PluginSourceSchema.safeParse("acme/a-plugin").success, true)
+  assert.equal(PluginSourceSchema.safeParse({ source: "url", url: "https://example.com/x.git" }).success, true, "a git url is a source")
+  assert.equal(PluginSourceSchema.safeParse({ source: "url", url: "https://example.com/x.git", sha: "a".repeat(40) }).success, true, "a forty-character SHA is a SHA")
+  assert.equal(PluginSourceSchema.safeParse({ source: "github", repo: "acme/a-plugin" }).success, true)
+  assert.equal(PluginSourceSchema.safeParse({ source: "github", repo: "acme" }).success, false, "a repository is owner/name")
+  assert.equal(PluginSourceSchema.safeParse({ source: "url", url: "https://example.com/x" }).success, false, "a git URL ends with .git")
+  assert.equal(PluginSourceSchema.safeParse({ source: "url", url: "https://example.com/x.git", sha: "a".repeat(39) }).success, false, "a SHA is forty characters")
+  assert.equal(PluginSourceSchema.safeParse({ source: "url", url: "https://example.com/x.git", sha: "g".repeat(40) }).success, false, "a SHA is hexadecimal")
+  assert.equal(PluginSourceSchema.safeParse({ source: "git-subdir", url: "https://example.com/x.git", path: "" }).success, false, "a subdirectory has a path")
+})
+
+test("a plugin's variable schema is checked beyond its shape", () => {
+  const badVersion = parsePluginManifest(JSON.stringify({ name: "a", minClientVersions: { cursor: "1.0" } }))
+  assert.equal(badVersion.success, false)
+  assert.match(badVersion.success === false ? badVersion.error : "", /Must be a semver version \(X\.Y\.Z\)/, "a client version says what it must look like")
+
+  const issuesOf = (schema: unknown): Array<[string, string]> => {
+    const result = parsePluginVariablesJsonSchema(schema)
+    return result.success ? [] : result.error.issues.map((issue) => [issue.path.join("."), issue.message])
+  }
+  assert.deepEqual(issuesOf({ type: "object", required: ["x"] }), [["required", 'Required property "x" must be declared in properties']])
+  assert.deepEqual(issuesOf({ type: "object", properties: { x: { type: "string" } }, required: ["x", "y"] }), [["required", 'Required property "y" must be declared in properties']])
+  assert.deepEqual(issuesOf({ type: "object", minLength: 3, maxLength: 2 }), [["minLength", "minLength must be less than or equal to maxLength"]])
+  assert.deepEqual(issuesOf({ type: "object", minimum: 3, maximum: 2 }), [["minimum", "minimum must be less than or equal to maximum"]])
+  assert.deepEqual(issuesOf({ type: "object", exclusiveMinimum: 2, exclusiveMaximum: 2 }), [["exclusiveMinimum", "exclusiveMinimum must be less than exclusiveMaximum"]])
+  assert.deepEqual(issuesOf({ type: "object", minItems: 3, maxItems: 2 }), [["minItems", "minItems must be less than or equal to maxItems"]])
+  assert.deepEqual(issuesOf({ type: "object", minProperties: 3, maxProperties: 2 }), [["minProperties", "minProperties must be less than or equal to maxProperties"]])
+  assert.deepEqual(issuesOf({ type: "string" }), [["type", 'Plugin variable schemas must declare type "object"']])
+  assert.deepEqual(issuesOf({ type: ["object", "object"] }), [["type", "Schema type arrays must not contain duplicates"], ["type", 'Plugin variable schemas must declare type "object"']])
+  assert.deepEqual(issuesOf({ type: "object", unknownField: true }), [["", "Unrecognized key(s) in object: 'unknownField'"]])
+  assert.equal(parsePluginVariablesJsonSchema({ type: "object", properties: { a: { type: "string", minLength: 2, maxLength: 2 } } }).success, true)
+})
+
+test("a marketplace listing says what it could not read, and what it filled in", () => {
+  const read = parseMarketplaceManifest(JSON.stringify({
+    name: "acme",
+    plugins: [
+      null,
+      { name: "no-source" },
+      { source: { source: "github", repo: "acme/no-name-is-fine" } },
+      { name: "bad-caps", source: "./x", capabilities: ["telepathy"] },
+      { name: "a", source: "./a" },
+      { name: "a", source: "./b" },
+      { name: "filled", source: "./c" },
+    ],
+  }), { fallbackId: "fixed" })
+  assert.equal(read.success, true)
+  if (!read.success) return
+  assert.deepEqual(read.data.skippedPluginEntries.map((entry) => [entry.index, entry.name, entry.error]), [
+    [0, undefined, "Plugin entry at index 0 is not an object"],
+    [1, "no-source", "Plugin entry at index 1 has no usable source"],
+    [3, "bad-caps", "Plugin entry at index 3 has invalid capabilities: 0: Invalid enum value. Expected 'canvas', received 'telepathy'"],
+    [5, "a", 'Duplicate plugin name "a" at index 5'],
+  ])
+  assert.deepEqual(read.data.plugins.map((entry) => entry.name), ["no-name-is-fine", "a", "filled"])
+  assert.equal(read.data.plugins[2]?.strict, true, "strict is on unless the listing says otherwise")
+  assert.deepEqual(Object.keys(read.data.plugins[2] ?? {}).slice(0, 3), ["name", "displayName", "source"], "the fields come in the format's order")
+  assert.equal(read.data.plugins[2]?.displayName, undefined, "nothing the listing did not say is invented")
+  assert.equal(read.data.plugins[2]?.capabilities, undefined)
+})
+
+test("a source is classified by what it names, and a path resolves inside the marketplace", () => {
+  assert.equal(resolvePluginSourcePath("x", "/repo//"), "/repo//x", "one trailing slash is taken off the root, not all of them")
+  const classified = parseAndClassifyManifestEntries([
+    { name: "local", source: "./a/b", strict: true },
+    { name: "local-root", source: "b", strict: true },
+    { name: "github", source: { source: "github", repo: "acme/a", ref: "main", sha: "c".repeat(40) }, strict: true },
+  ] as never, "/repo")
+  assert.equal(classified[0]?.kind, "local")
+  assert.equal(classified[0]?.kind === "local" && classified[0].localPath, "/repo/a/b")
+  assert.equal(classified[1]?.kind === "local" && classified[1].localPath, "/repo/b")
+  assert.equal(classified[2]?.kind === "external-github" && classified[2].effectiveRef, "c".repeat(40), "a pinned commit is the ref that is used")
+})
+
+test("what a marketplace says about itself and its entries is read as it is, and filled in when absent", () => {
+  const read = parseMarketplaceManifest(JSON.stringify({
+    name: "acme",
+    plugins: [
+      { name: "url-fallback", source: { url: "https://example.com/x.git" } },
+      { name: "author", source: "./a", author: { name: "" } },
+      { name: "loose", source: "./b", strict: false },
+    ],
+  }), { fallbackId: "fixed" })
+  assert.equal(read.success, true)
+  if (!read.success) return
+  assert.equal(read.data.plugins[0]?.source && typeof read.data.plugins[0].source === "object" && read.data.plugins[0].source.source, "url")
+  assert.equal(read.data.plugins[1]?.author, undefined, "an author with no name names nobody")
+  assert.equal(read.data.plugins[2]?.strict, false)
+  assert.equal(read.data.metadata, undefined, "no metadata block is no metadata")
+
+  assert.equal(read.data.owner.name, "Unknown", "a marketplace with no owner is owned by nobody in particular")
+  const emptyMetadata = parseMarketplaceManifest(JSON.stringify({ metadata: {} }), { fallbackId: "fixed" })
+  assert.equal(emptyMetadata.success && emptyMetadata.data.metadata, undefined, "an empty metadata block is no metadata")
+
+  const withMetadata = parseMarketplaceManifest(JSON.stringify({ metadata: { description: "d" } }), { fallbackId: "fixed" })
+  assert.deepEqual(withMetadata.success && withMetadata.data.metadata, { description: "d", version: undefined, pluginRoot: undefined })
+
+  assert.equal(resolvePluginSourcePath(""), ".", "a source that names nothing is the marketplace's own root")
 })
