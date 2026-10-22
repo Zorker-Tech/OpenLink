@@ -11,7 +11,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { errorLogTag } from "../../../shared/errors/summary.ts";
 import { getSlateProfilePath, readSlateProfileFile, writeSlateProfileFile, type SlateAgentProfile } from "../../agents/agent-profile.ts";
-import { getSlateSettingsPath, writeSlateSettingsFile } from "../../agents/settings-file.ts";
+import { getSlateSettingsPath, writeAgentSettings } from "../../agents/settings-file.ts";
 import { AUTOMATION_UI_LIMIT } from "../../automations/automation.ts";
 import { getSlateAgentsRootDir } from "../../storage/agent-paths.ts";
 import { deleteSlateAgentDbWriteGeneration, getSlateAgentDbWriteGeneration } from "../../storage/store-db.ts";
@@ -214,8 +214,8 @@ export class SlateAgentSessionStore {
   markSessionActivity(session: OpenAgentSession, at = Date.now()): void { session.db.markActivity(at); }
   async markAgentViewed(agentId: string, at = Date.now(), options: { preserveManualUnread?: boolean } = {}): Promise<void> { try { await this.withAgentDb(agentId, (db) => db.markViewed(at, options)); } catch {} }
   async setSessionUnread(agentId: string, unread: boolean, at = Date.now()): Promise<void> { await this.withAgentDb(agentId, (db) => unread ? db.markUnread(at) : db.markRead(at)); }
-  setSessionNotifyOnUpdates(agentId: string, enabled: boolean): void { writeSlateSettingsFile(getSlateSettingsPath(this.getAgentDir(agentId)), { notifyOnAgentUpdates: enabled }); }
-  setSessionHiddenFromSidebar(agentId: string, hidden: boolean): void { writeSlateSettingsFile(getSlateSettingsPath(this.getAgentDir(agentId)), { hiddenFromSidebar: hidden }); }
+  setSessionNotifyOnUpdates(agentId: string, enabled: boolean): void { writeAgentSettings(getSlateSettingsPath(this.getAgentDir(agentId)), { notifyOnAgentUpdates: enabled }); }
+  setSessionHiddenFromSidebar(agentId: string, hidden: boolean): void { writeAgentSettings(getSlateSettingsPath(this.getAgentDir(agentId)), { hiddenFromSidebar: hidden }); }
   async setAwaitingUserResponse(agentId: string, state: AwaitingUserResponse | null): Promise<void> { await this.withAgentDb(agentId, (db) => { db.setAwaitingUserResponse(state); }); }
   async setAwaitingUserResponseForTab(agentId: string, tabId: string, state: AwaitingUserResponse | null, options?: { ifSinceBefore?: number }): Promise<boolean> { return this.withAgentDb(agentId, (db) => db.setAwaitingUserResponseForTab(tabId, state, options)); }
   async expirePendingAutoReviewApprovals(agentId: string, onlyRequestId?: string): Promise<string[]> { return this.withAgentDb(agentId, (db) => expirePendingAutoReviewApprovalEntries(db as never, onlyRequestId)); }

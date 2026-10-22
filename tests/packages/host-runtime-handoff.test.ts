@@ -13,7 +13,7 @@ import { bestEffortAccessToken, type ManagedAuthPort } from "../../source/host/e
 import { AUTOMATION_SHADOW_PRUNE_EVENT, automationShadowPruneTelemetry } from "../../source/host/telemetry/automation-shadow-prune-telemetry.ts";
 import { SLATE_SUPERVISOR_COMMAND_PATH, SLATE_SUPERVISOR_DIR } from "../../source/host/extensions/host-upgrade/host-bundle-upgrade.ts";
 import { SlateConnectorSecretStore } from "../../source/host/extensions/session/connector-secret-store.ts";
-import { DEFAULT_HIDDEN_FROM_SIDEBAR, DEFAULT_NOTIFY_ON_AGENT_UPDATES, getSlateSettingsPath, readSlateSettingsFile, SLATE_SETTINGS_FILENAME, writeSlateSettingsFile } from "../../source/host/agents/settings-file.ts";
+import { DEFAULT_HIDDEN_FROM_SIDEBAR, DEFAULT_NOTIFY_ON_AGENT_UPDATES, getSlateSettingsPath, agentSettingsAt, SLATE_SETTINGS_FILENAME, writeAgentSettings } from "../../source/host/agents/settings-file.ts";
 import { BOX_STORE_PACK_INDEX_KEY, PACK_MEMBER_MAX_BYTES, PACK_INDEX_VERSION } from "../../source/host/boxes/box-store-sync/box-store-pack.ts";
 import { resolveCsnapsBinPath } from "../../source/host/extensions/codebase-telemetry/csnaps-capability.ts";
 import { tombstoneKey } from "../../source/host/rooms/xuser-room-tombstone-store.ts";
@@ -41,11 +41,11 @@ describe("an agent's own settings", () => {
     const path = getSlateSettingsPath(dir);
     assert.equal(path, join(dir, "settings.json"));
     mkdirSync(dir, { recursive: true });
-    assert.deepEqual(readSlateSettingsFile(path), { notifyOnAgentUpdates: true, hiddenFromSidebar: false });
-    writeSlateSettingsFile(path, { notifyOnAgentUpdates: false, hiddenFromSidebar: true });
-    assert.deepEqual(readSlateSettingsFile(path), { notifyOnAgentUpdates: false, hiddenFromSidebar: true });
+    assert.deepEqual(agentSettingsAt(path), { notifyOnAgentUpdates: true, hiddenFromSidebar: false });
+    writeAgentSettings(path, { notifyOnAgentUpdates: false, hiddenFromSidebar: true });
+    assert.deepEqual(agentSettingsAt(path), { notifyOnAgentUpdates: false, hiddenFromSidebar: true });
     writeFileSync(path, '{"notifyOnAgentUpdates": "yes", "unknown": 1}');
-    assert.deepEqual(readSlateSettingsFile(path), { notifyOnAgentUpdates: true, hiddenFromSidebar: false });
+    assert.deepEqual(agentSettingsAt(path), { notifyOnAgentUpdates: true, hiddenFromSidebar: false });
   });
 });
 
