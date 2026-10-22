@@ -46,6 +46,16 @@ const EXEMPT = [
   ["packages/agent-store-sync/bcs-list-adapter.ts", "adapter: the wire's listing shape, mapped one entry at a time"],
   ["packages/agent-store-sync/sync-client-config.ts", "the counterpart's client numbers, recovered as data"],
   ["shared/node/cursor-backend/cursor-inference.ts", "adapter: the backend transport and its endpoint resolution"],
+  ["packages/agent-exec/agent-skill-metadata.ts", "layout stub: the reference module retained only its strict-mode initializer and no named surface; our empty module keeps the layout with our own note, so only the export token coincides and there is nothing to rewrite"],
+  ["packages/agent-exec/await-outcome.ts", "layout stub: the reference module retained only its strict-mode initializer and no named surface; our empty module keeps the layout with our own note, so only the export token coincides and there is nothing to rewrite"],
+  ["packages/agent-exec/background-completion-dispatch.ts", "layout stub: the reference module retained only its strict-mode initializer and no named surface; our empty module keeps the layout with our own note, so only the export token coincides and there is nothing to rewrite"],
+  ["packages/agent-exec/common.ts", "layout stub: the reference module retained only its strict-mode initializer and no named surface; our empty module keeps the layout with our own note, so only the export token coincides and there is nothing to rewrite"],
+  ["packages/agent-exec/exec-error.ts", "layout stub: the reference module retained only its strict-mode initializer and no named surface; our empty module keeps the layout with our own note, so only the export token coincides and there is nothing to rewrite"],
+  ["packages/agent-exec/execution-timing.ts", "layout stub: the reference module retained only its strict-mode initializer and no named surface; our empty module keeps the layout with our own note, so only the export token coincides and there is nothing to rewrite"],
+  ["packages/agent-exec/request-context-parts.ts", "layout stub: the reference module retained only its strict-mode initializer and no named surface; our empty module keeps the layout with our own note, so only the export token coincides and there is nothing to rewrite"],
+  ["packages/agent-exec/subagent-lifecycle-state-machine.ts", "layout stub: the reference module retained only its strict-mode initializer and no named surface; our empty module keeps the layout with our own note, so only the export token coincides and there is nothing to rewrite"],
+  ["packages/agent-exec/subagent-lifecycle-store.ts", "layout stub: the reference module retained only its strict-mode initializer and no named surface; our empty module keeps the layout with our own note, so only the export token coincides and there is nothing to rewrite"],
+  ["packages/agent-exec/subagent-queue.ts", "layout stub: the reference module retained only its strict-mode initializer and no named surface; our empty module keeps the layout with our own note, so only the export token coincides and there is nothing to rewrite"],
 ];
 
 const options = new Map();
