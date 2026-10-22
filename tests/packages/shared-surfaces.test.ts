@@ -6,7 +6,7 @@ import { CONNECT_CODE_RESOURCE_EXHAUSTED, getConnectRetryAfterMs, isDeadlineExce
 import { isMessageAddress } from "../../source/shared/message-reference.ts"
 import { isMcpServerId, parseInt32McpServerId, validateMcpServerId } from "../../source/shared/node/mcp/mcp-server-id.ts"
 import { EXTENSION_FROM_IMAGE_MIME, IMAGE_MIME_FROM_EXTENSION, extensionOf } from "../../source/shared/media/media-extensions.ts"
-import { pinExperimentsDiagnosticsReporter, reportExperimentsDiagnostic } from "../../source/shared/node/experiments/experiments-diagnostics.ts"
+import { pinExperimentsDiagnosticsReporter, PRE_PIN_BUFFER_CAP, reportExperimentsDiagnostic } from "../../source/shared/node/experiments/experiments-diagnostics.ts"
 import { findMissingRequiredCatalogFields, humanizeVariableName, pluginVariablesSchemaToFields } from "../../source/shared/node/mcp/mcp-plugin-variables.ts"
 import { isSlateClientPersistenceSlice, SLATE_CLIENT_PERSISTENCE_SLICES } from "../../source/shared/observability/telemetry.ts"
 import { isSlateUpdateTrack } from "../../source/shared/update.ts"
@@ -213,6 +213,33 @@ test("a diagnostic reported before anyone listens is kept until someone does", (
   pinExperimentsDiagnosticsReporter(null)
   reportExperimentsDiagnostic({ kind: "third" })
   assert.deepEqual(received, ["first", "second"])
+})
+
+test("the buffer before a reporter is pinned is bounded, and pinning a reporter clears it", () => {
+  assert.equal(PRE_PIN_BUFFER_CAP, 64)
+  const received: Array<[string, number | undefined]> = []
+  // Pinning nothing throws away whatever was waiting rather than keeping it for the next reporter.
+  reportExperimentsDiagnostic({ kind: "dropped", n: 1 })
+  reportExperimentsDiagnostic({ kind: "dropped", n: 2 })
+  pinExperimentsDiagnosticsReporter(null)
+  reportExperimentsDiagnostic({ kind: "kept", n: 3 })
+  pinExperimentsDiagnosticsReporter(diagnostic => received.push([String(diagnostic.kind), typeof diagnostic.n === "number" ? diagnostic.n : undefined]))
+  assert.deepEqual(received, [["kept", 3]])
+  pinExperimentsDiagnosticsReporter(null)
+
+  // A full buffer drops what comes after it, and hands over what it kept, oldest first.
+  for (let index = 0; index < PRE_PIN_BUFFER_CAP + 5; index += 1) reportExperimentsDiagnostic({ kind: "k" + index, n: index })
+  const capped: number[] = []
+  pinExperimentsDiagnosticsReporter(diagnostic => capped.push(diagnostic.n as number))
+  assert.equal(capped.length, PRE_PIN_BUFFER_CAP, "the extra diagnostics are dropped, not kept")
+  assert.deepEqual(capped.slice(0, 3), [0, 1, 2], "the oldest diagnostics are handed over first")
+  assert.equal(capped.at(-1), PRE_PIN_BUFFER_CAP - 1)
+  pinExperimentsDiagnosticsReporter(null)
+
+  // A reporter that fails while it is being handed the backlog fails the pin.
+  reportExperimentsDiagnostic({ kind: "throws" })
+  assert.throws(() => pinExperimentsDiagnosticsReporter(() => { throw new Error("reporter is broken") }), /reporter is broken/)
+  pinExperimentsDiagnosticsReporter(null)
 })
 
 test("an invariant violation is reported, and its message is not carried in a packaged build", () => {
