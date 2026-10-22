@@ -65,6 +65,20 @@ test("a repository setting is a URL, a pattern, or every repository", () => {
   assert.equal(isPathPatternRepoUrl("https://github.com/a/b"), false)
   assert.equal(isPathPatternRepoUrl("git@github.com:a/b.git"), false)
   assert.equal(isPathPatternRepoUrl("gitlab.com/a/b"), false)
+
+  assert.equal(isWildcardRepoUrl("*"), true)
+  assert.equal(isWildcardRepoUrl("**"), false, "two stars are a pattern, not the wildcard")
+  assert.equal(isWildcardRepoUrl(""), false)
+  assert.equal(isWildcardRepoUrl(" *x "), false)
+  assert.equal(isPathPatternRepoUrl(""), true, "a setting with nothing URL-shaped in it is a pattern")
+  assert.equal(isPathPatternRepoUrl("GitHub.com/a/b"), true, "the host markers are compared as they are written")
+  assert.equal(isPathPatternRepoUrl("github.com.evil/x"), false, "a marker inside a longer host still counts")
+  assert.equal(isPathPatternRepoUrl("@"), false)
+  assert.equal(isPathPatternRepoUrl("://"), false)
+  assert.equal(isPathPatternRepoUrl("bitbucket.org/a/b"), false)
+  assert.equal(isPathPatternRepoUrl("example.com/a/b"), true)
+  assert.equal(isPathPatternRepoUrl("user/repo"), true)
+  assert.equal(isPathPatternRepoUrl("*"), true, "the wildcard is a pattern too")
 })
 
 test("the same repository is one identity however it was reached", () => {
