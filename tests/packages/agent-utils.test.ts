@@ -52,6 +52,20 @@ test("a subagent notification is delimited and comes with its reminder", () => {
   assert.match(META_PARENT_COMPLETION_SYSTEM_REMINDER, /Handling subagent notifications/)
 })
 
+test("the delimiters are the tag between angle brackets, and the reminder is five lines with a blank one between", () => {
+  assert.equal(META_PARENT_COMPLETION_OPEN_TAG, `<${META_PARENT_COMPLETION_TAG}>`)
+  assert.equal(META_PARENT_COMPLETION_CLOSE_TAG, `</${META_PARENT_COMPLETION_TAG}>`)
+  assert.equal(META_PARENT_COMPLETION_SYSTEM_REMINDER.startsWith("<system_reminder>\n"), true)
+  assert.equal(META_PARENT_COMPLETION_SYSTEM_REMINDER.endsWith("\n</system_reminder>"), true)
+  const lines = META_PARENT_COMPLETION_SYSTEM_REMINDER.split("\n")
+  assert.equal(lines.length, 5)
+  assert.equal(lines[0], "<system_reminder>")
+  assert.equal(lines[2], "", "a blank line separates the instruction from the reminder of what to follow")
+  assert.equal(lines[4], "</system_reminder>")
+  assert.match(lines[1] ?? "", /^Do not reiterate or repeat the contents of this agent notification to the user unless asked to do so\.$/)
+  assert.match(lines[3] ?? "", /^Follow your instructions for Handling subagent notifications\.$/)
+})
+
 test("classification failure metadata is read out of the error text when it is there", () => {
   const error = `${SMART_MODE_CLASSIFIER_MANUAL_REVIEW_ERROR_REASON}${METADATA_MARKER}${JSON.stringify({ failureReason: "provider overloaded", retryable: true })}`
   assert.deepEqual(parseSmartModeClassifierFailureMetadata(error), { failureReason: "provider overloaded", retryable: true })
