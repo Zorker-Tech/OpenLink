@@ -6,5 +6,8 @@
  * way.
  */
 
+/** The pause in the unit a delay is waited in: ten seconds. */
 export const DEV_SMART_MODE_CLASSIFIER_DELAY_MS = 10_000
+
+/** The same pause in seconds, for what reads it as a number of seconds rather than milliseconds. */
 export const DEV_SMART_MODE_CLASSIFIER_DELAY_SECONDS = DEV_SMART_MODE_CLASSIFIER_DELAY_MS / 1_000

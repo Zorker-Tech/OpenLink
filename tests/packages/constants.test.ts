@@ -282,6 +282,7 @@ test("environment and log windows are bounded and ordered", () => {
   assert.ok(DEFAULT_ENVIRONMENT_SETUP_MAX_RESUME_AGE_MS < MAX_ENVIRONMENT_SETUP_MAX_RESUME_AGE_MS)
   assert.equal(STRUCTURED_LOG_REPLAY_MAX_AGE_MS, 17 * 60 * 60 * 1_000)
   assert.equal(STRUCTURED_LOG_FUTURE_TIMESTAMP_MAX_SKEW_MS, 2 * 60 * 60 * 1_000)
+  assert.equal(DEV_SMART_MODE_CLASSIFIER_DELAY_MS, 10_000, "the development pause is ten seconds")
   assert.equal(DEV_SMART_MODE_CLASSIFIER_DELAY_SECONDS, DEV_SMART_MODE_CLASSIFIER_DELAY_MS / 1_000)
   assert.equal(MAX_TEXT_SIZE, 8 * 1024 * 1024)
 })
