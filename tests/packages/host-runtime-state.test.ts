@@ -255,6 +255,48 @@ describe("where a session's diagnostics go", () => {
     reportSessionDiagnostic({ family: "box", kind: "hydrate" });
     assert.deepEqual(seen, [{ family: "box", kind: "hydrate" }]);
   });
+
+  it("hands the reporter the very diagnostic it was given, once per report, and ignores its answer", () => {
+    const seen: SessionDiagnostic[] = [];
+    const arities: number[] = [];
+    pinSessionDiagnosticsReporter((...args: [SessionDiagnostic]) => { arities.push(args.length); seen.push(args[0]); return "ignored"; });
+    try {
+      const diagnostic = { family: "session", kind: "roster", detail: { id: "a1" } };
+      assert.equal(reportSessionDiagnostic(diagnostic), undefined, "reporting answers nothing");
+      assert.equal(seen.length, 1);
+      assert.deepEqual(arities, [1], "the reporter is handed exactly the diagnostic");
+      assert.equal(seen[0] === diagnostic, true, "the object is handed over, not a copy");
+      reportSessionDiagnostic({ family: "box", kind: "hydrate" });
+      assert.deepEqual(seen.map((entry) => entry.family), ["session", "box"]);
+    } finally {
+      pinSessionDiagnosticsReporter(null);
+    }
+  });
+
+  it("replaces the pinned reporter, and pins nothing again when it is given null", () => {
+    const first: SessionDiagnostic[] = [];
+    const second: SessionDiagnostic[] = [];
+    try {
+      pinSessionDiagnosticsReporter((report) => { first.push(report); });
+      pinSessionDiagnosticsReporter((report) => { second.push(report); });
+      reportSessionDiagnostic({ family: "box", kind: "hydrate" });
+      assert.deepEqual([first.length, second.length], [0, 1], "only the latest reporter is used");
+      pinSessionDiagnosticsReporter(null);
+      reportSessionDiagnostic({ family: "box", kind: "hydrate" });
+      assert.deepEqual([first.length, second.length], [0, 1]);
+    } finally {
+      pinSessionDiagnosticsReporter(null);
+    }
+  });
+
+  it("lets a failing reporter fail the report", () => {
+    pinSessionDiagnosticsReporter(() => { throw new Error("diagnostics are down"); });
+    try {
+      assert.throws(() => reportSessionDiagnostic({ family: "box", kind: "hydrate" }), /diagnostics are down/);
+    } finally {
+      pinSessionDiagnosticsReporter(null);
+    }
+  });
 });
 
 describe("remembering the turns another computer already delivered", () => {
