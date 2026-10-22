@@ -1,7 +1,7 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 
-import { AGENTS_SECTION_ID, AGENTS_SECTION_NAME, SidebarSections } from "../../source/shared/sidebar-sections.ts"
+import { UNASSIGNED_SECTION_ID, UNASSIGNED_SECTION_NAME, SidebarGrouping } from "../../source/shared/sidebar-sections.ts"
 import { SLATE_COMPUTER_UNAVAILABLE_MESSAGE, slateComputerUnavailableMessage, SLATE_NO_LOCAL_MACHINE_MESSAGE } from "../../source/shared/local-exec-gateway.ts"
 import { LOG_SHIP_INTERVAL_MS, LOG_SHIP_JITTER_RATIO, nextLogShipDelayMs } from "../../source/shared/observability/log-ship-cadence.ts"
 import { utcOffsetOf, isKnownTimeZone, timeZonePromptSection } from "../../source/shared/timezone.ts"
@@ -41,11 +41,11 @@ import { formatAttachmentSentSummary, kindPhrase, mergeKindCounts } from "../../
 // ---------------------------------------------------------------------------------------------
 
 test("sections are normalized before they are shown", () => {
-  const normalized = SidebarSections.normalize([
+  const normalized = SidebarGrouping.cleaned([
     { id: "work", name: "Work", agentIds: ["a", "b"] },
     { id: "work", name: "Work again", agentIds: ["c"] },
     { id: "  ", name: "Nothing", agentIds: ["d"] },
-    { id: AGENTS_SECTION_ID, name: AGENTS_SECTION_NAME, agentIds: ["e"] },
+    { id: UNASSIGNED_SECTION_ID, name: UNASSIGNED_SECTION_NAME, agentIds: ["e"] },
     { id: "other", name: "Other", agentIds: ["a", "f", ""] },
   ])
   // The second section with the same id, the one with no id, and the unassigned section are all gone, and an
@@ -54,13 +54,13 @@ test("sections are normalized before they are shown", () => {
   assert.deepEqual(normalized, [
     { id: "work", name: "Work", agentIds: ["a", "b"] },
     { id: "other", name: "Other", agentIds: ["f"] },
-    { id: AGENTS_SECTION_ID, name: AGENTS_SECTION_NAME, agentIds: [] },
+    { id: UNASSIGNED_SECTION_ID, name: UNASSIGNED_SECTION_NAME, agentIds: [] },
   ])
   // Folds are carried from what was stored, and the sections are read back from what a client persisted.
-  const folded = SidebarSections.withFolds(normalized, ["other"])
+  const folded = SidebarGrouping.folded(normalized, ["other"])
   assert.deepEqual(folded.map(section => section.isCollapsed), [false, true, false])
-  assert.deepEqual(SidebarSections.parse(normalized as unknown[]).length, 3)
-  assert.deepEqual(SidebarSections.carryFolds({ sections: normalized, stored: folded }).map(section => section.isCollapsed), [false, true, false])
+  assert.deepEqual(SidebarGrouping.readFrom(normalized as unknown[]).length, 3)
+  assert.deepEqual(SidebarGrouping.foldsCarried({ sections: normalized, stored: folded }).map(section => section.isCollapsed), [false, true, false])
 })
 
 test("the message about a machine that is not there names the computer when it can", () => {
