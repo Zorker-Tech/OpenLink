@@ -7,7 +7,7 @@ import { MAX_MODEL_ID_LENGTH, MAX_PARAMETERS, resolveSlateDefaultModelConfig, RO
 import { imageContentType, readCappedImageBytes } from "../../source/shared/node/http-image.ts"
 import { LISTENER_INTEGRATIONS } from "../../source/shared/listener-integrations.ts"
 import { markdownToPreviewText } from "../../source/shared/media/markdown-preview.ts"
-import { isHttpExternalUrl, parseAllowedExternalUrl } from "../../source/shared/external-url-policy.ts"
+import { isWebUrl, openableExternalUrl } from "../../source/shared/external-url-policy.ts"
 import { decideBoxHandBack } from "../../source/shared/forever-box.ts"
 import { isValidVncLivenessReport, VNC_LIVENESS_CHANNEL, VNC_LIVENESS_MIN_IMPACTFUL_INPUTS, VNC_LIVENESS_WINDOW_MS } from "../../source/shared/vnc-liveness.ts"
 import { isCoordinatorMainMethod, COORDINATOR_MAIN_METHOD_TABLE } from "../../source/shared/rpc/coordinator-main.ts"
@@ -95,15 +95,15 @@ test("a markdown document's preview is its text", () => {
 })
 
 test("only the links a browser can be handed safely are opened", () => {
-  assert.equal(parseAllowedExternalUrl("https://example.com") !== null, true)
-  assert.equal(parseAllowedExternalUrl("mailto:a@example.com") !== null, true)
-  assert.equal(parseAllowedExternalUrl("obsidian://open?vault=v") !== null, true)
+  assert.equal(openableExternalUrl("https://example.com") !== null, true)
+  assert.equal(openableExternalUrl("mailto:a@example.com") !== null, true)
+  assert.equal(openableExternalUrl("obsidian://open?vault=v") !== null, true)
   // Something a document could use to run anything else on the machine is not opened.
-  assert.equal(parseAllowedExternalUrl("javascript:alert(1)"), null)
-  assert.equal(parseAllowedExternalUrl("file:///etc/passwd"), null)
-  assert.equal(parseAllowedExternalUrl("not a url"), null)
-  assert.equal(isHttpExternalUrl("https://example.com"), true)
-  assert.equal(isHttpExternalUrl("mailto:a@example.com"), false)
+  assert.equal(openableExternalUrl("javascript:alert(1)"), null)
+  assert.equal(openableExternalUrl("file:///etc/passwd"), null)
+  assert.equal(openableExternalUrl("not a url"), null)
+  assert.equal(isWebUrl("https://example.com"), true)
+  assert.equal(isWebUrl("mailto:a@example.com"), false)
 })
 
 test("an attachment is previewed as text only when it is one", () => {
