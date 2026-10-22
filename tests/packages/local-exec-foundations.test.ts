@@ -425,4 +425,9 @@ test("nothing is recorded about ripgrep until a caller asks to watch it", () => 
   assert.equal(isRipgrepInvocationRecordingEnabled(), false)
   // With no watcher installed, a recorded invocation is dropped rather than thrown.
   recordRipgrepInvocation({ args: ["--files"] })
+  assert.equal(recordRipgrepInvocation({ args: [], cwd: "/tmp" }), undefined, "recording answers nothing")
+  recordRipgrepInvocation(null as never)
+  recordRipgrepInvocation(undefined as never)
+  recordRipgrepInvocation(7 as never)
+  assert.equal(isRipgrepInvocationRecordingEnabled(), false, "recording does not install a watcher")
 })
