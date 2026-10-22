@@ -54,15 +54,25 @@ export const ENCODING_MAPPINGS: Readonly<Record<string, string>> = {
   cp932: "cp932",
 }
 
+/** The name a decoder knows this encoding by, or the name it came in as when this build maps nothing for it. */
 export const mapToIconvEncoding = (encoding: string): string => ENCODING_MAPPINGS[encoding] || encoding
 
-/** A byte-order mark is metadata, not content: it is dropped before a file is read as text. */
-export const stripUtf8Bom = (text: string): string => text.startsWith("\ufeff") ? text.slice(1) : text
+/** The mark a text file may begin with, which is metadata rather than content. */
+const BOM = "\ufeff";
 
+/** A byte-order mark is dropped before a file is read as text, and a text without one comes back as it was. */
+export const stripUtf8Bom = (text: string): string => (text.startsWith(BOM) ? text.slice(BOM.length) : text)
+
+/** The spellings this platform reads as one of its own three names. */
+const CANONICAL_NAMES: ReadonlyMap<string, string> = new Map<string, string>([
+  ["latin-1", LATIN1_ENCODING],
+  ["utf-8", UTF8_ENCODING],
+  ["utf-8-bom", UTF8_BOM_ENCODING],
+  ["utf-8 bom", UTF8_BOM_ENCODING],
+]);
+
+/** A name folded to the spelling this platform uses for it, or the name itself folded when it has none. */
 export function normalizeEncodingName(encoding: string): string {
-  const normalized = encoding.toLowerCase()
-  if (normalized === "latin-1") return LATIN1_ENCODING
-  if (normalized === "utf-8") return UTF8_ENCODING
-  if (normalized === "utf-8-bom" || normalized === "utf-8 bom") return UTF8_BOM_ENCODING
-  return normalized
+  const folded = encoding.toLowerCase();
+  return CANONICAL_NAMES.get(folded) ?? folded;
 }
