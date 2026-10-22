@@ -8,7 +8,7 @@
  */
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import type { ResolutionConfig } from "./scaling.ts";
+import type { ScreenPair } from "./scaling.ts";
 
 const execFileAsync = promisify(execFile);
 export const API_WIDTH = 1280;
@@ -57,14 +57,14 @@ export function parseXrandrOutput(output: string): DisplayInfo {
   return { width, height, refreshRate };
 }
 
-export function buildResolutionConfig(displayWidth: number, displayHeight: number): ResolutionConfig {
+export function buildResolutionConfig(displayWidth: number, displayHeight: number): ScreenPair {
   return {
     display: { width: displayWidth, height: displayHeight },
     api: { width: API_WIDTH, height: Math.round(API_WIDTH / (displayWidth / displayHeight)) },
   };
 }
 
-export async function detectDisplay(display: string): Promise<{ display: DisplayInfo; resolution: ResolutionConfig; resolutionString: string }> {
+export async function detectDisplay(display: string): Promise<{ display: DisplayInfo; resolution: ScreenPair; resolutionString: string }> {
   const { stdout } = await execFileAsync("xrandr", ["--display", display], { timeout: 5_000 });
   const info = parseXrandrOutput(stdout);
   return { display: info, resolution: buildResolutionConfig(info.width, info.height), resolutionString: `${info.width}x${info.height}` };

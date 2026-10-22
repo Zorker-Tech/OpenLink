@@ -8,29 +8,38 @@
  */
 
 export interface ExternalLinkContent {
-  readonly url: string
-  readonly title: string
-  readonly content: string
+  readonly url: string;
+  readonly title: string;
+  readonly content: string;
 }
 
-export function renderExternalLinksContext(links: readonly ExternalLinkContent[]): string | undefined {
-  if (links.length === 0) return undefined
-  let linksText = `<external_links>
+/** What the block says before the results: that they are known, that they may be cited, and no disclaiming. */
+const LINKS_OPEN = `<external_links>
 ### Potentially Relevant Websearch Results
 
 You should respond as if these information are known to you. Refrain from saying "I am unable to browse the internet" or "I don't have access to the internet" or "I'm unable to provide real-time news updates". This is your internet search results. Please always cite any links you referenced from the above search results in markdown format.
 
 -------
-`
-  for (const link of links) {
-    linksText += `Website URL: ${link.url}
+`;
+
+const LINKS_CLOSE = `</external_links>`;
+
+/** A rule after each result, so two pages cannot be read as one. */
+const RESULT_RULE = `____
+
+`;
+
+/** One result: where it came from, what it is called, and what it says. */
+function renderResult(link: ExternalLinkContent): string {
+  return `Website URL: ${link.url}
 Website Title: ${link.title}
 Website Content:
 ${link.content}
-____
+${RESULT_RULE}`;
+}
 
-`
-  }
-  linksText += `</external_links>`
-  return linksText
+/** The results the user attached, as the block a prompt carries, and nothing when there are none. */
+export function renderExternalLinksContext(links: readonly ExternalLinkContent[]): string | undefined {
+  if (links.length === 0) return undefined;
+  return `${LINKS_OPEN}${links.map(renderResult).join("")}${LINKS_CLOSE}`;
 }

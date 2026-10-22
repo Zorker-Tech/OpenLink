@@ -4,35 +4,70 @@
  * The two are the same picture at different sizes, so a point is scaled up or down between them. A pair of sizes
  * whose aspect ratios differ is not the same picture at all, and is refused rather than scaled into something wrong.
  */
-export interface Resolution { width: number; height: number }
-export interface ResolutionConfig { display: Resolution; api: Resolution }
+export interface Size {
+  width: number;
+  height: number;
+}
 
-export class CoordinateScaler {
-  private readonly xScaleUp: number;
-  private readonly yScaleUp: number;
-  private readonly xScaleDown: number;
-  private readonly yScaleDown: number;
+export interface ScreenPair {
+  display: Size;
+  api: Size;
+}
 
-  constructor(private readonly config: ResolutionConfig) {
-    const displayRatio = config.display.width / config.display.height;
-    const apiRatio = config.api.width / config.api.height;
-    if (Math.abs(displayRatio - apiRatio) > 0.02) {
+/** How far two aspect ratios may differ before they are not the same picture. */
+const ASPECT_TOLERANCE = 0.02;
+
+/** The shape of a picture: its width over its height. */
+function aspectRatio(resolution: Size): number {
+  return resolution.width / resolution.height;
+}
+
+/** One axis' scale from one size to the other. */
+function ratio(from: number, to: number): number {
+  return from / to;
+}
+
+export class PointScaler {
+  private readonly upX: number;
+  private readonly upY: number;
+  private readonly downX: number;
+  private readonly downY: number;
+
+  constructor(private readonly config: ScreenPair) {
+    const displayRatio = aspectRatio(config.display);
+    const apiRatio = aspectRatio(config.api);
+    if (Math.abs(displayRatio - apiRatio) > ASPECT_TOLERANCE) {
       throw new Error(`Aspect ratio mismatch: display=${displayRatio.toFixed(3)}, api=${apiRatio.toFixed(3)}`);
     }
-    this.xScaleUp = config.display.width / config.api.width;
-    this.yScaleUp = config.display.height / config.api.height;
-    this.xScaleDown = config.api.width / config.display.width;
-    this.yScaleDown = config.api.height / config.display.height;
+    this.upX = ratio(config.display.width, config.api.width);
+    this.upY = ratio(config.display.height, config.api.height);
+    this.downX = ratio(config.api.width, config.display.width);
+    this.downY = ratio(config.api.height, config.display.height);
   }
 
-  apiToDisplay(x: number, y: number): { x: number; y: number } {
-    return { x: Math.round(x * this.xScaleUp), y: Math.round(y * this.yScaleUp) };
+  /** A point the API knows, as the pixel of the picture the display shows. */
+  toDisplay(x: number, y: number): { x: number; y: number } {
+    return { x: Math.round(x * this.upX), y: Math.round(y * this.upY) };
   }
-  displayToApi(x: number, y: number): { x: number; y: number } {
-    return { x: Math.round(x * this.xScaleDown), y: Math.round(y * this.yScaleDown) };
+
+  /** A pixel of the picture, as the point the API knows. */
+  toApi(x: number, y: number): { x: number; y: number } {
+    return { x: Math.round(x * this.downX), y: Math.round(y * this.downY) };
   }
-  get apiWidth(): number { return this.config.api.width; }
-  get apiHeight(): number { return this.config.api.height; }
-  get displayWidth(): number { return this.config.display.width; }
-  get displayHeight(): number { return this.config.display.height; }
+
+  get apiWidth(): number {
+    return this.config.api.width;
+  }
+
+  get apiHeight(): number {
+    return this.config.api.height;
+  }
+
+  get displayWidth(): number {
+    return this.config.display.width;
+  }
+
+  get displayHeight(): number {
+    return this.config.display.height;
+  }
 }
