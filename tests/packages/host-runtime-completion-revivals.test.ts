@@ -247,6 +247,39 @@ describe("reviving a conversation for a finished subagent", () => {
   });
 });
 
+it("leaves a queued completion alone when no runner can take it", async () => {
+  const subagentWorld = world({ canExecute: false });
+  subagentWorld.revivals.pendingSubagentCompletions.set("agent-1", [subagentDone()]);
+  await subagentWorld.revivals.reviveForSubagentCompletions("agent-1");
+  assert.deepEqual([subagentWorld.named("reportSubagentRevival").length, subagentWorld.revivals.pendingSubagentCompletions.get("agent-1")?.length], [0, 1]);
+  const shellWorld = world({ canExecute: false });
+  shellWorld.revivals.pendingShellCompletions.set("agent-1", [shellDone()]);
+  await shellWorld.revivals.reviveForShellCompletions("agent-1");
+  assert.deepEqual([shellWorld.named("clearSettledPendingWake").length, shellWorld.revivals.pendingShellCompletions.get("agent-1")?.length], [0, 1]);
+});
+
+it("drains a batch that arrives while one is already running", async () => {
+  const world1 = world();
+  const originalGetRunner = world1.tm.runnerRegistry.getRunner.bind(world1.tm.runnerRegistry);
+  let runs = 0;
+  world1.tm.runnerRegistry.getRunner = (session: unknown) => {
+    const inner = originalGetRunner(session);
+    return {
+      async run(prompt: string, runOptions: Record<string, unknown>) {
+        runs += 1;
+        if (runs === 1) world1.revivals.pendingSubagentCompletions.set("agent-1", [subagentDone({ subagentAgentId: "sub-2" })]);
+        return inner.run(prompt, runOptions);
+      },
+    };
+  };
+  world1.revivals.pendingSubagentCompletions.set("agent-1", [subagentDone()]);
+  await world1.revivals.reviveForSubagentCompletions("agent-1");
+  assert.equal(runs, 2, "the second pass is drained in the same revival");
+  assert.equal(world1.named("reportSubagentRevival").length, 2, "each batch is reported on its own");
+  assert.equal(world1.revivals.pendingSubagentCompletions.size, 0);
+  assert.equal(world1.revivals.revivingSubagentAgentIds.size, 0);
+});
+
 describe("reviving a conversation for a finished command", () => {
   it("queues the completion, or reports it dropped when the agent is gone", async () => {
     const world1 = world();
