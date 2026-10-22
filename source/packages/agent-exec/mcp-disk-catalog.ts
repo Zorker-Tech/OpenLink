@@ -6,13 +6,27 @@
 
 export const MCP_DISK_CATALOG_MCPS_DIR = "mcps";
 export const MCP_DISK_CATALOG_TOOLS_DIR = "tools";
+
+/** The field names a stored definition may carry a tool's name in, in the order they are read. */
+const TOOL_NAME_FIELDS = ["name", "toolName"] as const;
+
+/** A text that says something, or nothing when the field is absent or another type. */
+function nameText(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
 export function parseMcpToolNameFromDiskDefinitionJson(jsonText: string): string | undefined {
+  let parsed: unknown;
   try {
-    const parsed: unknown = JSON.parse(jsonText);
-    if (parsed === null || typeof parsed !== "object") return undefined;
-    const record = parsed as Record<string, unknown>;
-    if (typeof record.name === "string" && record.name.length > 0) return record.name;
-    if (typeof record.toolName === "string" && record.toolName.length > 0) return record.toolName;
+    parsed = JSON.parse(jsonText);
+  } catch {
     return undefined;
-  } catch { return undefined; }
+  }
+  if (parsed === null || typeof parsed !== "object") return undefined;
+  const record = parsed as Record<string, unknown>;
+  for (const field of TOOL_NAME_FIELDS) {
+    const name = nameText(record[field]);
+    if (name !== undefined) return name;
+  }
+  return undefined;
 }
