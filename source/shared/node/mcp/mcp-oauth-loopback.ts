@@ -97,15 +97,15 @@ export function createSlateMcpOAuthLoopback(deps: {
   bindRetry?: PollingPolicy;
   onCallback?(event: Record<string, unknown>): void;
 }) {
-  const callback = deps.loopbackRedirectUrl ?? MCP_OAUTH_LOOPBACK_CALLBACK_URL,
-    redirect = new URL(callback),
-    expiry =
+  const redirectUrl = deps.loopbackRedirectUrl ?? MCP_OAUTH_LOOPBACK_CALLBACK_URL,
+    redirectTarget = new URL(redirectUrl),
+    pendingExpiry =
       deps.pendingExpiry ??
       createRealExpiryPolicy({
         name: "slate-mcp-oauth-loopback-pending",
         ttlMs: MCP_OAUTH_PENDING_TTL_MS,
       }),
-    retry =
+    completionRetry =
       deps.completionRetry ??
       createRealRetryPolicy({
         name: "slate-mcp-oauth-loopback-completion",
@@ -121,23 +121,23 @@ export function createSlateMcpOAuthLoopback(deps: {
         name: "slate-mcp-oauth-loopback-bind-retry",
         intervalMs: MCP_OAUTH_BIND_RETRY_INTERVAL_MS,
       }),
-    bindHosts = loopbackBindHosts(redirect.hostname),
-    port = Number.parseInt(redirect.port, 10);
+    bindAddresses = loopbackBindHosts(redirectTarget.hostname),
+    bindPort = Number.parseInt(redirectTarget.port, 10);
   type Pending = {
     serverName?: string | undefined;
     expiry: { dispose(): void };
     completing: Promise<{ kind: string }> | null;
   };
-  const pending = new Map<string, Pending>(),
-    servers = new Map<string, Server>();
-  let bindAttempt: Promise<void> | null = null,
-    bindPoll: { dispose(): void } | null = null,
-    disposed = false,
-    logged = false,
-    serversClosed = Promise.resolve();
-  const closeServers = async (items: Server[]): Promise<void> => {
+  const pendingStates = new Map<string, Pending>(),
+    listeners = new Map<string, Server>();
+  let binding: Promise<void> | null = null,
+    bindTimer: { dispose(): void } | null = null,
+    isDisposed = false,
+    loggedBindFailure = false,
+    listenersClosed = Promise.resolve();
+  const closeListening = async (serversToClose: Server[]): Promise<void> => {
     await Promise.all(
-      items
+      serversToClose
         .filter((server) => server.listening)
         .map(
           (server) =>
@@ -148,30 +148,30 @@ export function createSlateMcpOAuthLoopback(deps: {
         ),
     );
   };
-  const stopBindPoll = () => {
-    bindPoll?.dispose();
-    bindPoll = null;
+  const stopBindTimer = () => {
+    bindTimer?.dispose();
+    bindTimer = null;
   };
-  const closeIfDrained = () => {
-    if (pending.size > 0) return;
-    stopBindPoll();
-    logged = false;
-    if (servers.size === 0) return;
-    const items = [...servers.values()];
-    servers.clear();
-    serversClosed = serversClosed
-      .then(() => closeServers(items))
+  const closeWhenDrained = () => {
+    if (pendingStates.size > 0) return;
+    stopBindTimer();
+    loggedBindFailure = false;
+    if (listeners.size === 0) return;
+    const items = [...listeners.values()];
+    listeners.clear();
+    listenersClosed = listenersClosed
+      .then(() => closeListening(items))
       .catch(() => undefined);
   };
-  const settle = (state: string) => {
-    const auth = pending.get(state);
-    if (auth == null) return;
-    pending.delete(state);
-    auth.expiry.dispose();
-    closeIfDrained();
+  const forgetState = (state: string) => {
+    const flow = pendingStates.get(state);
+    if (flow == null) return;
+    pendingStates.delete(state);
+    flow.expiry.dispose();
+    closeWhenDrained();
   };
-  const complete = async (state: string, auth: Pending, url: URL) => {
-    const serverName = auth.serverName;
+  const finishFlow = async (state: string, flow: Pending, requestUrl: URL) => {
+    const serverName = flow.serverName;
     const fail = (reason: string) =>
       deps.onCallback?.({
         phase: "callback_received",
@@ -181,19 +181,19 @@ export function createSlateMcpOAuthLoopback(deps: {
           reason: callbackFailureReason(reason),
         }),
       });
-    if (url.searchParams.get("error") != null) {
+    if (requestUrl.searchParams.get("error") != null) {
       fail("provider_error");
-      settle(state);
+      forgetState(state);
       return { kind: "refused" };
     }
-    const code = url.searchParams.get("code");
+    const code = requestUrl.searchParams.get("code");
     if (code == null || code.length === 0) {
       fail("missing_code");
-      settle(state);
+      forgetState(state);
       return { kind: "refused" };
     }
     try {
-      await retry.runWithRetry(() =>
+      await completionRetry.runWithRetry(() =>
         deps.completeOAuth({ stateId: state, code }),
       );
       deps.onCallback?.({
@@ -201,7 +201,7 @@ export function createSlateMcpOAuthLoopback(deps: {
         outcome: "ok",
         serverName,
       });
-      settle(state);
+      forgetState(state);
       return { kind: "success" };
     } catch (error) {
       fail(
@@ -212,102 +212,102 @@ export function createSlateMcpOAuthLoopback(deps: {
       deps.log(
         `[slate:mcp] loopback OAuth completion failed: ${error instanceof Error ? error.message : String(error)}`,
       );
-      if (isTransientConnectError(error)) auth.completing = null;
-      else settle(state);
+      if (isTransientConnectError(error)) flow.completing = null;
+      else forgetState(state);
       return { kind: "failed" };
     }
   };
-  const handle = async (url: URL, method: string, response: ServerResponse) => {
-    if (method !== "GET") {
+  const serveCallback = async (requestUrl: URL, httpMethod: string, response: ServerResponse) => {
+    if (httpMethod !== "GET") {
       response.writeHead(405).end("Method not allowed");
       return;
     }
-    if (url.pathname !== redirect.pathname) {
+    if (requestUrl.pathname !== redirectTarget.pathname) {
       response.writeHead(404).end("Not found");
       return;
     }
-    const state = url.searchParams.get("state"),
-      auth = state == null ? undefined : pending.get(state);
-    if (state == null || auth == null) {
+    const state = requestUrl.searchParams.get("state"),
+      flow = state == null ? undefined : pendingStates.get(state);
+    if (state == null || flow == null) {
       response.writeHead(404).end("Not found");
       return;
     }
-    const serverName = auth.serverName;
-    auth.completing ??= complete(state, auth, url);
-    const outcome = await auth.completing,
-      success = outcome.kind === "success";
-    const statusCode = success ? 200 : outcome.kind === "refused" ? 400 : 500;
-    const body =
-      success
+    const serverName = flow.serverName;
+    flow.completing ??= finishFlow(state, flow, requestUrl);
+    const outcome = await flow.completing,
+      isSuccess = outcome.kind === "success";
+    const statusCode = isSuccess ? 200 : outcome.kind === "refused" ? 400 : 500;
+    const page =
+      isSuccess
         ? renderMcpOAuthSuccessPage({ serverName })
         : renderMcpOAuthErrorPage({ serverName });
     response.writeHead(statusCode, {
       "Content-Type": "text/html; charset=utf-8",
       Connection: "close",
     });
-    response.end(body);
+    response.end(page);
   };
-  const listener = (request: IncomingMessage, response: ServerResponse) => {
-    let url: URL;
+  const onRequest = (incoming: IncomingMessage, response: ServerResponse) => {
+    let requestUrl: URL;
     try {
-      url = new URL(request.url ?? "/", redirect.origin);
+      requestUrl = new URL(incoming.url ?? "/", redirectTarget.origin);
     } catch {
       response.writeHead(400).end("Bad request");
       return;
     }
-    void handle(url, request.method ?? "GET", response);
+    void serveCallback(requestUrl, incoming.method ?? "GET", response);
   };
-  const bindMissing = async () => {
-    await serversClosed;
-    if (disposed || pending.size === 0) return;
-    const errors: unknown[] = [];
-    for (const host of bindHosts) {
-      if (servers.has(host)) continue;
-      const server = createServer(listener);
+  const bindMissingListeners = async () => {
+    await listenersClosed;
+    if (isDisposed || pendingStates.size === 0) return;
+    const bindErrors: unknown[] = [];
+    for (const address of bindAddresses) {
+      if (listeners.has(address)) continue;
+      const listenerServer = createServer(onRequest);
       try {
         await new Promise<void>((resolve, reject) => {
           const onError = (error: Error) => reject(error);
-          server.once("error", onError);
-          server.listen(port, host, () => {
-            server.off("error", onError);
+          listenerServer.once("error", onError);
+          listenerServer.listen(bindPort, address, () => {
+            listenerServer.off("error", onError);
             resolve();
           });
         });
-        if (disposed || pending.size === 0) server.close();
+        if (isDisposed || pendingStates.size === 0) listenerServer.close();
         else {
-          server.unref();
-          servers.set(host, server);
+          listenerServer.unref();
+          listeners.set(address, listenerServer);
         }
       } catch (error) {
-        errors.push(error);
-        server.close();
+        bindErrors.push(error);
+        listenerServer.close();
       }
     }
-    if (servers.size === bindHosts.length) {
-      stopBindPoll();
-      if (logged) {
+    if (listeners.size === bindAddresses.length) {
+      stopBindTimer();
+      if (loggedBindFailure) {
         deps.log("[slate:mcp] loopback OAuth listener bound after retry");
-        logged = false;
+        loggedBindFailure = false;
       }
-    } else if (errors.length > 0 && !logged) {
-      logged = true;
+    } else if (bindErrors.length > 0 && !loggedBindFailure) {
+      loggedBindFailure = true;
       deps.log(
-        `[slate:mcp] loopback OAuth listener failed to bind port ${port} (retrying while auth is pending): ${errors[0] instanceof Error ? errors[0].message : String(errors[0])}`,
+        `[slate:mcp] loopback OAuth listener failed to bind port ${bindPort} (retrying while auth is pending): ${bindErrors[0] instanceof Error ? bindErrors[0].message : String(bindErrors[0])}`,
       );
     }
   };
-  const ensureBound = async (): Promise<void> => {
-    bindAttempt ??= bindMissing().finally(() => {
-      bindAttempt = null;
+  const ensureListening = async (): Promise<void> => {
+    binding ??= bindMissingListeners().finally(() => {
+      binding = null;
     });
-    await bindAttempt;
+    await binding;
     if (
-      !disposed &&
-      pending.size > 0 &&
-      servers.size < bindHosts.length &&
-      bindPoll == null
+      !isDisposed &&
+      pendingStates.size > 0 &&
+      listeners.size < bindAddresses.length &&
+      bindTimer == null
     )
-      bindPoll = bindRetry.start(ensureBound);
+      bindTimer = bindRetry.start(ensureListening);
   };
   return {
     async registerPendingAuthFromUrl({
@@ -317,40 +317,46 @@ export function createSlateMcpOAuthLoopback(deps: {
       authorizationUrl: string;
       serverName?: string;
     }): Promise<boolean> {
-      if (disposed) return false;
-      const parsed = parseMcpOAuthLoopbackAuthorization(
+      if (isDisposed) return false;
+      const authorization = parseMcpOAuthLoopbackAuthorization(
         authorizationUrl,
-        callback,
+        redirectUrl,
       );
-      if (parsed == null) return false;
-      const known = pending.get(parsed.state);
-      if (known != null) {
-        known.expiry.dispose();
-        known.expiry = expiry.arm(parsed.state, () => settle(parsed.state));
-        if (known.serverName == null && serverName != null)
-          known.serverName = serverName;
+      if (authorization == null) return false;
+      const existing = pendingStates.get(authorization.state);
+      if (existing != null) {
+        existing.expiry.dispose();
+        existing.expiry = pendingExpiry.arm(
+          authorization.state,
+          () => forgetState(authorization.state),
+        );
+        if (existing.serverName == null && serverName != null)
+          existing.serverName = serverName;
         return true;
       }
-      pending.set(parsed.state, {
+      pendingStates.set(authorization.state, {
         serverName,
-        expiry: expiry.arm(parsed.state, () => settle(parsed.state)),
+        expiry: pendingExpiry.arm(
+          authorization.state,
+          () => forgetState(authorization.state),
+        ),
         completing: null,
       });
-      await ensureBound();
+      await ensureListening();
       return true;
     },
     async dispose(): Promise<void> {
-      disposed = true;
-      for (const auth of pending.values()) auth.expiry.dispose();
-      pending.clear();
-      stopBindPoll();
+      isDisposed = true;
+      for (const flow of pendingStates.values()) flow.expiry.dispose();
+      pendingStates.clear();
+      stopBindTimer();
       try {
-        await bindAttempt;
+        await binding;
       } catch {}
-      const items = [...servers.values()];
-      servers.clear();
-      await closeServers(items);
-      await serversClosed;
+      const items = [...listeners.values()];
+      listeners.clear();
+      await closeListening(items);
+      await listenersClosed;
     },
   };
 }
