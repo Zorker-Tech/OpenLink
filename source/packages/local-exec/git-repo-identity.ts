@@ -1,31 +1,50 @@
 /**
- * A repository's identity, as a host and a path.
+ * A repository's identity: the host and the path, and nothing about how it was reached.
  *
- * The same repository is named differently depending on how it was reached — an ssh remote, a scheme other than
- * http, a bare host and path, a trailing slash or `.git`, a query — and the identity is what they all have in common,
- * so the differences are stripped rather than kept.
+ * The same repository is written as an scp-style remote, an ssh url, a bare host and path, with or without a scheme,
+ * a trailing slash, a `.git` suffix or a query. The identity is what all of those have in common, so the differences
+ * are stripped rather than kept.
  */
+
+/** An scp-style remote: `git@host:owner/name` is a URL in disguise. */
+const SCP_REMOTE = /^git@/;
+
+/** Any URL scheme, and the two this platform keeps. */
+const ANY_SCHEME = /^[a-z][a-z0-9+.-]*:\/\//i;
+const HTTP_SCHEME = /^https?:\/\//i;
+
+/** What is not part of the identity: trailing slashes, the git suffix, and a query or fragment. */
+const TRAILING_SLASHES = /\/+$/;
+const GIT_SUFFIX = /\.git$/i;
+const QUERY_OR_FRAGMENT = /[?#].*$/;
+
+/** An scp-style remote turned into a URL: the colon between host and path becomes the path's own. */
+function withScpRemoteAsUrl(url: string): string {
+  return SCP_REMOTE.test(url) ? `https://${url.slice("git@".length).replace(":", "/")}` : url;
+}
+
+/** A scheme other than http/https turned into https: only the host and the path are kept, so the scheme is noise. */
+function withHttpsScheme(url: string): string {
+  return ANY_SCHEME.test(url) && !HTTP_SCHEME.test(url) ? url.replace(ANY_SCHEME, "https://") : url;
+}
+
+/** A bare host and path is a URL too. */
+function withScheme(url: string): string {
+  return HTTP_SCHEME.test(url) ? url : `https://${url}`;
+}
+
+/** A path without the marks that name the same repository differently. */
+function withoutPathNoise(pathname: string): string {
+  return pathname.replace(TRAILING_SLASHES, "").replace(GIT_SUFFIX, "").replace(TRAILING_SLASHES, "");
+}
+
 export function toHostPath(rawUrl: string): string {
-  let url = rawUrl.trim();
-  if (url.startsWith("git@")) {
-    url = `https://${url.slice("git@".length).replace(":", "/")}`;
-  }
-  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(url) && !/^https?:\/\//i.test(url)) {
-    url = url.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "https://");
-  }
-  if (!/^https?:\/\//i.test(url)) {
-    url = `https://${url}`;
-  }
+  const url = withScheme(withHttpsScheme(withScpRemoteAsUrl(rawUrl.trim())));
   try {
     const parsed = new URL(url);
-    const pathname = parsed.pathname.replace(/\/+$/, "").replace(/\.git$/i, "").replace(/\/+$/, "");
-    return parsed.hostname + pathname;
+    return parsed.hostname + withoutPathNoise(parsed.pathname);
   } catch {
-    url = url.replace(/^https?:\/\//i, "");
-    url = url.replace(/[?#].*$/, "");
-    url = url.replace(/\/+$/, "");
-    url = url.replace(/\.git$/i, "");
-    url = url.replace(/\/+$/, "");
-    return url;
+    // A URL the parser refuses is still written down somehow: strip what this platform strips by hand.
+    return withoutPathNoise(url.replace(HTTP_SCHEME, "").replace(QUERY_OR_FRAGMENT, ""));
   }
 }
