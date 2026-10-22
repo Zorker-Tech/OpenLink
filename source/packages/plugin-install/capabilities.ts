@@ -5,6 +5,19 @@
  * same capability twice is one capability rather than two.
  */
 import { z } from "zod";
+
+/** The capability names the platform understands. */
 export const CapabilitySchema = z.enum(["canvas"]);
-export const CapabilitiesSchema = z.array(CapabilitySchema).transform((capabilities) => [...new Set(capabilities)].sort());
+
 export type Capability = z.infer<typeof CapabilitySchema>;
+
+/** A declared list as one entry per capability, in name order. */
+function onceEach(declared: Capability[]): Capability[] {
+  return [...new Set(declared)].sort();
+}
+
+/** A list of capabilities, with a name declared twice counted once and the list in name order. */
+const CapabilityListSchema = z.array(CapabilitySchema);
+
+/** A list of capabilities, with a name declared twice counted once and the list in name order. */
+export const CapabilitiesSchema = CapabilityListSchema.transform(onceEach);
