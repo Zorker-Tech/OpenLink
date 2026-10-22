@@ -168,6 +168,11 @@ describe("the two errors a transcript delivery raises", () => {
     const unregistered = new SlateChannelDeliveryUnregisteredError();
     assert.equal(unregistered.name, "SlateChannelDeliveryUnregisteredError");
     assert.equal(unregistered.message, "No channel delivery mechanism is registered.");
+    assert.equal(unregistered instanceof SlateChannelDeliveryUnregisteredError, true);
+    assert.equal(unregistered instanceof Error, true, "a caller can catch it as an error");
+    assert.equal(unregistered.toString(), "SlateChannelDeliveryUnregisteredError: No channel delivery mechanism is registered.");
+    assert.deepEqual(Object.keys(unregistered), ["name"], "the name is the one own property it carries");
+    assert.equal(unregistered.constructor.name, "SlateChannelDeliveryUnregisteredError");
     const notPersisted = new SlateSendNotPersistedError();
     assert.equal(notPersisted.name, "SlateSendNotPersistedError");
   });
