@@ -33,6 +33,7 @@ import {
   buildMcpCustomInstructionsSystemPromptSection,
   clampMcpCustomInstruction,
   formatMcpCustomInstructionToolNote,
+  getDefaultMcpCustomInstruction,
   MCP_CUSTOM_INSTRUCTIONS_MAX_LENGTH,
   resolveMcpCustomInstruction,
   selectConnectedMcpCustomInstructions,
@@ -213,6 +214,41 @@ test("a connector's instructions are bounded, and only connected ones are listed
   assert.match(String(section), /- a: always a/)
   assert.equal(buildMcpCustomInstructionsSystemPromptSection(["a"], new Map()), null)
   assert.match(formatMcpCustomInstructionToolNote("a", "always a"), /"a" connector/)
+})
+
+test("a connector's own instruction stands in only when nothing was stored, and the prompt section is exactly three lines and a list", () => {
+  assert.equal(MCP_CUSTOM_INSTRUCTIONS_MAX_LENGTH, 500)
+  assert.equal(clampMcpCustomInstruction("x".repeat(500)), "x".repeat(500))
+  assert.equal(clampMcpCustomInstruction("x".repeat(501)), "x".repeat(500))
+  assert.equal(clampMcpCustomInstruction("  padded  "), "  padded  ", "cutting is not trimming")
+
+  assert.equal(getDefaultMcpCustomInstruction(" hex "), getDefaultMcpCustomInstruction("HEX"))
+  assert.match(getDefaultMcpCustomInstruction("hex"), /CSV/)
+  assert.equal(getDefaultMcpCustomInstruction("unknown"), "")
+
+  assert.equal(resolveMcpCustomInstruction("hex", ""), "", "a stored empty instruction is a decision, not a missing one")
+  assert.equal(resolveMcpCustomInstruction("hex", "   "), "")
+  assert.equal(resolveMcpCustomInstruction(" hex ", undefined), getDefaultMcpCustomInstruction("hex"))
+
+  assert.deepEqual(selectConnectedMcpCustomInstructions(["blank"], new Map([["blank", "   "]])), [], "an instruction that trims to nothing is no instruction")
+  assert.deepEqual(
+    selectConnectedMcpCustomInstructions(["hex"], new Map()),
+    [{ name: "hex", instructions: getDefaultMcpCustomInstruction("hex") }],
+    "a connector with a default is listed without a stored instruction",
+  )
+
+  const section = String(buildMcpCustomInstructionsSystemPromptSection(["b", "a"], new Map([["a", "always a"], ["b", "always b"]])))
+  const lines = section.split("\n")
+  assert.equal(lines.length, 4)
+  assert.equal(lines[0], "## Connector custom instructions")
+  const intro = lines[1] ?? ""
+  assert.equal(intro.startsWith("Custom instructions are configured for some connected tools"), true)
+  assert.equal(intro.length, 192, "the introduction is one sentence, unchanged")
+  assert.deepEqual(lines.slice(2), ["- a: always a", "- b: always b"])
+  assert.equal(section.length, 253)
+  assert.equal(buildMcpCustomInstructionsSystemPromptSection(["a"], new Map()), null)
+
+  assert.equal(formatMcpCustomInstructionToolNote("a", "  always a  "), 'Custom instructions for the "a" connector (always follow them when using this tool):\nalways a')
 })
 
 // ---------------------------------------------------------------------------------------------
