@@ -14,6 +14,8 @@ import {
 } from "../../source/packages/agent/tools/task-subagent-completion.ts"
 import type { ConversationBlobStore } from "../../source/packages/agent/tools/task-runtime.ts"
 import { createContext, type Context } from "../../source/packages/context/context.ts"
+import { generateSeededUuid } from "../../source/packages/agent/tools/tool-support.ts"
+import { SelectedContext } from "../../source/packages/proto/generated/agent/v1/selected_context_pb.ts"
 import {
   AgentMode,
   ConversationStateStructure,
@@ -398,4 +400,100 @@ test("an execution failure drops the subagent and reports it only when there is 
   )
   assert.deepEqual(second.cleaned, ["subagent-1"])
   assert.deepEqual(withoutState.calls, [])
+})
+
+// ---------------------------------------------------------------------------------------------
+// the pieces this rewrite split out
+// ---------------------------------------------------------------------------------------------
+
+test("a follow-up message id is seeded from the call and the turn, so retries agree", () => {
+  const expected = generateSeededUuid("call-1-followup-2")
+  const action = buildFollowupAction({ followupMessage: "keep going", toolCallId: "call-1", loopCount: 2, useAskMode: false })
+  const message = action.action.case === "userMessageAction" ? action.action.value.userMessage : undefined
+  assert.equal(message?.messageId, expected)
+
+  const withoutContext = buildFollowupAction({ followupMessage: "keep going", toolCallId: "call-1", loopCount: 2, useAskMode: false })
+  const withoutMessage = withoutContext.action.case === "userMessageAction" ? withoutContext.action.value.userMessage : undefined
+  assert.equal(withoutMessage?.selectedContext, undefined, "a follow-up without a context carries none")
+})
+
+test("a subagent that is asked to keep going in ask mode produces an ask-mode follow-up", async () => {
+  const harness = hookHarness(() => stopHookAnswer("ask this"))
+  const { state, blobStore } = conversationWith("the answer", 0)
+  const { deps } = dependencies(harness, blobStore, { enableTaskToolHooksExec: false })
+  const iterState = iterationState()
+  const result = await processSubagentIterationSuccess(
+    state,
+    0,
+    iterState,
+    { ...completionCtx, useAskModeForSubagent: true },
+    deps,
+    () => {},
+    new SubagentType({}),
+  )
+  const message = result.nextAction?.action.case === "userMessageAction" ? result.nextAction.action.value.userMessage : undefined
+  assert.equal(message?.mode, AgentMode.ASK)
+  assert.equal(iterState.loopCount, 1)
+})
+
+test("an empty follow-up answer finishes the subagent instead of continuing it", async () => {
+  const harness = hookHarness(() => stopHookAnswer(""))
+  const { state, blobStore } = conversationWith("the answer", 0)
+  const { deps } = dependencies(harness, blobStore, { enableTaskToolHooksExec: false })
+  const iterState = iterationState()
+  const result = await processSubagentIterationSuccess(state, 0, iterState, completionCtx, deps, () => {}, new SubagentType({}))
+  assert.equal(result.shouldContinue, false)
+  assert.equal(iterState.loopCount, 0)
+})
+
+test("the duration a finished subagent reports is measured from when it was started", async () => {
+  const harness = hookHarness(() => stopHookAnswer())
+  const { state, blobStore } = conversationWith("the answer", 0)
+  const { deps } = dependencies(harness, blobStore, { enableTaskToolHooksExec: false })
+  const startedAt = completionCtx.executionStartTime
+  const before = Date.now()
+  const result = await processSubagentIterationSuccess(state, 0, iterationState(), completionCtx, deps, () => {}, new SubagentType({}))
+  const after = Date.now()
+  const final = result.finalResult
+  if (final?.result.case !== "success") throw new Error("expected a success")
+  const duration = final.result.value.durationMs ?? 0n
+  assert.equal(duration >= BigInt(before - startedAt), true, "at least the time before the call has passed")
+  assert.equal(duration <= BigInt(after - startedAt), true, "and not more than the time after it")
+})
+
+
+test("a hook that answers something other than a string does not continue the subagent", async () => {
+  const harness = hookHarness(() => ({ response: { response: { case: "subagentStop", value: { followupMessage: 42 } } } }))
+  const { state, blobStore } = conversationWith("the answer", 0)
+  const { deps } = dependencies(harness, blobStore, { enableTaskToolHooksExec: false })
+  const iterState = iterationState()
+  const result = await processSubagentIterationSuccess(state, 0, iterState, completionCtx, deps, () => {}, new SubagentType({}))
+  assert.equal(result.shouldContinue, false)
+  assert.equal(iterState.loopCount, 0)
+})
+
+test("a follow-up carries the selected context it was given", () => {
+  const context = new SelectedContext({})
+  const action = buildFollowupAction({ followupMessage: "keep going", toolCallId: "call-1", loopCount: 2, useAskMode: false, selectedContext: context })
+  const message = action.action.case === "userMessageAction" ? action.action.value.userMessage : undefined
+  assert.notEqual(message?.selectedContext, undefined, "the context it was given is carried")
+})
+
+test("only the turns of this iteration are collected into the result", async () => {
+  const harness = hookHarness(() => stopHookAnswer())
+  // Three turns with blobs: two older ones and the turn this iteration added.
+  const turnBlob = (stepIds: number[]): Uint8Array => new ConversationTurnStructure({ turn: { case: "agentConversationTurn", value: { steps: stepIds.map(idOf) } as never } }).toBinary()
+  const entries = [
+    { id: idOf(7), bytes: turnBlob([20]) },
+    { id: idOf(8), bytes: turnBlob([21]) },
+    { id: idOf(1), bytes: turnBlob([10]) },
+    { id: idOf(10), bytes: new ConversationStep({ message: { case: "assistantMessage", value: { text: "new" } } as never }).toBinary() },
+    { id: idOf(20), bytes: new ConversationStep({ message: { case: "assistantMessage", value: { text: "old one" } } as never }).toBinary() },
+    { id: idOf(21), bytes: new ConversationStep({ message: { case: "assistantMessage", value: { text: "old two" } } as never }).toBinary() },
+  ]
+  const { deps } = dependencies(harness, blobStoreOf(entries), { enableTaskToolHooksExec: false })
+  const state = new ConversationStateStructure({ turns: [idOf(7), idOf(8), idOf(1)] })
+  const result = await processSubagentIterationSuccess(state, 2, iterationState(), { ...completionCtx, initialTurnsCount: 2 }, deps, () => {}, new SubagentType({}))
+  if (result.finalResult?.result.case !== "success") throw new Error("expected a success")
+  assert.equal(result.finalResult.result.value.conversationSteps.length, 1, "the older turns are not collected")
 })
