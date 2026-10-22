@@ -3,6 +3,10 @@
  *
  * It answers with what the platform knows — the agents, the boxes, the sessions — and never with the store itself, so
  * an agent can ask about the host without being handed its files.
+ *
+ * The operation catalogue and the trigger schemas below are the tool's published contract: the words are what the model
+ * is told it can do and what the arguments mean, and they are kept as written. The code around them decides which writer
+ * a route calls, what a trigger resolves to, and when a routine or workflow write needs a review.
  */
 import { z } from "zod";
 import { GITHUB_EVENT_KINDS, LINEAR_EVENT_CASES, PAGERDUTY_EVENT_CASES, SENTRY_EVENT_CASES } from "../../../shared/automations.ts";
