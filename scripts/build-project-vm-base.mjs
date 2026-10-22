@@ -3,6 +3,7 @@ import { access, appendFile, cp, mkdir, mkdtemp, readFile, rename, rm, stat, wri
 import { spawn } from 'node:child_process'
 import { constants } from 'node:fs'
 import { basename, resolve } from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
 import { configureBundledPodmanRuntime } from './lib/bundled-podman-runtime.mjs'
 import { ensurePodmanBuilder, run, stopPodmanBuilder } from './lib/podman-builder.mjs'
@@ -20,12 +21,15 @@ const outputDirectory = resolve(root, '.openlink-runtime/project-vm-base')
 const archive = resolve(outputDirectory, 'openlink-project-vm-base.oci.tar')
 const manifestPath = resolve(outputDirectory, 'manifest.json')
 const projectSupabaseLockPath = resolve(root, 'services/project-supabase/runtime.lock.json')
-const projectSupabaseConfiguration = resolve(root, '.openlink-runtime/project-supabase/configuration')
+const projectSupabaseArtifactRoot = process.env.OPENLINK_PROJECT_SUPABASE_ROOT?.trim()
+  ? resolve(process.env.OPENLINK_PROJECT_SUPABASE_ROOT)
+  : resolve(root, '.openlink-runtime/project-supabase')
+const projectSupabaseConfiguration = resolve(projectSupabaseArtifactRoot, 'configuration')
 const projectSupabaseSeedScript = resolve(root, 'services/agent-host/project-vm-seed-supabase.sh')
 const projectSupabaseController = resolve(root, 'services/agent-host/project-supabase-runtime.mjs')
 const projectSupabaseBundleVerifier = resolve(root, 'scripts/lib/project-supabase-bundle.mjs')
 const projectSupabaseReleaseTrust = resolve(root, 'services/project-supabase/release-trust.json')
-const projectSupabaseRuntimeSpec = resolve(root, '.openlink-runtime/project-supabase/runtime.spec.json')
+const projectSupabaseRuntimeSpec = resolve(projectSupabaseArtifactRoot, 'runtime.spec.json')
 // Keep the bootable OS aligned with the bundled Podman client.  The generic
 // 6.0 manifest has intermittently stalled on Quay; 6.2 is the current
 // machine-os release and is still a multi-arch manifest selected by Podman.
@@ -113,6 +117,69 @@ const OCI_TRANSFER_CHUNK_BYTES = Number.parseInt(process.env.OPENLINK_OCI_TRANSF
 if (!Number.isSafeInteger(OCI_TRANSFER_CHUNK_BYTES) || OCI_TRANSFER_CHUNK_BYTES < 64 * 1024 || OCI_TRANSFER_CHUNK_BYTES > 32 * 1024 * 1024) {
   throw new Error('OPENLINK_OCI_TRANSFER_CHUNK_BYTES must be between 64 KiB and 32 MiB')
 }
+const OCI_TRANSFER_CONCURRENCY = Number.parseInt(process.env.OPENLINK_OCI_TRANSFER_CONCURRENCY || '4', 10)
+if (!Number.isSafeInteger(OCI_TRANSFER_CONCURRENCY) || OCI_TRANSFER_CONCURRENCY < 1 || OCI_TRANSFER_CONCURRENCY > 16) {
+  throw new Error('OPENLINK_OCI_TRANSFER_CONCURRENCY must be between 1 and 16')
+}
+const OCI_TRANSFER_RETRIES = Number.parseInt(process.env.OPENLINK_OCI_TRANSFER_RETRIES || '6', 10)
+if (!Number.isSafeInteger(OCI_TRANSFER_RETRIES) || OCI_TRANSFER_RETRIES < 1 || OCI_TRANSFER_RETRIES > 12) {
+  throw new Error('OPENLINK_OCI_TRANSFER_RETRIES must be between 1 and 12')
+}
+
+async function downloadRange(url, token, { start, end, path }) {
+  const expectedSize = end - start + 1
+  const attemptPath = `${path}.attempt`
+  let received = 0
+  try {
+    received = (await stat(path)).size
+  } catch {}
+  if (received === expectedSize) return
+  if (received > expectedSize) {
+    await rm(path, { force: true })
+    received = 0
+  }
+  // Preserve bytes left by an interrupted curl process. This file starts at
+  // the current offset in this range, so it can be appended without overlap.
+  try {
+    const interruptedSize = (await stat(attemptPath)).size
+    if (interruptedSize > 0 && interruptedSize <= expectedSize - received) {
+      await appendFile(path, await readFile(attemptPath), { mode: 0o600 })
+      received += interruptedSize
+    }
+  } catch {}
+  await rm(attemptPath, { force: true })
+  if (received === expectedSize) return
+  for (let attempt = 1; attempt <= OCI_TRANSFER_RETRIES; attempt += 1) {
+    const requestStart = start + received
+    await rm(attemptPath, { force: true })
+    let transferError
+    try {
+      await runCurl([
+        '--fail', '--location', '--silent', '--show-error',
+        '--speed-time', '20', '--speed-limit', '1024',
+        '--range', `${requestStart}-${end}`, '--output', attemptPath,
+        ...registryHeaders(token, 'application/octet-stream'), url,
+      ])
+    } catch (error) {
+      transferError = error
+    }
+    let receivedThisAttempt = 0
+    try { receivedThisAttempt = (await stat(attemptPath)).size } catch {}
+    if (receivedThisAttempt > expectedSize - received) {
+      await rm(attemptPath, { force: true })
+      transferError ??= new Error(`OCI range transfer exceeded ${expectedSize} bytes for ${basename(path)}`)
+    } else if (receivedThisAttempt > 0) {
+      await appendFile(path, await readFile(attemptPath), { mode: 0o600 })
+      received += receivedThisAttempt
+      await rm(attemptPath, { force: true })
+    }
+    if (received === expectedSize) return
+    if (attempt === OCI_TRANSFER_RETRIES) {
+      throw transferError || new Error(`OCI range transfer stopped at ${received} of ${expectedSize} bytes for ${basename(path)}`)
+    }
+    await delay(Math.min(attempt * 1000, 5000))
+  }
+}
 
 async function downloadBlob(url, token, destination, expectedDigest, expectedSize) {
   try {
@@ -132,23 +199,21 @@ async function downloadBlob(url, token, destination, expectedDigest, expectedSiz
     downloaded = 0
   }
   while (downloaded < expectedSize) {
-    const rangeEnd = Math.min(downloaded + OCI_TRANSFER_CHUNK_BYTES, expectedSize) - 1
-    const chunkPath = `${destination}.${downloaded}-${rangeEnd}.part`
-    await rm(chunkPath, { force: true })
-    await runCurl([
-      '--fail', '--location', '--silent', '--show-error',
-      '--retry', '8', '--retry-all-errors', '--retry-delay', '5',
-      '--range', `${downloaded}-${rangeEnd}`, '--output', chunkPath,
-      ...registryHeaders(token, 'application/octet-stream'), url,
-    ])
-    const chunk = await readFile(chunkPath)
-    await rm(chunkPath, { force: true })
-    const expectedChunkSize = rangeEnd - downloaded + 1
-    if (chunk.length !== expectedChunkSize) {
-      throw new Error(`OCI range transfer returned ${chunk.length} bytes for ${basename(destination)}, expected ${expectedChunkSize}`)
+    const ranges = []
+    for (let start = downloaded; start < expectedSize && ranges.length < OCI_TRANSFER_CONCURRENCY; start += OCI_TRANSFER_CHUNK_BYTES) {
+      const end = Math.min(start + OCI_TRANSFER_CHUNK_BYTES, expectedSize) - 1
+      const path = `${destination}.${start}-${end}.part`
+      ranges.push({ start, end, path })
     }
-    await appendFile(destination, chunk, { mode: 0o600 })
-    downloaded += chunk.length
+    const results = await Promise.allSettled(ranges.map((range) => downloadRange(url, token, range)))
+    const failed = results.find((result) => result.status === 'rejected')
+    if (failed) throw failed.reason
+    for (const { path } of ranges) {
+      const chunk = await readFile(path)
+      await appendFile(destination, chunk, { mode: 0o600 })
+      await rm(path, { force: true })
+      downloaded += chunk.length
+    }
   }
   const received = (await stat(destination)).size
   if (received !== expectedSize) {
@@ -162,9 +227,9 @@ async function downloadBlob(url, token, destination, expectedDigest, expectedSiz
 
 /**
  * Acquire a registry image as an OCI archive before it enters the Builder VM.
- * The archive is content-addressed and each blob resumes independently. This
- * avoids containers/image's concurrent proxy transfer path while preserving
- * the original image manifest and digest verification performed by Podman.
+ * The archive is content-addressed, ranges download with bounded concurrency,
+ * and each blob resumes independently. This avoids containers/image's default
+ * blob-transfer path while preserving Podman's original digest verification.
  */
 async function ensureMachineOsArchive(image) {
   const matched = image.match(/^([^/]+)\/(.+):([^:@]+)$/)
@@ -321,31 +386,42 @@ try {
   await writeFile(resolve(context, 'project-vm-base.json'), `${JSON.stringify({ schemaVersion: 2, fingerprint, baseImage, baseImagePlatform: machineOs.platform, builtFor: 'OpenLink Project VM', projectSupabase: { release: projectSupabaseLock.release.tag, commit: projectSupabaseLock.release.commit, configurationTreeSha256: projectSupabaseLock.configuration.treeSha256, lockSha256: projectSupabaseLockSha256 } })}\n`, { mode: 0o600 })
 
   builder = await ensurePodmanBuilder(podman, artifactOptions)
-  await run(podman, ['machine', 'ssh', builder.machineName, `mkdir -p ${shellQuote(guestRoot)}`], artifactOptions)
-  await run(podman, ['machine', 'cp', context, `${builder.machineName}:${guestContext}`], artifactOptions)
-  await run(podman, ['machine', 'cp', machineOs.archivePath, `${builder.machineName}:${guestMachineOsArchive}`], artifactOptions)
   const tag = `openlink/project-vm-base:${fingerprint.slice(0, 20)}`
-  // Import the verified OCI archive into the Builder VM, tag it with the
-  // Containerfile reference, then forbid network pulls during the build.
-  const pull = ['podman', 'pull', '--quiet', machineOs.imageReference.replace(machineOs.archivePath, guestMachineOsArchive)]
-    .map(shellQuote)
-    .join(' ')
-  const retag = ['podman', 'tag', 'localhost/openlink-machine-os:latest', baseImage]
-    .map(shellQuote)
-    .join(' ')
+  const buildArgs = [
+    'build', '--pull-never', '--http-proxy=false', '--tag', tag,
+    '--build-arg', `OPENLINK_MACHINE_OS_IMAGE=${baseImage}`,
+  ]
   // OCI acquisition is explicitly proxied above. Package metadata and RPMs
   // inside the immutable build use the host's direct network path instead of
   // inheriting a proxy that has already demonstrated long-transfer stalls.
-  const build = ['podman', 'build', '--pull-never', '--http-proxy=false', '--tag', tag, '--build-arg', `OPENLINK_MACHINE_OS_IMAGE=${baseImage}`, '--file', guestContainerfile, guestContext]
-    .map(shellQuote)
-    .join(' ')
-  const save = ['podman', 'save', '--format', 'oci-archive', '--output', guestArchive, tag]
-    .map(shellQuote)
-    .join(' ')
-  const environment = guestBuildEnvironment().map(([key, value]) => shellQuote(`${key}=${value}`)).join(' ')
-  await run(podman, ['machine', 'ssh', builder.machineName, `env ${environment} ${pull} && ${retag} && ${build} && ${save}`], artifactOptions)
   await rm(temporaryArchive, { force: true })
-  await run(podman, ['machine', 'cp', `${builder.machineName}:${guestArchive}`, temporaryArchive], artifactOptions)
+  if (builder.machineName) {
+    // On macOS and Windows, build inside the dedicated Linux Builder VM.
+    await run(podman, ['machine', 'ssh', builder.machineName, `mkdir -p ${shellQuote(guestRoot)}`], artifactOptions)
+    await run(podman, ['machine', 'cp', context, `${builder.machineName}:${guestContext}`], artifactOptions)
+    await run(podman, ['machine', 'cp', machineOs.archivePath, `${builder.machineName}:${guestMachineOsArchive}`], artifactOptions)
+    const pull = ['podman', 'pull', '--quiet', machineOs.imageReference.replace(machineOs.archivePath, guestMachineOsArchive)]
+      .map(shellQuote)
+      .join(' ')
+    const retag = ['podman', 'tag', 'localhost/openlink-machine-os:latest', baseImage]
+      .map(shellQuote)
+      .join(' ')
+    const build = ['podman', ...buildArgs, '--file', guestContainerfile, guestContext]
+      .map(shellQuote)
+      .join(' ')
+    const save = ['podman', 'save', '--format', 'oci-archive', '--output', guestArchive, tag]
+      .map(shellQuote)
+      .join(' ')
+    const environment = guestBuildEnvironment().map(([key, value]) => shellQuote(`${key}=${value}`)).join(' ')
+    await run(podman, ['machine', 'ssh', builder.machineName, `env ${environment} ${pull} && ${retag} && ${build} && ${save}`], artifactOptions)
+    await run(podman, ['machine', 'cp', `${builder.machineName}:${guestArchive}`, temporaryArchive], artifactOptions)
+  } else {
+    // Linux already is the isolated rootless builder; no Podman Machine exists.
+    await run(podman, ['pull', '--quiet', machineOs.imageReference], artifactOptions)
+    await run(podman, ['tag', 'localhost/openlink-machine-os:latest', baseImage], artifactOptions)
+    await run(podman, [...buildArgs, '--file', resolve(context, 'Containerfile'), context], artifactOptions)
+    await run(podman, ['save', '--format', 'oci-archive', '--output', temporaryArchive, tag], artifactOptions)
+  }
   if (!(await validArchive(temporaryArchive))) throw new Error('Project VM base build produced an invalid OCI archive')
   await rename(temporaryArchive, archive)
   await writeFile(manifestPath, `${JSON.stringify({
@@ -372,7 +448,7 @@ try {
 } finally {
   await rm(context, { recursive: true, force: true })
   await rm(temporaryArchive, { force: true })
-  if (builder) {
+  if (builder?.machineName) {
     await run(podman, ['machine', 'ssh', builder.machineName, `rm -rf ${shellQuote(guestRoot)}`], artifactOptions).catch(() => {})
     await stopPodmanBuilder(podman, builder.machineName, artifactOptions)
   }

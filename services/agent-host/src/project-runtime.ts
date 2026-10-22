@@ -1411,6 +1411,7 @@ export class ProjectRuntimeManager {
       machineName: descriptor.machineName,
       workspacePath: descriptor.workspacePath,
       sessionStorageRoot: descriptor.sessionStorageRoot,
+      ...(this.ubuntuDesktopIsoSource ? { ubuntuDesktopIsoSource: this.ubuntuDesktopIsoSource } : {}),
       ...(descriptor.ubuntuDesktopIsoPath ? { ubuntuDesktopIsoPath: descriptor.ubuntuDesktopIsoPath } : {}),
       ports: descriptor.servicePorts,
       opensandboxApiKey: descriptor.opensandboxApiKey,

@@ -43,6 +43,7 @@ from opensandbox_server.extensions import (
     ISOLATION_UPPER_MOUNT_PATH,
     extract_extensions_from_mapping,
 )
+from opensandbox_server.extensions.keys import OPENLINK_QEMU_KVM_KEY
 from opensandbox_server.api.schema import (
     CreateSandboxRequest,
     CreateSandboxResponse,
@@ -710,6 +711,18 @@ class DockerSandboxService(DockerDiagnosticsMixin, DockerRuntimeMixin, DockerVol
             return None, None, None
         return self._resolve_resource_limits(request)
 
+    @staticmethod
+    def _validate_qemu_kvm_device() -> None:
+        """Ensure the explicit OpenLink VM extension can access host KVM."""
+        if not os.path.exists("/dev/kvm") or not os.access("/dev/kvm", os.R_OK | os.W_OK):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": SandboxErrorCodes.INVALID_PARAMETER,
+                    "message": "Ubuntu ISO desktop mode requires a readable and writable /dev/kvm on the OpenSandbox host.",
+                },
+            )
+
     def _provision_sandbox(
         self,
         sandbox_id: str,
@@ -734,6 +747,7 @@ class DockerSandboxService(DockerDiagnosticsMixin, DockerRuntimeMixin, DockerVol
         mem_limit, nano_cpus, gpu_count = resource_limits
         egress_token: Optional[str] = None
         requested_windows_profile = is_windows_platform(request.platform)
+        requested_qemu_kvm = (request.extensions or {}).get(OPENLINK_QEMU_KVM_KEY) == "enable"
 
         credential_proxy_enabled = bool(
             request.credential_proxy and request.credential_proxy.enabled
@@ -761,6 +775,8 @@ class DockerSandboxService(DockerDiagnosticsMixin, DockerRuntimeMixin, DockerVol
 
         if requested_windows_profile:
             validate_windows_runtime_prerequisites()
+        if requested_qemu_kvm:
+            self._validate_qemu_kvm_device()
 
         # Prepare OSSFS mounts first so binds can reference mounted host paths.
         ossfs_mount_keys = self._prepare_ossfs_mounts(request.volumes)
@@ -936,6 +952,11 @@ class DockerSandboxService(DockerDiagnosticsMixin, DockerRuntimeMixin, DockerVol
                     "apparmor/seccomp/system paths unconfined + tmpfs for bwrap isolation "
                     "(bootstrap.execd.isolation=enable)"
                 )
+
+            if requested_qemu_kvm:
+                devices = list(host_config_kwargs.get("devices") or [])
+                devices.append("/dev/kvm:/dev/kvm:rwm")
+                host_config_kwargs["devices"] = devices
 
             if self.network_mode != HOST_NETWORK_MODE and request.network_policy is None:
                 for attempt in range(MAX_PORT_PUBLISH_ATTEMPTS):

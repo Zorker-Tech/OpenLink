@@ -123,6 +123,10 @@ class UnixListener implements PiServerListener {
 		}
 		const handler = accept(connection);
 		socket.on("data", (chunk) => {
+			if (typeof chunk === "string") {
+				socket.destroy(new TypeError("Unix transport socket unexpectedly switched to text mode"));
+				return;
+			}
 			handler.onData(new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength));
 		});
 		socket.on("error", (error) => {

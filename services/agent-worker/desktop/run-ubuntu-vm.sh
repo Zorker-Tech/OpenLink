@@ -10,10 +10,41 @@ seed="$vm_root/seed.iso"
 installed_marker="$vm_root/installed"
 cached_iso="$vm_root/iso"
 
+prepare_workspace_share() {
+  if [[ ! -d "$workspace_root" ]]; then
+    echo "Project workspace is missing: $workspace_root" >&2
+    return 1
+  fi
+  if ! command -v setfacl >/dev/null 2>&1 || ! command -v getfacl >/dev/null 2>&1; then
+    echo "Ubuntu Desktop workspace sharing requires the acl utilities" >&2
+    return 1
+  fi
+
+  local access_acl default_acl
+  access_acl="$(getfacl -cp "$workspace_root" | grep -c '^user:openlink:rwx$' || true)"
+  default_acl="$(getfacl -cp "$workspace_root" | grep -c '^default:user:openlink:rwx$' || true)"
+  if [[ "$access_acl" == 1 && "$default_acl" == 1 ]]; then
+    return 0
+  fi
+
+  # The Project VM keeps the workspace root private (0700). Grant only the
+  # desktop account access, and keep OpenLink's other session/control data
+  # outside the desktop share.
+  setfacl -m u:openlink:rwx "$workspace_root"
+  setfacl -d -m u:openlink:rwx "$workspace_root"
+  find "$workspace_root" -mindepth 1 \
+    \( -path "$workspace_root/.openlink" -o -path "$workspace_root/.openlink/*" \) -prune -o \
+    -exec setfacl -m u:openlink:rwX -- {} +
+  find "$workspace_root" -mindepth 1 \
+    \( -path "$workspace_root/.openlink" -o -path "$workspace_root/.openlink/*" \) -prune -o \
+    -type d -exec setfacl -d -m u:openlink:rwx -- {} +
+}
+
 if [[ ! -r "$iso" ]]; then
   echo "Ubuntu Desktop ISO is missing: $iso" >&2
   exit 1
 fi
+prepare_workspace_share
 if [[ "$(id -u)" -eq 0 && -c /dev/kvm ]]; then
   kvm_gid="$(stat -c '%g' /dev/kvm)"
   if [[ "$kvm_gid" != 0 ]] && ! id -G openlink | tr ' ' '\n' | grep -qx "$kvm_gid"; then
@@ -103,7 +134,7 @@ EOF
     -drive if=none,id=ubuntu-iso,file="$iso",media=cdrom,readonly=on \
     -device ide-cd,drive=ubuntu-iso,bus=sata.0,unit=0,bootindex=1 \
     -drive if=none,id=seed-iso,file="$seed",media=cdrom,readonly=on \
-    -device ide-cd,drive=seed-iso,bus=sata.0,unit=1 \
+    -device ide-cd,drive=seed-iso,bus=sata.1,unit=0 \
     -virtfs "local,path=$workspace_root,mount_tag=openlink-workspace,security_model=none,id=workspace" \
     -virtfs "local,path=$session_root,mount_tag=openlink-session,security_model=none,id=session" \
     -netdev user,id=net0 -device virtio-net-pci,netdev=net0 \

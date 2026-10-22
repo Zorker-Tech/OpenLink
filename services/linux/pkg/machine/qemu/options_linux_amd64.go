@@ -6,9 +6,8 @@ var QemuCommand = "qemu-system-x86_64"
 
 func (q *QEMUStubber) addArchOptions(_ *setNewMachineCMDOpts) []string {
 	opts := []string{
-		"-accel", "kvm",
-		"-cpu", "host",
-		"-M", "memory-backend=mem",
+		"-cpu", "max",
+		"-M", "memory-backend=mem,accel=kvm:tcg",
 	}
 	return opts
 }

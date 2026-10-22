@@ -3,9 +3,10 @@
 package integration
 
 import (
+	"cmp"
 	"fmt"
 	"regexp"
-	"sort"
+	"slices"
 	"strconv"
 
 	"github.com/docker/go-units"
@@ -292,18 +293,16 @@ var _ = Describe("Podman ps", func() {
 		result.WaitWithDefaultTimeout()
 		Expect(result).Should(ExitCleanly())
 		Expect(result.OutputToString()).To(BeValidJSON())
-		// must contain "Status"
-		match, StatusLine := result.GrepString(`Status`)
-		Expect(match).To(BeTrue(), "found 'Status'")
-		// we waited for container to exit, so this must contain `Exited`
-		Expect(StatusLine[0]).To(ContainSubstring("Exited"))
+		// we waited for container to exit, so the Status line must contain Exited
+		Expect(result.OutputToStringArray()).To(ContainElement(MatchRegexp(`Status.*Exited`)))
 	})
 
 	It("podman ps namespace flag with go template format", func() {
-		_, ec, _ := podmanTest.RunLsContainer("test1")
-		Expect(ec).To(Equal(0))
+		result := podmanTest.Podman([]string{"run", "--name", "test1", "--network=none", "--label", "app=my-app", ALPINE, "ls"})
+		result.WaitWithDefaultTimeout()
+		Expect(result).Should(Exit(0))
 
-		result := podmanTest.Podman([]string{"ps", "-a", "--format", "table {{.ID}} {{.Image}} {{.ImageID}} {{.Labels}}"})
+		result = podmanTest.Podman([]string{"ps", "-a", "--format", "table {{.ID}} {{.Image}} {{.ImageID}} {{.Labels}}"})
 		result.WaitWithDefaultTimeout()
 		Expect(result).Should(ExitCleanly())
 
@@ -313,6 +312,17 @@ var _ = Describe("Podman ps", func() {
 		Expect(actual[0]).To(ContainSubstring("CONTAINER ID"))
 		Expect(actual[0]).ToNot(ContainSubstring("ImageID"))
 		Expect(actual[1]).To(ContainSubstring("alpine:latest"))
+
+		podmanTest.PodmanExitCleanly("create", "--name", "test2", ALPINE, "ls")
+		format := `table {{.Names}}|{{.Label "app"}}|{{.Label "missing"}}`
+		result = podmanTest.PodmanExitCleanly("ps", "-a", "--format", format)
+		actual = result.OutputToStringArray()
+		Expect(actual).To(HaveLen(3))
+		Expect(actual[0]).To(Equal("NAMES|app|missing"))
+		Expect(actual[1:]).To(ConsistOf("test1|my-app|", "test2||"))
+
+		result = podmanTest.PodmanExitCleanly("ps", "-a", "--noheading", "--format", format)
+		Expect(result.OutputToStringArray()).To(ConsistOf("test1|my-app|", "test2||"))
 	})
 
 	It("podman ps ancestor filter flag", func() {
@@ -507,19 +517,32 @@ var _ = Describe("Podman ps", func() {
 		// TODO: This may be broken - the test was running without the
 		// ability to perform any sorting for months and succeeded
 		// without error.
-		Expect(sort.SliceIsSorted(sortedArr, func(i, j int) bool {
+		Expect(slices.IsSortedFunc(sortedArr, func(a, b string) int {
 			r := regexp.MustCompile(`^\S+\s+\(virtual (\S+)\)`)
-			matches1 := r.FindStringSubmatch(sortedArr[i])
-			matches2 := r.FindStringSubmatch(sortedArr[j])
+			matches1 := r.FindStringSubmatch(a)
+			matches2 := r.FindStringSubmatch(b)
 
 			// sanity check in case an oddly formatted size appears
 			if len(matches1) < 2 || len(matches2) < 2 {
-				return sortedArr[i] < sortedArr[j]
+				return cmp.Compare(a, b)
 			}
 			size1, _ := units.FromHumanSize(matches1[1])
 			size2, _ := units.FromHumanSize(matches2[1])
-			return size1 < size2
+			return cmp.Compare(size1, size2)
 		})).To(BeTrue(), "slice is sorted")
+	})
+
+	It("podman --sort by pod", func() {
+		// Create the pods in reverse-alphabetical order so a broken sort
+		// (falling back to creation order) would fail this test.
+		for _, name := range []string{"bpod", "apod"} {
+			podmanTest.PodmanExitCleanly("pod", "create", "--name", name)
+			podmanTest.PodmanExitCleanly("create", "--pod", name, ALPINE, "top")
+		}
+
+		session := podmanTest.PodmanExitCleanly("ps", "-a", "--pod", "--sort=pod", "--format", "{{.PodName}}")
+
+		Expect(slices.IsSorted(session.OutputToStringArray())).To(BeTrue(), "containers are sorted by pod name")
 	})
 
 	It("podman --sort by command", func() {
@@ -538,7 +561,7 @@ var _ = Describe("Podman ps", func() {
 		Expect(session.OutputToString()).ToNot(ContainSubstring("COMMAND"))
 
 		sortedArr := session.OutputToStringArray()
-		Expect(sort.SliceIsSorted(sortedArr, func(i, j int) bool { return sortedArr[i] < sortedArr[j] })).To(BeTrue(), "slice is sorted")
+		Expect(slices.IsSorted(sortedArr)).To(BeTrue(), "slice is sorted")
 	})
 
 	It("podman --pod", func() {

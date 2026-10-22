@@ -13,11 +13,13 @@ import { getTextOutput, invalidArgText, shortenPath, str } from "./render-utils.
 import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
 import { DEFAULT_MAX_BYTES, formatSize, type TruncationResult, truncateHead } from "./truncate.ts";
 
+type PathModule = Pick<typeof path, "sep" | "isAbsolute" | "relative">;
+
 /** Relativize a find result against the search root and normalize it to posix separators. */
 export function relativizeFindResultPath(
 	resultPath: string,
 	searchPath: string,
-	pathModule: path.PlatformPath = path,
+	pathModule: PathModule = path,
 ): string {
 	const hadTrailingSeparator =
 		resultPath.endsWith(pathModule.sep) || (pathModule.sep === "\\" && resultPath.endsWith("/"));

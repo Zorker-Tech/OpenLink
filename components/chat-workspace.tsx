@@ -41,6 +41,7 @@ import {
   type BrowserWorkbenchHandle,
   type BrowserWorkbenchUiState,
 } from '@/components/browser/browser-workbench'
+import { DesktopWorkbench } from '@/components/browser/desktop-workbench'
 import { CodeServerWorkbench } from '@/components/code-server/code-server-workbench'
 import { ProjectSupabasePanel } from '@/components/project-supabase-panel'
 import { ProjectSupabaseStudioFrame } from '@/components/project-supabase-studio-frame'
@@ -84,6 +85,7 @@ import {
   Globe2,
   Inspect,
   MessageCircle,
+  Monitor,
   MoreHorizontal,
   PanelLeft,
   Plus,
@@ -239,7 +241,7 @@ function ToolbarButton({ label, children, className = '', ...props }: { label: s
 /** Width of the inline session-title editor; the title slot animates to it. */
 const TITLE_EDITOR_WIDTH = 220
 
-type WorkspaceTabId = 'preview' | 'realtime' | 'code' | 'database'
+type WorkspaceTabId = 'preview' | 'realtime' | 'desktop' | 'code' | 'database'
 
 type WorkspaceTabOption = { id: WorkspaceTabId; label: string; icon: typeof Globe2 }
 
@@ -247,12 +249,14 @@ function workspaceTabs(t: Translator): WorkspaceTabOption[] {
   return [
     { id: 'preview', label: t('预览'), icon: Globe2 },
     { id: 'realtime', label: t('实时浏览器'), icon: Send },
+    { id: 'desktop', label: t('桌面'), icon: Monitor },
     { id: 'code', label: t('代码'), icon: Code2 },
     { id: 'database', label: t('数据库'), icon: Database },
   ]
 }
 
-function activeWorkspaceTab(workspaceView: 'mobile' | 'browser' | 'code' | 'data', surface: BrowserWorkbenchUiState['surface']): WorkspaceTabId {
+function activeWorkspaceTab(workspaceView: 'mobile' | 'browser' | 'desktop' | 'code' | 'data', surface: BrowserWorkbenchUiState['surface']): WorkspaceTabId {
+  if (workspaceView === 'desktop') return 'desktop'
   if (workspaceView === 'code') return 'code'
   if (workspaceView === 'data') return 'database'
   return surface === 'chromium-stream' ? 'realtime' : 'preview'
@@ -359,7 +363,7 @@ function ChatTopbar({
   onToggleDataSurface: () => void
   localRuntime: boolean
   onSessionTitleChange: (title: string) => Promise<boolean>
-  workspaceView: 'mobile' | 'browser' | 'code' | 'data'
+  workspaceView: 'mobile' | 'browser' | 'desktop' | 'code' | 'data'
   renameRequestVersion: number
   sessionTitle: string
   context: ChatContextStats | null
@@ -1369,7 +1373,7 @@ function PreviewCanvas({
 }: {
   browserState: BrowserWorkbenchUiState
   browserWorkbenchRef: React.RefObject<BrowserWorkbenchHandle | null>
-  view: 'mobile' | 'browser' | 'code' | 'data'
+  view: 'mobile' | 'browser' | 'desktop' | 'code' | 'data'
   onBrowserStateChange: (state: BrowserWorkbenchUiState) => void
   onToggleDeviceView: () => void
   sessionId: string
@@ -1384,6 +1388,7 @@ function PreviewCanvas({
 }) {
   const t = useT()
   if (view === 'code') return <CodeServerWorkbench chatSessionId={sessionId} />
+  if (view === 'desktop') return <DesktopWorkbench chatSessionId={sessionId} />
   if (view === 'data') {
     if (dataSurface === 'studio') return <ProjectSupabaseStudioFrame sessionId={sessionId} />
     return <ProjectSupabasePanel {...panelProps} projectName={projectName} sessionId={sessionId} embedded />
@@ -1439,7 +1444,7 @@ export function ChatWorkspace({
   const [accessMode, setAccessMode] = useState<AccessMode>(initialAccessMode)
   // The browser canvas is the primary workspace. The device control is an
   // explicit opt-in for the constrained mobile viewport.
-  const [workspaceView, setWorkspaceView] = useState<'mobile' | 'browser' | 'code' | 'data'>('browser')
+  const [workspaceView, setWorkspaceView] = useState<'mobile' | 'browser' | 'desktop' | 'code' | 'data'>('browser')
   // The data region hosts either the native project panel or a full-area
   // upstream Supabase Studio session; Local mode exposes the toggle capsule.
   const [dataSurface, setDataSurface] = useState<'panel' | 'studio'>('panel')
@@ -1499,8 +1504,10 @@ export function ChatWorkspace({
       browserWorkbenchRef.current?.setSurface('chromium-stream')
     } else if (tab === 'code') {
       setWorkspaceView('code')
-    } else {
+    } else if (tab === 'database') {
       setWorkspaceView('data')
+    } else {
+      setWorkspaceView('desktop')
     }
   }, [])
 

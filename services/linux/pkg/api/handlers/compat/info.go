@@ -28,6 +28,11 @@ import (
 	"go.podman.io/podman/v6/pkg/rootless"
 )
 
+// ociRuntimeFeaturesKey is the key used for an OCI runtime's
+// status: features.
+// Described in https://github.com/opencontainers/runtime-spec/blob/main/features.md
+const ociRuntimeFeaturesKey = "org.opencontainers.runtime-spec.features"
+
 func GetInfo(w http.ResponseWriter, r *http.Request) {
 	// 200 ok
 	// 500 internal
@@ -61,7 +66,7 @@ func GetInfo(w http.ResponseWriter, r *http.Request) {
 			CPUCfsQuota:         sysInfo.CPUCfsQuota,
 			CPUSet:              sysInfo.Cpuset,
 			CPUShares:           sysInfo.CPUShares,
-			CgroupDriver:        configInfo.Engine.CgroupManager,
+			CgroupDriver:        getCgroupDriver(configInfo.Engine.CgroupManager, rootless.IsRootless()),
 			CDISpecDirs:         infoData.Host.CDISpecDirs,
 			ContainerdCommit:    dockerSystem.Commit{},
 			Containers:          infoData.Store.ContainerStore.Number,
@@ -111,7 +116,7 @@ func GetInfo(w http.ResponseWriter, r *http.Request) {
 			ProductLicense:  "Apache-2.0",
 			RegistryConfig:  getServiceConfig(runtime),
 			RuncCommit:      dockerSystem.Commit{},
-			Runtimes:        getRuntimes(configInfo),
+			Runtimes:        getRuntimes(runtime, configInfo),
 			SecurityOptions: getSecOpts(sysInfo, configInfo),
 			ServerVersion:   versionInfo.Version,
 			SwapLimit:       sysInfo.SwapLimit,
@@ -131,6 +136,13 @@ func GetInfo(w http.ResponseWriter, r *http.Request) {
 		SwapTotal:          infoData.Host.SwapTotal,
 		Uptime:             infoData.Host.Uptime,
 	}
+	// The Status field on runtimes was introduced in the Docker API v1.44.
+	if _, err := utils.SupportedVersion(r, "<1.44.0"); err == nil {
+		for k, rt := range info.Runtimes {
+			info.Runtimes[k] = dockerSystem.RuntimeWithStatus{Runtime: rt.Runtime}
+		}
+	}
+
 	utils.WriteResponse(w, http.StatusOK, info)
 }
 
@@ -182,6 +194,21 @@ func getGraphStatus(storeInfo map[string]string) [][2]string {
 	return graphStatus
 }
 
+// getCgroupDriver returns the cgroup driver reported to Docker API clients.
+//
+// Rootless Podman using the cgroupfs manager cannot honor a cgroup parent
+// chosen by the client: only the delegated subtree is writable, and container
+// creation deliberately leaves the parent unset in that case.  Reporting
+// "cgroupfs" leads clients to assume a rootful daemon and ask for a parent that
+// cannot be created, so report "none" instead, matching what rootless Docker
+// does.
+func getCgroupDriver(cgroupManager string, isRootless bool) string {
+	if isRootless && cgroupManager == config.CgroupfsCgroupsManager {
+		return "none"
+	}
+	return cgroupManager
+}
+
 func getSecOpts(sysInfo *sysinfo.SysInfo, c *config.Config) []string {
 	var secOpts []string
 	if sysInfo.AppArmor {
@@ -204,15 +231,18 @@ func getSecOpts(sysInfo *sysinfo.SysInfo, c *config.Config) []string {
 	return secOpts
 }
 
-func getRuntimes(configInfo *config.Config) map[string]dockerSystem.RuntimeWithStatus {
+func getRuntimes(runtime *libpod.Runtime, configInfo *config.Config) map[string]dockerSystem.RuntimeWithStatus {
 	runtimes := map[string]dockerSystem.RuntimeWithStatus{}
 	for name, paths := range configInfo.Engine.OCIRuntimes {
 		if len(paths) == 0 {
 			continue
 		}
-		runtime := dockerSystem.RuntimeWithStatus{}
-		runtime.Runtime = dockerSystem.Runtime{Path: paths[0], Args: nil}
-		runtimes[name] = runtime
+		rt := dockerSystem.RuntimeWithStatus{}
+		rt.Runtime = dockerSystem.Runtime{Path: paths[0], Args: nil}
+		if features := runtime.RuntimeFeatures(name); features != "" {
+			rt.Status = map[string]string{ociRuntimeFeaturesKey: features}
+		}
+		runtimes[name] = rt
 	}
 	return runtimes
 }

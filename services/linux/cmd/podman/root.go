@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -11,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -135,8 +137,8 @@ func init() {
 	rootCmd.SetUsageTemplate(usageTemplate)
 }
 
-func Execute() {
-	if cmd, err := rootCmd.ExecuteContextC(registry.Context()); err != nil {
+func Execute(ctx context.Context) {
+	if cmd, err := rootCmd.ExecuteContextC(ctx); err != nil {
 		if registry.GetExitCode() == 0 {
 			registry.SetExitCode(define.ExecErrorCodeGeneric)
 		}
@@ -151,6 +153,7 @@ func Execute() {
 	_ = shutdown.Stop()
 
 	if requireCleanup {
+		cleanupContext, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		// The cobra post-run is not being executed in case of
 		// a previous error, so make sure that the engine(s)
 		// are correctly shutdown.
@@ -158,11 +161,12 @@ func Execute() {
 		// See https://github.com/spf13/cobra/issues/914
 		logrus.Debugf("Shutting down engines")
 		if engine := registry.ImageEngine(); engine != nil {
-			engine.Shutdown(registry.Context())
+			engine.Shutdown(cleanupContext)
 		}
 		if engine := registry.ContainerEngine(); engine != nil {
-			engine.Shutdown(registry.Context())
+			engine.Shutdown(cleanupContext)
 		}
+		cancel()
 	}
 
 	os.Exit(registry.GetExitCode())
@@ -266,14 +270,14 @@ func setupRemoteConnection(podmanConfig *entities.PodmanConfig) string {
 func persistentPreRunE(cmd *cobra.Command, args []string) error {
 	logrus.Debugf("Called %s.PersistentPreRunE(%s)", cmd.Name(), strings.Join(os.Args, " "))
 
-	checkSupportedCgroups()
-
 	// Help, completion and commands with subcommands are special cases, no need for more setup
 	// Completion cmd is used to generate the shell scripts
 	if cmd.Name() == "help" || cmd.Name() == "completion" || cmd.HasSubCommands() {
 		requireCleanup = false
 		return nil
 	}
+
+	checkSupportedCgroups()
 
 	podmanConfig := registry.PodmanConfig()
 
@@ -414,7 +418,7 @@ func persistentPreRunE(cmd *cobra.Command, args []string) error {
 	// Hard code TMPDIR functions to use /var/tmp, if user did not override
 	if _, ok := os.LookupEnv("TMPDIR"); !ok {
 		if tmpdir, err := podmanConfig.ContainersConfDefaultsRO.ImageCopyTmpDir(); err != nil {
-			logrus.Warnf("Failed to retrieve default tmp dir: %s", err.Error())
+			logrus.Warnf("Failed to retrieve default tmp dir: %v", err)
 		} else {
 			os.Setenv("TMPDIR", tmpdir)
 		}
@@ -431,7 +435,7 @@ func persistentPreRunE(cmd *cobra.Command, args []string) error {
 		if flag := cmd.LocalFlags().Lookup("cgroups"); flag != nil {
 			cgroupMode = flag.Value.String()
 		}
-		err := registry.ContainerEngine().SetupRootless(registry.Context(), noMoveProcess, cgroupMode)
+		err := registry.ContainerEngine().SetupRootless(cmd.Context(), noMoveProcess, cgroupMode)
 		if err != nil {
 			return err
 		}
@@ -474,7 +478,7 @@ func configHook() {
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			// Cases where the folder does not exist are allowed, BUT cases where some other Stat() error
 			// is returned should fail
-			fmt.Fprintf(os.Stderr, "Supplied --config folder (%s) exists but is not accessible: %s\n", dockerConfig, err.Error())
+			fmt.Fprintf(os.Stderr, "Supplied --config folder (%s) exists but is not accessible: %v\n", dockerConfig, err)
 			os.Exit(1)
 		}
 		if err == nil && !statInfo.IsDir() {
@@ -483,7 +487,7 @@ func configHook() {
 			os.Exit(1)
 		}
 		if err := os.Setenv("DOCKER_CONFIG", dockerConfig); err != nil {
-			fmt.Fprintf(os.Stderr, "cannot set DOCKER_CONFIG=%s: %s\n", dockerConfig, err.Error())
+			fmt.Fprintf(os.Stderr, "cannot set DOCKER_CONFIG=%s: %v\n", dockerConfig, err)
 			os.Exit(1)
 		}
 	}
@@ -491,7 +495,7 @@ func configHook() {
 
 func loggingHook() {
 	if debug {
-		if logLevel != defaultLogLevel {
+		if rootCmd.Flag("log-level").Changed {
 			fmt.Fprintf(os.Stderr, "Setting --log-level and --debug is not allowed\n")
 			os.Exit(1)
 		}
@@ -529,7 +533,7 @@ func stdOutHook() {
 
 			// if we couldn't open the file for write, then just bail with an error.
 		} else {
-			fmt.Fprintf(os.Stderr, "unable to open file for standard output: %s\n", err.Error())
+			fmt.Fprintf(os.Stderr, "unable to open file for standard output: %v\n", err)
 			os.Exit(1)
 		}
 	}
@@ -594,7 +598,7 @@ func rootFlags(cmd *cobra.Command, podmanConfig *entities.PodmanConfig) {
 	pFlags := cmd.PersistentFlags()
 	if registry.IsRemote() {
 		if err := lFlags.MarkHidden("remote"); err != nil {
-			logrus.Warnf("Unable to mark --remote flag as hidden: %s", err.Error())
+			logrus.Warnf("Unable to mark --remote flag as hidden: %v", err)
 		}
 		podmanConfig.Remote = true
 	} else {
@@ -697,7 +701,7 @@ func rootFlags(cmd *cobra.Command, podmanConfig *entities.PodmanConfig) {
 			"trace",
 		} {
 			if err := pFlags.MarkHidden(f); err != nil {
-				logrus.Warnf("Unable to mark %s flag as hidden: %s", f, err.Error())
+				logrus.Warnf("Unable to mark %s flag as hidden: %v", f, err)
 			}
 		}
 	}

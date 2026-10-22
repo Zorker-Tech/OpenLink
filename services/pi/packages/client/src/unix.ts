@@ -51,7 +51,12 @@ function connectUnixSocket(
 			);
 		});
 		socket.on("data", (chunk) => {
-			if (!terminal) handlers.onData(new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength));
+			if (terminal) return;
+			if (typeof chunk === "string") {
+				socket.destroy(new TypeError("Unix transport socket unexpectedly switched to text mode"));
+				return;
+			}
+			handlers.onData(new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength));
 		});
 		socket.once("end", close);
 		socket.once("close", close);

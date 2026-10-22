@@ -18,11 +18,13 @@ import (
 	"syscall"
 	"time"
 
+	securejoin "github.com/cyphar/filepath-securejoin"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 	"go.podman.io/buildah"
 	buildahDefine "go.podman.io/buildah/define"
 	"go.podman.io/buildah/pkg/parse"
+	"go.podman.io/buildah/pkg/tmpdir"
 	"go.podman.io/common/pkg/config"
 	"go.podman.io/image/v5/docker/reference"
 	"go.podman.io/image/v5/pkg/compression"
@@ -84,6 +86,7 @@ type BuildQuery struct {
 	IDMappingOptions        string             `schema:"idmappingoptions"`
 	IdentityLabel           bool               `schema:"identitylabel"`
 	Ignore                  bool               `schema:"ignore"`
+	IgnoreFile              string             `schema:"ignorefile"`
 	InheritLabels           types.OptionalBool `schema:"inheritlabels"`
 	InheritAnnotations      types.OptionalBool `schema:"inheritannotations"`
 	Isolation               string             `schema:"isolation"`
@@ -171,6 +174,12 @@ func (b *BuildContext) validateLocalAPIPaths() error {
 		}
 	}
 
+	if b.IgnoreFile != "" {
+		if err := localapi.ValidatePathForLocalAPI(b.IgnoreFile); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -238,13 +247,34 @@ func parseBuildQuery(r *http.Request, conf *config.Config, queryValues url.Value
 	return query, nil
 }
 
+// urlOptionsFromQuery returns a tmpdir.URLOptions populated with settings from
+// the passed-in query and the proxy settings from the current environment.
+func urlOptionsFromQuery(query url.Values) (*tmpdir.URLOptions, error) {
+	var insecureSkipTLSVerify types.OptionalBool
+	if v, found := query["tlsVerify"]; found && len(v) > 0 {
+		b, err := strconv.ParseBool(v[len(v)-1])
+		if err != nil {
+			return nil, fmt.Errorf("parsing %q value %q: %w", "tlsVerify", v[len(v)-1], err)
+		}
+		insecureSkipTLSVerify = types.NewOptionalBool(!b)
+	}
+	return &tmpdir.URLOptions{
+		InsecureSkipTLSVerify: insecureSkipTLSVerify,
+		Proxy:                 http.ProxyFromEnvironment,
+	}, nil
+}
+
 // processBuildContext processes build context directory and container files based on request parameters.
 func processBuildContext(query url.Values, r *http.Request, buildContext *BuildContext, anchorDir string) (*BuildContext, error) {
 	dockerFileSet := false
 	remote := query.Get("remote")
 
 	if utils.IsLibpodRequest(r) && remote != "" {
-		tempDir, subDir, err := buildahDefine.TempDirForURL(anchorDir, "buildah", remote)
+		urlOptions, err := urlOptionsFromQuery(query)
+		if err != nil {
+			return nil, utils.GetInternalServerError(err)
+		}
+		tempDir, subDir, err := tmpdir.ForURL(r.Context(), anchorDir, "buildah", remote, urlOptions)
 		if err != nil {
 			return nil, utils.GetInternalServerError(genSpaceErr(err))
 		}
@@ -293,6 +323,36 @@ func processBuildContext(query url.Values, r *http.Request, buildContext *BuildC
 				}
 			}
 		}
+	}
+
+	// Process dockerignore only if no explicit ignorefile was specified
+	if ignorefile := query.Get("ignorefile"); ignorefile != "" {
+		if filepath.IsAbs(ignorefile) {
+			ignoreFilePath := filepath.Clean(ignorefile)
+			// In remote builds, the client may send an absolute path that exists
+			// only on the client filesystem. The file is bundled in the tarball
+			// and unpacked under the context directory at the same absolute path,
+			// so fall back to looking it up there if the absolute path is missing.
+			if err := fileutils.Exists(ignoreFilePath); err != nil {
+				ignoreFilePath, err = securejoin.SecureJoin(buildContext.ContextDirectory, ignoreFilePath)
+				if err != nil {
+					return nil, utils.GetInternalServerError(fmt.Errorf("processing ignore file path: %w", err))
+				}
+			}
+			buildContext.IgnoreFile = ignoreFilePath
+		} else {
+			ignoreFilePath, err := securejoin.SecureJoin(buildContext.ContextDirectory, ignorefile)
+			if err != nil {
+				return nil, utils.GetInternalServerError(fmt.Errorf("processing ignore file path: %w", err))
+			}
+			buildContext.IgnoreFile = ignoreFilePath
+		}
+	} else {
+		_, ignoreFile, err := util.ParseDockerignore(buildContext.ContainerFiles, buildContext.ContextDirectory)
+		if err != nil {
+			return nil, utils.GetInternalServerError(fmt.Errorf("processing ignore file: %w", err))
+		}
+		buildContext.IgnoreFile = ignoreFile
 	}
 
 	return buildContext, nil
@@ -777,6 +837,7 @@ func createBuildOptions(query *BuildQuery, buildCtx *BuildContext, queryValues u
 		OSVersion:                      query.OSVersion,
 		Output:                         output,
 		OutputFormat:                   format,
+		Proxy:                          http.ProxyFromEnvironment,
 		PullPolicy:                     pullPolicy,
 		PullPushRetryDelay:             retryDelay,
 		Quiet:                          query.Quiet,
@@ -932,7 +993,7 @@ func executeBuild(runtime *libpod.Runtime, w http.ResponseWriter, r *http.Reques
 //
 // Returns a BuildContext struct with the main context directory and a map of additional build contexts,
 // or an error if validation fails or required parameters are missing.
-func handleLocalBuildContexts(query url.Values, anchorDir string) (*BuildContext, error) {
+func handleLocalBuildContexts(ctx context.Context, query url.Values, anchorDir string) (*BuildContext, error) {
 	localContextDir := query.Get("localcontextdir")
 	if localContextDir == "" {
 		return nil, utils.GetBadRequestError("localcontextdir", localContextDir, fmt.Errorf("localcontextdir cannot be empty"))
@@ -950,6 +1011,11 @@ func handleLocalBuildContexts(query url.Values, anchorDir string) (*BuildContext
 		AdditionalBuildContexts: make(map[string]*buildahDefine.AdditionalBuildContext),
 	}
 
+	urlOptions, err := urlOptionsFromQuery(query)
+	if err != nil {
+		return nil, utils.GetInternalServerError(err)
+	}
+
 	for _, url := range query["additionalbuildcontexts"] {
 		name, value, found := strings.Cut(url, "=")
 		if !found {
@@ -961,7 +1027,7 @@ func handleLocalBuildContexts(query url.Values, anchorDir string) (*BuildContext
 		switch {
 		case strings.HasPrefix(value, "url:"):
 			value = strings.TrimPrefix(value, "url:")
-			tempDir, subdir, err := buildahDefine.TempDirForURL(anchorDir, "buildah", value)
+			tempDir, subdir, err := tmpdir.ForURL(ctx, anchorDir, "buildah", value, urlOptions)
 			if err != nil {
 				return nil, utils.GetInternalServerError(genSpaceErr(err))
 			}
@@ -995,7 +1061,7 @@ func handleLocalBuildContexts(query url.Values, anchorDir string) (*BuildContext
 // getLocalBuildContext processes build contexts from Local API HTTP request to a BuildContext struct.
 func getLocalBuildContext(r *http.Request, query url.Values, anchorDir string, _ bool) (*BuildContext, error) {
 	// Handle build contexts
-	buildContext, err := handleLocalBuildContexts(query, anchorDir)
+	buildContext, err := handleLocalBuildContexts(r.Context(), query, anchorDir)
 	if err != nil {
 		return nil, err
 	}
@@ -1012,13 +1078,6 @@ func getLocalBuildContext(r *http.Request, query url.Values, anchorDir string, _
 		}
 		return nil, utils.GetGenericBadRequestError(err)
 	}
-
-	// Process dockerignore
-	_, ignoreFile, err := util.ParseDockerignore(buildContext.ContainerFiles, buildContext.ContextDirectory)
-	if err != nil {
-		return nil, utils.GetInternalServerError(fmt.Errorf("processing ignore file: %w", err))
-	}
-	buildContext.IgnoreFile = ignoreFile
 
 	return buildContext, nil
 }
@@ -1120,13 +1179,6 @@ func getBuildContext(r *http.Request, query url.Values, anchorDir string, multip
 		return nil, err
 	}
 
-	// Process dockerignore
-	_, ignoreFile, err := util.ParseDockerignore(buildContext.ContainerFiles, buildContext.ContextDirectory)
-	if err != nil {
-		return nil, utils.GetInternalServerError(fmt.Errorf("processing ignore file: %w", err))
-	}
-	buildContext.IgnoreFile = ignoreFile
-
 	return buildContext, nil
 }
 
@@ -1138,6 +1190,11 @@ func handleBuildContexts(r *http.Request, query url.Values, anchorDir string, mu
 		AdditionalBuildContexts: make(map[string]*buildahDefine.AdditionalBuildContext),
 	}
 
+	urlOptions, err := urlOptionsFromQuery(query)
+	if err != nil {
+		return nil, utils.GetInternalServerError(err)
+	}
+
 	for _, url := range query["additionalbuildcontexts"] {
 		name, value, found := strings.Cut(url, "=")
 		if !found {
@@ -1147,7 +1204,7 @@ func handleBuildContexts(r *http.Request, query url.Values, anchorDir string, mu
 		logrus.Debugf("name: %q, context: %q", name, value)
 
 		if urlValue, ok := strings.CutPrefix(value, "url:"); ok {
-			tempDir, subdir, err := buildahDefine.TempDirForURL(anchorDir, "buildah", urlValue)
+			tempDir, subdir, err := tmpdir.ForURL(r.Context(), anchorDir, "buildah", urlValue, urlOptions)
 			if err != nil {
 				return nil, fmt.Errorf("downloading URL %q: %w", name, err)
 			}
