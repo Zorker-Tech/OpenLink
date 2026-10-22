@@ -16,21 +16,39 @@ export interface SmartModeClassifierFailureMetadata {
   retryable: boolean | undefined
 }
 
+/** The text written after the marker, when the error carries one at all. */
+function textAfterMarker(error: string): string | undefined {
+  const markerIndex = error.indexOf(METADATA_MARKER)
+  return markerIndex < 0 ? undefined : error.slice(markerIndex + METADATA_MARKER.length)
+}
+
+/** The record a metadata payload parses to, when it parses to an object at all. */
+function parsedRecord(payload: string): Record<string, unknown> | undefined {
+  try {
+    const parsed: unknown = JSON.parse(payload)
+    return parsed === null || typeof parsed !== "object" ? undefined : (parsed as Record<string, unknown>)
+  } catch {
+    return undefined
+  }
+}
+
+/** The string a field holds, or nothing when it is absent or of another type. */
+function textField(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined
+}
+
+/** The boolean a field holds, or nothing when it is absent or of another type. */
+function booleanField(value: unknown): boolean | undefined {
+  return typeof value === "boolean" ? value : undefined
+}
+
 export function parseSmartModeClassifierFailureMetadata(
   error: string | undefined,
 ): SmartModeClassifierFailureMetadata | undefined {
   if (error === undefined) return undefined
-  const markerIndex = error.indexOf(METADATA_MARKER)
-  if (markerIndex < 0) return undefined
-  try {
-    const parsed: unknown = JSON.parse(error.slice(markerIndex + METADATA_MARKER.length))
-    if (parsed === null || typeof parsed !== "object") return undefined
-    const record = parsed as Record<string, unknown>
-    return {
-      failureReason: typeof record.failureReason === "string" ? record.failureReason : undefined,
-      retryable: typeof record.retryable === "boolean" ? record.retryable : undefined,
-    }
-  } catch {
-    return undefined
-  }
+  const payload = textAfterMarker(error)
+  if (payload === undefined) return undefined
+  const record = parsedRecord(payload)
+  if (record === undefined) return undefined
+  return { failureReason: textField(record.failureReason), retryable: booleanField(record.retryable) }
 }
