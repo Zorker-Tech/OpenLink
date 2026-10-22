@@ -103,6 +103,10 @@ test("the subagent type is matched against the catalogue however it was spelled"
 })
 
 test("a call that names no type gets the general purpose one, or the first one there is", () => {
+  // The general-purpose agent wins even when it is not listed first.
+  const reversed = buildTaskParameterSchemas([explore, generalPurpose], { subagentModels: models })
+  const parsed = reversed.schemaForParsing.safeParse({ prompt: "p" })
+  assert.equal(parsed.success && (parsed.data as { subagent_type?: string }).subagent_type, "generalPurpose")
   const withGeneral = schemasOf([generalPurpose, explore])
   assert.equal((withGeneral.schemaForParsing.parse({ prompt: "go" }) as { subagent_type: string }).subagent_type, "generalPurpose")
   assert.equal((withGeneral.schemaForParsing.parse({ prompt: "go", subagent_type: "  " }) as { subagent_type: string }).subagent_type, "generalPurpose")
@@ -331,6 +335,8 @@ test("the catalogue of subagent types is listed, or pointed at when it lives in 
   const pointedAt = buildTaskToolDescriptionParts({ ...baseArgs, subagentModels: models, configs: [generalPurpose, explore], defaultResumeMode: "DEFAULT", catalogsInUserInfo: true })
   assert.match(pointedAt.fullDescription, /Available subagent_types and descriptions are listed in <available_subagent_types> in the initial user-info message at the start of this conversation\./)
   assert.match(pointedAt.fullDescription, /Available model slugs for subagents are listed in <available_subagent_models> in the initial user-info message at the start of this conversation\./)
+  const pointsByDefault = buildTaskToolDescriptionParts({ ...baseArgs, subagentModels: models, configs: [generalPurpose, explore], defaultResumeMode: "DEFAULT", subagentModelsInUserInfo: true })
+  assert.match(pointsByDefault.fullDescription, /listed in <available_subagent_types> in the initial user-info message/, "the user-info message is where the catalogues live when that setting says so")
   // The catalogue text is still produced, because a caller may want to render it elsewhere.
   assert.match(pointedAt.subagentTypeDescriptionsText, /^- explore: Search the codebase\.$/m)
 })
@@ -350,6 +356,22 @@ test("a type that resumes by itself says so beside its name", () => {
   const noCatalogue = buildTaskToolDescriptionParts({ ...baseArgs, subagentModels: models, configs: [], defaultResumeMode: "DEFAULT" })
   assert.equal(noCatalogue.subagentTypeDescriptionsText, "")
   assert.doesNotMatch(noCatalogue.fullDescription, /Available subagent_types/)
+})
+
+test("the parts description passes the session's own names and flags through to the base", () => {
+  const parts = buildTaskToolDescriptionParts({
+    ...baseArgs,
+    subagentModels: models,
+    configs: [generalPurpose, explore],
+    defaultResumeMode: "DEFAULT",
+    readToolName: "Read",
+    globToolName: "Glob",
+    allowResumeSelfFork: true,
+    enableAgentChatLinks: true,
+  })
+  assert.match(parts.baseDescription, /Read or Glob/)
+  assert.match(parts.baseDescription, /fork the current parent agent/)
+  assert.equal(parts.fullDescription, [parts.baseDescription, parts.subagentTypeDescriptionsText, parts.modelsDescription].join("\n\n"), "the full description is the three parts, in order")
 })
 
 test("the models section says to skip rather than substitute when the model is not offered", () => {
