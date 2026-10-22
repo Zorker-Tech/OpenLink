@@ -71,14 +71,17 @@ describe("what a sent message becomes in the conversation", () => {
       sentWhileOfflineAtMs: 1_700_000_000_000,
     });
     assert.equal((shaping.createUserMessage("id-3", "c", { composedAtMs: Number.NaN }) as Record<string, unknown>).sentWhileOfflineAtMs, undefined, "a nonsensical time is not composed offline");
+    assert.equal((shaping.createUserMessage("id-4", "c", { richText: "" }) as Record<string, unknown>).richText, undefined, "an empty rich text is not carried");
+    assert.equal((shaping.createUserMessage("id-5", "c", { clientNonce: "" }) as Record<string, unknown>).clientNonce, undefined, "an empty nonce is not carried");
   });
 
   it("threads only the message types that can be threaded, keeping their fields", () => {
     const text = shaping.withReplyTo({ type: "text", content: "hi", images: ["i"] } as never, "target") as Record<string, unknown>;
     assert.deepEqual(Object.keys(text), ["type", "content", "images", "reply_to"]);
     assert.equal(text.reply_to, "target");
-    const connector = shaping.withReplyTo({ type: "connector", connector: {}, variant: "v", serverId: "s" } as never, "t") as Record<string, unknown>;
-    assert.deepEqual(Object.keys(connector), ["type", "connector", "variant", "reply_to", "serverId"]);
+    const connector = shaping.withReplyTo({ type: "connector", connector: {}, variant: "v", serverId: "s", suggestions: ["s1"] } as never, "t") as Record<string, unknown>;
+    assert.deepEqual(Object.keys(connector), ["type", "connector", "variant", "reply_to", "serverId", "suggestions"]);
+    assert.deepEqual(connector.suggestions, ["s1"], "a connector keeps the suggestions it was given");
     const stripped = shaping.stripReplyTo({ type: "attachment", url: "u", reply_to: "r", alt: "a" } as never) as Record<string, unknown>;
     assert.deepEqual(Object.keys(stripped), ["type", "url", "alt"]);
     const email = { type: "email-draft", reply_to: "r" };
