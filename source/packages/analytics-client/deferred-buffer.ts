@@ -1,16 +1,27 @@
 /**
  * Events that are held until they can be sent.
  *
- * An event that cannot be delivered now is kept, bounded in number and age, and sent when the client can reach the
- * backend again; an event that is too old to mean anything is dropped rather than sent late.
+ * A client that is not allowed to send analytics yet keeps the events it is told about, in the order they happened, so
+ * a later flush can hand them over. This buffer is the held side of that: it records events and hands them back, and
+ * flushing it is a no-op until the deferred client is activated. An event carries its name, the properties it was
+ * tracked with, and the time it happened.
  */
 export interface DeferredAnalyticsEvent { eventName: string; props?: Readonly<Record<string, unknown>> | undefined; timestamp?: number | undefined }
 export class DeferredAnalyticsBuffer {
   private events: DeferredAnalyticsEvent[] = [];
-  track(eventName: string, props?: Readonly<Record<string, unknown>>, timestamp?: number): void {
-    this.events.push({ eventName, props, timestamp });
+
+  /** Keeps one event until the buffer is flushed or cleared. */
+  track(name: string, properties?: Readonly<Record<string, unknown>>, happenedAt?: number): void {
+    const event: DeferredAnalyticsEvent = { eventName: name, props: properties, timestamp: happenedAt };
+    this.events.push(event);
   }
-  async flush(_timeoutMs: number): Promise<void> {}
+
+  /** Nothing leaves this buffer by flushing it: it is the held side of an analytics client. */
+  async flush(_waitMs: number): Promise<void> {}
+
+  /** The events held so far, in the order they were tracked. */
   getEvents(): DeferredAnalyticsEvent[] { return this.events; }
+
+  /** Forgets every held event. */
   clear(): void { this.events = []; }
 }
