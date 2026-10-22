@@ -12,7 +12,7 @@ import {
   PrivacyModes,
   toPrivacyMode,
 } from "../../source/host/extensions/codebase-telemetry/privacy-mode.ts";
-import { createListenerIntegrationReads, DASHBOARD_INTEGRATIONS_URL, LISTENER_INTEGRATIONS } from "../../source/host/automations/listener-integrations.automations.ts";
+import { createListenerIntegrationReads, DASHBOARD_INTEGRATIONS_URL, LISTENER_PLATFORMS } from "../../source/host/automations/listener-integrations.automations.ts";
 import { bestEffortToken, createMarketplaceInterceptor, CURSOR_MARKETPLACE_REQUEST_TIMEOUT_MS } from "../../source/shared/node/marketplace/cursor-marketplace-client.ts";
 import { notificationsExtension } from "../../source/host/notifications/extension.ts";
 import { HostExtensions } from "../../source/host/extensions/extension-ids.generated.ts";
@@ -185,7 +185,7 @@ describe("the integrations a listener can be connected for", () => {
       ["slack", true, "idle", 1],
       ["github", false, "idle", 0],
     ]);
-    assert.deepEqual(LISTENER_INTEGRATIONS.map((entry) => entry.platform), ["slack", "github"]);
+    assert.deepEqual(LISTENER_PLATFORMS.map((entry) => entry.platform), ["slack", "github"]);
     // A status the host has is what the entry says, scope issues and all.
     const detailed = listenerWorld({ slack: true, showDetail: true });
     const entry = (await detailed.reads.getIntegrations()).integrations[0];

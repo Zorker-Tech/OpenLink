@@ -1,27 +1,23 @@
 /** The platforms an automation can listen to, and what each one watches. */
-export type ListenerIntegrationPlatform = "github" | "slack";
+export type ListenerPlatformName = "github" | "slack";
 
-export interface ListenerIntegrationManifest {
-  readonly platform: ListenerIntegrationPlatform;
+export interface ListenerPlatform {
+  readonly platform: ListenerPlatformName;
   readonly displayName: string;
   readonly blurb: string;
 }
 
-export const LISTENER_INTEGRATIONS: readonly ListenerIntegrationManifest[] = [
-  {
-    platform: "github",
-    displayName: "GitHub",
-    blurb: "Let automations watch a repo's PRs, comments, issues, and CI.",
-  },
-  {
-    platform: "slack",
-    displayName: "Slack",
-    blurb: "Wake automations on Slack messages, mentions, and reactions.",
-  },
+/** One platform, described the way a surface offers it. */
+function integration(platform: ListenerPlatformName, displayName: string, blurb: string): ListenerPlatform {
+  return { platform, displayName, blurb };
+}
+
+export const LISTENER_PLATFORMS: readonly ListenerPlatform[] = [
+  integration("github", "GitHub", "Let automations watch a repo's PRs, comments, issues, and CI."),
+  integration("slack", "Slack", "Wake automations on Slack messages, mentions, and reactions."),
 ];
 
-export function listenerIntegrationManifest(
-  platform: string,
-): ListenerIntegrationManifest | undefined {
-  return LISTENER_INTEGRATIONS.find((entry) => entry.platform === platform);
+/** The description of a platform a caller asked for, or nothing when this build cannot listen to it. */
+export function listenerPlatformFor(platform: string): ListenerPlatform | undefined {
+  return LISTENER_PLATFORMS.find((entry) => entry.platform === platform);
 }
