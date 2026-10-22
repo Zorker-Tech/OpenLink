@@ -136,6 +136,24 @@ test("an operating system error code is found however deep the failure was wrapp
   assert.equal(findSystemErrno(undefined), undefined)
 })
 
+test("an operating system error code is the nearest one that is shaped like one", () => {
+  const inner = Object.assign(new Error("inner"), { code: "ENOENT" })
+  assert.equal(findSystemErrno(new Error("outer", { cause: inner })), "ENOENT", "a wrapper without a code passes the question down")
+  assert.equal(findSystemErrno(Object.assign(new Error("outer", { cause: inner }), { code: "EPERM" })), "EPERM", "the nearest code answers first")
+  assert.equal(findSystemErrno(Object.assign(new Error("outer"), { code: "WRAPPED", cause: inner })), "ENOENT", "a code that is not shaped like one is skipped")
+  assert.equal(findSystemErrno(Object.assign(new Error("x"), { code: "ENOENT2" })), undefined, "a digit is not part of the shape")
+  assert.equal(findSystemErrno(Object.assign(new Error("x"), { code: "enoent" })), undefined, "the shape is upper case")
+  assert.equal(findSystemErrno(Object.assign(new Error("x"), { code: "E" })), undefined, "the shape needs more than the E")
+  assert.equal(findSystemErrno(Object.assign(new Error("x"), { code: "E_ACCES" })), "E_ACCES")
+  assert.equal(findSystemErrno(Object.assign(new Error("x"), { code: 7 })), undefined, "only a string is a code")
+  assert.equal(findSystemErrno({ cause: Object.assign(new Error("x"), { code: "EIO" }) }), "EIO", "a plain wrapper is walked like an error")
+  assert.equal(findSystemErrno("EACCES"), undefined, "a bare string has no wrappers to walk")
+  assert.equal(findSystemErrno(Object.assign(function fn() {}, { code: "EINVAL" })), undefined, "a function is not a wrapper")
+  const loopWithCode = Object.assign(new Error("loop"), { code: "ELOOP" })
+  ;(loopWithCode as { cause?: unknown }).cause = loopWithCode
+  assert.equal(findSystemErrno(loopWithCode), "ELOOP", "the code is read before the walk notices the cycle")
+})
+
 test("a box answers the VNC methods it declares, and nothing else", () => {
   assert.deepEqual(Object.keys(BOX_VNC_METHOD_TABLE), ["readClipboard", "writeClipboard", "reportUserPresence"])
   assert.equal(isBoxVncMethod("readClipboard"), true)
