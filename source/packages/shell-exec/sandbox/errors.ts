@@ -9,9 +9,9 @@
 export class SandboxUnsupportedError extends Error {
   readonly reason: string | undefined
 
-  constructor(message: string, reason?: string | undefined) {
-    super(message)
-    this.reason = reason
+  constructor(detail: string, why?: string | undefined) {
+    super(detail)
+    this.reason = why
     this.name = "SandboxUnsupportedError"
   }
 }
