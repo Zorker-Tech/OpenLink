@@ -10,6 +10,7 @@ import type { ProjectRuntimeDescriptor, ProjectSupabaseManagementRequest, Projec
 import type { ProjectRuntimeController } from './project-runtime-router.js'
 import { BrowserHostClient, type BrowserAgentSession } from './browser-client.js'
 import { BrowserGateway } from './browser-gateway.js'
+import { DesktopGateway, type DesktopEndpoint } from './desktop-gateway.js'
 import { CodeServerGateway } from './code-server-gateway.js'
 import { approveSupabaseMcpConfirmation, handleSupabaseMcpRequest, listPendingSupabaseMcpConfirmations } from './supabase-mcp.js'
 
@@ -26,6 +27,8 @@ export interface PromptRuntimeSession {
   resolveExtensionUi?(response: AgentExtensionUiResponse): Promise<void>
   /** Read display-safe capabilities from the already provisioned worker. */
   resources?(request?: AgentResourceRequest): Promise<unknown>
+  /** Start or reconnect the session's private noVNC endpoint on demand. */
+  desktopEndpoint?(): Promise<DesktopEndpoint>
   /** Hot-swap the optional Browser capability without recreating the Agent. */
   setBrowser?(browser?: BrowserAgentSession): Promise<void>
   cleanup(): Promise<void>
@@ -230,6 +233,7 @@ function parseProjectSupabaseStudioProxyBody(value: unknown): ProjectSupabaseStu
 
 interface SessionEntry {
   runtime: PromptRuntimeSession
+  sessionId?: string
   lastUsedAt: number
   busy: boolean
   recovering?: boolean
@@ -655,6 +659,10 @@ export async function startPromptHttpServer(
     allowedOrigins: config.browserGatewayAllowedOrigins ?? ['http://localhost:3000'],
     upstreamOrigin: config.browserGatewayUpstreamOrigin,
   })
+  const desktopGateway = new DesktopGateway({
+    publicBaseUrl: config.browserGatewayPublicUrl ?? `http://${config.host}:${config.port}`,
+    allowedOrigins: config.browserGatewayAllowedOrigins ?? ['http://localhost:3000'],
+  })
   const codeServerGateway = new CodeServerGateway({
     publicBaseUrl: config.browserGatewayPublicUrl ?? `http://${config.host}:${config.port}`,
     allowedOrigins: config.browserGatewayAllowedOrigins ?? ['http://localhost:3000'],
@@ -783,6 +791,7 @@ export async function startPromptHttpServer(
       for (const [existingKey, existing] of sessions) {
         if (!existingKey.startsWith(`${request.baseKey}:`)) continue
         if (existing.busy || existing.recovering) throw new AgentHostError('SESSION_BUSY', 'Agent session is changing model while a prompt is active', { retryable: true })
+        desktopGateway.unregister(request.sessionId)
         await existing.runtime.cleanup()
         if (sessions.get(existingKey) === existing) sessions.delete(existingKey)
       }
@@ -803,7 +812,7 @@ export async function startPromptHttpServer(
           { agent: request.agent, accessMode: request.accessMode },
         )
         if (recoveredRuntime) {
-          const entry: SessionEntry = { runtime: recoveredRuntime, lastUsedAt: Date.now(), busy: false, paused: false, userPaused: await readUserPause(request), browserSessionId: request.browserSessionId }
+          const entry: SessionEntry = { runtime: recoveredRuntime, sessionId: request.sessionId, lastUsedAt: Date.now(), busy: false, paused: false, userPaused: await readUserPause(request), browserSessionId: request.browserSessionId }
           sessions.set(request.key, entry)
           return { entry, created: false }
         }
@@ -822,6 +831,7 @@ export async function startPromptHttpServer(
             request.browser,
             { agent: request.agent, accessMode: request.accessMode },
           ),
+          sessionId: request.sessionId,
           lastUsedAt: Date.now(),
           busy: false,
           paused: false,
@@ -919,6 +929,7 @@ export async function startPromptHttpServer(
         // deleting the entry before DELETE succeeds would make that workload
         // permanently invisible to the reaper.
         entry.recovering = true
+        desktopGateway.unregister(prepared.sessionId)
         try {
           await trackCleanup(entry.runtime.cleanup())
           if (sessions.get(prepared.key) === entry) sessions.delete(prepared.key)
@@ -952,6 +963,7 @@ export async function startPromptHttpServer(
       // leaked one workload.  Keep the entry as a capacity barrier and fail
       // closed when cleanup cannot be confirmed.
       try {
+        desktopGateway.unregister(prepared.sessionId)
         await entry.runtime.cleanup()
       } catch (cleanupError) {
         entry.recovering = false
@@ -1206,6 +1218,48 @@ export async function startPromptHttpServer(
     json(response, 200, { ok: true, active })
   }
 
+  async function handleAgentDesktop(
+    request: IncomingMessage,
+    response: import('node:http').ServerResponse,
+    pathSessionId: string,
+  ): Promise<void> {
+    const body = parseLeaseBody(await readJson(request))
+    if (body.sessionId !== pathSessionId) throw new AgentHostError('INVALID_BODY', 'Desktop session does not match the route')
+    const baseKey = `${body.userId}:${body.workspaceId}:${body.sessionId}`
+    let entry = [...sessions.entries()].find(([key]) => key.startsWith(`${baseKey}:`))?.[1]
+    if (!entry) {
+      // The chat page can ask for its desktop while the first Worker lease is
+      // still provisioning. Join that creation instead of returning a series
+      // of transient SESSION_BUSY responses until the browser's retry window
+      // expires.
+      const pendingCreation = sessionCreationLocks.get(baseKey)
+      if (pendingCreation) {
+        await pendingCreation
+        entry = [...sessions.entries()].find(([key]) => key.startsWith(`${baseKey}:`))?.[1]
+      }
+    }
+    if (!entry || entry.recovering) throw new AgentHostError('SESSION_BUSY', 'Agent Worker is still starting', { retryable: true })
+    if (entry.userPaused) throw new AgentHostError('SESSION_BUSY', 'Agent session is paused', { retryable: true })
+    if (!entry.runtime.desktopEndpoint) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'This Agent runtime does not provide a desktop session')
+    if (entry.paused) {
+      await entry.runtime.resume?.()
+      entry.paused = false
+    }
+    entry.lastUsedAt = Date.now()
+    const endpoint = await entry.runtime.desktopEndpoint()
+    const binding = desktopGateway.register({
+      ownerId: body.userId,
+      workspaceId: body.workspaceId,
+      projectId: body.projectId,
+      sessionId: body.sessionId,
+    }, endpoint, () => {
+      for (const [key, candidate] of sessions) {
+        if (key.startsWith(`${baseKey}:`)) candidate.lastUsedAt = Date.now()
+      }
+    })
+    json(response, 200, binding)
+  }
+
   async function handleRuntimeResources(
     request: IncomingMessage,
     response: import('node:http').ServerResponse,
@@ -1325,6 +1379,11 @@ export async function startPromptHttpServer(
         await handleBrowserGatewayPreview(request, response, decodeURIComponent(browserGatewayPreview[1]!))
         return
       }
+      const desktopGatewayRequest = /^\/v1\/desktop\/gateway\/sessions\/[^/]+\/[^/]+\/desktop(?:\/|$)/.exec(url.pathname)
+      if (desktopGatewayRequest) {
+        await desktopGateway.handleHttp(request, response)
+        return
+      }
       const codeServerGatewayRequest = /^\/v1\/code-server\/gateway\/sessions\/([^/]+)(?:\/|$)/.exec(url.pathname)
       if (codeServerGatewayRequest) {
         await codeServerGateway.handleHttp(request, response, decodeURIComponent(codeServerGatewayRequest[1]!))
@@ -1428,6 +1487,13 @@ export async function startPromptHttpServer(
         await handleAgentLease(request, response, sessionId)
         return
       }
+      const desktopSessionMatch = /^\/v1\/agent\/sessions\/([^/]+)\/desktop$/.exec(url.pathname)
+      if (request.method === 'POST' && desktopSessionMatch) {
+        const sessionId = decodeURIComponent(desktopSessionMatch[1]!)
+        if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(sessionId)) throw new AgentHostError('INVALID_SESSION', 'sessionId is invalid')
+        await handleAgentDesktop(request, response, sessionId)
+        return
+      }
       const resourcesMatch = /^\/v1\/agent\/sessions\/([^/]+)\/resources$/.exec(url.pathname)
       if (request.method === 'POST' && resourcesMatch) {
         const sessionId = decodeURIComponent(resourcesMatch[1]!)
@@ -1458,6 +1524,7 @@ export async function startPromptHttpServer(
         if (raw.action === 'pause') {
           await writeUserPause(body, true)
           if (entry) entry.userPaused = true
+          desktopGateway.unregister(sessionId)
           activePromptControllers.get(baseKey)?.abort()
           return json(response, 200, { ok: true, paused: true, busy: entry?.busy === true })
         }
@@ -1600,13 +1667,18 @@ export async function startPromptHttpServer(
     })
   })
   server.on('upgrade', (request, socket, head) => {
-    if (!codeServerGateway.handleUpgrade(request, socket, head)) browserGateway.handleUpgrade(request, socket, head)
+    if (!codeServerGateway.handleUpgrade(request, socket, head)
+      && !desktopGateway.handleUpgrade(request, socket, head)) browserGateway.handleUpgrade(request, socket, head)
   })
 
   const reaper = setInterval(() => {
     const cutoff = Date.now() - config.sessionIdleTtlMs
     for (const [key, entry] of sessions) {
       if (entry.busy || entry.recovering || entry.paused || entry.lastUsedAt >= cutoff) continue
+      if (entry.sessionId && desktopGateway.hasActiveConnection(entry.sessionId)) {
+        entry.lastUsedAt = Date.now()
+        continue
+      }
       entry.recovering = true
       if (entry.runtime.pause) {
         // Keep the sandbox snapshot and session handle in memory. Pausing
@@ -1623,6 +1695,7 @@ export async function startPromptHttpServer(
       } else {
         // Backends without pause support retain the old destructive cleanup
         // behavior; the local OpenSandbox backend implements pause/resume.
+        if (entry.sessionId) desktopGateway.unregister(entry.sessionId)
         void trackCleanup(entry.runtime.cleanup()).then(() => {
           if (sessions.get(key) === entry) sessions.delete(key)
         }).catch((error) => {
@@ -1650,6 +1723,7 @@ export async function startPromptHttpServer(
     }
     sessions.clear()
     codeServerGateway.close()
+    desktopGateway.close()
     browserGateway.close()
     await backend.close()
   }

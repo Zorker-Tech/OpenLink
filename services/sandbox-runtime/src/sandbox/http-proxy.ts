@@ -335,7 +335,7 @@ export function createHttpProxyServer(options: HttpProxyServerOptions): Server {
         logForDebugging(
           `[tls-terminate] non-TLS bytes on CONNECT ${hostname}:${port}; opaque-tunnelling`,
         )
-        head = peeked.head
+        head = Buffer.from(peeked.head)
       } else if (options.mitmCA) {
         // Per-host termination opt-out: the policy exempts this host (mTLS
         // upstream, cert-pinning client), so skip the MITM entirely and

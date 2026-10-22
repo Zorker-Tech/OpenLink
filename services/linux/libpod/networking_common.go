@@ -28,7 +28,7 @@ func (c *Container) bindPorts() ([]*os.File, error) {
 	if !c.runtime.config.Engine.EnablePortReservation || rootless.IsRootless() || !c.config.NetMode.IsBridge() {
 		return nil, nil
 	}
-	return bindPorts(c.convertPortMappings())
+	return bindPorts(c.convertPortMappings(), c.runtime.config.Engine.ForcePortListen)
 }
 
 // convertPortMappings will remove the HostIP part from the ports when running inside podman machine.

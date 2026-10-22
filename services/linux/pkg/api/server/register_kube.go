@@ -63,6 +63,10 @@ func (s *APIServer) registerKubeHandlers(r *mux.Router) error {
 	//    type: string
 	//    description: JSON encoded value of annotations (a map[string]string).
 	//  - in: query
+	//    name: labels
+	//    type: string
+	//    description: JSON encoded value of labels (a map[string]string).
+	//  - in: query
 	//    name: logDriver
 	//    type: string
 	//    description: Logging driver for the containers in the pod.
@@ -73,11 +77,20 @@ func (s *APIServer) registerKubeHandlers(r *mux.Router) error {
 	//    items:
 	//         type: string
 	//  - in: query
+	//    name: multiplepods
+	//    type: boolean
+	//    description: Allow creation of multiple pod replicas from a Deployment
+	//  - in: query
 	//    name: network
 	//    type: array
 	//    description: USe the network mode or specify an array of networks.
 	//    items:
 	//      type: string
+	//  - in: query
+	//    name: noHostname
+	//    type: boolean
+	//    default: false
+	//    description: Do not create /etc/hostname within the container, instead use the version from the image
 	//  - in: query
 	//    name: noHosts
 	//    type: boolean
@@ -135,6 +148,15 @@ func (s *APIServer) registerKubeHandlers(r *mux.Router) error {
 	//    type: string
 	//    description: Set the user namespace mode for the pods.
 	//  - in: query
+	//    name: validate
+	//    type: string
+	//    default: ignore
+	//    enum: [ignore, warn, strict]
+	//    description: |
+	//      How to handle unrecognized YAML fields and unsupported objects. "ignore" skips them,
+	//      "warn" returns them in the ValidationWarnings field of the response, and "strict"
+	//      fails the request. An empty value is treated as "ignore".
+	//  - in: query
 	//    name: wait
 	//    type: boolean
 	//    default: false
@@ -143,6 +165,11 @@ func (s *APIServer) registerKubeHandlers(r *mux.Router) error {
 	//    name: build
 	//    type: boolean
 	//    description: Build the images with corresponding context.
+	//  - in: query
+	//    name: noPodPrefix
+	//    type: boolean
+	//    default: false
+	//    description: Do not prefix container name with pod name
 	//  - in: body
 	//    name: request
 	//    description: Kubernetes YAML file.
@@ -153,6 +180,8 @@ func (s *APIServer) registerKubeHandlers(r *mux.Router) error {
 	// responses:
 	//   200:
 	//     $ref: "#/responses/playKubeResponseLibpod"
+	//   400:
+	//     $ref: "#/responses/badParamError"
 	//   500:
 	//     $ref: "#/responses/internalError"
 	r.HandleFunc(VersionedPath("/libpod/play/kube"), s.APIHandler(libpod.PlayKube)).Methods(http.MethodPost)

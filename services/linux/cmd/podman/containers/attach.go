@@ -45,7 +45,7 @@ func attachFlags(cmd *cobra.Command) {
 	flags := cmd.Flags()
 
 	detachKeysFlagName := "detach-keys"
-	flags.StringVar(&attachOpts.DetachKeys, detachKeysFlagName, containerConfig.DetachKeys(), "Select the key sequence for detaching a container. Format is a single character `[a-Z]` or a comma separated sequence of `ctrl-<value>`, where `<value>` is one of: `a-z`, `@`, `^`, `[`, `\\`, `]`, `^` or `_`")
+	flags.StringVar(&attachOpts.DetachKeys, detachKeysFlagName, containerConfig.DetachKeys(), "Select the key sequence for detaching a container. Format is a single character `[a-Z]` or a comma separated sequence of `ctrl-<value>`, where `<value>` is one of: `a-z`, `@`, `[`, `\\`, `]`, `^` or `_`")
 	_ = cmd.RegisterFlagCompletionFunc(detachKeysFlagName, common.AutocompleteDetachKeys)
 
 	flags.BoolVar(&attachOpts.NoStdin, "no-stdin", false, "Do not attach STDIN. The default is false")
@@ -67,7 +67,7 @@ func init() {
 	validate.AddLatestFlag(containerAttachCommand, &attachOpts.Latest)
 }
 
-func attach(_ *cobra.Command, args []string) error {
+func attach(cmd *cobra.Command, args []string) error {
 	if len(args) > 1 || (len(args) == 0 && !attachOpts.Latest) {
 		return errors.New("attach requires the name or id of one running container or the latest flag")
 	}
@@ -82,5 +82,5 @@ func attach(_ *cobra.Command, args []string) error {
 	}
 	attachOpts.Stdout = os.Stdout
 	attachOpts.Stderr = os.Stderr
-	return registry.ContainerEngine().ContainerAttach(registry.Context(), name, attachOpts)
+	return registry.ContainerEngine().ContainerAttach(cmd.Context(), name, attachOpts)
 }

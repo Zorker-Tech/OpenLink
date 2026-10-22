@@ -47,14 +47,14 @@ func init() {
 	rmFlags(quadletRmCmd)
 }
 
-func rm(_ *cobra.Command, args []string) error {
+func rm(cmd *cobra.Command, args []string) error {
 	if len(args) < 1 && !removeOptions.All {
 		return errors.New("at least one quadlet file must be selected")
 	}
 	var errs utils.OutputErrors
-	removeReport, err := registry.ContainerEngine().QuadletRemove(registry.Context(), args, removeOptions)
+	removeReport, err := registry.ContainerEngine().QuadletRemove(cmd.Context(), args, removeOptions)
 	if err != nil {
-		errs = append(errs, fmt.Errorf("unable to remove Quadlet: %v", err))
+		errs = append(errs, fmt.Errorf("unable to remove Quadlet: %w", err))
 	}
 	// We can get a report back even if err != nil if systemd reload failed
 	if removeReport != nil {
@@ -62,7 +62,7 @@ func rm(_ *cobra.Command, args []string) error {
 			fmt.Println(rq)
 		}
 		for quadlet, quadletErr := range removeReport.Errors {
-			errs = append(errs, fmt.Errorf("unable to remove Quadlet %s: %v", quadlet, quadletErr))
+			errs = append(errs, fmt.Errorf("unable to remove Quadlet %s: %w", quadlet, quadletErr))
 		}
 		if err == nil && len(removeReport.Errors) > 0 {
 			errs = append(errs, errors.New("some quadlets could not be removed"))

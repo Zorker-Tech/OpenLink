@@ -33,7 +33,6 @@ var (
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	mainContext    = context.Background()
 	podmanConfig   entities.PodmanConfig
 	globalLogLevel string
 )
@@ -95,14 +94,13 @@ func main() {
 	unshare.MaybeReexecUsingUserNamespace(false)
 
 	exitCode := 1
-	if err := mainCmd.Execute(); err != nil {
+	if err := mainCmd.ExecuteContext(context.Background()); err != nil {
 		if logrus.IsLevelEnabled(logrus.TraceLevel) {
 			fmt.Fprintf(os.Stderr, "Error: %+v\n", err)
 		} else {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		}
-		var ee *exec.ExitError
-		if errors.As(err, &ee) {
+		if ee, ok := errors.AsType[*exec.ExitError](err); ok {
 			if w, ok := ee.Sys().(syscall.WaitStatus); ok {
 				exitCode = w.ExitStatus()
 			}

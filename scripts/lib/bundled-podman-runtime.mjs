@@ -1,5 +1,5 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { delimiter, resolve } from 'node:path'
 import { bundledToolchainPaths, resolveHostPlatform } from './host-platform.mjs'
 import { ensureMacPlatformContainerEngine, platformEngineIdentity } from '../../deploy/self-hosted/runtime/platform-container-engine.mjs'
 
@@ -50,6 +50,10 @@ export async function configureBundledPodmanRuntime(root) {
 
   process.env.OPENLINK_PODMAN_COMMAND ||= toolchain.podman
   process.env.CONTAINERS_HELPER_BINARY_DIR ||= toolchainRoot
+  if (process.platform === 'linux') {
+    const pathEntries = (process.env.PATH || '').split(delimiter)
+    if (!pathEntries.includes(toolchainRoot)) process.env.PATH = [toolchainRoot, ...pathEntries].join(delimiter)
+  }
   process.env.XDG_CONFIG_HOME ||= configRoot
   process.env.XDG_DATA_HOME ||= dataRoot
   if (process.platform !== 'linux') process.env.CONTAINERS_MACHINE_PROVIDER ||= host.provider

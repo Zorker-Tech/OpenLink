@@ -1,7 +1,6 @@
 package manifest
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -179,17 +178,17 @@ func add(cmd *cobra.Command, args []string) error {
 		if manifestAddOpts.artifactConfigFile != "" {
 			configBytes, err := os.ReadFile(manifestAddOpts.artifactConfigFile)
 			if err != nil {
-				return fmt.Errorf("%v", err)
+				return err
 			}
 			manifestAddOpts.artifactOptions.Config = string(configBytes)
 		}
 		manifestAddOpts.artifactOptions.ManifestAnnotateOptions = manifestAddOpts.ManifestAnnotateOptions
-		listID, err = registry.ImageEngine().ManifestAddArtifact(context.Background(), args[0], args[1:], manifestAddOpts.artifactOptions)
+		listID, err = registry.ImageEngine().ManifestAddArtifact(cmd.Context(), args[0], args[1:], manifestAddOpts.artifactOptions)
 		if err != nil {
 			return err
 		}
 	} else {
-		listID, err = registry.ImageEngine().ManifestAdd(context.Background(), args[0], args[1:], manifestAddOpts.ManifestAddOptions)
+		listID, err = registry.ImageEngine().ManifestAdd(cmd.Context(), args[0], args[1:], manifestAddOpts.ManifestAddOptions)
 		if err != nil {
 			return err
 		}

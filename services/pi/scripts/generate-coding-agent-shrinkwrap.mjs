@@ -11,7 +11,7 @@ const rootLockfilePath = join(repoRoot, "package-lock.json");
 const shrinkwrapPath = join(codingAgentDir, "npm-shrinkwrap.json");
 const internalPackagePrefix = "@earendil-works/pi-";
 const allowedInstallScriptPackages = new Map([
-	["@google/genai@1.52.0", "preinstall is a no-op in the published package"],
+	["@google/genai@2.30.0", "preinstall is a no-op in the published package"],
 	["protobufjs@7.6.5", "postinstall only warns about protobufjs version scheme mismatches"],
 ]);
 
@@ -195,6 +195,7 @@ function resolveExternalDependency(lockPackages, packageName, fromLockPath) {
 function addInternalWorkspace(shrinkwrapPackages, addedPaths, queue, name, workspace) {
 	const packageJson = workspace.packageJson;
 	const outputPath = `node_modules/${name}`;
+	const dependencyContext = { sourcePath: workspace.lockPath, outputPath };
 	const entry = copyPackageJsonEntry(packageJson, { includeName: false });
 	entry.resolved = registryTarballUrl(name, packageJson.version);
 
@@ -202,22 +203,30 @@ function addInternalWorkspace(shrinkwrapPackages, addedPaths, queue, name, works
 	addedPaths.add(outputPath);
 
 	for (const dependencyName of Object.keys(packageDependencies(packageJson))) {
-		queue.push({ name: dependencyName, from: outputPath });
+		queue.push({ name: dependencyName, from: workspace.lockPath, dependencyContext });
 	}
 }
 
-function addExternalPackage(lockPackages, shrinkwrapPackages, addedPaths, queue, name, from) {
-	const lockPath = resolveExternalDependency(lockPackages, name, from);
+function outputLockPath(sourceLockPath, dependencyContext) {
+	if (!dependencyContext) return sourceLockPath;
+	const sourcePrefix = `${dependencyContext.sourcePath}/node_modules/`;
+	if (!sourceLockPath.startsWith(sourcePrefix)) return sourceLockPath;
+	return `${dependencyContext.outputPath}/node_modules/${sourceLockPath.slice(sourcePrefix.length)}`;
+}
+
+function addExternalPackage(lockPackages, shrinkwrapPackages, addedPaths, queue, name, from, dependencyContext) {
+	const sourceLockPath = resolveExternalDependency(lockPackages, name, from);
+	const lockPath = outputLockPath(sourceLockPath, dependencyContext);
 	if (addedPaths.has(lockPath)) {
 		return;
 	}
 
-	const entry = lockPackages[lockPath];
+	const entry = lockPackages[sourceLockPath];
 	shrinkwrapPackages[lockPath] = copyLockEntry(entry);
 	addedPaths.add(lockPath);
 
 	for (const dependencyName of Object.keys(packageDependencies(entry))) {
-		queue.push({ name: dependencyName, from: lockPath });
+		queue.push({ name: dependencyName, from: sourceLockPath, dependencyContext });
 	}
 }
 
@@ -319,7 +328,7 @@ function generateShrinkwrap() {
 			continue;
 		}
 
-		addExternalPackage(lockPackages, shrinkwrapPackages, addedPaths, queue, item.name, item.from);
+		addExternalPackage(lockPackages, shrinkwrapPackages, addedPaths, queue, item.name, item.from, item.dependencyContext);
 	}
 
 	const shrinkwrap = {

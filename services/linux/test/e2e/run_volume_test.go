@@ -373,7 +373,7 @@ var _ = Describe("Podman run with volumes", func() {
 	})
 
 	It("podman run with noexec can't exec", func() {
-		session := podmanTest.Podman([]string{"run", "--rm", "-v", "/bin:/hostbin:noexec", ALPINE, "/hostbin/ls", "/"})
+		session := podmanTest.Podman([]string{"run", "--rm", "-v", "/bin:/hostbin:noexec", ALPINE, "/hostbin/true"})
 		session.WaitWithDefaultTimeout()
 		Expect(session).To(ExitWithError(126, "ermission denied"))
 	})
@@ -1113,7 +1113,7 @@ RUN chmod 755 /test1 /test2 /test3`, ALPINE)
 		mkvol.WaitWithDefaultTimeout()
 		Expect(mkvol).Should(ExitCleanly())
 
-		subvol := "/test/test2/"
+		subvol := "/test/a=b/"
 		pathInCtr := "/mnt"
 		pathToCreate := filepath.Join(pathInCtr, subvol)
 		popvol := podmanTest.Podman([]string{"run", "-v", fmt.Sprintf("%s:/mnt", volName), ALPINE, "sh", "-c", fmt.Sprintf("mkdir -p %s; touch %s; touch %s", pathToCreate, filepath.Join(pathToCreate, "foo"), filepath.Join(pathToCreate, "bar"))})

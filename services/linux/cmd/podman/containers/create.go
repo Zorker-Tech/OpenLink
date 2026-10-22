@@ -161,6 +161,8 @@ func create(cmd *cobra.Command, args []string) error {
 	}
 	s.RawImageName = rawImageName
 
+	s.Passwd = &cliVals.Passwd
+
 	// Include the command used to create the container.
 	s.ContainerCreateCommand = os.Args
 
@@ -169,7 +171,7 @@ func create(cmd *cobra.Command, args []string) error {
 	}
 
 	if cliVals.Replace {
-		if err := replaceContainer(cliVals.Name); err != nil {
+		if err := replaceContainer(cmd.Context(), cliVals.Name); err != nil {
 			return err
 		}
 	}
@@ -181,7 +183,7 @@ func create(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	report, err := registry.ContainerEngine().ContainerCreate(registry.Context(), s)
+	report, err := registry.ContainerEngine().ContainerCreate(cmd.Context(), s)
 	if err != nil {
 		// if pod was created as part of run
 		// remove it in case ctr creation fails
@@ -205,7 +207,7 @@ func create(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func replaceContainer(name string) error {
+func replaceContainer(ctx context.Context, name string) error {
 	if len(name) == 0 {
 		return errors.New("cannot replace container without --name being set")
 	}
@@ -213,7 +215,7 @@ func replaceContainer(name string) error {
 		Force:  true, // force stop & removal
 		Ignore: true, // ignore errors when a container doesn't exit
 	}
-	return removeContainers([]string{name}, rmOptions, false, true)
+	return removeContainers(ctx, []string{name}, rmOptions, false, true)
 }
 
 func createOrUpdateFlags(cmd *cobra.Command, vals *entities.ContainerCreateOptions) error {
@@ -414,7 +416,7 @@ func pullImage(cmd *cobra.Command, imageName string, cliVals *entities.Container
 		pullOptions.Password = creds.Password
 	}
 
-	pullReport, pullErr := registry.ImageEngine().Pull(registry.Context(), imageName, pullOptions)
+	pullReport, pullErr := registry.ImageEngine().Pull(cmd.Context(), imageName, pullOptions)
 	if pullErr != nil {
 		return "", pullErr
 	}
@@ -437,7 +439,7 @@ func rmPodIfNecessary(cmd *cobra.Command, s *specgen.SpecGenerator) error {
 	// errcheck not necessary since
 	// pod creation would've failed
 	podName := strings.Replace(s.Pod, "new:", "", 1)
-	_, err := registry.ContainerEngine().PodRm(context.Background(), []string{podName}, entities.PodRmOptions{})
+	_, err := registry.ContainerEngine().PodRm(cmd.Context(), []string{podName}, entities.PodRmOptions{})
 	return err
 }
 
@@ -502,6 +504,6 @@ func createPodIfNecessary(cmd *cobra.Command, s *specgen.SpecGenerator, netOpts 
 		return err
 	}
 	podSpec.PodSpecGen = *podGen
-	_, err = registry.ContainerEngine().PodCreate(context.Background(), podSpec)
+	_, err = registry.ContainerEngine().PodCreate(cmd.Context(), podSpec)
 	return err
 }

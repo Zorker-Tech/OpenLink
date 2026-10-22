@@ -1,7 +1,6 @@
 package containers
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -61,8 +60,8 @@ func init() {
 	topFlags(topCommand.Flags())
 	validate.AddLatestFlag(topCommand, &topOptions.Latest)
 
-	descriptors, err := util.GetContainerPidInformationDescriptors()
-	if err == nil {
+	descriptors, err := util.GetContainerPidInformationDescriptors() //nolint:staticcheck,nolintlint // false-positives on windows because this always errors there
+	if err == nil {                                                  //nolint:staticcheck,nolintlint
 		topDescription = fmt.Sprintf("%s\n\n  Format Descriptors:\n    %s", topDescription, strings.Join(descriptors, ","))
 		topCommand.Long = topDescription
 	}
@@ -77,8 +76,8 @@ func init() {
 
 func top(cmd *cobra.Command, args []string) error {
 	if topOptions.ListDescriptors {
-		descriptors, err := util.GetContainerPidInformationDescriptors()
-		if err != nil {
+		descriptors, err := util.GetContainerPidInformationDescriptors() //nolint:staticcheck,nolintlint // false-positives on windows because this always errors there
+		if err != nil {                                                  //nolint:staticcheck,nolintlint
 			return err
 		}
 		fmt.Println(strings.Join(descriptors, "\n"))
@@ -96,7 +95,7 @@ func top(cmd *cobra.Command, args []string) error {
 		topOptions.Descriptors = args[1:]
 	}
 
-	topResponse, err := registry.ContainerEngine().ContainerTop(context.Background(), topOptions)
+	topResponse, err := registry.ContainerEngine().ContainerTop(cmd.Context(), topOptions)
 	if err != nil {
 		return err
 	}

@@ -1918,6 +1918,13 @@ VOLUME %s`, ALPINE, volPath, volPath)
 		Expect(session.OutputToString()).To(ContainSubstring(limit))
 	})
 
+	It("podman run verify pids-limit 0 is unlimited", func() {
+		session := podmanTest.Podman([]string{"run", "--pids-limit", "0", "--net=none", "--rm", ALPINE, "cat", "/sys/fs/cgroup/pids.max"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+		Expect(session.OutputToString()).To(ContainSubstring("max"))
+	})
+
 	It("podman run umask", func() {
 		if !strings.Contains(podmanTest.OCIRuntime, "crun") {
 			Skip("Test only works on crun")
@@ -2346,9 +2353,7 @@ WORKDIR /madethis`, BB)
 		mount := podmanTest.Podman([]string{"exec", ctrName, "mount"})
 		mount.WaitWithDefaultTimeout()
 		Expect(mount).Should(ExitCleanly())
-		t, strings := mount.GrepString("tmpfs on /run/lock")
-		Expect(t).To(BeTrue(), "found /run/lock")
-		Expect(strings[0]).Should(ContainSubstring("size=10240k"))
+		Expect(mount.OutputToStringArray()).To(ContainElement(MatchRegexp(`tmpfs on /run/lock.*size=10240k`)))
 	})
 
 	It("podman run does not preserve image annotations", func() {

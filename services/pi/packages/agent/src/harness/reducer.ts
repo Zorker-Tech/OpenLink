@@ -169,7 +169,7 @@ function validateToolStart(
 	invocations.add(invocation);
 
 	const assistantEntry = entriesById.get(record.assistantEntryId);
-	if (!assistantEntry || assistantEntry.type !== "message" || assistantEntry.message.role !== "assistant") {
+	if (assistantEntry?.type !== "message" || assistantEntry.message.role !== "assistant") {
 		corrupt("tool_call_mismatch", `Tool start ${record.id} does not reference an assistant entry`);
 	}
 	const toolCalls = assistantEntry.message.content.filter((content) => content.type === "toolCall");

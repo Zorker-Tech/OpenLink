@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "tsconfig": "workspace:"
+    "tsconfig": "workspace:^"
   },
   "author": "",
   "license": "MIT",

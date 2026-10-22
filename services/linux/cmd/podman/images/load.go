@@ -1,7 +1,6 @@
 package images
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -68,7 +67,7 @@ func loadFlags(cmd *cobra.Command) {
 	}
 }
 
-func load(_ *cobra.Command, _ []string) error {
+func load(cmd *cobra.Command, _ []string) error {
 	if len(loadOpts.Input) > 0 {
 		// Download the input file if needed.
 		if strings.HasPrefix(loadOpts.Input, "https://") || strings.HasPrefix(loadOpts.Input, "http://") {
@@ -76,7 +75,7 @@ func load(_ *cobra.Command, _ []string) error {
 			if err != nil {
 				return err
 			}
-			tmpfile, err := download.FromURL(registry.Context(), tmpdir, loadOpts.Input, download.Options{})
+			tmpfile, err := download.FromURL(cmd.Context(), tmpdir, loadOpts.Input, download.Options{})
 			if err != nil {
 				return err
 			}
@@ -93,18 +92,18 @@ func load(_ *cobra.Command, _ []string) error {
 		}
 		outFile, err := os.CreateTemp(util.Tmpdir(), "podman")
 		if err != nil {
-			return fmt.Errorf("creating file %v", err)
+			return fmt.Errorf("creating file %w", err)
 		}
 		defer os.Remove(outFile.Name())
 		defer outFile.Close()
 
 		_, err = io.Copy(outFile, os.Stdin)
 		if err != nil {
-			return fmt.Errorf("copying file %v", err)
+			return fmt.Errorf("copying file %w", err)
 		}
 		loadOpts.Input = outFile.Name()
 	}
-	response, err := registry.ImageEngine().Load(context.Background(), loadOpts)
+	response, err := registry.ImageEngine().Load(cmd.Context(), loadOpts)
 	if err != nil {
 		return err
 	}

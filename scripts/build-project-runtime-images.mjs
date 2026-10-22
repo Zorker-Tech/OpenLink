@@ -43,6 +43,8 @@ const specs = [
     context: '.',
     inputs: [
       'services/agent-worker/Dockerfile',
+      'services/agent-worker/desktop/start.sh',
+      'services/agent-worker/desktop/run-ubuntu-vm.sh',
       'services/agent-worker/package.json',
       'services/agent-worker/package-lock.json',
       'services/agent-worker/dist',
@@ -53,6 +55,8 @@ const specs = [
     ],
     contextProjection: [
       'packages/pi-runtime/tarballs',
+      'services/agent-worker/desktop/start.sh',
+      'services/agent-worker/desktop/run-ubuntu-vm.sh',
       'services/agent-worker/package.json',
       'services/agent-worker/package-lock.json',
       'services/agent-worker/dist',
@@ -66,6 +70,8 @@ const specs = [
     context: '.',
     inputs: [
       'services/agent-rpc-worker/Dockerfile',
+      'services/agent-worker/desktop/start.sh',
+      'services/agent-worker/desktop/run-ubuntu-vm.sh',
       'services/agent-rpc-worker/package.json',
       'services/agent-rpc-worker/package-lock.json',
       'services/agent-rpc-worker/dist',
@@ -76,6 +82,8 @@ const specs = [
     ],
     contextProjection: [
       'packages/pi-runtime/tarballs',
+      'services/agent-worker/desktop/start.sh',
+      'services/agent-worker/desktop/run-ubuntu-vm.sh',
       'services/agent-rpc-worker/package.json',
       'services/agent-rpc-worker/package-lock.json',
       'services/agent-rpc-worker/dist',
@@ -316,10 +324,33 @@ if (changed.length) {
         } else if (builderKind === 'docker') {
           const buildArgs = ['build', '--platform', platform, '--tag', spec.image]
           if (imageBuildNetwork) buildArgs.push('--network', imageBuildNetwork)
+          const buildEnvironment = { ...process.env }
+          let usesHostGatewayProxy = false
+          // Docker builds do not inherit the host process environment by
+          // default. Forward only the proxy variable names so Docker reads
+          // their values from this process environment without adding proxy
+          // URLs to the command line or build logs. Loopback proxies need a
+          // host-gateway alias because BuildKit's host network namespace may
+          // differ from the Docker CLI host's loopback namespace.
+          for (const key of ['HTTP_PROXY', 'HTTPS_PROXY', 'FTP_PROXY', 'NO_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'ftp_proxy', 'no_proxy', 'all_proxy']) {
+            const value = process.env[key]
+            if (!value) continue
+            buildArgs.push('--build-arg', key)
+            try {
+              const proxy = new URL(value)
+              const hostname = proxy.hostname.replace(/^\[|\]$/g, '').toLowerCase()
+              if (hostname === 'localhost' || hostname === '::1' || /^127(?:\.\d{1,3}){3}$/.test(hostname)) {
+                proxy.hostname = 'host.docker.internal'
+                buildEnvironment[key] = proxy.toString()
+                usesHostGatewayProxy = true
+              }
+            } catch {}
+          }
+          if (usesHostGatewayProxy) buildArgs.push('--add-host', 'host.docker.internal:host-gateway')
           buildArgs.push('--file', resolve(root, spec.dockerfile), context.path)
           await run(docker, [
             ...buildArgs,
-          ], { cwd: root, timeout: 60 * 60 * 1000 })
+          ], { cwd: root, env: buildEnvironment, timeout: 60 * 60 * 1000 })
         } else {
           await run(podman, [
             ...builder.connectionArgs,
