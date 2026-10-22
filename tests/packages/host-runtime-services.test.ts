@@ -24,7 +24,7 @@ import { buildContentSnippet, entrySearchText, findAgentContentMatches, type Sea
 import { asDisplayOwner, createBoxWallpaperCommands, parseTonePlan, readLiveDisplays } from "../../source/host/extensions/wallpaper/box-wallpaper-commands.ts";
 import { McpAuthWaitRegistry } from "../../source/host/mcp/mcp-auth-wait-registry.ts";
 import { classifyBotBlockPage, withBotBlockDetection } from "../../source/host/runner/bot-block-detection.ts";
-import { isSqliteBusyError, isSqliteCorruptError, isSqliteIoError, retrySqliteBusy, SQLITE_BUSY } from "../../source/host/storage/sqlite-busy.ts";
+import { isSqliteBusyError, isSqliteCantOpenError, isSqliteCorruptError, isSqliteIoError, retrySqliteBusy, SQLITE_BUSY, SQLITE_CANTOPEN, SQLITE_CORRUPT, SQLITE_IOERR, SQLITE_LOCKED, SQLITE_NOTADB } from "../../source/host/storage/sqlite-busy.ts";
 import { SlateSendNotPersistedError } from "../../source/host/transcript/send-not-persisted-error.ts";
 import { mergeTurnUsage, toSafeTokenCount, turnUsageFromTurnEnded, type TurnUsage } from "../../source/host/runner/turn-usage.ts";
 import { backendCloudTrigger } from "../../source/host/automations/slate-automation-cloud-trigger.ts";
@@ -455,6 +455,67 @@ describe("a database another process holds", () => {
     );
     assert.equal(brokenAttempts, 1);
     await assert.rejects(() => retrySqliteBusy(async () => { throw busy; }, { attempts: 2, delay: async () => {} }), /database is locked/);
+  });
+
+  it("reads the result part of an extended sqlite code, and only waits out busy or locked", async () => {
+    assert.equal(SQLITE_BUSY, 5);
+    assert.equal(SQLITE_LOCKED, 6);
+    assert.equal(SQLITE_IOERR, 10);
+    assert.equal(SQLITE_CORRUPT, 11);
+    assert.equal(SQLITE_CANTOPEN, 14);
+    assert.equal(SQLITE_NOTADB, 26);
+
+    assert.equal(isSqliteBusyError(Object.assign(new Error("x"), { errcode: SQLITE_LOCKED })), true);
+    assert.equal(isSqliteBusyError(Object.assign(new Error("x"), { errcode: SQLITE_BUSY + 256 })), false, "an extended code is not the bare one for busy");
+    assert.equal(isSqliteBusyError(new Error("database schema is locked")), true);
+    assert.equal(isSqliteBusyError(new Error("DATABASE IS LOCKED")), true, "the message is matched in any case");
+    assert.equal(isSqliteBusyError({ message: "database is locked" }), false, "only an error is an error")
+    assert.equal(isSqliteIoError(Object.assign(new Error("x"), { errcode: SQLITE_IOERR + 256 })), true, "the low byte is the result")
+    assert.equal(isSqliteIoError(new Error("SHORT READ")), true)
+    assert.equal(isSqliteIoError(new Error("something else")), false)
+    assert.equal(isSqliteCantOpenError(Object.assign(new Error("x"), { errcode: SQLITE_CANTOPEN })), true)
+    assert.equal(isSqliteCantOpenError(Object.assign(new Error("x"), { errcode: SQLITE_CANTOPEN + 256 })), true)
+    assert.equal(isSqliteCantOpenError(new Error("unable to open database file")), true)
+    assert.equal(isSqliteCantOpenError(new Error("something else")), false)
+    assert.equal(isSqliteCorruptError(Object.assign(new Error("x"), { errcode: SQLITE_CORRUPT + 256 })), true)
+    assert.equal(isSqliteCorruptError(Object.assign(new Error("x"), { errcode: SQLITE_NOTADB })), true)
+    assert.equal(isSqliteCorruptError(new Error("malformed")), true)
+    assert.equal(isSqliteCorruptError(new Error("x")), false)
+  });
+
+  it("waits longer after each refusal, and gives up with the last busy error", async () => {
+    const busy = Object.assign(new Error("database is locked"), { errcode: SQLITE_BUSY });
+    const waits: number[] = [];
+    const delay = async (ms: number) => { waits.push(ms); };
+    assert.equal(await retrySqliteBusy(() => "sync", { delay }), "sync", "a synchronous operation is awaited too")
+    assert.deepEqual(waits, [])
+
+    await assert.rejects(() => retrySqliteBusy(async () => { throw busy; }, { attempts: 1, delay }), /database is locked/);
+    assert.deepEqual(waits, [], "one attempt means one try and no wait")
+
+    waits.length = 0;
+    let count = 0;
+    assert.equal(await retrySqliteBusy(async () => { count += 1; if (count < 4) throw busy; return count; }, { delay }), 4);
+    assert.deepEqual(waits, [100, 200, 400], "the default first wait is a hundred milliseconds, doubling")
+
+    waits.length = 0;
+    await assert.rejects(() => retrySqliteBusy(async () => { throw busy; }, { attempts: 0, delay }), /database is locked/, "zero attempts is clamped to one");
+    assert.deepEqual(waits, [])
+
+    waits.length = 0;
+    await assert.rejects(() => retrySqliteBusy(async () => { throw busy; }, { delay }), /database is locked/);
+    assert.deepEqual(waits, [100, 200, 400, 800], "the default is five attempts, so four waits");
+
+    let thrown: unknown = "not thrown";
+    try {
+      await retrySqliteBusy(async () => { throw busy; }, { attempts: Number.NaN, delay });
+    } catch (error) {
+      thrown = error;
+    }
+    assert.equal(thrown, undefined, "a nonsensical attempt count runs no attempts and throws the nothing it has")
+
+    const broken = new Error("short read");
+    await assert.rejects(() => retrySqliteBusy(async () => { throw broken; }, { delay }), (error: unknown) => error === broken, "the failing error is handed on as the same object")
   });
 });
 
