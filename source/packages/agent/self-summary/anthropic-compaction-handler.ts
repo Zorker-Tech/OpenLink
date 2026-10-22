@@ -1,20 +1,19 @@
 /**
- * Compacting a conversation the way the provider's compaction is asked for.
+ * Compacting a conversation the way this provider's own compaction is asked for.
  *
- * The provider has two ways of being asked, and they are not the same request. The beta path is what the
- * provider recognizes on its own: the conversation is sent as it stands and one line tells it to continue,
- * and the provider is expected to write the checkpoint. The explicit path is the same exchange asked in
- * words: the instructions — the platform's own, or the ones a caller supplied — are the last message, and
- * the answer is the summary.
+ * The provider offers two ways to be asked, and they are not the same request. The beta path is the one the
+ * provider recognizes by itself: the conversation is sent as it stands with one line telling the model to
+ * continue, and the provider is expected to write the checkpoint. The explicit path asks the same exchange in
+ * words — the instructions this platform ships, or the ones the caller supplied — and takes the answer as the
+ * summary.
  *
- * The beta path has a floor. The provider's own compaction is only worth asking for on a conversation that
- * is already large, so a small one is refused with the estimate rather than sent, since a refusal the caller
- * can read is better than a request that quietly does nothing.
+ * The beta path has a floor: the provider's own compaction is only worth asking for on a conversation that is
+ * already large, so a small one is refused with the estimate rather than sent. A refusal the caller can read is
+ * better than a request that quietly does nothing.
  *
- * What the model writes back is not the summary alone: it reasons first, and it may wrap the answer in its
- * own tags. So the analysis around the answer is taken off — the leading one and a trailing one that
- * contains no summary — and what is kept is the summary body, falling back to the whole answer when the
- * model did not tag anything.
+ * What the model writes back is not the summary alone — it reasons first, and it may wrap the answer in its own
+ * tags — so the reasoning around it is taken off, and what is kept is the tagged summary, or the whole answer
+ * when the model tagged nothing.
  */
 
 import {
@@ -50,8 +49,10 @@ import { extractTextContent } from "./token-estimate.ts"
 
 type RedactedCoreMessage = Parameters<typeof fromRedactedCoreMessage>[0]
 type RedactedInteractionListener = Parameters<typeof executeSelfSummaryWithRetry>[3]
+type CompactionMode = "explicit" | "beta"
 
-interface AnthropicPartition {
+/** The conversation split the way compaction needs it: framing, the user's profile, what is summarized, what stays. */
+interface CompactionPartition {
   readonly systemMessage: RedactedCoreMessage | undefined
   readonly userInfoMessage: RedactedCoreMessage | undefined
   readonly messagesToSummarize: readonly RedactedCoreMessage[]
@@ -59,45 +60,195 @@ interface AnthropicPartition {
   readonly skillBlocks: readonly string[]
 }
 
-interface AnthropicRawSummary {
+/** What the model answered, and what the exchange cost. */
+interface CompactionSummary {
   readonly text: string
   readonly inputTokens: number
   readonly outputTokens: number
 }
 
+/** What a caller may tell the handler beyond the conversation itself. */
 export interface AnthropicCompactionOptions extends SelfSummaryRetryOptions {
   readonly explicit?: boolean | undefined
   readonly anthropicCompactionInstructions?: string | undefined
 }
 
 const logger = createLogger("@slate/agent")
-const MIN_ANTHROPIC_COMPACTION_INPUT_TOKENS = 50_000
-const APPROX_CHARS_PER_TOKEN = 4
-const compactionInputTokens = createHistogram("anthropic_compaction.input_token", {
-  description: "Input tokens consumed during Anthropic compaction",
-  labelNames: ["mode"],
-})
-const compactionOutputTokens = createHistogram("anthropic_compaction.output_token", {
-  description: "Output tokens generated during Anthropic compaction",
-  labelNames: ["mode"],
-})
-const compactionCacheReadTokens = createHistogram("anthropic_compaction.cache_read_token", {
-  description: "Cache read tokens during Anthropic compaction",
-  labelNames: ["mode"],
-})
-const compactionCacheWriteTokens = createHistogram("anthropic_compaction.cache_write_token", {
-  description: "Cache write tokens during Anthropic compaction",
-  labelNames: ["mode"],
-})
-const compactionTimeTakenMs = createHistogram("anthropic_compaction.time_taken_ms", {
-  description: "Time taken for Anthropic compaction in milliseconds",
-  labelNames: ["mode"],
-})
-const compactionStatus = createCounter("anthropic_compaction.status", {
-  description: "Count of Anthropic compaction attempts and their outcomes",
-  labelNames: ["outcome", "errorKind", "mode"],
-})
 
+/** The provider's own compaction is only worth asking for above this many estimated input tokens. */
+const MIN_COMPACTION_INPUT_TOKENS = 50_000
+/** The platform's rough characters-per-token figure, used only for the floor estimate. */
+const CHARS_PER_TOKEN = 4
+
+/** The tags the model writes, which the summary is read out of and the reasoning is taken from. */
+const ANALYSIS_TAG = "<analysis>"
+const ANALYSIS_CLOSE_TAG = "</analysis>"
+const SUMMARY_TAG = "<summary>"
+const SUMMARY_CLOSE_TAG = "</summary>"
+/** The durable-block namespace and the provider name this compaction reports under. */
+const COMPACTION_NAMESPACE = "anthropic-compaction"
+
+/** How this compaction reports itself: what it cost, how long it took and how it ended. */
+const compactionMetrics = {
+  inputTokens: createHistogram("anthropic_compaction.input_token", {
+    description: "Input tokens consumed during Anthropic compaction",
+    labelNames: ["mode"],
+  }),
+  outputTokens: createHistogram("anthropic_compaction.output_token", {
+    description: "Output tokens generated during Anthropic compaction",
+    labelNames: ["mode"],
+  }),
+  cacheReadTokens: createHistogram("anthropic_compaction.cache_read_token", {
+    description: "Cache read tokens during Anthropic compaction",
+    labelNames: ["mode"],
+  }),
+  cacheWriteTokens: createHistogram("anthropic_compaction.cache_write_token", {
+    description: "Cache write tokens during Anthropic compaction",
+    labelNames: ["mode"],
+  }),
+  timeTakenMs: createHistogram("anthropic_compaction.time_taken_ms", {
+    description: "Time taken for Anthropic compaction in milliseconds",
+    labelNames: ["mode"],
+  }),
+  status: createCounter("anthropic_compaction.status", {
+    description: "Count of Anthropic compaction attempts and their outcomes",
+    labelNames: ["outcome", "errorKind", "mode"],
+  }),
+} as const
+
+/** The system message a compaction cannot run without, or the refusal that says so. */
+function requireSystemMessage(partitioned: CompactionPartition): RedactedCoreMessage {
+  if (partitioned.systemMessage === undefined) throw new Error("Expected system message in conversation")
+  return partitioned.systemMessage
+}
+
+/** The framing a compacted conversation begins with: the system message and, when it exists, the user's profile. */
+function conversationPreface(systemMessage: RedactedCoreMessage, userInfoMessage: RedactedCoreMessage | undefined): RedactedCoreMessage[] {
+  return [systemMessage, ...(userInfoMessage ? [userInfoMessage] : [])]
+}
+
+/** The line that tells a beta compaction to continue, or the instructions an explicit one asks in words. */
+function finalCompactionPrompt(mode: CompactionMode, instructions: string | undefined): string {
+  if (mode === "explicit") return instructions ?? TAGGED_COMPACTION_INSTRUCTIONS
+  return "Continue from where you left off."
+}
+
+/** The log line that says which way the compaction was asked for. */
+function summaryRequestLogLine(mode: CompactionMode): string {
+  return mode === "explicit"
+    ? "[anthropic-compaction] generating summary via explicit user prompt"
+    : "[anthropic-compaction] generating summary via compact beta"
+}
+
+/** The messages a compaction request is made of: framing, the conversation, and one last user turn that asks. */
+function compactionRequestMessages(
+  partitioned: CompactionPartition,
+  systemMessage: RedactedCoreMessage,
+  finalPrompt: string,
+  privacySource: RedactedCoreMessage,
+): RedactedCoreMessage[] {
+  return [
+    ...conversationPreface(systemMessage, partitioned.userInfoMessage),
+    ...partitioned.messagesToSummarize,
+    {
+      _privacyMode: privacySource._privacyMode,
+      role: "user",
+      content: safeString(finalPrompt),
+      providerOptions: SUMMARIZATION_CURSOR_PROVIDER_OPTIONS,
+    },
+  ]
+}
+
+/** A leading analysis block is reasoning rather than summary, so it is taken off before the answer is read. */
+function withoutLeadingAnalysis(text: string): string {
+  if (!text.startsWith(ANALYSIS_TAG)) return text
+  const analysisEnd = text.indexOf(ANALYSIS_CLOSE_TAG)
+  return analysisEnd === -1 ? text : text.slice(analysisEnd + ANALYSIS_CLOSE_TAG.length)
+}
+
+/** A trailing analysis block with no summary inside it is the same reasoning at the other end. */
+function withoutTrailingAnalysis(text: string): string {
+  if (!text.trimEnd().endsWith(ANALYSIS_CLOSE_TAG)) return text
+  const analysisStart = text.lastIndexOf(ANALYSIS_TAG)
+  if (analysisStart === -1) return text
+  if (text.lastIndexOf(SUMMARY_CLOSE_TAG, analysisStart) === -1) return text
+  return text.slice(0, analysisStart)
+}
+
+/** The summary body the model wrote: the tagged summary when it tagged one, and the whole answer otherwise. */
+function summaryBodyFromAnswer(answer: string): string {
+  const candidate = withoutTrailingAnalysis(withoutLeadingAnalysis(answer.trim()))
+  const summaryStart = candidate.indexOf(SUMMARY_TAG)
+  const summaryEnd = candidate.lastIndexOf(SUMMARY_CLOSE_TAG)
+  if (summaryStart !== -1 && summaryEnd > summaryStart) {
+    return candidate.slice(summaryStart + SUMMARY_TAG.length, summaryEnd).trim()
+  }
+  return candidate.trim() || answer
+}
+
+/** The text a compacted conversation is continued from: the summary in its tag, with durable blocks around it. */
+function summaryEnvelope(summary: string, durableBlocks: ReturnType<typeof renderDurableBlocks>): string {
+  return `${prependDurableBlocks(COMPACTION_NAMESPACE, durableBlocks)}
+
+<summary>
+${summary}
+</summary>${appendDurableBlocks(COMPACTION_NAMESPACE, durableBlocks)}`
+}
+
+/** Report what one compaction exchange cost, in the labels the metrics keep. */
+function recordCompactionUsage(
+  ctx: Context,
+  mode: CompactionMode,
+  usage: { inputTokens: number; outputTokens: number; cacheReadTokens: number | undefined; cacheWriteTokens: number | undefined },
+): void {
+  const labels = { mode }
+  compactionMetrics.inputTokens.histogram(ctx, usage.inputTokens, labels)
+  compactionMetrics.outputTokens.histogram(ctx, usage.outputTokens, labels)
+  compactionMetrics.cacheReadTokens.histogram(ctx, usage.cacheReadTokens!, labels)
+  compactionMetrics.cacheWriteTokens.histogram(ctx, usage.cacheWriteTokens!, labels)
+}
+
+/** One renderer per content part the estimate knows: the words it read, its thinking, and the calls it made. */
+const CONTENT_PART_RENDERERS: ReadonlyMap<string, (part: Record<string, unknown>) => string> = new Map([
+  ["text", (part: Record<string, unknown>) => part.text as string],
+  ["reasoning", (part: Record<string, unknown>) => part.text as string],
+  ["tool-call", (part: Record<string, unknown>) => `[Tool call] ${part.toolName as string} ${JSON.stringify(part.args) ?? "null"}`],
+  ["tool-result", (part: Record<string, unknown>) => `[Tool result] ${part.toolName as string} ${JSON.stringify(part.result) ?? "null"}`],
+  ["image", () => "[Image]"],
+  ["file", () => "[File]"],
+])
+
+/** What one content part of a message is worth reading for the estimate. */
+function renderContentPart(part: unknown): string {
+  const typedPart = part as Record<string, unknown>
+  const renderer = typeof typedPart.type === "string" ? CONTENT_PART_RENDERERS.get(typedPart.type) : undefined
+  return renderer === undefined ? "" : renderer(typedPart)
+}
+
+/** One message as the estimate reads it: who said it, and what of it counts. */
+function renderMessageForEstimate(message: RedactedCoreMessage): string {
+  const content = fromRedactedCoreMessage(message, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED).content
+  if (typeof content === "string") return content
+  if (!Array.isArray(content)) return ""
+  return content.map(renderContentPart).join("\n\n")
+}
+
+/** How large a conversation is, roughly, for the beta floor. */
+function estimateCompactionTokens(messages: readonly RedactedCoreMessage[]): number {
+  const renderedMessages = messages.map(message => `${message.role}: ${renderMessageForEstimate(message)}`)
+  return Math.round(renderedMessages.join("\n\n").length / CHARS_PER_TOKEN)
+}
+
+/** Refuse the provider's own compaction on a conversation too small to be worth it, naming the estimate. */
+function assertCompactionFloor(messages: readonly RedactedCoreMessage[]): void {
+  const estimatedTokens = estimateCompactionTokens(messages)
+  if (estimatedTokens >= MIN_COMPACTION_INPUT_TOKENS) return
+  throw new Error(
+    `Refusing anthropic compaction for fewer than ${MIN_COMPACTION_INPUT_TOKENS} tokens; estimated ${estimatedTokens} tokens in messagesToSummarize.`,
+  )
+}
+
+/** The provider's compaction, run against one conversation at a time. */
 export class AnthropicCompactionHandler {
   declare readonly promptSession: SelfSummaryPromptSession
   declare readonly stateHandler: SelfSummaryStateHandler
@@ -118,134 +269,70 @@ export class AnthropicCompactionHandler {
     modelId: string,
     options?: AnthropicCompactionOptions,
   ) {
+    // These two options are this handler's own; everything else belongs to the retry the exchange runs with.
+    const { explicit, anthropicCompactionInstructions, ...retryOptions } = options ?? {}
     this.promptSession = promptSession
     this.stateHandler = stateHandler
     this.interactionListener = interactionListener
     this.tools = tools
     this.extraT = extraT
     this.modelId = modelId
-    // The mode and the instructions are this handler's own options; everything else is a retry option.
-    const { explicit, anthropicCompactionInstructions, ...retry } = options ?? {}
     this.compactionMode = explicit === true ? "explicit" : "beta"
     this.anthropicCompactionInstructions = anthropicCompactionInstructions
-    this.retryOptions = retry
+    this.retryOptions = retryOptions
   }
 
   getModelId(): string { return this.modelId }
   getMetricsModelLabel(): string { return this.modelId }
 
-  /** Nothing is kept back: this compaction is asked for when the whole conversation must be replaced. */
-  partitionMessages(messages: readonly RedactedCoreMessage[], _options: SummarizationPipelineOptions): AnthropicPartition {
+  /** Nothing is kept back: this compaction replaces the whole conversation. */
+  partitionMessages(messages: readonly RedactedCoreMessage[], _options: SummarizationPipelineOptions): CompactionPartition {
     const { systemMessage, userInfoMessage, messagesForSummarization } = prepareMessagesForCompaction(messages)
-    const skillBlocks = collectAllSkillBlocks(messagesForSummarization)
     return {
       systemMessage,
       userInfoMessage,
       messagesToSummarize: messagesForSummarization,
       preservedTailMessages: [],
-      skillBlocks,
+      skillBlocks: collectAllSkillBlocks(messagesForSummarization),
     }
   }
 
-  async generateSummary(
-    ctx: Context,
-    partitioned: AnthropicPartition,
-    _options: SummarizationPipelineOptions,
-  ): Promise<AnthropicRawSummary> {
-    // The provider's own compaction is only asked for on a conversation that is already large.
-    if (this.compactionMode === "beta") {
-      assertAnthropicCompactionInputTokens(partitioned.messagesToSummarize)
-    }
-    if (!partitioned.systemMessage) throw new Error("Expected system message in conversation")
-    const privacySource = partitioned.preservedTailMessages[0] ?? partitioned.userInfoMessage ?? partitioned.systemMessage
-    // The beta path asks in the provider's own words; the explicit path asks in ours, or the caller's.
-    const finalUserContent = this.compactionMode === "explicit"
-      ? this.anthropicCompactionInstructions ?? TAGGED_COMPACTION_INSTRUCTIONS
-      : "Continue from where you left off."
-    logger.info(
+  /** Ask the model for the summary: the provider's own request on beta, the instructions on explicit. */
+  async generateSummary(ctx: Context, partitioned: CompactionPartition, _options: SummarizationPipelineOptions): Promise<CompactionSummary> {
+    if (this.compactionMode === "beta") assertCompactionFloor(partitioned.messagesToSummarize)
+    const systemMessage = requireSystemMessage(partitioned)
+    const privacySource = partitioned.preservedTailMessages[0] ?? partitioned.userInfoMessage ?? systemMessage
+    const finalPrompt = finalCompactionPrompt(this.compactionMode, this.anthropicCompactionInstructions)
+    logger.info(ctx, summaryRequestLogLine(this.compactionMode), { mode: this.compactionMode })
+    const requestMessages = compactionRequestMessages(partitioned, systemMessage, finalPrompt, privacySource)
+    const exchange = await executeSelfSummaryWithRetry(
       ctx,
-      this.compactionMode === "explicit"
-        ? "[anthropic-compaction] generating summary via explicit user prompt"
-        : "[anthropic-compaction] generating summary via compact beta",
-      { mode: this.compactionMode },
-    )
-    const compactInputMessages: RedactedCoreMessage[] = [
-      partitioned.systemMessage,
-      ...(partitioned.userInfoMessage ? [partitioned.userInfoMessage] : []),
-      ...partitioned.messagesToSummarize,
+      this.promptSession,
+      this.stateHandler,
+      this.interactionListener,
+      requestMessages.map(message => fromRedactedCoreMessage(message, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)),
+      this.tools,
+      this.extraT,
       {
-        _privacyMode: privacySource._privacyMode,
-        role: "user",
-        content: safeString(finalUserContent),
-        providerOptions: SUMMARIZATION_CURSOR_PROVIDER_OPTIONS,
+        preservedPrefixMessageCount: 1 + (partitioned.userInfoMessage !== undefined ? 1 : 0),
+        ...this.retryOptions,
       },
-    ]
-    const unredact = (message: RedactedCoreMessage) =>
-      fromRedactedCoreMessage(message, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
-    const { assistantMessage, inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens } =
-      await executeSelfSummaryWithRetry(
-        ctx,
-        this.promptSession,
-        this.stateHandler,
-        this.interactionListener,
-        compactInputMessages.map(unredact),
-        this.tools,
-        this.extraT,
-        {
-          preservedPrefixMessageCount: 1 + (partitioned.userInfoMessage !== undefined ? 1 : 0),
-          ...this.retryOptions,
-        },
-      )
-    const modeLabels = { mode: this.compactionMode }
-    compactionInputTokens.histogram(ctx, inputTokens, modeLabels)
-    compactionOutputTokens.histogram(ctx, outputTokens, modeLabels)
-    compactionCacheReadTokens.histogram(ctx, cacheReadTokens!, modeLabels)
-    compactionCacheWriteTokens.histogram(ctx, cacheWriteTokens!, modeLabels)
-    const summaryText = extractTextContent(
-      toRedactedCoreMessage(assistantMessage, this.stateHandler.getPrivacyMode()),
+    )
+    recordCompactionUsage(ctx, this.compactionMode, exchange)
+    const answer = extractTextContent(
+      toRedactedCoreMessage(exchange.assistantMessage, this.stateHandler.getPrivacyMode()),
     ).unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
-    let candidate = summaryText.trim()
-    // A leading analysis block is reasoning, not the summary, so it is taken off.
-    if (candidate.startsWith("<analysis>")) {
-      const leadingAnalysisClose = candidate.indexOf("</analysis>")
-      if (leadingAnalysisClose !== -1) {
-        candidate = candidate.slice(leadingAnalysisClose + "</analysis>".length)
-      }
-    }
-    // A trailing analysis block with no summary inside it is the same reasoning at the end.
-    if (candidate.trimEnd().endsWith("</analysis>")) {
-      const trailingAnalysisOpen = candidate.lastIndexOf("<analysis>")
-      if (
-        trailingAnalysisOpen !== -1 &&
-        candidate.lastIndexOf("</summary>", trailingAnalysisOpen) !== -1
-      ) {
-        candidate = candidate.slice(0, trailingAnalysisOpen)
-      }
-    }
-    // What is kept is the tagged summary when the model tagged one, and the whole answer otherwise.
-    const openTagIndex = candidate.indexOf("<summary>")
-    const closeTagIndex = candidate.lastIndexOf("</summary>")
-    const extractedSummaryBody = openTagIndex !== -1 && closeTagIndex > openTagIndex
-      ? candidate.slice(openTagIndex + "<summary>".length, closeTagIndex).trim()
-      : candidate.trim() || summaryText
-    return { text: extractedSummaryBody, inputTokens, outputTokens }
+    return { text: summaryBodyFromAnswer(answer), inputTokens: exchange.inputTokens, outputTokens: exchange.outputTokens }
   }
 
+  /** Write the summary back in the shape the next turn reads it in. */
   buildSummaryMessage(
-    rawSummary: AnthropicRawSummary,
-    partitioned: AnthropicPartition,
+    rawSummary: CompactionSummary,
+    partitioned: CompactionPartition,
     enrichments: SummarizationEnrichments,
   ): { message: RedactedCoreMessage; summaryTextLength: number } {
-    const durableBlocks = renderDurableBlocks(
-      "anthropic-compaction",
-      enrichments as DurableBlockEnrichments,
-    )
-    // The summary goes back in the tag the provider's compaction reads, with the blocks around it.
-    const wrappedContent = `${prependDurableBlocks("anthropic-compaction", durableBlocks)}
-
-<summary>
-${rawSummary.text}
-</summary>${appendDurableBlocks("anthropic-compaction", durableBlocks)}`
+    const durableBlocks = renderDurableBlocks(COMPACTION_NAMESPACE, enrichments as DurableBlockEnrichments)
+    const wrappedContent = summaryEnvelope(rawSummary.text, durableBlocks)
     const lastUserQuery = partitioned.preservedTailMessages[0]
     const privacySource = lastUserQuery ?? partitioned.userInfoMessage ?? partitioned.systemMessage
     const summaryPrivacyMode = privacySource!._privacyMode ?? this.stateHandler.getPrivacyMode()
@@ -259,45 +346,37 @@ ${rawSummary.text}
     }
   }
 
-  assembleFinalMessages(
-    partitioned: AnthropicPartition,
-    summaryMessage: RedactedCoreMessage,
-  ): readonly RedactedCoreMessage[] {
-    if (!partitioned.systemMessage) throw new Error("Expected system message in conversation")
-    return [
-      partitioned.systemMessage,
-      ...(partitioned.userInfoMessage ? [partitioned.userInfoMessage] : []),
-      summaryMessage,
-    ]
+  /** The conversation the next turn continues from: its framing, then the summary. */
+  assembleFinalMessages(partitioned: CompactionPartition, summaryMessage: RedactedCoreMessage): readonly RedactedCoreMessage[] {
+    const systemMessage = requireSystemMessage(partitioned)
+    return [...conversationPreface(systemMessage, partitioned.userInfoMessage), summaryMessage]
   }
 
-  async summarize(
-    ctx: Context,
-    messages: readonly RedactedCoreMessage[],
-    options: SummarizationPipelineOptions,
-  ): Promise<Record<string, unknown>> {
+  /** Run the whole compaction, reporting how it ended and how long it took. */
+  async summarize(ctx: Context, messages: readonly RedactedCoreMessage[], options: SummarizationPipelineOptions): Promise<Record<string, unknown>> {
     using spanContext = createSpan(ctx.withName("AnthropicCompactionHandler.summarize"))
-    const innerCtx = spanContext.ctx
-    const startTime = performance.now()
-    logger.info(innerCtx, "[anthropic-compaction] summarize starting", {
+    const scopedCtx = spanContext.ctx
+    const startedAt = performance.now()
+    logger.info(scopedCtx, "[anthropic-compaction] summarize starting", {
       messageCount: messages.length,
       modelId: this.modelId,
       mode: this.compactionMode,
     })
     try {
-      const pipelineResult = await runSummarizationPipeline(this, innerCtx, messages, options)
+      const pipelineResult = await runSummarizationPipeline(this, scopedCtx, messages, options)
+      // The summary is redacted before the completion is reported, because the report describes its length.
       const summaryCodeString = createRedactedString(
         pipelineResult.rawSummary.text,
         DataClassification.CODE,
         "compaction-summary",
         this.stateHandler.getPrivacyMode(),
       )
-      logger.info(innerCtx, "[anthropic-compaction] summarize completed", {
+      logger.info(scopedCtx, "[anthropic-compaction] summarize completed", {
         summaryTextLength: pipelineResult.rawSummary.text.length,
         fullReplacementMessagesCount: pipelineResult.fullReplacementMessages.length,
         messagesActuallySummarizedCount: pipelineResult.messagesActuallySummarized.length,
       })
-      compactionStatus.increment(innerCtx, 1, {
+      compactionMetrics.status.increment(scopedCtx, 1, {
         outcome: "success",
         errorKind: "Ok",
         mode: this.compactionMode,
@@ -308,58 +387,16 @@ ${rawSummary.text}
         onPersisted: () => { this.stateHandler.incrementSelfSummaryCount() },
       }
     } catch (error) {
-      const errorKind = getRetryDirective(error, { transientRetryDelayMs: 0 }).errorType
-      compactionStatus.increment(innerCtx, 1, {
+      compactionMetrics.status.increment(scopedCtx, 1, {
         outcome: "failed",
-        errorKind,
+        errorKind: getRetryDirective(error, { transientRetryDelayMs: 0 }).errorType,
         mode: this.compactionMode,
       })
       throw error
     } finally {
-      compactionTimeTakenMs.histogram(innerCtx, performance.now() - startTime, {
+      compactionMetrics.timeTakenMs.histogram(scopedCtx, performance.now() - startedAt, {
         mode: this.compactionMode,
       })
     }
-  }
-}
-
-/** The floor is measured the same way the prompt's own budget is: from the text, roughly. */
-function estimateAnthropicCompactionTokens(messages: readonly RedactedCoreMessage[]): number {
-  const serializedMessages = messages.map(
-    message => `${message.role}: ${anthropicCompactionMessageToString(message)}`,
-  )
-  return Math.round(serializedMessages.join("\n\n").length / APPROX_CHARS_PER_TOKEN)
-}
-
-function anthropicCompactionMessageToString(message: RedactedCoreMessage): string {
-  const unredactedMessage = fromRedactedCoreMessage(
-    message,
-    PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
-  )
-  const content = unredactedMessage.content
-  if (typeof content === "string") return content
-  if (!Array.isArray(content)) return ""
-  return content.map(part => {
-    const typedPart = part as Record<string, unknown>
-    if (typedPart.type === "text") return typedPart.text as string
-    if (typedPart.type === "reasoning") return typedPart.text as string
-    if (typedPart.type === "tool-call") {
-      return `[Tool call] ${typedPart.toolName as string} ${JSON.stringify(typedPart.args) ?? "null"}`
-    }
-    if (typedPart.type === "tool-result") {
-      return `[Tool result] ${typedPart.toolName as string} ${JSON.stringify(typedPart.result) ?? "null"}`
-    }
-    if (typedPart.type === "image") return "[Image]"
-    if (typedPart.type === "file") return "[File]"
-    return ""
-  }).join("\n\n")
-}
-
-function assertAnthropicCompactionInputTokens(messages: readonly RedactedCoreMessage[]): void {
-  const estimatedTokens = estimateAnthropicCompactionTokens(messages)
-  if (estimatedTokens < MIN_ANTHROPIC_COMPACTION_INPUT_TOKENS) {
-    throw new Error(
-      `Refusing anthropic compaction for fewer than ${MIN_ANTHROPIC_COMPACTION_INPUT_TOKENS} tokens; estimated ${estimatedTokens} tokens in messagesToSummarize.`,
-    )
   }
 }
