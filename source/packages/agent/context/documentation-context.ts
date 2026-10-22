@@ -17,21 +17,32 @@ export interface DocumentationResult {
   readonly chunks: readonly DocumentationChunk[]
 }
 
-export function renderDocumentationContext(result: DocumentationResult | undefined): string | undefined {
-  if (result === undefined || result.chunks.length === 0) return undefined
-  let docsText = `<documentation_context>
+const CONTEXT_OPEN = `<documentation_context>
 ## Potentially Relevant Documentation:
 -------
 `
-  for (const chunk of result.chunks) {
-    docsText += `Document Name: ${chunk.docName}
+const CONTEXT_CLOSE = `</documentation_context>`
+
+/** A chunk is rendered as itself, then a rule, so two passages cannot be read as one. */
+const CHUNK_RULE = `____
+
+`
+
+/** What one chunk says: the document it belongs to, the page it came from, and the passage itself. */
+function renderChunk(chunk: DocumentationChunk): string {
+  return `Document Name: ${chunk.docName}
 Document URL: ${chunk.pageUrl}
 Document content:
 ${chunk.documentationChunk}
-____
+${CHUNK_RULE}`
+}
 
-`
-  }
-  docsText += `</documentation_context>`
-  return docsText
+/**
+ * The documentation a question found, as the context a prompt carries, and nothing when nothing was found.
+ *
+ * The open and close carry no trailing rule: the passage before the close still ends with its own.
+ */
+export function renderDocumentationContext(result: DocumentationResult | undefined): string | undefined {
+  if (result === undefined || result.chunks.length === 0) return undefined
+  return `${CONTEXT_OPEN}${result.chunks.map(renderChunk).join("")}${CONTEXT_CLOSE}`
 }

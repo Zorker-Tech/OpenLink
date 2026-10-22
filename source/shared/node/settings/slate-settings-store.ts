@@ -12,7 +12,7 @@ import { SLATE_DISABLED_NOTIFICATION_CONFIG } from "../../host-settings.ts";
 import { SLATE_DEFAULT_LOCAL_TOOL_PERMISSION, isSlateLocalToolPermission, resolveSlateLocalToolPermission, type SlateLocalToolPermission } from "../../local-tool-permission.ts";
 import { clampMcpCustomInstruction, getDefaultMcpCustomInstruction } from "../../mcp-custom-instructions.ts";
 import { DEFAULT_SLATE_AUTO_REVIEW_INSTRUCTIONS, normalizeSlateAutoReviewInstructions, type SlateAutoReviewInstructions } from "../../slate-auto-review-instructions.ts";
-import { SidebarSections, type SidebarSection } from "../../sidebar-sections.ts";
+import { SidebarGrouping, type SidebarSection } from "../../sidebar-sections.ts";
 import { coerceToEnabledTrack, isSlateUpdateTrack, type SlateUpdateTrack } from "../../update-track.ts";
 import { isSlateAgentModelSelection, type SlateAgentModelSelection } from "../../agents/slate-agent-model.ts";
 import { emptySlateInferenceRouterUsage, isSlateInferenceProvider, type SlateInferenceProvider, type SlateInferenceRouterUsage } from "../../inference-router.ts";
@@ -92,7 +92,7 @@ function parseSettings(value: unknown): SlateStoredSettings | null {
     result.inferenceRouterUsage = usage;
   }
   if (Array.isArray(raw.pinnedAgentIds)) result.pinnedAgentIds = [...new Set(stringArray(raw.pinnedAgentIds).filter((id) => id.length > 0))];
-  if (Array.isArray(raw.sidebarSections)) result.sidebarSections = SidebarSections.carryFolds({ sections: raw.sidebarSections.filter((entry): entry is SidebarSection => typeof entry === "object" && entry != null && typeof (entry as { id?: unknown }).id === "string" && typeof (entry as { name?: unknown }).name === "string" && Array.isArray((entry as { agentIds?: unknown }).agentIds)) });
+  if (Array.isArray(raw.sidebarSections)) result.sidebarSections = SidebarGrouping.foldsCarried({ sections: raw.sidebarSections.filter((entry): entry is SidebarSection => typeof entry === "object" && entry != null && typeof (entry as { id?: unknown }).id === "string" && typeof (entry as { name?: unknown }).name === "string" && Array.isArray((entry as { agentIds?: unknown }).agentIds)) });
   return result;
 }
 
@@ -175,7 +175,7 @@ export class SlateSettingsStore {
   setLocalToolPermissionCeiling(value?: SlateLocalToolPermission): void { this.update((s) => { const { localToolPermissionCeiling: _old, ...rest } = s; return value === undefined ? rest : { ...rest, localToolPermissionCeiling: value }; }); }
   getPinnedAgentIds(): string[] | undefined { return this.load().pinnedAgentIds; }
   setPinnedAgentIds(ids: readonly string[]): void { this.update((s) => ({ ...s, pinnedAgentIds: [...new Set(ids)] })); }
-  static storable(args: { sections: readonly SidebarSection[]; stored?: readonly SidebarSection[] }): SidebarSection[] { return SidebarSections.carryFolds(args).map((s) => ({ id: s.id, name: s.name, agentIds: [...s.agentIds], isCollapsed: s.isCollapsed ?? false })); }
-  getSidebarSections(): SidebarSection[] | undefined { const stored = this.load().sidebarSections; return stored === undefined ? undefined : SidebarSections.carryFolds({ sections: stored }); }
-  setSidebarSections(sections: readonly SidebarSection[]): void { this.update((s) => ({ ...s, sidebarSections: SlateSettingsStore.storable(s.sidebarSections === undefined ? { sections } : { sections, stored: s.sidebarSections }) })); }
+  static storable(args: { sections: readonly SidebarSection[]; stored?: readonly SidebarSection[] }): SidebarSection[] { return SidebarGrouping.foldsCarried(args).map((s) => ({ id: s.id, name: s.name, agentIds: [...s.agentIds], isCollapsed: s.isCollapsed ?? false })); }
+  getSidebarGrouping(): SidebarSection[] | undefined { const stored = this.load().sidebarSections; return stored === undefined ? undefined : SidebarGrouping.foldsCarried({ sections: stored }); }
+  setSidebarGrouping(sections: readonly SidebarSection[]): void { this.update((s) => ({ ...s, sidebarSections: SlateSettingsStore.storable(s.sidebarSections === undefined ? { sections } : { sections, stored: s.sidebarSections }) })); }
 }

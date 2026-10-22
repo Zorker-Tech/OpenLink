@@ -219,7 +219,7 @@ export const automationsExtension = defineHostExtension({
       reconcileNow: () => hub.reconcileNow(),
       getListenerIntegrations: () => listenerReads.getIntegrations(),
       getListenerConnectUrl: (platform: "slack" | "github") => listenerReads.getConnectUrl(platform),
-      isListenerPlatformConnected: (platform: "slack" | "github") => listenerReads.isPlatformConnected(platform),
+      platformIsConnected: (platform: "slack" | "github") => listenerReads.isPlatformConnected(platform),
       getAgentChannels: (agentId: string) => listenerReads.getAgentChannels(agentId),
     };
   },

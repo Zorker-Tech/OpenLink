@@ -86,7 +86,7 @@ import { PrivacyMode, type PrivacyMode as PrivacyModeValue } from "../packages/r
 import { tryExtractSlateAutoReviewClassifierConversationContext } from "../packages/agent/smart-mode-classifier-context.ts";
 import { buildSlateAutomationWriteRiskTarget, reviewSlateAutomationWrite, SLATE_AUTOMATION_WRITE_CLASSIFIER_ERROR_REASON } from "./runner/slate-automation-auto-review.ts";
 import { runSlateAutoReviewClassifier } from "./runner/slate-auto-review-classifier-run.ts";
-import { surfaceListenerConnectCards } from "./runner/tools/listener-connect-cards.ts";
+import { connectCardsFor } from "./runner/tools/listener-connect-cards.ts";
 import {
   buildSlateCloudAgentLifecycleReviewTarget,
   buildSlateCloudAgentReviewTarget,
@@ -1086,7 +1086,7 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
       isSpotlightEnabled: () => looseMethod(experiments, "isSpotlightEnabled")?.() ?? false,
       isMcpMultiAccountEnabled: () => looseMethod(experiments, "isMcpMultiAccountEnabled")?.() ?? false,
       isUnicodeTypingEnabled: () => looseMethod(experiments, "isUnicodeTypingEnabled")?.() ?? false,
-      isListenerPlatformConnected: (platform: string) => looseMethod(extensions.api("automations"), "isListenerPlatformConnected")?.(platform) ?? false,
+      platformIsConnected: (platform: string) => looseMethod(extensions.api("automations"), "platformIsConnected")?.(platform) ?? false,
       resolveCloudAgentTitle,
       sendToAgent,
       agentDirectory: () => {
@@ -1242,7 +1242,7 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
       const uploadFile = looseMethod(remoteBox, "uploadFile");
       const downloadFile = looseMethod(remoteBox, "downloadFile");
       const watchCloudAgent = createRunnerCloudWatch(builtRunner);
-      const listenerPlatformConnected = looseMethod(extensions.api("automations"), "isListenerPlatformConnected");
+      const listenerPlatformConnected = looseMethod(extensions.api("automations"), "platformIsConnected");
 
       const cloudAgent = (() => {
         const launchedIds = cloudAgents.launchedIds;
@@ -1384,17 +1384,17 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
               const trigger = parseStoredTrigger(triggerValue);
               if (trigger === null) return undefined;
               return (
-                (await surfaceListenerConnectCards({
+                (await connectCardsFor({
                   trigger,
-                  platformsInTrigger: (value) => {
+                  platformsOf: (value) => {
                     const parsed = parseStoredTrigger(value);
                     return parsed === null ? [] : listenerPlatformsInTrigger(parsed);
                   },
-                  isListenerPlatformConnected: async (platform) => Boolean(await listenerPlatformConnected(platform)),
+                  platformIsConnected: async (platform) => Boolean(await listenerPlatformConnected(platform)),
                   emit: (card) => {
                     hooks.transport.onUpdate({ type: "send-message", message: card, timestampMs: Date.now() });
                   },
-                  displayName: (platform) => (platform === "slack" ? "Slack" : "GitHub"),
+                  spokenName: (platform) => (platform === "slack" ? "Slack" : "GitHub"),
                 })) ?? undefined
               );
             };
@@ -1430,7 +1430,7 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
               ...presentOptions({
                 actionAuditor: projectedActionAuditor,
                 localToolPermission: projectedLocalToolPermission,
-                isListenerPlatformConnected:
+                platformIsConnected:
                   listenerPlatformConnected === undefined ? undefined : async (platform: string) => Boolean(await listenerPlatformConnected(platform)),
               }),
             };

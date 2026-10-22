@@ -272,7 +272,7 @@ export interface ProductionTurnAutoReviewHostProjection {
     }) => Promise<{ readonly allowed: boolean; readonly reason?: string; readonly approvalId?: string }>;
     readonly completeScope: (scope: { readonly agentId: string; readonly toolCallId: string; readonly directionEpoch?: number; readonly action?: string }) => void;
   };
-  readonly isListenerPlatformConnected?: (platform: string) => Promise<boolean>;
+  readonly platformIsConnected?: (platform: string) => Promise<boolean>;
 }
 
 /**

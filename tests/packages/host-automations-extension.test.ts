@@ -148,7 +148,7 @@ describe("the automations extension", () => {
       "getAgentChannels",
       "getListenerConnectUrl",
       "getListenerIntegrations",
-      "isListenerPlatformConnected",
+      "platformIsConnected",
       "reconcileNow",
       "resumeWakes",
       "sourceStatuses",
