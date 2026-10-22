@@ -33,7 +33,7 @@ import {
   SLATE_SYSTEM_PROMPT_CLOUD_AGENTS_DISABLED,
 } from "./system-prompt.ts";
 import { renderAutomationsSystemPrompt, type AutomationRecord } from "../automations/automation.ts";
-import { renderTimeZoneSystemPrompt } from "../../shared/timezone.ts";
+import { timeZonePromptSection } from "../../shared/timezone.ts";
 import { renderUserIdentitySystemPrompt } from "../slate-user-identity.ts";
 import { renderWorkflowsSystemPrompt } from "../../shared/workflow-model.ts";
 import { renderChannelsSystemPrompt, type ChannelConnectionSummary } from "../channels/channel-messaging.ts";
@@ -202,7 +202,7 @@ export function createSystemPromptAssembly(deps: SystemPromptAssemblyDependencie
 
   function getTimeZoneSection(): string | null {
     if (deps.isBoxScopedSubagent()) return null;
-    const rendered = renderTimeZoneSystemPrompt(deps.requestContext.resolve().timeZone);
+    const rendered = timeZonePromptSection(deps.requestContext.resolve().timeZone);
     return rendered.length > 0 ? rendered : null;
   }
 

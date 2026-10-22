@@ -4,6 +4,9 @@
  * What is read and written goes through the store beside it, and what a caller receives is a setting rather than the
  * file it lives in.
  */
+import { isKnownTimeZone } from "../../shared/timezone.ts";
+
+export { isKnownTimeZone };
 import { join } from "node:path";
 
 import { getSlateRootDir } from "../host-paths.ts";
@@ -14,7 +17,6 @@ import type { SidebarSection } from "../../shared/sidebar-sections.ts";
 import { SlateSettingsStore } from "../../shared/node/settings/slate-settings-store.ts";
 import { isSlateInferenceProvider, type SlateInferenceProvider } from "../../shared/inference-router.ts";
 
-export function isValidIanaTimeZone(value: string): boolean { try { new Intl.DateTimeFormat("en", { timeZone: value }).format(); return true; } catch { return false; } }
 
 export interface HostSettingsUpdate {
   notifications?: unknown; mcpCustomInstructions?: Record<string, string>; mcpCustomInstructionsByServerId?: Record<string, string>;
@@ -45,8 +47,8 @@ export class SettingsService {
     if (update.mcpCustomInstructionsByServerId !== undefined) this.store.setMcpCustomInstructionsByServerId(update.mcpCustomInstructionsByServerId);
     if (update.mcpDisabledToolsByServerId !== undefined) this.store.setMcpDisabledToolsByServerId(update.mcpDisabledToolsByServerId);
     if (update.mcpBoxServers !== undefined) this.store.setMcpBoxServers(update.mcpBoxServers);
-    if (update.userTimeZone !== undefined && (update.userTimeZone === "" || isValidIanaTimeZone(update.userTimeZone))) this.store.setUserTimeZone(update.userTimeZone);
-    if (update.userTimeZoneOverride !== undefined && (update.userTimeZoneOverride === "" || isValidIanaTimeZone(update.userTimeZoneOverride))) this.store.setUserTimeZoneOverride(update.userTimeZoneOverride);
+    if (update.userTimeZone !== undefined && (update.userTimeZone === "" || isKnownTimeZone(update.userTimeZone))) this.store.setUserTimeZone(update.userTimeZone);
+    if (update.userTimeZoneOverride !== undefined && (update.userTimeZoneOverride === "" || isKnownTimeZone(update.userTimeZoneOverride))) this.store.setUserTimeZoneOverride(update.userTimeZoneOverride);
     if (update.agentDefaultModel === null) this.store.setAgentDefaultModel(undefined); else if (isSlateAgentModelSelection(update.agentDefaultModel)) this.store.setAgentDefaultModel(update.agentDefaultModel);
     if (update.autoReviewInstructions !== undefined) this.store.setAutoReviewInstructions(update.autoReviewInstructions);
     if (update.localToolPermission !== undefined) this.store.setLocalToolPermission(normalizeSlateLocalToolPermission(update.localToolPermission));

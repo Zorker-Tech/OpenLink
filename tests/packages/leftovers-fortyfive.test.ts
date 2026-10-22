@@ -10,7 +10,7 @@ import { describe, it } from "node:test";
 import { ROOM_TOMBSTONE_MIN_RETENTION_MS, SlateXuserDepartureObligations } from "../../source/host/rooms/xuser-departure-obligations.ts";
 import { ClientSideToolV2Producer } from "../../source/host/transcript/client-side-tool-v2-producer.ts";
 import { DEFAULT_SLATE_COMPUTER_ID, SlateLocalExecBridge, SUPERVISED_RANK, VARIANT_RANKS } from "../../source/host/local-exec/local-exec-bridge.ts";
-import { isValidIanaTimeZone, SettingsService } from "../../source/host/settings/settings-service.ts";
+import { isKnownTimeZone, SettingsService } from "../../source/host/settings/settings-service.ts";
 import { LINK_PREVIEW_USER_AGENT, MAX_REDIRECTS, MAX_URL_LENGTH, SlateLinkPreviewError } from "../../source/host/attachments/safe-link-preview-fetch.ts";
 import { KNOWN_DOM_ERROR_NAMES, WEBAUTHN_PROXY_EVENT } from "../../source/host/telemetry/webauthn-proxy-telemetry.ts";
 import { GroupChatOrchestrator } from "../../source/host/transcript/group-chat-orchestrator.ts";
@@ -41,8 +41,8 @@ describe("the bridge between the host and the local-exec daemon", () => {
 describe("the settings a user has", () => {
   it("reads and writes through the store, and checks a time zone", () => {
     assert.equal(typeof SettingsService, "function");
-    assert.equal(isValidIanaTimeZone("Europe/Berlin"), true);
-    assert.equal(isValidIanaTimeZone("Not/AZone"), false);
+    assert.equal(isKnownTimeZone("Europe/Berlin"), true);
+    assert.equal(isKnownTimeZone("Not/AZone"), false);
   });
 });
 
