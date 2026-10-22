@@ -1,8 +1,8 @@
 /**
- * Keeping a marketplace's plugins cached.
+ * Keeping a marketplace's discovered cached.
  *
- * A marketplace is a repository of plugins, fetched once and reused: the clone is given time to finish — less for a
- * listing than for a fetch — and a failure is classified by who has to act, since a user without access, a cache that
+ * A marketplace is a repository of discovered, fetched once and reused: the clone is given time to finish — less for a
+ * listing than for a fetch — and a failure is manifestEntry by who has to act, since a user without access, a cache that
  * two processes are racing over, and a pinned ref that no longer exists are three different problems with three
  * different answers. What a marketplace holds is read from its own files, and its path is canonicalized so the same
  * repository is one cache entry however its URL was spelled.
@@ -48,54 +48,67 @@ const LOCAL_CACHE_PATTERNS = ["enotempty: directory not empty, rename", "/_stagi
 const STALE_PINNED_REF_PATTERNS = ["upload-pack: not our ref", "server does not allow request for unadvertised object"] as const;
 const globalInFlight = new Map<string, Promise<unknown>>();
 
-function sanitize(value: string): string {
-  const sanitized = sanitizeFilename(value).replace(/[. ]+$/g, "");
-  if (sanitized === "" || sanitized === "." || sanitized === "..") return "_";
-  return WINDOWS_RESERVED_PATH_NAMES.has(sanitized.toLowerCase()) ? `_${sanitized}` : sanitized;
+/** Whether a text says one of the things a pattern list names. */
+function says(text: string, patterns: readonly string[]): boolean {
+  return patterns.some(pattern => text.includes(pattern));
+}
+
+/** A name turned into one path segment: no trailing dots or spaces, and never a reserved Windows name. */
+function safeSegment(raw: string): string {
+  const segment = sanitizeFilename(raw).replace(/[. ]+$/g, "");
+  if (segment === "" || segment === "." || segment === "..") return "_";
+  return WINDOWS_RESERVED_PATH_NAMES.has(segment.toLowerCase()) ? `_${segment}` : segment;
 }
 
 export type CloneErrorCategory = "user_git_access" | "local_cache_race" | "stale_pinned_ref" | "infrastructure";
 export function classifyCloneError(error: unknown): CloneErrorCategory {
-  const message = String(error).toLowerCase().replaceAll("\\", "/");
-  if (USER_GIT_ACCESS_PATTERNS.some(pattern => message.includes(pattern))) return "user_git_access";
-  if (LOCAL_CACHE_PATTERNS.every(pattern => message.includes(pattern))) return "local_cache_race";
-  if (STALE_PINNED_REF_PATTERNS.some(pattern => message.includes(pattern))) return "stale_pinned_ref";
+  const text = String(error).toLowerCase().replaceAll("\\", "/");
+  if (says(text, USER_GIT_ACCESS_PATTERNS)) return "user_git_access";
+  if (LOCAL_CACHE_PATTERNS.every(pattern => text.includes(pattern))) return "local_cache_race";
+  if (says(text, STALE_PINNED_REF_PATTERNS)) return "stale_pinned_ref";
   return "infrastructure";
 }
 
 export function isKilledSubprocessError(error: unknown): boolean {
   if (typeof error !== "object" || error === null) return false;
-  const candidate = error as { killed?: unknown; cause?: unknown };
-  return candidate.killed === true || isKilledSubprocessError(candidate.cause);
+  const failure = error as { killed?: unknown; cause?: unknown };
+  return failure.killed === true || isKilledSubprocessError(failure.cause);
 }
 
-function cloneErrorTag(error: unknown): CloneErrorCategory | "killed_by_budget" { return isKilledSubprocessError(error) ? "killed_by_budget" : classifyCloneError(error); }
+function errorTagOf(error: unknown): CloneErrorCategory | "killed_by_budget" { return isKilledSubprocessError(error) ? "killed_by_budget" : classifyCloneError(error); }
 
-export function getCanonicalMarketplacePathSegments(gitUrl: string): { host: string; pathSegments: string[] } {
-  const scm = parseAndValidateScmUrl(gitUrl);
-  if (!("error" in scm) && scm.provider === "gitlab") {
-    let pathname: string;
-    try { pathname = new URL(scm.url).pathname.replace(/^\//, ""); }
-    catch { throw new Error(`Invalid git URL: ${gitUrl}`); }
-    const pathSegments = pathname.split("/").filter(Boolean).map(segment => segment.toLowerCase());
-    if (pathSegments.length < 2) throw new Error(`Invalid git URL: ${gitUrl}`);
-    return { host: scm.host.toLowerCase(), pathSegments };
+/** The lower-cased segments a gitlab URL names, or nothing when the URL is not one. */
+function gitLabPathSegments(remoteUrl: string): string[] | undefined {
+  const scmInfo = parseAndValidateScmUrl(remoteUrl);
+  if ("error" in scmInfo || scmInfo.provider !== "gitlab") return undefined;
+  let urlPath: string;
+  try { urlPath = new URL(scmInfo.url).pathname.replace(/^\//, ""); }
+  catch { throw new Error(`Invalid git URL: ${remoteUrl}`); }
+  const pathSegments = urlPath.split("/").filter(Boolean).map(segment => segment.toLowerCase());
+  if (pathSegments.length < 2) throw new Error(`Invalid git URL: ${remoteUrl}`);
+  return pathSegments;
+}
+
+export function getCanonicalMarketplacePathSegments(remoteUrl: string): { host: string; pathSegments: string[] } {
+  const scmInfo = parseAndValidateScmUrl(remoteUrl);
+  if (!("error" in scmInfo) && scmInfo.provider === "gitlab") {
+    return { host: scmInfo.host.toLowerCase(), pathSegments: gitLabPathSegments(remoteUrl)! };
   }
-  const parsed = parseGitUrl(gitUrl);
-  if (parsed === null) throw new Error(`Invalid git URL: ${gitUrl}`);
-  return { host: canonicalRepoHost(parsed.host.replace(/^www\./i, "")).toLowerCase(), pathSegments: [parsed.owner.toLowerCase(), parsed.repo.toLowerCase()] };
+  const parsedUrl = parseGitUrl(remoteUrl);
+  if (parsedUrl === null) throw new Error(`Invalid git URL: ${remoteUrl}`);
+  return { host: canonicalRepoHost(parsedUrl.host.replace(/^www\./i, "")).toLowerCase(), pathSegments: [parsedUrl.owner.toLowerCase(), parsedUrl.repo.toLowerCase()] };
 }
 
-function manifestCacheKey(clonePath: string, options: { repoName?: string; fallbackId?: string }): string {
-  return JSON.stringify({ clonePath, repoName: options.repoName ?? null, fallbackId: options.fallbackId ?? null });
+function cacheKeyOf(checkoutPath: string, settings: { repoName?: string; fallbackId?: string }): string {
+  return JSON.stringify({ checkoutPath, repoName: settings.repoName ?? null, fallbackId: settings.fallbackId ?? null });
 }
 
-async function readMarketplaceManifestFromDir(dir: string, options: { repoName?: string; fallbackId?: string } = {}): Promise<MarketplaceManifest | null> {
+async function readManifestInDir(dir: string, settings: { repoName?: string; fallbackId?: string } = {}): Promise<MarketplaceManifest | null> {
   for (const manifestRelPath of MARKETPLACE_MANIFEST_PATHS) {
     let content: string;
     try { content = await readFile(join(dir, manifestRelPath), "utf-8"); }
     catch { continue; }
-    const result = parseMarketplaceManifest(content, options);
+    const result = parseMarketplaceManifest(content, settings);
     if (result.success) return result.data;
   }
   return null;
@@ -114,20 +127,20 @@ export interface DiscoveredMarketplacePlugin {
   subdirPath?: string;
 }
 
-function discoverPluginsFromManifest(manifest: MarketplaceManifest): DiscoveredMarketplacePlugin[] {
-  const plugins: DiscoveredMarketplacePlugin[] = [];
-  for (const classified of parseAndClassifyManifestEntries(manifest.plugins, manifest.metadata?.pluginRoot)) {
-    const { name, displayName, description, version } = classified.entry;
-    const common = { name, displayName, description, version };
-    switch (classified.kind) {
-      case "local": if (isPathSafe(classified.localPath)) plugins.push({ ...common, sourceType: "local", gitPath: classified.localPath }); break;
-      case "external-github": plugins.push({ ...common, sourceType: "github", gitUrl: classified.externalUrl, gitRef: classified.externalRef, sha: classified.externalSha }); break;
-      case "external-url": plugins.push({ ...common, sourceType: "url", gitUrl: classified.externalUrl, gitRef: classified.externalRef, sha: classified.externalSha }); break;
-      case "external-git-subdir": plugins.push({ ...common, sourceType: "git-subdir", gitUrl: classified.externalUrl, gitRef: classified.externalRef, sha: classified.externalSha, subdirPath: classified.subdirPath }); break;
+function pluginsInManifest(manifest: MarketplaceManifest): DiscoveredMarketplacePlugin[] {
+  const discovered: DiscoveredMarketplacePlugin[] = [];
+  for (const manifestEntry of parseAndClassifyManifestEntries(manifest.plugins, manifest.metadata?.pluginRoot)) {
+    const { name, displayName, description, version } = manifestEntry.entry;
+    const sharedFields = { name, displayName, description, version };
+    switch (manifestEntry.kind) {
+      case "local": if (isPathSafe(manifestEntry.localPath)) discovered.push({ ...sharedFields, sourceType: "local", gitPath: manifestEntry.localPath }); break;
+      case "external-github": discovered.push({ ...sharedFields, sourceType: "github", gitUrl: manifestEntry.externalUrl, gitRef: manifestEntry.externalRef, sha: manifestEntry.externalSha }); break;
+      case "external-url": discovered.push({ ...sharedFields, sourceType: "url", gitUrl: manifestEntry.externalUrl, gitRef: manifestEntry.externalRef, sha: manifestEntry.externalSha }); break;
+      case "external-git-subdir": discovered.push({ ...sharedFields, sourceType: "git-subdir", gitUrl: manifestEntry.externalUrl, gitRef: manifestEntry.externalRef, sha: manifestEntry.externalSha, subdirPath: manifestEntry.subdirPath }); break;
       case "unresolvable": break;
     }
   }
-  return plugins;
+  return discovered;
 }
 
 export interface MarketplaceCacheOptions {
@@ -135,7 +148,7 @@ export interface MarketplaceCacheOptions {
   readonly sparsePluginClones?: boolean;
 }
 
-interface CloneOutcome { strategy: "sparse" | "full"; filterIgnoredByServer: boolean }
+interface CloneStrategy { strategy: "sparse" | "full"; filterIgnoredByServer: boolean }
 
 export class MarketplaceCacheManager {
   static STALE_STAGING_THRESHOLD_MS = 5 * 60 * 1_000;
@@ -145,163 +158,163 @@ export class MarketplaceCacheManager {
   constructor(readonly cacheRoot: string, readonly options?: MarketplaceCacheOptions) {}
 
   get sparsePluginClones(): boolean { return this.options?.sparsePluginClones ?? false; }
-  private remoteTimeoutMs(): number | undefined { return this.sparsePluginClones ? REMOTE_GIT_TIMEOUT_MS : undefined; }
-  private localTimeoutMs(): number | undefined { return this.sparsePluginClones ? LOCAL_GIT_TIMEOUT_MS : undefined; }
-  private lsRemoteTimeoutMs(): number | undefined { return this.sparsePluginClones ? LS_REMOTE_TIMEOUT_MS : undefined; }
+  private fetchTimeoutMs(): number | undefined { return this.sparsePluginClones ? REMOTE_GIT_TIMEOUT_MS : undefined; }
+  private initTimeoutMs(): number | undefined { return this.sparsePluginClones ? LOCAL_GIT_TIMEOUT_MS : undefined; }
+  private lsRemoteTimeout(): number | undefined { return this.sparsePluginClones ? LS_REMOTE_TIMEOUT_MS : undefined; }
 
-  private async cloneResolvedRef(cloneDir: string, gitUrl: string, resolvedRef: string, options?: { sshBatchMode?: boolean | undefined; materialize?: MaterializeSpec | undefined }): Promise<CloneOutcome> {
-    const execOpts = {
-      cwd: cloneDir,
-      sshBatchMode: options?.sshBatchMode,
-      extraGitConfig: { ...resolveExtraGitConfig(this.options?.extraGitConfig), "safe.directory": cloneDir },
+  private async cloneRefInto(checkoutDir: string, remoteUrl: string, fullSha: string, settings?: { sshBatchMode?: boolean | undefined; materialize?: MaterializeSpec | undefined }): Promise<CloneStrategy> {
+    const gitOptions = {
+      cwd: checkoutDir,
+      sshBatchMode: settings?.sshBatchMode,
+      extraGitConfig: { ...resolveExtraGitConfig(this.options?.extraGitConfig), "safe.directory": checkoutDir },
     };
-    const { sparse, sparseDirs } = await resolveSparseClonePlan(options?.materialize ?? "all", this.sparsePluginClones);
-    await execGitNonInteractive(["init"], { ...execOpts, timeoutMs: this.localTimeoutMs() });
-    if (sparse) await setSparseCheckoutDirs(cloneDir, sparseDirs, { sshBatchMode: options?.sshBatchMode, extraGitConfig: resolveExtraGitConfig(this.options?.extraGitConfig), timeoutMs: this.localTimeoutMs() });
-    const { stderr: fetchStderr } = await execGitNonInteractive(["fetch", "--depth", "1", ...(sparse ? ["--filter=blob:none"] : []), gitUrl, resolvedRef], { ...execOpts, timeoutMs: this.remoteTimeoutMs() });
-    await execGitNonInteractive(["checkout", "FETCH_HEAD"], { ...execOpts, timeoutMs: this.remoteTimeoutMs() });
-    return { strategy: sparse ? "sparse" : "full", filterIgnoredByServer: sparse && serverIgnoredFilter(fetchStderr ?? "") };
+    const { sparse, sparseDirs: sparseDirectories } = await resolveSparseClonePlan(settings?.materialize ?? "all", this.sparsePluginClones);
+    await execGitNonInteractive(["init"], { ...gitOptions, timeoutMs: this.initTimeoutMs() });
+    if (sparse) await setSparseCheckoutDirs(checkoutDir, sparseDirectories, { sshBatchMode: settings?.sshBatchMode, extraGitConfig: resolveExtraGitConfig(this.options?.extraGitConfig), timeoutMs: this.initTimeoutMs() });
+    const { stderr: fetchErrorOutput } = await execGitNonInteractive(["fetch", "--depth", "1", ...(sparse ? ["--filter=blob:none"] : []), remoteUrl, fullSha], { ...gitOptions, timeoutMs: this.fetchTimeoutMs() });
+    await execGitNonInteractive(["checkout", "FETCH_HEAD"], { ...gitOptions, timeoutMs: this.fetchTimeoutMs() });
+    return { strategy: sparse ? "sparse" : "full", filterIgnoredByServer: sparse && serverIgnoredFilter(fetchErrorOutput ?? "") };
   }
 
-  private async createStagingDir(): Promise<string> { const stagingDir = join(this.cacheRoot, "_staging", randomUUID()); await mkdir(stagingDir, { recursive: true }); return stagingDir; }
-  private async moveToCanonicalDir(stagingDir: string, cloneDir: string): Promise<string> { await mkdir(dirname(cloneDir), { recursive: true }); await rm(cloneDir, RECURSIVE_RM_OPTIONS); await rename(stagingDir, cloneDir); return cloneDir; }
-  private async cleanStaleStagingDirs(): Promise<void> {
+  private async makeStagingDir(): Promise<string> { const stagingPath = join(this.cacheRoot, "_staging", randomUUID()); await mkdir(stagingPath, { recursive: true }); return stagingPath; }
+  private async promoteStagingDir(stagingPath: string, checkoutDir: string): Promise<string> { await mkdir(dirname(checkoutDir), { recursive: true }); await rm(checkoutDir, RECURSIVE_RM_OPTIONS); await rename(stagingPath, checkoutDir); return checkoutDir; }
+  private async sweepStaleStaging(): Promise<void> {
     const stagingRoot = join(this.cacheRoot, "_staging");
     try {
-      const entries = await readdir(stagingRoot, { withFileTypes: true }), now = Date.now();
-      await Promise.all(entries.filter(entry => entry.isDirectory()).map(async entry => {
-        try { const entryPath = join(stagingRoot, entry.name), stats = await stat(entryPath); if (now - stats.mtimeMs > MarketplaceCacheManager.STALE_STAGING_THRESHOLD_MS) await rm(entryPath, RECURSIVE_RM_OPTIONS); } catch {}
+      const listed = await readdir(stagingRoot, { withFileTypes: true }), clockReading = Date.now();
+      await Promise.all(listed.filter(pluginEntry => pluginEntry.isDirectory()).map(async pluginEntry => {
+        try { const entryPath = join(stagingRoot, pluginEntry.name), fileStats = await stat(entryPath); if (clockReading - fileStats.mtimeMs > MarketplaceCacheManager.STALE_STAGING_THRESHOLD_MS) await rm(entryPath, RECURSIVE_RM_OPTIONS); } catch {}
       }));
     } catch {}
   }
 
-  getLegacyCloneDir(marketplaceId: string, ref: string): string { return join(this.cacheRoot, sanitize(marketplaceId), sanitize(ref)); }
-  getCanonicalCloneDir(gitUrl: string, ref: string): string { const { host, pathSegments } = getCanonicalMarketplacePathSegments(gitUrl); return join(this.cacheRoot, sanitize(host), ...pathSegments.map(sanitize), sanitize(ref)); }
-  getCanonicalRepoRootDir(gitUrl: string): string { const { host, pathSegments } = getCanonicalMarketplacePathSegments(gitUrl); return join(this.cacheRoot, sanitize(host), ...pathSegments.map(sanitize)); }
+  getLegacyCloneDir(sourceId: string, ref: string): string { return join(this.cacheRoot, safeSegment(sourceId), safeSegment(ref)); }
+  getCanonicalCloneDir(remoteUrl: string, ref: string): string { const { host, pathSegments } = getCanonicalMarketplacePathSegments(remoteUrl); return join(this.cacheRoot, safeSegment(host), ...pathSegments.map(safeSegment), safeSegment(ref)); }
+  getCanonicalRepoRootDir(remoteUrl: string): string { const { host, pathSegments } = getCanonicalMarketplacePathSegments(remoteUrl); return join(this.cacheRoot, safeSegment(host), ...pathSegments.map(safeSegment)); }
 
-  private async pruneSiblingCloneDirs(gitUrl: string, keepRef: string, legacyCloneDir?: string): Promise<void> {
-    const repoRootDir = this.getCanonicalRepoRootDir(gitUrl), keepDirName = sanitize(keepRef);
-    try { const entries = await readdir(repoRootDir, { withFileTypes: true }); await Promise.all(entries.filter(entry => entry.isDirectory() && entry.name !== keepDirName).map(entry => rm(join(repoRootDir, entry.name), RECURSIVE_RM_OPTIONS))); } catch {}
-    if (legacyCloneDir !== undefined) try { await rm(legacyCloneDir, RECURSIVE_RM_OPTIONS); } catch {}
+  private async removeSiblingClones(remoteUrl: string, keptRef: string, oldCloneDir?: string): Promise<void> {
+    const repositoryRoot = this.getCanonicalRepoRootDir(remoteUrl), keepDirName = safeSegment(keptRef);
+    try { const listed = await readdir(repositoryRoot, { withFileTypes: true }); await Promise.all(listed.filter(pluginEntry => pluginEntry.isDirectory() && pluginEntry.name !== keepDirName).map(pluginEntry => rm(join(repositoryRoot, pluginEntry.name), RECURSIVE_RM_OPTIONS))); } catch {}
+    if (oldCloneDir !== undefined) try { await rm(oldCloneDir, RECURSIVE_RM_OPTIONS); } catch {}
   }
 
-  async ensureCloned(marketplaceId: string, gitUrl: string, ref: string, pluginLogger: PluginMetricsLogger = noopPluginMetricsLogger, options?: { materialize?: MaterializeSpec | undefined }): Promise<string> {
-    const inner = this.serializedOnRepo(this.getCanonicalRepoRootDir(gitUrl), () => this.ensureClonedImpl(marketplaceId, gitUrl, ref, pluginLogger, options?.materialize ?? "all"));
-    return this.sparsePluginClones ? inner : withTimeout(inner, 30_000, `ensureCloned timed out after 30000ms for ${gitUrl} @ ${ref}`);
+  async ensureCloned(sourceId: string, remoteUrl: string, ref: string, metricsLogger: PluginMetricsLogger = noopPluginMetricsLogger, settings?: { materialize?: MaterializeSpec | undefined }): Promise<string> {
+    const inner = this.serializedForRepo(this.getCanonicalRepoRootDir(remoteUrl), () => this.ensureClonedOnce(sourceId, remoteUrl, ref, metricsLogger, settings?.materialize ?? "all"));
+    return this.sparsePluginClones ? inner : withTimeout(inner, 30_000, `ensureCloned timed out after 30000ms for ${remoteUrl} @ ${ref}`);
   }
 
-  async ensureMaterialized(clonePath: string, spec: MaterializeSpec, pluginLogger: PluginMetricsLogger = noopPluginMetricsLogger): Promise<void> {
-    const inner = this.serializedOnRepo(dirname(clonePath), async () => {
-      const start = performance.now();
+  async ensureMaterialized(checkoutPath: string, requestedDirs: MaterializeSpec, metricsLogger: PluginMetricsLogger = noopPluginMetricsLogger): Promise<void> {
+    const inner = this.serializedForRepo(dirname(checkoutPath), async () => {
+      const startedAt = performance.now();
       try {
-        await materializeSparseDirs(clonePath, spec, { extraGitConfig: resolveExtraGitConfig(this.options?.extraGitConfig), timeoutMs: this.remoteTimeoutMs() });
-        pluginLogger.increment("marketplace_cache_manager.ensure_materialized.success", 1);
-        pluginLogger.distribution("marketplace_cache_manager.ensure_materialized.duration", performance.now() - start);
+        await materializeSparseDirs(checkoutPath, requestedDirs, { extraGitConfig: resolveExtraGitConfig(this.options?.extraGitConfig), timeoutMs: this.fetchTimeoutMs() });
+        metricsLogger.increment("marketplace_cache_manager.ensure_materialized.success", 1);
+        metricsLogger.distribution("marketplace_cache_manager.ensure_materialized.duration", performance.now() - startedAt);
       } catch (error) {
-        pluginLogger.log("error", "Failed to materialize plugin directories in sparse marketplace clone", { clonePath, spec: spec === "all" ? "all" : spec.join(","), error: String(error), errorCategory: cloneErrorTag(error) });
-        pluginLogger.increment("marketplace_cache_manager.ensure_materialized.error", 1, { error_category: cloneErrorTag(error) });
-        pluginLogger.distribution("marketplace_cache_manager.ensure_materialized.duration", performance.now() - start, { outcome: "error" });
+        metricsLogger.log("error", "Failed to materialize plugin directories in sparse marketplace clone", { clonePath: checkoutPath, spec: requestedDirs === "all" ? "all" : requestedDirs.join(","), error: String(error), errorCategory: errorTagOf(error) });
+        metricsLogger.increment("marketplace_cache_manager.ensure_materialized.error", 1, { error_category: errorTagOf(error) });
+        metricsLogger.distribution("marketplace_cache_manager.ensure_materialized.duration", performance.now() - startedAt, { cloneResult: "error" });
         throw error;
       }
     });
-    return this.sparsePluginClones ? inner : withTimeout(inner, 30_000, `ensureMaterialized timed out after 30000ms for ${clonePath}`);
+    return this.sparsePluginClones ? inner : withTimeout(inner, 30_000, `ensureMaterialized timed out after 30000ms for ${checkoutPath}`);
   }
 
-  private async serializedOnRepo<Value>(repoRootDir: string, work: () => Promise<Value>): Promise<Value> {
-    const serializationKey = `${this.cacheRoot}:${repoRootDir}`, predecessor = globalInFlight.get(serializationKey);
-    const myWork = (predecessor ?? Promise.resolve()).catch(() => {}).then(work);
-    globalInFlight.set(serializationKey, myWork);
-    try { return await myWork; }
-    finally { if (globalInFlight.get(serializationKey) === myWork) globalInFlight.delete(serializationKey); }
+  private async serializedForRepo<Value>(repositoryRoot: string, task: () => Promise<Value>): Promise<Value> {
+    const queueKey = `${this.cacheRoot}:${repositoryRoot}`, previousWork = globalInFlight.get(queueKey);
+    const thisWork = (previousWork ?? Promise.resolve()).catch(() => {}).then(task);
+    globalInFlight.set(queueKey, thisWork);
+    try { return await thisWork; }
+    finally { if (globalInFlight.get(queueKey) === thisWork) globalInFlight.delete(queueKey); }
   }
 
-  private async ensureClonedImpl(marketplaceId: string, gitUrl: string, ref: string, pluginLogger: PluginMetricsLogger, materialize: MaterializeSpec): Promise<string> {
-    pluginLogger.log("info", `MarketplaceCacheManager: Ensuring cloned ${marketplaceId} at ${gitUrl}@${ref}`, { marketplaceId, gitUrl, ref });
-    const originalRef = ref.trim();
-    let sshCloneUrl = !gitUrl.startsWith("git@") && !gitUrl.startsWith("ssh://") ? toScmSshUrl(gitUrl) : null;
-    let resolvedRef: string;
-    if (sshCloneUrl !== null) {
-      try { resolvedRef = (await resolveGitRemoteRef(sshCloneUrl, originalRef, { sshBatchMode: true, extraGitConfig: resolveExtraGitConfig(this.options?.extraGitConfig), timeoutMs: this.lsRemoteTimeoutMs() })).fullSha; }
+  private async ensureClonedOnce(sourceId: string, remoteUrl: string, ref: string, metricsLogger: PluginMetricsLogger, materialize: MaterializeSpec): Promise<string> {
+    metricsLogger.log("info", `MarketplaceCacheManager: Ensuring cloned ${sourceId} at ${remoteUrl}@${ref}`, { marketplaceId: sourceId, gitUrl: remoteUrl, ref });
+    const requestedRef = ref.trim();
+    let sshUrl = !remoteUrl.startsWith("git@") && !remoteUrl.startsWith("ssh://") ? toScmSshUrl(remoteUrl) : null;
+    let fullSha: string;
+    if (sshUrl !== null) {
+      try { fullSha = (await resolveGitRemoteRef(sshUrl, requestedRef, { sshBatchMode: true, extraGitConfig: resolveExtraGitConfig(this.options?.extraGitConfig), timeoutMs: this.lsRemoteTimeout() })).fullSha; }
       catch (error) {
         if (this.sparsePluginClones && isKilledSubprocessError(error)) throw error;
-        pluginLogger.log("error", "Failed to resolve remote ref using SSH URL, falling back to HTTPS", { gitUrl, ref, error: String(error), errorCategory: classifyCloneError(error) });
-        sshCloneUrl = null;
-        resolvedRef = (await resolveGitRemoteRef(gitUrl, originalRef, { extraGitConfig: resolveExtraGitConfig(this.options?.extraGitConfig), timeoutMs: this.lsRemoteTimeoutMs() })).fullSha;
+        metricsLogger.log("error", "Failed to resolve remote ref using SSH URL, falling back to HTTPS", { gitUrl: remoteUrl, ref, error: String(error), errorCategory: classifyCloneError(error) });
+        sshUrl = null;
+        fullSha = (await resolveGitRemoteRef(remoteUrl, requestedRef, { extraGitConfig: resolveExtraGitConfig(this.options?.extraGitConfig), timeoutMs: this.lsRemoteTimeout() })).fullSha;
       }
-    } else resolvedRef = (await resolveGitRemoteRef(gitUrl, originalRef, { extraGitConfig: resolveExtraGitConfig(this.options?.extraGitConfig), timeoutMs: this.lsRemoteTimeoutMs() })).fullSha;
-    const cloneDir = this.getCanonicalCloneDir(gitUrl, resolvedRef), legacyCloneDir = this.getLegacyCloneDir(marketplaceId, originalRef);
-    pluginLogger.log("info", `MarketplaceCacheManager: Resolved clone directory for ${marketplaceId} at ${gitUrl}@${ref} to ${cloneDir}`, { marketplaceId, resolvedRef, originalRef });
-    const start = performance.now();
-    const emitMetric = (suffix: string, tags?: Record<string, string>): void => { pluginLogger.increment(`marketplace_cache_manager.ensure_cloned.${suffix}`, 1, tags); pluginLogger.distribution(`marketplace_cache_manager.ensure_cloned.${suffix}.duration`, performance.now() - start, tags); };
-    if (await this.isCloneComplete(cloneDir)) {
-      await this.pruneSiblingCloneDirs(gitUrl, resolvedRef, legacyCloneDir);
-      const cachedCloneIsSparse = await isSparseCheckoutRepo(cloneDir);
-      if (cachedCloneIsSparse) await materializeSparseDirs(cloneDir, materialize, { extraGitConfig: resolveExtraGitConfig(this.options?.extraGitConfig), timeoutMs: this.remoteTimeoutMs() });
+    } else fullSha = (await resolveGitRemoteRef(remoteUrl, requestedRef, { extraGitConfig: resolveExtraGitConfig(this.options?.extraGitConfig), timeoutMs: this.lsRemoteTimeout() })).fullSha;
+    const checkoutDir = this.getCanonicalCloneDir(remoteUrl, fullSha), oldCloneDir = this.getLegacyCloneDir(sourceId, requestedRef);
+    metricsLogger.log("info", `MarketplaceCacheManager: Resolved clone directory for ${sourceId} at ${remoteUrl}@${ref} to ${checkoutDir}`, { marketplaceId: sourceId, resolvedRef: fullSha, originalRef: requestedRef });
+    const startedAt = performance.now();
+    const emitMetric = (suffix: string, tags?: Record<string, string>): void => { metricsLogger.increment(`marketplace_cache_manager.ensure_cloned.${suffix}`, 1, tags); metricsLogger.distribution(`marketplace_cache_manager.ensure_cloned.${suffix}.duration`, performance.now() - startedAt, tags); };
+    if (await this.isCloneComplete(checkoutDir)) {
+      await this.removeSiblingClones(remoteUrl, fullSha, oldCloneDir);
+      const cachedCloneIsSparse = await isSparseCheckoutRepo(checkoutDir);
+      if (cachedCloneIsSparse) await materializeSparseDirs(checkoutDir, materialize, { extraGitConfig: resolveExtraGitConfig(this.options?.extraGitConfig), timeoutMs: this.fetchTimeoutMs() });
       emitMetric("cache_hit", { strategy: cachedCloneIsSparse ? "sparse" : "full" });
-      return cloneDir;
+      return checkoutDir;
     }
-    pluginLogger.increment("marketplace_cache_manager.ensure_cloned.cache_miss", 1);
-    return this.cloneViaStaging(cloneDir, gitUrl, sshCloneUrl, resolvedRef, legacyCloneDir, ref, pluginLogger, emitMetric, materialize);
+    metricsLogger.increment("marketplace_cache_manager.ensure_cloned.cache_miss", 1);
+    return this.cloneThroughStaging(checkoutDir, remoteUrl, sshUrl, fullSha, oldCloneDir, ref, metricsLogger, emitMetric, materialize);
   }
 
-  private async cloneViaStaging(cloneDir: string, gitUrl: string, sshCloneUrl: string | null, resolvedRef: string, legacyCloneDir: string, ref: string, pluginLogger: PluginMetricsLogger, emitMetric: (suffix: string, tags?: Record<string, string>) => void, materialize: MaterializeSpec): Promise<string> {
-    await this.cleanStaleStagingDirs();
-    const stagingDir = await this.createStagingDir();
-    pluginLogger.log("info", `MarketplaceCacheManager: Cloning ${gitUrl}@${ref} into staging directory: ${stagingDir}`, { gitUrl, ref, cloneDir });
-    const heartbeat = this.sparsePluginClones ? setInterval(() => { const now = new Date(); void utimes(stagingDir, now, now).catch(() => {}); }, MarketplaceCacheManager.STAGING_HEARTBEAT_INTERVAL_MS) : undefined;
-    heartbeat?.unref?.();
+  private async cloneThroughStaging(checkoutDir: string, remoteUrl: string, sshUrl: string | null, fullSha: string, oldCloneDir: string, ref: string, metricsLogger: PluginMetricsLogger, emitMetric: (suffix: string, tags?: Record<string, string>) => void, materialize: MaterializeSpec): Promise<string> {
+    await this.sweepStaleStaging();
+    const stagingPath = await this.makeStagingDir();
+    metricsLogger.log("info", `MarketplaceCacheManager: Cloning ${remoteUrl}@${ref} into staging directory: ${stagingPath}`, { gitUrl: remoteUrl, ref, cloneDir: checkoutDir });
+    const heartbeatTimer = this.sparsePluginClones ? setInterval(() => { const clockReading = new Date(); void utimes(stagingPath, clockReading, clockReading).catch(() => {}); }, MarketplaceCacheManager.STAGING_HEARTBEAT_INTERVAL_MS) : undefined;
+    heartbeatTimer?.unref?.();
     try {
-      let outcome: CloneOutcome;
-      if (sshCloneUrl !== null) {
-        try { outcome = await this.cloneResolvedRef(stagingDir, sshCloneUrl, resolvedRef, { sshBatchMode: true, materialize }); }
+      let cloneResult: CloneStrategy;
+      if (sshUrl !== null) {
+        try { cloneResult = await this.cloneRefInto(stagingPath, sshUrl, fullSha, { sshBatchMode: true, materialize }); }
         catch (error) {
           if (this.sparsePluginClones && isKilledSubprocessError(error)) throw error;
-          pluginLogger.log("error", "Falling back to HTTPS clone due to SSH clone failure", { gitUrl, ref, error: String(error), errorCategory: cloneErrorTag(error) });
-          await rm(stagingDir, RECURSIVE_RM_OPTIONS); await mkdir(stagingDir, { recursive: true });
-          outcome = await this.cloneResolvedRef(stagingDir, gitUrl, resolvedRef, { materialize });
+          metricsLogger.log("error", "Falling back to HTTPS clone due to SSH clone failure", { gitUrl: remoteUrl, ref, error: String(error), errorCategory: errorTagOf(error) });
+          await rm(stagingPath, RECURSIVE_RM_OPTIONS); await mkdir(stagingPath, { recursive: true });
+          cloneResult = await this.cloneRefInto(stagingPath, remoteUrl, fullSha, { materialize });
         }
-      } else outcome = await this.cloneResolvedRef(stagingDir, gitUrl, resolvedRef, { materialize });
-      if (outcome.filterIgnoredByServer) { pluginLogger.log("warn", "Server ignored --filter=blob:none; sparse clone downloaded a full pack", { gitUrl, ref }); pluginLogger.increment("marketplace_cache_manager.ensure_cloned.filter_ignored_by_server", 1); }
-      const resultDir = await this.moveToCanonicalDir(stagingDir, cloneDir);
-      await this.pruneSiblingCloneDirs(gitUrl, resolvedRef, legacyCloneDir);
-      emitMetric("cache_write_success", { strategy: outcome.strategy });
+      } else cloneResult = await this.cloneRefInto(stagingPath, remoteUrl, fullSha, { materialize });
+      if (cloneResult.filterIgnoredByServer) { metricsLogger.log("warn", "Server ignored --filter=blob:none; sparse clone downloaded a full pack", { gitUrl: remoteUrl, ref }); metricsLogger.increment("marketplace_cache_manager.ensure_cloned.filter_ignored_by_server", 1); }
+      const resultDir = await this.promoteStagingDir(stagingPath, checkoutDir);
+      await this.removeSiblingClones(remoteUrl, fullSha, oldCloneDir);
+      emitMetric("cache_write_success", { strategy: cloneResult.strategy });
       return resultDir;
     } catch (error) {
-      const errorCategory = cloneErrorTag(error); emitMetric("error", { error_category: errorCategory });
-      pluginLogger.log("error", "Failed to clone marketplace repository via staging clone", { gitUrl, ref, error: String(error), errorCategory });
-      pluginLogger.captureException(error, { error_type: "clone_marketplace_repository", error_category: errorCategory });
+      const errorCategory = errorTagOf(error); emitMetric("error", { error_category: errorCategory });
+      metricsLogger.log("error", "Failed to clone marketplace repository via staging clone", { remoteUrl, ref, error: String(error), errorCategory });
+      metricsLogger.captureException(error, { error_type: "clone_marketplace_repository", error_category: errorCategory });
       throw error;
     } finally {
-      if (heartbeat !== undefined) clearInterval(heartbeat);
-      try { await rm(stagingDir, RECURSIVE_RM_OPTIONS); } catch {}
+      if (heartbeatTimer !== undefined) clearInterval(heartbeatTimer);
+      try { await rm(stagingPath, RECURSIVE_RM_OPTIONS); } catch {}
     }
   }
 
-  async isCloneComplete(cloneDir: string): Promise<boolean> {
+  async isCloneComplete(checkoutDir: string): Promise<boolean> {
     try {
-      const stats = await stat(cloneDir); if (!stats.isDirectory()) return false;
-      const entries = await readdir(cloneDir); if (!entries.includes(".git")) return false; if (entries.length > 1) return true;
-      try { return (await stat(join(cloneDir, ".git", "info", "sparse-checkout"))).isFile(); } catch { return false; }
+      const fileStats = await stat(checkoutDir); if (!fileStats.isDirectory()) return false;
+      const listed = await readdir(checkoutDir); if (!listed.includes(".git")) return false; if (listed.length > 1) return true;
+      try { return (await stat(join(checkoutDir, ".git", "info", "sparse-checkout"))).isFile(); } catch { return false; }
     } catch { return false; }
   }
 
-  getPluginDir(clonePath: string, gitPath: string): string { return validateAndResolveSubpath(clonePath, gitPath); }
-  async copyPluginToDir(sourcePath: string, targetDir: string): Promise<void> { await mkdir(targetDir, { recursive: true }); await cp(sourcePath, targetDir, { recursive: true, verbatimSymlinks: true }); }
+  getPluginDir(checkoutPath: string, relativePluginPath: string): string { return validateAndResolveSubpath(checkoutPath, relativePluginPath); }
+  async copyPluginToDir(pluginPath: string, destinationDir: string): Promise<void> { await mkdir(destinationDir, { recursive: true }); await cp(pluginPath, destinationDir, { recursive: true, verbatimSymlinks: true }); }
 
-  async readManifest(clonePath: string, options: { repoName?: string; fallbackId?: string } = {}): Promise<MarketplaceManifest | null> {
-    const cacheKey = manifestCacheKey(clonePath, options);
-    if (this.manifestCache.has(cacheKey)) return this.manifestCache.get(cacheKey) ?? null;
-    const manifest = await readMarketplaceManifestFromDir(clonePath, options); this.manifestCache.set(cacheKey, manifest); return manifest;
+  async readManifest(checkoutPath: string, settings: { repoName?: string; fallbackId?: string } = {}): Promise<MarketplaceManifest | null> {
+    const manifestKey = cacheKeyOf(checkoutPath, settings);
+    if (this.manifestCache.has(manifestKey)) return this.manifestCache.get(manifestKey) ?? null;
+    const manifest = await readManifestInDir(checkoutPath, settings); this.manifestCache.set(manifestKey, manifest); return manifest;
   }
 
-  async resolvePluginPath(clonePath: string, pluginName: string): Promise<string | null> {
-    const manifest = await this.readManifest(clonePath); if (!manifest) return null;
-    const entry = manifest.plugins.find(plugin => plugin.name === pluginName.toLowerCase()); if (!entry) return null;
-    const resolved = resolvePluginSourcePath(entry.source, manifest.metadata?.pluginRoot);
-    return resolved && isPathSafe(resolved) ? resolved : null;
+  async resolvePluginPath(checkoutPath: string, requestedPluginName: string): Promise<string | null> {
+    const manifest = await this.readManifest(checkoutPath); if (!manifest) return null;
+    const pluginEntry = manifest.plugins.find(plugin => plugin.name === requestedPluginName.toLowerCase()); if (!pluginEntry) return null;
+    const resolvedSource = resolvePluginSourcePath(pluginEntry.source, manifest.metadata?.pluginRoot);
+    return resolvedSource && isPathSafe(resolvedSource) ? resolvedSource : null;
   }
 
-  async discoverPlugins(clonePath: string): Promise<DiscoveredMarketplacePlugin[]> {
-    const manifest = await this.readManifest(clonePath); return manifest ? discoverPluginsFromManifest(manifest) : [];
+  async discoverPlugins(checkoutPath: string): Promise<DiscoveredMarketplacePlugin[]> {
+    const manifest = await this.readManifest(checkoutPath); return manifest ? pluginsInManifest(manifest) : [];
   }
 }
