@@ -8,12 +8,12 @@ import { formatUtcOffset, isValidIanaTimeZone, renderTimeZoneSystemPrompt } from
 import { parseHeapMetricsReport } from "../../source/shared/observability/heap-metrics.ts"
 import { isDevControlsMethod, DEV_CONTROLS_METHOD_TABLE } from "../../source/shared/rpc/dev-controls.ts"
 import {
-  getMainTranscriptEntries,
-  getThreadTranscriptEntries,
-  isAgentPeerMessageEntry,
-  isHiddenOutboundAgentPeerMessageEntry,
-  settlePendingAutoReviewApprovalEntry,
-  settlePendingLocalToolPermissionEntry,
+  mainTranscriptOf,
+  threadOf,
+  isPeerMessage,
+  isHiddenOutboundPeerMessage,
+  settledAutoReviewEntry,
+  settledToolPermissionEntry,
   SLATE_REACTION_AGENT,
   SLATE_REACTION_SELF,
 } from "../../source/shared/transcript.ts"
@@ -104,16 +104,16 @@ test("a file's preview kind follows what it is", () => {
 
 test("an approval a surface is still showing is settled, and nothing else is", () => {
   const pending = { kind: "send-message", message: { type: "auto-review-approval", approval: { requestId: "r1", status: "pending" } } }
-  const settled = settlePendingAutoReviewApprovalEntry(pending, "approved")
+  const settled = settledAutoReviewEntry(pending, "approved")
   assert.equal(settled?.message?.approval?.status, "approved")
   // A request that is not the one named, an entry that is not pending, and an entry of another kind are left alone.
-  assert.equal(settlePendingAutoReviewApprovalEntry(pending, "approved", "other"), null)
-  assert.equal(settlePendingAutoReviewApprovalEntry({ ...pending, message: { ...pending.message, approval: { requestId: "r1", status: "approved" } } }, "approved"), null)
-  assert.equal(settlePendingAutoReviewApprovalEntry({ kind: "message", message: pending.message }, "approved"), null)
+  assert.equal(settledAutoReviewEntry(pending, "approved", "other"), null)
+  assert.equal(settledAutoReviewEntry({ ...pending, message: { ...pending.message, approval: { requestId: "r1", status: "approved" } } }, "approved"), null)
+  assert.equal(settledAutoReviewEntry({ kind: "message", message: pending.message }, "approved"), null)
 
   const ask = { kind: "send-message", message: { type: "local-tool-permission", ask: { requestId: "r2", status: "pending" } } }
-  assert.equal(settlePendingLocalToolPermissionEntry(ask, "denied")?.message?.ask?.status, "denied")
-  assert.equal(settlePendingLocalToolPermissionEntry(pending, "denied"), null)
+  assert.equal(settledToolPermissionEntry(ask, "denied")?.message?.ask?.status, "denied")
+  assert.equal(settledToolPermissionEntry(pending, "denied"), null)
 })
 
 test("a transcript's main and threaded entries are told apart", () => {
@@ -125,15 +125,15 @@ test("a transcript's main and threaded entries are told apart", () => {
   ]
   // A branched entry that replies into a thread is the thread's; one that stands on its own — and one that
   // replies without being a branch — is still the main transcript's.
-  assert.deepEqual(getMainTranscriptEntries(entries).map(entry => entry.id), ["1", "2", "3"])
-  assert.deepEqual(getThreadTranscriptEntries(entries, "1").map(entry => entry.id), ["1", "4"])
-  assert.deepEqual(getThreadTranscriptEntries(entries, "nope"), [])
+  assert.deepEqual(mainTranscriptOf(entries).map(entry => entry.id), ["1", "2", "3"])
+  assert.deepEqual(threadOf(entries, "1").map(entry => entry.id), ["1", "4"])
+  assert.deepEqual(threadOf(entries, "nope"), [])
 
   // A message between agents is not the user's activity, and one the user should not see is hidden.
-  assert.equal(isAgentPeerMessageEntry({ kind: "message", fromAgent: { id: "a" } }), true)
-  assert.equal(isAgentPeerMessageEntry({ kind: "message" }), false)
-  assert.equal(isHiddenOutboundAgentPeerMessageEntry({ kind: "message", toAgent: { kind: "user" } }), true)
-  assert.equal(isHiddenOutboundAgentPeerMessageEntry({ kind: "message", toAgent: { kind: "agent" } }), false)
+  assert.equal(isPeerMessage({ kind: "message", fromAgent: { id: "a" } }), true)
+  assert.equal(isPeerMessage({ kind: "message" }), false)
+  assert.equal(isHiddenOutboundPeerMessage({ kind: "message", toAgent: { kind: "user" } }), true)
+  assert.equal(isHiddenOutboundPeerMessage({ kind: "message", toAgent: { kind: "agent" } }), false)
   assert.equal(SLATE_REACTION_SELF, "me")
   assert.equal(SLATE_REACTION_AGENT, "agent")
 })

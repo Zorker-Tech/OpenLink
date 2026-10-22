@@ -7,7 +7,7 @@
 import { mkdirSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { getMainTranscriptEntries } from "../../../shared/transcript.ts";
+import { mainTranscriptOf } from "../../../shared/transcript.ts";
 import { replyCountByBranch, branchEntries } from "../../../shared/transcript-threads.ts";
 import {
   EMPTY_SPEND_GUARD_STATE,
@@ -273,5 +273,5 @@ export class SlateAgentDb {
   clearAgentPurpose(): void { this.deleteKv(KV.purpose); }
   getLegacyBlobRetirementVersion(): number { return this.readVersion(KV.legacyBlobRetirement); }
   retireLegacyConversationBlobs(version: number): boolean { if (this.closed) return false; return this.runWrite("retireLegacyConversationBlobs", () => { this.db.exec("BEGIN IMMEDIATE"); try { this.db.exec("DELETE FROM blobs"); this.db.prepare("INSERT INTO kv(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(KV.legacyBlobRetirement, String(version)); this.db.exec("COMMIT"); } catch (error) { this.db.exec("ROLLBACK"); throw error; } }); }
-  getMainTranscriptEntries(): readonly TranscriptEntry[] { return getMainTranscriptEntries(this.getTranscriptEntries()) as readonly TranscriptEntry[]; }
+  mainTranscriptOf(): readonly TranscriptEntry[] { return mainTranscriptOf(this.getTranscriptEntries()) as readonly TranscriptEntry[]; }
 }
