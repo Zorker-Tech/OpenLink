@@ -105,31 +105,31 @@ export class OpenAICompactionHandler {
   declare readonly retryOptions: SelfSummaryRetryOptions
 
   constructor(
-    promptSession: SelfSummaryPromptSession,
-    stateHandler: SelfSummaryStateHandler,
-    interactionListener: RedactedInteractionListener,
-    tools: SelfSummaryTool[],
-    extraT: unknown,
-    modelId: string,
-    retryOptions?: SelfSummaryRetryOptions,
+    session: SelfSummaryPromptSession,
+    state: SelfSummaryStateHandler,
+    listener: RedactedInteractionListener,
+    toolset: SelfSummaryTool[],
+    extraTranslation: unknown,
+    modelName: string,
+    retrySettings?: SelfSummaryRetryOptions,
   ) {
-    this.promptSession = promptSession
-    this.stateHandler = stateHandler
-    this.interactionListener = interactionListener
-    this.tools = tools
-    this.extraT = extraT
-    this.modelId = modelId
-    this.retryOptions = retryOptions ?? {}
+    this.promptSession = session
+    this.stateHandler = state
+    this.interactionListener = listener
+    this.tools = toolset
+    this.extraT = extraTranslation
+    this.modelId = modelName
+    this.retryOptions = retrySettings ?? {}
   }
 
   getModelId(): string { return this.modelId }
   getMetricsModelLabel(): string { return this.modelId }
 
   /** Everything is summarized; what is kept is the user's own most recent requests, within a budget. */
-  partitionMessages(messages: readonly RedactedCoreMessage[], _options: SummarizationPipelineOptions): OpenAIPartition {
-    const { systemMessage, userInfoMessage, messagesForSummarization } = prepareMessagesForCompaction(messages)
+  partitionMessages(conversationMessages: readonly RedactedCoreMessage[], _pipelineOptions: SummarizationPipelineOptions): OpenAIPartition {
+    const { systemMessage, userInfoMessage, messagesForSummarization } = prepareMessagesForCompaction(conversationMessages)
     const skillBlocks = collectAllSkillBlocks(messagesForSummarization)
-    const preservedTailMessages = collectBudgetedUserMessages(
+    const preservedTailMessages = recentRequestsWithinBudget(
       messagesForSummarization,
       COMPACT_USER_MESSAGE_MAX_TOKENS,
     )
@@ -144,40 +144,40 @@ export class OpenAICompactionHandler {
 
   async generateSummary(
     ctx: Context,
-    partitioned: OpenAIPartition,
-    _options: SummarizationPipelineOptions,
+    partition: OpenAIPartition,
+    _pipelineOptions: SummarizationPipelineOptions,
   ): Promise<OpenAIRawSummary> {
-    if (!partitioned.systemMessage) throw new Error("Expected system message in conversation")
+    if (!partition.systemMessage) throw new Error("Expected system message in conversation")
     // The privacy of the compaction follows the newest thing that will remain in the conversation.
-    const privacySource = partitioned.preservedTailMessages.at(-1) ??
-      partitioned.userInfoMessage ?? partitioned.systemMessage
+    const privacyAnchor = partition.preservedTailMessages.at(-1) ??
+      partition.userInfoMessage ?? partition.systemMessage
     logger.info(ctx, "[openai-compaction] generating summary via compaction prompt", {
-      preservedUserMessageCount: partitioned.preservedTailMessages.length,
+      preservedUserMessageCount: partition.preservedTailMessages.length,
     })
-    const compactInputMessages: RedactedCoreMessage[] = [
-      partitioned.systemMessage,
-      ...(partitioned.userInfoMessage ? [partitioned.userInfoMessage] : []),
-      ...partitioned.messagesToSummarize,
+    const inputMessages: RedactedCoreMessage[] = [
+      partition.systemMessage,
+      ...(partition.userInfoMessage ? [partition.userInfoMessage] : []),
+      ...partition.messagesToSummarize,
       {
-        _privacyMode: privacySource._privacyMode,
+        _privacyMode: privacyAnchor._privacyMode,
         role: "user",
         content: safeString(OPENAI_COMPACTION_PROMPT),
         providerOptions: SUMMARIZATION_CURSOR_PROVIDER_OPTIONS,
       },
     ]
-    const unredact = (message: RedactedCoreMessage) =>
+    const unredacted = (message: RedactedCoreMessage) =>
       fromRedactedCoreMessage(message, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
-    const { assistantMessage, inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens } =
+    const { assistantMessage: assistantEntry, inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens } =
       await executeSelfSummaryWithRetry(
         ctx,
         this.promptSession,
         this.stateHandler,
         this.interactionListener,
-        compactInputMessages.map(unredact),
+        inputMessages.map(unredacted),
         this.tools,
         this.extraT,
         {
-          preservedPrefixMessageCount: 1 + (partitioned.userInfoMessage !== undefined ? 1 : 0),
+          preservedPrefixMessageCount: 1 + (partition.userInfoMessage !== undefined ? 1 : 0),
           ...this.retryOptions,
         },
       )
@@ -186,131 +186,131 @@ export class OpenAICompactionHandler {
     compactionCacheReadTokens.histogram(ctx, cacheReadTokens!)
     compactionCacheWriteTokens.histogram(ctx, cacheWriteTokens!)
     const summaryText = extractTextContent(
-      toRedactedCoreMessage(assistantMessage, this.stateHandler.getPrivacyMode()),
+      toRedactedCoreMessage(assistantEntry, this.stateHandler.getPrivacyMode()),
     ).unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
     return { text: summaryText, inputTokens, outputTokens }
   }
 
   buildSummaryMessage(
-    rawSummary: OpenAIRawSummary,
-    partitioned: OpenAIPartition,
-    enrichments: SummarizationEnrichments,
+    raw: OpenAIRawSummary,
+    partition: OpenAIPartition,
+    enrichment: SummarizationEnrichments,
   ): { message: RedactedCoreMessage; summaryTextLength: number } {
-    const durableBlocks = renderDurableBlocks(
+    const blocks = renderDurableBlocks(
       "openai-compaction",
-      enrichments as DurableBlockEnrichments,
+      enrichment as DurableBlockEnrichments,
     )
     // The prefix is what tells the next model that the workspace already holds someone else's work.
-    const wrappedContent = `${prependDurableBlocks("openai-compaction", durableBlocks)}${appendDurableBlocks("openai-compaction", durableBlocks)}
+    const wrappedText = `${prependDurableBlocks("openai-compaction", blocks)}${appendDurableBlocks("openai-compaction", blocks)}
 
 ${SUMMARY_PREFIX}
-${rawSummary.text}`
-    const lastUserQuery = partitioned.preservedTailMessages.at(-1)
-    const privacySource = lastUserQuery ?? partitioned.userInfoMessage ?? partitioned.systemMessage
-    const summaryPrivacyMode = privacySource!._privacyMode ?? this.stateHandler.getPrivacyMode()
+${raw.text}`
+    const lastRequest = partition.preservedTailMessages.at(-1)
+    const privacyAnchor = lastRequest ?? partition.userInfoMessage ?? partition.systemMessage
+    const privacyMode = privacyAnchor!._privacyMode ?? this.stateHandler.getPrivacyMode()
     return {
       message: toRedactedCoreMessage({
         role: "user",
-        content: wrappedContent,
+        content: wrappedText,
         providerOptions: { cursor: { isSummary: true } },
-      }, summaryPrivacyMode),
-      summaryTextLength: wrappedContent.length,
+      }, privacyMode),
+      summaryTextLength: wrappedText.length,
     }
   }
 
   /** The kept user messages come before the summary, since they are what the next model is answering. */
   assembleFinalMessages(
-    partitioned: OpenAIPartition,
+    partition: OpenAIPartition,
     summaryMessage: RedactedCoreMessage,
   ): readonly RedactedCoreMessage[] {
-    if (!partitioned.systemMessage) throw new Error("Expected system message in conversation")
+    if (!partition.systemMessage) throw new Error("Expected system message in conversation")
     return [
-      partitioned.systemMessage,
-      ...(partitioned.userInfoMessage ? [partitioned.userInfoMessage] : []),
-      ...partitioned.preservedTailMessages,
+      partition.systemMessage,
+      ...(partition.userInfoMessage ? [partition.userInfoMessage] : []),
+      ...partition.preservedTailMessages,
       summaryMessage,
     ]
   }
 
   async summarize(
     ctx: Context,
-    messages: readonly RedactedCoreMessage[],
-    options: SummarizationPipelineOptions,
+    conversationMessages: readonly RedactedCoreMessage[],
+    pipelineOptions: SummarizationPipelineOptions,
   ): Promise<Record<string, unknown>> {
-    using spanContext = createSpan(ctx.withName("OpenAICompactionHandler.summarize"))
-    const innerCtx = spanContext.ctx
-    const startTime = performance.now()
-    logger.info(innerCtx, "[openai-compaction] summarize starting", {
-      messageCount: messages.length,
+    using span = createSpan(ctx.withName("OpenAICompactionHandler.summarize"))
+    const scopedContext = span.ctx
+    const startedAt = performance.now()
+    logger.info(scopedContext, "[openai-compaction] summarize starting", {
+      messageCount: conversationMessages.length,
       modelId: this.modelId,
     })
     try {
-      const pipelineResult = await runSummarizationPipeline(this, innerCtx, messages, options)
-      const summaryCodeString = createRedactedString(
-        pipelineResult.rawSummary.text,
+      const pipelineOutcome = await runSummarizationPipeline(this, scopedContext, conversationMessages, pipelineOptions)
+      const summaryValue = createRedactedString(
+        pipelineOutcome.rawSummary.text,
         DataClassification.CODE,
         "compaction-summary",
         this.stateHandler.getPrivacyMode(),
       )
-      logger.info(innerCtx, "[openai-compaction] summarize completed", {
-        summaryTextLength: pipelineResult.rawSummary.text.length,
-        fullReplacementMessagesCount: pipelineResult.fullReplacementMessages.length,
-        messagesActuallySummarizedCount: pipelineResult.messagesActuallySummarized.length,
+      logger.info(scopedContext, "[openai-compaction] summarize completed", {
+        summaryTextLength: pipelineOutcome.rawSummary.text.length,
+        fullReplacementMessagesCount: pipelineOutcome.fullReplacementMessages.length,
+        messagesActuallySummarizedCount: pipelineOutcome.messagesActuallySummarized.length,
       })
-      compactionStatus.increment(innerCtx, 1, { outcome: "success", errorKind: "Ok" })
+      compactionStatus.increment(scopedContext, 1, { outcome: "success", errorKind: "Ok" })
       return {
-        ...pipelineResult,
-        summary: { summary: summaryCodeString },
+        ...pipelineOutcome,
+        summary: { summary: summaryValue },
         onPersisted: () => { this.stateHandler.incrementSelfSummaryCount() },
       }
     } catch (error) {
       // A failed compaction is counted with the kind of failure it was, since the caller retries by kind.
-      const errorKind = getRetryDirective(error, { transientRetryDelayMs: 0 }).errorType
-      compactionStatus.increment(innerCtx, 1, { outcome: "failed", errorKind })
+      const failureKind = getRetryDirective(error, { transientRetryDelayMs: 0 }).errorType
+      compactionStatus.increment(scopedContext, 1, { outcome: "failed", failureKind })
       throw error
     } finally {
-      compactionTimeTakenMs.histogram(innerCtx, performance.now() - startTime)
+      compactionTimeTakenMs.histogram(scopedContext, performance.now() - startedAt)
     }
   }
 }
 
 /** The length of a message's text, counted from the parts that carry text rather than from the whole message. */
-function getMessageTextLength(message: RedactedCoreMessage): number {
+function textLengthOf(message: RedactedCoreMessage): number {
   const content = message.content
   if (isRedactedString(content)) {
     return content.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED).length
   }
   if (Array.isArray(content)) {
-    return content.reduce((accumulator, part) => {
-      const typedPart = part as { type?: unknown; text?: unknown }
-      if (typedPart.type === "text" && isRedactedString(typedPart.text)) {
-        return accumulator + typedPart.text.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED).length
+    return content.reduce((total, part) => {
+      const typedFragment = part as { type?: unknown; text?: unknown }
+      if (typedFragment.type === "text" && isRedactedString(typedFragment.text)) {
+        return total + typedFragment.text.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED).length
       }
-      return accumulator
+      return total
     }, 0)
   }
   return 0
 }
 
-function isSummaryMessage(message: RedactedCoreMessage): boolean {
-  const options = message.providerOptions as { cursor?: { isSummary?: unknown } } | undefined
-  return options?.cursor?.isSummary === true
+function isCompactionSummary(message: RedactedCoreMessage): boolean {
+  const pipelineOptions = message.providerOptions as { cursor?: { isSummary?: unknown } } | undefined
+  return pipelineOptions?.cursor?.isSummary === true
 }
 
-function isNonSummaryUserMessage(message: RedactedCoreMessage): boolean {
-  return message.role === "user" && !isSummaryMessage(message)
+function isRequestMessage(message: RedactedCoreMessage): boolean {
+  return message.role === "user" && !isCompactionSummary(message)
 }
 
-function extractTextContentForCompaction(message: RedactedCoreMessage): string {
+function compactionTextOf(message: RedactedCoreMessage): string {
   const content = message.content
   if (isRedactedString(content)) {
     return content.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
   }
   if (Array.isArray(content)) {
     return content.map(part => {
-      const typedPart = part as { type?: unknown; text?: unknown }
-      return typedPart.type === "text" && isRedactedString(typedPart.text)
-        ? typedPart.text.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
+      const typedFragment = part as { type?: unknown; text?: unknown }
+      return typedFragment.type === "text" && isRedactedString(typedFragment.text)
+        ? typedFragment.text.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
         : ""
     }).join("")
   }
@@ -318,17 +318,17 @@ function extractTextContentForCompaction(message: RedactedCoreMessage): string {
 }
 
 /** Only the request itself is kept from a user message, not the context the platform wrapped around it. */
-function extractUserQuerySegments(messageText: string): string | undefined {
-  const userQueryMatches = messageText.match(/<user_query>[\s\S]*?<\/user_query>/g)
-  if (userQueryMatches === null) return undefined
-  const retained = userQueryMatches.join("\n\n").trim()
+function requestSegmentsOf(text: string): string | undefined {
+  const segmentMatches = text.match(/<user_query>[\s\S]*?<\/user_query>/g)
+  if (segmentMatches === null) return undefined
+  const retained = segmentMatches.join("\n\n").trim()
   return retained.length > 0 ? retained : undefined
 }
 
-function toCompactionUserMessage(message: RedactedCoreMessage): RedactedCoreMessage | undefined {
-  const retainedUserQueryText = extractUserQuerySegments(extractTextContentForCompaction(message))
-  if (retainedUserQueryText === undefined) return undefined
-  return { ...message, content: safeString(retainedUserQueryText) }
+function requestOnlyMessage(message: RedactedCoreMessage): RedactedCoreMessage | undefined {
+  const requestText = requestSegmentsOf(compactionTextOf(message))
+  if (requestText === undefined) return undefined
+  return { ...message, content: safeString(requestText) }
 }
 
 /**
@@ -336,26 +336,26 @@ function toCompactionUserMessage(message: RedactedCoreMessage): RedactedCoreMess
  * recent request is the one being answered, and the first message that does not fit ends the walk rather
  * than being skipped — a gap in the conversation would be worse than an older message left out.
  */
-function collectBudgetedUserMessages(
-  messages: readonly RedactedCoreMessage[],
-  maxTokens: number,
+function recentRequestsWithinBudget(
+  conversationMessages: readonly RedactedCoreMessage[],
+  tokenBudget: number,
 ): RedactedCoreMessage[] {
-  const userMessages = messages
-    .filter(isNonSummaryUserMessage)
-    .map(toCompactionUserMessage)
+  const requestMessages = conversationMessages
+    .filter(isRequestMessage)
+    .map(requestOnlyMessage)
     .filter((message): message is RedactedCoreMessage => message !== undefined)
-  const selected: RedactedCoreMessage[] = []
-  let remainingTokens = maxTokens
-  for (let index = userMessages.length - 1; index >= 0 && remainingTokens > 0; index--) {
-    const message = userMessages[index]!
-    const approximateTokens = Math.ceil(getMessageTextLength(message) / APPROX_CHARS_PER_TOKEN)
-    if (approximateTokens <= remainingTokens) {
-      selected.push(message)
-      remainingTokens -= approximateTokens
+  const kept: RedactedCoreMessage[] = []
+  let remainingBudget = tokenBudget
+  for (let index = requestMessages.length - 1; index >= 0 && remainingBudget > 0; index--) {
+    const message = requestMessages[index]!
+    const estimatedTokens = Math.ceil(textLengthOf(message) / APPROX_CHARS_PER_TOKEN)
+    if (estimatedTokens <= remainingBudget) {
+      kept.push(message)
+      remainingBudget -= estimatedTokens
     } else {
       break
     }
   }
-  selected.reverse()
-  return selected
+  kept.reverse()
+  return kept
 }
