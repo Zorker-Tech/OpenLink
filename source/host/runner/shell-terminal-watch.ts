@@ -35,21 +35,21 @@ export class SlateTerminalReadError extends Error {
 export type TerminalReadResult = ReadResult;
 
 export interface TerminalRemoteAccessor<Context> {
-  read(context: Context, args: { readonly path: string; readonly toolCallId: string }): Promise<TerminalReadResult>;
+  read(turnContext: Context, args: { readonly path: string; readonly toolCallId: string }): Promise<TerminalReadResult>;
 }
 
 export interface ShellWatchResourceAccessor<Context = unknown> {
   get(resource: typeof readExecutorResource): {
-    execute(context: Context, args: ReadArgs, options?: unknown): Promise<ReadResult>;
+    execute(turnContext: Context, args: ReadArgs, options?: unknown): Promise<ReadResult>;
   };
 }
 
 export function createShellWatchReadAccessor<Context>(
-  accessor: ShellWatchResourceAccessor<Context>,
+  reads: ShellWatchResourceAccessor<Context>,
 ): TerminalRemoteAccessor<Context> {
   return {
-    read: async (context, args) => await accessor.get(readExecutorResource).execute(
-      context,
+    read: async (turnContext, args) => await reads.get(readExecutorResource).execute(
+      turnContext,
       new ReadArgs({ path: args.path, toolCallId: args.toolCallId }),
     ),
   };
@@ -82,13 +82,13 @@ export interface ConfirmedUserTurnWatermark {
 export interface ShellTerminalWatchHost<Context> {
   readonly ctx: Context;
   getConversationId(): string;
-  ensureBoxReady(context: Context, conversationId: string): Promise<TerminalConnection<Context>>;
-  createLocalToolContext?(context: Context, agentId: string): Context;
-  terminalFilePath?(folder: string, id: string): string | undefined;
+  ensureBoxReady(turnContext: Context, conversationId: string): Promise<TerminalConnection<Context>>;
+  createLocalToolContext?(turnContext: Context, agentId: string): Context;
+  terminalFilePath?(terminalsFolder: string, id: string): string | undefined;
   getConversationState(): { readonly turns: readonly Uint8Array[] };
-  getBlob(context: Context, blobId: Uint8Array): Promise<Uint8Array | null>;
-  decodeConversationTurn(bytes: Uint8Array): ConversationTurnStructure;
-  decodeUserMessage(bytes: Uint8Array): { readonly text: string; readonly messageId: string };
+  getBlob(turnContext: Context, blobRef: Uint8Array): Promise<Uint8Array | null>;
+  decodeConversationTurn(rawBytes: Uint8Array): ConversationTurnStructure;
+  decodeUserMessage(rawBytes: Uint8Array): { readonly text: string; readonly messageId: string };
   getConfirmedUserTurnWatermarkCache(): ConfirmedUserTurnWatermark | undefined;
   setConfirmedUserTurnWatermarkCache(cache: ConfirmedUserTurnWatermark): void;
   now?(): number;
@@ -96,11 +96,11 @@ export interface ShellTerminalWatchHost<Context> {
 }
 
 /**
- * The generated state/blob portion of the immutable shell-watch host.
+ * The generated conversationState/blob portion of the immutable shell-watch shellHost.
  *
  * The runner still owns box readiness and the remote read executor. Keeping
  * those concerns out of this projection is deliberate: this leaf only binds
- * the generated conversation state and blob store to the decoders consumed by
+ * the generated conversation conversationState and blob store to the decoders consumed by
  * watermark discovery.
  */
 export interface ShellWatchGeneratedStateOwner<Context = unknown> {
@@ -109,21 +109,21 @@ export interface ShellWatchGeneratedStateOwner<Context = unknown> {
 }
 
 export function createShellWatchGeneratedStateProjection<Context>(
-  owner: ShellWatchGeneratedStateOwner<Context>,
+  stateOwner: ShellWatchGeneratedStateOwner<Context>,
 ): Pick<
   ShellTerminalWatchHost<Context>,
   "getConversationState" | "getBlob" | "decodeConversationTurn" | "decodeUserMessage"
 > {
   return {
-    getConversationState: () => owner.getConversationState(),
-    getBlob: async (context, blobId) => {
-      const blob = await owner.getBlobStore().getBlob(context, blobId);
+    getConversationState: () => stateOwner.getConversationState(),
+    getBlob: async (turnContext, blobRef) => {
+      const blob = await stateOwner.getBlobStore().getBlob(turnContext, blobRef);
       return blob ?? null;
     },
-    decodeConversationTurn: bytes => ConversationTurnStructure.fromBinary(bytes),
-    decodeUserMessage: bytes => {
-      const message = UserMessage.fromBinary(bytes);
-      return { text: message.text, messageId: message.messageId };
+    decodeConversationTurn: rawBytes => ConversationTurnStructure.fromBinary(rawBytes),
+    decodeUserMessage: rawBytes => {
+      const recentMessage = UserMessage.fromBinary(rawBytes);
+      return { text: recentMessage.text, messageId: recentMessage.messageId };
     },
   };
 }
@@ -141,11 +141,11 @@ function defaultDelay(milliseconds: number): Promise<void> {
 
 export async function readShellTerminalSnapshot<Context>(
   _host: ShellTerminalWatchHost<Context>,
-  accessor: TerminalRemoteAccessor<Context>,
+  reads: TerminalRemoteAccessor<Context>,
   path: string,
-  context: Context,
+  turnContext: Context,
 ): Promise<TerminalFileSnapshot> {
-  const result = await accessor.read(context, { path, toolCallId: "" });
+  const result = await reads.read(turnContext, { path, toolCallId: "" });
   switch (result.result.case) {
     case "success": {
       const success = result.result.value as {
@@ -173,63 +173,63 @@ export async function readShellTerminalSnapshot<Context>(
 }
 
 export async function pollShellTerminalFile<Context>(
-  host: ShellTerminalWatchHost<Context>,
+  shellHost: ShellTerminalWatchHost<Context>,
   id: string,
-  isCancelled: () => boolean,
-  settle: (status: ShellWatchStatus, detail?: string, outputPath?: string) => void,
+  cancelled: () => boolean,
+  settle: (watchStatus: ShellWatchStatus, watchDetail?: string, watchPath?: string) => void,
 ): Promise<void> {
-  const pollMs = shellRewatchPollMs();
-  const now = host.now ?? Date.now;
-  const delay = host.delay ?? defaultDelay;
-  const deadlineMs = now() + SHELL_REWATCH_MAX_WAIT_MS;
-  let missingReads = 0;
-  let outputPath: string | undefined;
-  while (!isCancelled()) {
+  const pollInterval = shellRewatchPollMs();
+  const now = shellHost.now ?? Date.now;
+  const delay = shellHost.delay ?? defaultDelay;
+  const deadline = now() + SHELL_REWATCH_MAX_WAIT_MS;
+  let missingCount = 0;
+  let watchPath: string | undefined;
+  while (!cancelled()) {
     try {
-      const contextWithScope = host.ctx as unknown as {
+      const scoped = shellHost.ctx as unknown as {
         with?: (
           key: typeof slateLocalToolScopeKey,
           value: { readonly agentId: string },
         ) => Context;
       };
-      const pollContext = typeof contextWithScope.with === "function"
-        ? contextWithScope.with(
+      const scopedContext = typeof scoped.with === "function"
+        ? scoped.with(
           slateLocalToolScopeKey,
-          { agentId: host.getConversationId() },
+          { agentId: shellHost.getConversationId() },
         )
-        : host.createLocalToolContext?.(
-          host.ctx,
-          host.getConversationId(),
-        ) ?? host.ctx;
-      const connection = await host.ensureBoxReady(pollContext, host.getConversationId());
-      const folder = connection.terminalsFolder;
-      outputPath = host.terminalFilePath?.(folder, id) ?? `${folder}/${id}.txt`;
-      const snapshot = await readShellTerminalSnapshot(
-        host,
-        connection.remoteAccessor,
-        outputPath,
-        pollContext,
+        : shellHost.createLocalToolContext?.(
+          shellHost.ctx,
+          shellHost.getConversationId(),
+        ) ?? shellHost.ctx;
+      const terminal = await shellHost.ensureBoxReady(scopedContext, shellHost.getConversationId());
+      const terminalsFolder = terminal.terminalsFolder;
+      watchPath = shellHost.terminalFilePath?.(terminalsFolder, id) ?? `${terminalsFolder}/${id}.txt`;
+      const fileSnapshot = await readShellTerminalSnapshot(
+        shellHost,
+        terminal.remoteAccessor,
+        watchPath,
+        scopedContext,
       );
-      if (snapshot.exists) {
-        missingReads = 0;
-        const footer = parseShellTerminalFooter(snapshot.content);
-        if (footer.isComplete) {
-          const status = footer.exitCode === 0 ? "success" : "error";
-          const detail = footer.exitCode === 0
+      if (fileSnapshot.exists) {
+        missingCount = 0;
+        const completion = parseShellTerminalFooter(fileSnapshot.content);
+        if (completion.isComplete) {
+          const watchStatus = completion.exitCode === 0 ? "success" : "error";
+          const watchDetail = completion.exitCode === 0
             ? undefined
-            : footer.isStreamFailure === true
+            : completion.isStreamFailure === true
               ? "the command's output stream failed; read its output file for the error"
-              : `exit_code=${footer.exitCode ?? "unknown"}`;
-          settle(status, detail, outputPath);
+              : `exit_code=${completion.exitCode ?? "unknown"}`;
+          settle(watchStatus, watchDetail, watchPath);
           return;
         }
       } else {
-        missingReads += 1;
-        if (missingReads >= SHELL_REWATCH_MISSING_FILE_GIVE_UP) {
+        missingCount += 1;
+        if (missingCount >= SHELL_REWATCH_MISSING_FILE_GIVE_UP) {
           settle(
             "error",
             "The command's terminal output file no longer exists, so its completion can no longer be observed (it may have been cleaned up).",
-            outputPath,
+            watchPath,
           );
           return;
         }
@@ -239,69 +239,69 @@ export async function pollShellTerminalFile<Context>(
         settle(
           "error",
           "Slate is no longer allowed to read this command's output on the user's computer, so its completion cannot be observed. The command keeps running; ask the user to approve reading its output file for the result.",
-          outputPath,
+          watchPath,
         );
         return;
       }
     }
-    if (now() >= deadlineMs) break;
-    await delay(pollMs);
+    if (now() >= deadline) break;
+    await delay(pollInterval);
   }
-  if (isCancelled()) return;
+  if (cancelled()) return;
   settle(
     "error",
     `The command is still running after ${Math.round(SHELL_REWATCH_MAX_WAIT_MS / 60_000)} minutes. It keeps running; check its output file for the result.`,
-    outputPath,
+    watchPath,
   );
 }
 
 export async function collectPrependUserMessages<Context>(
-  host: ShellTerminalWatchHost<Context>,
-  recentUserMessages: readonly RecentTerminalUserMessage[] | null | undefined,
+  shellHost: ShellTerminalWatchHost<Context>,
+  recentMessages: readonly RecentTerminalUserMessage[] | null | undefined,
   currentMessageId?: string,
 ): Promise<UserMessage[]> {
-  if (recentUserMessages == null || recentUserMessages.length === 0) return [];
-  const state = host.getConversationState();
-  const { lastUserMessageId, hasUserTurn } = await findConfirmedUserTurnWatermark(host, state);
-  const selected = selectUnconfirmedUserMessages({
-    recentUserMessages,
+  if (recentMessages == null || recentMessages.length === 0) return [];
+  const conversationState = shellHost.getConversationState();
+  const { lastUserMessageId, hasUserTurn } = await findConfirmedUserTurnWatermark(shellHost, conversationState);
+  const unconfirmed = selectUnconfirmedUserMessages({
+    recentUserMessages: recentMessages,
     ...(currentMessageId == null ? {} : { currentMessageId }),
     ...(lastUserMessageId == null ? {} : { lastTurnUserMessageId: lastUserMessageId }),
     hasConfirmedTurns: hasUserTurn,
   });
-  return selected.map((message) => {
-    const addressNote = buildUserMessageAddressNote(message.id);
-    const text = addressNote.length > 0 ? `${addressNote}\n${message.text}` : message.text;
+  return unconfirmed.map((recentMessage) => {
+    const addressText = buildUserMessageAddressNote(recentMessage.id);
+    const text = addressText.length > 0 ? `${addressText}\n${recentMessage.text}` : recentMessage.text;
     return new UserMessage({
       text,
-      messageId: message.id,
-      ...(message.richText != null && message.richText.length > 0
-        ? { richText: message.richText }
+      messageId: recentMessage.id,
+      ...(recentMessage.richText != null && recentMessage.richText.length > 0
+        ? { richText: recentMessage.richText }
         : {}),
     });
   });
 }
 
 export async function findConfirmedUserTurnWatermark<Context>(
-  host: ShellTerminalWatchHost<Context>,
-  state: { readonly turns: readonly Uint8Array[] },
+  shellHost: ShellTerminalWatchHost<Context>,
+  conversationState: { readonly turns: readonly Uint8Array[] },
 ): Promise<{ readonly lastUserMessageId?: string; readonly hasUserTurn: boolean }> {
-  const cached = host.getConfirmedUserTurnWatermarkCache();
-  const boundaryRef = cached != null && cached.turnCount > 0 && cached.turnCount <= state.turns.length
-    ? state.turns[cached.turnCount - 1]
+  const cached = shellHost.getConfirmedUserTurnWatermarkCache();
+  const boundary = cached != null && cached.turnCount > 0 && cached.turnCount <= conversationState.turns.length
+    ? conversationState.turns[cached.turnCount - 1]
     : undefined;
-  const cacheValid = cached != null && (
+  const cacheUsable = cached != null && (
     cached.turnCount === 0
-    || (boundaryRef != null && turnRefsEqual(boundaryRef, cached.boundaryRef))
+    || (boundary != null && turnRefsEqual(boundary, cached.boundaryRef))
   );
-  const stopIndex = cacheValid ? cached.turnCount : 0;
-  const cacheResult = (
+  const scanStop = cacheUsable ? cached.turnCount : 0;
+  const cachedAnswer = (
     result: { readonly lastUserMessageId?: string; readonly hasUserTurn: boolean },
   ) => {
-    const turnCount = state.turns.length;
-    host.setConfirmedUserTurnWatermarkCache({
-      turnCount,
-      boundaryRef: turnCount > 0 ? state.turns[turnCount - 1] ?? new Uint8Array() : new Uint8Array(),
+    const turnTotal = conversationState.turns.length;
+    shellHost.setConfirmedUserTurnWatermarkCache({
+      turnCount: turnTotal,
+      boundaryRef: turnTotal > 0 ? conversationState.turns[turnTotal - 1] ?? new Uint8Array() : new Uint8Array(),
       ...(result.lastUserMessageId == null
         ? {}
         : { lastUserMessageId: result.lastUserMessageId }),
@@ -310,44 +310,44 @@ export async function findConfirmedUserTurnWatermark<Context>(
     return result;
   };
 
-  for (let index = state.turns.length - 1; index >= stopIndex; index -= 1) {
-    const turnBlobId = state.turns[index];
-    if (turnBlobId == null || turnBlobId.length === 0) continue;
+  for (let index = conversationState.turns.length - 1; index >= scanStop; index -= 1) {
+    const turnBlobRef = conversationState.turns[index];
+    if (turnBlobRef == null || turnBlobRef.length === 0) continue;
     let userMessage: { readonly text: string; readonly messageId: string };
     try {
-      const turnBlob = await host.getBlob(host.ctx, turnBlobId);
+      const turnBlob = await shellHost.getBlob(shellHost.ctx, turnBlobRef);
       if (turnBlob == null) return { hasUserTurn: true };
-      const turnStructure = host.decodeConversationTurn(turnBlob);
-      if (turnStructure.turn.case !== "agentConversationTurn") continue;
-      const agentTurn = turnStructure.turn.value as {
+      const turn = shellHost.decodeConversationTurn(turnBlob);
+      if (turn.turn.case !== "agentConversationTurn") continue;
+      const agentTurn = turn.turn.value as {
         readonly userMessage?: Uint8Array;
       };
-      const userMessageBlobId = agentTurn.userMessage;
-      if (userMessageBlobId == null || userMessageBlobId.length === 0) {
+      const userBlobRef = agentTurn.userMessage;
+      if (userBlobRef == null || userBlobRef.length === 0) {
         return { hasUserTurn: true };
       }
-      const userMessageBlob = await host.getBlob(host.ctx, userMessageBlobId);
-      if (userMessageBlob == null) return { hasUserTurn: true };
-      userMessage = host.decodeUserMessage(userMessageBlob);
+      const userBlob = await shellHost.getBlob(shellHost.ctx, userBlobRef);
+      if (userBlob == null) return { hasUserTurn: true };
+      userMessage = shellHost.decodeUserMessage(userBlob);
     } catch {
       return { hasUserTurn: true };
     }
     if (userMessage.text.startsWith(SLATE_HIDDEN_PROMPT_MARKER)) continue;
     if (userMessage.messageId.length === 0 && isGroupTurnPromptText(userMessage.text)) continue;
-    return cacheResult({
+    return cachedAnswer({
       lastUserMessageId: userMessage.messageId,
       hasUserTurn: true,
     });
   }
-  if (cached != null && cacheValid && stopIndex > 0) {
-    return cacheResult({
+  if (cached != null && cacheUsable && scanStop > 0) {
+    return cachedAnswer({
       ...(cached.lastUserMessageId == null
         ? {}
         : { lastUserMessageId: cached.lastUserMessageId }),
       hasUserTurn: cached.hasUserTurn,
     });
   }
-  return cacheResult({ hasUserTurn: false });
+  return cachedAnswer({ hasUserTurn: false });
 }
 
 export function turnRefsEqual(a: Uint8Array, b: Uint8Array): boolean {
