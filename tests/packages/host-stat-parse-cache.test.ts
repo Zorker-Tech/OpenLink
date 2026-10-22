@@ -30,15 +30,18 @@ describe('the stat-keyed parse cache', () => {
       assert.equal(cache.read([file], parse), 'p1');
       assert.equal(cache.read([file], parse), 'p2', 'a racy parse is not kept');
       assert.equal(parses, 2);
-      // Half the window old is still racy.
+      // Half the window old is still racy: two reads, two parses.
       const halfWindow = makeFile(root, 'h.txt', NOW - mod.RACY_MTIME_TICK_WINDOW_MS / 2);
-      const halfWindowParse = 'p' + (parses + 1);
-      assert.equal(cache.read([halfWindow], parse), halfWindowParse);
-      assert.equal(cache.read([halfWindow], parse), 'p' + (parses + 1), 'a racy parse is not kept');
-      // Exactly the window old is old enough to cache.
+      const beforeHalf = parses;
+      cache.read([halfWindow], parse);
+      cache.read([halfWindow], parse);
+      assert.equal(parses, beforeHalf + 2, 'a racy parse is not kept');
+      // Exactly the window old is old enough to cache: two reads, one parse.
       const settled = makeFile(root, 'c.txt', NOW - mod.RACY_MTIME_TICK_WINDOW_MS);
-      assert.equal(cache.read([settled], parse), 'p3');
-      assert.equal(cache.read([settled], parse), 'p3');
+      const beforeSettled = parses;
+      cache.read([settled], parse);
+      cache.read([settled], parse);
+      assert.equal(parses, beforeSettled + 1);
     } finally { fs.rmSync(root, { recursive: true, force: true }); }
   });
   it('drops the entry of a file that is gone, and does not parse for it', () => {
