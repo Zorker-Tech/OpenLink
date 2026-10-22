@@ -21,7 +21,7 @@ import { selectSlateExperimentTurnModel, selectSlateModelExperimentModel, SLATE_
 import { pinSessionDiagnosticsReporter, reportSessionDiagnostic, type SessionDiagnostic } from "../../source/host/extensions/session/session-diagnostics.ts";
 import { createInMemoryXuserTurnDedupe, SlateXuserTurnDedupeStore, XUSER_TURN_DEDUPE_TTL_MS } from "../../source/host/rooms/xuser-turn-dedupe-store.ts";
 import { loadSelectedImageInputs } from "../../source/host/selected-image-inputs.ts";
-import { assertMembersAreNotGroups, formatGroupChatTag, formatGroupHistory, formatGroupLine, groupDisplayName, isGroupTurnPromptText, isPassContent, isSameMemberSet, memberMentionHandles, messagesSinceMemberLastSpoke, orderRoundSpeakers, parseGroupMentions, resolveResponders, SlateGroupNestingError, type GroupMessage } from "../../source/host/groups/group-chat.ts";
+import { assertMembersAreNotGroups, buildGroupMemberSystemPrompt, buildGroupRedriveNote, buildGroupTurnPrompt, describeGroup, formatGroupChatTag, formatGroupHistory, formatGroupLine, GROUP_CHAT_TAG_PREFIX, GROUP_CONFIG_VERSION, GROUP_MAX_MEMBER_TURNS, GROUP_MAX_MESSAGES_PER_TURN, GROUP_MAX_ROUNDS, GROUP_PROMPT_HISTORY_LIMIT, groupDisplayName, isGroupTurnPromptText, isPassContent, isPotentialPassPrefix, isSameMemberSet, memberMentionHandles, messagesSinceMemberLastSpoke, orderRoundSpeakers, parseGroupMentions, resolveResponders, SHARED_ROOM_HISTORY_LIMIT, SLATE_HIDDEN_PROMPT_MARKER, SlateGroupNestingError, type GroupMessage } from "../../source/host/groups/group-chat.ts";
 import { createProductionRunnerContext } from "../../source/host/runner-context-production-provider.ts";
 import { BROWSER_USE_SUBAGENT_TYPE, isBrowserUseSubagentType } from "../../source/host/runner/tools/slate-browser-use-subagent.ts";
 import { hostEventBusTelemetry, HOST_EVENT_BUS_EVENT } from "../../source/host/telemetry/host-event-bus-telemetry.ts";
@@ -308,17 +308,30 @@ describe("a conversation between the members of a group", () => {
   ];
 
   it("rotates who speaks first, and compares member sets without order", () => {
+    assert.equal(GROUP_CONFIG_VERSION, 1);
+    assert.equal(GROUP_MAX_MEMBER_TURNS, 10);
+    assert.equal(GROUP_MAX_ROUNDS, 3);
+    assert.equal(GROUP_PROMPT_HISTORY_LIMIT, 24);
+    assert.equal(GROUP_MAX_MESSAGES_PER_TURN, 2);
+    assert.equal(SHARED_ROOM_HISTORY_LIMIT, 24);
+    assert.equal(GROUP_CHAT_TAG_PREFIX, "[Group chat: ");
+    assert.equal(SLATE_HIDDEN_PROMPT_MARKER, "[SLATE_HIDDEN_PROMPT]");
     assert.deepEqual(orderRoundSpeakers(["a", "b", "c"], 0), ["a", "b", "c"]);
     assert.deepEqual(orderRoundSpeakers(["a", "b", "c"], 1), ["b", "c", "a"]);
     assert.deepEqual(orderRoundSpeakers(["a", "b", "c"], 4), ["b", "c", "a"]);
+    assert.deepEqual(orderRoundSpeakers(["a", "b", "c"], -1), ["c", "a", "b"], "a negative round counts back from the end");
     assert.deepEqual(orderRoundSpeakers([], 3), []);
     assert.equal(isSameMemberSet(["a", "b"], ["b", "a"]), true);
     assert.equal(isSameMemberSet(["a"], ["a", "b"]), false);
+    assert.equal(isSameMemberSet(["x", "y"], ["x", "z"]), false);
+    assert.equal(isSameMemberSet(["x", "x"], ["x", "y"]), false, "a repeated name does not stand in for another name");
+    assert.equal(isSameMemberSet(["x"], ["x", "x"]), false, "a repeated name does not make a longer list the same list");
   });
 
   it("recognizes a mention, and everyone", () => {
     assert.deepEqual(memberMentionHandles("  Ada Lovelace "), ["ada lovelace", "adalovelace", "ada"]);
     assert.deepEqual(memberMentionHandles("   "), []);
+    assert.deepEqual(memberMentionHandles("Ada\tLovelace"), ["ada\tlovelace", "adalovelace", "ada"], "any whitespace collapses into the joined handle");
     assert.deepEqual(parseGroupMentions("@Ada ask grace about it", members).memberIds, ["a1"]);
     assert.deepEqual(parseGroupMentions("@Grace Hopper and @Alan Turing please", members).memberIds, ["a2", "a3"]);
     assert.deepEqual(parseGroupMentions("email ada@example.com", members).memberIds, []);
@@ -372,6 +385,138 @@ describe("a conversation between the members of a group", () => {
       (error: unknown) => error instanceof SlateGroupNestingError && error.nestedGroupIds.length === 2 && /group chats/.test(error.message),
     );
     assert.doesNotThrow(() => assertMembersAreNotGroups(["a1"], () => false));
+  });
+
+  it("reads a mention only as a whole word, once per member, in the order the members are listed", () => {
+    assert.deepEqual(parseGroupMentions("@Ada!", members).memberIds, ["a1"]);
+    assert.deepEqual(parseGroupMentions("x@Ada", members).memberIds, [], "a mention inside a word is not one");
+    assert.deepEqual(parseGroupMentions("@Ada1", members).memberIds, [], "a longer word is a different word");
+    assert.deepEqual(parseGroupMentions("@Grace Hopper @Ada again", members).memberIds, ["a1", "a2"], "the members' order decides, not the text's");
+    assert.deepEqual(parseGroupMentions("@Ada @Ada @Ada", members).memberIds, ["a1"], "a member is mentioned once");
+    assert.equal(parseGroupMentions("@All please", members).isEveryone, true, "everyone is matched without case");
+    assert.equal(parseGroupMentions("@everyonex please", members).isEveryone, false, "everyone has to be the whole word");
+    assert.equal(parseGroupMentions("email @everyone@example.com", members).isEveryone, true, "the word stands alone even when an address follows it");
+  });
+
+  it("answers everyone until the last thing the user said names someone, and ignores older rounds", () => {
+    const history: GroupMessage[] = [
+      { speaker: { kind: "user" }, content: "@Grace Hopper" },
+      { speaker: { kind: "user" }, content: "hello room" },
+    ];
+    assert.deepEqual(resolveResponders(members, history).map((member) => member.id), ["a1", "a2", "a3"], "a mention before the last user message is an older round");
+    assert.deepEqual(resolveResponders(members, []).map((member) => member.id), ["a1", "a2", "a3"]);
+    assert.deepEqual(resolveResponders(members, [{ speaker: { kind: "user" }, content: "@Grace Hopper" }]).map((member) => member.id), ["a2"]);
+    assert.deepEqual(resolveResponders(members, [{ speaker: { kind: "user" }, content: "@everyone" }]).map((member) => member.id), ["a1", "a2", "a3"]);
+    const noUserYet: GroupMessage[] = [
+      { speaker: { kind: "member", id: "a2", name: "Grace Hopper" }, content: "@Ada look" },
+      { speaker: { kind: "member", id: "a1", name: "Ada Lovelace" }, content: "hello" },
+    ];
+    assert.deepEqual(resolveResponders(members, noUserYet).map((member) => member.id), ["a1"], "with no user message the whole transcript is the round");
+    assert.deepEqual(
+      resolveResponders(members, [{ speaker: { kind: "user" }, content: "@everyone" }, { speaker: { kind: "user" }, content: "@Grace Hopper" }]).map((member) => member.id),
+      ["a2"],
+      "the round starts at the last user message, so an earlier call to everyone is an older round",
+    );
+    assert.deepEqual(
+      resolveResponders(members, [
+        { speaker: { kind: "user" }, content: "@everyone" },
+        { speaker: { kind: "member", id: "a2", name: "Grace Hopper" }, content: "@Ada you first" },
+      ]).map((member) => member.id),
+      ["a1", "a2", "a3"],
+      "one call to everyone in the round answers for everyone, whatever is said after it",
+    );
+    assert.deepEqual(
+      resolveResponders(members, [{ speaker: { kind: "user" }, content: "@everyone @Grace Hopper" }]).map((member) => member.id),
+      ["a1", "a2", "a3"],
+      "everyone wins over a name mentioned beside it",
+    );
+  });
+
+  it("bounds the transcript from the end, and a limit of zero is no bound at all", () => {
+    const history: GroupMessage[] = [
+      { speaker: { kind: "user" }, content: "one" },
+      { speaker: { kind: "member", id: "a2", name: "Grace" }, content: "two" },
+      { speaker: { kind: "user" }, content: "three" },
+    ];
+    assert.deepEqual(formatGroupHistory(history, "a1", 1).split("\n"), ["User: three"]);
+    assert.deepEqual(formatGroupHistory(history, "a1", 2).split("\n"), ["Grace: two", "User: three"]);
+    assert.equal(formatGroupHistory(history, "a1", 0).split("\n").length, 3, "the bound is a negative slice, so zero keeps everything");
+  });
+
+  it("says where a group's name comes from, and describes it with or without its own description", () => {
+    assert.equal(groupDisplayName({ name: "  Room  ", description: "" }), "Room");
+    assert.equal(groupDisplayName({ name: "", description: "x" }), "the group");
+    assert.equal(describeGroup({ name: "Room", description: "" }), '"Room"');
+    assert.equal(describeGroup({ name: "  ", description: "  " }), '"the group"');
+    assert.equal(describeGroup({ name: "Room", description: "  a shared room  " }), '"Room" — a shared room');
+    assert.equal(formatGroupChatTag({ name: "", description: "" }, []), '[Group chat: "the group"]');
+  });
+
+  it("counts the nesting refusal in the plural, and keeps its own copy of the ids", () => {
+    const ids = ["g1"];
+    const one = new SlateGroupNestingError(ids);
+    ids.push("g2");
+    assert.equal(one.message, "A group chat can only contain individual agents, not other group chats. Remove the group chat from the member list.");
+    assert.deepEqual(one.nestedGroupIds, ["g1"], "the ids are copied out of the caller's list");
+    assert.equal(one.name, "SlateGroupNestingError");
+    assert.match(new SlateGroupNestingError(["g1", "g2"]).message, /Remove the group chats from the member list\.$/);
+  });
+
+  it("tells a message that is passing from one that could still become a pass", () => {
+    assert.equal(isPassContent("( pass )."), true);
+    assert.equal(isPassContent("passed"), false);
+    assert.equal(isPotentialPassPrefix(""), true);
+    assert.equal(isPotentialPassPrefix("  (pas"), true, "a reply still being typed may become a pass");
+    assert.equal(isPotentialPassPrefix("pass"), true);
+    assert.equal(isPotentialPassPrefix("passes"), false);
+    assert.equal(isPotentialPassPrefix("here"), false);
+  });
+
+  it("tags a turn only when the text, hidden marker or not, starts with the group tag", () => {
+    assert.equal(isGroupTurnPromptText("[SLATE_HIDDEN_PROMPT]hello"), false, "the marker alone is not a tag");
+    assert.equal(isGroupTurnPromptText('[SLATE_HIDDEN_PROMPT][Group chat: "Room"] hi'), true);
+    assert.equal(isGroupTurnPromptText(""), false);
+    assert.equal(buildGroupRedriveNote().startsWith("\n(Redelivery: your previous attempt"), true);
+    assert.equal(buildGroupRedriveNote().includes("SendMessage"), true);
+  });
+
+  it("tells a member who it is, who is in the room, and how to speak, in a shared room or a private one", () => {
+    const alone = buildGroupMemberSystemPrompt({ id: "a1", name: "Ada", description: "  a mathematician  " }, { name: "Room", description: "" }, []);
+    assert.equal(alone.includes('You are Ada, one participant in a group chat ("Room").'), true);
+    assert.equal(alone.includes("Your persona: a mathematician"), true);
+    assert.equal(alone.includes("Other participants in the room:"), false);
+    assert.equal(alone.includes("Right now you are speaking in this group chat."), true, "no peers means no list after the comma");
+    assert.equal(alone.includes("You have your full toolkit in this room."), true);
+    assert.equal(alone.includes('send exactly "(pass)"'), true);
+
+    const together = buildGroupMemberSystemPrompt(
+      { id: "a1", name: "Ada", description: "" },
+      { name: "Room", description: "a shared room" },
+      [{ id: "a2", name: "Grace", description: "  a rear admiral  " }, { id: "a3", name: "Alan", description: "" }],
+      { isSharedRoom: true },
+    );
+    assert.equal(together.includes("Other participants in the room:\n- Grace (a rear admiral)\n- Alan"), true);
+    assert.equal(together.includes("Right now you are speaking in this group chat, with Grace, Alan."), true);
+    assert.equal(together.includes("This is a cross-user room turn."), true);
+    assert.equal(together.includes("You have your full toolkit in this room."), false, "a cross-user room turn has the narrower rule");
+  });
+
+  it("prompts a turn with the room since the member last spoke, or says there was nothing new", () => {
+    const quiet = buildGroupTurnPrompt({ member: members[0]!, group: { name: "Room", description: "" }, peers: [], newMessages: [] });
+    assert.equal(quiet.startsWith('[Group chat: "Room"]'), true);
+    assert.equal(quiet.includes("No new messages in the room since your last turn."), true);
+    assert.equal(quiet.endsWith("It's your turn, Ada Lovelace. Reply in character with a single SendMessage if you have something worth adding, or send \"(pass)\" if you don't."), true);
+
+    const busy = buildGroupTurnPrompt({
+      member: members[0]!,
+      group: { name: "Room", description: "" },
+      peers: [members[1]!],
+      newMessages: [
+        { speaker: { kind: "member", id: "a2", name: "Grace Hopper" }, content: "on it" },
+        { speaker: { kind: "user" }, content: "thanks" },
+      ],
+    });
+    assert.equal(busy.includes("New messages in the room (oldest first):\nGrace Hopper: on it\nUser: thanks"), true);
   });
 });
 
