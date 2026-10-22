@@ -1,8 +1,10 @@
-/** Whether a URL is one an attachment may be read from: a file on this machine, or an https address. */
+/** The protocols an attachment may be read from: a file on this machine, and the web. */
+const ATTACHMENT_PROTOCOLS: ReadonlySet<string> = new Set(["file:", "https:"]);
+
+/** Whether a URL names a place an attachment may be read from. */
 export function isValidAttachmentUrl(rawUrl: string): boolean {
   try {
-    const url = new URL(rawUrl);
-    return url.protocol === "file:" || url.protocol === "https:";
+    return ATTACHMENT_PROTOCOLS.has(new URL(rawUrl).protocol);
   } catch {
     return false;
   }
