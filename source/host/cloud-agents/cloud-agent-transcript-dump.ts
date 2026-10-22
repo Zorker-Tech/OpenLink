@@ -11,39 +11,51 @@ export function cloudAgentTranscriptDumpPath(bcId: string): string {
   return `cloud-agent-transcripts/${bcId}.jsonl`;
 }
 
+/** What a cloud agent answers with when its transcript is asked for. */
 export interface CloudAgentDumpApi {
   getTranscriptDump(args: { bcId: string }): Promise<{ status: string; lineCount: number; jsonl: string } | null>;
 }
 
-export async function dumpCloudAgentTranscript(args: {
+/** What dumping a transcript needs: the agent's API, the box's file writer, and which agent. */
+interface TranscriptDumpDeps {
   readonly api: CloudAgentDumpApi;
   readonly writeBoxFile: (path: string, data: Uint8Array) => Promise<unknown>;
   readonly bcId: string;
-}): Promise<{ status: string; lineCount: number; file?: { path: string; sizeBytes: number } } | null> {
-  const dump = await args.api.getTranscriptDump({ bcId: args.bcId });
-  if (dump == null) return null;
-  // A transcript with nothing in it is not a file worth writing.
-  if (dump.lineCount === 0) return { status: dump.status, lineCount: 0 };
-  const path = cloudAgentTranscriptDumpPath(args.bcId);
-  const data = new TextEncoder().encode(dump.jsonl);
-  await args.writeBoxFile(path, data);
-  return { status: dump.status, lineCount: dump.lineCount, file: { path, sizeBytes: data.byteLength } };
 }
 
+/** A transcript's JSON lines as the bytes the box file is written with. */
+function transcriptBytes(jsonl: string): Uint8Array {
+  return new TextEncoder().encode(jsonl);
+}
+
+/** The transcript dumped into the agent's box, or nothing when there is no transcript to dump. */
+export async function dumpCloudAgentTranscript(
+  deps: TranscriptDumpDeps,
+): Promise<{ status: string; lineCount: number; file?: { path: string; sizeBytes: number } } | null> {
+  const transcript = await deps.api.getTranscriptDump({ bcId: deps.bcId });
+  if (transcript == null) return null;
+  // A transcript with nothing in it is not a file worth writing.
+  if (transcript.lineCount === 0) return { status: transcript.status, lineCount: 0 };
+  const targetPath = cloudAgentTranscriptDumpPath(deps.bcId);
+  const bytes = transcriptBytes(transcript.jsonl);
+  await deps.writeBoxFile(targetPath, bytes);
+  return { status: transcript.status, lineCount: transcript.lineCount, file: { path: targetPath, sizeBytes: bytes.byteLength } };
+}
+
+/** The line a caller reads after the transcript was dumped: where it is, how big, and how to read its end. */
 export function formatCloudAgentDumpCompletionLine(file: { path: string; sizeBytes: number }, lineCount: number): string {
-  return `Full transcript dumped to ${file.path} (${file.sizeBytes} bytes, ${lineCount} message lines). Read it with your shell tools; \`tail -n 1 ${file.path}\` gives the final assistant report.`;
+  const where = `${file.path} (${file.sizeBytes} bytes, ${lineCount} message lines)`;
+  const tailCommand = `tail -n 1 ${file.path}`;
+  return `Full transcript dumped to ${where}. Read it with your shell tools; \`${tailCommand}\` gives the final assistant report.`;
 }
 
 /** A watch result, with where its transcript went appended — and left exactly as it was when it could not be dumped. */
-export async function augmentWatchResultWithTranscriptDump<Result extends { text: string }>(args: {
-  readonly api: CloudAgentDumpApi;
-  readonly writeBoxFile: (path: string, data: Uint8Array) => Promise<unknown>;
-  readonly bcId: string;
-  readonly result: Result;
-}): Promise<Result> {
+export async function augmentWatchResultWithTranscriptDump<Result extends { text: string }>(
+  deps: TranscriptDumpDeps & { readonly result: Result },
+): Promise<Result> {
   try {
-    const outcome = await dumpCloudAgentTranscript(args);
-    if (outcome?.file != null) return { ...args.result, text: `${args.result.text}\n\n${formatCloudAgentDumpCompletionLine(outcome.file, outcome.lineCount)}` };
+    const dumped = await dumpCloudAgentTranscript(deps);
+    if (dumped?.file != null) return { ...deps.result, text: `${deps.result.text}\n\n${formatCloudAgentDumpCompletionLine(dumped.file, dumped.lineCount)}` };
   } catch {}
-  return args.result;
+  return deps.result;
 }
