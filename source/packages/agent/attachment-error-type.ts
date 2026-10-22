@@ -7,6 +7,11 @@
  * Error, and anything else is reported as its JavaScript type.
  */
 
+/** What an Error that carries no name of its own is reported as. */
+const FALLBACK_ERROR_TYPE = "Error";
+
+/** The category a failure is reported under: its own name when it is an Error with one, its JavaScript type otherwise. */
 export function getSafeErrorType(error: unknown): string {
-  return error instanceof Error ? error.name || "Error" : typeof error
+  if (!(error instanceof Error)) return typeof error;
+  return error.name || FALLBACK_ERROR_TYPE;
 }
