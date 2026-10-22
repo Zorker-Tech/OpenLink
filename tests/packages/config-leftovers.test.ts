@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { isLocalCliMode, LOCAL_CLI_MODE_ENV, LOCAL_CLI_MODE_HEADER } from "../../source/packages/config/request.ts";
+import { applyLocalCliModeHeader, createLocalCliModeHeaders, isLocalCliMode, LOCAL_CLI_MODE_ENV, LOCAL_CLI_MODE_HEADER } from "../../source/packages/config/request.ts";
 import { proxyFetch } from "../../source/packages/config/auth/proxy-fetch.ts";
 import { MDM_SIGN_IN_POLICY_HEADER_NAME, POLICY_CACHE_TTL_MS, readMdmSignInPolicyHeaderValue, SIGN_IN_POLICY_VIOLATION_ERROR, SIGN_IN_POLICY_VIOLATION_MESSAGE } from "../../source/packages/config/auth/mdm-sign-in-policy.ts";
 
@@ -23,6 +23,32 @@ describe("how a request says it came from the command line", () => {
     delete process.env[LOCAL_CLI_MODE_ENV];
     assert.equal(isLocalCliMode(), false);
     if (previous !== undefined) process.env[LOCAL_CLI_MODE_ENV] = previous;
+  });
+
+  it("marks a request's headers while the mode is on, and hands them back untouched while it is off", () => {
+    const previous = process.env[LOCAL_CLI_MODE_ENV];
+    try {
+      process.env[LOCAL_CLI_MODE_ENV] = "true";
+      const marked = new Headers({ "x-other": "1" });
+      applyLocalCliModeHeader(marked);
+      assert.equal(marked.get(LOCAL_CLI_MODE_HEADER), "true");
+      assert.equal(marked.get("x-other"), "1", "the request's own headers are kept");
+      assert.deepEqual(createLocalCliModeHeaders({ a: "1" }), { a: "1", [LOCAL_CLI_MODE_HEADER]: "true" });
+      assert.deepEqual(createLocalCliModeHeaders({ [LOCAL_CLI_MODE_HEADER]: "old" }), { [LOCAL_CLI_MODE_HEADER]: "true" }, "the mode's header wins over a stored one");
+
+      process.env[LOCAL_CLI_MODE_ENV] = "1";
+      const untouched = new Headers({ "x-other": "1" });
+      applyLocalCliModeHeader(untouched);
+      assert.equal(untouched.has(LOCAL_CLI_MODE_HEADER), false);
+      assert.equal(untouched.get("x-other"), "1");
+      const input = { a: "1" };
+      assert.equal(createLocalCliModeHeaders(input), input, "with the mode off the very same object comes back");
+      assert.equal(createLocalCliModeHeaders(undefined), undefined);
+      assert.deepEqual(createLocalCliModeHeaders({}), {});
+    } finally {
+      if (previous === undefined) delete process.env[LOCAL_CLI_MODE_ENV];
+      else process.env[LOCAL_CLI_MODE_ENV] = previous;
+    }
   });
 });
 
