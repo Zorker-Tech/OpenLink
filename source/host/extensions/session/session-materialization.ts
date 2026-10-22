@@ -8,7 +8,7 @@ import { randomUUID } from "node:crypto";
 import { readdir, rm, stat } from "node:fs/promises";
 import { dirname } from "node:path";
 import { getSlateProfilePath, writeSlateProfileFile, type SlateAgentProfile } from "../../agents/agent-profile.ts";
-import { getSlateSettingsPath, writeSlateSettingsFile } from "../../agents/settings-file.ts";
+import { getSlateSettingsPath, writeAgentSettings } from "../../agents/settings-file.ts";
 import { SlateAgentDb } from "./agent-db.ts";
 import { getAgentDbPath } from "./session-paths.ts";
 import { automationStoreForDbPath, channelStoreForDbPath, workflowStoreForDbPath } from "./session-store-factories.ts";
@@ -81,7 +81,7 @@ export class SlateSessionMaterialization {
     try {
       db.set("agentId", agentId); db.setAgentOrigin(origin); if (purpose != null) db.setAgentPurpose(purpose);
       writeSlateProfileFile(getSlateProfilePath(dirname(dbPath)), { name: profile?.name?.trim() || "New Bot", description: profile?.description?.trim() ?? "", title: profile?.title?.trim() ?? "", avatarShape: profile?.avatarShape?.trim() ?? "", avatarColor: profile?.avatarColor?.trim() ?? "" });
-      writeSlateSettingsFile(getSlateSettingsPath(dirname(dbPath)), { notifyOnAgentUpdates: true });
+      writeAgentSettings(getSlateSettingsPath(dirname(dbPath)), { notifyOnAgentUpdates: true });
       const session = this.compose(agentId, dbPath, db);
       for (const spec of DEFAULT_AGENT_AUTOMATIONS) session.automations.upsert(spec as never);
       return session;

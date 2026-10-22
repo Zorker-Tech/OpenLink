@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { getAgentWorkflowEnablementPath } from "./agent-workflow-enablement.ts";
 import { listConventionalAvatarFilenames, resolveDerivedAvatarFilename } from "./agent-avatar.ts";
 import { getSlateProfilePath, readLegacyProfileAvatarField, readSlateProfileFile, writeSlateProfileFile } from "./agent-profile.ts";
-import { getSlateSettingsPath, writeSlateSettingsFile } from "./settings-file.ts";
+import { getSlateSettingsPath, writeAgentSettings } from "./settings-file.ts";
 
 export class SlateAgentCloneError extends Error { override name = "SlateAgentCloneError"; }
 export const STORE_FILENAME = "store.db";
@@ -24,7 +24,7 @@ export function cloneAgentDir(sourceDir: string, targetDir: string, newAgentId: 
   try {
     const store = join(sourceDir, STORE_FILENAME); if (!existsSync(store)) throw new SlateAgentCloneError("This agent's data is missing and can't be duplicated."); adapters.checkpointStore(store); copyFileSync(store, join(targetDir, STORE_FILENAME));
     const profile = readSlateProfileFile(getSlateProfilePath(sourceDir)); writeSlateProfileFile(getSlateProfilePath(targetDir), { name: cloneName, description: profile?.description ?? "", title: profile?.title ?? "", avatarShape: profile?.avatarShape ?? "", avatarColor: profile?.avatarColor ?? "" });
-    copyIfPresent(getSlateSettingsPath(sourceDir), getSlateSettingsPath(targetDir)); writeSlateSettingsFile(getSlateSettingsPath(targetDir), { hiddenFromSidebar: false });
+    copyIfPresent(getSlateSettingsPath(sourceDir), getSlateSettingsPath(targetDir)); writeAgentSettings(getSlateSettingsPath(targetDir), { hiddenFromSidebar: false });
     copyIfPresent(getAgentWorkflowEnablementPath(sourceDir), getAgentWorkflowEnablementPath(targetDir));
     resolveDerivedAvatarFilename(sourceDir, readLegacyProfileAvatarField(getSlateProfilePath(sourceDir))); for (const name of listConventionalAvatarFilenames(sourceDir)) copyFileSync(join(sourceDir, name), join(targetDir, name));
     for (const entry of listAgentAutomationConfigFiles(adapters.getAutomationsDir(sourceDir))) { const destination = join(adapters.getAutomationsDir(targetDir), entry.folderName); mkdirSync(destination, { recursive: true }); copyFileSync(entry.configPath, join(destination, AUTOMATION_CONFIG_FILENAME)); }
