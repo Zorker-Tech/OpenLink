@@ -6,6 +6,13 @@
  * to the tags we write ourselves.
  */
 
+/** The escapes, in the order they are applied: the ampersand first, so the entities it writes are not escaped again. */
+const PROMPT_XML_ESCAPES: ReadonlyArray<readonly [RegExp, string]> = [
+  [/&/g, "&amp;"],
+  [/</g, "&lt;"],
+  [/>/g, "&gt;"],
+];
+
 export function escapePromptXmlText(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+  return PROMPT_XML_ESCAPES.reduce((text, [pattern, entity]) => text.replace(pattern, entity), value);
 }
