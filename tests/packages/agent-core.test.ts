@@ -128,9 +128,74 @@ test("a goal belongs to its conversation and, when it names one, to its agent se
 
   assert.equal(isGoalStateShapeValid({ goalId: GOAL_ID, conversationId: "conv-1", status: GOAL_STATUS_ACTIVE }, identity), true)
   assert.equal(isGoalStateShapeValid({ goalId: GOAL_ID, conversationId: "conv-1", status: 2 }, identity), false)
+  assert.equal(
+    isGoalStateShapeValid({ goalId: GOAL_ID, conversationId: "conv-9", status: GOAL_STATUS_ACTIVE }, identity),
+    false,
+    "the goal has to belong to this conversation",
+  )
   assert.equal(isGoalStateShapeValid({ goalId: "not-a-goal", conversationId: "conv-1", status: GOAL_STATUS_ACTIVE }, identity), false)
   assert.equal(isGoalStateShapeValid(undefined, identity), false)
   assert.equal(GOAL_ID_PATTERN.test(GOAL_ID), true)
+})
+
+test("a goal's clock reads a stored total, and an unanchored clock does not accrue", () => {
+  assert.equal(GOAL_STATUS_ACTIVE, 1)
+  assert.equal(goalWorkedMs(null), 0)
+  assert.equal(goalWorkedMs({ goalId: GOAL_ID }), 0)
+  assert.equal(goalWorkedMs({ goalId: GOAL_ID, activeDurationMs: BigInt(-5) }), -5)
+  assert.equal(
+    goalWorkedMs({ goalId: GOAL_ID, activeDurationMs: BigInt("18446744073709551617") }),
+    18_446_744_073_709_551_616,
+    "a total too large for a safe integer is the number it rounds to",
+  )
+
+  assert.equal(goalElapsedMsFrom(1_000, 5_000, 9_000), 5_000)
+  assert.equal(goalElapsedMsFrom(1_000, 5_000, 4_000), 1_000)
+  assert.equal(goalElapsedMsFrom(1_000, undefined, 9_000), 1_000)
+  assert.equal(goalElapsedMsFrom(1_000, 0, 1_500), 2_500, "a fractional stretch is kept as a fraction")
+  assert.equal(goalElapsedMsFrom(1_000, null as never, 9_000), 10_000, "only undefined is an absent anchor, so a null one counts as zero")
+  assert.equal(Number.isNaN(goalElapsedMsFrom(1_000, Number.NaN, 9_000)), true)
+
+  assert.equal(goalElapsedMs({ goalId: GOAL_ID, activeDurationMs: BigInt(1_000) }, 9_000), 1_000, "no anchor, no growth")
+  assert.equal(goalElapsedMs({ goalId: GOAL_ID, activeDurationMs: BigInt(1_000), lastAccruedAtMs: null as never }, 9_000), 10_000, "only undefined is an absent anchor, so a null one counts as zero")
+})
+
+test("a goal's clock on activation anchors it, and on deactivation freezes what elapsed", () => {
+  const started = goalClockOnActivation({ goalId: GOAL_ID, activeDurationMs: BigInt(1_000) }, 9_000)
+  assert.deepEqual(started, { activeDurationMs: BigInt(1_000), lastAccruedAtMs: BigInt(9_000) })
+  assert.deepEqual(goalClockOnActivation(undefined, 0), { activeDurationMs: BigInt(0), lastAccruedAtMs: BigInt(0) })
+  assert.throws(() => goalClockOnActivation(undefined, 1.5), RangeError, "a fractional moment cannot be a bigint")
+
+  const stopped = goalClockOnDeactivation({ goalId: GOAL_ID, activeDurationMs: BigInt(1_000), lastAccruedAtMs: BigInt(5_000) }, 9_000)
+  assert.deepEqual(stopped, { activeDurationMs: BigInt(5_000), lastAccruedAtMs: undefined })
+  assert.deepEqual(goalClockOnDeactivation(undefined, 9_000), { activeDurationMs: BigInt(0), lastAccruedAtMs: undefined })
+  assert.throws(() => goalClockOnDeactivation({ goalId: GOAL_ID, activeDurationMs: BigInt(0), lastAccruedAtMs: BigInt(0) }, 1.5), RangeError)
+})
+
+test("a goal's owner is the session that made it, and an empty owner is nobody's", () => {
+  assert.equal(isGoalOwnerValid({ goalId: GOAL_ID, agentSessionId: "" }, "session-1"), false, "an empty owner matches no session")
+  assert.equal(isGoalOwnerValid({ goalId: GOAL_ID, agentSessionId: "" }, ""), false)
+  assert.equal(isGoalOwnerValid({ goalId: GOAL_ID, agentSessionId: "session-1" }, ""), false, "an empty session is no session")
+  assert.equal(isGoalOwnerValid({ goalId: GOAL_ID, agentSessionId: "session-1" }, "session-1"), true)
+  assert.equal(isGoalOwnerValid({ goalId: GOAL_ID, agentSessionId: "session-1" }, undefined), false)
+  assert.equal(isGoalOwnerValid({ goalId: GOAL_ID }, undefined), true, "a goal without an owner needs no session")
+})
+
+test("a goal's identity is its conversation when it has no owner, and its owner when it has one", () => {
+  const identity = { conversationId: "conv-1", agentSessionId: "session-1" }
+  assert.equal(isGoalIdentityValid({ goalId: GOAL_ID, conversationId: "conv-1", agentSessionId: "" }, identity), false, "an empty owner is not a conversation match")
+  assert.equal(isGoalIdentityValid({ goalId: GOAL_ID, conversationId: "conv-9", agentSessionId: "session-1" }, identity), true)
+  assert.equal(isGoalIdentityValid({ goalId: GOAL_ID, conversationId: "conv-9", agentSessionId: "session-2" }, identity), false)
+  assert.equal(isGoalIdentityValid({ goalId: GOAL_ID }, { conversationId: "conv-1" }), false, "a goal without a conversation matches none")
+})
+
+test("the goal id pattern is the stored uuid shape, in either case, and only then", () => {
+  assert.equal(GOAL_ID_PATTERN.test(GOAL_ID.toUpperCase()), true)
+  assert.equal(GOAL_ID_PATTERN.test("3f2504e0-4f89-41d3-9a0c-0305e82c330"), false, "the last group is twelve hex digits")
+  assert.equal(GOAL_ID_PATTERN.test("3f2504e04f8941d39a0c0305e82c3301"), false, "the dashes are part of the shape")
+  assert.equal(GOAL_ID_PATTERN.test("3f2504e0-4f89-41d3-9a0c-0305e82c330g"), false)
+  assert.equal(GOAL_ID_PATTERN.test(`${GOAL_ID}\n`), false, "the end anchor is the very end of the string")
+  assert.equal(GOAL_ID_PATTERN.test(` ${GOAL_ID}`), false, "the start anchor does not skip a leading space")
 })
 
 test("the pursuit guidelines name the tools that exist and always carry the audit", () => {

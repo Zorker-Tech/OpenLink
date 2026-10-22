@@ -8,74 +8,71 @@
  * what stops a resumed conversation from adopting someone else's goal.
  */
 
-export const GOAL_STATUS_ACTIVE = 1
-export const GOAL_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+/** The status a goal has while it is being worked on. */
+export const GOAL_STATUS_ACTIVE = 1;
 
+/** The id a goal is stored under: a uuid-shaped id, in either case. */
+export const GOAL_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** What a stored goal carries: its identity, the status it was last left in, and its clock. */
 export interface GoalState {
-  activeDurationMs?: bigint
-  lastAccruedAtMs?: bigint
-  status?: number
-  goalId: string
-  conversationId?: string
-  agentSessionId?: string
+  activeDurationMs?: bigint;
+  lastAccruedAtMs?: bigint;
+  status?: number;
+  goalId: string;
+  conversationId?: string;
+  agentSessionId?: string;
 }
 
-export function goalWorkedMs(goalState: GoalState | null | undefined): number {
-  return Number(goalState?.activeDurationMs ?? BigInt(0))
+/** A goal that has never accrued anything. */
+const NO_ACCRUED_MS = BigInt(0);
+
+/** The time this goal was worked on before the current stretch, in milliseconds. */
+export function goalWorkedMs(goal: GoalState | null | undefined): number {
+  return Number(goal?.activeDurationMs ?? NO_ACCRUED_MS);
 }
 
-/** Accrued time plus the current stretch, which is zero-length when nothing is anchored. */
+/** Accrued time plus the current stretch, which is zero-length while nothing is anchored. */
 export function goalElapsedMsFrom(accruedMs: number, accrualAnchorMs: number | undefined, nowMs: number): number {
-  return accrualAnchorMs === undefined ? accruedMs : accruedMs + Math.max(0, nowMs - accrualAnchorMs)
+  if (accrualAnchorMs === undefined) return accruedMs;
+  return accruedMs + Math.max(0, nowMs - accrualAnchorMs);
 }
 
-export function goalElapsedMs(goalState: GoalState | null | undefined, nowMs: number): number {
-  return goalElapsedMsFrom(
-    goalWorkedMs(goalState),
-    goalState?.lastAccruedAtMs === undefined ? undefined : Number(goalState.lastAccruedAtMs),
-    nowMs,
-  )
+/** The time this goal has been worked on, counting the current stretch when one is anchored. */
+export function goalElapsedMs(goal: GoalState | null | undefined, nowMs: number): number {
+  const anchor = goal?.lastAccruedAtMs;
+  return goalElapsedMsFrom(goalWorkedMs(goal), anchor === undefined ? undefined : Number(anchor), nowMs);
 }
 
-export function goalClockOnActivation(
-  goalState: GoalState | null | undefined,
-  nowMs: number,
-): { activeDurationMs: bigint; lastAccruedAtMs: bigint } {
-  return { activeDurationMs: goalState?.activeDurationMs ?? BigInt(0), lastAccruedAtMs: BigInt(nowMs) }
+/** The clock to store when a goal starts a stretch: what was accrued, and the moment it started. */
+export function goalClockOnActivation(goal: GoalState | null | undefined, nowMs: number): { activeDurationMs: bigint; lastAccruedAtMs: bigint } {
+  const activeDurationMs = goal?.activeDurationMs ?? NO_ACCRUED_MS;
+  return { activeDurationMs, lastAccruedAtMs: BigInt(nowMs) };
 }
 
-export function goalClockOnDeactivation(
-  goalState: GoalState | null | undefined,
-  nowMs: number,
-): { activeDurationMs: bigint; lastAccruedAtMs: undefined } {
-  return { activeDurationMs: BigInt(goalElapsedMs(goalState, nowMs)), lastAccruedAtMs: undefined }
+/** The clock to store when a goal stops: the stretch is folded into the total, and nothing stays anchored. */
+export function goalClockOnDeactivation(goal: GoalState | null | undefined, nowMs: number): { activeDurationMs: bigint; lastAccruedAtMs: undefined } {
+  return { activeDurationMs: BigInt(goalElapsedMs(goal, nowMs)), lastAccruedAtMs: undefined };
 }
 
-/** A goal without an owner is anyone's; a goal with one belongs to that session. */
-export function isGoalOwnerValid(goalState: GoalState, agentSessionId: string | undefined): boolean {
-  return goalState.agentSessionId === undefined ||
-    (goalState.agentSessionId.length > 0 &&
-      agentSessionId !== undefined &&
-      agentSessionId.length > 0 &&
-      goalState.agentSessionId === agentSessionId)
+/** A goal without an owner is anyone's; a goal with an owner belongs to that session. */
+export function isGoalOwnerValid(goal: GoalState, agentSessionId: string | undefined): boolean {
+  const owner = goal.agentSessionId;
+  if (owner === undefined) return true;
+  if (owner.length === 0) return false;
+  return agentSessionId !== undefined && agentSessionId.length > 0 && owner === agentSessionId;
 }
 
-export function isGoalIdentityValid(
-  goalState: GoalState,
-  identity: { conversationId: string; agentSessionId?: string },
-): boolean {
-  return goalState.agentSessionId === undefined
-    ? goalState.conversationId === identity.conversationId
-    : isGoalOwnerValid(goalState, identity.agentSessionId)
+/** Whether this stored goal belongs to the conversation in play, and to its agent session when it names one. */
+export function isGoalIdentityValid(goal: GoalState, identity: { conversationId: string; agentSessionId?: string }): boolean {
+  if (goal.agentSessionId === undefined) return goal.conversationId === identity.conversationId;
+  return isGoalOwnerValid(goal, identity.agentSessionId);
 }
 
-/** The whole check a resumed conversation makes before it continues someone's goal. */
-export function isGoalStateShapeValid(
-  goalState: GoalState | undefined,
-  identity: { conversationId: string; agentSessionId?: string },
-): boolean {
-  return goalState !== undefined &&
-    isGoalIdentityValid(goalState, identity) &&
-    goalState.status === GOAL_STATUS_ACTIVE &&
-    GOAL_ID_PATTERN.test(goalState.goalId)
+/** The whole check a resumed conversation makes before it continues a stored goal. */
+export function isGoalStateShapeValid(goal: GoalState | undefined, identity: { conversationId: string; agentSessionId?: string }): boolean {
+  if (goal === undefined) return false;
+  if (!isGoalIdentityValid(goal, identity)) return false;
+  if (goal.status !== GOAL_STATUS_ACTIVE) return false;
+  return GOAL_ID_PATTERN.test(goal.goalId);
 }
