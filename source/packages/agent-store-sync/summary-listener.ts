@@ -9,18 +9,54 @@ import { classifyAgentStoreSourceId } from "./paths.ts";
 import { buildRoundCompletedEvent } from "./metrics-emitter.ts";
 import { safeNotifyListener, type ResilienceListener } from "./resilience-events.ts";
 
-interface SummaryError {
+/** The digest a path is hashed with. */
+const HASH_ALGORITHM = "sha256";
+
+/** What separates the salt from the path in a digest, so neither can be read out of the other's hash. */
+const HASH_SEPARATOR = "\0";
+
+/** What a path is hashed as when the summary did not carry one. */
+const UNKNOWN_REL_PATH = "<unknown>";
+
+/** How much of the hex digest a path hash keeps. */
+const HASH_HEX_LENGTH = 32;
+
+/** The failure a symlink-refused notification is not sent without. */
+const MISSING_PATH_HASH_SALT = "notifySummaryResult: pathHashSalt is required when emitting symlink-refused events";
+
+/** The failures that mean a path was refused because something on the way is a symlink. */
+const SYMLINK_REFUSAL_CODES: ReadonlySet<string> = new Set(["symlink_refused", "toctou_swap_refused"]);
+
+/** The failures that mean the disk would not take or give the bytes. */
+const DISK_FULL_CODES: ReadonlySet<string> = new Set(["fs_write_failed", "fs_read_failed"]);
+
+/** The operation each failure code is reported under. */
+const OP_BY_CODE: ReadonlyMap<string, string> = new Map([
+  ["symlink_refused", "fs_read"],
+  ["toctou_swap_refused", "fs_read"],
+  ["fs_read_failed", "fs_read"],
+  ["fs_write_failed", "fs_write"],
+  ["upload_failed", "blob_put"],
+  ["write_conflict", "blob_put"],
+  ["delete_failed", "delete_files"],
+  ["download_failed", "blob_get"],
+]);
+
+/** One failure a summary carries. */
+interface SummaryFailure {
   readonly code: string;
   readonly relPath?: string | undefined;
   readonly timeoutClass?: string | undefined;
 }
 
+/** One conflict a summary carries: the path, and the path it conflicted with. */
 interface SummaryConflict {
   readonly relPath: string;
   readonly conflictRelPath: string;
 }
 
-interface Summary {
+/** What one sync round reports about the paths it looked at. */
+interface SyncSummary {
   readonly durationMs: number;
   readonly filesPushed: number;
   readonly filesPulled: number;
@@ -41,7 +77,7 @@ interface Summary {
   readonly identityRecoveryWipeFailed: number;
   readonly legacyRowsRestored: number;
   readonly listingComplete: boolean;
-  readonly errors: readonly SummaryError[];
+  readonly errors: readonly SummaryFailure[];
   readonly conflicts: readonly SummaryConflict[];
   readonly walkMs?: number | undefined;
   readonly hashMs?: number | undefined;
@@ -52,242 +88,251 @@ interface Summary {
   readonly scope?: string | undefined;
 }
 
-interface SummaryListener extends ResilienceListener {
+/** The listener a sync round reports its failures and events to. */
+interface SyncRoundListener extends ResilienceListener {
   readonly onRoundCompleted?: ((event: unknown) => unknown) | undefined;
   readonly onError?: ((event: unknown) => unknown) | undefined;
   readonly onConflict?: ((event: unknown) => unknown) | undefined;
 }
 
-export function notifySummaryResult({
-  agentId,
-  summary,
-  listener,
-  pathHashSalt,
-}: {
-  readonly agentId: string;
-  readonly summary: Summary;
-  readonly listener?: SummaryListener | undefined;
-  readonly pathHashSalt?: string | undefined;
-}): void {
-  if (listener === undefined) {
-    return;
-  }
-  let firstError: unknown;
-  for (const error of summary.errors) {
+/** Runs each action even when one fails, and throws the first failure once they have all run. */
+function runEachKeepingFirstFailure(actions: readonly (() => void)[]): void {
+  let firstFailure: unknown;
+  for (const action of actions) {
     try {
-      dispatchError({ agentId, error, listener, pathHashSalt });
+      action();
     } catch (err) {
-      if (firstError === undefined) {
-        firstError = err;
+      if (firstFailure === undefined) {
+        firstFailure = err;
       }
     }
   }
-  if (firstError !== undefined) {
-    throw firstError;
+  if (firstFailure !== undefined) {
+    throw firstFailure;
   }
 }
 
-function dispatchError({
+/** The hash a path is reported under: salted, truncated, and never the path itself. */
+function hashRelPath({ relPath, salt }: { readonly relPath?: string | undefined; readonly salt: string }): string {
+  return createHash(HASH_ALGORITHM)
+    .update(salt)
+    .update(HASH_SEPARATOR)
+    .update(relPath ?? UNKNOWN_REL_PATH)
+    .digest("hex")
+    .slice(0, HASH_HEX_LENGTH);
+}
+
+/** The salt a symlink-refused notification needs, refusing to notify without one. */
+function requirePathHashSalt(pathHashSalt: string | undefined): string {
+  if (pathHashSalt === undefined || pathHashSalt.length === 0) {
+    throw new Error(MISSING_PATH_HASH_SALT);
+  }
+  return pathHashSalt;
+}
+
+/** Reports one summary failure to the listener, as a symlink refusal or as a full disk. */
+function dispatchSummaryFailure({
   agentId,
-  error,
+  failure,
   listener,
   pathHashSalt,
 }: {
   readonly agentId: string;
-  readonly error: SummaryError;
-  readonly listener: SummaryListener;
+  readonly failure: SummaryFailure;
+  readonly listener: SyncRoundListener;
   readonly pathHashSalt?: string | undefined;
 }): void {
-  if (error.code === "symlink_refused" || error.code === "toctou_swap_refused") {
+  if (SYMLINK_REFUSAL_CODES.has(failure.code)) {
     safeNotifyListener(listener, "onSymlinkRefused", {
       agentId,
       op: "fs_read",
       relPathHash: hashRelPath({
-        relPath: error.relPath,
+        relPath: failure.relPath,
         salt: requirePathHashSalt(pathHashSalt),
       }),
     });
     return;
   }
-  if (looksLikeDiskFull(error)) {
+  if (DISK_FULL_CODES.has(failure.code)) {
     safeNotifyListener(listener, "onDiskFull", {
       agentId,
-      op: error.code === "fs_read_failed" ? "fs_read" : "fs_write",
+      op: failure.code === "fs_read_failed" ? "fs_read" : "fs_write",
     });
   }
 }
 
-function hashRelPath({ relPath, salt }: { readonly relPath?: string | undefined; readonly salt: string }): string {
-  return createHash("sha256")
-    .update(salt)
-    .update("\0")
-    .update(relPath ?? "<unknown>")
-    .digest("hex")
-    .slice(0, 32);
-}
-
-function requirePathHashSalt(pathHashSalt: string | undefined): string {
-  if (pathHashSalt === undefined || pathHashSalt.length === 0) {
-    throw new Error("notifySummaryResult: pathHashSalt is required when emitting symlink-refused events");
+/** Reports the failures of a summary to its listener, throwing the first failure that reporting raised. */
+export function notifySummaryResult({
+  agentId: conversationAgentId,
+  summary: round,
+  listener: watcher,
+  pathHashSalt: salt,
+}: {
+  readonly agentId: string;
+  readonly summary: SyncSummary;
+  readonly listener?: SyncRoundListener | undefined;
+  readonly pathHashSalt?: string | undefined;
+}): void {
+  if (watcher === undefined) {
+    return;
   }
-  return pathHashSalt;
+  runEachKeepingFirstFailure(round.errors.map((failure) => () => dispatchSummaryFailure({
+    agentId: conversationAgentId,
+    failure,
+    listener: watcher,
+    pathHashSalt: salt,
+  })));
 }
 
-function looksLikeDiskFull(error: SummaryError): boolean {
-  return error.code === "fs_write_failed" || error.code === "fs_read_failed";
+/** The summary a round-completed event carries: its counts, its failures and the times it kept. */
+function roundSummaryOf(round: SyncSummary): Parameters<typeof buildRoundCompletedEvent>[0]["summary"] {
+  const walkMs = round.walkMs;
+  const hashMs = round.hashMs;
+  const presignMs = round.presignMs;
+  const uploadMs = round.uploadMs;
+  const listMs = round.listMs;
+  const downloadMs = round.downloadMs;
+  const scope = round.scope;
+  return {
+    durationMs: round.durationMs,
+    filesPushed: round.filesPushed,
+    filesPulled: round.filesPulled,
+    filesSkipped: round.filesSkipped,
+    bytesPushed: round.bytesPushed,
+    bytesPulled: round.bytesPulled,
+    refusals: round.refusals,
+    filesConflicted: round.filesConflicted,
+    conflictProtectionDowngrades: round.conflictProtectionDowngrades,
+    legacyProbes: round.legacyProbes,
+    pushEntriesParked: round.pushEntriesParked,
+    pullsDeferred: round.pullsDeferred,
+    filesDeletedRemote: round.filesDeletedRemote,
+    filesDeletedLocal: round.filesDeletedLocal,
+    deleteConflicts: round.deleteConflicts,
+    scanDeletesJournaled: round.scanDeletesJournaled,
+    recoveryDisarms: round.recoveryDisarms,
+    identityRecoveryWipeFailed: round.identityRecoveryWipeFailed,
+    legacyRowsRestored: round.legacyRowsRestored,
+    listingComplete: round.listingComplete,
+    errors: round.errors,
+    ...(walkMs === undefined ? {} : { walkMs }),
+    ...(hashMs === undefined ? {} : { hashMs }),
+    ...(presignMs === undefined ? {} : { presignMs }),
+    ...(uploadMs === undefined ? {} : { uploadMs }),
+    ...(listMs === undefined ? {} : { listMs }),
+    ...(downloadMs === undefined ? {} : { downloadMs }),
+    ...(scope === undefined ? {} : { scope }),
+  };
 }
 
+/** The error event one summary failure is reported as. */
+function errorEventOf(
+  agentId: string,
+  failure: SummaryFailure,
+  metricsSalt: string | undefined,
+): Record<string, unknown> {
+  return {
+    agentId,
+    op: opForCode(failure.code),
+    errorClass: failure.code,
+    relPathHash: failure.relPath === undefined || metricsSalt === undefined
+      ? undefined
+      : hashRelPath({ relPath: failure.relPath, salt: metricsSalt }),
+    ...(failure.timeoutClass === undefined ? {} : { timeoutClass: failure.timeoutClass }),
+  };
+}
+
+/** The conflict event one summary conflict is reported as. */
+function conflictEventOf(
+  agentId: string,
+  storeKind: string,
+  conflict: SummaryConflict,
+  metricsSalt: string | undefined,
+): Record<string, unknown> {
+  return {
+    agentId,
+    storeKind,
+    relPathHash: metricsSalt === undefined ? undefined : hashRelPath({ relPath: conflict.relPath, salt: metricsSalt }),
+    conflictRelPathHash: metricsSalt === undefined ? undefined : hashRelPath({
+      relPath: conflict.conflictRelPath,
+      salt: metricsSalt,
+    }),
+  };
+}
+
+/** Reports a summary's metrics and failures to the emitter, throwing the first reporting failure once all are reported. */
 export function notifySummaryMetrics({
-  agentId,
-  summary,
-  listener,
-  metricsEmitter,
-  pathHashSalt,
+  agentId: conversationAgentId,
+  summary: round,
+  listener: watcher,
+  metricsEmitter: emitter,
+  pathHashSalt: salt,
 }: {
   readonly agentId: string;
-  readonly summary: Summary;
-  readonly listener?: SummaryListener | undefined;
-  readonly metricsEmitter?: SummaryListener | undefined;
+  readonly summary: SyncSummary;
+  readonly listener?: SyncRoundListener | undefined;
+  readonly metricsEmitter?: SyncRoundListener | undefined;
   readonly pathHashSalt?: string | undefined;
 }): void {
-  let firstError: unknown;
-  if (metricsEmitter !== undefined) {
-    try {
-      emitMetrics({ agentId, summary, metricsEmitter, pathHashSalt });
-    } catch (err) {
-      firstError = err;
-    }
-  }
-  try {
-    notifySummaryResult({ agentId, summary, listener, pathHashSalt });
-  } catch (err) {
-    if (firstError === undefined) {
-      firstError = err;
-    }
-  }
-  if (firstError !== undefined) {
-    throw firstError;
-  }
+  runEachKeepingFirstFailure([
+    () => {
+      if (emitter !== undefined) {
+        emitSummaryMetrics({ agentId: conversationAgentId, summary: round, metricsEmitter: emitter, pathHashSalt: salt });
+      }
+    },
+    () => notifySummaryResult({ agentId: conversationAgentId, summary: round, listener: watcher, pathHashSalt: salt }),
+  ]);
 }
 
-function emitMetrics({
+/** The metrics one round emits: its completion, one event per failure, one per conflict. */
+function emitSummaryMetrics({
   agentId,
-  summary,
-  metricsEmitter,
-  pathHashSalt,
+  summary: round,
+  metricsEmitter: emitter,
+  pathHashSalt: salt,
 }: {
   readonly agentId: string;
-  readonly summary: Summary;
-  readonly metricsEmitter: SummaryListener;
+  readonly summary: SyncSummary;
+  readonly metricsEmitter: SyncRoundListener;
   readonly pathHashSalt?: string | undefined;
 }): void {
-  let firstError: unknown;
-  const recordError = (err: unknown): void => {
-    if (firstError === undefined) {
-      firstError = err;
+  let firstFailure: unknown;
+  const recordFailure = (err: unknown): void => {
+    if (firstFailure === undefined) {
+      firstFailure = err;
     }
   };
   try {
-    const walkMs = summary.walkMs;
-    const hashMs = summary.hashMs;
-    const presignMs = summary.presignMs;
-    const uploadMs = summary.uploadMs;
-    const listMs = summary.listMs;
-    const downloadMs = summary.downloadMs;
-    const scope = summary.scope;
-    const roundSummary = {
-      durationMs: summary.durationMs,
-      filesPushed: summary.filesPushed,
-      filesPulled: summary.filesPulled,
-      filesSkipped: summary.filesSkipped,
-      bytesPushed: summary.bytesPushed,
-      bytesPulled: summary.bytesPulled,
-      refusals: summary.refusals,
-      filesConflicted: summary.filesConflicted,
-      conflictProtectionDowngrades: summary.conflictProtectionDowngrades,
-      legacyProbes: summary.legacyProbes,
-      pushEntriesParked: summary.pushEntriesParked,
-      pullsDeferred: summary.pullsDeferred,
-      filesDeletedRemote: summary.filesDeletedRemote,
-      filesDeletedLocal: summary.filesDeletedLocal,
-      deleteConflicts: summary.deleteConflicts,
-      scanDeletesJournaled: summary.scanDeletesJournaled,
-      recoveryDisarms: summary.recoveryDisarms,
-      identityRecoveryWipeFailed: summary.identityRecoveryWipeFailed,
-      legacyRowsRestored: summary.legacyRowsRestored,
-      listingComplete: summary.listingComplete,
-      errors: summary.errors,
-      ...(walkMs === undefined ? {} : { walkMs }),
-      ...(hashMs === undefined ? {} : { hashMs }),
-      ...(presignMs === undefined ? {} : { presignMs }),
-      ...(uploadMs === undefined ? {} : { uploadMs }),
-      ...(listMs === undefined ? {} : { listMs }),
-      ...(downloadMs === undefined ? {} : { downloadMs }),
-      ...(scope === undefined ? {} : { scope }),
-    };
-    metricsEmitter.onRoundCompleted?.(buildRoundCompletedEvent({ agentId, summary: roundSummary }));
+    emitter.onRoundCompleted?.(buildRoundCompletedEvent({ agentId, summary: roundSummaryOf(round) }));
   } catch (err) {
-    recordError(err);
+    recordFailure(err);
   }
-  const metricsSalt = pathHashSalt !== undefined && pathHashSalt.length > 0 ? pathHashSalt : undefined;
-  if (metricsEmitter.onError !== undefined) {
-    for (const error of summary.errors) {
-      const event = {
-        agentId,
-        op: opForCode(error.code),
-        errorClass: error.code,
-        relPathHash: error.relPath === undefined || metricsSalt === undefined
-          ? undefined
-          : hashRelPath({ relPath: error.relPath, salt: metricsSalt }),
-        ...(error.timeoutClass === undefined ? {} : { timeoutClass: error.timeoutClass }),
-      };
+  const metricsSalt = salt !== undefined && salt.length > 0 ? salt : undefined;
+  if (emitter.onError !== undefined) {
+    for (const failure of round.errors) {
       try {
-        metricsEmitter.onError(event);
+        emitter.onError(errorEventOf(agentId, failure, metricsSalt));
       } catch (err) {
-        recordError(err);
+        recordFailure(err);
       }
     }
   }
-  if (metricsEmitter.onConflict !== undefined && summary.conflicts.length > 0) {
+  if (emitter.onConflict !== undefined && round.conflicts.length > 0) {
     const storeKind = classifyAgentStoreSourceId(agentId);
-    for (const conflict of summary.conflicts) {
-      const event = {
-        agentId,
-        storeKind,
-        relPathHash: metricsSalt === undefined ? undefined : hashRelPath({ relPath: conflict.relPath, salt: metricsSalt }),
-        conflictRelPathHash: metricsSalt === undefined ? undefined : hashRelPath({
-          relPath: conflict.conflictRelPath,
-          salt: metricsSalt,
-        }),
-      };
+    for (const conflict of round.conflicts) {
       try {
-        metricsEmitter.onConflict(event);
+        emitter.onConflict(conflictEventOf(agentId, storeKind, conflict, metricsSalt));
       } catch (err) {
-        recordError(err);
+        recordFailure(err);
       }
     }
   }
-  if (firstError !== undefined) {
-    throw firstError;
+  if (firstFailure !== undefined) {
+    throw firstFailure;
   }
 }
 
+/** The operation a failure code is reported under, or "unknown" for a code this round does not know. */
 function opForCode(code: string): string {
-  switch (code) {
-    case "symlink_refused":
-    case "toctou_swap_refused":
-    case "fs_read_failed":
-      return "fs_read";
-    case "fs_write_failed":
-      return "fs_write";
-    case "upload_failed":
-    case "write_conflict":
-      return "blob_put";
-    case "delete_failed":
-      return "delete_files";
-    case "download_failed":
-      return "blob_get";
-    default:
-      return "unknown";
-  }
+  return OP_BY_CODE.get(code) ?? "unknown";
 }
