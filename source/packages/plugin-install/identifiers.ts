@@ -8,6 +8,9 @@
 export type PluginIdentifier =
   | { source: "cursor-first-party" | "cursor-third-party"; sourceInfo: { pluginDbId: string } }
   | { source: "claude-plugin" | "user-local" | "extension"; sourceInfo?: unknown };
-export function getPluginDbId(identifier: PluginIdentifier): string | undefined {
-  switch (identifier.source) { case "cursor-first-party": case "cursor-third-party": return identifier.sourceInfo.pluginDbId; default: return undefined; }
+
+/** The database id a plugin's source carries, or undefined for a source that has none. */
+export function getPluginDbId(plugin: PluginIdentifier): string | undefined {
+  if (plugin.source === "cursor-first-party" || plugin.source === "cursor-third-party") return plugin.sourceInfo.pluginDbId;
+  return undefined;
 }
