@@ -10,7 +10,7 @@ import { filePathFromFileUrl, isPathWithin } from "../../source/shared/node/path
 import { parseTraceparent, SEND_TRACE_SAMPLE_RATIO } from "../../source/shared/observability/send-trace.ts"
 import { getWidgetAnswerLabel, slateWidgetSchema, summarizeWidget } from "../../source/shared/slate-widgets.ts"
 import { ACTION_VERB } from "../../source/shared/slate-timeline-events.ts"
-import { EGRESS_TUNNEL_WS_PORT } from "../../source/shared/node/egress-tunnel/box-connection.ts"
+import { TUNNEL_WS_PORT } from "../../source/shared/node/egress-tunnel/box-connection.ts"
 
 // ---------------------------------------------------------------------------------------------
 // The names the platform's own tools are known by
@@ -28,7 +28,7 @@ test("the tools that act on a machine are named for the machine they act on", ()
   assert.equal(known?.id, SLATE_DEFAULT_EXTERNAL_MACHINE_ID)
   // A machine the platform does not know is not invented.
   assert.equal(resolveSlateExternalMachine("some-machine"), undefined)
-  assert.equal(EGRESS_TUNNEL_WS_PORT, 8790)
+  assert.equal(TUNNEL_WS_PORT, 8790)
 })
 
 // ---------------------------------------------------------------------------------------------
