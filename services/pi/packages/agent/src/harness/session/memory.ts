@@ -42,7 +42,7 @@ export class InMemorySessionStorage implements SessionStorage {
 			let targetId: string | null = null;
 			if (selectedEntryId !== null) {
 				const target = this.state.getEntry(selectedEntryId);
-				if (!target || target.type !== "message") {
+				if (target?.type !== "message") {
 					throw new SessionError("invalid_fork_target", `Fork target is not a message entry: ${selectedEntryId}`);
 				}
 				const position = options.position ?? (options.entryId === undefined ? "at" : "before");

@@ -1,7 +1,6 @@
 package volumes
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -75,7 +74,7 @@ func list(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	responses, err := registry.ContainerEngine().VolumeList(context.Background(), lsOpts)
+	responses, err := registry.ContainerEngine().VolumeList(cmd.Context(), lsOpts)
 	if err != nil {
 		return err
 	}
@@ -108,7 +107,7 @@ func outputTemplate(cmd *cobra.Command, responses []*entities.VolumeListReport) 
 		return err
 	}
 
-	if (rpt.RenderHeaders) && !noHeading {
+	if rpt.RenderHeaders && !noHeading {
 		if err := rpt.Execute(headers); err != nil {
 			return fmt.Errorf("failed to write report column headers: %w", err)
 		}

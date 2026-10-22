@@ -71,19 +71,17 @@ BUILDTAGS += ${EXTRA_BUILDTAGS}
 # N/B: This value is managed by Renovate, manual changes are
 # possible, as long as they don't disturb the formatting
 # (i.e. DO NOT ADD A 'v' prefix!)
-GOLANGCI_LINT_VERSION := 2.12.2
+GOLANGCI_LINT_VERSION := 2.15.0
 SHFMT_VERSION := 3.13.1
 PYTHON ?= $(shell command -v python3 python|head -n1)
 PKG_MANAGER ?= $(shell command -v dnf yum|head -n1)
 # ~/.local/bin is not in PATH on all systems
 PRE_COMMIT = $(shell command -v bin/venv/bin/pre-commit ~/.local/bin/pre-commit pre-commit | head -n1)
-ifeq ($(NATIVE_GOOS),freebsd)
-SED=gsed
-GREP=ggrep
-MAN_L=	mandoc
-else
 SED=sed
 GREP=grep
+ifneq (,$(filter $(NATIVE_GOOS),freebsd darwin))
+MAN_L=	mandoc
+else
 MAN_L=	man -l
 endif
 
@@ -275,6 +273,23 @@ help: ## Print this help message
 .check-ci-yaml:
 	hack/ci/ci_yaml_test.py
 
+# Self-tests that ship next to the tooling they cover. These only need python3,
+# bash and perl, so they can run in validate-source.
+# Example-prompt tests are separate and need neither a built podman nor generated docs.
+# Not included here:
+#   hack/xref-helpmsgs-manpages.t   needs a built podman and docs, so it belongs
+#                                   with validate-binaries instead
+.PHONY: .check-self-tests
+.check-self-tests:
+	hack/markdown-preprocess.t
+	hack/swagger-check.t
+	hack/xref-helpmsgs-manpages-examples.t
+	hack/ci/pr-removes-fixed-skips.t
+	hack/ci/pr-should-include-tests.t
+	hack/ci/logformatter.t
+	hack/ci/github_log_summary_test.py
+	test/system/helpers.t
+
 .PHONY: lint
 lint: golangci-lint ## Run all linters (golangci-lint + pre-commit hooks)
 ifeq ($(PRE_COMMIT),)
@@ -305,7 +320,7 @@ test/testvol/testvol: $(wildcard test/testvol/*.go)
 
 .PHONY: volume-plugin-test-img
 volume-plugin-test-img:
-	./bin/podman build --network none -t quay.io/libpod/volume-plugin-test-img:$$(date +%Y%m%d) -f ./test/testvol/Containerfile .
+	./bin/podman build --network none --platform=linux/amd64,linux/arm64,linux/ppc64le,linux/s390x --manifest quay.io/libpod/volume-plugin-test-img:$$(date +%Y%m%d) -f ./test/testvol/Containerfile .
 
 .PHONY: test/goecho/goecho
 test/goecho/goecho: $(wildcard test/goecho/*.go)
@@ -323,7 +338,7 @@ codespell:
 
 # Code validation target that **DOES NOT** require building podman binaries
 .PHONY: validate-source
-validate-source: lint shfmt .commit-subject-check .check-ci-yaml swagger-check tests-expect-exit pr-removes-fixed-skips
+validate-source: lint shfmt .commit-subject-check .check-ci-yaml .check-self-tests swagger-check tests-expect-exit pr-removes-fixed-skips
 
 # Code validation target that **DOES** require building podman binaries
 .PHONY: validate-binaries
@@ -370,6 +385,7 @@ vendor: ## Tidy, vendor, and verify Go module dependencies
 	$(GO) mod vendor
 	$(GO) mod verify
 	$(GO) mod edit -toolchain none
+	./hack/container-libs-module-check.sh
 
 
 # We define *-in-container targets for the following make targets. This allow the targets to be run in a container.
@@ -585,17 +601,18 @@ $(MANPAGES): %: %.md .install.md2man docdir
 #     ASCII art. I (esm) believe the cost of releasing corrupt man pages
 #     is higher than the cost of carrying this kludge.
 #
-	@$(SED) -e 's/\[\([^]]*\)](http[^)]\+)/\1/g'         \
-	        -e 's/\((podman[^)]*\.md\(#.*\)\?)\)//g'     \
-	        -e 's/\[\(podman[^]]*\)\]/\1/g'              \
-	        -e 's;<\(/\)\?\(a\|a\s\+[^>]*\|sup\)>;;g'    \
+	@$(SED) -E \
+	        -e 's/\[([^]]*)\]\(http[^)]+\)/\1/g'         \
+	        -e 's/\((podman[^)]*\.md(#.*)?)\)//g'        \
+	        -e 's/\[(podman[^]]*)\]/\1/g'                \
+	        -e 's;<(/)?(a|a[[:space:]]+[^>]*|sup)>;;g'   \
 	        -e 's/\\$$/  /g' $<                         |\
 	$(GOMD2MAN) -out $(OUTFILE)
 	@if grep 'included file options/' $(OUTFILE); then \
 		echo "FATAL: man pages must not contain ^^^^ in $(OUTFILE)"; exit 1; \
 	fi
-	@if $(MAN_L) $(OUTFILE)| $(GREP) -Pazoq '│\s+│\n\s+├─+┼─+┤\n\s+│\s+│'; then  \
-		echo "FATAL: $< has a too-long table column; use 'man -l $(OUTFILE)' and look for empty table cells."; exit 1; \
+	@if $(MAN_L) $(OUTFILE)| perl -CSD -0777 -ne 'use utf8; exit(m/│\s+│\n\s+├─+┼─+┤\n\s+│\s+│/ ? 0 : 1)'; then  \
+		echo "FATAL: $< has a too-long table column; use '$(MAN_L) $(OUTFILE)' and look for empty table cells."; exit 1; \
 	fi
 
 .PHONY: docdir
@@ -670,12 +687,12 @@ run-docker-py-tests:
 	rm -f test/__init__.py
 
 .PHONY: localunit
-localunit: test/goecho/goecho test/version/version ## Run unit tests with coverage
+localunit: .install.ginkgo test/goecho/goecho test/version/version ## Run unit tests with coverage
 	rm -rf ${COVERAGE_PATH} && mkdir -p ${COVERAGE_PATH}
 	UNIT=1 $(GINKGO) \
 		-r \
 		$(TESTFLAGS) \
-		--skip-package test/e2e,pkg/bindings,hack,pkg/machine/e2e,pkg/machine/wsl,pkg/machine/hyperv \
+		--skip-package test/e2e,pkg/bindings/test,hack,pkg/machine/e2e,pkg/machine/wsl,pkg/machine/hyperv \
 		--cover \
 		--covermode atomic \
 		--coverprofile coverprofile \
@@ -713,7 +730,8 @@ ginkgo-remote:
 # bindings tests need access to podman-registry
 testbindings: PATH := $(PATH):$(CURDIR)/hack
 testbindings: .install.ginkgo
-	$(GINKGO) -v $(TESTFLAGS) --tags "$(TAGS) remote" $(GINKGOTIMEOUT) --trace --no-color --timeout 30m  -v -r ./pkg/bindings/test
+	$(GINKGO) -v $(TESTFLAGS) --tags "$(TAGS) remote" $(GINKGOTIMEOUT) --trace --no-color --timeout 30m \
+		$(if $(findstring y,$(GINKGO_PARALLEL)),-p,) -r ./pkg/bindings/test
 
 .PHONY: localintegration
 localintegration: test-binaries ginkgo ## Run integration tests locally (test/e2e/)
@@ -1028,9 +1046,7 @@ install.tools: .install.golangci-lint ## Install development tools (linters, etc
 
 .PHONY: .install.md2man
 .install.md2man:
-	if [ ! -x "$(GOMD2MAN)" ]; then \
-		$(MAKE) -C test/tools build/go-md2man GOOS=$(NATIVE_GOOS) GOARCH=$(NATIVE_GOARCH); \
-	fi
+	$(MAKE) -C test/tools build/go-md2man GOOS=$(NATIVE_GOOS) GOARCH=$(NATIVE_GOARCH)
 
 .PHONY: .install.pre-commit
 .install.pre-commit:

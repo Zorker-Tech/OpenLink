@@ -43,6 +43,7 @@ function setup() {
         'Arch:{{.Host.Arch}}'
         'OS:{{.Host.Distribution.Distribution}}{{.Host.Distribution.Version}}'
         'Runtime:{{.Host.OCIRuntime.Name}}'
+        'Conmon:{{.Host.Conmon.Path}}'
         'Rootless:{{.Host.Security.Rootless}}'
         'Events:{{.Host.EventLogger}}'
         'Logdriver:{{.Host.LogDriver}}'
@@ -233,6 +234,9 @@ See 'podman version --help'" "podman version --remote"
     assert "$output" =~ " level=debug " "podman --debug gives debug output"
     run_podman -D        version
     assert "$output" =~ " level=debug " "podman -D gives debug output"
+
+    run_podman 1 --debug --log-level=warn version
+    is "$output" "Setting --log-level and --debug is not allowed"
 
     run_podman 1 --debug --log-level=panic version
     is "$output" "Setting --log-level and --debug is not allowed"

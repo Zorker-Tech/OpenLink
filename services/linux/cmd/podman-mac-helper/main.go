@@ -3,12 +3,12 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -103,8 +103,8 @@ func getUser() (string, string, string, error) {
 }
 
 // Used for commands that don't return a proper exit code
-func runDetectErr(name string, args ...string) error {
-	cmd := exec.Command(name, args...)
+func runDetectErr(ctx context.Context, name string, args ...string) error {
+	cmd := exec.CommandContext(ctx, name, args...)
 	errReader, err := cmd.StderrPipe()
 	if err != nil {
 		return err
@@ -114,8 +114,8 @@ func runDetectErr(name string, args ...string) error {
 	if err == nil {
 		errString := readCapped(errReader)
 		if len(errString) > 0 {
-			re := regexp.MustCompile(`\r?\n`)
-			err = errors.New(re.ReplaceAllString(errString, ": "))
+			errString = strings.ReplaceAll(errString, "\r\n", ": ")
+			err = errors.New(strings.ReplaceAll(errString, "\n", ": "))
 		}
 	}
 

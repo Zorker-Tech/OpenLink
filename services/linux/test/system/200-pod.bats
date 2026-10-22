@@ -363,7 +363,7 @@ EOF
 # bats test_tags=ci:parallel
 @test "podman pod create should fail when infra-name is already in use" {
     local infra_name="infra_container_$(safename)"
-    local infra_image="quay.io/libpod/k8s-pause:3.5"
+    local infra_image="quay.io/libpod/k8s-pause:3.5-nowin"
     local pod_name="p-$(safename)"
 
     run_podman --noout pod create --name $pod_name --infra-name "$infra_name" --infra-image "$infra_image"
@@ -771,12 +771,7 @@ function thingy_with_unique_id() {
         result="$output"
         assert "$result" =~ "/" ".CgroupPath is a valid path"
 
-        if is_cgroupsv2; then
-           cgroup_path=/sys/fs/cgroup/$result
-        else
-           cgroup_path=/sys/fs/cgroup/memory/$result
-        fi
-
+        cgroup_path=/sys/fs/cgroup/$result
         if test ! -e $cgroup_path; then
             die "the cgroup $cgroup_path does not exist"
         fi
@@ -793,11 +788,7 @@ function thingy_with_unique_id() {
 
         # validate that cgroup limits are in place after a restart
         # issue #19175
-        if is_cgroupsv2; then
-           memory_limit_file=$cgroup_path/memory.max
-        else
-           memory_limit_file=$cgroup_path/memory.limit_in_bytes
-        fi
+        memory_limit_file=$cgroup_path/memory.max
         assert "$(< $memory_limit_file)" = "268435456" "Contents of $memory_limit_file"
 
         run_podman pod rm -t 0 -f $podid

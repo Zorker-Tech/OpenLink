@@ -49,14 +49,14 @@ func init() {
 	installFlags(quadletInstallCmd)
 }
 
-func install(_ *cobra.Command, args []string) error {
+func install(cmd *cobra.Command, args []string) error {
 	var errs utils.OutputErrors
-	installReport, err := registry.ContainerEngine().QuadletInstall(registry.Context(), args, installOptions)
+	installReport, err := registry.ContainerEngine().QuadletInstall(cmd.Context(), args, installOptions)
 	if err != nil {
 		return err
 	}
 	for pathOrURL, err := range installReport.QuadletErrors {
-		errs = append(errs, fmt.Errorf("quadlet %q failed to install: %v", pathOrURL, err))
+		errs = append(errs, fmt.Errorf("quadlet %q failed to install: %w", pathOrURL, err))
 	}
 	for _, s := range installReport.InstalledQuadlets {
 		fmt.Println(s)

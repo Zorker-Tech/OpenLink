@@ -4,9 +4,13 @@ package abi
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.podman.io/podman/v6/pkg/domain/entities"
 	v1 "go.podman.io/podman/v6/pkg/k8s.io/api/core/v1"
 	v12 "go.podman.io/podman/v6/pkg/k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -152,7 +156,7 @@ data:
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			buf := bytes.NewReader([]byte(test.configMapContent))
-			cm, err := readConfigMapFromFile(buf)
+			cm, _, err := readConfigMapFromFile(buf, entities.KubeValidateIgnore)
 
 			if test.expectError {
 				assert.Error(t, err)
@@ -165,6 +169,42 @@ data:
 			}
 		})
 	}
+}
+
+func TestReadConfigMapFromFileValidate(t *testing.T) {
+	const configMapWithUnknownField = `
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: foo
+bogusfield: nope
+data:
+  myvar: foo
+`
+
+	t.Run("ignore accepts an unknown field", func(t *testing.T) {
+		buf := bytes.NewReader([]byte(configMapWithUnknownField))
+		cms, warnings, err := readConfigMapFromFile(buf, entities.KubeValidateIgnore)
+		assert.NoError(t, err)
+		assert.Empty(t, warnings)
+		assert.Len(t, cms, 1)
+	})
+
+	t.Run("warn reports an unknown field but still reads it", func(t *testing.T) {
+		buf := bytes.NewReader([]byte(configMapWithUnknownField))
+		cms, warnings, err := readConfigMapFromFile(buf, entities.KubeValidateWarn)
+		assert.NoError(t, err)
+		assert.Len(t, warnings, 1)
+		assert.Contains(t, warnings[0], "ConfigMap")
+		assert.Len(t, cms, 1)
+	})
+
+	t.Run("strict fails on an unknown field", func(t *testing.T) {
+		buf := bytes.NewReader([]byte(configMapWithUnknownField))
+		_, _, err := readConfigMapFromFile(buf, entities.KubeValidateStrict)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "validating kube ConfigMap")
+	})
 }
 
 func TestGetKubeKind(t *testing.T) {
@@ -275,6 +315,110 @@ items:
 				assert.NoError(t, err)
 				assert.Equal(t, test.expected, len(docs))
 			}
+		})
+	}
+}
+
+func TestUnmarshalKubeObject(t *testing.T) {
+	type sample struct {
+		Name string `json:"name"`
+	}
+	const (
+		validDoc        = "name: valid\n"
+		unknownFieldDoc = "name: valid\nbogus: nope\n"
+	)
+
+	tests := []struct {
+		name          string
+		mode          entities.KubeValidateMode
+		document      string
+		expectError   bool
+		errContains   string
+		expectWarning bool
+	}{
+		{"ignore skips an unknown field", entities.KubeValidateIgnore, unknownFieldDoc, false, "", false},
+		{"warn reports an unknown field but keeps decoding", entities.KubeValidateWarn, unknownFieldDoc, false, "", true},
+		{"warn is silent on a valid document", entities.KubeValidateWarn, validDoc, false, "", false},
+		{"strict fails on an unknown field", entities.KubeValidateStrict, unknownFieldDoc, true, "validating kube Sample", false},
+		{"strict accepts a valid document", entities.KubeValidateStrict, validDoc, false, "", false},
+		{"an unset mode decodes leniently", entities.KubeValidateMode(""), unknownFieldDoc, false, "", false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var obj sample
+			warnings, err := unmarshalKubeObject("Sample", test.mode, []byte(test.document), &obj)
+			if test.expectError {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), test.errContains)
+				return
+			}
+			assert.NoError(t, err)
+			// Known fields are always decoded, whatever the mode.
+			assert.Equal(t, "valid", obj.Name)
+			if test.expectWarning {
+				assert.Len(t, warnings, 1)
+				assert.Contains(t, warnings[0], "kube Sample")
+			} else {
+				assert.Empty(t, warnings)
+			}
+		})
+	}
+}
+
+func TestGetBuildFile(t *testing.T) {
+	tests := []struct {
+		name      string
+		imageName string
+		files     []string
+		expected  string
+	}{
+		{
+			name:      "backward compatible simple image name",
+			imageName: "service-a:latest",
+			files:     []string{"service-a/Containerfile"},
+			expected:  "service-a/Containerfile",
+		},
+		{
+			name:      "nested image name",
+			imageName: "mocks/service-a:v3.42",
+			files:     []string{"mocks/service-a/Containerfile"},
+			expected:  "mocks/service-a/Containerfile",
+		},
+		{
+			name:      "nested image falls back to simple image name",
+			imageName: "mocks/service-a:v3.43",
+			files:     []string{"service-a/Containerfile"},
+			expected:  "service-a/Containerfile",
+		},
+		{
+			name:      "nested image with registry and port",
+			imageName: "localhost:5000/mocks/service-a:v2.34",
+			files:     []string{"mocks/service-a/Containerfile"},
+			expected:  "mocks/service-a/Containerfile",
+		},
+		{
+			name:      "nested image with digest",
+			imageName: "quay.io/mocks/service-a@sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+			files:     []string{"mocks/service-a/Dockerfile"},
+			expected:  "mocks/service-a/Dockerfile",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+
+			for _, file := range test.files {
+				path := filepath.Join(tmpDir, file)
+				require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+				require.NoError(t, os.WriteFile(path, []byte("FROM alpine\n"), 0o644))
+			}
+
+			got, err := getBuildFile(test.imageName, tmpDir)
+			require.NoError(t, err)
+
+			assert.Equal(t, filepath.Join(tmpDir, test.expected), got)
 		})
 	}
 }

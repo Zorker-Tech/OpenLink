@@ -3,7 +3,9 @@
 package compat
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -45,31 +47,39 @@ func StatsContainer(w http.ResponseWriter, r *http.Request) {
 
 	stats, err := ctnr.GetContainerStats(nil)
 	if err != nil {
-		utils.InternalServerError(w, fmt.Errorf("failed to obtain Container %s stats: %w", name, err))
+		err = fmt.Errorf("failed to obtain Container %s stats: %w", name, err)
+		utils.Error(w, statsErrorStatus(err), err)
 		return
 	}
-
-	coder := json.NewEncoder(w)
-	// Write header and content type.
-	w.WriteHeader(http.StatusOK)
-	w.Header().Set("Content-Type", "application/json")
-	if flusher, ok := w.(http.Flusher); ok {
-		flusher.Flush()
-	}
-
-	// Set up JSON encoder for streaming.
-	coder.SetEscapeHTML(true)
-	var preRead time.Time
-	var preCPUStats CPUStats
-	if query.Stream {
-		preRead = time.Now()
-		preCPUStats = getPreCPUStats(stats)
-	}
-
 	onlineCPUs, err := libpod.GetOnlineCPUs(ctnr)
 	if err != nil {
-		utils.InternalServerError(w, err)
+		utils.Error(w, statsErrorStatus(err), err)
 		return
+	}
+	wroteContent := false
+
+	// https://github.com/containers/podman/issues/24730
+	// Docker populates precpu_stats even with stream=false, but not
+	// with one-shot=true (Docker API spec: PreCPU is blank for one-shot).
+	var preRead time.Time
+	var preCPUStats CPUStats
+	if !query.OneShot {
+		preRead = time.Now()
+		var err2 error
+		preCPUStats, err2 = getPreCPUStats(stats)
+		if err2 != nil {
+			utils.InternalServerError(w, err2)
+			return
+		}
+		// Brief pause so the second GetContainerStats call below
+		// produces a measurable CPU delta for stream=false callers.
+		// At ClkTck=100 this gives ~10 ticks per CPU core, enough for
+		// the Docker CPU% formula to return a directionally correct
+		// value. This only affects the compat per-container endpoint;
+		// podman-remote stats uses a separate libpod handler.
+		if !query.Stream {
+			time.Sleep(100 * time.Millisecond)
+		}
 	}
 
 streamLabel: // A label to flatten the scope
@@ -80,14 +90,29 @@ streamLabel: // A label to flatten the scope
 	default:
 		stats, err = ctnr.GetContainerStats(stats)
 		if err != nil {
-			logrus.Errorf("Unable to get container stats: %v", err)
+			if wroteContent {
+				logrus.Errorf("Unable to get container stats: %v", err)
+			} else {
+				utils.Error(w, statsErrorStatus(err), err)
+			}
 			return
 		}
 		s, err := statsContainerJSON(ctnr, stats, preCPUStats, onlineCPUs)
 		if err != nil {
+			if wroteContent {
+				logrus.Errorf("Unable to build container stats response: %v", err)
+			} else {
+				utils.Error(w, statsErrorStatus(err), err)
+			}
 			return
 		}
 		s.Stats.PreRead = preRead
+
+		// one-shot=true: the two GetContainerStats calls are only
+		// milliseconds apart so cpu_stats.cpu is not meaningful (#29912).
+		if query.OneShot {
+			s.CPUStats.CPU = 0
+		}
 
 		var jsonOut any
 		if utils.IsLibpodRequest(r) {
@@ -96,10 +121,25 @@ streamLabel: // A label to flatten the scope
 			jsonOut = DockerStatsJSON(s)
 		}
 
-		if err := coder.Encode(jsonOut); err != nil {
-			logrus.Errorf("Unable to encode stats: %v", err)
+		var chunk bytes.Buffer
+		if err := json.NewEncoder(&chunk).Encode(jsonOut); err != nil {
+			if wroteContent {
+				logrus.Errorf("Unable to encode stats: %v", err)
+			} else {
+				utils.InternalServerError(w, err)
+			}
 			return
 		}
+
+		// Do not commit a successful response until the complete sample has
+		// been collected and encoded. For a stream, each write is one complete
+		// sample, so an error can only truncate the stream between samples.
+		w.Header().Set("Content-Type", "application/json")
+		if _, err := w.Write(chunk.Bytes()); err != nil {
+			logrus.Errorf("Unable to write stats: %v", err)
+			return
+		}
+		wroteContent = true
 		if flusher, ok := w.(http.Flusher); ok {
 			flusher.Flush()
 		}
@@ -109,14 +149,19 @@ streamLabel: // A label to flatten the scope
 		}
 
 		preRead = s.Read
-		bits, err := json.Marshal(s.CPUStats)
-		if err != nil {
-			logrus.Errorf("Unable to marshal cpu stats: %q", err)
-		}
-		if err := json.Unmarshal(bits, &preCPUStats); err != nil {
-			logrus.Errorf("Unable to unmarshal previous stats: %q", err)
-		}
+		preCPUStats = s.CPUStats
 		time.Sleep(defaultStatsPeriod)
 		goto streamLabel
+	}
+}
+
+func statsErrorStatus(err error) int {
+	switch {
+	case errors.Is(err, define.ErrNoSuchCtr), errors.Is(err, define.ErrCtrRemoved):
+		return http.StatusNotFound
+	case errors.Is(err, define.ErrCtrStopped), errors.Is(err, define.ErrCtrStateInvalid), errors.Is(err, define.ErrNoCgroups):
+		return http.StatusConflict
+	default:
+		return http.StatusInternalServerError
 	}
 }

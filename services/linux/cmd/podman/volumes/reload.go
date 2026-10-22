@@ -31,14 +31,14 @@ func init() {
 	})
 }
 
-func reload(_ *cobra.Command, _ []string) error {
-	report, err := registry.ContainerEngine().VolumeReload(registry.Context())
+func reload(cmd *cobra.Command, _ []string) error {
+	report, err := registry.ContainerEngine().VolumeReload(cmd.Context())
 	if err != nil {
 		return err
 	}
 	printReload("Added", report.Added)
 	printReload("Removed", report.Removed)
-	errs := (utils.OutputErrors)(report.Errors)
+	errs := utils.OutputErrors(report.Errors)
 	return errs.PrintErrors()
 }
 

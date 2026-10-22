@@ -64,7 +64,7 @@ func execFlags(cmd *cobra.Command) {
 	flags.BoolVarP(&execDetach, "detach", "d", false, "Run the exec session in detached mode (backgrounded)")
 
 	detachKeysFlagName := "detach-keys"
-	flags.StringVar(&execOpts.DetachKeys, detachKeysFlagName, containerConfig.DetachKeys(), "Select the key sequence for detaching a container. Format is a single character [a-Z] or ctrl-<value> where <value> is one of: a-z, @, ^, [, , or _")
+	flags.StringVar(&execOpts.DetachKeys, detachKeysFlagName, containerConfig.DetachKeys(), "Select the key sequence for detaching a container. Format is a single character `[a-Z]` or a comma separated sequence of `ctrl-<value>`, where `<value>` is one of: `a-z`, `@`, `^`, `[`, `\\`, `]`, `^` or `_`")
 	_ = cmd.RegisterFlagCompletionFunc(detachKeysFlagName, common.AutocompleteDetachKeys)
 
 	cidfileFlagName := "cidfile"
@@ -174,7 +174,7 @@ func exec(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-		if err := execWait(nameOrID, seconds); err != nil {
+		if err := execWait(cmd.Context(), nameOrID, seconds); err != nil {
 			if errors.Is(err, define.ErrCanceled) {
 				return fmt.Errorf("timed out waiting for container: %s", nameOrID)
 			}
@@ -202,16 +202,16 @@ func exec(cmd *cobra.Command, args []string) error {
 	}
 
 	if execNoSession {
-		exitCode, err := registry.ContainerEngine().ContainerExecNoSession(registry.Context(), nameOrID, execOpts, streams)
+		exitCode, err := registry.ContainerEngine().ContainerExecNoSession(cmd.Context(), nameOrID, execOpts, streams)
 		registry.SetExitCode(exitCode)
 		return err
 	} else if !execDetach {
-		exitCode, err := registry.ContainerEngine().ContainerExec(registry.Context(), nameOrID, execOpts, streams)
+		exitCode, err := registry.ContainerEngine().ContainerExec(cmd.Context(), nameOrID, execOpts, streams)
 		registry.SetExitCode(exitCode)
 		return err
 	}
 
-	id, err := registry.ContainerEngine().ContainerExecDetached(registry.Context(), nameOrID, execOpts)
+	id, err := registry.ContainerEngine().ContainerExecDetached(cmd.Context(), nameOrID, execOpts)
 	if err != nil {
 		return err
 	}
@@ -246,11 +246,11 @@ func determineTargetCtrAndCmd(args []string, latestSpecified bool, execCidFilePr
 	return nameOrID, command, nil
 }
 
-func execWait(ctr string, seconds int32) error {
+func execWait(ctx context.Context, ctr string, seconds int32) error {
 	maxDuration := time.Duration(seconds) * time.Second
 	interval := 100 * time.Millisecond
 
-	ctx, cancel := context.WithTimeout(registry.Context(), maxDuration)
+	ctx, cancel := context.WithTimeout(ctx, maxDuration)
 	defer cancel()
 
 	waitOptions.Conditions = []string{define.ContainerStateRunning.String()}

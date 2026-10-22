@@ -3,14 +3,16 @@
 package machine
 
 import (
+	"context"
 	"errors"
 	"net"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
+
+	"go.podman.io/storage/pkg/regexp"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -134,14 +136,14 @@ func getMachines(toComplete string) ([]string, cobra.ShellCompDirective) {
 	return suggestions, cobra.ShellCompDirectiveNoFileComp
 }
 
-func initMachineEvents() {
+func initMachineEvents(ctx context.Context) {
 	sockPaths, err := resolveEventSock()
 	if err != nil {
 		logrus.Warnf("Failed to resolve machine event sockets, machine events will not be published: %v", err)
 	}
 
 	for _, path := range sockPaths {
-		conn, err := (&net.Dialer{}).DialContext(registry.Context(), "unix", path)
+		conn, err := (&net.Dialer{}).DialContext(ctx, "unix", path)
 		if err != nil {
 			logrus.Warnf("Failed to open event socket %q: %v", path, err)
 			continue
@@ -151,13 +153,14 @@ func initMachineEvents() {
 	}
 }
 
+var eventsSockRegex = regexp.Delayed(`machine_events.*\.sock`)
+
 func resolveEventSock() ([]string, error) {
 	// Used mostly for testing
 	if sock, found := os.LookupEnv("PODMAN_MACHINE_EVENTS_SOCK"); found {
 		return []string{sock}, nil
 	}
 
-	re := regexp.MustCompile(`machine_events.*\.sock`)
 	sockPaths := make([]string, 0)
 	fn := func(path string, info os.DirEntry, err error) error {
 		switch {
@@ -167,7 +170,7 @@ func resolveEventSock() ([]string, error) {
 			return nil
 		case !isUnixSocket(info):
 			return nil
-		case !re.MatchString(info.Name()):
+		case !eventsSockRegex.MatchString(info.Name()):
 			return nil
 		}
 
@@ -197,8 +200,8 @@ func eventSockDir() (string, error) {
 	return filepath.Join(xdg, "podman"), nil
 }
 
-func newMachineEvent(status events.Status, event events.Event) {
-	openEventSock.Do(initMachineEvents)
+func newMachineEvent(ctx context.Context, status events.Status, event events.Event) {
+	openEventSock.Do(func() { initMachineEvents(ctx) })
 
 	event.Status = status
 	event.Time = time.Now()

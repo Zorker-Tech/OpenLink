@@ -17,5 +17,8 @@ export function OpenLinkThemeProvider({ children, theme }: { children: ReactNode
 }
 
 export function useOpenLinkTheme(explicitTheme?: OpenLinkTheme) {
-  return explicitTheme ?? useContext(OpenLinkThemeContext)
+  // Hooks run unconditionally: read the context before the explicit override
+  // is allowed to short-circuit it.
+  const contextTheme = useContext(OpenLinkThemeContext)
+  return explicitTheme ?? contextTheme
 }

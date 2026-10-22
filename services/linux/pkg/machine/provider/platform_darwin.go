@@ -82,7 +82,7 @@ func appleHvInstalled() (bool, error) {
 	cmd := exec.Command("sw_vers", "--productVersion")
 	cmd.Stdout = &outBuf
 	if err := cmd.Run(); err != nil {
-		return false, fmt.Errorf("unable to check current macOS version using `sw_vers --productVersion`: %s", err)
+		return false, fmt.Errorf("unable to check current macOS version using `sw_vers --productVersion`: %w", err)
 	}
 
 	// the output will be in the format of MAJOR.MINOR.PATCH

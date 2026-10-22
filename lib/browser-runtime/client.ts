@@ -20,6 +20,22 @@ export interface BrowserSessionConnectionDescriptor {
   }
 }
 
+const LOOPBACK_GATEWAY_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]'])
+
+/** Route local gateway URLs through the LAN-facing capability proxy. */
+export function browserReachableGatewayUrl(value: string): string {
+  if (typeof window === 'undefined') return value
+  try {
+    const url = new URL(value)
+    if (!LOOPBACK_GATEWAY_HOSTS.has(url.hostname.toLowerCase())) return value
+    url.hostname = window.location.hostname
+    url.port = '43125'
+    return url.toString()
+  } catch {
+    return value
+  }
+}
+
 export type BrowserConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'closed' | 'failed'
 
 export class BrowserSessionCreateError extends Error {
@@ -252,7 +268,16 @@ export async function createBrowserSession(input: {
       payload.error?.recoverable === true,
     )
   }
-  return payload
+  return {
+    ...payload,
+    connection: {
+      ...payload.connection,
+      eventsUrl: browserReachableGatewayUrl(payload.connection.eventsUrl),
+      ...(payload.connection.previewUrl
+        ? { previewUrl: browserReachableGatewayUrl(payload.connection.previewUrl) }
+        : {}),
+    },
+  }
 }
 
 export async function deleteBrowserSession(chatSessionId: string, browserSessionId: string): Promise<void> {

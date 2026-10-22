@@ -215,14 +215,25 @@ func (w WSLStubber) StartVM(mc *vmconfigs.MachineConfig) (func() error, func() e
 
 	err := wslInvoke(dist, "/root/bootstrap")
 	if err != nil {
-		err = fmt.Errorf("the WSL bootstrap script failed: %w", err)
+		return nil, nil, fmt.Errorf("the WSL bootstrap script failed: %w", err)
+	}
+
+	// We need to set cgroup_manager="cgroupfs" in the [engine] section
+	// of containers.conf until we use the WSL supported systemd.
+	// The details are in this GitHub issue:
+	// https://github.com/podman-container-tools/podman/issues/29749
+	// The issue about using the WSL supported systemd:
+	// https://github.com/podman-container-tools/podman/issues/15967
+	err = wslPipe(cgroupManager, dist, "sh", "-c", "cat > /usr/share/containers/containers.conf.d/999-podman-machine-wsl-cgroupfs.conf")
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed creating the cgroupfs config file: %w", err)
 	}
 
 	readyFunc := func() error {
 		return nil
 	}
 
-	return nil, readyFunc, err
+	return nil, readyFunc, nil
 }
 
 func (w WSLStubber) State(mc *vmconfigs.MachineConfig, _ bool) (define.Status, error) {
@@ -247,11 +258,11 @@ func (w WSLStubber) StopVM(mc *vmconfigs.MachineConfig, _ bool) error {
 
 	// Stop user-mode networking if enabled
 	if err := stopUserModeNetworking(mc); err != nil {
-		fmt.Fprintf(os.Stderr, "Could not cleanly stop user-mode networking: %s\n", err.Error())
+		fmt.Fprintf(os.Stderr, "Could not cleanly stop user-mode networking: %v\n", err)
 	}
 
 	if err := machine.StopWinProxy(mc.Name, vmtype); err != nil {
-		fmt.Fprintf(os.Stderr, "Could not stop API forwarding service (win-sshproxy.exe): %s\n", err.Error())
+		fmt.Fprintf(os.Stderr, "Could not stop API forwarding service (win-sshproxy.exe): %v\n", err)
 	}
 
 	cmd := wutil.NewWSLCommand("-u", "root", "-d", dist, "sh")

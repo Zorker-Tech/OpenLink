@@ -37,8 +37,13 @@ if (machineName.length > 30) throw new Error('OPENLINK_PROJECT_VM_IMAGE_MACHINE 
 const diskName = artifactContract.diskName
 const diskPath = join(outputRoot, diskName)
 const buildRawDiskName = `openlink-project-vm-base-${process.arch}.build.raw`
+const projectSupabaseArtifactRoot = process.env.OPENLINK_PROJECT_SUPABASE_ROOT?.trim()
+  ? resolve(process.env.OPENLINK_PROJECT_SUPABASE_ROOT)
+  : resolve(root, '.openlink-runtime/project-supabase')
 const projectSupabaseLockPath = resolve(root, 'services/project-supabase/runtime.lock.json')
-const projectSupabaseImageRoot = resolve(root, '.openlink-runtime/project-supabase/images', nodeArchitecture())
+const projectSupabaseImageRoot = process.env.OPENLINK_PROJECT_SUPABASE_IMAGE_OUTPUT_ROOT?.trim()
+  ? resolve(process.env.OPENLINK_PROJECT_SUPABASE_IMAGE_OUTPUT_ROOT)
+  : resolve(projectSupabaseArtifactRoot, 'images', nodeArchitecture())
 const projectSupabaseImageManifestPath = join(projectSupabaseImageRoot, 'manifest.json')
 const seedScriptPath = resolve(root, 'services/agent-host/project-vm-seed-supabase.sh')
 const diskBootContract = 'fcos-grub-firstboot-v1'
@@ -191,25 +196,27 @@ let builderWasCreated = false
 let stagingRoot
 let previousDiskBackup
 try {
-  if (!(await machineExists())) {
-    const cached = await cachedMachineOs()
-    await run(podman, [
-      'machine', 'init',
-      ...(cached ? ['--image', cached] : []),
-      '--rootful',
-      '--cpus', process.env.OPENLINK_PROJECT_VM_IMAGE_CPUS || '4',
-      '--memory', process.env.OPENLINK_PROJECT_VM_IMAGE_MEMORY_MB || '6144',
-      '--disk-size', String(diskSizeGb),
-      '--volume', `${outputRoot}:${guestOutputRoot}`,
-      '--volume', `${projectSupabaseImageRoot}:${guestProjectSupabaseImageRoot}:ro`,
-      machineName,
-    ], artifactOptions)
-    builderWasCreated = true
+  if (host.platform !== 'linux') {
+    if (!(await machineExists())) {
+      const cached = await cachedMachineOs()
+      await run(podman, [
+        'machine', 'init',
+        ...(cached ? ['--image', cached] : []),
+        '--rootful',
+        '--cpus', process.env.OPENLINK_PROJECT_VM_IMAGE_CPUS || '4',
+        '--memory', process.env.OPENLINK_PROJECT_VM_IMAGE_MEMORY_MB || '6144',
+        '--disk-size', String(diskSizeGb),
+        '--volume', `${outputRoot}:${guestOutputRoot}`,
+        '--volume', `${projectSupabaseImageRoot}:${guestProjectSupabaseImageRoot}:ro`,
+        machineName,
+      ], artifactOptions)
+      builderWasCreated = true
+    }
+    await run(podman, ['machine', 'start', machineName], { ...artifactOptions, input: 'n\n' }).catch((error) => {
+      if (!/already running|currently starting/i.test(error instanceof Error ? error.message : String(error))) throw error
+    })
+    await waitForSsh()
   }
-  await run(podman, ['machine', 'start', machineName], { ...artifactOptions, input: 'n\n' }).catch((error) => {
-    if (!/already running|currently starting/i.test(error instanceof Error ? error.message : String(error))) throw error
-  })
-  await waitForSsh()
 
   const stagingName = `.disk-staging-${process.pid}-${randomBytes(6).toString('hex')}`
   stagingRoot = join(outputRoot, stagingName)
@@ -224,7 +231,9 @@ try {
   const temporaryDiskPath = join(stagingRoot, diskName)
   const compressedDiskPath = join(stagingRoot, `${buildRawDiskName}.tar.gz`)
   const guestArchive = `${guestOutputRoot}/${basename(ociArchive)}`
-  const guestOutput = `${guestStagingRoot}-${process.pid}-${randomBytes(6).toString('hex')}`
+  const guestOutput = host.platform === 'linux'
+    ? stagingRoot
+    : `${guestStagingRoot}-${process.pid}-${randomBytes(6).toString('hex')}`
   const guestSupabaseImages = guestProjectSupabaseImageRoot
   const guestRawDisk = `${guestOutput}/${buildRawDiskName}`
   const guestDisk = artifactContract.diskFormat === 'raw' ? guestRawDisk : `${guestOutput}/${diskName}`
@@ -236,7 +245,9 @@ try {
   // dependency; the bootc tooling already present in the custom image does
   // the conversion in the disposable builder VM.
   const prepareGuestDisk = `${['sudo', 'mkdir', '-p', guestOutput].map(shellQuote).join(' ')} && ${['sudo', 'truncate', '-s', `${diskSizeGb}G`, guestRawDisk].map(shellQuote).join(' ')}`
-  await run(podman, ['machine', 'ssh', machineName, prepareGuestDisk], artifactOptions)
+  if (host.platform !== 'linux') {
+    await run(podman, ['machine', 'ssh', machineName, prepareGuestDisk], artifactOptions)
+  }
   const loadCommand = ['sudo', 'podman', 'load', '-i', guestArchive].map(shellQuote).join(' ')
   // Materialize the installer into the already-mounted build workspace and
   // mount it read-only into the build container. Keeping executable text out
@@ -338,8 +349,107 @@ try {
     imageRef,
     'bash', '/tmp/project-vm-seed-supabase.sh', guestRawDisk, guestSupabaseImages,
   ].map(shellQuote).join(' ')
-  await run(podman, ['machine', 'ssh', machineName, `${loadCommand} && ${buildCommand} && ${seedCommand}`], artifactOptions)
-  if (artifactContract.diskFormat !== 'raw') {
+  if (host.platform === 'linux') {
+    // Linux already runs on the VM host, so Podman Machine is not available.
+    // Use an isolated rootful Podman store for the privileged loop-device and
+    // mount operations needed to materialize the bootc image as a VM disk.
+    const rootfulPodmanRoot = join(stagingRoot, 'rootful-podman')
+    const rootfulStorage = join(rootfulPodmanRoot, 'storage')
+    const rootfulRunRoot = join(rootfulPodmanRoot, 'runroot')
+    const rootfulTmp = join(rootfulPodmanRoot, 'tmp')
+    const rootfulStorageConfig = join(rootfulPodmanRoot, 'storage.conf')
+    const rootfulEnvironment = [
+      `PATH=${podmanEnv.PATH}`,
+      `CONTAINERS_HELPER_BINARY_DIR=${podmanEnv.CONTAINERS_HELPER_BINARY_DIR}`,
+      `CONTAINERS_CONF=${process.env.CONTAINERS_CONF || resolve(configRoot, 'containers', 'containers.conf')}`,
+      `CONTAINERS_POLICY=${process.env.CONTAINERS_POLICY || resolve(configRoot, 'containers', 'policy.json')}`,
+    ]
+    const runRootfulPodman = (args) => run('sudo', [
+      '-n', 'env', ...rootfulEnvironment,
+      podman,
+      '--root', rootfulStorage,
+      '--runroot', rootfulRunRoot,
+      '--tmpdir', rootfulTmp,
+      ...args,
+    ], artifactOptions)
+    await mkdir(rootfulPodmanRoot, { recursive: true, mode: 0o700 })
+    await writeFile(rootfulStorageConfig, [
+      '[storage]',
+      'driver = "overlay"',
+      `runroot = ${JSON.stringify(rootfulRunRoot)}`,
+      `graphroot = ${JSON.stringify(rootfulStorage)}`,
+      '',
+    ].join('\n'), { mode: 0o600 })
+    try {
+      await runRootfulPodman(['load', '-i', ociArchive])
+      await runRootfulPodman([
+        'run', '--rm', '--privileged', '--pid=host', '--ipc=host', '--network=host',
+        '--security-opt', 'label=type:unconfined_t',
+        '-v', '/dev:/dev',
+        '-v', `${rootfulPodmanRoot}:/var/lib/containers`,
+        '-v', `${rootfulPodmanRoot}:${rootfulPodmanRoot}`,
+        '-v', `${outputRoot}:${guestOutputRoot}`,
+        '-v', `${guestOutput}:${guestOutput}`,
+        '-v', `${resolve(outputRoot, 'project-vm-install-disk.sh')}:/tmp/project-vm-install-disk.sh:ro`,
+        '--env', `PATH=${podmanEnv.PATH}`,
+        '--env', `CONTAINERS_STORAGE_CONF=${rootfulStorageConfig}`,
+        '--env', `OPENLINK_GUEST_DISK=${guestRawDisk}`,
+        imageRef,
+        'truncate', '-s', `${diskSizeGb}G`, guestRawDisk,
+      ])
+      await runRootfulPodman([
+        'run', '--rm', '--privileged', '--pid=host', '--ipc=host', '--network=host',
+        '--security-opt', 'label=type:unconfined_t',
+        '-v', '/dev:/dev',
+        '-v', `${rootfulPodmanRoot}:/var/lib/containers`,
+        '-v', `${rootfulPodmanRoot}:${rootfulPodmanRoot}`,
+        '-v', `${outputRoot}:${guestOutputRoot}`,
+        '-v', `${guestOutput}:${guestOutput}`,
+        '-v', `${resolve(outputRoot, 'project-vm-install-disk.sh')}:/tmp/project-vm-install-disk.sh:ro`,
+        '--env', `PATH=${podmanEnv.PATH}`,
+        '--env', `CONTAINERS_STORAGE_CONF=${rootfulStorageConfig}`,
+        '--env', `OPENLINK_GUEST_DISK=${guestRawDisk}`,
+        imageRef,
+        'bash', '/tmp/project-vm-install-disk.sh',
+      ])
+      await runRootfulPodman([
+        'run', '--rm', '--privileged', '--pid=host', '--ipc=host', '--network=host',
+        '--security-opt', 'label=type:unconfined_t',
+        '-v', '/dev:/dev',
+        '-v', `${rootfulPodmanRoot}:/var/lib/containers`,
+        '-v', `${rootfulPodmanRoot}:${rootfulPodmanRoot}`,
+        '-v', `${guestOutput}:${guestOutput}`,
+        '-v', `${projectSupabaseImageRoot}:${guestProjectSupabaseImageRoot}:ro`,
+        '-v', `${resolve(outputRoot, 'project-vm-seed-supabase.sh')}:/tmp/project-vm-seed-supabase.sh:ro`,
+        '--env', `PATH=${podmanEnv.PATH}`,
+        '--env', `CONTAINERS_STORAGE_CONF=${rootfulStorageConfig}`,
+        imageRef,
+        'bash', '/tmp/project-vm-seed-supabase.sh', guestRawDisk, guestProjectSupabaseImageRoot,
+      ])
+      await runRootfulPodman([
+        'run', '--rm', '--privileged', '--pid=host', '--ipc=host', '--network=host',
+        '--security-opt', 'label=type:unconfined_t',
+        '-v', `${guestOutput}:${guestOutput}`,
+        imageRef,
+        'qemu-img', 'convert', '-p', '-f', 'raw', '-O', artifactContract.diskFormat,
+        '-o', 'compat=1.1,lazy_refcounts=on', guestRawDisk, guestDisk,
+      ])
+      await runRootfulPodman([
+        'run', '--rm', '--privileged', '--pid=host', '--ipc=host', '--network=host',
+        '--security-opt', 'label=type:unconfined_t',
+        '-v', `${guestOutput}:${guestOutput}:ro`,
+        imageRef,
+        'qemu-img', 'check', '-f', artifactContract.diskFormat, guestDisk,
+      ])
+      await run('sudo', ['-n', 'chown', `${process.getuid()}:${process.getgid()}`, temporaryDiskPath], artifactOptions)
+      await run('sudo', ['-n', 'chmod', '0644', temporaryDiskPath], artifactOptions)
+    } finally {
+      await run('sudo', ['-n', 'rm', '-rf', '--', rootfulPodmanRoot], artifactOptions).catch(() => undefined)
+    }
+  } else {
+    await run(podman, ['machine', 'ssh', machineName, `${loadCommand} && ${buildCommand} && ${seedCommand}`], artifactOptions)
+  }
+  if (artifactContract.diskFormat !== 'raw' && host.platform !== 'linux') {
     const convertCommand = [
       // The raw disk is produced by the preceding rootful, privileged bootc
       // installer. Preserve that same confined execution boundary for the
@@ -361,7 +471,7 @@ try {
     ].map(shellQuote).join(' ')
     await run(podman, ['machine', 'ssh', machineName, `${convertCommand} && ${verifyCommand}`], artifactOptions)
     await run(podman, ['machine', 'cp', `${machineName}:${guestDisk}`, temporaryDiskPath], artifactOptions)
-  } else {
+  } else if (artifactContract.diskFormat === 'raw') {
     const compressCommand = ['sudo', 'tar', '--sparse', '-C', guestOutput, '-czf', guestCompressedDisk, buildRawDiskName].map(shellQuote).join(' ')
     await run(podman, ['machine', 'ssh', machineName, compressCommand], artifactOptions)
     await run(podman, ['machine', 'cp', `${machineName}:${guestCompressedDisk}`, compressedDiskPath], artifactOptions)

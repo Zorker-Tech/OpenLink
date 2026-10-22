@@ -18,24 +18,24 @@
   },
   "dependencies": {
     "common": "workspace:*",
-    "lucide-react": "*",
+    "lucide-react": "^1.59.0",
     "ui": "workspace:*"
   },
   "devDependencies": {
-    "@testing-library/jest-dom": "^6.6.0",
-    "@testing-library/react": "^16.0.0",
-    "@testing-library/user-event": "^14.0.0",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.8",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "@typescript/native": "catalog:",
     "config": "workspace:*",
-    "next-router-mock": "^0.9.13",
+    "next": "catalog:",
+    "next-router-mock": "^1.0.5",
+    "react": "catalog:",
+    "react-dom": "catalog:",
     "tailwindcss": "catalog:",
     "tsconfig": "workspace:*",
-    "@typescript/native": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:",
-    "next": "catalog:",
-    "react": "catalog:",
-    "react-dom": "catalog:"
+    "vitest": "catalog:"
   }
 }

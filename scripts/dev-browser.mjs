@@ -21,7 +21,7 @@ const agentRpcWorkerDirectory = new URL('../services/agent-rpc-worker/', import.
 const sandboxRuntimeDirectory = new URL('../services/sandbox-runtime/', import.meta.url)
 const browserProtocolDirectory = new URL('../packages/browser-protocol/', import.meta.url)
 const knowledgeServiceDirectory = new URL('../services/knowledge-service/', import.meta.url)
-const rootPath = fileURLToPath(root)
+const rootPath = resolve(fileURLToPath(root))
 const configuredWebRoot = process.env.OPENLINK_WEB_ROOT?.trim()
 const webRootPath = resolve(configuredWebRoot || rootPath)
 const hostPlatform = resolveHostPlatform()
@@ -107,7 +107,9 @@ const agentGatewayPublicUrl = localPublicAgentGatewayUrl()
 // it instead of a hardcoded historical default.
 const webPort = String(Number(process.env.PORT || 3000))
 const localAllowedOrigins = process.env.OPENLINK_BROWSER_ALLOWED_ORIGINS || `http://localhost:${webPort},http://127.0.0.1:${webPort}`
+const localGatewayAllowedOrigins = process.env.OPENLINK_BROWSER_GATEWAY_ALLOWED_ORIGINS || localAllowedOrigins
 const localBrowserGatewayUpstreamOrigin = process.env.OPENLINK_BROWSER_GATEWAY_UPSTREAM_ORIGIN || `http://localhost:${webPort}`
+const desktopGatewayInternalOrigin = localGatewayAllowedOrigins.split(',')[0]?.trim() || `http://localhost:${webPort}`
 
 function lifecycleMode(argv) {
   const modeIndex = argv.indexOf('--mode')
@@ -609,6 +611,9 @@ projectVmBase ||= await loadProjectVmBase()
 
 const shared = {
   ...process.env,
+  OPENLINK_DESKTOP_MODE: process.env.OPENLINK_DESKTOP_MODE?.trim() || 'ubuntu-iso',
+  OPENLINK_UBUNTU_DESKTOP_ISO: process.env.OPENLINK_UBUNTU_DESKTOP_ISO?.trim()
+    || resolve(rootPath, '.openlink-runtime/ubuntu/26.10/ubuntu-26.10-desktop-amd64.iso'),
   OPENLINK_RUNTIME_IMAGE_ROOT: projectImageRoot,
   OPENLINK_PROJECT_SUPABASE_ROOT: projectSupabaseArtifactRoot,
   OPENLINK_RUNTIME_MODE: runtimeMode,
@@ -657,7 +662,12 @@ const shared = {
   // deployments provide their authenticated HTTPS gateway explicitly.
   OPENLINK_BROWSER_GATEWAY_PUBLIC_URL: agentGatewayPublicUrl,
   OPENLINK_AGENT_PUBLIC_URL: agentGatewayPublicUrl,
-  OPENLINK_BROWSER_GATEWAY_ALLOWED_ORIGINS: process.env.OPENLINK_BROWSER_GATEWAY_ALLOWED_ORIGINS || localAllowedOrigins,
+  // Remote browsers cannot resolve the Agent Host's loopback address. The
+  // narrow LAN proxy exposes only capability-bearing Browser, Desktop, and
+  // code-server gateway routes on this port.
+  OPENLINK_DESKTOP_GATEWAY_PROXY_PORT: '43125',
+  OPENLINK_DESKTOP_GATEWAY_INTERNAL_ORIGIN: desktopGatewayInternalOrigin,
+  OPENLINK_BROWSER_GATEWAY_ALLOWED_ORIGINS: localGatewayAllowedOrigins,
   OPENLINK_BROWSER_GATEWAY_UPSTREAM_ORIGIN: localBrowserGatewayUpstreamOrigin,
   OPENLINK_DESKTOP_AGENT_HOST_URL: desktopAgentHostUrl,
   OPENLINK_AGENT_HOST: '127.0.0.1',
@@ -731,6 +741,21 @@ const knowledgeService = knowledgeServiceEnabled
 if (knowledgeService) await waitForHealth(knowledgeServiceUrl, knowledgeService, 'Knowledge Service')
 const agentHost = run(process.execPath, ['dist/src/main.js'], { cwd: agentHostDirectory, env: shared })
 await waitForHealth(agentHostUrl, agentHost, 'Agent Host')
+const desktopGatewayProxyUrl = 'http://127.0.0.1:43125'
+let desktopGatewayProxy = null
+try {
+  const response = await fetch(`${desktopGatewayProxyUrl}/healthz`, { signal: AbortSignal.timeout(1_500) })
+  if (!response.ok) throw new Error('Gateway proxy health check failed')
+} catch {
+  desktopGatewayProxy = run(process.execPath, ['scripts/desktop-gateway-proxy.mjs'], {
+    cwd: root,
+    env: {
+      ...shared,
+      OPENLINK_DESKTOP_GATEWAY_PROXY_HOST: process.env.OPENLINK_DESKTOP_GATEWAY_PROXY_HOST || '0.0.0.0',
+    },
+  })
+  await waitForHealth(desktopGatewayProxyUrl, desktopGatewayProxy, 'Desktop Gateway Proxy')
+}
 const desktopAgentHost = run(process.execPath, ['dist/src/desktop-main.js'], { cwd: agentHostDirectory, env: shared })
 await waitForHealth(desktopAgentHostUrl, desktopAgentHost, 'Desktop Agent Host')
 const next = run('npm', ['run', mode === 'production' ? 'start:web' : 'dev:web'], { cwd: webRootPath, env: shared })
@@ -760,6 +785,7 @@ async function shutdown(signal) {
   await stop(next, signal, 15_000).catch(() => undefined)
   await stop(studioOrigin, signal, 5_000).catch(() => undefined)
   await stop(desktopAgentHost, signal, 30_000).catch(() => undefined)
+  if (desktopGatewayProxy) await stop(desktopGatewayProxy, signal, 5_000).catch(() => undefined)
   await stop(agentHost, signal, 120_000).catch(() => undefined)
   if (knowledgeService) await stop(knowledgeService, signal, 30_000).catch(() => undefined)
   await stop(browserHost, signal, 30_000).catch(() => undefined)
@@ -775,6 +801,9 @@ agentHost.once('exit', (code) => {
   if (!shuttingDown) void shutdown('SIGTERM').finally(() => process.exit(code ?? 1))
 })
 desktopAgentHost.once('exit', (code) => {
+  if (!shuttingDown) void shutdown('SIGTERM').finally(() => process.exit(code ?? 1))
+})
+desktopGatewayProxy?.once('exit', (code) => {
   if (!shuttingDown) void shutdown('SIGTERM').finally(() => process.exit(code ?? 1))
 })
 browserHost.once('exit', (code) => {

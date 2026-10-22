@@ -105,6 +105,7 @@ func KubePlay(w http.ResponseWriter, r *http.Request) {
 	decoder := r.Context().Value(api.DecoderKey).(*schema.Decoder)
 	query := struct {
 		Annotations      map[string]string `schema:"annotations"`
+		Labels           map[string]string `schema:"labels"`
 		LogDriver        string            `schema:"logDriver"`
 		LogOptions       []string          `schema:"logOptions"`
 		Network          []string          `schema:"network"`
@@ -120,9 +121,11 @@ func KubePlay(w http.ResponseWriter, r *http.Request) {
 		StaticMACs       []string          `schema:"staticMACs"`
 		TLSVerify        bool              `schema:"tlsVerify"`
 		Userns           string            `schema:"userns"`
+		Validate         string            `schema:"validate"`
 		Wait             bool              `schema:"wait"`
 		Build            bool              `schema:"build"`
 		NoPodPrefix      bool              `schema:"noPodPrefix"`
+		MultiplePods     bool              `schema:"multiplePods"`
 	}{
 		TLSVerify: true,
 		Start:     true,
@@ -130,6 +133,13 @@ func KubePlay(w http.ResponseWriter, r *http.Request) {
 
 	if err := decoder.Decode(&query, r.URL.Query()); err != nil {
 		utils.Error(w, http.StatusBadRequest, fmt.Errorf("failed to parse parameters for %s: %w", r.URL.String(), err))
+		return
+	}
+
+	// An empty value is allowed for backward compatibility with older clients
+	// that do not send the parameter; it is treated as the default (ignore).
+	if query.Validate != "" && !entities.KubeValidateMode(query.Validate).IsValid() {
+		utils.Error(w, http.StatusBadRequest, fmt.Errorf("invalid validate value %q", query.Validate))
 		return
 	}
 
@@ -178,6 +188,7 @@ func KubePlay(w http.ResponseWriter, r *http.Request) {
 	containerEngine := abi.ContainerEngine{Libpod: runtime}
 	options := entities.PlayKubeOptions{
 		Annotations:        query.Annotations,
+		Labels:             query.Labels,
 		Authfile:           authfile,
 		IsRemote:           true,
 		LogDriver:          logDriver,
@@ -196,9 +207,11 @@ func KubePlay(w http.ResponseWriter, r *http.Request) {
 		UseLongAnnotations: query.NoTrunc,
 		Username:           username,
 		Userns:             query.Userns,
+		Validate:           entities.KubeValidateMode(query.Validate),
 		Wait:               query.Wait,
 		ContextDir:         contextDirectory,
 		NoPodPrefix:        query.NoPodPrefix,
+		MultiplePods:       query.MultiplePods,
 	}
 	if _, found := r.URL.Query()["build"]; found {
 		options.Build = types.NewOptionalBool(query.Build)

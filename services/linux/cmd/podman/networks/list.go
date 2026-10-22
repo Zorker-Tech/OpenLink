@@ -1,9 +1,10 @@
 package network
 
 import (
+	"cmp"
 	"fmt"
 	"os"
-	"sort"
+	"slices"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -67,13 +68,13 @@ func networkList(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	responses, err := registry.ContainerEngine().NetworkList(registry.Context(), networkListOptions)
+	responses, err := registry.ContainerEngine().NetworkList(cmd.Context(), networkListOptions)
 	if err != nil {
 		return err
 	}
 	// sort the networks to make sure the order is deterministic
-	sort.Slice(responses, func(i, j int) bool {
-		return responses[i].Name < responses[j].Name
+	slices.SortFunc(responses, func(a, b types.Network) int {
+		return cmp.Compare(a.Name, b.Name)
 	})
 
 	switch {
