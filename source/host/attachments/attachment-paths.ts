@@ -11,14 +11,19 @@ import { join } from "node:path"
 export const ATTACHMENTS_DIRNAME = "attachments"
 export const ASSETS_DIRNAME = "assets"
 
-export function getAgentAttachmentsDir(agentDir: string): string {
-  return join(agentDir, ATTACHMENTS_DIRNAME)
+/** A directory of that name under the agent's own directory. */
+function directoryNamed(agentRoot: string, name: string): string {
+  return join(agentRoot, name)
 }
 
-export function getAgentAssetsDir(agentDir: string): string {
-  return join(agentDir, ASSETS_DIRNAME)
+export function getAgentAttachmentsDir(agentRoot: string): string {
+  return directoryNamed(agentRoot, ATTACHMENTS_DIRNAME)
 }
 
-export function getAgentMediaStoreRoots(agentDir: string): [string, string] {
-  return [getAgentAttachmentsDir(agentDir), getAgentAssetsDir(agentDir)]
+export function getAgentAssetsDir(agentRoot: string): string {
+  return directoryNamed(agentRoot, ASSETS_DIRNAME)
+}
+
+export function getAgentMediaStoreRoots(agentRoot: string): [string, string] {
+  return [getAgentAttachmentsDir(agentRoot), getAgentAssetsDir(agentRoot)]
 }
