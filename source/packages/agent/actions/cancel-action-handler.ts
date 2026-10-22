@@ -7,6 +7,15 @@
  * nothing, because reaching it means a caller routed the action to the wrong place.
  */
 
+/** The refusal a cancellation raises when it reaches the turn runner: it was routed to the wrong place. */
+const CANCEL_CONVERSATION_ACTION_MISROUTED =
+  "Cancel Conversation action should never be routed directly to runStream!";
+
+/** Refuse the call rather than carry on: the cancellation has already been decided somewhere else. */
+function refuseMisroutedCancelConversation(): never {
+  throw new Error(CANCEL_CONVERSATION_ACTION_MISROUTED);
+}
+
 export class CancelActionHandler {
   constructor(
     readonly config: unknown,
@@ -16,14 +25,15 @@ export class CancelActionHandler {
     readonly conversationActionReceiver: unknown,
   ) {}
 
+  /** The turn's arguments are accepted because the handler's signature is the turn's, and none of them is used. */
   async handle(
-    _ctx: unknown,
-    _action: unknown,
-    _rootPromptExecutor: unknown,
-    _stateHandler: unknown,
-    _mcpTools: unknown,
-    _onStateUpdate: unknown,
+    _turnContext: unknown,
+    _turnAction: unknown,
+    _promptExecutor: unknown,
+    _stateComputer: unknown,
+    _availableTools: unknown,
+    _stateUpdateListener: unknown,
   ): Promise<never> {
-    throw new Error("Cancel Conversation action should never be routed directly to runStream!")
+    return refuseMisroutedCancelConversation();
   }
 }
