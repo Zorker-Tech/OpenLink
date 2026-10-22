@@ -9,18 +9,30 @@
  * model's problem, one is the conversation's, and one is the platform's own policy.
  */
 
+/** A line of text a tool result carries. */
+interface TextPart { type: "text"; text: string }
+
+/** An image a tool result carries, with the media type that says how to read it. */
+interface ImagePart { type: "image"; data: string; mimeType: string }
+
 export interface TextResult {
-  content: Array<{ type: "text"; text: string }>
+  content: TextPart[]
   isError: boolean
 }
 
 export interface ImageResult {
-  content: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }>
+  content: Array<TextPart | ImagePart>
   isError: boolean
 }
 
+/** A text part, built the one way the model reads it. */
+function textPart(text: string): TextPart { return { type: "text", text } }
+
+/** An image part, built the one way the model reads it. */
+function imagePart(data: string, mimeType: string): ImagePart { return { type: "image", data, mimeType } }
+
 export function createStringResult(content: string, isError = false): TextResult {
-  return { content: [{ type: "text", text: content }], isError }
+  return { content: [textPart(content)], isError }
 }
 
 /** An image result may carry a line of text before it, which is what tells the model what it is looking at. */
@@ -31,28 +43,27 @@ export function createImageResult(
   isError = false,
 ): ImageResult {
   const content: ImageResult["content"] = []
-  if (textContent) content.push({ type: "text", text: textContent })
-  content.push({ type: "image", data: imageData, mimeType })
+  if (textContent) content.push(textPart(textContent))
+  content.push(imagePart(imageData, mimeType))
   return { content, isError }
 }
 
+/** The messages the three limits read as when nothing more specific is known. */
+const OUTPUT_TOKENS_LIMIT_MESSAGE = "Provider exceeded max output tokens"
+const INPUT_TOKEN_LIMIT_MESSAGE = "Input token limit exceeded"
+const PROACTIVE_SUMMARIZATION_THRESHOLD_MESSAGE = "Configured summarization threshold reached"
+
 export class OutputTokensLimitExceededError extends Error {
-  constructor(message = "Provider exceeded max output tokens") {
-    super(message)
-    this.name = "OutputTokensLimitExceededError"
-  }
+  override name = "OutputTokensLimitExceededError"
+  constructor(message = OUTPUT_TOKENS_LIMIT_MESSAGE) { super(message) }
 }
 
 export class InputTokenLimitError extends Error {
-  constructor(message = "Input token limit exceeded") {
-    super(message)
-    this.name = "InputTokenLimitError"
-  }
+  override name = "InputTokenLimitError"
+  constructor(message = INPUT_TOKEN_LIMIT_MESSAGE) { super(message) }
 }
 
 export class ProactiveSummarizationThresholdError extends Error {
-  constructor(message = "Configured summarization threshold reached") {
-    super(message)
-    this.name = "ProactiveSummarizationThresholdError"
-  }
+  override name = "ProactiveSummarizationThresholdError"
+  constructor(message = PROACTIVE_SUMMARIZATION_THRESHOLD_MESSAGE) { super(message) }
 }
