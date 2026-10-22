@@ -1,7 +1,7 @@
 /**
  * Adding what a shell review needs to decide.
  *
- * The commands a turn ran and the files it touched are gathered into the review's context, bounded in how much is
+ * The commands a turn ran and the files it touched are gathered into the review's turnContext, readText in how much is
  * included, so a review can judge a command by what it was actually asked to do.
  */
 import { createHash, randomUUID } from "node:crypto";
@@ -31,7 +31,7 @@ export type SlateShellEnrichmentCandidate =
 
 export interface SlateShellReadAccessor<Context> {
   get(resource: typeof readExecutorResource): {
-    execute(context: Context, args: ReadArgs, options?: unknown): Promise<ReadResult>;
+    execute(turnContext: Context, input: ReadArgs, options?: unknown): Promise<ReadResult>;
   };
 }
 
@@ -69,262 +69,289 @@ export type SlateShellTargetEnrichment =
     readonly truncated: false;
   };
 
-export function unquote(token: string): string {
+export function unquote(rawToken: string): string {
   if (
-    (token.startsWith('"') && token.endsWith('"'))
-    || (token.startsWith("'") && token.endsWith("'"))
+    (rawToken.startsWith('"') && rawToken.endsWith('"'))
+    || (rawToken.startsWith("'") && rawToken.endsWith("'"))
   ) {
-    return token.slice(1, -1);
+    return rawToken.slice(1, -1);
   }
-  return token;
+  return rawToken;
+}
+
+/** The command after the environment assignments it starts with. */
+function withoutEnvironmentPrefix(commandText: string): string {
+  const envPrefix = commandText.match(
+    /^(?:env\s+)?(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|[^\s;&|]+)\s+)+/,
+  );
+  return envPrefix == null ? commandText : commandText.slice(envPrefix[0].length);
+}
+
+/** The directory a `cd … &&` prefix names, or nothing when the command does not start with one. */
+function directoryFromChangePrefix(commandText: string, currentDirectory: string | undefined): { readonly directory: string | undefined; readonly rest: string } | undefined {
+  const cdPrefix = commandText.match(
+    /^cd\s+("[^"]+"|'[^']+'|[^\s;&|]+)\s*&&\s*(.+)$/,
+  );
+  if (cdPrefix == null) return undefined;
+  const directoryText = cdPrefix[1];
+  const rest = cdPrefix[2];
+  if (directoryText == null || rest == null) return undefined;
+  return {
+    directory: currentDirectory == null ? undefined : resolve(currentDirectory, unquote(directoryText)),
+    rest,
+  };
+}
+
+/** The package.json a directory would hold. */
+function packageJsonIn(directory: string): string {
+  return resolve(directory, "package.json");
+}
+
+/** The package manager's script invocation a command names, or nothing when it names none. */
+function packageScriptOf(commandText: string, currentDirectory: string | undefined): SlateShellEnrichmentCandidate | undefined {
+  const packageMatch = commandText.match(
+    /^(?:npm(?:\s+run)?|pnpm(?:\s+run)?|yarn(?:\s+run)?)\s+([A-Za-z0-9_:][A-Za-z0-9:_-]*)(?:\s|$)/,
+  );
+  if (packageMatch == null) return undefined;
+  const scriptName = packageMatch[1];
+  if (scriptName == null) return undefined;
+  if (currentDirectory == null) {
+    return { kind: "package_script_unresolved", invocation: packageMatch[0].trim() };
+  }
+  return {
+    kind: "package_script",
+    packageJsonPath: packageJsonIn(currentDirectory),
+    scriptName,
+  };
+}
+
+/** A package-manager invocation whose script cannot be resolved. */
+function unresolvedPackageOf(commandText: string, currentDirectory: string | undefined): SlateShellEnrichmentCandidate | undefined {
+  const unresolvedPackageMatch = commandText.match(/^(?:npm|pnpm|yarn)\s+[^;&|]+/);
+  if (unresolvedPackageMatch != null) {
+    return {
+      kind: "package_script_unresolved",
+      ...(currentDirectory == null ? {} : { packageJsonPath: packageJsonIn(currentDirectory) }),
+      invocation: unresolvedPackageMatch[0],
+    };
+  }
+  if (/\b(?:npm|pnpm|yarn)\b/.test(commandText)) {
+    return {
+      kind: "package_script_unresolved",
+      ...(currentDirectory == null ? {} : { packageJsonPath: packageJsonIn(currentDirectory) }),
+      invocation: commandText,
+    };
+  }
+  return undefined;
+}
+
+/** The executable path a command names, as written. */
+function executableTokenOf(commandText: string): string | undefined {
+  const interpreterMatch = commandText.match(
+    /^(?:python(?:3(?:\.\d+)?)?|node|bash|sh|zsh)\s+("[^"]+"|'[^']+'|[^\s;&|]+)(?:\s|$)/,
+  );
+  const directMatch = commandText.match(
+    /^((?:\/|\.{1,2}\/)("[^"]+"|'[^']+'|[^\s;&|]+)|(?:\/|\.{1,2}\/)[^\s;&|]+)(?:\s|$)/,
+  );
+  return interpreterMatch?.[1] ?? directMatch?.[1];
 }
 
 export function parseSlateShellEnrichmentCandidate(
   command: string,
   workingDirectory?: string,
 ): SlateShellEnrichmentCandidate | undefined {
-  let candidateCommand = command.trim();
-  let candidateWorkingDirectory = workingDirectory;
-  for (let prefixCount = 0; prefixCount < 4; prefixCount += 1) {
-    const environmentPrefix = candidateCommand.match(
-      /^(?:env\s+)?(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|[^\s;&|]+)\s+)+/,
-    );
-    if (environmentPrefix != null) {
-      candidateCommand = candidateCommand.slice(environmentPrefix[0].length);
+  let remainingCommand = command.trim();
+  let currentDirectory = workingDirectory;
+  for (let pass = 0; pass < 4; pass += 1) {
+    const withoutEnvironment = withoutEnvironmentPrefix(remainingCommand);
+    if (withoutEnvironment !== remainingCommand) {
+      remainingCommand = withoutEnvironment;
       continue;
     }
-    const changeDirectoryPrefix = candidateCommand.match(
-      /^cd\s+("[^"]+"|'[^']+'|[^\s;&|]+)\s*&&\s*(.+)$/,
-    );
-    if (changeDirectoryPrefix == null) break;
-    const directoryToken = changeDirectoryPrefix[1];
-    const remaining = changeDirectoryPrefix[2];
-    if (directoryToken == null || remaining == null) break;
-    candidateWorkingDirectory = candidateWorkingDirectory == null
-      ? undefined
-      : resolve(candidateWorkingDirectory, unquote(directoryToken));
-    candidateCommand = remaining;
+    const change = directoryFromChangePrefix(remainingCommand, currentDirectory);
+    if (change === undefined) break;
+    currentDirectory = change.directory;
+    remainingCommand = change.rest;
   }
 
-  const commandSegments = candidateCommand
+  const segments = remainingCommand
     .split(/[;&|\n]+/)
     .map((segment) => segment.trim())
     .filter((segment) => segment.length > 0);
-  if (commandSegments.length > 1) {
-    const hasPackageManagerSegment = commandSegments.some((segment) => {
-      const nested = parseSlateShellEnrichmentCandidate(segment, candidateWorkingDirectory);
+  if (segments.length > 1) {
+    const containsScript = segments.some((segment) => {
+      const nested = parseSlateShellEnrichmentCandidate(segment, currentDirectory);
       return nested?.kind === "package_script" || nested?.kind === "package_script_unresolved";
     });
-    if (hasPackageManagerSegment) {
+    if (containsScript) {
       return {
         kind: "package_script_unresolved",
-        ...(candidateWorkingDirectory == null
-          ? {}
-          : { packageJsonPath: resolve(candidateWorkingDirectory, "package.json") }),
-        invocation: candidateCommand,
+        ...(currentDirectory == null ? {} : { packageJsonPath: packageJsonIn(currentDirectory) }),
+        invocation: remainingCommand,
       };
     }
   }
 
-  const packageMatch = candidateCommand.match(
-    /^(?:npm(?:\s+run)?|pnpm(?:\s+run)?|yarn(?:\s+run)?)\s+([A-Za-z0-9_:][A-Za-z0-9:_-]*)(?:\s|$)/,
-  );
-  if (packageMatch != null) {
-    const scriptName = packageMatch[1];
-    if (scriptName == null) return undefined;
-    if (candidateWorkingDirectory == null) {
-      return { kind: "package_script_unresolved", invocation: packageMatch[0].trim() };
-    }
-    return {
-      kind: "package_script",
-      packageJsonPath: resolve(candidateWorkingDirectory, "package.json"),
-      scriptName,
-    };
-  }
-  const unresolvedPackageMatch = candidateCommand.match(/^(?:npm|pnpm|yarn)\s+[^;&|]+/);
-  if (unresolvedPackageMatch != null) {
-    return {
-      kind: "package_script_unresolved",
-      ...(candidateWorkingDirectory == null
-        ? {}
-        : { packageJsonPath: resolve(candidateWorkingDirectory, "package.json") }),
-      invocation: unresolvedPackageMatch[0],
-    };
-  }
-  if (/\b(?:npm|pnpm|yarn)\b/.test(candidateCommand)) {
-    return {
-      kind: "package_script_unresolved",
-      ...(candidateWorkingDirectory == null
-        ? {}
-        : { packageJsonPath: resolve(candidateWorkingDirectory, "package.json") }),
-      invocation: candidateCommand,
-    };
-  }
+  const packageCandidate = packageScriptOf(remainingCommand, currentDirectory);
+  if (packageCandidate !== undefined) return packageCandidate;
+  const unresolvedCandidate = unresolvedPackageOf(remainingCommand, currentDirectory);
+  if (unresolvedCandidate !== undefined) return unresolvedCandidate;
 
-  const interpreterMatch = candidateCommand.match(
-    /^(?:python(?:3(?:\.\d+)?)?|node|bash|sh|zsh)\s+("[^"]+"|'[^']+'|[^\s;&|]+)(?:\s|$)/,
-  );
-  const directMatch = candidateCommand.match(
-    /^((?:\/|\.{1,2}\/)("[^"]+"|'[^']+'|[^\s;&|]+)|(?:\/|\.{1,2}\/)[^\s;&|]+)(?:\s|$)/,
-  );
-  const token = interpreterMatch?.[1] ?? directMatch?.[1];
-  if (token == null) return undefined;
-  const executablePath = unquote(token);
-  if (isAbsolute(executablePath)) return { kind: "executable", path: executablePath };
-  return candidateWorkingDirectory == null
+  const rawToken = executableTokenOf(remainingCommand);
+  if (rawToken == null) return undefined;
+  const targetPath = unquote(rawToken);
+  if (isAbsolute(targetPath)) return { kind: "executable", path: targetPath };
+  return currentDirectory == null
     ? undefined
-    : { kind: "executable", path: resolve(candidateWorkingDirectory, executablePath) };
+    : { kind: "executable", path: resolve(currentDirectory, targetPath) };
 }
 
-function successfulTextRead(result: ReadResult): {
+/** The readText text a successful read answered with, or nothing when the read failed. */
+function successfulTextRead(readAnswer: ReadResult): {
   readonly content: string;
   readonly totalLines: number;
   readonly truncated: boolean;
 } | undefined {
-  if (result.result.case !== "success") return undefined;
-  const value = result.result.value;
-  const output = value.output;
+  if (readAnswer.result.case !== "success") return undefined;
+  const answerValue = readAnswer.result.value;
+  const output = answerValue.output;
   if (output.case !== "content") return undefined;
   return {
     content: output.value,
-    totalLines: value.totalLines,
-    truncated: value.truncated,
+    totalLines: answerValue.totalLines,
+    truncated: answerValue.truncated,
   };
 }
 
 export async function readBoundedText<Context>(
-  context: Context,
-  resourceAccessor: SlateShellReadAccessor<Context>,
+  turnContext: Context,
+  reads: SlateShellReadAccessor<Context>,
   path: string,
-  toolCallId: string,
+  callId: string,
 ): Promise<BoundedText | undefined> {
-  const parsed = successfulTextRead(await resourceAccessor.get(readExecutorResource).execute(
-    context,
+  const readText = successfulTextRead(await reads.get(readExecutorResource).execute(
+    turnContext,
     new ReadArgs({
       path,
-      toolCallId,
+      toolCallId: callId,
       offset: 1,
       limit: SLATE_SHELL_ENRICHMENT_MAX_LINES,
     }),
   ));
-  if (parsed == null) return undefined;
+  if (readText == null) return undefined;
   return {
-    content: parsed.content.slice(0, SLATE_SHELL_ENRICHMENT_MAX_CHARS),
-    totalLines: parsed.totalLines,
-    truncated: parsed.truncated
-      || parsed.content.length > SLATE_SHELL_ENRICHMENT_MAX_CHARS
-      || parsed.totalLines > SLATE_SHELL_ENRICHMENT_MAX_LINES,
+    content: readText.content.slice(0, SLATE_SHELL_ENRICHMENT_MAX_CHARS),
+    totalLines: readText.totalLines,
+    truncated: readText.truncated
+      || readText.content.length > SLATE_SHELL_ENRICHMENT_MAX_CHARS
+      || readText.totalLines > SLATE_SHELL_ENRICHMENT_MAX_LINES,
   };
 }
 
 export async function hashFullText<Context>(
-  context: Context,
-  resourceAccessor: SlateShellReadAccessor<Context>,
+  turnContext: Context,
+  reads: SlateShellReadAccessor<Context>,
   path: string,
-  toolCallId: string,
+  callId: string,
   totalLines: number,
 ): Promise<FullTextHash | undefined> {
   if (totalLines > SLATE_SHELL_APPROVAL_HASH_MAX_LINES) return undefined;
   const hash = createHash("sha256");
-  let fullContent = "";
-  let canRetainFullContent = true;
+  let keptContent = "";
+  let keepsContent = true;
   for (
-    let offset = 1;
-    offset <= Math.max(1, totalLines);
-    offset += SLATE_SHELL_APPROVAL_HASH_CHUNK_LINES
+    let offsetLine = 1;
+    offsetLine <= Math.max(1, totalLines);
+    offsetLine += SLATE_SHELL_APPROVAL_HASH_CHUNK_LINES
   ) {
-    const parsed = successfulTextRead(await resourceAccessor.get(readExecutorResource).execute(
-      context,
+    const readChunk = successfulTextRead(await reads.get(readExecutorResource).execute(
+      turnContext,
       new ReadArgs({
         path,
-        toolCallId,
-        offset,
+        toolCallId: callId,
+        offset: offsetLine,
         limit: SLATE_SHELL_APPROVAL_HASH_CHUNK_LINES,
       }),
     ));
-    if (parsed == null || parsed.truncated) return undefined;
-    hash.update(String(offset)).update("\0").update(parsed.content).update("\0");
-    if (
-      canRetainFullContent
-      && fullContent.length + parsed.content.length <= SLATE_SHELL_APPROVAL_PARSE_MAX_CHARS
-    ) {
-      fullContent += parsed.content;
+    if (readChunk == null || readChunk.truncated) return undefined;
+    hash.update(String(offsetLine)).update("\0").update(readChunk.content).update("\0");
+    if (keepsContent && keptContent.length + readChunk.content.length <= SLATE_SHELL_APPROVAL_PARSE_MAX_CHARS) {
+      keptContent += readChunk.content;
     } else {
-      canRetainFullContent = false;
-      fullContent = "";
+      keepsContent = false;
+      keptContent = "";
     }
   }
   return {
     definitionHash: hash.digest("hex"),
-    ...(canRetainFullContent ? { fullContent } : {}),
+    ...(keepsContent ? { fullContent: keptContent } : {}),
   };
 }
 
+/** The path an enrichment candidateItem is reported under. */
+function candidatePath(candidateItem: SlateShellEnrichmentCandidate): string {
+  return candidateItem.kind === "executable"
+    ? candidateItem.path
+    : candidateItem.kind === "package_script"
+      ? candidateItem.packageJsonPath
+      : candidateItem.packageJsonPath ?? candidateItem.invocation;
+}
+
 export function unavailableBinding(
-  candidate: SlateShellEnrichmentCandidate,
+  candidateItem: SlateShellEnrichmentCandidate,
 ): SlateShellTargetEnrichment {
   return {
-    kind: candidate.kind,
-    path: candidate.kind === "executable"
-      ? candidate.path
-      : candidate.kind === "package_script"
-        ? candidate.packageJsonPath
-        : candidate.packageJsonPath ?? candidate.invocation,
+    kind: candidateItem.kind,
+    path: candidatePath(candidateItem),
     approval_binding_unavailable: true,
     approval_binding_nonce: randomUUID(),
   };
 }
 
 export async function buildSlateShellAutoReviewTargetEnrichment<Context>(
-  context: Context,
-  args: {
+  turnContext: Context,
+  input: {
     readonly command: string;
     readonly workingDirectory?: string;
     readonly resourceAccessor: SlateShellReadAccessor<Context>;
     readonly toolCallId: string;
   },
 ): Promise<SlateShellTargetEnrichment | undefined> {
-  const candidate = parseSlateShellEnrichmentCandidate(args.command, args.workingDirectory);
-  if (candidate == null) return undefined;
-  if (candidate.kind === "package_script_unresolved") return unavailableBinding(candidate);
+  const candidateItem = parseSlateShellEnrichmentCandidate(input.command, input.workingDirectory);
+  if (candidateItem == null) return undefined;
+  if (candidateItem.kind === "package_script_unresolved") return unavailableBinding(candidateItem);
   try {
-    const path = candidate.kind === "executable" ? candidate.path : candidate.packageJsonPath;
-    const read = await readBoundedText(context, args.resourceAccessor, path, args.toolCallId);
-    if (read == null) return unavailableBinding(candidate);
-    const full = await hashFullText(
-      context,
-      args.resourceAccessor,
-      path,
-      args.toolCallId,
-      read.totalLines,
-    );
-    if (full == null) return unavailableBinding(candidate);
-    if (candidate.kind === "executable") {
-      if (read.truncated) return unavailableBinding(candidate);
+    const path = candidateItem.kind === "executable" ? candidateItem.path : candidateItem.packageJsonPath;
+    const readText = await readBoundedText(turnContext, input.resourceAccessor, path, input.toolCallId);
+    if (readText == null) return unavailableBinding(candidateItem);
+    const hashResult = await hashFullText(turnContext, input.resourceAccessor, path, input.toolCallId, readText.totalLines);
+    if (hashResult == null) return unavailableBinding(candidateItem);
+    if (candidateItem.kind === "executable") {
+      if (readText.truncated) return unavailableBinding(candidateItem);
       return {
         kind: "executable",
-        path: candidate.path,
-        definition: read.content,
-        definition_hash: full.definitionHash,
-        truncated: read.truncated,
+        path: candidateItem.path,
+        definition: readText.content,
+        definition_hash: hashResult.definitionHash,
+        truncated: readText.truncated,
       };
     }
-    const parsed = JSON.parse(full.fullContent ?? read.content) as {
+    const manifestJson = JSON.parse(hashResult.fullContent ?? readText.content) as {
       readonly scripts?: Readonly<Record<string, unknown>>;
     };
-    const body = parsed.scripts?.[candidate.scriptName];
-    if (typeof body !== "string" || body.length > SLATE_SHELL_ENRICHMENT_MAX_CHARS) {
-      return unavailableBinding(candidate);
+    const scriptText = manifestJson.scripts?.[candidateItem.scriptName];
+    if (typeof scriptText !== "string" || scriptText.length > SLATE_SHELL_ENRICHMENT_MAX_CHARS) {
+      return unavailableBinding(candidateItem);
     }
     return {
       kind: "package_script",
-      path: candidate.packageJsonPath,
-      name: candidate.scriptName,
-      definition: body.slice(0, SLATE_SHELL_ENRICHMENT_MAX_CHARS),
-      definition_hash: full.definitionHash,
+      path: candidateItem.packageJsonPath,
+      name: candidateItem.scriptName,
+      definition: scriptText.slice(0, SLATE_SHELL_ENRICHMENT_MAX_CHARS),
+      definition_hash: hashResult.definitionHash,
       truncated: false,
     };
   } catch {
-    return unavailableBinding(candidate);
+    return unavailableBinding(candidateItem);
   }
 }
