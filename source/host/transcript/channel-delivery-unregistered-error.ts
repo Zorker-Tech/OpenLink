@@ -1,7 +1,10 @@
-/** What is raised when something wants to deliver to a channel and no delivery mechanism was registered. */
+/** What a channel delivery attempt says when no mechanism was registered. */
+const UNREGISTERED_MESSAGE = "No channel delivery mechanism is registered.";
+
+/** Raised when something wants to deliver to a channel and no delivery mechanism was registered. */
 export class SlateChannelDeliveryUnregisteredError extends Error {
   constructor() {
-    super("No channel delivery mechanism is registered.");
-    this.name = "SlateChannelDeliveryUnregisteredError";
+    super(UNREGISTERED_MESSAGE);
+    this.name = SlateChannelDeliveryUnregisteredError.name;
   }
 }
