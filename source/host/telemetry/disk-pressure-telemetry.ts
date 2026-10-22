@@ -1,8 +1,8 @@
 /** Disk pressure as the telemetry backend reports it: the level, the volume it was measured on and how much room is left. */
-export type DiskPressureLevel = "hard" | "soft" | string;
+export type PressureLevel = "hard" | "soft" | string;
 
 export interface DiskPressureReading {
-  level: DiskPressureLevel;
+  level: PressureLevel;
   volume: string;
   trigger: string;
   totalBytes: number;
@@ -21,7 +21,7 @@ const TELEMETRY_LEVELS: ReadonlyMap<string, "error" | "warn"> = new Map<string, 
 ]);
 
 /** How a pressure level is reported: the two this build raises, and anything a newer version might. */
-export function severityOf(level: DiskPressureLevel): "error" | "warn" | "info" {
+export function severityOf(level: PressureLevel): "error" | "warn" | "info" {
   return TELEMETRY_LEVELS.get(level) ?? "info";
 }
 

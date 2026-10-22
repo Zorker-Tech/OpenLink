@@ -9,26 +9,187 @@ import { stat, statfs } from "node:fs/promises";
 
 export const GIB = 1024 ** 3;
 export const DISK_PRESSURE_HEARTBEAT_MS = 5 * 60_000;
+
 export const DISK_PRESSURE_THRESHOLDS = {
-  softAvailableBytes: 8 * GIB, softAvailableRatio: 0.15,
-  hardAvailableBytes: 2 * GIB, hardAvailableRatio: 0.05,
-  softRecoveryBytes: 10 * GIB, softRecoveryRatio: 0.2,
-  hardRecoveryBytes: 3 * GIB, hardRecoveryRatio: 0.08,
+  softAvailableBytes: 8 * GIB,
+  softAvailableRatio: 0.15,
+  hardAvailableBytes: 2 * GIB,
+  hardAvailableRatio: 0.05,
+  softRecoveryBytes: 10 * GIB,
+  softRecoveryRatio: 0.2,
+  hardRecoveryBytes: 3 * GIB,
+  hardRecoveryRatio: 0.08,
 } as const;
 
-export type DiskPressureLevel = "healthy" | "soft" | "hard";
-export interface DiskVolumeSnapshot { readonly volume: string; readonly deviceId: string; readonly totalBytes: number; readonly availableBytes: number }
-export interface DiskVolumeSample { readonly snapshots: readonly DiskVolumeSnapshot[]; readonly complete: boolean }
-interface DiskPressureState { readonly level: DiskPressureLevel; readonly lastReportedAtMs: number }
+export type PressureLevel = "healthy" | "soft" | "hard";
 
-export function aggregateDiskPressureLevel(states: ReadonlyMap<string, DiskPressureState>): DiskPressureLevel { const values = [...states.values()]; return values.some((state) => state.level === "hard") ? "hard" : values.some((state) => state.level === "soft") ? "soft" : "healthy"; }
-export function classifyDiskPressure(snapshot: Pick<DiskVolumeSnapshot, "totalBytes" | "availableBytes">, previous: DiskPressureLevel = "healthy"): DiskPressureLevel { if (snapshot.totalBytes <= 0) return "healthy"; const ratio = snapshot.availableBytes / snapshot.totalBytes; if (snapshot.availableBytes <= DISK_PRESSURE_THRESHOLDS.hardAvailableBytes || ratio <= DISK_PRESSURE_THRESHOLDS.hardAvailableRatio) return "hard"; if (previous === "hard" && (snapshot.availableBytes <= DISK_PRESSURE_THRESHOLDS.hardRecoveryBytes || ratio <= DISK_PRESSURE_THRESHOLDS.hardRecoveryRatio)) return "hard"; if (snapshot.availableBytes <= DISK_PRESSURE_THRESHOLDS.softAvailableBytes || ratio <= DISK_PRESSURE_THRESHOLDS.softAvailableRatio) return "soft"; if (previous === "soft" && (snapshot.availableBytes <= DISK_PRESSURE_THRESHOLDS.softRecoveryBytes || ratio <= DISK_PRESSURE_THRESHOLDS.softRecoveryRatio)) return "soft"; return "healthy"; }
-export async function readDiskVolumeSnapshots(roots: readonly { readonly volume: string; readonly path: string }[]): Promise<DiskVolumeSample> { const snapshots: DiskVolumeSnapshot[] = [], seenDevices = new Set<string>(); let complete = true; for (const root of roots) { try { const [pathStat, fs] = await Promise.all([stat(root.path, { bigint: true }), statfs(root.path, { bigint: true })]); const deviceId = String(pathStat.dev); if (seenDevices.has(deviceId)) continue; seenDevices.add(deviceId); snapshots.push({ volume: root.volume, deviceId, totalBytes: Number(fs.blocks * fs.bsize), availableBytes: Number(fs.bavail * fs.bsize) }); } catch { complete = false; } } return { snapshots, complete }; }
+export interface VolumeReading {
+  readonly volume: string;
+  readonly deviceId: string;
+  readonly totalBytes: number;
+  readonly availableBytes: number;
+}
 
-export interface DiskPressureReport extends DiskVolumeSnapshot { readonly level: DiskPressureLevel; readonly trigger: "transition" | "heartbeat"; readonly usedPercent: number }
-export interface DiskPressureGuard { onTick(): void; dispose(): void }
-export function createDiskPressureGuard(options: { readonly readVolumes: () => Promise<DiskVolumeSample>; readonly report: (report: DiskPressureReport) => void; readonly onPressureChange: (level: "soft" | "hard" | null) => void; readonly onSuccessfulSample?: (level: DiskPressureLevel, complete: boolean) => void; readonly log: (message: string) => void; readonly clock?: { monotonicNow(): number } }): DiskPressureGuard {
-  const clock = options.clock ?? { monotonicNow: () => performance.now() }, states = new Map<string, DiskPressureState>(); let aggregate: DiskPressureLevel = "healthy", inFlight = false, disposed = false;
-  const check = async (): Promise<void> => { const checkedAtMs = clock.monotonicNow(); let sample: DiskVolumeSample; try { sample = await options.readVolumes(); } catch (error) { options.log(`disk-pressure sample failed: ${String(error)}`); return; } const sampled = new Set<string>(); for (const snapshot of sample.snapshots) { if (disposed) return; sampled.add(snapshot.deviceId); const previous = states.get(snapshot.deviceId), level = classifyDiskPressure(snapshot, previous?.level), transitioned = level !== (previous?.level ?? "healthy"), heartbeatDue = level !== "healthy" && checkedAtMs - (previous?.lastReportedAtMs ?? Number.NEGATIVE_INFINITY) >= DISK_PRESSURE_HEARTBEAT_MS, shouldReport = transitioned || heartbeatDue; states.set(snapshot.deviceId, { level, lastReportedAtMs: shouldReport ? checkedAtMs : previous?.lastReportedAtMs ?? checkedAtMs }); if (shouldReport) try { options.report({ ...snapshot, level, trigger: transitioned ? "transition" : "heartbeat", usedPercent: snapshot.totalBytes > 0 ? (snapshot.totalBytes - snapshot.availableBytes) / snapshot.totalBytes * 100 : 0 }); } catch (error) { options.log(`disk-pressure report delivery failed: ${String(error)}`); } } if (sample.complete) for (const deviceId of states.keys()) if (!sampled.has(deviceId)) states.delete(deviceId); const next = aggregateDiskPressureLevel(states); if (sample.complete || sample.snapshots.length > 0) options.onSuccessfulSample?.(next, sample.complete); if (next !== aggregate) { aggregate = next; options.onPressureChange(next === "healthy" ? null : next); } };
-  return { onTick: () => { if (disposed || inFlight) return; inFlight = true; void check().finally(() => { inFlight = false; }); }, dispose: () => { disposed = true; } };
+export interface VolumeSample {
+  readonly snapshots: readonly VolumeReading[];
+  readonly complete: boolean;
+}
+
+interface DiskPressureState {
+  readonly level: PressureLevel;
+  readonly lastReportedAtMs: number;
+}
+
+/** Whether a volume is at or below this many bytes, or this share of itself. */
+function atOrBelow(snapshot: Pick<VolumeReading, "totalBytes" | "availableBytes">, bytes: number, ratio: number): boolean {
+  return snapshot.availableBytes <= bytes || snapshot.availableBytes / snapshot.totalBytes <= ratio;
+}
+
+/** The worst level any of these volumes is at: a hard volume makes the box hard, and so on. */
+export function worstLevel(states: ReadonlyMap<string, DiskPressureState>): PressureLevel {
+  const levels = [...states.values()].map((state) => state.level);
+  if (levels.includes("hard")) return "hard";
+  return levels.includes("soft") ? "soft" : "healthy";
+}
+
+/**
+ * The level one volume is at now, given the level it was at last time.
+ *
+ * The entry thresholds decide when a level starts, and the recovery ones — higher, so the level cannot oscillate around
+ * a single boundary — decide when it ends. A volume this build cannot measure reads as healthy rather than as full.
+ */
+export function levelOfVolume(snapshot: Pick<VolumeReading, "totalBytes" | "availableBytes">, previous: PressureLevel = "healthy"): PressureLevel {
+  if (snapshot.totalBytes <= 0) return "healthy";
+  const thresholds = DISK_PRESSURE_THRESHOLDS;
+  if (atOrBelow(snapshot, thresholds.hardAvailableBytes, thresholds.hardAvailableRatio)) return "hard";
+  if (previous === "hard" && atOrBelow(snapshot, thresholds.hardRecoveryBytes, thresholds.hardRecoveryRatio)) return "hard";
+  if (atOrBelow(snapshot, thresholds.softAvailableBytes, thresholds.softAvailableRatio)) return "soft";
+  if (previous === "soft" && atOrBelow(snapshot, thresholds.softRecoveryBytes, thresholds.softRecoveryRatio)) return "soft";
+  return "healthy";
+}
+
+/** One volume's reading, taken from the platform: what it is, where it is, and how much room is left. */
+async function readVolume(root: { readonly volume: string; readonly path: string }): Promise<VolumeReading> {
+  const [pathStat, fileSystem] = await Promise.all([stat(root.path, { bigint: true }), statfs(root.path, { bigint: true })]);
+  return {
+    volume: root.volume,
+    deviceId: String(pathStat.dev),
+    totalBytes: Number(fileSystem.blocks * fileSystem.bsize),
+    availableBytes: Number(fileSystem.bavail * fileSystem.bsize),
+  };
+}
+
+/**
+ * What the platform says about these volumes, once each — two roots on one device are one volume — and whether every
+ * one of them could be read at all.
+ */
+export async function sampleVolumes(roots: readonly { readonly volume: string; readonly path: string }[]): Promise<VolumeSample> {
+  const snapshots: VolumeReading[] = [];
+  const seenDevices = new Set<string>();
+  let complete = true;
+  for (const root of roots) {
+    try {
+      const snapshot = await readVolume(root);
+      if (seenDevices.has(snapshot.deviceId)) continue;
+      seenDevices.add(snapshot.deviceId);
+      snapshots.push(snapshot);
+    } catch {
+      complete = false;
+    }
+  }
+  return { snapshots, complete };
+}
+
+export interface DiskPressureReport extends VolumeReading {
+  readonly level: PressureLevel;
+  readonly trigger: "transition" | "heartbeat";
+  readonly usedPercent: number;
+}
+
+export interface DiskPressureGuard {
+  onTick(): void;
+  dispose(): void;
+}
+
+/** How full a volume is, as the percentage a report carries. */
+function usedPercentOf(snapshot: Pick<VolumeReading, "totalBytes" | "availableBytes">): number {
+  return snapshot.totalBytes > 0 ? ((snapshot.totalBytes - snapshot.availableBytes) / snapshot.totalBytes) * 100 : 0;
+}
+
+/**
+ * Watches the box's disks, one tick at a time.
+ *
+ * A tick reads every volume, decides each one's level against the level it had, and reports what changed — a volume that
+ * changed level, or one that is still under pressure and has not been reported for a heartbeat. A volume that is no
+ * longer there is forgotten, but only when the reading was complete: a failed read is not a disk that went away.
+ */
+export function diskPressureGuard(options: {
+  readonly readVolumes: () => Promise<VolumeSample>;
+  readonly report: (report: DiskPressureReport) => void;
+  readonly onPressureChange: (level: "soft" | "hard" | null) => void;
+  readonly onSuccessfulSample?: (level: PressureLevel, complete: boolean) => void;
+  readonly log: (message: string) => void;
+  readonly clock?: { monotonicNow(): number };
+}): DiskPressureGuard {
+  const clock = options.clock ?? { monotonicNow: () => performance.now() };
+  const states = new Map<string, DiskPressureState>();
+  let aggregate: PressureLevel = "healthy";
+  let inFlight = false;
+  let disposed = false;
+
+  /** Reports one volume if it changed level or its heartbeat is due, and keeps what the next tick compares against. */
+  const visit = (snapshot: VolumeReading, checkedAtMs: number): void => {
+    const previous = states.get(snapshot.deviceId);
+    const level = levelOfVolume(snapshot, previous?.level);
+    const transitioned = level !== (previous?.level ?? "healthy");
+    const heartbeatDue = level !== "healthy" && checkedAtMs - (previous?.lastReportedAtMs ?? Number.NEGATIVE_INFINITY) >= DISK_PRESSURE_HEARTBEAT_MS;
+    const shouldReport = transitioned || heartbeatDue;
+    states.set(snapshot.deviceId, { level, lastReportedAtMs: shouldReport ? checkedAtMs : (previous?.lastReportedAtMs ?? checkedAtMs) });
+    if (!shouldReport) return;
+    try {
+      options.report({ ...snapshot, level, trigger: transitioned ? "transition" : "heartbeat", usedPercent: usedPercentOf(snapshot) });
+    } catch (error) {
+      // A report the host could not take is logged and the tick goes on: the next heartbeat will try again.
+      options.log(`disk-pressure report delivery failed: ${String(error)}`);
+    }
+  };
+
+  const check = async (): Promise<void> => {
+    const checkedAtMs = clock.monotonicNow();
+    let sample: VolumeSample;
+    try {
+      sample = await options.readVolumes();
+    } catch (error) {
+      options.log(`disk-pressure sample failed: ${String(error)}`);
+      return;
+    }
+    const sampled = new Set<string>();
+    for (const snapshot of sample.snapshots) {
+      if (disposed) return;
+      sampled.add(snapshot.deviceId);
+      visit(snapshot, checkedAtMs);
+    }
+    if (sample.complete) {
+      for (const deviceId of states.keys()) if (!sampled.has(deviceId)) states.delete(deviceId);
+    }
+    const next = worstLevel(states);
+    if (sample.complete || sample.snapshots.length > 0) options.onSuccessfulSample?.(next, sample.complete);
+    if (next === aggregate) return;
+    aggregate = next;
+    options.onPressureChange(next === "healthy" ? null : next);
+  };
+
+  return {
+    onTick: () => {
+      // One tick at a time: a reading that is still running is not started again.
+      if (disposed || inFlight) return;
+      inFlight = true;
+      void check().finally(() => {
+        inFlight = false;
+      });
+    },
+    dispose: () => {
+      disposed = true;
+    },
+  };
 }
