@@ -1,7 +1,7 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 
-import { coordinatorEventFamilyForSseChannel, SSE_CHANNEL_BY_FAMILY } from "../../source/coordinator/gateway/gateway-event-families.ts"
+import { familyOnChannel, CHANNEL_OF_FAMILY } from "../../source/coordinator/gateway/gateway-event-families.ts"
 import { SseBlockDecoder } from "../../source/coordinator/gateway/sse-block-decoder.ts"
 import { loopbackBindHosts, parseLoopbackRedirect } from "../../source/coordinator/oauth/mcp-oauth-loopback-registry.ts"
 import { SIGNER_BINARY } from "../../source/coordinator/webauthn/signer.ts"
@@ -31,11 +31,11 @@ test("a block that arrives in pieces is handed over whole", () => {
 })
 
 test("a family's channel is the channel a client subscribes to", () => {
-  for (const [family, channel] of Object.entries(SSE_CHANNEL_BY_FAMILY)) {
-    assert.equal(coordinatorEventFamilyForSseChannel(channel), family)
+  for (const [family, channel] of Object.entries(CHANNEL_OF_FAMILY)) {
+    assert.equal(familyOnChannel(channel), family)
   }
   // A channel nobody maps is not a family rather than being guessed at.
-  assert.equal(coordinatorEventFamilyForSseChannel("nobody"), null)
+  assert.equal(familyOnChannel("nobody"), null)
 })
 
 // ---------------------------------------------------------------------------------------------

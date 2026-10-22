@@ -65,7 +65,7 @@ import { automationFireDroppedTelemetry, automationRunTelemetry } from "./automa
 import { automationShadowPruneTelemetry } from "./automation-shadow-prune-telemetry.ts";
 import { boxLogShipTelemetry } from "./box-log-ship-telemetry.ts";
 import { conversationGcTelemetry } from "./conversation-gc-telemetry.ts";
-import { diskPressureTelemetry } from "./disk-pressure-telemetry.ts";
+import { diskPressureReport } from "./disk-pressure-telemetry.ts";
 import { eventLoopWindowTelemetry } from "./event-loop-telemetry.ts";
 import { experimentsDiagnosticTelemetry } from "./experiments-diagnostic-telemetry.ts";
 import { hostDiagnosticTelemetry } from "./host-diagnostic-telemetry.ts";
@@ -299,8 +299,8 @@ export class SlateStructuredLogTelemetry {
     this.reportMapped(conversationGcTelemetry, r as never);
   }
 
-  reportBoxDiskPressure(r: Parameters<typeof diskPressureTelemetry>[0]): void {
-    const mapped = diskPressureTelemetry(r);
+  reportBoxDiskPressure(r: Parameters<typeof diskPressureReport>[0]): void {
+    const mapped = diskPressureReport(r);
     this.enqueue(mapped.level as LogLevel, "slate.box.disk_pressure", mapped.metadata);
   }
 

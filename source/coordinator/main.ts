@@ -20,7 +20,7 @@ import { ClientSideToolV2Relay } from "./client-side-tool-v2-relay.ts";
 import { createControlPortClient } from "./control-port-client.ts";
 import { CoordinatorGatewayClient, createCoordinatorGatewayClientTiming, HOST_ACCOUNT_SLOT, type GatewayConnection } from "./gateway/gateway-client.ts";
 import { createGatewayDnsDiagnosticReporter } from "./gateway/gateway-dns-diagnostics.ts";
-import { coordinatorEventFamilyForSseChannel } from "./gateway/gateway-event-families.ts";
+import { familyOnChannel } from "./gateway/gateway-event-families.ts";
 import { createGatewayRequestDispatch } from "./gateway/gateway-request-dispatcher.ts";
 import { createCoordinatorHostSupervisorTiming, SlateHostSupervisor } from "./gateway/host-supervisor.ts";
 import { createCoordinatorInferenceRouter } from "./inference-router.ts";
@@ -130,7 +130,7 @@ export async function composeCoordinator(dependencies: ComposeCoordinatorDepende
     }
     if (event.channel === "agents") controlClient.postEvent("agents-event", { kind: "agents", event: event.payload });
     if (event.channel === "agent-upserted") controlClient.postEvent("agents-event", { kind: "agent-upserted", event: event.payload });
-    const family = coordinatorEventFamilyForSseChannel(event.channel);
+    const family = familyOnChannel(event.channel);
     if (family != null) server.postEvent(family, event.payload);
   }
 
