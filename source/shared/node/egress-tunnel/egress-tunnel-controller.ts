@@ -4,7 +4,7 @@
  * A tunnel is opened, watched and closed, and what it reports is what a caller needs to know: whether it is up, how
  * many streams it is relaying and how many it could not.
  */
-import type { EgressTunnelConfig } from "./box-connection.ts";
+import type { TunnelConfig } from "./box-connection.ts";
 
 export interface EgressTunnelStatus {
   readonly state: string;
@@ -21,7 +21,7 @@ export interface EgressTunnelClient {
 export const OFF_STATUS: EgressTunnelStatus = { state: "off", relayedStreams: 0, activeStreams: 0 };
 export const ANYRUN_NETWORK_TOKEN_HEADER = "x-slate-network-token";
 
-export function configsEqual(a: EgressTunnelConfig | null, b: EgressTunnelConfig | null): boolean {
+export function configsEqual(a: TunnelConfig | null, b: TunnelConfig | null): boolean {
   if (a === b) return true;
   if (a == null || b == null) return false;
   return a.url === b.url
@@ -30,7 +30,7 @@ export function configsEqual(a: EgressTunnelConfig | null, b: EgressTunnelConfig
     && JSON.stringify(a.headers ?? {}) === JSON.stringify(b.headers ?? {});
 }
 
-export function configFromEnv(env: NodeJS.ProcessEnv = process.env): EgressTunnelConfig | null {
+export function configFromEnv(env: NodeJS.ProcessEnv = process.env): TunnelConfig | null {
   const url = env.SLATE_EGRESS_TUNNEL_URL;
   const bearer = env.SLATE_EGRESS_TUNNEL_BEARER;
   if (url == null || url === "" || bearer == null || bearer === "") return null;
@@ -47,15 +47,15 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): EgressTunne
 
 export class EgressTunnelController {
   private enabled = false;
-  private boxConfig: EgressTunnelConfig | null = null;
-  private activeConfig: EgressTunnelConfig | null = null;
+  private boxConfig: TunnelConfig | null = null;
+  private activeConfig: TunnelConfig | null = null;
   private client: EgressTunnelClient | null = null;
   private lastStatus: EgressTunnelStatus = OFF_STATUS;
 
   constructor(private readonly options: {
     readonly onStatus: (status: EgressTunnelStatus) => void;
     readonly createClient: (options: {
-      readonly config: EgressTunnelConfig;
+      readonly config: TunnelConfig;
       readonly onStatus: (status: EgressTunnelStatus) => void;
       readonly log: (...values: unknown[]) => void;
     }) => EgressTunnelClient;
@@ -69,7 +69,7 @@ export class EgressTunnelController {
     this.reconcile();
   }
 
-  setBoxConnection(config: EgressTunnelConfig | null): void {
+  setBoxConnection(config: TunnelConfig | null): void {
     this.boxConfig = config;
     this.reconcile();
   }
@@ -83,7 +83,7 @@ export class EgressTunnelController {
     this.reconcile();
   }
 
-  private resolveConfig(): EgressTunnelConfig | null {
+  private resolveConfig(): TunnelConfig | null {
     return configFromEnv(this.options.env) ?? this.boxConfig;
   }
 

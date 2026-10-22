@@ -8,7 +8,7 @@ import { lookup } from "node:dns/promises";
 import { createConnection, isIP, type Socket } from "node:net";
 
 import { createRetryPolicy, realClock, type RetryPolicy } from "../../../host/extensions/scheduling.ts";
-import type { EgressTunnelConfig } from "./box-connection.ts";
+import type { TunnelConfig } from "./box-connection.ts";
 import type { EgressTunnelStatus } from "./egress-tunnel-controller.ts";
 
 export const KIND_OPEN = 1; export const KIND_DATA = 2; export const KIND_CLOSE = 3;
@@ -79,7 +79,7 @@ export class EgressTunnelExitClient {
   private ws: ExitWebSocket | null = null; private readonly streams = new Map<number, StreamEntry>(); private reconnectAttempt = 0; private reconnectAbort: AbortController | null = null;
   private stopped = true; private state = "off"; private relayedStreams = 0; private lastError: string | undefined;
   private readonly reconnectPolicy: RetryPolicy;
-  constructor(private readonly options: { readonly config: EgressTunnelConfig; onStatus(status: EgressTunnelStatus): void; log?(message: string): void; createWebSocket(url: string, options: { headers: Record<string, string> }): ExitWebSocket; readonly openReadyState?: number; readonly lookup?: typeof lookup; readonly createConnection?: typeof createConnection; readonly reconnectPolicy?: RetryPolicy }) {
+  constructor(private readonly options: { readonly config: TunnelConfig; onStatus(status: EgressTunnelStatus): void; log?(message: string): void; createWebSocket(url: string, options: { headers: Record<string, string> }): ExitWebSocket; readonly openReadyState?: number; readonly lookup?: typeof lookup; readonly createConnection?: typeof createConnection; readonly reconnectPolicy?: RetryPolicy }) {
     this.reconnectPolicy = options.reconnectPolicy ?? createRetryPolicy(realClock, { name: "slate-egress-tunnel-reconnect", maxAttempts: 1_000_000, initialDelayMs: RECONNECT_INITIAL_DELAY_MS, maxDelayMs: RECONNECT_MAX_DELAY_MS });
   }
   start(): void { if (!this.stopped) return; this.stopped = false; this.connect(); }

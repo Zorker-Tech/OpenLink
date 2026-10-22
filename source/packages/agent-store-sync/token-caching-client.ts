@@ -13,7 +13,7 @@
 import { isAgentStoreId, isCloudAgentStoreId, isValidBareUuid, parseTeamAgentStoreSourceId, parseUserAgentStoreSourceId } from "../constants/agent-store-ids.ts";
 import { AgentStoreUnauthorizedError } from "./bcs-client.ts";
 import { BackoffScheduler } from "./backoff-scheduler.ts";
-import { isAgentStoreMintNegativeCacheable, isAgentStoreSyncDisabledError } from "./connect-errors.ts";
+import { mintFailureIsCacheable, syncIsDisabledForAccount } from "./connect-errors.ts";
 import type { AgentStoreMintTarget, AgentStoreMultipartWriteAbort, AgentStoreMultipartWriteCompletion, AgentStoreSourceKind, AgentStoreToken, AgentStoreWriteFile } from "./bcs-transport.ts";
 
 const DEFAULT_REFRESH_BUFFER_MS = 60_000;
@@ -248,14 +248,14 @@ export class TokenCachingAgentStoreClient {
    * refusal that may pass is waited out with a growing delay.
    */
   private rememberMintFailure(args: { readonly cacheKey: string; readonly agentId: string; readonly error: unknown }): void {
-    if (isAgentStoreSyncDisabledError(args.error)) {
+    if (syncIsDisabledForAccount(args.error)) {
       const backoff = this.mintNegativeCache.get(args.cacheKey)?.backoff ?? newBackoffScheduler({ baseMs: this.mintNegativeCacheBaseMs, maxMs: this.mintNegativeCacheMaxMs });
       this.mintNegativeCache.set(args.cacheKey, { error: args.error, untilMs: SYNC_DISABLED_UNTIL_MS, backoff });
       this.metrics.tokenMintFailureCached?.({ agentId: args.agentId, kind: "stand_down" });
       this.notifySyncDisabledMint({ agentId: args.agentId, message: args.error instanceof Error ? args.error.message : String(args.error) });
       return;
     }
-    if (!isAgentStoreMintNegativeCacheable(args.error)) return;
+    if (!mintFailureIsCacheable(args.error)) return;
     const backoff = this.mintNegativeCache.get(args.cacheKey)?.backoff ?? newBackoffScheduler({ baseMs: this.mintNegativeCacheBaseMs, maxMs: this.mintNegativeCacheMaxMs });
     this.mintNegativeCache.set(args.cacheKey, { error: args.error, untilMs: this.now() + backoff.recordFailure(), backoff });
     this.metrics.tokenMintFailureCached?.({ agentId: args.agentId, kind: "backoff" });
