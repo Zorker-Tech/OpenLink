@@ -14,6 +14,7 @@ import {
 import type { ShellArgs, ShellResult } from "../../packages/proto/generated/agent/v1/shell_exec_pb.ts";
 import type { ActionAuditor } from "./site-visit-tracking.ts";
 
+/** Whether an MCP call's answer counts as a success or a failure for the audit. */
 export function mcpAuditStatus(result: any): "ok" | "error" {
   if (result.result.case === "success") {
     return result.result.value.isError ? "error" : "ok";
@@ -37,11 +38,11 @@ export function wrapMcpExecutorForAudit<
 ) {
   return {
     async execute(ctx: Context, args: Args, options?: unknown): Promise<Result> {
-      const now = deps.now ?? Date.now;
-      const startedAtMs = now();
+      const clock = deps.now ?? Date.now;
+      const startedAtMs = clock();
       const transport = deps.resolveTransport(args.providerIdentifier).catch(() => "unknown");
       const report = (status: "ok" | "error"): void => {
-        const durationMs = now() - startedAtMs;
+        const durationMs = clock() - startedAtMs;
         void transport.then(resolved => deps.auditor.record({
           agentId: deps.agentId,
           ...(deps.getTurnId?.(ctx) == null ? {} : { turnId: deps.getTurnId?.(ctx) }),
@@ -100,10 +101,11 @@ export function normalizeNavigationUrl(rawUrl: string): string | undefined {
   }
 }
 
+/** Every JSON array the probe's output contains, as its object entries. */
 export function parseNavigationProbeOutput(stdout: string): Record<string, unknown>[] {
   const targets: Record<string, unknown>[] = [];
   let depth = 0;
-  let start = -1;
+  let arrayStart = -1;
   let inString = false;
   let escaped = false;
   for (let index = 0; index < stdout.length; index += 1) {
@@ -111,25 +113,25 @@ export function parseNavigationProbeOutput(stdout: string): Record<string, unkno
     if (inString) {
       if (escaped) escaped = false;
       else if (character === "\\") escaped = true;
-      else if (character === '"') inString = false;
+      else if (character === "\"") inString = false;
       continue;
     }
-    if (character === '"') inString = true;
+    if (character === "\"") inString = true;
     else if (character === "[" || character === "{") {
-      if (depth === 0 && character === "[") start = index;
+      if (depth === 0 && character === "[") arrayStart = index;
       depth += 1;
     } else if (character === "]" || character === "}") {
       depth -= 1;
-      if (depth === 0 && start >= 0) {
+      if (depth === 0 && arrayStart >= 0) {
         try {
-          const parsed: unknown = JSON.parse(stdout.slice(start, index + 1));
+          const parsed: unknown = JSON.parse(stdout.slice(arrayStart, index + 1));
           if (Array.isArray(parsed)) {
             for (const entry of parsed) {
               if (typeof entry === "object" && entry != null) targets.push(entry as Record<string, unknown>);
             }
           }
         } catch {}
-        start = -1;
+        arrayStart = -1;
       }
       if (depth < 0) depth = 0;
     }
@@ -155,10 +157,12 @@ interface GeneratedShellAccessor<Context> {
   };
 }
 
+/** Whether a value is the generated resource accessor a shell is run through. */
 function isGeneratedShellAccessor<Context>(value: unknown): value is GeneratedShellAccessor<Context> {
   return typeof value === "object" && value !== null && typeof Reflect.get(value, "get") === "function";
 }
 
+/** The request id a context carries, when it carries one. */
 function requestIdFromContext(value: unknown): string | undefined {
   if ((typeof value !== "object" && typeof value !== "function") || value === null) return undefined;
   const get = Reflect.get(value, "get");
@@ -167,149 +171,155 @@ function requestIdFromContext(value: unknown): string | undefined {
   return typeof requestId === "string" ? requestId : undefined;
 }
 
+/** The shell call the navigation probe makes on one display. */
+function navigationProbeShellInput(displayNumber: number): HostShellArgsInput {
+  return {
+    command: navigationProbeCommand(displayNumber),
+    name: "curl",
+    workingDirectory: "/workspace",
+    toolCallId: "slate-navigation-probe",
+  };
+}
+
+/** A browser target the probe reported: its page id, its URL and its title. */
+interface NavigationTarget { readonly pageId: string; readonly url: string; readonly title: string }
+
+/** The page targets in a probe answer that are worth recording. */
+function navigationTargetsIn(stdout: string): NavigationTarget[] {
+  const found: NavigationTarget[] = [];
+  for (const target of parseNavigationProbeOutput(stdout)) {
+    if (target.type !== "page") continue;
+    const pageId = typeof target.id === "string" ? target.id : "";
+    if (pageId.length === 0) continue;
+    const url = normalizeNavigationUrl(typeof target.url === "string" ? target.url : "");
+    if (url === undefined) continue;
+    found.push({ pageId, url, title: typeof target.title === "string" ? target.title : "" });
+  }
+  return found;
+}
+
 export function createSlateNavigationProbe<Context>(deps: NavigationProbeDependencies<Context>) {
-  const now = deps.now ?? Date.now;
-  const lastUrlByPageId = new Map<string, string>();
+  const clock = deps.now ?? Date.now;
+  const lastUrlByPage = new Map<string, string>();
   let lastProbeAtMs = 0;
-  let inFlight = false;
-  let trailingScheduled = false;
-  let baselineInFlight = false;
-  let queuedDuringBaseline: {
+  let probing = false;
+  let trailingQueued = false;
+  let baselineRunning = false;
+  let queuedWhileBaseline: {
     readonly ctx: Context;
     readonly remoteAccessor: unknown;
     readonly displayNumber: number;
   } | null = null;
-  let lastRequestedTurnId: string | undefined;
+  let requestedTurnId: string | undefined;
 
-  const runProbe = async (
+  const recordNavigation = (target: NavigationTarget, occurredAtMs: number): void => {
+    deps.auditor.record({
+      agentId: deps.agentId,
+      ...(requestedTurnId === undefined ? {} : { turnId: requestedTurnId }),
+      ...(deps.getBoxId?.() === undefined ? {} : { boxId: deps.getBoxId?.() }),
+      occurredAtMs,
+      action: { kind: "browserNavigation", url: target.url, pageTitle: target.title },
+    });
+  };
+
+  const auditProbeAnswer = (stdout: string, mode: "baseline" | "report"): void => {
+    const occurredAtMs = clock();
+    for (const target of navigationTargetsIn(stdout)) {
+      if (lastUrlByPage.get(target.pageId) === target.url) continue;
+      lastUrlByPage.set(target.pageId, target.url);
+      if (mode === "baseline") continue;
+      recordNavigation(target, occurredAtMs);
+    }
+  };
+
+  const probeWithAccessor = async (
     context: Context,
     remoteAccessor: unknown,
     displayNumber: number,
     mode: "baseline" | "report",
   ): Promise<void> => {
     if (!Number.isInteger(displayNumber) || displayNumber < 0) return;
-    const input: HostShellArgsInput = {
-      command: navigationProbeCommand(displayNumber),
-      name: "curl",
-      workingDirectory: "/workspace",
-      toolCallId: "slate-navigation-probe",
-    };
-    if (!isGeneratedShellAccessor(remoteAccessor)) return;
+    if (!isGeneratedShellAccessor<Context>(remoteAccessor)) return;
     const result = await remoteAccessor.get(shellExecutorResource).execute(
       context,
-      (deps.buildShellArgs ?? buildHostShellArgs)(input),
+      (deps.buildShellArgs ?? buildHostShellArgs)(navigationProbeShellInput(displayNumber)),
     );
     if (result.result.case !== "success" || result.result.value.exitCode !== 0) return;
-    const occurredAtMs = now();
-    for (const target of parseNavigationProbeOutput(result.result.value.stdout)) {
-      if (target.type !== "page") continue;
-      const pageId = typeof target.id === "string" ? target.id : "";
-      if (pageId.length === 0) continue;
-      const url = normalizeNavigationUrl(typeof target.url === "string" ? target.url : "");
-      if (url === undefined || lastUrlByPageId.get(pageId) === url) continue;
-      lastUrlByPageId.set(pageId, url);
-      if (mode === "baseline") continue;
-      deps.auditor.record({
-        agentId: deps.agentId,
-        ...(lastRequestedTurnId === undefined ? {} : { turnId: lastRequestedTurnId }),
-        ...(deps.getBoxId?.() === undefined ? {} : { boxId: deps.getBoxId?.() }),
-        occurredAtMs,
-        action: { kind: "browserNavigation", url, pageTitle: typeof target.title === "string" ? target.title : "" },
-      });
-    }
+    auditProbeAnswer(result.result.value.stdout, mode);
   };
 
-  const legacyProbe = async (context: Context, displayNumber: number, mode: "baseline" | "report"): Promise<void> => {
+  const probeWithShell = async (context: Context, displayNumber: number, mode: "baseline" | "report"): Promise<void> => {
     if (deps.executeShell === undefined) return;
-    const result = await deps.executeShell(context, {
-      command: navigationProbeCommand(displayNumber),
-      name: "curl",
-      workingDirectory: "/workspace",
-      toolCallId: "slate-navigation-probe",
-    });
+    const result = await deps.executeShell(context, navigationProbeShellInput(displayNumber));
     if (result.result.case !== "success" || result.result.value?.exitCode !== 0) return;
-    const occurredAtMs = now();
-    for (const target of parseNavigationProbeOutput(result.result.value.stdout ?? "")) {
-      if (target.type !== "page") continue;
-      const pageId = typeof target.id === "string" ? target.id : "";
-      if (pageId.length === 0) continue;
-      const url = normalizeNavigationUrl(typeof target.url === "string" ? target.url : "");
-      if (url === undefined || lastUrlByPageId.get(pageId) === url) continue;
-      lastUrlByPageId.set(pageId, url);
-      if (mode === "baseline") continue;
-      deps.auditor.record({
-        agentId: deps.agentId,
-        ...(lastRequestedTurnId === undefined ? {} : { turnId: lastRequestedTurnId }),
-        ...(deps.getBoxId?.() === undefined ? {} : { boxId: deps.getBoxId?.() }),
-        occurredAtMs,
-        action: { kind: "browserNavigation", url, pageTitle: typeof target.title === "string" ? target.title : "" },
-      });
-    }
+    auditProbeAnswer(result.result.value.stdout ?? "", mode);
   };
 
-  const run = (context: Context, remoteAccessor: unknown, displayNumber: number, mode: "baseline" | "report") =>
+  const runProbe = (context: Context, remoteAccessor: unknown, displayNumber: number, mode: "baseline" | "report") =>
     isGeneratedShellAccessor<Context>(remoteAccessor)
-      ? runProbe(context, remoteAccessor, displayNumber, mode)
-      : legacyProbe(context, displayNumber, mode);
+      ? probeWithAccessor(context, remoteAccessor, displayNumber, mode)
+      : probeWithShell(context, displayNumber, mode);
 
-  const requestProbe = (context: Context, remoteAccessor: unknown, displayNumber: number): void => {
-    if (baselineInFlight) {
-      queuedDuringBaseline = { ctx: context, remoteAccessor, displayNumber };
+  const queueProbe = (context: Context, remoteAccessor: unknown, displayNumber: number): void => {
+    if (baselineRunning) {
+      queuedWhileBaseline = { ctx: context, remoteAccessor, displayNumber };
       return;
     }
-    const at = now();
-    if (inFlight || at - lastProbeAtMs < NAVIGATION_PROBE_MIN_INTERVAL_MS) {
-      if (!trailingScheduled) {
-        trailingScheduled = true;
+    const at = clock();
+    if (probing || at - lastProbeAtMs < NAVIGATION_PROBE_MIN_INTERVAL_MS) {
+      if (!trailingQueued) {
+        trailingQueued = true;
         void delay(NAVIGATION_PROBE_MIN_INTERVAL_MS).then(() => {
-          trailingScheduled = false;
-          requestProbe(context, remoteAccessor, displayNumber);
+          trailingQueued = false;
+          queueProbe(context, remoteAccessor, displayNumber);
         });
       }
       return;
     }
     lastProbeAtMs = at;
-    inFlight = true;
-    void run(context, remoteAccessor, displayNumber, "report").catch(() => {}).finally(() => { inFlight = false; });
+    probing = true;
+    void runProbe(context, remoteAccessor, displayNumber, "report").catch(() => {}).finally(() => { probing = false; });
   };
 
   const probe = (context: Context, remoteAccessor: unknown, displayNumber: number): void => {
-    lastRequestedTurnId = deps.getTurnId?.(context) ?? requestIdFromContext(context);
-    requestProbe(context, remoteAccessor, displayNumber);
+    requestedTurnId = deps.getTurnId?.(context) ?? requestIdFromContext(context);
+    queueProbe(context, remoteAccessor, displayNumber);
   };
 
-  let baselinePromise: Promise<void> | undefined;
+  let baselinePass: Promise<void> | undefined;
   const captureBaseline = (
     context: Context,
     remoteAccessor: unknown,
     displayNumber: number,
   ): Promise<void> => {
-    if (baselinePromise !== undefined) return baselinePromise;
-    inFlight = true;
-    baselineInFlight = true;
-    baselinePromise = run(context, remoteAccessor, displayNumber, "baseline").catch(() => {}).finally(() => {
-      inFlight = false;
-      baselineInFlight = false;
-      const queued = queuedDuringBaseline;
-      queuedDuringBaseline = null;
-      if (queued !== null) requestProbe(queued.ctx, queued.remoteAccessor, queued.displayNumber);
+    if (baselinePass !== undefined) return baselinePass;
+    probing = true;
+    baselineRunning = true;
+    baselinePass = runProbe(context, remoteAccessor, displayNumber, "baseline").catch(() => {}).finally(() => {
+      probing = false;
+      baselineRunning = false;
+      const queued = queuedWhileBaseline;
+      queuedWhileBaseline = null;
+      if (queued !== null) queueProbe(queued.ctx, queued.remoteAccessor, queued.displayNumber);
     });
-    return baselinePromise;
+    return baselinePass;
   };
 
   return { probe, captureBaseline };
 }
 
+/** The audit kind a computer-use action case is recorded as. */
+const COMPUTER_USE_AUDIT_KINDS = new Map<string, string>([
+  ["screenshot", "screenshot"],
+  ["click", "click"],
+  ["mouseMove", "mouse_move"],
+  ["drag", "drag"],
+  ["type", "type"],
+  ["key", "key"],
+  ["scroll", "scroll"],
+  ["wait", "wait"],
+]);
+
 export function computerUseAuditKind(actionCase: string): string | undefined {
-  switch (actionCase) {
-    case "screenshot": return "screenshot";
-    case "click": return "click";
-    case "mouseMove": return "mouse_move";
-    case "drag": return "drag";
-    case "type": return "type";
-    case "key": return "key";
-    case "scroll": return "scroll";
-    case "wait": return "wait";
-    default: return undefined;
-  }
+  return COMPUTER_USE_AUDIT_KINDS.get(actionCase);
 }
