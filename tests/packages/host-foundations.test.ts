@@ -200,6 +200,47 @@ test("a tool call's name is remembered until the update that carries it", () => 
   assert.equal(identity.resolveModelToolName("toolCallDelta", "call-2", "outline"), "outline")
 })
 
+test("the remembered names are bounded, and a completed call takes its pending update with it", () => {
+  const updates: Array<Record<string, unknown>> = []
+  const identity = createToolCallIdentity({ emitUpdate: update => updates.push(update as Record<string, unknown>) })
+
+  // An empty name is still a name: only a missing one falls back.
+  identity.recordModelToolName("empty", "")
+  assert.equal(identity.resolveModelToolName("toolCallDelta", "empty", "outline"), "")
+
+  // A pending update is handed over once, as a copy, with the recorded name written over its old one.
+  const waiting = { name: "old", other: "field" }
+  identity.stashSurfaceUnresolvedPending("call-with-name", waiting)
+  identity.recordModelToolName("call-with-name", "new")
+  assert.deepEqual(updates, [{ name: "new", other: "field" }], "the recorded name wins over the one the update carried")
+  assert.deepEqual(waiting, { name: "old", other: "field" }, "the update that was stashed is not changed")
+  assert.notEqual(updates[0], waiting, "a copy is handed over, not the stashed update itself")
+  identity.recordModelToolName("call-with-name", "again")
+  assert.equal(updates.length, 1, "a pending update is handed over once")
+
+  // A call that completes takes any pending update it never resolved with it.
+  identity.stashSurfaceUnresolvedPending("never-resolved", { other: "field" })
+  identity.resolveModelToolName("toolCallCompleted", "never-resolved", "outline")
+  identity.recordModelToolName("never-resolved", "Late")
+  assert.equal(updates.length, 1, "the pending update is dropped when the call completes")
+
+  // Both memories keep at most 128 entries, dropping the ones remembered first.
+  const bounded = createToolCallIdentity({ emitUpdate: () => {} })
+  for (let index = 0; index < 130; index += 1) bounded.recordModelToolName("call-" + index, "name-" + index)
+  assert.equal(bounded.resolveModelToolName("toolCallDelta", "call-0", "outline"), "outline", "the oldest name is dropped")
+  assert.equal(bounded.resolveModelToolName("toolCallDelta", "call-1", "outline"), "outline", "exactly the oldest names are dropped")
+  assert.equal(bounded.resolveModelToolName("toolCallDelta", "call-2", "outline"), "name-2", "the memory holds exactly 128 names: call-2 is the oldest it still holds")
+  assert.equal(bounded.resolveModelToolName("toolCallDelta", "call-129", "outline"), "name-129", "the newest name is kept")
+  for (let index = 0; index < 130; index += 1) bounded.stashSurfaceUnresolvedPending("pending-" + index, { n: index })
+  const emitted: Array<Record<string, unknown>> = []
+  const boundedPending = createToolCallIdentity({ emitUpdate: (update) => emitted.push(update as Record<string, unknown>) })
+  for (let index = 0; index < 130; index += 1) boundedPending.stashSurfaceUnresolvedPending("pending-" + index, { n: index })
+  boundedPending.recordModelToolName("pending-0", "Late")
+  assert.deepEqual(emitted, [], "the oldest pending update is dropped")
+  boundedPending.recordModelToolName("pending-129", "name")
+  assert.deepEqual(emitted, [{ n: 129, name: "name" }], "the newest pending update is handed over, with the name filled in")
+})
+
 test("a diagnostic is reported only to whoever is listening", () => {
   const hostReports: string[] = []
   pinHostDiagnosticsReporter(diagnostic => hostReports.push(diagnostic.kind))
