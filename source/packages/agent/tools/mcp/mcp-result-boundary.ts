@@ -28,23 +28,30 @@ import { ASK_MODE_MODEL_ERROR } from "../tool-support.ts"
 import { CustomToolCallError, ToolCallRejectedError, ToolErrorClassification } from "../tool-errors.ts"
 import { classifyMcpErrorMessage } from "./mcp-error-classification.ts"
 
+/** The three texts a tool error carries, built from the texts its audience sees. */
+function textsFor(error: string, clientVisibleErrorMessage: string, modelVisibleErrorMessage: string): {
+  readonly error: string
+  readonly clientVisibleErrorMessage: string
+  readonly modelVisibleErrorMessage: string
+} {
+  return { error, clientVisibleErrorMessage, modelVisibleErrorMessage }
+}
+
+/** The same text for every audience. */
+function sameTextForAll(error: string): ReturnType<typeof textsFor> {
+  return textsFor(error, error, error)
+}
+
 /** A refusal, which reads differently when the session cannot edit anything at all. */
 export class McpPermissionDeniedError extends CustomToolCallError {
   readonly error: string
   readonly isReadonly: boolean
 
-  constructor(error: string, isReadonly: boolean) {
-    super(ToolErrorClassification.UNEXPECTED_ENVIRONMENT, {
-      error,
-      clientVisibleErrorMessage: isReadonly
-        ? "You are in ask mode and cannot run non read-only tools. Ask the user to switch to agent mode if edits are required."
-        : `Permission denied: ${error}`,
-      modelVisibleErrorMessage: isReadonly
-        ? "You are in ask mode and cannot run non read-only tools. Ask the user to switch to agent mode if edits are required."
-        : `Permission denied: ${error}`,
-    })
-    this.error = error
-    this.isReadonly = isReadonly
+  constructor(message: string, readonly: boolean) {
+    const refusal = readonly ? ASK_MODE_MODEL_ERROR : `Permission denied: ${message}`
+    super(ToolErrorClassification.UNEXPECTED_ENVIRONMENT, textsFor(message, refusal, refusal))
+    this.error = message
+    this.isReadonly = readonly
   }
 }
 
@@ -52,14 +59,11 @@ export class McpServerDoesNotExistError extends CustomToolCallError {
   readonly serverIdentifier: string
   readonly readServerDefReminder: string
 
-  constructor(serverIdentifier: string, readServerDefReminder: string) {
-    super(ToolErrorClassification.UNEXPECTED_ENVIRONMENT, {
-      error: `MCP server does not exist: ${serverIdentifier}`,
-      clientVisibleErrorMessage: `MCP server does not exist: ${serverIdentifier}`,
-      modelVisibleErrorMessage: `MCP server does not exist: ${serverIdentifier}. ${readServerDefReminder}`,
-    })
-    this.serverIdentifier = serverIdentifier
-    this.readServerDefReminder = readServerDefReminder
+  constructor(serverId: string, reminder: string) {
+    const missing = `MCP server does not exist: ${serverId}`
+    super(ToolErrorClassification.UNEXPECTED_ENVIRONMENT, textsFor(missing, missing, `${missing}. ${reminder}`))
+    this.serverIdentifier = serverId
+    this.readServerDefReminder = reminder
   }
 }
 
@@ -68,25 +72,20 @@ export class McpToolDoesNotExistError extends CustomToolCallError {
   readonly toolName: string
   readonly readToolDefReminder: string
 
-  constructor(serverIdentifier: string, toolName: string, readToolDefReminder: string) {
-    super(ToolErrorClassification.UNEXPECTED_ENVIRONMENT, {
-      error: `MCP tool does not exist: server=${serverIdentifier}, tool=${toolName}`,
-      clientVisibleErrorMessage: `MCP tool does not exist: ${toolName}`,
-      modelVisibleErrorMessage: "unused",
-    })
-    this.serverIdentifier = serverIdentifier
-    this.toolName = toolName
-    this.readToolDefReminder = readToolDefReminder
+  constructor(serverId: string, tool: string, reminder: string) {
+    super(
+      ToolErrorClassification.UNEXPECTED_ENVIRONMENT,
+      textsFor(`MCP tool does not exist: server=${serverId}, tool=${tool}`, `MCP tool does not exist: ${tool}`, "unused"),
+    )
+    this.serverIdentifier = serverId
+    this.toolName = tool
+    this.readToolDefReminder = reminder
   }
 }
 
 export class McpExecToolNotFoundError extends CustomToolCallError {
-  constructor(errorMessage: string) {
-    super(ToolErrorClassification.UNEXPECTED_ENVIRONMENT, {
-      error: errorMessage,
-      clientVisibleErrorMessage: errorMessage,
-      modelVisibleErrorMessage: errorMessage,
-    })
+  constructor(message: string) {
+    super(ToolErrorClassification.UNEXPECTED_ENVIRONMENT, sameTextForAll(message))
   }
 }
 
@@ -96,40 +95,40 @@ export class McpWithoutReadToolDefinitionError extends CustomToolCallError {
   readonly readToolDefReminder: string
 
   constructor(
-    error: unknown,
-    readToolDefReminder: string,
-    classification: ToolErrorClassification = ToolErrorClassification.OTHER_ERROR,
+    failure: unknown,
+    reminder: string,
+    kind: ToolErrorClassification = ToolErrorClassification.OTHER_ERROR,
   ) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    super(classification, {
-      error: `Error in call_mcp_tool: ${errorMessage} without reading the tool definition`,
-      clientVisibleErrorMessage: "Tool execution error",
-      modelVisibleErrorMessage: `${errorMessage}. ${readToolDefReminder}`,
-    })
-    this.error = error
-    this.readToolDefReminder = readToolDefReminder
+    const message = failure instanceof Error ? failure.message : String(failure)
+    super(kind, textsFor(
+      `Error in call_mcp_tool: ${message} without reading the tool definition`,
+      "Tool execution error",
+      `${message}. ${reminder}`,
+    ))
+    this.error = failure
+    this.readToolDefReminder = reminder
   }
 }
 
 /** Bad arguments, told apart from other failures so the caller can ask for the definition. */
 export class McpInvalidArgsToolDefinitionReminderError extends CustomToolCallError {
-  constructor(error: Error, readToolDefReminder: string) {
-    super(ToolErrorClassification.INVALID_ARGS, {
-      error: error.message,
-      clientVisibleErrorMessage: "Tool execution error",
-      modelVisibleErrorMessage: `${error.message}. ${readToolDefReminder}`,
-    })
+  constructor(failure: Error, reminder: string) {
+    super(ToolErrorClassification.INVALID_ARGS, textsFor(
+      failure.message,
+      "Tool execution error",
+      `${failure.message}. ${reminder}`,
+    ))
   }
 }
 
-export function getWrappedMcpErrorClassification(error: unknown): ToolErrorClassification {
-  return error instanceof CustomToolCallError
-    ? error.classification
+export function getWrappedMcpErrorClassification(failure: unknown): ToolErrorClassification {
+  return failure instanceof CustomToolCallError
+    ? failure.classification
     : ToolErrorClassification.OTHER_ERROR
 }
 
-export function isInvalidMcpArgumentsError(error: unknown): boolean {
-  return getWrappedMcpErrorClassification(error) === ToolErrorClassification.INVALID_ARGS
+export function isInvalidMcpArgumentsError(failure: unknown): boolean {
+  return getWrappedMcpErrorClassification(failure) === ToolErrorClassification.INVALID_ARGS
 }
 
 /**
@@ -137,16 +136,12 @@ export function isInvalidMcpArgumentsError(error: unknown): boolean {
  * plain error — guessing at a retry policy from a message nobody wrote for it would be worse than not
  * retrying.
  */
-export function createMcpTransportError(errorMessage: string, cause?: unknown): Error {
-  const classification = classifyMcpErrorMessage(errorMessage)
+export function createMcpTransportError(message: string, cause?: unknown): Error {
+  const classification = classifyMcpErrorMessage(message)
   if (classification !== undefined && classification !== ToolErrorClassification.OTHER_ERROR) {
-    return new CustomToolCallError(classification, {
-      error: errorMessage,
-      clientVisibleErrorMessage: errorMessage,
-      modelVisibleErrorMessage: errorMessage,
-    })
+    return new CustomToolCallError(classification, sameTextForAll(message))
   }
-  return new Error(errorMessage, { cause })
+  return new Error(message, { cause })
 }
 
 export function createMcpToolCall(mcpToolCall: McpToolCall): ToolCall {
@@ -158,72 +153,92 @@ export function createMcpToolCall(mcpToolCall: McpToolCall): ToolCall {
   })
 }
 
+/** The answer for a missing tool: the descriptor files, or the tool that lists the servers. */
+function throwMissingTool(
+  fileOptions: { readonly enabled: boolean; readonly workspaceProjectDir: string } | undefined,
+  tool: string,
+  toolsToolName: string | undefined,
+): never {
+  if (fileOptions?.enabled) {
+    const mcpsDir = `${fileOptions.workspaceProjectDir}/mcps`
+    throw new McpExecToolNotFoundError(
+      `Tool ${tool} was not found. The list of all available MCP servers are included in ${mcpsDir}. Please list and read the relevant MCP servers carefully before using call_mcp_tool again.`,
+    )
+  }
+  throw new McpExecToolNotFoundError(
+    `Tool ${tool} was not found. Use ${toolsToolName ?? "GetMcpTools"} to discover available servers and their tools.`,
+  )
+}
+
+/** The answer for a missing server: the servers to read, or the tool that lists them. */
+function throwMissingServer(
+  fileOptions: { readonly enabled: boolean; readonly workspaceProjectDir: string } | undefined,
+  server: string,
+  availableServers: readonly string[],
+  toolsToolName: string | undefined,
+): never {
+  const reminder = availableServers.length > 0
+    ? `Available servers: ${availableServers.join(", ")}`
+    : fileOptions?.enabled
+      ? "No MCP servers available. Read the MCP server descriptor files to discover available servers."
+      : `No MCP servers available. Use ${toolsToolName ?? "GetMcpTools"} to discover available servers.`
+  throw new McpServerDoesNotExistError(server, reminder)
+}
+
 export function convertExecSuccessToToolSuccess(
-  execResult: McpResult,
-  readToolDefReminder: string | undefined,
-  invalidArgsToolDefReminder: string | undefined,
-  mcpFileSystemOptions: { readonly enabled: boolean; readonly workspaceProjectDir: string } | undefined,
-  getMcpToolsToolName: string | undefined,
+  answer: McpResult,
+  readReminder: string | undefined,
+  invalidArgsReminder: string | undefined,
+  fileOptions: { readonly enabled: boolean; readonly workspaceProjectDir: string } | undefined,
+  toolsToolName: string | undefined,
   requestedServer?: string,
 ): McpToolResult {
-  if (execResult.result.case !== "success") {
-    switch (execResult.result.case) {
+  const result = answer.result
+  if (result.case !== "success") {
+    switch (result.case) {
       case "error": {
-        const classifiedError = createMcpTransportError(execResult.result.value.error)
-        if (readToolDefReminder !== undefined) {
+        const classifiedError = createMcpTransportError(result.value.error)
+        if (readReminder !== undefined) {
           throw new McpWithoutReadToolDefinitionError(
             classifiedError,
-            readToolDefReminder,
+            readReminder,
             getWrappedMcpErrorClassification(classifiedError),
           )
         }
-        if (invalidArgsToolDefReminder !== undefined && isInvalidMcpArgumentsError(classifiedError)) {
-          throw new McpInvalidArgsToolDefinitionReminderError(classifiedError, invalidArgsToolDefReminder)
+        if (invalidArgsReminder !== undefined && isInvalidMcpArgumentsError(classifiedError)) {
+          throw new McpInvalidArgsToolDefinitionReminderError(classifiedError, invalidArgsReminder)
         }
         throw classifiedError
       }
       case "rejected":
-        throw new ToolCallRejectedError(execResult.result.value.reason || "Tool rejected")
+        throw new ToolCallRejectedError(result.value.reason || "Tool rejected")
       case "permissionDenied":
-        throw new McpPermissionDeniedError(execResult.result.value.error, execResult.result.value.isReadonly)
+        throw new McpPermissionDeniedError(result.value.error, result.value.isReadonly)
       case "toolNotFound": {
-        const { name, availableTools } = execResult.result.value
+        const { name: tool, availableTools } = result.value
         // A tool that is missing because its whole server is missing needs the other answer: the servers.
         if (requestedServer && availableTools.length > 0) {
           const serverPrefix = `${requestedServer}-`
-          const serverHasAnyTools = availableTools.some(tool => tool.startsWith(serverPrefix))
+          const serverHasAnyTools = availableTools.some(candidate => candidate.startsWith(serverPrefix))
           if (!serverHasAnyTools) {
-            const guidance = mcpFileSystemOptions?.enabled
+            const guidance = fileOptions?.enabled
               ? "Read the MCP server descriptor files to discover available servers."
-              : `Use ${getMcpToolsToolName ?? "GetMcpTools"} to discover available servers.`
+              : `Use ${toolsToolName ?? "GetMcpTools"} to discover available servers.`
             throw new McpServerDoesNotExistError(requestedServer, guidance)
           }
         }
-        if (mcpFileSystemOptions?.enabled) {
-          const mcpsDir = `${mcpFileSystemOptions.workspaceProjectDir}/mcps`
-          throw new McpExecToolNotFoundError(
-            `Tool ${name} was not found. The list of all available MCP servers are included in ${mcpsDir}. Please list and read the relevant MCP servers carefully before using call_mcp_tool again.`,
-          )
-        }
-        throw new McpExecToolNotFoundError(
-          `Tool ${name} was not found. Use ${getMcpToolsToolName ?? "GetMcpTools"} to discover available servers and their tools.`,
-        )
+        throwMissingTool(fileOptions, tool, toolsToolName)
       }
       case "serverNotFound": {
-        const { name, availableServers } = execResult.result.value
-        const readServerDefReminder = availableServers.length > 0
-          ? `Available servers: ${availableServers.join(", ")}`
-          : mcpFileSystemOptions?.enabled
-            ? "No MCP servers available. Read the MCP server descriptor files to discover available servers."
-            : `No MCP servers available. Use ${getMcpToolsToolName ?? "GetMcpTools"} to discover available servers.`
-        throw new McpServerDoesNotExistError(name, readServerDefReminder)
+        const { name: server, availableServers } = result.value
+        throwMissingServer(fileOptions, server, availableServers, toolsToolName)
       }
       case "approved":
         throw new Error("Approval-only MCP result cannot be used as tool output")
       case undefined:
         throw new Error("Exec result has no case")
       default: {
-        const exhaustiveResult: never = execResult.result
+        const exhaustiveResult: never = result
         throw new Error(`Unexpected exec result case: ${exhaustiveResult}`)
       }
     }
@@ -231,54 +246,55 @@ export function convertExecSuccessToToolSuccess(
   return new McpToolResult({
     result: {
       case: "success",
-      value: execResult.result.value,
+      value: result.value,
+    },
+  })
+}
+
+/** A text content item, the shape every successful answer is made of. */
+function textItem(text: string): McpToolResultContentItem {
+  return new McpToolResultContentItem({
+    content: {
+      case: "text",
+      value: new McpTextContent({ text }),
     },
   })
 }
 
 /** The result of a sign-in, which has no content of its own beyond saying it worked. */
-export function createVirtualMcpAuthSuccessResult(serverIdentifier: string): McpToolResult {
+export function createVirtualMcpAuthSuccessResult(serverId: string): McpToolResult {
   return new McpToolResult({
     result: {
       case: "success",
       value: new McpSuccess({
-        content: [
-          new McpToolResultContentItem({
-            content: {
-              case: "text",
-              value: new McpTextContent({
-                text: `Successfully authenticated MCP server: ${serverIdentifier}. The server's tools should now be available.`,
-              }),
-            },
-          }),
-        ],
+        content: [textItem(`Successfully authenticated MCP server: ${serverId}. The server's tools should now be available.`)],
         isError: false,
       }),
     },
   })
 }
 
-interface McpRenderedContent {
+interface Rendered {
   readonly type: "text" | "image"
   readonly text?: string
   readonly data?: string
   readonly mimeType?: string
 }
 
-function renderMcpContentItem(item: McpToolResultContentItem): McpRenderedContent {
+/** The sentence a text item that was written to a file is rendered as. */
+function describeOutputLocation(location: { readonly filePath: string; readonly sizeBytes: unknown; readonly lineCount: unknown }): string {
+  const totalSize = Number(location.sizeBytes)
+  const lineCount = Number(location.lineCount)
+  const size = totalSize >= 1024 ? `${(totalSize / 1024).toFixed(1)} KB` : `${totalSize} bytes`
+  return `Large output has been written to: ${location.filePath} (${size}, ${lineCount} lines)`
+}
+
+function renderContentItem(item: McpToolResultContentItem): Rendered {
   switch (item.content.case) {
     case "text": {
       const textContent = item.content.value
       // A text item that was written to a file says where it went instead of carrying the text.
-      if (textContent.outputLocation) {
-        const totalSize = Number(textContent.outputLocation.sizeBytes)
-        const lineCount = Number(textContent.outputLocation.lineCount)
-        const size = totalSize >= 1024 ? `${(totalSize / 1024).toFixed(1)} KB` : `${totalSize} bytes`
-        return {
-          type: "text",
-          text: `Large output has been written to: ${textContent.outputLocation.filePath} (${size}, ${lineCount} lines)`,
-        }
-      }
+      if (textContent.outputLocation) return { type: "text", text: describeOutputLocation(textContent.outputLocation) }
       return { type: "text", text: textContent.text }
     }
     case "image":
@@ -297,32 +313,33 @@ function renderMcpContentItem(item: McpToolResultContentItem): McpRenderedConten
 }
 
 export function renderMcpToolResult(result: McpToolResult): {
-  readonly content: McpRenderedContent[]
+  readonly content: Rendered[]
   readonly isError?: boolean
 } {
-  switch (result.result.case) {
+  const answer = result.result
+  switch (answer.case) {
     case "success":
       return {
-        content: result.result.value.content.map(renderMcpContentItem),
-        isError: result.result.value.isError,
+        content: answer.value.content.map(renderContentItem),
+        isError: answer.value.isError,
       }
     case "rejected":
-      return { content: [{ type: "text", text: result.result.value.reason ? `Tool rejected: ${result.result.value.reason}` : "Tool rejected" }] }
+      return { content: [{ type: "text", text: answer.value.reason ? `Tool rejected: ${answer.value.reason}` : "Tool rejected" }] }
     case "error":
       return {
         content: [{
           type: "text",
-          text: result.result.value.readToolDefReminder
-            ? `Error: ${result.result.value.error}. ${result.result.value.readToolDefReminder}`
-            : `Error: ${result.result.value.error}`,
+          text: answer.value.readToolDefReminder
+            ? `Error: ${answer.value.error}. ${answer.value.readToolDefReminder}`
+            : `Error: ${answer.value.error}`,
         }],
       }
     case "permissionDenied":
-      return { content: [{ type: "text", text: result.result.value.isReadonly ? ASK_MODE_MODEL_ERROR : `Permission denied: ${result.result.value.error}` }] }
+      return { content: [{ type: "text", text: answer.value.isReadonly ? ASK_MODE_MODEL_ERROR : `Permission denied: ${answer.value.error}` }] }
     case undefined:
       return { content: [{ type: "text", text: "Unknown error" }] }
     default: {
-      const exhaustiveResult: never = result.result
+      const exhaustiveResult: never = answer
       throw new Error(`Unhandled result case: ${exhaustiveResult}`)
     }
   }
