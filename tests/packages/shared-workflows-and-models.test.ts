@@ -1,7 +1,7 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 
-import { readSlateModelExperimentEnvOverride, resolveSlateModelExperimentState, SLATE_MODEL_EXPERIMENT_OPUS_MEDIUM_SELECTION } from "../../source/shared/node/experiments/slate-model-experiment.ts"
+import { readSlateModelExperimentEnvOverride, resolveSlateModelExperimentState, SLATE_MODEL_EXPERIMENT_NAME, SLATE_MODEL_EXPERIMENT_OPUS_MEDIUM_SELECTION } from "../../source/shared/node/experiments/slate-model-experiment.ts"
 import { SLATE_DEFAULT_MODEL_ID, SLATE_DEFAULT_MODEL_SELECTION } from "../../source/shared/agents/agent-model.ts"
 import { MAX_MODEL_ID_LENGTH, MAX_PARAMETERS, resolveSlateDefaultModelConfig, ROUTED_MODEL_IDS } from "../../source/shared/node/experiments/slate-model-config.ts"
 import { imageContentType, readCappedImageBytes } from "../../source/shared/node/http-image.ts"
@@ -38,6 +38,32 @@ test("an experiment arm is read from the environment or from the group a user is
   assert.equal(resolveSlateModelExperimentState({ groupName: "x", enabled: false })?.arm, "control")
   assert.equal(resolveSlateModelExperimentState({ groupName: "x", enabled: true })?.arm, "treatment")
   assert.equal(SLATE_MODEL_EXPERIMENT_OPUS_MEDIUM_SELECTION.modelId.length > 0, true)
+})
+
+test("the experiment's arms are read from the words the environment uses, and the treatment selection is the one it names", () => {
+  assert.equal(SLATE_MODEL_EXPERIMENT_NAME, "slate_model_selection")
+  assert.equal(readSlateModelExperimentEnvOverride({ SLATE_MODEL_EXPERIMENT_OVERRIDE: "CONTROL" } as NodeJS.ProcessEnv)?.arm, "control")
+  assert.equal(readSlateModelExperimentEnvOverride({ SLATE_MODEL_EXPERIMENT_OVERRIDE: " control " } as NodeJS.ProcessEnv)?.arm, "control")
+  assert.equal(readSlateModelExperimentEnvOverride({ SLATE_MODEL_EXPERIMENT_OVERRIDE: "treatment" } as NodeJS.ProcessEnv)?.arm, "treatment")
+  assert.equal(readSlateModelExperimentEnvOverride({ SLATE_MODEL_EXPERIMENT_OVERRIDE: " Test " } as NodeJS.ProcessEnv)?.arm, "treatment")
+  assert.equal(readSlateModelExperimentEnvOverride({ SLATE_MODEL_EXPERIMENT_OVERRIDE: "controlx" } as NodeJS.ProcessEnv), undefined)
+  assert.equal(readSlateModelExperimentEnvOverride({ SLATE_MODEL_EXPERIMENT_OVERRIDE: "" } as NodeJS.ProcessEnv), undefined)
+
+  const override = { active: true, arm: "control" } as const
+  assert.equal(resolveSlateModelExperimentState({ envOverride: override, groupName: "x", enabled: true }) === override, true, "the override itself is handed back")
+  assert.deepEqual(resolveSlateModelExperimentState({ envOverride: null as never, groupName: "x", enabled: true }), { active: true, arm: "treatment" }, "null is no override")
+  assert.deepEqual(resolveSlateModelExperimentState({ groupName: undefined as never, enabled: true }), undefined, "an absent group is no group")
+  assert.deepEqual(resolveSlateModelExperimentState({ groupName: "", enabled: true }), { active: true, arm: "treatment" }, "an empty group name is still a group")
+  const first = resolveSlateModelExperimentState({ groupName: "x", enabled: true })
+  const second = resolveSlateModelExperimentState({ groupName: "x", enabled: true })
+  assert.equal(first !== second, true, "the group branch builds a fresh answer")
+
+  assert.equal(SLATE_MODEL_EXPERIMENT_OPUS_MEDIUM_SELECTION.modelId, "claude-opus-4-8")
+  assert.equal(SLATE_MODEL_EXPERIMENT_OPUS_MEDIUM_SELECTION.maxMode, true)
+  assert.deepEqual(
+    SLATE_MODEL_EXPERIMENT_OPUS_MEDIUM_SELECTION.parameters.map((parameter) => [parameter.id, parameter.value]),
+    [["thinking", "true"], ["context", "1m"], ["effort", "medium"], ["fast", "false"]],
+  )
 })
 
 test("the model an agent runs on by default is one the platform names", () => {
