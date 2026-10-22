@@ -79,6 +79,21 @@ test("a failure is reported by type without its message", () => {
   assert.equal(getSafeErrorType(new Error("")), "Error")
   assert.equal(getSafeErrorType("a string"), "string")
   assert.equal(getSafeErrorType(undefined), "undefined")
+
+  assert.equal(getSafeErrorType(new Error("TypeError")), "Error", "the message is never the answer")
+  const named = new Error("x")
+  named.name = "SlateCustomError"
+  assert.equal(getSafeErrorType(named), "SlateCustomError")
+  const nameless = new Error("x")
+  nameless.name = ""
+  assert.equal(getSafeErrorType(nameless), "Error", "an error with no name is still an Error")
+  assert.equal(getSafeErrorType(null), "object")
+  assert.equal(getSafeErrorType({}), "object")
+  assert.equal(getSafeErrorType(7), "number")
+  assert.equal(getSafeErrorType(true), "boolean")
+  assert.equal(getSafeErrorType(() => undefined), "function")
+  assert.equal(getSafeErrorType(Symbol("s")), "symbol")
+  assert.equal(getSafeErrorType(10n), "bigint")
 })
 
 test("a skill's id is its directory, whatever shape the path arrived in", () => {
