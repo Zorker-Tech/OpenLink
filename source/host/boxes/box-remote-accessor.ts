@@ -2,7 +2,7 @@
  * Reaching a box's files over the tunnel.
  *
  * Reads, writes and listings are carried as framed requests with their own deadlines, and what a caller gets back is a
- * typed result — the bytes, the failure the box reported, or the fact that the box is not there.
+ * typed pingOutcome — the bytes, the failure the box reported, or the fact that the box is not there.
  */
 import { findSystemErrno } from "../../shared/system-errno.ts";
 import type { Context } from "../../packages/context/context.ts";
@@ -27,13 +27,13 @@ export interface BoxTransportRequest {
   readonly header: BoxTransportHeader;
 }
 
-export type BoxTransportNext<Response = unknown> = (
-  request: BoxTransportRequest
-) => Promise<Response>;
+export type BoxTransportNext<Reply = unknown> = (
+  outgoing: BoxTransportRequest
+) => Promise<Reply>;
 
-export type BoxTransportInterceptor = <Response>(
-  next: BoxTransportNext<Response>
-) => BoxTransportNext<Response>;
+export type BoxTransportInterceptor = <Reply>(
+  step: BoxTransportNext<Reply>
+) => BoxTransportNext<Reply>;
 
 export interface BoxTransportOptions {
   readonly httpVersion: "1.1";
@@ -42,20 +42,20 @@ export interface BoxTransportOptions {
   readonly interceptors: readonly BoxTransportInterceptor[];
 }
 
-export type BoxTransportFactory<Transport> = (
+export type BoxTransportFactory<Pipe> = (
   options: BoxTransportOptions
-) => Transport;
+) => Pipe;
 
 export interface BoxPingControlClient {
   ping(
-    ctx: Context,
-    request: Readonly<Record<string, never>>,
+    context: Context,
+    outgoing: Readonly<Record<string, never>>,
     options: { readonly timeoutMs: number }
   ): Promise<unknown>;
 }
 
-export type BoxControlClientFactory<Transport> = (
-  transport: Transport
+export type BoxControlClientFactory<Pipe> = (
+  pipe: Pipe
 ) => BoxPingControlClient;
 
 export type BoxRemoteExecControlMessage =
@@ -91,13 +91,13 @@ export interface BoxRemoteExecEnvelope {
 }
 
 export interface BoxRemoteExecClient {
-  exec(ctx: Context, args: ExecServerMessage): AsyncIterable<BoxRemoteExecEnvelope>;
+  exec(context: Context, args: ExecServerMessage): AsyncIterable<BoxRemoteExecEnvelope>;
 }
 
-export interface BoxRemoteResourceConstructionPorts<Transport, Accessor> {
-  readonly createTransport: BoxTransportFactory<Transport>;
-  createExecClient(transport: Transport): BoxRemoteExecClient;
-  createResourceAccessor(manager: BoxRemoteExecManager): Accessor;
+export interface BoxRemoteResourceConstructionPorts<Pipe, Store> {
+  readonly createTransport: BoxTransportFactory<Pipe>;
+  createExecClient(pipe: Pipe): BoxRemoteExecClient;
+  createResourceAccessor(execManager: BoxRemoteExecManager): Store;
 }
 
 export type BoxPingOutcome = {
@@ -106,6 +106,7 @@ export type BoxPingOutcome = {
   readonly causeSummary?: string;
 };
 
+/** The name a gRPC-style connect code is reported under; the platform's boxes speak these codes. */
 const CONNECT_CODE_NAMES: Readonly<Record<number, string>> = Object.freeze({
   1: "Canceled",
   2: "Unknown",
@@ -125,176 +126,204 @@ const CONNECT_CODE_NAMES: Readonly<Record<number, string>> = Object.freeze({
   16: "Unauthenticated"
 });
 
-function connectCode(error: unknown): number | string | undefined {
-  if (typeof error !== "object" || error === null || !("code" in error)) {
-    return undefined;
-  }
-  const code = error.code;
-  return typeof code === "number" || typeof code === "string"
-    ? code
-    : undefined;
+/** The connect code an failure carries, when it carries one at all. */
+function errorCodeOf(failure: unknown): number | string | undefined {
+  if (typeof failure !== "object" || failure === null || !("code" in failure)) return undefined;
+  const code = failure.code;
+  return typeof code === "number" || typeof code === "string" ? code : undefined;
 }
 
-function connectCodeName(error: unknown): string {
-  const code = connectCode(error);
+/** The name an failure's connect code is reported under, or "unknown" when it has none. */
+function errorCodeName(failure: unknown): string {
+  const code = errorCodeOf(failure);
   if (typeof code === "number") return CONNECT_CODE_NAMES[code] ?? "unknown";
   if (typeof code === "string" && code.length > 0) return code;
   return "unknown";
 }
 
+/** The message a failure carries, or an empty text when the failure is not an Error. */
+function failureMessage(failure: unknown): string {
+  return failure instanceof Error ? failure.message : "";
+}
+
+/** Whether a failure is the box not answering in time. */
+function isDeadlineFailure(failure: unknown, message: string): boolean {
+  return errorCodeOf(failure) === 4 || /deadline/i.test(message);
+}
+
+/** Whether a failure is the box refusing the connection. */
+function isRefusedFailure(errno: string | undefined, message: string): boolean {
+  return errno === "ECONNREFUSED" || /ECONNREFUSED/i.test(message);
+}
+
 export function createBoxAuthorizationInterceptor(
-  endpoint: BoxEndpoint
+  target: BoxEndpoint
 ): BoxTransportInterceptor {
-  return next => async request => {
-    request.header.set("Authorization", `Bearer ${endpoint.authToken}`);
-    for (const [name, value] of Object.entries(endpoint.headers ?? {})) {
-      request.header.set(name, value);
+  return step => async outgoing => {
+    outgoing.header.set("Authorization", `Bearer ${target.authToken}`);
+    for (const [name, value] of Object.entries(target.headers ?? {})) {
+      outgoing.header.set(name, value);
     }
-    return await next(request);
+    return await step(outgoing);
   };
 }
 
-export function createBoxTransport<Transport>(
-  endpoint: BoxEndpoint,
-  factory: BoxTransportFactory<Transport>
-): Transport {
-  return factory({
+/** The pipe options a box is reached with: its host and port, the binary format, and its authorization. */
+function boxTransportOptions(
+  target: BoxEndpoint,
+  authorization: BoxTransportInterceptor
+): BoxTransportOptions {
+  return {
     httpVersion: "1.1",
-    baseUrl: `http://${endpoint.host}:${endpoint.port}`,
+    baseUrl: `http://${target.host}:${target.port}`,
     useBinaryFormat: true,
-    interceptors: [createBoxAuthorizationInterceptor(endpoint)]
-  });
+    interceptors: [authorization]
+  };
+}
+
+export function createBoxTransport<Pipe>(
+  target: BoxEndpoint,
+  createTransport: BoxTransportFactory<Pipe>
+): Pipe {
+  return createTransport(boxTransportOptions(target, createBoxAuthorizationInterceptor(target)));
 }
 
 export function classifyPingFailure(
-  error: unknown
+  failure: unknown
 ): { outcome: "timeout" | "refused" | "crash"; causeSummary: string } {
-  const errno = findSystemErrno(error);
-  const codeName = connectCodeName(error);
+  const errno = findSystemErrno(failure);
+  const codeName = errorCodeName(failure);
   const causeSummary = errno == null ? codeName : `${codeName}/${errno}`;
-  const message = error instanceof Error ? error.message : "";
-  if (connectCode(error) === 4 || /deadline/i.test(message)) {
-    return { outcome: "timeout", causeSummary };
-  }
-  if (errno === "ECONNREFUSED" || /ECONNREFUSED/i.test(message)) {
-    return { outcome: "refused", causeSummary };
-  }
+  const message = failureMessage(failure);
+  if (isDeadlineFailure(failure, message)) return { outcome: "timeout", causeSummary };
+  if (isRefusedFailure(errno, message)) return { outcome: "refused", causeSummary };
   return { outcome: "crash", causeSummary };
 }
 
-export async function pingBoxTransportClassified<Transport>(
-  ctx: Context,
-  transport: Transport,
-  createControlClient: BoxControlClientFactory<Transport>,
-  timeoutMs = 1_500,
-  now: () => number = Date.now
+/** Whether a ping answered at all. */
+function pingSucceeded(pingOutcome: BoxPingOutcome): boolean {
+  return pingOutcome.outcome === "ok";
+}
+
+export async function pingBoxTransportClassified<Pipe>(
+  context: Context,
+  pipe: Pipe,
+  controlClientFactory: BoxControlClientFactory<Pipe>,
+  deadlineMs = 1_500,
+  clock: () => number = Date.now
 ): Promise<BoxPingOutcome> {
-  const control = createControlClient(transport);
-  const start = now();
+  const frame = controlClientFactory(pipe);
+  const startedAtMs = clock();
   try {
-    await control.ping(ctx, {}, { timeoutMs });
-    return { outcome: "ok", latencyMs: now() - start };
-  } catch (error) {
-    return { ...classifyPingFailure(error), latencyMs: now() - start };
+    await frame.ping(context, {}, { timeoutMs: deadlineMs });
+    return { outcome: "ok", latencyMs: clock() - startedAtMs };
+  } catch (failure) {
+    return { ...classifyPingFailure(failure), latencyMs: clock() - startedAtMs };
   }
 }
 
-export async function pingBoxClassified<Transport>(
-  ctx: Context,
-  endpoint: BoxEndpoint,
+export async function pingBoxClassified<Pipe>(
+  context: Context,
+  target: BoxEndpoint,
   ports: {
-    readonly createTransport: BoxTransportFactory<Transport>;
-    readonly createControlClient: BoxControlClientFactory<Transport>;
+    readonly createTransport: BoxTransportFactory<Pipe>;
+    readonly createControlClient: BoxControlClientFactory<Pipe>;
   },
-  timeoutMs = 1_500
+  deadlineMs = 1_500
 ): Promise<BoxPingOutcome> {
-  const transport = createBoxTransport(endpoint, ports.createTransport);
+  const pipe = createBoxTransport(target, ports.createTransport);
   return await pingBoxTransportClassified(
-    ctx,
-    transport,
+    context,
+    pipe,
     ports.createControlClient,
-    timeoutMs
+    deadlineMs
   );
 }
 
-export async function pingBoxTransport<Transport>(
-  ctx: Context,
-  transport: Transport,
-  createControlClient: BoxControlClientFactory<Transport>,
-  timeoutMs = 1_500
+export async function pingBoxTransport<Pipe>(
+  context: Context,
+  pipe: Pipe,
+  controlClientFactory: BoxControlClientFactory<Pipe>,
+  deadlineMs = 1_500
 ): Promise<boolean> {
-  return (
-    await pingBoxTransportClassified(
-      ctx,
-      transport,
-      createControlClient,
-      timeoutMs
-    )
-  ).outcome === "ok";
+  const pingOutcome = await pingBoxTransportClassified(
+    context,
+    pipe,
+    controlClientFactory,
+    deadlineMs
+  );
+  return pingSucceeded(pingOutcome);
 }
 
-export async function pingBox<Transport>(
-  ctx: Context,
-  endpoint: BoxEndpoint,
+export async function pingBox<Pipe>(
+  context: Context,
+  target: BoxEndpoint,
   ports: {
-    readonly createTransport: BoxTransportFactory<Transport>;
-    readonly createControlClient: BoxControlClientFactory<Transport>;
+    readonly createTransport: BoxTransportFactory<Pipe>;
+    readonly createControlClient: BoxControlClientFactory<Pipe>;
   },
-  timeoutMs = 1_500
+  deadlineMs = 1_500
 ): Promise<boolean> {
-  return (
-    await pingBoxClassified(ctx, endpoint, ports, timeoutMs)
-  ).outcome === "ok";
+  return pingSucceeded(await pingBoxClassified(context, target, ports, deadlineMs));
+}
+
+/** The error a control frame reports, with the box's stack when it sent one. */
+function thrownByControlFrame(frame: {
+  readonly error: string;
+  readonly stackTrace?: string;
+}): Error {
+  const raised = new Error(frame.error);
+  if (frame.stackTrace != null && frame.stackTrace.length > 0) {
+    raised.stack = frame.stackTrace;
+  }
+  return raised;
 }
 
 export class BoxRemoteExecManager implements RemoteExecManager {
-  #nextId = 0;
+  #requestId = 0;
 
   constructor(readonly client: BoxRemoteExecClient) {}
 
   async *createExecInstance(
-    ctx: Context,
-    serialize: (id: number) => ExecServerMessage
+    context: Context,
+    encode: (id: number) => ExecServerMessage
   ): AsyncIterable<ExecClientMessage> {
-    for await (const message of this.client.exec(ctx, serialize(this.#nextId++))) {
-      if (message.element.case === "execClientMessage") {
-        yield message.element.value;
+    const outgoing = encode(this.#requestId++);
+    for await (const envelope of this.client.exec(context, outgoing)) {
+      const part = envelope.element;
+      if (part.case === "execClientMessage") {
+        yield part.value;
         continue;
       }
-      if (message.element.case !== "execClientControlMessage") continue;
-      const control = message.element.value;
-      if (control.message.case !== "throw") continue;
-      const thrown = control.message.value;
-      const error = new Error(thrown.error);
-      if (thrown.stackTrace != null && thrown.stackTrace.length > 0) {
-        error.stack = thrown.stackTrace;
-      }
-      throw error;
+      if (part.case !== "execClientControlMessage") continue;
+      const frame = part.value.message;
+      if (frame.case !== "throw") continue;
+      throw thrownByControlFrame(frame.value);
     }
   }
 }
 
 export function createBoxRemoteResourceAccessorFromTransport<
-  Transport,
-  Accessor
+  Pipe,
+  Store
 >(
-  transport: Transport,
+  pipe: Pipe,
   ports: Pick<
-    BoxRemoteResourceConstructionPorts<Transport, Accessor>,
+    BoxRemoteResourceConstructionPorts<Pipe, Store>,
     "createExecClient" | "createResourceAccessor"
   >
-): Accessor {
+): Store {
   return ports.createResourceAccessor(
-    new BoxRemoteExecManager(ports.createExecClient(transport))
+    new BoxRemoteExecManager(ports.createExecClient(pipe))
   );
 }
 
-export function createBoxRemoteResourceAccessor<Transport, Accessor>(
-  endpoint: BoxEndpoint,
-  ports: BoxRemoteResourceConstructionPorts<Transport, Accessor>
-): Accessor {
+export function createBoxRemoteResourceAccessor<Pipe, Store>(
+  target: BoxEndpoint,
+  ports: BoxRemoteResourceConstructionPorts<Pipe, Store>
+): Store {
   return createBoxRemoteResourceAccessorFromTransport(
-    createBoxTransport(endpoint, ports.createTransport),
+    createBoxTransport(target, ports.createTransport),
     ports
   );
 }
