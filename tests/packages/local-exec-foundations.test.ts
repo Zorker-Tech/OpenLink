@@ -13,7 +13,7 @@ import { sanitizeServerName } from "../../source/packages/local-exec/mcp.ts"
 import { DEFAULT_SHELL_FOREGROUND_TIMEOUT_MS, resolveShellTimeoutMs } from "../../source/packages/local-exec/shell-timeout.ts"
 import { MAX_TOOL_ANNOTATION_TITLE_LENGTH, toolAnnotationsJsonField } from "../../source/packages/local-exec/mcp-tool-annotations.ts"
 import { sanitizeToolCallId, validateAndNormalizeSaveAsFilename } from "../../source/packages/local-exec/record-screen-paths.ts"
-import { CoordinateScaler } from "../../source/packages/local-exec/computer-use/scaling.ts"
+import { PointScaler } from "../../source/packages/local-exec/computer-use/scaling.ts"
 import { exec } from "../../source/packages/local-exec/computer-use/shell.ts"
 import { LocalLsExecutor, MissingLsTraversalBindingError } from "../../source/packages/local-exec/ls.ts"
 import { forcedShellSandboxPolicy, isForcedShellEgressEnabled } from "../../source/packages/local-exec/forced-egress.ts"
@@ -138,13 +138,13 @@ test("a recording's file name is taken relative to the artifacts directory and k
 })
 
 test("coordinates are scaled between the display and the API, and a mismatch is refused", () => {
-  const scaler = new CoordinateScaler({ display: { width: 1_000, height: 500 }, api: { width: 2_000, height: 1_000 } })
-  assert.deepEqual(scaler.apiToDisplay(100, 50), { x: 50, y: 25 })
-  assert.deepEqual(scaler.displayToApi(50, 25), { x: 100, y: 50 })
+  const scaler = new PointScaler({ display: { width: 1_000, height: 500 }, api: { width: 2_000, height: 1_000 } })
+  assert.deepEqual(scaler.toDisplay(100, 50), { x: 50, y: 25 })
+  assert.deepEqual(scaler.toApi(50, 25), { x: 100, y: 50 })
   assert.equal(scaler.apiWidth, 2_000)
   assert.equal(scaler.displayHeight, 500)
   assert.throws(
-    () => new CoordinateScaler({ display: { width: 1_000, height: 500 }, api: { width: 1_000, height: 900 } }),
+    () => new PointScaler({ display: { width: 1_000, height: 500 }, api: { width: 1_000, height: 900 } }),
     /Aspect ratio mismatch/,
   )
 })

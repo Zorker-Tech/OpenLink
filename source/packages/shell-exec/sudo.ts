@@ -8,39 +8,64 @@
  * alone too, since a `sudo` inside a quoted string or an argument is not the command being run.
  */
 
-export const SUDO_ALIAS = "alias sudo='sudo -A'"
-const isWindows = process.platform === "win32"
-export const shouldEnableSudoAskpass = (env: NodeJS.ProcessEnv): boolean => !isWindows && Boolean(env.SUDO_ASKPASS)
-export const getSudoAliasInjection = (env: NodeJS.ProcessEnv): string => shouldEnableSudoAskpass(env) ? `${SUDO_ALIAS}; ` : ""
+export const SUDO_ALIAS = "alias sudo='sudo -A'";
 
-/** Rewrites the `sudo` words that start a command so they ask the configured helper. */
+const isWindows = process.platform === "win32";
+
+/** Whether this machine can answer sudo's prompt without a terminal. */
+export const shouldEnableSudoAskpass = (env: NodeJS.ProcessEnv): boolean => !isWindows && Boolean(env.SUDO_ASKPASS);
+
+/** What a shell is given before the command, so its own `sudo` asks the helper. */
+export const getSudoAliasInjection = (env: NodeJS.ProcessEnv): string => (shouldEnableSudoAskpass(env) ? `${SUDO_ALIAS}; ` : "");
+
+/** The word itself, and the flag that makes it ask the helper. */
+const SUDO = "sudo";
+const ASKPASS_FLAGS = "-A";
+
+/** The separators a command may start after. */
+const OPERATOR_BEFORE = /(?:&&|\|\||[|;])\s*$/;
+
+/** Whether this position is where a command begins: the start of the line, or after a separator. */
+function startsACommand(command: string, index: number): boolean {
+  if (index === 0) return true;
+  if (command[index - 1] === "|" || command[index - 1] === ";") return true;
+  return OPERATOR_BEFORE.test(command.slice(Math.max(0, index - 10), index));
+}
+
+/** The flags a sudo was given, read from the text just after it, or nothing when it was given none. */
+function flagsAfter(command: string, from: number): string | null {
+  let at = from;
+  while (at < command.length && /\s/.test(command[at]!)) at += 1;
+  if (command[at] !== "-") return null;
+  let end = at + 1;
+  while (end < command.length && !/\s/.test(command[end]!)) end += 1;
+  return command.slice(at, end);
+}
+
+/** Whether these flags already carry the one that makes sudo ask the helper, however they are written. */
+function carriesAskpassFlag(flags: string | null): boolean {
+  return flags !== null && /^-[a-zA-Z]*A[a-zA-Z]*$/.test(flags);
+}
+
+/**
+ * Rewrites the `sudo` words that start a command so they ask the configured helper.
+ *
+ * Everything else — a `sudo` in an argument, a longer word that begins with it, a command that already asked — is
+ * copied through as it was written.
+ */
 export function transformSudoCommand(command: string): string {
-  const result: string[] = []
-  let index = 0
+  const written: string[] = [];
+  let index = 0;
   while (index < command.length) {
-    // A command starts at the beginning, after a separator, or after one followed by whitespace.
-    const isCommandStart = index === 0 || command.slice(Math.max(0, index - 2), index) === "&&" || command.slice(Math.max(0, index - 2), index) === "||" || command[index - 1] === "|" || command[index - 1] === ";"
-    const lookback = command.slice(Math.max(0, index - 10), index)
-    const isAfterOperator = /(?:&&|\|\||[|;])\s*$/.test(lookback) || (index === 0 && /^\s*$/.test(lookback))
-    if ((isCommandStart || isAfterOperator) && command.slice(index, index + 4) === "sudo") {
-      const afterSudo = index + 4
-      // The word has to end there, or it is a longer word that merely starts with sudo.
-      if (afterSudo >= command.length || /\s/.test(command[afterSudo]!)) {
-        let flagStart = afterSudo
-        while (flagStart < command.length && /\s/.test(command[flagStart]!)) flagStart += 1
-        let hasAFlag = false
-        if (command[flagStart] === "-") {
-          let flagEnd = flagStart + 1
-          while (flagEnd < command.length && /[^\s]/.test(command[flagEnd]!)) flagEnd += 1
-          hasAFlag = /^-[a-zA-Z]*A[a-zA-Z]*$/.test(command.slice(flagStart, flagEnd))
-        }
-        result.push(hasAFlag ? "sudo" : "sudo -A")
-        index = afterSudo
-        continue
-      }
+    const isSudoWord = command.slice(index, index + SUDO.length) === SUDO && (index + SUDO.length >= command.length || /\s/.test(command[index + SUDO.length]!));
+    if (isSudoWord && startsACommand(command, index)) {
+      const afterSudo = index + SUDO.length;
+      written.push(carriesAskpassFlag(flagsAfter(command, afterSudo)) ? SUDO : `${SUDO} ${ASKPASS_FLAGS}`);
+      index = afterSudo;
+      continue;
     }
-    result.push(command[index]!)
-    index += 1
+    written.push(command[index]!);
+    index += 1;
   }
-  return result.join("")
+  return written.join("");
 }
