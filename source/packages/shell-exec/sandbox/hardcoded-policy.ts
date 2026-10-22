@@ -21,7 +21,6 @@
 import { existsSync, lstatSync, statSync } from "node:fs";
 import os from "node:os";
 import { join } from "node:path";
-import ignore from "ignore";
 
 type AllowedReadPath = {
   platform: "linux" | "darwin";
@@ -309,7 +308,6 @@ const SLATE_ALLOWED_WRITE_SUBDIRS = HARDCODED_WRITE_PROTECTION_PATTERNS
 const HARDCODED_NETWORK_DENYLIST: string[] = [];
 const _caseInsensitiveFs = process.platform === "win32" || process.platform === "darwin";
 
-void ignore;
 void HARDCODED_PROTECTED_GIT_PATTERNS;
 void SLATE_ALLOWED_WRITE_SUBDIRS;
 void _caseInsensitiveFs;
