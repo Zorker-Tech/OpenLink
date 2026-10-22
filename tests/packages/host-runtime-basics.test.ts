@@ -359,6 +359,27 @@ describe("finding an MCP server by the identifier it is known by", () => {
     assert.deepEqual(await readMcpInstalledListing(async () => rows), { kind: "read", servers: rows });
     assert.deepEqual(await readMcpInstalledListing(async () => { throw new Error("no listing"); }), { kind: "unreadable" });
   });
+
+  it("keeps every row the identifier names, and only falls back to an older id when none is named", () => {
+    const duplicated = [
+      { id: "a", serverIdentifier: "github" },
+      { id: "b", serverIdentifier: "github" },
+      { id: "github", serverIdentifier: "other" },
+    ];
+    assert.deepEqual(resolveMcpServerRowsByIdentifierOrLegacyId(duplicated, "github"), [duplicated[0], duplicated[1]], "the identifier answers with every row it names, before any older id is tried");
+    assert.deepEqual(resolveMcpServerRowsByIdentifierOrLegacyId(duplicated, "other"), [duplicated[2]]);
+    assert.deepEqual(resolveMcpServerRowsByIdentifierOrLegacyId([], "x"), []);
+    assert.deepEqual(resolveMcpServerRowsByIdentifierOrLegacyId(rows, ""), []);
+    assert.deepEqual(resolveMcpServerRowsByIdentifierOrLegacyId([{ id: "", serverIdentifier: "" }], "   "), [], "an empty token asks for nothing, not for the row filed under nothing");
+    assert.equal(resolveMcpServerRowByIdentifierOrLegacyId(duplicated, "github")?.id, "a", "the first row named is the one answered")
+  });
+
+  it("reads a listing that fails in any way as unreadable, and an empty one as read", async () => {
+    assert.deepEqual(await readMcpInstalledListing(async () => []), { kind: "read", servers: [] });
+    assert.deepEqual(await readMcpInstalledListing(async () => Promise.reject(new Error("rejected"))), { kind: "unreadable" });
+    assert.deepEqual(await readMcpInstalledListing(() => { throw new Error("sync failure"); }), { kind: "unreadable" });
+    assert.deepEqual(await readMcpInstalledListing(7 as never), { kind: "unreadable" }, "a listing that is not a loader is unreadable too")
+  });
 });
 
 describe("asking the user for a secret", () => {
