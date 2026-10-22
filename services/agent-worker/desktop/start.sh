@@ -35,6 +35,56 @@ wait_for_process() {
   return 1
 }
 
+configure_xfce_wallpaper() {
+  local wallpaper=/usr/share/xfce4/backdrops/xubuntu-wallpaper.png
+  if [[ ! -r "$wallpaper" ]]; then
+    echo "Ubuntu desktop wallpaper is missing: $wallpaper" >&2
+    return 1
+  fi
+
+  if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]]; then
+    echo "Xfce wallpaper configuration must run inside its D-Bus session" >&2
+    return 1
+  fi
+
+  local property
+  for property in \
+    /xfce4-desktop/backdrop/screen0/monitor0/image \
+    /xfce4-desktop/backdrop/screen0/monitor0/workspace-0/image; do
+    xfconf-query -c xfce4-desktop -p "$property" -n -t string -s "$wallpaper"
+  done
+}
+
+run_xfce_session() {
+  startxfce4 &
+  local xfce_launcher_pid=$!
+  local started=false
+  for _ in $(seq 1 100); do
+    if pgrep -u openlink -x xfce4-session >/dev/null 2>&1; then
+      started=true
+      break
+    fi
+    if ! kill -0 "$xfce_launcher_pid" 2>/dev/null; then
+      wait "$xfce_launcher_pid" || true
+      break
+    fi
+    sleep 0.2
+  done
+
+  if [[ "$started" != true ]]; then
+    echo "Xfce did not start" >&2
+    return 1
+  fi
+
+  configure_xfce_wallpaper
+  wait "$xfce_launcher_pid"
+}
+
+if [[ "${1:-}" == "--run-xfce-session" ]]; then
+  run_xfce_session
+  exit $?
+fi
+
 if [[ "${OPENLINK_DESKTOP_MODE:-ubuntu-container}" == "ubuntu-iso" ]]; then
   start_background ubuntu-vm bash /opt/openlink/desktop/run-ubuntu-vm.sh
   wait_for_file /tmp/openlink-ubuntu-vm-vnc.ready
@@ -69,7 +119,7 @@ else
       XDG_CURRENT_DESKTOP=XFCE \
       DESKTOP_SESSION=xfce \
       LIBGL_ALWAYS_SOFTWARE=1 \
-      dbus-run-session -- startxfce4
+      dbus-run-session -- bash /opt/openlink/desktop/start.sh --run-xfce-session
     desktop_process_name=xfce4-session
     desktop_pid_file=/tmp/openlink-desktop-xfce.pid
     if ! wait_for_process "$desktop_process_name" "$desktop_pid_file"; then

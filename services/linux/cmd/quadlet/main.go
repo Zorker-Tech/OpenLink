@@ -1,12 +1,13 @@
 package main
 
 import (
+	"cmp"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"unicode"
@@ -106,7 +107,7 @@ func loadUnitsFromDir(sourcePath string) ([]*parser.UnitFile, error) {
 	for _, file := range files {
 		name := file.Name()
 		if _, ok := seen[name]; !ok && quadlet.IsExtSupported(name) {
-			path := path.Join(sourcePath, name)
+			path := filepath.Join(sourcePath, name)
 
 			Debugf("Loading source unit file %s", path)
 
@@ -115,7 +116,7 @@ func loadUnitsFromDir(sourcePath string) ([]*parser.UnitFile, error) {
 				if prevError == nil {
 					prevError = err
 				} else {
-					prevError = fmt.Errorf("%s\n%s", prevError, err)
+					prevError = fmt.Errorf("%w\n%w", prevError, err)
 				}
 			} else {
 				seen[name] = void
@@ -127,20 +128,105 @@ func loadUnitsFromDir(sourcePath string) ([]*parser.UnitFile, error) {
 	return units, prevError
 }
 
+// Discover instances from drop-in directories after loading all explicit units,
+// but before merging drop-ins so that each instance gets its own template copy.
+func loadTemplateInstances(sourcePaths []string, units []*parser.UnitFile) ([]*parser.UnitFile, error) {
+	unitsByName := make(map[string]*parser.UnitFile, len(units))
+	for _, unit := range units {
+		unitsByName[unit.Filename] = unit
+	}
+
+	var instances []*parser.UnitFile
+	var prevError error
+	for _, sourcePath := range sourcePaths {
+		files, err := os.ReadDir(sourcePath)
+		if err != nil {
+			if !errors.Is(err, os.ErrNotExist) {
+				prevError = errors.Join(prevError, fmt.Errorf("reading %q: %w", sourcePath, err))
+			}
+			continue
+		}
+		for _, file := range files {
+			name, found := strings.CutSuffix(file.Name(), ".d")
+			if !found || !quadlet.IsExtSupported(name) {
+				continue
+			}
+			candidate := &parser.UnitFile{Filename: name}
+			base, instance, isTemplate := candidate.GetTemplateParts()
+			if !isTemplate || base == "" || instance == "" || instance == "." {
+				continue
+			}
+			if unitsByName[name] != nil {
+				continue
+			}
+			template := unitsByName[base+"@"+filepath.Ext(name)]
+			if template == nil {
+				continue
+			}
+			if !file.IsDir() {
+				// Follow symlinks to drop-in directories, as loadUnitDropins does.
+				dropinPath := filepath.Join(sourcePath, file.Name())
+				info, err := os.Stat(dropinPath)
+				if err != nil {
+					if !errors.Is(err, os.ErrNotExist) {
+						prevError = errors.Join(prevError, fmt.Errorf("reading %q: %w", dropinPath, err))
+					}
+					continue
+				}
+				if !info.IsDir() {
+					continue
+				}
+			}
+
+			Debugf("Loading instance %s from template %s", name, template.Path)
+			unit := template.Dup()
+			unit.Filename = name
+			// Keep the source path for relative paths and SourcePath in the service.
+			unit.Path = template.Path
+			unitsByName[name] = unit
+			instances = append(instances, unit)
+		}
+	}
+	return instances, prevError
+}
+
 func loadUnitDropins(unit *parser.UnitFile, sourcePaths []string) error {
 	var prevError error
 	reportError := func(err error) {
 		if prevError != nil {
-			err = fmt.Errorf("%s\n%s", prevError, err)
+			err = fmt.Errorf("%w\n%w", prevError, err)
 		}
 		prevError = err
 	}
 
 	unitDropinPaths := unit.GetUnitDropinPaths()
 	dropinDirs := make([]string, 0, len(unitDropinPaths))
+
+	// Get the resolved path of the unit file to handle symlinks
+	resolvedPath, err := filepath.EvalSymlinks(unit.Path)
+	if err != nil {
+		// If we can't resolve symlinks, use the original path
+		resolvedPath = unit.Path
+	}
+	resolvedDir := filepath.Dir(resolvedPath)
+
+	// Use a map to track directories we've already added
+	addedDirs := make(map[string]struct{})
+
 	for _, dropinPath := range unitDropinPaths {
 		for _, sourcePath := range sourcePaths {
-			dropinDirs = append(dropinDirs, path.Join(sourcePath, dropinPath))
+			dir := filepath.Join(sourcePath, dropinPath)
+			if _, exists := addedDirs[dir]; !exists {
+				addedDirs[dir] = struct{}{}
+				dropinDirs = append(dropinDirs, dir)
+			}
+		}
+		// Also search in the directory containing the resolved unit file
+		// This is needed for rootless users when rootful quadlets are symlinked
+		dir := filepath.Join(resolvedDir, dropinPath)
+		if _, exists := addedDirs[dir]; !exists {
+			addedDirs[dir] = struct{}{}
+			dropinDirs = append(dropinDirs, dir)
 		}
 	}
 
@@ -165,7 +251,7 @@ func loadUnitDropins(unit *parser.UnitFile, sourcePaths []string) error {
 				continue // We already saw this name
 			}
 
-			dropinPaths[dropinName] = path.Join(dropinDir, dropinName)
+			dropinPaths[dropinName] = filepath.Join(dropinDir, dropinName)
 		}
 	}
 
@@ -248,7 +334,7 @@ func enableServiceFile(outputPath string, service *parser.UnitFile) {
 
 	// For non-instantiated template service we only support installs if a
 	// DefaultInstance is given. Otherwise we ignore the Install group, but
-	// it is still useful when instantiating the unit via a symlink.
+	// it is still useful when creating individual instances.
 	if isTemplate && templateInstance == "" {
 		if defaultInstance, ok := service.Lookup(quadlet.InstallGroup, "DefaultInstance"); ok {
 			serviceFilename = templateBase + "@" + defaultInstance + filepath.Ext(serviceFilename)
@@ -264,14 +350,14 @@ func enableServiceFile(outputPath string, service *parser.UnitFile) {
 	}
 
 	for _, symlinkRel := range symlinks {
-		target, err := filepath.Rel(path.Dir(symlinkRel), service.Filename)
+		target, err := filepath.Rel(filepath.Dir(symlinkRel), service.Filename)
 		if err != nil {
 			Logf("Can't create symlink %s: %s", symlinkRel, err)
 			continue
 		}
-		symlinkPath := path.Join(outputPath, symlinkRel)
+		symlinkPath := filepath.Join(outputPath, symlinkRel)
 
-		symlinkDir := path.Dir(symlinkPath)
+		symlinkDir := filepath.Dir(symlinkPath)
 		err = os.MkdirAll(symlinkDir, os.ModePerm)
 		if err != nil {
 			Logf("Can't create dir %s: %s", symlinkDir, err)
@@ -441,7 +527,7 @@ func main() {
 func process() bool {
 	var processErred bool
 
-	prgname := path.Base(os.Args[0])
+	prgname := filepath.Base(os.Args[0])
 	isUserFlag = strings.Contains(prgname, "user")
 
 	flag.Parse()
@@ -495,6 +581,12 @@ func process() bool {
 		return processErred
 	}
 
+	instances, err := loadTemplateInstances(sourcePathsMap, units)
+	if err != nil {
+		reportError(err)
+	}
+	units = append(units, instances...)
+
 	for _, unit := range units {
 		if err := loadUnitDropins(unit, sourcePathsMap); err != nil {
 			reportError(err)
@@ -511,16 +603,16 @@ func process() bool {
 
 	// Sort unit files according to potential inter-dependencies, with Volume and Network units
 	// taking precedence over all others.
-	sort.Slice(units, func(i, j int) bool {
-		getOrder := func(i int) int {
-			ext := filepath.Ext(units[i].Filename)
+	slices.SortFunc(units, func(a, b *parser.UnitFile) int {
+		getOrder := func(filename string) int {
+			ext := filepath.Ext(filename)
 			order, ok := quadlet.SupportedExtensions[ext]
 			if !ok {
 				return 0
 			}
 			return order
 		}
-		return getOrder(i) < getOrder(j)
+		return cmp.Compare(getOrder(a.Filename), getOrder(b.Filename))
 	})
 
 	// Generate the PodsInfoMap to allow containers to link to their pods and add themselves to the pod's containers list
@@ -567,7 +659,7 @@ func process() bool {
 			continue
 		}
 
-		service.Path = path.Join(outputPath, service.Filename)
+		service.Path = filepath.Join(outputPath, service.Filename)
 
 		if dryRunFlag {
 			data, err := service.ToString()

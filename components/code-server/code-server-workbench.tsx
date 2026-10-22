@@ -1,6 +1,7 @@
 'use client'
 
 import { ThinkingOrb } from '@/components/thinking/src'
+import { browserReachableGatewayUrl } from '@/lib/browser-runtime/client'
 import { useT } from '@/lib/i18n/client'
 import { theme } from '@/lib/theme'
 import { AlertCircle, RefreshCw } from 'lucide-react'
@@ -17,23 +18,6 @@ interface CodeServerSessionResponse {
   }
   error?: {
     code?: unknown
-  }
-}
-
-function browserReachableGatewayUrl(value: string): string {
-  if (typeof window === 'undefined') return value
-  try {
-    const url = new URL(value)
-    const loopback = new Set(['localhost', '127.0.0.1', '[::1]'])
-    // During local development Agent Host binds to loopback. Match the
-    // gateway hostname to the app hostname so its HttpOnly bootstrap cookie
-    // remains same-site inside the code iframe (127.0.0.1 ≠ localhost).
-    if (loopback.has(url.hostname) && loopback.has(window.location.hostname)) {
-      url.hostname = window.location.hostname
-    }
-    return url.toString()
-  } catch {
-    return value
   }
 }
 

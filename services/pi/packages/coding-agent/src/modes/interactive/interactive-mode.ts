@@ -4628,7 +4628,7 @@ export class InteractiveMode {
 		if (this.anthropicSubscriptionWarningShown) {
 			return;
 		}
-		if (!model || model.provider !== "anthropic") {
+		if (model?.provider !== "anthropic") {
 			return;
 		}
 

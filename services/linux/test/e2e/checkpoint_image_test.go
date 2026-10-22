@@ -5,6 +5,7 @@ package integration
 import (
 	"fmt"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -61,7 +62,7 @@ var _ = Describe("Podman checkpoint", func() {
 		session = podmanTest.Podman([]string{"images"})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
-		Expect(session.LineInOutputContainsTag("localhost/"+checkpointImage, "latest")).To(BeFalse())
+		Expect(session.OutputToStringArray()).ToNot(ContainElement(MatchRegexp("^" + regexp.QuoteMeta("localhost/"+checkpointImage) + `\s+latest\s`)))
 
 		// Check if none of the checkpoint/restore specific information is displayed
 		// for newly started containers.
@@ -94,7 +95,7 @@ var _ = Describe("Podman checkpoint", func() {
 		session = podmanTest.Podman([]string{"images"})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
-		Expect(session.LineInOutputContainsTag("localhost/"+checkpointImage, "latest")).To(BeTrue())
+		Expect(session.OutputToStringArray()).To(ContainElement(MatchRegexp("^" + regexp.QuoteMeta("localhost/"+checkpointImage) + `\s+latest\s`)))
 
 		// Check if the checkpoint image contains annotations
 		inspect = podmanTest.Podman([]string{"inspect", checkpointImage})
@@ -159,7 +160,7 @@ var _ = Describe("Podman checkpoint", func() {
 		session = podmanTest.Podman([]string{"images"})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
-		Expect(session.LineInOutputContainsTag("localhost/"+checkpointImage, "latest")).To(BeFalse())
+		Expect(session.OutputToStringArray()).ToNot(ContainElement(MatchRegexp("^" + regexp.QuoteMeta("localhost/"+checkpointImage) + `\s+latest\s`)))
 
 		result := podmanTest.Podman([]string{"container", "checkpoint", "--create-image", checkpointImage, "--keep", containerID})
 		result.WaitWithDefaultTimeout()
@@ -172,7 +173,7 @@ var _ = Describe("Podman checkpoint", func() {
 		session = podmanTest.Podman([]string{"images"})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
-		Expect(session.LineInOutputContainsTag("localhost/"+checkpointImage, "latest")).To(BeTrue())
+		Expect(session.OutputToStringArray()).To(ContainElement(MatchRegexp("^" + regexp.QuoteMeta("localhost/"+checkpointImage) + `\s+latest\s`)))
 
 		// Remove existing container
 		result = podmanTest.Podman([]string{"rm", "-t", "1", "-f", containerID})
@@ -274,7 +275,7 @@ var _ = Describe("Podman checkpoint", func() {
 		Expect(podmanTest.NumberOfContainersRunning()).To(Equal(0))
 	})
 
-	It("podman run with checkpoint image", func() {
+	It("podman run with checkpoint image throws an error", func() {
 		// Container image must be lowercase
 		checkpointImage := "alpine-checkpoint-" + strings.ToLower(RandomString(6))
 		containerName := "alpine-container-" + RandomString(6)
@@ -300,19 +301,7 @@ var _ = Describe("Podman checkpoint", func() {
 		// Restore containers from image using `podman run`
 		result = podmanTest.Podman([]string{"run", checkpointImage})
 		result.WaitWithDefaultTimeout()
-		Expect(result).Should(ExitCleanly())
-		Expect(podmanTest.NumberOfContainersRunning()).To(Equal(1))
-
-		// Check if the container is running
-		status := podmanTest.Podman([]string{"inspect", containerName, "--format={{.State.Status}}"})
-		status.WaitWithDefaultTimeout()
-		Expect(status).Should(ExitCleanly())
-		Expect(status.OutputToString()).To(Equal("running"))
-
-		// Clean-up
-		result = podmanTest.Podman([]string{"rm", "-t", "0", "-fa"})
-		result.WaitWithDefaultTimeout()
-		Expect(result).Should(ExitCleanly())
+		Expect(result).Should(ExitWithError(125, "is a checkpoint and must be started using `podman container restore` instead"))
 		Expect(podmanTest.NumberOfContainersRunning()).To(Equal(0))
 
 		result = podmanTest.Podman([]string{"rmi", checkpointImage})

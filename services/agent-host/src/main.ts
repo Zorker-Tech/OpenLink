@@ -125,6 +125,7 @@ if (projectRuntimeBackend === 'container') {
     agentWorkerImage: env.OPENLINK_AGENT_WORKER_IMAGE || 'openlink/agent-worker:dev', agentRpcWorkerImage: env.OPENLINK_AGENT_RPC_WORKER_IMAGE || env.OPENLINK_AGENT_WORKER_IMAGE || 'openlink/agent-rpc-worker:dev',
     codeServerImage: env.OPENLINK_CODE_SERVER_IMAGE || 'openlink/code-server:dev', imageArchives: imageArchives(env.OPENLINK_PROJECT_RUNTIME_IMAGE_ARCHIVES),
     projectPortBase: integer(env.OPENLINK_PROJECT_RUNTIME_PORT_BASE, 51_000, 1_024, 65_000), projectPortRangeSize: integer(env.OPENLINK_PROJECT_RUNTIME_PORT_RANGE_SIZE, 1_000, 1, 64_000),
+    ...(ubuntuDesktopIsoSource ? { ubuntuDesktopIsoSource } : {}),
     browserAllowedOrigins: env.OPENLINK_BROWSER_ALLOWED_ORIGINS || 'http://localhost:3000',
   })
 }

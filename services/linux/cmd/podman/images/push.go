@@ -137,6 +137,10 @@ func pushFlags(cmd *cobra.Command) {
 	flags.IntSliceVar(&pushOptions.EncryptLayers, encryptLayersFlagName, nil, "Layers to encrypt, 0-indexed layer indices with support for negative indexing (e.g. 0 is the first layer, -1 is the last layer). If not defined, will encrypt all layers if encryption-key flag is specified")
 	_ = cmd.RegisterFlagCompletionFunc(encryptLayersFlagName, completion.AutocompleteDefault)
 
+	platformFlagName := "platform"
+	flags.String(platformFlagName, "", "Specify the platform for selecting the image from a manifest list")
+	_ = cmd.RegisterFlagCompletionFunc(platformFlagName, completion.AutocompleteNone)
+
 	if registry.IsRemote() {
 		_ = flags.MarkHidden("cert-dir")
 		_ = flags.MarkHidden("compress")
@@ -229,9 +233,20 @@ func imagePush(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	if cmd.Flags().Changed("platform") {
+		platform, err := cmd.Flags().GetString("platform")
+		if err != nil {
+			return err
+		}
+		if platform != "" {
+			pushOptions.OS, pushOptions.Arch, pushOptions.Variant = parsePlatform(platform)
+			pushOptions.All = false
+		}
+	}
+
 	// Let's do all the remaining Yoga in the API to prevent us from scattering
 	// logic across (too) many parts of the code.
-	report, err := registry.ImageEngine().Push(registry.Context(), source, destination, pushOptions.ImagePushOptions)
+	report, err := registry.ImageEngine().Push(cmd.Context(), source, destination, pushOptions.ImagePushOptions)
 	if err != nil {
 		return err
 	}

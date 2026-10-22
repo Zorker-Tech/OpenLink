@@ -5,6 +5,7 @@ package server
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -147,6 +148,7 @@ func newServer(runtime *libpod.Runtime, listener net.Listener, opts entities.Ser
 		server.registerAuthHandlers,
 		server.registerArtifactHandlers,
 		server.registerArchiveHandlers,
+		server.registerAutoUpdateHandlers,
 		server.registerContainersHandlers,
 		server.registerDistributionHandlers,
 		server.registerEventsHandlers,
@@ -265,7 +267,7 @@ func (s *APIServer) Serve() error {
 			s.Server.Protocols.SetUnencryptedHTTP2(true)
 			err = s.Server.Serve(s.Listener)
 		}
-		if err != nil && err != http.ErrServerClosed {
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errChan <- fmt.Errorf("failed to start API service: %w", err)
 			return
 		}
@@ -329,7 +331,7 @@ func (s *APIServer) Shutdown(halt bool) error {
 			defer cancel()
 
 			err := s.Server.Shutdown(ctx)
-			if err != nil && err != context.Canceled && err != http.ErrServerClosed {
+			if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, http.ErrServerClosed) {
 				logrus.Error("Failed to cleanly shutdown API service: " + err.Error())
 			}
 		}()

@@ -30,6 +30,7 @@ interface ProviderConfigurationRow {
 export type { AgentProviderRuntimeConfiguration, AiProviderConfigurationSummary, ConfiguredModelOption, ProviderModelParams } from '@/lib/ai-provider-types'
 
 const selectColumns = 'user_id, provider_id, enabled, is_default, base_url, default_model_id, enabled_model_ids, model_params, encrypted_api_key, api_key_iv, api_key_tag, api_key_hint, encryption_version, created_at, updated_at'
+const validProviderModelId = (modelId: string) => /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/.test(modelId)
 
 function summary(row: ProviderConfigurationRow): AiProviderConfigurationSummary {
   return {
@@ -143,18 +144,31 @@ export async function saveAiProviderConfiguration(
   if (!definition) throw new Error('UNKNOWN_PROVIDER')
   const models = await getAiProviderModels(input.providerId)
   const modelIds = new Set(models.map((model) => model.id))
-  const validDynamicModel = (modelId: string) => /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/.test(modelId)
-  if (models.length ? !modelIds.has(input.defaultModelId) : !validDynamicModel(input.defaultModelId)) throw new Error('UNKNOWN_PROVIDER_MODEL')
-  if (input.enabledModelIds.some((modelId) => models.length ? !modelIds.has(modelId) : !validDynamicModel(modelId))) throw new Error('UNKNOWN_PROVIDER_MODEL')
   if (input.modelParams !== undefined) {
     for (const [modelId, params] of Object.entries(input.modelParams)) {
-      if (!validDynamicModel(modelId)) throw new Error('UNKNOWN_PROVIDER_MODEL')
+      if (!validProviderModelId(modelId)) throw new Error('UNKNOWN_PROVIDER_MODEL')
       if (!params) continue
       if (!Number.isFinite(params.contextWindow) || !Number.isFinite(params.maxTokens)) throw new Error('MODEL_PARAMS_INVALID')
     }
   }
 
   const existing = await getProviderRow(supabase, userId, input.providerId)
+  // The settings form also supports models fetched from a custom endpoint and
+  // manually added model IDs. Those models are stored in model_params, so
+  // accept them alongside the current Pi catalog. Existing enabled IDs are
+  // retained too, which lets users save configurations after Pi removes or
+  // renames a model.
+  const configuredModelIds = new Set([
+    ...Object.keys(existing?.model_params ?? {}),
+    ...Object.keys(input.modelParams ?? {}),
+    ...(existing?.enabled_model_ids ?? []),
+  ])
+  const isKnownModel = (modelId: string) => validProviderModelId(modelId) && (
+    models.length === 0 || modelIds.has(modelId) || configuredModelIds.has(modelId)
+  )
+  if (!isKnownModel(input.defaultModelId)) throw new Error('UNKNOWN_PROVIDER_MODEL')
+  if (input.enabledModelIds.some((modelId) => !isKnownModel(modelId))) throw new Error('UNKNOWN_PROVIDER_MODEL')
+
   const catalogBaseUrl = models.find((model) => model.baseUrl && !model.baseUrl.includes('{'))?.baseUrl
   const effectiveBaseUrl = input.baseUrl || definition.baseUrl || catalogBaseUrl || null
   if (input.enabled && !effectiveBaseUrl) throw new Error('PROVIDER_BASE_URL_REQUIRED')
@@ -268,9 +282,9 @@ export async function resolveAgentProviderRuntimeConfiguration(
   if (!definition) throw new Error('UNKNOWN_PROVIDER')
   const modelId = requestedModel?.modelId ?? row.default_model_id
   if (!modelId || !row.enabled_model_ids.includes(modelId)) throw new Error('MODEL_NOT_ENABLED')
+  if (!validProviderModelId(modelId)) throw new Error('UNKNOWN_PROVIDER_MODEL')
   const models = await getAiProviderModels(row.provider_id)
   const modelDefinition = models.find((model) => model.id === modelId)
-  if (models.length && !modelDefinition) throw new Error('UNKNOWN_PROVIDER_MODEL')
   const modelBaseUrl = modelDefinition?.baseUrl
   const baseUrl = row.base_url || modelBaseUrl || definition.baseUrl || ''
   if (!row.encrypted_api_key || !row.api_key_iv || !row.api_key_tag) {
@@ -335,8 +349,7 @@ export async function resolveConfiguredModelSelection(
 
   const modelId = requestedModel?.modelId ?? row.default_model_id
   if (!modelId || !row.enabled_model_ids.includes(modelId)) throw new Error('MODEL_NOT_ENABLED')
-  const models = await getAiProviderModels(row.provider_id)
-  if (models.length && !models.some((model) => model.id === modelId)) throw new Error('UNKNOWN_PROVIDER_MODEL')
+  if (!validProviderModelId(modelId)) throw new Error('UNKNOWN_PROVIDER_MODEL')
   return { providerId: row.provider_id, modelId }
 }
 
@@ -353,12 +366,11 @@ export async function listConfiguredModels(supabase: ServerSupabaseClient, userI
     // fetched ids present in model params. Persisted params override catalog
     // metadata so edits survive reloads.
     const catalogById = new Map(catalog.map((model) => [model.id, model]))
-    const knownIds = new Set<string>([...catalogById.keys(), ...Object.keys(storedParams)])
-    // A dynamic provider (no catalog) exposes exactly the enabled ids; carry
-    // any enabled id that is not yet in knownIds so it still appears.
-    if (!catalog.length) {
-      for (const id of enabledIds) knownIds.add(id)
-    }
+    // Expose persisted enabled ids even when they are custom or were removed
+    // from the current catalog. The enabled list is the user's configured
+    // model allowlist; catalog metadata is only an optional source of labels
+    // and capabilities.
+    const knownIds = new Set<string>([...catalogById.keys(), ...Object.keys(storedParams), ...enabledIds])
 
     return [...knownIds]
       .filter((modelId) => enabledIds.has(modelId))

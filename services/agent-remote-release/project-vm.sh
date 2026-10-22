@@ -185,6 +185,32 @@ bootstrap_guest() {
   local machine="$1"
   local directory="$(machine_dir "$machine")"
   [[ -x "$PODMAN_BINARY" ]] || fail "repository-built Podman binary is missing: ${PODMAN_BINARY}"
+  guest_ssh "$machine" bash -s <<'EOF'
+set -Eeuo pipefail
+# ISO desktop sessions launch QEMU inside this Project VM. Load nested KVM
+# whenever the outer VM exposes virtualization flags; failure is non-fatal
+# because the Ubuntu GNOME container fallback does not need /dev/kvm.
+if grep -Eq '(^|[[:space:]])vmx([[:space:]]|$)' /proc/cpuinfo; then
+  printf '%s\n' 'kvm' 'kvm_intel' | sudo tee /etc/modules-load.d/openlink-kvm.conf >/dev/null
+  printf '%s\n' 'options kvm_intel nested=1' | sudo tee /etc/modprobe.d/openlink-kvm.conf >/dev/null
+  sudo modprobe kvm || true
+  sudo modprobe kvm_intel nested=1 || true
+elif grep -Eq '(^|[[:space:]])svm([[:space:]]|$)' /proc/cpuinfo; then
+  printf '%s\n' 'kvm' 'kvm_amd' | sudo tee /etc/modules-load.d/openlink-kvm.conf >/dev/null
+  printf '%s\n' 'options kvm_amd nested=1' | sudo tee /etc/modprobe.d/openlink-kvm.conf >/dev/null
+  sudo modprobe kvm || true
+  sudo modprobe kvm_amd nested=1 || true
+fi
+# Rootless Podman bind-mounts host devices and does not preserve group-only
+# access by default. This single-user Project VM makes /dev/kvm world-accessible
+# so the control plane can pass it only to ISO-mode session workers. The
+# Project VM remains the outer isolation boundary.
+if [[ -c /dev/kvm ]]; then
+  printf '%s\n' 'KERNEL=="kvm", MODE="0666"' | sudo tee /etc/udev/rules.d/99-openlink-kvm.rules >/dev/null
+  sudo udevadm control --reload-rules >/dev/null 2>&1 || true
+  sudo chmod 0666 /dev/kvm || true
+fi
+EOF
   local marker="${directory}/guest-toolchain-${PODMAN_SHA256}"
   if [[ -f "$marker" ]]; then
     return

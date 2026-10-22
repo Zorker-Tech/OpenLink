@@ -10,7 +10,8 @@ buildahVersion: *[0-9.]\\\+
 conmon:\\\s\\\+package:
 distribution:
 logDriver:
-ociRuntime:\\\s\\\+name:
+ociRuntime:\\\s\\\+features:
+ociRuntime:.* name: [a-z0-9]
 os:
 rootless:
 registries:
@@ -65,24 +66,6 @@ store.imageStore.number   | 1
     done < <(parse_table "$tests")
 }
 
-@test "podman info - confirm desired runtime" {
-    if [[ -z "$CI_DESIRED_RUNTIME" ]]; then
-        # When running in Cirrus, CI_DESIRED_RUNTIME *must* be defined
-        # in .cirrus.yml so we can double-check that all CI VMs are
-        # using crun/runc as desired.
-        if [[ -n "$CIRRUS_CI" ]]; then
-            die "CIRRUS_CI is set, but CI_DESIRED_RUNTIME is not! See #14912"
-        fi
-
-        # Not running under Cirrus (e.g., gating tests, or dev laptop).
-        # Totally OK to skip this test.
-        skip "CI_DESIRED_RUNTIME is unset--OK, because we're not in Cirrus"
-    fi
-
-    run_podman info --format '{{.Host.OCIRuntime.Name}}'
-    is "$output" "$CI_DESIRED_RUNTIME" "CI_DESIRED_RUNTIME (from .cirrus.yml)"
-}
-
 @test "podman info - confirm desired network backend" {
     if [[ -z "$CI_DESIRED_NETWORK" ]]; then
         # When running on RHEL, CI_DESIRED_NETWORK *must* be defined
@@ -105,19 +88,19 @@ store.imageStore.number   | 1
 
 @test "podman info - confirm desired storage driver" {
     if [[ -z "$CI_DESIRED_STORAGE" ]]; then
-        # When running in Cirrus, CI_DESIRED_STORAGE *must* be defined
-        # in .cirrus.yml so we can double-check that all CI VMs are
-        # using overlay or vfs as desired.
-        if [[ -n "$CIRRUS_CI" ]]; then
-            die "CIRRUS_CI is set, but CI_DESIRED_STORAGE is not! See #20161"
+        # In our CI, CI_DESIRED_STORAGE *must* be set by hack/ci/runner.sh
+        # so we can double-check that all CI VMs are using overlay or vfs
+        # as desired.
+        if [[ -n "$PODMAN_CI" ]]; then
+            die "PODMAN_CI is set, but CI_DESIRED_STORAGE is not! See #20161"
         fi
 
-        # Not running under Cirrus (e.g., gating tests, or dev laptop).
+        # Not running in podman CI (e.g., gating tests, or dev laptop).
         # Totally OK to skip this test.
-        skip "CI_DESIRED_STORAGE is unset--OK, because we're not in Cirrus"
+        skip "CI_DESIRED_STORAGE is unset--OK, because we're not in podman CI"
     fi
 
-    is "$(podman_storage_driver)" "$CI_DESIRED_STORAGE" "podman storage driver is not CI_DESIRED_STORAGE (from .cirrus.yml)"
+    is "$(podman_storage_driver)" "$CI_DESIRED_STORAGE" "podman storage driver is not CI_DESIRED_STORAGE"
 
     # Confirm desired setting of composefs
     if [[ "$CI_DESIRED_STORAGE" = "overlay" ]]; then
@@ -128,6 +111,20 @@ store.imageStore.number   | 1
         run_podman info --format '{{index .Store.GraphOptions "overlay.use_composefs"}}'
         assert "$output" = "$expect" ".Store.GraphOptions -> overlay.use_composefs"
     fi
+}
+
+@test "podman info - confirm desired conmon" {
+    # Set by hack/ci/runner.sh on fedora-rawhide so we fail if Podman is not
+    # actually using conmon-v3 (containers.conf and/or CONMON_BINARY drift).
+    if [[ -z "$CI_DESIRED_CONMON" ]]; then
+        skip "CI_DESIRED_CONMON is unset--OK outside Rawhide CI"
+    fi
+
+    run_podman info --format '{{.Host.Conmon.Path}}'
+    is "$output" "$CI_DESIRED_CONMON" ".Host.Conmon.Path"
+
+    run_podman info --format '{{.Host.Conmon.Version}}'
+    assert "$output" =~ "version 3" ".Host.Conmon.Version is conmon v3 ($output)"
 }
 
 # 2021-04-06 discussed in watercooler: RHEL must never use crun, even if
@@ -286,6 +283,21 @@ EOF
 
     # Second run of Podman should still succeed after editing the graph driver.
     CONTAINERS_STORAGE_CONF=$PODMAN_TMPDIR/storage.conf run_podman $safe_opts info --format {{.Store.GraphDriverName}}
+}
+
+@test "podman info - report why the default OCI runtime failed to initialize" {
+    skip_if_remote "--tmpdir not supported via remote"
+
+    runtime=$(podman_runtime)
+    safe_opts=$(podman_isolation_opts ${PODMAN_TMPDIR})
+
+    # A regular file in place of the exits directory breaks the runtime
+    # initialization, even as root.
+    touch $PODMAN_TMPDIR/tmpdir/exits
+
+    run_podman 125 $safe_opts info
+    assert "$output" =~ "default OCI runtime \"$runtime\" failed to initialize: creating OCI runtime exit files directory: .*exits: not a directory" \
+           "error explains why the default OCI runtime failed"
 }
 
 # vim: filetype=sh

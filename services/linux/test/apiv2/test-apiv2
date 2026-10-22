@@ -385,6 +385,7 @@ function t() {
     fi
 
     IFS='^' read actual_code content_type time_total <<<"$response"
+    response_content_type="$content_type"
     printf "X-Response-Time: ${time_total}s\n\n" >>$LOG
 
     # Log results, if text. If JSON, filter through jq for readability.
@@ -673,12 +674,6 @@ function rootless() {
         ROOTLESS=$(curl -s http://$HOST:$PORT/v1.40/info | jq .Rootless)
     fi
     test "$ROOTLESS" = "true"
-}
-
-# True if cgroups v2 are enabled
-function have_cgroupsv2() {
-    cgroup_type=$(stat -f -c %T /sys/fs/cgroup)
-    test "$cgroup_type" = "cgroup2fs"
 }
 
 # END   infrastructure code

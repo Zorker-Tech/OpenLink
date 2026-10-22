@@ -1,4 +1,4 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { spawn, type ChildProcess, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { timingSafeEqual } from 'node:crypto'
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
@@ -333,6 +333,26 @@ class RpcRuntime {
 
 const config = loadConfig()
 const runtime = new RpcRuntime(config)
+let desktopProcess: ChildProcess | undefined
+
+function startDesktopProcess(): void {
+  if (desktopProcess && desktopProcess.exitCode === null && !desktopProcess.killed) return
+  const child = spawn('bash', ['/opt/openlink/desktop/start.sh'], {
+    cwd: config.workspaceRoot,
+    env: process.env,
+    stdio: 'ignore',
+  })
+  desktopProcess = child
+  child.once('error', (error) => {
+    if (desktopProcess === child) desktopProcess = undefined
+    console.error(`OpenLink desktop process failed to start: ${error.message}`)
+  })
+  child.once('exit', (code, signal) => {
+    if (desktopProcess === child) desktopProcess = undefined
+    if (code !== 0 && code !== null) console.error(`OpenLink desktop process exited with code ${code}`)
+    if (signal) console.error(`OpenLink desktop process exited from signal ${signal}`)
+  })
+}
 const server = createServer((request, response) => {
   void (async () => {
     const url = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`)
@@ -342,6 +362,11 @@ const server = createServer((request, response) => {
     }
     if (!authorized(request, config.token)) {
       response.writeHead(403, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: 'AUTH_DENIED' }))
+      return
+    }
+    if (request.method === 'POST' && url.pathname === '/desktop/start') {
+      startDesktopProcess()
+      response.writeHead(202, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify({ ok: true }))
       return
     }
     if (request.method === 'POST' && url.pathname === '/v1/cancel') {

@@ -2,7 +2,6 @@ package system
 
 import (
 	"bufio"
-	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -55,7 +54,7 @@ func init() {
 	_ = pruneCommand.RegisterFlagCompletionFunc(filterFlagName, common.AutocompletePruneFilters)
 }
 
-func prune(_ *cobra.Command, _ []string) error {
+func prune(cmd *cobra.Command, _ []string) error {
 	var err error
 	// Prompt for confirmation if --force is not set, unless --external
 	if !force && !pruneOptions.External {
@@ -87,7 +86,7 @@ func prune(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	response, err := registry.ContainerEngine().SystemPrune(context.Background(), pruneOptions)
+	response, err := registry.ContainerEngine().SystemPrune(cmd.Context(), pruneOptions)
 	if err != nil {
 		return err
 	}
@@ -120,7 +119,7 @@ func prune(_ *cobra.Command, _ []string) error {
 	}
 
 	if !pruneOptions.External {
-		fmt.Printf("Total reclaimed space: %s\n", units.HumanSize((float64)(response.ReclaimedSpace)))
+		fmt.Printf("Total reclaimed space: %s\n", units.HumanSize(float64(response.ReclaimedSpace)))
 	}
 	return nil
 }

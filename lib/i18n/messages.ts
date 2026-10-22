@@ -42,8 +42,8 @@ export async function loadMessages(locale: Locale): Promise<Messages> {
   if (pending) return pending
   const request = (async () => {
     try {
-      const module = await import(`./messages/${locale}.json`)
-      const messages = (module.default ?? module) as Messages
+      const catalog = await import(`./messages/${locale}.json`)
+      const messages = (catalog.default ?? catalog) as Messages
       catalogs.set(locale, messages)
       return messages
     } catch {

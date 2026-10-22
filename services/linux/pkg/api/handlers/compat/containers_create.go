@@ -18,6 +18,7 @@ import (
 	"go.podman.io/common/libimage"
 	"go.podman.io/common/libnetwork/types"
 	"go.podman.io/common/pkg/config"
+	"go.podman.io/image/v5/manifest"
 	"go.podman.io/podman/v6/libpod"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/pkg/api/handlers"
@@ -93,6 +94,11 @@ func CreateContainer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Docker clients send the seccomp profile JSON inline in
+	// HostConfig.SecurityOpt, FillOutSpecGen would treat it as a path.
+	var inlineSeccompProfile string
+	inlineSeccompProfile, body.HostConfig.SecurityOpt = extractInlineSeccompProfile(body.HostConfig.SecurityOpt)
+
 	// Take body structure and convert to cliopts
 	cliOpts, args, err := cliOpts(body, rtc)
 	if err != nil {
@@ -116,6 +122,26 @@ func CreateContainer(w http.ResponseWriter, r *http.Request) {
 		utils.Error(w, http.StatusInternalServerError, fmt.Errorf("fill out specgen: %w", err))
 		return
 	}
+
+	if inlineSeccompProfile != "" {
+		sg.SeccompProfile = inlineSeccompProfile
+		// keep SecurityOpt in inspect output matching what the client sent
+		sg.Annotations[define.InspectAnnotationSeccomp] = inlineSeccompProfile
+	}
+
+	// empty test command means inherit the image healthcheck, but we need to preserve the other health config fields if provided
+	if hc := body.Config.Healthcheck; hc != nil && len(hc.Test) == 0 && sg.HealthConfig == nil {
+		if hc.Interval != 0 || hc.Timeout != 0 || hc.Retries != 0 || hc.StartPeriod != 0 || hc.StartInterval != 0 {
+			sg.HealthConfig = &manifest.Schema2HealthConfig{
+				Interval:      hc.Interval,
+				Timeout:       hc.Timeout,
+				Retries:       hc.Retries,
+				StartPeriod:   hc.StartPeriod,
+				StartInterval: hc.StartInterval,
+			}
+		}
+	}
+
 	// moby always create the working directory
 	localTrue := true
 	sg.CreateWorkingDir = &localTrue
@@ -147,6 +173,41 @@ func stringMaptoArray(m map[string]string) []string {
 		a = append(a, fmt.Sprintf("%s=%s", k, v))
 	}
 	return a
+}
+
+// extractInlineSeccompProfile splits an inline JSON seccomp profile out of
+// securityOpts, returning the profile (or "") and the remaining options.
+// Only values starting with "{" are treated as inline profiles so that
+// path-based values keep working. Duplicate seccomp options resolve
+// last-one-wins, like docker, and only the winner is kept in the
+// remaining options.
+func extractInlineSeccompProfile(securityOpts []string) (string, []string) {
+	lastIdx := -1
+	lastVal := ""
+	for i, opt := range securityOpts {
+		if key, val, hasVal := specgenutil.CutSecurityOpt(opt); hasVal && key == "seccomp" {
+			lastIdx = i
+			lastVal = val
+		}
+	}
+	if lastIdx == -1 {
+		return "", securityOpts
+	}
+	inline := strings.HasPrefix(strings.TrimSpace(lastVal), "{")
+	rest := make([]string, 0, len(securityOpts))
+	for i, opt := range securityOpts {
+		if key, _, hasVal := specgenutil.CutSecurityOpt(opt); hasVal && key == "seccomp" {
+			// drop all seccomp options except a path-valued winner
+			if inline || i != lastIdx {
+				continue
+			}
+		}
+		rest = append(rest, opt)
+	}
+	if !inline {
+		return "", rest
+	}
+	return lastVal, rest
 }
 
 // cliOpts converts a compat input struct to cliopts
@@ -253,8 +314,25 @@ func cliOpts(cc handlers.CreateContainerConfig, rtc *config.Config) (*entities.C
 			}
 		case mount.TypeTmpfs:
 			if m.TmpfsOptions != nil {
-				addField(&builder, "tmpfs-size", strconv.FormatInt(m.TmpfsOptions.SizeBytes, 10))
-				addField(&builder, "tmpfs-mode", strconv.FormatUint(uint64(m.TmpfsOptions.Mode), 8))
+				if m.TmpfsOptions.SizeBytes != 0 {
+					addField(&builder, "tmpfs-size", strconv.FormatInt(m.TmpfsOptions.SizeBytes, 10))
+				}
+				if m.TmpfsOptions.Mode != 0 {
+					addField(&builder, "tmpfs-mode", strconv.FormatUint(uint64(m.TmpfsOptions.Mode), 8))
+				}
+				for _, opt := range m.TmpfsOptions.Options {
+					switch len(opt) {
+					case 1:
+						if builder.Len() > 0 {
+							builder.WriteRune(',')
+						}
+						builder.WriteString(opt[0])
+					case 2:
+						addField(&builder, opt[0], opt[1])
+					default:
+						return nil, nil, fmt.Errorf("invalid tmpfs format %q,", opt)
+					}
+				}
 			}
 		case mount.TypeVolume:
 			if m.VolumeOptions != nil {
@@ -594,7 +672,7 @@ func cliOpts(cc handlers.CreateContainerConfig, rtc *config.Config) (*entities.C
 	if cc.HostConfig.OomKillDisable != nil {
 		cliOpts.OOMKillDisable = *cc.HostConfig.OomKillDisable
 	}
-	if cc.Config.Healthcheck != nil {
+	if cc.Config.Healthcheck != nil && len(cc.Config.Healthcheck.Test) > 0 {
 		// Encode healthcheck test as JSON to preserve arguments with spaces.
 		// MakeHealthCheckFromCli will unmarshal this back to the original array.
 		cmdJSON, err := json.Marshal(cc.Config.Healthcheck.Test)

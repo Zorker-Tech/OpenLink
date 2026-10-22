@@ -38,7 +38,7 @@
     "linux": {
       "path": "services/linux",
       "upstream": "https://github.com/containers/podman.git",
-      "sourceCommit": "a31c37153678ed76036d3784c10b5dd16ca28c7f",
+      "sourceCommit": "8dd1367b23419bec0f4bc37c6c56f87965184375",
       "openlinkPatches": [
         "Honor XDG_CONFIG_HOME in the vendored Windows homedir adapter so Project VM configuration and disks remain in the product-owned runtime root."
       ]

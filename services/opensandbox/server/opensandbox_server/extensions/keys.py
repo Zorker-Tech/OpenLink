@@ -20,6 +20,7 @@ ACCESS_RENEW_EXTEND_SECONDS_METADATA_KEY = "opensandbox.io/access-renew-extend-s
 # When set to "enable", the sandbox container receives CAP_SYS_ADMIN so that
 # execd can use bwrap namespace isolation (OSEP-0013).
 BOOTSTRAP_EXECD_ISOLATION_KEY = "bootstrap.execd.isolation"
+OPENLINK_QEMU_KVM_KEY = "openlink.qemu-kvm"
 
 # Default mount path for the isolation upper directory.
 # Must match the execd DefaultConfig().UpperRoot value.

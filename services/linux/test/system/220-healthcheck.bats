@@ -96,25 +96,27 @@ Log[-1].ExitCode | 1
 Log[-1].Output   | \"Uh-oh on stdout!\\\nUh-oh on stderr!\\\n\"
 " "$current_time" "healthy"
 
-    # Capture time before systemctl checks so we don't miss the "unhealthy"
-    # event that may fire during those checks (health-interval is only 1s).
-    current_time=$(date --iso-8601=ns)
-
-    # Check that we now we do have valid podman units with this
+    # Check that we now have valid podman units with this
     # name so that the leak check below does not turn into a NOP without noticing.
     run -0 systemctl list-units
     cidmatch=$(grep "$cid" <<<"$output")
     echo "$cidmatch"
-    assert "$cidmatch" =~ " $cid-[0-9a-f]+\.timer  *.*/podman .* healthcheck run --ignore-result $cid" \
-           "Healthcheck systemd unit exists"
+    assert "$cidmatch" =~ " libpod-healthcheck-$cid-[0-9a-f]+\.timer  *.*/podman .* healthcheck run --ignore-result $cid" \
+       "Healthcheck systemd unit uses the expected name"
 
     # Check that the right service option is applied so we don't hit the systemd restart limit.
     # Even though the code sets StartLimitIntervalSec the systemd command prints StartLimitInterval*U*Sec
     # Use show --all otherwise the glob might not match the already inactive transient unit.
-    run -0 systemctl show --all "$cid-*.service"
+    run -0 systemctl show --all "libpod-healthcheck-$cid-*.service"
     assert "$output" =~ "StartLimitIntervalUSec=0" "The hc service has the right interval set"
 
-    # After three successive failures, container should no longer be healthy
+    # After three successive failures, container should no longer be healthy.
+    # No new timestamp here on purpose: with a 1s interval the third failure
+    # can fire while the "First failure" checks above are still running, so a
+    # timestamp taken at this point can land after the unhealthy event and the
+    # events window below would never contain it (#29353). Reusing the
+    # timestamp captured before the failure was triggered is safe because the
+    # wait loop only looks at the last event.
     _check_health $ctrname "Four or more failures" "
 Status           | \"unhealthy\"
 FailingStreak    | [3456]

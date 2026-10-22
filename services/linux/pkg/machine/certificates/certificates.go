@@ -12,6 +12,7 @@ import (
 	"go.podman.io/podman/v6/pkg/machine"
 	"go.podman.io/podman/v6/pkg/machine/define"
 	"go.podman.io/podman/v6/pkg/machine/vmconfigs"
+	"go.podman.io/storage/pkg/stringutils"
 )
 
 const (
@@ -43,14 +44,14 @@ func ImportNativeCertificates(mc *vmconfigs.MachineConfig, vmType define.VMType)
 	// Save the certificates to a PEM file in the machine data folder
 	certFilePath, err := saveCertificatesToFile(mc, certs)
 	if err != nil {
-		return fmt.Errorf("failed to create certs file in machine data folder: %s", err)
+		return fmt.Errorf("failed to create certs file in machine data folder: %w", err)
 	}
 	logrus.Debugf("Saved the certificates to file %q", certFilePath)
 	// Copy or transfer via SCP the file with the certificates to the anchors
 	// folder in the guest
 	err = copyOrTransferFileToGuestAnchorsFolder(mc, vmType, certFilePath)
 	if err != nil {
-		return fmt.Errorf("failed to transfer or copy the certs file in the guest anchors folder: %s", err)
+		return fmt.Errorf("failed to transfer or copy the certs file in the guest anchors folder: %w", err)
 	}
 	// Update the CA trust list
 	if err := runUpdateCATrustInGuest(mc); err != nil {
@@ -112,8 +113,12 @@ func copyFileToGuestAnchorsFolder(mc *vmconfigs.MachineConfig, guestFilePath str
 		mc.SSH.IdentityPath,
 		mc.Name,
 		mc.SSH.Port,
-		[]string{"sudo", "cp", guestFilePath, GuestAnchorsPath},
+		[]string{guestCopyCommand(guestFilePath)},
 	)
+}
+
+func guestCopyCommand(guestFilePath string) string {
+	return stringutils.ShellQuoteArguments([]string{"sudo", "cp", guestFilePath, GuestAnchorsPath})
 }
 
 // saveCertificatesToPEM exports the certificates in certs to a PEM file

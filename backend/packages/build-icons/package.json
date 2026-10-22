@@ -19,7 +19,7 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "minimist": "^1.2.7",
-    "svgson": "^5.2.1"
+    "minimist": "^1.2.8",
+    "svgson": "^5.3.1"
   }
 }

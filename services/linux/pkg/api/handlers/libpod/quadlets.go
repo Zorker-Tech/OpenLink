@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -100,11 +101,11 @@ func extractQuadletFiles(tempDir string, r io.ReadCloser) ([]string, error) {
 
 	// Collect all files from the extracted directory
 	var filePaths []string
-	err = filepath.Walk(quadletDir, func(path string, info os.FileInfo, err error) error {
+	err = filepath.WalkDir(quadletDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if !info.IsDir() {
+		if !d.IsDir() {
 			filePaths = append(filePaths, path)
 		}
 		return nil
@@ -129,31 +130,43 @@ func processMultipartQuadlets(tempDir string, r *http.Request) ([]string, error)
 	var filePaths []string
 	for {
 		part, err := reader.NextPart()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
 			return nil, fmt.Errorf("failed to read multipart: %w", err)
 		}
-		defer part.Close()
 
 		filename := part.FileName()
 		if filename == "" {
 			// Skip parts without filenames
+			_ = part.Close()
+			continue
+		}
+		filename = filepath.Base(filename)
+		if filename == "." || filename == ".." || filename == string(filepath.Separator) {
+			_ = part.Close()
 			continue
 		}
 
-		// Create file in temp directory
+		// Write the file in a scope that lets us close it per iteration
 		filePath := filepath.Join(quadletDir, filename)
-		file, err := os.Create(filePath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create file %s: %w", filename, err)
-		}
-		defer file.Close()
+		if err := func() error {
+			defer part.Close()
 
-		_, err = io.Copy(file, part)
-		if err != nil {
-			return nil, fmt.Errorf("failed to write file %s: %w", filename, err)
+			file, err := os.OpenFile(filePath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+			if err != nil {
+				return fmt.Errorf("failed to create file %s: %w", filename, err)
+			}
+			defer file.Close()
+
+			_, err = io.Copy(file, part)
+			if err != nil {
+				return fmt.Errorf("failed to write file %s: %w", filename, err)
+			}
+			return nil
+		}(); err != nil {
+			return nil, err
 		}
 
 		filePaths = append(filePaths, filePath)

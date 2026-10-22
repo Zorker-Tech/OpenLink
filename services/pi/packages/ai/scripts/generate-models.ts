@@ -305,6 +305,7 @@ const KIMI_K3_COST = {
 // equivalent Moonshot API rates to estimate the value of subscription usage.
 const KIMI_CODING_IMPLIED_COSTS: Record<string, Model<Api>["cost"]> = {
 	k3: KIMI_K3_COST,
+	"k3-256k": KIMI_K3_COST,
 	"kimi-for-coding": { input: 0.95, output: 4, cacheRead: 0.19, cacheWrite: 0 },
 	"kimi-for-coding-highspeed": { input: 1.9, output: 8, cacheRead: 0.38, cacheWrite: 0 },
 	"kimi-k2-thinking": { input: 0.6, output: 2.5, cacheRead: 0.15, cacheWrite: 0 },
@@ -1942,9 +1943,12 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 			}
 		}
 
-		// Process Kimi For Coding models
-		if (data["kimi-for-coding"]?.models) {
-			const kimiModels = data["kimi-for-coding"].models as Record<string, ModelsDevModel>;
+		// Process Kimi For Coding models. models.dev renamed this catalog to
+		// kimi-code-plan-global, while older snapshots may still use the legacy ID.
+		const kimiCodingCatalog =
+			data["kimi-code-plan-global"] ?? data["kimi-for-coding"] ?? data["kimi-code-plan-cn"];
+		if (kimiCodingCatalog?.models) {
+			const kimiModels = kimiCodingCatalog.models as Record<string, ModelsDevModel>;
 			const hasCanonicalModel = Object.prototype.hasOwnProperty.call(kimiModels, "kimi-for-coding");
 
 			const kimiAliases = new Set(["k2p5", "k2p6", "k2p7"]);
@@ -1958,7 +1962,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 
 				const normalizedId = kimiAliases.has(modelId) ? "kimi-for-coding" : modelId;
 				const normalizedName = kimiAliases.has(modelId) ? "Kimi For Coding" : m.name || normalizedId;
-				const isKimiK3 = normalizedId === "k3";
+				const isKimiK3 = normalizedId === "k3" || normalizedId === "k3-256k";
 				const allowEmptySignature = isKimiK3 || normalizedId === "kimi-for-coding";
 				const impliedCost = KIMI_CODING_IMPLIED_COSTS[normalizedId];
 
