@@ -18,7 +18,7 @@ import { DOUBLE_BIND_MESSAGE, TurnExecutionRegistry, UNBOUND_EXECUTION_MESSAGE }
 import { MAX_ACTIVITY_DETAIL_CHARS, SLATE_BOX_SHELL_TOOL_NAME, SLATE_EXTERNAL_SHELL_TOOL_NAME, SEND_MESSAGE_TOOL_CALL_OUTLINE_NAME, THINKING_ACTIVITY } from "../../source/host/slate-activity.ts";
 import { appliesToSlate, directMemberTeamIds, mergeRulesByFullPath, TeamRuleAgentType, TEAM_RULES_REQUEST_TIMEOUT_MS } from "../../source/host/extensions/managed-setup/team-rules.ts";
 import { searchIndexHealthTelemetry, SEARCH_INDEX_HEALTH_EVENT } from "../../source/host/telemetry/search-index-health-telemetry.ts";
-import { AlwaysOffSampler, createSendTraceSampler, ParentBasedSampler, SamplingDecision } from "../../source/host/telemetry/send-trace-sampler.ts";
+import { NeverRecords, sendTraceSampler, FollowsItsParent, SampleDecision } from "../../source/host/telemetry/send-trace-sampler.ts";
 import { isBackgroundAutomationTrigger, normalizeAutomationErrorKind } from "../../source/host/transcript/slate-automation-failure.ts";
 import { DISK_PRESSURE_HEARTBEAT_MS, DISK_PRESSURE_THRESHOLDS, GIB } from "../../source/host/boxes/forever-box/disk-pressure-guard.ts";
 import { getAgentProjectsPath, MEMBERSHIP_FILENAME, toSafeSlugSet } from "../../source/host/memory/project-membership.ts";
@@ -159,12 +159,12 @@ describe("the rules a team set", () => {
 
 describe("whether a send is traced", () => {
   it("never records a root of its own", () => {
-    const sampler = createSendTraceSampler();
-    assert.equal(sampler instanceof ParentBasedSampler, true);
-    assert.equal(sampler.shouldSample().decision, SamplingDecision.NOT_RECORD);
+    const sampler = sendTraceSampler();
+    assert.equal(sampler instanceof FollowsItsParent, true);
+    assert.equal(sampler.shouldSample().decision, SampleDecision.NOT_RECORD);
     assert.equal(sampler.toString(), "ParentBased{root=AlwaysOffSampler}");
-    assert.equal(new AlwaysOffSampler().toString(), "AlwaysOffSampler");
-    assert.equal(SamplingDecision.RECORD_AND_SAMPLED, 2);
+    assert.equal(new NeverRecords().toString(), "AlwaysOffSampler");
+    assert.equal(SampleDecision.RECORD_AND_SAMPLED, 2);
   });
 });
 

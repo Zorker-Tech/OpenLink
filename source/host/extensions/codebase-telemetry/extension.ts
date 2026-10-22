@@ -19,12 +19,12 @@ import { defineHostExtension } from "../host-extensions.ts";
 import { HostExtensions } from "../extension-ids.generated.ts";
 import { createDeadlinePolicy, createRealPollingPolicy, createRealRetryPolicy, realClock } from "../scheduling.ts";
 import { CsnapsCodebaseTelemetryAdapter } from "./codebase-telemetry-adapter.ts";
-import { resolveCsnapsCapability } from "./csnaps-capability.ts";
+import { csnapsAvailability } from "./csnaps-capability.ts";
 import { createCodebaseTelemetryService, createSlateCodebaseTelemetryLogger } from "./codebase-telemetry-service.ts";
 import { spawnCsnaps } from "./csnaps-process.ts";
 import { createSlatePrivacyModeLoader, isRetryablePrivacyModeLookupError, type TelemetryAuth } from "./privacy-mode.ts";
 
-export { resolveCsnapsBinPath, resolveCsnapsCapability } from "./csnaps-capability.ts";
+export { csnapsPath, csnapsAvailability } from "./csnaps-capability.ts";
 
 /** Where the host keeps what the helper knows: the account's codebase identities, and its snapshots. */
 export const CODEBASE_UUID_STATE_FILENAME = "telemetry/codebase-uuids.json";
@@ -98,7 +98,7 @@ export const codebaseTelemetryExtension = defineHostExtension({
       experiments: Parameters<typeof createCodebaseTelemetryService>[0]["experiments"];
     };
     const logger = createSlateCodebaseTelemetryLogger(host.log);
-    const capability = resolveCsnapsCapability();
+    const capability = csnapsAvailability();
     if (!capability.available) {
       // Not there and not runnable are told apart, because only one of them is a mistake to fix.
       logger.warn(`Codebase Telemetry unavailable: csnaps ${capability.reason} at ${capability.executablePath}`);

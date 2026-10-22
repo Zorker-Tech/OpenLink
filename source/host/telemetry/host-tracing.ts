@@ -14,7 +14,7 @@ import {
 } from "@opentelemetry/sdk-trace-node";
 import { errorLogTag } from "../../shared/errors/summary.ts";
 import { SLATE_CLIENT_TYPE } from "../../shared/node/slate-client-metadata.ts";
-import { createSendTraceSampler } from "./send-trace-sampler.ts";
+import { sendTraceSampler } from "./send-trace-sampler.ts";
 export { ExportResultCode };
 export type SpanExporter = OTelSpanExporter;
 export type SpanExporterFactory = (options: {
@@ -123,7 +123,7 @@ export function initSlateHostTracing(options: {
   createProvider?: (config: {
     exporter: SpanExporter;
     resource: Record<string, string>;
-    sampler: ReturnType<typeof createSendTraceSampler>;
+    sampler: ReturnType<typeof sendTraceSampler>;
   }) => {
     register(): void;
     forceFlush(): Promise<void>;
@@ -152,7 +152,7 @@ export function initSlateHostTracing(options: {
       "process.runtime.version": process.version,
       "deployment.environment": "box",
     };
-    const sampler = createSendTraceSampler();
+    const sampler = sendTraceSampler();
     const provider = options.createProvider?.({ exporter, resource, sampler }) ?? (() => {
       const nodeProvider = new NodeTracerProvider({
         resource: resourceFromAttributes(resource),
