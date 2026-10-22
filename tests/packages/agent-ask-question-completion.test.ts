@@ -251,3 +251,38 @@ test("a completion with no id of its own is recorded under a fresh one", async (
   assert.equal(applied.recordedToolCallId, "tool-call-9")
   assert.equal(harnessed.upserted[0]?.toolCallId, "tool-call-9")
 })
+
+test("an empty question id was never applied, whatever the session remembers", () => {
+  const stateHandler = { hasCompletedAskQuestion: () => true, markAskQuestionCompleted: () => {}, getPrivacyMode: () => PrivacyMode.NO_STORAGE }
+  assert.equal(hasAppliedAskQuestionCompletion(stateHandler, ""), false)
+})
+
+test("the conversation is told the ask in the tool's own spelling, call first", async () => {
+  const events: string[] = []
+  const applied: unknown[][] = []
+  const upserted: unknown[] = []
+  void upserted
+  const result = await applyAskQuestionCompletion(createContext(), {
+    action: action(),
+    stateHandler: { hasCompletedAskQuestion: () => false, markAskQuestionCompleted: () => {}, getPrivacyMode: () => PrivacyMode.NO_STORAGE },
+    turn: { async upsertToolCall(_ctx, toolCall, toolCallId) { events.push("upsert"); upserted.push([toolCallId, toolCall]); return {} } },
+    rootPromptExecutor: { appendMessages(messages) { events.push("append"); applied.push([...messages]); return {} } },
+    resultFormat: "structured",
+  })
+  assert.deepEqual(events, ["upsert", "append"], "the call is recorded before the messages are appended")
+  assert.equal(result.outcome, "applied")
+  const messages = plainMessages(applied[0]!)
+  assert.equal(messages.length, 2)
+  assert.equal(messages[0]?.role, "assistant")
+  assert.equal(messages[0]?.content[0]?.type, "tool-call")
+  assert.equal(messages[1]?.role, "tool")
+  assert.equal(messages[1]?.content[0]?.type, "tool-result")
+  assert.equal(messages[0]?.content[0]?.toolCallId, messages[1]?.content[0]?.toolCallId, "the call and its result share one id")
+  const args = messages[0]?.content[0]?.args as Record<string, unknown>
+  assert.equal(args.title, "Which database?")
+  assert.equal(args.async_original_tool_call_id, "tool-call-1")
+  const questions = args.questions as Array<Record<string, unknown>>
+  assert.equal(questions[0]?.allow_multiple, false)
+  const options = questions[0]?.options as Array<Record<string, unknown>>
+  assert.deepEqual(options.map(option => option.label), ["Postgres", "SQLite"])
+})
