@@ -128,6 +128,59 @@ test("a plugin's variables become the form a user fills in", () => {
   assert.deepEqual(findMissingRequiredCatalogFields(fields, { API_URL: "https://api" }), [])
 })
 
+test("a variable's name is read as words, and its schema decides what the form asks for", () => {
+  assert.equal(humanizeVariableName(""), "")
+  assert.equal(humanizeVariableName("_"), "")
+  assert.equal(humanizeVariableName("my__var"), "My Var", "an empty word between underscores is not a word")
+  assert.equal(humanizeVariableName("apiKey"), "Apikey", "only underscores split words")
+  assert.equal(humanizeVariableName("myVar"), "Myvar", "the rest of a word is folded to lower case")
+  assert.equal(humanizeVariableName("url"), "URL")
+  assert.equal(humanizeVariableName("URL"), "URL")
+  assert.equal(humanizeVariableName("x_y_z"), "X Y Z")
+
+  const fields = pluginVariablesSchemaToFields({
+    properties: {
+      password_field: { format: "password" },
+      write_only: { writeOnly: true },
+      not_quite: { writeOnly: 1 },
+      MY_TOKEN: {},
+      myToken: {},
+      plain: { title: "", description: "", default: "" },
+      padded: { title: "  T  ", description: "  D  " },
+      empty: [],
+    },
+    required: [1, "plain", null],
+  })
+  assert.deepEqual(fields.map(field => [field.key, field.isSecret, field.isRequired]), [
+    ["password_field", true, false],
+    ["write_only", true, false],
+    ["not_quite", false, false],
+    ["MY_TOKEN", true, false],
+    ["myToken", false, false],
+    ["plain", false, true],
+    ["padded", false, false],
+    ["empty", false, false],
+  ], "the schema's order is kept, and only the boolean true is write-only")
+  assert.equal(fields[6]?.label, "  T  ", "a title is used as it came")
+  assert.equal(fields[6]?.hint, "  D  ", "a description is used as it came")
+  assert.equal(fields[5]?.label, "", "an empty title is a title, not a missing one")
+  assert.equal(fields[6]?.defaultValue, undefined, "a property without a default has none")
+  assert.equal(fields[5]?.hint, "", "an empty description is a hint, not a missing one")
+  assert.equal(fields[5]?.defaultValue, "", "an empty default is still a default")
+  assert.deepEqual(pluginVariablesSchemaToFields({ properties: "x" }), [])
+  assert.deepEqual(pluginVariablesSchemaToFields({ properties: { a: "text" } }).map(field => field.key), ["a"])
+
+  const required = [
+    { key: "a", label: "A", placeholder: "a", isRequired: true, isSecret: false },
+    { key: "b", label: "B", placeholder: "b", isRequired: true, isSecret: false, defaultValue: "  " },
+    { key: "c", label: "C", placeholder: "c", isRequired: true, isSecret: false, defaultValue: "d" },
+    { key: "d", label: "D", placeholder: "d", isRequired: false, isSecret: false },
+  ]
+  assert.deepEqual(findMissingRequiredCatalogFields(required, {}).map(field => field.key), ["a", "b"], "a blank default is no default")
+  assert.deepEqual(findMissingRequiredCatalogFields(required, { a: "  " }).map(field => field.key), ["a", "b"], "a blank entry is no entry")
+  assert.deepEqual(findMissingRequiredCatalogFields(required, { a: "x" }).map(field => field.key), ["b"])
+})
+
 test("the names the platform's own reports use are a fixed set", () => {
   assert.equal(isSlateClientPersistenceSlice("send-journal"), true)
   assert.equal(isSlateClientPersistenceSlice("something-else"), false)
