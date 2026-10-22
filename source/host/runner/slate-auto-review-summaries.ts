@@ -3,6 +3,9 @@
  *
  * What a review found is written as an entry a reader can read — the verdict, what it looked at and what it wants — and
  * a summary that was already written is not written twice.
+ *
+ * The sentences are the product's wording and are kept as they are written; the code in this file is what decides which
+ * words to use (compaction, redaction, the order of an action's sentence) rather than what the words are.
  */
 const SLATE_AUTO_REVIEW_SECRET_KEY_PATTERN = /(?:authorization|api.?key|credential|password|secret|token)/i;
 const SLATE_AUTO_REVIEW_SECRET_VALUE_PATTERN = /^(?:bearer\s+)?[A-Za-z0-9_+\/-]{24,}={0,2}$/i;
