@@ -4,8 +4,8 @@ import assert from "node:assert/strict"
 import { AGENTS_SECTION_ID, AGENTS_SECTION_NAME, SidebarSections } from "../../source/shared/sidebar-sections.ts"
 import { SLATE_COMPUTER_UNAVAILABLE_MESSAGE, slateComputerUnavailableMessage, SLATE_NO_LOCAL_MACHINE_MESSAGE } from "../../source/shared/local-exec-gateway.ts"
 import { LOG_SHIP_INTERVAL_MS, LOG_SHIP_JITTER_RATIO, nextLogShipDelayMs } from "../../source/shared/observability/log-ship-cadence.ts"
-import { formatUtcOffset, isValidIanaTimeZone, renderTimeZoneSystemPrompt } from "../../source/shared/timezone.ts"
-import { parseHeapMetricsReport } from "../../source/shared/observability/heap-metrics.ts"
+import { utcOffsetOf, isKnownTimeZone, timeZonePromptSection } from "../../source/shared/timezone.ts"
+import { parseMemoryReport } from "../../source/shared/observability/heap-metrics.ts"
 import { isDevControlsMethod, DEV_CONTROLS_METHOD_TABLE } from "../../source/shared/rpc/dev-controls.ts"
 import {
   mainTranscriptOf,
@@ -187,31 +187,31 @@ test("how long to wait before shipping logs again", () => {
 })
 
 test("a time zone is checked, and said the way a user reads it", () => {
-  assert.equal(isValidIanaTimeZone("America/Los_Angeles"), true)
-  assert.equal(isValidIanaTimeZone("UTC"), true)
-  assert.equal(isValidIanaTimeZone(""), false)
-  assert.equal(isValidIanaTimeZone("Not/AZone"), false)
+  assert.equal(isKnownTimeZone("America/Los_Angeles"), true)
+  assert.equal(isKnownTimeZone("UTC"), true)
+  assert.equal(isKnownTimeZone(""), false)
+  assert.equal(isKnownTimeZone("Not/AZone"), false)
 
   const now = new Date("2026-01-15T12:00:00Z")
-  assert.equal(formatUtcOffset(now, "UTC"), "UTC+0")
-  assert.equal(formatUtcOffset(now, "America/Los_Angeles"), "UTC-8")
-  assert.equal(formatUtcOffset(now, "Not/AZone"), null)
+  assert.equal(utcOffsetOf(now, "UTC"), "UTC+0")
+  assert.equal(utcOffsetOf(now, "America/Los_Angeles"), "UTC-8")
+  assert.equal(utcOffsetOf(now, "Not/AZone"), null)
 
-  assert.equal(renderTimeZoneSystemPrompt(undefined), "")
-  const prompt = renderTimeZoneSystemPrompt("America/Los_Angeles", now)
+  assert.equal(timeZonePromptSection(undefined), "")
+  const prompt = timeZonePromptSection("America/Los_Angeles", now)
   assert.match(prompt, /## Time/)
   assert.match(prompt, /America\/Los_Angeles/)
 })
 
 test("a memory report is read only when it matches its shape", () => {
-  const report = parseHeapMetricsReport({ usedBytes: 100, limitBytes: 1_000, loadedAgents: 2 })
+  const report = parseMemoryReport({ usedBytes: 100, limitBytes: 1_000, loadedAgents: 2 })
   assert.equal(report?.usedBytes, 100)
   assert.equal(report?.loadedAgents, 2)
   // A report that is missing what it must have, or that counts something that is not a count, is not one.
-  assert.equal(parseHeapMetricsReport({ usedBytes: 100 }), null)
+  assert.equal(parseMemoryReport({ usedBytes: 100 }), null)
   // A count that is not a count is dropped, and the report keeps what it does have.
-  assert.deepEqual(parseHeapMetricsReport({ usedBytes: 100, limitBytes: 1_000, loadedAgents: -1 }), { usedBytes: 100, limitBytes: 1_000 })
-  assert.equal(parseHeapMetricsReport(null), null)
+  assert.deepEqual(parseMemoryReport({ usedBytes: 100, limitBytes: 1_000, loadedAgents: -1 }), { usedBytes: 100, limitBytes: 1_000 })
+  assert.equal(parseMemoryReport(null), null)
 })
 
 test("the development controls answer the methods they declare", () => {

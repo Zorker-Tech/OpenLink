@@ -5,39 +5,53 @@
  * arrive at once: the decoder holds what is incomplete until the rest arrives, and hands over each event as soon as it
  * is whole — with the fields it carries, the event's own name, and the id a client resumes from.
  */
+
+/** A line feed, which is what a block is separated by. */
 const LF = 10;
+
+/** The separator between two blocks. */
+const BLOCK_SEPARATOR = "\n\n";
 
 export class SseBlockDecoder {
   private readonly decoder = new TextDecoder();
-  private readonly parts: string[] = [];
-  private prevEndedWithLf = false;
+
+  /** What has arrived of a block that is not finished yet, in the pieces it arrived in. */
+  private readonly pending: string[] = [];
+
+  /** Whether the last piece ended on a line feed, which is how a block can be split between one read and the next. */
+  private endedOnLineFeed = false;
 
   constructor(private readonly onBlock: (block: string) => void) {}
 
   push(bytes: Uint8Array): void {
     const chunk = this.decoder.decode(bytes, { stream: true });
     if (chunk.length === 0) return;
+
     let start = 0;
-    if (this.prevEndedWithLf && chunk.charCodeAt(0) === LF) {
-      const joined = this.parts.length === 1 ? this.parts[0] ?? "" : this.parts.join("");
+    if (this.endedOnLineFeed && chunk.charCodeAt(0) === LF) {
+      // The block already ended on its first line feed; this one is half of the separator, so the block is whole.
+      const joined = this.pending.join("");
       this.onBlock(joined.slice(0, joined.length - 1));
-      this.parts.length = 0;
+      this.pending.length = 0;
       start = 1;
     }
-    let separator = chunk.indexOf("\n\n", start);
+
+    let separator = chunk.indexOf(BLOCK_SEPARATOR, start);
     while (separator >= 0) {
-      if (this.parts.length === 0) this.onBlock(chunk.slice(start, separator));
+      const untilSeparator = chunk.slice(start, separator);
+      if (this.pending.length === 0) this.onBlock(untilSeparator);
       else {
-        this.parts.push(chunk.slice(start, separator));
-        this.onBlock(this.parts.join(""));
-        this.parts.length = 0;
+        this.pending.push(untilSeparator);
+        this.onBlock(this.pending.join(""));
+        this.pending.length = 0;
       }
-      start = separator + 2;
-      separator = chunk.indexOf("\n\n", start);
+      start = separator + BLOCK_SEPARATOR.length;
+      separator = chunk.indexOf(BLOCK_SEPARATOR, start);
     }
+
     const tail = start === 0 ? chunk : chunk.slice(start);
-    if (tail.length > 0) this.parts.push(tail);
-    const last = this.parts.length > 0 ? this.parts[this.parts.length - 1] ?? "" : "";
-    this.prevEndedWithLf = last.length > 0 && last.charCodeAt(last.length - 1) === LF;
+    if (tail.length > 0) this.pending.push(tail);
+    const last = this.pending.at(-1) ?? "";
+    this.endedOnLineFeed = last.length > 0 && last.charCodeAt(last.length - 1) === LF;
   }
 }
