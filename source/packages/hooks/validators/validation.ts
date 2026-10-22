@@ -12,14 +12,20 @@ export interface ValidationResult {
   errors: string[]
 }
 
-export const isString = (value: unknown): value is string => typeof value === "string"
+/** Whether a value is text. */
+export const isString = (candidate: unknown): candidate is string => typeof candidate === "string"
 
-export const isObject = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === "object" && !Array.isArray(value)
+/** Whether a value is a record: an object that is not a list. */
+const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
+  candidate !== null && typeof candidate === "object" && !Array.isArray(candidate)
 
-export const createValidationResult = (isValid: boolean, errors: string[] = []): ValidationResult =>
-  ({ isValid, errors })
+export const isObject = (candidate: unknown): candidate is Record<string, unknown> => isRecord(candidate)
 
-export function validateOptionalString(value: unknown, fieldName: string, errors: string[]): void {
-  if (value !== undefined && !isString(value)) errors.push(`${fieldName} must be a string if provided`)
+export const createValidationResult = (valid: boolean, errors: string[] = []): ValidationResult =>
+  ({ isValid: valid, errors })
+
+/** Adds the problem a provided-but-not-text field is; an absent field is no problem at all. */
+export function validateOptionalString(provided: unknown, fieldName: string, problems: string[]): void {
+  if (provided === undefined || isString(provided)) return
+  problems.push(`${fieldName} must be a string if provided`)
 }
