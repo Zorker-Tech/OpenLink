@@ -38,12 +38,14 @@ import { generateSeededUuid } from "./tool-support.ts"
 import { executeRemotePostToolUseHook, executeRemoteSubagentStopHook } from "./remote-hooks.ts"
 import type { SubagentType } from "../../proto/generated/agent/v1/subagents_pb.ts"
 
+/** How far into its run a subagent has got: its turns so far, whether the stream is done, whether it was told to stop. */
 export interface TaskSubagentIterationState {
   loopCount: number
   runStreamCompleted: boolean
   subagentStopCalled: boolean
 }
 
+/** What is known about a subagent when it finishes, gathered while it ran. */
 export interface TaskSubagentCompletionContext {
   readonly subagentId: string
   readonly subagentRequestId: string
@@ -67,8 +69,10 @@ export interface TaskSubagentCompletionContext {
   readonly rawArgsDescription: string
 }
 
+/** What a hook is handed by the runner. */
 export type TaskHookContext = Record<string, unknown>
 
+/** What finishing a subagent needs from the runner. */
 export interface TaskSubagentCompletionDependencies {
   readonly ctx: Context
   readonly blobStore: ConversationBlobStore
@@ -80,13 +84,50 @@ export interface TaskSubagentCompletionDependencies {
   readonly postToolUseHookInput: unknown
 }
 
+/** What one turn of a subagent answers with: carry on with an action, or stop with a result. */
 export interface TaskSubagentIterationResult {
   readonly shouldContinue: boolean
   readonly nextAction?: ConversationAction
   readonly finalResult?: TaskResult
 }
 
-/** The subagent's own stop hook, which may answer with something for it to do next. */
+/** How long the subagent has been running, measured from the moment it was started. */
+function elapsedMs(completion: TaskSubagentCompletionContext): number {
+  return Date.now() - completion.executionStartTime
+}
+
+/** The text of an error the subagent run raised, whatever shape it came in. */
+function errorTextOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+/** The request a stop hook is called with, from what the caller already had. */
+function subagentStopRequest(args: TaskHookContext & {
+  readonly status: "completed" | "error"
+  readonly durationMs: number
+  readonly messageCount: number
+  readonly toolCallCount: number
+  readonly summary?: string
+  readonly errorMessage?: string
+  readonly loopCount: number
+  readonly task: string
+  readonly description: string
+}): Parameters<typeof executeRemoteSubagentStopHook>[0] {
+  return {
+    ...args,
+    requestContext: {
+      toolCallId: args.toolCallId,
+      model: args.overriddenModelId,
+    },
+    options: {
+      resourceAccessor: args.resourceAccessor,
+      enableExecuteHookExec: args.enableExecuteHookExec,
+      configuredSteps: args.configuredSteps,
+    },
+  } as Parameters<typeof executeRemoteSubagentStopHook>[0]
+}
+
+/** The stop hook's answer when it may be followed up on, and nothing otherwise. */
 export async function executeSubagentStopHook(args: TaskHookContext & {
   readonly status: "completed" | "error"
   readonly durationMs: number
@@ -99,29 +140,17 @@ export async function executeSubagentStopHook(args: TaskHookContext & {
   readonly description: string
 }): Promise<string | undefined> {
   try {
-    const result = await executeRemoteSubagentStopHook({
-      ...args,
-      requestContext: {
-        toolCallId: args.toolCallId,
-        model: args.overriddenModelId,
-      },
-      options: {
-        resourceAccessor: args.resourceAccessor,
-        enableExecuteHookExec: args.enableExecuteHookExec,
-        configuredSteps: args.configuredSteps,
-      },
-    })
+    const result = await executeRemoteSubagentStopHook(subagentStopRequest(args))
     const followupMessage = result.followupMessage
     // A hook that runs after a failure has nothing to continue, so only a completed stop may follow up.
-    return args.status === "completed" && typeof followupMessage === "string"
-      ? followupMessage
-      : undefined
+    return args.status === "completed" && typeof followupMessage === "string" ? followupMessage : undefined
   } catch {
     return undefined
   }
 }
 
-export function buildFollowupAction(args: {
+/** The action that turns a follow-up message into another turn of the same subagent. */
+export function buildFollowupAction(request: {
   readonly followupMessage: string
   readonly toolCallId: string
   readonly loopCount: number
@@ -133,72 +162,91 @@ export function buildFollowupAction(args: {
       case: "userMessageAction",
       value: new UserMessageAction({
         userMessage: new UserMessage({
-          text: args.followupMessage,
+          text: request.followupMessage,
           // The id is derived from the call and the turn it belongs to, so a retry produces the same one.
-          messageId: generateSeededUuid(`${args.toolCallId}-followup-${args.loopCount}`),
-          mode: args.useAskMode ? AgentMode.ASK : AgentMode.AGENT,
-          ...(args.selectedContext !== undefined
-            ? { selectedContext: args.selectedContext }
-            : {}),
+          messageId: generateSeededUuid(`${request.toolCallId}-followup-${request.loopCount}`),
+          mode: request.useAskMode ? AgentMode.ASK : AgentMode.AGENT,
+          ...(request.selectedContext !== undefined ? { selectedContext: request.selectedContext } : {}),
         }),
       }),
     },
   })
 }
 
+/** The request the post-tool-use hook is called with after a successful run. */
+function postToolUseRequest(
+  completion: TaskSubagentCompletionContext,
+  dependencies: TaskSubagentCompletionDependencies,
+  durationMs: number,
+  messageCount: number,
+  toolCallCount: number,
+): Parameters<typeof executeRemotePostToolUseHook>[0] {
+  return {
+    ctx: dependencies.ctx,
+    toolName: dependencies.toolName,
+    toolInput: dependencies.postToolUseHookInput,
+    toolOutput: JSON.stringify({
+      status: "success",
+      agentId: completion.subagentId,
+      durationMs,
+      messageCount,
+      toolCallCount,
+    }),
+    durationMs,
+    requestContext: {
+      toolCallId: completion.toolCallId,
+      model: completion.overriddenModelId,
+    },
+    options: {
+      resourceAccessor: dependencies.hookContext.resourceAccessor,
+      enableExecuteHookExec: dependencies.enableTaskToolHooksExec,
+      configuredSteps: dependencies.configuredSteps,
+    },
+  } as Parameters<typeof executeRemotePostToolUseHook>[0]
+}
+
+/** The success result a completed subagent produces from the turns it added. */
+function successResult(
+  completion: TaskSubagentCompletionContext,
+  conversationSteps: TaskSuccess["conversationSteps"],
+  durationMs: number,
+): TaskResult {
+  return new TaskResult({
+    result: {
+      case: "success",
+      value: new TaskSuccess({
+        conversationSteps,
+        agentId: completion.subagentId,
+        durationMs: BigInt(durationMs),
+        ...(completion.resultSuffix !== undefined ? { resultSuffix: completion.resultSuffix } : {}),
+      }),
+    },
+  })
+}
+
+/** Finishes a subagent that ended successfully: collects its work, cleans it up, reports it and answers with the result. */
 async function buildFinalResult(
   currentState: ConversationStateStructure,
-  completionCtx: TaskSubagentCompletionContext,
-  deps: TaskSubagentCompletionDependencies,
+  completion: TaskSubagentCompletionContext,
+  dependencies: TaskSubagentCompletionDependencies,
 ): Promise<TaskSubagentIterationResult> {
-  const allNewTurns = currentState.turns.slice(completionCtx.initialTurnsCount)
+  const allNewTurns = currentState.turns.slice(completion.initialTurnsCount)
   const { conversationSteps: allConversationSteps, toolCallCount: finalToolCallCount } =
-    await collectConversationStepsWithToolCallCount(deps.ctx, allNewTurns, deps.blobStore)
-  const finalDurationMs = Date.now() - completionCtx.executionStartTime
-  deps.registry.cleanup(completionCtx.subagentId)
-  if (deps.enableTaskToolHooksExec) {
+    await collectConversationStepsWithToolCallCount(dependencies.ctx, allNewTurns, dependencies.blobStore)
+  const finalDurationMs = elapsedMs(completion)
+  dependencies.registry.cleanup(completion.subagentId)
+  if (dependencies.enableTaskToolHooksExec) {
     try {
-      await executeRemotePostToolUseHook({
-        ctx: deps.ctx,
-        toolName: deps.toolName,
-        toolInput: deps.postToolUseHookInput,
-        toolOutput: JSON.stringify({
-          status: "success",
-          agentId: completionCtx.subagentId,
-          durationMs: finalDurationMs,
-          messageCount: allNewTurns.length,
-          toolCallCount: finalToolCallCount,
-        }),
-        durationMs: finalDurationMs,
-        requestContext: {
-          toolCallId: completionCtx.toolCallId,
-          model: completionCtx.overriddenModelId,
-        },
-        options: {
-          resourceAccessor: deps.hookContext.resourceAccessor,
-          enableExecuteHookExec: deps.enableTaskToolHooksExec,
-          configuredSteps: deps.configuredSteps,
-        },
-      })
+      await executeRemotePostToolUseHook(
+        postToolUseRequest(completion, dependencies, finalDurationMs, allNewTurns.length, finalToolCallCount),
+      )
     } catch {
       // This hook observes the call; a hook that cannot run does not make the call fail.
     }
   }
   return {
     shouldContinue: false,
-    finalResult: new TaskResult({
-      result: {
-        case: "success",
-        value: new TaskSuccess({
-          conversationSteps: allConversationSteps,
-          agentId: completionCtx.subagentId,
-          durationMs: BigInt(finalDurationMs),
-          ...(completionCtx.resultSuffix !== undefined
-            ? { resultSuffix: completionCtx.resultSuffix }
-            : {}),
-        }),
-      },
-    }),
+    finalResult: successResult(completion, allConversationSteps, finalDurationMs),
   }
 }
 
@@ -209,9 +257,9 @@ async function buildFinalResult(
 export async function processSubagentIterationSuccess(
   currentState: ConversationStateStructure,
   turnsAtStartOfIteration: number,
-  iterState: TaskSubagentIterationState,
-  completionCtx: TaskSubagentCompletionContext,
-  deps: TaskSubagentCompletionDependencies,
+  iteration: TaskSubagentIterationState,
+  completion: TaskSubagentCompletionContext,
+  dependencies: TaskSubagentCompletionDependencies,
   persistState: (
     ctx: Context,
     subagentId: string,
@@ -221,73 +269,67 @@ export async function processSubagentIterationSuccess(
   subagentType: SubagentType,
 ): Promise<TaskSubagentIterationResult> {
   persistState(
-    deps.ctx,
-    completionCtx.subagentId,
+    dependencies.ctx,
+    completion.subagentId,
     subagentType,
     new SubagentPersistedState({
       conversationState: currentState,
-      modelId: completionCtx.overriddenModelId,
+      modelId: completion.overriddenModelId,
     }),
   )
   const newTurns = currentState.turns.slice(turnsAtStartOfIteration)
-  const lastAssistant = await extractLastAssistantMessage(
-    deps.ctx,
-    newTurns,
-    deps.blobStore,
-  )
-  const toolCallCount = await countToolCallsFromTurns(deps.ctx, newTurns, deps.blobStore)
+  const lastAssistant = await extractLastAssistantMessage(dependencies.ctx, newTurns, dependencies.blobStore)
+  const toolCallCount = await countToolCallsFromTurns(dependencies.ctx, newTurns, dependencies.blobStore)
   const followupMessage = await executeSubagentStopHook({
-    ...deps.hookContext,
+    ...dependencies.hookContext,
     status: "completed",
-    durationMs: Date.now() - completionCtx.executionStartTime,
+    durationMs: elapsedMs(completion),
     messageCount: currentState.turns.length,
     toolCallCount,
     ...(lastAssistant !== undefined ? { summary: lastAssistant } : {}),
-    loopCount: iterState.loopCount,
-    task: completionCtx.rawArgsPrompt,
-    description: completionCtx.rawArgsDescription,
+    loopCount: iteration.loopCount,
+    task: completion.rawArgsPrompt,
+    description: completion.rawArgsDescription,
   })
-  iterState.subagentStopCalled = true
+  iteration.subagentStopCalled = true
   if (followupMessage !== undefined && followupMessage.length > 0) {
-    iterState.loopCount += 1
+    iteration.loopCount += 1
     return {
       shouldContinue: true,
       nextAction: buildFollowupAction({
         followupMessage,
-        toolCallId: completionCtx.toolCallId,
-        loopCount: iterState.loopCount,
-        useAskMode: completionCtx.useAskModeForSubagent,
-        ...(completionCtx.selectedContext !== undefined
-          ? { selectedContext: completionCtx.selectedContext }
-          : {}),
+        toolCallId: completion.toolCallId,
+        loopCount: iteration.loopCount,
+        useAskMode: completion.useAskModeForSubagent,
+        ...(completion.selectedContext !== undefined ? { selectedContext: completion.selectedContext } : {}),
       }),
     }
   }
-  return buildFinalResult(currentState, completionCtx, deps)
+  return buildFinalResult(currentState, completion, dependencies)
 }
 
 /** The run stream failed: the subagent is told it stopped, and the failure is passed on unchanged. */
 export async function handleSubagentRunStreamError(
   runStreamError: unknown,
   currentState: ConversationStateStructure,
-  iterState: TaskSubagentIterationState,
-  completionCtx: TaskSubagentCompletionContext,
-  deps: TaskSubagentCompletionDependencies,
+  iteration: TaskSubagentIterationState,
+  completion: TaskSubagentCompletionContext,
+  dependencies: TaskSubagentCompletionDependencies,
   _subagentCtxCanceled: boolean,
   _abortOptions: unknown,
 ): Promise<never> {
   await executeSubagentStopHook({
-    ...deps.hookContext,
+    ...dependencies.hookContext,
     status: "error",
-    durationMs: Date.now() - completionCtx.executionStartTime,
+    durationMs: elapsedMs(completion),
     messageCount: currentState.turns.length,
     toolCallCount: 0,
-    errorMessage: runStreamError instanceof Error ? runStreamError.message : String(runStreamError),
-    loopCount: iterState.loopCount,
-    task: completionCtx.rawArgsPrompt,
-    description: completionCtx.rawArgsDescription,
+    errorMessage: errorTextOf(runStreamError),
+    loopCount: iteration.loopCount,
+    task: completion.rawArgsPrompt,
+    description: completion.rawArgsDescription,
   })
-  iterState.subagentStopCalled = true
+  iteration.subagentStopCalled = true
   throw runStreamError
 }
 
@@ -295,24 +337,24 @@ export async function handleSubagentRunStreamError(
 export async function handleSubagentExecutionError(
   error: unknown,
   state: ConversationStateStructure | undefined,
-  _iterState: TaskSubagentIterationState,
-  completionCtx: TaskSubagentCompletionContext,
-  deps: TaskSubagentCompletionDependencies,
+  iteration: TaskSubagentIterationState,
+  completion: TaskSubagentCompletionContext,
+  dependencies: TaskSubagentCompletionDependencies,
   _subagentCtxCanceled: boolean,
   _abortOptions: unknown,
 ): Promise<never> {
-  deps.registry.cleanup(completionCtx.subagentId)
+  dependencies.registry.cleanup(completion.subagentId)
   if (state !== undefined) {
     await executeSubagentStopHook({
-      ...deps.hookContext,
+      ...dependencies.hookContext,
       status: "error",
-      durationMs: Date.now() - completionCtx.executionStartTime,
+      durationMs: elapsedMs(completion),
       messageCount: state.turns.length,
       toolCallCount: 0,
-      errorMessage: error instanceof Error ? error.message : String(error),
-      loopCount: _iterState.loopCount,
-      task: completionCtx.rawArgsPrompt,
-      description: completionCtx.rawArgsDescription,
+      errorMessage: errorTextOf(error),
+      loopCount: iteration.loopCount,
+      task: completion.rawArgsPrompt,
+      description: completion.rawArgsDescription,
     })
   }
   throw error
