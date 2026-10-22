@@ -10,13 +10,17 @@
 const PDF_HEADER = [37, 80, 68, 70] as const
 const PDF_EXTENSION_REGEX = /\.pdf$/i
 
+/** Whether these bytes begin with the four bytes every PDF starts with. */
 export function hasPdfMagicBytes(bytes: Uint8Array): boolean {
   if (bytes.length < PDF_HEADER.length) return false
-  return PDF_HEADER.every((value, index) => bytes[index] === value)
+  return PDF_HEADER.every((byte, position) => bytes[position] === byte)
+}
+
+/** Whether the name ends in the extension a PDF carries, which is the clue when the header is not there. */
+function hasPdfExtension(filePath: string | undefined): boolean {
+  return filePath !== undefined && PDF_EXTENSION_REGEX.test(filePath)
 }
 
 export function isPdfBinary(bytes: Uint8Array, filePath?: string): boolean {
-  if (hasPdfMagicBytes(bytes)) return true
-  if (filePath && PDF_EXTENSION_REGEX.test(filePath)) return true
-  return false
+  return hasPdfMagicBytes(bytes) || hasPdfExtension(filePath)
 }

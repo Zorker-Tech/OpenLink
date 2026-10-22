@@ -414,6 +414,22 @@ test("a PDF is recognized by its header, and by its name when the header is not 
   assert.equal(isPdfBinary(new Uint8Array([1, 2, 3]), "/w/a.txt"), false)
 })
 
+test("a PDF's header is its first four bytes exactly, and the name only decides when they are absent", () => {
+  const header = new Uint8Array([37, 80, 68, 70])
+  assert.equal(hasPdfMagicBytes(header), true, "the bare header is a whole PDF as far as the classifier goes")
+  assert.equal(hasPdfMagicBytes(new Uint8Array([37, 80, 68, 71])), false, "the last header byte has to match")
+  assert.equal(hasPdfMagicBytes(new Uint8Array([37, 80, 68, 70, 0])), true, "what follows the header is not part of it")
+  assert.equal(hasPdfMagicBytes(new Uint8Array([80, 68, 70, 37])), false, "the header has an order")
+  assert.equal(hasPdfMagicBytes(new Uint8Array()), false)
+  assert.equal(isPdfBinary(new Uint8Array([1, 2, 3]), "/w/a.PDF"), true, "the extension is matched without case")
+  assert.equal(isPdfBinary(new Uint8Array([1, 2, 3]), "/w/a.pdfx"), false, "the extension has to end the name")
+  assert.equal(isPdfBinary(new Uint8Array([1, 2, 3]), "/w/.pdf"), true)
+  assert.equal(isPdfBinary(new Uint8Array([1, 2, 3]), "/w/a.pdf "), false, "a trailing space is not the extension")
+  assert.equal(isPdfBinary(new Uint8Array([1, 2, 3]), ""), false)
+  assert.equal(isPdfBinary(new Uint8Array([1, 2, 3])), false, "the path is optional")
+  assert.equal(isPdfBinary(header, "/w/a.txt"), true, "the bytes are the truth even when the name says otherwise")
+})
+
 test("an image is typed from its bytes first, and its name as a fallback", () => {
   const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
   assert.equal(detectImageMimeType(png), "image/png")
