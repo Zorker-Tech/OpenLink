@@ -8,7 +8,24 @@
  */
 
 export interface NetworkPolicy { version: 1; default: "allow" | "deny"; allow?: readonly string[]; deny?: readonly string[] }
-export const getEffectiveNetworkPolicy = (policy: NetworkPolicy | undefined): NetworkPolicy => policy !== undefined ? policy : { version: 1, default: "deny" }
-export const isNetworkEnabledByPolicy = (policy: NetworkPolicy | undefined): boolean => policy !== undefined && (policy.default === "allow" || (policy.allow !== undefined && policy.allow.length > 0))
-export const networkDisabledPolicy = (): NetworkPolicy => ({ version: 1, default: "deny" })
-export const networkAllowAllPolicy = (): NetworkPolicy => ({ version: 1, default: "allow" })
+
+/** The policy of a sandbox that may not reach the network at all. */
+const denyAllPolicy = (): NetworkPolicy => ({ version: 1, default: "deny" })
+
+/** The policy of a sandbox that may reach anything. */
+const allowAllPolicy = (): NetworkPolicy => ({ version: 1, default: "allow" })
+
+/** The policy a command actually runs under: the one it declared, or the deny-all default. */
+export const getEffectiveNetworkPolicy = (declared: NetworkPolicy | undefined): NetworkPolicy =>
+  declared !== undefined ? declared : denyAllPolicy()
+
+/** Whether a policy names anything it may reach: allowed by default, or with a non-empty allow list. */
+const hasAllowedNetwork = (policy: NetworkPolicy): boolean =>
+  policy.default === "allow" || (policy.allow !== undefined && policy.allow.length > 0)
+
+export const isNetworkEnabledByPolicy = (declared: NetworkPolicy | undefined): boolean =>
+  declared !== undefined && hasAllowedNetwork(declared)
+
+export const networkDisabledPolicy = (): NetworkPolicy => denyAllPolicy()
+
+export const networkAllowAllPolicy = (): NetworkPolicy => allowAllPolicy()
