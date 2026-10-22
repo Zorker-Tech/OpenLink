@@ -51,15 +51,24 @@ export interface MaterializationPort {
   requireWorkerPool?(): { collectConversationGarbage(args: Record<string, unknown>): Promise<unknown> };
   isAgentCapReached?(): Promise<boolean>;
 }
+/** The window of a transcript a reader may ask for. */
+interface TranscriptWindowQuery { beforeSeq?: number; limit: number }
+
+/** The page of a transcript a reader may ask for. */
+interface TranscriptPageQuery { beforeSeq?: number; sinceMs?: number; untilMs: number; limit: number }
+
+/** What marking a session viewed may preserve. */
+interface ViewedMarkOptions { preserveManualUnread?: boolean }
+
 export interface ConversationStatePort {
   getTranscriptEntries(session: OpenAgentSession): Promise<TranscriptEntry[]>;
   getSessionOutline(session: OpenAgentSession): Promise<unknown>;
   getAgentOutline(agentId: string): Promise<unknown>;
   getAgentTranscriptEntries(agentId: string): Promise<TranscriptEntry[]>;
   readAgentTranscriptEntries(agentId: string): TranscriptEntry[];
-  readAgentTranscriptPage(agentId: string, query: { beforeSeq?: number; sinceMs?: number; untilMs: number; limit: number }): ReturnType<SlateAgentDb["getTranscriptPage"]>;
-  readAgentTranscriptWindow(agentId: string, query: { beforeSeq?: number; limit: number }): ReturnType<SlateAgentDb["getTranscriptWindow"]>;
-  readAgentTranscriptTail(agentId: string, query: { beforeSeq?: number; limit: number }): ReturnType<SlateAgentDb["getTranscriptTail"]>;
+  readAgentTranscriptPage(agentId: string, query: TranscriptPageQuery): ReturnType<SlateAgentDb["getTranscriptPage"]>;
+  readAgentTranscriptWindow(agentId: string, query: TranscriptWindowQuery): ReturnType<SlateAgentDb["getTranscriptWindow"]>;
+  readAgentTranscriptTail(agentId: string, query: TranscriptWindowQuery): ReturnType<SlateAgentDb["getTranscriptTail"]>;
   readAgentThread(agentId: string, rootId: string): ReturnType<SlateAgentDb["getThread"]>;
 }
 export interface AgentSessionStoreOptions {
@@ -70,7 +79,15 @@ export interface AgentSessionStoreOptions {
   onAgentRemoved?(agentId: string): void;
 }
 
-export function resolveProfileName(trimmedName: string, current?: { name?: string } | null): string { if (trimmedName) return trimmedName; if (current?.name?.trim()) return current.name; return "New Bot"; }
+/** The name a profile is shown under when nothing names it. */
+const DEFAULT_PROFILE_NAME = "New Bot";
+
+/** The name a profile is written under: the name given, else the current one, else the default. */
+export function resolveProfileName(trimmedName: string, current?: { name?: string } | null): string {
+  if (trimmedName) return trimmedName;
+  if (current?.name?.trim()) return current.name;
+  return DEFAULT_PROFILE_NAME;
+}
 
 export class SlateAgentSessionStore {
   private memory: SessionMemoryProvider = NO_SESSION_MEMORY;
@@ -109,7 +126,7 @@ export class SlateAgentSessionStore {
   private async createLocalSession(profile: Partial<SlateAgentProfile>, origin: "user" | "dev", purpose?: string): Promise<OpenAgentSession> {
     let id = randomUUID(); while (this.agentDirExists(id)) id = randomUUID();
     mkdirSync(this.getAgentDir(id), { recursive: true });
-    this.writeAgentProfileFile(id, { name: profile.name ?? "New Bot", description: profile.description ?? "", ...(profile.title == null ? {} : { title: profile.title }), ...(profile.avatarShape == null ? {} : { avatarShape: profile.avatarShape }), ...(profile.avatarColor == null ? {} : { avatarColor: profile.avatarColor }) });
+    this.writeAgentProfileFile(id, { name: profile.name ?? DEFAULT_PROFILE_NAME, description: profile.description ?? "", ...(profile.title == null ? {} : { title: profile.title }), ...(profile.avatarShape == null ? {} : { avatarShape: profile.avatarShape }), ...(profile.avatarColor == null ? {} : { avatarColor: profile.avatarColor }) });
     const dbPath = getAgentDbPath(this.rootDir, id), db = new SlateAgentDb(dbPath); db.set("agentId", id); db.setAgentOrigin(origin); if (purpose != null) db.setAgentPurpose(purpose); db.setIntroductionPending(true);
     return { id, dbPath, db, agentStore: { dispose: async () => {} } };
   }
@@ -192,27 +209,32 @@ export class SlateAgentSessionStore {
   async listAgentIds(): Promise<string[]> { try { return (await readdir(this.rootDir, { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort(); } catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return []; throw error; } }
 
   async getTranscriptEntries(session: OpenAgentSession): Promise<TranscriptEntry[]> { return this.conversationState?.getTranscriptEntries(session) ?? session.db.getTranscriptEntries(); }
-  async getSessionOutline(session: OpenAgentSession): Promise<unknown> { if (this.conversationState == null) throw new Error("Session conversation-state provider is required"); return this.conversationState.getSessionOutline(session); }
-  async getAgentOutline(agentId: string): Promise<unknown> { if (this.conversationState == null) throw new Error("Session conversation-state provider is required"); return this.conversationState.getAgentOutline(agentId); }
+  /** The conversation-state provider, which the outline readers cannot work without. */
+  private requireConversationState(): ConversationStatePort {
+    if (this.conversationState == null) throw new Error("Session conversation-state provider is required");
+    return this.conversationState;
+  }
+  async getSessionOutline(session: OpenAgentSession): Promise<unknown> { return this.requireConversationState().getSessionOutline(session); }
+  async getAgentOutline(agentId: string): Promise<unknown> { return this.requireConversationState().getAgentOutline(agentId); }
   async getAgentTranscriptEntries(agentId: string): Promise<TranscriptEntry[]> { return this.conversationState?.getAgentTranscriptEntries(agentId) ?? this.withAgentDb(agentId, (db) => db.getTranscriptEntries()); }
   readAgentTranscriptEntries(agentId: string): TranscriptEntry[] { return this.conversationState?.readAgentTranscriptEntries(agentId) ?? []; }
-  readAgentTranscriptPage(agentId: string, query: { beforeSeq?: number; sinceMs?: number; untilMs: number; limit: number }) { return this.conversationState?.readAgentTranscriptPage(agentId, query) ?? { entries: [] }; }
-  readAgentTranscriptWindow(agentId: string, query: { beforeSeq?: number; limit: number }) { return this.conversationState?.readAgentTranscriptWindow(agentId, query) ?? { entries: [], threadCounts: {} }; }
-  readAgentTranscriptTail(agentId: string, query: { beforeSeq?: number; limit: number }) { return this.conversationState?.readAgentTranscriptTail(agentId, query) ?? { entries: [] }; }
+  readAgentTranscriptPage(agentId: string, query: TranscriptPageQuery) { return this.conversationState?.readAgentTranscriptPage(agentId, query) ?? { entries: [] }; }
+  readAgentTranscriptWindow(agentId: string, query: TranscriptWindowQuery) { return this.conversationState?.readAgentTranscriptWindow(agentId, query) ?? { entries: [], threadCounts: {} }; }
+  readAgentTranscriptTail(agentId: string, query: TranscriptWindowQuery) { return this.conversationState?.readAgentTranscriptTail(agentId, query) ?? { entries: [] }; }
   readAgentThread(agentId: string, rootId: string) { return this.conversationState?.readAgentThread(agentId, rootId) ?? { entries: [] }; }
 
   // Recovered from the shipped host bundle (host-main.cjs:632999-633002), where this backfills a
   // legacy agent's lastActivityAt from its store-db mtime before the viewed mark is written. The
   // reconstruction kept the call site in agent-lifecycle.ts but dropped the definition, so every
   // caller threw "seedSessionActivityFromDbMtime is not a function".
-  async markSessionViewed(session: OpenAgentSession, at = Date.now(), options: { preserveManualUnread?: boolean } = {}): Promise<void> { await this.seedSessionActivityFromDbMtime(session); session.db.markViewed(at, options); }
+  async markSessionViewed(session: OpenAgentSession, at = Date.now(), options: ViewedMarkOptions = {}): Promise<void> { await this.seedSessionActivityFromDbMtime(session); session.db.markViewed(at, options); }
   // Deliberately skips the mtime seed: it only backfills a legacy agent's lastActivityAt while
   // listing and is a no-op once activity is recorded, which it always is on the session that just
   // marked activity. Staying synchronous keeps the activity mark and the viewed mark in one tick,
   // so the active row can never be observed unread between them.
-  markSessionViewedNow(session: OpenAgentSession, at = Date.now(), options: { preserveManualUnread?: boolean } = {}): void { session.db.markViewed(at, options); }
+  markSessionViewedNow(session: OpenAgentSession, at = Date.now(), options: ViewedMarkOptions = {}): void { session.db.markViewed(at, options); }
   markSessionActivity(session: OpenAgentSession, at = Date.now()): void { session.db.markActivity(at); }
-  async markAgentViewed(agentId: string, at = Date.now(), options: { preserveManualUnread?: boolean } = {}): Promise<void> { try { await this.withAgentDb(agentId, (db) => db.markViewed(at, options)); } catch {} }
+  async markAgentViewed(agentId: string, at = Date.now(), options: ViewedMarkOptions = {}): Promise<void> { try { await this.withAgentDb(agentId, (db) => db.markViewed(at, options)); } catch {} }
   async setSessionUnread(agentId: string, unread: boolean, at = Date.now()): Promise<void> { await this.withAgentDb(agentId, (db) => unread ? db.markUnread(at) : db.markRead(at)); }
   setSessionNotifyOnUpdates(agentId: string, enabled: boolean): void { writeAgentSettings(getSlateSettingsPath(this.getAgentDir(agentId)), { notifyOnAgentUpdates: enabled }); }
   setSessionHiddenFromSidebar(agentId: string, hidden: boolean): void { writeAgentSettings(getSlateSettingsPath(this.getAgentDir(agentId)), { hiddenFromSidebar: hidden }); }
@@ -225,17 +247,29 @@ export class SlateAgentSessionStore {
 
   automationStoreFor(agentId: string) { return automationStoreForDbPath(getAgentDbPath(this.rootDir, agentId), this.resolveUserTimeZone); }
   listAgentAutomations(agentId: string) { return this.automationStoreFor(agentId).list().slice(0, AUTOMATION_UI_LIMIT); }
-  setAgentAutomationEnabled(agentId: string, automationId: string, enabled: boolean) { const store = this.automationStoreFor(agentId); store.setEnabled(automationId, enabled); return store.list().slice(0, AUTOMATION_UI_LIMIT); }
-  createAgentAutomation(agentId: string, spec: Parameters<ReturnType<SlateAgentSessionStore["automationStoreFor"]>["upsert"]>[0]) { const store = this.automationStoreFor(agentId); store.upsert(spec); return store.list().slice(0, AUTOMATION_UI_LIMIT); }
-  updateAgentAutomation(agentId: string, automationId: string, spec: Parameters<ReturnType<SlateAgentSessionStore["automationStoreFor"]>["update"]>[1]) { const store = this.automationStoreFor(agentId); store.update(automationId, spec); return store.list().slice(0, AUTOMATION_UI_LIMIT); }
-  removeAgentAutomation(agentId: string, automationId: string) { const store = this.automationStoreFor(agentId); store.remove(automationId); return store.list().slice(0, AUTOMATION_UI_LIMIT); }
+  /** Change one agent's automations and answer the list the screens show. */
+  private changeAgentAutomations(agentId: string, change: (store: ReturnType<SlateAgentSessionStore["automationStoreFor"]>) => void) {
+    const store = this.automationStoreFor(agentId);
+    change(store);
+    return store.list().slice(0, AUTOMATION_UI_LIMIT);
+  }
+  setAgentAutomationEnabled(agentId: string, automationId: string, enabled: boolean) { return this.changeAgentAutomations(agentId, (store) => { store.setEnabled(automationId, enabled); }); }
+  createAgentAutomation(agentId: string, spec: Parameters<ReturnType<SlateAgentSessionStore["automationStoreFor"]>["upsert"]>[0]) { return this.changeAgentAutomations(agentId, (store) => { store.upsert(spec); }); }
+  updateAgentAutomation(agentId: string, automationId: string, spec: Parameters<ReturnType<SlateAgentSessionStore["automationStoreFor"]>["update"]>[1]) { return this.changeAgentAutomations(agentId, (store) => { store.update(automationId, spec); }); }
+  removeAgentAutomation(agentId: string, automationId: string) { return this.changeAgentAutomations(agentId, (store) => { store.remove(automationId); }); }
   workflowStoreFor(agentId: string) { return workflowStoreForDbPath(getAgentDbPath(this.rootDir, agentId), this.resolveUserTimeZone); }
   async listAgentWorkflows(agentId: string) { return limitSurfacedWorkflows(this.workflowStoreFor(agentId).listAll()); }
   async getAgentWorkflow(agentId: string, workflowId: string) { return this.workflowStoreFor(agentId).get(workflowId); }
-  createAgentWorkflow(agentId: string, spec: WorkflowSpec) { const store = this.workflowStoreFor(agentId); store.create(spec); return limitSurfacedWorkflows(store.listAll()); }
-  updateAgentWorkflow(agentId: string, workflowId: string, spec: WorkflowSpec) { const store = this.workflowStoreFor(agentId); store.update(workflowId, spec); return limitSurfacedWorkflows(store.listAll()); }
-  async setAgentWorkflowEnabled(agentId: string, workflowId: string, enabled: boolean) { const store = this.workflowStoreFor(agentId); store.setEnabledForAgent(workflowId, enabled); return limitSurfacedWorkflows(store.listAll()); }
-  removeAgentWorkflow(agentId: string, workflowId: string) { const store = this.workflowStoreFor(agentId); store.remove(workflowId); return limitSurfacedWorkflows(store.listAll()); }
+  /** Change one agent's workflows and answer the list the screens show. */
+  private changeAgentWorkflows(agentId: string, change: (store: ReturnType<SlateAgentSessionStore["workflowStoreFor"]>) => void) {
+    const store = this.workflowStoreFor(agentId);
+    change(store);
+    return limitSurfacedWorkflows(store.listAll());
+  }
+  createAgentWorkflow(agentId: string, spec: WorkflowSpec) { return this.changeAgentWorkflows(agentId, (store) => { store.create(spec); }); }
+  updateAgentWorkflow(agentId: string, workflowId: string, spec: WorkflowSpec) { return this.changeAgentWorkflows(agentId, (store) => { store.update(workflowId, spec); }); }
+  async setAgentWorkflowEnabled(agentId: string, workflowId: string, enabled: boolean) { return this.changeAgentWorkflows(agentId, (store) => { store.setEnabledForAgent(workflowId, enabled); }); }
+  removeAgentWorkflow(agentId: string, workflowId: string) { return this.changeAgentWorkflows(agentId, (store) => { store.remove(workflowId); }); }
   async importAgentWorkflowMarkdown(agentId: string, markdown: string, fallbackName?: string) { const store = this.workflowStoreFor(agentId), imported = store.importMarkdown(markdown, fallbackName); return { workflows: limitSurfacedWorkflows(store.listAll()), result: imported == null ? { imported: [], skipped: [{ source: "pasted skill", reason: "empty or invalid" }] } : { imported: [imported], skipped: [] } }; }
   async importAgentWorkflowSource(agentId: string, source: string, fallbackName?: string) { const store = this.workflowStoreFor(agentId), imported = store.importLiveSource(source, fallbackName); return { workflows: limitSurfacedWorkflows(store.listAll()), result: imported == null ? { imported: [], skipped: [{ source, reason: "could not link" }] } : { imported: [imported], skipped: [] } }; }
   async portAgentLocalSkills(agentId: string) { const store = this.workflowStoreFor(agentId), result = store.portLocalSkills(homedir(), process.cwd()); return { workflows: limitSurfacedWorkflows(store.listAll()), result }; }
