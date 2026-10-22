@@ -244,6 +244,33 @@ test("the headers that say where a request came from are safe to send", () => {
   )
 })
 
+test("a lineage header is stripped of line breaks, and only the tool call is optional", () => {
+  assert.equal(sanitizeHeaderValue("a\rb"), "ab")
+  assert.equal(sanitizeHeaderValue("a\r\nb\n"), "ab", "every line break goes, not just the first")
+  assert.equal(sanitizeHeaderValue("a\tb"), "a\tb", "a tab is not a line break")
+  assert.equal(sanitizeHeaderValue("a\u2028b"), "a\u2028b", "the line separator is not a carriage return or a newline")
+
+  assert.deepEqual(buildSlateRequestLineageHeaders(null), {})
+  assert.deepEqual(buildSlateRequestLineageHeaders(undefined), {})
+  assert.deepEqual(Object.keys(buildSlateRequestLineageHeaders({ parentRequestId: "p", rootParentRequestId: "r" })), ["x-parent-request-id", "x-root-parent-request-id"])
+
+  assert.deepEqual(
+    buildSlateRequestLineageHeaders({ parentRequestId: "p1", rootParentRequestId: "r1", parentAgentToolCallId: "" }),
+    { "x-parent-request-id": "p1", "x-root-parent-request-id": "r1", "x-parent-agent-tool-call-id": "" },
+    "an empty tool call id is still a value",
+  )
+  assert.deepEqual(
+    buildSlateRequestLineageHeaders({ parentRequestId: "p1", rootParentRequestId: "r1", parentAgentToolCallId: null as never }),
+    { "x-parent-request-id": "p1", "x-root-parent-request-id": "r1" },
+    "only undefined or null leaves the tool call header out",
+  )
+  assert.deepEqual(
+    buildSlateRequestLineageHeaders({ parentRequestId: "p\r\n1", rootParentRequestId: "r\n1", parentAgentToolCallId: "c\r1" }),
+    { "x-parent-request-id": "p1", "x-root-parent-request-id": "r1", "x-parent-agent-tool-call-id": "c1" },
+    "every header value is sanitized",
+  )
+})
+
 test("the WebAuthn proxy is only mirrored where the signer ships", () => {
   assert.equal(slateWebauthnSignerShips("darwin"), true)
   assert.equal(slateWebauthnSignerShips("win32"), true)
