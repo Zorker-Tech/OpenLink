@@ -24,13 +24,38 @@ export const MEMORY_PROJECT_INJECTED_CAP = 3;
 export const MEMORY_DECAY_HALF_LIFE_DAYS = 30;
 export const DAY_MS = 86_400_000;
 
-export interface MemoryRecord { readonly id?: string; readonly content: string; readonly createdAt: number; readonly kind?: "profile" | "log" }
-export interface MemoryRecall { readonly profile: readonly MemoryRecord[]; readonly recent: readonly MemoryRecord[] }
-export interface MemoryExtraction { readonly additions: readonly { readonly content: string; readonly kind: "profile" | "log" }[]; readonly removals: readonly string[] }
-export interface FrozenMemorySnapshot { readonly render: string; readonly compactionEpoch: number }
+/** One remembered fact: its text, when it was learned, which tier it belongs to and which assistant recorded it. */
+export interface MemoryRecord {
+  readonly content: string;
+  readonly createdAt: number;
+  readonly id?: string;
+  readonly kind?: "profile" | "log";
+}
 
+/** What an agent recalls at the start of a turn, in the two tiers its own prompt renders. */
+export interface MemoryRecall {
+  readonly profile: readonly MemoryRecord[];
+  readonly recent: readonly MemoryRecord[];
+}
+
+/** The two changes a review of an exchange can ask for: facts to add, and facts that no longer hold. */
+export interface MemoryExtraction {
+  readonly additions: readonly { readonly content: string; readonly kind: "profile" | "log" }[];
+  readonly removals: readonly string[];
+}
+
+/** The rendered memory a prompt used at its last compaction, kept so it can be reused until the next one. */
+export interface FrozenMemorySnapshot {
+  readonly render: string;
+  readonly compactionEpoch: number;
+}
+
+/** The environment switches this module knows, named once. */
+const FROZEN_MEMORY_DISABLE_ENV = "SLATE_DISABLE_MEMORY_FREEZE";
+
+/** Whether the memory prompt may freeze between compactions; an explicit opt-out disables it. */
 export function isMemoryFreezeEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  return env.SLATE_DISABLE_MEMORY_FREEZE !== "1";
+  return env[FROZEN_MEMORY_DISABLE_ENV] !== "1";
 }
 
 export function resolveFrozenMemoryPrompt(args: {
@@ -38,72 +63,133 @@ export function resolveFrozenMemoryPrompt(args: {
   readonly compactionEpoch: number;
   readonly renderLive: () => { readonly render: string; readonly hasFacts: boolean };
 }): { readonly render: string; readonly snapshotToPersist?: FrozenMemorySnapshot } {
-  if (args.snapshot != null && args.snapshot.compactionEpoch === args.compactionEpoch) return { render: args.snapshot.render };
+  const snapshot = args.snapshot;
+  if (snapshot != null && snapshot.compactionEpoch === args.compactionEpoch) return { render: snapshot.render };
   const live = args.renderLive();
-  return !live.hasFacts ? { render: live.render } : { render: live.render, snapshotToPersist: { render: live.render, compactionEpoch: args.compactionEpoch } };
+  if (!live.hasFacts) return { render: live.render };
+  return { render: live.render, snapshotToPersist: { render: live.render, compactionEpoch: args.compactionEpoch } };
 }
 
+/***/ const EPISODE_INTERVAL_ENV = "SLATE_MEMORY_EPISODE_INTERVAL";
+
+/** How many turns an episode covers when the deployment says; a value that is not a positive number is ignored. */
 export function getEpisodeInterval(env: NodeJS.ProcessEnv = process.env): number {
-  const raw = env.SLATE_MEMORY_EPISODE_INTERVAL;
-  if (raw == null) return DEFAULT_EPISODE_INTERVAL;
-  const parsed = Number.parseInt(raw.trim(), 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_EPISODE_INTERVAL;
+  const configured = env[EPISODE_INTERVAL_ENV];
+  if (configured == null) return DEFAULT_EPISODE_INTERVAL;
+  const interval = Number.parseInt(configured.trim(), 10);
+  return Number.isFinite(interval) && interval > 0 ? interval : DEFAULT_EPISODE_INTERVAL;
 }
 
 const TRIVIAL_EXCHANGES = new Set(["hi", "hey", "hello", "yo", "sup", "thanks", "thank you", "ty", "thx", "ok", "okay", "k", "kk", "cool", "nice", "great", "awesome", "perfect", "yes", "yep", "yeah", "no", "nope", "sure", "got it", "gotcha", "lol", "haha", "np", "done", "good", "bye"]);
 
+/** A message longer than this, or one that asks something, is memorable whatever it says. */
+const ALWAYS_MEMORABLE_LENGTH = 40;
+
 export function isMemorableExchange(userMessage: string): boolean {
   const user = userMessage.trim();
   if (user.length === 0) return false;
-  if (user.length > 40 || user.includes("?")) return true;
+  return user.length > ALWAYS_MEMORABLE_LENGTH || user.includes("?") || isTrivialSpelling(user);
+}
+
+/** A greeting or acknowledgement, in any spelling of it, is not worth remembering. Answers the untrivial ones. */
+function isTrivialSpelling(user: string): boolean {
   return !TRIVIAL_EXCHANGES.has(user.toLowerCase().replace(/[\s!.…,~)\]]+$/g, "").replace(/\s+/g, " ").trim());
 }
 
+const WHITESPACE_RUN = /\s+/g;
+
+/** A fact as the platform stores it: one line, trimmed, and no longer than the content limit. */
 export function normalizeMemoryContent(raw: string): string {
-  return raw.replace(/\s+/g, " ").trim().slice(0, MEMORY_MAX_CONTENT_LENGTH);
+  return raw.replace(WHITESPACE_RUN, " ").trim().slice(0, MEMORY_MAX_CONTENT_LENGTH);
 }
+
+/** What makes two facts the same fact: their normalized text, case-insensitively. */
 export function memoryDedupeKey(content: string): string { return normalizeMemoryContent(content).toLowerCase(); }
+
+const EPISODE_IMPORTANCE = 1.5;
+const NOTE_IMPORTANCE = 0.5;
+const ORDINARY_IMPORTANCE = 1;
+
+/** How much a fact counts when memories compete: episodes first, notes last, ordinary facts between them. */
 export function memoryImportance(contentOrRecord: string | MemoryRecord): number {
   const content = typeof contentOrRecord === "string" ? contentOrRecord : contentOrRecord.content;
-  return content.startsWith(MEMORY_EPISODE_PREFIX) ? 1.5 : content.startsWith(MEMORY_NOTE_PREFIX) ? 0.5 : 1;
+  if (content.startsWith(MEMORY_EPISODE_PREFIX)) return EPISODE_IMPORTANCE;
+  if (content.startsWith(MEMORY_NOTE_PREFIX)) return NOTE_IMPORTANCE;
+  return ORDINARY_IMPORTANCE;
 }
+
+/** The window over which a fact's age halves its pull. */
+const DECAY_WINDOW_MS = MEMORY_DECAY_HALF_LIFE_DAYS * DAY_MS;
+
+/** A fact's recall rank: its importance, and its age measured in decay windows from the epoch. */
 export function memoryRecallRank(memory: MemoryRecord): number {
-  return Math.log2(memoryImportance(memory.content)) + memory.createdAt / (MEMORY_DECAY_HALF_LIFE_DAYS * DAY_MS);
+  return Math.log2(memoryImportance(memory.content)) + memory.createdAt / DECAY_WINDOW_MS;
 }
+
+const UNKNOWN_DATE = "unknown date";
+
+/** The day a fact was learned, or a phrase when the timestamp cannot name one. */
 export function formatMemoryDate(createdAtMs: number): string {
-  return !Number.isFinite(createdAtMs) || createdAtMs <= 0 ? "unknown date" : new Date(createdAtMs).toISOString().slice(0, 10);
+  return Number.isFinite(createdAtMs) && createdAtMs > 0 ? new Date(createdAtMs).toISOString().slice(0, 10) : UNKNOWN_DATE;
 }
+
+/** One fact as a prompt line, with the day it was learned. */
 export function factLine(memory: MemoryRecord): string { return `- (learned ${formatMemoryDate(memory.createdAt)}) ${memory.content}`; }
 
+/** Read a recall either as the two tiers or as one flat list, each fact kept in the tier its kind names. */
 function toRecall(value: MemoryRecall | readonly MemoryRecord[]): MemoryRecall {
-  return Array.isArray(value) ? { profile: value.filter((record) => record.kind === "profile"), recent: value.filter((record) => record.kind !== "profile") } : value as MemoryRecall;
+  if (!Array.isArray(value)) return value as MemoryRecall;
+  const profile: MemoryRecord[] = [];
+  const recent: MemoryRecord[] = [];
+  for (const record of value) (record.kind === "profile" ? profile : recent).push(record);
+  return { profile, recent };
 }
 
-export function renderMemorySystemPrompt(value: MemoryRecall | readonly MemoryRecord[], location?: string): string {
-  const { profile, recent } = toRecall(value);
-  if (profile.length === 0 && recent.length === 0 && location == null) return "";
-  const lines = [
-    "Memory: durable facts you have learned about the user and their world.",
-    "These persist across every conversation with this agent, even after the chat is cleared. Rely on them so you stay consistent and avoid re-asking what you already know.",
-  ];
-  if (location != null) lines.push(
+/** Append whole prompt lines until the budget would run out; the first line is always kept. Answers how many were shown. */
+function appendBudgetedLines(target: string[], renderedLines: readonly string[], charBudget: number): number {
+  let remaining = charBudget;
+  let shown = 0;
+  for (const line of renderedLines) {
+    if (shown > 0 && line.length > remaining) break;
+    target.push(line);
+    remaining -= line.length;
+    shown += 1;
+  }
+  return shown;
+}
+
+const MEMORY_PROMPT_INTRODUCTION = [
+  "Memory: durable facts you have learned about the user and their world.",
+  "These persist across every conversation with this agent, even after the chat is cleared. Rely on them so you stay consistent and avoid re-asking what you already know.",
+];
+const ABOUT_THE_USER_HEADING = "About the user:";
+const RECENTLY_HEADING = "Recently:";
+const NO_FACTS_RECORDED = "No facts recorded yet.";
+
+/** Where the agent's own memory lives, and how to change it, when the caller knows the folder. */
+function memoryFolderParagraph(location: string): string[] {
+  return [
     `Your memory lives in a folder at ${location}: profile.md holds who the user is (kept in mind every turn) and log/ holds dated history.`,
     'Read or grep those files with Read and Shell on your own computer when you need older facts that are not listed here. To CHANGE memory, prefer the update_state tool (target "memory"): action "write" with a fact and a tier (profile | log | note), or action "forget" with the exact text of a recorded fact.',
-  );
-  if (profile.length > 0) lines.push("About the user:", ...profile.map(factLine));
-  if (recent.length > 0) {
-    lines.push("Recently:");
-    let budget = MEMORY_RECENT_PROMPT_CHAR_BUDGET;
-    let shown = 0;
-    for (const memory of recent) {
-      const line = factLine(memory);
-      if (shown > 0 && line.length > budget) break;
-      lines.push(line); budget -= line.length; shown += 1;
-    }
-    const omitted = recent.length - shown;
+  ];
+}
+
+/** The memory prompt for an agent's own tiers; an empty memory with no folder renders nothing at all. */
+export function renderMemorySystemPrompt(value: MemoryRecall | readonly MemoryRecord[], location?: string): string {
+  const recall = toRecall(value);
+  const profileFacts = recall.profile;
+  const recentFacts = recall.recent;
+  if (!profileFacts.length && !recentFacts.length && location == null) return "";
+  const lines = [...MEMORY_PROMPT_INTRODUCTION];
+  if (location != null) lines.push(...memoryFolderParagraph(location));
+  if (profileFacts.length > 0) lines.push(ABOUT_THE_USER_HEADING, ...profileFacts.map(factLine));
+  if (recentFacts.length > 0) {
+    lines.push(RECENTLY_HEADING);
+    const shown = appendBudgetedLines(lines, recentFacts.map(factLine), MEMORY_RECENT_PROMPT_CHAR_BUDGET);
+    const omitted = recentFacts.length - shown;
     if (omitted > 0) lines.push(location == null ? `(${omitted} more log facts not shown.)` : `(${omitted} more log facts on disk \u2014 grep the log/ folder for them.)`);
   }
-  if (profile.length === 0 && recent.length === 0) lines.push("No facts recorded yet.");
+  if (!profileFacts.length && !recentFacts.length) lines.push(NO_FACTS_RECORDED);
   return lines.join("\n");
 }
 
@@ -131,103 +217,163 @@ export function buildExtractionUserPrompt(userMessage: string, agentMessage = ""
 }
 
 const CATEGORY_LINE = /^(profile|log|note|remove)\s*:\s*(.+)$/i;
+
+/** One line of a model's extraction answer, read as a category tag and the fact body under it. */
+function parseExtractionLine(rawLine: string): { tag: string | undefined; body: string } {
+  const stripped = rawLine.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, "");
+  const category = CATEGORY_LINE.exec(stripped);
+  return { tag: category?.[1]?.toLowerCase(), body: normalizeMemoryContent(category?.[2] ?? stripped) };
+}
+
+/** Read a model's extraction answer into the facts it asks to add and the facts it asks to drop. */
 export function parseExtractedMemories(raw: string, existingMemories: readonly string[] = []): MemoryExtraction {
-  const trimmed = raw.trim();
-  if (trimmed.length === 0 || trimmed.toUpperCase() === MEMORY_EXTRACTION_NONE_SENTINEL) return { additions: [], removals: [] };
-  const seen = new Set(existingMemories.map(memoryDedupeKey));
+  const text = raw.trim();
+  if (text.length === 0 || text.toUpperCase() === MEMORY_EXTRACTION_NONE_SENTINEL) return { additions: [], removals: [] };
+  const seenKeys = new Set(existingMemories.map(memoryDedupeKey));
   const additions: Array<{ content: string; kind: "profile" | "log" }> = [];
   const removals: string[] = [];
-  for (const rawLine of trimmed.split("\n")) {
-    const stripped = rawLine.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, "");
-    const category = CATEGORY_LINE.exec(stripped);
-    const tag = category?.[1]?.toLowerCase();
-    const bare = normalizeMemoryContent(category?.[2] ?? stripped);
-    if (bare.length === 0 || bare.toUpperCase() === MEMORY_EXTRACTION_NONE_SENTINEL) continue;
-    if (tag === "remove") { removals.push(bare); continue; }
-    const content = tag === "note" ? normalizeMemoryContent(`${MEMORY_NOTE_PREFIX}${bare}`) : bare;
+  for (const rawLine of text.split("\n")) {
+    const { tag, body } = parseExtractionLine(rawLine);
+    if (body.length === 0 || body.toUpperCase() === MEMORY_EXTRACTION_NONE_SENTINEL) continue;
+    if (tag === "remove") { removals.push(body); continue; }
+    const content = tag === "note" ? normalizeMemoryContent(`${MEMORY_NOTE_PREFIX}${body}`) : body;
     const key = memoryDedupeKey(content);
-    if (seen.has(key)) continue;
-    seen.add(key); additions.push({ content, kind: tag === "profile" ? "profile" : "log" });
+    if (seenKeys.has(key)) continue;
+    seenKeys.add(key);
+    additions.push({ content, kind: tag === "profile" ? "profile" : "log" });
   }
   return { additions, removals };
 }
 
 const RELEVANCE_TOKEN = /[\p{L}\p{N}]{4,}/gu;
 const RELEVANCE_STOPWORDS = new Set(["that", "this", "with", "from", "they", "them", "then", "than", "what", "when", "where", "which", "will", "would", "could", "should", "have", "been", "being", "about", "just", "like", "your", "does", "were", "also", "into", "over", "only", "some", "more", "most", "very", "much", "here", "there", "their", "these", "those", "because", "while", "after", "before", "user"]);
+/** The words worth matching on: four letters or more, lowercased, with the stopwords dropped. */
 function relevanceTokens(text: string): Set<string> {
   const result = new Set<string>();
   for (const match of text.toLowerCase().matchAll(RELEVANCE_TOKEN)) if (!RELEVANCE_STOPWORDS.has(match[0])) result.add(match[0]);
   return result;
 }
 
+/** The query and the memories, from the two argument orders the callers use. */
+function readingOrder(first: string | readonly MemoryRecord[], second: string | readonly MemoryRecord[]): { query: string; memories: readonly MemoryRecord[] } {
+  return typeof first === "string" ? { query: first, memories: second as readonly MemoryRecord[] } : { query: second as string, memories: first };
+}
+
 export function selectRelevantMemories(query: string, memories: readonly MemoryRecord[], max: number): MemoryRecord[];
 export function selectRelevantMemories(memories: readonly MemoryRecord[], query: string, max: number): MemoryRecord[];
+/** The memories that share words with the query, most shared first, newest first among equals, cut to the limit. */
 export function selectRelevantMemories(first: string | readonly MemoryRecord[], second: string | readonly MemoryRecord[], max: number): MemoryRecord[] {
-  const query = typeof first === "string" ? first : second as string;
-  const memories = typeof first === "string" ? second as readonly MemoryRecord[] : first;
+  const { query, memories } = readingOrder(first, second);
   if (max <= 0 || memories.length === 0) return [];
-  const queryTokens = relevanceTokens(query);
-  if (queryTokens.size === 0) return [];
-  return memories.map((memory) => ({ memory, overlap: [...relevanceTokens(memory.content)].filter((token) => queryTokens.has(token)).length }))
-    .filter((entry) => entry.overlap > 0)
-    .sort((left, right) => right.overlap - left.overlap || right.memory.createdAt - left.memory.createdAt)
-    .slice(0, max).map((entry) => entry.memory);
+  const wanted = relevanceTokens(query);
+  if (wanted.size === 0) return [];
+  return memories
+    .map(memory => ({ memory, matched: [...relevanceTokens(memory.content)].filter(token => wanted.has(token)).length }))
+    .filter(candidate => candidate.matched > 0)
+    .sort((left, right) => right.matched - left.matched || right.memory.createdAt - left.memory.createdAt)
+    .slice(0, max)
+    .map(candidate => candidate.memory);
 }
 
+const EXTRACTION_ARCHIVE_MATCH_LIMIT = 10;
+
+/** What the extraction prompt is shown: the current recall first, then the most relevant archived facts. */
 export function gatherExtractionMemories(recall: MemoryRecall, archive: readonly MemoryRecord[], exchangeText: string): string[] {
-  const inPrompt = [...recall.profile, ...recall.recent];
-  const seen = new Set(inPrompt.map((memory) => memoryDedupeKey(memory.content)));
-  const candidates = archive.filter((memory) => !seen.has(memoryDedupeKey(memory.content)));
-  return [...inPrompt, ...selectRelevantMemories(exchangeText, candidates, 10)].map((memory) => memory.content);
+  const shown = [...recall.profile, ...recall.recent];
+  const shownKeys = new Set(shown.map(memory => memoryDedupeKey(memory.content)));
+  const candidates = archive.filter(memory => !shownKeys.has(memoryDedupeKey(memory.content)));
+  return [...shown, ...selectRelevantMemories(exchangeText, candidates, EXTRACTION_ARCHIVE_MATCH_LIMIT)].map(memory => memory.content);
 }
 
+/** The executor an extraction or an episode runs its prompt through. */
 export interface TextExecutor {
+  appendMessages(messages: readonly { readonly role: "system" | "user"; readonly content: string }[]): void;
+  clearMessages(): void;
   getMessages(): readonly unknown[];
   getState(): unknown;
-  clearMessages(): void;
-  appendMessages(messages: readonly { readonly role: "system" | "user"; readonly content: string }[]): void;
   stream(ctx: unknown, first?: unknown, second?: unknown, options?: object): { readonly fullStream: AsyncIterable<{ readonly type: string; readonly textDelta?: string; readonly error?: unknown }> };
 }
 
+const TEXT_DELTA_PART = "text-delta";
+const ERROR_PART = "error";
+
+/** The text an executor produced, or the failure it hit: a failed exchange is raised, never read as empty. */
 export async function collectExecutorText(executor: TextExecutor, ctx: unknown): Promise<string> {
-  let text = "";
+  let collected = "";
   for await (const part of executor.stream(ctx, undefined, undefined, {}).fullStream) {
-    if (part.type === "text-delta") text += part.textDelta ?? "";
-    else if (part.type === "error") throw part.error instanceof Error ? part.error : new Error(String(part.error));
+    if (part.type === TEXT_DELTA_PART) { collected += part.textDelta ?? ""; continue; }
+    if (part.type === ERROR_PART) throw part.error instanceof Error ? part.error : new Error(String(part.error));
   }
-  return text;
+  return collected;
 }
 
-export async function extractMemories(args: { executor: TextExecutor; ctx: unknown; userMessage: string; agentMessage: string; existingMemories: readonly string[] }): Promise<MemoryExtraction>;
+/** One request for memory extraction: the exchange, what is already known, and the executor to ask. */
+interface ExtractionRequest {
+  executor: TextExecutor;
+  ctx: unknown;
+  userMessage: string;
+  agentMessage: string;
+  existingMemories: readonly string[];
+}
+
+/** Run the extraction prompt through an executor and read the answer it wrote. */
+async function extractWithExecutor(request: ExtractionRequest): Promise<MemoryExtraction> {
+  const { executor, ctx, userMessage, agentMessage, existingMemories } = request;
+  executor.appendMessages([
+    { role: "system", content: buildExtractionSystemPrompt() },
+    { role: "user", content: buildExtractionUserPrompt(userMessage, agentMessage, existingMemories) },
+  ]);
+  return parseExtractedMemories(await collectExecutorText(executor, ctx), existingMemories);
+}
+
+export async function extractMemories(args: ExtractionRequest): Promise<MemoryExtraction>;
 export async function extractMemories(text: string, execute: (system: string, user: string) => Promise<string>): Promise<MemoryExtraction>;
-export async function extractMemories(first: string | { executor: TextExecutor; ctx: unknown; userMessage: string; agentMessage: string; existingMemories: readonly string[] }, execute?: (system: string, user: string) => Promise<string>): Promise<MemoryExtraction> {
-  if (typeof first === "string") return parseExtractedMemories(await execute?.(buildExtractionSystemPrompt(), buildExtractionUserPrompt(first)) ?? "NONE");
-  first.executor.appendMessages([{ role: "system", content: buildExtractionSystemPrompt() }, { role: "user", content: buildExtractionUserPrompt(first.userMessage, first.agentMessage, first.existingMemories) }]);
-  return parseExtractedMemories(await collectExecutorText(first.executor, first.ctx), first.existingMemories);
+export async function extractMemories(first: string | ExtractionRequest, execute?: (system: string, user: string) => Promise<string>): Promise<MemoryExtraction> {
+  if (typeof first !== "string") return extractWithExecutor(first);
+  return parseExtractedMemories(await execute?.(buildExtractionSystemPrompt(), buildExtractionUserPrompt(first)) ?? "NONE");
 }
 
-export interface MemoryStore { removeMemoryByContent(content: string): boolean; addMemory(content: string, now: number, kind: "profile" | "log"): MemoryRecord | null }
-export function applyExtractedMemories(store: MemoryStore, extraction: MemoryExtraction, now: number, knownMemories: readonly string[]): { added: MemoryRecord[]; removed: string[] };
-export function applyExtractedMemories(existing: readonly MemoryRecord[], extraction: MemoryExtraction, now?: number): MemoryRecord[];
-export function applyExtractedMemories(first: MemoryStore | readonly MemoryRecord[], extraction: MemoryExtraction, now = Date.now(), knownMemories: readonly string[] = []): MemoryRecord[] | { added: MemoryRecord[]; removed: string[] } {
-  if (Array.isArray(first)) {
-    const removals = new Set(extraction.removals.map(memoryDedupeKey));
-    const next = first.filter((record) => !removals.has(memoryDedupeKey(record.content)));
-    const seen = new Set(next.map((record) => memoryDedupeKey(record.content)));
-    for (const addition of extraction.additions) if (!seen.has(memoryDedupeKey(addition.content))) {
-      seen.add(memoryDedupeKey(addition.content)); next.push({ id: `memory-${now}-${next.length}`, content: addition.content, createdAt: now, kind: addition.kind });
-    }
-    return next;
+/** The store an applied extraction writes through, when the caller keeps memories in files rather than a list. */
+export interface MemoryStore {
+  addMemory(content: string, now: number, kind: "profile" | "log"): MemoryRecord | null;
+  removeMemoryByContent(content: string): boolean;
+}
+
+/** Apply an extraction to a list: superseded facts go, new facts join, and a fact already present is not repeated. */
+function applyToRecords(records: readonly MemoryRecord[], extraction: MemoryExtraction, now: number): MemoryRecord[] {
+  const removalKeys = new Set(extraction.removals.map(memoryDedupeKey));
+  const next = records.filter(record => !removalKeys.has(memoryDedupeKey(record.content)));
+  const presentKeys = new Set(next.map(record => memoryDedupeKey(record.content)));
+  for (const addition of extraction.additions) {
+    const key = memoryDedupeKey(addition.content);
+    if (presentKeys.has(key)) continue;
+    presentKeys.add(key);
+    next.push({ id: `memory-${now}-${next.length}`, content: addition.content, createdAt: now, kind: addition.kind });
   }
-  const store = first as MemoryStore;
-  const known = new Set(knownMemories.map(memoryDedupeKey));
-  const removed: string[] = [], added: MemoryRecord[] = [];
-  for (const removal of extraction.removals) if (known.has(memoryDedupeKey(removal)) && store.removeMemoryByContent(removal)) removed.push(removal);
-  for (const addition of extraction.additions) { const record = store.addMemory(addition.content, now, addition.kind); if (record != null) added.push(record); }
+  return next;
+}
+
+/** Apply an extraction through a store, answering what it actually removed and added. */
+function applyToStore(store: MemoryStore, extraction: MemoryExtraction, now: number, knownMemories: readonly string[]): { added: MemoryRecord[]; removed: string[] } {
+  const knownKeys = new Set(knownMemories.map(memoryDedupeKey));
+  const removed: string[] = [];
+  const added: MemoryRecord[] = [];
+  for (const removal of extraction.removals) if (knownKeys.has(memoryDedupeKey(removal)) && store.removeMemoryByContent(removal)) removed.push(removal);
+  for (const addition of extraction.additions) {
+    const record = store.addMemory(addition.content, now, addition.kind);
+    if (record != null) added.push(record);
+  }
   return { added, removed };
 }
 
-export interface EpisodeTurn { readonly ts: number; readonly user: string; readonly agent: string }
+export function applyExtractedMemories(store: MemoryStore, extraction: MemoryExtraction, now: number, knownMemories: readonly string[]): { added: MemoryRecord[]; removed: string[] };
+export function applyExtractedMemories(existing: readonly MemoryRecord[], extraction: MemoryExtraction, now?: number): MemoryRecord[];
+export function applyExtractedMemories(first: MemoryStore | readonly MemoryRecord[], extraction: MemoryExtraction, now = Date.now(), knownMemories: readonly string[] = []): MemoryRecord[] | { added: MemoryRecord[]; removed: string[] } {
+  return Array.isArray(first) ? applyToRecords(first, extraction, now) : applyToStore(first as MemoryStore, extraction, now, knownMemories);
+}
+
+/** One turn an episode is written from. */
+export interface EpisodeTurn { readonly agent: string; readonly ts: number; readonly user: string }
 export function buildEpisodeSystemPrompt(): string { return [
   MEMORY_EPISODE_PROMPT_MARKER,
   "You maintain the long-term memory of a personal desktop assistant named Slate.",
@@ -236,49 +382,69 @@ export function buildEpisodeSystemPrompt(): string { return [
   'Anchor any time references with the absolute dates shown, never relative words like "yesterday". Drop greetings, acknowledgements, and anything ephemeral. Never invent details.',
   `Output just the sentence(s), no preamble or bullets. Output exactly ${MEMORY_EXTRACTION_NONE_SENTINEL} if nothing in this stretch is worth remembering.`,
 ].join("\n"); }
-export function buildEpisodeUserPrompt(turns: readonly EpisodeTurn[]): string { return ["Recent turns, oldest first:", "", turns.map((turn) => [`(${formatMemoryDate(turn.ts)})`, ...(turn.user.trim() ? [`User: ${turn.user.trim()}`] : []), ...(turn.agent.trim() ? [`Slate: ${turn.agent.trim()}`] : [])].join("\n")).join("\n\n")].join("\n"); }
+/** One turn as the lines an episode prompt reads it as. */
+function episodeTurnLines(turn: EpisodeTurn): string[] {
+  const lines = [`(${formatMemoryDate(turn.ts)})`];
+  if (turn.user.trim()) lines.push(`User: ${turn.user.trim()}`);
+  if (turn.agent.trim()) lines.push(`Slate: ${turn.agent.trim()}`);
+  return lines;
+}
+
+/** The turns of an episode, oldest first, each tagged with its day. */
+export function buildEpisodeUserPrompt(turns: readonly EpisodeTurn[]): string {
+  const renderedTurns = turns.map(turn => episodeTurnLines(turn).join("\n")).join("\n\n");
+  return ["Recent turns, oldest first:", "", renderedTurns].join("\n");
+}
+
+/** One journal sentence for a stretch of turns, or null when there is nothing worth remembering in it. */
 export async function summarizeEpisode(args: { executor: TextExecutor; ctx: unknown; turns: readonly EpisodeTurn[] }): Promise<string | null> {
-  if (args.turns.length === 0) return null;
-  args.executor.appendMessages([{ role: "system", content: buildEpisodeSystemPrompt() }, { role: "user", content: buildEpisodeUserPrompt(args.turns) }]);
-  const narrative = normalizeMemoryContent(await collectExecutorText(args.executor, args.ctx));
+  const { executor, ctx, turns } = args;
+  if (turns.length === 0) return null;
+  executor.appendMessages([{ role: "system", content: buildEpisodeSystemPrompt() }, { role: "user", content: buildEpisodeUserPrompt(turns) }]);
+  const narrative = normalizeMemoryContent(await collectExecutorText(executor, ctx));
   return narrative.length === 0 || narrative.toUpperCase() === MEMORY_EXTRACTION_NONE_SENTINEL ? null : narrative;
 }
 
 export interface ProvenancedMemory extends MemoryRecord { readonly via: string }
+/** The newest record for each dedupe key, ordered and cut to the limit. */
+function mergeRecords(records: ProvenancedMemory[], limit: number, rank: boolean): ProvenancedMemory[] {
+  const newestByKey = new Map<string, ProvenancedMemory>();
+  for (const record of records) {
+    const key = memoryDedupeKey(record.content);
+    const current = newestByKey.get(key);
+    if (current == null || record.createdAt > current.createdAt) newestByKey.set(key, record);
+  }
+  const ordered = [...newestByKey.values()].sort((left, right) => rank
+    ? memoryRecallRank(right) - memoryRecallRank(left) || right.createdAt - left.createdAt
+    : right.createdAt - left.createdAt || left.content.localeCompare(right.content));
+  return ordered.slice(0, Math.max(0, Math.floor(limit)));
+}
+
+/** The user's shared memory as one recall: every assistant's shards, newest fact per text, ranked and bounded. */
 export function mergeUserMemoryShards(shards: readonly { readonly via: string; readonly recall: MemoryRecall }[], limits: { readonly profileLimit: number; readonly recentLimit: number }): { profile: ProvenancedMemory[]; recent: ProvenancedMemory[] } {
-  const merge = (records: ProvenancedMemory[], limit: number, rank = false): ProvenancedMemory[] => {
-    const byKey = new Map<string, ProvenancedMemory>();
-    for (const record of records) { const current = byKey.get(memoryDedupeKey(record.content)); if (current == null || record.createdAt > current.createdAt) byKey.set(memoryDedupeKey(record.content), record); }
-    return [...byKey.values()].sort((a, b) => rank ? memoryRecallRank(b) - memoryRecallRank(a) || b.createdAt - a.createdAt : b.createdAt - a.createdAt || a.content.localeCompare(b.content)).slice(0, Math.max(0, Math.floor(limit)));
-  };
+  const profile: ProvenancedMemory[] = [];
+  const recent: ProvenancedMemory[] = [];
+  for (const shard of shards) {
+    for (const record of shard.recall.profile) profile.push({ ...record, via: shard.via });
+    for (const record of shard.recall.recent) recent.push({ ...record, via: shard.via });
+  }
   return {
-    profile: merge(shards.flatMap((shard) => shard.recall.profile.map((record) => ({ ...record, via: shard.via }))), limits.profileLimit),
-    recent: merge(shards.flatMap((shard) => shard.recall.recent.map((record) => ({ ...record, via: shard.via }))), limits.recentLimit, true),
+    profile: mergeRecords(profile, limits.profileLimit, false),
+    recent: mergeRecords(recent, limits.recentLimit, true),
   };
 }
 
-function provenancedLine(record: ProvenancedMemory): string { return `- (learned ${formatMemoryDate(record.createdAt)})${record.via.trim() ? ` [via ${record.via.trim()}]` : ""} ${record.content}`; }
-const MEMORY_USER_PROFILE_CHAR_BUDGET = 4_000;
-const MEMORY_USER_RECENT_CHAR_BUDGET = 2_000;
-const MEMORY_PROJECT_PROFILE_CHAR_BUDGET = 2_500;
-const MEMORY_PROJECT_RECENT_CHAR_BUDGET = 1_500;
+/** One shared fact as a prompt line, saying which assistant learned it. */
+function provenanceLine(record: ProvenancedMemory): string { return `- (learned ${formatMemoryDate(record.createdAt)})${record.via.trim() ? ` [via ${record.via.trim()}]` : ""} ${record.content}`; }
 
-function appendBudgetedProvenancedFacts(
-  lines: string[],
-  records: readonly ProvenancedMemory[],
-  charBudget: number,
-  moreLabel: string,
-  grepHint: string,
-): void {
-  let budget = charBudget;
-  let shown = 0;
-  for (const record of records) {
-    const line = provenancedLine(record);
-    if (shown > 0 && line.length > budget) break;
-    lines.push(line);
-    budget -= line.length;
-    shown += 1;
-  }
+const USER_PROFILE_BUDGET = 4_000;
+const USER_RECENT_BUDGET = 2_000;
+const PROJECT_PROFILE_BUDGET = 2_500;
+const PROJECT_RECENT_BUDGET = 1_500;
+
+/** Add a tier's facts under its budget, and say how many facts were left out when some were. */
+function appendBudgetedProvenancedFacts(lines: string[], records: readonly ProvenancedMemory[], charBudget: number, moreLabel: string, grepHint: string): void {
+  const shown = appendBudgetedLines(lines, records.map(provenanceLine), charBudget);
   const omitted = records.length - shown;
   if (omitted > 0) {
     lines.push(`(${omitted} more shared ${moreLabel} on disk \u2014 grep ${grepHint} for them.)`);
@@ -287,7 +453,7 @@ function appendBudgetedProvenancedFacts(
 
 export function renderUserMemorySystemPrompt(recall: { readonly profile: readonly ProvenancedMemory[]; readonly recent: readonly ProvenancedMemory[] }, ctx: { readonly userMemoryDir?: string; readonly ownShardDir?: string }): string {
   if (ctx.userMemoryDir == null) return "";
-  const hasFacts = recall.profile.length > 0 || recall.recent.length > 0;
+  const sharedFactsExist = recall.profile.length > 0 || recall.recent.length > 0;
   const lines = [
     "User memory: durable facts shared across every assistant this user runs \u2014 their name, timezone, lasting preferences, and anything all of the user's assistants should know. This is separate from your own memory (shown below) and is visible to all of them.",
     "Precedence: when a shared user fact conflicts with your OWN memory, prefer your own \u2014 it is curated for your role and may deliberately override a shared default.",
@@ -298,29 +464,58 @@ export function renderUserMemorySystemPrompt(recall: { readonly profile: readonl
       'To fix or replace a shared fact another assistant recorded, write the corrected fact into YOUR shard via update_state \u2014 the newest wins on conflict. Record a fact here only when it is clearly about the user and useful to every assistant; keep role-specific facts in your own memory (scope "agent").',
     );
   }
-  if (hasFacts) {
+  if (sharedFactsExist) {
     lines.push("Shared facts are tagged [via <assistant>] so you can tell which assistant learned each one.");
   }
   if (recall.profile.length > 0) {
     lines.push("About the user (shared):");
-    appendBudgetedProvenancedFacts(lines, recall.profile, MEMORY_USER_PROFILE_CHAR_BUDGET, "profile facts", "the user-memory/ folder");
+    appendBudgetedProvenancedFacts(lines, recall.profile, USER_PROFILE_BUDGET, "profile facts", "the user-memory/ folder");
   }
   if (recall.recent.length > 0) {
     lines.push("Recently (shared):");
-    appendBudgetedProvenancedFacts(lines, recall.recent, MEMORY_USER_RECENT_CHAR_BUDGET, "log facts", "the user-memory/ folder");
+    appendBudgetedProvenancedFacts(lines, recall.recent, USER_RECENT_BUDGET, "log facts", "the user-memory/ folder");
   }
   if (recall.profile.length === 0 && recall.recent.length === 0) lines.push("No shared facts recorded yet.");
   return lines.join("\n");
 }
 
-export interface ProjectMemoryBlock { readonly slug: string; readonly name: string; readonly ownShardDir?: string; readonly recall: { readonly profile: readonly ProvenancedMemory[]; readonly recent: readonly ProvenancedMemory[] } }
-function hasProjectFacts(block: ProjectMemoryBlock): boolean { return block.recall.profile.length > 0 || block.recall.recent.length > 0; }
-export function selectProjectMemoryBlocks(blocks: readonly ProjectMemoryBlock[], injectedCap = 3): { injected: ProjectMemoryBlock[]; alsoMemberOf: Array<{ slug: string; name: string }> } {
-  const ordered = [...blocks].sort((a, b) => Number(hasProjectFacts(b)) - Number(hasProjectFacts(a)) || Math.max(0, ...b.recall.profile.map((r) => r.createdAt), ...b.recall.recent.map((r) => r.createdAt)) - Math.max(0, ...a.recall.profile.map((r) => r.createdAt), ...a.recall.recent.map((r) => r.createdAt)) || a.slug.localeCompare(b.slug));
-  const cap = Number.isFinite(injectedCap) && injectedCap > 0 ? Math.floor(injectedCap) : 0;
-  return { injected: ordered.slice(0, cap), alsoMemberOf: ordered.slice(cap).map(({ slug, name }) => ({ slug, name })) };
+/** One project's memory as the prompt sees it: what it is, where this assistant's shard is, and its facts. */
+export interface ProjectMemoryBlock {
+  readonly name: string;
+  readonly slug: string;
+  readonly ownShardDir?: string;
+  readonly recall: { readonly profile: readonly ProvenancedMemory[]; readonly recent: readonly ProvenancedMemory[] };
 }
-export function projectMemoryHasFacts(recall: { readonly injected: readonly ProjectMemoryBlock[] }): boolean { return recall.injected.some(hasProjectFacts); }
+
+/** Whether a project block carries any fact of its own. */
+function hasProjectFacts(block: ProjectMemoryBlock): boolean {
+  return block.recall.profile.length > 0 || block.recall.recent.length > 0;
+}
+
+/** The newest fact a project block carries, or zero when it has none. */
+function projectFreshness(block: ProjectMemoryBlock): number {
+  return Math.max(0, ...block.recall.profile.map(record => record.createdAt), ...block.recall.recent.map(record => record.createdAt));
+}
+
+/** Projects with facts first, then the freshest, then by slug. */
+function compareProjects(left: ProjectMemoryBlock, right: ProjectMemoryBlock): number {
+  return Number(hasProjectFacts(right)) - Number(hasProjectFacts(left)) || projectFreshness(right) - projectFreshness(left) || left.slug.localeCompare(right.slug);
+}
+
+/** The projects whose memory a prompt carries, and the ones the agent is only a member of. */
+export function selectProjectMemoryBlocks(blocks: readonly ProjectMemoryBlock[], injectedCap = 3): { injected: ProjectMemoryBlock[]; alsoMemberOf: Array<{ slug: string; name: string }> } {
+  const ordered = [...blocks].sort(compareProjects);
+  const cap = Number.isFinite(injectedCap) && injectedCap > 0 ? Math.floor(injectedCap) : 0;
+  return {
+    injected: ordered.slice(0, cap),
+    alsoMemberOf: ordered.slice(cap).map(block => ({ slug: block.slug, name: block.name })),
+  };
+}
+
+/** Whether any project the prompt carries has facts. */
+export function projectMemoryHasFacts(recall: { readonly injected: readonly ProjectMemoryBlock[] }): boolean {
+  return recall.injected.some(hasProjectFacts);
+}
 export function renderProjectMemorySystemPrompt(recall: { readonly injected: readonly ProjectMemoryBlock[]; readonly alsoMemberOf: readonly { slug: string; name: string }[] }, ctx: { readonly projectsRootDir?: string }): string {
   if (ctx.projectsRootDir == null) return "";
   const lines = [
@@ -336,11 +531,11 @@ export function renderProjectMemorySystemPrompt(recall: { readonly injected: rea
     const grepHint = "this project's memory/ folder";
     if (block.recall.profile.length > 0) {
       lines.push("About this project (shared):");
-      appendBudgetedProvenancedFacts(lines, block.recall.profile, MEMORY_PROJECT_PROFILE_CHAR_BUDGET, "profile facts", grepHint);
+      appendBudgetedProvenancedFacts(lines, block.recall.profile, PROJECT_PROFILE_BUDGET, "profile facts", grepHint);
     }
     if (block.recall.recent.length > 0) {
       lines.push("Recently (shared):");
-      appendBudgetedProvenancedFacts(lines, block.recall.recent, MEMORY_PROJECT_RECENT_CHAR_BUDGET, "log facts", grepHint);
+      appendBudgetedProvenancedFacts(lines, block.recall.recent, PROJECT_RECENT_BUDGET, "log facts", grepHint);
     }
     if (!hasProjectFacts(block)) lines.push("No shared facts recorded yet for this project.");
   }
