@@ -681,3 +681,48 @@ test("an unrecognized failure is just an error", () => {
   assert.equal(classifyError(new Error("something else")), ToolErrorClassification.OTHER_ERROR)
   assert.equal(classifyError("a string"), ToolErrorClassification.OTHER_ERROR)
 })
+
+test("the hook is told the conversation and request ids, with the call as the last resort", async () => {
+  const executor = executorReturning(new ExecuteHookResult({}))
+  const options = hookOptions(executor)
+  await executeRemoteAfterAgentThoughtHook({ ctx: testContext(), text: "t", requestContext: { toolCallId: "call-1" }, options })
+  const request = executor.calls[0]?.request?.request
+  assert.equal(request?.case, "afterAgentThought")
+  const value = request?.value as AnyRecord
+  assert.equal(value.conversationId, "conv-1")
+  assert.equal(value.generationId, "req-1")
+
+  const bareCtx = createContext().with(agentEventTrackerKey, { trackHookExecuted: () => {} } as unknown as AgentEventTracker)
+  const bare = executorReturning(new ExecuteHookResult({}))
+  await executeRemoteAfterAgentThoughtHook({ ctx: bareCtx, text: "t", requestContext: { toolCallId: "call-9" }, options: hookOptions(bare) })
+  const bareValue = bare.calls[0]?.request?.request?.value as AnyRecord
+  assert.equal(bareValue.conversationId, "call-9")
+  assert.equal(bareValue.generationId, "call-9")
+})
+
+test("a hook that fails without stating fail-closed lets the tool run", async () => {
+  const executor = { async execute() { throw new Error("boom") } }
+  const options = hookOptions({ resourceAccessor: { get: () => executor } } as never)
+  const result = await executeRemotePreToolUseHookWithPermissionCheck({ ctx: testContext(), toolName: "shell", toolInput: {}, requestContext, options })
+  assert.deepEqual(result, {})
+})
+
+test("a wrapper refuses an ask permission instead of running the tool", async () => {
+  const executor = executorReturning(preToolUseResponse({ permission: "ask" }))
+  let ran = false
+  const wrapped = withRemoteHooks({
+    ctx: testContext(),
+    executeFn: async () => { ran = true; return { value: 1 } },
+    config: {
+      toolName: "shell",
+      createToolInput: () => ({ command: "ls" }),
+      createRejectedResult: (_raw: AnyRecord, message: string) => ({ rejected: message }),
+      createSuccessOutput: (_raw: AnyRecord, result: unknown) => ({ output: result }),
+    },
+    requestContext,
+    options: hookOptions(executor),
+  })
+  const result = await wrapped(testContext(), { command: "ls" })
+  assert.equal(ran, false)
+  assert.deepEqual(result, { rejected: "The 'ask' permission for preToolUse hooks is not yet implemented" })
+})

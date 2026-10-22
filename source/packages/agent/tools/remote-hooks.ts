@@ -43,35 +43,35 @@ import { ToolTimeoutError } from "./tool-errors.ts"
 
 const logger = createLogger("agent/tools/remote-hooks")
 
-type AnyRecord = Record<string, any>
+type HookWire = Record<string, any>
 
-const remoteHookDuration = createHistogram("remote_hook.duration_ms", {
+const hookDurationMetric = createHistogram("remote_hook.duration_ms", {
   description: "Duration of remote hook execution in milliseconds",
   labelNames: ["hook_type", "outcome"],
 })
-const remoteHookCount = createCounter("remote_hook.count", {
+const hookCountMetric = createCounter("remote_hook.count", {
   description: "Count of remote hook executions",
   labelNames: ["hook_type", "outcome"],
 })
 
-function recordRemoteHookMetrics(ctx: Context, durationMs: number, hookType: string, outcome: string): void {
-  remoteHookDuration.histogram(ctx, durationMs, { hook_type: hookType, outcome })
-  remoteHookCount.increment(ctx, 1, { hook_type: hookType, outcome })
+function recordHookMetrics(ctx: Context, durationMs: number, hookType: string, outcome: string): void {
+  hookDurationMetric.histogram(ctx, durationMs, { hook_type: hookType, outcome })
+  hookCountMetric.increment(ctx, 1, { hook_type: hookType, outcome })
 }
 
-function isHookExecutionTimeout(error: unknown): boolean {
+function didHookTimeOut(error: unknown): boolean {
   return error instanceof Error &&
     (error.message.toLowerCase().includes("timed out") || error.message.toLowerCase().includes("timeout"))
 }
 
 /** The model a hook is told about: the call's own choice when it made one, the session's otherwise. */
-function toRemoteHookModelFields(requestContext: AnyRecord, options: AnyRecord): AnyRecord {
+function hookModelFields(requestContext: HookWire, options: HookWire): HookWire {
   const modelId = requestContext.modelId ?? options.modelId
   const modelParams = requestContext.modelParams ?? options.modelParams
   return {
     ...(modelId !== undefined && { modelId }),
     ...(modelParams !== undefined && modelParams.length > 0
-      ? { modelParams: modelParams.map((parameter: AnyRecord) => new RequestedModel_ModelParameterValue(parameter)) }
+      ? { modelParams: modelParams.map((parameter: HookWire) => new RequestedModel_ModelParameterValue(parameter)) }
       : {}),
   }
 }
@@ -87,48 +87,71 @@ export class RemoteHookBlockedError extends Error {
   }
 }
 
-function isTimeoutError(error: unknown): boolean {
+function isToolTimeout(error: unknown): boolean {
   return error instanceof ToolTimeoutError || (error instanceof Error && error.name === "TimeoutError")
 }
 
 /** A struct carries JSON, and a value that is not JSON cannot be sent: this is where that is decided. */
-function sanitizeToolInputForStruct(value: unknown): unknown {
+function structJsonValue(value: unknown): unknown {
   return JSON.parse(JSON.stringify(value))
 }
 
-function getRemoteHookExecutor(options: AnyRecord, hookStep: string): AnyRecord | undefined {
+function hookExecutorFor(options: HookWire, hookStep: string): HookWire | undefined {
   if (!options.enableExecuteHookExec || !isHookStepConfigured(options.configuredSteps, hookStep)) return undefined
   return options.resourceAccessor.get(hookExecutorResource)
 }
 
 /** A hook is told which conversation and which request it is answering, even when the call is bare. */
-function buildRequestIds(ctx: Context, requestContext: AnyRecord): { conversationId: string; generationId: string } {
+function requestIdsFor(ctx: Context, requestContext: HookWire): { conversationId: string; generationId: string } {
   return {
     conversationId: requestContext.conversationId ?? getConversationId(ctx) ?? requestContext.toolCallId,
     generationId: requestContext.generationId ?? getRequestId(ctx) ?? requestContext.toolCallId,
   }
 }
 
-function checkRemotePreToolUsePermission(toolName: string, result: AnyRecord): AnyRecord {
-  if (result.permission === "deny") {
-    const reason = result.userMessage
-      ? `${toolName} blocked by preToolUse hook: ${result.userMessage}`
+function requirePreToolPermission(toolName: string, hookAnswer: HookWire): HookWire {
+  if (hookAnswer.permission === "deny") {
+    const reason = hookAnswer.userMessage
+      ? `${toolName} blocked by preToolUse hook: ${hookAnswer.userMessage}`
       : `${toolName} blocked by preToolUse hook`
     throw new RemoteHookBlockedError(reason, reason)
   }
-  if (result.permission === "ask") {
+  if (hookAnswer.permission === "ask") {
     const reason = "The 'ask' permission for preToolUse hooks is not yet implemented. Use 'allow' or 'deny' instead."
     throw new RemoteHookBlockedError(reason, reason)
   }
-  return result
+  return hookAnswer
 }
 
-function track(ctx: Context, event: AnyRecord): void {
+
+/** Milliseconds since a hook call started, rounded the way the durations are reported. */
+function elapsedSince(startedAt: number): number {
+  return Math.round(performance.now() - startedAt)
+}
+
+/** A failed hook call as the reporting needs it: how long it took and whether it timed out. */
+function hookCallFailure(startedAt: number, error: unknown): { durationMs: number; timedOut: boolean } {
+  return { durationMs: elapsedSince(startedAt), timedOut: didHookTimeOut(error) }
+}
+
+/** What one hook call needs before it is made: the executor, and the ids it answers under. */
+function prepareHookCall(
+  ctx: Context,
+  options: HookWire,
+  hookStep: string,
+  requestContext: HookWire,
+): { hookExecutor: HookWire; conversationId: string; generationId: string } | undefined {
+  const hookExecutor = hookExecutorFor(options, hookStep)
+  if (hookExecutor === undefined) return undefined
+  return { hookExecutor, ...requestIdsFor(ctx, requestContext) }
+}
+
+function track(ctx: Context, event: HookWire): void {
   getAgentEventTracker(ctx).trackHookExecuted(ctx, event)
 }
 
 /** Context a hook returned, or nothing if it returned more than a carrier may hold. */
-function safeBuildRemoteHookContexts(
+function hookContextCarriers(
   ctx: Context,
   toolName: string,
   toolCallId: string,
@@ -153,14 +176,14 @@ function safeBuildRemoteHookContexts(
 }
 
 /** A thought is observed, not decided: the hook runs and nothing depends on what it says. */
-export async function executeRemoteAfterAgentThoughtHook(args: AnyRecord): Promise<void> {
-  const { ctx, text, durationMs: thoughtDurationMs, requestContext, options } = args
-  const executor = getRemoteHookExecutor(options, "afterAgentThought")
-  if (!executor) return
-  const { conversationId, generationId } = buildRequestIds(ctx, requestContext)
-  const startTime = performance.now()
+export async function executeRemoteAfterAgentThoughtHook(call: HookWire): Promise<void> {
+  const { ctx, text, durationMs: thoughtDurationMs, requestContext, options } = call
+  const hook = prepareHookCall(ctx, options, "afterAgentThought", requestContext)
+  if (hook === undefined) return
+  const { hookExecutor, conversationId, generationId } = hook
+  const startedAt = performance.now()
   try {
-    const hookArgs = new ExecuteHookArgs({
+    const hookCall = new ExecuteHookArgs({
       request: new ExecuteHookRequest({
         request: {
           case: "afterAgentThought",
@@ -170,14 +193,14 @@ export async function executeRemoteAfterAgentThoughtHook(args: AnyRecord): Promi
             conversationId,
             generationId,
             model: requestContext.model ?? options.model,
-            ...toRemoteHookModelFields(requestContext, options),
+            ...hookModelFields(requestContext, options),
           }),
         },
       }),
     })
-    await executor.execute(ctx, hookArgs)
-    const durationMs = Math.round(performance.now() - startTime)
-    recordRemoteHookMetrics(ctx, durationMs, "afterAgentThought", "success")
+    await hookExecutor.execute(ctx, hookCall)
+    const durationMs = elapsedSince(startedAt)
+    recordHookMetrics(ctx, durationMs, "afterAgentThought", "success")
     track(ctx, {
       hookStep: "afterAgentThought",
       hookSource: "remote",
@@ -187,9 +210,8 @@ export async function executeRemoteAfterAgentThoughtHook(args: AnyRecord): Promi
       failClosed: false,
     })
   } catch (error) {
-    const durationMs = Math.round(performance.now() - startTime)
-    const timedOut = isHookExecutionTimeout(error)
-    recordRemoteHookMetrics(ctx, durationMs, "afterAgentThought", "failure")
+    const { durationMs, timedOut } = hookCallFailure(startedAt, error)
+    recordHookMetrics(ctx, durationMs, "afterAgentThought", "failure")
     track(ctx, {
       hookStep: "afterAgentThought",
       hookSource: "remote",
@@ -207,7 +229,7 @@ export async function executeRemoteAfterAgentThoughtHook(args: AnyRecord): Promi
   }
 }
 
-export async function executeRemoteSubagentStartHook(args: AnyRecord): Promise<AnyRecord> {
+export async function executeRemoteSubagentStartHook(call: HookWire): Promise<HookWire> {
   const {
     ctx,
     subagentId,
@@ -219,15 +241,15 @@ export async function executeRemoteSubagentStartHook(args: AnyRecord): Promise<A
     gitBranch,
     requestContext,
     options,
-  } = args
-  const executor = getRemoteHookExecutor(options, "subagentStart")
-  if (!executor) return {}
-  const { conversationId, generationId } = buildRequestIds(ctx, requestContext)
+  } = call
+  const hook = prepareHookCall(ctx, options, "subagentStart", requestContext)
+  if (hook === undefined) return {}
+  const { hookExecutor, conversationId, generationId } = hook
   const parentConversationId = providedParentConversationId ?? conversationId
   logger.info(ctx, "subagentStart hook firing", { subagentId, subagentType, toolCallId: requestContext.toolCallId })
-  const startTime = performance.now()
+  const startedAt = performance.now()
   try {
-    const hookArgs = new ExecuteHookArgs({
+    const hookCall = new ExecuteHookArgs({
       request: new ExecuteHookRequest({
         request: {
           case: "subagentStart",
@@ -243,22 +265,22 @@ export async function executeRemoteSubagentStartHook(args: AnyRecord): Promise<A
             conversationId,
             generationId,
             model: requestContext.model ?? options.model,
-            ...toRemoteHookModelFields(requestContext, options),
+            ...hookModelFields(requestContext, options),
           }),
         },
       }),
     })
-    const result = await executor.execute(ctx, hookArgs)
-    const durationMs = Math.round(performance.now() - startTime)
-    if (result.response?.response.case !== "subagentStart") {
+    const hookAnswer = await hookExecutor.execute(ctx, hookCall)
+    const durationMs = elapsedSince(startedAt)
+    if (hookAnswer.response?.response.case !== "subagentStart") {
       logger.warn(ctx, "subagentStart hook returned unexpected response", {
         subagentId,
         subagentType,
         toolCallId: requestContext.toolCallId,
-        responseCase: result.response?.response.case,
+        responseCase: hookAnswer.response?.response.case,
         durationMs,
       })
-      recordRemoteHookMetrics(ctx, durationMs, "subagentStart", "failure")
+      recordHookMetrics(ctx, durationMs, "subagentStart", "failure")
       track(ctx, {
         hookStep: "subagentStart",
         hookSource: "remote",
@@ -269,9 +291,9 @@ export async function executeRemoteSubagentStartHook(args: AnyRecord): Promise<A
       })
       return {}
     }
-    const response = result.response.response.value
+    const response = hookAnswer.response.response.value
     const blocked = response.permission === "deny" || response.permission === "ask"
-    recordRemoteHookMetrics(ctx, durationMs, "subagentStart", "success")
+    recordHookMetrics(ctx, durationMs, "subagentStart", "success")
     track(ctx, {
       hookStep: "subagentStart",
       hookSource: "remote",
@@ -289,9 +311,8 @@ export async function executeRemoteSubagentStartHook(args: AnyRecord): Promise<A
     })
     return { permission: response.permission, userMessage: response.userMessage }
   } catch (error) {
-    const durationMs = Math.round(performance.now() - startTime)
-    const timedOut = isHookExecutionTimeout(error)
-    recordRemoteHookMetrics(ctx, durationMs, "subagentStart", "failure")
+    const { durationMs, timedOut } = hookCallFailure(startedAt, error)
+    recordHookMetrics(ctx, durationMs, "subagentStart", "failure")
     track(ctx, {
       hookStep: "subagentStart",
       hookSource: "remote",
@@ -305,7 +326,7 @@ export async function executeRemoteSubagentStartHook(args: AnyRecord): Promise<A
   }
 }
 
-export async function executeRemoteSubagentStopHook(args: AnyRecord): Promise<AnyRecord> {
+export async function executeRemoteSubagentStopHook(call: HookWire): Promise<HookWire> {
   const {
     ctx,
     subagentId,
@@ -324,10 +345,10 @@ export async function executeRemoteSubagentStopHook(args: AnyRecord): Promise<An
     description,
     requestContext,
     options,
-  } = args
-  const executor = getRemoteHookExecutor(options, "subagentStop")
-  if (!executor) return {}
-  const { conversationId, generationId } = buildRequestIds(ctx, requestContext)
+  } = call
+  const hook = prepareHookCall(ctx, options, "subagentStop", requestContext)
+  if (hook === undefined) return {}
+  const { hookExecutor, conversationId, generationId } = hook
   const parentConversationId = suppliedParent ?? conversationId
   logger.info(ctx, "subagentStop hook firing", {
     subagentId,
@@ -335,9 +356,9 @@ export async function executeRemoteSubagentStopHook(args: AnyRecord): Promise<An
     toolCallId: requestContext.toolCallId,
     status,
   })
-  const startTime = performance.now()
+  const startedAt = performance.now()
   try {
-    const hookArgs = new ExecuteHookArgs({
+    const hookCall = new ExecuteHookArgs({
       request: new ExecuteHookRequest({
         request: {
           case: "subagentStop",
@@ -356,7 +377,7 @@ export async function executeRemoteSubagentStopHook(args: AnyRecord): Promise<An
             conversationId,
             generationId,
             model: requestContext.model ?? options.model,
-            ...toRemoteHookModelFields(requestContext, options),
+            ...hookModelFields(requestContext, options),
             loopCount,
             task,
             description,
@@ -364,17 +385,17 @@ export async function executeRemoteSubagentStopHook(args: AnyRecord): Promise<An
         },
       }),
     })
-    const result = await executor.execute(ctx, hookArgs)
-    const durationMs = Math.round(performance.now() - startTime)
-    if (result.response?.response.case !== "subagentStop") {
+    const hookAnswer = await hookExecutor.execute(ctx, hookCall)
+    const durationMs = elapsedSince(startedAt)
+    if (hookAnswer.response?.response.case !== "subagentStop") {
       logger.warn(ctx, "subagentStop hook returned unexpected response", {
         subagentId,
         subagentType,
         toolCallId: requestContext.toolCallId,
-        responseCase: result.response?.response.case,
+        responseCase: hookAnswer.response?.response.case,
         durationMs,
       })
-      recordRemoteHookMetrics(ctx, durationMs, "subagentStop", "failure")
+      recordHookMetrics(ctx, durationMs, "subagentStop", "failure")
       track(ctx, {
         hookStep: "subagentStop",
         hookSource: "remote",
@@ -385,8 +406,8 @@ export async function executeRemoteSubagentStopHook(args: AnyRecord): Promise<An
       })
       return {}
     }
-    const response = result.response.response.value
-    recordRemoteHookMetrics(ctx, durationMs, "subagentStop", "success")
+    const response = hookAnswer.response.response.value
+    recordHookMetrics(ctx, durationMs, "subagentStop", "success")
     track(ctx, {
       hookStep: "subagentStop",
       hookSource: "remote",
@@ -405,9 +426,8 @@ export async function executeRemoteSubagentStopHook(args: AnyRecord): Promise<An
     })
     return { followupMessage: response.followupMessage?.trim() }
   } catch (error) {
-    const durationMs = Math.round(performance.now() - startTime)
-    const timedOut = isHookExecutionTimeout(error)
-    recordRemoteHookMetrics(ctx, durationMs, "subagentStop", "failure")
+    const { durationMs, timedOut } = hookCallFailure(startedAt, error)
+    recordHookMetrics(ctx, durationMs, "subagentStop", "failure")
     track(ctx, {
       hookStep: "subagentStop",
       hookSource: "remote",
@@ -422,38 +442,38 @@ export async function executeRemoteSubagentStopHook(args: AnyRecord): Promise<An
 }
 
 /** The variant a tool call uses: a refusal is raised, not returned, because the call must not happen. */
-export async function executeRemotePreToolUseHookWithPermissionCheck(args: AnyRecord): Promise<AnyRecord> {
-  return checkRemotePreToolUsePermission(args.toolName, await executeRemotePreToolUseHook(args))
+export async function executeRemotePreToolUseHookWithPermissionCheck(call: HookWire): Promise<HookWire> {
+  return requirePreToolPermission(call.toolName, await executeRemotePreToolUseHook(call))
 }
 
-async function executeRemotePreToolUseHook(args: AnyRecord): Promise<AnyRecord> {
-  const { ctx, toolName, toolInput, requestContext, options } = args
-  const executor = getRemoteHookExecutor(options, "preToolUse")
-  if (!executor) return {}
-  const { conversationId, generationId } = buildRequestIds(ctx, requestContext)
+async function executeRemotePreToolUseHook(call: HookWire): Promise<HookWire> {
+  const { ctx, toolName, toolInput, requestContext, options } = call
+  const hook = prepareHookCall(ctx, options, "preToolUse", requestContext)
+  if (hook === undefined) return {}
+  const { hookExecutor, conversationId, generationId } = hook
   logger.info(ctx, "preToolUse hook firing", { toolName, toolCallId: requestContext.toolCallId })
-  const startTime = performance.now()
+  const startedAt = performance.now()
   try {
-    const hookArgs = new ExecuteHookArgs({
+    const hookCall = new ExecuteHookArgs({
       request: new ExecuteHookRequest({
         request: {
           case: "preToolUse",
           value: new PreToolUseRequestQuery({
             toolName,
-            toolInput: Struct.fromJson(sanitizeToolInputForStruct(toolInput) as any),
+            toolInput: Struct.fromJson(structJsonValue(toolInput) as any),
             toolUseId: requestContext.toolCallId,
             conversationId,
             generationId,
             model: requestContext.model ?? options.model,
-            ...toRemoteHookModelFields(requestContext, options),
+            ...hookModelFields(requestContext, options),
           }),
         },
       }),
     })
-    const result = await executor.execute(ctx, hookArgs)
-    const durationMs = Math.round(performance.now() - startTime)
-    if (result.response?.response.case === "preToolUse") {
-      const response = result.response.response.value
+    const hookAnswer = await hookExecutor.execute(ctx, hookCall)
+    const durationMs = elapsedSince(startedAt)
+    if (hookAnswer.response?.response.case === "preToolUse") {
+      const response = hookAnswer.response.response.value
       let updatedInput: unknown
       if (response.updatedInput) {
         try {
@@ -462,9 +482,9 @@ async function executeRemotePreToolUseHook(args: AnyRecord): Promise<AnyRecord> 
           logger.warn(ctx, "Failed to parse preToolUse updatedInput", { toolName, toolCallId: requestContext.toolCallId })
         }
       }
-      const contexts = safeBuildRemoteHookContexts(ctx, toolName, requestContext.toolCallId, HookStep.preToolUse, response.additionalContext)
+      const contexts = hookContextCarriers(ctx, toolName, requestContext.toolCallId, HookStep.preToolUse, response.additionalContext)
       appendHookAdditionalContexts(options.hookContextCollector, contexts)
-      recordRemoteHookMetrics(ctx, durationMs, "preToolUse", "success")
+      recordHookMetrics(ctx, durationMs, "preToolUse", "success")
       track(ctx, {
         hookStep: "preToolUse",
         hookSource: "remote",
@@ -489,7 +509,7 @@ async function executeRemotePreToolUseHook(args: AnyRecord): Promise<AnyRecord> 
         hookAdditionalContexts: contexts,
       }
     }
-    recordRemoteHookMetrics(ctx, durationMs, "preToolUse", "success")
+    recordHookMetrics(ctx, durationMs, "preToolUse", "success")
     track(ctx, {
       hookStep: "preToolUse",
       hookSource: "remote",
@@ -501,11 +521,10 @@ async function executeRemotePreToolUseHook(args: AnyRecord): Promise<AnyRecord> 
     })
     logger.info(ctx, "preToolUse hook completed with no response", { toolName, toolCallId: requestContext.toolCallId, durationMs })
   } catch (error) {
-    const durationMs = Math.round(performance.now() - startTime)
-    const timedOut = isHookExecutionTimeout(error)
-    recordRemoteHookMetrics(ctx, durationMs, "preToolUse", "failure")
+    const { durationMs, timedOut } = hookCallFailure(startedAt, error)
+    recordHookMetrics(ctx, durationMs, "preToolUse", "failure")
     // A hook that cannot be evaluated blocks when it is configured to fail closed, and only then.
-    const failClosed = executor.hasFailClosedHooksForStep?.("preToolUse", toolName) ?? false
+    const failClosed = hookExecutor.hasFailClosedHooksForStep?.("preToolUse", toolName) ?? false
     if (failClosed) {
       const detail = error instanceof Error ? error.message : "preToolUse hook error"
       const userMessage = `Tool blocked because this hook is configured to fail closed (block when it fails). preToolUse hook failed: ${detail}`
@@ -548,39 +567,39 @@ async function executeRemotePreToolUseHook(args: AnyRecord): Promise<AnyRecord> 
 }
 
 /** After a call there is nothing to decide: the hook's only effect is the context it adds. */
-export async function executeRemotePostToolUseHook(args: AnyRecord): Promise<any[]> {
-  const { ctx, toolName, toolInput, toolOutput, durationMs: toolDurationMs, requestContext, options } = args
-  const executor = getRemoteHookExecutor(options, "postToolUse")
-  if (!executor) return []
-  const { conversationId, generationId } = buildRequestIds(ctx, requestContext)
-  const startTime = performance.now()
+export async function executeRemotePostToolUseHook(call: HookWire): Promise<any[]> {
+  const { ctx, toolName, toolInput, toolOutput, durationMs: toolDurationMs, requestContext, options } = call
+  const hook = prepareHookCall(ctx, options, "postToolUse", requestContext)
+  if (hook === undefined) return []
+  const { hookExecutor, conversationId, generationId } = hook
+  const startedAt = performance.now()
   logger.info(ctx, "postToolUse hook firing", { toolName, toolCallId: requestContext.toolCallId })
-  const hookArgs = new ExecuteHookArgs({
+  const hookCall = new ExecuteHookArgs({
     request: new ExecuteHookRequest({
       request: {
         case: "postToolUse",
         value: new PostToolUseRequestQuery({
           toolName,
-          toolInput: Struct.fromJson(sanitizeToolInputForStruct(toolInput) as any),
+          toolInput: Struct.fromJson(structJsonValue(toolInput) as any),
           toolOutput,
           durationMs: BigInt(Math.round(toolDurationMs)),
           toolUseId: requestContext.toolCallId,
           conversationId,
           generationId,
           model: requestContext.model ?? options.model,
-          ...toRemoteHookModelFields(requestContext, options),
+          ...hookModelFields(requestContext, options),
         }),
       },
     }),
   })
   try {
-    const result = await executor.execute(ctx, hookArgs)
-    const durationMs = Math.round(performance.now() - startTime)
-    const contexts = result.response?.response.case === "postToolUse"
-      ? safeBuildRemoteHookContexts(ctx, toolName, requestContext.toolCallId, HookStep.postToolUse, result.response.response.value.additionalContext)
+    const hookAnswer = await hookExecutor.execute(ctx, hookCall)
+    const durationMs = elapsedSince(startedAt)
+    const contexts = hookAnswer.response?.response.case === "postToolUse"
+      ? hookContextCarriers(ctx, toolName, requestContext.toolCallId, HookStep.postToolUse, hookAnswer.response.response.value.additionalContext)
       : []
     appendHookAdditionalContexts(options.hookContextCollector, contexts)
-    recordRemoteHookMetrics(ctx, durationMs, "postToolUse", "success")
+    recordHookMetrics(ctx, durationMs, "postToolUse", "success")
     track(ctx, {
       hookStep: "postToolUse",
       hookSource: "remote",
@@ -593,10 +612,9 @@ export async function executeRemotePostToolUseHook(args: AnyRecord): Promise<any
     logger.info(ctx, "postToolUse hook completed", { toolName, toolCallId: requestContext.toolCallId, durationMs })
     return contexts
   } catch (error) {
-    const durationMs = Math.round(performance.now() - startTime)
-    const timedOut = isHookExecutionTimeout(error)
-    const failClosed = executor.hasFailClosedHooksForStep?.("postToolUse", toolName) ?? false
-    recordRemoteHookMetrics(ctx, durationMs, "postToolUse", "failure")
+    const { durationMs, timedOut } = hookCallFailure(startedAt, error)
+    const failClosed = hookExecutor.hasFailClosedHooksForStep?.("postToolUse", toolName) ?? false
+    recordHookMetrics(ctx, durationMs, "postToolUse", "failure")
     track(ctx, {
       hookStep: "postToolUse",
       hookSource: "remote",
@@ -617,7 +635,7 @@ export async function executeRemotePostToolUseHook(args: AnyRecord): Promise<any
   }
 }
 
-export async function executeRemotePostToolUseFailureHook(args: AnyRecord): Promise<any[]> {
+export async function executeRemotePostToolUseFailureHook(call: HookWire): Promise<any[]> {
   const {
     ctx,
     toolName,
@@ -628,19 +646,19 @@ export async function executeRemotePostToolUseFailureHook(args: AnyRecord): Prom
     isInterrupt = false,
     requestContext,
     options,
-  } = args
-  const executor = getRemoteHookExecutor(options, "postToolUseFailure")
-  if (!executor) return []
-  const { conversationId, generationId } = buildRequestIds(ctx, requestContext)
-  const startTime = performance.now()
+  } = call
+  const hook = prepareHookCall(ctx, options, "postToolUseFailure", requestContext)
+  if (hook === undefined) return []
+  const { hookExecutor, conversationId, generationId } = hook
+  const startedAt = performance.now()
   logger.info(ctx, "postToolUseFailure hook firing", { toolName, toolCallId: requestContext.toolCallId, failureType })
-  const hookArgs = new ExecuteHookArgs({
+  const hookCall = new ExecuteHookArgs({
     request: new ExecuteHookRequest({
       request: {
         case: "postToolUseFailure",
         value: new PostToolUseFailureRequestQuery({
           toolName,
-          toolInput: Struct.fromJson(sanitizeToolInputForStruct(toolInput) as any),
+          toolInput: Struct.fromJson(structJsonValue(toolInput) as any),
           errorMessage,
           failureType,
           durationMs: BigInt(Math.round(toolDurationMs)),
@@ -649,19 +667,19 @@ export async function executeRemotePostToolUseFailureHook(args: AnyRecord): Prom
           conversationId,
           generationId,
           model: requestContext.model ?? options.model,
-          ...toRemoteHookModelFields(requestContext, options),
+          ...hookModelFields(requestContext, options),
         }),
       },
     }),
   })
   try {
-    const result = await executor.execute(ctx, hookArgs)
-    const durationMs = Math.round(performance.now() - startTime)
-    const contexts = result.response?.response.case === "postToolUseFailure"
-      ? safeBuildRemoteHookContexts(ctx, toolName, requestContext.toolCallId, HookStep.postToolUseFailure, result.response.response.value.additionalContext)
+    const hookAnswer = await hookExecutor.execute(ctx, hookCall)
+    const durationMs = elapsedSince(startedAt)
+    const contexts = hookAnswer.response?.response.case === "postToolUseFailure"
+      ? hookContextCarriers(ctx, toolName, requestContext.toolCallId, HookStep.postToolUseFailure, hookAnswer.response.response.value.additionalContext)
       : []
     appendHookAdditionalContexts(options.hookContextCollector, contexts)
-    recordRemoteHookMetrics(ctx, durationMs, "postToolUseFailure", "success")
+    recordHookMetrics(ctx, durationMs, "postToolUseFailure", "success")
     track(ctx, {
       hookStep: "postToolUseFailure",
       hookSource: "remote",
@@ -675,10 +693,9 @@ export async function executeRemotePostToolUseFailureHook(args: AnyRecord): Prom
     logger.info(ctx, "postToolUseFailure hook completed", { toolName, toolCallId: requestContext.toolCallId, durationMs })
     return contexts
   } catch (error) {
-    const durationMs = Math.round(performance.now() - startTime)
-    const timedOut = isHookExecutionTimeout(error)
-    const failClosed = executor.hasFailClosedHooksForStep?.("postToolUseFailure", toolName) ?? false
-    recordRemoteHookMetrics(ctx, durationMs, "postToolUseFailure", "failure")
+    const { durationMs, timedOut } = hookCallFailure(startedAt, error)
+    const failClosed = hookExecutor.hasFailClosedHooksForStep?.("postToolUseFailure", toolName) ?? false
+    recordHookMetrics(ctx, durationMs, "postToolUseFailure", "failure")
     track(ctx, {
       hookStep: "postToolUseFailure",
       hookSource: "remote",
@@ -705,59 +722,59 @@ export async function executeRemotePostToolUseFailureHook(args: AnyRecord): Prom
  * rewrite, and the post-call report — including the failure report when the tool threw, which is sent
  * before the error is rethrown so the hook sees the call that failed.
  */
-export function withRemoteHooks(args: AnyRecord): (ctx: Context, toolArgs: AnyRecord) => Promise<unknown> {
-  const { executeFn, config, requestContext, options } = args
-  return async (ctx, toolArgs) => {
-    const startTime = performance.now()
-    const toolInput = config.createToolInput(toolArgs)
-    const hookResult = await executeRemotePreToolUseHook({ ctx, toolName: config.toolName, toolInput, requestContext, options })
-    if (hookResult.permission === "deny") {
-      return config.createRejectedResult(toolArgs, hookResult.userMessage ?? `${config.toolName} denied by hook`)
+export function withRemoteHooks(call: HookWire): (ctx: Context, rawToolArgs: HookWire) => Promise<unknown> {
+  const { executeFn: executeTool, config: toolConfig, requestContext, options } = call
+  return async (ctx, rawToolArgs) => {
+    const startedAt = performance.now()
+    const toolInput = toolConfig.createToolInput(rawToolArgs)
+    const preCallDecision = await executeRemotePreToolUseHook({ ctx, toolName: toolConfig.toolName, toolInput, requestContext, options })
+    if (preCallDecision.permission === "deny") {
+      return toolConfig.createRejectedResult(rawToolArgs, preCallDecision.userMessage ?? `${toolConfig.toolName} denied by hook`)
     }
-    if (hookResult.permission === "ask") {
-      return config.createRejectedResult(toolArgs, "The 'ask' permission for preToolUse hooks is not yet implemented")
+    if (preCallDecision.permission === "ask") {
+      return toolConfig.createRejectedResult(rawToolArgs, "The 'ask' permission for preToolUse hooks is not yet implemented")
     }
-    let actualToolInput = toolInput
-    if (hookResult.updatedInput && config.applyUpdatedInput) {
-      config.applyUpdatedInput(toolArgs, hookResult.updatedInput)
-      actualToolInput = config.createToolInput(toolArgs)
+    let effectiveToolInput = toolInput
+    if (preCallDecision.updatedInput && toolConfig.applyUpdatedInput) {
+      toolConfig.applyUpdatedInput(rawToolArgs, preCallDecision.updatedInput)
+      effectiveToolInput = toolConfig.createToolInput(rawToolArgs)
     }
-    let result: unknown
+    let hookAnswer: unknown
     try {
-      result = await executeFn(ctx, toolArgs)
+      hookAnswer = await executeTool(ctx, rawToolArgs)
     } catch (error) {
-      const errorObject = error instanceof Error ? error : new Error(String(error))
+      const toolError = error instanceof Error ? error : new Error(String(error))
       try {
         await executeRemotePostToolUseFailureHook({
           ctx,
-          toolName: config.toolName,
-          toolInput: actualToolInput,
-          errorMessage: errorObject.message,
-          failureType: isTimeoutError(error) ? "timeout" : "error",
-          durationMs: performance.now() - startTime,
+          toolName: toolConfig.toolName,
+          toolInput: effectiveToolInput,
+          errorMessage: toolError.message,
+          failureType: isToolTimeout(error) ? "timeout" : "error",
+          durationMs: performance.now() - startedAt,
           isInterrupt: false,
           requestContext,
           options,
         })
       } catch (hookError) {
         logger.warn(ctx, "postToolUseFailure hook execution failed", {
-          toolName: config.toolName,
+          toolName: toolConfig.toolName,
           toolCallId: requestContext.toolCallId,
           error: hookError instanceof Error ? hookError.message : String(hookError),
         })
       }
       throw error
     }
-    const durationMs = performance.now() - startTime
-    // A tool may report a failure in its result rather than by throwing; the hook is told either way.
-    const failureInfo = config.getFailureInfo?.(result)
-    if (failureInfo) {
+    const durationMs = performance.now() - startedAt
+    // A tool may report a failure in its hookAnswer rather than by throwing; the hook is told either way.
+    const reportedFailure = toolConfig.getFailureInfo?.(hookAnswer)
+    if (reportedFailure) {
       await executeRemotePostToolUseFailureHook({
         ctx,
-        toolName: config.toolName,
-        toolInput: actualToolInput,
-        errorMessage: failureInfo.errorMessage,
-        failureType: failureInfo.failureType,
+        toolName: toolConfig.toolName,
+        toolInput: effectiveToolInput,
+        errorMessage: reportedFailure.errorMessage,
+        failureType: reportedFailure.failureType,
         durationMs,
         isInterrupt: false,
         requestContext,
@@ -766,14 +783,14 @@ export function withRemoteHooks(args: AnyRecord): (ctx: Context, toolArgs: AnyRe
     } else {
       await executeRemotePostToolUseHook({
         ctx,
-        toolName: config.toolName,
-        toolInput: actualToolInput,
-        toolOutput: JSON.stringify(config.createSuccessOutput(toolArgs, result)),
+        toolName: toolConfig.toolName,
+        toolInput: effectiveToolInput,
+        toolOutput: JSON.stringify(toolConfig.createSuccessOutput(rawToolArgs, hookAnswer)),
         durationMs,
         requestContext,
         options,
       })
     }
-    return result
+    return hookAnswer
   }
 }
