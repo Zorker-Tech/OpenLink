@@ -26,7 +26,7 @@ import { BoxFileTransferError } from "../../source/host/boxes/box-file-transfer.
 import { computerUseSubagentDescription, COMPUTER_USE_SUBAGENT_TYPE, isComputerUseSubagentType } from "../../source/host/runner/tools/slate-computer-use-subagent.ts";
 import { autoReviewApprovalTelemetry } from "../../source/host/telemetry/auto-review-approval-telemetry.ts";
 import { MAX_DOMAIN_LENGTH, SNAPSHOT_TIMEOUT_MS } from "../../source/host/extensions/session/box-handoff-service.ts";
-import { diskPressureTelemetry, telemetryLevel } from "../../source/host/telemetry/disk-pressure-telemetry.ts";
+import { diskPressureReport, severityOf } from "../../source/host/telemetry/disk-pressure-telemetry.ts";
 
 const scratch = mkdtempSync(join(tmpdir(), "slate-host-runtime-4-"));
 after(() => { rmSync(scratch, { recursive: true, force: true }); });
@@ -106,10 +106,10 @@ describe("what the host reports about itself", () => {
   });
 
   it("reports disk pressure with the level the caller's measurement implies", () => {
-    assert.equal(telemetryLevel("hard"), "error");
-    assert.equal(telemetryLevel("soft"), "warn");
-    assert.equal(telemetryLevel("healthy"), "info");
-    const report = diskPressureTelemetry({ level: "soft", volume: "/", trigger: "heartbeat", totalBytes: 100, availableBytes: 12, usedPercent: 88.25 });
+    assert.equal(severityOf("hard"), "error");
+    assert.equal(severityOf("soft"), "warn");
+    assert.equal(severityOf("healthy"), "info");
+    const report = diskPressureReport({ level: "soft", volume: "/", trigger: "heartbeat", totalBytes: 100, availableBytes: 12, usedPercent: 88.25 });
     assert.deepEqual(report, {
       level: "warn",
       metadata: { volume: "/", pressure_level: "soft", trigger: "heartbeat", total_bytes: "100", available_bytes: "12", used_percent: "88.3" },
