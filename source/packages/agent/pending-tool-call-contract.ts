@@ -11,7 +11,7 @@
  * Writing that down is what makes a replay safe. A replayed call is checked against what it was admitted
  * as, and a call that would now resolve to a different tool is answered with the mismatch rather than run —
  * because running something else under the same call id would put a result in the conversation for a call
- * the model never made. The contracts are stored on the carrier message itself, in the provider options the
+ * the model never made. The contracts are stored on the carrier message itself, in the provider input the
  * platform already owns, so they travel with the conversation and need no separate store.
  */
 
@@ -45,17 +45,17 @@ export interface PendingToolExecutionContract {
   readonly effectiveToolIdentifier?: string | undefined
 }
 
-interface ToolIdentity {
+interface ResolvedIdentity {
   readonly toolIdentifier: string
   readonly isDynamic: boolean
 }
 
-type ResolveIdentity = (input: {
+type IdentityResolver = (input: {
   readonly toolName: string
   readonly args: unknown
-}) => ToolIdentity | undefined
+}) => ResolvedIdentity | undefined
 
-interface PendingContractCarrierMessage {
+interface ContractCarrier {
   readonly providerOptions?: {
     readonly cursor?: {
       readonly pendingToolExecutionContracts?: unknown
@@ -63,63 +63,63 @@ interface PendingContractCarrierMessage {
   }
 }
 
-function isToolCallContentPart(value: unknown): value is ToolCallContentPart {
+function looksLikeToolCall(value: unknown): value is ToolCallContentPart {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     return false
   }
-  const part = value as Record<string, unknown>
-  return part.type === "tool-call" &&
-    typeof part.toolCallId === "string" &&
-    typeof part.toolName === "string"
+  const contentPart = value as Record<string, unknown>
+  return contentPart.type === "tool-call" &&
+    typeof contentPart.toolCallId === "string" &&
+    typeof contentPart.toolName === "string"
 }
 
-function isToolIdentifierOrUnknown(value: unknown): value is string {
+function isNamedIdentifier(value: unknown): value is string {
   return typeof value === "string" && value.length > 0
 }
 
 /** A stored contract is read back only if it is whole; a partial one would admit the wrong tool. */
-function parseContract(value: unknown): PendingToolExecutionContract | undefined {
+function readContractShape(value: unknown): PendingToolExecutionContract | undefined {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     return undefined
   }
-  const raw = value as Record<string, unknown>
+  const stored = value as Record<string, unknown>
   if (
-    typeof raw.toolCallId !== "string" ||
-    typeof raw.outerToolName !== "string" ||
-    !isToolIdentifierOrUnknown(raw.toolIdentifier) ||
-    typeof raw.isDynamic !== "boolean" ||
-    !Array.isArray(raw.allowedToolNames) ||
-    !raw.allowedToolNames.every(name => typeof name === "string")
+    typeof stored.toolCallId !== "string" ||
+    typeof stored.outerToolName !== "string" ||
+    !isNamedIdentifier(stored.toolIdentifier) ||
+    typeof stored.isDynamic !== "boolean" ||
+    !Array.isArray(stored.allowedToolNames) ||
+    !stored.allowedToolNames.every(name => typeof name === "string")
   ) {
     return undefined
   }
   const contract: PendingToolExecutionContract = {
-    toolCallId: raw.toolCallId,
-    outerToolName: raw.outerToolName,
-    toolIdentifier: raw.toolIdentifier,
-    isDynamic: raw.isDynamic,
-    allowedToolNames: raw.allowedToolNames,
+    toolCallId: stored.toolCallId,
+    outerToolName: stored.outerToolName,
+    toolIdentifier: stored.toolIdentifier,
+    isDynamic: stored.isDynamic,
+    allowedToolNames: stored.allowedToolNames,
   }
-  if (typeof raw.effectiveToolName === "string") {
-    (contract as { effectiveToolName?: string }).effectiveToolName = raw.effectiveToolName
+  if (typeof stored.effectiveToolName === "string") {
+    (contract as { effectiveToolName?: string }).effectiveToolName = stored.effectiveToolName
   }
-  if (isToolIdentifierOrUnknown(raw.effectiveToolIdentifier)) {
+  if (isNamedIdentifier(stored.effectiveToolIdentifier)) {
     (contract as { effectiveToolIdentifier?: string }).effectiveToolIdentifier =
-      raw.effectiveToolIdentifier
+      stored.effectiveToolIdentifier
   }
   return contract
 }
 
 export function readPendingToolExecutionContracts(
-  message: PendingContractCarrierMessage,
+  message: ContractCarrier,
 ): Map<string, PendingToolExecutionContract> {
-  const raw = message.providerOptions?.cursor?.pendingToolExecutionContracts
+  const stored = message.providerOptions?.cursor?.pendingToolExecutionContracts
   const contracts = new Map<string, PendingToolExecutionContract>()
-  if (raw === undefined || raw === null || typeof raw !== "object") {
+  if (stored === undefined || stored === null || typeof stored !== "object") {
     return contracts
   }
-  for (const [toolCallId, value] of Object.entries(raw)) {
-    const contract = parseContract(value)
+  for (const [toolCallId, value] of Object.entries(stored)) {
+    const contract = readContractShape(value)
     // A contract stored under the wrong key is not the contract for that call.
     if (contract === undefined || contract.toolCallId !== toolCallId) {
       continue
@@ -129,65 +129,65 @@ export function readPendingToolExecutionContracts(
   return contracts
 }
 
-export function buildPendingToolExecutionContract(options: {
+export function buildPendingToolExecutionContract(input: {
   readonly toolCallId: string
   readonly toolName: string
   readonly args: unknown
-  readonly resolveIdentity: ResolveIdentity
+  readonly resolveIdentity: IdentityResolver
   readonly toolExecutionSet: ToolExecutionSet
   readonly allowedToolNames: Iterable<string>
 }): PendingToolExecutionContract {
-  const descriptor = resolveEffectiveToolCallDescriptor({
-    toolCallId: options.toolCallId,
-    toolName: options.toolName,
-    args: parseNativeToolArguments(options.args) ?? {},
-  }, options.toolExecutionSet)
-  const outerIdentity = options.resolveIdentity({
-    toolName: options.toolName,
-    args: options.args,
+  const resolvedDescriptor = resolveEffectiveToolCallDescriptor({
+    toolCallId: input.toolCallId,
+    toolName: input.toolName,
+    args: parseNativeToolArguments(input.args) ?? {},
+  }, input.toolExecutionSet)
+  const outer = input.resolveIdentity({
+    toolName: input.toolName,
+    args: input.args,
   }) ?? {
     toolIdentifier: "unknown",
     isDynamic: false,
   }
-  const effectiveToolName = descriptor.effectiveNativeToolCall?.toolName
-  const effectiveArgs = descriptor.effectiveNativeToolCall?.args
+  const innerName = resolvedDescriptor.effectiveNativeToolCall?.toolName
+  const innerArgs = resolvedDescriptor.effectiveNativeToolCall?.args
   // An inner tool that resolves to nothing is still dynamic: it came in through a namespace.
-  const effectiveIdentity = effectiveToolName === undefined
+  const innerIdentity = innerName === undefined
     ? undefined
-    : options.resolveIdentity({
-      toolName: effectiveToolName,
-      args: effectiveArgs,
+    : input.resolveIdentity({
+      toolName: innerName,
+      args: innerArgs,
     }) ?? {
       toolIdentifier: "unknown",
       isDynamic: true,
     }
   return {
-    toolCallId: options.toolCallId,
-    outerToolName: options.toolName,
-    toolIdentifier: outerIdentity.toolIdentifier,
-    isDynamic: outerIdentity.isDynamic || effectiveIdentity?.isDynamic === true,
-    ...(effectiveToolName !== undefined
+    toolCallId: input.toolCallId,
+    outerToolName: input.toolName,
+    toolIdentifier: outer.toolIdentifier,
+    isDynamic: outer.isDynamic || innerIdentity?.isDynamic === true,
+    ...(innerName !== undefined
       ? {
-        effectiveToolName,
-        effectiveToolIdentifier: effectiveIdentity?.toolIdentifier ?? "unknown",
+        effectiveToolName: innerName,
+        effectiveToolIdentifier: innerIdentity?.toolIdentifier ?? "unknown",
       }
       : {}),
-    allowedToolNames: [...options.allowedToolNames],
+    allowedToolNames: [...input.allowedToolNames],
   }
 }
 
 /** The pending message with its contracts written onto it, and when the call started. */
 export function enrichPendingToolCallJson(
-  pendingMessage: string,
-  options: {
-    readonly resolveIdentity: ResolveIdentity
+  pendingJson: string,
+  input: {
+    readonly resolveIdentity: IdentityResolver
     readonly toolExecutionSet: ToolExecutionSet
     readonly allowedToolNames: Iterable<string>
     readonly pendingToolCallStartedAtMs?: number | undefined
   },
 ): string {
   try {
-    const parsed = JSON.parse(pendingMessage) as Record<string, unknown> & {
+    const message = JSON.parse(pendingJson) as Record<string, unknown> & {
       content?: unknown
       providerOptions?: Record<string, unknown> & {
         cursor?: Record<string, unknown>
@@ -195,45 +195,45 @@ export function enrichPendingToolCallJson(
     }
     // Contracts already on the message are kept: an earlier turn's calls are still pending.
     const contracts: Record<string, unknown> = {
-      ...(parsed.providerOptions?.cursor?.pendingToolExecutionContracts as
+      ...(message.providerOptions?.cursor?.pendingToolExecutionContracts as
         | Record<string, unknown>
         | undefined) ?? {},
     }
-    if (Array.isArray(parsed.content)) {
-      for (const part of parsed.content) {
-        if (!isToolCallContentPart(part)) {
+    if (Array.isArray(message.content)) {
+      for (const contentPart of message.content) {
+        if (!looksLikeToolCall(contentPart)) {
           continue
         }
-        contracts[part.toolCallId] = buildPendingToolExecutionContract({
-          toolCallId: part.toolCallId,
-          toolName: part.toolName,
-          args: part.args,
-          resolveIdentity: options.resolveIdentity,
-          toolExecutionSet: options.toolExecutionSet,
-          allowedToolNames: options.allowedToolNames,
+        contracts[contentPart.toolCallId] = buildPendingToolExecutionContract({
+          toolCallId: contentPart.toolCallId,
+          toolName: contentPart.toolName,
+          args: contentPart.args,
+          resolveIdentity: input.resolveIdentity,
+          toolExecutionSet: input.toolExecutionSet,
+          allowedToolNames: input.allowedToolNames,
         })
       }
     }
-    const existingStartedAtMs =
-      parsed.providerOptions?.cursor?.pendingToolCallStartedAtMs
-    parsed.providerOptions = {
-      ...parsed.providerOptions,
+    const previousStartedAtMs =
+      message.providerOptions?.cursor?.pendingToolCallStartedAtMs
+    message.providerOptions = {
+      ...message.providerOptions,
       cursor: {
-        ...parsed.providerOptions?.cursor,
+        ...message.providerOptions?.cursor,
         // A call that already has a start time keeps it; the first one is the truth.
-        ...(options.pendingToolCallStartedAtMs !== undefined
+        ...(input.pendingToolCallStartedAtMs !== undefined
           ? {
             pendingToolCallStartedAtMs:
-              existingStartedAtMs ?? options.pendingToolCallStartedAtMs,
+              previousStartedAtMs ?? input.pendingToolCallStartedAtMs,
           }
           : {}),
         pendingToolExecutionContracts: contracts,
       },
     }
-    return JSON.stringify(parsed)
+    return JSON.stringify(message)
   } catch {
     // A message that cannot be read is left as it was rather than replaced by a broken one.
-    return pendingMessage
+    return pendingJson
   }
 }
 
@@ -249,7 +249,7 @@ export function getAdmittedEffectiveToolName(
 }
 
 /** Which names the pending calls together admit, both the outer calls and what they would run. */
-export function collectPendingToolAdmission(options: {
+export function collectPendingToolAdmission(input: {
   readonly contracts: Iterable<PendingToolExecutionContract>
 }): {
   readonly allowedToolNames: Set<string> | undefined
@@ -257,7 +257,7 @@ export function collectPendingToolAdmission(options: {
 } {
   const admittedEffectiveToolNames = new Set<string>()
   let allowedToolNames: Set<string> | undefined
-  for (const contract of options.contracts) {
+  for (const contract of input.contracts) {
     allowedToolNames ??= new Set(contract.allowedToolNames)
     for (const name of contract.allowedToolNames) {
       allowedToolNames.add(name)
@@ -275,45 +275,45 @@ export function collectPendingToolAdmission(options: {
 }
 
 /** A replayed call resolves the way it was admitted to, rather than the way the session now looks. */
-export function resolveDescriptorForPendingToolCall(options: {
+export function resolveDescriptorForPendingToolCall(input: {
   readonly toolCallId: string
   readonly toolName: string
   readonly args: unknown
   readonly contract?: PendingToolExecutionContract | undefined
   readonly toolExecutionSet: ToolExecutionSet
 }): NativeToolCallDescriptor {
-  const outerDescriptor: NativeToolCallDescriptor = {
-    toolCallId: options.toolCallId,
-    toolName: options.toolName,
-    args: parseNativeToolArguments(options.args) ?? {},
+  const replayedDescriptor: NativeToolCallDescriptor = {
+    toolCallId: input.toolCallId,
+    toolName: input.toolName,
+    args: parseNativeToolArguments(input.args) ?? {},
   }
   if (
-    options.contract?.effectiveToolName !== undefined &&
-    outerDescriptor.args !== null &&
-    typeof outerDescriptor.args === "object" &&
-    !Array.isArray(outerDescriptor.args)
+    input.contract?.effectiveToolName !== undefined &&
+    replayedDescriptor.args !== null &&
+    typeof replayedDescriptor.args === "object" &&
+    !Array.isArray(replayedDescriptor.args)
   ) {
-    const outerArgs = outerDescriptor.args as Record<string, unknown>
+    const outerArguments = replayedDescriptor.args as Record<string, unknown>
     // The stored contract names the inner tool, so the nested arguments are read from the outer call.
-    const nestedArgs =
-      outerArgs.namespace === DYNAMIC_TOOLS_NAMESPACE &&
-        outerArgs.toolName === options.contract.effectiveToolName
-        ? parseNativeToolArguments(outerArgs.arguments)
+    const nestedArguments =
+      outerArguments.namespace === DYNAMIC_TOOLS_NAMESPACE &&
+        outerArguments.toolName === input.contract.effectiveToolName
+        ? parseNativeToolArguments(outerArguments.arguments)
         : undefined
-    if (nestedArgs !== undefined) {
+    if (nestedArguments !== undefined) {
       return {
-        ...outerDescriptor,
+        ...replayedDescriptor,
         effectiveNativeToolCall: {
-          toolName: options.contract.effectiveToolName,
-          args: nestedArgs,
+          toolName: input.contract.effectiveToolName,
+          args: nestedArguments,
         },
       }
     }
   }
-  return resolveEffectiveToolCallDescriptor(outerDescriptor, options.toolExecutionSet)
+  return resolveEffectiveToolCallDescriptor(replayedDescriptor, input.toolExecutionSet)
 }
 
-function expectedPendingToolIdentifier(contract: PendingToolExecutionContract): string {
+function expectedIdentifierFor(contract: PendingToolExecutionContract): string {
   return contract.effectiveToolIdentifier ?? contract.toolIdentifier
 }
 
@@ -324,37 +324,37 @@ function expectedPendingToolIdentifier(contract: PendingToolExecutionContract): 
  * be the one that was written down. A call that fails either check is answered with the mismatch instead of
  * being run, since a result for a call the model did not make is worse than an unanswered one.
  */
-export function validatePendingToolContractIdentity(options: {
+export function validatePendingToolContractIdentity(input: {
   readonly contract: PendingToolExecutionContract
   readonly descriptor: NativeToolCallDescriptor
   readonly tool: Record<string, unknown>
   readonly directDynamicToolNames: ReadonlySet<string>
 }): { readonly ok: true } | { readonly ok: false; readonly reason: string } {
   if (
-    options.contract.effectiveToolName !== undefined &&
-    options.descriptor.effectiveNativeToolCall === undefined
+    input.contract.effectiveToolName !== undefined &&
+    input.descriptor.effectiveNativeToolCall === undefined
   ) {
     return {
       ok: false,
       reason:
-        `Pending tool contract mismatch for ${options.descriptor.toolName}: expected effective tool ${options.contract.effectiveToolName}, but none resolved`,
+        `Pending tool contract mismatch for ${input.descriptor.toolName}: expected effective tool ${input.contract.effectiveToolName}, but none resolved`,
     }
   }
-  const effectiveToolName = getEffectiveToolCallName(options.descriptor)
-  const effectiveArgs = getEffectiveToolCallArgs(options.descriptor)
-  const actual = resolveToolCallIdentity({
-    tool: options.tool,
-    args: effectiveArgs,
+  const innerName = getEffectiveToolCallName(input.descriptor)
+  const innerArgs = getEffectiveToolCallArgs(input.descriptor)
+  const actualIdentity = resolveToolCallIdentity({
+    tool: input.tool,
+    args: innerArgs,
     isDirectDynamicTool:
-      options.descriptor.effectiveNativeToolCall !== undefined ||
-      options.directDynamicToolNames.has(effectiveToolName),
+      input.descriptor.effectiveNativeToolCall !== undefined ||
+      input.directDynamicToolNames.has(innerName),
   })
-  const expected = expectedPendingToolIdentifier(options.contract)
-  if (actual.toolIdentifier !== expected) {
+  const expectedIdentifier = expectedIdentifierFor(input.contract)
+  if (actualIdentity.toolIdentifier !== expectedIdentifier) {
     return {
       ok: false,
       reason:
-        `Pending tool contract mismatch for ${effectiveToolName}: expected ${expected}, got ${String(actual.toolIdentifier)}`,
+        `Pending tool contract mismatch for ${innerName}: expected ${expectedIdentifier}, got ${String(actualIdentity.toolIdentifier)}`,
     }
   }
   return { ok: true }
