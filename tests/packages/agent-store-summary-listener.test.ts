@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
 
 import { notifySummaryMetrics, notifySummaryResult } from "../../source/packages/agent-store-sync/summary-listener.ts";
@@ -48,6 +49,13 @@ describe("what a sync round reports about its paths", () => {
     assert.equal(typeof (events[0]?.[1] as Record<string, unknown>).relPathHash, "string");
     assert.equal(((events[0]?.[1] as Record<string, unknown>).relPathHash as string).length, 32);
     assert.equal(JSON.stringify(events).includes("a/b.txt"), false, "the path itself is never reported");
+    const expectedHash = (salt: string, relPath: string): string =>
+      createHash("sha256").update(salt).update("\0").update(relPath).digest("hex").slice(0, 32);
+    assert.equal((events[0]?.[1] as Record<string, unknown>).relPathHash, expectedHash("salt", "a/b.txt"));
+    assert.equal((events[1]?.[1] as Record<string, unknown>).relPathHash, expectedHash("salt", "c/d.txt"));
+    const noPathEvents: unknown[][] = [];
+    notifySummaryResult({ agentId: "agent", summary: summarise({ errors: [{ code: "symlink_refused" }] }) as never, listener: { onSymlinkRefused: (event: unknown) => noPathEvents.push([event]) }, pathHashSalt: "salt" });
+    assert.equal((noPathEvents[0]?.[0] as Record<string, unknown>).relPathHash, expectedHash("salt", "<unknown>"), "a refusal without a path hashes a placeholder");
     assert.deepEqual(events[1]?.[1], { agentId: "agent", op: "fs_read", relPathHash: (events[1]?.[1] as Record<string, unknown>).relPathHash });
     assert.deepEqual(events[2]?.[1], { agentId: "agent", op: "fs_read" });
     assert.deepEqual(events[3]?.[1], { agentId: "agent", op: "fs_write" });
