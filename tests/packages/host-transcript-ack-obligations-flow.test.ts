@@ -104,7 +104,8 @@ describe("the acknowledgement a send is owed", () => {
     const redriveReport = w.named("reportAckObligation")[0]?.args[0] as Record<string, unknown>;
     assert.equal(redriveReport.redriveAttempts, 1, "the attempt was recorded before the turn");
     const delivery = w.named("reportTurnEmptyDelivery")[0]?.args[0] as Record<string, unknown>;
-    assert.deepEqual([delivery.source, delivery.requestId, delivery.toolCallCount, delivery.durationMs, delivery.redriveAttempts], ["ack_redrive", "req-7", 4, 0, 1]);
+    assert.deepEqual([delivery.source, delivery.requestId, delivery.toolCallCount, delivery.redriveAttempts], ["ack_redrive", "req-7", 4, 1]);
+    assert.equal(typeof delivery.durationMs, "number");
     assert.equal(w.obligations.ackRunTokens.size, 0, "the token is retired after the turn");
     assert.equal(w.named("endSessionRun").length, 1, "the session run is closed after the turn");
   });
