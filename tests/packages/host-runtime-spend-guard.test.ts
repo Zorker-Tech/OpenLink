@@ -191,4 +191,36 @@ describe("the guard over what a conversation's routines spend", () => {
     assert.deepEqual(asked.kindsOf("inactive-changes"), []);
     assert.deepEqual(asked.kindsOf("change-events"), []);
   });
+
+  it("keeps the outcome table complete, and snoozes exactly where it says", () => {
+    assert.deepEqual(SPEND_GUARD_ANSWER_OUTCOMES.resume, { routines: "resume-guard-paused", snoozes: true, retiresGuard: false });
+  });
+
+  it("issues the nudge card for an awaiting answer that has none", async () => {
+    const waiting = harness({ ...away(), state: { nudgedAtMs: Date.now() - 1_000, cardEntryIds: [] } });
+    assert.deepEqual(await waiting.runtime.apply(waiting.session, { id: "routine-1" }), { paused: false });
+    assert.deepEqual(waiting.state().cardEntryIds.length, 1, "an awaiting answer with no card gets one");
+  });
+
+  it("does not add another card when a pause is already open", async () => {
+    const paused = harness({
+      ...away(),
+      state: { nudgedAtMs: Date.now() - SPEND_GUARD_PAUSE_DELAY_MS - 1, cardEntryIds: ["card-1"], pausedAutomationIds: ["routine-1"] },
+    });
+    await paused.runtime.apply(paused.session, { id: "routine-1" });
+    assert.equal(paused.state().cardEntryIds.length, 1, "the open pause keeps its card");
+  });
+
+  it("does not touch a routine that is already enabled when resuming", () => {
+    const { automations, calls, definitions } = conversation();
+    reEnableGuardPausedRoutines({ automations } as never, ["routine-1", "routine-2"]);
+    assert.deepEqual(definitions.map((automation) => automation.isEnabled), [true, true]);
+    assert.deepEqual(calls.map((call) => [call[0], call[1], call[2]]), [["set-enabled", "routine-2", true]], "only the disabled one is set");
+  });
+
+  it("issues a card when none is open", () => {
+    const world = harness({ state: { cardEntryIds: [] } });
+    world.runtime.issueCardIfNone(world.session);
+    assert.equal(world.state().cardEntryIds.length, 1);
+  });
 });

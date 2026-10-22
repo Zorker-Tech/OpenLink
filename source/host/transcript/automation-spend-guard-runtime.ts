@@ -1,7 +1,7 @@
-/** Asking the user before their routines keep spending, and doing what they answered.
+/** Asking the user definitionsBefore their routines keep spending, and doing what they answered.
 
- * What the guard decided is turned into what the user sees — a card they answer, a reminder, routines paused — and their
- * answer is carried out: what to resume, what to leave paused, what to stop asking about; every one of those changes is
+ * What the guard decided is turned into what the user sees — a card they guardAnswer, a reminder, routines paused — and their
+ * guardAnswer is carried out: what to resume, what to leave paused, what to stop asking about; every one of those changes is
  * recorded the way the platform records an automation change, whether the conversation is on screen or not. */
 import {
   SPEND_GUARD_SNOOZE_MS,
@@ -63,24 +63,48 @@ interface GuardSession {
   db: any;
 }
 
-export function disableEveryEnabledRoutine(session: GuardSession): string[] {
-  const disabled: string[] = [];
-  for (const automation of session.automations.listDefinitions()) {
+
+/** Whether this conversation is the one on screen: the guard writes into the live transcript only then. */
+function isOnScreenSession(guardSession: GuardSession, tm: TranscriptManagerLike): boolean {
+  return tm.sessions.activeSession?.id === guardSession.id;
+}
+
+/** The guard state the guardSession keeps, in the shape the runtime works with. */
+function guardStateOf(guardSession: GuardSession): GuardState {
+  return guardSession.db.getAutomationSpendGuardState() as GuardState;
+}
+
+/** Records an automation change the way the platform records one, on screen or not. */
+function recordAutomationChange(
+  host: any,
+  guardSession: GuardSession,
+  onScreen: boolean,
+  definitionsBefore: unknown,
+  after: () => unknown,
+  source: "agent" | "spend_guard",
+): void {
+  if (onScreen) host.recordAutomationChangeEvents(guardSession, source);
+  else host.recordInactiveAutomationChanges({ agentId: guardSession.id, before: definitionsBefore, after: after(), source });
+}
+
+export function disableEveryEnabledRoutine(guardSession: GuardSession): string[] {
+  const disabledIds: string[] = [];
+  for (const automation of guardSession.automations.listDefinitions()) {
     if (automation.isEnabled) {
-      session.automations.setEnabled(automation.id, false);
-      disabled.push(automation.id);
+      guardSession.automations.setEnabled(automation.id, false);
+      disabledIds.push(automation.id);
     }
   }
-  return disabled;
+  return disabledIds;
 }
 export function reEnableGuardPausedRoutines(
-  session: GuardSession,
+  guardSession: GuardSession,
   ids: readonly string[],
 ): void {
   const resume = new Set(ids);
-  for (const automation of session.automations.listDefinitions()) {
+  for (const automation of guardSession.automations.listDefinitions()) {
     if (resume.has(automation.id) && !automation.isEnabled)
-      session.automations.setEnabled(automation.id, true);
+      guardSession.automations.setEnabled(automation.id, true);
   }
 }
 
@@ -91,100 +115,100 @@ export class AutomationSpendGuardRuntime {
   ) {}
 
   async apply(
-    session: GuardSession,
+    guardSession: GuardSession,
     firing: { id: string },
   ): Promise<{ paused: boolean; reminder?: string }> {
     const nowMs = Date.now();
     const isFiringOff = () =>
-      session.automations.get(firing.id)?.isEnabled !== true;
-    const evaluated = this.evaluate(session, nowMs);
-    switch (evaluated.decision) {
+      guardSession.automations.get(firing.id)?.isEnabled !== true;
+    const decisionSummary = this.evaluate(guardSession, nowMs);
+    switch (decisionSummary.decision) {
       case "user-active":
       case "opted-out":
       case "snoozed":
       case "below-thresholds":
         return { paused: isFiringOff() };
       case "awaiting-ack":
-        this.issueCardIfNone(session);
+        this.issueCardIfNone(guardSession);
         return { paused: isFiringOff() };
       case "nudge":
-        session.db.setAutomationSpendGuardState({
+        guardSession.db.setAutomationSpendGuardState({
           ...CLEARED_GUARD_STATE,
           nudgedAtMs: nowMs,
           cardEntryIds: [
-            this.issueGuardCard(session, buildSpendGuardNudgeWidget()),
+            this.issueGuardCard(guardSession, buildSpendGuardNudgeWidget()),
           ],
         });
         return {
           paused: isFiringOff(),
           reminder: renderSpendGuardNudgeReminder({
             nowMs,
-            lastViewedAtMs: evaluated.lastViewedAtMs,
-            unreadCount: evaluated.unreadCount,
-            firesSinceViewedCount: evaluated.firesSinceViewedCount,
+            lastViewedAtMs: decisionSummary.lastViewedAtMs,
+            unreadCount: decisionSummary.unreadCount,
+            firesSinceViewedCount: decisionSummary.firesSinceViewedCount,
             timeZone: this.tm.sessionStore.getUserTimeZone(),
           }),
         };
       case "pause":
         return {
-          paused: (await this.pauseForAwayUser(session)) || isFiringOff(),
+          paused: (await this.pauseForAwayUser(guardSession)) || isFiringOff(),
         };
     }
   }
 
-  evaluate(session: GuardSession, nowMs: number) {
-    const unread = session.db.getUnreadState();
-    const state = session.db.getAutomationSpendGuardState() as GuardState;
+  evaluate(guardSession: GuardSession, nowMs: number) {
+    const unreadState = guardSession.db.getUnreadState();
+    const state = guardStateOf(guardSession);
     const firesSinceViewedCount = countAutomationRunsSince(
-      session.automations.listDefinitions(),
-      unread.lastViewedAt,
+      guardSession.automations.listDefinitions(),
+      unreadState.lastViewedAt,
     );
     return {
       decision: evaluateAutomationSpendGuard({
         nowMs,
-        lastViewedAtMs: unread.lastViewedAt,
-        unreadCount: unread.unreadCount,
+        lastViewedAtMs: unreadState.lastViewedAt,
+        unreadCount: unreadState.unreadCount,
         firesSinceViewedCount,
         nudgedAtMs: state.nudgedAtMs,
         snoozedUntilMs: state.snoozedUntilMs,
         optedOut: state.optedOut,
       }),
-      lastViewedAtMs: unread.lastViewedAt,
-      unreadCount: unread.unreadCount,
+      lastViewedAtMs: unreadState.lastViewedAt,
+      unreadCount: unreadState.unreadCount,
       firesSinceViewedCount,
     };
   }
 
-  async pauseForAwayUser(session: GuardSession): Promise<boolean> {
-    let guardPausedIds: string[] = [];
-    await this.runGuardTransition(session, (current) => {
-      if (this.evaluate(session, Date.now()).decision !== "pause") return;
-      guardPausedIds = disableEveryEnabledRoutine(session);
-      if (guardPausedIds.length === 0) return;
-      const isPauseAlreadyOpen = current.pausedAutomationIds.length > 0;
-      session.db.setAutomationSpendGuardState({
+  async pauseForAwayUser(guardSession: GuardSession): Promise<boolean> {
+    let pausedIds: string[] = [];
+    await this.runGuardTransition(guardSession, (existingState) => {
+      if (this.evaluate(guardSession, Date.now()).decision !== "pause") return;
+      pausedIds = disableEveryEnabledRoutine(guardSession);
+      if (pausedIds.length === 0) return;
+      const isPauseAlreadyOpen = existingState.pausedAutomationIds.length > 0;
+      guardSession.db.setAutomationSpendGuardState({
         ...CLEARED_GUARD_STATE,
-        nudgedAtMs: current.nudgedAtMs,
+        nudgedAtMs: existingState.nudgedAtMs,
         pausedAutomationIds: [
-          ...new Set([...current.pausedAutomationIds, ...guardPausedIds]),
+          ...new Set([...existingState.pausedAutomationIds, ...pausedIds]),
         ],
         cardEntryIds: isPauseAlreadyOpen
-          ? current.cardEntryIds
+          ? existingState.cardEntryIds
           : [
-              ...current.cardEntryIds,
-              this.issueGuardCard(session, buildSpendGuardPausedWidget()),
+              ...existingState.cardEntryIds,
+              this.issueGuardCard(guardSession, buildSpendGuardPausedWidget()),
             ],
       });
     });
-    if (guardPausedIds.length === 0) return false;
+    if (pausedIds.length === 0) return false;
     this.tm.automationConfigChanged?.();
-    this.host.emitAutomations(session);
+    this.host.emitAutomations(guardSession);
     this.tm.trayErrors.pushError({
-      agentId: session.id,
+      agentId: guardSession.id,
       title: "Routines paused while you were away",
       detail:
         "This agent's routines kept running without anyone reading the results, so they were paused to avoid wasted spend. Re-enable them from the routine panel when you're back.",
-      dedupeKey: `spend-guard-paused:${session.id}`,
+      dedupeKey: `spend-guard-paused:${guardSession.id}`,
     });
     return true;
   }
@@ -193,66 +217,66 @@ export class AutomationSpendGuardRuntime {
     agentId: string;
     entryId: string;
     value: string;
-    onApplied?(ack: string): void;
+    onApplied?(acknowledgement: string): void;
   }): Promise<string | null> {
-    const answer = interpretSpendGuardAnswer(args.value);
-    if (answer == null || this.tm.sessions.isAgentGone(args.agentId))
+    const guardAnswer = interpretSpendGuardAnswer(args.value);
+    if (guardAnswer == null || this.tm.sessions.isAgentGone(args.agentId))
       return null;
-    const session = (await this.tm.sessions.resolveBackgroundSession(
+    const guardSession = (await this.tm.sessions.resolveBackgroundSession(
       args.agentId,
     )) as GuardSession;
     const nowMs = Date.now();
-    let applied = false;
-    await this.runGuardTransition(session, (current) => {
+    let wasApplied = false;
+    await this.runGuardTransition(guardSession, (existingState) => {
       if (
-        !current.cardEntryIds.includes(args.entryId) ||
-        !this.isHostIssuedCard(session, args.entryId, args.value)
+        !existingState.cardEntryIds.includes(args.entryId) ||
+        !this.isHostIssuedCard(guardSession, args.entryId, args.value)
       )
         return;
-      const outcome = SPEND_GUARD_ANSWER_OUTCOMES[answer];
-      let guardPausedIds: string[] = [];
-      if (outcome.routines === "resume-guard-paused")
-        reEnableGuardPausedRoutines(session, current.pausedAutomationIds);
-      else if (outcome.routines === "disable-every-enabled")
-        guardPausedIds = [
+      const effects = SPEND_GUARD_ANSWER_OUTCOMES[guardAnswer];
+      let pausedIds: string[] = [];
+      if (effects.routines === "resume-guard-paused")
+        reEnableGuardPausedRoutines(guardSession, existingState.pausedAutomationIds);
+      else if (effects.routines === "disable-every-enabled")
+        pausedIds = [
           ...new Set([
-            ...current.pausedAutomationIds,
-            ...disableEveryEnabledRoutine(session),
+            ...existingState.pausedAutomationIds,
+            ...disableEveryEnabledRoutine(guardSession),
           ]),
         ];
-      session.db.setAutomationSpendGuardState({
+      guardSession.db.setAutomationSpendGuardState({
         ...CLEARED_GUARD_STATE,
-        snoozedUntilMs: outcome.snoozes ? nowMs + SPEND_GUARD_SNOOZE_MS : null,
-        optedOut: outcome.retiresGuard,
-        pausedAutomationIds: guardPausedIds,
-        cardEntryIds: guardPausedIds.length > 0 ? current.cardEntryIds : [],
+        snoozedUntilMs: effects.snoozes ? nowMs + SPEND_GUARD_SNOOZE_MS : null,
+        optedOut: effects.retiresGuard,
+        pausedAutomationIds: pausedIds,
+        cardEntryIds: pausedIds.length > 0 ? existingState.cardEntryIds : [],
       });
-      applied = true;
+      wasApplied = true;
     });
-    if (!applied) return null;
-    const ack = renderSpendGuardAnswerAck(answer as SpendGuardAnswer);
-    args.onApplied?.(ack);
+    if (!wasApplied) return null;
+    const acknowledgement = renderSpendGuardAnswerAck(guardAnswer as SpendGuardAnswer);
+    args.onApplied?.(acknowledgement);
     this.tm.automationConfigChanged?.();
-    this.host.emitAutomations(session);
-    return ack;
+    this.host.emitAutomations(guardSession);
+    return acknowledgement;
   }
 
-  issueCardIfNone(session: GuardSession): void {
-    const current = session.db.getAutomationSpendGuardState() as GuardState;
-    if (current.cardEntryIds.length > 0) return;
-    session.db.setAutomationSpendGuardState({
-      ...current,
+  issueCardIfNone(guardSession: GuardSession): void {
+    const existingState = guardStateOf(guardSession);
+    if (existingState.cardEntryIds.length > 0) return;
+    guardSession.db.setAutomationSpendGuardState({
+      ...existingState,
       cardEntryIds: [
-        this.issueGuardCard(session, buildSpendGuardNudgeWidget()),
+        this.issueGuardCard(guardSession, buildSpendGuardNudgeWidget()),
       ],
     });
   }
   isHostIssuedCard(
-    session: GuardSession,
+    guardSession: GuardSession,
     entryId: string,
     value: string,
   ): boolean {
-    const entry = this.readEntries(session).find(
+    const entry = this.readEntries(guardSession).find(
       (item) => item.id === entryId,
     ) as any;
     return (
@@ -261,69 +285,54 @@ export class AutomationSpendGuardRuntime {
       isSpendGuardCard(entry.message.widget as SpendGuardWidget, value)
     );
   }
-  readEntries(session: GuardSession): TranscriptEntry[] {
-    return this.tm.sessions.activeSession?.id === session.id
+  readEntries(guardSession: GuardSession): TranscriptEntry[] {
+    return isOnScreenSession(guardSession, this.tm)
       ? getTranscript()
-      : session.db.getTranscriptEntries();
+      : guardSession.db.getTranscriptEntries();
   }
-  issueGuardCard(session: GuardSession, widget: SpendGuardWidget): string {
-    const isActive = this.tm.sessions.activeSession?.id === session.id;
+  issueGuardCard(guardSession: GuardSession, widget: SpendGuardWidget): string {
+    const onScreen = isOnScreenSession(guardSession, this.tm);
     const entry: TranscriptEntry = {
       kind: "send-message",
-      id: nextEntryId(this.readEntries(session), "send-message"),
+      id: nextEntryId(this.readEntries(guardSession), "send-message"),
       message: { type: "widget", widget },
       timestampMs: Date.now(),
     };
-    if (isActive) this.tm.appendEntry(entry);
+    if (onScreen) this.tm.appendEntry(entry);
     else {
-      session.db.appendTranscriptEntry(entry);
-      this.tm.sessionStore.markSessionActivity(session);
-      void this.tm.roster.emitAgentUpdate(session.id);
+      guardSession.db.appendTranscriptEntry(entry);
+      this.tm.sessionStore.markSessionActivity(guardSession);
+      void this.tm.roster.emitAgentUpdate(guardSession.id);
     }
     return entry.id;
   }
   runGuardTransition(
-    session: GuardSession,
-    transition: (current: GuardState) => void,
+    guardSession: GuardSession,
+    mutate: (existingState: GuardState) => void,
   ): Promise<unknown> {
     return this.host.enqueueAutomationLifecycleMutation({
-      agentId: session.id,
+      agentId: guardSession.id,
       mutation: () => {
-        const before = session.automations.listDefinitions();
-        const isActive = this.tm.sessions.activeSession?.id === session.id;
-        this.recordPendingAgentEdits(session, isActive, before);
-        transition(session.db.getAutomationSpendGuardState());
-        this.recordGuardDelta(session, isActive, before);
+        const definitionsBefore = guardSession.automations.listDefinitions();
+        const onScreen = isOnScreenSession(guardSession, this.tm);
+        this.recordPendingAgentEdits(guardSession, onScreen, definitionsBefore);
+        mutate(guardSession.db.getAutomationSpendGuardState());
+        this.recordGuardDelta(guardSession, onScreen, definitionsBefore);
       },
     });
   }
   recordPendingAgentEdits(
-    session: GuardSession,
-    isActive: boolean,
-    before: unknown,
+    guardSession: GuardSession,
+    onScreen: boolean,
+    definitionsBefore: unknown,
   ): void {
-    if (isActive) this.host.recordAutomationChangeEvents(session, "agent");
-    else
-      this.host.recordInactiveAutomationChanges({
-        agentId: session.id,
-        before,
-        after: before,
-        source: "agent",
-      });
+    recordAutomationChange(this.host, guardSession, onScreen, definitionsBefore, () => definitionsBefore, "agent");
   }
   recordGuardDelta(
-    session: GuardSession,
-    isActive: boolean,
-    before: unknown,
+    guardSession: GuardSession,
+    onScreen: boolean,
+    definitionsBefore: unknown,
   ): void {
-    if (isActive)
-      this.host.recordAutomationChangeEvents(session, "spend_guard");
-    else
-      this.host.recordInactiveAutomationChanges({
-        agentId: session.id,
-        before,
-        after: session.automations.listDefinitions(),
-        source: "spend_guard",
-      });
+    recordAutomationChange(this.host, guardSession, onScreen, definitionsBefore, () => guardSession.automations.listDefinitions(), "spend_guard");
   }
 }
