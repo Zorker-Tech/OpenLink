@@ -214,6 +214,39 @@ test("a diagnostic is reported only to whoever is listening", () => {
   assert.deepEqual(boxReports, ["sync"])
 })
 
+test("the box store's diagnostics go to whoever is pinned, and nowhere while nobody is", () => {
+  const received: Array<Record<string, unknown>> = []
+  try {
+    // Nothing is pinned at first: a report is dropped and throws nothing.
+    assert.doesNotThrow(() => reportBoxStoreDiagnostic({ kind: "dropped" }))
+    assert.equal(received.length, 0, "nothing is reported while nobody is pinned")
+
+    pinBoxStoreDiagnosticsReporter((diagnostic) => received.push(diagnostic))
+    const diagnostic = { kind: "sync", n: 1 }
+    reportBoxStoreDiagnostic(diagnostic)
+    assert.equal(received[0], diagnostic, "the diagnostic is handed over as it is")
+
+    pinBoxStoreDiagnosticsReporter((other) => received.push({ kind: "replacement:" + String(other.kind) }))
+    reportBoxStoreDiagnostic({ kind: "second" })
+    assert.deepEqual(received.map((entry) => entry.kind), ["sync", "replacement:second"], "a newly pinned reporter is the one told")
+
+    pinBoxStoreDiagnosticsReporter(null)
+    reportBoxStoreDiagnostic({ kind: "after-null" })
+    assert.equal(received.length, 2, "pinning nothing stops the reports")
+
+    pinBoxStoreDiagnosticsReporter(undefined as never)
+    assert.doesNotThrow(() => reportBoxStoreDiagnostic({ kind: "after-undefined" }), "an absent reporter is no reporter")
+    assert.equal(received.length, 2)
+
+    // This seam does not swallow a reporter's failure: a broken reporter is a broken caller.
+    pinBoxStoreDiagnosticsReporter(() => { throw new Error("reporter broke") })
+    assert.throws(() => reportBoxStoreDiagnostic({ kind: "throwing" }), /reporter broke/)
+    assert.throws(() => { pinBoxStoreDiagnosticsReporter(7 as never); reportBoxStoreDiagnostic({ kind: "non-function" }) }, /is not a function/)
+  } finally {
+    pinBoxStoreDiagnosticsReporter(null)
+  }
+})
+
 test("a crash is reported and the process is kept alive", () => {
   const reported: Array<{ message: string; kind: string }> = []
   const originalError = console.error
