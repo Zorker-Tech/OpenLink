@@ -17,9 +17,12 @@ import { findSystemErrno } from "../../source/shared/system-errno.ts"
 import {
   availableUpdateTracks,
   coerceToEnabledTrack,
+  isSlateUpdateTrack,
+  NIGHTLY_UPDATE_TRACK_DISABLED,
   resolveEffectiveTrack,
   resolveReleaseTrackGate,
   selectableUpdateTracks,
+  SLATE_UPDATE_TRACKS,
   toManagedUpdateTrack,
 } from "../../source/shared/update-track.ts"
 import { accountSlot } from "../../source/shared/auth.ts"
@@ -188,6 +191,35 @@ test("the tracks a user can pick are the ones that are offered", () => {
   assert.deepEqual(resolveReleaseTrackGate({ releaseTrack: "nightly" }), { managedTrack: undefined, unlockInternalTracks: false })
   assert.equal(resolveEffectiveTrack({ userOverride: "dogfood" }), "dogfood")
   assert.equal(resolveEffectiveTrack({}), "stable")
+})
+
+test("a track is only managed when it is a track that survives coercion, and only the strict unlock flag unlocks", () => {
+  assert.equal(NIGHTLY_UPDATE_TRACK_DISABLED, true)
+  assert.deepEqual([...SLATE_UPDATE_TRACKS], ["stable", "nightly", "dogfood"])
+  assert.equal(isSlateUpdateTrack("stable"), true)
+  assert.equal(isSlateUpdateTrack(" dogfood "), false, "a stored value is trimmed before it is judged, not by the guard")
+  assert.equal(isSlateUpdateTrack("toString"), false)
+  assert.equal(isSlateUpdateTrack(null), false)
+  assert.equal(isSlateUpdateTrack(7), false)
+
+  assert.equal(toManagedUpdateTrack("  dogfood  "), "dogfood", "the stored value is trimmed")
+  assert.equal(toManagedUpdateTrack("beta"), undefined)
+  assert.equal(toManagedUpdateTrack(""), undefined)
+  assert.equal(toManagedUpdateTrack(7), undefined, "only text is a stored track")
+  assert.equal(toManagedUpdateTrack("nightly"), undefined, "a track that coerces away from itself is not managed")
+
+  assert.deepEqual(resolveReleaseTrackGate({ releaseTrack: "  dogfood  ", unlockInternalTracks: true }), { managedTrack: "dogfood", unlockInternalTracks: true })
+  assert.deepEqual(resolveReleaseTrackGate({ releaseTrack: "stable", unlockInternalTracks: "true" }), { managedTrack: "stable", unlockInternalTracks: false }, "only the boolean true unlocks")
+  assert.deepEqual(resolveReleaseTrackGate({ releaseTrack: "stable", unlockInternalTracks: 1 }), { managedTrack: "stable", unlockInternalTracks: false })
+  assert.deepEqual(resolveReleaseTrackGate({}), { managedTrack: undefined, unlockInternalTracks: false })
+
+  assert.equal(resolveEffectiveTrack({ managedTrack: "dogfood", userOverride: "stable" }), "dogfood", "the managed track comes first")
+  assert.equal(resolveEffectiveTrack({ userOverride: "stable", buildDefault: "dogfood" }), "stable", "the user's choice comes before the build's own")
+  assert.equal(resolveEffectiveTrack({ buildDefault: "nightly" }), "stable", "the chosen track is coerced like any other")
+  assert.equal(resolveEffectiveTrack({ managedTrack: "nightly", userOverride: "dogfood" }), "stable", "a coerced nightly does not fall through to the user's choice")
+  assert.equal(resolveEffectiveTrack({ buildDefault: null }), "stable", "a null build default falls through to the stable one")
+  assert.deepEqual(availableUpdateTracks({ unlockInternalTracks: true, effectiveTrack: "stable" }), ["stable", "dogfood"])
+  assert.deepEqual(availableUpdateTracks({ unlockInternalTracks: false, effectiveTrack: "dogfood" }), ["stable", "dogfood"], "the track the build is on is shown even when it cannot be picked")
 })
 
 // ---------------------------------------------------------------------------------------------
