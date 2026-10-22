@@ -5,7 +5,23 @@
  * update that answer something the user sent: the message that was sent, and whether a reaction landed.
  */
 export interface SlateUpdate { type: string; [key: string]: unknown }
+
+/** What the transport remembers about the last send and the last reaction it carried. */
+interface SlateTransportMemory {
+  lastSentMessageId: string | undefined;
+  lastReactionApplied: boolean;
+}
+
 export function createSlateTransport(ingest: (update: SlateUpdate) => string | undefined) {
-  let lastSentMessageId: string | undefined; let lastReactionApplied = false;
-  return { onUpdate(update: SlateUpdate): void { const assignedId = ingest(update); if (update.type === "send-message") lastSentMessageId = assignedId; else if (update.type === "react-to-message") lastReactionApplied = assignedId != null; }, lastSentMessageId: () => lastSentMessageId, lastReactionApplied: () => lastReactionApplied };
+  const memory: SlateTransportMemory = { lastSentMessageId: undefined, lastReactionApplied: false };
+  const recordUpdate = (update: SlateUpdate): void => {
+    const assignedId = ingest(update);
+    if (update.type === "send-message") memory.lastSentMessageId = assignedId;
+    else if (update.type === "react-to-message") memory.lastReactionApplied = assignedId != null;
+  };
+  return {
+    onUpdate: recordUpdate,
+    lastSentMessageId: () => memory.lastSentMessageId,
+    lastReactionApplied: () => memory.lastReactionApplied,
+  };
 }
