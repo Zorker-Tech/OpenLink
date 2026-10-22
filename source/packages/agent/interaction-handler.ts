@@ -5,7 +5,7 @@
  * it, the tool calls and their results — and so does everything the turn needs back: the abort signal, the
  * recorder that keeps the conversation's tool calls, the queries the tools ask. Having it in one place is
  * what makes the stream observable rather than assumed, and it is why the small accounting lives here too:
- * tokens are estimated as they stream (four characters to a token, with the remainder carried to the next
+ * tokenCount are estimated as they stream (four characters to a token, with the remainder carried to the next
  * chunk so the estimate does not drift), tool-call latency and output size are measured, and a send that
  * takes suspiciously long is logged, because a stalled stream is the failure that looks like nothing
  * happening.
@@ -33,7 +33,7 @@ import { AgentLoopError, checkAgentLoop, AgentTextLoopDetector } from "./loop-de
 
 type Loose = any;
 
-function requireGeneratedToolCall(value: unknown): ToolCall {
+function assertGeneratedToolCall(value: unknown): ToolCall {
   if (value instanceof ToolCall && typeof value.clone === "function" && typeof value.toBinary === "function") return value;
   const constructorName = typeof value === "object" && value !== null
     ? Object.getPrototypeOf(value)?.constructor?.name ?? "unknown"
@@ -43,7 +43,7 @@ function requireGeneratedToolCall(value: unknown): ToolCall {
 }
 
 /** A promise whose settling is decided elsewhere: how a tool call is raced against an abort. */
-function deferred<T>(): { promise: Promise<T>; resolve(value: T): void; reject(reason: unknown): void } {
+function makeDeferred<T>(): { promise: Promise<T>; resolve(value: T): void; reject(reason: unknown): void } {
   let resolve!: (value: T) => void
   let reject!: (reason: unknown) => void
   const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej })
@@ -57,14 +57,14 @@ function deferred<T>(): { promise: Promise<T>; resolve(value: T): void; reject(r
  * `Symbol.hasInstance` that only recognizes its own name, so a subclass instance is not an instance of its
  * own class. Reading the fields the error carries is what the check was always meant to be.
  */
-function isSingleMessageLoopError(error: unknown): error is AgentLoopError {
+function isLoopError(error: unknown): error is AgentLoopError {
   return error instanceof Error &&
     error.name === "AgentLoopError" &&
     (error as { loopType?: unknown }).loopType === "singleMessage"
 }
 
 const logger = createLogger("interaction-handler");
-const THINKING_RELATED_CHUNK_TYPES = ["reasoning", "reasoning-signature", "redacted-reasoning"];
+const THINKING_CHUNK_TYPES = ["reasoning", "reasoning-signature", "redacted-reasoning"];
 const toolCallLatency = createHistogram("agent.tool_call.latency_ms", {
   description: "Latency of tool calls in milliseconds",
   labelNames: ["tool_name"],
@@ -74,11 +74,11 @@ const toolCallCount = createCounter("agent.tool_call.count", {
   labelNames: ["tool_name"],
 });
 const toolCallOutputTokens = createHistogram("agent.tool_call.output_tokens", {
-  description: "Approximate number of tokens in tool call output (text.length / 4)",
+  description: "Approximate number of tokenCount in tool call output (text.length / 4)",
   labelNames: ["tool_name"],
 });
 const toolCallResultTokens = createHistogram("agent.tool_call_result_tokens", {
-  description: "Number of tokens in tool call result content",
+  description: "Number of tokenCount in tool call result content",
   labelNames: ["tool_name", "success"],
 });
 
@@ -122,8 +122,8 @@ export class InteractionHandler {
   }
 
   /** A caller may supply its own signal, which then stands in for the context's. */
-  getAbortSignal(ctx: Loose): AbortSignal {
-    return this.overrideSignal ?? ctx.signal;
+  getAbortSignal(context: Loose): AbortSignal {
+    return this.overrideSignal ?? context.signal;
   }
 
   /** From here on, the latest version of this call is remembered so an error can carry its arguments. */
@@ -131,78 +131,78 @@ export class InteractionHandler {
     this.shouldPreserveArgsOnErrorCallIds.add(callId);
   }
 
-  rememberToolCallForArgPreservation(callId: string, toolCall: Loose): void {
-    this.rememberLatestToolCall(callId, toolCall);
+  rememberToolCallForArgPreservation(callId: string, pendingCall: Loose): void {
+    this.rememberLatestToolCall(callId, pendingCall);
   }
 
-  applyArgsFromLatestToolCall(callId: string, incomingToolCall: Loose): Loose {
-    const latestToolCall = this.latestToolCallsById.get(callId);
-    if (latestToolCall === undefined || latestToolCall.tool.case !== incomingToolCall.tool.case) return incomingToolCall;
-    const mergedToolCall = incomingToolCall.clone();
-    if (mergedToolCall.tool.case === "createAgentToolCall" && latestToolCall.tool.case === "createAgentToolCall") {
-      const latestArgs = latestToolCall.tool.value.args;
-      if (latestArgs !== undefined) mergedToolCall.tool.value.args = latestArgs.clone();
-      return mergedToolCall;
+  applyArgsFromLatestToolCall(callId: string, incomingCall: Loose): Loose {
+    const previousCall = this.latestToolCallsById.get(callId);
+    if (previousCall === undefined || previousCall.tool.case !== incomingCall.tool.case) return incomingCall;
+    const combinedCall = incomingCall.clone();
+    if (combinedCall.tool.case === "createAgentToolCall" && previousCall.tool.case === "createAgentToolCall") {
+      const latestArgs = previousCall.tool.value.args;
+      if (latestArgs !== undefined) combinedCall.tool.value.args = latestArgs.clone();
+      return combinedCall;
     }
-    if (mergedToolCall.tool.case === "sendToAgentToolCall" && latestToolCall.tool.case === "sendToAgentToolCall") {
-      const latestArgs = latestToolCall.tool.value.args;
-      if (latestArgs !== undefined) mergedToolCall.tool.value.args = latestArgs.clone();
-      return mergedToolCall;
+    if (combinedCall.tool.case === "sendToAgentToolCall" && previousCall.tool.case === "sendToAgentToolCall") {
+      const latestArgs = previousCall.tool.value.args;
+      if (latestArgs !== undefined) combinedCall.tool.value.args = latestArgs.clone();
+      return combinedCall;
     }
-    if (mergedToolCall.tool.case === "editToolCall" && latestToolCall.tool.case === "editToolCall") {
-      const latestArgs = latestToolCall.tool.value.args;
-      if (latestArgs === undefined) return mergedToolCall;
-      const mergedArgs = mergedToolCall.tool.value.args;
+    if (combinedCall.tool.case === "editToolCall" && previousCall.tool.case === "editToolCall") {
+      const latestArgs = previousCall.tool.value.args;
+      if (latestArgs === undefined) return combinedCall;
+      const mergedArgs = combinedCall.tool.value.args;
       if (mergedArgs === undefined) {
-        mergedToolCall.tool.value.args = latestArgs.clone();
-        return mergedToolCall;
+        combinedCall.tool.value.args = latestArgs.clone();
+        return combinedCall;
       }
       if (mergedArgs.path.length === 0 && latestArgs.path.length > 0) mergedArgs.path = latestArgs.path;
       if (mergedArgs.streamContent === undefined && latestArgs.streamContent !== undefined) mergedArgs.streamContent = latestArgs.streamContent;
-      return mergedToolCall;
+      return combinedCall;
     }
-    return mergedToolCall;
+    return combinedCall;
   }
 
-  rememberLatestToolCall(callId: string, toolCall: Loose): void {
+  rememberLatestToolCall(callId: string, pendingCall: Loose): void {
     if (!this.shouldPreserveArgsOnErrorCallIds.has(callId)) return;
-    this.latestToolCallsById.set(callId, this.applyArgsFromLatestToolCall(callId, toolCall));
+    this.latestToolCallsById.set(callId, this.applyArgsFromLatestToolCall(callId, pendingCall));
   }
 
-  async upsertRecordedToolCall(ctx: Loose, callId: string, toolCall: Loose): Promise<void> {
+  async upsertRecordedToolCall(context: Loose, callId: string, pendingCall: Loose): Promise<void> {
     if (this.toolCallRecorder.upsertToolCall !== undefined) {
-      await this.toolCallRecorder.upsertToolCall(ctx, toolCall, callId);
+      await this.toolCallRecorder.upsertToolCall(context, pendingCall, callId);
       return;
     }
-    this.toolCallRecorder.recordToolCall(toolCall, callId);
+    this.toolCallRecorder.recordToolCall(pendingCall, callId);
   }
 
-  applyDeltaToLatestToolCall(callId: string, toolCallDelta: Loose): void {
+  applyDeltaToLatestToolCall(callId: string, callDelta: Loose): void {
     if (!this.shouldPreserveArgsOnErrorCallIds.has(callId)) return;
-    const latestToolCall = this.latestToolCallsById.get(callId);
-    if (latestToolCall?.tool.case !== "editToolCall" || toolCallDelta.delta.case !== "editToolCallDelta") return;
-    const editToolCall = latestToolCall.tool.value;
+    const previousCall = this.latestToolCallsById.get(callId);
+    if (previousCall?.tool.case !== "editToolCall" || callDelta.delta.case !== "editToolCallDelta") return;
+    const editToolCall = previousCall.tool.value;
     editToolCall.args ??= new EditArgs();
-    editToolCall.args.streamContent = (editToolCall.args.streamContent ?? "") + toolCallDelta.delta.value.streamContentDelta;
+    editToolCall.args.streamContent = (editToolCall.args.streamContent ?? "") + callDelta.delta.value.streamContentDelta;
   }
 
   withToolCallMetadata(callId: string, value: ToolCall, timestamps?: { startedAtMs?: number | undefined; completedAtMs?: number | undefined }): ToolCall {
-    const toolCall = requireGeneratedToolCall(value);
+    const pendingCall = assertGeneratedToolCall(value);
     const startedAtMs = timestamps?.startedAtMs !== undefined ? BigInt(timestamps.startedAtMs) : undefined;
     const completedAtMs = timestamps?.completedAtMs !== undefined ? BigInt(timestamps.completedAtMs) : undefined;
-    if (toolCall.toolCallId === callId && (startedAtMs === undefined || toolCall.startedAtMs === startedAtMs) && (completedAtMs === undefined || toolCall.completedAtMs === completedAtMs)) return toolCall;
-    const stamped = toolCall.clone();
+    if (pendingCall.toolCallId === callId && (startedAtMs === undefined || pendingCall.startedAtMs === startedAtMs) && (completedAtMs === undefined || pendingCall.completedAtMs === completedAtMs)) return pendingCall;
+    const stamped = pendingCall.clone();
     stamped.toolCallId = callId;
     if (startedAtMs !== undefined) stamped.startedAtMs = startedAtMs;
     if (completedAtMs !== undefined) stamped.completedAtMs = completedAtMs;
     return stamped;
   }
 
-  async emitTokenDeltaFromChars(ctx: Loose, newChars: string): Promise<void> {
-    const combinedLength = this.leftoverTokenCharCount + newChars.length;
-    const tokens = Math.floor(combinedLength / 4);
-    this.leftoverTokenCharCount = combinedLength % 4;
-    if (tokens > 0) await this.interactionProvider.sendUpdate(ctx, Updates.tokenDelta(tokens));
+  async emitTokenDeltaFromChars(context: Loose, addedChars: string): Promise<void> {
+    const totalChars = this.leftoverTokenCharCount + addedChars.length;
+    const tokenCount = Math.floor(totalChars / 4);
+    this.leftoverTokenCharCount = totalChars % 4;
+    if (tokenCount > 0) await this.interactionProvider.sendUpdate(context, Updates.tokenDelta(tokenCount));
   }
 
   isConsumerSideError(error: unknown): boolean {
@@ -214,185 +214,185 @@ export class InteractionHandler {
   }
 
   /** Reads the model's stream: text, thinking, and the tool-call deltas that arrive alongside them. */
-  async consumeStream(ctx: Loose, fullStream: AsyncIterable<Loose>, textHandler: Loose): Promise<void> {
-    let _textAccumulator = "";
-    let thinkingAccumulator = "";
-    let thinkingStartTime: number | undefined;
-    let currentThinkingActive = false;
-    const singleMessageLoopDetector = this.enableSingleMessageLoopDetection ? new AgentTextLoopDetector() : null;
-    const sealCurrentThinking = async () => {
-      if (!currentThinkingActive || thinkingStartTime === undefined) return;
-      currentThinkingActive = false;
-      const duration = Math.max(1, Date.now() - thinkingStartTime);
-      await this.interactionProvider.sendUpdate(ctx, Updates.thinkingCompleted(duration));
-      await textHandler.recordThinking(ctx, "", duration);
-      const completedThinkingText = thinkingAccumulator;
-      thinkingAccumulator = "";
-      void this.onThinkingCompleted?.(ctx, { text: completedThinkingText, durationMs: duration }).catch((error: unknown) => {
-        logger.warn(ctx, "afterAgentThought hook callback failed", { error: error instanceof Error ? error.message : String(error) });
+  async consumeStream(context: Loose, chunkStream: AsyncIterable<Loose>, transcriptHandler: Loose): Promise<void> {
+    let textSoFar = "";
+    let thinkingText = "";
+    let thinkingStartedAt: number | undefined;
+    let thinkingOpen = false;
+    const loopDetector = this.enableSingleMessageLoopDetection ? new AgentTextLoopDetector() : null;
+    const closeThinking = async () => {
+      if (!thinkingOpen || thinkingStartedAt === undefined) return;
+      thinkingOpen = false;
+      const thinkingMs = Math.max(1, Date.now() - thinkingStartedAt);
+      await this.interactionProvider.sendUpdate(context, Updates.thinkingCompleted(thinkingMs));
+      await transcriptHandler.recordThinking(context, "", thinkingMs);
+      const finishedThinkingText = thinkingText;
+      thinkingText = "";
+      void this.onThinkingCompleted?.(context, { text: finishedThinkingText, durationMs: thinkingMs }).catch((error: unknown) => {
+        logger.warn(context, "afterAgentThought hook callback failed", { error: error instanceof Error ? error.message : String(error) });
       });
     };
     try {
-      for await (const chunk of fullStream) {
+      for await (const chunk of chunkStream) {
         if (chunk.type === "reasoning-signature") {
-          if (thinkingAccumulator.length > 0) await sealCurrentThinking();
+          if (thinkingText.length > 0) await closeThinking();
           continue;
         }
-        if (currentThinkingActive && !THINKING_RELATED_CHUNK_TYPES.includes(chunk.type)) await sealCurrentThinking();
+        if (thinkingOpen && !THINKING_CHUNK_TYPES.includes(chunk.type)) await closeThinking();
         if (chunk.type === "text-delta") {
-          _textAccumulator += chunk.textDelta;
-          if (singleMessageLoopDetector !== null) {
-            const singleMessageLoopResult = checkAgentLoop({ ctx, newText: chunk.textDelta, detector: singleMessageLoopDetector, caller: "nal" });
-            if (singleMessageLoopResult.loopDetected) {
+          textSoFar += chunk.textDelta;
+          if (loopDetector !== null) {
+            const loopResult = checkAgentLoop({ ctx: context, newText: chunk.textDelta, detector: loopDetector, caller: "nal" });
+            if (loopResult.loopDetected) {
               throw new AgentLoopError({
                 loopType: "singleMessage",
-                loopKind: singleMessageLoopResult.loopKind ?? "single_message_multi_line",
-                repetitions: singleMessageLoopResult.repetitions ?? 0,
-                period: singleMessageLoopResult.period,
+                loopKind: loopResult.loopKind ?? "single_message_multi_line",
+                repetitions: loopResult.repetitions ?? 0,
+                period: loopResult.period,
               });
             }
           }
-          await this.interactionProvider.sendUpdate(ctx, Updates.textDelta(chunk.textDelta));
-          await this.emitTokenDeltaFromChars(ctx, chunk.textDelta);
-          await textHandler.recordText(ctx, chunk.textDelta);
-        } else if (THINKING_RELATED_CHUNK_TYPES.includes(chunk.type)) {
-          if (!currentThinkingActive) {
-            thinkingStartTime = Date.now();
-            currentThinkingActive = true;
+          await this.interactionProvider.sendUpdate(context, Updates.textDelta(chunk.textDelta));
+          await this.emitTokenDeltaFromChars(context, chunk.textDelta);
+          await transcriptHandler.recordText(context, chunk.textDelta);
+        } else if (THINKING_CHUNK_TYPES.includes(chunk.type)) {
+          if (!thinkingOpen) {
+            thinkingStartedAt = Date.now();
+            thinkingOpen = true;
           }
           let delta = "";
           if (chunk.type === "reasoning") delta = chunk.textDelta;
-          thinkingAccumulator += delta;
-          await this.interactionProvider.sendUpdate(ctx, Updates.thinkingDelta(delta, this.thinkingStyle));
-          await this.emitTokenDeltaFromChars(ctx, delta);
-          await textHandler.recordThinking(ctx, delta);
+          thinkingText += delta;
+          await this.interactionProvider.sendUpdate(context, Updates.thinkingDelta(delta, this.thinkingStyle));
+          await this.emitTokenDeltaFromChars(context, delta);
+          await transcriptHandler.recordThinking(context, delta);
         } else if (chunk.type === "tool-call-delta") {
-          await this.emitTokenDeltaFromChars(ctx, chunk.argsTextDelta);
+          await this.emitTokenDeltaFromChars(context, chunk.argsTextDelta);
         }
       }
     } catch (error) {
-      if (isSingleMessageLoopError(error)) throw error;
+      if (isLoopError(error)) throw error;
       if (error instanceof InputTokenLimitError) {
-        logger.warn(ctx, "InputTokenLimitError will trigger blocking summarization", { error });
+        logger.warn(context, "InputTokenLimitError will trigger blocking summarization", { error });
         return;
       }
-      const streamAbortReason = ctx.reason;
-      const isStreamIntentionalAbort = ctx.canceled && streamAbortReason?.intentional === true;
-      if (isStreamIntentionalAbort) logger.info(ctx, "consumeStream aborted (intentional cancellation)", { error, intentionalAbort: true, abortReason: streamAbortReason?.reason });
-      else logger.error(ctx, "Error in consumeStream", error);
+      const streamAbortReason = context.reason;
+      const isStreamIntentionalAbort = context.canceled && streamAbortReason?.intentional === true;
+      if (isStreamIntentionalAbort) logger.info(context, "consumeStream aborted (intentional cancellation)", { error, intentionalAbort: true, abortReason: streamAbortReason?.reason });
+      else logger.error(context, "Error in consumeStream", error);
       if (this.isConsumerSideError(error)) throw error;
     }
   }
 
-  async emitPartialToolCall(ctx: Loose, callId: string, toolCall: Loose): Promise<void> {
-    const toolCallWithId = this.withToolCallMetadata(callId, toolCall, undefined);
-    this.rememberLatestToolCall(callId, toolCallWithId);
-    await this.interactionProvider.sendUpdate(ctx, Updates.partialToolCall(callId, toolCallWithId, this.invocationId));
+  async emitPartialToolCall(context: Loose, callId: string, pendingCall: Loose): Promise<void> {
+    const stampedCall = this.withToolCallMetadata(callId, pendingCall, undefined);
+    this.rememberLatestToolCall(callId, stampedCall);
+    await this.interactionProvider.sendUpdate(context, Updates.partialToolCall(callId, stampedCall, this.invocationId));
   }
 
-  async recordPendingToolCall(ctx: Loose, callId: string, toolCall: Loose): Promise<void> {
-    const toolCallWithId = this.withToolCallMetadata(callId, toolCall, undefined);
-    const redactedToolCall = toRedactedToolCall(toolCallWithId, PrivacyMode.UNSPECIFIED);
+  async recordPendingToolCall(context: Loose, callId: string, pendingCall: Loose): Promise<void> {
+    const stampedCall = this.withToolCallMetadata(callId, pendingCall, undefined);
+    const redactedCall = toRedactedToolCall(stampedCall, PrivacyMode.UNSPECIFIED);
     if (this.toolCallRecorder.recordPendingToolCall !== undefined) {
-      await this.toolCallRecorder.recordPendingToolCall(ctx, redactedToolCall, callId);
+      await this.toolCallRecorder.recordPendingToolCall(context, redactedCall, callId);
       return;
     }
-    await this.upsertRecordedToolCall(ctx, callId, redactedToolCall);
+    await this.upsertRecordedToolCall(context, callId, redactedCall);
   }
 
-  async emitToolCallDelta(ctx: Loose, callId: string, toolCallDelta: Loose): Promise<void> {
-    this.applyDeltaToLatestToolCall(callId, toolCallDelta);
-    await this.interactionProvider.sendUpdate(ctx, Updates.toolCallDelta(callId, toolCallDelta, this.invocationId));
+  async emitToolCallDelta(context: Loose, callId: string, callDelta: Loose): Promise<void> {
+    this.applyDeltaToLatestToolCall(callId, callDelta);
+    await this.interactionProvider.sendUpdate(context, Updates.toolCallDelta(callId, callDelta, this.invocationId));
   }
 
-  async emitToolCallError(ctx: Loose, callId: string, erroredToolCall: Loose): Promise<void> {
+  async emitToolCallError(context: Loose, callId: string, failedCall: Loose): Promise<void> {
     const shouldPreserveArgs = this.shouldPreserveArgsOnErrorCallIds.has(callId);
-    const toolCallWithArgs = shouldPreserveArgs ? this.applyArgsFromLatestToolCall(callId, erroredToolCall) : erroredToolCall;
-    const toolCallWithId = this.withToolCallMetadata(callId, toolCallWithArgs, { startedAtMs: this.toolCallStartedAtMsByCallId.get(callId), completedAtMs: Date.now() });
+    const mergedCall = shouldPreserveArgs ? this.applyArgsFromLatestToolCall(callId, failedCall) : failedCall;
+    const stampedCall = this.withToolCallMetadata(callId, mergedCall, { startedAtMs: this.toolCallStartedAtMsByCallId.get(callId), completedAtMs: Date.now() });
     this.toolCallStartedAtMsByCallId.delete(callId);
     this.latestToolCallsById.delete(callId);
     this.shouldPreserveArgsOnErrorCallIds.delete(callId);
-    await this.interactionProvider.sendUpdate(ctx, Updates.toolCallCompleted(callId, toolCallWithId, this.invocationId));
-    const redactedToolCall = toRedactedToolCall(toolCallWithId, PrivacyMode.UNSPECIFIED);
-    if (toolCallWithId.tool.case === "askQuestionToolCall") await this.upsertRecordedToolCall(ctx, callId, redactedToolCall);
-    else this.toolCallRecorder.recordToolCall(redactedToolCall, callId);
+    await this.interactionProvider.sendUpdate(context, Updates.toolCallCompleted(callId, stampedCall, this.invocationId));
+    const redactedCall = toRedactedToolCall(stampedCall, PrivacyMode.UNSPECIFIED);
+    if (stampedCall.tool.case === "askQuestionToolCall") await this.upsertRecordedToolCall(context, callId, redactedCall);
+    else this.toolCallRecorder.recordToolCall(redactedCall, callId);
   }
 
-  async recordToolCallResult(ctx: Loose, result: Loose, loggedToolName: string, errorClassification?: unknown): Promise<void> {
-    let totalTextLength = 0;
+  async recordToolCallResult(context: Loose, result: Loose, loggedName: string, failureClassification?: unknown): Promise<void> {
+    let textLength = 0;
     for (const part of result.content) {
       if (part.type === "text") {
-        totalTextLength += part.text.length;
-        await this.emitTokenDeltaFromChars(ctx, part.text);
+        textLength += part.text.length;
+        await this.emitTokenDeltaFromChars(context, part.text);
       }
     }
-    if (totalTextLength > 0) {
-      const approximateTokens = Math.floor(totalTextLength / 4);
-      toolCallOutputTokens.histogram(ctx, approximateTokens, { tool_name: loggedToolName });
-      toolCallResultTokens.histogram(ctx, approximateTokens, { tool_name: loggedToolName, success: errorClassification === undefined ? "true" : "false" });
+    if (textLength > 0) {
+      const tokenEstimate = Math.floor(textLength / 4);
+      toolCallOutputTokens.histogram(context, tokenEstimate, { tool_name: loggedName });
+      toolCallResultTokens.histogram(context, tokenEstimate, { tool_name: loggedName, success: failureClassification === undefined ? "true" : "false" });
     }
   }
 
-  async sendHeartbeat(ctx: Loose): Promise<void> {
-    await this.interactionProvider.sendUpdate(ctx, Updates.heartbeat());
+  async sendHeartbeat(context: Loose): Promise<void> {
+    await this.interactionProvider.sendUpdate(context, Updates.heartbeat());
   }
 
   /** Runs a tool call, announcing it before and after, and recording it once it is done. */
   async executeToolCall(
-    parentCtx: Loose,
-    toolCall: Loose,
+    parentContext: Loose,
+    pendingCall: Loose,
     callId: string,
-    promiseFn: (ctx: Loose) => Promise<Loose>,
-    resultMergeFn: (result: Loose) => Loose,
-    hookContextCollector?: readonly Loose[],
+    runToolFn: (context: Loose) => Promise<Loose>,
+    mergeResultFn: (result: Loose) => Loose,
+    hookContexts?: readonly Loose[],
   ): Promise<Loose> {
-    using spanCtxt = createSpan(parentCtx.withName("executeToolCall"));
-    const ctx = spanCtxt.ctx;
-    const startSendStartMs = Date.now();
-    this.toolCallStartedAtMsByCallId.set(callId, startSendStartMs);
+    using executionSpan = createSpan(parentContext.withName("executeToolCall"));
+    const context = executionSpan.ctx;
+    const startUpdateAt = Date.now();
+    this.toolCallStartedAtMsByCallId.set(callId, startUpdateAt);
     {
-      using startSendSpan = createSpan(ctx.withName("executeToolCall.sendStartUpdate"));
-      const toolCallWithId = this.withToolCallMetadata(callId, toolCall, { startedAtMs: startSendStartMs });
-      this.rememberLatestToolCall(callId, toolCallWithId);
-      await this.interactionProvider.sendUpdate(startSendSpan.ctx, Updates.toolCallStarted(callId, toolCallWithId, this.invocationId));
+      using startUpdateSpan = createSpan(context.withName("executeToolCall.sendStartUpdate"));
+      const stampedCall = this.withToolCallMetadata(callId, pendingCall, { startedAtMs: startUpdateAt });
+      this.rememberLatestToolCall(callId, stampedCall);
+      await this.interactionProvider.sendUpdate(startUpdateSpan.ctx, Updates.toolCallStarted(callId, stampedCall, this.invocationId));
     }
-    const startSendMs = Date.now() - startSendStartMs;
-    if (startSendMs > 1_000) logger.warn(ctx, "nal.await_stall.start_send_slow", { callId, toolName: toolCall.tool?.case ?? "unknown", startSendMs });
-    const startTime = Date.now();
+    const startUpdateMs = Date.now() - startUpdateAt;
+    if (startUpdateMs > 1_000) logger.warn(context, "nal.await_stall.start_send_slow", { callId, toolName: pendingCall.tool?.case ?? "unknown", startSendMs: startUpdateMs });
+    const executionStartedAt = Date.now();
     let result: Loose;
-    const abortSignal = this.getAbortSignal(ctx);
-    const resolvers = deferred<Loose>();
-    if (abortSignal.aborted) throw new ToolCallAbortedError();
-    else abortSignal.addEventListener("abort", () => resolvers.reject(new ToolCallAbortedError()), { once: true });
-    promiseFn(ctx).then(value => {
+    const cancelSignal = this.getAbortSignal(context);
+    const settle = makeDeferred<Loose>();
+    if (cancelSignal.aborted) throw new ToolCallAbortedError();
+    else cancelSignal.addEventListener("abort", () => settle.reject(new ToolCallAbortedError()), { once: true });
+    runToolFn(context).then(value => {
       result = value;
-      const newToolCall = resultMergeFn(value);
-      if (hookContextCollector && hookContextCollector.length > 0) newToolCall.hookAdditionalContexts.push(...hookContextCollector);
-      resolvers.resolve(newToolCall);
-    }).catch((error: unknown) => resolvers.reject(error));
-    const newToolCall = this.withToolCallMetadata(callId, await resolvers.promise, { startedAtMs: startSendStartMs, completedAtMs: Date.now() });
+      const completedCall = mergeResultFn(value);
+      if (hookContexts && hookContexts.length > 0) completedCall.hookAdditionalContexts.push(...hookContexts);
+      settle.resolve(completedCall);
+    }).catch((error: unknown) => settle.reject(error));
+    const completedCall = this.withToolCallMetadata(callId, await settle.promise, { startedAtMs: startUpdateAt, completedAtMs: Date.now() });
     this.toolCallStartedAtMsByCallId.delete(callId);
-    this.rememberLatestToolCall(callId, newToolCall);
-    const toolExecutionMs = Date.now() - startTime;
-    const toolName = toolCall.tool?.case ?? "unknown";
-    toolCallLatency.histogram(ctx, toolExecutionMs, { tool_name: toolName });
-    toolCallCount.increment(ctx, 1, { tool_name: toolName });
+    this.rememberLatestToolCall(callId, completedCall);
+    const executionMs = Date.now() - executionStartedAt;
+    const toolName = pendingCall.tool?.case ?? "unknown";
+    toolCallLatency.histogram(context, executionMs, { tool_name: toolName });
+    toolCallCount.increment(context, 1, { tool_name: toolName });
     const completionSendStartMs = Date.now();
     {
-      using completionSendSpan = createSpan(ctx.withName("executeToolCall.sendCompletionUpdate"));
-      await this.interactionProvider.sendUpdate(completionSendSpan.ctx, Updates.toolCallCompleted(callId, newToolCall, this.invocationId));
+      using completionSendSpan = createSpan(context.withName("executeToolCall.sendCompletionUpdate"));
+      await this.interactionProvider.sendUpdate(completionSendSpan.ctx, Updates.toolCallCompleted(callId, completedCall, this.invocationId));
     }
     const completionSendMs = Date.now() - completionSendStartMs;
-    if (completionSendMs > 1_000) logger.warn(ctx, "nal.await_stall.completion_send_slow", { callId, toolName, toolExecutionMs, completionSendMs });
-    const redactedToolCall = toRedactedToolCall(newToolCall, PrivacyMode.UNSPECIFIED);
-    if (newToolCall.tool.case === "askQuestionToolCall") await this.upsertRecordedToolCall(ctx, callId, redactedToolCall);
-    else this.toolCallRecorder.recordToolCall(redactedToolCall, callId);
+    if (completionSendMs > 1_000) logger.warn(context, "nal.await_stall.completion_send_slow", { callId, toolName, toolExecutionMs: executionMs, completionSendMs });
+    const redactedCall = toRedactedToolCall(completedCall, PrivacyMode.UNSPECIFIED);
+    if (completedCall.tool.case === "askQuestionToolCall") await this.upsertRecordedToolCall(context, callId, redactedCall);
+    else this.toolCallRecorder.recordToolCall(redactedCall, callId);
     this.latestToolCallsById.delete(callId);
     this.shouldPreserveArgsOnErrorCallIds.delete(callId);
     return result!;
   }
 
-  async query(ctx: Loose, query: Loose): Promise<Loose> {
-    return this.interactionProvider.query(ctx, query);
+  async query(context: Loose, query: Loose): Promise<Loose> {
+    return this.interactionProvider.query(context, query);
   }
 }
