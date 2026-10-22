@@ -97,6 +97,19 @@ test("a server's name is reduced to one token", () => {
   assert.equal(sanitizeServerName("."), "_")
   assert.equal(sanitizeServerName(".."), "_")
   assert.equal(sanitizeServerName(""), "_")
+
+  assert.equal(sanitizeServerName("..."), "_", "a run of dots is a dot-path too")
+  assert.equal(sanitizeServerName("a...b"), "a.b", "a run of dots collapses to one")
+  assert.equal(sanitizeServerName("a..b..c"), "a.b.c", "every run of dots collapses, not just the first")
+  assert.equal(sanitizeServerName("..a"), ".a")
+  assert.equal(sanitizeServerName("a."), "a.")
+  assert.equal(sanitizeServerName("a  b"), "a__b", "every whitespace character becomes its own underscore")
+  assert.equal(sanitizeServerName("a\tb\nc"), "a_b_c")
+  assert.equal(sanitizeServerName("a\u00a0b"), "a_b", "a non-breaking space is whitespace too")
+  assert.equal(sanitizeServerName("üa"), "a", "characters the registry cannot hold are dropped")
+  assert.equal(sanitizeServerName("文件"), "_")
+  assert.equal(sanitizeServerName("a-b_c.d"), "a-b_c.d", "letters, digits, underscore, dot and dash are kept")
+  assert.equal(sanitizeServerName("  "), "__")
 })
 
 // ---------------------------------------------------------------------------------------------
