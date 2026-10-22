@@ -3,6 +3,10 @@
  *
  * It carries the platform's own instructions, the reminders a reply is expected with, and the paths to the reference
  * documents the box can read — so what the model is told and what it can look up cannot disagree.
+ *
+ * The text itself is the contract: its wording is what the model is trained on for this product, so it is kept as it
+ * is written and only its assembly is code. The helpers here decide what is appended to a message, how a size is said,
+ * and which subagent is a media reviewer; the prompt sections are plain strings.
  */
 import {
   SLATE_APP_UI_REFERENCE_PATH,
