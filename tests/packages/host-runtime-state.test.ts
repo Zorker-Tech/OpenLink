@@ -5,7 +5,7 @@
  */
 
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
@@ -25,7 +25,7 @@ import { assertMembersAreNotGroups, formatGroupChatTag, formatGroupHistory, form
 import { createProductionRunnerContext } from "../../source/host/runner-context-production-provider.ts";
 import { BROWSER_USE_SUBAGENT_TYPE, isBrowserUseSubagentType } from "../../source/host/runner/tools/slate-browser-use-subagent.ts";
 import { hostEventBusTelemetry, HOST_EVENT_BUS_EVENT } from "../../source/host/telemetry/host-event-bus-telemetry.ts";
-import { createInMemoryXuserPendingDepartures, departureKey, SlateXuserPendingDepartureStore } from "../../source/host/rooms/xuser-pending-departure-store.ts";
+import { createInMemoryXuserPendingDepartures, departureKey, parseDepartureFile, SLATE_XUSER_PENDING_DEPARTURE_FILE_NAME, SlateXuserPendingDepartureStore } from "../../source/host/rooms/xuser-pending-departure-store.ts";
 import { SlateXuserStateReconcile, type XuserRoom, type XuserStateReconcileHost } from "../../source/host/rooms/xuser-state-reconcile.ts";
 import { adoptRemoteParent, beginGatewayCommandTrace, beginSendTrace, setHostTraceFactory, SLATE_TURN_ROOT_SPAN_NAME } from "../../source/host/send-trace-host.ts";
 import { buildTriggerEventContextBlock, describeTriggerEvent, githubListenerMatches, listenerMatchesEvent, parseStoredTrigger, serializeStoredTrigger, slackListenerMatches, slackScopeMatches, triggerIdentity, triggerMatchesEvent } from "../../source/host/automations/automation-trigger.ts";
@@ -431,6 +431,123 @@ describe("a departure that could not be delivered yet", () => {
     store.clear({ kind: "remove-agent", agentId: "a3" });
     assert.deepEqual(store.list(), []);
     assert.deepEqual(new SlateXuserPendingDepartureStore(root).list(), []);
+  });
+
+  it("reads the file's shape defensively, keeping only the entries that name a departure", () => {
+    assert.equal(SLATE_XUSER_PENDING_DEPARTURE_FILE_NAME, "host-xuser-pending-departures.json");
+    assert.deepEqual([...parseDepartureFile(null).keys()], []);
+    assert.deepEqual([...parseDepartureFile(undefined as unknown as string | null).keys()], []);
+    assert.deepEqual([...parseDepartureFile("{ half a file").keys()], []);
+    assert.deepEqual([...parseDepartureFile("null").keys()], []);
+    assert.deepEqual([...parseDepartureFile('{"pending":"x"}').keys()], []);
+    assert.deepEqual([...parseDepartureFile('{"pending":[null,3,"x",[]]}').keys()], []);
+    assert.deepEqual([...parseDepartureFile('{"pending":{"kind":"remove-agent","agentId":"a9"}}').keys()], []);
+    const parsed = parseDepartureFile(JSON.stringify({
+      version: 2,
+      pending: [
+        { kind: "remove-agent", agentId: "a1" },
+        { kind: "leave-room", roomId: "r1", agentId: "a2", ownerAuthId: "o" },
+        { kind: "remove-agent" },
+        { kind: "remove-agent", agentId: "" },
+        { kind: "remove-agent", agentId: 7 },
+        { kind: "remove-agent", agentId: "a3", ownerAuthId: "" },
+        { kind: "leave-room", agentId: "a4" },
+        { kind: "leave-room", roomId: "", agentId: "a5" },
+        { kind: "remove-agent", agentId: "a6", ownerAuthId: 5 },
+        { kind: "not-a-departure", agentId: "a7" },
+      ],
+    }));
+    assert.deepEqual([...parsed.values()], [
+      { kind: "remove-agent", agentId: "a1" },
+      { kind: "leave-room", ownerAuthId: "o", roomId: "r1", agentId: "a2" },
+      { kind: "remove-agent", agentId: "a3" },
+      { kind: "remove-agent", agentId: "a6" },
+    ]);
+    assert.deepEqual([...parsed.keys()], ["remove-agent\0\0a1", "leave-room\0o\0r1", "remove-agent\0\0a3", "remove-agent\0\0a6"]);
+  });
+
+  it("keeps the last of two entries that identify the same departure, where the first one sat", () => {
+    const parsed = parseDepartureFile(JSON.stringify({ pending: [
+      { kind: "remove-agent", agentId: "a1" },
+      { kind: "remove-agent", agentId: "a2" },
+      { kind: "remove-agent", agentId: "a1" },
+    ] }));
+    assert.deepEqual([...parsed.keys()], ["remove-agent\0\0a1", "remove-agent\0\0a2"]);
+    assert.equal(parsed.size, 2);
+  });
+
+  it("writes the file's version and its list in one rename, and reads the text back whole", () => {
+    const root = join(scratch, "departures-format");
+    const store = new SlateXuserPendingDepartureStore(root);
+    store.record({ kind: "leave-room", ownerAuthId: "o", roomId: "r1", agentId: "a1" });
+    store.record({ kind: "remove-agent", agentId: "ü" });
+    const path = join(root, SLATE_XUSER_PENDING_DEPARTURE_FILE_NAME);
+    assert.equal(readFileSync(path, "utf8"), JSON.stringify({ version: 2, pending: [
+      { kind: "leave-room", ownerAuthId: "o", roomId: "r1", agentId: "a1" },
+      { kind: "remove-agent", agentId: "ü" },
+    ] }));
+    assert.deepEqual(readdirSync(root), [SLATE_XUSER_PENDING_DEPARTURE_FILE_NAME], "the temporary file is renamed away");
+    assert.deepEqual(new SlateXuserPendingDepartureStore(root).list().map((value) => value.agentId), ["a1", "ü"]);
+  });
+
+  it("does not write the file again for a departure it already has or one it never had", () => {
+    const root = join(scratch, "departures-nowrite");
+    const store = new SlateXuserPendingDepartureStore(root);
+    store.record({ kind: "remove-agent", agentId: "a1" });
+    const path = join(root, SLATE_XUSER_PENDING_DEPARTURE_FILE_NAME);
+    rmSync(path);
+    store.record({ kind: "remove-agent", agentId: "a1" });
+    assert.equal(existsSync(path), false, "a departure already recorded is not written again");
+    store.clear({ kind: "remove-agent", agentId: "nobody" });
+    assert.equal(existsSync(path), false, "a departure that was never recorded is not written again");
+    store.clear({ kind: "remove-agent", agentId: "a1" });
+    assert.deepEqual(JSON.parse(readFileSync(path, "utf8")), { version: 2, pending: [] });
+  });
+
+  it("reads the file once per store, and a file that is not the shape reads as no departures", () => {
+    const root = join(scratch, "departures-cache");
+    const writer = new SlateXuserPendingDepartureStore(root);
+    writer.record({ kind: "remove-agent", agentId: "a1" });
+    const reader = new SlateXuserPendingDepartureStore(root);
+    assert.deepEqual(reader.list().map((value) => value.agentId), ["a1"]);
+    new SlateXuserPendingDepartureStore(root).record({ kind: "remove-agent", agentId: "a2" });
+    assert.deepEqual(reader.list().map((value) => value.agentId), ["a1"], "the file is read once per store");
+    assert.deepEqual(new SlateXuserPendingDepartureStore(root).list().map((value) => value.agentId), ["a1", "a2"]);
+    writeFileSync(join(root, SLATE_XUSER_PENDING_DEPARTURE_FILE_NAME), "half a file");
+    const corrupt = new SlateXuserPendingDepartureStore(root);
+    assert.deepEqual(corrupt.list(), []);
+    corrupt.record({ kind: "remove-agent", agentId: "a3" });
+    assert.deepEqual(parseDepartureFile(readFileSync(join(root, SLATE_XUSER_PENDING_DEPARTURE_FILE_NAME), "utf8")).size, 1);
+  });
+
+  it("overwrites the departure the in-memory store already holds, and hands out a copy of its list", () => {
+    const store = createInMemoryXuserPendingDepartures();
+    store.record({ kind: "remove-agent", agentId: "a1" });
+    store.record({ kind: "remove-agent", agentId: "a2" } as never);
+    store.record({ kind: "remove-agent", agentId: "a1", mark: "second" } as never);
+    assert.deepEqual(store.list().map((value) => value.agentId), ["a1", "a2"], "the position the first entry took is kept");
+    assert.equal((store.list()[0] as unknown as Record<string, unknown>).mark, "second", "the value is replaced");
+    const copy = store.list();
+    copy.length = 0;
+    assert.deepEqual(store.list().map((value) => value.agentId), ["a1", "a2"], "the list is a copy");
+  });
+
+  it("reads no departures from a path that is not a file, and still answers what it was given", () => {
+    const root = join(scratch, "departures-dir");
+    const store = new SlateXuserPendingDepartureStore(root);
+    mkdirSync(store.filePath, { recursive: true });
+    assert.deepEqual(new SlateXuserPendingDepartureStore(root).list(), []);
+    store.record({ kind: "remove-agent", agentId: "a1" });
+    assert.deepEqual(store.list().map((value) => value.agentId), ["a1"], "a store that cannot write still answers what it recorded");
+  });
+
+  it("keeps a departure in memory when the file cannot be written", () => {
+    const root = join(scratch, "departures-unwritable");
+    mkdirSync(root, { recursive: true });
+    writeFileSync(join(root, "blocked"), "x");
+    const store = new SlateXuserPendingDepartureStore(join(root, "blocked", "nested"));
+    store.record({ kind: "remove-agent", agentId: "a1" });
+    assert.deepEqual(store.list().map((value) => value.agentId), ["a1"]);
   });
 });
 
