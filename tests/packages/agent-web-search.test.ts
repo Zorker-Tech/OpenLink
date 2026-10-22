@@ -245,6 +245,14 @@ test("a document that fits the inline cap is kept whole when it cannot be writte
   assert.equal(referencesOf(result)[0]?.chunk, medium)
 })
 
+
+test("an empty answer is not a reference at all", async () => {
+  const harnessed = harness({ result: { answer: "", documents: [{ title: "A page", url: "https://example.test", text: "the text" }] } })
+  const references = referencesOf(await run(harnessed, { search_term: "anything" }))
+  assert.equal(references.length, 1)
+  assert.equal(references[0]?.chunk, "the text")
+})
+
 test("a provider that answered with nothing yields no references", async () => {
   const harnessed = harness({ result: { documents: [] } })
   const result = await run(harnessed, { search_term: "a thing" })
@@ -320,4 +328,9 @@ test("a provider failure that says nothing about retrying is passed on as it cam
     () => run(harnessed, { search_term: "a thing" }),
     (error: Error) => error.constructor === Error && error.message === "API request failed: 400",
   )
+})
+
+test("a 500 from the provider is worth trying again, like the other server errors", async () => {
+  const harnessed = harness({ throwResult: () => { throw new Error("API request failed: 500") } })
+  await assert.rejects(run(harnessed, { search_term: "anything" }), (error: Error) => /provider_status=500/.test(error.message))
 })
