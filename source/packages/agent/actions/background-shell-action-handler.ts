@@ -15,6 +15,17 @@ interface StateHandler<Context, State> {
   computeNewStructure(ctx: Context): Promise<State> | State;
 }
 
+/** What a single step answers: the state it arrived at, and that there is nothing to run. */
+type SideChannelStepAnswer<State> = { state: State; hasToolCall: false };
+
+/** The state a side-channel action arrives at, computed rather than patched onto the old one. */
+function recomputedStructure<Context, State>(
+  ctx: Context,
+  stateHandler: StateHandler<Context, State>,
+): Promise<State> | State {
+  return stateHandler.computeNewStructure(ctx);
+}
+
 /**
  * A handler for actions that leave nothing to run.
  *
@@ -24,24 +35,24 @@ interface StateHandler<Context, State> {
 export class NoOpSideChannelActionHandler {
   async handle<Context, State>(
     ctx: Context,
-    _action: unknown,
+    _turnAction: unknown,
     _rootPromptExecutor: unknown,
     stateHandler: StateHandler<Context, State>,
-    _mcpTools: unknown,
-    _onStateUpdate: unknown,
+    _toolInventory: unknown,
+    _stateUpdateListener: unknown,
   ): Promise<State> {
-    return stateHandler.computeNewStructure(ctx);
+    return recomputedStructure(ctx, stateHandler);
   }
 
   async handleSingleStep<Context, State>(
     ctx: Context,
-    _action: unknown,
+    _turnAction: unknown,
     _rootPromptExecutor: unknown,
     stateHandler: StateHandler<Context, State>,
-    _mcpTools: unknown,
-    _onStateUpdate: unknown,
-  ): Promise<{ state: State; hasToolCall: false }> {
-    return { state: await stateHandler.computeNewStructure(ctx), hasToolCall: false };
+    _toolInventory: unknown,
+    _stateUpdateListener: unknown,
+  ): Promise<SideChannelStepAnswer<State>> {
+    return { state: await recomputedStructure(ctx, stateHandler), hasToolCall: false };
   }
 }
 
