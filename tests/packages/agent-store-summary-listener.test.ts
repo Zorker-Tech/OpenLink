@@ -120,6 +120,18 @@ describe("what a sync round reports about its paths", () => {
     );
   });
 
+  it("keeps the first failure when the error report itself fails", () => {
+    const emitter = {
+      onError: () => { throw new Error("first report failed"); },
+      onConflict: () => { throw new Error("last report failed"); },
+    };
+    assert.throws(
+      () => notifySummaryMetrics({ agentId: "agent", summary: summarise({ errors: [{ code: "delete_failed" }], conflicts: [{ relPath: "p", conflictRelPath: "q" }] }) as never, metricsEmitter: emitter, pathHashSalt: "salt" }),
+      { message: "first report failed" },
+      "the failure of the first report is the one raised, not the last",
+    );
+  });
+
   it("reports the store kind of the agent a conflict came from", () => {
     const kinds: unknown[] = [];
     const emitter = { onConflict: (event: unknown) => kinds.push((event as Record<string, unknown>).storeKind) };
