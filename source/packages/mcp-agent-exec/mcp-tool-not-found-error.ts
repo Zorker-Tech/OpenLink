@@ -8,28 +8,34 @@
  * where the class identity is gone, and the shape is what remains.
  */
 
-export function isMcpToolNotFoundError(error: unknown): error is McpToolNotFoundError {
-  if (error instanceof McpToolNotFoundError) {
-    return true
-  }
-  if (!(error instanceof Error) || error.name !== "McpToolNotFoundError") {
-    return false
-  }
-  const candidate = error as Error & {
-    readonly toolName?: unknown
-    readonly availableTools?: unknown
-  }
-  return typeof candidate.toolName === "string" && Array.isArray(candidate.availableTools)
+/** The name this failure carries across a realm, where the class identity does not survive. */
+const TOOL_NOT_FOUND = "McpToolNotFoundError";
+
+/** The message a missing tool reports: what was asked for, and what the server has instead. */
+function missingToolMessage(toolName: string, availableTools: readonly string[]): string {
+  return `Tool ${toolName} not found, available tools: ${availableTools.join(", ")}`;
+}
+
+/** Whether an error from another realm kept the name and the two fields a caller repairs the call from. */
+function isForeignToolNotFoundError(value: unknown): value is McpToolNotFoundError {
+  if (!(value instanceof Error) || value.name !== TOOL_NOT_FOUND) return false;
+  const foreign = value as { toolName?: unknown; availableTools?: unknown };
+  return typeof foreign.toolName === "string" && Array.isArray(foreign.availableTools);
+}
+
+/** Whether this is the failure a tool call reports when the tool it named does not exist. */
+export function isMcpToolNotFoundError(value: unknown): value is McpToolNotFoundError {
+  return value instanceof McpToolNotFoundError || isForeignToolNotFoundError(value);
 }
 
 export class McpToolNotFoundError extends Error {
-  readonly toolName: string
-  readonly availableTools: string[]
+  readonly toolName: string;
+  readonly availableTools: string[];
 
   constructor(toolName: string, availableTools: string[]) {
-    super(`Tool ${toolName} not found, available tools: ${availableTools.join(", ")}`)
-    this.toolName = toolName
-    this.availableTools = availableTools
-    this.name = "McpToolNotFoundError"
+    super(missingToolMessage(toolName, availableTools));
+    this.toolName = toolName;
+    this.availableTools = availableTools;
+    this.name = TOOL_NOT_FOUND;
   }
 }
