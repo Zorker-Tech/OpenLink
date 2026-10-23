@@ -34,6 +34,10 @@ function harness(options: {
   listing?: unknown
   subagentAwait?: SubagentAwaitResult | "throw"
   subagentResume?: unknown
+  readError?: "permissionDenied" | "rejected" | "invalidFile" | "error"
+  readData?: boolean
+  fileSizes?: Record<string, number>
+  listingTimeout?: boolean
   tool?: Partial<AwaitToolOptions>
   promptVersion?: string
 } = {}) {
@@ -57,14 +61,15 @@ function harness(options: {
               content = sequence[Math.min(index, sequence.length - 1)]
             }
             if (content === undefined) return new ReadResult({ result: { case: "fileNotFound", value: {} } as never })
+            if (options.readError !== undefined) return new ReadResult({ result: options.readError === "permissionDenied" ? { case: "permissionDenied", value: {} } as never : options.readError === "rejected" ? { case: "rejected", value: { reason: "denied by policy" } } as never : options.readError === "invalidFile" ? { case: "invalidFile", value: { reason: "not a file" } } as never : { case: "error", value: { error: "the read blew up" } } as never })
             return new ReadResult({
               result: {
                 case: "success",
                 value: new ReadSuccess({
                   path: args.path,
                   totalLines: content.split("\n").length,
-                  fileSize: BigInt(content.length),
-                  output: { case: "content", value: content },
+                  fileSize: BigInt(options.fileSizes?.[args.path] ?? content.length),
+                  output: options.readData === true ? { case: "data", value: Buffer.from(content) } : { case: "content", value: content },
                 }),
               },
             })
@@ -75,6 +80,7 @@ function harness(options: {
         return {
           async execute() {
             listingCalls++
+            if (options.listingTimeout === true) return new LsResult({ result: { case: "timeout", value: { directoryTreeRoot: options.listing } } as never })
             if (options.listing === undefined) return new LsResult({ result: { case: "fileNotFound", value: {} } as never })
             return new LsResult({ result: { case: "success", value: new LsSuccess({ directoryTreeRoot: options.listing as never }) } as never })
           },
@@ -440,4 +446,314 @@ test("a failure is serialized into the call's own error result", () => {
   assert.equal(call.tool.case, "awaitToolCall")
   assert.equal(call.tool.value.result?.result?.case, "error")
   assert.equal(call.tool.value.result?.result?.value?.error, "the wait failed")
+})
+
+test("the default duration is used when the argument is missing", async () => {
+  const harnessed = harness({ tool: { defaultBlockUntilMs: 12 } })
+  const result = await harnessed.call({})
+  const awaited = awaitResultOf(result)
+  assert.equal(awaited?.case, "complete")
+  assert.equal(awaited?.value?.taskId, "")
+})
+
+test("a duration that is not a valid number falls back to the default", async () => {
+  const harnessed = harness({ tool: { defaultBlockUntilMs: 12 } })
+  const result = await harnessed.call({ block_until_ms: -5 })
+  assert.equal(awaitResultOf(result)?.case, "complete")
+  const fractional = harness({ tool: { defaultBlockUntilMs: 12 } })
+  assert.equal(awaitResultOf(await fractional.call({ block_until_ms: 12.9 }))?.case, "complete")
+})
+
+test("a required duration must be sent", async () => {
+  const harnessed = harness({ tool: { requireBlockUntilMs: true } })
+  const error = await failureOf(harnessed.call({ task_id: "7" }))
+  assert.equal(error instanceof ToolCallArgParseError, true)
+})
+
+test("the wait's call carries the request back to the client", async () => {
+  const harnessed = harness({ files: { [TERMINALS + "/42.txt"]: "output\n" } })
+  const tool = harnessed.build()
+  const execute = tool.execute as (ctx: unknown, handler: unknown, stream: AsyncIterable<string>, meta: unknown) => Promise<AwaitResult>
+  const merged: unknown[] = []
+  const stream = (async function* () { yield JSON.stringify({ shell_id: "42", block_until_ms: 0, pattern: "done" }) })()
+  await execute(createContext(), { emitPartialToolCall() {}, async executeToolCall(_ctx: unknown, _call: unknown, _id: string, run: (ctx: unknown) => Promise<unknown>, merge: (result: unknown) => unknown) { const result = await run(_ctx); merged.push(merge(result)); return result } }, stream, { toolCallId: "call-1" })
+  const call = merged[0] as { tool: { case: string; value: { args?: { taskId?: string; blockUntilMs?: number; regex?: string }; result?: { result?: { case?: string } } } } }
+  assert.equal(call.tool.case, "awaitToolCall")
+  assert.equal(call.tool.value.args?.taskId, "42")
+  assert.equal(call.tool.value.args?.blockUntilMs, 0)
+  assert.equal(call.tool.value.args?.regex, "done")
+  assert.equal(call.tool.value.result?.result?.case, "success")
+})
+
+test("a user message admitted during a slice releases it", async () => {
+  let admit: (() => void) | undefined
+  const signal = {
+    hasPendingUserInjections: () => false,
+    onUserInjectionAdmitted: (listener: () => void) => { admit = listener; return () => {} },
+  }
+  const harnessed = harness({ files: { [TERMINALS + "/43.txt"]: header(100) } })
+  const started = Date.now()
+  const promise = harnessed.callWithMeta({ task_id: "43", block_until_ms: 5_000 }, { contextInjectionSignal: signal })
+  const timer = setTimeout(() => admit?.(), 60)
+  const result = await promise
+  clearTimeout(timer)
+  const awaited = awaitResultOf(result)
+  assert.equal(awaited?.case, "stillRunning")
+  assert.equal(awaited?.value?.wakeReason, "context_injection")
+  assert.equal(Date.now() - started < 2_000, true)
+})
+
+test("a regex is not matched against the file's metadata", async () => {
+  const content = header(777) + "the body\n"
+  const metadata = harness({ files: { [TERMINALS + "/44.txt"]: content } })
+  const result = await metadata.call({ task_id: "44", block_until_ms: 250, pattern: "running_for_ms" })
+  assert.equal(awaitResultOf(result)?.value?.regexMatch, undefined)
+  const body = harness({ files: { [TERMINALS + "/44.txt"]: content } })
+  const matched = await body.call({ task_id: "44", block_until_ms: 250, pattern: "the body" })
+  assert.equal(awaitResultOf(matched)?.value?.regexMatch, "the body")
+})
+
+test("a matched output is reported up to five hundred characters", async () => {
+  const long = "a".repeat(600)
+  const harnessed = harness({ files: { [TERMINALS + "/45.txt"]: long } })
+  const result = await harnessed.call({ task_id: "45", block_until_ms: 250, pattern: "a+" })
+  const matched = awaitResultOf(result)?.value?.regexMatch as string
+  assert.equal(matched.length, 500)
+})
+
+test("a malformed footer still finishes the wait without an exit code", async () => {
+  const harnessed = harness({ files: { [TERMINALS + "/46.txt"]: "out\n---\nexit_code: nope\nelapsed_ms: 12\n---\n" } })
+  const result = await harnessed.call({ task_id: "46", block_until_ms: 5_000 })
+  const awaited = awaitResultOf(result)
+  assert.equal(awaited?.case, "complete")
+  assert.equal(awaited?.value?.exitCode, undefined)
+  assert.equal(awaited?.value?.runtimeMs, 12n)
+})
+
+test("a transcript in a nested directory is found by listing", async () => {
+  const harnessed = harness({
+    listing: { absPath: TRANSCRIPTS, childrenFiles: [], childrenDirs: [{ absPath: TRANSCRIPTS + "/run-1", childrenFiles: [{ name: "agent-5.jsonl" }], childrenDirs: [] }] },
+    subagentResume: { result: { case: "complete", value: {} } },
+    tool: { enableSubagentAwaiting: true, agentTranscriptsFolder: TRANSCRIPTS },
+  })
+  const result = await harnessed.call({ task_id: "agent-5", block_until_ms: 0 }, createContext().with(conversationIdKey, "conversation-1"))
+  const awaited = awaitResultOf(result)
+  assert.equal(awaited?.value?.outputFilePath, TRANSCRIPTS + "/run-1/agent-5.jsonl")
+})
+
+test("a function terminals folder is resolved when the wait needs it", async () => {
+  const harnessed = harness({ files: { [TERMINALS + "/47.txt"]: "output\n" }, tool: { terminalsFolder: () => TERMINALS, defaultBlockUntilMs: 0 } })
+  const result = await harnessed.call({ task_id: "47" })
+  assert.equal(awaitResultOf(result)?.value?.taskId, "47")
+})
+
+test("the polling advice falls back to plain guidance past six hours", () => {
+  const tool = harness({ tool: { enableJobCompletionNotifications: true, promptCacheTTLMs: 21_700_000 } }).build()
+  const description = (tool.descriptionGenerator as (props: Record<string, unknown>) => string)({ allTools: { SHELL: { name: "Shell" } } })
+  assert.match(description, /size slices based on expected progress/)
+})
+
+test("a pattern that is not a valid regex fails the wait", async () => {
+  const harnessed = harness({ files: { [TERMINALS + "/48.txt"]: "output\n" } })
+  const error = await failureOf(harnessed.call({ task_id: "48", block_until_ms: 0, pattern: "[" }))
+  assert.equal(error instanceof Error, true)
+})
+
+test("a non-error failure is serialized with its text", () => {
+  const tool = harness().build()
+  const call = (tool.serializeError as (error: unknown) => { tool: { value?: { result?: { result?: { case?: string; value?: { error: string } } } } } })("a plain failure")
+  assert.equal(call.tool.value?.result?.result?.case, "error")
+  assert.equal(call.tool.value?.result?.result?.value?.error, "a plain failure")
+})
+
+test("an id with letters is a subagent, not a shell", async () => {
+  const harnessed = harness({
+    subagentAwait: new SubagentAwaitResult({ result: { case: "complete", value: new SubagentAwaitComplete({ agentId: "abcdef" }) } as never }),
+    tool: { enableSubagentAwaiting: true, enableBoundedSubagentAwait: true },
+  })
+  const result = await harnessed.call({ task_id: "abcdef", block_until_ms: 0 }, createContext().with(conversationIdKey, "conversation-1"))
+  assert.equal(awaitResultOf(result)?.case, "complete")
+})
+
+test("a duration sent by the model is normalized before the handler sees it", async () => {
+  const captured: Array<{ blockUntilMs?: number }> = []
+  const run = async (args: Record<string, unknown>) => {
+    const harnessed = harness({ tool: { defaultBlockUntilMs: 12 } })
+    const tool = harnessed.build()
+    const execute = tool.execute as (ctx: unknown, handler: unknown, stream: AsyncIterable<string>, meta: unknown) => Promise<AwaitResult>
+    const stream = (async function* () { yield JSON.stringify(args) })()
+    await execute(createContext(), { emitPartialToolCall() {}, async executeToolCall(_ctx: unknown, _call: unknown, _id: string, runWork: (ctx: unknown) => Promise<unknown>, merge: (result: unknown) => unknown) { const result = await runWork(_ctx); const call = merge(result) as { tool: { value: { args: { blockUntilMs: number } } } }; captured.push(call.tool.value.args); return result } }, stream, { toolCallId: "call-1" })
+  }
+  await run({ block_until_ms: -5 })
+  await run({ block_until_ms: 12.9 })
+  assert.deepEqual(captured.map(call => call.blockUntilMs), [12, 12])
+})
+
+test("a footer whose exit code is a fraction reports no exit code", async () => {
+  const harnessed = harness({ files: { [TERMINALS + "/50.txt"]: "out\n---\nexit_code: 0.5\nelapsed_ms: 3\n---\n" } })
+  const awaited = awaitResultOf(await harnessed.call({ task_id: "50", block_until_ms: 0 }))
+  assert.equal(awaited?.value?.exitCode, undefined)
+})
+
+test("a read that is refused by policy is reported with its reason", async () => {
+  for (const [readError, pattern] of [["permissionDenied", /Permission denied reading/], ["rejected", /denied by policy/], ["invalidFile", /not a file/], ["error", /the read blew up/]] as const) {
+    const harnessed = harness({ files: { [TERMINALS + "/51.txt"]: "output\n" }, readError })
+    const error = await failureOf(harnessed.call({ task_id: "51", block_until_ms: 0 }))
+    assert.match(error.message, pattern)
+  }
+})
+
+test("a read that returns data is read as utf8 text and counted", async () => {
+  const content = "hello\n"
+  const harnessed = harness({ files: { [TERMINALS + "/52.txt"]: "out\n" + footer(4, 9) }, readData: true })
+  const awaited = awaitResultOf(await harnessed.call({ task_id: "52", block_until_ms: 0 }))
+  assert.equal(awaited?.case, "complete")
+  assert.equal(awaited?.value?.exitCode, 4)
+})
+
+test("a reported file size of zero falls back to the content length", async () => {
+  const content = "hello\n"
+  const harnessed = harness({ files: { [TERMINALS + "/53.txt"]: content }, fileSizes: { [TERMINALS + "/53.txt"]: 0 } })
+  const awaited = awaitResultOf(await harnessed.call({ task_id: "53", block_until_ms: 0 }))
+  assert.equal(awaited?.value?.outputLength, BigInt(content.length))
+})
+
+test("a resume answer without a transcript path is searched for and left empty when nothing lists", async () => {
+  const harnessed = harness({
+    subagentResume: { result: { case: "complete", value: {} } },
+    tool: { enableSubagentAwaiting: true, agentTranscriptsFolder: TRANSCRIPTS },
+  })
+  const awaited = awaitResultOf(await harnessed.call({ task_id: "agent-x", block_until_ms: 0 }, createContext().with(conversationIdKey, "conversation-1")))
+  assert.equal(awaited?.value?.outputFilePath, "")
+  assert.equal(harnessed.listingCalls(), 1)
+})
+
+test("an empty transcripts folder is not searched", async () => {
+  const harnessed = harness({
+    subagentResume: { result: { case: "complete", value: {} } },
+    tool: { enableSubagentAwaiting: true, agentTranscriptsFolder: "" },
+  })
+  const awaited = awaitResultOf(await harnessed.call({ task_id: "agent-y", block_until_ms: 0 }, createContext().with(conversationIdKey, "conversation-1")))
+  assert.equal(awaited?.value?.outputFilePath, "")
+  assert.equal(harnessed.listingCalls(), 0)
+})
+
+test("a transcript under the parent conversation is found without listing", async () => {
+  const conversationTranscript = TRANSCRIPTS + "/conversation-1/subagents/agent-6.jsonl"
+  const harnessed = harness({
+    files: { [conversationTranscript]: "transcript\n" },
+    subagentResume: { result: { case: "complete", value: {} } },
+    tool: { enableSubagentAwaiting: true, agentTranscriptsFolder: TRANSCRIPTS },
+  })
+  const awaited = awaitResultOf(await harnessed.call({ task_id: "agent-6", block_until_ms: 0 }, createContext().with(conversationIdKey, "conversation-1")))
+  assert.equal(awaited?.value?.outputFilePath, conversationTranscript)
+  assert.equal(harnessed.listingCalls(), 0)
+})
+
+test("a failed transcript read does not fail the wait", async () => {
+  const harnessed = harness({
+    files: { [TRANSCRIPTS + "/agent-z.jsonl"]: "transcript\n" },
+    subagentResume: { result: { case: "complete", value: {} } },
+    readError: "error",
+    tool: { enableSubagentAwaiting: true, agentTranscriptsFolder: TRANSCRIPTS },
+  })
+  const awaited = awaitResultOf(await harnessed.call({ task_id: "agent-z", block_until_ms: 0 }, createContext().with(conversationIdKey, "conversation-1")))
+  assert.equal(awaited?.value?.outputFilePath, "")
+  assert.equal(harnessed.listingCalls(), 1)
+})
+
+test("a timed-out listing still finds a transcript", async () => {
+  const harnessed = harness({
+    listing: { absPath: TRANSCRIPTS, childrenFiles: [{ name: "agent-t.jsonl" }], childrenDirs: [] },
+    listingTimeout: true,
+    subagentResume: { result: { case: "complete", value: {} } },
+    tool: { enableSubagentAwaiting: true, agentTranscriptsFolder: TRANSCRIPTS },
+  })
+  const awaited = awaitResultOf(await harnessed.call({ task_id: "agent-t", block_until_ms: 0 }, createContext().with(conversationIdKey, "conversation-1")))
+  assert.equal(awaited?.value?.outputFilePath, TRANSCRIPTS + "/agent-t.jsonl")
+})
+
+test("a regex compiled with the multiline flag matches a later line", async () => {
+  const harnessed = harness({ files: { [TERMINALS + "/54.txt"]: "alpha\nbeta\n" } })
+  const result = await harnessed.call({ task_id: "54", block_until_ms: 250, pattern: "^beta" })
+  assert.equal(awaitResultOf(result)?.value?.regexMatch, "beta")
+})
+
+test("the schema tells a session with subagents what the id can be", () => {
+  const tool = harness({ tool: { enableSubagentAwaiting: true } }).build()
+  assert.match(JSON.stringify(tool.parameters), /shell or subagent/)
+  const shellOnly = harness().build()
+  assert.equal((JSON.stringify(shellOnly.parameters) as string).includes("shell or subagent"), false)
+})
+
+test("an older client's path does not override an id it was not sent with", async () => {
+  const harnessed = harness({ files: { [TERMINALS + "/3.txt"]: "output\n" }, tool: { enableAwaitTerminalPathCompat: true } })
+  const error = await failureOf(harnessed.call({ task_id: "88", path: TERMINALS + "/3.txt", block_until_ms: 0 }))
+  assert.match(error.message, /No shell found for id 88/)
+})
+
+test("a fractional cache lifetime is labelled to one decimal", () => {
+  const tool = harness({ tool: { enableJobCompletionNotifications: true, promptCacheTTLMs: 5_450_000 } }).build()
+  const description = (tool.descriptionGenerator as (props: Record<string, unknown>) => string)({ allTools: { SHELL: { name: "Shell" } } })
+  assert.match(description, /avoid waiting 1\.5h or more/)
+})
+
+test("a thirty-minute cache lifetime is on the minute boundary", () => {
+  const tool = harness({ tool: { enableJobCompletionNotifications: true, promptCacheTTLMs: 1_800_000 } }).build()
+  const description = (tool.descriptionGenerator as (props: Record<string, unknown>) => string)({ allTools: { SHELL: { name: "Shell" } } })
+  assert.match(description, /avoid round 30-minute waits/)
+})
+
+test("a six-hour cache lifetime is still on the hour boundary", () => {
+  const tool = harness({ tool: { enableJobCompletionNotifications: true, promptCacheTTLMs: 21_600_000 } }).build()
+  const description = (tool.descriptionGenerator as (props: Record<string, unknown>) => string)({ allTools: { SHELL: { name: "Shell" } } })
+  assert.match(description, /avoid waiting 6h or more/)
+})
+
+test("a pending user message ends a shell wait, not just a sleep", async () => {
+  const harnessed = harness({ files: { [TERMINALS + "/55.txt"]: header(100) } })
+  const result = await harnessed.callWithMeta({ task_id: "55", block_until_ms: 300 }, {
+    contextInjectionSignal: { hasPendingUserInjections: () => true, onUserInjectionAdmitted: () => () => {} },
+  })
+  const awaited = awaitResultOf(result)
+  assert.equal(awaited?.value?.wakeReason, "context_injection")
+  // The wait ends on the first slice rather than sleeping once more.
+  assert.equal(harnessed.reads.length, 1)
+})
+
+test("a matched body ends the wait after one read", async () => {
+  const harnessed = harness({ files: { [TERMINALS + "/56.txt"]: header(100) + "the body\n" } })
+  const result = await harnessed.call({ task_id: "56", block_until_ms: 250, pattern: "the body" })
+  assert.equal(awaitResultOf(result)?.value?.regexMatch, "the body")
+  assert.equal(harnessed.reads.length, 1)
+})
+
+test("a status check reports a matched output cut to five hundred characters", async () => {
+  const long = "a".repeat(600)
+  const harnessed = harness({ files: { [TERMINALS + "/57.txt"]: long } })
+  const result = await harnessed.call({ task_id: "57", block_until_ms: 0, pattern: "a+" })
+  assert.equal((awaitResultOf(result)?.value?.regexMatch as string).length, 500)
+})
+
+test("a training prompt cannot wait on a subagent", async () => {
+  const harnessed = harness({ tool: { useTrainingShellOnlyPrompt: true, enableSubagentAwaiting: true } })
+  const error = await failureOf(harnessed.call({ task_id: "agent-9", block_until_ms: 0 }))
+  assert.match(error.message, /should NOT wait for subagents/)
+})
+
+test("a session that switched awaiting off is shell-only", async () => {
+  const harnessed = harness({ tool: { enableSubagentAwaiting: true, enableAwaitForSubagents: false } })
+  assert.equal(harnessed.build().name, "AwaitShell")
+  const error = await failureOf(harnessed.call({ task_id: "agent-8", block_until_ms: 0 }))
+  assert.match(error.message, /should NOT wait for subagents/)
+})
+
+test("the default wait is told to the model as thirty seconds", () => {
+  const tool = harness().build()
+  assert.match(JSON.stringify(tool.parameters), /Defaults to 30000ms/)
+})
+
+test("a session that can signal waiting is told what the signal means", () => {
+  const tool = harness({ tool: { fixClaudeSubagentAwait: true } }).build()
+  assert.match(JSON.stringify(tool.parameters), /Set this to true if you are waiting for subagent\(s\) to complete/)
 })
