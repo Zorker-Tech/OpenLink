@@ -79,7 +79,7 @@ export interface TurnTraceContext {
 
 export type TurnCompletedSpanRecorder = (
   context: unknown,
-  options: {
+  settings: {
     readonly startTime: Date;
     readonly attributes: Readonly<Record<string, unknown>>;
   },
@@ -95,7 +95,7 @@ export function setTurnCompletedSpanRecorder(
   turnCompletedSpanRecorder = recorder;
 }
 
-export function recordTurnQueueWaitSpan(args: {
+export function recordTurnQueueWaitSpan(input: {
   traceCtx: unknown;
   queueStartEpochMs?: number;
   queueStartPerfMs?: number;
@@ -104,33 +104,33 @@ export function recordTurnQueueWaitSpan(args: {
 }): void {
   if (
     turnCompletedSpanRecorder == null ||
-    args.queueStartEpochMs == null ||
-    args.queueStartPerfMs == null ||
-    args.traceCtx == null ||
-    typeof args.traceCtx !== "object" ||
-    !("withName" in args.traceCtx) ||
-    typeof args.traceCtx.withName !== "function"
+    input.queueStartEpochMs == null ||
+    input.queueStartPerfMs == null ||
+    input.traceCtx == null ||
+    typeof input.traceCtx !== "object" ||
+    !("withName" in input.traceCtx) ||
+    typeof input.traceCtx.withName !== "function"
   ) {
     return;
   }
   try {
     const queueWaitMs = Math.max(
       0,
-      Math.round(performance.now() - args.queueStartPerfMs),
+      Math.round(performance.now() - input.queueStartPerfMs),
     );
     turnCompletedSpanRecorder(
-      (args.traceCtx as TurnTraceContext).withName("turn-queue-wait"),
+      (input.traceCtx as TurnTraceContext).withName("turn-queue-wait"),
       {
-        startTime: new Date(args.queueStartEpochMs),
+        startTime: new Date(input.queueStartEpochMs),
         attributes: {
           "slate.queue_wait_ms": queueWaitMs,
-          "slate.conversation_id": args.conversationId,
-          ...(args.clientNonce != null && args.clientNonce.length > 0
-            ? { "slate.client_nonce": args.clientNonce }
+          "slate.conversation_id": input.conversationId,
+          ...(input.clientNonce != null && input.clientNonce.length > 0
+            ? { "slate.client_nonce": input.clientNonce }
             : {}),
         },
       },
-      new Date(args.queueStartEpochMs + queueWaitMs),
+      new Date(input.queueStartEpochMs + queueWaitMs),
     );
   } catch {}
 }
@@ -154,7 +154,7 @@ export interface TurnResult {
 }
 
 export interface AgentRunner {
-  run(prompt: string, options: Record<string, unknown>): Promise<TurnResult>;
+  run(prompt: string, settings: Record<string, unknown>): Promise<TurnResult>;
   wouldRecoverViaPrepend?(
     recent: readonly unknown[],
     latestMessageId: string,
@@ -179,9 +179,9 @@ export interface TurnOptions extends Record<string, unknown> {
 }
 
 export function isDeliveryOwed(
-  result: Pick<TurnResult, "sentMessageCount" | "reacted">,
+  turnResult: Pick<TurnResult, "sentMessageCount" | "reacted">,
 ): boolean {
-  return result.sentMessageCount === 0 && !result.reacted;
+  return turnResult.sentMessageCount === 0 && !turnResult.reacted;
 }
 
 export function classifyAgentError(error: unknown): Record<string, unknown> {
@@ -216,12 +216,12 @@ export function classifyAgentError(error: unknown): Record<string, unknown> {
   return SlateError.agentUnclassified();
 }
 
-type CardPredicate = (entry: TranscriptEntry) => boolean;
-type CardUpdate = (entry: TranscriptEntry) => TranscriptEntry;
+type CardPredicate = (transcriptEntry: TranscriptEntry) => boolean;
+type CardUpdate = (transcriptEntry: TranscriptEntry) => TranscriptEntry;
 
-function messageOf(entry: TranscriptEntry): Record<string, any> | undefined {
-  return typeof entry.message === "object" && entry.message != null
-    ? (entry.message as Record<string, any>)
+function messageOf(transcriptEntry: TranscriptEntry): Record<string, any> | undefined {
+  return typeof transcriptEntry.message === "object" && transcriptEntry.message != null
+    ? (transcriptEntry.message as Record<string, any>)
     : undefined;
 }
 
@@ -239,169 +239,169 @@ export class TurnRuntime {
 
   constructor(readonly tm: TranscriptManagerLike) {}
 
-  settleCardStatus(args: {
+  settleCardStatus(input: {
     runSession?: LiveTranscriptSession | null;
     isForActiveAgent: boolean;
     matchesCard: CardPredicate;
     applyStatus: CardUpdate;
   }): void {
     const targetSession =
-      args.runSession ?? this.tm.sessions.activeSession ?? null;
-    const dbTarget = targetSession?.db
+      input.runSession ?? this.tm.sessions.activeSession ?? null;
+    const persistedTarget = targetSession?.db
       .getTranscriptEntries()
-      .find(args.matchesCard) as TranscriptEntry | undefined;
+      .find(input.matchesCard) as TranscriptEntry | undefined;
     const persisted =
-      targetSession != null && dbTarget != null
+      targetSession != null && persistedTarget != null
         ? (targetSession.db.updateTranscriptEntry(
-            dbTarget.id,
-            args.applyStatus,
+            persistedTarget.id,
+            input.applyStatus,
           ) as TranscriptEntry | null)
         : null;
-    const liveTarget = args.isForActiveAgent
-      ? getTranscript().find(args.matchesCard)
+    const liveTargetEntry = input.isForActiveAgent
+      ? getTranscript().find(input.matchesCard)
       : undefined;
     const live =
-      liveTarget == null ? null : updateEntry(liveTarget.id, args.applyStatus);
-    const shipped = live ?? persisted;
-    if (shipped != null)
+      liveTargetEntry == null ? null : updateEntry(liveTargetEntry.id, input.applyStatus);
+    const shippedEntry = live ?? persisted;
+    if (shippedEntry != null)
       this.tm.roster.emit(
-        { type: "updated", entry: shipped },
+        { type: "updated", entry: shippedEntry },
         targetSession?.id,
       );
   }
 
-  markReportedOnce(args: {
+  markReportedOnce(input: {
     reported: Map<string, Set<string>>;
     sessionId: string;
     toolCallId: string;
   }): boolean {
-    let seen = args.reported.get(args.sessionId);
-    if (seen == null) {
-      seen = new Set();
-      args.reported.set(args.sessionId, seen);
+    let seenIds = input.reported.get(input.sessionId);
+    if (seenIds == null) {
+      seenIds = new Set();
+      input.reported.set(input.sessionId, seenIds);
     }
-    if (seen.has(args.toolCallId)) return false;
-    seen.add(args.toolCallId);
+    if (seenIds.has(input.toolCallId)) return false;
+    seenIds.add(input.toolCallId);
     return true;
   }
 
   reportToolCallDiagnostic(
     session: LiveTranscriptSession,
-    observation: Record<string, any>,
+    toolObservation: Record<string, any>,
   ): void {
     const requestId =
-      observation.requestId ??
+      toolObservation.requestId ??
       this.tm.runLifecycle.lastRequestIdBySession.get(session.id);
     const base = {
       conversationId: session.id,
       requestId,
-      toolName: observation.toolName,
-      toolCallId: observation.toolCallId,
-      connector: observation.connector,
+      toolName: toolObservation.toolName,
+      toolCallId: toolObservation.toolCallId,
+      connector: toolObservation.connector,
     };
-    if (observation.kind === "error") {
+    if (toolObservation.kind === "error") {
       if (
         !this.markReportedOnce({
           reported: this.reportedToolCallErrors,
           sessionId: session.id,
-          toolCallId: observation.toolCallId,
+          toolCallId: toolObservation.toolCallId,
         })
       )
         return;
       this.tm.telemetry.reportToolCallError({
         ...base,
-        errorClass: observation.errorClass,
-        durationMs: observation.durationMs,
+        errorClass: toolObservation.errorClass,
+        durationMs: toolObservation.durationMs,
       });
     } else {
       if (
         !this.markReportedOnce({
           reported: this.reportedToolCallStalls,
           sessionId: session.id,
-          toolCallId: observation.toolCallId,
+          toolCallId: toolObservation.toolCallId,
         })
       )
         return;
       this.tm.telemetry.reportToolCallStalled({
         ...base,
-        elapsedMs: observation.elapsedMs,
+        elapsedMs: toolObservation.elapsedMs,
       });
     }
   }
 
   async runTurn(
     session: LiveTranscriptSession,
-    runner: AgentRunner,
+    agentRunner: AgentRunner,
     prompt: string,
-    options: TurnOptions,
+    settings: TurnOptions,
     epoch: number,
   ): Promise<void> {
     const turnTrace = beginTurnTrace({
-      parentCtx: options.traceCtx,
+      parentCtx: settings.traceCtx,
       conversationId: session.id,
       turnType: "user",
-      ...(options.queueStartEpochMs == null
+      ...(settings.queueStartEpochMs == null
         ? {}
-        : { startTime: options.queueStartEpochMs }),
+        : { startTime: settings.queueStartEpochMs }),
       attributes: {
         "slate.turn_epoch": epoch,
-        ...(options.clientNonce
-          ? { "slate.client_nonce": options.clientNonce }
+        ...(settings.clientNonce
+          ? { "slate.client_nonce": settings.clientNonce }
           : {}),
-        ...(options.messageId == null
+        ...(settings.messageId == null
           ? {}
-          : { "slate.message_id": options.messageId }),
-        ...(options.isFork === true ? { "slate.is_fork": true } : {}),
+          : { "slate.message_id": settings.messageId }),
+        ...(settings.isFork === true ? { "slate.is_fork": true } : {}),
       },
     });
-    const turnCtx = turnTrace?.context ?? options.traceCtx;
+    const turnCtx = turnTrace?.context ?? settings.traceCtx;
     try {
       recordTurnQueueWaitSpan({
         traceCtx: turnCtx,
-        ...(options.queueStartEpochMs == null
+        ...(settings.queueStartEpochMs == null
           ? {}
-          : { queueStartEpochMs: options.queueStartEpochMs }),
-        ...(options.queueStartPerfMs == null
+          : { queueStartEpochMs: settings.queueStartEpochMs }),
+        ...(settings.queueStartPerfMs == null
           ? {}
-          : { queueStartPerfMs: options.queueStartPerfMs }),
+          : { queueStartPerfMs: settings.queueStartPerfMs }),
         conversationId: session.id,
-        ...(options.clientNonce == null
+        ...(settings.clientNonce == null
           ? {}
-          : { clientNonce: options.clientNonce }),
+          : { clientNonce: settings.clientNonce }),
       });
       if (
         epoch !== this.tm.sendPipeline.currentTurnEpoch(session) &&
-        options.messageId != null
+        settings.messageId != null
       ) {
-        const latest = this.tm.sendPipeline.latestRecoverySends.get(session.id);
-        const rawText = options.recentUserMessages?.find(
-          (message) => message.id === options.messageId,
+        const currentResult = this.tm.sendPipeline.latestRecoverySends.get(session.id);
+        const rawText = settings.recentUserMessages?.find(
+          (sentMessage) => sentMessage.id === settings.messageId,
         )?.text;
-        const recoverable =
-          options.selectedImages.length === 0 &&
-          (options.selectedVideos?.length ?? 0) === 0 &&
-          (options.attachedFilePaths?.length ?? 0) === 0 &&
-          options.isFork !== true &&
-          options.replyContext == null &&
+        const canRecover =
+          settings.selectedImages.length === 0 &&
+          (settings.selectedVideos?.length ?? 0) === 0 &&
+          (settings.attachedFilePaths?.length ?? 0) === 0 &&
+          settings.isFork !== true &&
+          settings.replyContext == null &&
           rawText != null &&
           rawText === prompt.trim() &&
           epoch >
             (this.tm.sendPipeline.recoveryBreakEpochs.get(session.id) ?? 0) &&
-          latest != null &&
-          latest.epoch === this.tm.sendPipeline.currentTurnEpoch(session) &&
-          runner.wouldRecoverViaPrepend != null &&
-          (await runner.wouldRecoverViaPrepend(
-            latest.recentUserMessages,
-            latest.messageId,
-            options.messageId,
+          currentResult != null &&
+          currentResult.epoch === this.tm.sendPipeline.currentTurnEpoch(session) &&
+          agentRunner.wouldRecoverViaPrepend != null &&
+          (await agentRunner.wouldRecoverViaPrepend(
+            currentResult.recentUserMessages,
+            currentResult.messageId,
+            settings.messageId,
           ));
-        if (recoverable) {
+        if (canRecover) {
           this.tm.telemetry
             .startTurn({ conversationId: session.id, turnType: "new" })
             .finalize("cancelled");
           this.tm.ackObligations.retireAckRunToken(
             session.id,
-            options.ackToken,
+            settings.ackToken,
           );
           setTurnTraceAttributes(turnTrace, { "slate.outcome": "superseded" });
           this.tm.runLifecycle.endSessionRun(session);
@@ -409,16 +409,16 @@ export class TurnRuntime {
         }
       }
 
-      const trimmed = prompt.trim();
-      if (trimmed) this.activeRequestPrompts.set(session.id, trimmed);
+      const cleanPrompt = prompt.trim();
+      if (cleanPrompt) this.activeRequestPrompts.set(session.id, cleanPrompt);
       else this.activeRequestPrompts.delete(session.id);
-      if (options.replyContext != null)
-        this.replyThreadTargets.set(session, options.replyContext.targetId);
+      if (settings.replyContext != null)
+        this.replyThreadTargets.set(session, settings.replyContext.targetId);
       else this.replyThreadTargets.delete(session);
-      if (options.isFork === true) this.forkTurnSessions.add(session);
+      if (settings.isFork === true) this.forkTurnSessions.add(session);
       else this.forkTurnSessions.delete(session);
       this.activeTurnEpochs.set(session.id, epoch);
-      const startedAtMs = Date.now();
+      const turnStartMs = Date.now();
       const turn = this.tm.telemetry.startTurn({
         conversationId: session.id,
         turnType: "new",
@@ -426,38 +426,38 @@ export class TurnRuntime {
       this.activeTurns.set(session.id, turn);
       this.activeRequestSources.set(session.id, "turn");
       try {
-        const unansweredPrompts =
+        const unanswered =
           this.tm.widgetResponses.collectUnansweredQuestionPrompts(session);
-        const result = await runner.run(prompt, {
-          ...options,
-          ...unansweredPrompts,
+        const turnResult = await agentRunner.run(prompt, {
+          ...settings,
+          ...unanswered,
           traceCtx: turnCtx,
           appendReplyReminder: true,
           requestSource: "turn",
           onModelResolved: (modelId: string) => turn.setModel(modelId),
         });
-        let settledResult = result;
-        if (result.quiescedForUpgrade)
+        let finalResult = turnResult;
+        if (turnResult.quiescedForUpgrade)
           this.tm.upgradeResume.markAgentResumePending(session, "turn");
         else if (
-          !result.aborted &&
+          !turnResult.aborted &&
           epoch === this.tm.sendPipeline.currentTurnEpoch(session)
         ) {
-          const settled = await this.ensureUserReply(
-            runner,
-            result,
+          const settledReply = await this.ensureUserReply(
+            agentRunner,
+            turnResult,
             session,
             epoch,
-            options.ackToken,
+            settings.ackToken,
             turnCtx,
             turnTrace,
             turn,
           );
-          settledResult = settled.result;
+          finalResult = settledReply.result;
           if (
-            settled.deliveryOwed &&
-            !settledResult.aborted &&
-            settledResult.quiescedForUpgrade !== true &&
+            settledReply.deliveryOwed &&
+            !finalResult.aborted &&
+            finalResult.quiescedForUpgrade !== true &&
             epoch === this.tm.sendPipeline.currentTurnEpoch(session)
           ) {
             this.tm.telemetry.reportTurnEmptyDelivery({
@@ -467,20 +467,20 @@ export class TurnRuntime {
               ),
               source: "turn",
               requestSource: "turn",
-              replyNudgeAttempts: settled.replyNudgeAttempts,
-              toolCallCount: runner.getObservedToolCallCount?.() ?? 0,
-              streamOutputProduced: settled.streamOutputProduced,
-              durationMs: Date.now() - startedAtMs,
+              replyNudgeAttempts: settledReply.replyNudgeAttempts,
+              toolCallCount: agentRunner.getObservedToolCallCount?.() ?? 0,
+              streamOutputProduced: settledReply.streamOutputProduced,
+              durationMs: Date.now() - turnStartMs,
               ackOutstanding:
                 this.tm.ackObligationStore?.get(session.id) != null,
             });
           }
         }
         turn.finalize(
-          result.aborted || result.quiescedForUpgrade ? "cancelled" : "success",
+          turnResult.aborted || turnResult.quiescedForUpgrade ? "cancelled" : "success",
         );
         setTurnTraceAttributes(turnTrace, {
-          "slate.outcome": resolveTurnTraceOutcome(settledResult),
+          "slate.outcome": resolveTurnTraceOutcome(finalResult),
         });
         await this.tm.roster.emitAgentUpdate(session.id);
         this.tm.automationRuntime.emitAutomations(session);
@@ -496,16 +496,16 @@ export class TurnRuntime {
         );
         markTurnTraceError(turnTrace, error);
         if (epoch === this.tm.sendPipeline.currentTurnEpoch(session)) {
-          const description = describeAgentRunError(error);
+          const failureDescription = describeAgentRunError(error);
           const requestId = session.db.getRequestIds().at(-1)?.id;
           this.tm.trayErrors.pushError({
             agentId: session.id,
             title:
-              description.errorKind === "provider_overloaded"
+              failureDescription.errorKind === "provider_overloaded"
                 ? PROVIDER_OVERLOAD_ERROR_TITLE
                 : "Agent failed to respond",
             requestId,
-            ...description,
+            ...failureDescription,
           });
         }
         await this.tm.roster.emitAgentUpdate(session.id);
@@ -525,7 +525,7 @@ export class TurnRuntime {
         this.forkTurnSessions.delete(session);
         if (this.activeTurnEpochs.get(session.id) === epoch)
           this.activeTurnEpochs.delete(session.id);
-        this.tm.ackObligations.retireAckRunToken(session.id, options.ackToken);
+        this.tm.ackObligations.retireAckRunToken(session.id, settings.ackToken);
         this.tm.runLifecycle.endSessionRun(session);
       }
     } finally {
@@ -537,8 +537,8 @@ export class TurnRuntime {
   }
 
   async ensureUserReply(
-    runner: AgentRunner,
-    result: TurnResult,
+    agentRunner: AgentRunner,
+    turnResult: TurnResult,
     session: LiveTranscriptSession,
     epoch: number,
     ackToken: string | undefined,
@@ -551,84 +551,84 @@ export class TurnRuntime {
     deliveryOwed: boolean;
     streamOutputProduced: boolean;
   }> {
-    let latest = result;
-    let attempts = 0;
-    let delivered = !isDeliveryOwed(result);
-    let streamOutputProduced = result.streamOutputProduced === true;
+    let currentResult = turnResult;
+    let nudgeAttempts = 0;
+    let didDeliver = !isDeliveryOwed(turnResult);
+    let producedStreamOutput = turnResult.streamOutputProduced === true;
     while (
-      isDeliveryOwed(latest) &&
-      attempts < MAX_REPLY_NUDGES &&
+      isDeliveryOwed(currentResult) &&
+      nudgeAttempts < MAX_REPLY_NUDGES &&
       epoch === this.tm.sendPipeline.currentTurnEpoch(session)
     ) {
-      attempts += 1;
-      latest = await runner.run(REPLY_NUDGE_PROMPT, {
+      nudgeAttempts += 1;
+      currentResult = await agentRunner.run(REPLY_NUDGE_PROMPT, {
         hidden: true,
         ackToken,
         traceCtx,
         onModelResolved: (id: string) => turn?.setModel(id),
       });
-      delivered ||= !isDeliveryOwed(latest);
-      streamOutputProduced ||= latest.streamOutputProduced === true;
-      if (latest.aborted) break;
+      didDeliver ||= !isDeliveryOwed(currentResult);
+      producedStreamOutput ||= currentResult.streamOutputProduced === true;
+      if (currentResult.aborted) break;
     }
     if (
-      latest.endedOnSilentToolCalls === true &&
-      !latest.aborted &&
-      latest.awaitingUserSelection !== true &&
+      currentResult.endedOnSilentToolCalls === true &&
+      !currentResult.aborted &&
+      currentResult.awaitingUserSelection !== true &&
       epoch === this.tm.sendPipeline.currentTurnEpoch(session)
     ) {
       setTurnTraceAttributes(turnTrace, { "slate.closing_send_nudge": true });
-      let nudged: TurnResult | undefined;
+      let nudgeResult: TurnResult | undefined;
       try {
-        nudged = await runner.run(CLOSING_SEND_NUDGE_PROMPT, {
+        nudgeResult = await agentRunner.run(CLOSING_SEND_NUDGE_PROMPT, {
           hidden: true,
           ackToken,
           traceCtx,
           onModelResolved: (id: string) => turn?.setModel(id),
         });
-        latest = nudged;
-        delivered ||= !isDeliveryOwed(nudged);
-        streamOutputProduced ||= nudged.streamOutputProduced === true;
+        currentResult = nudgeResult;
+        didDeliver ||= !isDeliveryOwed(nudgeResult);
+        producedStreamOutput ||= nudgeResult.streamOutputProduced === true;
       } finally {
         this.tm.telemetry.reportClosingSendNudge({
           conversationId: session.id,
           delivered:
-            nudged != null && (nudged.sentMessageCount > 0 || nudged.reacted),
-          sentMessageCount: nudged?.sentMessageCount ?? 0,
-          aborted: nudged?.aborted ?? false,
+            nudgeResult != null && (nudgeResult.sentMessageCount > 0 || nudgeResult.reacted),
+          sentMessageCount: nudgeResult?.sentMessageCount ?? 0,
+          aborted: nudgeResult?.aborted ?? false,
         });
       }
     }
     return {
-      result: latest,
-      replyNudgeAttempts: attempts,
-      deliveryOwed: !delivered,
-      streamOutputProduced,
+      result: currentResult,
+      replyNudgeAttempts: nudgeAttempts,
+      deliveryOwed: !didDeliver,
+      streamOutputProduced: producedStreamOutput,
     };
   }
 
   resolveReplyTarget(
-    entries: readonly TranscriptEntry[],
+    entryList: readonly TranscriptEntry[],
     candidateId: string,
   ): string | undefined {
-    return entries.some((entry) => entry.id === candidateId)
+    return entryList.some((transcriptEntry) => transcriptEntry.id === candidateId)
       ? candidateId
       : undefined;
   }
 
   buildReplyContext(
-    entries: readonly TranscriptEntry[],
+    entryList: readonly TranscriptEntry[],
     targetId?: string,
   ): { targetId: string; quote: string } | undefined {
     if (targetId == null) return undefined;
-    const target = entries.find((entry) => entry.id === targetId);
+    const target = entryList.find((transcriptEntry) => transcriptEntry.id === targetId);
     return target == null
       ? undefined
       : { targetId, quote: describeRepliedMessageQuote(target) };
   }
 
   handleAgentUpdate(
-    update: Record<string, any>,
+    agentUpdate: Record<string, any>,
     session?: LiveTranscriptSession,
   ): string | undefined {
     const runSession =
@@ -639,34 +639,34 @@ export class TurnRuntime {
     const isForActiveAgent =
       runSession == null ||
       runSession.id === this.tm.sessions.activeSession?.id;
-    if (isForActiveAgent) this.tm.roster.applyAgentUpdateToOutline(update);
+    if (isForActiveAgent) this.tm.roster.applyAgentUpdateToOutline(agentUpdate);
     if (runSession != null) {
-      this.tm.runLifecycle.trackComposingFromUpdate(update, runSession.id);
-      this.tm.runLifecycle.trackRetryingFromUpdate(update, runSession);
-      this.tm.runLifecycle.trackActivityFromUpdate(update, runSession.id);
+      this.tm.runLifecycle.trackComposingFromUpdate(agentUpdate, runSession.id);
+      this.tm.runLifecycle.trackRetryingFromUpdate(agentUpdate, runSession);
+      this.tm.runLifecycle.trackActivityFromUpdate(agentUpdate, runSession.id);
     }
-    switch (update.type) {
+    switch (agentUpdate.type) {
       case "client-side-tool-v2": {
         if (runSession == null) return undefined;
-        const event = this.tm.clientSideToolV2.publish(runSession.id, update.update);
+        const event = this.tm.clientSideToolV2.publish(runSession.id, agentUpdate.update);
         if (event != null) this.tm.roster.emitClientSideToolV2(event);
         return undefined;
       }
       case "tool-call": {
-        if (update.status === "pending" && runSession != null) {
-          let starts = this.pendingToolCallStarts.get(runSession.id);
-          if (starts == null) {
-            starts = new Map();
-            this.pendingToolCallStarts.set(runSession.id, starts);
+        if (agentUpdate.status === "pending" && runSession != null) {
+          let startTimes = this.pendingToolCallStarts.get(runSession.id);
+          if (startTimes == null) {
+            startTimes = new Map();
+            this.pendingToolCallStarts.set(runSession.id, startTimes);
           }
-          if (!starts.has(update.id)) starts.set(update.id, performance.now());
-          const dual = slateDualSurfaceToolTelemetry(update.name);
+          if (!startTimes.has(agentUpdate.id)) startTimes.set(agentUpdate.id, performance.now());
+          const dualSurface = slateDualSurfaceToolTelemetry(agentUpdate.name);
           if (
-            dual != null &&
+            dualSurface != null &&
             this.markReportedOnce({
               reported: this.reportedDualSurfaceToolCalls,
               sessionId: runSession.id,
-              toolCallId: update.id,
+              toolCallId: agentUpdate.id,
             })
           ) {
             this.tm.telemetry.reportToolCallStarted({
@@ -674,195 +674,195 @@ export class TurnRuntime {
               requestId: this.tm.runLifecycle.lastRequestIdBySession.get(
                 runSession.id,
               ),
-              toolName: dual.toolName,
-              toolCallId: update.id,
-              surface: dual.surface,
+              toolName: dualSurface.toolName,
+              toolCallId: agentUpdate.id,
+              surface: dualSurface.surface,
             });
           }
         } else if (runSession != null) {
-          const starts = this.pendingToolCallStarts.get(runSession.id);
-          const started = starts?.get(update.id);
-          starts?.delete(update.id);
-          if (update.status === "failed")
+          const startTimes = this.pendingToolCallStarts.get(runSession.id);
+          const startedAt = startTimes?.get(agentUpdate.id);
+          startTimes?.delete(agentUpdate.id);
+          if (agentUpdate.status === "failed")
             this.reportToolCallDiagnostic(runSession, {
               kind: "error",
-              toolCallId: update.id,
-              toolName: update.name,
+              toolCallId: agentUpdate.id,
+              toolName: agentUpdate.name,
               connector: UNKNOWN_CONNECTOR_TAG,
               errorClass: TASK_ERROR_RESULT_CLASS,
-              ...(started == null
+              ...(startedAt == null
                 ? {}
-                : { durationMs: Math.round(performance.now() - started) }),
+                : { durationMs: Math.round(performance.now() - startedAt) }),
             });
         }
         return undefined;
       }
       case "request-id":
         if (runSession != null) {
-          this.activeTurns.get(runSession.id)?.setRequestId(update.requestId);
+          this.activeTurns.get(runSession.id)?.setRequestId(agentUpdate.requestId);
           this.tm.runLifecycle.lastRequestIdBySession.set(
             runSession.id,
-            update.requestId,
+            agentUpdate.requestId,
           );
           this.tm.runLifecycle.trackTurnRequestId(
             runSession.id,
-            update.requestId,
+            agentUpdate.requestId,
           );
         }
         void this.tm.runLifecycle.recordRequestId(
-          update.requestId,
+          agentUpdate.requestId,
           runSession,
-          update.source,
+          agentUpdate.source,
         );
         return undefined;
       case "turn-ended":
         if (runSession != null)
-          this.tm.runLifecycle.reportTurnUsage(runSession, update.usage);
+          this.tm.runLifecycle.reportTurnUsage(runSession, agentUpdate.usage);
         return undefined;
       case "send-message": {
-        const incoming = update.message as SendMessage;
+        const incomingMessage = agentUpdate.message as SendMessage;
         if (
-          (incoming.type === "text" || incoming.type === "attachment") &&
-          typeof incoming.channel === "string" &&
-          incoming.channel.length > 0
+          (incomingMessage.type === "text" || incomingMessage.type === "attachment") &&
+          typeof incomingMessage.channel === "string" &&
+          incomingMessage.channel.length > 0
         )
           this.tm.backgroundWakes.deliverToChannel(
             runSession,
-            incoming,
-            incoming.channel,
+            incomingMessage,
+            incomingMessage.channel,
           );
-        if (incoming.type === "listener-connect")
-          this.notifyListenerConnect(runSession, incoming);
-        if (incoming.type === "connector" && incoming.variant === "connect")
-          this.notifyConnectorConnect(runSession, incoming);
-        const entries =
+        if (incomingMessage.type === "listener-connect")
+          this.onListenerConnect(runSession, incomingMessage);
+        if (incomingMessage.type === "connector" && incomingMessage.variant === "connect")
+          this.onConnectorConnect(runSession, incomingMessage);
+        const entryList =
           isForActiveAgent || runSession == null
             ? getTranscript()
             : (runSession.db.getTranscriptEntries() as TranscriptEntry[]);
-        const sendId = nextEntryId(entries, "send-message");
-        const validated = this.tm.sendPipeline.validateAiReplyTarget(
-          incoming,
-          sendId,
-          entries,
+        const sendEntryId = nextEntryId(entryList, "send-message");
+        const validatedMessage = this.tm.sendPipeline.validateAiReplyTarget(
+          incomingMessage,
+          sendEntryId,
+          entryList,
         );
-        const threaded = this.tm.sendPipeline.applyAutoReplyThread(
-          validated,
+        const threadedMessage = this.tm.sendPipeline.applyAutoReplyThread(
+          validatedMessage,
           runSession,
-          entries,
+          entryList,
         ) as SendMessage;
         const batchId =
-          threaded.type === "attachment" && runSession != null
+          threadedMessage.type === "attachment" && runSession != null
             ? this.tm.sendPipeline.claimSendAttachmentBatchId(runSession.id)
             : undefined;
         const base = {
-          ...createSendMessageEntry(sendId, threaded, update.timestampMs),
+          ...createSendMessageEntry(sendEntryId, threadedMessage, agentUpdate.timestampMs),
           ...(batchId == null ? {} : { batchId }),
         };
-        const stamped =
-          update.boxHandoff == null
+        const boxStampedEntry =
+          agentUpdate.boxHandoff == null
             ? base
-            : stampBoxRequestEntry(base, update.boxHandoff);
-        const entry =
+            : stampBoxRequestEntry(base, agentUpdate.boxHandoff);
+        const transcriptEntry =
           runSession != null && this.forkTurnSessions.has(runSession)
-            ? { ...stamped, branched: true }
-            : stamped;
+            ? { ...boxStampedEntry, branched: true }
+            : boxStampedEntry;
         if (isForActiveAgent || runSession == null) {
-          this.tm.sendPipeline.appendSendMessageEntry(entry);
-          const activeId = runSession?.id ?? this.tm.sessions.activeSession?.id;
+          this.tm.sendPipeline.appendSendMessageEntry(transcriptEntry);
+          const activeAgentKey = runSession?.id ?? this.tm.sessions.activeSession?.id;
           this.tm.ackObligations.fulfillAckObligation(
-            activeId,
-            update.ackToken,
+            activeAgentKey,
+            agentUpdate.ackToken,
           );
-          if (activeId != null) void this.tm.roster.emitAgentUpdate(activeId);
+          if (activeAgentKey != null) void this.tm.roster.emitAgentUpdate(activeAgentKey);
         } else {
-          runSession.db.appendTranscriptEntry(entry);
+          runSession.db.appendTranscriptEntry(transcriptEntry);
           this.tm.ackObligations.fulfillAckObligation(
             runSession.id,
-            update.ackToken,
+            agentUpdate.ackToken,
           );
           this.tm.sessionStore.markSessionActivity(runSession);
           void this.tm.roster.emitAgentUpdate(runSession.id);
         }
-        return sendId;
+        return sendEntryId;
       }
       case "auto-review-status":
-        this.settleNestedStatus(
+        this.settleNestedCard(
           runSession,
           isForActiveAgent,
           "auto-review-approval",
           "approval",
-          update.requestId,
-          update.status,
+          agentUpdate.requestId,
+          agentUpdate.status,
         );
         return undefined;
       case "local-tool-permission-status":
-        this.settleNestedStatus(
+        this.settleNestedCard(
           runSession,
           isForActiveAgent,
           "local-tool-permission",
           "ask",
-          update.requestId,
-          update.status,
+          agentUpdate.requestId,
+          agentUpdate.status,
         );
         return undefined;
       case "react-to-message": {
-        const emoji = String(update.emoji ?? "").trim();
-        if (!emoji || !isMessageAddress(update.messageAddress))
+        const emoji = String(agentUpdate.emoji ?? "").trim();
+        if (!emoji || !isMessageAddress(agentUpdate.messageAddress))
           return undefined;
-        const reactSession =
+        const reactionSession =
           runSession ?? this.tm.sessions.activeSession ?? null;
-        const entries =
-          reactSession != null &&
-          reactSession.id !== this.tm.sessions.activeSession?.id
-            ? (reactSession.db.getTranscriptEntries() as TranscriptEntry[])
+        const entryList =
+          reactionSession != null &&
+          reactionSession.id !== this.tm.sessions.activeSession?.id
+            ? (reactionSession.db.getTranscriptEntries() as TranscriptEntry[])
             : getTranscript();
-        const target = entries.find(
-          (entry) => entry.id === update.messageAddress,
+        const target = entryList.find(
+          (transcriptEntry) => transcriptEntry.id === agentUpdate.messageAddress,
         );
         if (target == null || !isUserMessageEntry(target)) return undefined;
-        const applied = this.tm.widgetResponses.applyReaction({
-          session: reactSession,
-          entryId: update.messageAddress,
+        const appliedReaction = this.tm.widgetResponses.applyReaction({
+          session: reactionSession,
+          entryId: agentUpdate.messageAddress,
           emoji,
-          by: reactSession?.id ?? SLATE_REACTION_AGENT,
+          by: reactionSession?.id ?? SLATE_REACTION_AGENT,
         });
-        return applied == null ? undefined : update.messageAddress;
+        return appliedReaction == null ? undefined : agentUpdate.messageAddress;
       }
       default:
         return undefined;
     }
   }
 
-  private notifyListenerConnect(
+  private onListenerConnect(
     session: LiveTranscriptSession | null,
-    message: SendMessage,
+    sentMessage: SendMessage,
   ): void {
-    const ownerId = session?.id ?? this.tm.sessions.activeSession?.id;
-    if (ownerId == null) return;
+    const ownerKey = session?.id ?? this.tm.sessions.activeSession?.id;
+    if (ownerKey == null) return;
     try {
       this.tm.onListenerConnectCard?.({
-        agentId: ownerId,
-        platform: message.platform,
+        agentId: ownerKey,
+        platform: sentMessage.platform,
       });
     } catch {}
   }
 
-  private notifyConnectorConnect(
+  private onConnectorConnect(
     session: LiveTranscriptSession | null,
-    message: SendMessage,
+    sentMessage: SendMessage,
   ): void {
-    const ownerId = session?.id ?? this.tm.sessions.activeSession?.id;
-    if (ownerId == null) return;
+    const ownerKey = session?.id ?? this.tm.sessions.activeSession?.id;
+    if (ownerKey == null) return;
     try {
       this.tm.onConnectorConnectCard?.({
-        agentId: ownerId,
-        connector: message.connector,
-        ...(message.serverId == null ? {} : { serverId: message.serverId }),
+        agentId: ownerKey,
+        connector: sentMessage.connector,
+        ...(sentMessage.serverId == null ? {} : { serverId: sentMessage.serverId }),
       });
     } catch {}
   }
 
-  private settleNestedStatus(
+  private settleNestedCard(
     runSession: LiveTranscriptSession | null,
     isForActiveAgent: boolean,
     type: string,
@@ -870,27 +870,27 @@ export class TurnRuntime {
     requestId: string,
     status: unknown,
   ): void {
-    const matchesCard = (entry: TranscriptEntry) =>
-      messageOf(entry)?.type === type &&
-      messageOf(entry)?.[key]?.requestId === requestId;
-    const applyStatus = (entry: TranscriptEntry): TranscriptEntry => {
-      const message = messageOf(entry);
+    const cardPredicate = (transcriptEntry: TranscriptEntry) =>
+      messageOf(transcriptEntry)?.type === type &&
+      messageOf(transcriptEntry)?.[key]?.requestId === requestId;
+    const statusMutator = (transcriptEntry: TranscriptEntry): TranscriptEntry => {
+      const sentMessage = messageOf(transcriptEntry);
       if (
-        message == null ||
-        message.type !== type ||
-        message[key]?.requestId !== requestId
+        sentMessage == null ||
+        sentMessage.type !== type ||
+        sentMessage[key]?.requestId !== requestId
       )
-        return entry;
+        return transcriptEntry;
       return {
-        ...entry,
-        message: { ...message, [key]: { ...message[key], status } },
+        ...transcriptEntry,
+        message: { ...sentMessage, [key]: { ...sentMessage[key], status } },
       };
     };
     this.settleCardStatus({
       runSession,
       isForActiveAgent,
-      matchesCard,
-      applyStatus,
+      matchesCard: cardPredicate,
+      applyStatus: statusMutator,
     });
   }
 }
