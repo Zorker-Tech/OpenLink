@@ -1,7 +1,7 @@
 /** The database a conversation's blobs live in.
 
  * It is opened with the settings it needs, checked before it is trusted, and — when its file turns out to be damaged —
- * rebuilt: what can still be read is salvaged into a replacement, the damaged file is kept aside rather than thrown
+ * rebuilt: what can still be read is salvaged into a candidate, the damaged file is kept aside rather than thrown
  * away, and a rebuild that was interrupted is finished the next time the conversation is opened. */
 import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
@@ -36,29 +36,29 @@ export class ConversationBlobRecoveryError extends Error {
   }
 }
 
-interface ConversationBlobRecoveryInfo {
+interface RecoveryOutcome {
   outcome: "recovered" | "reset";
   quarantinePath: string | null;
   salvagedBlobs: number;
 }
 
-interface ConversationBlobDbOptions {
+interface BlobDbSettings {
   dbPath: string;
   busyTimeoutMs: number;
   agentId: string;
   log?: (message: string) => void;
-  onRecovery?: (info: ConversationBlobRecoveryInfo) => void;
+  onRecovery?: (recoveryInfo: RecoveryOutcome) => void;
 }
 
-interface PendingConversationBlobRecovery {
+interface PendingRecovery {
   pendingPath: string;
   quarantinePath: string;
 }
 
-export function readConversationBlobMigrationState(db: DatabaseSync): ConversationBlobMigrationState {
+export function readConversationBlobMigrationState(connection: DatabaseSync): ConversationBlobMigrationState {
   let version: unknown;
   try {
-    version = (db.prepare("PRAGMA user_version").get() as { user_version?: unknown } | undefined)?.user_version;
+    version = (connection.prepare("PRAGMA user_version").get() as { user_version?: unknown } | undefined)?.user_version;
   } catch {
     return "unknown";
   }
@@ -75,20 +75,20 @@ export function readConversationBlobMigrationState(db: DatabaseSync): Conversati
 }
 
 export function openConfiguredConversationBlobDb(dbPath: string, busyTimeoutMs: number): DatabaseSync {
-  const db = new DatabaseSync(dbPath);
+  const connection = new DatabaseSync(dbPath);
   try {
-    db.exec(`PRAGMA busy_timeout = ${busyTimeoutMs}`);
+    connection.exec(`PRAGMA busy_timeout = ${busyTimeoutMs}`);
     try {
-      db.exec("PRAGMA journal_mode = WAL");
-      db.exec("PRAGMA synchronous = NORMAL");
+      connection.exec("PRAGMA journal_mode = WAL");
+      connection.exec("PRAGMA synchronous = NORMAL");
     } catch {
       // The database can still be opened when journal configuration is unavailable.
     }
-    db.exec(CONVERSATION_BLOB_SCHEMA);
-    return db;
+    connection.exec(CONVERSATION_BLOB_SCHEMA);
+    return connection;
   } catch (error) {
     try {
-      db.close();
+      connection.close();
     } catch {
       // Preserve the original database error.
     }
@@ -96,8 +96,8 @@ export function openConfiguredConversationBlobDb(dbPath: string, busyTimeoutMs: 
   }
 }
 
-export function runQuickCheck(db: DatabaseSync): "healthy" | "corrupt" {
-  const row = db.prepare("PRAGMA quick_check").get() as { quick_check?: unknown } | undefined;
+export function runQuickCheck(connection: DatabaseSync): "healthy" | "corrupt" {
+  const row = connection.prepare("PRAGMA quick_check").get() as { quick_check?: unknown } | undefined;
   return row?.quick_check === "ok" ? "healthy" : "corrupt";
 }
 
@@ -105,87 +105,87 @@ export function removeSqliteSidecars(path: string): void {
   removeSqliteRecoverySidecars(path);
 }
 
-function getHealth(db: DatabaseSync): "healthy" | "corrupt" | "unavailable" {
+function healthOf(connection: DatabaseSync): "healthy" | "corrupt" | "unavailable" {
   try {
-    return runQuickCheck(db);
+    return runQuickCheck(connection);
   } catch (error) {
     return isSqliteCorruptError(error) ? "corrupt" : "unavailable";
   }
 }
 
-function getHealthOnDisk(options: Pick<ConversationBlobDbOptions, "dbPath" | "busyTimeoutMs">): "healthy" | "corrupt" | "unavailable" {
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    let db: DatabaseSync | undefined;
+function healthOnDiskOf(settings: Pick<BlobDbSettings, "dbPath" | "busyTimeoutMs">): "healthy" | "corrupt" | "unavailable" {
+  for (let tryIndex = 0; tryIndex < 2; tryIndex += 1) {
+    let connection: DatabaseSync | undefined;
     try {
-      db = new DatabaseSync(options.dbPath, { readOnly: true });
-      db.exec(`PRAGMA busy_timeout = ${options.busyTimeoutMs}`);
-      return runQuickCheck(db);
+      connection = new DatabaseSync(settings.dbPath, { readOnly: true });
+      connection.exec(`PRAGMA busy_timeout = ${settings.busyTimeoutMs}`);
+      return runQuickCheck(connection);
     } catch (error) {
-      if (attempt === 0 && (isSqliteIoError(error) || isSqliteCantOpenError(error))) {
+      if (tryIndex === 0 && (isSqliteIoError(error) || isSqliteCantOpenError(error))) {
         try {
-          db?.close();
+          connection?.close();
         } catch {
           // Continue with the sidecar cleanup retry.
         }
-        db = undefined;
-        removeSqliteSidecars(options.dbPath);
+        connection = undefined;
+        removeSqliteSidecars(settings.dbPath);
         continue;
       }
       return isSqliteCorruptError(error) ? "corrupt" : "unavailable";
     } finally {
       try {
-        db?.close();
+        connection?.close();
       } catch {
-        // Preserve the health result.
+        // Preserve the condition result.
       }
     }
   }
   return "unavailable";
 }
 
-export function recoverConversationBlobDb(options: ConversationBlobDbOptions): DatabaseSync {
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const intendedQuarantinePath = `${options.dbPath}.corrupt-${stamp}`;
-  const intentPath = `${intendedQuarantinePath}.intent`;
-  writeFileSync(intentPath, "");
+export function recoverConversationBlobDb(settings: BlobDbSettings): DatabaseSync {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const intendedQuarantinePath = `${settings.dbPath}.corrupt-${timestamp}`;
+  const intentMarkerPath = `${intendedQuarantinePath}.intent`;
+  writeFileSync(intentMarkerPath, "");
   const quarantine = quarantineCorruptSqliteDb({
-    dbPath: options.dbPath,
+    dbPath: settings.dbPath,
     quarantinePath: intendedQuarantinePath,
     preserveSourceOnCopyFailure: true,
-    removeAttempts: Math.ceil(options.busyTimeoutMs / 50),
+    removeAttempts: Math.ceil(settings.busyTimeoutMs / 50),
     removeRetryDelayMs: 50,
   });
   const pendingPath = `${quarantine.quarantinePath ?? intendedQuarantinePath}.pending`;
-  renameSync(intentPath, pendingPath);
+  renameSync(intentMarkerPath, pendingPath);
   if (quarantine.renameErrorCode != null) {
-    options.log?.(
+    settings.log?.(
       quarantine.quarantinePath == null
-        ? `[agent-store-worker] could not quarantine conversation-blobs.db for agent=${options.agentId} (rename ${quarantine.renameErrorCode}); resetting without a preserved copy`
+        ? `[agent-store-worker] could not quarantine conversation-blobs.db for agent=${settings.agentId} (rename ${quarantine.renameErrorCode}); resetting without a preserved copy`
         : quarantine.copied
-          ? `[agent-store-worker] quarantined conversation-blobs.db by copy for agent=${options.agentId} (rename ${quarantine.renameErrorCode})`
-          : `[agent-store-worker] could not copy quarantine for conversation-blobs.db for agent=${options.agentId} (rename ${quarantine.renameErrorCode}); recovering from the source in place`,
+          ? `[agent-store-worker] quarantined conversation-blobs.db by copy for agent=${settings.agentId} (rename ${quarantine.renameErrorCode})`
+          : `[agent-store-worker] could not copy quarantine for conversation-blobs.db for agent=${settings.agentId} (rename ${quarantine.renameErrorCode}); recovering from the source in place`,
     );
   }
-  return finishConversationBlobRecovery({
-    options,
+  return completeRecovery({
+    settings,
     quarantinePath: quarantine.quarantinePath,
     pendingPath,
   });
 }
 
-function openConversationBlobRecoveryTarget(options: Pick<ConversationBlobDbOptions, "busyTimeoutMs">, dbPath: string): DatabaseSync {
-  const open = () => openConfiguredConversationBlobDb(dbPath, options.busyTimeoutMs);
+function openHealthyTarget(settings: Pick<BlobDbSettings, "busyTimeoutMs">, dbPath: string): DatabaseSync {
+  const open = () => openConfiguredConversationBlobDb(dbPath, settings.busyTimeoutMs);
   const remove = () =>
     removeSqliteDb({
       dbPath,
-      attempts: Math.ceil(options.busyTimeoutMs / 50),
+      attempts: Math.ceil(settings.busyTimeoutMs / 50),
       retryDelayMs: 50,
     });
   let retriedWithoutSidecars = false;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    let db: DatabaseSync | undefined;
+  for (let tryIndex = 0; tryIndex < 3; tryIndex += 1) {
+    let connection: DatabaseSync | undefined;
     try {
-      db = open();
+      connection = open();
     } catch (error) {
       if ((isSqliteIoError(error) || isSqliteCantOpenError(error)) && !retriedWithoutSidecars) {
         retriedWithoutSidecars = true;
@@ -198,14 +198,14 @@ function openConversationBlobRecoveryTarget(options: Pick<ConversationBlobDbOpti
       remove();
       continue;
     }
-    const health = getHealth(db);
-    if (health === "healthy") return db;
+    const condition = healthOf(connection);
+    if (condition === "healthy") return connection;
     try {
-      db.close();
+      connection.close();
     } catch {
       // Continue recovery using the replacement path.
     }
-    if (health === "unavailable") {
+    if (condition === "unavailable") {
       throw new ConversationBlobRecoveryError(
         "SLATE_BLOB_RECOVERY_TARGET_UNHEALTHY",
         "conversation blob recovery target is temporarily unavailable",
@@ -219,27 +219,27 @@ function openConversationBlobRecoveryTarget(options: Pick<ConversationBlobDbOpti
   );
 }
 
-function installCompletedConversationBlobReplacement(options: {
+function installFinishedReplacement(settings: {
   dbPath: string;
   replacementPath: string;
   pendingPath?: string;
   busyTimeoutMs: number;
 }): DatabaseSync | undefined {
-  const health = getHealthOnDisk({
-    dbPath: options.replacementPath,
-    busyTimeoutMs: options.busyTimeoutMs,
+  const condition = healthOnDiskOf({
+    dbPath: settings.replacementPath,
+    busyTimeoutMs: settings.busyTimeoutMs,
   });
-  if (health === "unavailable") {
+  if (condition === "unavailable") {
     throw new ConversationBlobRecoveryError(
       "SLATE_BLOB_RECOVERY_SOURCE_UNAVAILABLE",
       "completed conversation blob replacement is temporarily unavailable",
     );
   }
-  if (health === "corrupt") return undefined;
-  let replacement: DatabaseSync | undefined;
+  if (condition === "corrupt") return undefined;
+  let candidate: DatabaseSync | undefined;
   try {
-    replacement = openConfiguredConversationBlobDb(options.replacementPath, options.busyTimeoutMs);
-    const configuredHealth = getHealth(replacement);
+    candidate = openConfiguredConversationBlobDb(settings.replacementPath, settings.busyTimeoutMs);
+    const configuredHealth = healthOf(candidate);
     if (configuredHealth === "corrupt") return undefined;
     if (configuredHealth === "unavailable") {
       throw new ConversationBlobRecoveryError(
@@ -247,64 +247,64 @@ function installCompletedConversationBlobReplacement(options: {
         "completed conversation blob replacement became unavailable",
       );
     }
-    const replacementState = readConversationBlobMigrationState(replacement);
+    const replacementState = readConversationBlobMigrationState(candidate);
     if (replacementState !== "recovery-rebuilt" && replacementState !== "adoption-complete") return undefined;
-    replacement.exec("PRAGMA wal_checkpoint(TRUNCATE)");
-    replacement.exec("PRAGMA journal_mode = DELETE");
+    candidate.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+    candidate.exec("PRAGMA journal_mode = DELETE");
   } catch (error) {
     if (isSqliteCorruptError(error)) return undefined;
     throw error;
   } finally {
     try {
-      replacement?.close();
+      candidate?.close();
     } catch {
-      // Preserve the replacement result/error.
+      // Preserve the candidate result/error.
     }
   }
-  removeSqliteSidecars(options.replacementPath);
-  removeSqliteDb({ dbPath: options.dbPath });
-  renameSync(options.replacementPath, options.dbPath);
-  const installed = openConfiguredConversationBlobDb(options.dbPath, options.busyTimeoutMs);
-  if (getHealth(installed) !== "healthy") {
-    installed.close();
+  removeSqliteSidecars(settings.replacementPath);
+  removeSqliteDb({ dbPath: settings.dbPath });
+  renameSync(settings.replacementPath, settings.dbPath);
+  const readyDb = openConfiguredConversationBlobDb(settings.dbPath, settings.busyTimeoutMs);
+  if (healthOf(readyDb) !== "healthy") {
+    readyDb.close();
     throw new ConversationBlobRecoveryError(
       "SLATE_BLOB_RECOVERY_INSTALL_UNHEALTHY",
       "installed completed conversation blob replacement is unhealthy",
     );
   }
-  if (options.pendingPath != null) rmSync(options.pendingPath, { force: true });
-  return installed;
+  if (settings.pendingPath != null) rmSync(settings.pendingPath, { force: true });
+  return readyDb;
 }
 
-function finishConversationBlobRecovery(args: {
-  options: ConversationBlobDbOptions;
+function completeRecovery(args: {
+  settings: BlobDbSettings;
   quarantinePath: string | null;
   pendingPath: string | null;
 }): DatabaseSync {
-  const { options } = args;
+  const { settings } = args;
   let pendingPath = args.pendingPath;
   let quarantinePath = args.quarantinePath;
-  let replacementPath = `${quarantinePath ?? options.dbPath}.replacement`;
-  if (!existsSync(options.dbPath) && existsSync(replacementPath)) {
-    const installed = installCompletedConversationBlobReplacement({
-      dbPath: options.dbPath,
+  let replacementPath = `${quarantinePath ?? settings.dbPath}.replacement`;
+  if (!existsSync(settings.dbPath) && existsSync(replacementPath)) {
+    const readyDb = installFinishedReplacement({
+      dbPath: settings.dbPath,
       replacementPath,
-      busyTimeoutMs: options.busyTimeoutMs,
+      busyTimeoutMs: settings.busyTimeoutMs,
       ...(pendingPath == null ? {} : { pendingPath }),
     });
-    if (installed != null) return installed;
+    if (readyDb != null) return readyDb;
     const hasSeparateQuarantine =
-      quarantinePath != null && quarantinePath !== options.dbPath && existsSync(quarantinePath);
+      quarantinePath != null && quarantinePath !== settings.dbPath && existsSync(quarantinePath);
     if (!hasSeparateQuarantine) {
       quarantinePath = replacementPath;
       replacementPath = `${replacementPath}.replacement`;
     }
   }
-  if (existsSync(options.dbPath)) {
-    let existing: DatabaseSync | undefined;
-    const sourceHealth = getHealthOnDisk({
-      dbPath: options.dbPath,
-      busyTimeoutMs: options.busyTimeoutMs,
+  if (existsSync(settings.dbPath)) {
+    let current: DatabaseSync | undefined;
+    const sourceHealth = healthOnDiskOf({
+      dbPath: settings.dbPath,
+      busyTimeoutMs: settings.busyTimeoutMs,
     });
     if (sourceHealth === "unavailable") {
       throw new ConversationBlobRecoveryError(
@@ -314,7 +314,7 @@ function finishConversationBlobRecovery(args: {
     }
     if (sourceHealth === "healthy") {
       try {
-        existing = openConfiguredConversationBlobDb(options.dbPath, options.busyTimeoutMs);
+        current = openConfiguredConversationBlobDb(settings.dbPath, settings.busyTimeoutMs);
       } catch (error) {
         if (!isSqliteCorruptError(error)) {
           throw new ConversationBlobRecoveryError(
@@ -323,15 +323,15 @@ function finishConversationBlobRecovery(args: {
           );
         }
       }
-      const configuredHealth = existing == null ? "corrupt" : getHealth(existing);
-      if (configuredHealth === "healthy" && existing != null) {
+      const configuredHealth = current == null ? "corrupt" : healthOf(current);
+      if (configuredHealth === "healthy" && current != null) {
         if (quarantinePath != null) removeSqliteDb({ dbPath: `${quarantinePath}.replacement` });
         if (pendingPath != null) rmSync(pendingPath, { force: true });
-        return existing;
+        return current;
       }
       if (configuredHealth === "unavailable") {
         try {
-          existing?.close();
+          current?.close();
         } catch {
           // Preserve the source-unavailable result.
         }
@@ -342,18 +342,18 @@ function finishConversationBlobRecovery(args: {
       }
     }
     try {
-      existing?.close();
+      current?.close();
     } catch {
       // Continue with salvage.
     }
-    if (quarantinePath === options.dbPath) {
+    if (quarantinePath === settings.dbPath) {
       // The source itself is the salvage path when it could not be moved.
     } else if (quarantinePath != null && !existsSync(quarantinePath)) {
       const quarantine = quarantineCorruptSqliteDb({
-        dbPath: options.dbPath,
+        dbPath: settings.dbPath,
         quarantinePath,
         preserveSourceOnCopyFailure: true,
-        removeAttempts: Math.ceil(options.busyTimeoutMs / 50),
+        removeAttempts: Math.ceil(settings.busyTimeoutMs / 50),
         removeRetryDelayMs: 50,
       });
       quarantinePath = quarantine.quarantinePath;
@@ -362,36 +362,36 @@ function finishConversationBlobRecovery(args: {
         renameSync(pendingPath, resumedPendingPath);
         pendingPath = resumedPendingPath;
       }
-      replacementPath = `${quarantinePath ?? options.dbPath}.replacement`;
+      replacementPath = `${quarantinePath ?? settings.dbPath}.replacement`;
     } else {
       removeSqliteDb({
-        dbPath: options.dbPath,
-        attempts: Math.ceil(options.busyTimeoutMs / 50),
+        dbPath: settings.dbPath,
+        attempts: Math.ceil(settings.busyTimeoutMs / 50),
         retryDelayMs: 50,
       });
     }
   }
   removeSqliteDb({ dbPath: replacementPath });
-  const freshDb = openConversationBlobRecoveryTarget(options, replacementPath);
+  const rebuiltDb = openHealthyTarget(settings, replacementPath);
   let salvagedBlobs = 0;
   try {
     if (quarantinePath != null) {
-      const source = openSqliteForSalvage({
+      const salvageSource = openSqliteForSalvage({
         dbPath: quarantinePath,
-        busyTimeoutMs: options.busyTimeoutMs,
+        busyTimeoutMs: settings.busyTimeoutMs,
       });
-      if (source == null && existsSync(quarantinePath)) {
+      if (salvageSource == null && existsSync(quarantinePath)) {
         throw new ConversationBlobRecoveryError(
           "SLATE_BLOB_RECOVERY_QUARANTINE_UNREADABLE",
           "quarantined conversation blob database is unreadable",
         );
       }
-      if (source != null) {
+      if (salvageSource != null) {
         try {
           salvagedBlobs = copySalvageableSqliteRows(
-            source,
+            salvageSource,
             "SELECT id, data FROM blobs",
-            freshDb.prepare("INSERT OR IGNORE INTO blobs (id, data) VALUES (?, ?)"),
+            rebuiltDb.prepare("INSERT OR IGNORE INTO blobs (id, data) VALUES (?, ?)"),
             (row: unknown) => {
               const value = row as { id: string; data: unknown };
               return [value.id, value.data];
@@ -399,144 +399,144 @@ function finishConversationBlobRecovery(args: {
           );
         } finally {
           try {
-            source.close();
+            salvageSource.close();
           } catch {
             // Preserve the salvage result.
           }
         }
       }
     }
-    freshDb.exec(`PRAGMA user_version = ${CONVERSATION_BLOB_RECOVERY_REBUILT}`);
-    freshDb.exec("PRAGMA wal_checkpoint(TRUNCATE)");
-    freshDb.exec("PRAGMA journal_mode = DELETE");
+    rebuiltDb.exec(`PRAGMA user_version = ${CONVERSATION_BLOB_RECOVERY_REBUILT}`);
+    rebuiltDb.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+    rebuiltDb.exec("PRAGMA journal_mode = DELETE");
   } finally {
     try {
-      freshDb.close();
+      rebuiltDb.close();
     } catch {
       // Preserve the recovery error.
     }
   }
   removeSqliteSidecars(replacementPath);
   removeSqliteDb({
-    dbPath: options.dbPath,
-    attempts: Math.ceil(options.busyTimeoutMs / 50),
+    dbPath: settings.dbPath,
+    attempts: Math.ceil(settings.busyTimeoutMs / 50),
     retryDelayMs: 50,
   });
-  renameSync(replacementPath, options.dbPath);
-  const installedDb = openConfiguredConversationBlobDb(options.dbPath, options.busyTimeoutMs);
-  if (getHealth(installedDb) !== "healthy") {
-    installedDb.close();
+  renameSync(replacementPath, settings.dbPath);
+  const installedConnection = openConfiguredConversationBlobDb(settings.dbPath, settings.busyTimeoutMs);
+  if (healthOf(installedConnection) !== "healthy") {
+    installedConnection.close();
     throw new ConversationBlobRecoveryError(
       "SLATE_BLOB_RECOVERY_INSTALL_UNHEALTHY",
       "installed conversation blob recovery is unhealthy",
     );
   }
-  const info: ConversationBlobRecoveryInfo = {
+  const recoveryInfo: RecoveryOutcome = {
     outcome: salvagedBlobs > 0 ? "recovered" : "reset",
     quarantinePath,
     salvagedBlobs,
   };
-  options.log?.(
-    `[agent-store-worker] conversation-blobs.db recovery: outcome=${info.outcome} agent=${options.agentId} quarantine=${info.quarantinePath != null ? basename(info.quarantinePath) : "none"} salvaged.blobs=${info.salvagedBlobs}`,
+  settings.log?.(
+    `[agent-store-worker] conversation-blobs.db recovery: outcome=${recoveryInfo.outcome} agent=${settings.agentId} quarantine=${recoveryInfo.quarantinePath != null ? basename(recoveryInfo.quarantinePath) : "none"} salvaged.blobs=${recoveryInfo.salvagedBlobs}`,
   );
   try {
-    options.onRecovery?.(info);
+    settings.onRecovery?.(recoveryInfo);
   } catch {
     // Recovery callback failures do not invalidate the installed database.
   }
   if (pendingPath != null) rmSync(pendingPath, { force: true });
-  return installedDb;
+  return installedConnection;
 }
 
-function findPendingRecovery(dbPath: string): PendingConversationBlobRecovery | undefined {
+function locatePendingRecovery(dbPath: string): PendingRecovery | undefined {
   const dir = dirname(dbPath);
   const dbName = basename(dbPath);
   const prefix = `${dbName}.corrupt-`;
-  const names = readdirSync(dir);
-  const quarantineMarkerNames = names
+  const entries = readdirSync(dir);
+  const quarantineMarkerNames = entries
     .filter((name) => name.startsWith(prefix) && (name.endsWith(".intent") || name.endsWith(".pending")))
     .sort();
   const inPlaceMarkerName = `${dbName}.pending`;
-  const markerNames = [
-    ...(names.includes(inPlaceMarkerName) ? [inPlaceMarkerName] : []),
+  const markerEntries = [
+    ...(entries.includes(inPlaceMarkerName) ? [inPlaceMarkerName] : []),
     ...quarantineMarkerNames,
   ];
-  const markerName = markerNames.at(-1);
+  const latestMarker = markerEntries.at(-1);
   const quarantinePathFor = (name: string): string => {
     const markerPath = join(dir, name);
     if (name === `${dbName}.pending`) return dbPath;
     const suffix = name.endsWith(".intent") ? ".intent" : ".pending";
     return markerPath.slice(0, -suffix.length);
   };
-  const activeReplacement = markerName == null ? null : `${quarantinePathFor(markerName)}.replacement`;
-  for (const name of names) {
+  const activeReplacement = latestMarker == null ? null : `${quarantinePathFor(latestMarker)}.replacement`;
+  for (const name of entries) {
     if ((name.startsWith(prefix) || name === `${dbName}.replacement`) && name.endsWith(".replacement")) {
       const replacementPath = join(dir, name);
       if (replacementPath !== activeReplacement) removeSqliteDb({ dbPath: replacementPath });
     }
   }
-  if (markerName == null) return undefined;
-  for (const staleName of markerNames.slice(0, -1)) {
+  if (latestMarker == null) return undefined;
+  for (const staleName of markerEntries.slice(0, -1)) {
     rmSync(join(dir, staleName), { force: true });
     removeSqliteDb({ dbPath: `${quarantinePathFor(staleName)}.replacement` });
   }
-  const pendingPath = join(dir, markerName);
+  const pendingPath = join(dir, latestMarker);
   return {
     pendingPath,
-    quarantinePath: quarantinePathFor(markerName),
+    quarantinePath: quarantinePathFor(latestMarker),
   };
 }
 
-export function openConversationBlobDb(options: ConversationBlobDbOptions): DatabaseSync {
-  mkdirSync(dirname(options.dbPath), { recursive: true });
-  const pending = findPendingRecovery(options.dbPath);
-  if (pending != null) {
-    return finishConversationBlobRecovery({
-      options,
-      quarantinePath: pending.quarantinePath,
-      pendingPath: pending.pendingPath,
+export function openConversationBlobDb(settings: BlobDbSettings): DatabaseSync {
+  mkdirSync(dirname(settings.dbPath), { recursive: true });
+  const foundPending = locatePendingRecovery(settings.dbPath);
+  if (foundPending != null) {
+    return completeRecovery({
+      settings,
+      quarantinePath: foundPending.quarantinePath,
+      pendingPath: foundPending.pendingPath,
     });
   }
-  let db: DatabaseSync;
+  let connection: DatabaseSync;
   try {
-    db = openConfiguredConversationBlobDb(options.dbPath, options.busyTimeoutMs);
+    connection = openConfiguredConversationBlobDb(settings.dbPath, settings.busyTimeoutMs);
   } catch (error) {
     if (isSqliteIoError(error) || isSqliteCantOpenError(error)) {
-      removeSqliteSidecars(options.dbPath);
+      removeSqliteSidecars(settings.dbPath);
       try {
-        db = openConfiguredConversationBlobDb(options.dbPath, options.busyTimeoutMs);
+        connection = openConfiguredConversationBlobDb(settings.dbPath, settings.busyTimeoutMs);
       } catch (retryError) {
-        if (isSqliteCorruptError(retryError)) return recoverConversationBlobDb(options);
+        if (isSqliteCorruptError(retryError)) return recoverConversationBlobDb(settings);
         throw retryError;
       }
     } else if (isSqliteCorruptError(error)) {
-      return recoverConversationBlobDb(options);
+      return recoverConversationBlobDb(settings);
     } else {
       throw error;
     }
   }
-  let health: "healthy" | "corrupt";
+  let condition: "healthy" | "corrupt";
   try {
-    health = runQuickCheck(db);
+    condition = runQuickCheck(connection);
   } catch (error) {
     try {
-      db.close();
+      connection.close();
     } catch {
-      // Continue with the classified health failure.
+      // Continue with the classified condition failure.
     }
     if (isSqliteIoError(error) || isSqliteCantOpenError(error)) {
-      removeSqliteSidecars(options.dbPath);
+      removeSqliteSidecars(settings.dbPath);
       try {
-        db = openConfiguredConversationBlobDb(options.dbPath, options.busyTimeoutMs);
-        health = runQuickCheck(db);
+        connection = openConfiguredConversationBlobDb(settings.dbPath, settings.busyTimeoutMs);
+        condition = runQuickCheck(connection);
       } catch (retryError) {
         if (isSqliteIoError(retryError) || isSqliteCantOpenError(retryError) || isSqliteCorruptError(retryError)) {
-          return recoverConversationBlobDb(options);
+          return recoverConversationBlobDb(settings);
         }
         throw retryError;
       }
     } else if (isSqliteCorruptError(error)) {
-      return recoverConversationBlobDb(options);
+      return recoverConversationBlobDb(settings);
     } else {
       throw new ConversationBlobRecoveryError(
         "SLATE_BLOB_RECOVERY_SOURCE_UNAVAILABLE",
@@ -544,11 +544,11 @@ export function openConversationBlobDb(options: ConversationBlobDbOptions): Data
       );
     }
   }
-  if (health === "healthy") return db;
+  if (condition === "healthy") return connection;
   try {
-    db.close();
+    connection.close();
   } catch {
     // Continue recovery using the quarantined source.
   }
-  return recoverConversationBlobDb(options);
+  return recoverConversationBlobDb(settings);
 }
