@@ -47,108 +47,78 @@ export interface FeedbackRequestCopy {
   readonly commentPlaceholder?: string
 }
 
+function wireUpdate(caseName: InteractionUpdate["message"]["case"], value: unknown): InteractionUpdate {
+  return new InteractionUpdate({ message: { case: caseName, value } } as never)
+}
+
 export const Updates = {
   textDelta(text: string): InteractionUpdate {
-    return new InteractionUpdate({ message: { case: "textDelta", value: new TextDeltaUpdate({ text }) } })
+    return wireUpdate("textDelta", new TextDeltaUpdate({ text }))
   },
   toolCallStarted(callId: string, toolCall: ToolCallStartedUpdate["toolCall"], modelCallId: string): InteractionUpdate {
-    return new InteractionUpdate({
-      message: { case: "toolCallStarted", value: new ToolCallStartedUpdate({ callId, ...(toolCall === undefined ? {} : { toolCall }), modelCallId }) },
-    })
+    return wireUpdate("toolCallStarted", new ToolCallStartedUpdate({ callId, ...(toolCall === undefined ? {} : { toolCall }), modelCallId }))
   },
   toolCallCompleted(
     callId: string,
     toolCall: ToolCallCompletedUpdate["toolCall"],
     modelCallId: string,
   ): InteractionUpdate {
-    return new InteractionUpdate({
-      message: { case: "toolCallCompleted", value: new ToolCallCompletedUpdate({ callId, ...(toolCall === undefined ? {} : { toolCall }), modelCallId }) },
-    })
+    return wireUpdate("toolCallCompleted", new ToolCallCompletedUpdate({ callId, ...(toolCall === undefined ? {} : { toolCall }), modelCallId }))
   },
   toolCallDelta(callId: string, toolCallDelta: ToolCallDeltaUpdate["toolCallDelta"], modelCallId: string): InteractionUpdate {
-    return new InteractionUpdate({
-      message: { case: "toolCallDelta", value: new ToolCallDeltaUpdate({ callId, ...(toolCallDelta === undefined ? {} : { toolCallDelta }), modelCallId }) },
-    })
+    return wireUpdate("toolCallDelta", new ToolCallDeltaUpdate({ callId, ...(toolCallDelta === undefined ? {} : { toolCallDelta }), modelCallId }))
   },
   thinkingDelta(text: string, thinkingStyle: ThinkingDeltaUpdate["thinkingStyle"]): InteractionUpdate {
-    return new InteractionUpdate({
-      message: { case: "thinkingDelta", value: new ThinkingDeltaUpdate({ text, ...(thinkingStyle === undefined ? {} : { thinkingStyle }) }) },
-    })
+    return wireUpdate("thinkingDelta", new ThinkingDeltaUpdate({ text, ...(thinkingStyle === undefined ? {} : { thinkingStyle }) }))
   },
   thinkingCompleted(thinkingDurationMs: number): InteractionUpdate {
-    return new InteractionUpdate({
-      message: { case: "thinkingCompleted", value: new ThinkingCompletedUpdate({ thinkingDurationMs }) },
-    })
+    return wireUpdate("thinkingCompleted", new ThinkingCompletedUpdate({ thinkingDurationMs }))
   },
   userMessageAppended(userMessage: UserMessageAppendedUpdate["userMessage"]): InteractionUpdate {
-    return new InteractionUpdate({
-      message: { case: "userMessageAppended", value: new UserMessageAppendedUpdate({ ...(userMessage === undefined ? {} : { userMessage }) }) },
-    })
+    return wireUpdate("userMessageAppended", new UserMessageAppendedUpdate({ ...(userMessage === undefined ? {} : { userMessage }) }))
   },
   partialToolCall(callId: string, toolCall: PartialToolCallUpdate["toolCall"], modelCallId: string): InteractionUpdate {
-    return new InteractionUpdate({
-      message: { case: "partialToolCall", value: new PartialToolCallUpdate({ callId, ...(toolCall === undefined ? {} : { toolCall }), modelCallId }) },
-    })
+    return wireUpdate("partialToolCall", new PartialToolCallUpdate({ callId, ...(toolCall === undefined ? {} : { toolCall }), modelCallId }))
   },
   tokenDelta(tokens: number): InteractionUpdate {
-    return new InteractionUpdate({ message: { case: "tokenDelta", value: new TokenDeltaUpdate({ tokens }) } })
+    return wireUpdate("tokenDelta", new TokenDeltaUpdate({ tokens }))
   },
   summary(summary: string): InteractionUpdate {
-    return new InteractionUpdate({ message: { case: "summary", value: new SummaryUpdate({ summary }) } })
+    return wireUpdate("summary", new SummaryUpdate({ summary }))
   },
   summaryStarted(): InteractionUpdate {
-    return new InteractionUpdate({ message: { case: "summaryStarted", value: new SummaryStartedUpdate() } })
+    return wireUpdate("summaryStarted", new SummaryStartedUpdate())
   },
   heartbeat(): InteractionUpdate {
-    return new InteractionUpdate({ message: { case: "heartbeat", value: new HeartbeatUpdate() } })
+    return wireUpdate("heartbeat", new HeartbeatUpdate())
   },
   summaryCompleted(hookMessage: SummaryCompletedUpdate["hookMessage"]): InteractionUpdate {
-    return new InteractionUpdate({
-      message: { case: "summaryCompleted", value: new SummaryCompletedUpdate({ ...(hookMessage === undefined ? {} : { hookMessage }) }) },
-    })
+    return wireUpdate("summaryCompleted", new SummaryCompletedUpdate({ ...(hookMessage === undefined ? {} : { hookMessage }) }))
   },
   shellOutputDelta(event: ShellOutputDeltaUpdate["event"]): InteractionUpdate {
-    return new InteractionUpdate({
-      message: { case: "shellOutputDelta", value: new ShellOutputDeltaUpdate({ event }) },
-    })
+    return wireUpdate("shellOutputDelta", new ShellOutputDeltaUpdate({ event }))
   },
   /** Usage is optional: a turn that ended early reports no counts rather than zeroes. */
   turnEnded(usage?: TurnUsage): InteractionUpdate {
-    return new InteractionUpdate({
-      message: {
-        case: "turnEnded",
-        value: new TurnEndedUpdate(usage === undefined ? {} : {
+    return wireUpdate("turnEnded", new TurnEndedUpdate(usage === undefined ? {} : {
           inputTokens: BigInt(usage.inputTokens),
           outputTokens: BigInt(usage.outputTokens),
           cacheReadTokens: BigInt(usage.cacheReadTokens),
           cacheWriteTokens: BigInt(usage.cacheWriteTokens),
           reasoningTokens: BigInt(usage.reasoningTokens ?? 0),
-        }),
-      },
-    })
+        }),)
   },
   stepStarted(stepId: number): InteractionUpdate {
-    return new InteractionUpdate({
-      message: { case: "stepStarted", value: new StepStartedUpdate({ stepId: BigInt(stepId) }) },
-    })
+    return wireUpdate("stepStarted", new StepStartedUpdate({ stepId: BigInt(stepId) }))
   },
   stepCompleted(stepId: number, stepDurationMs: number): InteractionUpdate {
-    return new InteractionUpdate({
-      message: {
-        case: "stepCompleted",
-        value: new StepCompletedUpdate({ stepId: BigInt(stepId), stepDurationMs: BigInt(stepDurationMs) }),
-      },
-    })
+    return wireUpdate("stepCompleted", new StepCompletedUpdate({ stepId: BigInt(stepId), stepDurationMs: BigInt(stepDurationMs) }),)
   },
   promptSuggestion(suggestion: string): InteractionUpdate {
-    return new InteractionUpdate({
-      message: { case: "promptSuggestion", value: new PromptSuggestionUpdate({ suggestion }) },
-    })
+    return wireUpdate("promptSuggestion", new PromptSuggestionUpdate({ suggestion }))
   },
   activeBranchChange(path: string, branchName: string): InteractionUpdate {
-    return new InteractionUpdate({
-      message: { case: "activeBranchChange", value: new ActiveBranchChange({ path, branchName }) },
-    })
+    return wireUpdate("activeBranchChange", new ActiveBranchChange({ path, branchName }))
   },
   feedbackRequest(
     requestId: string,
@@ -157,10 +127,7 @@ export const Updates = {
     categoryGroups: readonly FeedbackRequestCategoryGroup[] = [],
     copy: FeedbackRequestCopy = {},
   ): InteractionUpdate {
-    return new InteractionUpdate({
-      message: {
-        case: "feedbackRequest",
-        value: new FeedbackRequestUpdate({
+    return wireUpdate("feedbackRequest", new FeedbackRequestUpdate({
           requestId,
           ...(canonicalModelName === undefined ? {} : { canonicalModelName }),
           categories: [...categories],
@@ -168,8 +135,6 @@ export const Updates = {
           ...(copy.title === undefined ? {} : { title: copy.title }),
           ...(copy.negativeTitle === undefined ? {} : { negativeTitle: copy.negativeTitle }),
           ...(copy.commentPlaceholder === undefined ? {} : { commentPlaceholder: copy.commentPlaceholder }),
-        }),
-      },
-    })
+        }),)
   },
 }
