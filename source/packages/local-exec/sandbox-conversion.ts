@@ -45,83 +45,83 @@ export interface SandboxRule {
   readonly ignoreMapping?: unknown;
 }
 
-function convertProtoToNetworkPolicy(policy: NetworkPolicyMessage | undefined): NetworkPolicy | undefined {
-  if (!policy) return undefined;
-  const result: NetworkPolicy = {
-    ...(policy.version === undefined ? {} : { version: policy.version }),
+function networkFromProto(sandboxValue: NetworkPolicyMessage | undefined): NetworkPolicy | undefined {
+  if (!sandboxValue) return undefined;
+  const networkShape: NetworkPolicy = {
+    ...(sandboxValue.version === undefined ? {} : { version: sandboxValue.version }),
   };
-  if (policy.defaultAction !== undefined) {
-    switch (policy.defaultAction) {
+  if (sandboxValue.defaultAction !== undefined) {
+    switch (sandboxValue.defaultAction) {
       case NetworkPolicy_DefaultAction.ALLOW:
         return {
-          ...result,
+          ...networkShape,
           default: "allow",
-          ...(policy.deny.length === 0 ? {} : { deny: [...policy.deny] }),
-          ...(policy.allow.length === 0 ? {} : { allow: [...policy.allow] }),
-          ...(policy.logging === undefined ? {} : { logging: convertProtoToNetworkPolicyLoggingConfig(policy.logging) }),
+          ...(sandboxValue.deny.length === 0 ? {} : { deny: [...sandboxValue.deny] }),
+          ...(sandboxValue.allow.length === 0 ? {} : { allow: [...sandboxValue.allow] }),
+          ...(sandboxValue.logging === undefined ? {} : { logging: loggingFromProto(sandboxValue.logging) }),
         };
       case NetworkPolicy_DefaultAction.DENY:
         return {
-          ...result,
+          ...networkShape,
           default: "deny",
-          ...(policy.deny.length === 0 ? {} : { deny: [...policy.deny] }),
-          ...(policy.allow.length === 0 ? {} : { allow: [...policy.allow] }),
-          ...(policy.logging === undefined ? {} : { logging: convertProtoToNetworkPolicyLoggingConfig(policy.logging) }),
+          ...(sandboxValue.deny.length === 0 ? {} : { deny: [...sandboxValue.deny] }),
+          ...(sandboxValue.allow.length === 0 ? {} : { allow: [...sandboxValue.allow] }),
+          ...(sandboxValue.logging === undefined ? {} : { logging: loggingFromProto(sandboxValue.logging) }),
         };
     }
   }
   return {
-    ...result,
-    ...(policy.deny.length === 0 ? {} : { deny: [...policy.deny] }),
-    ...(policy.allow.length === 0 ? {} : { allow: [...policy.allow] }),
-    ...(policy.logging === undefined ? {} : { logging: convertProtoToNetworkPolicyLoggingConfig(policy.logging) }),
+    ...networkShape,
+    ...(sandboxValue.deny.length === 0 ? {} : { deny: [...sandboxValue.deny] }),
+    ...(sandboxValue.allow.length === 0 ? {} : { allow: [...sandboxValue.allow] }),
+    ...(sandboxValue.logging === undefined ? {} : { logging: loggingFromProto(sandboxValue.logging) }),
   };
 }
 
-function convertNetworkPolicyToProto(policy: NetworkPolicy | undefined): NetworkPolicyMessage | undefined {
-  if (!policy) return undefined;
+function networkToProto(sandboxValue: NetworkPolicy | undefined): NetworkPolicyMessage | undefined {
+  if (!sandboxValue) return undefined;
   let defaultAction: NetworkPolicy_DefaultAction | undefined;
-  if (policy.default === "allow") defaultAction = NetworkPolicy_DefaultAction.ALLOW;
-  else if (policy.default === "deny") defaultAction = NetworkPolicy_DefaultAction.DENY;
+  if (sandboxValue.default === "allow") defaultAction = NetworkPolicy_DefaultAction.ALLOW;
+  else if (sandboxValue.default === "deny") defaultAction = NetworkPolicy_DefaultAction.DENY;
   return new NetworkPolicyProto({
-    ...(policy.version === undefined ? {} : { version: policy.version }),
+    ...(sandboxValue.version === undefined ? {} : { version: sandboxValue.version }),
     ...(defaultAction === undefined ? {} : { defaultAction }),
-    deny: [...(policy.deny ?? [])],
-    allow: [...(policy.allow ?? [])],
-    ...(policy.logging === undefined ? {} : { logging: convertNetworkPolicyLoggingConfigToProto(policy.logging) }),
+    deny: [...(sandboxValue.deny ?? [])],
+    allow: [...(sandboxValue.allow ?? [])],
+    ...(sandboxValue.logging === undefined ? {} : { logging: loggingToProto(sandboxValue.logging) }),
   });
 }
 
-function convertProtoToNetworkPolicyLoggingConfig(config: NetworkPolicyMessage["logging"]): NetworkPolicy["logging"] {
-  if (!config) return undefined;
+function loggingFromProto(loggingConfig: NetworkPolicyMessage["logging"]): NetworkPolicy["logging"] {
+  if (!loggingConfig) return undefined;
   return {
-    ...(config.decisionLogPath === undefined ? {} : { decisionLogPath: config.decisionLogPath }),
-    ...(config.logFormat === undefined ? {} : { logFormat: config.logFormat }),
+    ...(loggingConfig.decisionLogPath === undefined ? {} : { decisionLogPath: loggingConfig.decisionLogPath }),
+    ...(loggingConfig.logFormat === undefined ? {} : { logFormat: loggingConfig.logFormat }),
   };
 }
 
-function convertNetworkPolicyLoggingConfigToProto(config: NonNullable<NetworkPolicy["logging"]>): NetworkPolicyLoggingConfig {
+function loggingToProto(loggingConfig: NonNullable<NetworkPolicy["logging"]>): NetworkPolicyLoggingConfig {
   return new NetworkPolicyLoggingConfig({
-    ...(config.decisionLogPath === undefined ? {} : { decisionLogPath: config.decisionLogPath }),
-    ...(config.logFormat === undefined ? {} : { logFormat: config.logFormat }),
+    ...(loggingConfig.decisionLogPath === undefined ? {} : { decisionLogPath: loggingConfig.decisionLogPath }),
+    ...(loggingConfig.logFormat === undefined ? {} : { logFormat: loggingConfig.logFormat }),
   });
 }
 
-function networkDisabledPolicy(): NetworkPolicy {
+function denyNetwork(): NetworkPolicy {
   return { version: 1, default: "deny" };
 }
 
-function networkAllowAllPolicy(): NetworkPolicy {
+function allowNetwork(): NetworkPolicy {
   return { version: 1, default: "allow" };
 }
 
-function resolveNetworkPolicy(policy: SandboxPolicyMessage): NetworkPolicy {
-  const explicit = convertProtoToNetworkPolicy(policy.networkPolicy);
-  return explicit ?? (policy.networkAccess ? networkAllowAllPolicy() : networkDisabledPolicy());
+function resolveNetwork(sandboxValue: SandboxPolicyMessage): NetworkPolicy {
+  const explicitNetwork = networkFromProto(sandboxValue.networkPolicy);
+  return explicitNetwork ?? (sandboxValue.networkAccess ? allowNetwork() : denyNetwork());
 }
 
-function convertProtoToReadBoundary(mode: SandboxPolicyMessage["readBoundary"]): "system" | "workspace" | undefined {
-  switch (mode) {
+function readBoundaryFromProto(boundaryMode: SandboxPolicyMessage["readBoundary"]): "system" | "workspace" | undefined {
+  switch (boundaryMode) {
     case SandboxPolicy_ReadBoundaryMode.SYSTEM:
       return "system";
     case SandboxPolicy_ReadBoundaryMode.WORKSPACE:
@@ -133,8 +133,8 @@ function convertProtoToReadBoundary(mode: SandboxPolicyMessage["readBoundary"]):
   }
 }
 
-function convertReadBoundaryToProto(boundary: SandboxRule["readBoundary"]): SandboxPolicy_ReadBoundaryMode {
-  switch (boundary) {
+function readBoundaryToProto(boundaryName: SandboxRule["readBoundary"]): SandboxPolicy_ReadBoundaryMode {
+  switch (boundaryName) {
     case "system":
       return SandboxPolicy_ReadBoundaryMode.SYSTEM;
     case "workspace":
@@ -144,96 +144,96 @@ function convertReadBoundaryToProto(boundary: SandboxRule["readBoundary"]): Sand
   }
 }
 
-function sandboxedProtoFields(policy: SandboxPolicyMessage): {
+function sandboxProtoFields(sandboxValue: SandboxPolicyMessage): {
   readonly readBoundary: "system" | "workspace" | undefined;
   readonly additionalReadPaths: readonly string[] | undefined;
 } {
-  const readBoundary = convertProtoToReadBoundary(policy.readBoundary);
-  const paths = policy.additionalReadPaths;
+  const readBoundary = readBoundaryFromProto(sandboxValue.readBoundary);
+  const readPathList = sandboxValue.additionalReadPaths;
   return {
     readBoundary,
-    additionalReadPaths: readBoundary === "workspace" && paths.length > 0 ? paths : undefined,
+    additionalReadPaths: readBoundary === "workspace" && readPathList.length > 0 ? readPathList : undefined,
   };
 }
 
-export function convertProtoToInternalPolicy(policy: SandboxPolicyMessage | undefined): SandboxRule {
-  if (!policy) return { type: "insecure_none" };
-  switch (policy.type) {
+export function convertProtoToInternalPolicy(sandboxValue: SandboxPolicyMessage | undefined): SandboxRule {
+  if (!sandboxValue) return { type: "insecure_none" };
+  switch (sandboxValue.type) {
     case SandboxPolicy_Type.INSECURE_NONE:
     case SandboxPolicy_Type.UNSPECIFIED:
       return {
         type: "insecure_none",
-        allowlistEscalated: policy.allowlistEscalated,
-        enableSharedBuildCache: policy.enableSharedBuildCache,
-        debugOutputDir: policy.debugOutputDir,
-        captureDenies: policy.captureDenies,
+        allowlistEscalated: sandboxValue.allowlistEscalated,
+        enableSharedBuildCache: sandboxValue.enableSharedBuildCache,
+        debugOutputDir: sandboxValue.debugOutputDir,
+        captureDenies: sandboxValue.captureDenies,
       };
     case SandboxPolicy_Type.WORKSPACE_READWRITE:
       return {
         type: "workspace_readwrite",
-        networkPolicy: resolveNetworkPolicy(policy),
-        skipStatsigDefaults: policy.skipStatsigDefaults,
-        additionalReadwritePaths: policy.additionalReadwritePaths,
-        additionalReadonlyPaths: policy.additionalReadonlyPaths,
-        disableTmpWrite: policy.disableTmpWrite,
-        enableSharedBuildCache: policy.enableSharedBuildCache,
-        debugOutputDir: policy.debugOutputDir,
-        captureDenies: policy.captureDenies,
-        networkPolicyStrict: policy.networkPolicyStrict,
-        ...sandboxedProtoFields(policy),
+        networkPolicy: resolveNetwork(sandboxValue),
+        skipStatsigDefaults: sandboxValue.skipStatsigDefaults,
+        additionalReadwritePaths: sandboxValue.additionalReadwritePaths,
+        additionalReadonlyPaths: sandboxValue.additionalReadonlyPaths,
+        disableTmpWrite: sandboxValue.disableTmpWrite,
+        enableSharedBuildCache: sandboxValue.enableSharedBuildCache,
+        debugOutputDir: sandboxValue.debugOutputDir,
+        captureDenies: sandboxValue.captureDenies,
+        networkPolicyStrict: sandboxValue.networkPolicyStrict,
+        ...sandboxProtoFields(sandboxValue),
       };
     case SandboxPolicy_Type.WORKSPACE_READONLY:
       return {
         type: "workspace_readonly",
-        networkPolicy: resolveNetworkPolicy(policy),
-        skipStatsigDefaults: policy.skipStatsigDefaults,
-        additionalReadonlyPaths: policy.additionalReadonlyPaths,
-        disableTmpWrite: policy.disableTmpWrite,
-        enableSharedBuildCache: policy.enableSharedBuildCache,
-        debugOutputDir: policy.debugOutputDir,
-        captureDenies: policy.captureDenies,
-        networkPolicyStrict: policy.networkPolicyStrict,
-        ...sandboxedProtoFields(policy),
+        networkPolicy: resolveNetwork(sandboxValue),
+        skipStatsigDefaults: sandboxValue.skipStatsigDefaults,
+        additionalReadonlyPaths: sandboxValue.additionalReadonlyPaths,
+        disableTmpWrite: sandboxValue.disableTmpWrite,
+        enableSharedBuildCache: sandboxValue.enableSharedBuildCache,
+        debugOutputDir: sandboxValue.debugOutputDir,
+        captureDenies: sandboxValue.captureDenies,
+        networkPolicyStrict: sandboxValue.networkPolicyStrict,
+        ...sandboxProtoFields(sandboxValue),
       };
     default:
       return { type: "insecure_none" };
   }
 }
 
-export function convertInternalToProtoPolicy(policy: SandboxRule | undefined): SandboxPolicyMessage | undefined {
-  if (!policy) return undefined;
-  if (policy.type === "insecure_none") {
+export function convertInternalToProtoPolicy(sandboxValue: SandboxRule | undefined): SandboxPolicyMessage | undefined {
+  if (!sandboxValue) return undefined;
+  if (sandboxValue.type === "insecure_none") {
     return new SandboxPolicy({
       type: SandboxPolicy_Type.INSECURE_NONE,
-      ...(policy.allowlistEscalated === undefined ? {} : { allowlistEscalated: policy.allowlistEscalated }),
-      ...(policy.enableSharedBuildCache === undefined ? {} : { enableSharedBuildCache: policy.enableSharedBuildCache }),
-      ...(policy.debugOutputDir === undefined ? {} : { debugOutputDir: policy.debugOutputDir }),
-      ...(policy.captureDenies === undefined ? {} : { captureDenies: policy.captureDenies }),
+      ...(sandboxValue.allowlistEscalated === undefined ? {} : { allowlistEscalated: sandboxValue.allowlistEscalated }),
+      ...(sandboxValue.enableSharedBuildCache === undefined ? {} : { enableSharedBuildCache: sandboxValue.enableSharedBuildCache }),
+      ...(sandboxValue.debugOutputDir === undefined ? {} : { debugOutputDir: sandboxValue.debugOutputDir }),
+      ...(sandboxValue.captureDenies === undefined ? {} : { captureDenies: sandboxValue.captureDenies }),
     });
   }
-  if (policy.type !== "workspace_readwrite" && policy.type !== "workspace_readonly") {
+  if (sandboxValue.type !== "workspace_readwrite" && sandboxValue.type !== "workspace_readonly") {
     return new SandboxPolicy({ type: SandboxPolicy_Type.INSECURE_NONE });
   }
-  const networkPolicy = convertNetworkPolicyToProto(policy.networkPolicy);
-  const common = {
-    type: policy.type === "workspace_readwrite" ? SandboxPolicy_Type.WORKSPACE_READWRITE : SandboxPolicy_Type.WORKSPACE_READONLY,
-    networkAccess: policy.networkPolicy?.default === "allow" || (policy.networkPolicy?.allow?.length ?? 0) > 0,
-    ...(policy.skipStatsigDefaults === undefined ? {} : { skipStatsigDefaults: policy.skipStatsigDefaults }),
-    ...(policy.additionalReadonlyPaths === undefined ? {} : { additionalReadonlyPaths: [...policy.additionalReadonlyPaths] }),
-    ...(policy.disableTmpWrite === undefined ? {} : { disableTmpWrite: policy.disableTmpWrite }),
-    ...(policy.enableSharedBuildCache === undefined ? {} : { enableSharedBuildCache: policy.enableSharedBuildCache }),
-    ...(policy.debugOutputDir === undefined ? {} : { debugOutputDir: policy.debugOutputDir }),
-    ...(policy.captureDenies === undefined ? {} : { captureDenies: policy.captureDenies }),
+  const networkPolicy = networkToProto(sandboxValue.networkPolicy);
+  const commonFields = {
+    type: sandboxValue.type === "workspace_readwrite" ? SandboxPolicy_Type.WORKSPACE_READWRITE : SandboxPolicy_Type.WORKSPACE_READONLY,
+    networkAccess: sandboxValue.networkPolicy?.default === "allow" || (sandboxValue.networkPolicy?.allow?.length ?? 0) > 0,
+    ...(sandboxValue.skipStatsigDefaults === undefined ? {} : { skipStatsigDefaults: sandboxValue.skipStatsigDefaults }),
+    ...(sandboxValue.additionalReadonlyPaths === undefined ? {} : { additionalReadonlyPaths: [...sandboxValue.additionalReadonlyPaths] }),
+    ...(sandboxValue.disableTmpWrite === undefined ? {} : { disableTmpWrite: sandboxValue.disableTmpWrite }),
+    ...(sandboxValue.enableSharedBuildCache === undefined ? {} : { enableSharedBuildCache: sandboxValue.enableSharedBuildCache }),
+    ...(sandboxValue.debugOutputDir === undefined ? {} : { debugOutputDir: sandboxValue.debugOutputDir }),
+    ...(sandboxValue.captureDenies === undefined ? {} : { captureDenies: sandboxValue.captureDenies }),
     ...(networkPolicy === undefined ? {} : { networkPolicy }),
-    ...(policy.networkPolicyStrict === undefined ? {} : { networkPolicyStrict: policy.networkPolicyStrict }),
-    readBoundary: convertReadBoundaryToProto(policy.readBoundary),
-    additionalReadPaths: policy.readBoundary === "workspace" ? [...(policy.additionalReadPaths ?? [])] : [],
+    ...(sandboxValue.networkPolicyStrict === undefined ? {} : { networkPolicyStrict: sandboxValue.networkPolicyStrict }),
+    readBoundary: readBoundaryToProto(sandboxValue.readBoundary),
+    additionalReadPaths: sandboxValue.readBoundary === "workspace" ? [...(sandboxValue.additionalReadPaths ?? [])] : [],
   };
-  if (policy.type === "workspace_readwrite") {
+  if (sandboxValue.type === "workspace_readwrite") {
     return new SandboxPolicy({
-      ...common,
-      additionalReadwritePaths: [...(policy.additionalReadwritePaths ?? [])],
+      ...commonFields,
+      additionalReadwritePaths: [...(sandboxValue.additionalReadwritePaths ?? [])],
     });
   }
-  return new SandboxPolicy(common);
+  return new SandboxPolicy(commonFields);
 }
