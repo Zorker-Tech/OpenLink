@@ -34,7 +34,7 @@ type DurableBlockId =
   | "todos"
   | "skills"
 
-const SUMMARIZERS: Record<DurableBlockSummarizer, { leading: DurableBlockId[]; trailing: DurableBlockId[] }> = {
+const PLACEMENTS: Record<DurableBlockSummarizer, { leading: DurableBlockId[]; trailing: DurableBlockId[] }> = {
   external: {
     leading: [],
     trailing: ["plan", "transcript", "mode-prompt", "project-root", "automation-trigger", "todos", "skills"],
@@ -57,7 +57,7 @@ const SUMMARIZERS: Record<DurableBlockSummarizer, { leading: DurableBlockId[]; t
   },
 }
 
-const BLOCK_SEPARATOR = "\n\n"
+const BLOCK_GAP = "\n\n"
 
 export interface DurablePlan {
   readonly content: { unwrap(purpose: PrivacyCapability): string }
@@ -85,9 +85,9 @@ function todoUpdateTag(todoContent: string): string {
 }
 
 /** A plan with nothing in it is not worth carrying, so it is treated as absent. */
-function unwrapPlanContent(plan: DurablePlan): string | undefined {
-  const rawContent = plan.content.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
-  return rawContent && rawContent.trim().length > 0 ? rawContent : undefined
+function planContentText(plan: DurablePlan): string | undefined {
+  const planText = plan.content.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
+  return planText && planText.trim().length > 0 ? planText : undefined
 }
 
 /** The plan is addressed by the scheme the platform's own files use, with or without a session id. */
@@ -99,113 +99,168 @@ function planFilePath(plan: DurablePlan): string {
     : `cursor-plan:///${planFilename}`
 }
 
-function renderTranscript(agentTranscriptsFolder: string, conversationId: string | undefined, useXml: boolean): string {
-  const section = formatTranscriptLocation(agentTranscriptsFolder, { conversationId, useXml })
+function transcriptSection(agentTranscriptsFolder: string, conversationId: string | undefined, useXml: boolean): string {
+  const locationText = formatTranscriptLocation(agentTranscriptsFolder, { conversationId, useXml })
   // The location text brings its own leading blank line, which the block separator already provides.
-  return section.startsWith(BLOCK_SEPARATOR) ? section.slice(BLOCK_SEPARATOR.length) : section
+  return locationText.startsWith(BLOCK_GAP) ? locationText.slice(BLOCK_GAP.length) : locationText
 }
 
-type Renderer = (enrichments: DurableBlockEnrichments, context: DurableBlockRenderContext) => string | undefined
-interface BlockRenderer { readonly render: Renderer; readonly overrides?: Partial<Record<DurableBlockSummarizer, Renderer>> }
+type BlockRender = (sessionContext: DurableBlockEnrichments, renderOptions: DurableBlockRenderContext) => string | undefined
+interface BlockRendererSpec { readonly render: BlockRender; readonly overrides?: Partial<Record<DurableBlockSummarizer, BlockRender>> }
 
-const BLOCK_RENDERERS: Record<DurableBlockId, BlockRenderer> = {
-  "mode-prompt": { render: enrichments => enrichments.modePrompt },
-  "project-root": { render: enrichments => enrichments.projectRootPrompt },
-  plan: {
-    render: enrichments => {
-      if (!enrichments.currentPlan) return undefined
-      const content = unwrapPlanContent(enrichments.currentPlan)
-      if (content === undefined) return undefined
-      const instruction = "The below plan was previously created in this session. If you are still in plan mode, continue to iterate on the plan with the user given the rest of your context on the current conversation. Otherwise, if there are remaining relevant todos, you should continue to implement them according to the plan."
-      return `10. Current plan mode progress:\n   ${instruction}\n\n<file_contents path="${planFilePath(enrichments.currentPlan)}" isFullFile="true">\n${content}\n</file_contents>`
-    },
-    overrides: {
-      "xai-compaction": enrichments => {
-        if (!enrichments.currentPlan) return undefined
-        const content = unwrapPlanContent(enrichments.currentPlan)
-        return content === undefined ? undefined : `<current_plan>\n${content}\n</current_plan>`
-      },
-    },
-  },
-  transcript: {
-    // The transcript is offered in the tag shape unless the summarizer reads the markdown one.
-    render: (enrichments, context) => context.includeTranscript !== false && enrichments.agentTranscriptsFolder
-      ? renderTranscript(enrichments.agentTranscriptsFolder, enrichments.conversationId, true)
-      : undefined,
-    overrides: {
-      external: (enrichments, context) => context.includeTranscript !== false && enrichments.agentTranscriptsFolder
-        ? renderTranscript(enrichments.agentTranscriptsFolder, enrichments.conversationId, false)
-        : undefined,
-    },
-  },
+function modePromptBlock(sessionContext: DurableBlockEnrichments): string | undefined {
+  return sessionContext.modePrompt
+}
+
+function projectRootBlock(sessionContext: DurableBlockEnrichments): string | undefined {
+  return sessionContext.projectRootPrompt
+}
+
+/** The plan is rendered as a numbered step the model reads like a file it can open. */
+function planBlock(sessionContext: DurableBlockEnrichments): string | undefined {
+  if (!sessionContext.currentPlan) return undefined
+  const content = planContentText(sessionContext.currentPlan)
+  if (content === undefined) return undefined
+  const instruction = "The below plan was previously created in this session. If you are still in plan mode, continue to iterate on the plan with the user given the rest of your context on the current conversation. Otherwise, if there are remaining relevant todos, you should continue to implement them according to the plan."
+  return `10. Current plan mode progress:
+   ${instruction}
+
+<file_contents path="${planFilePath(sessionContext.currentPlan)}" isFullFile="true">
+${content}
+</file_contents>`
+}
+
+function xaiPlanBlock(sessionContext: DurableBlockEnrichments): string | undefined {
+  if (!sessionContext.currentPlan) return undefined
+  const content = planContentText(sessionContext.currentPlan)
+  return content === undefined ? undefined : `<current_plan>
+${content}
+</current_plan>`
+}
+
+// The transcript is offered in the tag shape unless the summarizer reads the markdown one.
+function transcriptBlock(sessionContext: DurableBlockEnrichments, renderOptions: DurableBlockRenderContext): string | undefined {
+  return renderOptions.includeTranscript !== false && sessionContext.agentTranscriptsFolder
+    ? transcriptSection(sessionContext.agentTranscriptsFolder, sessionContext.conversationId, true)
+    : undefined
+}
+
+function externalTranscriptBlock(sessionContext: DurableBlockEnrichments, renderOptions: DurableBlockRenderContext): string | undefined {
+  return renderOptions.includeTranscript !== false && sessionContext.agentTranscriptsFolder
+    ? transcriptSection(sessionContext.agentTranscriptsFolder, sessionContext.conversationId, false)
+    : undefined
+}
+
+function automationTriggerBlock(sessionContext: DurableBlockEnrichments): string | undefined {
+  return sessionContext.automationTriggerContext
+    ? `NOTE: This is an automation run. The original trigger info that started this session:
+${sessionContext.automationTriggerContext}`
+    : undefined
+}
+
+function externalAutomationTriggerBlock(sessionContext: DurableBlockEnrichments): string | undefined {
+  return sessionContext.automationTriggerContext
+    ? `12. Automation trigger info (this is the original trigger that started this agent):
+
+${sessionContext.automationTriggerContext}`
+    : undefined
+}
+
+function xaiAutomationTriggerBlock(sessionContext: DurableBlockEnrichments): string | undefined {
+  return sessionContext.automationTriggerContext
+}
+
+function todosBlock(sessionContext: DurableBlockEnrichments): string | undefined {
+  return sessionContext.todoContent
+    ? `NOTE: There was an active todo list in the conversation. Here is the latest update before summarization:
+${todoUpdateTag(sessionContext.todoContent)}`
+    : undefined
+}
+
+function xaiTodosBlock(sessionContext: DurableBlockEnrichments): string | undefined {
+  return sessionContext.todoContent ? todoUpdateTag(sessionContext.todoContent) : undefined
+}
+
+function skillsBlock(sessionContext: DurableBlockEnrichments): string | undefined {
+  return sessionContext.skillBlocks.length > 0 ? sessionContext.skillBlocks.join(BLOCK_GAP) : undefined
+}
+
+const RENDERERS_BY_BLOCK: Record<DurableBlockId, BlockRendererSpec> = {
+  "mode-prompt": { render: modePromptBlock },
+  "project-root": { render: projectRootBlock },
+  plan: { render: planBlock, overrides: { "xai-compaction": xaiPlanBlock } },
+  transcript: { render: transcriptBlock, overrides: { external: externalTranscriptBlock } },
   "automation-trigger": {
-    render: enrichments => enrichments.automationTriggerContext
-      ? `NOTE: This is an automation run. The original trigger info that started this session:\n${enrichments.automationTriggerContext}`
-      : undefined,
+    render: automationTriggerBlock,
     overrides: {
-      external: enrichments => enrichments.automationTriggerContext
-        ? `12. Automation trigger info (this is the original trigger that started this agent):\n\n${enrichments.automationTriggerContext}`
-        : undefined,
-      "xai-compaction": enrichments => enrichments.automationTriggerContext,
+      external: externalAutomationTriggerBlock,
+      "xai-compaction": xaiAutomationTriggerBlock,
     },
   },
-  todos: {
-    render: enrichments => enrichments.todoContent
-      ? `NOTE: There was an active todo list in the conversation. Here is the latest update before summarization:\n${todoUpdateTag(enrichments.todoContent)}`
-      : undefined,
-    overrides: {
-      "xai-compaction": enrichments => enrichments.todoContent ? todoUpdateTag(enrichments.todoContent) : undefined,
-    },
-  },
-  skills: {
-    render: enrichments => enrichments.skillBlocks.length > 0
-      ? enrichments.skillBlocks.join(BLOCK_SEPARATOR)
-      : undefined,
-  },
+  todos: { render: todosBlock, overrides: { "xai-compaction": xaiTodosBlock } },
+  skills: { render: skillsBlock },
 }
+
 
 /** The blocks a summarizer places at all, which is what has to be rendered for it. */
-function placedBlockIds(summarizer: DurableBlockSummarizer): DurableBlockId[] {
-  const { leading, trailing } = SUMMARIZERS[summarizer]
+function blockOrderFor(style: DurableBlockSummarizer): DurableBlockId[] {
+  const { leading, trailing } = PLACEMENTS[style]
   return [...new Set([...leading, ...trailing])]
 }
 
-export function renderDurableBlocks(
-  summarizer: DurableBlockSummarizer,
-  enrichments: DurableBlockEnrichments,
-  context: DurableBlockRenderContext = {},
-): Map<DurableBlockId, string> {
-  const blocks = new Map<DurableBlockId, string>()
-  for (const id of placedBlockIds(summarizer)) {
-    const spec = BLOCK_RENDERERS[id]
-    const render = spec.overrides?.[summarizer] ?? spec.render
-    const promptText = render(enrichments, context)
-    if (promptText !== undefined && promptText.length > 0) blocks.set(id, promptText)
-  }
-  return blocks
-}
-
-/** A block that is placed twice is written once, in the position it was placed first. */
-function selectBlockPrompts(blocks: ReadonlyMap<DurableBlockId, string>, ids: readonly DurableBlockId[]): string[] {
-  const seen = new Set<DurableBlockId>()
-  const promptTexts: string[] = []
+/** A block that is placed twice is placed once, in the position it was placed first. */
+function blockTextsFor(placedBlocks: ReadonlyMap<DurableBlockId, string>, ids: readonly DurableBlockId[]): string[] {
+  const placed = new Set<DurableBlockId>()
+  const renderedTexts: string[] = []
   for (const id of ids) {
-    if (seen.has(id)) continue
-    seen.add(id)
-    const promptText = blocks.get(id)
-    if (promptText !== undefined) promptTexts.push(promptText)
+    if (placed.has(id)) continue
+    placed.add(id)
+    const renderedText = placedBlocks.get(id)
+    if (renderedText !== undefined) renderedTexts.push(renderedText)
   }
-  return promptTexts
+  return renderedTexts
 }
 
-export function appendDurableBlocks(summarizer: DurableBlockSummarizer, blocks: ReadonlyMap<DurableBlockId, string>): string {
-  return selectBlockPrompts(blocks, SUMMARIZERS[summarizer].trailing)
-    .map(promptText => `${BLOCK_SEPARATOR}${promptText}`)
+/** The renderer a style reads for one block: its own wording when it has one, the default otherwise. */
+function renderOneBlock(
+  style: DurableBlockSummarizer,
+  id: DurableBlockId,
+  sessionContext: DurableBlockEnrichments,
+  renderOptions: DurableBlockRenderContext,
+): string | undefined {
+  const renderer = RENDERERS_BY_BLOCK[id]
+  const render = renderer.overrides?.[style] ?? renderer.render
+  return render(sessionContext, renderOptions)
+}
+
+export function renderDurableBlocks(
+  style: DurableBlockSummarizer,
+  sessionContext: DurableBlockEnrichments,
+  renderOptions: DurableBlockRenderContext = {},
+): Map<DurableBlockId, string> {
+  const placedBlocks = new Map<DurableBlockId, string>()
+  for (const id of blockOrderFor(style)) {
+    const renderedText = renderOneBlock(style, id, sessionContext, renderOptions)
+    if (renderedText !== undefined && renderedText.length > 0) placedBlocks.set(id, renderedText)
+  }
+  return placedBlocks
+}
+
+/** The placed blocks, joined on the side of the summary the placement asks for. */
+function joinBlocks(
+  style: DurableBlockSummarizer,
+  placedBlocks: ReadonlyMap<DurableBlockId, string>,
+  placement: "leading" | "trailing",
+): string {
+  return blockTextsFor(placedBlocks, PLACEMENTS[style][placement])
+    .map(renderedText => placement === "trailing" ? `${BLOCK_GAP}${renderedText}` : `${renderedText}${BLOCK_GAP}`)
     .join("")
 }
 
-export function prependDurableBlocks(summarizer: DurableBlockSummarizer, blocks: ReadonlyMap<DurableBlockId, string>): string {
-  return selectBlockPrompts(blocks, SUMMARIZERS[summarizer].leading)
-    .map(promptText => `${promptText}${BLOCK_SEPARATOR}`)
-    .join("")
+export function appendDurableBlocks(style: DurableBlockSummarizer, placedBlocks: ReadonlyMap<DurableBlockId, string>): string {
+  return joinBlocks(style, placedBlocks, "trailing")
+}
+
+export function prependDurableBlocks(style: DurableBlockSummarizer, placedBlocks: ReadonlyMap<DurableBlockId, string>): string {
+  return joinBlocks(style, placedBlocks, "leading")
 }

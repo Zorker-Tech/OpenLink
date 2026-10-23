@@ -175,3 +175,29 @@ test("the blocks that are placed are exactly the ones that were rendered", () =>
   assert.match(whole, /^the mode\n\nSUMMARY/)
   assert.match(whole, /SUMMARY\n\nNOTE: There was an active todo list/)
 })
+
+test("the external compactor reads the plan before the transcript", () => {
+  const context = enrichments({
+    modePrompt: "the mode",
+    projectRootPrompt: "the root",
+    currentPlan: plan("the plan"),
+    agentTranscriptsFolder: "/repo/.slate/projects/workspace-1/transcripts",
+    conversationId: "conversation-1",
+    automationTriggerContext: "the trigger",
+    todoContent: "the todo",
+    skillBlocks: ["the skill"],
+  })
+  const appended = appendDurableBlocks("external", renderDurableBlocks("external", context))
+  assert.equal(appended.indexOf("10. Current plan mode progress") < appended.indexOf("transcript"), true)
+  assert.equal(appended.indexOf("10. Current plan mode progress") < appended.indexOf("Current mode"), false)
+  assert.equal(prependDurableBlocks("external", renderDurableBlocks("external", context)), "")
+})
+
+test("a block with nothing to say is left out", () => {
+  const empty = enrichments({ modePrompt: "", projectRootPrompt: "", skillBlocks: [] })
+  for (const summarizer of ["self-summary", "openai-compaction", "anthropic-compaction"] as DurableBlockSummarizer[]) {
+    assert.deepEqual([...renderDurableBlocks(summarizer, empty).keys()], [])
+    assert.equal(prependDurableBlocks(summarizer, renderDurableBlocks(summarizer, empty)), "")
+    assert.equal(appendDurableBlocks(summarizer, renderDurableBlocks(summarizer, empty)), "")
+  }
+})
