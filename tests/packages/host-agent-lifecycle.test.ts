@@ -304,8 +304,13 @@ describe("creating an agent", () => {
 
   it("leaves a background agent's session closed behind it, even when it could not be summarized", async () => {
     const world1 = world();
+    world1.tm.sessionStore.createSession = async () => {
+      const created = fakeSession("created-1", { entries: [{ id: "entry-1" }] });
+      world1.tm.sessions.liveSessions.set(created.id, created);
+      return created;
+    };
     const result = await world1.lifecycle.createBackgroundAgent({ name: "New Bot" });
-    assert.deepEqual(result.transcript, []);
+    assert.deepEqual(result.transcript, [{ id: "entry-1" }]);
     assert.equal(world1.named("emitAgents").length, 1);
     const session = world1.tm.sessions.liveSessions.get("created-1") as ReturnType<typeof fakeSession>;
     assert.deepEqual([session.named("dispose").length], [1]);
@@ -397,6 +402,11 @@ describe("starting a new agent off", () => {
     await aborted.lifecycle.kickstartAgent("agent-1", true);
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal((aborted.tm.sessions.liveSessions.get("agent-1") as ReturnType<typeof fakeSession>).named("setIntroductionPending").length, 0);
+    // Even a turn that did send something is not a finished introduction when it was aborted.
+    const abortedWithReply = world({ liveSessions: [["agent-1", fakeSession("agent-1", { pending: true })]], runResult: { sentMessageCount: 1, reacted: false, aborted: true } });
+    await abortedWithReply.lifecycle.kickstartAgent("agent-1", true);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal((abortedWithReply.tm.sessions.liveSessions.get("agent-1") as ReturnType<typeof fakeSession>).named("setIntroductionPending").length, 0);
     const quiesced = world({ liveSessions: [["agent-1", fakeSession("agent-1", { pending: true })]], runResult: { sentMessageCount: 0, reacted: false, aborted: false, quiescedForUpgrade: true } });
     await quiesced.lifecycle.kickstartAgent("agent-1", true);
     await new Promise((resolve) => setImmediate(resolve));
@@ -464,6 +474,7 @@ describe("cloning an agent", () => {
     sourceDb.setAgentOrigin("dev");
     sourceDb.setAgentPurpose("disk-saver");
     sourceDb.setSlateProfile({ description: "does a thing", avatarPath: null });
+    sourceDb.appendTranscriptEntry({ id: "old-entry", kind: "notice", text: "an old note" });
     sourceDb.close();
     writeSlateProfileFile(getSlateProfilePath(sourceDir), { name: "Original", description: "does a thing", title: "", avatarShape: "", avatarColor: "" });
     writeFileSync(join(sourceDir, CANONICAL_AVATAR_FILENAME), "png");
@@ -478,6 +489,8 @@ describe("cloning an agent", () => {
     const copyDb = new SlateAgentDb(join(copyDir, "store.db"));
     assert.deepEqual([copyDb.get("agentId"), copyDb.getAgentOrigin(), copyDb.getAgentPurpose()], ["minted-1", "user", null]);
     assert.deepEqual(copyDb.getSlateProfile(), { description: "does a thing", avatarPath: join(copyDir, CANONICAL_AVATAR_FILENAME) });
+    // The copy starts with no conversation of its own.
+    assert.deepEqual(copyDb.getTranscriptEntries(), []);
     copyDb.close();
     assert.equal(existsSync(join(copyDir, CANONICAL_AVATAR_FILENAME)), true);
     // A source with no avatar leaves the copy without one.
@@ -537,7 +550,14 @@ describe("cloning an agent", () => {
 describe("deleting an agent", () => {
   it("stops everything the agent was doing before it is forgotten", async () => {
     const world1 = world({ activeSession: undefined });
+    const groupCalls: string[] = [];
+    world1.tm.runnerRegistry.activeGroupMemberRunners.set("agent-1", {
+      interruptAll: () => true,
+      cancelBackgroundShellRewatches: () => groupCalls.push("cancel"),
+      drainBackgroundSubagents: async () => groupCalls.push("drain"),
+    });
     await world1.lifecycle.interruptAgentForDeletion("agent-1");
+    assert.deepEqual(groupCalls, ["cancel", "drain"]);
     assert.equal(world1.tm.sessions.deletedAgentIds.has("agent-1"), true);
     assert.deepEqual(world1.named("markAckObligationLost")[0]?.args, ["agent-1", "agent_deleted"]);
     assert.equal(world1.tm.ackObligations.ackRunTokens.has("agent-1"), false);
@@ -591,6 +611,7 @@ describe("deleting an agent", () => {
     // The active agent is closed out only when it is idle, and the next one is put on screen.
     assert.deepEqual(world1.named("deleteSession").map((call) => call.args[0]), ["agent-1"]);
     assert.deepEqual(world1.named("closeSessionWhenIdleLifecycle")[0]?.args, ["agent-1"]);
+    assert.equal(active.named("dispose").length, 1);
     assert.deepEqual(world1.named("setActiveSession")[0]?.args, ["agent-2"]);
     assert.deepEqual(world1.named("setActiveTranscript")[0]?.args, ["agent-2"]);
     assert.equal((world1.named("emit")[0]?.args[0] as { type: string }).type, "snapshot");
