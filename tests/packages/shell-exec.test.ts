@@ -3,6 +3,7 @@ import assert from "node:assert/strict"
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
+import { execFileSync } from "node:child_process"
 
 import {
   SUDO_ALIAS,
@@ -794,6 +795,151 @@ test("a policy that is not sandboxed still merges what it was told", async () =>
     assert.equal(policy.enableSharedBuildCache, true)
     // Nothing else is carried, since a policy that does not sandbox has nothing to configure.
     assert.equal("writeProtectionMapping" in policy, false)
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("the strictest source decides between the person and the repository too", () => {
+  assert.equal(getSandboxPolicyType({ perUser: { type: "insecure_none" }, perRepo: { type: "workspace_readonly" } }), "workspace_readonly")
+  assert.equal(getSandboxPolicyType({ perUser: { type: "workspace_readwrite" } }), "workspace_readwrite")
+})
+
+test("a policy with no sources at all still merges as a workspace policy", async () => {
+  const dir = policyDir()
+  try {
+    const { policy } = await resolveSandboxPolicyForWorkspace(dir, {})
+    assert.equal(policy.type, "workspace_readwrite")
+    assert.deepEqual(policy.networkPolicy, { version: 1, default: "deny" })
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("what may be read is only what every source named", async () => {
+  const dir = policyDir()
+  try {
+    const { policy } = await resolveSandboxPolicyForWorkspace(dir, {
+      perUser: { type: "workspace_readwrite", readBoundary: "workspace", additionalReadPaths: ["/a", "/b"] },
+      perRepo: { type: "workspace_readwrite", readBoundary: "workspace", additionalReadPaths: ["/b", "/c"] },
+    })
+    assert.deepEqual(policy.additionalReadPaths, ["/b"])
+    const empty = await resolveSandboxPolicyForWorkspace(dir, {
+      perUser: { type: "workspace_readwrite", readBoundary: "workspace", additionalReadPaths: ["/a"] },
+      perRepo: { type: "workspace_readwrite", readBoundary: "workspace", additionalReadPaths: [] },
+    })
+    assert.deepEqual(empty.policy.additionalReadPaths, [])
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("paths are written the one way before they are merged", async () => {
+  const dir = policyDir()
+  try {
+    const bs = String.fromCharCode(92)
+    const { policy } = await resolveSandboxPolicyForWorkspace(dir, {
+      perUser: { type: "workspace_readwrite", additionalReadwritePaths: ["/dup/", "/dup", "", "C:" + bs + "temp" + bs + "a" + bs] },
+      perRepo: { type: "workspace_readwrite", additionalReadwritePaths: ["C:" + bs + "temp" + bs + "a"] },
+    })
+    assert.deepEqual(policy.additionalReadwritePaths, ["/dup", "/", "C:/temp/a"])
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("a pattern already in an ignore mapping moves rather than repeats", async () => {
+  const dir = policyDir()
+  try {
+    const { policy } = await resolveSandboxPolicyForWorkspace(dir, {
+      perUser: { type: "workspace_readwrite", ignoreMapping: { "/a": ["x", "y"] } },
+      perRepo: { type: "workspace_readwrite", ignoreMapping: { "/a": ["y", "x", "w"], "/b": [] } },
+    })
+    assert.deepEqual((policy.ignoreMapping as Record<string, string[]>)?.["/a"], ["y", "x", "w"])
+    assert.deepEqual((policy.ignoreMapping as Record<string, string[]>)?.["/b"], [])
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("a network policy that names only what it denies still exists", async () => {
+  const dir = policyDir()
+  try {
+    const denied = await resolveSandboxPolicyForWorkspace(dir, {
+      perUser: { type: "workspace_readwrite", networkPolicy: { version: 1, deny: ["bad.example"] } },
+    })
+    const network = denied.policy.networkPolicy as { default?: string; deny: string[] }
+    assert.deepEqual(network.deny, ["bad.example"])
+    // Only the deny list was named, so no default was decided by the merge.
+    assert.equal(network.default, undefined)
+    const logged = await resolveSandboxPolicyForWorkspace(dir, {
+      perUser: { type: "workspace_readwrite", networkPolicy: { version: 1, allow: ["a.example"], logging: { level: 1 } } },
+      teamAdmin: { type: "workspace_readwrite", networkPolicy: { version: 1, allow: ["a.example"], logging: { level: 2 } } },
+    })
+    assert.deepEqual((logged.policy.networkPolicy as { logging?: unknown }).logging, { level: 2 })
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("an empty organization allowlist replaces nothing", async () => {
+  const dir = policyDir()
+  try {
+    const { policy } = await resolveSandboxPolicyForWorkspace(dir, {
+      perUser: { type: "workspace_readwrite", networkPolicy: { version: 1, allow: ["mine.example"] } },
+      teamAdmin: { type: "workspace_readwrite", networkPolicy: { version: 1, allow: [] } },
+    })
+    assert.deepEqual((policy.networkPolicy as { allow: string[] }).allow, ["mine.example"])
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("one source tightening a boolean is enough, and one loosening it is not", async () => {
+  const dir = policyDir()
+  try {
+    const { policy } = await resolveSandboxPolicyForWorkspace(dir, {
+      perUser: { type: "workspace_readwrite", disableTmpWrite: true },
+      perRepo: { type: "workspace_readwrite", disableTmpWrite: false },
+    })
+    assert.equal(policy.disableTmpWrite, true)
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("a worktree's git directory is added to what may be written, and its protections to what may not", async () => {
+  const dir = policyDir()
+  try {
+    const repo = path.join(dir, "repo")
+    const worktree = path.join(dir, "wt")
+    fs.mkdirSync(repo)
+    execFileSync("git", ["init", "-q"], { cwd: repo, stdio: "ignore" })
+    execFileSync("git", ["-c", "user.email=a@b.c", "-c", "user.name=x", "commit", "-q", "--allow-empty", "-m", "one"], { cwd: repo, stdio: "ignore" })
+    execFileSync("git", ["worktree", "add", "-q", worktree], { cwd: repo, stdio: "ignore" })
+    const { policy } = await resolveSandboxPolicyForWorkspace(worktree, {
+      perRepo: { type: "workspace_readwrite", additionalReadwritePaths: ["/w"], ignoreMapping: { "/m": ["*"] } },
+    })
+    const readwrite = policy.additionalReadwritePaths as string[]
+    assert.equal(readwrite[0], "/w")
+    assert.equal(readwrite.length, 2)
+    assert.equal((readwrite[1] ?? "").endsWith(path.sep + "repo" + path.sep + ".git"), true)
+    assert.deepEqual((policy.ignoreMapping as Record<string, string[]>)?.["/m"], ["*"])
+    const protectionKeys = Object.keys(policy.writeProtectionMapping as Record<string, unknown>)
+    assert.equal(protectionKeys.some((key) => key.includes(path.sep + "repo")), true)
+    assert.equal(protectionKeys.some((key) => key.includes(path.sep + "wt")), true)
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("a .git that is a file but not a worktree of any repository is just a workspace", async () => {
+  const dir = policyDir()
+  try {
+    fs.writeFileSync(path.join(dir, ".git"), "gitdir: /nowhere\n")
+    const { policy } = await resolveSandboxPolicyForWorkspace(dir, { perRepo: { type: "workspace_readwrite" } })
+    assert.equal(policy.type, "workspace_readwrite")
+    assert.equal("additionalReadwritePaths" in policy, false)
   } finally {
     fs.rmSync(dir, { recursive: true, force: true })
   }
