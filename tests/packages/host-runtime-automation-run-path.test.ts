@@ -263,6 +263,16 @@ describe("what stops an automation from firing", () => {
 });
 
 describe("what a fired automation does", () => {
+  it("marks each notice the routine raises as it fires", async () => {
+    const raised = world();
+    const listDefinitions = raised.session.automations.listDefinitions;
+    raised.session.automations.get = () => automation({ createdAt: 0, trigger: { type: "github", repo: "org/repo", events: ["pr-opened"] } });
+    void listDefinitions;
+    await raised.path.fireAutomation(args());
+    assert.deepEqual(raised.named("markNoticeRaised").map((call) => call.args), [["auto-1", "github-listener-scope"]]);
+  });
+
+
   it("runs the routine's own wake and writes the run onto its ledger", async () => {
     const world1 = world({ timeZone: "UTC", notices: [{ id: "notice-1" }] });
     assert.equal(await world1.path.fireAutomation(args()), "ok");
