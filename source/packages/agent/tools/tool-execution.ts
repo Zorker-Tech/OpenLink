@@ -46,20 +46,20 @@ export function getRequiredToolName(allTools: Record<string, { name: string }>, 
   return tool.name
 }
 
-export function isPromptVisibleDescription(options: { promptVisible?: boolean } | undefined): boolean {
-  return options?.promptVisible !== false
+export function isPromptVisibleDescription(settings: { promptVisible?: boolean } | undefined): boolean {
+  return settings?.promptVisible !== false
 }
 
-export function isForcedStaticContext(contextType: { type?: string } | undefined): boolean {
-  return contextType?.type === "static"
+export function isForcedStaticContext(contextKind: { type?: string } | undefined): boolean {
+  return contextKind?.type === "static"
 }
 
 /** A dynamic context may still carry a short version for prompts that have no room for the long one. */
 export function getConciseStaticContext(
-  contextType: { type?: string; conciseStaticContext?: string } | undefined,
+  contextKind: { type?: string; conciseStaticContext?: string } | undefined,
 ): string | undefined {
-  if (contextType?.type !== "dynamic") return undefined
-  return contextType.conciseStaticContext?.trim() || undefined
+  if (contextKind?.type !== "dynamic") return undefined
+  return contextKind.conciseStaticContext?.trim() || undefined
 }
 
 /** Which tool a call is really for: a meta tool may report a different one for the call it wraps. */
@@ -72,11 +72,11 @@ export function resolveToolCallIdentity({ tool, args, isDirectDynamicTool = fals
   readonly isDynamic: boolean
   readonly [key: string]: unknown
 } {
-  const identity = tool.resolveToolCallTelemetry?.(args) ?? { toolIdentifier: tool.toolIdentifier, isDynamic: false }
+  const resolvedIdentity = tool.resolveToolCallTelemetry?.(args) ?? { toolIdentifier: tool.toolIdentifier, isDynamic: false }
   return {
-    ...identity,
-    toolIdentifier: identity.toolIdentifier as string,
-    isDynamic: identity.isDynamic === true || isDirectDynamicTool,
+    ...resolvedIdentity,
+    toolIdentifier: resolvedIdentity.toolIdentifier as string,
+    isDynamic: resolvedIdentity.isDynamic === true || isDirectDynamicTool,
   }
 }
 
@@ -86,22 +86,22 @@ export interface ToolExecutionSet {
 }
 
 /** A tool that is executable but not shown to the model still has to be runnable by the runtime. */
-export function getExecutableTools(toolSet: ToolExecutionSet): AnyTool[] {
-  return toolSet.additionalExecutableTools.length === 0
-    ? toolSet.modelVisibleTools
-    : [...toolSet.modelVisibleTools, ...toolSet.additionalExecutableTools]
+export function getExecutableTools(executionSet: ToolExecutionSet): AnyTool[] {
+  return executionSet.additionalExecutableTools.length === 0
+    ? executionSet.modelVisibleTools
+    : [...executionSet.modelVisibleTools, ...executionSet.additionalExecutableTools]
 }
 
-export function getDirectDynamicToolNames(toolSet: ToolExecutionSet): Set<string> {
-  return new Set(toolSet.additionalExecutableTools.map(tool => tool.name))
+export function getDirectDynamicToolNames(executionSet: ToolExecutionSet): Set<string> {
+  return new Set(executionSet.additionalExecutableTools.map(tool => tool.name))
 }
 
 /** MCP tools arrive in whatever order the servers answered; sorting them keeps prompts cacheable. */
-function stabilizeMcpToolOrder(tools: AnyTool[]): AnyTool[] {
+function sortMcpTools(toolList: AnyTool[]): AnyTool[] {
   const nonMcp: AnyTool[] = []
   const mcp: AnyTool[] = []
-  for (const tool of tools) (tool.toolIdentifier === "MCP" ? mcp : nonMcp).push(tool)
-  if (mcp.length === 0) return tools
+  for (const tool of toolList) (tool.toolIdentifier === "MCP" ? mcp : nonMcp).push(tool)
+  if (mcp.length === 0) return toolList
   mcp.sort((a, b) => a.name.localeCompare(b.name))
   return [...nonMcp, ...mcp]
 }
@@ -112,15 +112,15 @@ export class ToolSetHandle {
     private staticTools: AnyTool[],
     private dynamicTools: AnyTool[] = [],
     private readonly dynamicToolRegistry?: { replaceTools(value: { dynamicTools: AnyTool[]; allTools: AnyTool[] }): void },
-    private descriptionProps: Record<string, unknown> = { allTools: {} },
+    private generatorProps: Record<string, unknown> = { allTools: {} },
   ) {}
 
-  hasTool(identifier: string): boolean {
-    return this.getTool(identifier) !== undefined
+  hasTool(toolIdentifier: string): boolean {
+    return this.getTool(toolIdentifier) !== undefined
   }
 
-  getTool(identifier: string): AnyTool | undefined {
-    return this.allToolsByIdentifier.get(identifier)?.at(0)
+  getTool(toolIdentifier: string): AnyTool | undefined {
+    return this.allToolsByIdentifier.get(toolIdentifier)?.at(0)
   }
 
   resolveToolCallIdentity({ toolName, args }: { toolName: string; args: unknown }): ReturnType<typeof resolveToolCallIdentity> | undefined {
@@ -132,16 +132,16 @@ export class ToolSetHandle {
       : resolveToolCallIdentity({ tool: dynamicTool, args, isDirectDynamicTool: true })
   }
 
-  getTools(identifier: string): AnyTool[] | undefined {
-    return this.allToolsByIdentifier.get(identifier)
+  getTools(toolIdentifier: string): AnyTool[] | undefined {
+    return this.allToolsByIdentifier.get(toolIdentifier)
   }
 
-  hasStaticTool(identifier: string): boolean {
-    return this.getStaticTool(identifier) !== undefined
+  hasStaticTool(toolIdentifier: string): boolean {
+    return this.getStaticTool(toolIdentifier) !== undefined
   }
 
-  getStaticTool(identifier: string): AnyTool | undefined {
-    return this.staticTools.find(tool => tool.toolIdentifier === identifier)
+  getStaticTool(toolIdentifier: string): AnyTool | undefined {
+    return this.staticTools.find(tool => tool.toolIdentifier === toolIdentifier)
   }
 
   getStaticTools(): AnyTool[] {
@@ -177,22 +177,22 @@ export class ToolSetHandle {
   }
 
   getDescriptionProps(): Record<string, unknown> {
-    return this.descriptionProps
+    return this.generatorProps
   }
 
   /** Rewrites the set in place, keeping each tool on the side of the line it was already on. */
-  transformToolsInPlace(transform: (tools: AnyTool[]) => AnyTool[]): this {
-    const transformed = transform(this.getAllTools())
+  transformToolsInPlace(transformTools: (toolList: AnyTool[]) => AnyTool[]): this {
+    const transformed = transformTools(this.getAllTools())
     const dynamicToolSet = new Set(this.dynamicTools)
     const dynamicTools = transformed.filter(tool => dynamicToolSet.has(tool))
     const staticTools = transformed.filter(tool => !dynamicToolSet.has(tool))
-    const handle = this.dynamicToolRegistry === undefined
+    const builtHandle = this.dynamicToolRegistry === undefined
       ? ToolSetHandle.fromTools(staticTools)
       : ToolSetHandle.fromTools({ staticTools, dynamicTools, dynamicToolRegistry: this.dynamicToolRegistry })
-    this.allToolsByIdentifier = handle.allToolsByIdentifier
-    this.staticTools = handle.staticTools
-    this.dynamicTools = handle.dynamicTools
-    this.descriptionProps = handle.descriptionProps
+    this.allToolsByIdentifier = builtHandle.allToolsByIdentifier
+    this.staticTools = builtHandle.staticTools
+    this.dynamicTools = builtHandle.dynamicTools
+    this.generatorProps = builtHandle.generatorProps
     return this
   }
 
@@ -202,33 +202,33 @@ export class ToolSetHandle {
    * are ordinary tools, because nothing would be able to reach them.
    */
   static fromTools(
-    input: AnyTool[] | {
+    callInput: AnyTool[] | {
       staticTools: AnyTool[]
       dynamicTools?: AnyTool[]
       dynamicToolRegistry?: { replaceTools(value: { dynamicTools: AnyTool[]; allTools: AnyTool[] }): void }
     },
   ): ToolSetHandle {
-    const { staticTools: tools, dynamicTools = [], dynamicToolRegistry } = Array.isArray(input)
-      ? { staticTools: input }
-      : input
-    const hasDynamicMetaTools = tools.some(tool => tool.dynamicToolMetaRole === "discovery") &&
-      tools.some(tool => tool.dynamicToolMetaRole === "invocation")
+    const { staticTools: toolList, dynamicTools = [], dynamicToolRegistry } = Array.isArray(callInput)
+      ? { staticTools: callInput }
+      : callInput
+    const hasDynamicMetaTools = toolList.some(tool => tool.dynamicToolMetaRole === "discovery") &&
+      toolList.some(tool => tool.dynamicToolMetaRole === "invocation")
     const canExposeDynamicTools = dynamicToolRegistry !== undefined && hasDynamicMetaTools
     const effectiveDynamicTools = canExposeDynamicTools ? dynamicTools : []
-    const effectiveStaticTools = canExposeDynamicTools ? tools : [...tools, ...dynamicTools]
-    const descriptionProps = buildDescriptionGeneratorProps([...effectiveStaticTools, ...effectiveDynamicTools])
+    const effectiveStaticTools = canExposeDynamicTools ? toolList : [...toolList, ...dynamicTools]
+    const generatorProps = buildDescriptionGeneratorProps([...effectiveStaticTools, ...effectiveDynamicTools])
     dynamicToolRegistry?.replaceTools({
       dynamicTools: effectiveDynamicTools,
       allTools: [...effectiveStaticTools, ...effectiveDynamicTools],
     })
     const allToolsByIdentifier = new Map<string, AnyTool[]>()
-    const sortedStaticTools = stabilizeMcpToolOrder(effectiveStaticTools)
+    const sortedStaticTools = sortMcpTools(effectiveStaticTools)
     for (const tool of [...sortedStaticTools, ...effectiveDynamicTools]) {
       const existing = allToolsByIdentifier.get(tool.toolIdentifier)
       if (existing) existing.push(tool)
       else allToolsByIdentifier.set(tool.toolIdentifier, [tool])
     }
-    return new ToolSetHandle(allToolsByIdentifier, sortedStaticTools, effectiveDynamicTools, dynamicToolRegistry, descriptionProps)
+    return new ToolSetHandle(allToolsByIdentifier, sortedStaticTools, effectiveDynamicTools, dynamicToolRegistry, generatorProps)
   }
 
   /**
@@ -236,17 +236,17 @@ export class ToolSetHandle {
    * to publish through one of them, and a tool published through the wrong registry is a tool nobody
    * can invoke. When one side owns a registry the merge happens through it.
    */
-  merge(other: ToolSetHandle): ToolSetHandle {
-    const otherRegistry = other.getDynamicToolRegistry()
+  merge(otherHandle: ToolSetHandle): ToolSetHandle {
+    const otherRegistry = otherHandle.getDynamicToolRegistry()
     if (this.dynamicToolRegistry !== undefined && otherRegistry !== undefined && this.dynamicToolRegistry !== otherRegistry) {
       throw new Error("Cannot merge toolsets with distinct dynamic registries")
     }
     if (this.dynamicToolRegistry !== undefined && this.dynamicToolRegistry === otherRegistry) {
       throw new Error("Cannot merge toolsets sharing a dynamic registry")
     }
-    if (this.dynamicToolRegistry !== undefined) return this.transformToolsInPlace(tools => [...tools, ...other.getAllTools()])
-    if (otherRegistry !== undefined) return other.transformToolsInPlace(tools => [...this.getAllTools(), ...tools])
-    return ToolSetHandle.fromTools([...this.getAllTools(), ...other.getAllTools()])
+    if (this.dynamicToolRegistry !== undefined) return this.transformToolsInPlace(toolList => [...toolList, ...otherHandle.getAllTools()])
+    if (otherRegistry !== undefined) return otherHandle.transformToolsInPlace(toolList => [...this.getAllTools(), ...toolList])
+    return ToolSetHandle.fromTools([...this.getAllTools(), ...otherHandle.getAllTools()])
   }
 }
 
@@ -257,106 +257,106 @@ export class ToolSetHandle {
  */
 export async function executeToolResultOrError(
   tool: AnyTool,
-  parentCtx: Context,
+  outerContext: Context,
   interactionHandler: AnyTool,
   argsStream: AsyncIterable<string>,
-  meta: AnyTool,
+  callMeta: AnyTool,
 ): Promise<AnyTool> {
-  using spanContext = createSpan(parentCtx.withName("executeToolResultOrError"))
-  const ctx = withLogAttributes(spanContext.ctx, { toolName: tool.toolIdentifier, toolId: meta.toolCallId })
-  spanContext.span.setAttribute("toolName", tool.toolIdentifier)
-  spanContext.span.setAttribute("toolId", meta.toolCallId)
+  using callSpanContext = createSpan(outerContext.withName("executeToolResultOrError"))
+  const callContext = withLogAttributes(callSpanContext.ctx, { toolName: tool.toolIdentifier, toolId: callMeta.toolCallId })
+  callSpanContext.span.setAttribute("toolName", tool.toolIdentifier)
+  callSpanContext.span.setAttribute("toolId", callMeta.toolCallId)
   // Some callers keep the raw arguments around to re-issue the call; they are told before it runs.
-  if (meta.enableToolArgPreservation === true && "customToolFormat" in tool && tool.customToolFormat !== undefined) {
-    interactionHandler.markToolCallForArgPreservation(meta.toolCallId)
+  if (callMeta.enableToolArgPreservation === true && "customToolFormat" in tool && tool.customToolFormat !== undefined) {
+    interactionHandler.markToolCallForArgPreservation(callMeta.toolCallId)
   }
   try {
-    return { result: await tool.execute(ctx, interactionHandler, argsStream, meta) }
-  } catch (error) {
-    if (error instanceof DeferredInteractionResponseError) throw error
-    const shouldBubble = getShouldBubbleRetryableTaskErrorsFromContext(ctx)
-    if (error instanceof RetryableToolOrchestrationError && shouldBubble) throw error
-    const streamStartTimeout = maybeCreateAgentStreamStartTimeoutTurnError(error)
-    if (streamStartTimeout !== undefined) throw streamStartTimeout
-    const interactionAbortSignal = interactionHandler.getAbortSignal?.(ctx)
-    const normalized = maybeRewriteFusedStepGuardAbort(
-      maybeNormalizeExecBoundaryError(error),
-      interactionAbortSignal !== undefined ? [interactionAbortSignal, ctx.signal] : [ctx.signal],
+    return { result: await tool.execute(callContext, interactionHandler, argsStream, callMeta) }
+  } catch (failure) {
+    if (failure instanceof DeferredInteractionResponseError) throw failure
+    const bubbleRetryable = getShouldBubbleRetryableTaskErrorsFromContext(callContext)
+    if (failure instanceof RetryableToolOrchestrationError && bubbleRetryable) throw failure
+    const startTimeoutError = maybeCreateAgentStreamStartTimeoutTurnError(failure)
+    if (startTimeoutError !== undefined) throw startTimeoutError
+    const abortSignal = interactionHandler.getAbortSignal?.(callContext)
+    const classifiableFailure = rewriteGuardAbort(
+      maybeNormalizeExecBoundaryError(failure),
+      abortSignal !== undefined ? [abortSignal, callContext.signal] : [callContext.signal],
       tool.name,
     )
-    if (normalized instanceof DeferredInteractionResponseError) throw normalized
-    if (normalized instanceof RetryableToolOrchestrationError && shouldBubble) throw normalized
-    const errorClassification = classifyError(normalized)
-    const output = tool.serializeError(normalized)
-    if (!shouldHideToolCallErrorFromClient(normalized)) {
-      await interactionHandler.emitToolCallError(ctx, meta.toolCallId, output)
+    if (classifiableFailure instanceof DeferredInteractionResponseError) throw classifiableFailure
+    if (classifiableFailure instanceof RetryableToolOrchestrationError && bubbleRetryable) throw classifiableFailure
+    const errorClassification = classifyError(classifiableFailure)
+    const callOutput = tool.serializeError(classifiableFailure)
+    if (!hidesClientError(classifiableFailure)) {
+      await interactionHandler.emitToolCallError(callContext, callMeta.toolCallId, callOutput)
     }
-    return { result: output.tool.value?.result, error: normalized, errorClassification }
+    return { result: callOutput.tool.value?.result, error: classifiableFailure, errorClassification }
   }
 }
 
-function shouldHideToolCallErrorFromClient(error: unknown): boolean {
-  return error instanceof CustomToolCallError && "hideFromClientToolCall" in error && error.hideFromClientToolCall === true
+function hidesClientError(failure: unknown): boolean {
+  return failure instanceof CustomToolCallError && "hideFromClientToolCall" in failure && failure.hideFromClientToolCall === true
 }
 
-function isAbortLikeError(error: unknown): boolean {
-  return error instanceof ToolCallAbortedError || (error instanceof Error && error.name === "AbortError")
+function looksAborted(failure: unknown): boolean {
+  return failure instanceof ToolCallAbortedError || (failure instanceof Error && failure.name === "AbortError")
 }
 
 /** An abort whose reason is the fused step guard is a timeout that was reported as a cancellation. */
-function maybeRewriteFusedStepGuardAbort(error: unknown, abortSignals: AbortSignal[], toolName: string): unknown {
-  if (!isAbortLikeError(error)) return error
-  const reason = findFusedStepGuardTimeoutReason(abortSignals, error)
-  if (reason === undefined) return error
+function rewriteGuardAbort(failure: unknown, abortSignals: AbortSignal[], toolName: string): unknown {
+  if (!looksAborted(failure)) return failure
+  const reason = guardTimeoutReason(abortSignals, failure)
+  if (reason === undefined) return failure
   const timeoutError = createToolCallExecutionTimeoutError({ toolName, executionTimeoutMs: reason.fuseGuardMs })
-  timeoutError.cause = error
+  timeoutError.cause = failure
   return timeoutError
 }
 
-function findFusedStepGuardTimeoutReason(abortSignals: AbortSignal[], error: unknown): { fuseGuardMs: number } | undefined {
+function guardTimeoutReason(abortSignals: AbortSignal[], failure: unknown): { fuseGuardMs: number } | undefined {
   for (const signal of abortSignals) {
     if (signal.aborted && isFusedStepGuardTimeoutReason(signal.reason)) return signal.reason
   }
-  if (isFusedStepGuardTimeoutReason(error)) return error
-  return error instanceof Error && isFusedStepGuardTimeoutReason(error.cause) ? error.cause : undefined
+  if (isFusedStepGuardTimeoutReason(failure)) return failure
+  return failure instanceof Error && isFusedStepGuardTimeoutReason(failure.cause) ? failure.cause : undefined
 }
 
 /** What went wrong, in the vocabulary retry policy and metrics use. */
-export function classifyError(error: unknown): ToolErrorClassification {
-  if (error instanceof RetryableToolOrchestrationError) return error.classification ?? ToolErrorClassification.OTHER_ERROR
-  if (error instanceof CustomToolCallError) return error.classification
-  if (error instanceof ToolCallArgParseError) return ToolErrorClassification.INVALID_ARGS
-  if (isAbortLikeError(error)) return ToolErrorClassification.ABORTED
-  if (error instanceof ToolCallRejectedError) {
-    return error.message.includes(HOOK_DENIAL_AGENT_NOTE) ? ToolErrorClassification.HOOK_DENIED : ToolErrorClassification.USER_REJECTED
+export function classifyError(failure: unknown): ToolErrorClassification {
+  if (failure instanceof RetryableToolOrchestrationError) return failure.classification ?? ToolErrorClassification.OTHER_ERROR
+  if (failure instanceof CustomToolCallError) return failure.classification
+  if (failure instanceof ToolCallArgParseError) return ToolErrorClassification.INVALID_ARGS
+  if (looksAborted(failure)) return ToolErrorClassification.ABORTED
+  if (failure instanceof ToolCallRejectedError) {
+    return failure.message.includes(HOOK_DENIAL_AGENT_NOTE) ? ToolErrorClassification.HOOK_DENIED : ToolErrorClassification.USER_REJECTED
   }
-  if (error instanceof ToolCallUnexpectedEnvironmentError) return ToolErrorClassification.UNEXPECTED_ENVIRONMENT
-  if (error instanceof ToolTimeoutError || (error instanceof Error && error.name === "TimeoutError") || isAxiosTimeoutError(error)) {
+  if (failure instanceof ToolCallUnexpectedEnvironmentError) return ToolErrorClassification.UNEXPECTED_ENVIRONMENT
+  if (failure instanceof ToolTimeoutError || (failure instanceof Error && failure.name === "TimeoutError") || axiosTimeout(failure)) {
     return ToolErrorClassification.TIMEOUT
   }
-  if (isBadUserDeviceStateError(error)) return ToolErrorClassification.BAD_USER_DEVICE_STATE
-  if (isUnexpectedEnvironmentErrno(error)) return ToolErrorClassification.UNEXPECTED_ENVIRONMENT
-  if (error instanceof RemoteHookBlockedError) return ToolErrorClassification.HOOK_DENIED
-  if (error instanceof Error && error.message.includes(HOOK_DENIAL_AGENT_NOTE)) return ToolErrorClassification.HOOK_DENIED
+  if (badDeviceState(failure)) return ToolErrorClassification.BAD_USER_DEVICE_STATE
+  if (missingEnvironmentPath(failure)) return ToolErrorClassification.UNEXPECTED_ENVIRONMENT
+  if (failure instanceof RemoteHookBlockedError) return ToolErrorClassification.HOOK_DENIED
+  if (failure instanceof Error && failure.message.includes(HOOK_DENIAL_AGENT_NOTE)) return ToolErrorClassification.HOOK_DENIED
   return ToolErrorClassification.OTHER_ERROR
 }
 
-function errorCode(error: Error): unknown {
-  return (error as Error & { code?: unknown }).code
+function errnoOf(failure: Error): unknown {
+  return (failure as Error & { code?: unknown }).code
 }
 
-function isAxiosTimeoutError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false
-  const code = errorCode(error)
-  return code === "ETIMEDOUT" || (code === "ECONNABORTED" && error.message.toLowerCase().includes("timeout"))
+function axiosTimeout(failure: unknown): boolean {
+  if (!(failure instanceof Error)) return false
+  const code = errnoOf(failure)
+  return code === "ETIMEDOUT" || (code === "ECONNABORTED" && failure.message.toLowerCase().includes("timeout"))
 }
 
 /** The machine ran out of something the work needed; retrying the same call on the same machine is futile. */
-function isBadUserDeviceStateError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false
-  const code = errorCode(error)
+function badDeviceState(failure: unknown): boolean {
+  if (!(failure instanceof Error)) return false
+  const code = errnoOf(failure)
   if (["ENOSPC", "ENOMEM", "EMFILE", "ENFILE", "EAGAIN", "EBADF"].includes(String(code))) return true
-  const message = error.message.toLowerCase()
+  const message = failure.message.toLowerCase()
   return message.includes("no space left on device") ||
     message.includes("out of memory") ||
     message.includes("cannot allocate memory") ||
@@ -365,44 +365,44 @@ function isBadUserDeviceStateError(error: unknown): boolean {
 }
 
 /** The environment is not what the call assumed: a path that is not there, or not what it claimed to be. */
-function isUnexpectedEnvironmentErrno(error: unknown): boolean {
-  if (!(error instanceof Error)) return false
-  const code = errorCode(error)
+function missingEnvironmentPath(failure: unknown): boolean {
+  if (!(failure instanceof Error)) return false
+  const code = errnoOf(failure)
   if (code === "ENOENT" || code === "ENOTDIR") return true
-  const message = error.message.toLowerCase()
+  const message = failure.message.toLowerCase()
   return message.includes("no such file or directory") || message.includes("not a directory")
 }
 
 /** Rendering a result and a failure is the same call, told apart by a flag the renderer sets. */
-export async function renderToolResultOrError(ctx: unknown, tool: AnyTool, output: AnyTool, props: unknown): Promise<AnyTool> {
-  const renderedOutput = await tool.render(ctx, output.result, props)
-  return "error" in output ? { ...renderedOutput, isError: true } : renderedOutput
+export async function renderToolResultOrError(callContext: unknown, tool: AnyTool, callOutput: AnyTool, descriptionInput: unknown): Promise<AnyTool> {
+  const rendered = await tool.render(callContext, callOutput.result, descriptionInput)
+  return "error" in callOutput ? { ...rendered, isError: true } : rendered
 }
 
-export function extractToolMetadataMap(tools: AnyTool[]): Record<string, unknown> {
-  const record: Record<string, unknown> = {}
-  for (const tool of tools) {
-    record[tool.toolIdentifier] = { name: tool.name, toolIdentifier: tool.toolIdentifier, parameters: tool.parameters }
+export function extractToolMetadataMap(toolList: AnyTool[]): Record<string, unknown> {
+  const metadataByTool: Record<string, unknown> = {}
+  for (const tool of toolList) {
+    metadataByTool[tool.toolIdentifier] = { name: tool.name, toolIdentifier: tool.toolIdentifier, parameters: tool.parameters }
   }
-  return record
+  return metadataByTool
 }
 
 /** What a tool is told about its siblings when it writes its own description. */
-export function buildDescriptionGeneratorProps(tools: AnyTool[]): Record<string, unknown> {
+export function buildDescriptionGeneratorProps(toolList: AnyTool[]): Record<string, unknown> {
   const allTools: Record<string, unknown> = {}
-  for (const tool of tools) {
+  for (const tool of toolList) {
     allTools[tool.toolIdentifier] = { name: tool.name, toolIdentifier: tool.toolIdentifier, parameters: tool.parameters }
   }
   return { allTools }
 }
 
 /** The tools as the model sees them: a generated description where the tool has one, its own otherwise. */
-export function toAgentTools(tools: AnyTool[], props?: Record<string, unknown>): AnyTool[] {
-  const descriptionProps = props ?? buildDescriptionGeneratorProps(tools)
-  return tools.map(tool => "descriptionGenerator" in tool
+export function toAgentTools(toolList: AnyTool[], descriptionInput?: Record<string, unknown>): AnyTool[] {
+  const generatorProps = descriptionInput ?? buildDescriptionGeneratorProps(toolList)
+  return toolList.map(tool => "descriptionGenerator" in tool
     ? {
       name: tool.name,
-      description: tool.descriptionGenerator(descriptionProps),
+      description: tool.descriptionGenerator(generatorProps),
       parameters: tool.parameters,
       customToolFormat: tool.customToolFormat,
       render: tool.render,
