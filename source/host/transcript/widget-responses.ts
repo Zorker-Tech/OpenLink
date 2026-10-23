@@ -1,8 +1,8 @@
-/** What the cards in a conversation do when they are answered.
+/** What the cards in a session do when they are answered.
 
  * A card that asks a question, offers a widget, asks for a secret or proposes a permission is answered, dismissed,
- * reacted to or left to expire here: the answer is written onto the entry so a timeline shows it, the agent is resumed
- * when the platform decides it should be, and a card that went stale is retired on the session it belongs to. */
+ * reacted to or left to expire here: the answer is written onto the transcriptEntry so a timeline shows it, the agent is resumed
+ * when the platform decides it should be, and a card that went stale is didRetire on the session it belongs to. */
 import { errorLogTag } from "../../shared/errors/summary.ts";
 import {
   mainTranscriptOf,
@@ -36,119 +36,119 @@ export class WidgetResponses {
     dismissedQuestionPrompts: string[];
   } {
     const isActive = session.id === this.tm.sessions.activeSession?.id;
-    const entries = isActive
+    const entryList = isActive
       ? getTranscript()
       : session.db.getTranscriptEntries();
     const skippedQuestionPrompts: string[] = [];
     const dismissedQuestionPrompts: string[] = [];
-    for (const entry of entries) {
+    for (const transcriptEntry of entryList) {
       if (
-        entry.kind !== "send-message" ||
-        entry.respondedValue != null ||
-        entry.widgetSkipped === true
+        transcriptEntry.kind !== "send-message" ||
+        transcriptEntry.respondedValue != null ||
+        transcriptEntry.widgetSkipped === true
       )
         continue;
-      const summary = skippablePromptSummary(entry.message as any);
-      if (summary == null) continue;
-      if (entry.widgetDismissed === true)
-        dismissedQuestionPrompts.push(summary);
-      else skippedQuestionPrompts.push(summary);
+      const promptSummary = skippablePromptSummary(transcriptEntry.message as any);
+      if (promptSummary == null) continue;
+      if (transcriptEntry.widgetDismissed === true)
+        dismissedQuestionPrompts.push(promptSummary);
+      else skippedQuestionPrompts.push(promptSummary);
       const markSkipped = (current: TranscriptEntry): TranscriptEntry =>
         current.kind === "send-message"
           ? { ...current, widgetSkipped: true }
           : current;
       if (isActive) {
-        const updated = updateEntry(entry.id, markSkipped);
-        if (updated != null)
-          this.tm.roster.emit({ type: "updated", entry: updated });
+        const stampedEntry = updateEntry(transcriptEntry.id, markSkipped);
+        if (stampedEntry != null)
+          this.tm.roster.emit({ type: "updated", entry: stampedEntry });
       }
-      session.db.updateTranscriptEntry(entry.id, markSkipped);
+      session.db.updateTranscriptEntry(transcriptEntry.id, markSkipped);
     }
     return { skippedQuestionPrompts, dismissedQuestionPrompts };
   }
 
   async respondToWidget(
     entryId: string,
-    value: string,
+    text: string,
     agentId: string,
   ): Promise<{ accepted: boolean }> {
-    const trimmedValue = value.trim();
-    if (trimmedValue.length === 0) return { accepted: false };
+    const cleanValue = text.trim();
+    if (cleanValue.length === 0) return { accepted: false };
     await this.tm.sessions.ensureActionTarget(agentId);
     const targetAgentId = this.tm.sessions.activeSession?.id;
-    if (!this.recordWidgetResponse(entryId, trimmedValue))
+    if (!this.recordWidgetResponse(entryId, cleanValue))
       return { accepted: false };
 
-    const widgetEntry = getTranscript().find((entry) => entry.id === entryId);
+    const widgetRow = getTranscript().find((transcriptEntry) => transcriptEntry.id === entryId);
     const replyToId =
-      widgetEntry?.kind === "send-message"
-        ? (widgetEntry.replyTo as string | undefined)
+      widgetRow?.kind === "send-message"
+        ? (widgetRow.replyTo as string | undefined)
         : undefined;
-    let modelPrompt = trimmedValue;
-    let guardApplied = false;
+    let wakePrompt = cleanValue;
+    let guardedOk = false;
     try {
       if (
-        trimmedValue.startsWith(SPEND_GUARD_VALUE_PREFIX) &&
+        cleanValue.startsWith(SPEND_GUARD_VALUE_PREFIX) &&
         targetAgentId != null
       ) {
         const applied =
           await this.tm.automationRuntime.handleSpendGuardWidgetAnswer({
             agentId: targetAgentId,
             entryId,
-            value: trimmedValue,
+            value: cleanValue,
             onApplied: () => {
-              guardApplied = true;
+              guardedOk = true;
             },
           });
         if (applied == null) {
           this.rollbackWidgetResponse(entryId);
           return { accepted: false };
         }
-        modelPrompt = applied;
+        wakePrompt = applied;
       }
-      await this.tm.sendPrompt(modelPrompt, {
+      await this.tm.sendPrompt(wakePrompt, {
         ...(targetAgentId == null ? {} : { agentId: targetAgentId }),
         ...(replyToId == null ? {} : { replyToId }),
         appendUserMessage: false,
         awaitTurn: false,
       });
     } catch (error) {
-      if (guardApplied) return { accepted: true };
+      if (guardedOk) return { accepted: true };
       this.rollbackWidgetResponse(entryId);
       throw error;
     }
     return { accepted: true };
   }
 
-  async settleStaleAutoReviewCard(args: {
+  async settleStaleAutoReviewCard(input: {
     agentId: string;
     entryId: string;
     requestId: string;
   }): Promise<boolean> {
     if (
       this.settlePendingAutoReviewApprovalsOnSession({
-        agentId: args.agentId,
+        agentId: input.agentId,
         status: "expired",
-        requestId: args.requestId,
+        requestId: input.requestId,
       })
     )
       return true;
-    const expired = await this.tm.sessionStore.expirePendingAutoReviewApprovals(
-      args.agentId,
-      args.requestId,
+    const staleList = await this.tm.sessionStore.expirePendingAutoReviewApprovals(
+      input.agentId,
+      input.requestId,
     );
-    if (expired.length > 0) void this.tm.roster.emitAgentUpdate(args.agentId);
-    const settled = this.tm.sessionStore
-      .readAgentTranscriptEntries(args.agentId)
+    if (staleList.length > 0) void this.tm.roster.emitAgentUpdate(input.agentId);
+    const settledEntry = this.tm.sessionStore
+      .readAgentTranscriptEntries(input.agentId)
       .find(
-        (entry: any) =>
-          entry.id === args.entryId &&
-          entry.kind === "send-message" &&
-          entry.message.type === "auto-review-approval" &&
-          entry.message.approval.requestId === args.requestId,
+        (transcriptEntry: any) =>
+          transcriptEntry.id === input.entryId &&
+          transcriptEntry.kind === "send-message" &&
+          transcriptEntry.message.type === "auto-review-approval" &&
+          transcriptEntry.message.approval.requestId === input.requestId,
       );
-    if (settled == null) return false;
-    this.tm.roster.emit({ type: "updated", entry: settled }, args.agentId);
+    if (settledEntry == null) return false;
+    this.tm.roster.emit({ type: "updated", entry: settledEntry }, input.agentId);
     return true;
   }
 
@@ -160,28 +160,28 @@ export class WidgetResponses {
       });
     };
     try {
-      const activeId = this.tm.sessions.activeSession?.id;
-      if (activeId != null) {
+      const activeAgentKey = this.tm.sessions.activeSession?.id;
+      if (activeAgentKey != null) {
         this.settlePendingAutoReviewApprovalsOnSession({
-          agentId: activeId,
+          agentId: activeAgentKey,
           status: "expired",
         });
       }
-      let agentIds: string[];
+      let agentIdList: string[];
       try {
-        agentIds = await this.tm.sessionStore.listAgentIds();
+        agentIdList = await this.tm.sessionStore.listAgentIds();
       } catch (error) {
         reportFailure("list_agents", error);
         return;
       }
-      for (const agentId of agentIds) {
-        if (agentId === activeId) continue;
+      for (const agentId of agentIdList) {
+        if (agentId === activeAgentKey) continue;
         try {
-          const expired =
+          const staleList =
             await this.tm.sessionStore.expirePendingAutoReviewApprovals(
               agentId,
             );
-          if (expired.length > 0) void this.tm.roster.emitAgentUpdate(agentId);
+          if (staleList.length > 0) void this.tm.roster.emitAgentUpdate(agentId);
         } catch (error) {
           reportFailure("expire_agent", error);
         }
@@ -191,90 +191,90 @@ export class WidgetResponses {
     }
   }
 
-  settlePendingAutoReviewApprovalsOnSession(args: {
+  settlePendingAutoReviewApprovalsOnSession(input: {
     agentId: string;
     status: string;
     requestId?: string;
   }): boolean {
-    const session = this.liveSessionFor(args.agentId);
+    const session = this.liveSessionFor(input.agentId);
     if (session == null) return false;
-    let retired = false;
-    for (const entry of session.db.getTranscriptEntries()) {
-      const settled = settledAutoReviewEntry(
-        entry,
-        args.status,
-        args.requestId,
+    let didRetire = false;
+    for (const transcriptEntry of session.db.getTranscriptEntries()) {
+      const settledEntry = settledAutoReviewEntry(
+        transcriptEntry,
+        input.status,
+        input.requestId,
       ) as TranscriptEntry | null;
-      if (settled == null) continue;
-      session.db.updateTranscriptEntry(entry.id, () => settled);
-      retired = true;
-      const live =
-        args.agentId === this.tm.sessions.activeSession?.id
-          ? updateEntry(entry.id, () => settled)
+      if (settledEntry == null) continue;
+      session.db.updateTranscriptEntry(transcriptEntry.id, () => settledEntry);
+      didRetire = true;
+      const liveEntry =
+        input.agentId === this.tm.sessions.activeSession?.id
+          ? updateEntry(transcriptEntry.id, () => settledEntry)
           : null;
       this.tm.roster.emit(
-        { type: "updated", entry: live ?? settled },
-        args.agentId,
+        { type: "updated", entry: liveEntry ?? settledEntry },
+        input.agentId,
       );
     }
-    return retired;
+    return didRetire;
   }
 
-  async settleStaleLocalToolPermissionCard(args: {
+  async settleStaleLocalToolPermissionCard(input: {
     agentId: string;
     entryId: string;
     requestId: string;
   }): Promise<"retired" | "already-settled" | false> {
-    if (this.settlePendingLocalToolPermissionAsksOnSession(args))
+    if (this.settlePendingLocalToolPermissionAsksOnSession(input))
       return "retired";
-    const expired =
+    const staleList =
       await this.tm.sessionStore.expirePendingLocalToolPermissionAsks({
-        agentId: args.agentId,
-        onlyRequestId: args.requestId,
+        agentId: input.agentId,
+        onlyRequestId: input.requestId,
       });
-    if (expired.length > 0) void this.tm.roster.emitAgentUpdate(args.agentId);
-    const settled = this.tm.sessionStore
-      .readAgentTranscriptEntries(args.agentId)
+    if (staleList.length > 0) void this.tm.roster.emitAgentUpdate(input.agentId);
+    const settledEntry = this.tm.sessionStore
+      .readAgentTranscriptEntries(input.agentId)
       .find(
-        (entry: any) =>
-          entry.id === args.entryId &&
-          entry.kind === "send-message" &&
-          entry.message.type === "local-tool-permission" &&
-          entry.message.ask.requestId === args.requestId,
+        (transcriptEntry: any) =>
+          transcriptEntry.id === input.entryId &&
+          transcriptEntry.kind === "send-message" &&
+          transcriptEntry.message.type === "local-tool-permission" &&
+          transcriptEntry.message.ask.requestId === input.requestId,
       );
-    if (settled == null) return false;
-    this.tm.roster.emit({ type: "updated", entry: settled }, args.agentId);
-    return expired.length > 0 ? "retired" : "already-settled";
+    if (settledEntry == null) return false;
+    this.tm.roster.emit({ type: "updated", entry: settledEntry }, input.agentId);
+    return staleList.length > 0 ? "retired" : "already-settled";
   }
 
-  async expireAllPendingLocalToolPermissionCards(options?: {
+  async expireAllPendingLocalToolPermissionCards(sweepOptions?: {
     ifPendingBeforeMs?: number;
   }): Promise<void> {
     try {
-      const activeId = this.tm.sessions.activeSession?.id;
-      if (activeId != null) {
+      const activeAgentKey = this.tm.sessions.activeSession?.id;
+      if (activeAgentKey != null) {
         this.settlePendingLocalToolPermissionAsksOnSession({
-          agentId: activeId,
-          ...(options?.ifPendingBeforeMs == null
+          agentId: activeAgentKey,
+          ...(sweepOptions?.ifPendingBeforeMs == null
             ? {}
-            : { ifPendingBeforeMs: options.ifPendingBeforeMs }),
+            : { ifPendingBeforeMs: sweepOptions.ifPendingBeforeMs }),
         });
       }
-      let agentIds: string[];
+      let agentIdList: string[];
       try {
-        agentIds = await this.tm.sessionStore.listAgentIds();
+        agentIdList = await this.tm.sessionStore.listAgentIds();
       } catch {
         return;
       }
-      for (const agentId of agentIds) {
-        if (agentId === activeId) continue;
+      for (const agentId of agentIdList) {
+        if (agentId === activeAgentKey) continue;
         try {
-          const expired =
+          const staleList =
             await this.tm.sessionStore.expirePendingLocalToolPermissionAsks({
               agentId,
-              ifPendingBeforeMs: options?.ifPendingBeforeMs,
+              ifPendingBeforeMs: sweepOptions?.ifPendingBeforeMs,
             });
-          if (expired.length > 0) void this.tm.roster.emitAgentUpdate(agentId);
+          if (staleList.length > 0) void this.tm.roster.emitAgentUpdate(agentId);
         } catch {
           continue;
         }
@@ -284,73 +284,73 @@ export class WidgetResponses {
     }
   }
 
-  settlePendingLocalToolPermissionAsksOnSession(args: {
+  settlePendingLocalToolPermissionAsksOnSession(input: {
     agentId: string;
     requestId?: string;
     ifPendingBeforeMs?: number;
   }): boolean {
-    const session = this.liveSessionFor(args.agentId);
+    const session = this.liveSessionFor(input.agentId);
     if (session == null) return false;
-    let retired = false;
-    for (const entry of session.db.getTranscriptEntries()) {
+    let didRetire = false;
+    for (const transcriptEntry of session.db.getTranscriptEntries()) {
       if (
-        args.ifPendingBeforeMs != null &&
-        entry.kind === "send-message" &&
-        entry.timestampMs != null &&
-        entry.timestampMs >= args.ifPendingBeforeMs
+        input.ifPendingBeforeMs != null &&
+        transcriptEntry.kind === "send-message" &&
+        transcriptEntry.timestampMs != null &&
+        transcriptEntry.timestampMs >= input.ifPendingBeforeMs
       )
         continue;
-      const settled = settledToolPermissionEntry(
-        entry,
+      const settledEntry = settledToolPermissionEntry(
+        transcriptEntry,
         "expired",
-        args.requestId,
+        input.requestId,
       ) as TranscriptEntry | null;
-      if (settled == null) continue;
-      session.db.updateTranscriptEntry(entry.id, () => settled);
-      retired = true;
-      const live =
-        args.agentId === this.tm.sessions.activeSession?.id
-          ? updateEntry(entry.id, () => settled)
+      if (settledEntry == null) continue;
+      session.db.updateTranscriptEntry(transcriptEntry.id, () => settledEntry);
+      didRetire = true;
+      const liveEntry =
+        input.agentId === this.tm.sessions.activeSession?.id
+          ? updateEntry(transcriptEntry.id, () => settledEntry)
           : null;
       this.tm.roster.emit(
-        { type: "updated", entry: live ?? settled },
-        args.agentId,
+        { type: "updated", entry: liveEntry ?? settledEntry },
+        input.agentId,
       );
     }
-    return retired;
+    return didRetire;
   }
 
-  async dismissWidget(args: {
+  async dismissWidget(input: {
     entryId: string;
     agentId: string;
   }): Promise<{ accepted: boolean }> {
-    await this.tm.sessions.ensureActionTarget(args.agentId);
-    const existing = getTranscript().find((entry) => entry.id === args.entryId);
+    await this.tm.sessions.ensureActionTarget(input.agentId);
+    const currentEntry = getTranscript().find((transcriptEntry) => transcriptEntry.id === input.entryId);
     if (
-      existing == null ||
-      existing.kind !== "send-message" ||
-      (existing.message as any)?.type !== "widget" ||
-      existing.respondedValue != null ||
-      existing.widgetDismissed === true
+      currentEntry == null ||
+      currentEntry.kind !== "send-message" ||
+      (currentEntry.message as any)?.type !== "widget" ||
+      currentEntry.respondedValue != null ||
+      currentEntry.widgetDismissed === true
     )
       return { accepted: false };
     let didStamp = false;
-    const markDismissed = (entry: TranscriptEntry): TranscriptEntry => {
+    const markDismissed = (transcriptEntry: TranscriptEntry): TranscriptEntry => {
       if (
-        entry.kind !== "send-message" ||
-        entry.respondedValue != null ||
-        entry.widgetDismissed === true
+        transcriptEntry.kind !== "send-message" ||
+        transcriptEntry.respondedValue != null ||
+        transcriptEntry.widgetDismissed === true
       )
-        return entry;
+        return transcriptEntry;
       didStamp = true;
-      const { widgetSkipped: _skipped, ...rest } = entry;
-      return { ...rest, widgetDismissed: true } as TranscriptEntry;
+      const { widgetSkipped: _skipped, ...remainder } = transcriptEntry;
+      return { ...remainder, widgetDismissed: true } as TranscriptEntry;
     };
-    const updated = updateEntry(args.entryId, markDismissed);
-    if (didStamp && updated != null) {
-      this.tm.roster.emit({ type: "updated", entry: updated });
+    const stampedEntry = updateEntry(input.entryId, markDismissed);
+    if (didStamp && stampedEntry != null) {
+      this.tm.roster.emit({ type: "updated", entry: stampedEntry });
       this.tm.sessions.activeSession?.db.updateTranscriptEntry(
-        args.entryId,
+        input.entryId,
         markDismissed,
       );
     }
@@ -359,24 +359,24 @@ export class WidgetResponses {
 
   async submitSecret(
     entryId: string,
-    value: string,
+    text: string,
     agentId: string,
   ): Promise<void> {
-    const trimmed = value.trim();
-    if (trimmed.length === 0) return;
+    const cleanText = text.trim();
+    if (cleanText.length === 0) return;
     await this.tm.sessions.ensureActionTarget(agentId);
     const session = this.tm.sessions.activeSession;
     if (session == null) return;
-    const entry = getTranscript().find((item) => item.id === entryId);
+    const transcriptEntry = getTranscript().find((item) => item.id === entryId);
     if (
-      entry == null ||
-      entry.kind !== "send-message" ||
-      (entry.message as any)?.type !== "secret-request" ||
-      entry.secretProvided === true
+      transcriptEntry == null ||
+      transcriptEntry.kind !== "send-message" ||
+      (transcriptEntry.message as any)?.type !== "secret-request" ||
+      transcriptEntry.secretProvided === true
     )
       return;
-    const request = (entry.message as any).secretRequest;
-    if (!this.routeSecret(session.id, request.target, trimmed)) {
+    const secretTarget = (transcriptEntry.message as any).secretRequest;
+    if (!this.routeSecret(session.id, secretTarget.target, cleanText)) {
       this.tm.trayErrors.pushError({
         agentId: session.id,
         title: "Could not store the secret",
@@ -386,89 +386,89 @@ export class WidgetResponses {
     }
     const markProvided = (item: TranscriptEntry): TranscriptEntry =>
       item.kind === "send-message" ? { ...item, secretProvided: true } : item;
-    const updated = updateEntry(entryId, markProvided);
-    if (updated != null)
-      this.tm.roster.emit({ type: "updated", entry: updated });
+    const stampedEntry = updateEntry(entryId, markProvided);
+    if (stampedEntry != null)
+      this.tm.roster.emit({ type: "updated", entry: stampedEntry });
     session.db.updateTranscriptEntry(entryId, markProvided);
     await this.tm.boxHandoff.resumeWithHiddenPrompt(
       session.id,
-      buildSecretProvidedAck(request),
+      buildSecretProvidedAck(secretTarget),
       "Agent failed to resume after secret submission",
     );
   }
 
-  routeSecret(agentId: string, target: any, value: string): boolean {
-    if (target.kind !== "channel-credential") return false;
-    const stored = this.tm.sessionStore.storeConnectorCredential(
+  routeSecret(agentId: string, credentialTarget: any, text: string): boolean {
+    if (credentialTarget.kind !== "channel-credential") return false;
+    const didStore = this.tm.sessionStore.storeConnectorCredential(
       agentId,
-      target.platform,
-      target.field,
-      value,
+      credentialTarget.platform,
+      credentialTarget.field,
+      text,
     );
-    if (stored) this.tm.channelConfigChanged?.();
-    return stored;
+    if (didStore) this.tm.channelConfigChanged?.();
+    return didStore;
   }
 
-  recordWidgetResponse(entryId: string, value: string): boolean {
-    const transcript = getTranscript();
-    const existing = transcript.find((entry) => entry.id === entryId);
+  recordWidgetResponse(entryId: string, text: string): boolean {
+    const transcriptList = getTranscript();
+    const currentEntry = transcriptList.find((transcriptEntry) => transcriptEntry.id === entryId);
     if (
-      existing == null ||
-      existing.kind !== "send-message" ||
-      (existing.message as any)?.type !== "widget" ||
-      existing.respondedValue != null ||
-      existing.widgetDismissed === true
+      currentEntry == null ||
+      currentEntry.kind !== "send-message" ||
+      (currentEntry.message as any)?.type !== "widget" ||
+      currentEntry.respondedValue != null ||
+      currentEntry.widgetDismissed === true
     )
       return false;
 
-    if ((existing.message as any).widget.dismissOnMoveOn === true) {
+    if ((currentEntry.message as any).widget.dismissOnMoveOn === true) {
       const hasLaterUserMoment = (
-        scope: readonly TranscriptEntry[],
+        page: readonly TranscriptEntry[],
       ): boolean => {
-        const index = scope.findIndex((entry) => entry.id === entryId);
+        const position = page.findIndex((transcriptEntry) => transcriptEntry.id === entryId);
         return (
-          index >= 0 &&
-          scope
-            .slice(index + 1)
+          position >= 0 &&
+          page
+            .slice(position + 1)
             .some(
-              (entry) =>
-                (isUserMessageEntry(entry) &&
-                  !isPeerMessage(entry)) ||
-                (entry.kind === "send-message" &&
-                  (entry.message as any)?.type === "widget" &&
-                  (entry.respondedValue != null ||
-                    entry.widgetDismissed === true)),
+              (transcriptEntry) =>
+                (isUserMessageEntry(transcriptEntry) &&
+                  !isPeerMessage(transcriptEntry)) ||
+                (transcriptEntry.kind === "send-message" &&
+                  (transcriptEntry.message as any)?.type === "widget" &&
+                  (transcriptEntry.respondedValue != null ||
+                    transcriptEntry.widgetDismissed === true)),
             )
         );
       };
-      const surfaces: Array<readonly TranscriptEntry[]> = [];
-      const main = mainTranscriptOf(
-        transcript,
+      const views: Array<readonly TranscriptEntry[]> = [];
+      const mainView = mainTranscriptOf(
+        transcriptList,
       ) as readonly TranscriptEntry[];
-      if (main.some((entry) => entry.id === entryId)) surfaces.push(main);
-      const thread = threadOf(
-        transcript,
+      if (mainView.some((transcriptEntry) => transcriptEntry.id === entryId)) views.push(mainView);
+      const threadView = threadOf(
+        transcriptList,
         entryId,
       ) as readonly TranscriptEntry[];
-      if (thread.length > 1) surfaces.push(thread);
-      if (surfaces.length > 0 && surfaces.every(hasLaterUserMoment))
+      if (threadView.length > 1) views.push(threadView);
+      if (views.length > 0 && views.every(hasLaterUserMoment))
         return false;
     }
 
     let didStamp = false;
-    const withResponse = (entry: TranscriptEntry): TranscriptEntry => {
+    const withResponse = (transcriptEntry: TranscriptEntry): TranscriptEntry => {
       if (
-        entry.kind !== "send-message" ||
-        entry.respondedValue != null ||
-        entry.widgetDismissed === true
+        transcriptEntry.kind !== "send-message" ||
+        transcriptEntry.respondedValue != null ||
+        transcriptEntry.widgetDismissed === true
       )
-        return entry;
+        return transcriptEntry;
       didStamp = true;
-      return { ...entry, respondedValue: value };
+      return { ...transcriptEntry, respondedValue: text };
     };
-    const updated = updateEntry(entryId, withResponse);
-    if (didStamp && updated != null) {
-      this.tm.roster.emit({ type: "updated", entry: updated });
+    const stampedEntry = updateEntry(entryId, withResponse);
+    if (didStamp && stampedEntry != null) {
+      this.tm.roster.emit({ type: "updated", entry: stampedEntry });
       this.tm.sessions.activeSession?.db.updateTranscriptEntry(
         entryId,
         withResponse,
@@ -478,19 +478,19 @@ export class WidgetResponses {
   }
 
   rollbackWidgetResponse(entryId: string): TranscriptEntry | null {
-    const withoutResponse = (entry: TranscriptEntry): TranscriptEntry => {
-      if (entry.kind !== "send-message") return entry;
-      const { respondedValue: _value, ...rest } = entry;
-      return rest as TranscriptEntry;
+    const withoutResponse = (transcriptEntry: TranscriptEntry): TranscriptEntry => {
+      if (transcriptEntry.kind !== "send-message") return transcriptEntry;
+      const { respondedValue: _value, ...remainder } = transcriptEntry;
+      return remainder as TranscriptEntry;
     };
-    const updated = updateEntry(entryId, withoutResponse);
-    if (updated != null)
-      this.tm.roster.emit({ type: "updated", entry: updated });
+    const stampedEntry = updateEntry(entryId, withoutResponse);
+    if (stampedEntry != null)
+      this.tm.roster.emit({ type: "updated", entry: stampedEntry });
     this.tm.sessions.activeSession?.db.updateTranscriptEntry(
       entryId,
       withoutResponse,
     );
-    return updated;
+    return stampedEntry;
   }
 
   async reactToMessage(
@@ -498,66 +498,66 @@ export class WidgetResponses {
     emoji: string,
     agentId: string,
   ): Promise<void> {
-    const trimmed = emoji.trim();
-    if (trimmed.length === 0) return;
+    const cleanText = emoji.trim();
+    if (cleanText.length === 0) return;
     await this.tm.sessions.ensureActionTarget(agentId);
-    const result = this.applyReaction({
+    const reactResult = this.applyReaction({
       session: this.tm.sessions.activeSession ?? null,
       entryId,
-      emoji: trimmed,
+      emoji: cleanText,
       by: SLATE_REACTION_SELF,
     });
     const activeAgentId = this.tm.sessions.activeSession?.id;
     if (
-      result?.isAdding &&
+      reactResult?.isAdding &&
       activeAgentId != null &&
-      !isUserMessageEntry(result.before)
+      !isUserMessageEntry(reactResult.before)
     ) {
       void this.resumeAfterReaction(
         activeAgentId,
-        trimmed,
-        describeReactedMessageQuote(result.before),
+        cleanText,
+        describeReactedMessageQuote(reactResult.before),
       );
     }
   }
 
-  applyReaction(args: {
+  applyReaction(input: {
     session?: LiveSession | null;
     entryId: string;
     emoji: string;
     by: string;
   }): { before: TranscriptEntry; isAdding: boolean } | null {
     const isActive =
-      args.session == null ||
-      args.session.id === this.tm.sessions.activeSession?.id;
-    const entries = isActive
+      input.session == null ||
+      input.session.id === this.tm.sessions.activeSession?.id;
+    const entryList = isActive
       ? getTranscript()
-      : args.session.db.getTranscriptEntries();
-    const before = entries.find(
-      (entry: TranscriptEntry) => entry.id === args.entryId,
+      : input.session.db.getTranscriptEntries();
+    const before = entryList.find(
+      (transcriptEntry: TranscriptEntry) => transcriptEntry.id === input.entryId,
     );
     if (before == null) return null;
     const isAdding = !((before.reactions as any[]) ?? []).some(
-      (reaction) => reaction.emoji === args.emoji && reaction.by === args.by,
+      (reactionRow) => reactionRow.emoji === input.emoji && reactionRow.by === input.by,
     );
-    const withToggle = (entry: TranscriptEntry): TranscriptEntry => {
-      const next = toggleReaction(entry.reactions as any, args.emoji, args.by);
-      const { reactions: _omit, ...rest } = entry;
-      return next == null
-        ? (rest as TranscriptEntry)
-        : { ...rest, reactions: next };
+    const withToggle = (transcriptEntry: TranscriptEntry): TranscriptEntry => {
+      const toggled = toggleReaction(transcriptEntry.reactions as any, input.emoji, input.by);
+      const { reactions: _omit, ...remainder } = transcriptEntry;
+      return toggled == null
+        ? (remainder as TranscriptEntry)
+        : { ...remainder, reactions: toggled };
     };
     if (isActive) {
-      const updated = updateEntry(args.entryId, withToggle);
-      if (updated == null) return null;
-      this.tm.roster.emit({ type: "updated", entry: updated });
+      const stampedEntry = updateEntry(input.entryId, withToggle);
+      if (stampedEntry == null) return null;
+      this.tm.roster.emit({ type: "updated", entry: stampedEntry });
       this.tm.sessions.activeSession?.db.updateTranscriptEntry(
-        args.entryId,
+        input.entryId,
         withToggle,
       );
     } else {
-      args.session.db.updateTranscriptEntry(args.entryId, withToggle);
-      void this.tm.roster.emitAgentUpdate(args.session.id);
+      input.session.db.updateTranscriptEntry(input.entryId, withToggle);
+      void this.tm.roster.emitAgentUpdate(input.session.id);
     }
     return { before, isAdding };
   }
