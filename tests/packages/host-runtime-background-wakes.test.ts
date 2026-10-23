@@ -9,6 +9,7 @@ import { describe, it } from "node:test";
 import { BackgroundWakes, distinctChannelAddresses } from "../../source/host/transcript/background-wakes.ts";
 import { AgentGoneError } from "../../source/host/transcript/session-runtime.ts";
 import { getTranscript, setTranscript } from "../../source/host/transcript/transcript-store.ts";
+import { nextEntryId } from "../../source/host/transcript/transcript-entry-ids.ts";
 import { SLATE_DISK_SAVER_KICKSTART_PROMPT } from "../../source/shared/agents/disk-saver.ts";
 import { SlateError } from "../../source/shared/errors/registry.ts";
 
@@ -67,6 +68,7 @@ function world(
     agentIds?: string[];
     shellWork?: boolean;
     unanswered?: { skippedQuestionPrompts: string[]; dismissedQuestionPrompts: string[] };
+    duringRun?: () => void;
   } = {},
 ) {
   const calls: Call[] = [];
@@ -77,6 +79,7 @@ function world(
   const runner = {
     run: async (prompt: string, runOptions: Record<string, unknown>) => {
       record("run", prompt, runOptions);
+      if (options.duringRun !== undefined) (options.duringRun as () => void)();
       if (options.runError !== undefined) throw options.runError;
       return options.runResult ?? { sentMessageCount: 1, reacted: false, aborted: false };
     },
@@ -440,5 +443,334 @@ describe("broadcasts and timeline events", () => {
   it("says whether anything is still running a background command", () => {
     assert.equal(world({ shellWork: true }).wakes.hasRunningBackgroundShellWork(), true);
     assert.equal(world().wakes.hasRunningBackgroundShellWork(), false);
+  });
+});
+
+describe("the queues that could not be woken yet", () => {
+  it("keeps nothing when the shared queue refuses the wake", async () => {
+    const world1 = world({ enqueueAccepted: false });
+    world1.wakes.wakeForInbound("agent-1", envelopeOf());
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal(world1.wakes.pendingInbound.size, 0);
+    assert.equal(world1.named("resolveBackgroundSession").length, 0);
+    const events = world({ enqueueAccepted: false });
+    events.wakes.queueEventWake("agent-1", { kind: "note" });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal(events.wakes.pendingEventWakes.size, 0);
+    assert.equal(events.named("run").length, 0);
+  });
+
+  it("does not wake a remote room for an inbound message", async () => {
+    const world1 = world({ remoteRoom: true });
+    world1.wakes.wakeForInbound("agent-1", envelopeOf());
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(world1.named("run").length, 0);
+    assert.equal(world1.named("appendEntry").length, 0);
+    assert.equal(world1.wakes.pendingInbound.size, 0);
+  });
+
+  it("redrives the messages of a wake that a direct message preempted", async () => {
+    let runs = 0;
+    const world1 = world({
+      runResult: { sentMessageCount: 0, reacted: false, aborted: true },
+      duringRun: () => {
+        runs += 1;
+        if (runs === 1) world1.wakes.dmPreemptedWakeAgentIds.add("agent-1");
+      },
+    });
+    world1.wakes.wakeForInbound("agent-1", envelopeOf());
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    // The preempted batch is redriven (shown now) and the redriven run no longer sees a preemption.
+    assert.equal(world1.named("run").length, 2);
+    assert.equal(world1.wakes.pendingInbound.size, 0);
+    assert.equal(world1.wakes.dmPreemptedWakeAgentIds.has("agent-1"), false);
+  });
+
+  it("does not redrive a wake that quiesced for an upgrade", async () => {
+    const world1 = world({
+      runResult: { sentMessageCount: 0, reacted: false, aborted: true, quiescedForUpgrade: true },
+      duringRun: () => world1.wakes.dmPreemptedWakeAgentIds.add("agent-1"),
+    });
+    world1.wakes.wakeForInbound("agent-1", envelopeOf());
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.equal(world1.named("run").length, 1);
+    assert.equal(world1.wakes.pendingInbound.size, 0);
+  });
+
+  it("forgets a delivery failure when its agent is gone", async () => {
+    const world1 = world({ agentGoneError: true });
+    world1.wakes.queueChannelDeliveryFailure("agent-1", { addressToken: "slack:C1", reason: "refused" });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.equal(world1.wakes.pendingChannelFailures.size, 0);
+    assert.equal(world1.named("run").length, 0);
+    assert.equal(world1.named("pushError").length, 0);
+  });
+});
+
+describe("what a broadcast does when it has nothing to do", () => {
+  it("schedules nothing for an empty message or a stopped execution", async () => {
+    const blank = world({ agentIds: ["agent-1"] });
+    assert.deepEqual(await blank.wakes.broadcastToAgents("all", "   "), { total: 0, scheduled: 0 });
+    assert.equal(blank.named("listAgentIds").length, 0);
+    const stopped = world({ canExecute: false, agentIds: ["agent-1"] });
+    assert.deepEqual(await stopped.wakes.broadcastToAgents("all", "hello"), { total: 0, scheduled: 0 });
+    assert.equal(stopped.named("run").length, 0);
+  });
+});
+
+describe("recording a timeline event for a conversation that is not on screen", () => {
+  it("writes the event to the background conversation's own store", async () => {
+    const background = fakeSession("agent-2");
+    const world1 = world({ liveSessions: [["agent-2", background]], activeSession: fakeSession("agent-1") });
+    world1.wakes.emitTimelineEvent("agent-2", { kind: "note", text: "something happened" });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.equal((background.db.getTranscriptEntries() as unknown[]).length, 1);
+    assert.equal(world1.named("appendEntry").length, 0);
+    assert.equal(world1.named("markSessionActivity").length, 0);
+    // Nothing was running, so the event also wakes the conversation.
+    assert.equal(world1.named("run").length, 1);
+  });
+
+  it("does nothing for a conversation that cannot be resolved", async () => {
+    const world1 = world({ sessionError: new AgentGoneError("gone") });
+    world1.wakes.emitTimelineEvent("agent-1", { kind: "note" });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(world1.named("appendEntry").length, 0);
+    assert.equal(world1.wakes.pendingEventWakes.size, 0);
+  });
+});
+
+describe("what a wake reports and what it does not", () => {
+  it("humanizes a delivery failure and names the conversation in the tray", async () => {
+    const world1 = world({ activeSession: fakeSession("agent-1"), deliveryError: new Error("the channel refused it") });
+    world1.wakes.deliverToChannel({ id: "agent-1" }, { type: "text", content: "hi" }, "slack:C1");
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const pushed = world1.named("pushError")[0]?.args[0] as Record<string, unknown>;
+    assert.equal(pushed.agentId, "agent-1");
+    // The raw error text is turned into something a user can act on.
+    assert.notEqual(String(pushed.detail), "the channel refused it");
+    const plain = world({ activeSession: fakeSession("agent-1"), deliveryError: "a string failure" as never });
+    plain.wakes.deliverToChannel({ id: "agent-1" }, { type: "text", content: "hi" }, "slack:C1");
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.match(String((plain.named("pushError")[0]?.args[0] as Record<string, unknown>).detail), /Channel delivery failed/);
+  });
+
+  it("does not wake a group room about a delivery failure, and reports the failure's questions", async () => {
+    const grouped = world({ group: true });
+    grouped.wakes.queueChannelDeliveryFailure("agent-1", { addressToken: "slack:C1", reason: "refused" });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.equal(grouped.named("run").length, 0);
+    assert.equal(grouped.wakes.pendingChannelFailures.size, 0);
+    const prompted = world({ unanswered: { skippedQuestionPrompts: ["skip me"], dismissedQuestionPrompts: ["dismiss me"] } });
+    prompted.wakes.queueChannelDeliveryFailure("agent-1", { addressToken: "slack:C1", reason: "refused" });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const options = prompted.named("run")[0]?.args[1] as Record<string, unknown>;
+    assert.deepEqual(options, { hidden: true, skippedQuestionPrompts: ["skip me"], dismissedQuestionPrompts: ["dismiss me"] });
+  });
+
+  it("shows the failure of a delivery wake in the tray with the request it belonged to", async () => {
+    const world1 = world({ runError: new Error("the follow-up broke") });
+    world1.wakes.queueChannelDeliveryFailure("agent-1", { addressToken: "slack:C1", reason: "refused" });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const pushed = world1.named("pushError")[0]?.args[0] as Record<string, unknown>;
+    assert.equal(pushed.title, "Delivery-failure follow-up failed");
+    const report = world1.named("reportAgentError")[0]?.args[0] as Record<string, unknown>;
+    assert.equal(report.requestId, "req-3");
+    assert.deepEqual(report.detail, { message: "the follow-up broke", stack: (report.detail as { stack: string }).stack });
+  });
+
+  it("does not run an inbound wake while execution is stopped", async () => {
+    const world1 = world({ canExecute: false });
+    world1.wakes.wakeForInbound("agent-1", envelopeOf());
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.equal(world1.named("run").length, 0);
+    assert.equal(world1.wakes.pendingInbound.size, 1);
+  });
+
+  it("ignores an empty inbound batch and an empty event batch", async () => {
+    const world1 = world();
+    await world1.wakes.runInboundWake("agent-1", []);
+    await world1.wakes.runEventWake("agent-1", []);
+    assert.equal(world1.named("run").length, 0);
+    assert.equal(world1.named("resolveBackgroundSession").length, 0);
+  });
+
+  it("clears a preemption that arrived before the run", async () => {
+    const world1 = world({ runResult: { sentMessageCount: 0, reacted: false, aborted: true } });
+    world1.wakes.dmPreemptedWakeAgentIds.add("agent-1");
+    world1.wakes.wakeForInbound("agent-1", envelopeOf());
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    assert.equal(world1.named("run").length, 1);
+    assert.equal(world1.wakes.pendingInbound.size, 0);
+  });
+
+  it("does not redrive a wake whose agent is already gone", async () => {
+    let runs = 0;
+    const world1 = world({
+      gone: ["agent-1"],
+      runResult: { sentMessageCount: 0, reacted: false, aborted: true },
+      duringRun: () => {
+        runs += 1;
+        if (runs === 1) world1.wakes.dmPreemptedWakeAgentIds.add("agent-1");
+      },
+    });
+    world1.wakes.wakeForInbound("agent-1", envelopeOf());
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    assert.equal(world1.named("run").length, 1);
+    assert.equal(world1.wakes.pendingInbound.size, 0);
+  });
+
+  it("does not redrive a message that was already redriven", async () => {
+    let runs = 0;
+    const world1 = world({
+      runResult: { sentMessageCount: 0, reacted: false, aborted: true },
+      duringRun: () => {
+        runs += 1;
+        if (runs === 1) world1.wakes.dmPreemptedWakeAgentIds.add("agent-1");
+      },
+    });
+    world1.wakes.wakeForInbound("agent-1", envelopeOf({ isRedriven: true }));
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    assert.equal(world1.named("run").length, 1);
+    assert.equal(world1.wakes.pendingInbound.size, 0);
+  });
+
+  it("writes a redriven message back into the conversation and tells the roster", async () => {
+    let runs = 0;
+    const world1 = world({
+      activeSession: fakeSession("agent-1"),
+      runResult: { sentMessageCount: 0, reacted: false, aborted: true },
+      duringRun: () => {
+        runs += 1;
+        if (runs === 1) world1.wakes.dmPreemptedWakeAgentIds.add("agent-1");
+      },
+    });
+    world1.wakes.wakeForInbound("agent-1", envelopeOf());
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    // The redriven batch is marked shown, so only the first arrival is written as a new entry.
+    assert.equal(world1.named("appendEntry").length, 1);
+    assert.equal(world1.named("run").length, 2);
+    assert.equal(world1.wakes.pendingInbound.size, 0);
+  });
+
+  it("puts a redriven batch in front of what arrived while it ran", async () => {
+    let runs = 0;
+    const world1 = world({
+      runResult: { sentMessageCount: 0, reacted: false, aborted: true },
+      duringRun: () => {
+        runs += 1;
+        if (runs === 1) {
+          world1.wakes.dmPreemptedWakeAgentIds.add("agent-1");
+          world1.wakes.wakeForInbound("agent-1", envelopeOf({ text: "newer message" }));
+        }
+      },
+    });
+    world1.wakes.wakeForInbound("agent-1", envelopeOf({ text: "redriven message" }));
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    const prompts = world1.named("run").map((call) => String(call.args[0]));
+    assert.equal(prompts.length, 2);
+    assert.equal((prompts[1] ?? "").indexOf("redriven message") < (prompts[1] ?? "").indexOf("newer message"), true);
+  });
+
+  it("announces every address that arrived, and asks for the prompt it was given", async () => {
+    const world1 = world();
+    world1.wakes.wakeForInbound("agent-1", envelopeOf({ text: "first text", address: { platform: "slack", chat: "C1" } }));
+    world1.wakes.wakeForInbound("agent-1", envelopeOf({ text: "second text", address: { platform: "slack", chat: "C2" } }));
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    const addresses = world1.named("channelActivity").map((call) => call.args[0]);
+    assert.deepEqual([...new Set(addresses)].sort(), ["slack:C1", "slack:C2"]);
+    const prompt = world1.named("run").map((call) => String(call.args[0])).join("\n");
+    assert.match(prompt, /first text/);
+    assert.match(prompt, /second text/);
+  });
+
+  it("does not record or wake a group room for a timeline event", async () => {
+    const world1 = world({ group: true });
+    world1.wakes.emitTimelineEvent("agent-1", { kind: "note" });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.equal(world1.named("appendEntry").length, 0);
+    assert.equal(world1.named("run").length, 0);
+    assert.equal(world1.wakes.pendingEventWakes.size, 0);
+  });
+
+  it("stamps a timeline event when it is recorded", async () => {
+    const world1 = world({ activeSession: fakeSession("agent-1") });
+    const before = Date.now();
+    world1.wakes.recordTimelineEvent("agent-1", { kind: "note" });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const entry = world1.named("appendEntry")[0]?.args[0] as Record<string, unknown>;
+    assert.equal(typeof entry.timestampMs, "number");
+    assert.equal((entry.timestampMs as number) >= before, true);
+  });
+
+  it("swallows a failed event wake so the queue behind it still drains", async () => {
+    const world1 = world({ runError: new Error("the event turn broke") });
+    world1.wakes.queueEventWake("agent-1", { kind: "note" });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    await assert.doesNotReject(world1.wakes.reviveForEvents("agent-1"));
+    assert.equal(world1.named("run").length, 1);
+  });
+
+  it("begins and ends the session run of a broadcast, and tells the roster", async () => {
+    const world1 = world({ agentIds: ["agent-1"] });
+    assert.deepEqual(await world1.wakes.broadcastToAgents("all", "a broadcast"), { total: 1, scheduled: 1 });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.equal(world1.named("beginSessionRun").length, 1);
+    assert.equal(world1.named("endSessionRun").length, 1);
+    assert.equal(world1.named("emitAgentUpdate").length, 1);
+    assert.match(String(world1.named("run")[0]?.args[0]), /a broadcast/);
+  });
+});
+
+describe("the details of a written wake", () => {
+  it("hands the images a message carried to the prompt", async () => {
+    const image = { data: "aGk=", mimeType: "image/png" };
+    const world1 = world();
+    world1.wakes.wakeForInbound("agent-1", envelopeOf({ images: [image] }));
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    const options = world1.named("run")[0]?.args[1] as Record<string, unknown>;
+    assert.deepEqual(options.selectedImages, [image]);
+  });
+
+  it("asks for a hidden reply and then tells the roster about a quiet turn", async () => {
+    const world1 = world({ runResult: { sentMessageCount: 0, reacted: false, aborted: false } });
+    world1.wakes.wakeForInbound("agent-1", envelopeOf());
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    assert.equal(world1.named("ensureHiddenTurnReply").length, 1);
+    // Once for the written arrival and once for the finished turn.
+    assert.equal(world1.named("emitAgentUpdate").length, 2);
+  });
+
+  it("announces both addresses of one batch, not just the first", async () => {
+    const world1 = world();
+    world1.wakes.pendingInbound.set("agent-1", [
+      envelopeOf({ address: { platform: "slack", chat: "C1" } }),
+      envelopeOf({ address: { platform: "slack", chat: "C2" } }),
+    ]);
+    await world1.wakes.reviveForInbound("agent-1");
+    const addresses = world1.named("channelActivity").map((call) => call.args[0]);
+    assert.deepEqual([...new Set(addresses)].sort(), ["slack:C1", "slack:C2"]);
+    assert.equal(world1.named("run").length, 1);
+  });
+
+  it("computes the entry id from the transcript the conversation is showing", async () => {
+    setTranscript([{ id: "t0u", role: "user" } as never]);
+    const world1 = world({ activeSession: fakeSession("agent-1") });
+    const expected = nextEntryId(getTranscript(), "user-message");
+    world1.wakes.wakeForInbound("agent-1", envelopeOf());
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    const written = world1.named("appendEntry")[0]?.args[0] as Record<string, unknown>;
+    assert.equal(written.id, expected);
+    setTranscript([]);
+  });
+
+  it("does not write a group room's timeline event into its store", async () => {
+    const background = fakeSession("agent-2");
+    const world1 = world({ group: true, liveSessions: [["agent-2", background]] });
+    world1.wakes.emitTimelineEvent("agent-2", { kind: "note" });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.equal((background.db.getTranscriptEntries() as unknown[]).length, 0);
+    assert.equal(world1.named("run").length, 0);
   });
 });

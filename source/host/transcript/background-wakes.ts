@@ -28,11 +28,11 @@ import { classifyAgentError } from "./turn-runtime.ts";
 import type { TranscriptManagerLike } from "./transcript-hub.ts";
 
 export function distinctChannelAddresses(
-  envelopes: readonly { address: any }[],
+  inboundBatch: readonly { address: any }[],
 ): string[] {
   return [
     ...new Set(
-      envelopes.map((envelope) => formatChannelAddress(envelope.address)),
+      inboundBatch.map((envelope) => formatChannelAddress(envelope.address)),
     ),
   ];
 }
@@ -77,11 +77,11 @@ export class BackgroundWakes {
   ): void {
     this.completionRevivals.handleBackgroundShellCompletion(...args);
   }
-  reviveForSubagentCompletions(agentId: string) {
-    return this.completionRevivals.reviveForSubagentCompletions(agentId);
+  reviveForSubagentCompletions(agentKey: string) {
+    return this.completionRevivals.reviveForSubagentCompletions(agentKey);
   }
-  reviveForShellCompletions(agentId: string) {
-    return this.completionRevivals.reviveForShellCompletions(agentId);
+  reviveForShellCompletions(agentKey: string) {
+    return this.completionRevivals.reviveForShellCompletions(agentKey);
   }
   sendToAgent(...args: Parameters<AgentToAgentMessaging["sendToAgent"]>) {
     return this.agentToAgent.sendToAgent(...args);
@@ -95,80 +95,80 @@ export class BackgroundWakes {
   deliverToChannel(
     runSession: any,
     message: unknown,
-    addressToken: string,
+    recipientToken: string,
   ): void {
-    const agentId = runSession?.id ?? this.tm.sessions.activeSession?.id;
-    if (agentId == null) return;
-    const outbound = buildChannelOutboundMessage(message as any);
-    if (outbound == null) return;
+    const agentKey = runSession?.id ?? this.tm.sessions.activeSession?.id;
+    if (agentKey == null) return;
+    const delivery = buildChannelOutboundMessage(message as any);
+    if (delivery == null) return;
     void this.tm
-      .channelDelivery(agentId, addressToken, outbound)
+      .channelDelivery(agentKey, recipientToken, delivery)
       .catch((error: unknown) => {
-        const rawDetail =
+        const failureDetail =
           error instanceof Error ? error.message : "Channel delivery failed";
-        const reason = humanizeChannelDeliveryFailure(addressToken, rawDetail);
+        const reason = humanizeChannelDeliveryFailure(recipientToken, failureDetail);
         this.tm.trayErrors.pushError({
-          agentId,
+          agentId: agentKey,
           title: "Message not delivered",
           detail: reason,
         });
-        this.queueChannelDeliveryFailure(agentId, { addressToken, reason });
+        this.queueChannelDeliveryFailure(agentKey, { addressToken: recipientToken, reason });
       });
   }
-  queueChannelDeliveryFailure(agentId: string, failure: unknown): void {
+  queueChannelDeliveryFailure(agentKey: string, failure: unknown): void {
     if (
       this.tm.pendingWakes.enqueuePendingWake(
         this.pendingChannelFailures,
-        agentId,
+        agentKey,
         [failure],
       )
     )
-      void this.reviveForChannelFailures(agentId);
+      void this.reviveForChannelFailures(agentKey);
   }
-  async reviveForChannelFailures(agentId: string): Promise<void> {
+  async reviveForChannelFailures(agentKey: string): Promise<void> {
     if (
       !this.tm.execution.canExecute ||
-      this.revivingChannelFailureAgentIds.has(agentId)
+      this.revivingChannelFailureAgentIds.has(agentKey)
     )
       return;
-    this.revivingChannelFailureAgentIds.add(agentId);
+    this.revivingChannelFailureAgentIds.add(agentKey);
     try {
-      while ((this.pendingChannelFailures.get(agentId)?.length ?? 0) > 0) {
-        const failures = this.pendingChannelFailures.get(agentId) ?? [];
-        this.pendingChannelFailures.delete(agentId);
-        if (!(await this.runChannelFailureWake(agentId, failures))) {
-          this.pendingChannelFailures.set(agentId, [
-            ...failures,
-            ...(this.pendingChannelFailures.get(agentId) ?? []),
+      while ((this.pendingChannelFailures.get(agentKey)?.length ?? 0) > 0) {
+        const failureBatch = this.pendingChannelFailures.get(agentKey) ?? [];
+        this.pendingChannelFailures.delete(agentKey);
+        if (!(await this.runChannelFailureWake(agentKey, failureBatch))) {
+          this.pendingChannelFailures.set(agentKey, [
+            ...failureBatch,
+            ...(this.pendingChannelFailures.get(agentKey) ?? []),
           ]);
           break;
         }
       }
     } finally {
-      this.revivingChannelFailureAgentIds.delete(agentId);
+      this.revivingChannelFailureAgentIds.delete(agentKey);
     }
   }
   async runChannelFailureWake(
-    agentId: string,
-    failures: readonly any[],
+    agentKey: string,
+    failureBatch: readonly any[],
   ): Promise<boolean> {
-    if (failures.length === 0) return true;
+    if (failureBatch.length === 0) return true;
     if (!this.tm.execution.canExecute) return false;
-    let session: any;
+    let targetSession: any;
     try {
-      session = await this.tm.sessions.resolveBackgroundSession(agentId);
+      targetSession = await this.tm.sessions.resolveBackgroundSession(agentKey);
     } catch (error) {
       return error instanceof AgentGoneError;
     }
-    if (this.tm.groupChat.isGroupSession(session)) return true;
+    if (this.tm.groupChat.isGroupSession(targetSession)) return true;
     await this.runBackgroundWake(
-      session,
+      targetSession,
       "connector",
       "channel-failure",
-      async (runner) => {
-        await runner.run(buildChannelDeliveryFailureWakePrompt(failures), {
+      async (sessionRunner) => {
+        await sessionRunner.run(buildChannelDeliveryFailureWakePrompt(failureBatch), {
           hidden: true,
-          ...this.tm.widgetResponses.collectUnansweredQuestionPrompts(session),
+          ...this.tm.widgetResponses.collectUnansweredQuestionPrompts(targetSession),
         });
       },
       "Delivery-failure follow-up failed",
@@ -177,122 +177,122 @@ export class BackgroundWakes {
     return true;
   }
 
-  wakeForInbound(agentId: string, envelope: unknown): void {
+  wakeForInbound(agentKey: string, envelope: unknown): void {
     if (
-      this.tm.pendingWakes.enqueuePendingWake(this.pendingInbound, agentId, [
+      this.tm.pendingWakes.enqueuePendingWake(this.pendingInbound, agentKey, [
         envelope,
       ])
     )
-      void this.reviveForInbound(agentId);
+      void this.reviveForInbound(agentKey);
   }
-  async reviveForInbound(agentId: string): Promise<void> {
+  async reviveForInbound(agentKey: string): Promise<void> {
     if (
       !this.tm.execution.canExecute ||
-      this.revivingInboundAgentIds.has(agentId)
+      this.revivingInboundAgentIds.has(agentKey)
     )
       return;
-    this.revivingInboundAgentIds.add(agentId);
+    this.revivingInboundAgentIds.add(agentKey);
     try {
-      while ((this.pendingInbound.get(agentId)?.length ?? 0) > 0) {
-        const envelopes = this.pendingInbound.get(agentId) ?? [];
-        this.pendingInbound.delete(agentId);
-        await this.runInboundWake(agentId, envelopes);
+      while ((this.pendingInbound.get(agentKey)?.length ?? 0) > 0) {
+        const inboundBatch = this.pendingInbound.get(agentKey) ?? [];
+        this.pendingInbound.delete(agentKey);
+        await this.runInboundWake(agentKey, inboundBatch);
       }
     } finally {
-      this.revivingInboundAgentIds.delete(agentId);
+      this.revivingInboundAgentIds.delete(agentKey);
     }
   }
   async runInboundWake(
-    agentId: string,
-    envelopes: readonly any[],
+    agentKey: string,
+    inboundBatch: readonly any[],
   ): Promise<void> {
-    if (envelopes.length === 0 || !this.tm.execution.canExecute) return;
-    let session: any;
+    if (inboundBatch.length === 0 || !this.tm.execution.canExecute) return;
+    let targetSession: any;
     try {
-      session = await this.tm.sessions.resolveBackgroundSession(agentId);
+      targetSession = await this.tm.sessions.resolveBackgroundSession(agentKey);
     } catch {
       return;
     }
     if (
-      this.tm.groupChat.isGroupSession(session) ||
-      this.tm.groupChat.isRemoteRoomSession(session)
+      this.tm.groupChat.isGroupSession(targetSession) ||
+      this.tm.groupChat.isRemoteRoomSession(targetSession)
     )
       return;
     this.appendChannelInboundEntries(
-      session,
-      envelopes.filter((envelope) => envelope.isDisplayed !== true),
+      targetSession,
+      inboundBatch.filter((envelope) => envelope.isDisplayed !== true),
     );
-    const sourceAddresses = distinctChannelAddresses(envelopes);
-    const runner = this.tm.runnerRegistry.getRunner(session);
-    this.tm.runLifecycle.beginSessionRun(session);
+    const originAddresses = distinctChannelAddresses(inboundBatch);
+    const sessionRunner = this.tm.runnerRegistry.getRunner(targetSession);
+    this.tm.runLifecycle.beginSessionRun(targetSession);
     await this.tm.runLifecycle.enqueueExclusiveRun(
-      session.id,
+      targetSession.id,
       async () => {
-        this.tm.turnRuntime.activeRequestPrompts.delete(session.id);
-        this.tm.turnRuntime.activeRequestSources.set(session.id, "connector");
-        this.dmPreemptedWakeAgentIds.delete(session.id);
+        this.tm.turnRuntime.activeRequestPrompts.delete(targetSession.id);
+        this.tm.turnRuntime.activeRequestSources.set(targetSession.id, "connector");
+        this.dmPreemptedWakeAgentIds.delete(targetSession.id);
         try {
-          this.notifyChannelActivity(session.id, sourceAddresses, true);
-          const result = await runner.run(
-            buildChannelInboundWakePrompt(envelopes),
+          this.notifyChannelActivity(targetSession.id, originAddresses, true);
+          const result = await sessionRunner.run(
+            buildChannelInboundWakePrompt(inboundBatch),
             {
               hidden: true,
               ...this.tm.widgetResponses.collectUnansweredQuestionPrompts(
-                session,
+                targetSession,
               ),
-              selectedImages: collectInboundImages(envelopes),
+              selectedImages: collectInboundImages(inboundBatch),
             },
           );
-          const preempted = this.dmPreemptedWakeAgentIds.delete(session.id);
+          const preemptedByDm = this.dmPreemptedWakeAgentIds.delete(targetSession.id);
           if (result.aborted && result.quiescedForUpgrade !== true) {
-            if (!preempted || this.tm.sessions.isAgentGone(agentId)) return;
-            const redrivable = envelopes
+            if (!preemptedByDm || this.tm.sessions.isAgentGone(agentKey)) return;
+            const retryableInbound = inboundBatch
               .filter((envelope) => envelope.isRedriven !== true)
               .map((envelope) => ({
                 ...envelope,
                 isDisplayed: true,
                 isRedriven: true,
               }));
-            if (redrivable.length > 0)
-              this.pendingInbound.set(agentId, [
-                ...redrivable,
-                ...(this.pendingInbound.get(agentId) ?? []),
+            if (retryableInbound.length > 0)
+              this.pendingInbound.set(agentKey, [
+                ...retryableInbound,
+                ...(this.pendingInbound.get(agentKey) ?? []),
               ]);
             return;
           }
           if (!result.aborted && result.sentMessageCount === 0)
-            await this.tm.automationRuntime.ensureHiddenTurnReply(runner);
-          await this.tm.roster.emitAgentUpdate(session.id);
+            await this.tm.automationRuntime.ensureHiddenTurnReply(sessionRunner);
+          await this.tm.roster.emitAgentUpdate(targetSession.id);
         } catch (error) {
           this.reportWakeError(
-            session,
+            targetSession,
             "connector",
             "Channel message follow-up failed",
             error,
           );
         } finally {
-          this.notifyChannelActivity(session.id, sourceAddresses, false);
-          this.tm.runLifecycle.endSessionRun(session);
+          this.notifyChannelActivity(targetSession.id, originAddresses, false);
+          this.tm.runLifecycle.endSessionRun(targetSession);
         }
       },
       { lane: "background", source: "connector" },
     );
   }
   notifyChannelActivity(
-    agentId: string,
+    agentKey: string,
     addresses: readonly string[],
     isActive: boolean,
   ): void {
     for (const address of addresses)
-      this.tm.channelActivity?.(agentId, address, isActive);
+      this.tm.channelActivity?.(agentKey, address, isActive);
   }
-  appendChannelInboundEntries(session: any, envelopes: readonly any[]): void {
-    const isActive = session.id === this.tm.sessions.activeSession?.id;
-    for (const envelope of envelopes) {
-      const entry = {
+  appendChannelInboundEntries(targetSession: any, inboundBatch: readonly any[]): void {
+    const isActive = targetSession.id === this.tm.sessions.activeSession?.id;
+    for (const envelope of inboundBatch) {
+      const transcriptEntry = {
         kind: "message",
         id: nextEntryId(
-          isActive ? getTranscript() : session.db.getTranscriptEntries(),
+          isActive ? getTranscript() : targetSession.db.getTranscriptEntries(),
           "user-message",
         ),
         role: "user",
@@ -302,12 +302,12 @@ export class BackgroundWakes {
         channel: formatChannelAddress(envelope.address),
         channelSender: envelope.sender,
       };
-      if (isActive) this.tm.appendEntry(entry);
-      else session.db.appendTranscriptEntry(entry);
+      if (isActive) this.tm.appendEntry(transcriptEntry);
+      else targetSession.db.appendTranscriptEntry(transcriptEntry);
     }
     if (!isActive) {
-      this.tm.sessionStore.markSessionActivity(session);
-      void this.tm.roster.emitAgentUpdate(session.id);
+      this.tm.sessionStore.markSessionActivity(targetSession);
+      void this.tm.roster.emitAgentUpdate(targetSession.id);
     }
   }
 
@@ -327,110 +327,110 @@ export class BackgroundWakes {
       if (await this.scheduleBroadcast(id, text)) scheduled += 1;
     return { total: ids.length, scheduled };
   }
-  async scheduleBroadcast(agentId: string, message: string): Promise<boolean> {
-    if (this.tm.sessions.isAgentGone(agentId)) return false;
-    let session: any;
+  async scheduleBroadcast(agentKey: string, message: string): Promise<boolean> {
+    if (this.tm.sessions.isAgentGone(agentKey)) return false;
+    let targetSession: any;
     try {
-      session = await this.tm.sessions.resolveBackgroundSession(agentId);
+      targetSession = await this.tm.sessions.resolveBackgroundSession(agentKey);
     } catch {
       return false;
     }
     if (
-      this.tm.groupChat.isGroupSession(session) ||
-      this.tm.groupChat.isRemoteRoomSession(session)
+      this.tm.groupChat.isGroupSession(targetSession) ||
+      this.tm.groupChat.isRemoteRoomSession(targetSession)
     )
       return false;
     void this.runBackgroundWake(
-      session,
+      targetSession,
       "broadcast",
       "broadcast",
-      async (runner) => {
-        const result = await runner.run(
+      async (sessionRunner) => {
+        const result = await sessionRunner.run(
           buildAdminBroadcastWakePrompt(message),
           { hidden: true },
         );
         if (!result.aborted && result.sentMessageCount === 0)
-          await this.tm.automationRuntime.ensureHiddenTurnReply(runner);
+          await this.tm.automationRuntime.ensureHiddenTurnReply(sessionRunner);
       },
       "Broadcast message failed",
     );
     return true;
   }
 
-  emitTimelineEvent(agentId: string, event: unknown): void {
-    if (!this.tm.sessions.isAgentGone(agentId))
-      void this.recordTimelineEvent(agentId, event);
+  emitTimelineEvent(agentKey: string, event: unknown): void {
+    if (!this.tm.sessions.isAgentGone(agentKey))
+      void this.recordTimelineEvent(agentKey, event);
   }
-  async recordTimelineEvent(agentId: string, event: unknown): Promise<void> {
-    let session: any;
+  async recordTimelineEvent(agentKey: string, event: unknown): Promise<void> {
+    let targetSession: any;
     try {
-      session = await this.tm.sessions.resolveBackgroundSession(agentId);
+      targetSession = await this.tm.sessions.resolveBackgroundSession(agentKey);
     } catch {
       return;
     }
-    if (this.tm.groupChat.isGroupSession(session)) return;
-    this.appendTimelineEventEntry(session, event);
-    if (!this.tm.runLifecycle.runningAgentIds().has(agentId))
-      this.queueEventWake(agentId, event);
+    if (this.tm.groupChat.isGroupSession(targetSession)) return;
+    this.appendTimelineEventEntry(targetSession, event);
+    if (!this.tm.runLifecycle.runningAgentIds().has(agentKey))
+      this.queueEventWake(agentKey, event);
   }
-  appendTimelineEventEntry(session: any, event: unknown): void {
-    const entry = {
+  appendTimelineEventEntry(targetSession: any, event: unknown): void {
+    const transcriptEntry = {
       kind: "event",
       id: `event-${randomUUID()}`,
       event,
       timestampMs: Date.now(),
     };
-    if (session.id === this.tm.sessions.activeSession?.id)
-      this.tm.appendEntry(entry);
-    else session.db.appendTranscriptEntry(entry);
+    if (targetSession.id === this.tm.sessions.activeSession?.id)
+      this.tm.appendEntry(transcriptEntry);
+    else targetSession.db.appendTranscriptEntry(transcriptEntry);
   }
-  queueEventWake(agentId: string, event: unknown): void {
+  queueEventWake(agentKey: string, event: unknown): void {
     if (
-      this.tm.pendingWakes.enqueuePendingWake(this.pendingEventWakes, agentId, [
+      this.tm.pendingWakes.enqueuePendingWake(this.pendingEventWakes, agentKey, [
         event,
       ])
     )
-      void this.reviveForEvents(agentId);
+      void this.reviveForEvents(agentKey);
   }
-  async reviveForEvents(agentId: string): Promise<void> {
+  async reviveForEvents(agentKey: string): Promise<void> {
     if (
       !this.tm.execution.canExecute ||
-      this.revivingEventAgentIds.has(agentId)
+      this.revivingEventAgentIds.has(agentKey)
     )
       return;
-    this.revivingEventAgentIds.add(agentId);
+    this.revivingEventAgentIds.add(agentKey);
     try {
-      while ((this.pendingEventWakes.get(agentId)?.length ?? 0) > 0) {
-        const events = this.pendingEventWakes.get(agentId) ?? [];
-        this.pendingEventWakes.delete(agentId);
+      while ((this.pendingEventWakes.get(agentKey)?.length ?? 0) > 0) {
+        const eventBatch = this.pendingEventWakes.get(agentKey) ?? [];
+        this.pendingEventWakes.delete(agentKey);
         try {
-          await this.runEventWake(agentId, events);
+          await this.runEventWake(agentKey, eventBatch);
         } catch (error) {
           console.error(
-            `[transcript-manager] event wake revival failed for ${agentId}:`,
+            `[transcript-manager] event wake revival failed for ${agentKey}:`,
             error,
           );
         }
       }
     } finally {
-      this.revivingEventAgentIds.delete(agentId);
+      this.revivingEventAgentIds.delete(agentKey);
     }
   }
-  async runEventWake(agentId: string, events: readonly any[]): Promise<void> {
-    if (events.length === 0 || !this.tm.execution.canExecute) return;
-    let session: any;
+  async runEventWake(agentKey: string, eventBatch: readonly any[]): Promise<void> {
+    if (eventBatch.length === 0 || !this.tm.execution.canExecute) return;
+    let targetSession: any;
     try {
-      session = await this.tm.sessions.resolveBackgroundSession(agentId);
+      targetSession = await this.tm.sessions.resolveBackgroundSession(agentKey);
     } catch {
       return;
     }
-    if (!this.tm.groupChat.isGroupSession(session))
+    if (!this.tm.groupChat.isGroupSession(targetSession))
       await this.runBackgroundWake(
-        session,
+        targetSession,
         "event",
         "event",
-        (runner) =>
-          runner.run(buildTimelineEventWakePrompt(events), {
+        (sessionRunner) =>
+          sessionRunner.run(buildTimelineEventWakePrompt(eventBatch), {
             hidden: true,
             isSilenceAllowed: true,
           }),
@@ -438,53 +438,53 @@ export class BackgroundWakes {
       );
   }
   hasRunningBackgroundShellWork(): boolean {
-    for (const runner of this.tm.runnerRegistry.runners.values())
-      if (runner.hasRunningBackgroundShellWork()) return true;
+    for (const sessionRunner of this.tm.runnerRegistry.runners.values())
+      if (sessionRunner.hasRunningBackgroundShellWork()) return true;
     return false;
   }
 
   private async runBackgroundWake(
-    session: any,
+    targetSession: any,
     requestSource: string,
     queueSource: string,
-    run: (runner: any) => Promise<unknown>,
+    run: (sessionRunner: any) => Promise<unknown>,
     trayTitle: string,
     errorSource = requestSource,
   ): Promise<void> {
-    const runner = this.tm.runnerRegistry.getRunner(session);
-    this.tm.runLifecycle.beginSessionRun(session);
+    const sessionRunner = this.tm.runnerRegistry.getRunner(targetSession);
+    this.tm.runLifecycle.beginSessionRun(targetSession);
     await this.tm.runLifecycle.enqueueExclusiveRun(
-      session.id,
+      targetSession.id,
       async () => {
-        this.tm.turnRuntime.activeRequestPrompts.delete(session.id);
-        this.tm.turnRuntime.activeRequestSources.set(session.id, requestSource);
+        this.tm.turnRuntime.activeRequestPrompts.delete(targetSession.id);
+        this.tm.turnRuntime.activeRequestSources.set(targetSession.id, requestSource);
         try {
-          await run(runner);
-          await this.tm.roster.emitAgentUpdate(session.id);
+          await run(sessionRunner);
+          await this.tm.roster.emitAgentUpdate(targetSession.id);
         } catch (error) {
-          this.reportWakeError(session, errorSource, trayTitle, error);
+          this.reportWakeError(targetSession, errorSource, trayTitle, error);
         } finally {
-          this.tm.runLifecycle.endSessionRun(session);
+          this.tm.runLifecycle.endSessionRun(targetSession);
         }
       },
       { lane: "background", source: queueSource },
     );
   }
   private reportWakeError(
-    session: any,
+    targetSession: any,
     source: string,
     title: string,
     error: unknown,
   ): void {
     this.tm.telemetry.reportAgentError({
       source,
-      conversationId: session.id,
-      requestId: this.tm.runLifecycle.lastRequestIdBySession.get(session.id),
+      conversationId: targetSession.id,
+      requestId: this.tm.runLifecycle.lastRequestIdBySession.get(targetSession.id),
       error: classifyAgentError(error),
       detail: slateErrorDetail(error),
     });
     this.tm.trayErrors.pushError({
-      agentId: session.id,
+      agentId: targetSession.id,
       title,
       ...describeAgentRunError(error),
     });
