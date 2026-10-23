@@ -177,3 +177,65 @@ describe("the roster the platform is told about", () => {
     assert.deepEqual(roster.finalizeSummaryForRpc({ id: "agent-1" }, stamp), { id: "agent-1", isRunning: true, snapshotEpoch: stamp.snapshotEpoch, snapshotSeq: stamp.snapshotSeq });
   });
 });
+
+// ---------------------------------------------------------------------------------------------
+// the edges of a roster send
+// ---------------------------------------------------------------------------------------------
+
+it("a queued task that fails is reported to its caller and does not stop the queue", async () => {
+  const { manager } = harness();
+  const { emitter } = emitterWith();
+  const roster = new RosterEmit(manager as never, emitter);
+  const order: string[] = [];
+  await assert.rejects(
+    () => roster.enqueueEmit(async () => { order.push("failed"); throw new Error("this one fails"); }),
+    /this one fails/,
+  );
+  await roster.enqueueEmit(async () => { order.push("after"); });
+  assert.deepEqual(order, ["failed", "after"]);
+});
+
+it("a delta that cannot see a session, a summary or an unchanged sibling sends the whole roster", async () => {
+  const noSession = harness({ noSession: true });
+  const noSessionEmitter = emitterWith();
+  const noSessionRoster = new RosterEmit(noSession.manager as never, noSessionEmitter.emitter);
+  await noSessionRoster.emitAgents();
+  const noSessionEvents = noSessionEmitter.events.length;
+  assert.equal(await noSessionRoster.runEmitAgentUpdate("agent-1"), "full");
+  assert.equal(noSessionEmitter.events.length > noSessionEvents, true);
+  assert.equal(noSessionEmitter.events.at(-1)?.[0], "agents");
+
+  const noSummary = harness({ summaryByIdNull: true });
+  const noSummaryEmitter = emitterWith();
+  const noSummaryRoster = new RosterEmit(noSummary.manager as never, noSummaryEmitter.emitter);
+  await noSummaryRoster.emitAgents();
+  assert.equal(await noSummaryRoster.runEmitAgentUpdate("agent-9"), "full");
+
+  const siblings = harness({ runningStates: true });
+  const siblingsEmitter = emitterWith();
+  const siblingsRoster = new RosterEmit(siblings.manager as never, siblingsEmitter.emitter);
+  await siblingsRoster.emitAgents();
+  // The decorated roster gives every sibling a different object, so one agent's delta cannot stand.
+  assert.equal(await siblingsRoster.runEmitAgentUpdate("agent-2"), "full");
+});
+
+it("a delta keeps the agent it sent in the cache", async () => {
+  const { manager } = harness();
+  const { emitter, events } = emitterWith();
+  const roster = new RosterEmit(manager as never, emitter);
+  await roster.emitAgents();
+  assert.equal(await roster.runEmitAgentUpdate("agent-2"), "delta");
+  const payload = events.at(-1)?.[1] as { agent: { id: string; name: string } };
+  assert.equal(payload.agent.id, "agent-2");
+  assert.equal(payload.agent.name, "ByName");
+  assert.deepEqual(roster.cachedAgentSummaries.find((agent: { id: string }) => agent.id === "agent-2")?.name, "ByName");
+});
+
+it("a full roster reached while coalescing stops the remaining deltas", async () => {
+  const { manager } = harness();
+  const { emitter, events } = emitterWith();
+  const roster = new RosterEmit(manager as never, emitter);
+  await Promise.all([roster.emitAgentUpdate("agent-1"), roster.emitAgentUpdate("agent-2")]);
+  assert.equal(events.length, 1);
+});
+

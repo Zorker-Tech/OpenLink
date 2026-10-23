@@ -1,6 +1,6 @@
 /** Telling the platform what a conversation looks like now.
 
- * Appended entries, an agent's own status, which agents are running and the profile a conversation is under are emitted
+ * Appended entries, an agent's own status, which roster are running and the profile a conversation is under are emittedAgent
  * from here, coalesced and de-duplicated so the same news is not sent twice, and bounded so a long conversation does not
  * become a long message. */
 import { randomUUID } from "node:crypto";
@@ -25,19 +25,19 @@ export class RosterEmit {
   rosterCacheSeeded = false;
 
   private snapshotSeq = 0;
-  private emitChain: Promise<void> = Promise.resolve();
-  private pendingFullEmit = false;
-  private readonly pendingDeltaAgentIds = new Set<string>();
-  private pendingEmitFlush: Promise<void> | null = null;
+  private workChain: Promise<void> = Promise.resolve();
+  private fullRosterPending = false;
+  private readonly pendingAgentIds = new Set<string>();
+  private flushPromise: Promise<void> | null = null;
 
   constructor(
     readonly tm: TranscriptManagerLike,
     readonly emitter: EventEmitter,
   ) {}
 
-  enqueueEmit<T>(work: () => Promise<T>): Promise<T> {
-    const run = this.emitChain.then(work, work);
-    this.emitChain = run.then(
+  enqueueEmit<T>(task: () => Promise<T>): Promise<T> {
+    const run = this.workChain.then(task, task);
+    this.workChain = run.then(
       () => undefined,
       () => undefined,
     );
@@ -45,43 +45,43 @@ export class RosterEmit {
   }
 
   emitAgents(): Promise<void> {
-    this.pendingFullEmit = true;
+    this.fullRosterPending = true;
     return this.scheduleCoalescedEmit();
   }
 
   emitAgentUpdate(agentId: string): Promise<void> {
-    this.pendingDeltaAgentIds.add(agentId);
+    this.pendingAgentIds.add(agentId);
     return this.scheduleCoalescedEmit();
   }
 
   scheduleCoalescedEmit(): Promise<void> {
-    if (this.pendingEmitFlush != null) return this.pendingEmitFlush;
-    const flush = (async () => {
+    if (this.flushPromise != null) return this.flushPromise;
+    const flushing = (async () => {
       await this.tm.taskBoundary.settled();
       await this.enqueueEmit(async () => {
-        this.pendingEmitFlush = null;
-        const full = this.pendingFullEmit;
-        const agentIds = [...this.pendingDeltaAgentIds];
-        this.pendingFullEmit = false;
-        this.pendingDeltaAgentIds.clear();
+        this.flushPromise = null;
+        const wantsFull = this.fullRosterPending;
+        const queuedAgentIds = [...this.pendingAgentIds];
+        this.fullRosterPending = false;
+        this.pendingAgentIds.clear();
         try {
-          if (full) {
+          if (wantsFull) {
             await this.runEmitAgents();
             return;
           }
-          for (const agentId of agentIds) {
+          for (const agentId of queuedAgentIds) {
             if ((await this.runEmitAgentUpdate(agentId)) === "full") return;
           }
-        } catch (error) {
+        } catch (cause) {
           console.error(
             "[transcript-manager] coalesced roster emit failed:",
-            error,
+            cause,
           );
         }
       });
     })();
-    this.pendingEmitFlush = flush;
-    return flush;
+    this.flushPromise = flushing;
+    return flushing;
   }
 
   reserveSnapshotStamp(): SnapshotStamp {
@@ -92,70 +92,70 @@ export class RosterEmit {
   }
 
   applySnapshotStamp<T extends object>(
-    agents: readonly T[],
-    stamp: SnapshotStamp,
+    roster: readonly T[],
+    snapshot: SnapshotStamp,
   ): Array<T & SnapshotStamp> {
-    return agents.map((agent) => ({ ...agent, ...stamp }));
+    return roster.map((agent) => ({ ...agent, ...snapshot }));
   }
 
   finalizeSummaryForRpc<T extends object>(
-    summary: T,
-    stamp: SnapshotStamp,
+    agentSummary: T,
+    snapshot: SnapshotStamp,
   ): T & SnapshotStamp {
     const finalized =
-      this.tm.runLifecycle.withRunStates([summary])[0] ?? summary;
-    return { ...finalized, ...stamp };
+      this.tm.runLifecycle.withRunStates([agentSummary])[0] ?? agentSummary;
+    return { ...finalized, ...snapshot };
   }
 
   async runEmitAgents(): Promise<void> {
     if (this.tm.disposed) return;
-    const session = await this.tm.sessions.tryEnsureSession();
-    const announcedId =
-      this.tm.sessions.getAnnouncedActiveAgentId() ?? session?.id;
-    const stamp = this.reserveSnapshotStamp();
-    const agents = this.applySnapshotStamp(
+    const activeSession = await this.tm.sessions.tryEnsureSession();
+    const announcedAgentId =
+      this.tm.sessions.getAnnouncedActiveAgentId() ?? activeSession?.id;
+    const snapshot = this.reserveSnapshotStamp();
+    const roster = this.applySnapshotStamp(
       this.tm.runLifecycle.withRunStates(
-        await this.tm.sessionStore.listAgents(announcedId),
+        await this.tm.sessionStore.listAgents(announcedAgentId),
       ),
-      stamp,
+      snapshot,
     );
-    this.cachedAgentSummaries = agents;
+    this.cachedAgentSummaries = roster;
     this.rosterCacheSeeded = true;
     this.emitter.emit("agents", {
-      activeAgentId: announcedId ?? "",
-      agents,
+      activeAgentId: announcedAgentId ?? "",
+      agents: roster,
       ordered: this.replicaWriter.nextStamp(ROSTER_REPLICA_KEY),
       coverage: { kind: "complete-roster" },
     });
   }
 
   async buildAgentSummary(agentId: string): Promise<any | null> {
-    const activeId = this.tm.sessions.activeSession?.id;
-    const announcedId =
+    const currentActiveId = this.tm.sessions.activeSession?.id;
+    const announcedAgentId =
       this.tm.sessions.getAnnouncedActiveAgentId() ?? undefined;
-    const live =
-      activeId === agentId
+    const liveSession =
+      currentActiveId === agentId
         ? this.tm.sessions.activeSession
         : (this.tm.sessions.liveSessions.get(agentId) ?? null);
-    let summary: any | null = null;
-    if (live != null) {
+    let agentSummary: any | null = null;
+    if (liveSession != null) {
       try {
-        summary = await this.tm.sessionStore.summarizeSession(
-          live,
-          announcedId,
+        agentSummary = await this.tm.sessionStore.summarizeSession(
+          liveSession,
+          announcedAgentId,
         );
       } catch {
-        summary = null;
+        agentSummary = null;
       }
     }
-    if (summary == null) {
-      summary = await this.tm.sessionStore.summarizeAgentById(
+    if (agentSummary == null) {
+      agentSummary = await this.tm.sessionStore.summarizeAgentById(
         agentId,
-        announcedId,
+        announcedAgentId,
       );
     }
-    if (summary == null) return null;
-    return this.tm.runLifecycle.withRunStates([summary])[0] ?? summary;
+    if (agentSummary == null) return null;
+    return this.tm.runLifecycle.withRunStates([agentSummary])[0] ?? agentSummary;
   }
 
   async runEmitAgentUpdate(agentId: string): Promise<EmitAgentUpdateOutcome> {
@@ -165,44 +165,44 @@ export class RosterEmit {
         await this.runEmitAgents();
         return "full";
       }
-      const session = await this.tm.sessions.tryEnsureSession();
-      if (session == null) {
+      const activeSession = await this.tm.sessions.tryEnsureSession();
+      if (activeSession == null) {
         await this.runEmitAgents();
         return "full";
       }
-      const stamp = this.reserveSnapshotStamp();
-      const summary = await this.buildAgentSummary(agentId);
-      if (summary == null) {
+      const snapshot = this.reserveSnapshotStamp();
+      const agentSummary = await this.buildAgentSummary(agentId);
+      if (agentSummary == null) {
         await this.runEmitAgents();
         return "full";
       }
-      const patched = upsertAgentSummary(this.cachedAgentSummaries, summary);
-      const reconciled = this.tm.runLifecycle.withRunStates(patched);
-      const siblingChanged = reconciled.some(
+      const patchedRoster = upsertAgentSummary(this.cachedAgentSummaries, agentSummary);
+      const reconciledRoster = this.tm.runLifecycle.withRunStates(patchedRoster);
+      const siblingUpdated = reconciledRoster.some(
         (agent: any, index: number) =>
-          agent.id !== agentId && agent !== patched[index],
+          agent.id !== agentId && agent !== patchedRoster[index],
       );
-      if (siblingChanged) {
+      if (siblingUpdated) {
         await this.runEmitAgents();
         return "full";
       }
-      const emitted =
+      const emittedAgent =
         this.applySnapshotStamp(
-          [reconciled.find((agent: any) => agent.id === agentId) ?? summary],
-          stamp,
-        )[0] ?? summary;
-      this.cachedAgentSummaries = upsertAgentSummary(reconciled, emitted);
+          [reconciledRoster.find((agent: any) => agent.id === agentId) ?? agentSummary],
+          snapshot,
+        )[0] ?? agentSummary;
+      this.cachedAgentSummaries = upsertAgentSummary(reconciledRoster, emittedAgent);
       this.emitter.emit("agent-upserted", {
         activeAgentId:
-          this.tm.sessions.getAnnouncedActiveAgentId() ?? session.id,
-        agent: emitted,
+          this.tm.sessions.getAnnouncedActiveAgentId() ?? activeSession.id,
+        agent: emittedAgent,
         ordered: this.replicaWriter.nextStamp(ROSTER_REPLICA_KEY),
       });
       return "delta";
-    } catch (error) {
+    } catch (cause) {
       console.error(
-        `[transcript-manager] incremental emit failed for ${agentId}; falling back to full emit:`,
-        error,
+        `[transcript-manager] incremental emit failed for ${agentId}; falling back to wantsFull emit:`,
+        cause,
       );
       try {
         await this.runEmitAgents();
