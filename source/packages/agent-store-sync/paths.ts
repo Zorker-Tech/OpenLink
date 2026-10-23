@@ -19,8 +19,8 @@ import {
 
 export const AGENT_STORE_SYNC_DIR_NAME = ".sync";
 
-export function isReservedRelPath(relPath: string): boolean {
-  return relPath.split("/").some(isReservedRelPathSegment);
+export function isReservedRelPath(relativePathName: string): boolean {
+  return relativePathName.split("/").some(isReservedRelPathSegment);
 }
 
 export function isReservedRelPathSegment(segment: string): boolean {
@@ -30,7 +30,7 @@ export function isReservedRelPathSegment(segment: string): boolean {
 
 export const AGENT_STORE_CONFLICT_EVENTS_FILE_NAME = "conflict-events.jsonl";
 export const AGENT_STORE_CONFLICT_PENDING_FILE_NAME = "conflict-events.pending.jsonl";
-const PRIVATE_DIR_MODE = 0o700;
+const SECURE_DIRECTORY_MODE = 0o700;
 
 export type AgentStoreSourceKind = "user" | "team" | "cloud" | "local" | "store" | "unknown";
 
@@ -49,19 +49,19 @@ export class AgentStorePathError extends Error {
   readonly code: AgentStorePathErrorCode;
   readonly failedPath: string;
 
-  constructor(options: { code: AgentStorePathErrorCode; message: string; failedPath: string }) {
-    super(options.message);
+  constructor(settings: { code: AgentStorePathErrorCode; message: string; failedPath: string }) {
+    super(settings.message);
     this.name = "AgentStorePathError";
-    this.code = options.code;
-    this.failedPath = options.failedPath;
+    this.code = settings.code;
+    this.failedPath = settings.failedPath;
   }
 }
 
-type PathFs = Pick<typeof fs, "lstatSync" | "mkdirSync">;
+type PathFileSystem = Pick<typeof fs, "lstatSync" | "mkdirSync">;
 
 export interface AgentStorePathOptions {
   readonly env?: NodeJS.ProcessEnv;
-  readonly fs?: PathFs;
+  readonly fs?: PathFileSystem;
   readonly geteuid?: (() => number) | undefined;
   readonly osTmpdir?: () => string;
   readonly path?: typeof path;
@@ -70,9 +70,9 @@ export interface AgentStorePathOptions {
   readonly trustedBase?: string;
 }
 
-interface ResolvedPathDeps {
+interface ResolvedDeps {
   readonly env: NodeJS.ProcessEnv;
-  readonly fs: PathFs;
+  readonly fs: PathFileSystem;
   readonly geteuid: (() => number) | undefined;
   readonly osTmpdir: () => string;
   readonly path: typeof path;
@@ -80,14 +80,14 @@ interface ResolvedPathDeps {
   readonly windowsAcl: Record<string, unknown>;
 }
 
-export function assertNoSymlinkInPath(targetPath: string, options: AgentStorePathOptions = {}): void {
-  const deps = getDeps(options);
-  const resolved = deps.path.resolve(targetPath);
-  const segments = getPathSegments(resolved, deps.path);
-  for (const segment of segments) {
-    const stat = tryLstat(segment, deps.fs);
-    if (!stat) return;
-    if (stat.isSymbolicLink()) {
+export function assertNoSymlinkInPath(targetPath: string, settings: AgentStorePathOptions = {}): void {
+  const resolvedDeps = resolvePathDeps(settings);
+  const absoluteTarget = resolvedDeps.path.resolve(targetPath);
+  const pathChain = splitPathChain(absoluteTarget, resolvedDeps.path);
+  for (const segment of pathChain) {
+    const fileStat = readLstat(segment, resolvedDeps.fs);
+    if (!fileStat) return;
+    if (fileStat.isSymbolicLink()) {
       throw new AgentStorePathError({
         code: "symlink_refused",
         message: `Refusing to use symlinked agent store path: ${segment}`,
@@ -97,54 +97,54 @@ export function assertNoSymlinkInPath(targetPath: string, options: AgentStorePat
   }
 }
 
-export function ensureSecureDirectoryChain(targetDir: string, options: AgentStorePathOptions = {}): void {
-  const deps = getDeps(options);
-  const resolvedTarget = deps.path.resolve(targetDir);
-  const trustedBase = options.trustedBase !== undefined
-    ? deps.path.resolve(options.trustedBase)
-    : findTrustedDirectoryAncestor(resolvedTarget, deps);
+export function ensureSecureDirectoryChain(targetDir: string, settings: AgentStorePathOptions = {}): void {
+  const resolvedDeps = resolvePathDeps(settings);
+  const resolvedTarget = resolvedDeps.path.resolve(targetDir);
+  const trustedBase = settings.trustedBase !== undefined
+    ? resolvedDeps.path.resolve(settings.trustedBase)
+    : trustedAncestor(resolvedTarget, resolvedDeps);
   if (resolvedTarget === trustedBase) {
-    assertRealDirectorySegment(trustedBase, deps);
+    validateRealSegment(trustedBase, resolvedDeps);
     return;
   }
-  const relative = deps.path.relative(trustedBase, resolvedTarget);
-  if (relative.length === 0 || relative.startsWith("..") || deps.path.isAbsolute(relative)) {
+  const relativeToBase = resolvedDeps.path.relative(trustedBase, resolvedTarget);
+  if (relativeToBase.length === 0 || relativeToBase.startsWith("..") || resolvedDeps.path.isAbsolute(relativeToBase)) {
     throw new AgentStorePathError({
       code: "invalid_store_base",
       message: `Refusing to create ${resolvedTarget} outside trusted base ${trustedBase}`,
       failedPath: resolvedTarget,
     });
   }
-  const segments = relative.split(deps.path.sep).filter((segment) => segment.length > 0);
-  let current = trustedBase;
-  for (const segment of segments) {
-    assertRealDirectorySegment(current, deps);
-    current = deps.path.join(current, segment);
-    ensureRealDirectorySegment(current, deps);
+  const pathChain = relativeToBase.split(resolvedDeps.path.sep).filter((segment) => segment.length > 0);
+  let currentDirectory = trustedBase;
+  for (const segment of pathChain) {
+    validateRealSegment(currentDirectory, resolvedDeps);
+    currentDirectory = resolvedDeps.path.join(currentDirectory, segment);
+    createRealSegment(currentDirectory, resolvedDeps);
   }
 }
 
-function getDeps(options: AgentStorePathOptions): ResolvedPathDeps {
+function resolvePathDeps(settings: AgentStorePathOptions): ResolvedDeps {
   return {
-    env: options.env ?? process.env,
-    fs: options.fs ?? fs,
-    geteuid: options.geteuid ?? process.geteuid?.bind(process),
-    osTmpdir: options.osTmpdir ?? os.tmpdir,
-    path: options.path ?? path,
-    platform: options.platform ?? process.platform,
-    windowsAcl: options.windowsAcl ?? {},
+    env: settings.env ?? process.env,
+    fs: settings.fs ?? fs,
+    geteuid: settings.geteuid ?? process.geteuid?.bind(process),
+    osTmpdir: settings.osTmpdir ?? os.tmpdir,
+    path: settings.path ?? path,
+    platform: settings.platform ?? process.platform,
+    windowsAcl: settings.windowsAcl ?? {},
   };
 }
 
-function assertDirectoryStat(targetPath: string, stat: fs.Stats): void {
-  if (stat.isSymbolicLink()) {
+function validateDirectoryStat(targetPath: string, fileStat: fs.Stats): void {
+  if (fileStat.isSymbolicLink()) {
     throw new AgentStorePathError({
       code: "symlink_refused",
       message: `Refusing to use symlinked agent store path: ${targetPath}`,
       failedPath: targetPath,
     });
   }
-  if (!stat.isDirectory()) {
+  if (!fileStat.isDirectory()) {
     throw new AgentStorePathError({
       code: "not_directory",
       message: `Agent store path is not a directory: ${targetPath}`,
@@ -153,22 +153,22 @@ function assertDirectoryStat(targetPath: string, stat: fs.Stats): void {
   }
 }
 
-function findTrustedDirectoryAncestor(targetPath: string, deps: ResolvedPathDeps): string {
-  const segments = getPathSegments(deps.path.resolve(targetPath), deps.path);
-  let trusted = segments[0] ?? deps.path.resolve(targetPath);
-  for (let index = 1; index < segments.length; index += 1) {
-    const segment = segments[index];
+function trustedAncestor(targetPath: string, resolvedDeps: ResolvedDeps): string {
+  const pathChain = splitPathChain(resolvedDeps.path.resolve(targetPath), resolvedDeps.path);
+  let trusted = pathChain[0] ?? resolvedDeps.path.resolve(targetPath);
+  for (let index = 1; index < pathChain.length; index += 1) {
+    const segment = pathChain[index];
     if (segment === undefined) continue;
-    const stat = tryLstat(segment, deps.fs);
-    if (!stat) break;
-    if (stat.isSymbolicLink()) {
+    const fileStat = readLstat(segment, resolvedDeps.fs);
+    if (!fileStat) break;
+    if (fileStat.isSymbolicLink()) {
       throw new AgentStorePathError({
         code: "symlink_refused",
         message: `Refusing to use symlinked agent store path: ${segment}`,
         failedPath: segment,
       });
     }
-    if (!stat.isDirectory()) {
+    if (!fileStat.isDirectory()) {
       throw new AgentStorePathError({
         code: "not_directory",
         message: `Agent store path is not a directory: ${segment}`,
@@ -180,28 +180,28 @@ function findTrustedDirectoryAncestor(targetPath: string, deps: ResolvedPathDeps
   return trusted;
 }
 
-function assertRealDirectorySegment(targetPath: string, deps: ResolvedPathDeps): void {
-  const stat = tryLstat(targetPath, deps.fs);
-  if (!stat) {
+function validateRealSegment(targetPath: string, resolvedDeps: ResolvedDeps): void {
+  const fileStat = readLstat(targetPath, resolvedDeps.fs);
+  if (!fileStat) {
     throw new AgentStorePathError({
       code: "not_directory",
       message: `Trusted directory does not exist: ${targetPath}`,
       failedPath: targetPath,
     });
   }
-  assertDirectoryStat(targetPath, stat);
+  validateDirectoryStat(targetPath, fileStat);
 }
 
-function ensureRealDirectorySegment(targetPath: string, deps: ResolvedPathDeps): void {
-  let stat = tryLstat(targetPath, deps.fs);
-  if (!stat) {
+function createRealSegment(targetPath: string, resolvedDeps: ResolvedDeps): void {
+  let fileStat = readLstat(targetPath, resolvedDeps.fs);
+  if (!fileStat) {
     try {
-      deps.fs.mkdirSync(targetPath, { mode: PRIVATE_DIR_MODE });
-    } catch (error) {
-      if (!isNodeError(error) || error.code !== "EEXIST") throw error;
+      resolvedDeps.fs.mkdirSync(targetPath, { mode: SECURE_DIRECTORY_MODE });
+    } catch (failure) {
+      if (!hasErrnoCode(failure) || failure.code !== "EEXIST") throw failure;
     }
-    stat = tryLstat(targetPath, deps.fs);
-    if (!stat) {
+    fileStat = readLstat(targetPath, resolvedDeps.fs);
+    if (!fileStat) {
       throw new AgentStorePathError({
         code: "not_directory",
         message: `Failed to create directory: ${targetPath}`,
@@ -209,32 +209,32 @@ function ensureRealDirectorySegment(targetPath: string, deps: ResolvedPathDeps):
       });
     }
   }
-  assertDirectoryStat(targetPath, stat);
+  validateDirectoryStat(targetPath, fileStat);
 }
 
-function getPathSegments(targetPath: string, pathModule: typeof path): string[] {
-  const root = pathModule.parse(targetPath).root;
-  const rest = targetPath.slice(root.length);
-  const parts = rest.split(/[\\/]+/).filter(Boolean);
-  const segments: string[] = [];
-  let current = root;
-  if (root) segments.push(root);
-  for (const part of parts) {
-    current = current === root ? pathModule.join(root, part) : pathModule.join(current, part);
-    segments.push(current);
+function splitPathChain(targetPath: string, pathApi: typeof path): string[] {
+  const rootPrefix = pathApi.parse(targetPath).root;
+  const remainder = targetPath.slice(rootPrefix.length);
+  const nameParts = remainder.split(/[\\/]+/).filter(Boolean);
+  const pathChain: string[] = [];
+  let currentDirectory = rootPrefix;
+  if (rootPrefix) pathChain.push(rootPrefix);
+  for (const part of nameParts) {
+    currentDirectory = currentDirectory === rootPrefix ? pathApi.join(rootPrefix, part) : pathApi.join(currentDirectory, part);
+    pathChain.push(currentDirectory);
   }
-  return segments;
+  return pathChain;
 }
 
-function tryLstat(targetPath: string, fsModule: PathFs): fs.Stats | undefined {
+function readLstat(targetPath: string, fileSystem: PathFileSystem): fs.Stats | undefined {
   try {
-    return fsModule.lstatSync(targetPath);
-  } catch (error) {
-    if (isNodeError(error) && error.code === "ENOENT") return undefined;
-    throw error;
+    return fileSystem.lstatSync(targetPath);
+  } catch (failure) {
+    if (hasErrnoCode(failure) && failure.code === "ENOENT") return undefined;
+    throw failure;
   }
 }
 
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && typeof (error as NodeJS.ErrnoException).code === "string";
+function hasErrnoCode(failure: unknown): failure is NodeJS.ErrnoException {
+  return failure instanceof Error && typeof (failure as NodeJS.ErrnoException).code === "string";
 }
