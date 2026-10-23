@@ -5,7 +5,7 @@ import os from "node:os"
 import path from "node:path"
 
 import { LocalReadExecutor } from "../../source/packages/local-exec/read.ts"
-import { ShellOutputNotificationObserver } from "../../source/packages/local-exec/background-shell-observability.ts"
+import { FileLoggingShellFactory, NotifyingBackgroundShellFactory, ShellOutputNotificationObserver } from "../../source/packages/local-exec/background-shell-observability.ts"
 import { createContext } from "../../source/packages/context/context.ts"
 
 // ---------------------------------------------------------------------------------------------
@@ -18,6 +18,160 @@ function withWorkspace(run: (workspace: string) => Promise<void>) {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "slate-read-"))
   return run(workspace).finally(() => fs.rmSync(workspace, { recursive: true, force: true }))
 }
+
+
+// ---------------------------------------------------------------------------------------------
+// Watching a shell that keeps running
+// ---------------------------------------------------------------------------------------------
+
+const registryOf = () => {
+  const enqueued: { payload: Record<string, unknown> }[] = []
+  return { enqueued, enqueue: (event: { payload: Record<string, unknown> }) => enqueued.push(event) }
+}
+const observerOf = (config: Record<string, unknown>, registry = registryOf(), extra: Record<string, unknown> = {}) =>
+  new ShellOutputNotificationObserver({ shellId: 7, outputPath: "/terminals/7.txt", config: config as never, conversationId: "conv-1", registry: registry as never, ...extra })
+
+test("a shell's output notifies once at first, then in a batch, and when it is limited", () => {
+  const registry = registryOf()
+  const observer = observerOf({ pattern: "ERR", reason: "when it fails", notificationLimit: 3 }, registry)
+  observer.observe("ERR")
+  assert.equal(registry.enqueued.length, 1)
+  assert.equal(registry.enqueued[0]?.payload.title, "when it fails")
+  assert.match(String(registry.enqueued[0]?.payload.detail), /This is occurrence number 1\. Matched text: ERR\./)
+  observer.observe("ERR ERR ERR")
+  // The batch and the limit notification are flushed once the third occurrence is reached.
+  assert.equal(registry.enqueued.length, 3)
+  assert.match(String(registry.enqueued[1]?.payload.detail), /2 more times since the previous notification\. The title message is being displayed to the user\. Latest match: ERR\./)
+  assert.equal(registry.enqueued[2]?.payload.title, "Notification limit reached (3)")
+  assert.match(String(registry.enqueued[2]?.payload.detail), /matched \/ERR\/ 3 times and has reached the notification limit/)
+  assert.match(String(registry.enqueued[2]?.payload.detail), /No further notifications will be sent/)
+  observer.finish()
+  observer.observe("ERR")
+  assert.equal(registry.enqueued.length, 3)
+})
+
+test("a match split across two reads is still found, and a match already seen is not counted twice", () => {
+  const registry = registryOf()
+  const observer = observerOf({ pattern: "ERR", reason: "r" }, registry)
+  observer.observe("E")
+  observer.observe("RR")
+  observer.finish()
+  assert.equal(registry.enqueued.length, 1)
+  assert.match(String(registry.enqueued[0]?.payload.detail), /Matched text: ERR\./)
+  // A second full read repeats the match once: the old text is not counted again, only the new one.
+  const repeated = registryOf()
+  const repeating = observerOf({ pattern: "ERR", reason: "r" }, repeated)
+  repeating.observe("ERR")
+  repeating.observe("ERR")
+  repeating.finish()
+  assert.equal(repeated.enqueued.length, 2)
+  assert.match(String(repeated.enqueued[1]?.payload.detail), /This is occurrence number 2\./)
+})
+
+test("a long reason is cut and a long match is not quoted", () => {
+  const registry = registryOf()
+  observerOf({ pattern: "x+", reason: "r".repeat(600) }, registry).observe("x".repeat(6000))
+  assert.equal(String(registry.enqueued[0]?.payload.title).length, 503)
+  assert.match(String(registry.enqueued[0]?.payload.detail), /is 6000 characters; omitted from notification detail\./)
+  const fallback = registryOf()
+  observerOf({ pattern: "x", reason: "   " }, fallback, { toolCallId: "call-1" }).observe("x")
+  assert.equal(fallback.enqueued[0]?.payload.title, "Shell output contains /x/")
+  assert.equal(fallback.enqueued[0]?.payload.toolCallId, "call-1")
+  const withoutCallId = registryOf()
+  observerOf({ pattern: "x", reason: "r" }, withoutCallId).observe("x")
+  assert.equal("toolCallId" in (withoutCallId.enqueued[0]?.payload ?? {}), false)
+})
+
+test("a pattern longer than the notification limit is refused", () => {
+  assert.throws(
+    () => new ShellOutputNotificationObserver({ shellId: 1, outputPath: "/o", config: { pattern: "x".repeat(501), reason: "r" }, conversationId: "c", registry: registryOf() as never }),
+    /Output notification pattern exceeds 500 characters/,
+  )
+})
+
+test("a shell factory watches a shell's output and an adopted shell's first output", async () => {
+  const registry = registryOf()
+  const spawned: { context: unknown; executor: { execute: (ctx: unknown, args: unknown) => AsyncIterable<unknown> } }[] = []
+  const adopted: { eventIterator: { next: () => Promise<unknown> } }[] = []
+  const shell = { kind: "shell" }
+  const inner = {
+    spawn: async (context: unknown, executor: never) => { spawned.push({ context: context as never, executor: executor as never }); return shell as never },
+    adopt: async (state: { eventIterator: never }) => { adopted.push(state as never); return shell as never },
+  }
+  const factory = new NotifyingBackgroundShellFactory(inner as never, "/project", registry as never)
+  await factory.spawn({ shellId: 2, conversationId: "conv", toolCallId: "call", command: "c", workingDirectory: "/w", outputNotification: { pattern: "ERR", reason: "r" } } as never, { execute: async function* () { yield { type: "stdout", data: "ERR" }; yield { type: "exit", code: 0 } } })
+  const events = []
+  for await (const event of spawned[0]!.executor.execute({}, {})) events.push(event)
+  assert.equal(events.length, 2)
+  assert.equal(registry.enqueued.length, 1)
+  const iterator = { next: async () => ({ done: false, value: { type: "stdout", data: "ERR" } }), return: async () => ({ done: true, value: undefined }) }
+  await factory.adopt({ shellId: 3, conversationId: "conv", command: "c", workingDirectory: "/w", initialOutput: "ERR", eventIterator: iterator, outputNotification: { pattern: "ERR", reason: "r" } } as never)
+  await adopted[0]!.eventIterator.next()
+  await (adopted[0] as unknown as { eventIterator: { return: () => Promise<unknown> } }).eventIterator.return()
+  assert.equal(registry.enqueued.length, 3)
+  // A shell with no notification config is handed on untouched.
+  const untouched = { spawn: async () => shell as never, adopt: async () => shell as never }
+  const plain = new NotifyingBackgroundShellFactory(untouched as never, "/project", registry as never)
+  await plain.spawn({ shellId: 4, command: "c", workingDirectory: "/w" } as never, {} as never)
+})
+
+test("a shell is logged to its terminal file, with its footer and its stdin", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "slate-log-"))
+  try {
+    const spawned: { executor: { execute: (ctx: unknown, args: unknown) => AsyncIterable<unknown> } }[] = []
+    const inner = { spawn: async (_context: unknown, executor: never) => { spawned.push({ executor: executor as never }); return { kind: "shell" } as never }, adopt: async () => ({ kind: "shell" } as never) }
+    const factory = new FileLoggingShellFactory(inner as never, dir)
+    const stdinCalls: unknown[] = []
+    const stdin: { write: (chunk?: unknown) => boolean; end: (chunk?: unknown) => unknown } = { write: (chunk?: unknown) => { stdinCalls.push(chunk); return true }, end: (chunk?: unknown) => { stdinCalls.push(chunk); return stdin } }
+    await factory.spawn({ shellId: 11, command: "echo hi", workingDirectory: dir, description: 'say "hi"' } as never, {
+      execute: async function* () {
+        yield { type: "stdout", data: "hello\n" }
+        yield { type: "stdin_ready", pid: 9, stdin }
+        stdin.write("hello")
+        stdin.end()
+        yield { type: "exit", code: 0 }
+      },
+    })
+    for await (const _event of spawned[0]!.executor.execute({}, { showElapsedTime: true })) { /* logged */ }
+    const content = fs.readFileSync(path.join(dir, "terminals", "11.txt"), "utf8")
+    assert.match(content, /^---\ncwd: "/)
+    assert.match(content, /command: "echo hi"\ntitle: "say \\"hi\\""\nstatus: succeeded/)
+    assert.match(content, /started_at: .+\nrunning_for_ms: \d+ +\n---\nhello\n/)
+    assert.match(content, /\[stdin\] hello\n/)
+    assert.match(content, /\n---\nexit_code: 0\nelapsed_ms: \d+\nended_at: .+\n---\n$/)
+    assert.equal(stdinCalls.length, 2)
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("an aborted or failing shell says how it ended, and an adopted one is logged from its start", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "slate-log-"))
+  try {
+    const spawned: { executor: { execute: (ctx: unknown, args: unknown) => AsyncIterable<unknown> } }[] = []
+    const inner = { spawn: async (_context: unknown, executor: never) => { spawned.push({ executor: executor as never }); return { kind: "shell" } as never }, adopt: async () => ({ kind: "shell" } as never) }
+    const factory = new FileLoggingShellFactory(inner as never, dir)
+    await factory.spawn({ shellId: 12, command: "sleep", workingDirectory: dir } as never, { execute: async function* () { yield { type: "exit", aborted: true, code: null } } })
+    for await (const _event of spawned[0]!.executor.execute({}, {})) { /* logged */ }
+    const abortedContent = fs.readFileSync(path.join(dir, "terminals", "12.txt"), "utf8")
+    assert.match(abortedContent, /status: aborted {2}\n[\s\S]*exit_code: unknown/)
+    assert.equal(abortedContent.includes("elapsed_ms:"), false)
+    const adopted: { eventIterator: { next: () => Promise<{ done: boolean; value?: unknown }>; return: () => Promise<{ done: boolean; value: undefined }> } }[] = []
+    const adopting = { spawn: async () => ({ kind: "shell" } as never), adopt: async (state: never) => { adopted.push(state as never); return { kind: "shell" } as never } }
+    const adoptingFactory = new FileLoggingShellFactory(adopting as never, dir)
+    const iterator = { next: async () => ({ done: false, value: { type: "stdout", data: "adopted\n" } }), return: async () => ({ done: true, value: undefined }) }
+    await adoptingFactory.adopt({ shellId: 21, command: "cat", workingDirectory: dir, description: "adopted", startTime: Date.now() - 1_000, pid: 42, showElapsedTime: true, initialOutput: "first\n", eventIterator: iterator, abortController: new AbortController() } as never)
+    await adopted[0]!.eventIterator.next()
+    await adopted[0]!.eventIterator.return()
+    const content = fs.readFileSync(path.join(dir, "terminals", "21.txt"), "utf8")
+    assert.match(content, /pid: 42\n/)
+    assert.match(content, /title: "adopted"/)
+    assert.match(content, /running_for_ms: \d+ +\n/)
+    assert.match(content, /---\nfirst\nadopted\n/)
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
 
 test("a text file is read with the lines it has", async () => {
   await withWorkspace(async (workspace) => {
