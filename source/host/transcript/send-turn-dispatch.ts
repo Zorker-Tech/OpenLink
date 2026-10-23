@@ -50,148 +50,162 @@ export interface DispatchUserTurnArgs {
   readonly ackGuard: SendAckGuard;
 }
 
+
+function addressedRecoveryMessages(readAddressedTranscript: () => readonly TranscriptEntry[]): RecoverySend["recentUserMessages"] {
+  return readAddressedTranscript()
+    .filter(
+      (entry) =>
+        entry.kind === "message" &&
+        entry.role === "user" &&
+        entry.fromAgent == null &&
+        entry.channel == null,
+    )
+    .map((entry) => ({
+      id: entry.id,
+      text: typeof entry.content === "string" ? entry.content : "",
+      ...(entry.richText == null ? {} : { richText: entry.richText }),
+    }))
+}
+
+function composeRunPrompt(tm: TranscriptManagerLike, session: LiveTranscriptSession, prompt: string, richText: unknown, composedAtMs: number | undefined): string {
+  const expandedPrompt = tm.workflowCommands.withMentionedAgentsContext(
+    session,
+    prompt,
+    tm.workflowCommands.expandWorkflowReferences(session, prompt, richText),
+  )
+  const offlineNote = composedAtMs == null ? "" : buildComposedOfflineNote(composedAtMs)
+  return offlineNote.length > 0 ? `${offlineNote}
+${expandedPrompt}` : expandedPrompt
+}
+
+function supersedeActiveRuns(
+  tm: TranscriptManagerLike,
+  session: LiveTranscriptSession,
+  agentRunner: ReturnType<TranscriptManagerLike["runnerRegistry"]["getRunner"]>,
+  carriesRecovery: boolean,
+  acceptedAtMs: number,
+  wasInFlight: boolean,
+): boolean {
+  tm.runLifecycle.beginSessionRun(session)
+  const hadActiveGroupMemberRun = tm.runnerRegistry.activeGroupMemberRunners
+    .get(session.id)
+    ?.interrupt("superseded by a direct user message") ?? false
+  if (hadActiveGroupMemberRun) tm.groupChat.dmPreemptedGroupMemberIds.add(session.id)
+  const hadActiveOneToOneRun = agentRunner.interrupt("superseded by a new user message", { carriesRecovery })
+  if (hadActiveOneToOneRun) tm.backgroundWakes.dmPreemptedWakeAgentIds.add(session.id)
+  const hadActiveRun = hadActiveOneToOneRun || hadActiveGroupMemberRun
+  tm.telemetry.reportTurnInterrupt({ conversationId: session.id, reason: "superseded", hadActiveRun, wasInFlight })
+  tm.ackObligations.confirmAckObligationAfterInterrupt(session, acceptedAtMs, hadActiveRun)
+  return hadActiveRun
+}
+
+function buildTurnRunOptions(input: {
+  richText: unknown
+  selectedImages: readonly unknown[]
+  selectedVideos: readonly unknown[] | undefined
+  fileAttachmentPaths: readonly string[]
+  attachedFileSizes: ReadonlyMap<string, number>
+  messageId: string | undefined
+  recentUserMessages: RecoverySend["recentUserMessages"] | undefined
+  replyContext: unknown
+  isFork: boolean
+  traceCtx: unknown
+  enterEpochMs: number | undefined
+  queueStartEpochMs: number
+  queueStartPerfMs: number
+  clientNonce: string | undefined
+  ackToken: string | undefined
+}): Record<string, unknown> {
+  return {
+    richText: input.richText,
+    selectedImages: input.selectedImages,
+    selectedVideos: input.selectedVideos,
+    attachedFilePaths: input.fileAttachmentPaths,
+    attachedFileSizes: input.attachedFileSizes,
+    messageId: input.messageId,
+    recentUserMessages: input.recentUserMessages,
+    replyContext: input.replyContext,
+    isFork: input.isFork,
+    traceCtx: input.traceCtx,
+    enterEpochMs: input.enterEpochMs,
+    queueStartEpochMs: input.queueStartEpochMs,
+    queueStartPerfMs: input.queueStartPerfMs,
+    clientNonce: input.clientNonce,
+    ackToken: input.ackToken,
+  }
+}
+
+function reportDetachedTurnFailure(failure: unknown): void {
+  console.error("[slate] detached turn failed after send acceptance:", failure)
+}
+
 export async function dispatchUserTurn(
   args: DispatchUserTurnArgs,
 ): Promise<void> {
   const {
-    tm,
-    session,
-    trimmedPrompt,
-    richText,
-    composedAtMs,
-    enterEpochMs,
-    clientNonce,
-    awaitTurn,
-    isFork,
-    userMessageId,
-    replyContext,
-    selectedImages,
-    selectedVideos,
-    fileAttachmentPaths,
-    attachedFileSizes,
-    traceCtx,
-    acceptedAtMs,
-    wasInFlight,
-    readAddressedTranscript,
-    latestRecoverySends,
-    recoveryBreakEpochs,
-    nextTurnEpoch,
-    markSendAccepted,
-    ackGuard,
+    tm: transcriptManager,
+    session: liveSession,
+    trimmedPrompt: cleanPrompt,
+    richText: richContent,
+    composedAtMs: composedAt,
+    enterEpochMs: enterAt,
+    clientNonce: nonceValue,
+    awaitTurn: shouldAwait,
+    isFork: forking,
+    userMessageId: userEntryId,
+    replyContext: replyInfo,
+    selectedImages: imageInputs,
+    selectedVideos: videoInputs,
+    fileAttachmentPaths: attachmentPaths,
+    attachedFileSizes: attachmentSizes,
+    traceCtx: traceContext,
+    acceptedAtMs: acceptedAt,
+    wasInFlight: wasRunning,
+    readAddressedTranscript: readAddressed,
+    latestRecoverySends: recoverySends,
+    recoveryBreakEpochs: recoveryBreaks,
+    nextTurnEpoch: nextEpoch,
+    markSendAccepted: markAccepted,
+    ackGuard: ackGuardHandle,
   } = args;
-  const runner = tm.runnerRegistry.getRunner(session);
-  const recentUserMessages =
-    userMessageId == null
-      ? undefined
-      : readAddressedTranscript()
-          .filter(
-            (entry) =>
-              entry.kind === "message" &&
-              entry.role === "user" &&
-              entry.fromAgent == null &&
-              entry.channel == null,
-          )
-          .map((entry) => ({
-            id: entry.id,
-            text: typeof entry.content === "string" ? entry.content : "",
-            ...(entry.richText == null ? {} : { richText: entry.richText }),
-          }));
-  const expandedPrompt = tm.workflowCommands.withMentionedAgentsContext(
-    session,
-    trimmedPrompt,
-    tm.workflowCommands.expandWorkflowReferences(
-      session,
-      trimmedPrompt,
-      richText,
-    ),
-  );
-  const composeNote =
-    composedAtMs == null ? "" : buildComposedOfflineNote(composedAtMs);
-  const promptForRun =
-    composeNote.length > 0
-      ? `${composeNote}\n${expandedPrompt}`
-      : expandedPrompt;
-  const epoch = nextTurnEpoch(session);
-  const carriesRecovery = userMessageId != null && !isFork;
+  const agentRunner = transcriptManager.runnerRegistry.getRunner(liveSession);
+  const recentUserMessages = userEntryId == null ? undefined : addressedRecoveryMessages(readAddressed);
+  const promptForRun = composeRunPrompt(transcriptManager, liveSession, cleanPrompt, richContent, composedAt);
+  const epoch = nextEpoch(liveSession);
+  const carriesRecovery = userEntryId != null && !forking;
   if (carriesRecovery && recentUserMessages != null) {
-    latestRecoverySends.set(session.id, {
+    recoverySends.set(liveSession.id, {
       epoch,
-      messageId: userMessageId,
+      messageId: userEntryId,
       recentUserMessages,
     });
   } else {
-    recoveryBreakEpochs.set(session.id, epoch);
+    recoveryBreaks.set(liveSession.id, epoch);
   }
 
-  tm.runLifecycle.beginSessionRun(session);
-  const hadActiveGroupMemberRun =
-    tm.runnerRegistry.activeGroupMemberRunners
-      .get(session.id)
-      ?.interrupt("superseded by a direct user message") ?? false;
-  if (hadActiveGroupMemberRun)
-    tm.groupChat.dmPreemptedGroupMemberIds.add(session.id);
-  const hadActiveOneToOneRun = runner.interrupt(
-    "superseded by a new user message",
-    { carriesRecovery },
-  );
-  if (hadActiveOneToOneRun)
-    tm.backgroundWakes.dmPreemptedWakeAgentIds.add(session.id);
-  const hadActiveRun = hadActiveOneToOneRun || hadActiveGroupMemberRun;
-  tm.telemetry.reportTurnInterrupt({
-    conversationId: session.id,
-    reason: "superseded",
-    hadActiveRun,
-    wasInFlight,
-  });
-  tm.ackObligations.confirmAckObligationAfterInterrupt(
-    session,
-    acceptedAtMs,
-    hadActiveRun,
-  );
-  const ackToken = tm.ackObligations.mintAckRunToken(session.id);
+  const hadActiveRun = supersedeActiveRuns(transcriptManager, liveSession, agentRunner, carriesRecovery, acceptedAt, wasRunning);
+  const ackToken = transcriptManager.ackObligations.mintAckRunToken(liveSession.id);
   const queueStartEpochMs = Date.now();
   const queueStartPerfMs = performance.now();
-  const turnDone = tm.runLifecycle.enqueueExclusiveRun(
-    session.id,
+  const turnDone = transcriptManager.runLifecycle.enqueueExclusiveRun(
+    liveSession.id,
     () =>
-      tm.turnRuntime.runTurn(
-        session,
-        runner,
+      transcriptManager.turnRuntime.runTurn(
+        liveSession,
+        agentRunner,
         promptForRun,
-        {
-          richText,
-          selectedImages,
-          selectedVideos,
-          attachedFilePaths: fileAttachmentPaths,
-          attachedFileSizes,
-          messageId: userMessageId,
-          recentUserMessages,
-          replyContext,
-          isFork,
-          traceCtx,
-          enterEpochMs,
-          queueStartEpochMs,
-          queueStartPerfMs,
-          clientNonce,
-          ackToken,
-        },
+        buildTurnRunOptions({ richText: richContent, selectedImages: imageInputs, selectedVideos: videoInputs, fileAttachmentPaths: attachmentPaths, attachedFileSizes: attachmentSizes, messageId: userEntryId, recentUserMessages, replyContext: replyInfo, isFork: forking, traceCtx: traceContext, enterEpochMs: enterAt, queueStartEpochMs, queueStartPerfMs, clientNonce: nonceValue, ackToken }),
         epoch,
       ),
     {
       lane: "user",
       source: "turn",
-      acceptedAtMs,
+      acceptedAtMs: acceptedAt,
       ...(ackToken == null ? {} : { ackToken }),
     },
   ) as Promise<void>;
-  ackGuard.disarm();
-  markSendAccepted(clientNonce);
-  if (awaitTurn) await turnDone;
-  else
-    void turnDone.catch((error: unknown) =>
-      console.error(
-        "[slate] detached turn failed after send acceptance:",
-        error,
-      ),
-    );
+  ackGuardHandle.disarm();
+  markAccepted(nonceValue);
+  if (shouldAwait) await turnDone;
+  else void turnDone.catch(reportDetachedTurnFailure);
 }
