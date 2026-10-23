@@ -517,3 +517,91 @@ describe("the client the box builds for itself", () => {
     assert.deepEqual([isConditionalWriteRejection(412), isConditionalWriteRejection(409), isConditionalWriteRejection(500)], [true, true, false]);
   });
 });
+
+describe("url and write details the store's own rules decide", () => {
+  it("refuses plain http on loopback when the backend is not on loopback", async () => {
+    const previous = process.env.SLATE_BACKEND_URL;
+    process.env.SLATE_BACKEND_URL = "https://api.slate.invalid";
+    const world = clientWorld({ reads: [{ relPath: "a.txt", url: "http://127.0.0.1:9999/a.txt", expiresAtMs: 1 }] });
+    const fetcher = fetchWorld([]);
+    try {
+      await assert.rejects(
+        () => putAgentStoreObject({ client: world.client, sourceId: SOURCE_ID, relPath: "a.txt", data: new Uint8Array([1]), etags: new AgentStoreMutableWriteEtags() }),
+        /non-https scheme/,
+      );
+    } finally {
+      fetcher.restore();
+      if (previous === undefined) delete process.env.SLATE_BACKEND_URL;
+      else process.env.SLATE_BACKEND_URL = previous;
+    }
+  });
+
+  it("uses the playground's own bucket allowlist on the playground backend", async () => {
+    const previous = process.env.SLATE_BACKEND_URL;
+    process.env.SLATE_BACKEND_URL = "https://playground.cursor.sh";
+    const world = clientWorld({ reads: [{ relPath: "a.txt", url: "https://agent-stores-928182716709-us-west-2-an.s3.us-west-2.amazonaws.com/a.txt", expiresAtMs: 1 }] });
+    const fetcher = fetchWorld([{ status: 404 }, { status: 200, etag: '"E"' }]);
+    try {
+      const outcome = await putAgentStoreObject({ client: world.client, sourceId: SOURCE_ID, relPath: "a.txt", data: new Uint8Array([1]), etags: new AgentStoreMutableWriteEtags() });
+      assert.deepEqual(outcome, { outcome: "written" });
+    } finally {
+      if (previous === undefined) delete process.env.SLATE_BACKEND_URL;
+      else process.env.SLATE_BACKEND_URL = previous;
+      fetcher.restore();
+    }
+  });
+
+  it("refuses a presign that answers with no write at all", async () => {
+    const world = clientWorld();
+    world.client.presignWrites = async () => [];
+    const fetcher = fetchWorld([{ status: 404 }]);
+    try {
+      await assert.rejects(
+        () => putAgentStoreObject({ client: world.client, sourceId: SOURCE_ID, relPath: "a.txt", data: new Uint8Array([1]), etags: new AgentStoreMutableWriteEtags() }),
+        /agent-store presign returned no write for a\.txt/,
+      );
+    } finally {
+      fetcher.restore();
+    }
+  });
+
+  it("treats if-none-match as conditional protection", async () => {
+    const world = clientWorld({ writes: [writeInstruction("a.txt", { headers: { "If-None-Match": "*" } })] });
+    const fetcher = fetchWorld([{ status: 404 }, { status: 200 }]);
+    try {
+      await assert.rejects(
+        () => putAgentStoreObject({ client: world.client, sourceId: SOURCE_ID, relPath: "a.txt", data: new Uint8Array([1]), etags: new AgentStoreMutableWriteEtags() }),
+        /carries a conditional header but no conflict instruction/,
+      );
+    } finally {
+      fetcher.restore();
+    }
+  });
+
+  it("says nothing about a downgraded protection when the store protected it one way", async () => {
+    const diagnostics: unknown[] = [];
+    pinBoxStoreDiagnosticsReporter((diagnostic) => diagnostics.push(diagnostic));
+    const world = clientWorld({ writes: [writeInstruction("a.txt", { headers: { "If-Match": "x" } })] });
+    const fetcher = fetchWorld([{ status: 200 }]);
+    try {
+      // A content-addressed write has no conflict instruction to fall back on, but its own header is protection.
+      await putAgentStoreObjectContentAddressed({ client: world.client, sourceId: SOURCE_ID, relPath: "a.txt", data: new Uint8Array([1]) });
+      assert.deepEqual(diagnostics, []);
+    } finally {
+      pinBoxStoreDiagnosticsReporter(null);
+      fetcher.restore();
+    }
+  });
+
+  it("sends the headers the store presigned", async () => {
+    const world = clientWorld({ writes: [writeInstruction("a.txt", { headers: { "content-type": "text/plain" } })] });
+    const fetcher = fetchWorld([{ status: 404 }, { status: 200, etag: '"E"' }]);
+    try {
+      await putAgentStoreObject({ client: world.client, sourceId: SOURCE_ID, relPath: "a.txt", data: new Uint8Array([1]), etags: new AgentStoreMutableWriteEtags() });
+      assert.deepEqual(fetcher.calls[1]!.headers, { "content-type": "text/plain" });
+    } finally {
+      fetcher.restore();
+    }
+  });
+});
+
