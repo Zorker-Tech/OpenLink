@@ -1,8 +1,8 @@
 /** A group chat, as the conversation machinery sees it.
 
  * A group is an agent whose directory says it is one; the glue creates and reconfigures those, tells a room turn how to
- * reach its members and what they have said, runs each member's turn with its own persona and stream, and answers for the
- * members that live on someone else's host. */
+ * reach its members and what they have said, runs each groupMember's turn with its own persona and stream, and answers for the
+ * members that stream on someone else's host. */
 import { existsSync } from "node:fs";
 import { dirname } from "node:path";
 
@@ -83,16 +83,39 @@ export class GroupChatGlue {
 
   constructor(readonly tm: TranscriptManagerLike) {}
 
+
+  /** A session's transcriptEntries, read from the open transcript or from its own database. */
+  private entriesFor(session: LiveSession, isActive?: boolean): TranscriptEntry[] {
+    const onScreen = isActive ?? this.tm.sessions.activeSession?.id === session.id;
+    return onScreen ? getTranscript() : session.db.getTranscriptEntries();
+  }
+
+  /** Writes a group message into the room the user sees, or into the room's own session. */
+  private writeGroupEntry(
+    session: LiveSession,
+    transcriptEntry: TranscriptEntry,
+    isActive?: boolean,
+  ): void {
+    const onScreen = isActive ?? this.tm.sessions.activeSession?.id === session.id;
+    if (onScreen) {
+      this.tm.appendEntry(transcriptEntry);
+      return;
+    }
+    session.db.appendTranscriptEntry(transcriptEntry);
+    this.tm.sessionStore.markSessionActivity(session);
+    void this.tm.roster.emitAgentUpdate(session.id);
+  }
+
   async pinMemberSessionForGroupTurn(memberId: string): Promise<LiveSession> {
     if (this.tm.sessions.isAgentGone(memberId))
       throw new AgentGoneError(memberId);
-    const live = this.tm.sessions.liveSessions.get(memberId);
-    const session = live ?? (await this.tm.sessions.openSessionOnce(memberId));
+    const stream = this.tm.sessions.liveSessions.get(memberId);
+    const session = stream ?? (await this.tm.sessions.openSessionOnce(memberId));
     this.tm.runLifecycle.beginSessionRun(session, { isGroupMemberTurn: true });
     return session;
   }
 
-  async createGroup(args: {
+  async createGroup(turnRequest: {
     name: string;
     description?: string;
     memberIds: string[];
@@ -104,7 +127,7 @@ export class GroupChatGlue {
         .filter((agent: any) => agent.isGroup)
         .map((agent: any) => agent.id),
     );
-    const requested = [...new Set(args.memberIds)];
+    const requested = [...new Set(turnRequest.memberIds)];
     assertMembersAreNotGroups(requested, (id) => groupIds.has(id));
     const memberIds = requested
       .filter((id) => existing.has(id))
@@ -133,7 +156,7 @@ export class GroupChatGlue {
     }
 
     const created = await this.tm.createAgent(
-      { name: args.name, description: args.description ?? "" },
+      { name: turnRequest.name, description: turnRequest.description ?? "" },
       "user",
     );
     writeSlateGroupConfig(this.tm.sessionStore.getAgentDir(created.agent.id), {
@@ -228,16 +251,16 @@ export class GroupChatGlue {
     lane = "background",
   ): Promise<void> {
     try {
-      const config = readSlateGroupConfig(dirname(session.dbPath));
-      if (config == null) return;
-      const orchestrator = new GroupChatOrchestrator(
+      const roomConfig = readSlateGroupConfig(dirname(session.dbPath));
+      if (roomConfig == null) return;
+      const groupOrchestrator = new GroupChatOrchestrator(
         this.groupOrchestratorDeps(session, epoch, traceCtx, lane),
       );
-      await orchestrator.run({
+      await groupOrchestrator.run({
         group: this.groupIdentityFor(session),
         memberIds: [
-          ...config.memberIds,
-          ...(config.remoteMembers ?? []).map(formatRemoteAgentId),
+          ...roomConfig.memberIds,
+          ...(roomConfig.remoteMembers ?? []).map(formatRemoteAgentId),
         ],
       });
       await this.tm.roster.emitAgentUpdate(session.id);
@@ -260,27 +283,27 @@ export class GroupChatGlue {
     lane = "background",
     requestSource?: string,
   ): GroupOrchestratorDeps {
-    const live = createGroupMemberStream();
-    const config = readSlateGroupConfig(dirname(session.dbPath));
-    const remoteMembers = config?.remoteMembers ?? [];
+    const stream = createGroupMemberStream();
+    const roomConfig = readSlateGroupConfig(dirname(session.dbPath));
+    const remoteMembers = roomConfig?.remoteMembers ?? [];
     return {
-      isSharedRoom: config?.sharedRoomId != null,
+      isSharedRoom: roomConfig?.sharedRoomId != null,
       resolveMembers: (ids) => this.resolveGroupMembers(ids, remoteMembers),
       readHistory: () => this.readGroupHistory(session),
-      runMemberTurn: (request) =>
+      runMemberTurn: (turnRequest) =>
         this.runGroupMemberTurn(
           session,
-          request,
-          live,
+          turnRequest,
+          stream,
           () => this.tm.sendPipeline.currentTurnEpoch(session) === epoch,
           traceCtx,
           lane,
           requestSource,
         ),
-      postMemberMessage: (member, content) => {
-        this.postGroupMemberMessage(session, member, content, live);
+      postMemberMessage: (groupMember, content) => {
+        this.postGroupMemberMessage(session, groupMember, content, stream);
       },
-      finalizeMemberTurn: () => this.finalizeGroupMemberStream(session, live),
+      finalizeMemberTurn: () => this.finalizeGroupMemberStream(session, stream),
       isCurrent: () => this.tm.sendPipeline.currentTurnEpoch(session) === epoch,
     };
   }
@@ -318,25 +341,25 @@ export class GroupChatGlue {
   }
 
   async runGroupMemberTurn(
-    roomSession: LiveSession,
-    request: { member: GroupMember; systemPrompt: string; prompt: string },
-    live: GroupMemberStream,
+    groupRoom: LiveSession,
+    turnRequest: { member: GroupMember; systemPrompt: string; prompt: string },
+    stream: GroupMemberStream,
     isRoomTurnCurrent: () => boolean,
     traceCtx?: unknown,
     lane = "background",
     requestSource?: string,
   ): Promise<string[]> {
-    if (isRemoteAgentId(request.member.id)) {
-      return this.runRemoteGroupMemberTurn(roomSession, request.member);
+    if (isRemoteAgentId(turnRequest.member.id)) {
+      return this.runRemoteGroupMemberTurn(groupRoom, turnRequest.member);
     }
     if (!this.tm.execution.canExecuteGroupMember) return [];
 
-    let effective = request;
-    if (this.tm.sharedRooms.sharedRoomConfigOf(roomSession) != null) {
+    let effective = turnRequest;
+    if (this.tm.sharedRooms.sharedRoomConfigOf(groupRoom) != null) {
       effective = {
-        ...request,
+        ...turnRequest,
         systemPrompt:
-          request.systemPrompt +
+          turnRequest.systemPrompt +
           buildSharedRoomGuardrailPrompt({
             hostName: "",
             isForeignHost: false,
@@ -344,90 +367,90 @@ export class GroupChatGlue {
       };
     }
 
-    let memberSession: LiveSession;
+    let memberRoom: LiveSession;
     try {
-      memberSession = await this.pinMemberSessionForGroupTurn(
+      memberRoom = await this.pinMemberSessionForGroupTurn(
         effective.member.id,
       );
     } catch {
       return [];
     }
-    const sent: string[] = [];
+    const sentMessages: string[] = [];
     let lastReactionApplied = false;
     let trackActivity = createGroupMemberActivityTracker();
-    const transport = {
+    const memberTransport = {
       onUpdate: (update: any) => {
         this.tm.runLifecycle.applyActivityTransition(
-          memberSession.id,
+          memberRoom.id,
           trackActivity(update),
         );
         if (update.type === "react-to-message") {
           lastReactionApplied = this.applyGroupMemberReaction(
-            roomSession,
+            groupRoom,
             effective.member,
             update,
           );
           return;
         }
         if (update.type === "send-message" && update.message?.type === "text") {
-          sent.push(update.message.content);
+          sentMessages.push(update.message.content);
         }
         this.streamGroupMemberUpdate(
-          roomSession,
+          groupRoom,
           effective.member,
           update,
-          live,
+          stream,
         );
       },
       lastReactionApplied: () => lastReactionApplied,
     };
 
-    for (let attempt = 1; attempt <= 3; attempt += 1) {
-      this.finalizeGroupMemberStream(roomSession, live);
+    for (let tryNumber = 1; tryNumber <= 3; tryNumber += 1) {
+      this.finalizeGroupMemberStream(groupRoom, stream);
       lastReactionApplied = false;
       trackActivity = createGroupMemberActivityTracker();
       const prompt =
-        attempt === 1
+        tryNumber === 1
           ? effective.prompt
           : `${effective.prompt}${buildGroupRedriveNote()}`;
       await this.tm.runLifecycle.enqueueExclusiveRun(
-        memberSession.id,
+        memberRoom.id,
         async () => {
           this.tm.turnRuntime.activeRequestSources.set(
-            memberSession.id,
+            memberRoom.id,
             requestSource ?? "turn",
           );
           let registeredRunner: any;
           try {
-            if (attempt > 1 && !isRoomTurnCurrent()) return;
+            if (tryNumber > 1 && !isRoomTurnCurrent()) return;
             registeredRunner = this.tm.execution.createGroupMemberRunner(
-              memberSession,
-              this.tm.runnerRegistry.runnerHooksFor(memberSession, transport),
+              memberRoom,
+              this.tm.runnerRegistry.runnerHooksFor(memberRoom, memberTransport),
               {
                 systemPrompt: effective.systemPrompt,
                 isSharedRoomTurn:
-                  this.tm.sharedRooms.sharedRoomConfigOf(roomSession) != null,
+                  this.tm.sharedRooms.sharedRoomConfigOf(groupRoom) != null,
               },
             );
             this.tm.runnerRegistry.activeGroupMemberRunners.set(
-              memberSession.id,
+              memberRoom.id,
               registeredRunner,
             );
             this.tm.runnerRegistry.wireRunnerLifecycle(
               registeredRunner,
-              memberSession,
-              roomSession.id,
+              memberRoom,
+              groupRoom.id,
             );
             const memberTurnTrace = beginTurnTrace({
               parentCtx: traceCtx,
-              conversationId: roomSession.id,
+              conversationId: groupRoom.id,
               turnType: resolveTurnTraceType(
                 requestSource == null ? {} : { requestSource },
               ),
               attributes: {
                 "slate.is_group_member": true,
-                "slate.member_conversation_id": memberSession.id,
-                ...(attempt > 1 ? { "slate.attempt": attempt } : {}),
+                "slate.member_conversation_id": memberRoom.id,
+                ...(tryNumber > 1 ? { "slate.tryNumber": tryNumber } : {}),
               },
             });
             try {
@@ -447,75 +470,75 @@ export class GroupChatGlue {
               } catch {}
             }
           } catch {
-            // A failed member turn is a pass, not a room-wide failure.
+            // A failed groupMember turn is a pass, not a room-wide failure.
           } finally {
             if (
               this.tm.runnerRegistry.activeGroupMemberRunners.get(
-                memberSession.id,
+                memberRoom.id,
               ) === registeredRunner
             ) {
               this.tm.runnerRegistry.activeGroupMemberRunners.delete(
-                memberSession.id,
+                memberRoom.id,
               );
             }
-            this.tm.runLifecycle.endSessionRun(memberSession);
+            this.tm.runLifecycle.endSessionRun(memberRoom);
           }
         },
         { lane, source: "group-member" },
       );
 
-      const preempted = this.dmPreemptedGroupMemberIds.delete(memberSession.id);
+      const wasPreempted = this.dmPreemptedGroupMemberIds.delete(memberRoom.id);
       if (
-        !preempted ||
-        sent.length > 0 ||
+        !wasPreempted ||
+        sentMessages.length > 0 ||
         lastReactionApplied ||
-        attempt >= 3 ||
+        tryNumber >= 3 ||
         !isRoomTurnCurrent()
       ) {
         break;
       }
       try {
-        memberSession = await this.pinMemberSessionForGroupTurn(
+        memberRoom = await this.pinMemberSessionForGroupTurn(
           effective.member.id,
         );
       } catch {
         break;
       }
     }
-    return sent;
+    return sentMessages;
   }
 
   async runRemoteGroupMemberTurn(
-    roomSession: LiveSession,
-    member: GroupMember,
+    groupRoom: LiveSession,
+    groupMember: GroupMember,
   ): Promise<string[]> {
-    const delegate = this.tm.xuserDelegate;
-    if (delegate == null || !delegate.isEnabled()) return [];
-    const config = this.tm.sharedRooms.sharedRoomConfigOf(roomSession);
-    if (config?.sharedRoomId == null) return [];
+    const xuserDelegate = this.tm.xuserDelegate;
+    if (xuserDelegate == null || !xuserDelegate.isEnabled()) return [];
+    const roomConfig = this.tm.sharedRooms.sharedRoomConfigOf(groupRoom);
+    if (roomConfig?.sharedRoomId == null) return [];
     const ids = [
-      ...config.memberIds,
-      ...(config.remoteMembers ?? []).map(formatRemoteAgentId),
+      ...roomConfig.memberIds,
+      ...(roomConfig.remoteMembers ?? []).map(formatRemoteAgentId),
     ];
     const members = await this.resolveGroupMembers(
       ids,
-      config.remoteMembers ?? [],
+      roomConfig.remoteMembers ?? [],
     );
-    this.setRemoteTurnMember(roomSession.id, member.id);
+    this.setRemoteTurnMember(groupRoom.id, groupMember.id);
     try {
-      return await delegate.runRemoteMemberTurn({
-        sharedRoomId: config.sharedRoomId,
-        member,
-        group: this.groupIdentityFor(roomSession),
-        peers: members.filter((other) => other.id !== member.id),
-        newMessages: this.readGroupHistory(roomSession).slice(
+      return await xuserDelegate.runRemoteMemberTurn({
+        sharedRoomId: roomConfig.sharedRoomId,
+        member: groupMember,
+        group: this.groupIdentityFor(groupRoom),
+        peers: members.filter((other) => other.id !== groupMember.id),
+        newMessages: this.readGroupHistory(groupRoom).slice(
           -SHARED_ROOM_HISTORY_LIMIT,
         ),
       });
     } catch {
       return [];
     } finally {
-      this.setRemoteTurnMember(roomSession.id);
+      this.setRemoteTurnMember(groupRoom.id);
     }
   }
 
@@ -527,59 +550,56 @@ export class GroupChatGlue {
   }
 
   applyGroupMemberReaction(
-    roomSession: LiveSession,
-    member: GroupMember,
+    groupRoom: LiveSession,
+    groupMember: GroupMember,
     update: any,
   ): boolean {
-    const emoji = String(update.emoji ?? "").trim();
-    if (emoji.length === 0 || !isMessageAddress(update.messageAddress))
+    const reactionEmoji = String(update.emoji ?? "").trim();
+    if (reactionEmoji.length === 0 || !isMessageAddress(update.messageAddress))
       return false;
-    const entries =
-      this.tm.sessions.activeSession?.id === roomSession.id
-        ? getTranscript()
-        : roomSession.db.getTranscriptEntries();
-    const target = entries.find(
-      (entry: TranscriptEntry) => entry.id === update.messageAddress,
+    const transcriptEntries = this.entriesFor(groupRoom);
+    const target = transcriptEntries.find(
+      (transcriptEntry: TranscriptEntry) => transcriptEntry.id === update.messageAddress,
     );
     if (target == null) return false;
     if (
       target.kind === "send-message" &&
-      (target.author as any)?.id === member.id
+      (target.author as any)?.id === groupMember.id
     )
       return false;
     return (
       this.tm.widgetResponses.applyReaction({
-        session: roomSession,
+        session: groupRoom,
         entryId: update.messageAddress,
-        emoji,
-        by: member.id,
+        emoji: reactionEmoji,
+        by: groupMember.id,
       }) != null
     );
   }
 
   postGroupMemberMessage(
     session: LiveSession,
-    member: GroupMember,
+    groupMember: GroupMember,
     content: string,
-    live?: GroupMemberStream,
+    stream?: GroupMemberStream,
   ): void {
-    const author = { id: member.id, name: member.name };
+    const author = { id: groupMember.id, name: groupMember.name };
     const isActive = this.tm.sessions.activeSession?.id === session.id;
-    if (live != null && isActive) {
-      const previewId = live.sealed.shift();
+    if (stream != null && isActive) {
+      const previewId = stream.sealed.shift();
       if (previewId != null) {
-        const finalized = updateEntry(previewId, (entry) =>
-          entry.kind === "send-message"
+        const finalized = updateEntry(previewId, (transcriptEntry) =>
+          transcriptEntry.kind === "send-message"
             ? {
                 kind: "send-message",
-                id: entry.id,
+                id: transcriptEntry.id,
                 message: { type: "text", content },
-                ...(entry.timestampMs == null
+                ...(transcriptEntry.timestampMs == null
                   ? {}
-                  : { timestampMs: entry.timestampMs }),
+                  : { timestampMs: transcriptEntry.timestampMs }),
                 author,
               }
-            : entry,
+            : transcriptEntry,
         );
         if (finalized != null) {
           this.tm.roster.emit({ type: "updated", entry: finalized });
@@ -593,126 +613,116 @@ export class GroupChatGlue {
         }
       }
     }
-    const entries = isActive
-      ? getTranscript()
-      : session.db.getTranscriptEntries();
-    const entry: TranscriptEntry = {
+    const transcriptEntries = this.entriesFor(session, isActive);
+    const transcriptEntry: TranscriptEntry = {
       kind: "send-message",
-      id: nextEntryId(entries, "send-message"),
+      id: nextEntryId(transcriptEntries, "send-message"),
       message: { type: "text", content },
       timestampMs: Date.now(),
       author,
     };
-    if (isActive) this.tm.appendEntry(entry);
-    else {
-      session.db.appendTranscriptEntry(entry);
-      this.tm.sessionStore.markSessionActivity(session);
-      void this.tm.roster.emitAgentUpdate(session.id);
-    }
-    this.tm.sharedRooms.publishSharedRoomEntryIfNeeded(session, entry);
+    this.writeGroupEntry(session, transcriptEntry, isActive);
+    this.tm.sharedRooms.publishSharedRoomEntryIfNeeded(session, transcriptEntry);
   }
 
   streamGroupMemberUpdate(
-    roomSession: LiveSession,
-    member: GroupMember,
+    groupRoom: LiveSession,
+    groupMember: GroupMember,
     update: any,
-    live: GroupMemberStream,
+    stream: GroupMemberStream,
   ): void {
-    if (this.tm.sessions.activeSession?.id !== roomSession.id) return;
+    if (this.tm.sessions.activeSession?.id !== groupRoom.id) return;
     try {
       if (update.type === "text-delta") {
         if (!update.text) return;
-        live.currentText += update.text;
-        if (live.currentId == null) {
-          if (isPotentialPassPrefix(live.currentText)) return;
-          this.openGroupStreamEntry(member, live);
-        } else this.updateGroupStreamEntry(live.currentId, live.currentText);
-      } else if (update.type === "send-message" && live.currentId != null) {
-        live.sealed.push(live.currentId);
-        live.currentId = undefined;
-        live.currentText = "";
+        stream.currentText += update.text;
+        if (stream.currentId == null) {
+          if (isPotentialPassPrefix(stream.currentText)) return;
+          this.openGroupStreamEntry(groupMember, stream);
+        } else this.updateGroupStreamEntry(stream.currentId, stream.currentText);
+      } else if (update.type === "send-message" && stream.currentId != null) {
+        stream.sealed.push(stream.currentId);
+        stream.currentId = undefined;
+        stream.currentText = "";
       }
     } catch {
-      // Streaming preview failures must not fail the member turn.
+      // Streaming preview failures must not fail the groupMember turn.
     }
   }
 
-  openGroupStreamEntry(member: GroupMember, live: GroupMemberStream): void {
+  openGroupStreamEntry(groupMember: GroupMember, stream: GroupMemberStream): void {
     const id = nextEntryId(getTranscript(), "send-message");
-    const entry: TranscriptEntry = {
+    const transcriptEntry: TranscriptEntry = {
       kind: "send-message",
       id,
-      message: { type: "text", content: live.currentText },
+      message: { type: "text", content: stream.currentText },
       timestampMs: Date.now(),
-      author: { id: member.id, name: member.name },
+      author: { id: groupMember.id, name: groupMember.name },
       streaming: true,
     };
-    live.currentId = id;
-    appendEntry(entry);
-    this.tm.roster.emit({ type: "appended", entry });
+    stream.currentId = id;
+    appendEntry(transcriptEntry);
+    this.tm.roster.emit({ type: "appended", entry: transcriptEntry });
   }
 
   updateGroupStreamEntry(id: string, content: string): void {
-    const updated = updateEntry(id, (entry) =>
-      entry.kind === "send-message"
-        ? { ...entry, message: { type: "text", content } }
-        : entry,
+    const updated = updateEntry(id, (transcriptEntry) =>
+      transcriptEntry.kind === "send-message"
+        ? { ...transcriptEntry, message: { type: "text", content } }
+        : transcriptEntry,
     );
     if (updated != null)
       this.tm.roster.emit({ type: "updated", entry: updated });
   }
 
   finalizeGroupMemberStream(
-    roomSession: LiveSession,
-    live: GroupMemberStream,
+    groupRoom: LiveSession,
+    stream: GroupMemberStream,
   ): void {
     try {
-      if (this.tm.sessions.activeSession?.id === roomSession.id) {
-        const leftovers = [...live.sealed];
-        if (live.currentId != null) leftovers.push(live.currentId);
+      if (this.tm.sessions.activeSession?.id === groupRoom.id) {
+        const leftovers = [...stream.sealed];
+        if (stream.currentId != null) leftovers.push(stream.currentId);
         for (const id of leftovers) {
           if (removeEntry(id)) this.tm.roster.emit({ type: "removed", id });
         }
       }
     } catch {
-      // Preview cleanup is defensive: failures never fail the member turn.
+      // Preview cleanup is defensive: failures never fail the groupMember turn.
     } finally {
-      live.currentId = undefined;
-      live.currentText = "";
-      live.sealed.length = 0;
+      stream.currentId = undefined;
+      stream.currentText = "";
+      stream.sealed.length = 0;
     }
   }
 
   readGroupHistory(session: LiveSession): GroupMessage[] {
-    const entries =
-      this.tm.sessions.activeSession?.id === session.id
-        ? getTranscript()
-        : session.db.getTranscriptEntries();
+    const transcriptEntries = this.entriesFor(session);
     const messages: GroupMessage[] = [];
-    for (const entry of entries) {
+    for (const transcriptEntry of transcriptEntries) {
       if (
-        entry.kind === "message" &&
-        entry.role === "user" &&
-        String(entry.content ?? "").trim()
+        transcriptEntry.kind === "message" &&
+        transcriptEntry.role === "user" &&
+        String(transcriptEntry.content ?? "").trim()
       ) {
-        const name = (entry.fromUser as any)?.name;
+        const name = (transcriptEntry.fromUser as any)?.name;
         messages.push({
           speaker: name == null ? { kind: "user" } : { kind: "user", name },
-          content: String(entry.content),
+          content: String(transcriptEntry.content),
         });
       } else if (
-        entry.kind === "send-message" &&
-        (entry.message as any)?.type === "text" &&
-        entry.author != null &&
-        entry.streaming !== true
+        transcriptEntry.kind === "send-message" &&
+        (transcriptEntry.message as any)?.type === "text" &&
+        transcriptEntry.author != null &&
+        transcriptEntry.streaming !== true
       ) {
         messages.push({
           speaker: {
             kind: "member",
-            id: (entry.author as any).id,
-            name: (entry.author as any).name,
+            id: (transcriptEntry.author as any).id,
+            name: (transcriptEntry.author as any).name,
           },
-          content: (entry.message as any).content,
+          content: (transcriptEntry.message as any).content,
         });
       }
     }
