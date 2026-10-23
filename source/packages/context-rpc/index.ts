@@ -34,65 +34,65 @@ export interface ContextPropagationOptions {
   readonly enableAbortSignal?: boolean;
 }
 
-const callerContextKey = createContextKey<Context | undefined>(undefined, {
+const requestContextKey = createContextKey<Context | undefined>(undefined, {
   description: "slate.callerContext",
 });
 
-function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
-  return value !== null && typeof value === "object" && Symbol.asyncIterator in value;
+function isAsyncIterable(headerText: unknown): headerText is AsyncIterable<unknown> {
+  return headerText !== null && typeof headerText === "object" && Symbol.asyncIterator in headerText;
 }
 
-function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
-  return value !== null
-    && typeof value === "object"
-    && "then" in value
-    && typeof value.then === "function";
+function isPromiseLike(headerText: unknown): headerText is PromiseLike<unknown> {
+  return headerText !== null
+    && typeof headerText === "object"
+    && "then" in headerText
+    && typeof headerText.then === "function";
 }
 
 function wrapAsyncIterableWithSpan<T>(
-  iterable: AsyncIterable<T>,
+  sourceStream: AsyncIterable<T>,
   span: Span | undefined,
-  cleanupSignalListener?: () => void,
+  releaseSignalListener?: () => void,
 ): AsyncIterable<T> {
   return {
     [Symbol.asyncIterator]() {
-      const iterator = iterable[Symbol.asyncIterator]();
-      let finished = false;
-      const finish = (error?: unknown): void => {
-        if (finished) return;
-        finished = true;
-        if (error) {
-          span?.recordException(error instanceof Error ? error : new Error(String(error)));
+      const sourceIterator = sourceStream[Symbol.asyncIterator]();
+      let isFinished = false;
+      const closeStream = (failure?: unknown): void => {
+        if (isFinished) return;
+        isFinished = true;
+        if (failure) {
+          span?.recordException(failure instanceof Error ? failure : new Error(String(failure)));
           span?.setStatus({
             code: SpanStatusCode.ERROR,
-            message: error instanceof Error ? error.message : "Stream failed",
+            message: failure instanceof Error ? failure.message : "Stream failed",
           });
         } else {
           span?.setStatus({ code: SpanStatusCode.OK });
         }
         span?.end();
-        cleanupSignalListener?.();
+        releaseSignalListener?.();
       };
       return {
         async next() {
           try {
-            const result = await iterator.next();
-            if (result.done) finish();
-            return result;
-          } catch (error) {
-            finish(error);
-            throw error;
+            const callResult = await sourceIterator.next();
+            if (callResult.done) closeStream();
+            return callResult;
+          } catch (failure) {
+            closeStream(failure);
+            throw failure;
           }
         },
-        async return(value?: T) {
-          finish();
-          if (iterator.return) return await iterator.return(value);
+        async return(headerText?: T) {
+          closeStream();
+          if (sourceIterator.return) return await sourceIterator.return(headerText);
           return { done: true, value: undefined };
         },
-        async throw(error?: unknown) {
-          finish(error);
-          if (iterator.throw) return await iterator.throw(error);
-          throw error;
+        async throw(failure?: unknown) {
+          closeStream(failure);
+          if (sourceIterator.throw) return await sourceIterator.throw(failure);
+          throw failure;
         },
       };
     },
@@ -100,147 +100,147 @@ function wrapAsyncIterableWithSpan<T>(
 }
 
 function extractTraceHeaders(ctx: Context): Headers {
-  const headers = new Headers();
+  const traceHeaders = new Headers();
   try {
     const spanContext = getSpan(ctx)?.spanContext?.();
     if (spanContext?.traceId && spanContext.spanId) {
       const traceFlags = spanContext.traceFlags ?? 0;
-      const headerValue = `00-${spanContext.traceId}-${spanContext.spanId}-${traceFlags.toString(16).padStart(2, "0")}`;
-      headers.set("traceparent", headerValue);
-      headers.set("backend-traceparent", headerValue);
+      const traceHeader = `00-${spanContext.traceId}-${spanContext.spanId}-${traceFlags.toString(16).padStart(2, "0")}`;
+      traceHeaders.set("traceparent", traceHeader);
+      traceHeaders.set("backend-traceparent", traceHeader);
       if (spanContext.traceState) {
-        const traceState = spanContext.traceState as typeof spanContext.traceState & {
+        const traceStateValue = spanContext.traceState as typeof spanContext.traceState & {
           serialize?: () => string;
         };
-        headers.set(
+        traceHeaders.set(
           "tracestate",
-          typeof traceState.serialize === "function"
-            ? traceState.serialize()
-            : String(traceState),
+          typeof traceStateValue.serialize === "function"
+            ? traceStateValue.serialize()
+            : String(traceStateValue),
         );
       }
     }
   } catch {}
-  return headers;
+  return traceHeaders;
 }
 
-function mergeHeaders(...sources: (HeadersInit | undefined)[]): Headers {
-  const merged = new Headers();
-  for (const source of sources) {
-    if (!source) continue;
-    if (source instanceof Headers) {
-      source.forEach((value, key) => merged.set(key, value));
+function mergeHeaders(...headerSources: (HeadersInit | undefined)[]): Headers {
+  const allHeaders = new Headers();
+  for (const headerSource of headerSources) {
+    if (!headerSource) continue;
+    if (headerSource instanceof Headers) {
+      headerSource.forEach((headerText, headerName) => allHeaders.set(headerName, headerText));
     } else {
-      for (const [key, value] of Object.entries(source)) {
-        merged.set(key, value as string);
+      for (const [headerName, headerText] of Object.entries(headerSource)) {
+        allHeaders.set(headerName, headerText as string);
       }
     }
   }
-  return merged;
+  return allHeaders;
 }
 
 function mergeContextSignal(
-  ctxSignal: AbortSignal,
-  providedSignal?: AbortSignal,
+  contextSignal: AbortSignal,
+  callerSignal?: AbortSignal,
 ): { signal: AbortSignal; cleanup?: () => void } {
-  if (providedSignal === undefined || providedSignal === ctxSignal) {
-    return { signal: ctxSignal };
+  if (callerSignal === undefined || callerSignal === contextSignal) {
+    return { signal: contextSignal };
   }
-  const controller = new AbortController();
-  const abortFromContext = () => controller.abort(ctxSignal.reason);
-  const abortFromProvided = () => controller.abort(providedSignal.reason);
-  ctxSignal.addEventListener("abort", abortFromContext, { once: true });
-  providedSignal.addEventListener("abort", abortFromProvided, { once: true });
-  if (ctxSignal.aborted) abortFromContext();
-  else if (providedSignal.aborted) abortFromProvided();
+  const abortController = new AbortController();
+  const abortFromContext = () => abortController.abort(contextSignal.reason);
+  const abortFromProvided = () => abortController.abort(callerSignal.reason);
+  contextSignal.addEventListener("abort", abortFromContext, { once: true });
+  callerSignal.addEventListener("abort", abortFromProvided, { once: true });
+  if (contextSignal.aborted) abortFromContext();
+  else if (callerSignal.aborted) abortFromProvided();
   return {
-    signal: controller.signal,
+    signal: abortController.signal,
     cleanup() {
-      ctxSignal.removeEventListener("abort", abortFromContext);
-      providedSignal.removeEventListener("abort", abortFromProvided);
+      contextSignal.removeEventListener("abort", abortFromContext);
+      callerSignal.removeEventListener("abort", abortFromProvided);
     },
   };
 }
 
 function addContextPropagation<Service extends ServiceType>(
-  client: Client<Service>,
-  options: ContextPropagationOptions,
+  baseClient: Client<Service>,
+  settings: ContextPropagationOptions,
 ): ContextPropagatingClient<Service> {
-  const { injectTraceHeaders = true, extractHeaders } = options;
-  return new Proxy(client, {
-    get(target, property) {
-      const original: unknown = Reflect.get(target, property);
-      if (typeof original !== "function") return original;
-      return (ctx: Context, input: unknown, callOptions: CallOptions = {}) => {
-        const spanCtx = withSpan(ctx.withName(`rpc.${String(property)}`), {
+  const { injectTraceHeaders = true, extractHeaders } = settings;
+  return new Proxy(baseClient, {
+    get(targetClient, property) {
+      const originalMethod: unknown = Reflect.get(targetClient, property);
+      if (typeof originalMethod !== "function") return originalMethod;
+      return (ctx: Context, input: unknown, callSettings: CallOptions = {}) => {
+        const callSpanContext = withSpan(ctx.withName(`rpc.${String(property)}`), {
           kind: SpanKind.CLIENT,
           attributes: {
             "rpc.method": String(property),
             "rpc.system": "connect",
           },
         });
-        const span = getSpan(spanCtx);
-        let cleanupSignalListener: (() => void) | undefined;
+        const span = getSpan(callSpanContext);
+        let releaseSignalListener: (() => void) | undefined;
         try {
-          let contextHeaders: Headers | undefined;
-          if (injectTraceHeaders) contextHeaders = extractTraceHeaders(spanCtx);
+          let propagationHeaders: Headers | undefined;
+          if (injectTraceHeaders) propagationHeaders = extractTraceHeaders(callSpanContext);
           if (extractHeaders) {
-            const extra = extractHeaders(spanCtx);
-            if (extra) contextHeaders = mergeHeaders(contextHeaders, extra);
+            const extraHeaders = extractHeaders(callSpanContext);
+            if (extraHeaders) propagationHeaders = mergeHeaders(propagationHeaders, extraHeaders);
           }
-          const finalHeaders = mergeHeaders(callOptions.headers, contextHeaders);
-          const { signal, cleanup } = options.enableAbortSignal === true
-            ? mergeContextSignal(spanCtx.signal, callOptions.signal)
-            : { signal: callOptions.signal, cleanup: undefined };
-          cleanupSignalListener = cleanup;
-          const contextValues = (callOptions.contextValues ?? createContextValues())
-            .set(callerContextKey, spanCtx);
-          const enhancedOptions: CallOptions = {
-            ...callOptions,
-            headers: finalHeaders,
+          const headersForCall = mergeHeaders(callSettings.headers, propagationHeaders);
+          const { signal, cleanup } = settings.enableAbortSignal === true
+            ? mergeContextSignal(callSpanContext.signal, callSettings.signal)
+            : { signal: callSettings.signal, cleanup: undefined };
+          releaseSignalListener = cleanup;
+          const contextValues = (callSettings.contextValues ?? createContextValues())
+            .set(requestContextKey, callSpanContext);
+          const enhancedCallSettings: CallOptions = {
+            ...callSettings,
+            headers: headersForCall,
             signal: signal!,
             contextValues,
           };
-          const result: unknown = (original as (
+          const callResult: unknown = (originalMethod as (
             input: unknown,
-            options: CallOptions,
-          ) => unknown).call(target, input, enhancedOptions);
-          if (isAsyncIterable(result)) {
-            return wrapAsyncIterableWithSpan(result, span, cleanupSignalListener);
+            settings: CallOptions,
+          ) => unknown).call(targetClient, input, enhancedCallSettings);
+          if (isAsyncIterable(callResult)) {
+            return wrapAsyncIterableWithSpan(callResult, span, releaseSignalListener);
           }
-          if (isPromiseLike(result)) {
-            return (result as Promise<unknown>).then((response) => {
-              if (isAsyncIterable(response)) {
-                return wrapAsyncIterableWithSpan(response, span, cleanupSignalListener);
+          if (isPromiseLike(callResult)) {
+            return (callResult as Promise<unknown>).then((callResponse) => {
+              if (isAsyncIterable(callResponse)) {
+                return wrapAsyncIterableWithSpan(callResponse, span, releaseSignalListener);
               }
               span?.setStatus({ code: SpanStatusCode.OK });
               span?.end();
-              cleanupSignalListener?.();
-              return response;
-            }).catch((error: unknown) => {
-              span?.recordException(error instanceof Error ? error : new Error(String(error)));
+              releaseSignalListener?.();
+              return callResponse;
+            }).catch((failure: unknown) => {
+              span?.recordException(failure instanceof Error ? failure : new Error(String(failure)));
               span?.setStatus({
                 code: SpanStatusCode.ERROR,
-                message: error instanceof Error ? error.message : "RPC call failed",
+                message: failure instanceof Error ? failure.message : "RPC call failed",
               });
               span?.end();
-              cleanupSignalListener?.();
-              throw error;
+              releaseSignalListener?.();
+              throw failure;
             });
           }
           span?.setStatus({ code: SpanStatusCode.OK });
           span?.end();
-          cleanupSignalListener?.();
-          return result;
-        } catch (error) {
-          span?.recordException(error instanceof Error ? error : new Error(String(error)));
+          releaseSignalListener?.();
+          return callResult;
+        } catch (failure) {
+          span?.recordException(failure instanceof Error ? failure : new Error(String(failure)));
           span?.setStatus({
             code: SpanStatusCode.ERROR,
-            message: error instanceof Error ? error.message : "RPC call failed",
+            message: failure instanceof Error ? failure.message : "RPC call failed",
           });
           span?.end();
-          cleanupSignalListener?.();
-          throw error;
+          releaseSignalListener?.();
+          throw failure;
         }
       };
     },
@@ -248,9 +248,9 @@ function addContextPropagation<Service extends ServiceType>(
 }
 
 export function createContextPropagatingClient<Service extends ServiceType>(
-  service: Service,
-  transport: Transport,
-  options: ContextPropagationOptions = {},
+  serviceDefinition: Service,
+  rpcTransport: Transport,
+  settings: ContextPropagationOptions = {},
 ): ContextPropagatingClient<Service> {
-  return addContextPropagation(createClient(service, transport), options);
+  return addContextPropagation(createClient(serviceDefinition, rpcTransport), settings);
 }
