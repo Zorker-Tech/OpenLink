@@ -52,28 +52,28 @@ import type { PrivacyMode } from "../redaction/privacy-mode.ts"
 
 type RedactedCoreMessage = ReturnType<typeof toRedactedCoreMessage>
 
-function jsonReplacer(_key: string, value: unknown): unknown {
-  if (value instanceof Uint8Array) {
+function encodeJsonValue(_key: string, entryValue: unknown): unknown {
+  if (entryValue instanceof Uint8Array) {
     return {
       __type: "Uint8Array",
-      hex: toHex(value),
+      hex: toHex(entryValue),
     }
   }
-  if (typeof value === "bigint") {
-    return value.toString()
+  if (typeof entryValue === "bigint") {
+    return entryValue.toString()
   }
-  return value
+  return entryValue
 }
 
-function jsonReviver(_key: string, value: unknown): unknown {
+function decodeJsonValue(_key: string, entryValue: unknown): unknown {
   if (
-    value && typeof value === "object" &&
-    (value as { __type?: unknown }).__type === "Uint8Array" &&
-    typeof (value as { hex?: unknown }).hex === "string"
+    entryValue && typeof entryValue === "object" &&
+    (entryValue as { __type?: unknown }).__type === "Uint8Array" &&
+    typeof (entryValue as { hex?: unknown }).hex === "string"
   ) {
-    return fromHex((value as { hex: string }).hex)
+    return fromHex((entryValue as { hex: string }).hex)
   }
-  return value
+  return entryValue
 }
 
 /**
@@ -81,76 +81,76 @@ function jsonReviver(_key: string, value: unknown): unknown {
  * only pays off for messages large enough to matter, and it has to agree with the reviver exactly, which
  * is not something to turn on without a reason to.
  */
-const FAST_CORE_MESSAGE_PARSE = false
-const UINT8ARRAY_MARKER = '"__type":"Uint8Array"'
-const STRICT_HEX_RE = /^[0-9a-f]*$/
+const FAST_PARSE_ENABLED = false
+const ENCODED_BYTES_MARKER = '"__type":"Uint8Array"'
+const HEX_ONLY_RE = /^[0-9a-f]*$/
 
-function decodeHex(hex: string): Uint8Array {
-  const clean = hex.trim().toLowerCase()
-  if (clean.length % 2 !== 0) throw new Error("Invalid hex string length")
-  if (STRICT_HEX_RE.test(clean)) {
+function readHexBytes(hex: string): Uint8Array {
+  const normalizedHex = hex.trim().toLowerCase()
+  if (normalizedHex.length % 2 !== 0) throw new Error("Invalid hex string length")
+  if (HEX_ONLY_RE.test(normalizedHex)) {
     try {
-      const out = new Uint8Array(clean.length / 2)
-      Buffer.from(out.buffer, out.byteOffset, out.byteLength).write(clean, "hex")
-      return out
+      const byteResult = new Uint8Array(normalizedHex.length / 2)
+      Buffer.from(byteResult.buffer, byteResult.byteOffset, byteResult.byteLength).write(normalizedHex, "hex")
+      return byteResult
     } catch {
       // Anything the fast path cannot write is left to the shared decoder below.
     }
   }
-  return fromHex(clean)
+  return fromHex(normalizedHex)
 }
 
-function isEncodedUint8Array(value: unknown): value is { __type: "Uint8Array"; hex: string } {
-  return value !== null && typeof value === "object" &&
-    (value as { __type?: unknown }).__type === "Uint8Array" &&
-    typeof (value as { hex?: unknown }).hex === "string"
+function looksEncodedBytes(entryValue: unknown): entryValue is { __type: "Uint8Array"; hex: string } {
+  return entryValue !== null && typeof entryValue === "object" &&
+    (entryValue as { __type?: unknown }).__type === "Uint8Array" &&
+    typeof (entryValue as { hex?: unknown }).hex === "string"
 }
 
-function reviveUint8ArraysInPlace(node: unknown): unknown {
-  if (Array.isArray(node)) {
-    for (let index = 0; index < node.length; index++) {
-      node[index] = reviveUint8ArraysInPlace(node[index])
+function restoreByteArrays(tree: unknown): unknown {
+  if (Array.isArray(tree)) {
+    for (let position = 0; position < tree.length; position++) {
+      tree[position] = restoreByteArrays(tree[position])
     }
-    return node
+    return tree
   }
-  if (node !== null && typeof node === "object") {
-    const record = node as Record<string, unknown>
-    for (const key of Object.keys(record)) {
-      record[key] = reviveUint8ArraysInPlace(record[key])
+  if (tree !== null && typeof tree === "object") {
+    const objectValue = tree as Record<string, unknown>
+    for (const fieldKey of Object.keys(objectValue)) {
+      objectValue[fieldKey] = restoreByteArrays(objectValue[fieldKey])
     }
-    if (isEncodedUint8Array(node)) {
-      return decodeHex(node.hex)
+    if (looksEncodedBytes(tree)) {
+      return readHexBytes(tree.hex)
     }
-    return node
+    return tree
   }
-  return node
+  return tree
 }
 
-function parseWithUint8Arrays(json: string): unknown {
-  const parsed: unknown = JSON.parse(json)
+function parseBytesJson(jsonText: string): unknown {
+  const parsedTree: unknown = JSON.parse(jsonText)
   // Without the marker there is nothing to revive, so the walk is skipped.
-  if (json.includes(UINT8ARRAY_MARKER)) {
-    return reviveUint8ArraysInPlace(parsed)
+  if (jsonText.includes(ENCODED_BYTES_MARKER)) {
+    return restoreByteArrays(parsedTree)
   }
-  return parsed
+  return parsedTree
 }
 
-function parseCoreMessageJson(json: string): CoreMessageLike {
-  if (FAST_CORE_MESSAGE_PARSE) {
-    return parseWithUint8Arrays(json) as CoreMessageLike
+function readCoreMessageJson(jsonText: string): CoreMessageLike {
+  if (FAST_PARSE_ENABLED) {
+    return parseBytesJson(jsonText) as CoreMessageLike
   }
-  return JSON.parse(json, jsonReviver) as CoreMessageLike
+  return JSON.parse(jsonText, decodeJsonValue) as CoreMessageLike
 }
 
 class CoreMessageSerde implements Serde<CoreMessageLike> {
-  serialize(value: CoreMessageLike): Uint8Array {
-    const json = JSON.stringify(value, jsonReplacer)
-    return utf8Serde.serialize(json)
+  serialize(entryValue: CoreMessageLike): Uint8Array {
+    const jsonText = JSON.stringify(entryValue, encodeJsonValue)
+    return utf8Serde.serialize(jsonText)
   }
 
-  deserialize(blob: Uint8Array): CoreMessageLike {
-    const json = utf8Serde.deserialize(blob)
-    return parseCoreMessageJson(json)
+  deserialize(storedBytes: Uint8Array): CoreMessageLike {
+    const jsonText = utf8Serde.deserialize(storedBytes)
+    return readCoreMessageJson(jsonText)
   }
 
   getBlobType(): BlobType {
@@ -161,18 +161,18 @@ class CoreMessageSerde implements Serde<CoreMessageLike> {
 export const coreMessageSerde = new CoreMessageSerde()
 
 class RedactedCoreMessageSerde implements Serde<RedactedCoreMessage> {
-  constructor(private readonly privacyMode: PrivacyMode) {}
+  constructor(private readonly privacySetting: PrivacyMode) {}
 
-  serialize(value: RedactedCoreMessage): Uint8Array {
-    const plainMessage = fromRedactedCoreMessage(value, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
-    const json = JSON.stringify(plainMessage, jsonReplacer)
-    return utf8Serde.serialize(json)
+  serialize(entryValue: RedactedCoreMessage): Uint8Array {
+    const unwrappedMessage = fromRedactedCoreMessage(entryValue, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
+    const jsonText = JSON.stringify(unwrappedMessage, encodeJsonValue)
+    return utf8Serde.serialize(jsonText)
   }
 
-  deserialize(blob: Uint8Array): RedactedCoreMessage {
-    const json = utf8Serde.deserialize(blob)
-    const plainMessage = parseCoreMessageJson(json)
-    return toRedactedCoreMessage(plainMessage, this.privacyMode)
+  deserialize(storedBytes: Uint8Array): RedactedCoreMessage {
+    const jsonText = utf8Serde.deserialize(storedBytes)
+    const unwrappedMessage = readCoreMessageJson(jsonText)
+    return toRedactedCoreMessage(unwrappedMessage, this.privacySetting)
   }
 
   getBlobType(): BlobType {
@@ -180,41 +180,41 @@ class RedactedCoreMessageSerde implements Serde<RedactedCoreMessage> {
   }
 }
 
-export function createRedactedCoreMessageSerde(privacyMode: PrivacyMode): Serde<RedactedCoreMessage> {
-  return new RedactedCoreMessageSerde(privacyMode)
+export function createRedactedCoreMessageSerde(privacySetting: PrivacyMode): Serde<RedactedCoreMessage> {
+  return new RedactedCoreMessageSerde(privacySetting)
 }
 
 /** The same arrangement for protocol messages: plain on disk, redacted in memory. */
 class RedactedProtoSerde<Plain extends BinaryMessage, Redacted> implements Serde<Redacted> {
   constructor(
-    private readonly protoType: BinaryMessageType<Plain>,
-    private readonly toRedacted: (value: Plain, privacyMode: PrivacyMode) => Redacted,
-    private readonly fromRedacted: (value: Redacted, purpose: PrivacyCapability) => Plain,
-    private readonly privacyMode: PrivacyMode,
+    private readonly messageType: BinaryMessageType<Plain>,
+    private readonly toRedacted: (entryValue: Plain, privacySetting: PrivacyMode) => Redacted,
+    private readonly fromRedacted: (entryValue: Redacted, purpose: PrivacyCapability) => Plain,
+    private readonly privacySetting: PrivacyMode,
   ) {}
 
-  serialize(value: Redacted): Uint8Array {
-    const plainProto = this.fromRedacted(value, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
-    return plainProto.toBinary()
+  serialize(entryValue: Redacted): Uint8Array {
+    const wireMessage = this.fromRedacted(entryValue, PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
+    return wireMessage.toBinary()
   }
 
-  deserialize(blob: Uint8Array): Redacted {
-    const plainProto = this.protoType.fromBinary(blob)
-    return this.toRedacted(plainProto, this.privacyMode)
+  deserialize(storedBytes: Uint8Array): Redacted {
+    const wireMessage = this.messageType.fromBinary(storedBytes)
+    return this.toRedacted(wireMessage, this.privacySetting)
   }
 
   getBlobType(): BlobType {
-    return { kind: "proto", typeName: this.protoType.typeName }
+    return { kind: "proto", typeName: this.messageType.typeName }
   }
 }
 
 export function createRedactedProtoSerde<Plain extends BinaryMessage, Redacted>(
-  protoType: BinaryMessageType<Plain>,
-  toRedacted: (value: Plain, privacyMode: PrivacyMode) => Redacted,
-  fromRedacted: (value: Redacted, purpose: PrivacyCapability) => Plain,
-  privacyMode: PrivacyMode,
+  messageType: BinaryMessageType<Plain>,
+  toRedacted: (entryValue: Plain, privacySetting: PrivacyMode) => Redacted,
+  fromRedacted: (entryValue: Redacted, purpose: PrivacyCapability) => Plain,
+  privacySetting: PrivacyMode,
 ): Serde<Redacted> {
-  return new RedactedProtoSerde(protoType, toRedacted, fromRedacted, privacyMode)
+  return new RedactedProtoSerde(messageType, toRedacted, fromRedacted, privacySetting)
 }
 
 // The conversation types this module knows how to store, each as its own protocol serializer. The two a
