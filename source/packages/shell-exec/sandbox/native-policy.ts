@@ -2,15 +2,15 @@
  * The policy a sandboxed command is actually run under, once the platform has resolved it.
  *
  * What a caller asks for and what the sandbox is given are not the same document. A caller says "this
- * workspace may be written, read the system's paths, allow this network"; the sandbox is given a working
- * directory, the list of paths it may read, and a mapping of directories to the patterns it must not write.
+ * workspace may be written, read the system's entries, allow this network"; the sandbox is given a working
+ * directory, the list of entries it may read, and a mapping of directories to the rules it must not write.
  * This is that translation, and most of it is about making the two agree on what a path is.
  *
  * Paths are canonicalized, because the same directory reached by two names is two directories to a sandbox
  * that was handed two strings: a path that is a symlink is resolved to what it points at, and a mapping is
  * written under both names so that whichever one the command uses is covered. A read path that names a glob
  * is reduced to the directory the glob was anchored at, since a sandbox is given directories rather than
- * patterns. Home-relative paths are expanded, and a path that was already listed is not listed twice.
+ * rules. Home-relative entries are expanded, and a path that was already listed is not listed twice.
  *
  * What is protected from writing depends on where the command runs. The workspace's own protections apply
  * everywhere except Linux, where they apply only when the workspace is inside a git repository — because on
@@ -18,7 +18,7 @@
  * would only make the policy harder to read.
  *
  * The read boundary decides how much is trusted: a command that may read anywhere is given the system's
- * paths, and one confined to its workspace is given only the roots the caller named.
+ * entries, and one confined to its workspace is given only the rootList the caller named.
  */
 
 import { existsSync, realpathSync } from "node:fs";
@@ -57,35 +57,35 @@ export interface NativeSandboxPolicy {
   readonly disableTmpWrite?: boolean;
 }
 
-function isGitBackedSync(dir: string): boolean {
-  let current = path.resolve(dir);
+function looksGitBackedSync(startDirectory: string): boolean {
+  let visitedDirectory = path.resolve(startDirectory);
   for (;;) {
     try {
-      const dotGit = path.join(current, ".git");
-      if (existsSync(dotGit)) {
+      const gitMarker = path.join(visitedDirectory, ".git");
+      if (existsSync(gitMarker)) {
         return true;
       }
     } catch {
       // Probe failures are treated as not git-backed.
     }
-    const parent = path.dirname(current);
-    if (parent === current) {
+    const parent = path.dirname(visitedDirectory);
+    if (parent === visitedDirectory) {
       return false;
     }
-    current = parent;
+    visitedDirectory = parent;
   }
 }
 
-function uriToFsPath(uri: string): string {
-  let result = uri.replace(/^file:\/\//, "");
-  result = decodeURIComponent(result);
-  if (result.length > 1 && result.endsWith("/")) {
-    result = result.slice(0, -1);
+function fileUriPathOf(uri: string): string {
+  let product = uri.replace(/^file:\/\//, "");
+  product = decodeURIComponent(product);
+  if (product.length > 1 && product.endsWith("/")) {
+    product = product.slice(0, -1);
   }
-  return result;
+  return product;
 }
 
-function tryRealpath(value: string): string {
+function realPathOrSelf(value: string): string {
   try {
     return realpathSync(value);
   } catch {
@@ -93,107 +93,107 @@ function tryRealpath(value: string): string {
   }
 }
 
-function normalizeIgnoreMapping(ignoreMapping: NativeIgnoreMapping): NativeIgnoreMapping {
-  const result: Record<string, readonly string[]> = {};
-  for (const [rawPath, patterns] of Object.entries(ignoreMapping)) {
-    const fsPath = rawPath.startsWith("file://") ? uriToFsPath(rawPath) : rawPath;
-    result[fsPath] = patterns;
-    const canonicalPath = tryRealpath(fsPath);
-    if (canonicalPath !== fsPath) {
-      result[canonicalPath] = patterns;
+function canonicalIgnoreMapping(ignoreMapping: NativeIgnoreMapping): NativeIgnoreMapping {
+  const product: Record<string, readonly string[]> = {};
+  for (const [rawKey, rules] of Object.entries(ignoreMapping)) {
+    const filesystemPath = rawKey.startsWith("file://") ? fileUriPathOf(rawKey) : rawKey;
+    product[filesystemPath] = rules;
+    const resolvedPath = realPathOrSelf(filesystemPath);
+    if (resolvedPath !== filesystemPath) {
+      product[resolvedPath] = rules;
     }
   }
-  return result;
+  return product;
 }
 
-function buildIgnoreMapping(ignoreMapping: NativeIgnoreMapping): NativeIgnoreMapping {
-  return normalizeIgnoreMapping(ignoreMapping);
+function ignoreMappingFor(ignoreMapping: NativeIgnoreMapping): NativeIgnoreMapping {
+  return canonicalIgnoreMapping(ignoreMapping);
 }
 
-function normalizeAdditionalReadPathRoots(paths: readonly string[]): string[] {
-  const roots: string[] = [];
-  const seen = new Set<string>();
-  for (const raw of paths) {
-    let entry = raw.trim();
-    if (!entry) {
+function readRootsOf(entries: readonly string[]): string[] {
+  const rootList: string[] = [];
+  const visited = new Set<string>();
+  for (const candidateEntry of entries) {
+    let candidate = candidateEntry.trim();
+    if (!candidate) {
       continue;
     }
-    if (entry === "~") {
-      entry = os.homedir();
-    } else if (entry.startsWith("~/") || entry.startsWith("~\\")) {
-      entry = path.join(os.homedir(), entry.slice(2));
+    if (candidate === "~") {
+      candidate = os.homedir();
+    } else if (candidate.startsWith("~/") || candidate.startsWith("~\\")) {
+      candidate = path.join(os.homedir(), candidate.slice(2));
     }
-    entry = entry.replace(/\/\*\*$/, "").replace(/\/\*$/, "");
-    entry = entry.replace(/\\\*\*$/, "").replace(/\\\*$/, "");
-    const base = path.basename(entry);
-    if (base.includes("*") || base.includes("?")) {
-      entry = path.dirname(entry);
+    candidate = candidate.replace(/\/\*\*$/, "").replace(/\/\*$/, "");
+    candidate = candidate.replace(/\\\*\*$/, "").replace(/\\\*$/, "");
+    const leaf = path.basename(candidate);
+    if (leaf.includes("*") || leaf.includes("?")) {
+      candidate = path.dirname(candidate);
     }
-    if (!entry || entry === ".") {
+    if (!candidate || candidate === ".") {
       continue;
     }
-    const normalized = path.normalize(entry);
-    if (seen.has(normalized)) {
+    const canonical = path.normalize(candidate);
+    if (visited.has(canonical)) {
       continue;
     }
-    seen.add(normalized);
-    roots.push(normalized);
+    visited.add(canonical);
+    rootList.push(canonical);
   }
-  return roots;
+  return rootList;
 }
 
-function buildReadOnlyJson(
+function readonlyMappingOf(
   additionalReadonlyPaths: readonly string[] | undefined,
   writeProtectionMapping: NativeIgnoreMapping | undefined,
   cwd: string,
 ): NativeIgnoreMapping | undefined {
-  const fromPaths = additionalReadonlyPaths !== undefined && additionalReadonlyPaths.length > 0
+  const fromReadonlyPaths = additionalReadonlyPaths !== undefined && additionalReadonlyPaths.length > 0
     ? convertPathsToIgnoreMapping(...additionalReadonlyPaths)
     : {};
-  const cwdIsGitBacked = isGitBackedSync(cwd);
-  const fromWorkspace = process.platform !== "linux" || cwdIsGitBacked
+  const workspaceInRepository = looksGitBackedSync(cwd);
+  const fromWorkspaceProtections = process.platform !== "linux" || workspaceInRepository
     ? writeProtectionMapping ?? {}
     : {};
-  const merged: Record<string, readonly string[]> = { ...fromPaths };
-  for (const [dir, patterns] of Object.entries(fromWorkspace)) {
-    if (merged[dir] !== undefined) {
-      merged[dir] = [...merged[dir], ...patterns];
+  const combined: Record<string, readonly string[]> = { ...fromReadonlyPaths };
+  for (const [startDirectory, rules] of Object.entries(fromWorkspaceProtections)) {
+    if (combined[startDirectory] !== undefined) {
+      combined[startDirectory] = [...combined[startDirectory], ...rules];
     } else {
-      merged[dir] = patterns;
+      combined[startDirectory] = rules;
     }
   }
-  if (Object.keys(merged).length === 0) {
+  if (Object.keys(combined).length === 0) {
     return undefined;
   }
-  return normalizeIgnoreMapping(merged);
+  return canonicalIgnoreMapping(combined);
 }
 
-function resolveHardcodedAllowedReadPaths(platform = process.platform): string[] {
+function trustedReadPathsOf(hostPlatform = process.platform): string[] {
   const resolved: string[] = [];
-  const seen = new Set<string>();
-  const bundledPaths: Record<string, string> = {};
+  const visited = new Set<string>();
+  const bundledBinaries: Record<string, string> = {};
   try {
-    bundledPaths.ripgrep = getRipgrepBinaryPath();
+    bundledBinaries.ripgrep = getRipgrepBinaryPath();
   } catch {
     // Ripgrep is optional for the trusted-read allowlist.
   }
-  const allowed = platform === "linux" || platform === "darwin"
-    ? getHardcodedAllowedReadPaths(platform, os.homedir(), bundledPaths)
+  const trustedPaths = hostPlatform === "linux" || hostPlatform === "darwin"
+    ? getHardcodedAllowedReadPaths(hostPlatform, os.homedir(), bundledBinaries)
     : [];
-  for (const entry of allowed) {
-    let pathToUse = entry;
+  for (const candidate of trustedPaths) {
+    let usablePath = candidate;
     try {
-      if (existsSync(entry)) {
-        pathToUse = realpathSync(entry);
+      if (existsSync(candidate)) {
+        usablePath = realpathSync(candidate);
       }
     } catch {
-      // Individual trusted paths are best-effort.
+      // Individual trusted entries are best-effort.
     }
-    if (seen.has(pathToUse)) {
+    if (visited.has(usablePath)) {
       continue;
     }
-    seen.add(pathToUse);
-    resolved.push(pathToUse);
+    visited.add(usablePath);
+    resolved.push(usablePath);
   }
   return resolved;
 }
@@ -204,31 +204,31 @@ export function buildNativeSandboxPolicy(
 ): NativeSandboxPolicy {
   let ignoreMapping: NativeIgnoreMapping | undefined;
   if (sandboxPolicy.ignoreMapping) {
-    ignoreMapping = buildIgnoreMapping(sandboxPolicy.ignoreMapping);
+    ignoreMapping = ignoreMappingFor(sandboxPolicy.ignoreMapping);
   }
-  const additionalReadonlyPaths = buildReadOnlyJson(
+  const additionalReadonlyPaths = readonlyMappingOf(
     sandboxPolicy.additionalReadonlyPaths,
     sandboxPolicy.writeProtectionMapping,
     cwd,
   );
   const readBoundary = sandboxPolicy.readBoundary ?? "system";
-  const trustedReadPaths = resolveHardcodedAllowedReadPaths();
-  const allowlistRoots = readBoundary === "workspace"
-    ? normalizeAdditionalReadPathRoots(sandboxPolicy.additionalReadPaths ?? [])
+  const trustedSystemPaths = trustedReadPathsOf();
+  const workspaceRoots = readBoundary === "workspace"
+    ? readRootsOf(sandboxPolicy.additionalReadPaths ?? [])
     : [];
-  const hardcodedReadPaths = [...trustedReadPaths];
-  const seen = new Set(trustedReadPaths);
-  for (const root of allowlistRoots) {
-    if (seen.has(root)) {
+  const systemReadPaths = [...trustedSystemPaths];
+  const visited = new Set(trustedSystemPaths);
+  for (const root of workspaceRoots) {
+    if (visited.has(root)) {
       continue;
     }
-    seen.add(root);
-    hardcodedReadPaths.push(root);
+    visited.add(root);
+    systemReadPaths.push(root);
   }
   const common = {
     cwd,
     readBoundary,
-    hardcodedReadPaths,
+    hardcodedReadPaths: systemReadPaths,
     additionalReadonlyPaths,
     networkAccess: isNetworkEnabledByPolicy(sandboxPolicy.networkPolicy),
     ignoreMapping,
