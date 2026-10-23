@@ -6,7 +6,7 @@
  *
  * - **where it will talk to**: a presigned url is only used when it is https (or plain http on loopback while the
  *   backend itself is on loopback), carries no credentials, and names one of the store's own buckets;
- * - **what a path may be**: a relative path is normalized into segments and refused when it is empty, absolute, walks
+ * - **what a path may be**: a relative path is normalized into parts and refused when it is empty, absolute, walks
  *   up, is longer than a filesystem segment allows, carries a control character, ends in a dot or a space, or uses a
  *   device name Windows reserves;
  * - **what it remembers between writes**: the etag a write answered with is kept, so the next write of the same file
@@ -115,11 +115,11 @@ const PLAYGROUND_AGENT_STORE_BUCKET_HOSTS = new Set(["agent-stores-928182716709-
 const WINDOWS_RESERVED = new Set(["con", "prn", "aux", "nul", "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8", "com9", "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9"]);
 
 /** A path the store can hold, or the reason it cannot. */
-function normalizeRelPath(relPath: string): string {
+function normalizePath(relPath: string): string {
   if (relPath.length === 0) throw new Error("Agent store relative path must be a non-empty string");
   if (relPath.includes("\0")) throw new Error("Agent store relative path must not contain NUL bytes");
   if (path.posix.isAbsolute(relPath) || path.win32.isAbsolute(relPath)) throw new Error(`Agent store relative path must not be absolute: ${relPath}`);
-  const segments: string[] = [];
+  const parts: string[] = [];
   for (const segment of relPath.replaceAll("\\", "/").split("/")) {
     if (segment.length === 0 || segment === ".") continue;
     if (segment === "..") throw new Error(`Agent store relative path must not contain '..': ${relPath}`);
@@ -128,125 +128,125 @@ function normalizeRelPath(relPath: string): string {
       const code = segment.charCodeAt(index);
       if (code < 32 || code === 127) throw new Error(`Agent store path segment contains control character (0x${code.toString(16)}): ${segment}`);
     }
-    const lastCharacter = segment.at(-1);
+    const lastChar = segment.at(-1);
     // Windows trims a trailing dot or space, so a name that has one means two different files on two systems.
-    if (lastCharacter === "." || lastCharacter === " ") throw new Error(`Agent store path segment must not end with '.' or space (Windows trims these): ${segment}`);
-    const stem = segment.toLowerCase().split(".")[0];
-    if (stem !== undefined && WINDOWS_RESERVED.has(stem)) throw new Error(`Agent store path segment uses a reserved device name: ${segment}`);
-    segments.push(segment);
+    if (lastChar === "." || lastChar === " ") throw new Error(`Agent store path segment must not end with '.' or space (Windows trims these): ${segment}`);
+    const deviceStem = segment.toLowerCase().split(".")[0];
+    if (deviceStem !== undefined && WINDOWS_RESERVED.has(deviceStem)) throw new Error(`Agent store path segment uses a reserved device name: ${segment}`);
+    parts.push(segment);
   }
-  if (segments.length === 0) throw new Error(`Agent store relative path resolved to empty: ${relPath}`);
-  return segments.join("/");
+  if (parts.length === 0) throw new Error(`Agent store relative path resolved to empty: ${relPath}`);
+  return parts.join("/");
 }
 
-function isLoopbackHostName(hostname: string): boolean {
-  const lowered = hostname.toLowerCase();
-  return lowered === "localhost" || lowered === "ip6-localhost" || lowered === "127.0.0.1" || lowered === "::1" || lowered === "0:0:0:0:0:0:0:1";
+function isLoopback(hostname: string): boolean {
+  const lower = hostname.toLowerCase();
+  return lower === "localhost" || lower === "ip6-localhost" || lower === "127.0.0.1" || lower === "::1" || lower === "0:0:0:0:0:0:0:1";
 }
 
 /** Where this box will send a presigned request: https on the store's own buckets, or plain http on loopback in dev. */
-function validatePresignedUrl(rawUrl: string, relPath: string): void {
+function validateUrl(raw: string, relPath: string): void {
   let url: URL;
   try {
-    url = new URL(rawUrl);
+    url = new URL(raw);
   } catch {
     throw new Error(`Refusing unparseable presigned URL for ${relPath}`);
   }
   if (url.username !== "" || url.password !== "") throw new Error(`Refusing presigned URL for ${relPath}: Refused presigned URL with embedded userinfo`);
-  const backendUrl = getSlateInferenceBackendUrl();
-  if ((backendUrl.includes("localhost") || backendUrl.includes("lclhst.build")) && url.protocol === "http:" && isLoopbackHostName(url.hostname)) return;
+  const backend = getSlateInferenceBackendUrl();
+  if ((backend.includes("localhost") || backend.includes("lclhst.build")) && url.protocol === "http:" && isLoopback(url.hostname)) return;
   if (url.protocol !== "https:") throw new Error(`Refusing presigned URL for ${relPath}: Refused presigned URL with non-https scheme: ${url.protocol}`);
-  const isPlayground = (() => {
+  const playground = (() => {
     try {
-      const hostname = new URL(backendUrl).hostname.toLowerCase();
+      const hostname = new URL(backend).hostname.toLowerCase();
       return hostname === "playground.cursor.sh" || hostname.endsWith(".playground.cursor.sh");
     } catch {
       return false;
     }
   })();
-  const allowed = isPlayground ? PLAYGROUND_AGENT_STORE_BUCKET_HOSTS : BCS_AGENT_STORE_BUCKET_HOSTS;
+  const allowed = playground ? PLAYGROUND_AGENT_STORE_BUCKET_HOSTS : BCS_AGENT_STORE_BUCKET_HOSTS;
   if (!allowed.has(url.hostname.toLowerCase())) throw new Error(`Refusing presigned URL for ${relPath}: Refused presigned URL whose host is not in the allowlist: ${url.hostname}`);
 }
 
 /** Whether the store already holds an object, and what its etag is. */
-async function probeAgentStoreObject(client: AgentStoreClient, sourceId: string, relPath: string): Promise<{ readonly kind: "absent" } | { readonly kind: "exists"; readonly etag: string }> {
-  const [presigned] = await client.presignReads({ agentId: sourceId, relPaths: [relPath] });
-  if (presigned === undefined) throw new Error(`agent-store baseline probe returned no read for ${relPath}`);
-  let canonicalRequested: string;
-  let canonicalPresignPath: string;
+async function probeObject(client: AgentStoreClient, sourceId: string, relPath: string): Promise<{ readonly kind: "absent" } | { readonly kind: "exists"; readonly etag: string }> {
+  const [instruction] = await client.presignReads({ agentId: sourceId, relPaths: [relPath] });
+  if (instruction === undefined) throw new Error(`agent-store baseline probe returned no read for ${relPath}`);
+  let requestedPath: string;
+  let presignPath: string;
   try {
-    canonicalRequested = normalizeRelPath(relPath);
-    canonicalPresignPath = normalizeRelPath(presigned.relPath);
+    requestedPath = normalizePath(relPath);
+    presignPath = normalizePath(instruction.relPath);
   } catch (error) {
     throw new Error(`agent-store baseline probe relPath mismatch for ${relPath}: ${error instanceof Error ? error.message : String(error)}`);
   }
-  if (canonicalPresignPath !== canonicalRequested) throw new Error(`agent-store baseline probe relPath mismatch for ${relPath} (got ${presigned.relPath})`);
-  validatePresignedUrl(presigned.url, relPath);
+  if (presignPath !== requestedPath) throw new Error(`agent-store baseline probe relPath mismatch for ${relPath} (got ${instruction.relPath})`);
+  validateUrl(instruction.url, relPath);
   // One byte is enough to learn the etag; an empty object refuses the range, so it is asked for whole then.
-  const probe = (range: boolean) => fetch(presigned.url, { redirect: "error", ...(range ? { headers: { Range: "bytes=0-0" } } : {}) });
-  let response = await probe(true);
-  if (response.status === 416) {
-    await response.body?.cancel();
-    response = await probe(false);
+  const lookup = (range: boolean) => fetch(instruction.url, { redirect: "error", ...(range ? { headers: { Range: "bytes=0-0" } } : {}) });
+  let reply = await lookup(true);
+  if (reply.status === 416) {
+    await reply.body?.cancel();
+    reply = await lookup(false);
   }
   try {
-    if (response.status === 404) return { kind: "absent" };
-    if (response.status !== 200 && response.status !== 206) throw new Error(`agent-store baseline probe failed for ${relPath}: ${response.status}`);
-    const etag = normalizeS3Etag(response.headers.get("etag") ?? undefined);
+    if (reply.status === 404) return { kind: "absent" };
+    if (reply.status !== 200 && reply.status !== 206) throw new Error(`agent-store baseline probe failed for ${relPath}: ${reply.status}`);
+    const etag = normalizeS3Etag(reply.headers.get("etag") ?? undefined);
     if (etag.length === 0) throw new Error(`agent-store baseline probe for ${relPath} returned no usable etag`);
     return { kind: "exists", etag };
   } finally {
-    await response.body?.cancel();
+    await reply.body?.cancel();
   }
 }
 
-async function presignSingleWrite(client: AgentStoreClient, sourceId: string, file: Omit<AgentStoreWriteFile, "baseEtag" | "expectAbsent">, precondition: { readonly baseEtag: string } | { readonly expectAbsent: true }): Promise<AgentStoreWriteInstruction> {
-  const [presigned] = await client.presignWrites({ agentId: sourceId, files: [{ ...file, ...precondition }] });
-  if (presigned === undefined) throw new BoxStoreSyncError(`agent-store presign returned no write for ${file.relPath}`);
-  return presigned;
+async function presignWrite(client: AgentStoreClient, sourceId: string, file: Omit<AgentStoreWriteFile, "baseEtag" | "expectAbsent">, precondition: { readonly baseEtag: string } | { readonly expectAbsent: true }): Promise<AgentStoreWriteInstruction> {
+  const [instruction] = await client.presignWrites({ agentId: sourceId, files: [{ ...file, ...precondition }] });
+  if (instruction === undefined) throw new BoxStoreSyncError(`agent-store presign returned no write for ${file.relPath}`);
+  return instruction;
 }
 
-function presignHasConditionalHeaders(presigned: AgentStoreWriteInstruction): boolean {
-  return Object.keys(presigned.headers ?? {}).some((name) => {
+function hasConditionalHeaders(instruction: AgentStoreWriteInstruction): boolean {
+  return Object.keys(instruction.headers ?? {}).some((name) => {
     const key = name.toLowerCase();
     return key === "if-match" || key === "if-none-match";
   });
 }
 
 /** A write that is protected against conflicts one way but not the other is worth saying out loud. */
-function warnIfConflictProtectionDowngraded(presigned: AgentStoreWriteInstruction): void {
-  if (presigned.conflict !== undefined || presignHasConditionalHeaders(presigned)) return;
+function warnDowngraded(instruction: AgentStoreWriteInstruction): void {
+  if (instruction.conflict !== undefined || hasConditionalHeaders(instruction)) return;
   reportBoxStoreDiagnostic({ extension: "box_store", kind: "conflict_protection_downgraded" });
 }
 
-/** What the object store is told about the body when the store presigned no headers of its own. */
-function primaryPutHeaders(presigned: AgentStoreWriteInstruction): Record<string, string> {
-  return presigned.headers !== undefined ? { ...presigned.headers } : { "x-amz-meta-content-sha256": presigned.sha };
+/** What the object store is told about the body when the store instruction no headers of its own. */
+function putHeaders(instruction: AgentStoreWriteInstruction): Record<string, string> {
+  return instruction.headers !== undefined ? { ...instruction.headers } : { "x-amz-meta-content-sha256": instruction.sha };
 }
 
-export function isConditionalWriteRejection(status: number): boolean {
-  return status === 412 || status === 409;
+export function isConditionalWriteRejection(code: number): boolean {
+  return code === 412 || code === 409;
 }
 
-/** What the write is presigned against: what this session knows, or what a probe of the store found. */
-async function resolveMutableWriteBaseline(client: AgentStoreClient, sourceId: string, relPath: string, etags: AgentStoreMutableWriteEtags): Promise<MutableWriteBaseline> {
-  const known = etags.get(sourceId, relPath);
-  if (known !== undefined) return { precondition: { baseEtag: known }, source: "session" };
-  const probe = await probeAgentStoreObject(client, sourceId, relPath);
-  return probe.kind === "absent" ? { precondition: { expectAbsent: true }, source: "absent" } : { precondition: { baseEtag: probe.etag }, source: "probe" };
+/** What the write is presigned against: what this session knows, or what a lookup of the store found. */
+async function resolveBaseline(client: AgentStoreClient, sourceId: string, relPath: string, etags: AgentStoreMutableWriteEtags): Promise<MutableWriteBaseline> {
+  const remembered = etags.get(sourceId, relPath);
+  if (remembered !== undefined) return { precondition: { baseEtag: remembered }, source: "session" };
+  const lookup = await probeObject(client, sourceId, relPath);
+  return lookup.kind === "absent" ? { precondition: { expectAbsent: true }, source: "absent" } : { precondition: { baseEtag: lookup.etag }, source: "probe" };
 }
 
 /** The local copy of a file that collided: written beside the store's own object rather than lost. */
-async function putConflictObject(client: AgentStoreClient, sourceId: string, file: Omit<AgentStoreWriteFile, "baseEtag" | "expectAbsent">, precondition: { readonly baseEtag: string } | { readonly expectAbsent: true }, conflict: AgentStoreConflictWriteInstruction, data: Uint8Array): Promise<string> {
+async function putConflict(client: AgentStoreClient, sourceId: string, file: Omit<AgentStoreWriteFile, "baseEtag" | "expectAbsent">, precondition: { readonly baseEtag: string } | { readonly expectAbsent: true }, conflict: AgentStoreConflictWriteInstruction, data: Uint8Array): Promise<string> {
   let target = conflict;
-  let response = await fetch(target.url, { method: "PUT", headers: { ...(target.headers ?? {}) }, body: Buffer.from(data) });
-  if (isConditionalWriteRejection(response.status)) {
-    const fresh = await presignSingleWrite(client, sourceId, file, precondition);
+  let reply = await fetch(target.url, { method: "PUT", headers: { ...(target.headers ?? {}) }, body: Buffer.from(data) });
+  if (isConditionalWriteRejection(reply.status)) {
+    const fresh = await presignWrite(client, sourceId, file, precondition);
     if (fresh.conflict === undefined) throw new BoxStoreSyncError(`agent-store conflict write for ${file.relPath} collided and the fresh presign returned no conflict instruction`);
     target = fresh.conflict;
-    response = await fetch(target.url, { method: "PUT", headers: { ...(target.headers ?? {}) }, body: Buffer.from(data) });
+    reply = await fetch(target.url, { method: "PUT", headers: { ...(target.headers ?? {}) }, body: Buffer.from(data) });
   }
-  if (!response.ok) throw new BoxStoreSyncError(`agent-store conflict write failed for ${file.relPath} -> ${target.relPath}: ${response.status}`);
+  if (!reply.ok) throw new BoxStoreSyncError(`agent-store conflict write failed for ${file.relPath} -> ${target.relPath}: ${reply.status}`);
   return target.relPath;
 }
 
@@ -267,25 +267,25 @@ export async function putAgentStoreObject(args: {
 > {
   const { client, sourceId, relPath, data, etags } = args;
   const file = { relPath, sha: sha256Hex(data), size: data.byteLength };
-  const { precondition, source: baselineSource } = await resolveMutableWriteBaseline(client, sourceId, relPath, etags);
-  const presigned = await presignSingleWrite(client, sourceId, file, precondition);
-  if (presigned.conflict === undefined && presignHasConditionalHeaders(presigned)) throw new BoxStoreSyncError(`agent-store presign for ${relPath} carries a conditional header but no conflict instruction`);
-  warnIfConflictProtectionDowngraded(presigned);
-  const put = () => fetch(presigned.url, { method: "PUT", headers: primaryPutHeaders(presigned), body: Buffer.from(data) });
-  let response = await put();
+  const { precondition, source: baseline } = await resolveBaseline(client, sourceId, relPath, etags);
+  const instruction = await presignWrite(client, sourceId, file, precondition);
+  if (instruction.conflict === undefined && hasConditionalHeaders(instruction)) throw new BoxStoreSyncError(`agent-store presign for ${relPath} carries a conditional header but no conflict instruction`);
+  warnDowngraded(instruction);
+  const put = () => fetch(instruction.url, { method: "PUT", headers: putHeaders(instruction), body: Buffer.from(data) });
+  let reply = await put();
   // A collision on the object store itself is worth one more try before the copy is kept aside.
-  if (response.status === 409) response = await put();
-  if (isConditionalWriteRejection(response.status)) {
+  if (reply.status === 409) reply = await put();
+  if (isConditionalWriteRejection(reply.status)) {
     etags.delete(sourceId, relPath);
     client.invalidateListCache?.({ agentId: sourceId });
-    if (presigned.conflict === undefined) throw new BoxStoreSyncError(`agent-store write failed for ${relPath}: ${response.status}`);
-    const conflictRelPath = await putConflictObject(client, sourceId, file, precondition, presigned.conflict, data);
+    if (instruction.conflict === undefined) throw new BoxStoreSyncError(`agent-store write failed for ${relPath}: ${reply.status}`);
+    const conflictRelPath = await putConflict(client, sourceId, file, precondition, instruction.conflict, data);
     reportBoxStoreDiagnostic({ extension: "box_store", kind: "write_conflict_preserved" });
-    return { outcome: "conflict", conflictRelPath, baseEtag: "baseEtag" in precondition ? precondition.baseEtag : null, baselineSource };
+    return { outcome: "conflict", conflictRelPath, baseEtag: "baseEtag" in precondition ? precondition.baseEtag : null, baselineSource: baseline };
   }
-  if (!response.ok) throw new BoxStoreSyncError(`agent-store write failed for ${relPath}: ${response.status}`);
-  const etag = normalizeS3Etag(response.headers.get("etag") ?? undefined);
-  // Without an etag there is nothing to write against next time, so what was known is dropped and the listing too.
+  if (!reply.ok) throw new BoxStoreSyncError(`agent-store write failed for ${relPath}: ${reply.status}`);
+  const etag = normalizeS3Etag(reply.headers.get("etag") ?? undefined);
+  // Without an etag there is nothing to write against next time, so what was remembered is dropped and the listing too.
   if (etag.length > 0) etags.set(sourceId, relPath, etag);
   else {
     etags.delete(sourceId, relPath);
@@ -297,62 +297,62 @@ export async function putAgentStoreObject(args: {
 /** A write that is only made when the object is not there at all, which is what a content-addressed file wants. */
 export async function putAgentStoreObjectContentAddressed(args: { readonly client: AgentStoreClient; readonly sourceId: string; readonly relPath: string; readonly data: Uint8Array }): Promise<void> {
   const { client, sourceId, relPath, data } = args;
-  const presigned = await presignSingleWrite(client, sourceId, { relPath, sha: sha256Hex(data), size: data.byteLength }, { expectAbsent: true });
-  warnIfConflictProtectionDowngraded(presigned);
-  const put = () => fetch(presigned.url, { method: "PUT", headers: primaryPutHeaders(presigned), body: Buffer.from(data) });
-  let response = await put();
-  if (response.status === 409) response = await put();
+  const instruction = await presignWrite(client, sourceId, { relPath, sha: sha256Hex(data), size: data.byteLength }, { expectAbsent: true });
+  warnDowngraded(instruction);
+  const put = () => fetch(instruction.url, { method: "PUT", headers: putHeaders(instruction), body: Buffer.from(data) });
+  let reply = await put();
+  if (reply.status === 409) reply = await put();
   // The store refusing because the object is already there is exactly what this write was for.
-  if (response.status === 412) return;
-  if (!response.ok) throw new BoxStoreSyncError(`agent-store write failed for ${relPath}: ${response.status}`);
+  if (reply.status === 412) return;
+  if (!reply.ok) throw new BoxStoreSyncError(`agent-store write failed for ${relPath}: ${reply.status}`);
 }
 
 export async function getAgentStoreObject(client: AgentStoreClient, sourceId: string, relPath: string): Promise<Uint8Array | null> {
-  const [presigned] = await client.presignReads({ agentId: sourceId, relPaths: [relPath] });
-  return presigned === undefined ? null : fetchAgentStoreObjectFromUrl(presigned.url, relPath);
+  const [instruction] = await client.presignReads({ agentId: sourceId, relPaths: [relPath] });
+  return instruction === undefined ? null : fetchAgentStoreObjectFromUrl(instruction.url, relPath);
 }
 
 export async function fetchAgentStoreObjectFromUrl(url: string, label: string): Promise<Uint8Array | null> {
-  const response = await fetch(url);
-  if (response.status === 404) return null;
-  if (!response.ok) throw new BoxStoreSyncError(`agent-store read failed for ${label}: ${response.status}`);
-  return new Uint8Array(await response.arrayBuffer());
+  const reply = await fetch(url);
+  if (reply.status === 404) return null;
+  if (!reply.ok) throw new BoxStoreSyncError(`agent-store read failed for ${label}: ${reply.status}`);
+  return new Uint8Array(await reply.arrayBuffer());
 }
 
 export const PRESIGN_READ_BATCH_MAX = 500;
 
 /** Read urls for many files at once, asked for in batches the store will take. */
 export async function presignAgentStoreReadBatch(client: AgentStoreClient, sourceId: string, relPaths: readonly string[]): Promise<Map<string, { readonly url: string; readonly expiresAtMs: number }>> {
-  const byRelPath = new Map<string, { readonly url: string; readonly expiresAtMs: number }>();
+  const urls = new Map<string, { readonly url: string; readonly expiresAtMs: number }>();
   for (let index = 0; index < relPaths.length; index += PRESIGN_READ_BATCH_MAX) {
-    const chunk = relPaths.slice(index, index + PRESIGN_READ_BATCH_MAX);
-    const presigned = await client.presignReads({ agentId: sourceId, relPaths: [...chunk] });
-    for (const instruction of presigned) byRelPath.set(instruction.relPath, { url: instruction.url, expiresAtMs: instruction.expiresAtMs });
+    const batch = relPaths.slice(index, index + PRESIGN_READ_BATCH_MAX);
+    const reads = await client.presignReads({ agentId: sourceId, relPaths: [...batch] });
+    for (const read of reads) urls.set(read.relPath, { url: read.url, expiresAtMs: read.expiresAtMs });
   }
-  return byRelPath;
+  return urls;
 }
 
 /** A file's contents streamed to the store: the box never holds the whole object to send it. */
-async function streamPutFromFile(url: string, headers: Record<string, string>, srcPath: string): Promise<number> {
-  const parsedUrl = new URL(url);
-  const transport = parsedUrl.protocol === "http:" ? http : https;
+async function streamPut(url: string, headers: Record<string, string>, srcPath: string): Promise<number> {
+  const targetUrl = new URL(url);
+  const transport = targetUrl.protocol === "http:" ? http : https;
   const body = createReadStream(srcPath);
   try {
     return await new Promise<number>((resolve, reject) => {
-      let settled = false;
-      const settle = (error?: unknown, status?: number) => {
-        if (settled) return;
-        settled = true;
-        if (error === undefined) resolve(status ?? 0);
+      let done = false;
+      const finish = (error?: unknown, code?: number) => {
+        if (done) return;
+        done = true;
+        if (error === undefined) resolve(code ?? 0);
         else reject(error);
       };
-      const request = transport.request(parsedUrl, { method: "PUT", headers }, (response) => {
-        response.on("error", (error) => settle(error));
-        response.resume();
-        response.on("end", () => settle(undefined, response.statusCode ?? 0));
+      const request = transport.request(targetUrl, { method: "PUT", headers }, (reply) => {
+        reply.on("error", (error) => finish(error));
+        reply.resume();
+        reply.on("end", () => finish(undefined, reply.statusCode ?? 0));
       });
-      request.on("error", (error) => settle(error));
-      void pipeline(body, request).catch((error) => settle(error));
+      request.on("error", (error) => finish(error));
+      void pipeline(body, request).catch((error) => finish(error));
     });
   } catch (error) {
     body.destroy();
@@ -362,31 +362,31 @@ async function streamPutFromFile(url: string, headers: Record<string, string>, s
 
 export async function putAgentStoreObjectFromFile(args: { readonly client: AgentStoreClient; readonly sourceId: string; readonly relPath: string; readonly srcPath: string; readonly sha: string; readonly size: number }): Promise<void> {
   const { client, sourceId, relPath, srcPath, sha, size } = args;
-  const presigned = await presignSingleWrite(client, sourceId, { relPath, sha, size }, { expectAbsent: true });
-  warnIfConflictProtectionDowngraded(presigned);
-  const headers = { ...primaryPutHeaders(presigned), "content-length": String(size) };
-  let status = await streamPutFromFile(presigned.url, headers, srcPath);
-  if (status === 409) status = await streamPutFromFile(presigned.url, headers, srcPath);
-  if (status === 412) return;
-  if (status < 200 || status >= 300) throw new BoxStoreSyncError(`agent-store write failed for ${relPath}: ${status}`);
+  const instruction = await presignWrite(client, sourceId, { relPath, sha, size }, { expectAbsent: true });
+  warnDowngraded(instruction);
+  const headers = { ...putHeaders(instruction), "content-length": String(size) };
+  let code = await streamPut(instruction.url, headers, srcPath);
+  if (code === 409) code = await streamPut(instruction.url, headers, srcPath);
+  if (code === 412) return;
+  if (code < 200 || code >= 300) throw new BoxStoreSyncError(`agent-store write failed for ${relPath}: ${code}`);
 }
 
 export async function getAgentStoreObjectToFile(client: AgentStoreClient, sourceId: string, relPath: string, destPath: string, maxBytes?: number): Promise<number | null> {
-  const [presigned] = await client.presignReads({ agentId: sourceId, relPaths: [relPath] });
-  return presigned === undefined ? null : fetchAgentStoreObjectToFileFromUrl(presigned.url, relPath, destPath, maxBytes);
+  const [instruction] = await client.presignReads({ agentId: sourceId, relPaths: [relPath] });
+  return instruction === undefined ? null : fetchAgentStoreObjectToFileFromUrl(instruction.url, relPath, destPath, maxBytes);
 }
 
 /** An object streamed into a file, stopped as soon as it grows past what the caller will hold. */
 export async function fetchAgentStoreObjectToFileFromUrl(url: string, label: string, destPath: string, maxBytes?: number): Promise<number | null> {
-  const response = await fetch(url, { redirect: "error" });
-  if (response.status === 404) return null;
-  if (!response.ok) throw new BoxStoreSyncError(`agent-store read failed for ${label}: ${response.status}`);
-  if (response.body === null) throw new BoxStoreSyncError(`agent-store read for ${label} returned no body`);
+  const reply = await fetch(url, { redirect: "error" });
+  if (reply.status === 404) return null;
+  if (!reply.ok) throw new BoxStoreSyncError(`agent-store read failed for ${label}: ${reply.status}`);
+  if (reply.body === null) throw new BoxStoreSyncError(`agent-store read for ${label} returned no body`);
   await mkdir(dirname(destPath), { recursive: true });
   let written = 0;
   const sizeTap = new Transform({
-    transform(chunk, _encoding, callback) {
-      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    transform(batch, _encoding, callback) {
+      const buffer = Buffer.isBuffer(batch) ? batch : Buffer.from(batch);
       written += buffer.byteLength;
       if (maxBytes !== undefined && written > maxBytes) {
         callback(new Error(`agent-store object ${label} exceeded ${maxBytes}B`));
@@ -395,11 +395,11 @@ export async function fetchAgentStoreObjectToFileFromUrl(url: string, label: str
       callback(null, buffer);
     },
   });
-  await pipeline(Readable.fromWeb(response.body as import("node:stream/web").ReadableStream), sizeTap, createWriteStream(destPath));
+  await pipeline(Readable.fromWeb(reply.body as import("node:stream/web").ReadableStream), sizeTap, createWriteStream(destPath));
   return written;
 }
 
 export async function listAgentStoreObjects(client: AgentStoreClient, sourceId: string, prefix: string): Promise<string[]> {
-  const response = await client.listFiles({ agentId: sourceId, relPath: prefix });
-  return response.files.map((file) => file.relPath);
+  const reply = await client.listFiles({ agentId: sourceId, relPath: prefix });
+  return reply.files.map((file) => file.relPath);
 }
