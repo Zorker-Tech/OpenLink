@@ -90,16 +90,21 @@ const execute = (options: {
 )
 
 /** A model response made of the chunks a test wants, with the message list a provider would return. */
-function streamExecutor(chunks: unknown[], messages: Array<Record<string, unknown>>) {
+function streamExecutor(chunks: unknown[], messages: Array<Record<string, unknown>>, options: { streamError?: Error; responseReject?: Error } = {}) {
   const calls: Array<{ tools: readonly unknown[]; options: Record<string, unknown> }> = []
   return {
     calls,
     executor: {
-      stream(_ctx: Context, _invocationId: string, tools: readonly unknown[], options: Record<string, unknown>) {
-        calls.push({ tools, options })
+      stream(_ctx: Context, _invocationId: string, tools: readonly unknown[], optionsValue: Record<string, unknown>) {
+        calls.push({ tools, options: optionsValue })
         return {
-          fullStream: (async function* () { for (const chunk of chunks) yield chunk })(),
-          response: Promise.resolve({ messages, id: "response-1" }),
+          fullStream: (async function* () {
+            for (const chunk of chunks) yield chunk
+            if (options.streamError !== undefined) throw options.streamError
+          })(),
+          response: options.responseReject !== undefined
+            ? Promise.reject(options.responseReject)
+            : Promise.resolve({ messages, id: "response-1" }),
           usage: Promise.resolve({}),
           extendedUsage: Promise.resolve({}),
           providerMetadata: Promise.resolve({}),
@@ -511,4 +516,156 @@ test("the redacted executor passes the streams through", () => {
   const executor = new RedactedPromptToolExecutor(inner.executor as never, PrivacyMode.NO_STORAGE)
   assert.deepEqual(executor.executeToolStream(ctx, {}, {}, [], {}, {}, {}, {}), { ran: "tools" })
   assert.deepEqual(executor.executeModelStreamOnly(ctx, {}, {}, [], {}, {}), { ran: "model" })
+})
+// ---------------------------------------------------------------------------------------------
+// the edges tool execution keeps
+// ---------------------------------------------------------------------------------------------
+
+test("a failure keeps the messages its causes carry, once each", async () => {
+  const outer = new Error("outer")
+  const duplicate = new Error("outer")
+  const inner = new Error("inner")
+  ;(duplicate as Error & { cause?: unknown }).cause = inner
+  ;(outer as Error & { cause?: unknown }).cause = duplicate
+  const failing = fakeTool("Read", { error: outer, errorText: "outer" })
+  const result = await execute({
+    descriptor: { toolCallId: "call-1", toolName: "Read", args: {} },
+    tools: [failing],
+  })
+  const kept = (result.providerOptions as { cursor: { highLevelToolCallResult: { rawErrorMessages?: string[] } } }).cursor.highLevelToolCallResult
+  assert.deepEqual(kept.rawErrorMessages, ["outer", "inner"])
+})
+
+test("telemetry is refined from the arguments once they are complete", async () => {
+  const recorded: string[] = []
+  const tool: ToolRecord = {
+    ...fakeTool("Read"),
+    resolveToolCallTelemetry(args: unknown) {
+      const path = (args as { path?: string } | undefined)?.path
+      return { toolIdentifier: path === "/special" ? "SpecialRead" : "Read", isDynamic: false }
+    },
+  }
+  await execute({
+    descriptor: { toolCallId: "call-1", toolName: "Read", args: {} },
+    tools: [tool],
+    completedArgs: Promise.resolve({ path: "/special" }),
+    record: (_ctx, _result, name) => { recorded.push(name) },
+  })
+  assert.deepEqual(recorded, ["specialread"])
+})
+
+test("summarized reasoning is replayed as the redacted form, or dropped", async () => {
+  const { executor } = streamExecutor(
+    [
+      { type: "reasoning", textDelta: "thought", providerOptions: { cursor: { isAlreadySummarizedThinking: true, modelName: "model-x" } } },
+      { type: "reasoning-signature", signature: "sig-1" },
+      { type: "reasoning", textDelta: "", providerOptions: { cursor: { isAlreadySummarizedThinking: true } } },
+      { type: "reasoning-signature", signature: "sig-2" },
+      { type: "reasoning", textDelta: "plain thought" },
+      { type: "text-delta", textDelta: "the answer" },
+    ],
+    [],
+  )
+  const promptExecutor = new SimplePromptToolExecutor(executor as never)
+  const stream = promptExecutor.executeModelStreamOnly(ctx, {}, interactionHandler, executionSet([]), undefined, undefined) as {
+    fullStream: AsyncIterable<unknown>
+    response: Promise<{ messages: Array<{ content?: unknown }> }>
+  }
+  await consumeStream(stream)
+  const response = await stream.response
+  assert.deepEqual(response.messages[0]?.content, [
+    { type: "redacted-reasoning", data: "sig-1", providerOptions: { cursor: { modelName: "model-x" } } },
+    { type: "reasoning", text: "plain thought" },
+    { type: "text", text: "the answer" },
+  ])
+})
+
+test("a repeated start names a call that started without a name", async () => {
+  const { executor } = streamExecutor(
+    [
+      { type: "tool-call-streaming-start", toolCallId: "call-1", toolName: "" },
+      { type: "tool-call-streaming-start", toolCallId: "call-1", toolName: "Read" },
+      { type: "tool-call-delta", toolCallId: "call-1", toolName: "Read", argsTextDelta: "{}" },
+      { type: "tool-call", toolCallId: "call-1", toolName: "Read", args: {} },
+    ],
+    [assistantCall("call-1", "Read", {})],
+  )
+  const promptExecutor = new SimplePromptToolExecutor(executor as never)
+  const stream = promptExecutor.executeModelStreamOnly(ctx, {}, interactionHandler, executionSet([fakeTool("Read")]), undefined, undefined) as {
+    fullStream: AsyncIterable<unknown>
+    toolCallDescriptors: Promise<NativeToolCallDescriptor[]>
+  }
+  await consumeStream(stream)
+  const descriptors = await stream.toolCallDescriptors
+  assert.equal(descriptors[0]?.toolName, "Read")
+})
+
+test("the first tool call hook sees the messages the response carries", async () => {
+  let seen: string[] | undefined
+  const { executor } = streamExecutor(toolCallChunks("call-1", "Read", {}), [assistantCall("call-1", "Read", {})])
+  const promptExecutor = new SimplePromptToolExecutor(executor as never)
+  const stream = promptExecutor.executeModelStreamOnly(ctx, {}, interactionHandler, executionSet([fakeTool("Read")]), undefined, (messages: string[]) => { seen = messages }) as {
+    fullStream: AsyncIterable<unknown>
+    toolCallDescriptors: Promise<unknown>
+  }
+  await consumeStream(stream)
+  await stream.toolCallDescriptors
+  assert.equal(seen?.length, 1)
+  assert.match(String(seen?.[0]), /assistant/)
+})
+
+test("a rejected response is reported to the caller", async () => {
+  const broken = new Error("provider went away")
+  const executor = {
+    stream() {
+      return {
+        fullStream: (async function* () { yield { type: "text-delta", textDelta: "partial" } })(),
+        response: Promise.reject(broken),
+        usage: Promise.resolve({}),
+        extendedUsage: Promise.resolve({}),
+        providerMetadata: Promise.resolve({}),
+        invocationId: "invocation-1",
+      }
+    },
+  }
+  const promptExecutor = new SimplePromptToolExecutor(executor as never)
+  const stream = promptExecutor.executeModelStreamOnly(ctx, {}, interactionHandler, executionSet([]), undefined, undefined) as {
+    fullStream: AsyncIterable<unknown>
+    response: Promise<{ messages: Array<{ content?: unknown }>; error?: unknown }>
+  }
+  await consumeStream(stream)
+  const response = await stream.response
+  assert.deepEqual(response.messages[0]?.content, [{ type: "text", text: "partial" }])
+  assert.equal(response.error instanceof Error ? response.error.message : undefined, "provider went away")
+})
+
+test("a stream that breaks keeps what it streamed and reports the error", async () => {
+  const { executor } = streamExecutor([{ type: "text-delta", textDelta: "partial" }], [], { streamError: new Error("stream broke") })
+  const promptExecutor = new SimplePromptToolExecutor(executor as never)
+  const stream = promptExecutor.executeModelStreamOnly(ctx, {}, interactionHandler, executionSet([]), undefined, undefined) as {
+    fullStream: AsyncIterable<unknown>
+    response: Promise<{ messages: Array<{ content?: unknown }>; error?: Error }>
+  }
+  const drained = (async () => { try { for await (const _chunk of stream.fullStream) { /* the forwarded stream errors */ } } catch { /* expected */ } })()
+  await Promise.all([stream.response, drained])
+  const response = await stream.response
+  assert.deepEqual(response.messages[0]?.content, [{ type: "text", text: "partial" }])
+})
+
+test("a dynamic invocation that names nothing falls back to the outer call", async () => {
+  const invoke = { ...fakeTool("CallMcpTool"), dynamicToolMetaRole: "invocation" }
+  const { executor } = streamExecutor(
+    toolCallChunks("call-1", "CallMcpTool", { namespace: DYNAMIC_TOOLS_NAMESPACE, toolName: "Nope", arguments: "{}" }),
+    [assistantCall("call-1", "CallMcpTool", { namespace: DYNAMIC_TOOLS_NAMESPACE, toolName: "Nope", arguments: "{}" })],
+  )
+  const promptExecutor = new SimplePromptToolExecutor(executor as never)
+  const stream = promptExecutor.executeToolStream(ctx, {}, interactionHandler, executionSet([invoke]), {}, async () => {}, undefined, undefined) as {
+    fullStream: AsyncIterable<unknown>
+    response: Promise<{ messages: Array<Record<string, unknown>> }>
+  }
+  await consumeStream(stream)
+  const response = await stream.response
+  const toolMessage = response.messages.find(message => message.role === "tool")
+  const content = toolMessage?.content as Array<Record<string, unknown>>
+  assert.equal(content[0]?.toolName, "CallMcpTool")
 })

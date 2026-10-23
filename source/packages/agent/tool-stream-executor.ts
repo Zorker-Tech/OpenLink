@@ -70,64 +70,64 @@ import {
   getIsUserApiKeyFromContext,
 } from "./utils/request-scope.ts"
 
-type ToolLike = Record<string, unknown> & {
+type RuntimeTool = Record<string, unknown> & {
   readonly name: string
   readonly toolIdentifier: string
   readonly dynamicToolMetaRole?: string
   readonly customToolFormat?: unknown
 }
 
-type ProviderOptions = {
+type ReplayProviderOptions = {
   readonly cursor?: {
     readonly isAlreadySummarizedThinking?: boolean
     readonly modelName?: string
   }
 }
 
-type StreamChunk =
+type ResponseStreamChunk =
   | { readonly type: "text-delta"; readonly textDelta: string }
-  | { readonly type: "reasoning"; readonly textDelta: string; readonly providerOptions?: ProviderOptions }
-  | { readonly type: "redacted-reasoning"; readonly data: string; readonly providerOptions?: ProviderOptions }
+  | { readonly type: "reasoning"; readonly textDelta: string; readonly providerOptions?: ReplayProviderOptions }
+  | { readonly type: "redacted-reasoning"; readonly data: string; readonly providerOptions?: ReplayProviderOptions }
   | { readonly type: "reasoning-signature"; readonly signature: string }
   | { readonly type: "tool-call-streaming-start"; readonly toolCallId: string; readonly toolName: string }
   | { readonly type: "tool-call-delta"; readonly toolCallId: string; readonly toolName: string; readonly argsTextDelta: string }
   | { readonly type: "tool-call"; readonly toolCallId: string; readonly toolName: string; readonly args: unknown }
 
-type AssistantContentPart =
+type ResponseContentPart =
   | { type: "text"; text: string }
-  | { type: "reasoning"; text: string; signature?: string; providerOptions?: ProviderOptions }
-  | { type: "redacted-reasoning"; data: string; providerOptions?: ProviderOptions }
+  | { type: "reasoning"; text: string; signature?: string; providerOptions?: ReplayProviderOptions }
+  | { type: "redacted-reasoning"; data: string; providerOptions?: ReplayProviderOptions }
   | { type: "tool-call"; toolCallId: string; toolName: string; args: unknown }
   | { type: "file"; [key: string]: unknown }
 
-interface ModelResponse {
+interface StreamedResponse {
   readonly messages: Array<Record<string, unknown> & {
     readonly role: string
-    readonly content: string | AssistantContentPart[]
+    readonly content: string | ResponseContentPart[]
   }>
   readonly id: string
   readonly [key: string]: unknown
 }
 
-interface ModelStreamResult {
-  readonly fullStream: AsyncIterable<StreamChunk>
-  readonly response: Promise<ModelResponse>
+interface ModelStream {
+  readonly fullStream: AsyncIterable<ResponseStreamChunk>
+  readonly response: Promise<StreamedResponse>
   readonly usage: Promise<unknown>
   readonly extendedUsage: Promise<unknown>
   readonly providerMetadata: Promise<unknown>
   readonly invocationId: unknown
 }
 
-interface StreamingPromptExecutor {
+interface PromptStreamExecutor {
   stream(
     ctx: Context,
     invocationId: string,
     tools: readonly unknown[],
     options: Record<string, unknown>,
-  ): ModelStreamResult
+  ): ModelStream
 }
 
-const logger = createLogger("chat-inference/tool-call")
+const callLog = createLogger("chat-inference/tool-call")
 const TOOL_CALL_ID_CONTEXT_KEY = createKey<string | undefined>(
   Symbol("agent.toolCallId"),
   undefined,
@@ -136,7 +136,7 @@ const SEMANTIC_SEARCH_TOOL_NAME = "semantic_search"
 const AGENT_STORE_CONFLICT_HOOK_EVENT_NAME = "agentStoreConflict"
 const RAW_ERROR_MESSAGE_CHARACTER_BUDGET = 20_000
 
-interface HookContextCarrier {
+interface HookCarrier {
   readonly hookEventName: string
   readonly content: string
 }
@@ -174,10 +174,10 @@ function collectRawErrorMessages(error: unknown): string[] {
 }
 
 /** A collector that keeps only the conflict notices, which is all the caller wants from it. */
-function createConflictNoticeOnlyCollector(): HookContextCarrier[] {
-  const collector: HookContextCarrier[] = []
+function createConflictNoticeOnlyCollector(): HookCarrier[] {
+  const collector: HookCarrier[] = []
   const push = collector.push.bind(collector)
-  collector.push = (...items: HookContextCarrier[]) => push(
+  collector.push = (...items: HookCarrier[]) => push(
     ...items.filter(item => item.hookEventName === AGENT_STORE_CONFLICT_HOOK_EVENT_NAME),
   )
   return collector
@@ -242,7 +242,7 @@ export interface NativeToolCallDescriptor {
   }
 }
 
-interface BasePromptExecutorLike {
+interface BasePromptExecutor {
   appendMessages(messages: any): unknown
   getState(): readonly any[]
   getMessages(): readonly any[]
@@ -250,16 +250,16 @@ interface BasePromptExecutorLike {
   stream(ctx: Context, invocationId: string, tools: readonly unknown[], options: Record<string, unknown>): any
 }
 
-interface PromptExecutorLike extends BasePromptExecutorLike {
+interface ExecutingPromptExecutor extends BasePromptExecutor {
   executeToolStream(...args: unknown[]): unknown
   executeModelStreamOnly(...args: unknown[]): unknown
 }
 
-interface InteractionHandlerLike {
+interface InvocationHandler {
   readonly invocationId: string
 }
 
-interface ToolCallEvent {
+interface ToolCallWatchEvent {
   readonly toolCallId: string
   readonly toolName: string
   readonly argsStream: AsyncIterable<string>
@@ -267,14 +267,14 @@ interface ToolCallEvent {
   readonly completedArgsText: Promise<string>
 }
 
-interface StreamCollectionOptions {
+interface CollectionOptions {
   readonly emitToolCallEvents?: boolean
-  readonly executionToolMap?: Record<string, ToolLike>
+  readonly executionToolMap?: Record<string, RuntimeTool>
   readonly acceptedUnadvertisedToolNames?: readonly string[]
 }
 
 /** A tool the session does not have is logged as "other", since its name is not a name we publish. */
-function toolNameForLogging(toolName: string, toolMap: Record<string, ToolLike>): string {
+function toolNameForLogging(toolName: string, toolMap: Record<string, RuntimeTool>): string {
   if (!(toolName in toolMap)) {
     return "other"
   }
@@ -282,7 +282,7 @@ function toolNameForLogging(toolName: string, toolMap: Record<string, ToolLike>)
 }
 
 function resolveToolCallTelemetry(
-  tool: ToolLike,
+  tool: RuntimeTool,
   args: unknown,
   isDirectDynamicTool = false,
 ): Record<string, unknown> & { toolIdentifier: string; loggedToolName: string } {
@@ -371,7 +371,7 @@ class ToolCallStream {
       if (error instanceof WriteIterableClosedError) {
         return
       }
-      logger.error(ctx, "Error writing to tool call stream", error)
+      callLog.error(ctx, "Error writing to tool call stream", error)
     })
   }
 
@@ -389,7 +389,7 @@ class ToolCallStream {
         if (error instanceof WriteIterableClosedError) {
           return
         }
-        logger.error(ctx, "Error writing to tool call stream", error)
+        callLog.error(ctx, "Error writing to tool call stream", error)
       }
     }
   }
@@ -417,8 +417,8 @@ function createOneShotStringIterable(value: string): AsyncIterable<string> {
   })()
 }
 
-function createToolMap(tools: readonly ToolLike[]): Record<string, ToolLike> {
-  const toolMap: Record<string, ToolLike> = {}
+function createToolMap(tools: readonly RuntimeTool[]): Record<string, RuntimeTool> {
+  const toolMap: Record<string, RuntimeTool> = {}
   for (const tool of tools) {
     toolMap[tool.name] = tool
   }
@@ -447,7 +447,7 @@ export function parseNativeToolArguments(value: unknown): unknown {
   return value
 }
 
-function getDynamicInvocationToolNames(modelVisibleTools: readonly ToolLike[]): Set<string> {
+function getDynamicInvocationToolNames(modelVisibleTools: readonly RuntimeTool[]): Set<string> {
   return new Set(
     modelVisibleTools
       .filter(tool => tool.dynamicToolMetaRole === "invocation")
@@ -464,7 +464,7 @@ export function resolveEffectiveToolCallDescriptor(
   descriptor: NativeToolCallDescriptor,
   toolExecutionSet: ToolExecutionSet,
 ): NativeToolCallDescriptor {
-  const modelVisibleTools = toolExecutionSet.modelVisibleTools as ToolLike[]
+  const modelVisibleTools = toolExecutionSet.modelVisibleTools as RuntimeTool[]
   const dynamicInvocationToolNames = getDynamicInvocationToolNames(modelVisibleTools)
   if (!dynamicInvocationToolNames.has(descriptor.toolName)) {
     return descriptor
@@ -513,14 +513,14 @@ async function drainArgsStream(argsStream: AsyncIterable<string>): Promise<void>
   }
 }
 
-type RecordToolCallResult = (
+type ResultRecorder = (
   ctx: Context,
   result: unknown,
   loggedToolName: string,
   errorClassification: ToolErrorClassification | string | undefined,
 ) => unknown | Promise<unknown>
 
-interface ToolExecutionExtra extends Record<string, unknown> {
+interface ExecutionExtras extends Record<string, unknown> {
   readonly enableHookAdditionalContext?: boolean
   readonly enableAgentStoreConflictNoticeCollector?: boolean
   readonly enableAgentStoreConflictNotices?: boolean
@@ -539,25 +539,25 @@ interface ToolExecutionExtra extends Record<string, unknown> {
  */
 export async function executeDeferredToolCall(
   ctx: Context,
-  descriptor: NativeToolCallDescriptor,
-  toolMap: Record<string, ToolLike>,
-  interactionHandler: unknown,
-  extraT: ToolExecutionExtra,
-  recordToolCallResult: RecordToolCallResult | undefined,
-  renderProps: Record<string, unknown>,
-  streamingArgsIterable: AsyncIterable<string> | undefined,
-  completedArgs: Promise<unknown> | undefined,
-  directDynamicToolNames = new Set<string>(),
+  call: NativeToolCallDescriptor,
+  toolsByName: Record<string, RuntimeTool>,
+  invocation: unknown,
+  extras: ExecutionExtras,
+  recordResult: ResultRecorder | undefined,
+  renderContext: Record<string, unknown>,
+  argsWatcher: AsyncIterable<string> | undefined,
+  completedArgumentPromise: Promise<unknown> | undefined,
+  directDynamicNames = new Set<string>(),
 ): Promise<Record<string, unknown>> {
-  const effectiveToolName = getEffectiveToolCallName(descriptor)
-  const effectiveArgs = getEffectiveToolCallArgs(descriptor)
-  const tool = toolMap[effectiveToolName]
+  const resolvedName = getEffectiveToolCallName(call)
+  const resolvedArgs = getEffectiveToolCallArgs(call)
+  const tool = toolsByName[resolvedName]
   // A tool that is not there is answered rather than thrown, since the model can usually repair the call.
   if (tool === undefined) {
-    logger.warn(ctx, "nal.tool_call.failure", {
-      toolCallId: descriptor.toolCallId,
+    callLog.warn(ctx, "nal.tool_call.failure", {
+      toolCallId: call.toolCallId,
       toolName: "other",
-      toolNameFromModel: effectiveToolName,
+      toolNameFromModel: resolvedName,
       errorClassification: "tool_not_found",
       team: getToolFamily("unknown"),
     })
@@ -576,165 +576,165 @@ export async function executeDeferredToolCall(
     } as Record<string, string>)
     getAgentEventTracker(ctx).trackToolCallResult(ctx, {
       toolName: "other",
-      toolCallId: descriptor.toolCallId,
+      toolCallId: call.toolCallId,
       outcome: "tool_not_found",
     })
     return {
       role: "tool",
-      id: descriptor.toolCallId,
+      id: call.toolCallId,
       content: [{
         type: "tool-result",
-        toolName: descriptor.toolName,
-        toolCallId: descriptor.toolCallId,
-        result: `Tool not found: ${effectiveToolName}. Available tools: ${Object.keys(toolMap).join(", ")}`,
+        toolName: call.toolName,
+        toolCallId: call.toolCallId,
+        result: `Tool not found: ${resolvedName}. Available tools: ${Object.keys(toolsByName).join(", ")}`,
       }],
     }
   }
-  const startTimeMs = Date.now()
-  const argsIterable = streamingArgsIterable ?? createOneShotArgsIterable(effectiveArgs)
-  const usedDynamicInvocationSurface = descriptor.effectiveNativeToolCall !== undefined ||
-    directDynamicToolNames.has(effectiveToolName)
-  let telemetry = resolveToolCallTelemetry(tool, effectiveArgs, usedDynamicInvocationSurface)
-  let telemetryLogFields: Record<string, unknown> = telemetry.isDynamic
+  const startedAtMs = Date.now()
+  const argumentStream = argsWatcher ?? createOneShotArgsIterable(resolvedArgs)
+  const dynamicSurface = call.effectiveNativeToolCall !== undefined ||
+    directDynamicNames.has(resolvedName)
+  let instrumentation = resolveToolCallTelemetry(tool, resolvedArgs, dynamicSurface)
+  let instrumentationFields: Record<string, unknown> = instrumentation.isDynamic
     ? { isDynamicToolCall: true }
     : {}
-  let didLogStart = false
-  const logToolCallStart = (): void => {
-    didLogStart = true
-    logger.info(ctx, "nal.tool_call.start", {
-      toolCallId: descriptor.toolCallId,
-      toolName: telemetry.loggedToolName,
-      team: getToolFamily(telemetry.toolIdentifier),
-      ...telemetryLogFields,
+  let loggedStart = false
+  const noteCallStart = (): void => {
+    loggedStart = true
+    callLog.info(ctx, "nal.tool_call.start", {
+      toolCallId: call.toolCallId,
+      toolName: instrumentation.loggedToolName,
+      team: getToolFamily(instrumentation.toolIdentifier),
+      ...instrumentationFields,
     })
     getAgentEventTracker(ctx).trackToolCallStarted(ctx, {
-      toolName: telemetry.loggedToolName,
-      toolCallId: descriptor.toolCallId,
+      toolName: instrumentation.loggedToolName,
+      toolCallId: call.toolCallId,
     })
   }
-  const generalHookCarriersEnabled = extraT.enableHookAdditionalContext === true
-  const conflictNoticeCollectorEnabled =
-    extraT.enableAgentStoreConflictNoticeCollector === true ||
-    extraT.enableAgentStoreConflictNotices === true
-  const hookContextCollector = generalHookCarriersEnabled
+  const allHookCarriers = extras.enableHookAdditionalContext === true
+  const noticesOnly =
+    extras.enableAgentStoreConflictNoticeCollector === true ||
+    extras.enableAgentStoreConflictNotices === true
+  const carrierCollector = allHookCarriers
     ? []
-    : conflictNoticeCollectorEnabled
+    : noticesOnly
       ? createConflictNoticeOnlyCollector()
       : undefined
-  const toolCallCtx = ctx.with(TOOL_CALL_ID_CONTEXT_KEY, descriptor.toolCallId)
+  const callContext = ctx.with(TOOL_CALL_ID_CONTEXT_KEY, call.toolCallId)
   try {
     // The tool is a record here and a typed tool there; the runtime shape is the same one.
-    const executeTool = () => executeToolResultOrError(
+    const runTool = () => executeToolResultOrError(
       tool as unknown as Parameters<typeof executeToolResultOrError>[0],
-      toolCallCtx,
-      interactionHandler as Parameters<typeof executeToolResultOrError>[2],
-      argsIterable,
+      callContext,
+      invocation as Parameters<typeof executeToolResultOrError>[2],
+      argumentStream,
       {
-        ...extraT,
-        toolCallId: descriptor.toolCallId,
-        hookContextCollector,
+        ...extras,
+        toolCallId: call.toolCallId,
+        carrierCollector,
       },
     )
-    // The output is captured rather than awaited here, so the telemetry race below can see it settle.
-    const toolOutputPromise = executeTool().then(
+    // The output is captured rather than awaited here, so the instrumentation race below can see it settle.
+    const outputSettled = runTool().then(
       result => ({ ok: true as const, result }),
       error => ({ ok: false as const, error }),
     )
-    if (tool.resolveToolCallTelemetry !== undefined && completedArgs !== undefined) {
+    if (tool.resolveToolCallTelemetry !== undefined && completedArgumentPromise !== undefined) {
       try {
-        const telemetryRaceResult = await Promise.race([
-          completedArgs.then(args => ({ source: "completedArgs" as const, args })),
-          toolOutputPromise.then(result => ({ source: "toolOutput" as const, result })),
+        const raceResult = await Promise.race([
+          completedArgumentPromise.then(args => ({ source: "completedArgs" as const, args })),
+          outputSettled.then(result => ({ source: "toolOutput" as const, result })),
         ])
-        if (telemetryRaceResult.source === "completedArgs") {
-          telemetry = resolveToolCallTelemetry(
+        if (raceResult.source === "completedArgs") {
+          instrumentation = resolveToolCallTelemetry(
             tool,
-            telemetryRaceResult.args,
-            usedDynamicInvocationSurface,
+            raceResult.args,
+            dynamicSurface,
           )
-          telemetryLogFields = telemetry.isDynamic ? { isDynamicToolCall: true } : {}
+          instrumentationFields = instrumentation.isDynamic ? { isDynamicToolCall: true } : {}
         }
       } catch {
         // Telemetry refinement must never affect execution.
       }
     }
-    logToolCallStart()
-    const settledToolOutput = await toolOutputPromise
-    if (!settledToolOutput.ok) {
-      throw settledToolOutput.error
+    noteCallStart()
+    const settledOutput = await outputSettled
+    if (!settledOutput.ok) {
+      throw settledOutput.error
     }
-    const toolOutputRaw = settledToolOutput.result
-    const blobStore = extraT.stateHandler?.getBlobStore?.()
-    const renderPropsWithBlobStore = { ...renderProps, blobStore }
-    const toolOutput = await renderToolResultOrError(
+    const rawOutput = settledOutput.result
+    const blobs = extras.stateHandler?.getBlobStore?.()
+    const renderContextWithBlobs = { ...renderContext, blobs }
+    const rendered = await renderToolResultOrError(
       ctx,
       tool as unknown as Parameters<typeof executeToolResultOrError>[0],
-      toolOutputRaw,
-      renderPropsWithBlobStore,
+      rawOutput,
+      renderContextWithBlobs,
     )
     // What the platform keeps about the call: the rendered result, whether it failed, and the messages the
     // failure carried.
-    const highLevelToolCallResult: Record<string, unknown> = {
-      output: toolOutputRaw.result.toJson(),
-      isError: toolOutput.isError,
+    const keptResult: Record<string, unknown> = {
+      output: rawOutput.result.toJson(),
+      isError: rendered.isError,
     }
-    const durationMs = Date.now() - startTimeMs
-    let primaryContent: string | undefined
-    const textParts: string[] = []
-    for (const part of toolOutput.content as Array<Record<string, unknown>>) {
-      if (part.type === "text") {
-        textParts.push(part.text as string)
+    const durationMs = Date.now() - startedAtMs
+    let mainText: string | undefined
+    const textChunks: string[] = []
+    for (const piece of rendered.content as Array<Record<string, unknown>>) {
+      if (piece.type === "text") {
+        textChunks.push(piece.text as string)
       }
     }
-    if (textParts.length > 0) {
-      primaryContent = textParts.join("\n")
+    if (textChunks.length > 0) {
+      mainText = textChunks.join("\n")
     }
     let errorClassification: ToolErrorClassification | string | undefined
-    if (toolOutput.isError === true && "error" in toolOutputRaw) {
-      errorClassification = toolOutputRaw.errorClassification
-      const rawErrorMessages = collectRawErrorMessages(toolOutputRaw.error)
-      if (rawErrorMessages.length > 0) {
-        highLevelToolCallResult.rawErrorMessages = rawErrorMessages
+    if (rendered.isError === true && "error" in rawOutput) {
+      errorClassification = rawOutput.errorClassification
+      const rawFailures = collectRawErrorMessages(rawOutput.error)
+      if (rawFailures.length > 0) {
+        keptResult.rawErrorMessages = rawFailures
       }
-      const toolAbortReason = ctx.reason as {
+      const abortReasonValue = ctx.reason as {
         readonly intentional?: unknown
         readonly reason?: unknown
       } | undefined
       // A call the user stopped on purpose is an abort, not a failure of the tool.
-      const isToolIntentionalAbort = ctx.canceled && toolAbortReason?.intentional === true
-      const logData = {
-        toolCallId: descriptor.toolCallId,
-        toolName: telemetry.loggedToolName,
+      const intentionalStop = ctx.canceled && abortReasonValue?.intentional === true
+      const failureFields = {
+        toolCallId: call.toolCallId,
+        toolName: instrumentation.loggedToolName,
         durationMs,
         errorClassification,
         toolError: true,
-        intentionalAbort: isToolIntentionalAbort,
-        abortReason: toolAbortReason?.reason,
-        team: getToolFamily(telemetry.toolIdentifier),
-        errorMessage: typeof primaryContent === "string" ? primaryContent : undefined,
-        mcp_version: getMcpVersionLabel(telemetry.loggedToolName),
-        ...telemetryLogFields,
+        intentionalAbort: intentionalStop,
+        abortReason: abortReasonValue?.reason,
+        team: getToolFamily(instrumentation.toolIdentifier),
+        errorMessage: typeof mainText === "string" ? mainText : undefined,
+        mcp_version: getMcpVersionLabel(instrumentation.loggedToolName),
+        ...instrumentationFields,
       }
-      if (isToolIntentionalAbort) {
-        logger.info(ctx, "nal.tool_call.aborted", logData)
+      if (intentionalStop) {
+        callLog.info(ctx, "nal.tool_call.aborted", failureFields)
       } else {
-        logger.error(ctx, "nal.tool_call.failure", toolOutputRaw.error, logData)
+        callLog.error(ctx, "nal.tool_call.failure", rawOutput.error, failureFields)
       }
     } else {
-      logger.info(ctx, "nal.tool_call.success", {
-        toolCallId: descriptor.toolCallId,
-        toolName: telemetry.loggedToolName,
+      callLog.info(ctx, "nal.tool_call.success", {
+        toolCallId: call.toolCallId,
+        toolName: instrumentation.loggedToolName,
         durationMs,
-        team: getToolFamily(telemetry.toolIdentifier),
-        mcp_version: getMcpVersionLabel(telemetry.loggedToolName),
-        ...telemetryLogFields,
+        team: getToolFamily(instrumentation.toolIdentifier),
+        mcp_version: getMcpVersionLabel(instrumentation.loggedToolName),
+        ...instrumentationFields,
       })
     }
-    if (recordToolCallResult !== undefined) {
-      await recordToolCallResult(
+    if (recordResult !== undefined) {
+      await recordResult(
         ctx,
-        toolOutput,
-        telemetry.loggedToolName,
+        rendered,
+        instrumentation.loggedToolName,
         errorClassification,
       )
     }
@@ -742,14 +742,14 @@ export async function executeDeferredToolCall(
       ? "success"
       : errorClassification.toString()
     getAgentEventTracker(ctx).trackToolCallResult(ctx, {
-      toolName: telemetry.loggedToolName,
-      toolCallId: descriptor.toolCallId,
+      toolName: instrumentation.loggedToolName,
+      toolCallId: call.toolCallId,
       outcome,
     })
-    const team = getToolFamily(telemetry.toolIdentifier)
-    const mcpVersion = getMcpVersionLabel(telemetry.loggedToolName)
+    const team = getToolFamily(instrumentation.toolIdentifier)
+    const mcpVersion = getMcpVersionLabel(instrumentation.loggedToolName)
     toolCallResult.increment(ctx, 1, {
-      toolName: telemetry.loggedToolName,
+      toolName: instrumentation.loggedToolName,
       outcome,
       team,
       mcp_version: mcpVersion,
@@ -758,57 +758,57 @@ export async function executeDeferredToolCall(
       ...getClientOsMetricTagFromContext(ctx),
       issubagent: getIsSubagentFromContext(ctx) ? "true" : "false",
       isuserapikey: getIsUserApiKeyFromContext(ctx) ? "true" : "false",
-      isdynamic: telemetry.isDynamic ? "true" : "false",
+      isdynamic: instrumentation.isDynamic ? "true" : "false",
       "user.is_dev": getIsDevFromContext(ctx) ? "true" : "false",
     } as Record<string, string>)
-    if (telemetry.loggedToolName === SEMANTIC_SEARCH_TOOL_NAME) {
-      logger.info(ctx, "semantic search usage detected")
+    if (instrumentation.loggedToolName === SEMANTIC_SEARCH_TOOL_NAME) {
+      callLog.info(ctx, "semantic search usage detected")
     }
     toolCallDuration.histogram(ctx, durationMs, {
-      toolName: telemetry.loggedToolName,
+      toolName: instrumentation.loggedToolName,
       outcome,
       team,
       mcp_version: mcpVersion,
       ...getClientVersionMetricTagsFromContext(ctx),
       ...getClientRemoteTypeMetricTagFromContext(ctx),
-      isdynamic: telemetry.isDynamic ? "true" : "false",
+      isdynamic: instrumentation.isDynamic ? "true" : "false",
       "user.is_dev": getIsDevFromContext(ctx) ? "true" : "false",
     } as Record<string, string>)
-    const toolResultContent = [...toolOutput.content] as Array<Record<string, unknown>>
+    const resultContent = [...rendered.content] as Array<Record<string, unknown>>
     // Only the conflict notices are appended when that is all the caller asked to collect.
-    const carriersToRender = generalHookCarriersEnabled || hookContextCollector === undefined
-      ? hookContextCollector ?? []
-      : hookContextCollector.filter(
+    const carriers = allHookCarriers || carrierCollector === undefined
+      ? carrierCollector ?? []
+      : carrierCollector.filter(
         carrier => carrier.hookEventName === AGENT_STORE_CONFLICT_HOOK_EVENT_NAME,
       )
     appendHookContextRemindersToCoreToolResult(
-      textParts,
-      toolResultContent as Array<{ type: "text"; text: string }>,
-      carriersToRender as never[],
+      textChunks,
+      resultContent as Array<{ type: "text"; text: string }>,
+      carriers as never[],
     )
-    primaryContent = textParts.length > 0 ? textParts.join("\n") : primaryContent
+    mainText = textChunks.length > 0 ? textChunks.join("\n") : mainText
     return {
       role: "tool",
-      id: descriptor.toolCallId,
+      id: call.toolCallId,
       content: [{
         type: "tool-result",
-        toolName: descriptor.toolName,
-        toolCallId: descriptor.toolCallId,
-        result: primaryContent,
-        experimental_content: toolResultContent,
+        toolName: call.toolName,
+        toolCallId: call.toolCallId,
+        result: mainText,
+        experimental_content: resultContent,
       }],
       providerOptions: {
         cursor: {
-          highLevelToolCallResult: highLevelToolCallResult ?? {},
+          highLevelToolCallResult: keptResult ?? {},
         },
       },
     }
   } catch (error) {
     // A call that failed before its start was logged is logged now, so every call has a start and an end.
-    if (!didLogStart) {
-      logToolCallStart()
+    if (!loggedStart) {
+      noteCallStart()
     }
-    const durationMs = Date.now() - startTimeMs
+    const durationMs = Date.now() - startedAtMs
     const errorName = error instanceof Error ? error.name : typeof error
     const errorMessage = error instanceof Error ? error.message : undefined
     const errorClassification = isMcpToolNotFoundError(error)
@@ -825,72 +825,72 @@ export async function executeDeferredToolCall(
     if (error instanceof InteractionListenerStreamClosedError || isIntentionalAbort) {
       // A listener that went away is a warning; a user who stopped the turn is not even that.
       const logLevel = isIntentionalAbort ? "info" : "warn"
-      logger[logLevel](ctx, "nal.tool_call.aborted", {
+      callLog[logLevel](ctx, "nal.tool_call.aborted", {
         error,
-        toolCallId: descriptor.toolCallId,
-        toolName: telemetry.loggedToolName,
+        toolCallId: call.toolCallId,
+        toolName: instrumentation.loggedToolName,
         durationMs,
         errorName,
         errorMessage,
         errorClassification,
         intentionalAbort: isIntentionalAbort,
         abortReason: abortReason?.reason,
-        team: getToolFamily(telemetry.toolIdentifier),
-        mcp_version: getMcpVersionLabel(telemetry.loggedToolName),
-        ...telemetryLogFields,
+        team: getToolFamily(instrumentation.toolIdentifier),
+        mcp_version: getMcpVersionLabel(instrumentation.loggedToolName),
+        ...instrumentationFields,
       })
       outcome = "aborted"
     } else {
-      logger.error(ctx, "nal.tool_call.unexpected_error_not_user_visible", error, {
-        toolCallId: descriptor.toolCallId,
-        toolName: telemetry.loggedToolName,
+      callLog.error(ctx, "nal.tool_call.unexpected_error_not_user_visible", error, {
+        toolCallId: call.toolCallId,
+        toolName: instrumentation.loggedToolName,
         durationMs,
         errorName,
         errorMessage,
         errorClassification,
-        team: getToolFamily(telemetry.toolIdentifier),
-        mcp_version: getMcpVersionLabel(telemetry.loggedToolName),
-        ...telemetryLogFields,
+        team: getToolFamily(instrumentation.toolIdentifier),
+        mcp_version: getMcpVersionLabel(instrumentation.loggedToolName),
+        ...instrumentationFields,
       })
     }
-    const catchTeam = getToolFamily(telemetry.toolIdentifier)
-    const catchMcpVersion = getMcpVersionLabel(telemetry.loggedToolName)
+    const finalFamily = getToolFamily(instrumentation.toolIdentifier)
+    const finalMcpTag = getMcpVersionLabel(instrumentation.loggedToolName)
     toolCallDuration.histogram(ctx, durationMs, {
-      toolName: telemetry.loggedToolName,
+      toolName: instrumentation.loggedToolName,
       outcome,
-      team: catchTeam,
-      mcp_version: catchMcpVersion,
+      team: finalFamily,
+      mcp_version: finalMcpTag,
       ...getClientVersionMetricTagsFromContext(ctx),
       ...getClientRemoteTypeMetricTagFromContext(ctx),
-      isdynamic: telemetry.isDynamic ? "true" : "false",
+      isdynamic: instrumentation.isDynamic ? "true" : "false",
       "user.is_dev": getIsDevFromContext(ctx) ? "true" : "false",
     } as Record<string, string>)
     toolCallResult.increment(ctx, 1, {
-      toolName: telemetry.loggedToolName,
+      toolName: instrumentation.loggedToolName,
       outcome,
-      team: catchTeam,
-      mcp_version: catchMcpVersion,
+      team: finalFamily,
+      mcp_version: finalMcpTag,
       ...getClientVersionMetricTagsFromContext(ctx),
       ...getClientRemoteTypeMetricTagFromContext(ctx),
       ...getClientOsMetricTagFromContext(ctx),
       issubagent: getIsSubagentFromContext(ctx) ? "true" : "false",
       isuserapikey: getIsUserApiKeyFromContext(ctx) ? "true" : "false",
-      isdynamic: telemetry.isDynamic ? "true" : "false",
+      isdynamic: instrumentation.isDynamic ? "true" : "false",
       "user.is_dev": getIsDevFromContext(ctx) ? "true" : "false",
     } as Record<string, string>)
-    if (telemetry.loggedToolName === SEMANTIC_SEARCH_TOOL_NAME) {
-      logger.info(ctx, "semantic search usage detected")
+    if (instrumentation.loggedToolName === SEMANTIC_SEARCH_TOOL_NAME) {
+      callLog.info(ctx, "semantic search usage detected")
     }
     getAgentEventTracker(ctx).trackToolCallResult(ctx, {
-      toolName: telemetry.loggedToolName,
-      toolCallId: descriptor.toolCallId,
+      toolName: instrumentation.loggedToolName,
+      toolCallId: call.toolCallId,
       outcome,
     })
     throw error
   }
 }
 
-function hasMeaningfulContentPart(part: AssistantContentPart): boolean {
+function hasMeaningfulContentPart(part: ResponseContentPart): boolean {
   if (part.type === "text") {
     return part.text.trim().length > 0
   }
@@ -901,7 +901,7 @@ function hasMeaningfulContentPart(part: AssistantContentPart): boolean {
 }
 
 /** A call or a file counts as something to say; reasoning on its own does not. */
-function shouldSynthesizeResponseFromStreamContent(part: AssistantContentPart): boolean {
+function shouldSynthesizeResponseFromStreamContent(part: ResponseContentPart): boolean {
   if (part.type === "text") {
     return part.text.trim().length > 0
   }
@@ -912,8 +912,8 @@ function shouldSynthesizeResponseFromStreamContent(part: AssistantContentPart): 
  * Reasoning that was already summarized once, and is being sent back, is not text the provider will accept:
  * it goes back as the redacted form it came from, or it is dropped when even that is not known.
  */
-function sanitizeContentBufferForReplay(buffer: readonly AssistantContentPart[]): AssistantContentPart[] {
-  return buffer.flatMap<AssistantContentPart>(part => {
+function sanitizeContentBufferForReplay(buffer: readonly ResponseContentPart[]): ResponseContentPart[] {
+  return buffer.flatMap<ResponseContentPart>(part => {
     if (part.type !== "reasoning") {
       return [part]
     }
@@ -936,7 +936,7 @@ function sanitizeContentBufferForReplay(buffer: readonly AssistantContentPart[])
   })
 }
 
-function hasMeaningfulResponseMessageContent(messages: ModelResponse["messages"]): boolean {
+function hasMeaningfulResponseMessageContent(messages: StreamedResponse["messages"]): boolean {
   return messages.some(message => {
     if (message.role !== "assistant") {
       return false
@@ -963,100 +963,100 @@ function hasMeaningfulResponseMessageContent(messages: ModelResponse["messages"]
  */
 function streamModelAndCollectToolCalls(
   ctx: Context,
-  executor: StreamingPromptExecutor,
-  interactionHandler: InteractionHandlerLike,
-  modelVisibleTools: readonly ToolLike[],
-  descriptionProps: Record<string, unknown> | undefined,
-  firstToolCallHook: ((messages: string[]) => unknown | Promise<unknown>) | undefined,
-  options?: StreamCollectionOptions,
+  executor: PromptStreamExecutor,
+  interactionHandler: InvocationHandler,
+  visibleTools: readonly RuntimeTool[],
+  descriptionInputs: Record<string, unknown> | undefined,
+  onFirstToolCall: ((messagesForError: string[]) => unknown | Promise<unknown>) | undefined,
+  collection?: CollectionOptions,
 ) {
-  const emitToolCallEvents = options?.emitToolCallEvents ?? true
-  let toolMap = options?.executionToolMap
-  if (toolMap === undefined) {
-    const modelVisibleToolMap: Record<string, ToolLike> = {}
-    for (const tool of modelVisibleTools) {
-      modelVisibleToolMap[tool.name] = tool
+  const emitEvents = collection?.emitToolCallEvents ?? true
+  let toolsByName = collection?.executionToolMap
+  if (toolsByName === undefined) {
+    const visibleToolMap: Record<string, RuntimeTool> = {}
+    for (const tool of visibleTools) {
+      visibleToolMap[tool.name] = tool
     }
-    toolMap = modelVisibleToolMap
+    toolsByName = visibleToolMap
   }
-  const mutableModelVisibleTools = modelVisibleTools as ToolLike[]
-  const toolDefinitions = toAgentTools(
-    mutableModelVisibleTools,
-    descriptionProps ?? buildDescriptionGeneratorProps(mutableModelVisibleTools),
+  const visibleToolList = visibleTools as RuntimeTool[]
+  const definitions = toAgentTools(
+    visibleToolList,
+    descriptionInputs ?? buildDescriptionGeneratorProps(visibleToolList),
   )
-  const acceptedUnadvertisedToolNames = options?.acceptedUnadvertisedToolNames ?? []
+  const acceptedUnadvertisedNames = collection?.acceptedUnadvertisedToolNames ?? []
   const result = executor.stream(
     ctx,
     interactionHandler.invocationId,
-    toolDefinitions,
-    { acceptedUnadvertisedToolNames },
+    definitions,
+    { acceptedUnadvertisedToolNames: acceptedUnadvertisedNames },
   )
   // The response is settled into a value rather than awaited, so a rejection can be reported after the
   // stream has been drained rather than thrown past it.
-  const settledResultResponse = result.response.then(
+  const settledModelResponse = result.response.then(
     response => ({ didReject: false as const, response }),
     error => ({ didReject: true as const, error }),
   )
-  const [innerStream, fullStream] = duplicateStream(result.fullStream)
-  const toolCallsIterable = createWritableIterable<NativeToolCallDescriptor>()
-  const toolCallEventsIterable = createWritableIterable<ToolCallEvent>()
-  const responsePromise = (async (): Promise<ModelResponse> => {
-    let currentStream: ToolCallStream | undefined
-    let currentToolCallId: string | undefined
-    let hasStartedToolCall = false
-    const handledToolCalls = new Set<string>()
-    const contentBuffer: AssistantContentPart[] = []
-    const newMessages: ModelResponse["messages"] = []
-    let response: ModelResponse
-    let toolIterablesClosed = false
-    let shouldCloseToolIterables = false
-    const pendingDescriptorWrites = new Set<Promise<void>>()
+  const [watchedStream, forwardedStream] = duplicateStream(result.fullStream)
+  const callsIterable = createWritableIterable<NativeToolCallDescriptor>()
+  const eventsIterable = createWritableIterable<ToolCallWatchEvent>()
+  const responseWork = (async (): Promise<StreamedResponse> => {
+    let openStream: ToolCallStream | undefined
+    let openCallId: string | undefined
+    let startedCalls = false
+    const handledCalls = new Set<string>()
+    const contentAccumulator: ResponseContentPart[] = []
+    const messagesOut: StreamedResponse["messages"] = []
+    let response: StreamedResponse
+    let iterablesClosed = false
+    let readyToCloseIterables = false
+    const pendingCallWrites = new Set<Promise<void>>()
     const pendingEventWrites = new Set<Promise<void>>()
-    const maybeCloseToolIterables = (): void => {
-      if (toolIterablesClosed || !shouldCloseToolIterables) {
+    const closeIterablesWhenIdle = (): void => {
+      if (iterablesClosed || !readyToCloseIterables) {
         return
       }
-      const pendingWrites = emitToolCallEvents ? pendingEventWrites : pendingDescriptorWrites
+      const pendingWrites = emitEvents ? pendingEventWrites : pendingCallWrites
       if (pendingWrites.size > 0) {
         return
       }
-      toolIterablesClosed = true
-      toolCallsIterable.close()
-      toolCallEventsIterable.close()
+      iterablesClosed = true
+      callsIterable.close()
+      eventsIterable.close()
     }
-    const closeCurrentStream = (): void => {
-      if (currentStream === undefined) {
+    const finishOpenStream = (): void => {
+      if (openStream === undefined) {
         return
       }
-      const stream = currentStream
+      const stream = openStream
       stream.close().catch(error => {
         if (error instanceof Error && error.message.includes("WritableIterable is closed")) {
           return
         }
-        logger.error(ctx, "Error closing tool call stream", error)
+        callLog.error(ctx, "Error closing tool call stream", error)
       })
-      handledToolCalls.add(stream.toolCallId)
-      const tool = toolMap[stream.toolName]
+      handledCalls.add(stream.toolCallId)
+      const tool = toolsByName[stream.toolName]
       // A tool that parses its own arguments is handed the raw text, since its format is not JSON.
-      const isCustomFormatTool = tool !== undefined &&
+      const customFormatTool = tool !== undefined &&
         "customToolFormat" in tool &&
         tool.customToolFormat !== undefined
-      let argsParseError: unknown
+      let argumentParseFailure: unknown
       const args: unknown = (() => {
         if (stream.written.length === 0) {
           return {}
         }
-        if (isCustomFormatTool) {
+        if (customFormatTool) {
           return stream.written
         }
         try {
           return JSON.parse(stream.written) as unknown
         } catch (error) {
-          argsParseError = error
+          argumentParseFailure = error
           return stream.written
         }
       })()
-      contentBuffer.push({
+      contentAccumulator.push({
         type: "tool-call",
         toolCallId: stream.toolCallId,
         toolName: stream.toolName,
@@ -1070,63 +1070,63 @@ function streamModelAndCollectToolCalls(
         args,
       }
       const telemetry = tool === undefined ? undefined : resolveToolCallTelemetry(tool, args)
-      const loggedToolName = telemetry === undefined || telemetry.toolIdentifier === "unknown"
+      const instrumentedName = telemetry === undefined || telemetry.toolIdentifier === "unknown"
         ? "other"
         : telemetry.toolIdentifier
       // Malformed arguments are still handed over: the tool decides what to say about them, and the model
       // reads that rather than a parser error.
-      if (argsParseError !== undefined) {
-        logger.warn(ctx, "nal.tool_call.args_parse_failure", {
+      if (argumentParseFailure !== undefined) {
+        callLog.warn(ctx, "nal.tool_call.args_parse_failure", {
           toolCallId: stream.toolCallId,
-          toolName: loggedToolName,
+          toolName: instrumentedName,
           toolNameFromModel: stream.toolName,
           errorClassification: "invalid_args",
-          errorMessage: argsParseError instanceof Error
-            ? argsParseError.message
-            : String(argsParseError),
+          errorMessage: argumentParseFailure instanceof Error
+            ? argumentParseFailure.message
+            : String(argumentParseFailure),
           writtenByteLength: Buffer.byteLength(stream.written, "utf8"),
           team: getToolFamily(telemetry?.toolIdentifier ?? "unknown"),
         })
       }
-      const approximateInputTokens = approximateTokenCountFromRawArgs(stream.written)
-      if (approximateInputTokens > 0) {
-        rawToolCallInputTokens.histogram(ctx, approximateInputTokens, {
-          tool_name: loggedToolName,
+      const approxInputTokens = approximateTokenCountFromRawArgs(stream.written)
+      if (approxInputTokens > 0) {
+        rawToolCallInputTokens.histogram(ctx, approxInputTokens, {
+          tool_name: instrumentedName,
         })
       }
-      const pendingWrite = toolCallsIterable.write(descriptor).catch(() => {})
-      pendingDescriptorWrites.add(pendingWrite)
-      void pendingWrite.finally(() => {
-        pendingDescriptorWrites.delete(pendingWrite)
-        maybeCloseToolIterables()
+      const pending = callsIterable.write(descriptor).catch(() => {})
+      pendingCallWrites.add(pending)
+      void pending.finally(() => {
+        pendingCallWrites.delete(pending)
+        closeIterablesWhenIdle()
       })
     }
-    const closeToolIterables = (): void => {
-      shouldCloseToolIterables = true
-      maybeCloseToolIterables()
+    const finishIterables = (): void => {
+      readyToCloseIterables = true
+      closeIterablesWhenIdle()
     }
-    const writeToolCallEvent = (stream: ToolCallStream): void => {
+    const publishCallEvent = (stream: ToolCallStream): void => {
       if (stream.inner === undefined) {
         return
       }
-      const pendingWrite = toolCallEventsIterable.write({
+      const pending = eventsIterable.write({
         toolCallId: stream.toolCallId,
         toolName: stream.toolName,
         argsStream: stream.inner,
         completedArgs: stream.completedArgs,
         completedArgsText: stream.completedArgsText,
       }).catch(() => {})
-      pendingEventWrites.add(pendingWrite)
-      void pendingWrite.finally(() => {
-        pendingEventWrites.delete(pendingWrite)
-        maybeCloseToolIterables()
+      pendingEventWrites.add(pending)
+      void pending.finally(() => {
+        pendingEventWrites.delete(pending)
+        closeIterablesWhenIdle()
       })
     }
-    const logDuplicate = (
-      chunk: Extract<StreamChunk, { toolCallId: string }>,
+    const noteDuplicate = (
+      chunk: Extract<ResponseStreamChunk, { toolCallId: string }>,
       disposition: "dropped" | "merged",
     ): void => {
-      logger.warn(ctx, "nal.tool_call.duplicate_inbound_id", {
+      callLog.warn(ctx, "nal.tool_call.duplicate_inbound_id", {
         toolCallId: chunk.toolCallId,
         toolName: chunk.toolName,
         chunkType: chunk.type,
@@ -1138,32 +1138,32 @@ function streamModelAndCollectToolCalls(
       })
     }
     try {
-      for await (const chunk of innerStream) {
+      for await (const chunk of watchedStream) {
         if (chunk.type === "text-delta") {
           if (chunk.textDelta.length === 0) {
             continue
           }
           // Adjacent text is one part, so the message reads as it was written rather than as it arrived.
-          const lastContent = contentBuffer.at(-1)
-          if (lastContent !== undefined && lastContent.type === "text") {
-            lastContent.text += chunk.textDelta
+          const previousContent = contentAccumulator.at(-1)
+          if (previousContent !== undefined && previousContent.type === "text") {
+            previousContent.text += chunk.textDelta
           } else {
-            contentBuffer.push({ type: "text", text: chunk.textDelta })
+            contentAccumulator.push({ type: "text", text: chunk.textDelta })
           }
         } else if (chunk.type === "reasoning") {
-          const incomingProviderOptions = chunk.providerOptions
-          const last = contentBuffer.at(-1)
-          if (last !== undefined && last.type === "reasoning" && last.signature === undefined) {
-            last.text += chunk.textDelta
-            const incomingCursor = incomingProviderOptions?.cursor
+          const incomingOptions = chunk.providerOptions
+          const previous = contentAccumulator.at(-1)
+          if (previous !== undefined && previous.type === "reasoning" && previous.signature === undefined) {
+            previous.text += chunk.textDelta
+            const incomingCursor = incomingOptions?.cursor
             if (
               incomingCursor?.isAlreadySummarizedThinking === true ||
               incomingCursor?.modelName !== undefined
             ) {
-              last.providerOptions = {
-                ...(last.providerOptions ?? {}),
+              previous.providerOptions = {
+                ...(previous.providerOptions ?? {}),
                 cursor: {
-                  ...(last.providerOptions?.cursor ?? {}),
+                  ...(previous.providerOptions?.cursor ?? {}),
                   ...(incomingCursor.isAlreadySummarizedThinking === true
                     ? { isAlreadySummarizedThinking: true }
                     : {}),
@@ -1174,168 +1174,168 @@ function streamModelAndCollectToolCalls(
               }
             }
           } else {
-            contentBuffer.push({
+            contentAccumulator.push({
               type: "reasoning",
               text: chunk.textDelta,
-              ...(incomingProviderOptions !== undefined
-                ? { providerOptions: incomingProviderOptions }
+              ...(incomingOptions !== undefined
+                ? { providerOptions: incomingOptions }
                 : {}),
             })
           }
         } else if (chunk.type === "redacted-reasoning") {
-          const incomingProviderOptions = chunk.providerOptions
-          const last = contentBuffer.at(-1)
-          if (last !== undefined && last.type === "redacted-reasoning") {
-            last.data += chunk.data
-            if (incomingProviderOptions?.cursor?.modelName !== undefined) {
-              last.providerOptions = {
-                ...(last.providerOptions ?? {}),
+          const incomingOptions = chunk.providerOptions
+          const previous = contentAccumulator.at(-1)
+          if (previous !== undefined && previous.type === "redacted-reasoning") {
+            previous.data += chunk.data
+            if (incomingOptions?.cursor?.modelName !== undefined) {
+              previous.providerOptions = {
+                ...(previous.providerOptions ?? {}),
                 cursor: {
-                  ...(last.providerOptions?.cursor ?? {}),
-                  modelName: incomingProviderOptions.cursor.modelName,
+                  ...(previous.providerOptions?.cursor ?? {}),
+                  modelName: incomingOptions.cursor.modelName,
                 },
               }
             }
           } else {
-            contentBuffer.push({
+            contentAccumulator.push({
               type: "redacted-reasoning",
               data: chunk.data,
-              ...(incomingProviderOptions !== undefined
-                ? { providerOptions: incomingProviderOptions }
+              ...(incomingOptions !== undefined
+                ? { providerOptions: incomingOptions }
                 : {}),
             })
           }
         } else if (chunk.type === "reasoning-signature") {
           // A signature belongs to the reasoning it signed; a second one starts a part of its own.
-          const last = contentBuffer.at(-1)
-          if (last !== undefined && last.type === "reasoning") {
-            if (last.signature === undefined) {
-              last.signature = chunk.signature
+          const previous = contentAccumulator.at(-1)
+          if (previous !== undefined && previous.type === "reasoning") {
+            if (previous.signature === undefined) {
+              previous.signature = chunk.signature
             } else {
-              contentBuffer.push({ type: "reasoning", text: "", signature: chunk.signature })
+              contentAccumulator.push({ type: "reasoning", text: "", signature: chunk.signature })
             }
           }
         } else if (chunk.type === "tool-call-streaming-start") {
-          const hasCurrentStreamForChunk = chunk.toolCallId === currentToolCallId
-          if (!hasStartedToolCall) {
-            hasStartedToolCall = true
+          const sameCallAsOpen = chunk.toolCallId === openCallId
+          if (!startedCalls) {
+            startedCalls = true
           }
-          if (handledToolCalls.has(chunk.toolCallId)) {
-            logDuplicate(chunk, "dropped")
+          if (handledCalls.has(chunk.toolCallId)) {
+            noteDuplicate(chunk, "dropped")
             continue
           }
-          if (!hasCurrentStreamForChunk) {
-            closeCurrentStream()
-            currentStream = new ToolCallStream(
+          if (!sameCallAsOpen) {
+            finishOpenStream()
+            openStream = new ToolCallStream(
               chunk.toolCallId,
               chunk.toolName,
-              emitToolCallEvents ? createWritableIterable<string>() : undefined,
+              emitEvents ? createWritableIterable<string>() : undefined,
             )
-            currentToolCallId = chunk.toolCallId
-            writeToolCallEvent(currentStream)
-          } else if (currentStream !== undefined) {
+            openCallId = chunk.toolCallId
+            publishCallEvent(openStream)
+          } else if (openStream !== undefined) {
             // A repeated start for the same call names it if the first one did not, and is otherwise noise.
-            if (currentStream.toolName === "") {
-              currentStream.toolName = chunk.toolName
+            if (openStream.toolName === "") {
+              openStream.toolName = chunk.toolName
             } else {
-              logDuplicate(chunk, "merged")
+              noteDuplicate(chunk, "merged")
             }
           }
         } else if (chunk.type === "tool-call-delta" || chunk.type === "tool-call") {
-          if (!hasStartedToolCall) {
-            hasStartedToolCall = true
+          if (!startedCalls) {
+            startedCalls = true
           }
-          if (handledToolCalls.has(chunk.toolCallId)) {
-            logDuplicate(chunk, "dropped")
+          if (handledCalls.has(chunk.toolCallId)) {
+            noteDuplicate(chunk, "dropped")
             continue
           }
-          if (chunk.toolCallId !== currentToolCallId) {
-            closeCurrentStream()
-            currentStream = new ToolCallStream(
+          if (chunk.toolCallId !== openCallId) {
+            finishOpenStream()
+            openStream = new ToolCallStream(
               chunk.toolCallId,
               chunk.toolName,
-              emitToolCallEvents ? createWritableIterable<string>() : undefined,
+              emitEvents ? createWritableIterable<string>() : undefined,
             )
-            currentToolCallId = chunk.toolCallId
-            writeToolCallEvent(currentStream)
+            openCallId = chunk.toolCallId
+            publishCallEvent(openStream)
             if (chunk.type === "tool-call-delta") {
-              await currentStream.write(ctx, chunk.argsTextDelta)
+              await openStream.write(ctx, chunk.argsTextDelta)
             } else {
-              const argsString = typeof chunk.args === "string"
+              const argumentText = typeof chunk.args === "string"
                 ? chunk.args
                 : JSON.stringify(chunk.args) as string
-              await currentStream.complete(ctx, argsString)
-              closeCurrentStream()
-              currentStream = undefined
-              currentToolCallId = undefined
+              await openStream.complete(ctx, argumentText)
+              finishOpenStream()
+              openStream = undefined
+              openCallId = undefined
             }
           } else {
-            if (currentStream === undefined) {
+            if (openStream === undefined) {
               throw new Error("No current stream found")
             }
             if (chunk.type === "tool-call-delta") {
-              await currentStream.write(ctx, chunk.argsTextDelta)
+              await openStream.write(ctx, chunk.argsTextDelta)
             } else {
-              const argsString = typeof chunk.args === "string"
+              const argumentText = typeof chunk.args === "string"
                 ? chunk.args
                 : JSON.stringify(chunk.args) as string
-              await currentStream.complete(ctx, argsString)
-              closeCurrentStream()
-              currentStream = undefined
-              currentToolCallId = undefined
+              await openStream.complete(ctx, argumentText)
+              finishOpenStream()
+              openStream = undefined
+              openCallId = undefined
             }
           }
         }
       }
-      closeCurrentStream()
-      closeToolIterables()
-      const settledResponse = await settledResultResponse
-      if (settledResponse.didReject) {
-        throw settledResponse.error
+      finishOpenStream()
+      finishIterables()
+      const settledResponseValue = await settledModelResponse
+      if (settledResponseValue.didReject) {
+        throw settledResponseValue.error
       }
-      response = settledResponse.response
+      response = settledResponseValue.response
       // A response that says nothing is rebuilt from what was streamed, if anything was.
       if (hasMeaningfulResponseMessageContent(response.messages)) {
-        newMessages.push(...response.messages)
-      } else if (contentBuffer.some(shouldSynthesizeResponseFromStreamContent)) {
-        newMessages.push({
+        messagesOut.push(...response.messages)
+      } else if (contentAccumulator.some(shouldSynthesizeResponseFromStreamContent)) {
+        messagesOut.push({
           role: "assistant",
-          content: sanitizeContentBufferForReplay(contentBuffer),
+          content: sanitizeContentBufferForReplay(contentAccumulator),
           id: response.id,
         })
       } else {
-        newMessages.push(...response.messages)
+        messagesOut.push(...response.messages)
       }
     } catch (error) {
-      closeCurrentStream()
-      closeToolIterables()
+      finishOpenStream()
+      finishIterables()
       // The response promise is still awaited so its rejection cannot go unhandled.
-      await settledResultResponse
-      const messages: ModelResponse["messages"] = [{
+      await settledModelResponse
+      const failureMessages: StreamedResponse["messages"] = [{
         role: "assistant",
-        content: sanitizeContentBufferForReplay(contentBuffer),
+        content: sanitizeContentBufferForReplay(contentAccumulator),
         id: "1",
       }]
       response = {
         error: error instanceof Error ? error : new Error("Unknown error"),
-        messages,
+        messages: failureMessages,
         id: "1",
         timestamp: new Date(),
         modelId: "1",
         headers: {},
       }
-      newMessages.push(...messages)
+      messagesOut.push(...failureMessages)
     }
-    if (firstToolCallHook !== undefined) {
-      await firstToolCallHook(newMessages.map(message => JSON.stringify(message)))
+    if (onFirstToolCall !== undefined) {
+      await onFirstToolCall(messagesOut.map(message => JSON.stringify(message)))
     }
-    return { ...response, messages: newMessages }
+    return { ...response, messages: messagesOut }
   })()
   return {
-    fullStream,
-    toolCalls: toolCallsIterable,
-    toolCallEvents: toolCallEventsIterable,
-    response: responsePromise,
+    fullStream: forwardedStream,
+    toolCalls: callsIterable,
+    toolCallEvents: eventsIterable,
+    response: responseWork,
     // Usage is accounting rather than the answer, so a provider that does not report it reports zeros.
     usage: result.usage.catch(() => ({
       totalTokens: 0,
@@ -1356,11 +1356,11 @@ function streamModelAndCollectToolCalls(
 
 /** The tools are accepted either as one list or as the two lists the runtime distinguishes. */
 function normalizeToolExecutionInput(
-  tools: readonly ToolLike[] | ToolExecutionSet,
+  tools: readonly RuntimeTool[] | ToolExecutionSet,
 ): ToolExecutionSet {
   if (Array.isArray(tools)) {
     return {
-      modelVisibleTools: tools as ToolLike[],
+      modelVisibleTools: tools as RuntimeTool[],
       additionalExecutableTools: [],
     }
   }
@@ -1378,59 +1378,59 @@ function normalizeToolExecutionInput(
  */
 function executeToolStream(
   ctx: Context,
-  executor: StreamingPromptExecutor,
-  interactionHandler: InteractionHandlerLike,
-  tools: readonly ToolLike[] | ToolExecutionSet,
-  extraT: ToolExecutionExtra,
-  recordToolCallResult: RecordToolCallResult,
-  descriptionProps: Record<string, unknown> | undefined,
-  firstToolCallHook: ((messages: string[]) => unknown | Promise<unknown>) | undefined,
+  executor: PromptStreamExecutor,
+  interactionHandler: InvocationHandler,
+  inputTools: readonly RuntimeTool[] | ToolExecutionSet,
+  extras: ExecutionExtras,
+  recordResult: ResultRecorder,
+  descriptionInputs: Record<string, unknown> | undefined,
+  onFirstToolCall: ((messages: string[]) => unknown | Promise<unknown>) | undefined,
 ) {
-  const toolExecutionSet = normalizeToolExecutionInput(tools)
-  const { modelVisibleTools } = toolExecutionSet
-  const executableTools = getExecutableTools(toolExecutionSet) as ToolLike[]
-  const directDynamicToolNames = getDirectDynamicToolNames(toolExecutionSet)
-  const toolMap = createToolMap(executableTools)
-  const dynamicInvocationToolNames = getDynamicInvocationToolNames(
-    modelVisibleTools as ToolLike[],
+  const executableSet = normalizeToolExecutionInput(inputTools)
+  const { modelVisibleTools: visibleTools } = executableSet
+  const runnableTools = getExecutableTools(executableSet) as RuntimeTool[]
+  const directDynamicNames = getDirectDynamicToolNames(executableSet)
+  const toolsByName = createToolMap(runnableTools)
+  const dynamicInvocationNames = getDynamicInvocationToolNames(
+    visibleTools as RuntimeTool[],
   )
-  const renderProps = { allTools: extractToolMetadataMap(executableTools) }
-  const streamResult = streamModelAndCollectToolCalls(
+  const renderContext = { allTools: extractToolMetadataMap(runnableTools) }
+  const modelStream = streamModelAndCollectToolCalls(
     ctx,
     executor,
     interactionHandler,
-    modelVisibleTools as ToolLike[],
-    descriptionProps,
-    firstToolCallHook,
+    visibleTools as RuntimeTool[],
+    descriptionInputs,
+    onFirstToolCall,
     {
-      executionToolMap: toolMap,
-      acceptedUnadvertisedToolNames: [...directDynamicToolNames],
+      executionToolMap: toolsByName,
+      acceptedUnadvertisedToolNames: [...directDynamicNames],
     },
   )
-  const responsePromise = (async (): Promise<ModelResponse> => {
-    const toolPromises: Array<Promise<Record<string, unknown>>> = []
-    let execBackendDown = false
+  const responseWork = (async (): Promise<StreamedResponse> => {
+    const callResults: Array<Promise<Record<string, unknown>>> = []
+    let backendDown = false
     // The circuit opens on the first result that says the backend is gone, and the calls after it are
     // skipped rather than attempted.
-    const circuitBreakerRecordToolCallResult: RecordToolCallResult = async (
+    const noteSkippedResult: ResultRecorder = async (
       resultCtx,
       result,
       loggedToolName,
       errorClassification,
     ) => {
       if (errorClassification === ToolErrorClassification.EXEC_BACKEND_UNAVAILABLE) {
-        execBackendDown = true
+        backendDown = true
       }
-      await recordToolCallResult(
+      await recordResult(
         resultCtx,
         result,
         loggedToolName,
         errorClassification,
       )
     }
-    const consumeToolCalls = (async (): Promise<void> => {
-      for await (const event of streamResult.toolCallEvents) {
-        if (execBackendDown) {
+    const consumeWatches = (async (): Promise<void> => {
+      for await (const event of modelStream.toolCallEvents) {
+        if (backendDown) {
           void (async () => {
             try {
               for await (const _chunk of event.argsStream) {
@@ -1440,21 +1440,21 @@ function executeToolStream(
               // The skipped result is authoritative once the backend is down.
             }
           })()
-          const skippedToolResult = {
+          const skippedResultForRecord = {
             content: [{
               type: "text",
               text: "Execution backend unavailable. Tool execution skipped.",
             }],
             isError: true,
           }
-          const loggedName = toolNameForLogging(event.toolName, toolMap)
-          await circuitBreakerRecordToolCallResult(
+          const instrumentedName = toolNameForLogging(event.toolName, toolsByName)
+          await noteSkippedResult(
             ctx,
-            skippedToolResult,
-            loggedName,
+            skippedResultForRecord,
+            instrumentedName,
             ToolErrorClassification.EXEC_BACKEND_UNAVAILABLE,
           )
-          const skippedResult: Record<string, unknown> = {
+          const skippedMessage: Record<string, unknown> = {
             role: "tool",
             id: event.toolCallId,
             content: [{
@@ -1464,107 +1464,107 @@ function executeToolStream(
               result: "Execution backend unavailable. Tool execution skipped.",
             }],
           }
-          toolPromises.push(Promise.resolve(skippedResult))
-          logger.warn(ctx, "nal.tool_call.skipped_exec_backend_down", {
+          callResults.push(Promise.resolve(skippedMessage))
+          callLog.warn(ctx, "nal.tool_call.skipped_exec_backend_down", {
             toolCallId: event.toolCallId,
             toolName: event.toolName,
           })
           continue
         }
-        if (dynamicInvocationToolNames.has(event.toolName)) {
+        if (dynamicInvocationNames.has(event.toolName)) {
           // The outer call's own arguments are drained and then replaced by the inner call's.
-          const drainOuterArgs = drainArgsStream(event.argsStream).catch(() => {})
-          const [outerArgs, outerArgsText] = await Promise.all([
+          const drainedOuterArgs = drainArgsStream(event.argsStream).catch(() => {})
+          const [outerArguments, outerArgumentsText] = await Promise.all([
             event.completedArgs,
             event.completedArgsText,
           ])
-          await drainOuterArgs
-          const outerDescriptor: NativeToolCallDescriptor = {
+          await drainedOuterArgs
+          const outerCall: NativeToolCallDescriptor = {
             toolCallId: event.toolCallId,
             toolName: event.toolName,
-            args: outerArgs,
+            args: outerArguments,
           }
-          const descriptor = resolveEffectiveToolCallDescriptor(
-            outerDescriptor,
-            toolExecutionSet,
+          const call = resolveEffectiveToolCallDescriptor(
+            outerCall,
+            executableSet,
           )
-          const { effectiveNativeToolCall } = descriptor
-          const argsIterable = effectiveNativeToolCall === undefined
-            ? createOneShotStringIterable(outerArgsText)
+          const { effectiveNativeToolCall } = call
+          const argumentStream = effectiveNativeToolCall === undefined
+            ? createOneShotStringIterable(outerArgumentsText)
             : createOneShotArgsIterable(effectiveNativeToolCall.args)
-          toolPromises.push(executeDeferredToolCall(
+          callResults.push(executeDeferredToolCall(
             ctx,
-            descriptor,
-            toolMap,
+            call,
+            toolsByName,
             interactionHandler,
-            extraT,
-            circuitBreakerRecordToolCallResult,
-            renderProps,
-            argsIterable,
+            extras,
+            noteSkippedResult,
+            renderContext,
+            argumentStream,
             undefined,
-            directDynamicToolNames,
+            directDynamicNames,
           ))
           continue
         }
-        const descriptor: NativeToolCallDescriptor = {
+        const call: NativeToolCallDescriptor = {
           toolCallId: event.toolCallId,
           toolName: event.toolName,
           args: {},
         }
-        toolPromises.push(executeDeferredToolCall(
+        callResults.push(executeDeferredToolCall(
           ctx,
-          descriptor,
-          toolMap,
+          call,
+          toolsByName,
           interactionHandler,
-          extraT,
-          circuitBreakerRecordToolCallResult,
-          renderProps,
+          extras,
+          noteSkippedResult,
+          renderContext,
           event.argsStream,
           event.completedArgs,
-          directDynamicToolNames,
+          directDynamicNames,
         ))
       }
     })()
-    const [response] = await Promise.all([
-      streamResult.response,
-      consumeToolCalls,
+    const [modelResponse] = await Promise.all([
+      modelStream.response,
+      consumeWatches,
     ])
-    // A result is kept only for a call the response actually asked for, since a result for a call nobody
+    // A result is kept only for a call the modelResponse actually asked for, since a result for a call nobody
     // made would be a message the provider rejects.
-    const isValidToolResult = (toolId: unknown): boolean => response.messages.some(
+    const keptResultForCall = (toolId: unknown): boolean => modelResponse.messages.some(
       message => message.role === "assistant" &&
         Array.isArray(message.content) &&
         message.content.some(
           content => content.type === "tool-call" && content.toolCallId === toolId,
         ),
     )
-    let toolResults: Array<Record<string, unknown>>
+    let resultMessages: Array<Record<string, unknown>>
     try {
-      toolResults = await Promise.all(toolPromises)
+      resultMessages = await Promise.all(callResults)
     } catch (error) {
-      // A stream that timed out at its start is reported on the response rather than thrown, since the
+      // A stream that timed out at its start is reported on the modelResponse rather than thrown, since the
       // turn can still be recovered from what was streamed.
       if (!isAgentStreamStartTimeoutRecoveryTurnError(error)) {
         throw error
       }
       return {
-        ...response,
+        ...modelResponse,
         error: error instanceof Error ? error : new Error("Unknown tool error"),
       }
     }
-    const newMessages: ModelResponse["messages"] = [
-      ...response.messages,
-      ...toolResults.filter(result => isValidToolResult(result.id)) as ModelResponse["messages"],
+    const messagesOut: StreamedResponse["messages"] = [
+      ...modelResponse.messages,
+      ...resultMessages.filter(result => keptResultForCall(result.id)) as StreamedResponse["messages"],
     ]
-    return { ...response, messages: newMessages }
+    return { ...modelResponse, messages: messagesOut }
   })()
   return {
-    fullStream: streamResult.fullStream,
-    response: responsePromise,
-    providerMetadata: streamResult.providerMetadata,
-    usage: streamResult.usage,
-    extendedUsage: streamResult.extendedUsage,
-    invocationId: streamResult.invocationId,
+    fullStream: modelStream.fullStream,
+    response: responseWork,
+    providerMetadata: modelStream.providerMetadata,
+    usage: modelStream.usage,
+    extendedUsage: modelStream.extendedUsage,
+    invocationId: modelStream.invocationId,
   }
 }
 
@@ -1574,9 +1574,9 @@ function executeToolStream(
  */
 function executeModelStreamOnly(
   ctx: Context,
-  executor: StreamingPromptExecutor,
-  interactionHandler: InteractionHandlerLike,
-  tools: readonly ToolLike[] | ToolExecutionSet,
+  executor: PromptStreamExecutor,
+  interactionHandler: InvocationHandler,
+  tools: readonly RuntimeTool[] | ToolExecutionSet,
   descriptionProps: Record<string, unknown> | undefined,
   firstToolCallHook: ((messages: string[]) => unknown | Promise<unknown>) | undefined,
 ) {
@@ -1587,7 +1587,7 @@ function executeModelStreamOnly(
     ctx,
     executor,
     interactionHandler,
-    modelVisibleTools as ToolLike[],
+    modelVisibleTools as RuntimeTool[],
     descriptionProps,
     firstToolCallHook,
     {
@@ -1615,9 +1615,9 @@ function executeModelStreamOnly(
 
 /** An executor that passes everything through, for a caller that has no redaction to add. */
 export class SimplePromptToolExecutor {
-  readonly innerExecutor: BasePromptExecutorLike
+  readonly innerExecutor: BasePromptExecutor
 
-  constructor(innerExecutor: BasePromptExecutorLike) {
+  constructor(innerExecutor: BasePromptExecutor) {
     this.innerExecutor = innerExecutor
   }
 
@@ -1651,10 +1651,10 @@ export class SimplePromptToolExecutor {
     return executeToolStream(
       ctx as Context,
       this.innerExecutor,
-      interactionHandler as InteractionHandlerLike,
-      tools as readonly ToolLike[] | ToolExecutionSet,
-      extraT as ToolExecutionExtra,
-      recordToolCallResult as RecordToolCallResult,
+      interactionHandler as InvocationHandler,
+      tools as readonly RuntimeTool[] | ToolExecutionSet,
+      extraT as ExecutionExtras,
+      recordToolCallResult as ResultRecorder,
       descriptionProps as Record<string, unknown> | undefined,
       firstToolCallHook as ((messages: string[]) => unknown | Promise<unknown>) | undefined,
     )
@@ -1671,8 +1671,8 @@ export class SimplePromptToolExecutor {
     return executeModelStreamOnly(
       ctx as Context,
       this.innerExecutor,
-      interactionHandler as InteractionHandlerLike,
-      tools as readonly ToolLike[] | ToolExecutionSet,
+      interactionHandler as InvocationHandler,
+      tools as readonly RuntimeTool[] | ToolExecutionSet,
       descriptionProps as Record<string, unknown> | undefined,
       firstToolCallHook as ((messages: string[]) => unknown | Promise<unknown>) | undefined,
     )
@@ -1698,12 +1698,12 @@ export class SimplePromptToolExecutor {
  * and comes back is recognized rather than wrapped again.
  */
 export class RedactedPromptToolExecutor {
-  readonly innerToolExecutor: PromptExecutorLike
+  readonly innerToolExecutor: ExecutingPromptExecutor
   readonly privacyMode: PrivacyMode
   private redactedWrapperMemo: WeakMap<CoreMessageLike, unknown>
 
   constructor(
-    innerToolExecutor: PromptExecutorLike,
+    innerToolExecutor: ExecutingPromptExecutor,
     privacyMode: PrivacyMode,
   ) {
     this.innerToolExecutor = innerToolExecutor
