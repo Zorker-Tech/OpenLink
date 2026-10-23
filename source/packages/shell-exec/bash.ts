@@ -52,244 +52,244 @@ type BashInitOptions = Pick<BashExecuteOptions, "env" | "signal"> & {
   readonly userTerminalHint?: string;
 };
 type SpawnWithSignal = (
-  command: string,
-  args: readonly string[],
-  options: SpawnOptions,
-  sandboxPolicy: SandboxExecutionPolicy,
+  userCommand: string,
+  spawnArgs: readonly string[],
+  settings: SpawnOptions,
+  sandboxRules: SandboxExecutionPolicy,
   signal?: AbortSignal,
 ) => ChildProcess;
 
-let spawnWithSignalBinding: SpawnWithSignal = spawnWithSignal;
-const isMacOS = process.platform === "darwin";
+let signalSpawnBinding: SpawnWithSignal = spawnWithSignal;
+const onMacOS = process.platform === "darwin";
 
-function requireSpawnWithSignal(): SpawnWithSignal {
-  return spawnWithSignalBinding;
+function spawnBinding(): SpawnWithSignal {
+  return signalSpawnBinding;
 }
 
-async function captureSandboxDenies2(child: ChildProcess): Promise<readonly unknown[]> {
-  return isMacOS ? captureSandboxDenies(child) : [];
+async function collectDenies(shellProcess: ChildProcess): Promise<readonly unknown[]> {
+  return onMacOS ? captureSandboxDenies(shellProcess) : [];
 }
 
-export async function initBashState(options?: BashInitOptions): Promise<BashState> {
-  const env: NodeJS.ProcessEnv = {
+export async function initBashState(settings?: BashInitOptions): Promise<BashState> {
+  const environment: NodeJS.ProcessEnv = {
     ...process.env,
     ...SHELL_ENV_OVERRIDES,
-    ...options?.env,
+    ...settings?.env,
   };
-  const stateMarker = "__SLATE_STATE_MARKER__";
-  const args = [
+  const stateMark = "__SLATE_STATE_MARKER__";
+  const spawnArgs = [
     "-O",
     "extglob",
     "-ilc",
-    `${dumpBashState} builtin printf '${stateMarker}\\n'; dump_bash_state`,
+    `${dumpBashState} builtin printf '${stateMark}\\n'; dump_bash_state`,
   ];
-  const bashPath = getBashPath(options?.userTerminalHint);
-  if (!bashPath) throw new Error("Can't find Bash");
-  const child = requireSpawnWithSignal()(bashPath, args, {
-    env,
+  const shellPath = getBashPath(settings?.userTerminalHint);
+  if (!shellPath) throw new Error("Can't find Bash");
+  const shellProcess = spawnBinding()(shellPath, spawnArgs, {
+    env: environment,
     detached: true,
     stdio: ["ignore", "pipe", "pipe"],
-  }, { type: "insecure_none" }, options?.signal);
-  let fullOutput = "";
-  child.stdout?.on("data", (data: Buffer | string) => {
-    fullOutput += data.toString();
+  }, { type: "insecure_none" }, settings?.signal);
+  let capturedOutput = "";
+  shellProcess.stdout?.on("data", (chunk: Buffer | string) => {
+    capturedOutput += chunk.toString();
   });
-  child.on("error", (error) => {
+  shellProcess.on("error", (error) => {
     console.warn(`[shell-exec] bash state init spawn failed; falling back to empty state: ${error instanceof Error ? error.message : String(error)}`);
   });
   await new Promise<void>((resolve) => {
-    child.on("close", () => resolve());
+    shellProcess.on("close", () => resolve());
   });
-  const snapshot = parseShellStateOutput(fullOutput, stateMarker);
-  const startMarkerLine = `${BASH_STATE_START_MARKER}\n`;
-  const endMarkerLine = `${BASH_STATE_END_MARKER}\n`;
-  let stateWithoutMarkers: string;
-  if (snapshot.startsWith(startMarkerLine) && snapshot.endsWith(endMarkerLine)) {
-    stateWithoutMarkers = snapshot.slice(startMarkerLine.length);
-    stateWithoutMarkers = stateWithoutMarkers.slice(0, -(BASH_STATE_END_MARKER.length + 1));
+  const stateSnapshot = parseShellStateOutput(capturedOutput, stateMark);
+  const stateStartLine = `${BASH_STATE_START_MARKER}\n`;
+  const stateEndLine = `${BASH_STATE_END_MARKER}\n`;
+  let rawState: string;
+  if (stateSnapshot.startsWith(stateStartLine) && stateSnapshot.endsWith(stateEndLine)) {
+    rawState = stateSnapshot.slice(stateStartLine.length);
+    rawState = rawState.slice(0, -(BASH_STATE_END_MARKER.length + 1));
   } else {
-    stateWithoutMarkers = `${process.cwd()}\n`;
+    rawState = `${process.cwd()}\n`;
   }
-  const { cwd, rest } = splitPwdAndState(stateWithoutMarkers);
-  const useFileStateTransport = process.platform === "win32";
-  const initialCwd = process.platform === "win32" ? process.cwd() : cwd;
-  return new BashState(initialCwd, rest, options?.userTerminalHint, useFileStateTransport);
+  const { cwd: workingDirectory, rest } = splitPwdAndState(rawState);
+  const fileTransport = process.platform === "win32";
+  const startDirectory = process.platform === "win32" ? process.cwd() : workingDirectory;
+  return new BashState(startDirectory, rest, settings?.userTerminalHint, fileTransport);
 }
 
 class BashState {
   constructor(
-    private cwd: string,
+    private workingDirectory: string,
     private state: string,
     private readonly userTerminalHint?: string,
-    private readonly useFileStateTransport = false,
+    private readonly fileTransport = false,
   ) {}
 
   async getCwd(): Promise<string> {
-    return this.cwd;
+    return this.workingDirectory;
   }
 
   clone(workingDirectory?: string): BashState {
-    return new BashState(workingDirectory ?? this.cwd, this.state, this.userTerminalHint, this.useFileStateTransport);
+    return new BashState(workingDirectory ?? this.workingDirectory, this.state, this.userTerminalHint, this.fileTransport);
   }
 
-  async *execute(ctx: Context, command: string, options: BashExecuteOptions = {}): AsyncIterable<TerminalEvent> {
-    using span = createSpan(ctx.withName("BashState.execute"));
-    const pipeStdin = options.pipeStdin ?? false;
-    const iterable = createWritableIterable<TerminalEvent>();
-    const cwd = options.workingDirectory ?? this.cwd;
-    const env: NodeJS.ProcessEnv = {
+  async *execute(runCtx: Context, userCommand: string, settings: BashExecuteOptions = {}): AsyncIterable<TerminalEvent> {
+    using span = createSpan(runCtx.withName("BashState.execute"));
+    const wantsStdin = settings.pipeStdin ?? false;
+    const eventStream = createWritableIterable<TerminalEvent>();
+    const workingDirectory = settings.workingDirectory ?? this.workingDirectory;
+    const environment: NodeJS.ProcessEnv = {
       ...process.env,
       ...SHELL_ENV_OVERRIDES,
-      ...options.env,
+      ...settings.env,
     };
-    let core = "builtin eval \"$1\"";
-    if (!pipeStdin) core += " < /dev/null";
-    const sudoAliasInjection = getSudoAliasInjection(env);
-    const useFileTransport = this.useFileStateTransport;
-    let tempDir: string | undefined;
-    let stateInputPath: string | undefined;
-    let stateOutputPath: string | undefined;
-    if (useFileTransport) {
-      tempDir = await mkdtemp(join(tmpdir(), "cursor-bash-state-"));
-      stateInputPath = join(tempDir, "state-in");
-      stateOutputPath = join(tempDir, "state-out");
-      await writeFile(stateInputPath, this.state, "utf8");
-      await writeFile(stateOutputPath, "", "utf8").catch(() => {});
-      env.SLATE_STATE_INPUT_FILE = windowsPathToGitBash(stateInputPath);
-      env.SLATE_STATE_OUTPUT_FILE = windowsPathToGitBash(stateOutputPath);
+    let evalCore = "builtin eval \"$1\"";
+    if (!wantsStdin) evalCore += " < /dev/null";
+    const aliasPrefix = getSudoAliasInjection(environment);
+    const localFileTransport = this.fileTransport;
+    let temporaryDirectory: string | undefined;
+    let stateInPath: string | undefined;
+    let stateOutPath: string | undefined;
+    if (localFileTransport) {
+      temporaryDirectory = await mkdtemp(join(tmpdir(), "cursor-bash-state-"));
+      stateInPath = join(temporaryDirectory, "state-in");
+      stateOutPath = join(temporaryDirectory, "state-out");
+      await writeFile(stateInPath, this.state, "utf8");
+      await writeFile(stateOutPath, "", "utf8").catch(() => {});
+      environment.SLATE_STATE_INPUT_FILE = windowsPathToGitBash(stateInPath);
+      environment.SLATE_STATE_OUTPUT_FILE = windowsPathToGitBash(stateOutPath);
     }
-    const stateLoader = useFileTransport ? 'snap=$(command cat "$SLATE_STATE_INPUT_FILE")' : "snap=$(command cat <&3)";
-    const stateWriter = useFileTransport
+    const loaderScript = localFileTransport ? 'snap=$(command cat "$SLATE_STATE_INPUT_FILE")' : "snap=$(command cat <&3)";
+    const writerScript = localFileTransport
       ? 'mkdir -p "$(dirname "$SLATE_STATE_OUTPUT_FILE")" 2>/dev/null; dump_bash_state > "$SLATE_STATE_OUTPUT_FILE"'
       : "dump_bash_state >&4";
-    const commandScript = `${stateLoader} && builtin shopt -s extglob && builtin eval -- "$snap" && { builtin set +u 2>/dev/null || true; builtin eval "\${__SLATE_SANDBOX_ENV_RESTORE:-}" 2>/dev/null; builtin export PWD="$(builtin pwd)"; builtin shopt -s expand_aliases 2>/dev/null; ${sudoAliasInjection}${core}; }; COMMAND_EXIT_CODE=$?; ${stateWriter}; builtin exit $COMMAND_EXIT_CODE`;
-    const args = ["-O", "extglob", "-c", commandScript, "--", command];
-    const bashPath = getBashPath(this.userTerminalHint);
-    if (!bashPath) throw new Error("Can't find Bash");
-    const sandboxWorkspaceRoot = options.sandboxWorkspaceRoot ?? cwd;
-    const resolvedPolicy = (await resolveSandboxPolicyForWorkspace(sandboxWorkspaceRoot, options.sandboxPolicy)).policy;
-    const sandboxPolicy = resolvedPolicy.type !== "insecure_none" ? { ...resolvedPolicy, sandboxWorkspaceRoot } : resolvedPolicy;
-    let newState = "";
-    const readStateFromTransport = async (): Promise<void> => {
-      if (!useFileTransport) return;
-      if (!stateOutputPath) {
-        newState = this.state;
+    const script = `${loaderScript} && builtin shopt -s extglob && builtin eval -- "$snap" && { builtin set +u 2>/dev/null || true; builtin eval "\${__SLATE_SANDBOX_ENV_RESTORE:-}" 2>/dev/null; builtin export PWD="$(builtin pwd)"; builtin shopt -s expand_aliases 2>/dev/null; ${aliasPrefix}${evalCore}; }; COMMAND_EXIT_CODE=$?; ${writerScript}; builtin exit $COMMAND_EXIT_CODE`;
+    const spawnArgs = ["-O", "extglob", "-c", script, "--", userCommand];
+    const shellPath = getBashPath(this.userTerminalHint);
+    if (!shellPath) throw new Error("Can't find Bash");
+    const workspaceRoot = settings.sandboxWorkspaceRoot ?? workingDirectory;
+    const policy = (await resolveSandboxPolicyForWorkspace(workspaceRoot, settings.sandboxPolicy)).policy;
+    const sandboxRules = policy.type !== "insecure_none" ? { ...policy, workspaceRoot } : policy;
+    let updatedState = "";
+    const loadStateFromTransport = async (): Promise<void> => {
+      if (!localFileTransport) return;
+      if (!stateOutPath) {
+        updatedState = this.state;
         return;
       }
       try {
-        newState = await readFile(stateOutputPath, "utf8");
+        updatedState = await readFile(stateOutPath, "utf8");
       } catch (error) {
         console.warn("[shell-exec] Failed to read bash state file", error);
-        newState = this.state;
+        updatedState = this.state;
       }
     };
-    const cleanupStateFiles = async (): Promise<void> => {
-      if (!tempDir) return;
+    const discardStateFiles = async (): Promise<void> => {
+      if (!temporaryDirectory) return;
       try {
-        await rm(tempDir, { recursive: true, force: true });
+        await rm(temporaryDirectory, { recursive: true, force: true });
       } catch {
         // Temporary state cleanup is best-effort after process completion.
       }
     };
-    let child: ChildProcess;
+    let shellProcess: ChildProcess;
     try {
-      child = requireSpawnWithSignal()(bashPath, args, {
-        env,
-        stdio: [pipeStdin ? "pipe" : "ignore", "pipe", "pipe", "pipe", "pipe"],
-        cwd,
+      shellProcess = spawnBinding()(shellPath, spawnArgs, {
+        env: environment,
+        stdio: [wantsStdin ? "pipe" : "ignore", "pipe", "pipe", "pipe", "pipe"],
+        cwd: workingDirectory,
         detached: true,
-      }, sandboxPolicy, options.signal);
+      }, sandboxRules, settings.signal);
     } catch (error) {
-      await cleanupStateFiles();
+      await discardStateFiles();
       throw error;
     }
-    child.on("spawn", async () => {
+    shellProcess.on("spawn", async () => {
       try {
-        await iterable.write({ type: "stdin_ready", stdin: child.stdin ?? undefined, pid: child.pid });
+        await eventStream.write({ type: "stdin_ready", stdin: shellProcess.stdin ?? undefined, pid: shellProcess.pid });
       } catch {
         // The consumer may have closed the iterable before spawn was observed.
       }
     });
-    const outputPump = attachShellOutputStreams({
-      stdout: child.stdout,
-      stderr: child.stderr,
-      writable: iterable,
-      bufferOutputEvents: options.bufferOutputEvents,
-      outputLimiterOptions: options.outputLimiterOptions,
+    const pump = attachShellOutputStreams({
+      stdout: shellProcess.stdout,
+      stderr: shellProcess.stderr,
+      writable: eventStream,
+      bufferOutputEvents: settings.bufferOutputEvents,
+      outputLimiterOptions: settings.outputLimiterOptions,
     });
-    child.on("error", async (error) => {
-      await cleanupStateFiles();
-      iterable.throw(error);
+    shellProcess.on("error", async (error) => {
+      await discardStateFiles();
+      eventStream.throw(error);
     });
-    let exitCode: number | null = null;
-    let closeTimeoutId: ReturnType<typeof setTimeout> | null = null;
-    let hasEmittedExit = false;
-    const emitExitAndClose = async (waitForOutputPumps: boolean): Promise<void> => {
-      if (hasEmittedExit) return;
-      hasEmittedExit = true;
-      if (closeTimeoutId !== null) {
-        clearTimeout(closeTimeoutId);
-        closeTimeoutId = null;
+    let shellExitCode: number | null = null;
+    let closeTimer: ReturnType<typeof setTimeout> | null = null;
+    let exitEmitted = false;
+    const finishExecution = async (waitForPumps: boolean): Promise<void> => {
+      if (exitEmitted) return;
+      exitEmitted = true;
+      if (closeTimer !== null) {
+        clearTimeout(closeTimer);
+        closeTimer = null;
       }
       reportEvent(span.ctx, "exit");
-      if (waitForOutputPumps) {
+      if (waitForPumps) {
         try {
-          await outputPump.waitForOutput();
+          await pump.waitForOutput();
         } catch (error) {
-          await cleanupStateFiles();
-          iterable.throw(error instanceof Error ? error : new Error(String(error)));
+          await discardStateFiles();
+          eventStream.throw(error instanceof Error ? error : new Error(String(error)));
           return;
         }
       }
-      await outputPump.flush();
-      if (!options.signal?.aborted) {
-        await readStateFromTransport();
-        const startMarkerLine = `${BASH_STATE_START_MARKER}\n`;
-        const endMarkerLine = `${BASH_STATE_END_MARKER}\n`;
-        if (newState.startsWith(startMarkerLine) && newState.endsWith(endMarkerLine)) {
-          let stateWithoutMarkers = newState.slice(startMarkerLine.length);
-          stateWithoutMarkers = stateWithoutMarkers.slice(0, -(BASH_STATE_END_MARKER.length + 1));
-          const next = splitPwdAndState(stateWithoutMarkers);
-          this.state = next.rest;
-          if (process.platform !== "win32" && next.cwd.startsWith("/")) this.cwd = next.cwd;
+      await pump.flush();
+      if (!settings.signal?.aborted) {
+        await loadStateFromTransport();
+        const stateStartLine = `${BASH_STATE_START_MARKER}\n`;
+        const stateEndLine = `${BASH_STATE_END_MARKER}\n`;
+        if (updatedState.startsWith(stateStartLine) && updatedState.endsWith(stateEndLine)) {
+          let rawState = updatedState.slice(stateStartLine.length);
+          rawState = rawState.slice(0, -(BASH_STATE_END_MARKER.length + 1));
+          const divided = splitPwdAndState(rawState);
+          this.state = divided.rest;
+          if (process.platform !== "win32" && divided.cwd.startsWith("/")) this.workingDirectory = divided.cwd;
         }
       }
-      if (sandboxPolicy.captureDenies === true) {
+      if (sandboxRules.captureDenies === true) {
         try {
-          const denyEvents = await captureSandboxDenies2(child);
-          if (denyEvents.length > 0) await iterable.write({ type: "sandbox_denies", events: denyEvents });
+          const deniedEvents = await collectDenies(shellProcess);
+          if (deniedEvents.length > 0) await eventStream.write({ type: "sandbox_denies", events: deniedEvents });
         } catch {
           // Sandbox diagnostics are best-effort after process exit.
         }
       }
       try {
-        await iterable.write(createShellExitEvent(exitCode, options.signal?.aborted ?? false));
-        iterable.close();
+        await eventStream.write(createShellExitEvent(shellExitCode, settings.signal?.aborted ?? false));
+        eventStream.close();
       } catch {
-        iterable.close();
+        eventStream.close();
       }
-      await cleanupStateFiles();
+      await discardStateFiles();
     };
-    child.on("exit", (code) => {
-      exitCode = code;
-      const timeout = options.closeTimeout ?? 5_000;
-      if (timeout > 0) {
-        closeTimeoutId = setTimeout(() => {
-          console.warn(`[shell-exec] Close event did not fire within ${timeout}ms after exit. This may indicate a background process is holding file descriptors open. Proceeding anyway to prevent hang.`);
-          void emitExitAndClose(false);
-        }, timeout);
+    shellProcess.on("exit", (code) => {
+      shellExitCode = code;
+      const closeDelay = settings.closeTimeout ?? 5_000;
+      if (closeDelay > 0) {
+        closeTimer = setTimeout(() => {
+          console.warn(`[shell-exec] Close event did not fire within ${closeDelay}ms after exit. This may indicate a background process is holding file descriptors open. Proceeding anyway to prevent hang.`);
+          void finishExecution(false);
+        }, closeDelay);
       }
     });
-    child.on("close", () => {
-      void emitExitAndClose(true);
+    shellProcess.on("close", () => {
+      void finishExecution(true);
     });
-    if (!useFileTransport) {
-      const inputFd = child.stdio[3];
-      if (inputFd !== null && inputFd !== undefined && "write" in inputFd && "end" in inputFd) writeShellStatePipe(inputFd, this.state);
-      const outputFd = child.stdio[4];
-      if (outputFd !== null && outputFd !== undefined) attachShellStateOutput(outputFd, (text) => { newState += text; });
+    if (!localFileTransport) {
+      const stdinFd = shellProcess.stdio[3];
+      if (stdinFd !== null && stdinFd !== undefined && "write" in stdinFd && "end" in stdinFd) writeShellStatePipe(stdinFd, this.state);
+      const stateFd = shellProcess.stdio[4];
+      if (stateFd !== null && stateFd !== undefined) attachShellStateOutput(stateFd, (stateText) => { updatedState += stateText; });
     }
-    yield* iterable;
+    yield* eventStream;
   }
 }
 
