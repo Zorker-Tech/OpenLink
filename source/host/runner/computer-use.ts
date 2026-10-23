@@ -1,7 +1,7 @@
 /**
  * Driving a box's desktop.
  *
- * A click, a keystroke or a screenshot is carried to the box over its own connection, and what comes back is what the
+ * A click, a keystroke or a screenshot is carried to the box over its own readyConnection, and what comes back is what the
  * desktop answered — with a monitor claimed for the agent so two agents do not drive the same screen.
  */
 import {
@@ -50,7 +50,7 @@ interface GeneratedResourceAccessor<Context> {
   };
 }
 
-function isGeneratedResourceAccessor<Context>(value: unknown): value is GeneratedResourceAccessor<Context> {
+function looksLikeGeneratedAccessor<Context>(value: unknown): value is GeneratedResourceAccessor<Context> {
   return typeof value === "object" && value !== null && typeof Reflect.get(value, "get") === "function";
 }
 
@@ -60,48 +60,48 @@ export interface ComputerUseUsageSnapshot {
   readonly usage?: TurnUsage | undefined;
 }
 
-function errorClass(error: unknown): string {
+function failureKind(error: unknown): string {
   return error instanceof Error ? error.name : typeof error;
 }
 
 export function createComputerUseCoordination<Context>(
   dependencies: ComputerUseCoordinationDependencies<Context>,
 ) {
-  const windowBySubagent = new Map<string, number>();
-  const preparationBySubagent = new Map<
+  const windowByAgent = new Map<string, number>();
+  const preparationByAgent = new Map<
     string,
     Promise<ComputerUseRemoteConnection<Context> | undefined>
   >();
-  const auditActionCounts = new Map<string, number>();
-  const modelIds = new Set<string>();
-  let turnEndedCount = 0;
-  let usage: TurnUsage | undefined;
-  let navigationProbe = dependencies.initialNavigationProbe;
+  const auditCountsByKind = new Map<string, number>();
+  const seenModelIds = new Set<string>();
+  let endedTurnCount = 0;
+  let accumulatedUsage: TurnUsage | undefined;
+  let navigationProbeState = dependencies.initialNavigationProbe;
 
-  function reportPrewarmFailure(
+  function reportPreparationFailure(
     stage: "box" | "browser",
     error: unknown,
   ): void {
     dependencies.reportDiagnostic?.({
       kind: "computer_use_prewarm_skipped",
       stage,
-      errorClass: dependencies.classifyError?.(error) ?? errorClass(error),
+      errorClass: dependencies.classifyError?.(error) ?? failureKind(error),
     });
   }
 
   return {
     allocateWindow(subagentAgentId: string): number | null {
-      const existing = windowBySubagent.get(subagentAgentId);
-      if (existing != null) return existing;
-      const mainBusy = [...windowBySubagent.values()].includes(1);
-      if (mainBusy) return null;
-      windowBySubagent.set(subagentAgentId, 1);
+      const claimedWindow = windowByAgent.get(subagentAgentId);
+      if (claimedWindow != null) return claimedWindow;
+      const mainWindowTaken = [...windowByAgent.values()].includes(1);
+      if (mainWindowTaken) return null;
+      windowByAgent.set(subagentAgentId, 1);
       return 1;
     },
 
     freeWindow(subagentAgentId: string): void {
-      windowBySubagent.delete(subagentAgentId);
-      preparationBySubagent.delete(subagentAgentId);
+      windowByAgent.delete(subagentAgentId);
+      preparationByAgent.delete(subagentAgentId);
     },
 
     prepareRemoteBox({
@@ -111,19 +111,19 @@ export function createComputerUseCoordination<Context>(
       readonly agentId: string;
       readonly boxId: string;
     }): Promise<ComputerUseRemoteConnection<Context> | undefined> {
-      const connection = dependencies.remoteBox.ensureReady(dependencies.ctx, boxId)
+      const readyConnection = dependencies.remoteBox.ensureReady(dependencies.ctx, boxId)
         .catch((error: unknown) => {
-          reportPrewarmFailure("box", error);
+          reportPreparationFailure("box", error);
           return undefined;
         });
-      const preparation = connection.then(async (ready) => {
-        if (ready == null) return undefined;
-        if (!isGeneratedResourceAccessor<Context>(ready.remoteAccessor)) {
+      const browserPreparation = readyConnection.then(async (preparedConnection) => {
+        if (preparedConnection == null) return undefined;
+        if (!looksLikeGeneratedAccessor<Context>(preparedConnection.remoteAccessor)) {
           throw new TypeError("computer-use remote accessor does not expose generated resources");
         }
-        const computerUse = ready.remoteAccessor.get(computerUseExecutorResource);
-        if (isNoMonitorComputerUseExecutor(computerUse)) return ready;
-        await ready.remoteAccessor.get(shellExecutorResource).execute(
+        const computerExecutor = preparedConnection.remoteAccessor.get(computerUseExecutorResource);
+        if (isNoMonitorComputerUseExecutor(computerExecutor)) return preparedConnection;
+        await preparedConnection.remoteAccessor.get(shellExecutorResource).execute(
           dependencies.ctx,
           buildHostShellArgs({
             command: "box-chrome --slate-prepare",
@@ -132,58 +132,58 @@ export function createComputerUseCoordination<Context>(
             toolCallId: `slate-cua-browser-prepare-${agentId}`,
           }),
         );
-        return ready;
+        return preparedConnection;
       }).catch((error: unknown) => {
-        reportPrewarmFailure("browser", error);
+        reportPreparationFailure("browser", error);
         return undefined;
       });
-      preparationBySubagent.set(agentId, preparation);
-      return connection;
+      preparationByAgent.set(agentId, browserPreparation);
+      return readyConnection;
     },
 
     preparationFor(subagentAgentId: string) {
-      return preparationBySubagent.get(subagentAgentId);
+      return preparationByAgent.get(subagentAgentId);
     },
 
-    recordAuditIntent(actionCase: string): void {
+    recordAuditIntent(actionName: string): void {
       if (dependencies.actionAuditor() == null) return;
-      const kind = computerUseAuditKind(actionCase);
-      if (kind == null) return;
-      auditActionCounts.set(kind, (auditActionCounts.get(kind) ?? 0) + 1);
+      const auditKind = computerUseAuditKind(actionName);
+      if (auditKind == null) return;
+      auditCountsByKind.set(auditKind, (auditCountsByKind.get(auditKind) ?? 0) + 1);
     },
 
     auditActionCounts(): ReadonlyMap<string, number> {
-      return auditActionCounts;
+      return auditCountsByKind;
     },
 
-    recordTurnEnded(turnUsage: TurnUsage | undefined): void {
-      turnEndedCount += 1;
-      usage = mergeTurnUsage(usage, turnUsage);
+    recordTurnEnded(turnTokens: TurnUsage | undefined): void {
+      endedTurnCount += 1;
+      accumulatedUsage = mergeTurnUsage(accumulatedUsage, turnTokens);
     },
 
     recordModelId(modelId: string): void {
-      modelIds.add(modelId);
+      seenModelIds.add(modelId);
     },
 
     usageSnapshot(): ComputerUseUsageSnapshot {
-      const ids = [...modelIds];
+      const ids = [...seenModelIds];
       return {
         modelId: ids.length === 0 ? undefined : ids.length === 1 ? ids[0] : "mixed",
-        turnEndedCount,
-        usage,
+        turnEndedCount: endedTurnCount,
+        usage: accumulatedUsage,
       };
     },
 
     getOrCreateNavigationProbe(): ReturnType<typeof createSlateNavigationProbe<Context>> | undefined {
-      const auditor = dependencies.actionAuditor();
-      if (auditor == null) return undefined;
-      navigationProbe ??= createSlateNavigationProbe({
-        auditor,
+      const auditorSink = dependencies.actionAuditor();
+      if (auditorSink == null) return undefined;
+      navigationProbeState ??= createSlateNavigationProbe({
+        auditor: auditorSink,
         agentId: dependencies.getConversationId(),
         getBoxId: () => dependencies.resolveBoxId(),
         buildShellArgs: buildHostShellArgs,
       });
-      return navigationProbe;
+      return navigationProbeState;
     },
   };
 }
