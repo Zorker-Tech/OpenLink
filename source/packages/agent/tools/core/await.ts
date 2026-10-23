@@ -63,15 +63,15 @@ import { ToolCall } from "../../../proto/generated/agent/v1/agent_pb.ts"
 import { ToolCallAbortedError, ToolCallArgParseError, createZodAgentTool, withSafeParsedArgs } from "../tool-support.ts"
 import { lenientNumber } from "../lenient-scalars.ts"
 
-const DEFAULT_BLOCK_UNTIL_MS = 30_000
-const SHELL_CHECK_SLICE_MS = 250
-const AWAIT_TOOL_MODEL_NAME_DEFAULT = "Await"
-const AWAIT_TOOL_MODEL_NAME_SHELL_ONLY = "AwaitShell"
-const WAITING_FOR_SUBAGENT_DESCRIPTION = "Set this to true if you are waiting for subagent(s) to complete. Remember you should NOT be doing this and instead end your turn or do parallel work."
-const WAITING_FOR_SUBAGENT_ERROR = "You should NOT wait for subagents to complete. End your turn instead; completions are queued, or do parallel work."
-const WAKE_REASON_CONTEXT_INJECTION = "context_injection"
+const DEFAULT_WAIT_MS = 30_000
+const SHELL_POLL_SLICE_MS = 250
+const TOOL_NAME_FULL = "Await"
+const TOOL_NAME_SHELL_ONLY = "AwaitShell"
+const SUBAGENT_WAIT_HINT = "Set this to true if you are waiting for subagent(s) to complete. Remember you should NOT be doing this and instead end your turn or do parallel work."
+const SUBAGENT_WAIT_REFUSAL = "You should NOT wait for subagents to complete. End your turn instead; completions are queued, or do parallel work."
+const STEER_WAKE_REASON = "context_injection"
 
-type AwaitResourceAccessor = ResourceAccessor<RemoteExecManager>
+type AwaitAccessor = ResourceAccessor<RemoteExecManager>
 
 interface AwaitOptions {
   readonly toolName?: string
@@ -92,7 +92,7 @@ interface AwaitOptions {
   readonly defaultModelId?: string
 }
 
-interface AwaitExecutionMeta {
+interface ExecutionMeta {
   readonly toolCallId: string
   readonly contextInjectionSignal?: {
     hasPendingUserInjections(): boolean
@@ -100,7 +100,7 @@ interface AwaitExecutionMeta {
   }
 }
 
-interface AwaitInteractionHandler {
+interface InteractionHandlerBridge {
   executeToolCall(
     ctx: Context,
     toolCall: ToolCall,
@@ -110,35 +110,35 @@ interface AwaitInteractionHandler {
   ): Promise<AwaitResult>
 }
 
-function createAwaitToolCall(value: AwaitToolCall): ToolCall {
+function awaitCallOf(value: AwaitToolCall): ToolCall {
   return new ToolCall({ tool: { case: "awaitToolCall", value } })
 }
 
-function toPositiveInt(value: unknown, fallback: number): number {
+function wholeNonNegative(value: unknown, fallback: number): number {
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return fallback
   return Math.floor(value)
 }
 
 /** A task id of "none" is how some models say they have none, so it counts as omitted. */
-function normalizeTaskId(value: unknown): string {
+function taskIdOrEmpty(value: unknown): string {
   const trimmed = typeof value === "string" ? value.trim() : ""
   return trimmed.length === 0 || trimmed.toLowerCase() === "none" ? "" : trimmed
 }
 
-function isShellTaskId(taskId: string): boolean {
+function looksLikeShellId(taskId: string): boolean {
   return /^[0-9]+$/.test(taskId)
 }
 
 /** The terminals folder is resolved late, since it is read when a wait actually needs it. */
-function terminalsFolderOf(value: string | (() => string) | undefined): string {
+function resolveTerminalsFolder(value: string | (() => string) | undefined): string {
   return typeof value === "function" ? value() : value ?? ""
 }
 
-function joinPath(base: string, leaf: string): string {
+function underFolder(base: string, leaf: string): string {
   return `${base.endsWith("/") ? base.slice(0, -1) : base}/${leaf}`
 }
 
-function throwIfAborted(ctx: Context): void {
+function failIfAborted(ctx: Context): void {
   if (ctx.signal.aborted) throw new ToolCallAbortedError()
 }
 
@@ -146,8 +146,8 @@ function throwIfAborted(ctx: Context): void {
  * Sleeps for a slice, and gives up early when the user says something: an injection already pending
  * releases the wait before it starts, and one admitted during the slice releases it where it stands.
  */
-function sleepOrAbort(ctx: Context, milliseconds: number, signal: AwaitExecutionMeta["contextInjectionSignal"]): Promise<"timeout" | "steer_release"> {
-  throwIfAborted(ctx)
+function sleepUnlessSteered(ctx: Context, milliseconds: number, signal: ExecutionMeta["contextInjectionSignal"]): Promise<"timeout" | "steer_release"> {
+  failIfAborted(ctx)
   if (signal?.hasPendingUserInjections()) return Promise.resolve("steer_release")
   return new Promise((resolve, reject) => {
     let timeout: ReturnType<typeof setTimeout> | undefined
@@ -174,13 +174,13 @@ function sleepOrAbort(ctx: Context, milliseconds: number, signal: AwaitExecution
 }
 
 /** The footer a finished job leaves: its exit code and how long it ran. */
-function parseFooter(content: string): { isComplete: boolean; runtimeMs?: number; exitCode?: number } {
+function readJobFooter(content: string): { isComplete: boolean; runtimeMs?: number; exitCode?: number } {
   const match = content.match(/\n---\n([\s\S]*?)\n---\s*$/)
   if (match === null) return { isComplete: false }
-  const footer = match[1] ?? ""
-  const exit = footer.match(/(?:^|\n)exit_code:\s*([^\n]*)/)?.[1]?.trim() ?? ""
+  const jobEnding = match[1] ?? ""
+  const exit = jobEnding.match(/(?:^|\n)exit_code:\s*([^\n]*)/)?.[1]?.trim() ?? ""
   const parsedExit = Number(exit)
-  const elapsed = footer.match(/(?:^|\n)elapsed_ms:\s*(\d+)/)?.[1]
+  const elapsed = jobEnding.match(/(?:^|\n)elapsed_ms:\s*(\d+)/)?.[1]
   return {
     isComplete: true,
     ...(elapsed === undefined ? {} : { runtimeMs: Number(elapsed) }),
@@ -189,38 +189,38 @@ function parseFooter(content: string): { isComplete: boolean; runtimeMs?: number
 }
 
 /** The header a running job carries, which is how a wait reports progress before there is a footer. */
-function parseRunningForMs(content: string): number | undefined {
+function readRunningMilliseconds(content: string): number | undefined {
   const match = content.match(/^---\r?\n[\s\S]*?(?:^|\r?\n)running_for_ms:\s*(\d+)[\s\S]*?\r?\n---/m)
   return match?.[1] === undefined ? undefined : Number(match[1])
 }
 
 /** A regex is matched against the output itself, never against the header or the footer. */
-function bodyWithoutMetadata(content: string): string {
+function jobOutputBody(content: string): string {
   let body = content
   if (body.startsWith("---\n")) {
     const end = body.indexOf("\n---\n", 4)
     if (end >= 0) body = body.slice(end + 5)
   }
-  const footer = body.match(/\n---\n[\s\S]*?\n---\s*$/)
-  return footer?.index === undefined ? body : body.slice(0, footer.index)
+  const jobEnding = body.match(/\n---\n[\s\S]*?\n---\s*$/)
+  return jobEnding?.index === undefined ? body : body.slice(0, jobEnding.index)
 }
 
-function regexMatcher(pattern: string | undefined): { matched(content: string): { matched: boolean; firstMatch: string } } | undefined {
+function compileOutputMatcher(pattern: string | undefined): { matched(content: string): { matched: boolean; firstMatch: string } } | undefined {
   if (pattern === undefined || pattern.trim().length === 0) return undefined
   const compiled = RE2JS.compile(pattern, RE2JS.MULTILINE)
   return {
     matched(content) {
-      const matcher = compiled.matcher(content)
-      if (!matcher.find()) return { matched: false, firstMatch: "" }
-      return { matched: true, firstMatch: matcher.group() ?? "" }
+      const outputMatcher = compiled.matcher(content)
+      if (!outputMatcher.find()) return { matched: false, firstMatch: "" }
+      return { matched: true, firstMatch: outputMatcher.group() ?? "" }
     },
   }
 }
 
-interface ReadSnapshot { readonly exists: boolean; readonly content: string; readonly outputLength: number }
+interface JobFileSnapshot { readonly exists: boolean; readonly content: string; readonly outputLength: number }
 
 /** The file as it stands right now, which is what every wait slice is decided from. */
-async function readSnapshot(ctx: Context, resourceAccessor: AwaitResourceAccessor, path: string, toolCallId: string): Promise<ReadSnapshot> {
+async function readJobFile(ctx: Context, resourceAccessor: AwaitAccessor, path: string, toolCallId: string): Promise<JobFileSnapshot> {
   const result = await resourceAccessor.get(readExecutorResource).execute(ctx, new ReadArgs({ path, toolCallId }))
   switch (result.result.case) {
     case "success": {
@@ -239,13 +239,13 @@ async function readSnapshot(ctx: Context, resourceAccessor: AwaitResourceAccesso
 }
 
 /** A transcript is found by walking the listing, since the folder it lands in depends on the run. */
-function findTranscript(root: { absPath: string; childrenFiles: readonly { name: string }[]; childrenDirs: readonly { absPath: string; childrenFiles: readonly { name: string }[]; childrenDirs: readonly unknown[] }[] } | undefined, name: string): string | undefined {
+function findInTree(root: { absPath: string; childrenFiles: readonly { name: string }[]; childrenDirs: readonly { absPath: string; childrenFiles: readonly { name: string }[]; childrenDirs: readonly unknown[] }[] } | undefined, name: string): string | undefined {
   if (root === undefined) return undefined
   const stack: Array<typeof root> = [root]
   while (stack.length > 0) {
     const node = stack.pop()!
     const file = node.childrenFiles.find(candidate => candidate.name === name)
-    if (file !== undefined) return joinPath(node.absPath, file.name)
+    if (file !== undefined) return underFolder(node.absPath, file.name)
     for (const child of node.childrenDirs) stack.push(child as typeof root)
   }
   return undefined
@@ -255,25 +255,25 @@ function findTranscript(root: { absPath: string; childrenFiles: readonly { name:
  * Where a subagent's transcript is: tried at the paths it is known to land in, then found by listing,
  * and left unknown rather than guessed when none of them has it.
  */
-async function locateTranscript(ctx: Context, resourceAccessor: AwaitResourceAccessor, taskId: string, folder: string | undefined, toolCallId: string, parentConversationId: string | undefined): Promise<string | undefined> {
+async function findSubagentTranscript(ctx: Context, resourceAccessor: AwaitAccessor, taskId: string, folder: string | undefined, toolCallId: string, parentConversationId: string | undefined): Promise<string | undefined> {
   if (folder === undefined || folder.length === 0) return undefined
-  const candidates = [joinPath(folder, `${taskId}.jsonl`), joinPath(folder, `${taskId}/${taskId}.jsonl`), ...(parentConversationId === undefined ? [] : [joinPath(folder, `${parentConversationId}/subagents/${taskId}.jsonl`)])]
+  const candidates = [underFolder(folder, `${taskId}.jsonl`), underFolder(folder, `${taskId}/${taskId}.jsonl`), ...(parentConversationId === undefined ? [] : [underFolder(folder, `${parentConversationId}/subagents/${taskId}.jsonl`)])]
   for (const candidate of candidates) {
-    if ((await readSnapshot(ctx, resourceAccessor, candidate, toolCallId).catch(() => undefined))?.exists === true) return candidate
+    if ((await readJobFile(ctx, resourceAccessor, candidate, toolCallId).catch(() => undefined))?.exists === true) return candidate
   }
   const listed = await resourceAccessor.get(lsExecutorResource).execute(ctx, new LsArgs({ path: folder, toolCallId, timeoutMs: 2_000 })).catch(() => undefined)
   const tree = listed?.result.case === "success" || listed?.result.case === "timeout" ? listed.result.value.directoryTreeRoot : undefined
-  return findTranscript(tree, `${taskId}.jsonl`)
+  return findInTree(tree, `${taskId}.jsonl`)
 }
 
 /** A success that carries no await result at all is reported as an unknown result, not as a success. */
-function normalizeResult(result: AwaitResult["result"]): AwaitResult["result"] {
+function awaitResultShape(result: AwaitResult["result"]): AwaitResult["result"] {
   if (result.case === "success") return result.value.awaitResult?.case === undefined ? { case: undefined } : result.value.awaitResult
   if (result.case === "error") return result
   return { case: undefined }
 }
 
-function buildParameters(options: { enableSubagentAwaiting: boolean; defaultBlockUntilMs: number; requireBlockUntilMs: boolean; training: boolean; includeWaitingSignal: boolean }) {
+function awaitParameters(options: { enableSubagentAwaiting: boolean; defaultBlockUntilMs: number; requireBlockUntilMs: boolean; training: boolean; includeWaitingSignal: boolean }) {
   const blockDescription = options.requireBlockUntilMs ? `Max sleep time to block before returning (in milliseconds). Required. Set to 0 for non-blocking status check.` : `Max sleep time to block before returning (in milliseconds). Defaults to ${options.defaultBlockUntilMs}ms. Set to 0 for non-blocking status check.`
   const block = (options.requireBlockUntilMs ? lenientNumber() : lenientNumber().optional()).describe(blockDescription)
   const idNoun = options.enableSubagentAwaiting && !options.training ? "shell or subagent" : "shell"
@@ -289,13 +289,13 @@ function buildParameters(options: { enableSubagentAwaiting: boolean; defaultBloc
       const normalized = { ...(raw as Record<string, unknown>) }
       if (normalized.shell_id === undefined && normalized.task_id !== undefined) normalized.shell_id = normalized.task_id
       return normalized
-    }, z.object({ shell_id: id, block_until_ms: block, pattern, ...(options.includeWaitingSignal ? { waiting_for_subagent: z.boolean().optional().describe(WAITING_FOR_SUBAGENT_DESCRIPTION) } : {}) }).transform(({ shell_id, ...rest }) => ({ task_id: shell_id, ...rest })))
+    }, z.object({ shell_id: id, block_until_ms: block, pattern, ...(options.includeWaitingSignal ? { waiting_for_subagent: z.boolean().optional().describe(SUBAGENT_WAIT_HINT) } : {}) }).transform(({ shell_id, ...rest }) => ({ task_id: shell_id, ...rest })))
   }
   return z.object({ task_id: id, block_until_ms: block, pattern })
 }
 
 /** An older client sends the terminal file's path instead of its id, and the id is what a wait needs. */
-function normalizeInput(raw: unknown, compat: boolean): unknown {
+function legacyPathArguments(raw: unknown, compat: boolean): unknown {
   if (!compat || raw === null || typeof raw !== "object" || Array.isArray(raw)) return raw
   const value = { ...(raw as Record<string, unknown>) }
   if (value.task_id !== undefined || value.shell_id !== undefined) return value
@@ -306,7 +306,7 @@ function normalizeInput(raw: unknown, compat: boolean): unknown {
   return value
 }
 
-function formatHoursForPrompt(minutes: number): string {
+function hoursLabel(minutes: number): string {
   const hours = minutes / 60
   return Number.isInteger(hours) ? `${hours}` : hours.toFixed(1)
 }
@@ -315,16 +315,16 @@ function formatHoursForPrompt(minutes: number): string {
  * How long to wait, given how long the prompt cache lasts: a slice just under the cache lifetime is
  * cheap, and a wait just past it pays for the conversation to be read again.
  */
-function formatPromptCacheTTLWaitGuidance(milliseconds: number): string {
+function cacheWaitGuidance(milliseconds: number): string {
   const ttlSeconds = Math.round(milliseconds / 1_000)
   const ttlMinutes = Math.round(ttlSeconds / 60)
   if (ttlMinutes === 1) return `When waiting further, avoid round 1-minute waits: prefer slices of up to ${ttlSeconds - 30}s (keeps prompt cache warm) or ${ttlSeconds * 4}s+ (one cache miss buys a long wait).`
   if (ttlMinutes >= 1 && ttlMinutes <= 30) return `When waiting further, avoid round ${ttlMinutes}-minute waits: prefer slices of 60–${ttlSeconds - 30}s (keeps prompt cache warm) or ${ttlSeconds * 4}s+ (one cache miss buys a long wait).`
-  if (ttlMinutes <= 6 * 60) return `When waiting further, avoid waiting ${formatHoursForPrompt(ttlMinutes)}h or more: prefer slices of 60s-${ttlMinutes - 1}m (keeps prompt cache warm). Size slices based on expected progress; when progress is unclear, exponential backoff is useful.`
+  if (ttlMinutes <= 6 * 60) return `When waiting further, avoid waiting ${hoursLabel(ttlMinutes)}h or more: prefer slices of 60s-${ttlMinutes - 1}m (keeps prompt cache warm). Size slices based on expected progress; when progress is unclear, exponential backoff is useful.`
   return "When waiting further, size slices based on expected progress. When progress is unclear, exponential backoff is useful."
 }
 
-function buildLegacyAwaitDescription(options: { enableSubagentAwaiting: boolean; hasShell: boolean }): string {
+function legacyDescription(options: { enableSubagentAwaiting: boolean; hasShell: boolean }): string {
   const idNoun = options.enableSubagentAwaiting ? "task id" : "shell id"
   const idArg = options.enableSubagentAwaiting ? "task_id" : "shell_id"
   const shellOnlyGuidance = options.hasShell ? `
@@ -343,11 +343,11 @@ Monitor backgrounded jobs as follows:
 - Pick your polling intervals using best guess/judgment based on any knowledge you have about the command and its expected runtime, and any output from monitoring the job. When no new output, exponential backoff is useful, e.g. 2000ms, 4000ms, 8000ms, 16000ms...${shellOnlyGuidance}`
 }
 
-function buildNotifyFirstAwaitDescription(options: { enableSubagentAwaiting: boolean; hasShell: boolean; toolName: string; taskToolName?: string; promptCacheTTLMs?: number }): string {
+function notifyFirstDescription(options: { enableSubagentAwaiting: boolean; hasShell: boolean; toolName: string; taskToolName?: string; promptCacheTTLMs?: number }): string {
   const jobNoun = options.enableSubagentAwaiting ? "shell or subagent" : "shell"
   const idNoun = options.enableSubagentAwaiting ? "task id" : "shell id"
   const idArg = options.enableSubagentAwaiting ? "task_id" : "shell_id"
-  const promptCacheGuidance = options.promptCacheTTLMs === undefined ? "When waiting further, avoid round 5-minute waits: prefer slices of 60–270s (keeps prompt cache warm) or 1200s+ (one cache miss buys a long wait)." : formatPromptCacheTTLWaitGuidance(options.promptCacheTTLMs)
+  const promptCacheGuidance = options.promptCacheTTLMs === undefined ? "When waiting further, avoid round 5-minute waits: prefer slices of 60–270s (keeps prompt cache warm) or 1200s+ (one cache miss buys a long wait)." : cacheWaitGuidance(options.promptCacheTTLMs)
   // A session that is notified when a subagent finishes is told not to wait for one at all.
   const neverPollSubagent = options.taskToolName !== undefined && !options.enableSubagentAwaiting ? `
 - NEVER USE THIS TO POLL OR WAIT VACUOUSLY FOR A SUBAGENT LAUNCHED WITH THE ${options.taskToolName} TOOL — rely on the end-of-turn completion notification instead (it is delivered as soon as the subagent finishes; guessing a wait time is inefficient).` : ""
@@ -376,85 +376,180 @@ Prefer NOT to poll reflexively with ${options.toolName}. Multitask on independen
 - Never poll a task whose tool result says it was "manually backgrounded by the user".${neverPollSubagent}${subagentRule}${shellGuidance}`
 }
 
-export type AwaitToolResourceAccessor = AwaitResourceAccessor
+export type AwaitToolResourceAccessor = AwaitAccessor
 export interface AwaitToolOptions extends AwaitOptions {}
 
-export function createAwaitTool(resourceAccessor: AwaitResourceAccessor, options: AwaitToolOptions, promptVersion = "latest") {
+/** What one wait is asked to watch, read from the arguments the wrapper already parsed. */
+interface AwaitRequest {
+  readonly taskId: string
+  readonly blockUntilMs: number
+  readonly pattern?: string
+}
+
+/** The fields the handler needs from a parsed call: the wait itself, and whether it was asking for a subagent wait. */
+function awaitRequestOf(raw: unknown, fallbackBlockUntilMs: number): { request: AwaitRequest; waitingRequested: boolean } {
+  const values = raw as { task_id?: string; shell_id?: string; block_until_ms?: number; pattern?: string; waiting_for_subagent?: boolean }
+  return {
+    waitingRequested: values.waiting_for_subagent === true,
+    request: {
+      taskId: taskIdOrEmpty(values.task_id ?? values.shell_id),
+      blockUntilMs: wholeNonNegative(values.block_until_ms, fallbackBlockUntilMs),
+      ...(values.pattern === undefined ? {} : { pattern: values.pattern }),
+    },
+  }
+}
+
+/** The result of a wait with nothing to watch: the duration slept, or a sleep the user's message cut short. */
+function sleptAwaitResult(startMs: number, outcome: "timeout" | "steer_release"): AwaitResult {
+  return new AwaitResult({ result: { case: "success", value: new AwaitSuccess({ awaitResult: { case: "complete", value: new AwaitTaskComplete({ taskId: "", runtimeMs: BigInt(Date.now() - startMs), outputFilePath: "", outputLength: 0n, regexRequested: false, ...(outcome === "steer_release" ? { wakeReason: STEER_WAKE_REASON } : {}) }) } }) } })
+}
+
+/** The result a finished shell job reports, with its exit code when the footer carried one. */
+function completedShellResult(request: AwaitRequest, runtimeMs: number, jobFile: string, outputLength: number, matchedText: string | undefined, exitCode: number | undefined): AwaitResult {
+  return new AwaitResult({ result: { case: "success", value: new AwaitSuccess({ awaitResult: { case: "complete", value: new AwaitTaskComplete({ taskId: request.taskId, runtimeMs: BigInt(runtimeMs), outputFilePath: jobFile, outputLength: BigInt(outputLength), regexRequested: typeof request.pattern === "string" && request.pattern.trim().length > 0, ...(matchedText === undefined ? {} : { regexMatch: matchedText }), ...(exitCode === undefined ? {} : { exitCode }) }) } }) } })
+}
+
+/** The result a shell job that is still running reports, whether the wait ran out, was a status check, or was steered. */
+function runningShellResult(request: AwaitRequest, runtimeMs: number, jobFile: string, outputLength: number, matchedText: string | undefined, steered: boolean): AwaitResult {
+  return new AwaitResult({ result: { case: "success", value: new AwaitSuccess({ awaitResult: { case: "stillRunning", value: new AwaitTaskStillRunning({ taskId: request.taskId, runtimeMs: BigInt(runtimeMs), outputFilePath: jobFile, outputLength: BigInt(outputLength), regexRequested: typeof request.pattern === "string" && request.pattern.trim().length > 0, ...(matchedText === undefined ? {} : { regexMatch: matchedText }), ...(steered ? { wakeReason: STEER_WAKE_REASON } : {}) }) } }) } })
+}
+
+/**
+ * Waits on a subagent task: a bounded wait asks the subagent-await executor, and a plain resume asks the
+ * subagent executor read-only. Either way the answer is the transcript path and its length, found by
+ * listing when the executor did not name its own path.
+ */
+async function subagentAwaitResult(
+  toolCtx: Context,
+  resourceAccessor: AwaitAccessor,
+  options: AwaitToolOptions,
+  toolCallId: string,
+  request: AwaitRequest,
+  startMs: number,
+): Promise<AwaitResult> {
+  const parentConversationId = getConversationId(toolCtx)
+  if (!parentConversationId) throw new Error("Awaiting subagent tasks requires a non-empty conversationId in the agent context")
+  // A bounded wait is one call that returns when the subagent finishes; otherwise the wait is a
+  // read-only resume of the subagent, which is what reports its transcript.
+  const result = options.enableBoundedSubagentAwait === true
+    ? await resourceAccessor.get(subagentAwaitExecutorResource).execute(toolCtx, new SubagentAwaitArgs({ agentId: request.taskId, timeoutMs: request.blockUntilMs }))
+    : await resourceAccessor.get(subagentExecutorResource).execute(toolCtx, new SubagentArgs({ toolCallId, resumeAgentId: request.taskId, parentConversationId, prompt: "", readonly: true, runInBackground: false, subagentType: options.defaultSubagentType ?? "generalPurpose", modelId: options.defaultModelId ?? "default-model" }))
+  if (!("result" in result) || result.result.case !== "complete") throw new Error("Failed to await subagent task")
+  const complete = result.result.value
+  const transcriptPath = "transcriptPath" in complete ? complete.transcriptPath : await findSubagentTranscript(toolCtx, resourceAccessor, request.taskId, options.agentTranscriptsFolder, toolCallId, parentConversationId)
+  const jobFileSnapshot = transcriptPath === undefined ? undefined : await readJobFile(toolCtx, resourceAccessor, transcriptPath, toolCallId).catch(() => undefined)
+  return new AwaitResult({ result: { case: "success", value: new AwaitSuccess({ awaitResult: { case: "complete", value: new AwaitTaskComplete({ taskId: request.taskId, runtimeMs: BigInt(Date.now() - startMs), outputFilePath: transcriptPath ?? "", outputLength: BigInt(jobFileSnapshot?.outputLength ?? 0) }) } }) } })
+}
+
+/**
+ * Waits on a shell job in quarter-second slices: every slice re-reads the output file, and the wait stops
+ * as soon as the job finished, the pattern matched, the time is up, the caller wanted a status check, or
+ * the user said something.
+ */
+async function shellAwaitResult(
+  toolCtx: Context,
+  resourceAccessor: AwaitAccessor,
+  options: AwaitToolOptions,
+  toolCallId: string,
+  request: AwaitRequest,
+  startMs: number,
+  injectionSignal: ExecutionMeta["contextInjectionSignal"],
+): Promise<AwaitResult> {
+  const regexRequested = typeof request.pattern === "string" && request.pattern.trim().length > 0
+  const outputMatcher = compileOutputMatcher(request.pattern)
+  const terminalsRoot = resolveTerminalsFolder(options.terminalsFolder)
+  if (!terminalsRoot) throw new Error("Cannot await shell task: terminals folder is unavailable")
+  const jobFile = underFolder(terminalsRoot, `${request.taskId}.txt`)
+  const waitDeadline = Date.now() + request.blockUntilMs
+  let steeredDuringSlice = false
+  while (true) {
+    failIfAborted(toolCtx)
+    const jobFileSnapshot = await readJobFile(toolCtx, resourceAccessor, jobFile, toolCallId)
+    if (!jobFileSnapshot.exists) throw new Error(`No shell found for id ${request.taskId}`)
+    const jobEnding = readJobFooter(jobFileSnapshot.content)
+    const runtimeMs = jobEnding.runtimeMs ?? readRunningMilliseconds(jobFileSnapshot.content) ?? Math.max(0, Date.now() - startMs)
+    const matchFound = outputMatcher?.matched(jobOutputBody(jobFileSnapshot.content))
+    const matchedText = regexRequested && matchFound?.matched === true ? matchFound.firstMatch.slice(0, 500) : undefined
+    // A wait ends when the job finished, when there is no time left to wait, when the caller asked for a
+    // status check, or when the user has something to say.
+    const steerNow = steeredDuringSlice || injectionSignal?.hasPendingUserInjections() === true
+    const outcome = jobEnding.isComplete ? "complete" : request.blockUntilMs === 0 || Date.now() >= waitDeadline || steerNow ? "stillRunning" : undefined
+    if (outcome === "complete") return completedShellResult(request, runtimeMs, jobFile, jobFileSnapshot.outputLength, matchedText, jobEnding.exitCode)
+    if (outcome === "stillRunning") return runningShellResult(request, runtimeMs, jobFile, jobFileSnapshot.outputLength, matchedText, steerNow)
+    // The pattern matched before the job finished, which is an answer in itself.
+    if (matchFound?.matched === true) return runningShellResult(request, runtimeMs, jobFile, jobFileSnapshot.outputLength, matchFound.firstMatch.slice(0, 500), false)
+    if (await sleepUnlessSteered(toolCtx, SHELL_POLL_SLICE_MS, injectionSignal) === "steer_release") steeredDuringSlice = true
+  }
+}
+
+/** What the model is told a wait returned: a sleep, a finished job, a still-running one, or a failure. */
+function renderAwaitResult(output: AwaitResult): string {
+  const normalized = awaitResultShape(output.result)
+  if (normalized.case === "complete") {
+    const value = normalized.value
+    if (!value.taskId) return value.wakeReason === STEER_WAKE_REASON ? "Slept briefly. Sleep released early: a new user message is arriving." : "Slept briefly."
+    return `Task completed in ${value.runtimeMs.toString()}ms with exit code: ${value.exitCode ?? "unknown"}.\noutput_file_path: ${value.outputFilePath}\noutput_length: ${value.outputLength.toString()}`
+  }
+  if (normalized.case === "stillRunning") return `Task still running after ${normalized.value.runtimeMs.toString()}ms...\noutput_file_path: ${normalized.value.outputFilePath}\noutput_length: ${normalized.value.outputLength.toString()}`
+  if (normalized.case === "error") return `Error awaiting task: ${normalized.value.error}`
+  return "Unknown error"
+}
+
+/** The prompt versions whose wait advice this tool knows, checked before any description is built. */
+const KNOWN_PROMPT_VERSIONS = ["cursor-0226", "dsv3-1205", "dsv3-1018", "gpt5-codex", "codex-cloud", "latest", "haiku"]
+
+/** The description the model is given for this tool, by prompt version and by how it is configured. */
+function awaitDescriptionFor(
+  promptVersion: string,
+  toolName: string,
+  training: boolean,
+  enableSubagentAwaiting: boolean,
+  mentionSubagents: boolean,
+  shellToolName: string | undefined,
+  taskToolName: string | undefined,
+  options: AwaitToolOptions,
+): string {
+  if (training) return "Poll a background shell."
+  if (!KNOWN_PROMPT_VERSIONS.includes(promptVersion)) throw new Error(`Unhandled version: ${promptVersion}`)
+  return options.enableJobCompletionNotifications === true
+    ? notifyFirstDescription({ enableSubagentAwaiting: mentionSubagents, hasShell: shellToolName !== undefined, toolName, ...(taskToolName === undefined ? {} : { taskToolName }), ...(options.promptCacheTTLMs === undefined ? {} : { promptCacheTTLMs: options.promptCacheTTLMs }) })
+    : legacyDescription({ enableSubagentAwaiting: mentionSubagents, hasShell: shellToolName !== undefined })
+}
+
+export function createAwaitTool(resourceAccessor: AwaitAccessor, options: AwaitToolOptions, promptVersion = "latest") {
   const training = options.useTrainingShellOnlyPrompt === true
   const enableSubagentAwaiting = options.enableSubagentAwaiting === true && options.enableAwaitForSubagents !== false && !training
-  const derivedName = !enableSubagentAwaiting && !training ? AWAIT_TOOL_MODEL_NAME_SHELL_ONLY : AWAIT_TOOL_MODEL_NAME_DEFAULT
+  const derivedName = !enableSubagentAwaiting && !training ? TOOL_NAME_SHELL_ONLY : TOOL_NAME_FULL
   const name = options.toolName ?? derivedName
-  const includeWaitingSignal = options.fixClaudeSubagentAwait === true && derivedName === AWAIT_TOOL_MODEL_NAME_SHELL_ONLY
-  const defaultBlockUntilMs = options.defaultBlockUntilMs ?? DEFAULT_BLOCK_UNTIL_MS
-  const parameters = buildParameters({ enableSubagentAwaiting, defaultBlockUntilMs, requireBlockUntilMs: options.requireBlockUntilMs === true, training, includeWaitingSignal })
-  const parsing = z.preprocess(raw => normalizeInput(raw, options.enableAwaitTerminalPathCompat === true), parameters)
+  const includeWaitingSignal = options.fixClaudeSubagentAwait === true && derivedName === TOOL_NAME_SHELL_ONLY
+  const defaultBlockUntilMs = options.defaultBlockUntilMs ?? DEFAULT_WAIT_MS
+  const parameters = awaitParameters({ enableSubagentAwaiting, defaultBlockUntilMs, requireBlockUntilMs: options.requireBlockUntilMs === true, training, includeWaitingSignal })
+  const parsing = z.preprocess(raw => legacyPathArguments(raw, options.enableAwaitTerminalPathCompat === true), parameters)
 
   // The wrapper hands the handler and the parsed arguments over as unknowns, since it does not know this
   // tool's own types; the arguments have just been parsed against this tool's schema, so they are asserted
   // here rather than re-checked.
-  const execute = async (parent: Context, interactionHandler: unknown, raw: unknown, meta: AwaitExecutionMeta): Promise<AwaitResult> => {
-    const handler = interactionHandler as AwaitInteractionHandler
-    const rawArgs = raw as { task_id?: string; shell_id?: string; block_until_ms?: number; pattern?: string; waiting_for_subagent?: boolean }
-    using span = createSpan(parent.withName("awaitExecute"))
-    const ctx = span.ctx
-    const taskId = normalizeTaskId(rawArgs.task_id ?? rawArgs.shell_id)
-    const blockUntilMs = toPositiveInt(rawArgs.block_until_ms, defaultBlockUntilMs)
-    const baseCall = new AwaitToolCall({ args: new AwaitArgs({ taskId, blockUntilMs, ...(rawArgs.pattern === undefined ? {} : { regex: rawArgs.pattern }) }) })
-    return handler.executeToolCall(ctx, createAwaitToolCall(baseCall), meta.toolCallId, async toolCtx => {
+  const execute = async (parent: Context, bridge: unknown, raw: unknown, meta: ExecutionMeta): Promise<AwaitResult> => {
+    const callBridge = bridge as InteractionHandlerBridge
+    const { request, waitingRequested } = awaitRequestOf(raw, defaultBlockUntilMs)
+    using executionSpan = createSpan(parent.withName("awaitExecute"))
+    const ctx = executionSpan.ctx
+    const baseAwaitCall = new AwaitToolCall({ args: new AwaitArgs({ taskId: request.taskId, blockUntilMs: request.blockUntilMs, ...(request.pattern === undefined ? {} : { regex: request.pattern }) }) })
+    return callBridge.executeToolCall(ctx, awaitCallOf(baseAwaitCall), meta.toolCallId, async toolCtx => {
       // Waiting for a subagent is the one thing this tool must not be used for, so asking for it is refused.
-      if (includeWaitingSignal && rawArgs.waiting_for_subagent === true) throw new ToolCallArgParseError(WAITING_FOR_SUBAGENT_ERROR)
+      if (includeWaitingSignal && waitingRequested) throw new ToolCallArgParseError(SUBAGENT_WAIT_REFUSAL)
       const startMs = Date.now()
-      if (taskId.length === 0) {
-        if (blockUntilMs === 0) throw new Error("Must pass a task id or wait for a nonzero duration.")
-        const outcome = await sleepOrAbort(toolCtx, blockUntilMs, meta.contextInjectionSignal)
-        return new AwaitResult({ result: { case: "success", value: new AwaitSuccess({ awaitResult: { case: "complete", value: new AwaitTaskComplete({ taskId: "", runtimeMs: BigInt(Date.now() - startMs), outputFilePath: "", outputLength: 0n, regexRequested: false, ...(outcome === "steer_release" ? { wakeReason: WAKE_REASON_CONTEXT_INJECTION } : {}) }) } }) } })
+      if (request.taskId.length === 0) {
+        if (request.blockUntilMs === 0) throw new Error("Must pass a task id or wait for a nonzero duration.")
+        return sleptAwaitResult(startMs, await sleepUnlessSteered(toolCtx, request.blockUntilMs, meta.contextInjectionSignal))
       }
-      const regexRequested = typeof rawArgs.pattern === "string" && rawArgs.pattern.trim().length > 0
-      const matcher = regexMatcher(rawArgs.pattern)
-      if (!isShellTaskId(taskId)) {
-        if (!enableSubagentAwaiting) throw new ToolCallArgParseError(WAITING_FOR_SUBAGENT_ERROR)
-        if (regexRequested) throw new ToolCallArgParseError("Regex awaiting is not available for subagents. Run Await without regex, or await a shell task id instead.")
-        const parentConversationId = getConversationId(toolCtx)
-        if (!parentConversationId) throw new Error("Awaiting subagent tasks requires a non-empty conversationId in the agent context")
-        // A bounded wait is one call that returns when the subagent finishes; otherwise the wait is a
-        // read-only resume of the subagent, which is what reports its transcript.
-        const result = options.enableBoundedSubagentAwait === true
-          ? await resourceAccessor.get(subagentAwaitExecutorResource).execute(toolCtx, new SubagentAwaitArgs({ agentId: taskId, timeoutMs: blockUntilMs }))
-          : await resourceAccessor.get(subagentExecutorResource).execute(toolCtx, new SubagentArgs({ toolCallId: meta.toolCallId, resumeAgentId: taskId, parentConversationId, prompt: "", readonly: true, runInBackground: false, subagentType: options.defaultSubagentType ?? "generalPurpose", modelId: options.defaultModelId ?? "default-model" }))
-        if ("result" in result && result.result.case === "complete") {
-          const complete = result.result.value
-          const transcriptPath = "transcriptPath" in complete ? complete.transcriptPath : await locateTranscript(toolCtx, resourceAccessor, taskId, options.agentTranscriptsFolder, meta.toolCallId, parentConversationId)
-          const snapshot = transcriptPath === undefined ? undefined : await readSnapshot(toolCtx, resourceAccessor, transcriptPath, meta.toolCallId).catch(() => undefined)
-          return new AwaitResult({ result: { case: "success", value: new AwaitSuccess({ awaitResult: { case: "complete", value: new AwaitTaskComplete({ taskId, runtimeMs: BigInt(Date.now() - startMs), outputFilePath: transcriptPath ?? "", outputLength: BigInt(snapshot?.outputLength ?? 0) }) } }) } })
-        }
-        throw new Error("Failed to await subagent task")
+      if (!looksLikeShellId(request.taskId)) {
+        if (!enableSubagentAwaiting) throw new ToolCallArgParseError(SUBAGENT_WAIT_REFUSAL)
+        if (typeof request.pattern === "string" && request.pattern.trim().length > 0) throw new ToolCallArgParseError("Regex awaiting is not available for subagents. Run Await without regex, or await a shell task id instead.")
+        return subagentAwaitResult(toolCtx, resourceAccessor, options, meta.toolCallId, request, startMs)
       }
-      const terminalsFolder = terminalsFolderOf(options.terminalsFolder)
-      if (!terminalsFolder) throw new Error("Cannot await shell task: terminals folder is unavailable")
-      const outputPath = joinPath(terminalsFolder, `${taskId}.txt`)
-      const deadline = Date.now() + blockUntilMs
-      let steerReleasedMidSleep = false
-      while (true) {
-        throwIfAborted(toolCtx)
-        const snapshot = await readSnapshot(toolCtx, resourceAccessor, outputPath, meta.toolCallId)
-        if (!snapshot.exists) throw new Error(`No shell found for id ${taskId}`)
-        const footer = parseFooter(snapshot.content)
-        const runtimeMs = footer.runtimeMs ?? parseRunningForMs(snapshot.content) ?? Math.max(0, Date.now() - startMs)
-        const found = matcher?.matched(bodyWithoutMetadata(snapshot.content))
-        const regexMatch = regexRequested && found?.matched === true ? found.firstMatch.slice(0, 500) : undefined
-        // A wait ends when the job finished, when there is no time left to wait, when the caller asked for a
-        // status check, or when the user has something to say.
-        const steerReleased = steerReleasedMidSleep || meta.contextInjectionSignal?.hasPendingUserInjections() === true
-        const result = footer.isComplete ? "complete" : blockUntilMs === 0 || Date.now() >= deadline || steerReleased ? "stillRunning" : undefined
-        if (result !== undefined) {
-          const value = result === "complete" ? new AwaitTaskComplete({ taskId, runtimeMs: BigInt(runtimeMs), outputFilePath: outputPath, outputLength: BigInt(snapshot.outputLength), regexRequested, ...(regexMatch === undefined ? {} : { regexMatch }), ...(footer.exitCode === undefined ? {} : { exitCode: footer.exitCode }) }) : new AwaitTaskStillRunning({ taskId, runtimeMs: BigInt(runtimeMs), outputFilePath: outputPath, outputLength: BigInt(snapshot.outputLength), regexRequested, ...(regexMatch === undefined ? {} : { regexMatch }), ...(steerReleased ? { wakeReason: WAKE_REASON_CONTEXT_INJECTION } : {}) })
-          return new AwaitResult({ result: { case: "success", value: new AwaitSuccess({ awaitResult: { case: result, value } }) } })
-        }
-        // The pattern matched before the job finished, which is an answer in itself.
-        if (found?.matched === true) return new AwaitResult({ result: { case: "success", value: new AwaitSuccess({ awaitResult: { case: "stillRunning", value: new AwaitTaskStillRunning({ taskId, runtimeMs: BigInt(runtimeMs), outputFilePath: outputPath, outputLength: BigInt(snapshot.outputLength), regexRequested, regexMatch: found.firstMatch.slice(0, 500) }) } }) } })
-        if (await sleepOrAbort(toolCtx, SHELL_CHECK_SLICE_MS, meta.contextInjectionSignal) === "steer_release") steerReleasedMidSleep = true
-      }
-    }, result => createAwaitToolCall(new AwaitToolCall({ ...baseCall, result })))
+      return shellAwaitResult(toolCtx, resourceAccessor, options, meta.toolCallId, request, startMs, meta.contextInjectionSignal)
+    }, result => awaitCallOf(new AwaitToolCall({ ...baseAwaitCall, result })))
   }
 
   return createZodAgentTool(options.toolIdentifier ?? "AWAIT", {
@@ -464,25 +559,11 @@ export function createAwaitTool(resourceAccessor: AwaitResourceAccessor, options
       const shellToolName = props.allTools.SHELL?.name
       const taskToolName = props.allTools.TASK?.name
       const mentionSubagents = enableSubagentAwaiting && taskToolName !== undefined
-      if (training) return "Poll a background shell."
-      if (!["cursor-0226", "dsv3-1205", "dsv3-1018", "gpt5-codex", "codex-cloud", "latest", "haiku"].includes(promptVersion)) throw new Error(`Unhandled version: ${promptVersion}`)
-      return options.enableJobCompletionNotifications === true
-        ? buildNotifyFirstAwaitDescription({ enableSubagentAwaiting: mentionSubagents, hasShell: shellToolName !== undefined, toolName: name, ...(taskToolName === undefined ? {} : { taskToolName }), ...(options.promptCacheTTLMs === undefined ? {} : { promptCacheTTLMs: options.promptCacheTTLMs }) })
-        : buildLegacyAwaitDescription({ enableSubagentAwaiting: mentionSubagents, hasShell: shellToolName !== undefined })
+      return awaitDescriptionFor(promptVersion, name, training, enableSubagentAwaiting, mentionSubagents, shellToolName, taskToolName, options)
     },
     parameters,
-    execute: withSafeParsedArgs(parsing, execute, createAwaitToolCall(new AwaitToolCall())),
-    render: async (_ctx: Context, output: AwaitResult) => {
-      const normalized = normalizeResult(output.result)
-      if (normalized.case === "complete") {
-        const value = normalized.value
-        if (!value.taskId) return createStringResult(value.wakeReason === WAKE_REASON_CONTEXT_INJECTION ? "Slept briefly. Sleep released early: a new user message is arriving." : "Slept briefly.")
-        return createStringResult(`Task completed in ${value.runtimeMs.toString()}ms with exit code: ${value.exitCode ?? "unknown"}.\noutput_file_path: ${value.outputFilePath}\noutput_length: ${value.outputLength.toString()}`)
-      }
-      if (normalized.case === "stillRunning") return createStringResult(`Task still running after ${normalized.value.runtimeMs.toString()}ms...\noutput_file_path: ${normalized.value.outputFilePath}\noutput_length: ${normalized.value.outputLength.toString()}`)
-      if (normalized.case === "error") return createStringResult(`Error awaiting task: ${normalized.value.error}`)
-      return createStringResult("Unknown error")
-    },
-    serializeError: error => createAwaitToolCall(new AwaitToolCall({ result: new AwaitResult({ result: { case: "error", value: new AwaitError({ error: error instanceof Error ? error.message : String(error) }) } }) })),
+    execute: withSafeParsedArgs(parsing, execute, awaitCallOf(new AwaitToolCall())),
+    render: async (_ctx: Context, output: AwaitResult) => createStringResult(renderAwaitResult(output)),
+    serializeError: error => awaitCallOf(new AwaitToolCall({ result: new AwaitResult({ result: { case: "error", value: new AwaitError({ error: error instanceof Error ? error.message : String(error) }) } }) })),
   })
 }
