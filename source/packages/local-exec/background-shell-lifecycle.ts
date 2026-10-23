@@ -25,7 +25,7 @@ export interface BackgroundShell {
   readonly stdin?: NodeJS.WritableStream | undefined;
   abort(): void;
   dispose(): void;
-  onComplete?(listener: (completion: ShellCompletion) => void): void;
+  onComplete?(notified: (finish: ShellCompletion) => void): void;
 }
 
 export interface BackgroundSpawnContext {
@@ -61,12 +61,12 @@ export interface BackgroundAdoptState {
 }
 
 export interface BackgroundShellFactory {
-  spawn(executionContext: BackgroundSpawnContext, coreExecutor: unknown): Promise<BackgroundShell>;
+  spawn(spawnInput: BackgroundSpawnContext, coreExecutor: unknown): Promise<BackgroundShell>;
   adopt(state: BackgroundAdoptState): Promise<BackgroundShell>;
 }
 
 export interface BackgroundWorkRegistry {
-  enqueue(wakeup: Record<string, unknown>): void;
+  enqueue(notice: Record<string, unknown>): void;
   upsertWork(record: Record<string, unknown>): void;
   clearWork(id: string): unknown;
   abortWork(id: string): boolean;
@@ -79,7 +79,7 @@ export interface BackgroundWorkRegistry {
   suppress(conversationId: string, id: string): void;
   drainCompletions(): unknown[];
   hasPendingCompletions(conversationId?: string): boolean;
-  markAwaitedCompletion(taskId: string): void;
+  markAwaitedCompletion(taskKey: string): void;
 }
 
 export class CoreBackgroundShell implements BackgroundShell {
@@ -87,10 +87,10 @@ export class CoreBackgroundShell implements BackgroundShell {
   readonly abortController: AbortController;
   stdin: NodeJS.WritableStream | undefined;
   pid: number | undefined;
-  private disposed = false;
-  private completed = false;
-  private completion: ShellCompletion | undefined;
-  private completionListeners: Array<(completion: ShellCompletion) => void> = [];
+  private wasDisposed = false;
+  private isComplete = false;
+  private finish: ShellCompletion | undefined;
+  private onCompleteListeners: Array<(finish: ShellCompletion) => void> = [];
 
   constructor(id: number, abortController: AbortController) {
     this.id = id;
@@ -102,8 +102,8 @@ export class CoreBackgroundShell implements BackgroundShell {
   }
 
   dispose(): void {
-    if (this.disposed) return;
-    this.disposed = true;
+    if (this.wasDisposed) return;
+    this.wasDisposed = true;
     if (!this.abortController.signal.aborted) this.abortController.abort();
   }
 
@@ -112,24 +112,24 @@ export class CoreBackgroundShell implements BackgroundShell {
   }
 
   isDisposed(): boolean {
-    return this.disposed;
+    return this.wasDisposed;
   }
 
-  onComplete(listener: (completion: ShellCompletion) => void): void {
-    if (this.completed && this.completion) {
-      listener(this.completion);
+  onComplete(notified: (finish: ShellCompletion) => void): void {
+    if (this.isComplete && this.finish) {
+      notified(this.finish);
       return;
     }
-    this.completionListeners.push(listener);
+    this.onCompleteListeners.push(notified);
   }
 
-  markCompleted(completion: ShellCompletion): void {
-    if (this.completed) return;
-    this.completed = true;
-    this.completion = completion;
-    const listeners = [...this.completionListeners];
-    this.completionListeners = [];
-    for (const listener of listeners) listener(completion);
+  markCompleted(finish: ShellCompletion): void {
+    if (this.isComplete) return;
+    this.isComplete = true;
+    this.finish = finish;
+    const listeners = [...this.onCompleteListeners];
+    this.onCompleteListeners = [];
+    for (const notified of listeners) notified(finish);
   }
 }
 
@@ -146,33 +146,40 @@ interface ShellMetadata {
   readonly startTimeMs?: number;
 }
 
+/** What a manager calls a shell in the background-work list: its description, or its command. */
+function shellTitle(description: unknown, command: unknown): string {
+  return typeof description === "string" && description.length > 0
+    ? description
+    : String(command ?? "");
+}
+
 export class BackgroundShellManager {
-  private readonly runningShells = new Map<number, BackgroundShell>();
-  private nextShellId = randomInitialShellId();
+  private readonly liveShells = new Map<number, BackgroundShell>();
+  private nextId = randomInitialShellId();
 
   constructor(
-    private readonly factory: BackgroundShellFactory,
-    private readonly backgroundWorkRegistry?: BackgroundWorkRegistry,
+    private readonly shellFactory: BackgroundShellFactory,
+    private readonly workQueue?: BackgroundWorkRegistry,
   ) {}
 
-  private registerShellWork(shell: BackgroundShell, metadata: ShellMetadata): void {
+  private registerShellWork(shell: BackgroundShell, shellMetadata: ShellMetadata): void {
     const shellId = String(shell.id);
-    this.backgroundWorkRegistry?.upsertWork({
+    this.workQueue?.upsertWork({
       id: shellId,
       kind: "shell",
       state: "running",
-      metadata: encodeBackgroundWorkMetadata(metadata),
+      metadata: encodeBackgroundWorkMetadata(shellMetadata),
       abort: () => this.abort(shell.id),
     });
   }
 
   private clearShellWork(shellId: number): void {
-    this.backgroundWorkRegistry?.clearWork(String(shellId));
+    this.workQueue?.clearWork(String(shellId));
   }
 
   private cleanupShell(shellId: number): void {
-    if (!this.runningShells.has(shellId)) return;
-    this.runningShells.delete(shellId);
+    if (!this.liveShells.has(shellId)) return;
+    this.liveShells.delete(shellId);
     this.clearShellWork(shellId);
   }
 
@@ -180,52 +187,48 @@ export class BackgroundShellManager {
     shellId: number,
     toolCallId: string | undefined,
     conversationId: string | undefined,
-    commandTitle: string,
-    completion: ShellCompletion,
+    displayTitle: string,
+    finish: ShellCompletion,
   ): void {
-    if (!this.backgroundWorkRegistry) return;
-    const status = completion.aborted ? "aborted" : completion.code === 0 ? "success" : "error";
-    const detail = !completion.aborted && completion.code !== null && completion.code !== 0
-      ? `exit_code=${completion.code}`
+    if (!this.workQueue) return;
+    const outcome = finish.aborted ? "aborted" : finish.code === 0 ? "success" : "error";
+    const failureDetail = !finish.aborted && finish.code !== null && finish.code !== 0
+      ? `exit_code=${finish.code}`
       : undefined;
-    const taskId = String(shellId);
-    this.backgroundWorkRegistry.enqueue({
+    const taskKey = String(shellId);
+    this.workQueue.enqueue({
       conversationId: conversationId ?? LEGACY_LOCAL_WAKEUP_CONVERSATION_ID,
-      id: taskId,
+      id: taskKey,
       source: "shell",
       payload: {
-        taskId,
+        taskId: taskKey,
         ...(toolCallId === undefined ? {} : { toolCallId }),
         kind: "shell",
-        status,
-        title: commandTitle,
-        ...(detail ? { detail } : {}),
-        ...(completion.outputPath ? { outputPath: completion.outputPath } : {}),
+        status: outcome,
+        title: displayTitle,
+        ...(failureDetail ? { detail: failureDetail } : {}),
+        ...(finish.outputPath ? { outputPath: finish.outputPath } : {}),
         reason: "task_finished",
       },
     });
   }
 
-  async spawn(executionContext: BackgroundSpawnContext, coreExecutor: unknown): Promise<{ shellId: number; pid?: number | undefined }> {
-    const shell = await this.factory.spawn(executionContext, coreExecutor);
-    this.runningShells.set(shell.id, shell);
+  async spawn(spawnInput: BackgroundSpawnContext, coreExecutor: unknown): Promise<{ shellId: number; pid?: number | undefined }> {
+    const shell = await this.shellFactory.spawn(spawnInput, coreExecutor);
+    this.liveShells.set(shell.id, shell);
     this.registerShellWork(shell, {
-      title: typeof executionContext.description === "string" && executionContext.description.length > 0
-        ? executionContext.description
-        : String(executionContext.command ?? ""),
-      cwd: String(executionContext.workingDirectory ?? ""),
+      title: shellTitle(spawnInput.description, spawnInput.command),
+      cwd: String(spawnInput.workingDirectory ?? ""),
       startTimeMs: Date.now(),
     });
     shell.signal.addEventListener("abort", () => this.cleanupShell(shell.id));
-    shell.onComplete?.((completion) => {
+    shell.onComplete?.((finish) => {
       this.enqueueShellCompletion(
         shell.id,
-        typeof executionContext.toolCallId === "string" ? executionContext.toolCallId : undefined,
-        typeof executionContext.conversationId === "string" ? executionContext.conversationId : undefined,
-        typeof executionContext.description === "string" && executionContext.description.length > 0
-          ? executionContext.description
-          : String(executionContext.command ?? ""),
-        completion,
+        typeof spawnInput.toolCallId === "string" ? spawnInput.toolCallId : undefined,
+        typeof spawnInput.conversationId === "string" ? spawnInput.conversationId : undefined,
+        shellTitle(spawnInput.description, spawnInput.command),
+        finish,
       );
       this.cleanupShell(shell.id);
     });
@@ -233,21 +236,21 @@ export class BackgroundShellManager {
   }
 
   async adopt(state: BackgroundAdoptState): Promise<{ shellId: number; pid?: number | undefined }> {
-    const shell = await this.factory.adopt(state);
-    this.runningShells.set(shell.id, shell);
+    const shell = await this.shellFactory.adopt(state);
+    this.liveShells.set(shell.id, shell);
     this.registerShellWork(shell, {
-      title: typeof state.description === "string" && state.description.length > 0 ? state.description : String(state.command ?? ""),
+      title: shellTitle(state.description, state.command),
       cwd: String(state.workingDirectory ?? ""),
       startTimeMs: typeof state.startTime === "number" ? state.startTime : Date.now(),
     });
     shell.signal.addEventListener("abort", () => this.cleanupShell(shell.id));
-    shell.onComplete?.((completion) => {
+    shell.onComplete?.((finish) => {
       this.enqueueShellCompletion(
         shell.id,
         typeof state.toolCallId === "string" ? state.toolCallId : undefined,
         undefined,
-        typeof state.description === "string" && state.description.length > 0 ? state.description : String(state.command ?? ""),
-        completion,
+        shellTitle(state.description, state.command),
+        finish,
       );
       this.cleanupShell(shell.id);
     });
@@ -255,121 +258,121 @@ export class BackgroundShellManager {
   }
 
   generateShellId(): number {
-    for (let attempts = 0; attempts <= MAX_SHELL_ID - MIN_SHELL_ID; attempts++) {
-      if (this.nextShellId > MAX_SHELL_ID) this.nextShellId = MIN_SHELL_ID;
-      const candidate = this.nextShellId;
-      this.nextShellId += 1;
-      if (!this.runningShells.has(candidate)) return candidate;
+    for (let tries = 0; tries <= MAX_SHELL_ID - MIN_SHELL_ID; tries++) {
+      if (this.nextId > MAX_SHELL_ID) this.nextId = MIN_SHELL_ID;
+      const nextCandidate = this.nextId;
+      this.nextId += 1;
+      if (!this.liveShells.has(nextCandidate)) return nextCandidate;
     }
     throw new Error("No available background shell id in range");
   }
 
   abort(shellId: number): boolean {
-    const shell = this.runningShells.get(shellId);
+    const shell = this.liveShells.get(shellId);
     if (!shell) return false;
     shell.abort();
-    this.runningShells.delete(shellId);
+    this.liveShells.delete(shellId);
     this.clearShellWork(shellId);
     return true;
   }
 
   isRunning(shellId: number): boolean {
-    return this.runningShells.has(shellId);
+    return this.liveShells.has(shellId);
   }
 
   dispose(): void {
-    for (const [shellId, shell] of this.runningShells) {
+    for (const [shellId, shell] of this.liveShells) {
       shell.dispose();
       this.clearShellWork(shellId);
     }
-    this.runningShells.clear();
+    this.liveShells.clear();
   }
 
-  async writeStdin(shellId: number, data: string): Promise<void> {
-    const shell = this.runningShells.get(shellId);
+  async writeStdin(shellId: number, inputText: string): Promise<void> {
+    const shell = this.liveShells.get(shellId);
     if (!shell) throw new Error("Shell not found");
     if (!shell.stdin) throw new Error("Shell stdin not available");
-    const eotIndex = data.indexOf("\x04");
-    const effectiveEofIndex = eotIndex !== -1 ? eotIndex : data.indexOf("\\u0004");
-    if (effectiveEofIndex !== -1) {
-      const beforeEof = data.substring(0, effectiveEofIndex);
-      if (beforeEof.length > 0) {
+    const eotAt = inputText.indexOf("\u0004");
+    const eofAt = eotAt !== -1 ? eotAt : inputText.indexOf("\\u0004");
+    if (eofAt !== -1) {
+      const beforeEofText = inputText.substring(0, eofAt);
+      if (beforeEofText.length > 0) {
         await new Promise<void>((resolve, reject) => {
-          shell.stdin?.write(beforeEof, (error?: Error | null) => error ? reject(error) : resolve());
+          shell.stdin?.write(beforeEofText, (error?: Error | null) => error ? reject(error) : resolve());
         });
       }
       shell.stdin.end();
       return;
     }
     await new Promise<void>((resolve, reject) => {
-      shell.stdin?.write(data, (error?: Error | null) => error ? reject(error) : resolve());
+      shell.stdin?.write(inputText, (error?: Error | null) => error ? reject(error) : resolve());
     });
   }
 }
 
 export class ConversationOwnerOverrideRegistry {
   constructor(
-    private readonly inner: BackgroundWorkRegistry,
-    private readonly ownerConversationId: string,
+    private readonly innerRegistry: BackgroundWorkRegistry,
+    private readonly ownerId: string,
   ) {}
 
-  enqueue(wakeup: Record<string, unknown>): void {
-    this.inner.enqueue({ ...wakeup, conversationId: this.ownerConversationId });
+  enqueue(notice: Record<string, unknown>): void {
+    this.innerRegistry.enqueue({ ...notice, conversationId: this.ownerId });
   }
 
-  enqueueCompletion(item: { readonly taskId: string; readonly kind: string; readonly [key: string]: unknown }): void {
-    this.enqueue({ conversationId: this.ownerConversationId, id: item.taskId, source: item.kind, payload: item });
+  enqueueCompletion(accepted: { readonly taskId: string; readonly kind: string; readonly [key: string]: unknown }): void {
+    this.enqueue({ conversationId: this.ownerId, id: accepted.taskId, source: accepted.kind, payload: accepted });
   }
 
   pull(conversationId: string): unknown[] {
-    return this.inner.pull(conversationId);
+    return this.innerRegistry.pull(conversationId);
   }
 
   ack(ids: readonly string[]): unknown[] {
-    return this.inner.ack(ids);
+    return this.innerRegistry.ack(ids);
   }
 
   nack(ids: readonly string[], opts: unknown): void {
-    this.inner.nack(ids, opts);
+    this.innerRegistry.nack(ids, opts);
   }
 
   suppress(conversationId: string, id: string): void {
-    this.inner.suppress(conversationId, id);
+    this.innerRegistry.suppress(conversationId, id);
   }
 
   upsertWork(record: Record<string, unknown>): void {
-    this.inner.upsertWork(record);
+    this.innerRegistry.upsertWork(record);
   }
 
   clearWork(id: string): unknown {
-    return this.inner.clearWork(id);
+    return this.innerRegistry.clearWork(id);
   }
 
   abortWork(id: string): boolean {
-    return this.inner.abortWork(id);
+    return this.innerRegistry.abortWork(id);
   }
 
   hasRunningWork(filter?: unknown): boolean {
-    return this.inner.hasRunningWork(filter);
+    return this.innerRegistry.hasRunningWork(filter);
   }
 
   abortAllWork(filter?: unknown): number {
-    return this.inner.abortAllWork(filter);
+    return this.innerRegistry.abortAllWork(filter);
   }
 
   listWork(filter?: unknown): unknown[] {
-    return this.inner.listWork(filter);
+    return this.innerRegistry.listWork(filter);
   }
 
   drainCompletions(): unknown[] {
-    return this.inner.drainCompletions();
+    return this.innerRegistry.drainCompletions();
   }
 
   hasPendingCompletions(conversationId?: string): boolean {
-    return this.inner.hasPendingCompletions(conversationId);
+    return this.innerRegistry.hasPendingCompletions(conversationId);
   }
 
-  markAwaitedCompletion(taskId: string): void {
-    this.inner.suppress(this.ownerConversationId, taskId);
+  markAwaitedCompletion(taskKey: string): void {
+    this.innerRegistry.suppress(this.ownerId, taskKey);
   }
 }
