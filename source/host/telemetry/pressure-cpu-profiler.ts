@@ -2,7 +2,7 @@
  * Taking a CPU profile while the host is under pressure.
  *
  * A profile is only taken when there is pressure to explain and nothing is already being profiled, and what it leaves
- * behind is bounded — the oldest profiles are dropped — so diagnostics cannot fill the disk they were meant to explain.
+ * behind is bounded — the oldest retainedNames are dropped — so diagnostics cannot fill the disk they were meant to explain.
  */
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { Session } from "node:inspector/promises";
@@ -21,41 +21,41 @@ export interface CpuProfilerBackend {
   dispose(): void;
 }
 export function createInspectorBackend(): CpuProfilerBackend {
-  let session: Session | undefined;
+  let inspectorSession: Session | undefined;
   return {
     start: async () => {
-      const starting = new Session();
-      starting.connect();
+      const sessionStarting = new Session();
+      sessionStarting.connect();
       try {
-        await starting.post("Profiler.enable");
-        await starting.post("Profiler.setSamplingInterval", {
+        await sessionStarting.post("Profiler.enable");
+        await sessionStarting.post("Profiler.setSamplingInterval", {
           interval: PROFILER_SAMPLING_INTERVAL_US,
         });
-        await starting.post("Profiler.start");
-      } catch (error) {
+        await sessionStarting.post("Profiler.start");
+      } catch (failure) {
         try {
-          starting.disconnect();
+          sessionStarting.disconnect();
         } catch {}
-        throw error;
+        throw failure;
       }
-      session = starting;
+      inspectorSession = sessionStarting;
     },
     stop: async () => {
-      const active = session;
-      if (active == null) throw new Error("profiler session not started");
+      const activeSession = inspectorSession;
+      if (activeSession == null) throw new Error("profiler session not started");
       try {
-        const { profile } = await active.post("Profiler.stop");
+        const { profile } = await activeSession.post("Profiler.stop");
         if (profile == null)
           throw new SlateProfilerCaptureError("profiler returned no profile");
         return JSON.stringify(profile);
       } finally {
-        active.disconnect();
-        session = undefined;
+        activeSession.disconnect();
+        inspectorSession = undefined;
       }
     },
     dispose: () => {
-      session?.disconnect();
-      session = undefined;
+      inspectorSession?.disconnect();
+      inspectorSession = undefined;
     },
   };
 }
@@ -71,119 +71,119 @@ export function createPressureCpuProfiler(
     backend?: CpuProfilerBackend;
     now?: () => number;
     overrides?: () => PressureCpuProfilerKnobs | undefined;
-    onCaptured?: (path: string) => void;
+    onCaptured?: (profilePath: string) => void;
   },
 ) {
-  const directory = options.directory ?? PRESSURE_CPU_PROFILE_DIR,
-    backend = options.backend ?? createInspectorBackend(),
-    now = options.now ?? Date.now;
+  const profileDir = options.directory ?? PRESSURE_CPU_PROFILE_DIR,
+    profilerBackend = options.backend ?? createInspectorBackend(),
+    clock = options.now ?? Date.now;
   const knobs = () => {
-    let live: PressureCpuProfilerKnobs | undefined;
+    let liveOverrides: PressureCpuProfilerKnobs | undefined;
     try {
-      live = options.overrides?.();
+      liveOverrides = options.overrides?.();
     } catch {
-      live = undefined;
+      liveOverrides = undefined;
     }
     return {
       sustainedPressureWindowMs:
-        live?.sustainedPressureWindowMs ??
+        liveOverrides?.sustainedPressureWindowMs ??
         options.sustainedPressureWindowMs ??
         DEFAULT_SUSTAINED_PRESSURE_WINDOW_MS,
       profileDurationMs:
-        live?.profileDurationMs ??
+        liveOverrides?.profileDurationMs ??
         options.profileDurationMs ??
         DEFAULT_PROFILE_DURATION_MS,
       minIntervalMs:
-        live?.minIntervalMs ?? options.minIntervalMs ?? DEFAULT_MIN_INTERVAL_MS,
+        liveOverrides?.minIntervalMs ?? options.minIntervalMs ?? DEFAULT_MIN_INTERVAL_MS,
       maxRetainedProfiles: Math.max(
         1,
-        live?.maxRetainedProfiles ??
+        liveOverrides?.maxRetainedProfiles ??
           options.maxRetainedProfiles ??
           DEFAULT_MAX_RETAINED_PROFILES,
       ),
     };
   };
-  let state: "idle" | "starting" | "profiling" | "stopping" = "idle",
-    captureDeadlineMs = 0,
-    lastCaptureStartedAtMs: number | undefined,
-    previousPressureAtMs: number | undefined,
-    disposed = false;
-  const pruneOldProfiles = (max: number) => {
-    const profiles = readdirSync(directory)
-      .filter((name) => name.startsWith(PRESSURE_CPU_PROFILE_PREFIX))
+  let captureState: "idle" | "sessionStarting" | "profiling" | "stopping" = "idle",
+    deadlineMs = 0,
+    lastCaptureAt: number | undefined,
+    previousPressureAt: number | undefined,
+    isDisposed = false;
+  const pruneProfiles = (max: number) => {
+    const retainedNames = readdirSync(profileDir)
+      .filter((fileName) => fileName.startsWith(PRESSURE_CPU_PROFILE_PREFIX))
       .sort();
-    for (const name of profiles.slice(0, Math.max(0, profiles.length - max)))
-      rmSync(join(directory, name), { force: true });
+    for (const fileName of retainedNames.slice(0, Math.max(0, retainedNames.length - max)))
+      rmSync(join(profileDir, fileName), { force: true });
   };
-  const finishCapture = async () => {
-    state = "stopping";
+  const completeCapture = async () => {
+    captureState = "stopping";
     try {
-      const profileJson = await backend.stop();
-      if (disposed) return;
-      mkdirSync(directory, { recursive: true });
-      const path = join(
-        directory,
-        `${PRESSURE_CPU_PROFILE_PREFIX}${now()}.cpuprofile`,
+      const profileText = await profilerBackend.stop();
+      if (isDisposed) return;
+      mkdirSync(profileDir, { recursive: true });
+      const profilePath = join(
+        profileDir,
+        `${PRESSURE_CPU_PROFILE_PREFIX}${clock()}.cpuprofile`,
       );
-      writeFileSync(path, profileJson);
-      pruneOldProfiles(knobs().maxRetainedProfiles);
-      console.warn(`[slate-host] pressure CPU profile written: ${path}`);
-      options.onCaptured?.(path);
-    } catch (error) {
-      console.warn("[slate-host] pressure CPU profile capture failed:", error);
+      writeFileSync(profilePath, profileText);
+      pruneProfiles(knobs().maxRetainedProfiles);
+      console.warn(`[slate-host] pressure CPU profile written: ${profilePath}`);
+      options.onCaptured?.(profilePath);
+    } catch (failure) {
+      console.warn("[slate-host] pressure CPU profile capture failed:", failure);
     } finally {
-      state = "idle";
+      captureState = "idle";
     }
   };
   return {
     onPressure: () => {
-      if (disposed || state !== "idle") return;
-      const nowMs = now(),
-        effective = knobs();
+      if (isDisposed || captureState !== "idle") return;
+      const currentMs = clock(),
+        activeKnobs = knobs();
       if (
-        lastCaptureStartedAtMs != null &&
-        nowMs - lastCaptureStartedAtMs < effective.minIntervalMs
+        lastCaptureAt != null &&
+        currentMs - lastCaptureAt < activeKnobs.minIntervalMs
       )
         return;
-      const sustained =
-        previousPressureAtMs != null &&
-        nowMs - previousPressureAtMs <= effective.sustainedPressureWindowMs;
-      if (!sustained) {
-        previousPressureAtMs = nowMs;
+      const isSustained =
+        previousPressureAt != null &&
+        currentMs - previousPressureAt <= activeKnobs.sustainedPressureWindowMs;
+      if (!isSustained) {
+        previousPressureAt = currentMs;
         return;
       }
-      previousPressureAtMs = undefined;
-      state = "starting";
-      lastCaptureStartedAtMs = nowMs;
-      void backend
+      previousPressureAt = undefined;
+      captureState = "sessionStarting";
+      lastCaptureAt = currentMs;
+      void profilerBackend
         .start()
         .then(() => {
-          if (disposed) {
-            backend.dispose();
-            state = "idle";
+          if (isDisposed) {
+            profilerBackend.dispose();
+            captureState = "idle";
             return;
           }
-          if (state === "starting") {
-            captureDeadlineMs = now() + effective.profileDurationMs;
-            state = "profiling";
+          if (captureState === "sessionStarting") {
+            deadlineMs = clock() + activeKnobs.profileDurationMs;
+            captureState = "profiling";
           }
         })
-        .catch((error) => {
-          console.warn("[slate-host] pressure CPU profile start failed:", error);
-          state = "idle";
-          lastCaptureStartedAtMs = undefined;
+        .catch((failure) => {
+          console.warn("[slate-host] pressure CPU profile start failed:", failure);
+          captureState = "idle";
+          lastCaptureAt = undefined;
         });
     },
     onTick: () => {
-      if (disposed || state !== "profiling" || now() < captureDeadlineMs)
+      if (isDisposed || captureState !== "profiling" || clock() < deadlineMs)
         return;
-      void finishCapture();
+      void completeCapture();
     },
     dispose: () => {
-      if (disposed) return;
-      disposed = true;
-      if (state === "starting" || state === "profiling") backend.dispose();
-      state = "idle";
+      if (isDisposed) return;
+      isDisposed = true;
+      if (captureState === "sessionStarting" || captureState === "profiling") profilerBackend.dispose();
+      captureState = "idle";
     },
   };
 }
