@@ -1,6 +1,6 @@
 /** The box's own log, carried where the platform can read it.
 
- * What a box writes down as it runs is read, bounded and shipped in batches, with what was already shipped remembered so
+ * What a box writes down as it runs is read, clamped and shipped in batches, with what was already shipped remembered so
  * a restart does not send it twice and a box that is behind is caught up rather than dropped. */
 import { open, readFile, readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
@@ -150,8 +150,8 @@ interface SaveFailure {
 export function parseBoxInfrastructureEvent(
   value: unknown,
 ): InfrastructureEvent | undefined {
-  const parsed = boxInfrastructureEventSchema.safeParse(value);
-  return parsed.success ? parsed.data : undefined;
+  const parsedValue = boxInfrastructureEventSchema.safeParse(value);
+  return parsedValue.success ? parsedValue.data : undefined;
 }
 export class BoxLogShipper {
   readonly offsets = new Map<string, number>();
@@ -159,37 +159,37 @@ export class BoxLogShipper {
   readonly pendingWindowStartedAtMs = new Map<string, number>();
   readonly statFailedPaths = new Set<string>();
   private readonly reportBatch: (
-    records: BoxTelemetryRecord[],
-    settle: (settlement: Settlement) => void,
+    batchRecords: BoxTelemetryRecord[],
+    settle: (outcome: Settlement) => void,
   ) => void;
   private readonly reportBoxLogShip: (
     report: BoxShipReport,
-    settle?: (settlement: Settlement) => void,
+    settleRecord?: (outcome: Settlement) => void,
   ) => void;
-  private readonly skip: Set<string>;
-  private readonly excludeSourcePrefixes: readonly string[];
-  private readonly logDir: string;
-  private readonly subdirPattern: RegExp;
-  private readonly polling: Polling;
-  private readonly clock: Clock;
-  private readonly maxBytesPerReadPerFile: number;
-  private readonly maxLinesPerPoll: number;
-  private readonly maxLagBytes: number;
-  private readonly maxLineBytes: number;
-  private readonly offsetsPath: string;
-  private readonly writeOffsets: (
+  private readonly skipPaths: Set<string>;
+  private readonly excludedPrefixes: readonly string[];
+  private readonly logDirectory: string;
+  private readonly windowPattern: RegExp;
+  private readonly pollingLoop: Polling;
+  private readonly monotonicClock: Clock;
+  private readonly readByteBudget: number;
+  private readonly lineBudget: number;
+  private readonly lagByteLimit: number;
+  private readonly lineByteLimit: number;
+  private readonly offsetsFilePath: string;
+  private readonly offsetWriter: (
     path: string,
     data: Uint8Array,
   ) => Promise<void>;
-  private pollingHandle: { dispose(): void } | undefined;
-  private activePoll: Promise<void> | undefined;
-  private hasLoadedOffsets = false;
-  private isDisposed = false;
-  private isOffsetsDirty = false;
-  private offsetsRevision = 0;
-  private lastProgressReportAtMs: number | undefined;
-  private offsetSaveFailure: SaveFailure | undefined;
-  constructor(deps: {
+  private pollSubscription: { dispose(): void } | undefined;
+  private currentPoll: Promise<void> | undefined;
+  private offsetsHydrated = false;
+  private shutDown = false;
+  private offsetsUnsaved = false;
+  private offsetsVersionNumber = 0;
+  private lastProgressAtMs: number | undefined;
+  private offsetSaveProblem: SaveFailure | undefined;
+  constructor(settings: {
     reportBatch: BoxLogShipper["reportBatch"];
     reportBoxLogShip: BoxLogShipper["reportBoxLogShip"];
     polling: Polling;
@@ -205,32 +205,32 @@ export class BoxLogShipper {
     offsetsPath?: string;
     writeOffsets?: (path: string, data: Uint8Array) => Promise<void>;
   }) {
-    this.reportBatch = deps.reportBatch;
-    this.reportBoxLogShip = deps.reportBoxLogShip;
-    this.logDir = deps.logDir ?? DEFAULT_LOG_DIR;
-    this.skip = new Set(deps.skipPaths ?? []);
-    this.excludeSourcePrefixes =
-      deps.excludeSourcePrefixes ?? DEFAULT_EXCLUDED_SOURCE_PREFIXES;
-    this.subdirPattern = deps.subdirPattern ?? DEFAULT_SUBDIR_PATTERN;
-    this.polling = deps.polling;
-    this.clock = deps.clock;
-    this.maxBytesPerReadPerFile =
-      deps.maxBytesPerReadPerFile ?? DEFAULT_MAX_BYTES_PER_READ;
-    this.maxLinesPerPoll = deps.maxLinesPerPoll ?? DEFAULT_MAX_LINES_PER_POLL;
-    this.maxLagBytes = deps.maxLagBytes ?? DEFAULT_MAX_LAG_BYTES;
-    this.maxLineBytes = deps.maxLineBytes ?? DEFAULT_MAX_LINE_BYTES;
-    this.offsetsPath = deps.offsetsPath ?? join(this.logDir, OFFSETS_FILE_NAME);
-    this.writeOffsets = deps.writeOffsets ?? writeFileAtomic;
+    this.reportBatch = settings.reportBatch;
+    this.reportBoxLogShip = settings.reportBoxLogShip;
+    this.logDirectory = settings.logDir ?? DEFAULT_LOG_DIR;
+    this.skipPaths = new Set(settings.skipPaths ?? []);
+    this.excludedPrefixes =
+      settings.excludeSourcePrefixes ?? DEFAULT_EXCLUDED_SOURCE_PREFIXES;
+    this.windowPattern = settings.subdirPattern ?? DEFAULT_SUBDIR_PATTERN;
+    this.pollingLoop = settings.polling;
+    this.monotonicClock = settings.clock;
+    this.readByteBudget =
+      settings.maxBytesPerReadPerFile ?? DEFAULT_MAX_BYTES_PER_READ;
+    this.lineBudget = settings.maxLinesPerPoll ?? DEFAULT_MAX_LINES_PER_POLL;
+    this.lagByteLimit = settings.maxLagBytes ?? DEFAULT_MAX_LAG_BYTES;
+    this.lineByteLimit = settings.maxLineBytes ?? DEFAULT_MAX_LINE_BYTES;
+    this.offsetsFilePath = settings.offsetsPath ?? join(this.logDirectory, OFFSETS_FILE_NAME);
+    this.offsetWriter = settings.writeOffsets ?? writeFileAtomic;
   }
   async start(): Promise<void> {
     await this.loadOffsets();
-    this.hasLoadedOffsets = true;
+    this.offsetsHydrated = true;
     let first = true,
       resolveFirst = () => {};
     const firstPoll = new Promise<void>((resolve) => {
       resolveFirst = resolve;
     });
-    this.pollingHandle = this.polling.start(async () => {
+    this.pollSubscription = this.pollingLoop.start(async () => {
       try {
         await this.poll();
       } catch (error) {
@@ -252,34 +252,34 @@ export class BoxLogShipper {
     await this.saveOffsets(true);
   }
   async stopPolling(): Promise<void> {
-    this.isDisposed = true;
-    this.pollingHandle?.dispose();
-    this.pollingHandle = undefined;
-    await this.activePoll;
+    this.shutDown = true;
+    this.pollSubscription?.dispose();
+    this.pollSubscription = undefined;
+    await this.currentPoll;
   }
   async poll(): Promise<void> {
-    if (this.activePoll !== undefined || this.isDisposed) return;
+    if (this.currentPoll !== undefined || this.shutDown) return;
     const active = this.pollOnce();
-    this.activePoll = active;
+    this.currentPoll = active;
     try {
       await active;
     } finally {
-      if (this.activePoll === active) this.activePoll = undefined;
+      if (this.currentPoll === active) this.currentPoll = undefined;
     }
   }
   async pollOnce(): Promise<void> {
-    const listing = await this.listLogFiles(),
-      snapshot = await this.snapshotLogFileSizes(listing);
-    this.reconcileTruncatedOffsets(snapshot.files);
-    let budget = this.maxLinesPerPoll;
-    for (const file of snapshot.files) {
+    const scanListing = await this.listLogFiles(),
+      sizeSnapshot = await this.snapshotLogFileSizes(scanListing);
+    this.reconcileTruncatedOffsets(sizeSnapshot.files);
+    let budget = this.lineBudget;
+    for (const logFile of sizeSnapshot.files) {
       if (budget <= 0) break;
       try {
-        budget -= await this.pumpFile(file, budget);
+        budget -= await this.pumpFile(logFile, budget);
       } catch {}
     }
-    if (this.isOffsetsDirty) await this.saveOffsets();
-    if (snapshot.complete) this.maybeReportProgress(snapshot.files);
+    if (this.offsetsUnsaved) await this.saveOffsets();
+    if (sizeSnapshot.complete) this.maybeReportProgress(sizeSnapshot.files);
     this.maybeRetryOffsetSaveFailure();
   }
   async listLogFiles(): Promise<{ files: LogFile[]; complete: boolean }> {
@@ -287,152 +287,152 @@ export class BoxLogShipper {
     let complete = true;
     let entries;
     try {
-      entries = await readdir(this.logDir, { withFileTypes: true });
+      entries = await readdir(this.logDirectory, { withFileTypes: true });
     } catch {
       return { files, complete: false };
     }
-    for (const entry of entries) {
-      if (entry.isFile() && entry.name.endsWith(LOG_SUFFIX)) {
-        const path = join(this.logDir, entry.name),
-          source = toSourceName(entry.name);
-        if (!this.skip.has(path) && !this.isExcludedSource(source))
+    for (const directoryEntry of entries) {
+      if (directoryEntry.isFile() && directoryEntry.name.endsWith(LOG_SUFFIX)) {
+        const path = join(this.logDirectory, directoryEntry.name),
+          source = toSourceName(directoryEntry.name);
+        if (!this.skipPaths.has(path) && !this.isExcludedSource(source))
           files.push({ path, source });
-      } else if (entry.isDirectory() && this.subdirPattern.test(entry.name)) {
-        const subdir = join(this.logDir, entry.name);
-        let subEntries;
+      } else if (directoryEntry.isDirectory() && this.windowPattern.test(directoryEntry.name)) {
+        const subdir = join(this.logDirectory, directoryEntry.name);
+        let windowEntries;
         try {
-          subEntries = await readdir(subdir, { withFileTypes: true });
+          windowEntries = await readdir(subdir, { withFileTypes: true });
         } catch {
           complete = false;
           continue;
         }
-        for (const sub of subEntries) {
-          if (!sub.isFile() || !sub.name.endsWith(LOG_SUFFIX)) continue;
-          const path = join(subdir, sub.name),
-            leaf = toSourceName(sub.name);
-          if (!this.skip.has(path) && !this.isExcludedSource(leaf))
-            files.push({ path, source: `${entry.name}/${leaf}` });
+        for (const windowEntry of windowEntries) {
+          if (!windowEntry.isFile() || !windowEntry.name.endsWith(LOG_SUFFIX)) continue;
+          const path = join(subdir, windowEntry.name),
+            leafSource = toSourceName(windowEntry.name);
+          if (!this.skipPaths.has(path) && !this.isExcludedSource(leafSource))
+            files.push({ path, source: `${directoryEntry.name}/${leafSource}` });
         }
       }
     }
     return { files, complete };
   }
-  async snapshotLogFileSizes(listing: {
+  async snapshotLogFileSizes(scanListing: {
     files: LogFile[];
     complete: boolean;
   }): Promise<{ files: Required<LogFile>[]; complete: boolean }> {
     const files: Required<LogFile>[] = [];
-    let complete = listing.complete;
-    for (const file of listing.files) {
+    let complete = scanListing.complete;
+    for (const logFile of scanListing.files) {
       try {
-        const fileStat = await stat(file.path);
-        this.statFailedPaths.delete(file.path);
-        if (fileStat.isFile()) files.push({ ...file, size: fileStat.size });
+        const fileStat = await stat(logFile.path);
+        this.statFailedPaths.delete(logFile.path);
+        if (fileStat.isFile()) files.push({ ...logFile, size: fileStat.size });
       } catch (error) {
         complete = false;
         if (
           findSystemErrno(error) !== "ENOENT" &&
-          !this.statFailedPaths.has(file.path)
+          !this.statFailedPaths.has(logFile.path)
         ) {
-          this.statFailedPaths.add(file.path);
+          this.statFailedPaths.add(logFile.path);
           console.error(
-            `[slate-log-shipper] stat failed for ${file.source} (${errorLogTag(error)})`,
+            `[slate-log-shipper] stat failed for ${logFile.source} (${errorLogTag(error)})`,
           );
         }
       }
     }
     return { files, complete };
   }
-  isExcludedSource(leaf: string): boolean {
-    return this.excludeSourcePrefixes.some((prefix) => leaf.startsWith(prefix));
+  isExcludedSource(leafSource: string): boolean {
+    return this.excludedPrefixes.some((prefix) => leafSource.startsWith(prefix));
   }
-  reconcileTruncatedOffsets(files: Required<LogFile>[]): void {
-    for (const file of files) {
-      const offset = this.offsets.get(file.path);
-      if (offset !== undefined && file.size < offset) {
-        const pending = this.pendingDeliveryWindows.get(file.path);
+  reconcileTruncatedOffsets(logFiles: Required<LogFile>[]): void {
+    for (const logFile of logFiles) {
+      const offset = this.offsets.get(logFile.path);
+      if (offset !== undefined && logFile.size < offset) {
+        const pending = this.pendingDeliveryWindows.get(logFile.path);
         if (pending === undefined)
-          this.pendingWindowStartedAtMs.delete(file.path);
+          this.pendingWindowStartedAtMs.delete(logFile.path);
         else pending.invalidated = true;
-        this.setOffset(file.path, 0);
+        this.setOffset(logFile.path, 0);
       }
     }
   }
-  async pumpFile(file: Required<LogFile>, budget: number): Promise<number> {
-    const { path, source, size } = file;
+  async pumpFile(logFile: Required<LogFile>, budget: number): Promise<number> {
+    const { path, source, size } = logFile;
     if (this.pendingDeliveryWindows.has(path)) return 0;
-    let from = this.offsets.get(path) ?? 0;
-    if (size <= from) {
+    let startOffset = this.offsets.get(path) ?? 0;
+    if (size <= startOffset) {
       this.pendingWindowStartedAtMs.delete(path);
       return 0;
     }
-    let processed = 0,
-      candidateEndOffset = from;
-    const records: BoxTelemetryRecord[] = [];
-    if (size - from > this.maxLagBytes) {
-      const jumped = size - this.maxBytesPerReadPerFile;
-      records.push({
+    let handledCount = 0,
+      candidateEndOffset = startOffset;
+    const batchRecords: BoxTelemetryRecord[] = [];
+    if (size - startOffset > this.lagByteLimit) {
+      const jumpTarget = size - this.readByteBudget;
+      batchRecords.push({
         kind: "log",
         source,
-        line: `[slate-log-shipper] skipped ${jumped - from} bytes (too far behind)`,
+        line: `[slate-log-shipper] skipped ${jumpTarget - startOffset} bytes (too far behind)`,
       });
-      processed += 1;
-      from = jumped;
-      candidateEndOffset = jumped;
+      handledCount += 1;
+      startOffset = jumpTarget;
+      candidateEndOffset = jumpTarget;
     }
-    const length = Math.min(size - from, this.maxBytesPerReadPerFile),
-      buffer = Buffer.alloc(length),
-      handle = await open(path, "r");
+    const length = Math.min(size - startOffset, this.readByteBudget),
+      byteBuffer = Buffer.alloc(length),
+      openHandle = await open(path, "r");
     let bytesRead = 0;
     try {
-      ({ bytesRead } = await handle.read(buffer, 0, length, from));
+      ({ bytesRead } = await openHandle.read(byteBuffer, 0, length, startOffset));
     } finally {
-      await handle.close();
+      await openHandle.close();
     }
     if (bytesRead <= 0) {
-      this.reportDeliveryWindow(path, candidateEndOffset, records);
-      return processed;
+      this.reportDeliveryWindow(path, candidateEndOffset, batchRecords);
+      return handledCount;
     }
-    const chunk = buffer.subarray(0, bytesRead),
-      lastNewline = chunk.lastIndexOf(NEWLINE);
+    const inputChunk = byteBuffer.subarray(0, bytesRead),
+      lastNewline = inputChunk.lastIndexOf(NEWLINE);
     if (lastNewline === -1) {
-      if (from + bytesRead < size) {
+      if (startOffset + bytesRead < size) {
         const record = this.toTelemetryRecord({
           source,
-          line: chunk.subarray(0, this.maxLineBytes).toString("utf8"),
+          line: inputChunk.subarray(0, this.lineByteLimit).toString("utf8"),
         });
-        if (record !== undefined) records.push(record);
-        candidateEndOffset = from + bytesRead;
-        processed += 1;
+        if (record !== undefined) batchRecords.push(record);
+        candidateEndOffset = startOffset + bytesRead;
+        handledCount += 1;
       }
-      this.reportDeliveryWindow(path, candidateEndOffset, records);
-      return processed;
+      this.reportDeliveryWindow(path, candidateEndOffset, batchRecords);
+      return handledCount;
     }
-    let cursor = 0;
-    while (processed < budget) {
-      const newline = chunk.indexOf(NEWLINE, cursor);
-      if (newline === -1 || newline > lastNewline) break;
-      let line = chunk.subarray(cursor, newline).toString("utf8");
-      cursor = newline + 1;
+    let cursorPosition = 0;
+    while (handledCount < budget) {
+      const newlinePosition = inputChunk.indexOf(NEWLINE, cursorPosition);
+      if (newlinePosition === -1 || newlinePosition > lastNewline) break;
+      let line = inputChunk.subarray(cursorPosition, newlinePosition).toString("utf8");
+      cursorPosition = newlinePosition + 1;
       if (line.endsWith("\r")) line = line.slice(0, -1);
       if (line.length > 0) {
         const record = this.toTelemetryRecord({ source, line });
-        if (record !== undefined) records.push(record);
-        processed += 1;
+        if (record !== undefined) batchRecords.push(record);
+        handledCount += 1;
       }
     }
-    candidateEndOffset = from + cursor;
-    this.reportDeliveryWindow(path, candidateEndOffset, records);
-    return processed;
+    candidateEndOffset = startOffset + cursorPosition;
+    this.reportDeliveryWindow(path, candidateEndOffset, batchRecords);
+    return handledCount;
   }
-  toTelemetryRecord(entry: {
+  toTelemetryRecord(directoryEntry: {
     source: string;
     line: string;
   }): BoxTelemetryRecord | undefined {
-    if (entry.source !== BOX_TELEMETRY_SOURCE) return { kind: "log", ...entry };
+    if (directoryEntry.source !== BOX_TELEMETRY_SOURCE) return { kind: "log", ...directoryEntry };
     let value: unknown;
     try {
-      value = JSON.parse(entry.line);
+      value = JSON.parse(directoryEntry.line);
     } catch {
       return undefined;
     }
@@ -442,47 +442,47 @@ export class BoxLogShipper {
   reportDeliveryWindow(
     path: string,
     candidateEndOffset: number,
-    records: BoxTelemetryRecord[],
+    batchRecords: BoxTelemetryRecord[],
   ): void {
-    if (records.length === 0) {
+    if (batchRecords.length === 0) {
       this.setOffset(path, candidateEndOffset);
       return;
     }
-    const window: DeliveryWindow = {
+    const deliveryWindow: DeliveryWindow = {
       candidateEndOffset,
-      unsettledRecordCount: records.length,
+      unsettledRecordCount: batchRecords.length,
       didDropRecord: false,
       invalidated: false,
     };
     if (!this.pendingWindowStartedAtMs.has(path))
-      this.pendingWindowStartedAtMs.set(path, this.clock.monotonicNow());
-    this.pendingDeliveryWindows.set(path, window);
-    this.reportBatch(records, (settlement) =>
-      this.settleDeliveryWindow(path, window, settlement),
+      this.pendingWindowStartedAtMs.set(path, this.monotonicClock.monotonicNow());
+    this.pendingDeliveryWindows.set(path, deliveryWindow);
+    this.reportBatch(batchRecords, (outcome) =>
+      this.settleDeliveryWindow(path, deliveryWindow, outcome),
     );
   }
   settleDeliveryWindow(
     path: string,
-    window: DeliveryWindow,
-    settlement: Settlement,
+    deliveryWindow: DeliveryWindow,
+    outcome: Settlement,
   ): void {
-    window.unsettledRecordCount -= 1;
-    if (settlement === "dropped") window.didDropRecord = true;
-    if (window.unsettledRecordCount > 0) return;
+    deliveryWindow.unsettledRecordCount -= 1;
+    if (outcome === "dropped") deliveryWindow.didDropRecord = true;
+    if (deliveryWindow.unsettledRecordCount > 0) return;
     this.pendingDeliveryWindows.delete(path);
-    if (!window.didDropRecord && !window.invalidated)
-      this.setOffset(path, window.candidateEndOffset);
+    if (!deliveryWindow.didDropRecord && !deliveryWindow.invalidated)
+      this.setOffset(path, deliveryWindow.candidateEndOffset);
   }
   setOffset(path: string, offset: number): void {
-    const previous = this.offsets.get(path);
-    if (previous === offset) return;
+    const previousOffset = this.offsets.get(path);
+    if (previousOffset === offset) return;
     this.offsets.set(path, offset);
-    if (offset > (previous ?? 0)) this.pendingWindowStartedAtMs.delete(path);
-    this.isOffsetsDirty = true;
-    this.offsetsRevision += 1;
+    if (offset > (previousOffset ?? 0)) this.pendingWindowStartedAtMs.delete(path);
+    this.offsetsUnsaved = true;
+    this.offsetsVersionNumber += 1;
   }
   async loadOffsets(): Promise<void> {
-    const raw = await readFile(this.offsetsPath, "utf8").catch(
+    const rawBody = await readFile(this.offsetsFilePath, "utf8").catch(
       (error: unknown) => {
         if (findSystemErrno(error) !== "ENOENT")
           console.error(
@@ -491,59 +491,59 @@ export class BoxLogShipper {
         return null;
       },
     );
-    if (raw === null) return;
-    let parsed;
+    if (rawBody === null) return;
+    let parsedValue;
     try {
-      parsed = offsetsSchema.safeParse(JSON.parse(raw));
+      parsedValue = offsetsSchema.safeParse(JSON.parse(rawBody));
     } catch {
       return;
     }
-    if (!parsed.success) return;
-    for (const [path, offset] of Object.entries(parsed.data))
+    if (!parsedValue.success) return;
+    for (const [path, offset] of Object.entries(parsedValue.data))
       this.offsets.set(path, offset);
   }
   async saveOffsets(force = false): Promise<void> {
-    if (!this.hasLoadedOffsets || (!force && !this.isOffsetsDirty)) return;
-    const revision = this.offsetsRevision,
+    if (!this.offsetsHydrated || (!force && !this.offsetsUnsaved)) return;
+    const saveRevision = this.offsetsVersionNumber,
       record: Record<string, number> = {};
     for (const [path, offset] of this.offsets) record[path] = offset;
     try {
-      await this.writeOffsets(
-        this.offsetsPath,
+      await this.offsetWriter(
+        this.offsetsFilePath,
         Buffer.from(JSON.stringify(record)),
       );
-      if (this.offsetsRevision === revision) {
-        this.isOffsetsDirty = false;
+      if (this.offsetsVersionNumber === saveRevision) {
+        this.offsetsUnsaved = false;
         this.noteOffsetSaveSucceeded();
       }
     } catch (error) {
-      this.isOffsetsDirty = true;
+      this.offsetsUnsaved = true;
       this.noteOffsetSaveFailed(error);
     }
   }
-  maybeReportProgress(files: Required<LogFile>[]): void {
-    const now = this.clock.monotonicNow();
+  maybeReportProgress(logFiles: Required<LogFile>[]): void {
+    const monoNow = this.monotonicClock.monotonicNow();
     if (
-      this.lastProgressReportAtMs !== undefined &&
-      now - this.lastProgressReportAtMs < BOX_LOG_SHIP_PROGRESS_INTERVAL_MS
+      this.lastProgressAtMs !== undefined &&
+      monoNow - this.lastProgressAtMs < BOX_LOG_SHIP_PROGRESS_INTERVAL_MS
     )
       return;
     let bytesWritten = 0,
       bytesDelivered = 0;
-    for (const file of files) {
-      bytesWritten = saturatingAdd(bytesWritten, file.size);
+    for (const logFile of logFiles) {
+      bytesWritten = saturatingAdd(bytesWritten, logFile.size);
       bytesDelivered = saturatingAdd(
         bytesDelivered,
-        Math.min(file.size, this.offsets.get(file.path) ?? 0),
+        Math.min(logFile.size, this.offsets.get(logFile.path) ?? 0),
       );
     }
     let oldestPendingWindowAgeMs = 0;
-    for (const startedAtMs of this.pendingWindowStartedAtMs.values())
+    for (const windowStartMs of this.pendingWindowStartedAtMs.values())
       oldestPendingWindowAgeMs = Math.max(
         oldestPendingWindowAgeMs,
-        toNonnegativeSafeInteger(now - startedAtMs),
+        toNonnegativeSafeInteger(monoNow - windowStartMs),
       );
-    this.lastProgressReportAtMs = now;
+    this.lastProgressAtMs = monoNow;
     this.reportBoxLogShip({
       kind: "progress",
       bytesWritten,
@@ -555,27 +555,27 @@ export class BoxLogShipper {
     });
   }
   maybeRetryOffsetSaveFailure(): void {
-    const failure = this.offsetSaveFailure;
+    const failure = this.offsetSaveProblem;
     if (
       failure?.reportState.kind === "waiting_for_retry" &&
-      this.clock.monotonicNow() >= failure.reportState.retryAtMs
+      this.monotonicClock.monotonicNow() >= failure.reportState.retryAtMs
     )
       this.reportOffsetSaveFailure(failure);
   }
   noteOffsetSaveFailed(error: unknown): void {
-    const errorClass = classifyOffsetSaveError(error),
-      failure = this.offsetSaveFailure;
+    const saveErrorKind = classifyOffsetSaveError(error),
+      failure = this.offsetSaveProblem;
     if (failure !== undefined) {
-      failure.errorClass = errorClass;
+      failure.errorClass = saveErrorKind;
       failure.failureCount = saturatingAdd(failure.failureCount, 1);
       return;
     }
     const next: SaveFailure = {
-      errorClass,
+      errorClass: saveErrorKind,
       failureCount: 1,
       reportState: { kind: "in_flight" },
     };
-    this.offsetSaveFailure = next;
+    this.offsetSaveProblem = next;
     this.reportOffsetSaveFailure(next);
   }
   reportOffsetSaveFailure(failure: SaveFailure): void {
@@ -586,27 +586,27 @@ export class BoxLogShipper {
         errorClass: failure.errorClass,
         failureCount: failure.failureCount,
       },
-      (settlement) => {
+      (outcome) => {
         if (
-          this.offsetSaveFailure !== failure ||
+          this.offsetSaveProblem !== failure ||
           failure.reportState.kind !== "in_flight"
         )
           return;
         failure.reportState =
-          settlement === "delivered"
+          outcome === "delivered"
             ? { kind: "delivered" }
             : {
                 kind: "waiting_for_retry",
                 retryAtMs:
-                  this.clock.monotonicNow() + BOX_LOG_SHIP_PROGRESS_INTERVAL_MS,
+                  this.monotonicClock.monotonicNow() + BOX_LOG_SHIP_PROGRESS_INTERVAL_MS,
               };
       },
     );
   }
   noteOffsetSaveSucceeded(): void {
-    const failure = this.offsetSaveFailure;
+    const failure = this.offsetSaveProblem;
     if (failure === undefined) return;
-    this.offsetSaveFailure = undefined;
+    this.offsetSaveProblem = undefined;
     this.reportBoxLogShip({
       kind: "save_recovered",
       errorClass: failure.errorClass,
@@ -618,13 +618,13 @@ export function isBoxLogShippingEnabled(
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
   if (env.SLATE_HOST_IN_BOX !== "1") return false;
-  const disabled = env.SLATE_BOX_LOG_SHIP_DISABLED?.trim().toLowerCase();
-  return !(disabled === "1" || disabled === "true" || disabled === "yes");
+  const disabledFlag = env.SLATE_BOX_LOG_SHIP_DISABLED?.trim().toLowerCase();
+  return !(disabledFlag === "1" || disabledFlag === "true" || disabledFlag === "yes");
 }
-export function toSourceName(fileName: string): string {
-  return fileName.endsWith(LOG_SUFFIX)
-    ? fileName.slice(0, -LOG_SUFFIX.length)
-    : fileName;
+export function toSourceName(leafFileName: string): string {
+  return leafFileName.endsWith(LOG_SUFFIX)
+    ? leafFileName.slice(0, -LOG_SUFFIX.length)
+    : leafFileName;
 }
 export function classifyOffsetSaveError(error: unknown): string {
   switch (findSystemErrno(error)) {
@@ -645,10 +645,10 @@ export function classifyOffsetSaveError(error: unknown): string {
   }
 }
 export function saturatingAdd(total: number, value: number): number {
-  const bounded = toNonnegativeSafeInteger(value);
-  return total >= Number.MAX_SAFE_INTEGER - bounded
+  const clamped = toNonnegativeSafeInteger(value);
+  return total >= Number.MAX_SAFE_INTEGER - clamped
     ? Number.MAX_SAFE_INTEGER
-    : total + bounded;
+    : total + clamped;
 }
 export function toNonnegativeSafeInteger(value: number): number {
   if (!Number.isFinite(value)) return Number.MAX_SAFE_INTEGER;
