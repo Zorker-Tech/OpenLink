@@ -4,13 +4,13 @@
  * A store with a thousand small files costs a thousand reads to restore. A pack is the answer — many members in one file,
  * with an index that says where each member is — and this file owns the two sides of it:
  *
- * - **building** — decide which live blobs are worth packing (small enough, present locally, not already packed), build
+ * - **building** — decide which liveSizes blobs are worth packing (small enough, present locally, not already packed), build
  *   them, upload each pack by content, and only then replace the index. A round that finds a flush waiting yields, because
- *   a user asking for "now" outranks housekeeping;
+ *   a user asking for "clock" outranks housekeeping;
  * - **restoring** — a pack is only used when it saves real work (enough members, and its bytes are mostly wanted);
  *   members are verified as they are extracted, and anything that does not verify falls back to the loose blob.
  *
- * The retired list is the tombstone side of the index: a pack that is no longer referenced is recorded before it is
+ * The retired list is the tombstone side of the index: a pack that is no longer keptIds is recorded before it is
  * deleted, so an interrupted deletion leaves a pack the next restore knows to ignore rather than a dangling reference.
  */
 import { randomBytes } from "node:crypto";
@@ -87,7 +87,7 @@ export interface BoxStorePackPipelineOptions {
   now(): number;
   log(message: string): void;
   getFlushWaiters(): number;
-  discardTemp(args: { tmpPath: string; label: string }): Promise<void>;
+  discardTemp(input: { tmpPath: string; label: string }): Promise<void>;
   sha256File(path: string): Promise<string>;
 }
 
@@ -96,10 +96,10 @@ export interface RestoreBulkSmallFromPacksOptions {
   readonly targetDir: string;
   readonly groups: ReadonlyMap<string, BoxStoreBlobGroup>;
   readonly byteBudget: BoxStoreByteBudget;
-  localFileMatches(destPath: string, group: BoxStoreBlobGroup): Promise<boolean>;
+  localFileMatches(destinationPath: string, group: BoxStoreBlobGroup): Promise<boolean>;
   mkdirOwned(dir: string): Promise<void>;
-  applyExistingFileMetadata(destPath: string, relPath: string): Promise<void>;
-  writeVerifiedBytes(destPath: string, relPath: string, bytes: Uint8Array): Promise<void>;
+  applyExistingFileMetadata(destinationPath: string, relPath: string): Promise<void>;
+  writeVerifiedBytes(destinationPath: string, relPath: string, bytes: Uint8Array): Promise<void>;
   recordRestoredPath(byteSize: number): void;
 }
 
@@ -107,33 +107,33 @@ export class BoxStorePackPipeline {
   private readonly categories: readonly BoxStorePackCategory[];
   private readonly objectStore: (storeId: string) => BoxObjectStore;
   private readonly manifestStore: Pick<BoxStoreManifestStore, "loadManifest">;
-  private readonly now: () => number;
+  private readonly clock: () => number;
   private readonly log: (message: string) => void;
   private readonly getFlushWaiters: () => number;
-  private readonly discardTemp: (args: { tmpPath: string; label: string }) => Promise<void>;
+  private readonly discardTemp: (input: { tmpPath: string; label: string }) => Promise<void>;
   private readonly sha256File: (path: string) => Promise<string>;
 
-  constructor(args: BoxStorePackPipelineOptions) {
-    this.categories = args.categories;
-    this.objectStore = args.objectStore;
-    this.manifestStore = args.manifestStore;
-    this.now = args.now;
-    this.log = args.log;
-    this.getFlushWaiters = args.getFlushWaiters;
-    this.discardTemp = args.discardTemp;
-    this.sha256File = args.sha256File;
+  constructor(input: BoxStorePackPipelineOptions) {
+    this.categories = input.categories;
+    this.objectStore = input.objectStore;
+    this.manifestStore = input.manifestStore;
+    this.clock = input.now;
+    this.log = input.log;
+    this.getFlushWaiters = input.getFlushWaiters;
+    this.discardTemp = input.discardTemp;
+    this.sha256File = input.sha256File;
   }
 
-  /** Where a stored path lives on this box: the most specific category that names it wins. */
+  /** Where a stored path lives on this box: the most specific rootCategory that names it wins. */
   resolveLocalPathForRelPath(relPath: string): string | undefined {
-    let best: BoxStorePackCategory | undefined;
-    for (const category of this.categories) {
-      if (category.stageOnly) continue;
-      if (!relPath.startsWith(`${category.relPrefix}/`)) continue;
-      if (best == null || category.relPrefix.length > best.relPrefix.length) best = category;
+    let mostSpecific: BoxStorePackCategory | undefined;
+    for (const rootCategory of this.categories) {
+      if (rootCategory.stageOnly) continue;
+      if (!relPath.startsWith(`${rootCategory.relPrefix}/`)) continue;
+      if (mostSpecific == null || rootCategory.relPrefix.length > mostSpecific.relPrefix.length) mostSpecific = rootCategory;
     }
-    if (best == null) return undefined;
-    return join(best.absRoot, ...relPath.slice(best.relPrefix.length + 1).split("/"));
+    if (mostSpecific == null) return undefined;
+    return join(mostSpecific.absRoot, ...relPath.slice(mostSpecific.relPrefix.length + 1).split("/"));
   }
 
   /** The pack scratch directory, swept of leftovers from a host that died mid-build. */
@@ -141,12 +141,12 @@ export class BoxStorePackPipeline {
     const dir = join(tmpdir(), PACK_TMP_DIR_NAME);
     await mkdir(dir, { recursive: true });
     try {
-      const now = this.now();
+      const clock = this.clock();
       for (const name of await readdir(dir)) {
         const path = join(dir, name);
         try {
-          const info = await stat(path);
-          if (now - info.mtimeMs > PACK_TMP_MAX_AGE_MS) await unlink(path);
+          const fileInfo = await stat(path);
+          if (clock - fileInfo.mtimeMs > PACK_TMP_MAX_AGE_MS) await unlink(path);
         } catch {
           // A leftover that vanished while it was being swept is already gone.
         }
@@ -159,204 +159,204 @@ export class BoxStorePackPipeline {
 
   /** One maintenance round: decide, build, upload, then replace the index (and only then retire the old packs). */
   async syncPacks(storeId: string): Promise<BoxStorePackCycleSummary> {
-    const summary: BoxStorePackCycleSummary = { name: "packs", filesScanned: 0, filesUploaded: 0, bytesUploaded: 0, skippedUnchanged: 0, removed: 0, oversize: 0, failures: 0, metadataFailures: 0 };
+    const cycleSummary: BoxStorePackCycleSummary = { name: "packs", filesScanned: 0, filesUploaded: 0, bytesUploaded: 0, skippedUnchanged: 0, removed: 0, oversize: 0, failures: 0, metadataFailures: 0 };
     try {
       const store = this.objectStore(storeId);
       const manifest = await this.manifestStore.loadManifest(storeId);
-      const live = new Map<string, number>();
-      const eligible = new Map<string, number>();
-      const localBySha = new Map<string, string>();
+      const liveSizes = new Map<string, number>();
+      const packable = new Map<string, number>();
+      const pathBySha = new Map<string, string>();
 
       for (const [relPath, entry] of manifest) {
         if (!isBoxStoreManifestFileEntry(entry)) continue;
-        live.set(entry.sha, entry.size);
+        liveSizes.set(entry.sha, entry.size);
         // Too big to be a pack member, or a blob a pack already holds: not a candidate for a new pack.
-        if (entry.size >= PACK_MEMBER_MAX_BYTES || eligible.has(entry.sha)) continue;
+        if (entry.size >= PACK_MEMBER_MAX_BYTES || packable.has(entry.sha)) continue;
         const absPath = this.resolveLocalPathForRelPath(relPath);
         if (absPath == null) continue;
         try {
-          const info = await lstat(absPath);
-          if (!info.isFile() || info.size !== entry.size) continue;
+          const fileInfo = await lstat(absPath);
+          if (!fileInfo.isFile() || fileInfo.size !== entry.size) continue;
         } catch {
           continue;
         }
-        eligible.set(entry.sha, entry.size);
-        localBySha.set(entry.sha, absPath);
+        packable.set(entry.sha, entry.size);
+        pathBySha.set(entry.sha, absPath);
       }
 
-      const rawIndex = await store.get(BOX_STORE_PACK_INDEX_KEY);
-      const index = rawIndex == null || rawIndex.byteLength > PACK_INDEX_MAX_BYTES ? null : parsePackIndex(Buffer.from(rawIndex).toString("utf8"));
-      if (rawIndex != null && index == null) this.log("the pack index is unparseable; rebuilding it from scratch");
+      const rawPackIndex = await store.get(BOX_STORE_PACK_INDEX_KEY);
+      const index = rawPackIndex == null || rawPackIndex.byteLength > PACK_INDEX_MAX_BYTES ? null : parsePackIndex(Buffer.from(rawPackIndex).toString("utf8"));
+      if (rawPackIndex != null && index == null) this.log("the pack index is unparseable; rebuilding it from scratch");
 
-      const plan = planPackMaintenance({
-        live,
-        eligible,
+      const maintenancePlan = planPackMaintenance({
+        live: liveSizes,
+        eligible: packable,
         index,
         maxPackMemberSizeSum: PACK_MAX_MEMBER_SIZE_SUM,
         minPackMembers: PACK_BUILD_MIN_MEMBERS,
         minPackBytes: PACK_BUILD_MIN_BYTES,
       });
-      summary.skippedUnchanged = plan.keptPacks.length;
-      summary.removed = plan.retiredPackIds.length;
-      summary.filesScanned = plan.newPacks.length;
-      if (plan.newPacks.length === 0 && plan.retiredPackIds.length === 0) return summary;
+      cycleSummary.skippedUnchanged = maintenancePlan.keptPacks.length;
+      cycleSummary.removed = maintenancePlan.retiredPackIds.length;
+      cycleSummary.filesScanned = maintenancePlan.newPacks.length;
+      if (maintenancePlan.newPacks.length === 0 && maintenancePlan.retiredPackIds.length === 0) return cycleSummary;
 
       // Housekeeping yields to a flush: a user waiting for their store comes before a pack build.
       const yieldToFlush = (): boolean => this.getFlushWaiters() > 0;
-      const tmpDir = await this.ensureSweptPackTmpDir();
-      const builtPacks: PackEntry[] = [];
+      const scratchDir = await this.ensureSweptPackTmpDir();
+      const newPackEntries: PackEntry[] = [];
 
-      for (const planned of plan.newPacks) {
+      for (const plannedPack of maintenancePlan.newPacks) {
         if (yieldToFlush()) {
           this.log("the pack round yielded to a waiting flush; it will be retried later");
-          return summary;
+          return cycleSummary;
         }
-        const tmpPath = join(tmpDir, `build-${randomBytes(8).toString("hex")}`);
+        const tempPath = join(scratchDir, `build-${randomBytes(8).toString("hex")}`);
         try {
-          const built = await buildPackFile(
-            tmpPath,
-            planned.flatMap((member) => {
-              const absPath = localBySha.get(member.sha);
+          const builtPack = await buildPackFile(
+            tempPath,
+            plannedPack.flatMap((member) => {
+              const absPath = pathBySha.get(member.sha);
               return absPath == null ? [] : [{ ...member, absPath }];
             }),
             yieldToFlush,
           );
-          if (built == null) {
+          if (builtPack == null) {
             this.log("the pack round yielded to a waiting flush; it will be retried later");
-            return summary;
+            return cycleSummary;
           }
-          if (built.members.length === 0) continue;
-          const builtSizeSum = built.members.reduce((sum, member) => sum + member.size, 0);
+          if (builtPack.members.length === 0) continue;
+          const builtByteSum = builtPack.members.reduce((sum, member) => sum + member.size, 0);
           // Below the floor a pack costs more than it saves: the members go back to being loose blobs.
-          if (built.members.length < PACK_BUILD_MIN_MEMBERS && builtSizeSum < PACK_BUILD_MIN_BYTES) continue;
+          if (builtPack.members.length < PACK_BUILD_MIN_MEMBERS && builtByteSum < PACK_BUILD_MIN_BYTES) continue;
 
-          const packId = await this.sha256File(tmpPath);
-          await store.putFromFile!(`${BOX_STORE_PACKS_PREFIX}/${packId}`, tmpPath, packId, built.fileBytes);
-          builtPacks.push({ id: packId, bytes: built.fileBytes, members: [...built.members] });
-          summary.filesUploaded += 1;
-          summary.bytesUploaded += built.fileBytes;
+          const newPackId = await this.sha256File(tempPath);
+          await store.putFromFile!(`${BOX_STORE_PACKS_PREFIX}/${newPackId}`, tempPath, newPackId, builtPack.fileBytes);
+          newPackEntries.push({ id: newPackId, bytes: builtPack.fileBytes, members: [...builtPack.members] });
+          cycleSummary.filesUploaded += 1;
+          cycleSummary.bytesUploaded += builtPack.fileBytes;
         } finally {
-          await this.discardTemp({ tmpPath, label: "pack build" });
+          await this.discardTemp({ tmpPath: tempPath, label: "pack build" });
         }
       }
 
       if (yieldToFlush()) {
         this.log("the pack round yielded to a waiting flush; it will be retried later");
-        return summary;
+        return cycleSummary;
       }
-      if (builtPacks.length === 0 && plan.retiredPackIds.length === 0) return summary;
+      if (newPackEntries.length === 0 && maintenancePlan.retiredPackIds.length === 0) return cycleSummary;
 
-      const nextIndex = {
+      const nextPackIndex = {
         version: 1,
-        maxVmtime: Math.max(index?.maxVmtime ?? 0, ...builtPacks.flatMap((pack) => pack.members.map((member) => member.vmtime))),
-        packs: [...plan.keptPacks, ...builtPacks],
+        maxVmtime: Math.max(index?.maxVmtime ?? 0, ...newPackEntries.flatMap((pack) => pack.members.map((member) => member.vmtime))),
+        packs: [...maintenancePlan.keptPacks, ...newPackEntries],
       };
-      const referenced = new Set(nextIndex.packs.map((pack) => pack.id));
-      const retiring = plan.retiredPackIds.filter((id) => !referenced.has(id));
+      const keptIds = new Set(nextPackIndex.packs.map((pack) => pack.id));
+      const retiringIds = maintenancePlan.retiredPackIds.filter((id) => !keptIds.has(id));
 
       try {
-        const rawRetired = await store.get(BOX_STORE_PACK_RETIRED_KEY);
-        const existing = rawRetired == null ? [] : parsePackRetired(Buffer.from(rawRetired).toString("utf8"));
-        if (existing == null) {
+        const rawRetiredList = await store.get(BOX_STORE_PACK_RETIRED_KEY);
+        const existingTombstones = rawRetiredList == null ? [] : parsePackRetired(Buffer.from(rawRetiredList).toString("utf8"));
+        if (existingTombstones == null) {
           // A retired list that cannot be read is only fatal when something is about to be retired: overwriting it would
-          // lose the tombstones of packs a live index may still name.
-          if (retiring.length > 0) throw new BoxStoreSyncError("the retired list is present but unreadable; refusing to overwrite it");
-          this.log("the retired list is unreadable; continuing without a tombstone update (nothing is retiring)");
+          // lose the tombstones of packs a liveSizes index may still name.
+          if (retiringIds.length > 0) throw new BoxStoreSyncError("the retired list is present but unreadable; refusing to overwrite it");
+          this.log("the retired list is unreadable; continuing without a tombstone update (nothing is retiringIds)");
         } else {
-          const merged = [...new Set([...existing, ...retiring])].filter((id) => !referenced.has(id));
-          const changed = merged.length !== existing.length || merged.some((id, indexInExisting) => existing[indexInExisting] !== id);
-          if (changed) await store.put(BOX_STORE_PACK_RETIRED_KEY, new Uint8Array(Buffer.from(serializePackRetired(merged), "utf8")));
+          const mergedIds = [...new Set([...existingTombstones, ...retiringIds])].filter((id) => !keptIds.has(id));
+          const listChanged = mergedIds.length !== existingTombstones.length || mergedIds.some((id, indexInExisting) => existingTombstones[indexInExisting] !== id);
+          if (listChanged) await store.put(BOX_STORE_PACK_RETIRED_KEY, new Uint8Array(Buffer.from(serializePackRetired(mergedIds), "utf8")));
         }
-      } catch (error) {
-        this.log(`the retired-list write failed: ${errorMessage(error)}`);
-        summary.failures += 1;
-        return summary;
+      } catch (failure) {
+        this.log(`the retired-list write failed: ${errorMessage(failure)}`);
+        cycleSummary.failures += 1;
+        return cycleSummary;
       }
 
-      await store.put(BOX_STORE_PACK_INDEX_KEY, new Uint8Array(Buffer.from(serializePackIndex(nextIndex), "utf8")));
-      for (const packId of retiring) {
+      await store.put(BOX_STORE_PACK_INDEX_KEY, new Uint8Array(Buffer.from(serializePackIndex(nextPackIndex), "utf8")));
+      for (const newPackId of retiringIds) {
         try {
-          await store.delete(`${BOX_STORE_PACKS_PREFIX}/${packId}`);
+          await store.delete(`${BOX_STORE_PACKS_PREFIX}/${newPackId}`);
         } catch {
           // The tombstone is what makes a failed deletion safe: the next restore ignores the pack either way.
         }
       }
-      if (plan.deferredMembers > 0) this.log(`the pack round deferred ${plan.deferredMembers} member(s) under the build floor`);
-    } catch (error) {
-      this.log(`the pack maintenance round failed: ${errorMessage(error)}`);
-      summary.failures += 1;
+      if (maintenancePlan.deferredMembers > 0) this.log(`the pack round deferred ${maintenancePlan.deferredMembers} member(s) under the build floor`);
+    } catch (failure) {
+      this.log(`the pack maintenance round failed: ${errorMessage(failure)}`);
+      cycleSummary.failures += 1;
     }
-    return summary;
+    return cycleSummary;
   }
 
   /**
    * Restores what it can from packs, and answers with the paths it restored. Anything a pack cannot serve stays for the
    * caller's loose-blob pass: this method never decides that a path is un-restorable.
    */
-  async restoreBulkSmallFromPacks(args: RestoreBulkSmallFromPacksOptions): Promise<Set<string>> {
-    const { store, targetDir, groups: bulkSmall, byteBudget, localFileMatches, mkdirOwned, applyExistingFileMetadata, writeVerifiedBytes, recordRestoredPath } = args;
+  async restoreBulkSmallFromPacks(input: RestoreBulkSmallFromPacksOptions): Promise<Set<string>> {
+    const { store, targetDir, groups: smallGroups, byteBudget: budget, localFileMatches, mkdirOwned, applyExistingFileMetadata, writeVerifiedBytes, recordRestoredPath } = input;
     const restoredByPack = new Set<string>();
     const ensuredDirs = new Set<string>();
-    const ensureDir = async (dir: string): Promise<void> => {
+    const ensureDirectory = async (dir: string): Promise<void> => {
       if (ensuredDirs.has(dir)) return;
       await mkdirOwned(dir);
       ensuredDirs.add(dir);
     };
 
-    const restoreFromPack = async (pack: PackEntry): Promise<void> => {
-      // Which members of this pack are actually wanted here and now, and how many bytes that is.
-      const usable: PackEntry["members"] = [];
-      let usableCompressedBytes = 0;
-      let usableSize = 0;
+    const restorePack = async (pack: PackEntry): Promise<void> => {
+      // Which members of this pack are actually wanted here and clock, and how many bytes that is.
+      const wantedMembers: PackEntry["members"] = [];
+      let wantedCompressedBytes = 0;
+      let wantedBytes = 0;
       for (const member of pack.members) {
-        const group = bulkSmall.get(`${member.sha}:${member.size}`);
+        const group = smallGroups.get(`${member.sha}:${member.size}`);
         if (group == null) continue;
         let pending = false;
         for (const relPath of group.relPaths) {
           if (restoredByPack.has(relPath)) continue;
-          const destPath = join(targetDir, relPath);
-          await ensureDir(dirname(destPath));
-          if (await localFileMatches(destPath, group)) continue;
+          const destinationPath = join(targetDir, relPath);
+          await ensureDirectory(dirname(destinationPath));
+          if (await localFileMatches(destinationPath, group)) continue;
           pending = true;
           break;
         }
         if (pending) {
-          usable.push(member);
-          usableCompressedBytes += member.clen;
-          usableSize += member.size;
+          wantedMembers.push(member);
+          wantedCompressedBytes += member.clen;
+          wantedBytes += member.size;
         }
       }
       // Too little of the pack is wanted: downloading it would cost more than fetching those members loose.
-      if (usable.length < PACK_RESTORE_MIN_MEMBERS && usableSize < PACK_BUILD_MIN_BYTES) return;
-      if (usableCompressedBytes * PACK_RESTORE_MIN_BYTE_SHARE < pack.bytes) return;
+      if (wantedMembers.length < PACK_RESTORE_MIN_MEMBERS && wantedBytes < PACK_BUILD_MIN_BYTES) return;
+      if (wantedCompressedBytes * PACK_RESTORE_MIN_BYTE_SHARE < pack.bytes) return;
 
-      const tmpPath = join(await this.ensureSweptPackTmpDir(), `restore-${randomBytes(8).toString("hex")}`);
+      const tempPath = join(await this.ensureSweptPackTmpDir(), `restore-${randomBytes(8).toString("hex")}`);
       try {
-        const written = await store.getToFile!(`${BOX_STORE_PACKS_PREFIX}/${pack.id}`, tmpPath, { maxBytes: pack.bytes });
+        const written = await store.getToFile!(`${BOX_STORE_PACKS_PREFIX}/${pack.id}`, tempPath, { maxBytes: pack.bytes });
         if (written == null) return;
-        const result = await extractPackMembers({
-          packPath: tmpPath,
+        const extractResult = await extractPackMembers({
+          packPath: tempPath,
           members: pack.members,
           concurrency: PACK_EXTRACT_CONCURRENCY,
           admitBytes: async (memberBytes) => {
-            await byteBudget.acquire(memberBytes);
-            return () => byteBudget.release(memberBytes);
+            await budget.acquire(memberBytes);
+            return () => budget.release(memberBytes);
           },
           wants: (member) => {
-            const group = bulkSmall.get(`${member.sha}:${member.size}`);
+            const group = smallGroups.get(`${member.sha}:${member.size}`);
             return group != null && group.relPaths.some((relPath) => !restoredByPack.has(relPath));
           },
           onBlob: async (member, blobBytes) => {
-            const group = bulkSmall.get(`${member.sha}:${member.size}`);
+            const group = smallGroups.get(`${member.sha}:${member.size}`);
             if (group == null) return;
             for (const relPath of group.relPaths) {
               if (restoredByPack.has(relPath)) continue;
               restoredByPack.add(relPath);
-              const destPath = join(targetDir, relPath);
+              const destinationPath = join(targetDir, relPath);
               try {
-                await ensureDir(dirname(destPath));
-                if (await localFileMatches(destPath, group)) await applyExistingFileMetadata(destPath, relPath);
-                else await writeVerifiedBytes(destPath, relPath, blobBytes);
+                await ensureDirectory(dirname(destinationPath));
+                if (await localFileMatches(destinationPath, group)) await applyExistingFileMetadata(destinationPath, relPath);
+                else await writeVerifiedBytes(destinationPath, relPath, blobBytes);
               } catch {
                 // A path that could not be written stays for the loose pass.
                 restoredByPack.delete(relPath);
@@ -366,26 +366,26 @@ export class BoxStorePackPipeline {
             }
           },
         });
-        if (result.mismatched > 0) this.log(`pack ${pack.id}: ${result.mismatched} member(s) failed the sha check; those fall back to loose blobs`);
+        if (extractResult.mismatched > 0) this.log(`pack ${pack.id}: ${extractResult.mismatched} member(s) failed the sha check; those fall back to loose blobs`);
       } finally {
-        await this.discardTemp({ tmpPath, label: `pack ${pack.id}` });
+        await this.discardTemp({ tmpPath: tempPath, label: `pack ${pack.id}` });
       }
     };
 
-    if (bulkSmall.size > 0) {
+    if (smallGroups.size > 0) {
       let packIndex = null;
       try {
-        const rawIndex = await store.get(BOX_STORE_PACK_INDEX_KEY);
-        packIndex = rawIndex == null || rawIndex.byteLength > PACK_INDEX_MAX_BYTES ? null : parsePackIndex(Buffer.from(rawIndex).toString("utf8"));
-      } catch (error) {
-        this.log(`the pack index could not be read (falling back to loose blobs): ${errorMessage(error)}`);
+        const rawPackIndex = await store.get(BOX_STORE_PACK_INDEX_KEY);
+        packIndex = rawPackIndex == null || rawPackIndex.byteLength > PACK_INDEX_MAX_BYTES ? null : parsePackIndex(Buffer.from(rawPackIndex).toString("utf8"));
+      } catch (failure) {
+        this.log(`the pack index could not be read (falling back to loose blobs): ${errorMessage(failure)}`);
       }
       if (packIndex != null && packIndex.packs.length > 0) {
         await forEachBounded([...packIndex.packs], PACK_DOWNLOAD_CONCURRENCY, async (pack) => {
           try {
-            await restoreFromPack(pack);
-          } catch (error) {
-            this.log(`pack ${pack.id} could not be restored (falling back to loose blobs): ${errorMessage(error)}`);
+            await restorePack(pack);
+          } catch (failure) {
+            this.log(`pack ${pack.id} could not be restored (falling back to loose blobs): ${errorMessage(failure)}`);
           }
         });
       }
