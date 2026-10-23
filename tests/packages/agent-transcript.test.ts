@@ -113,6 +113,8 @@ test("a conversation is written as text with its roles", async () => {
   const harnessed = harness({ blobs, state: { rootPromptMessagesJson: [blobId("a"), blobId("b")] } })
   assert.equal(await harnessed.store.writeFromStateFull(ctx, harnessed.state, "conversation-1"), true)
   assert.equal(textFile(harnessed), "user:\nhello\n\nassistant:\nhi there")
+  // The default store writes only the text form.
+  assert.equal(harnessed.files.size, 1)
 })
 
 test("a transcript written as nothing is not a failure", async () => {
@@ -155,7 +157,7 @@ test("a part the transcript cannot show is written as a note", async () => {
     { type: "image" },
     { type: "file", filename: "report.pdf" },
     { type: "reasoning", text: "thinking about it" },
-    { type: "tool-call", toolName: "Read", args: { path: "/repo/a.ts" } },
+    { type: "tool-call", toolName: "Read", args: { path: "/repo/a.ts", count: 2, nested: { a: 1 } } },
     { type: "tool-result", toolName: "Read" },
   ])]])
   const harnessed = harness({ blobs, state: { rootPromptMessagesJson: [blobId("a")] } })
@@ -165,6 +167,8 @@ test("a part the transcript cannot show is written as a note", async () => {
   assert.match(written, /\[File: report\.pdf\]/)
   assert.match(written, /\[Thinking\] thinking about it/)
   assert.match(written, /\[Tool call\] Read\n {2}path: \/repo\/a\.ts/)
+  assert.match(written, / {2}count: 2/)
+  assert.match(written, / {2}nested: \{"a":1\}/)
   assert.match(written, /\[Tool result\] Read/)
 })
 
@@ -434,4 +438,242 @@ test("reasoning is carried on the message that has it", () => {
 test("a message with nothing in it is still a row", () => {
   const trace = convertConversationMessagesToTrace([conversationMessage(ConversationMessage_MessageType.AI, { text: "   " })], HistoryVisibilityMode.NO_PREAMBLE)
   assert.deepEqual(trace, [{ role: "assistant" }])
+})
+
+// ---------------------------------------------------------------------------------------------
+// the shapes inside the forms
+// ---------------------------------------------------------------------------------------------
+
+const jsonFileOf = (harnessed: ReturnType<typeof harness>) =>
+  JSON.parse(harnessed.files.get("/repo/.slate/projects/workspace-1/agent-transcripts/conversation-1/conversation-1.json") ?? "{}") as { mode?: string; messages?: unknown[]; turnEnded?: unknown }
+const jsonlLinesOf = (harnessed: ReturnType<typeof harness>) =>
+  (jsonlFile(harnessed) ?? "").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line) as Record<string, unknown>)
+
+test("an unspecified mode is written as agent, like an unknown one", async () => {
+  const blobs = new Map([["a", message("user", "hello")]])
+  const unspecified = harness({ blobs, state: { mode: AgentMode.UNSPECIFIED, rootPromptMessagesJson: [blobId("a")] }, storeOptions: { writeText: false, writeJson: true } })
+  await unspecified.store.writeFromStateFull(ctx, unspecified.state, "conversation-1")
+  assert.equal(jsonFileOf(unspecified).mode, "agent")
+  const unknown = harness({ blobs, state: { mode: 99 as AgentMode, rootPromptMessagesJson: [blobId("a")] }, storeOptions: { writeText: false, writeJson: true } })
+  await unknown.store.writeFromStateFull(ctx, unknown.state, "conversation-1")
+  assert.equal(jsonFileOf(unknown).mode, "agent")
+})
+
+test("the JSON form keeps each kind of part in its own place", async () => {
+  const blobs = new Map([["a", message("assistant", [
+    { type: "text", text: "the answer" },
+    { type: "image" },
+    { type: "file", filename: "report.pdf" },
+    { type: "file" },
+    { type: "reasoning", text: "first thought" },
+    { type: "reasoning", text: "second thought" },
+    { type: "redacted-reasoning" },
+    { type: "tool-call", toolName: "Read", args: { path: "/repo/a.ts" } },
+    { type: "tool-result", toolName: "Read" },
+    { type: "unknown-kind", text: "invisible" },
+  ])]])
+  const harnessed = harness({ blobs, state: { rootPromptMessagesJson: [blobId("a")] }, storeOptions: { writeText: false, writeJson: true } })
+  await harnessed.store.writeFromStateFull(ctx, harnessed.state, "conversation-1")
+  assert.deepEqual(jsonFileOf(harnessed).messages, [{
+    role: "assistant",
+    text: "the answer\n[Image]\n[File: report.pdf]\n[File]",
+    thinking: "first thought\nsecond thought\n[REDACTED]",
+    toolCalls: [{ toolName: "Read", args: { path: "/repo/a.ts" } }],
+    toolResult: { toolName: "Read" },
+  }])
+})
+
+test("a message with nothing to show is not written to the JSON form", async () => {
+  const blobs = new Map([
+    ["a", message("assistant", [{ type: "text", text: "   " }])],
+    ["b", message("assistant", [])],
+  ])
+  const harnessed = harness({ blobs, state: { rootPromptMessagesJson: [blobId("a"), blobId("b")] }, storeOptions: { writeText: false, writeJson: true } })
+  await harnessed.store.writeFromStateFull(ctx, harnessed.state, "conversation-1")
+  assert.equal(jsonFileOf(harnessed).messages, undefined)
+  assert.equal(harnessed.files.size, 0)
+})
+
+test("a binary payload becomes a note saying how many bytes were dropped", async () => {
+  const blob = encoder.encode(JSON.stringify({ role: "user", content: { __type: "Uint8Array", hex: "deadbeef" } }))
+  const harnessed = harness({ blobs: new Map([["a", blob]]), state: { rootPromptMessagesJson: [blobId("a")] } })
+  await harnessed.store.writeFromStateFull(ctx, harnessed.state, "conversation-1")
+  assert.equal(textFile(harnessed), "user:\n[Binary data omitted from transcript: 4 bytes]")
+})
+
+test("a turn status the transcript does not know is written as it came", async () => {
+  const harnessed = harness({ state: { rootPromptMessagesJson: [] }, storeOptions: { writeText: true, writeJsonl: true } })
+  await harnessed.store.writeFromStateFull(ctx, harnessed.state, "conversation-1", { turnEnded: { status: "mystery", error: "why" } })
+  assert.equal(textFile(harnessed), "[object Object]")
+  assert.deepEqual(jsonlLinesOf(harnessed), [{ type: "turn_ended", status: "mystery", error: "why" }])
+})
+
+test("an error turn with no reason says its reason is undefined", async () => {
+  const harnessed = harness({ state: { rootPromptMessagesJson: [] } })
+  await harnessed.store.writeFromStateFull(ctx, harnessed.state, "conversation-1", { turnEnded: { status: "error" } })
+  assert.equal(textFile(harnessed), "Turn ended: error: undefined")
+})
+
+test("an archived summary message is written while an archived system one is not", async () => {
+  const archive = new ConversationSummaryArchive({ summarizedMessages: [blobId("s"), blobId("m")] })
+  const blobs = new Map([
+    ["s", message("system", "the archived preamble")],
+    ["m", message("assistant", "the archived summary", { isSummary: true })],
+    ["arc", archive.toBinary()],
+  ])
+  const harnessed = harness({ blobs, state: { rootPromptMessagesJson: [], summaryArchives: [blobId("arc")] } })
+  await harnessed.store.writeFromStateFull(ctx, harnessed.state, "conversation-1")
+  const written = textFile(harnessed) ?? ""
+  assert.match(written, /the archived summary/)
+  assert.equal(written.includes("the archived preamble"), false)
+})
+
+test("the JSONL form joins a message's words and its thinking with a blank line", async () => {
+  const blobs = new Map([["a", message("assistant", [{ type: "text", text: "the answer" }, { type: "reasoning", text: "the reasoning" }])]])
+  const harnessed = harness({ blobs, state: { rootPromptMessagesJson: [blobId("a")] }, storeOptions: { writeText: false, writeJsonl: true } })
+  await harnessed.store.writeFromStateFull(ctx, harnessed.state, "conversation-1")
+  assert.deepEqual(jsonlLinesOf(harnessed), [{ role: "assistant", message: { content: [{ type: "text", text: "the answer\n\nthe reasoning" }] } }])
+})
+
+test("a message with no showable part is left out of the JSONL form", async () => {
+  const blobs = new Map([["a", message("assistant", [{ type: "unknown-kind", text: "invisible" }])]])
+  const harnessed = harness({ blobs, state: { rootPromptMessagesJson: [blobId("a")] }, storeOptions: { writeText: false, writeJsonl: true } })
+  await harnessed.store.writeFromStateFull(ctx, harnessed.state, "conversation-1")
+  assert.equal(jsonlFile(harnessed), undefined)
+})
+
+test("the store names a transcript itself when it is given no resolver", async () => {
+  const files = new Map<string, string>()
+  const store = new TranscriptStore("/repo", blobStoreOf(new Map([["a", message("user", "hello")]])) as never, async (path, content) => { files.set(path, content) })
+  await store.writeFromStateFull(ctx, { mode: AgentMode.AGENT, rootPromptMessagesJson: [blobId("a")], summaryArchives: [] }, "conversation-1")
+  assert.equal([...files.keys()][0], "/repo/agent-transcripts/conversation-1/conversation-1.txt")
+})
+
+test("a fallback append says why it fell back, and a refused one says why it did not", async () => {
+  const blobs = new Map([["a", message("user", "first")], ["b", message("user", "second")]])
+  const errors: unknown[][] = []
+  const originalError = console.error
+  console.error = (...args: unknown[]) => { errors.push(args) }
+  try {
+    const harnessed = harness({ blobs, state: { rootPromptMessagesJson: [blobId("a"), blobId("b")] }, storeOptions: { writeText: false, writeJsonl: true, appendFile: async () => { throw new Error("no space left") } } })
+    await harnessed.store.writeFromStateIncremental(ctx, harnessed.state, "conversation-1", 1)
+    assert.match(String(errors[0]?.[0]), /falling back to full write/)
+    assert.equal((errors[0]?.[1] as Error).message, "no space left")
+    const refusing = harness({ blobs, state: { rootPromptMessagesJson: [blobId("a"), blobId("b")] }, storeOptions: { writeText: false, writeJsonl: true, fallbackToFullWriteOnIncrementalFailure: false, appendFile: async () => { throw new Error("no space left") } } })
+    await refusing.store.writeFromStateIncremental(ctx, refusing.state, "conversation-1", 1)
+    assert.equal(String(errors[1]?.[0]).includes("falling back"), false)
+    assert.match(String(errors[1]?.[0]), /Failed to append transcript:/)
+  } finally {
+    console.error = originalError
+  }
+})
+
+test("a turn's ending is spelled out for each status it knows", async () => {
+  const success = harness({ state: { rootPromptMessagesJson: [] } })
+  await success.store.writeFromStateFull(ctx, success.state, "conversation-1", { turnEnded: { status: "success" } })
+  assert.equal(textFile(success), "Turn ended: success.")
+  const aborted = harness({ state: { rootPromptMessagesJson: [] } })
+  await aborted.store.writeFromStateFull(ctx, aborted.state, "conversation-1", { turnEnded: { status: "aborted" } })
+  assert.equal(textFile(aborted), "Turn ended: aborted.")
+  const stopped = harness({ state: { rootPromptMessagesJson: [] } })
+  await stopped.store.writeFromStateFull(ctx, stopped.state, "conversation-1", { turnEnded: { status: "aborted", error: "the user stopped it" } })
+  assert.equal(textFile(stopped), "Turn ended: aborted: the user stopped it")
+})
+
+test("a turn that wrote nothing but its ending writes just that line", async () => {
+  const harnessed = harness({ state: { rootPromptMessagesJson: [] }, storeOptions: { writeText: true, writeJson: true, writeJsonl: true } })
+  await harnessed.store.writeFromStateFull(ctx, harnessed.state, "conversation-1", { turnEnded: { status: "success" } })
+  assert.equal(textFile(harnessed), "Turn ended: success.")
+  const json = jsonFileOf(harnessed)
+  assert.deepEqual({ mode: json.mode, messages: json.messages }, { mode: "agent", messages: [] })
+  assert.deepEqual(jsonlLinesOf(harnessed), [{ type: "turn_ended", status: "success" }])
+  assert.equal((jsonlFile(harnessed) ?? "").endsWith("\n"), true)
+  assert.equal((jsonlFile(harnessed) ?? "").startsWith("\n"), false)
+})
+
+test("an unknown part says nothing, and hidden reasoning does not reach the forms", async () => {
+  const blobs = new Map([
+    ["a", message("assistant", [
+      { type: "unknown-kind", text: "invisible" },
+      { type: "text", text: "visible<thinking>hidden part</thinking>more" },
+      { type: "text", text: "second line" },
+    ])],
+    ["b", message("assistant", "visible<thinking>hidden text</thinking>more")],
+  ])
+  const harnessed = harness({ blobs, state: { rootPromptMessagesJson: [blobId("a"), blobId("b")] }, storeOptions: { writeText: true, writeJson: true } })
+  await harnessed.store.writeFromStateFull(ctx, harnessed.state, "conversation-1")
+  const written = textFile(harnessed) ?? ""
+  assert.equal(written.includes("invisible"), false)
+  assert.equal(written.includes("hidden"), false)
+  // A kind the surface does not have adds no note of its own.
+  assert.equal(written.includes("?"), false)
+  assert.match(written, /visible/)
+  assert.match(written, /more/)
+  assert.deepEqual(jsonFileOf(harnessed).messages, [{ role: "assistant", text: "visiblemore\nsecond line" }, { role: "assistant", text: "visiblemore" }])
+})
+
+test("a user's own text keeps the thinking tags it came with", async () => {
+  const kept = "kept\u003cthinking\u003ekept tag\u003c/thinking\u003e"
+  const blobs = new Map([["a", message("user", [{ type: "text", text: kept }])]])
+  const harnessed = harness({ blobs, state: { rootPromptMessagesJson: [blobId("a")] }, storeOptions: { writeText: true, writeJson: true } })
+  await harnessed.store.writeFromStateFull(ctx, harnessed.state, "conversation-1")
+  const written = textFile(harnessed) ?? ""
+  assert.equal(written.includes("\u003cthinking\u003e"), true)
+  assert.equal(written.includes("kept tag"), true)
+  assert.equal((jsonFileOf(harnessed).messages?.[0] as { text?: string }).text?.includes("\u003cthinking\u003e"), true)
+})
+
+test("a blob of exactly the threshold size is read rather than omitted", async () => {
+  const overhead = encoder.encode(JSON.stringify({ role: "user", content: "" })).length
+  const boundary = encoder.encode(JSON.stringify({ role: "user", content: "x".repeat(5_000_000 - overhead) }))
+  assert.equal(boundary.length, 5_000_000)
+  const harnessed = harness({ blobs: new Map([["a", boundary]]), state: { rootPromptMessagesJson: [blobId("a")] } })
+  const written = await harnessed.store.writeFromStateFull(ctx, harnessed.state, "conversation-1")
+  assert.equal(written, true)
+  assert.equal((textFile(harnessed) ?? "").startsWith("user:\nxxxxxxxx"), true)
+})
+
+test("a write that fails says so, and a failed overview says that too", async () => {
+  const errors: unknown[][] = []
+  const originalError = console.error
+  console.error = (...args: unknown[]) => { errors.push(args) }
+  try {
+    const failing = harness({ blobs: new Map([["a", message("user", "hello")]]), state: { rootPromptMessagesJson: [blobId("a")] } })
+    const broken = new TranscriptStore("/repo", blobStoreOf(new Map([["a", message("user", "hello")]])) as never, async () => { throw new Error("the disk is full") })
+    await broken.writeFromStateFull(ctx, failing.state, "conversation-1")
+    assert.match(String(errors[0]?.[0]), /Failed to write transcript:/)
+    assert.equal((errors[0]?.[1] as Error).message, "the disk is full")
+    const overview = harness({ blobs: new Map([["a", message("user", "hello")]]), state: { rootPromptMessagesJson: [blobId("a")] }, storeOptions: { writeText: false, writeJsonl: true } })
+    await overview.store.writeFromStateFull(ctx, overview.state, "conversation-1", { overviewFactory: async () => { throw new Error("no model") } })
+    assert.match(String(errors[1]?.[0]), /Failed to generate transcript overview:/)
+  } finally {
+    console.error = originalError
+  }
+})
+
+test("a store with no append path writes everything instead", async () => {
+  const blobs = new Map([["a", message("user", "first")], ["b", message("user", "second")]])
+  const harnessed = harness({ blobs, state: { rootPromptMessagesJson: [blobId("a"), blobId("b")] }, storeOptions: { writeText: false, writeJsonl: true, appendFile: undefined } })
+  assert.equal(await harnessed.store.writeFromStateIncremental(ctx, harnessed.state, "conversation-1", 1), 2)
+  assert.deepEqual(harnessed.appends, [])
+  assert.match(jsonlFile(harnessed) ?? "", /second/)
+})
+
+test("an overview means the file is written again rather than appended to", async () => {
+  const blobs = new Map([["a", message("user", "first")]])
+  const harnessed = harness({ blobs, state: { rootPromptMessagesJson: [blobId("a")] }, storeOptions: { writeText: false, writeJsonl: true } })
+  assert.equal(await harnessed.store.writeFromStateIncremental(ctx, harnessed.state, "conversation-1", 1, { overviewFactory: async () => "what happened" }), 1)
+  assert.deepEqual(harnessed.appends, [])
+  assert.equal((jsonlFile(harnessed) ?? "").split("\n")[0]?.includes("metadata"), true)
+})
+
+test("an appended marker ends with a newline, and appended messages that show nothing append nothing", async () => {
+  const blobs = new Map([["a", message("user", "first")]])
+  const harnessed = harness({ blobs, state: { rootPromptMessagesJson: [blobId("a")] }, storeOptions: { writeText: false, writeJsonl: true } })
+  await harnessed.store.writeFromStateIncremental(ctx, harnessed.state, "conversation-1", 1, { turnEnded: { status: "success" } })
+  assert.equal(harnessed.appends.length, 1)
+  assert.equal((harnessed.appends[0] ?? "").endsWith("\n"), true)
+  const unshowable = harness({ blobs: new Map([["a", message("user", "first")], ["s", message("system", "system only")]]), state: { rootPromptMessagesJson: [blobId("a"), blobId("s")] }, storeOptions: { writeText: false, writeJsonl: true } })
+  assert.equal(await unshowable.store.writeFromStateIncremental(ctx, unshowable.state, "conversation-1", 1), 2)
+  assert.deepEqual(unshowable.appends, [])
 })
