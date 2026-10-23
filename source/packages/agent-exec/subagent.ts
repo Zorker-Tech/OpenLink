@@ -27,15 +27,15 @@ export const RUNNING_SUBAGENT_FOLLOWUP_ERROR =
 export const RUNNING_SUBAGENT_INTERRUPT_RETRY_HINT =
   "If you intended to interrupt this agent, you may retry with `interrupt` set to true";
 
-class SubagentHostError extends Error {
+class SubagentHostFailure extends Error {
   readonly agentId: string | undefined;
   override readonly cause: unknown;
 
-  constructor(message: string, options?: { agentId?: string | undefined; cause?: unknown }) {
+  constructor(message: string, settings?: { agentId?: string | undefined; cause?: unknown }) {
     super(message);
     this.name = "SubagentHostError";
-    this.agentId = options?.agentId;
-    this.cause = options?.cause;
+    this.agentId = settings?.agentId;
+    this.cause = settings?.cause;
   }
 }
 
@@ -49,26 +49,26 @@ interface SubagentRunOutcome {
 }
 
 interface SubagentHostAdapter {
-  createOrResumeSession(ctx: Context, args: SubagentArgs): Promise<string>;
+  createOrResumeSession(runContext: Context, args: SubagentArgs): Promise<string>;
   runSession(
-    ctx: Context,
+    runContext: Context,
     agentId: string,
     args: SubagentArgs,
-    options: { execId?: string | undefined },
+    settings: { execId?: string | undefined },
   ): Promise<SubagentRunOutcome>;
   releaseSession?(agentId: string): void;
 }
 
-function extractAgentIdFromError(error: unknown): string | undefined {
-  if (error instanceof SubagentHostError && error.agentId) {
-    return error.agentId;
+function extractAgentIdFromError(failure: unknown): string | undefined {
+  if (failure instanceof SubagentHostFailure && failure.agentId) {
+    return failure.agentId;
   }
-  if (!error || typeof error !== "object") {
+  if (!failure || typeof failure !== "object") {
     return undefined;
   }
-  const record = error as { agentId?: unknown };
-  if (typeof record.agentId === "string") {
-    return record.agentId;
+  const errorEntry = failure as { agentId?: unknown };
+  if (typeof errorEntry.agentId === "string") {
+    return errorEntry.agentId;
   }
   return undefined;
 }
@@ -88,54 +88,54 @@ function getInFlightKey(args: SubagentArgs): string | undefined {
 const MAX_COMPLETED_TOOL_CALL_RESULTS = 1_000;
 
 export function createSubagentExecutor(
-  adapter: SubagentHostAdapter,
+  hostAdapter: SubagentHostAdapter,
 ): Executor<SubagentArgs, SubagentResult> {
-  const inFlightByToolCall = new Map<string, Promise<SubagentResult>>();
-  const completedByToolCall = new Map<string, SubagentResult>();
+  const inFlightRuns = new Map<string, Promise<SubagentResult>>();
+  const completedRuns = new Map<string, SubagentResult>();
 
-  async function runExecute(
-    ctx: Context,
+  async function executeSubagentRun(
+    runContext: Context,
     args: SubagentArgs,
-    options?: ExecutorOptions,
+    settings?: ExecutorOptions,
   ): Promise<SubagentResult> {
     let agentId: string | undefined;
     try {
-      agentId = await adapter.createOrResumeSession(ctx, args);
-      const outcome = await adapter.runSession(ctx, agentId, args, {
-        execId: options?.execId,
+      agentId = await hostAdapter.createOrResumeSession(runContext, args);
+      const runOutcome = await hostAdapter.runSession(runContext, agentId, args, {
+        execId: settings?.execId,
       });
-      if (outcome.status === "error") {
+      if (runOutcome.status === "error") {
         return new SubagentResult({
           result: {
             case: "error",
             value: new SubagentError({
               agentId,
-              error: outcome.error!,
+              error: runOutcome.error!,
             }),
           },
         });
       }
-      if (outcome.status === "aborted") {
+      if (runOutcome.status === "aborted") {
         return new SubagentResult({
           result: {
             case: "error",
             value: new SubagentError({
               agentId,
-              error: outcome.error ?? "Subagent was aborted by the user",
+              error: runOutcome.error ?? "Subagent was aborted by the user",
             }),
           },
         });
       }
-      if (outcome.status === "background") {
+      if (runOutcome.status === "background") {
         return new SubagentResult({
           result: {
             case: "success",
             value: new SubagentSuccess({
               agentId,
-              finalMessage: outcome.finalMessage!,
-              toolCallCount: outcome.toolCallCount ?? 0,
-              backgroundReason: outcome.backgroundReason!,
-              transcriptPath: outcome.transcriptPath!,
+              finalMessage: runOutcome.finalMessage!,
+              toolCallCount: runOutcome.toolCallCount ?? 0,
+              backgroundReason: runOutcome.backgroundReason!,
+              transcriptPath: runOutcome.transcriptPath!,
             }),
           },
         });
@@ -145,23 +145,23 @@ export function createSubagentExecutor(
           case: "success",
           value: new SubagentSuccess({
             agentId,
-            finalMessage: outcome.finalMessage!,
-            toolCallCount: outcome.toolCallCount ?? 0,
+            finalMessage: runOutcome.finalMessage!,
+            toolCallCount: runOutcome.toolCallCount ?? 0,
           }),
         },
       });
-    } catch (error) {
-      if (agentId && adapter.releaseSession) {
-        adapter.releaseSession(agentId);
+    } catch (failure) {
+      if (agentId && hostAdapter.releaseSession) {
+        hostAdapter.releaseSession(agentId);
       }
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const errorAgentId = agentId ?? extractAgentIdFromError(error) ?? args.resumeAgentId;
+      const failureMessage = failure instanceof Error ? failure.message : String(failure);
+      const failureAgentId = agentId ?? extractAgentIdFromError(failure) ?? args.resumeAgentId;
       return new SubagentResult({
         result: {
           case: "error",
           value: new SubagentError({
-            ...(errorAgentId ? { agentId: errorAgentId } : {}),
-            error: errorMessage,
+            ...(failureAgentId ? { agentId: failureAgentId } : {}),
+            error: failureMessage,
           }),
         },
       });
@@ -169,34 +169,34 @@ export function createSubagentExecutor(
   }
 
   return {
-    execute(ctx, args, options) {
-      const key = getInFlightKey(args);
-      if (key === undefined) {
-        return runExecute(ctx, args, options);
+    execute(runContext, args, settings) {
+      const inFlightKey = getInFlightKey(args);
+      if (inFlightKey === undefined) {
+        return executeSubagentRun(runContext, args, settings);
       }
-      const completed = completedByToolCall.get(key);
-      if (completed !== undefined) {
-        return Promise.resolve(completed);
+      const cachedResult = completedRuns.get(inFlightKey);
+      if (cachedResult !== undefined) {
+        return Promise.resolve(cachedResult);
       }
-      const existing = inFlightByToolCall.get(key);
-      if (existing !== undefined) {
-        return existing;
+      const runningRun = inFlightRuns.get(inFlightKey);
+      if (runningRun !== undefined) {
+        return runningRun;
       }
-      const promise = runExecute(ctx, args, options)
-        .then((result) => {
-          if (result.result.case === "success") {
-            completedByToolCall.set(key, result);
-            if (completedByToolCall.size > MAX_COMPLETED_TOOL_CALL_RESULTS) {
-              completedByToolCall.delete(completedByToolCall.keys().next().value!);
+      const runPromise = executeSubagentRun(runContext, args, settings)
+        .then((runResult) => {
+          if (runResult.result.case === "success") {
+            completedRuns.set(inFlightKey, runResult);
+            if (completedRuns.size > MAX_COMPLETED_TOOL_CALL_RESULTS) {
+              completedRuns.delete(completedRuns.keys().next().value!);
             }
           }
-          return result;
+          return runResult;
         })
         .finally(() => {
-          inFlightByToolCall.delete(key);
+          inFlightRuns.delete(inFlightKey);
         });
-      inFlightByToolCall.set(key, promise);
-      return promise;
+      inFlightRuns.set(inFlightKey, runPromise);
+      return runPromise;
     },
   };
 }
@@ -206,16 +206,16 @@ export const subagentExecutorResource = createResource<
   RemoteExecManager,
   ControlledExecManager
 >(
-  (execManager) =>
+  (executionManager) =>
     new ExecutorResource(
-      execManager,
+      executionManager,
       createServerSerializer("subagentArgs"),
       createClientDeserializer("subagentResult"),
     ),
-  (implementation, controlledExecManager) =>
-    controlledExecManager.register(
+  (executorImplementation, controlledManager) =>
+    controlledManager.register(
       new SimpleControlledExecHandler(
-        implementation,
+        executorImplementation,
         createServerDeserializer("subagentArgs"),
         createClientSerializer("subagentResult"),
       ),
