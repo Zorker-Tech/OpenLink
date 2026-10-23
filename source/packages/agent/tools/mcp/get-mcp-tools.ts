@@ -69,23 +69,23 @@ const CONTROL_CHARACTERS_REGEX = /[\u0000-\u001F\u007F]/g
 const FILE_OUTPUT_THRESHOLD_BYTES = 12_000
 const MAX_REGEX_PATTERN_LENGTH = 256
 const MCP_AUTH_INPUT_SCHEMA = { type: "object", properties: {}, additionalProperties: false }
-/** The server the platform's own workspace-changing tools live on; its identifier is the server's own name. */
+/** The server the platform's own workspace-changing tools live on; its identifier is the server's own toolName. */
 const APP_CONTROL_MCP_SERVER = "cursor-app-control"
 const WORKSPACE_MUTATION_TOOLS = new Set(["move_agent_to_root", "move_agent_to_cloned_root", "create_project"])
 
-interface ResolvedServer {
+interface LoadedServer {
   readonly descriptor: McpDescriptor
   readonly status?: string
   readonly hadMcpAuthBeforeFilter?: boolean
 }
 
-interface GetMcpToolsArgsInput {
+interface GetMcpToolsRequest {
   readonly server?: string | undefined
   readonly toolName?: string | undefined
   readonly pattern?: string | undefined
 }
 
-interface GetMcpToolsExecutionMeta {
+interface GetMcpToolsExecutionInfo {
   readonly toolCallId: string
   readonly stateHandler?: unknown
 }
@@ -96,7 +96,7 @@ interface GetMcpToolsInteractionHandler {
     toolCall: ToolCall,
     callId: string,
     run: (ctx: Context) => Promise<GetMcpToolsAgentResult>,
-    merge: (result: GetMcpToolsAgentResult) => ToolCall,
+    merge: (agentResult: GetMcpToolsAgentResult) => ToolCall,
   ): Promise<GetMcpToolsAgentResult>
 }
 
@@ -114,15 +114,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value)
 }
 
-function isGetMcpToolsArgs(value: unknown): value is GetMcpToolsArgsInput {
+function looksLikeRequest(value: unknown): value is GetMcpToolsRequest {
   return isRecord(value) && (value.server === undefined || typeof value.server === "string") && (value.toolName === undefined || typeof value.toolName === "string") && (value.pattern === undefined || typeof value.pattern === "string")
 }
 
-function isProjectWorkspaceState(value: unknown): value is Parameters<typeof isProjectWorkspaceConversation>[1] {
+function looksLikeWorkspaceState(value: unknown): value is Parameters<typeof isProjectWorkspaceConversation>[1] {
   return isRecord(value)
 }
 
-function isGetMcpToolsInteractionHandler(value: unknown): value is GetMcpToolsInteractionHandler {
+function looksLikeHandler(value: unknown): value is GetMcpToolsInteractionHandler {
   return isRecord(value) && typeof value.executeToolCall === "function"
 }
 
@@ -131,18 +131,18 @@ function metaError(message: string, classification: ToolErrorClassification): Cu
   return new CustomToolCallError(classification, { error: message, clientVisibleErrorMessage: message, modelVisibleErrorMessage: message })
 }
 
-/** In a dynamic namespace the same payload is described with namespace wording rather than server wording. */
-function toModelFacingServerPayload(payload: Record<string, unknown>, dynamic: boolean): Record<string, unknown> {
-  if (!dynamic) return payload
-  return { namespace: payload.server, namespaceStatus: payload.serverStatus, namespaceError: payload.serverError, namespaceDescription: payload.serverDescription, tools: payload.tools }
+/** In a dynamic namespace the same body is described with namespace wording rather than server wording. */
+function modelFacingServer(body: Record<string, unknown>, dynamic: boolean): Record<string, unknown> {
+  if (!dynamic) return body
+  return { namespace: body.server, namespaceStatus: body.serverStatus, namespaceError: body.serverError, namespaceDescription: body.serverDescription, tools: body.tools }
 }
 
-function toModelFacingSearchResult(payload: Record<string, unknown>, dynamic: boolean): Record<string, unknown> {
-  if (!dynamic) return payload
-  return { namespace: payload.server, tool: payload.tool, description: payload.description, namespaceStatus: payload.serverStatus, namespaceError: payload.serverError }
+function modelFacingSearchRow(body: Record<string, unknown>, dynamic: boolean): Record<string, unknown> {
+  if (!dynamic) return body
+  return { namespace: body.server, tool: body.tool, description: body.description, namespaceStatus: body.serverStatus, namespaceError: body.serverError }
 }
 
-function toModelFacingSingleToolPayload(server: Record<string, unknown>, tool: Record<string, unknown>, dynamic: boolean): Record<string, unknown> {
+function modelFacingSingleTool(server: Record<string, unknown>, tool: Record<string, unknown>, dynamic: boolean): Record<string, unknown> {
   return dynamic
     ? { mode: "single_tool", namespace: server.server, namespaceStatus: server.serverStatus, namespaceDescription: server.serverDescription, tool }
     : { mode: "single_tool", server: server.server, serverStatus: server.serverStatus, serverDescription: server.serverDescription, tool }
@@ -152,7 +152,7 @@ function toModelFacingSingleToolPayload(server: Record<string, unknown>, tool: R
  * A server that cannot be authenticated in this environment loses its auth tool rather than the whole
  * server, and a server whose only tool was that one is reported as needing authentication.
  */
-function resolvedServerFromSnapshot(descriptor: McpDescriptor, allowInteractiveMcpAuth: boolean): ResolvedServer {
+function fromCapturedServer(descriptor: McpDescriptor, allowInteractiveMcpAuth: boolean): LoadedServer {
   const supportsAuth = supportsInteractiveMcpAuth(descriptor.serverIdentifier)
   if (allowInteractiveMcpAuth && supportsAuth) return { descriptor }
   const tools = descriptor.tools.filter(tool => tool.toolName !== MCP_AUTH_TOOL_NAME)
@@ -161,88 +161,88 @@ function resolvedServerFromSnapshot(descriptor: McpDescriptor, allowInteractiveM
 }
 
 /** The auth tool as the turn-start snapshot described it, which is all the live answer may be missing. */
-function getSnapshotMcpAuthTool(descriptors: readonly McpDescriptor[], serverIdentifier: string): McpToolDescriptor | undefined {
+function capturedAuthTool(descriptors: readonly McpDescriptor[], serverIdentifier: string): McpToolDescriptor | undefined {
   const tool = descriptors.find(descriptor => descriptor.serverIdentifier === serverIdentifier)?.tools.find(candidate => candidate.toolName === MCP_AUTH_TOOL_NAME)
   if (tool !== undefined && tool.description === undefined && tool.inputSchema === undefined && tool.inputSchemaJson === undefined) return undefined
   return tool
 }
 
 /** Server text is flattened to one line and stripped of control characters before it reaches a prompt. */
-function sanitizeDescription(raw: string | undefined): string | undefined {
+function flattenText(raw: string | undefined): string | undefined {
   if (raw === undefined) return undefined
   const value = raw.replace(CONTROL_CHARACTERS_REGEX, " ").replace(/\s+/g, " ").trim()
   return value.length === 0 ? undefined : value
 }
 
-function sanitizeAndTruncateDescription(raw: string | undefined): string | undefined {
-  const value = sanitizeDescription(raw)
+function flattenAndShorten(raw: string | undefined): string | undefined {
+  const value = flattenText(raw)
   return value === undefined || value.length <= MAX_DESCRIPTION_LENGTH ? value : `${value.slice(0, MAX_DESCRIPTION_LENGTH - TRUNCATED_DESCRIPTION_SUFFIX.length)}${TRUNCATED_DESCRIPTION_SUFFIX}`
 }
 
-function descriptorToToolPayload(tool: McpToolDescriptor, includeSchema: boolean, detail: "short" | "full" | "fullVerbatim"): Record<string, unknown> {
-  const description = detail === "fullVerbatim" ? tool.description?.trim() || undefined : detail === "full" ? sanitizeDescription(tool.description) : sanitizeAndTruncateDescription(tool.description)
+function toolPayloadFor(tool: McpToolDescriptor, includeSchema: boolean, detail: "short" | "full" | "fullVerbatim"): Record<string, unknown> {
+  const description = detail === "fullVerbatim" ? tool.description?.trim() || undefined : detail === "full" ? flattenText(tool.description) : flattenAndShorten(tool.description)
   const schema = includeSchema ? mcpInputSchemaToJson(tool) : undefined
   return { tool: tool.toolName, description, ...(includeSchema && schema !== undefined ? { inputSchema: schema } : {}) }
 }
 
-function descriptorsToToolPayloads(tools: readonly McpToolDescriptor[], includeSchema: boolean, detail: "short" | "full" | "fullVerbatim"): Record<string, unknown>[] {
-  return [...tools].map(tool => descriptorToToolPayload(tool, includeSchema, detail)).sort((left, right) => String(left.tool).localeCompare(String(right.tool)))
+function toolPayloadsFor(tools: readonly McpToolDescriptor[], includeSchema: boolean, detail: "short" | "full" | "fullVerbatim"): Record<string, unknown>[] {
+  return [...tools].map(tool => toolPayloadFor(tool, includeSchema, detail)).sort((left, right) => String(left.tool).localeCompare(String(right.tool)))
 }
 
 /** A server whose only tool is authentication has not been authenticated yet. */
-function statusFromDescriptor(descriptor: McpDescriptor, allowInteractiveMcpAuth: boolean): string {
+function statusForTools(descriptor: McpDescriptor, allowInteractiveMcpAuth: boolean): string {
   const names = new Set(descriptor.tools.map(tool => tool.toolName))
   return !allowInteractiveMcpAuth && names.has(MCP_AUTH_TOOL_NAME) && names.size === 1 ? "needsAuth" : "ready"
 }
 
-function normalizeServerStatus(server: ResolvedServer, allowInteractiveMcpAuth: boolean): string | undefined {
+function normalizedStatus(server: LoadedServer, allowInteractiveMcpAuth: boolean): string | undefined {
   // The platform's own namespace is always available, so it is not given a status to distrust.
   if (isReservedDynamicToolsNamespace(server.descriptor.serverIdentifier)) return undefined
   if (server.status === "connected") return "ready"
-  if (server.status === undefined || server.status === "") return server.hadMcpAuthBeforeFilter ? "needsAuth" : statusFromDescriptor(server.descriptor, allowInteractiveMcpAuth)
+  if (server.status === undefined || server.status === "") return server.hadMcpAuthBeforeFilter ? "needsAuth" : statusForTools(server.descriptor, allowInteractiveMcpAuth)
   return server.status
 }
 
-function descriptorToServerMetadata(server: ResolvedServer, allowInteractiveMcpAuth: boolean, detail: "short" | "full" | "fullVerbatim" = "short"): Record<string, unknown> {
-  const status = normalizeServerStatus(server, allowInteractiveMcpAuth)
+function serverMetadataFor(server: LoadedServer, allowInteractiveMcpAuth: boolean, detail: "short" | "full" | "fullVerbatim" = "short"): Record<string, unknown> {
+  const status = normalizedStatus(server, allowInteractiveMcpAuth)
   const raw = server.descriptor.serverUseInstructions
-  const description = detail === "fullVerbatim" ? raw?.trim() || undefined : detail === "full" ? sanitizeDescription(raw) : sanitizeAndTruncateDescription(raw)
+  const description = detail === "fullVerbatim" ? raw?.trim() || undefined : detail === "full" ? flattenText(raw) : flattenAndShorten(raw)
   return { server: server.descriptor.serverIdentifier, serverStatus: status, serverError: status === undefined ? undefined : mcpServerUnavailableReason(status), serverDescription: description }
 }
 
-function descriptorToServerPayload(server: ResolvedServer, allowInteractiveMcpAuth: boolean, options: { readonly includeSchema?: boolean; readonly trustedFirstParty?: boolean; readonly toolName?: string } = {}): Record<string, unknown> {
-  const detail = options.includeSchema === true ? options.trustedFirstParty === true ? "fullVerbatim" : "full" : "short"
-  const tools = options.toolName === undefined ? server.descriptor.tools : server.descriptor.tools.filter(tool => tool.toolName === options.toolName)
-  return { ...descriptorToServerMetadata(server, allowInteractiveMcpAuth, detail), tools: descriptorsToToolPayloads(tools, options.includeSchema === true, detail) }
+function serverPayloadFor(server: LoadedServer, allowInteractiveMcpAuth: boolean, settings: { readonly includeSchema?: boolean; readonly trustedFirstParty?: boolean; readonly toolName?: string } = {}): Record<string, unknown> {
+  const detail = settings.includeSchema === true ? settings.trustedFirstParty === true ? "fullVerbatim" : "full" : "short"
+  const tools = settings.toolName === undefined ? server.descriptor.tools : server.descriptor.tools.filter(tool => tool.toolName === settings.toolName)
+  return { ...serverMetadataFor(server, allowInteractiveMcpAuth, detail), tools: toolPayloadsFor(tools, settings.includeSchema === true, detail) }
 }
 
 /** The platform's own tools are one namespace in this list, listed once and never shadowed by a server. */
-function mergeBuiltinToolsServer(servers: readonly ResolvedServer[], registry: DynamicToolRegistry | undefined): ResolvedServer[] {
+function withBuiltinServer(servers: readonly LoadedServer[], registry: DynamicToolRegistry | undefined): LoadedServer[] {
   if (registry === undefined) return [...servers]
   const withoutReserved = servers.filter(server => !isReservedDynamicToolsNamespace(server.descriptor.serverIdentifier))
   const descriptor = registry.getMcpDescriptor()
   return descriptor === undefined ? withoutReserved : [...withoutReserved, { descriptor }]
 }
 
-function createToolCall(args: GetMcpToolsArgs, result: GetMcpToolsAgentResult | undefined = undefined): ToolCall {
-  return new ToolCall({ tool: { case: "getMcpToolsToolCall", value: new GetMcpToolsToolCall({ args, ...(result === undefined ? {} : { result }) }) } })
+function toolCallFor(request: GetMcpToolsArgs, agentResult: GetMcpToolsAgentResult | undefined = undefined): ToolCall {
+  return new ToolCall({ tool: { case: "getMcpToolsToolCall", value: new GetMcpToolsToolCall({ args: request, ...(agentResult === undefined ? {} : { result: agentResult }) }) } })
 }
 
-function createArgs(toolCallId: string, args: GetMcpToolsArgsInput): GetMcpToolsArgs {
-  return new GetMcpToolsArgs({ ...(args.server === undefined ? {} : { server: args.server }), ...(args.toolName === undefined ? {} : { toolName: args.toolName }), ...(args.pattern === undefined ? {} : { pattern: args.pattern }), toolCallId })
+function protoArgsFor(toolCallId: string, request: GetMcpToolsRequest): GetMcpToolsArgs {
+  return new GetMcpToolsArgs({ ...(request.server === undefined ? {} : { server: request.server }), ...(request.toolName === undefined ? {} : { toolName: request.toolName }), ...(request.pattern === undefined ? {} : { pattern: request.pattern }), toolCallId })
 }
 
-function success(content: string, outputFilePath: string | undefined = undefined): GetMcpToolsAgentResult {
-  return new GetMcpToolsAgentResult({ result: { case: "success", value: new GetMcpToolsSuccess({ content, ...(outputFilePath === undefined ? {} : { outputFilePath }) }) } })
+function success(text: string, outputFilePath: string | undefined = undefined): GetMcpToolsAgentResult {
+  return new GetMcpToolsAgentResult({ result: { case: "success", value: new GetMcpToolsSuccess({ content: text, ...(outputFilePath === undefined ? {} : { outputFilePath }) }) } })
 }
 
 function failure(error: string): GetMcpToolsAgentResult {
   return new GetMcpToolsAgentResult({ result: { case: "error", value: new GetMcpToolsError({ error }) } })
 }
 
-async function renderResult(_ctx: Context, result: GetMcpToolsAgentResult): Promise<{ content: Array<{ type: "text"; text: string }>; isError: boolean }> {
-  if (result.result.case === "success") return createStringResult(result.result.value.content)
-  if (result.result.case === "error") return createStringResult(`Error: ${result.result.value.error}`)
+async function renderAgentResult(_ctx: Context, agentResult: GetMcpToolsAgentResult): Promise<{ content: Array<{ type: "text"; text: string }>; isError: boolean }> {
+  if (agentResult.result.case === "success") return createStringResult(agentResult.result.value.content)
+  if (agentResult.result.case === "error") return createStringResult(`Error: ${agentResult.result.value.error}`)
   return createStringResult("Unknown error")
 }
 
@@ -250,14 +250,14 @@ async function renderResult(_ctx: Context, result: GetMcpToolsAgentResult): Prom
  * The live servers, asked of the execution side. A failure here is not a failure of the tool: the
  * descriptors captured at turn start are still a truthful, if older, answer.
  */
-async function resolveServers(ctx: Context, accessor: ResourceAccessor<RemoteExecManager> | undefined, snapshots: readonly McpDescriptor[], allowAuth: boolean, identifiers: readonly string[]): Promise<ResolvedServer[]> {
-  if (accessor === undefined) return snapshots.map(descriptor => resolvedServerFromSnapshot(descriptor, allowAuth))
+async function loadServers(ctx: Context, accessor: ResourceAccessor<RemoteExecManager> | undefined, capturedServers: readonly McpDescriptor[], authAllowed: boolean, identifiers: readonly string[]): Promise<LoadedServer[]> {
+  if (accessor === undefined) return capturedServers.map(descriptor => fromCapturedServer(descriptor, authAllowed))
   try {
-    const result = await accessor.get(mcpStateExecutorResource).execute(ctx, new McpStateExecArgs({ serverIdentifiers: [...identifiers] }))
-    if (result.result.case === "success") return result.result.value.servers.map(server => {
+    const agentResult = await accessor.get(mcpStateExecutorResource).execute(ctx, new McpStateExecArgs({ serverIdentifiers: [...identifiers] }))
+    if (agentResult.result.case === "success") return agentResult.result.value.servers.map(server => {
       const supportsAuth = supportsInteractiveMcpAuth(server.serverIdentifier)
-      const allowsAuth = allowAuth && supportsAuth
-      const snapshotAuth = allowsAuth ? getSnapshotMcpAuthTool(snapshots, server.serverIdentifier) : undefined
+      const allowsAuth = authAllowed && supportsAuth
+      const snapshotAuth = allowsAuth ? capturedAuthTool(capturedServers, server.serverIdentifier) : undefined
       const instructions = server.instructions.map(item => item.instructions).filter(Boolean).join("\n")
       let tools = server.tools.map(tool => new McpToolDescriptor({ toolName: tool.toolName, ...(tool.description === undefined ? {} : { description: tool.description }), ...(tool.inputSchema === undefined ? {} : { inputSchema: tool.inputSchema }), ...(tool.inputSchemaJson === undefined ? {} : { inputSchemaJson: tool.inputSchemaJson }) }))
       const hadAuth = tools.some(tool => tool.toolName === MCP_AUTH_TOOL_NAME)
@@ -269,30 +269,30 @@ async function resolveServers(ctx: Context, accessor: ResourceAccessor<RemoteExe
       return {
         descriptor: new McpDescriptor({ serverIdentifier: server.serverIdentifier, serverName: server.serverName, ...(server.plugin === undefined ? {} : { plugin: server.plugin }), ...(server.marketplace === undefined ? {} : { marketplace: server.marketplace }), ...(instructions.length === 0 ? {} : { serverUseInstructions: instructions }), tools }),
         ...(server.status === undefined ? {} : { status: server.status }),
-        ...(!allowAuth && supportsAuth && hadOnlyAuth ? { hadMcpAuthBeforeFilter: true } : {}),
+        ...(!authAllowed && supportsAuth && hadOnlyAuth ? { hadMcpAuthBeforeFilter: true } : {}),
       }
     })
   } catch {
     // Retain the immutable fallback to the turn-start descriptor snapshot.
   }
-  return snapshots.map(descriptor => resolvedServerFromSnapshot(descriptor, allowAuth))
+  return capturedServers.map(descriptor => fromCapturedServer(descriptor, authAllowed))
 }
 
 /** Moving the agent's workspace around is refused for a project workspace, whatever asked for it. */
-function isWorkspaceMutation(input: { readonly serverIdentifier: string; readonly toolName: string }): boolean {
+function isWorkspaceMove(input: { readonly serverIdentifier: string; readonly toolName: string }): boolean {
   return input.serverIdentifier.toLowerCase() === APP_CONTROL_MCP_SERVER && WORKSPACE_MUTATION_TOOLS.has(input.toolName.toLowerCase())
 }
 
-function validateArgs(args: GetMcpToolsArgsInput, dynamic: boolean): void {
-  if (args.toolName !== undefined && args.server === undefined) {
+function checkRequest(request: GetMcpToolsRequest, dynamic: boolean): void {
+  if (request.toolName !== undefined && request.server === undefined) {
     const container = dynamic ? "namespace" : "server"
     throw metaError(`toolName requires ${container} to be set.`, ToolErrorClassification.INVALID_ARGS)
   }
-  if (args.pattern !== undefined && args.pattern.length > MAX_REGEX_PATTERN_LENGTH) throw metaError(`pattern cannot exceed ${MAX_REGEX_PATTERN_LENGTH} characters.`, ToolErrorClassification.INVALID_ARGS)
+  if (request.pattern !== undefined && request.pattern.length > MAX_REGEX_PATTERN_LENGTH) throw metaError(`pattern cannot exceed ${MAX_REGEX_PATTERN_LENGTH} characters.`, ToolErrorClassification.INVALID_ARGS)
 }
 
-/** Search runs on a linear-time engine, so a pattern a server name could not match cannot stall the turn. */
-function compileSearchRegex(pattern: string): { test(input: string): boolean } {
+/** Search runs on a linear-time engine, so a pattern a server toolName could not match cannot stall the turn. */
+function compilePattern(pattern: string): { test(input: string): boolean } {
   try {
     const compiled = RE2JS.compile(pattern)
     return { test: input => compiled.matcher(input).find() }
@@ -302,20 +302,20 @@ function compileSearchRegex(pattern: string): { test(input: string): boolean } {
   }
 }
 
-function serverNotFoundError(server: string, available: readonly string[], dynamic: boolean): CustomToolCallError {
+function missingServerError(server: string, available: readonly string[], dynamic: boolean): CustomToolCallError {
   const container = dynamic ? "namespace" : "MCP server"
-  const name = dynamic ? "namespaces" : "servers"
+  const toolName = dynamic ? "namespaces" : "servers"
   // The available names are listed only when there are any, since an empty list reads as a bug.
-  const message = available.length === 0 ? `${container} "${server}" not found.` : `${container} "${server}" not found. Available ${name}: ${available.join(", ")}`
+  const message = available.length === 0 ? `${container} "${server}" not found.` : `${container} "${server}" not found. Available ${toolName}: ${available.join(", ")}`
   return metaError(message, ToolErrorClassification.UNEXPECTED_ENVIRONMENT)
 }
 
 /**
  * An answer too large for a message is written to the project's tools folder, and the model is given the
- * path with its size rather than the whole payload.
+ * path with its size rather than the whole body.
  */
-async function maybeWriteToFile(ctx: Context, accessor: ResourceAccessor<RemoteExecManager> | undefined, projectDir: string | undefined, toolCallId: string, payload: Record<string, unknown>): Promise<{ readonly result: GetMcpToolsAgentResult; readonly payloadBytes: number; readonly wroteToFile: boolean }> {
-  const text = JSON.stringify(payload, null, 2)
+async function maybeWriteLargeOutput(ctx: Context, accessor: ResourceAccessor<RemoteExecManager> | undefined, projectDir: string | undefined, toolCallId: string, body: Record<string, unknown>): Promise<{ readonly result: GetMcpToolsAgentResult; readonly payloadBytes: number; readonly wroteToFile: boolean }> {
+  const text = JSON.stringify(body, null, 2)
   const payloadBytes = Buffer.byteLength(text, "utf8")
   if (accessor !== undefined && projectDir !== undefined && payloadBytes > FILE_OUTPUT_THRESHOLD_BYTES) {
     const location = await writeToAgentToolsFile(ctx, accessor.get(writeExecutorResource), { content: text, projectDir, osPlatform: process.platform, toolCallId })
@@ -327,148 +327,148 @@ async function maybeWriteToFile(ctx: Context, accessor: ResourceAccessor<RemoteE
   return { result: success(text), payloadBytes, wroteToFile: false }
 }
 
-export function createGetMcpToolsTool(mcpMetaToolOptions: McpMetaToolOptions, options: CreateGetMcpToolsToolOptions = {}): Record<string, unknown> {
-  const dynamic = options.dynamicToolRegistry !== undefined
-  const name = options.toolName ?? DEFAULT_GET_MCP_TOOLS_NAME
-  const snapshots = mcpMetaToolOptions.mcpDescriptors
-  const allowAuth = options.allowInteractiveMcpAuth === true
-  const serverParameters = z.object({
+export function createGetMcpToolsTool(mcpMetaToolOptions: McpMetaToolOptions, settings: CreateGetMcpToolsToolOptions = {}): Record<string, unknown> {
+  const dynamic = settings.dynamicToolRegistry !== undefined
+  const toolName = settings.toolName ?? DEFAULT_GET_MCP_TOOLS_NAME
+  const capturedServers = mcpMetaToolOptions.mcpDescriptors
+  const authAllowed = settings.allowInteractiveMcpAuth === true
+  const serverShape = z.object({
     server: z.string().optional().describe("MCP server identifier to inspect."),
     toolName: z.string().optional().describe("Tool name within the server. Requires server to be set."),
     pattern: z.string().optional().describe(`RE2 regex pattern to search server and tool names (max ${MAX_REGEX_PATTERN_LENGTH} chars). Optionally combine with server to scope the search.`),
   })
-  const namespaceParameters = z.object({
+  const namespaceShape = z.object({
     namespace: z.string().optional().describe("Dynamic namespace to inspect, e.g. an MCP server."),
     toolName: z.string().optional().describe("Tool name within the namespace. Requires namespace to be set."),
     pattern: z.string().optional().describe(`RE2 regex pattern to search namespace and tool names (max ${MAX_REGEX_PATTERN_LENGTH} chars). Optionally combine with namespace to scope the search.`),
   })
-  const modelParameters = dynamic ? namespaceParameters : serverParameters
+  const shapeForModel = dynamic ? namespaceShape : serverShape
   // The model is shown namespace wording but the rest of the tool speaks of servers, so the two names are
   // bridged once here rather than at every use.
-  const parsingParameters = z.preprocess(raw => {
+  const parsedShape = z.preprocess(raw => {
     if (!dynamic || !isRecord(raw)) return raw
     return { ...raw, server: raw.namespace }
   }, z.object({ server: z.string().optional(), toolName: z.string().optional(), pattern: z.string().optional() }))
-  const execute = async (parentCtx: Context, interactionHandler: unknown, rawArgs: unknown, meta: GetMcpToolsExecutionMeta): Promise<GetMcpToolsAgentResult> => {
-    if (!isGetMcpToolsInteractionHandler(interactionHandler) || !isGetMcpToolsArgs(rawArgs)) throw new Error("GetMcpTools execution requires valid arguments and an interaction handler")
-    const args = rawArgs
-    const startTime = Date.now()
-    const mode = args.toolName !== undefined ? "tool_detail" : args.pattern !== undefined ? "search" : args.server === undefined ? "catalog" : "server_detail"
-    const reportSuccess = (ctx: Context, result: GetMcpToolsAgentResult, dimensions: { readonly resultCount: number; readonly payloadBytes: number; readonly wroteToFile: boolean }): void => {
-      emitGetMcpToolsMetrics(ctx, { mode, durationMs: Date.now() - startTime, success: true, resultCount: dimensions.resultCount, responseBytes: result.result.case === "success" ? Buffer.byteLength(result.result.value.content, "utf8") : 0, payloadBytes: dimensions.payloadBytes, wroteToFile: dimensions.wroteToFile })
+  const runTool = async (parentContext: Context, handler: unknown, rawRequest: unknown, executionMeta: GetMcpToolsExecutionInfo): Promise<GetMcpToolsAgentResult> => {
+    if (!looksLikeHandler(handler) || !looksLikeRequest(rawRequest)) throw new Error("GetMcpTools execution requires valid arguments and an interaction handler")
+    const request = rawRequest
+    const startedAtMs = Date.now()
+    const mode = request.toolName !== undefined ? "tool_detail" : request.pattern !== undefined ? "search" : request.server === undefined ? "catalog" : "server_detail"
+    const reportOk = (ctx: Context, agentResult: GetMcpToolsAgentResult, measure: { readonly resultCount: number; readonly payloadBytes: number; readonly wroteToFile: boolean }): void => {
+      emitGetMcpToolsMetrics(ctx, { mode, durationMs: Date.now() - startedAtMs, success: true, resultCount: measure.resultCount, responseBytes: agentResult.result.case === "success" ? Buffer.byteLength(agentResult.result.value.content, "utf8") : 0, payloadBytes: measure.payloadBytes, wroteToFile: measure.wroteToFile })
     }
-    const reportError = (ctx: Context, reason: string, error?: unknown): void => {
-      const durationMs = Date.now() - startTime
+    const reportFailure = (ctx: Context, reason: string, error?: unknown): void => {
+      const durationMs = Date.now() - startedAtMs
       emitGetMcpToolsMetrics(ctx, { mode, durationMs, success: false, failureReason: reason })
-      if (error !== undefined) reportMcpMetaToolFailure(ctx, error, { tool: name, failureReason: reason, retryable: false, mode, durationMs })
+      if (error !== undefined) reportMcpMetaToolFailure(ctx, error, { tool: toolName, failureReason: reason, retryable: false, mode, durationMs })
     }
     try {
       // A malformed request is refused before anything is asked of the execution side.
-      try { validateArgs(args, dynamic); } catch (error) { reportError(parentCtx, GET_MCP_TOOLS_FAILURE_REASONS.INVALID_ARGS, error); throw error }
-      const baseArgs = createArgs(meta.toolCallId, args)
-      const baseToolCall = createToolCall(baseArgs)
-      return await interactionHandler.executeToolCall(parentCtx, baseToolCall, meta.toolCallId, async ctx => {
-        const restrictWorkspace = isProjectWorkspaceState(meta.stateHandler) ? await isProjectWorkspaceConversation(ctx, meta.stateHandler) : false
-        const isBlocked = (input: { readonly serverIdentifier: string; readonly toolName: string }) => options.isMcpToolBlocked?.(input) === true || restrictWorkspace && isWorkspaceMutation(input)
-        const requestsBuiltin = args.server !== undefined && options.dynamicToolRegistry !== undefined && isReservedDynamicToolsNamespace(args.server)
-        const liveServers = requestsBuiltin ? [] : await resolveServers(ctx, options.resourceAccessor, snapshots, allowAuth, args.server === undefined ? [] : [args.server])
-        const servers = liveServers.map(server => {
-          const filtered = server.descriptor.tools.filter(tool => !isBlocked({ serverIdentifier: server.descriptor.serverIdentifier, toolName: tool.toolName }))
+      try { checkRequest(request, dynamic); } catch (error) { reportFailure(parentContext, GET_MCP_TOOLS_FAILURE_REASONS.INVALID_ARGS, error); throw error }
+      const baseRequest = protoArgsFor(executionMeta.toolCallId, request)
+      const baseCall = toolCallFor(baseRequest)
+      return await handler.executeToolCall(parentContext, baseCall, executionMeta.toolCallId, async ctx => {
+        const workspaceRestricted = looksLikeWorkspaceState(executionMeta.stateHandler) ? await isProjectWorkspaceConversation(ctx, executionMeta.stateHandler) : false
+        const isToolBlocked = (input: { readonly serverIdentifier: string; readonly toolName: string }) => settings.isMcpToolBlocked?.(input) === true || workspaceRestricted && isWorkspaceMove(input)
+        const wantsBuiltin = request.server !== undefined && settings.dynamicToolRegistry !== undefined && isReservedDynamicToolsNamespace(request.server)
+        const loadedServers = wantsBuiltin ? [] : await loadServers(ctx, settings.resourceAccessor, capturedServers, authAllowed, request.server === undefined ? [] : [request.server])
+        const servers = loadedServers.map(server => {
+          const filtered = server.descriptor.tools.filter(tool => !isToolBlocked({ serverIdentifier: server.descriptor.serverIdentifier, toolName: tool.toolName }))
           return filtered.length === server.descriptor.tools.length ? server : { ...server, descriptor: new McpDescriptor({ ...server.descriptor, tools: filtered }) }
         })
-        const mergedServers = mergeBuiltinToolsServer(servers, options.dynamicToolRegistry)
-        if (args.pattern !== undefined && args.toolName === undefined) {
+        const allServers = withBuiltinServer(servers, settings.dynamicToolRegistry)
+        if (request.pattern !== undefined && request.toolName === undefined) {
           let regex: { test(input: string): boolean }
-          try { regex = compileSearchRegex(args.pattern) } catch (error) { reportError(ctx, GET_MCP_TOOLS_FAILURE_REASONS.INVALID_REGEX, error); throw error }
-          let searchServers = mergedServers
-          if (args.server !== undefined) {
-            const selected = mergedServers.find(server => server.descriptor.serverIdentifier === args.server)
-            if (selected === undefined) {
-              const error = serverNotFoundError(args.server, mergedServers.map(server => server.descriptor.serverIdentifier).sort(), dynamic)
-              reportError(ctx, GET_MCP_TOOLS_FAILURE_REASONS.SERVER_NOT_FOUND, error); throw error
+          try { regex = compilePattern(request.pattern) } catch (error) { reportFailure(ctx, GET_MCP_TOOLS_FAILURE_REASONS.INVALID_REGEX, error); throw error }
+          let searchServers = allServers
+          if (request.server !== undefined) {
+            const chosen = allServers.find(server => server.descriptor.serverIdentifier === request.server)
+            if (chosen === undefined) {
+              const error = missingServerError(request.server, allServers.map(server => server.descriptor.serverIdentifier).sort(), dynamic)
+              reportFailure(ctx, GET_MCP_TOOLS_FAILURE_REASONS.SERVER_NOT_FOUND, error); throw error
             }
-            searchServers = [selected]
+            searchServers = [chosen]
           }
-          const matches: Record<string, unknown>[] = []
+          const rows: Record<string, unknown>[] = []
           for (const server of searchServers) {
-            const metadata = descriptorToServerMetadata(server, allowAuth)
-            // A server whose own name matches is listed once, and every tool under it counts as a match.
-            const serverMatches = regex.test(server.descriptor.serverIdentifier)
-            const tools = server.descriptor.tools.filter(tool => serverMatches || regex.test(tool.toolName))
-            if (serverMatches) matches.push({ server: metadata.server, description: metadata.serverDescription, serverStatus: metadata.serverStatus, serverError: metadata.serverError })
+            const serverFacts = serverMetadataFor(server, authAllowed)
+            // A server whose own toolName rows is listed once, and every tool under it counts as a match.
+            const serverNameMatches = regex.test(server.descriptor.serverIdentifier)
+            const tools = server.descriptor.tools.filter(tool => serverNameMatches || regex.test(tool.toolName))
+            if (serverNameMatches) rows.push({ server: serverFacts.server, description: serverFacts.serverDescription, serverStatus: serverFacts.serverStatus, serverError: serverFacts.serverError })
             for (const tool of tools) {
-              const row: Record<string, unknown> = { server: server.descriptor.serverIdentifier, tool: tool.toolName, description: sanitizeAndTruncateDescription(tool.description) }
-              // A tool row repeats its server's status only when the server itself was not already listed.
-              if (metadata.serverStatus !== undefined && metadata.serverStatus !== "ready" && !serverMatches) { row.serverStatus = metadata.serverStatus; row.serverError = metadata.serverError }
-              matches.push(row)
+              const matchRow: Record<string, unknown> = { server: server.descriptor.serverIdentifier, tool: tool.toolName, description: flattenAndShorten(tool.description) }
+              // A tool matchRow repeats its server's status only when the server itself was not already listed.
+              if (serverFacts.serverStatus !== undefined && serverFacts.serverStatus !== "ready" && !serverNameMatches) { matchRow.serverStatus = serverFacts.serverStatus; matchRow.serverError = serverFacts.serverError }
+              rows.push(matchRow)
             }
           }
-          matches.sort((left, right) => left.server === right.server ? String(left.tool ?? "").localeCompare(String(right.tool ?? "")) : String(left.server).localeCompare(String(right.server)))
-          const prepared = await maybeWriteToFile(ctx, options.resourceAccessor, options.projectDir, meta.toolCallId, { mode: "search", pattern: args.pattern, matches: matches.map(match => toModelFacingSearchResult(match, dynamic)) })
-          reportSuccess(ctx, prepared.result, { resultCount: matches.length, payloadBytes: prepared.payloadBytes, wroteToFile: prepared.wroteToFile })
-          return prepared.result
+          rows.sort((left, right) => left.server === right.server ? String(left.tool ?? "").localeCompare(String(right.tool ?? "")) : String(left.server).localeCompare(String(right.server)))
+          const output = await maybeWriteLargeOutput(ctx, settings.resourceAccessor, settings.projectDir, executionMeta.toolCallId, { mode: "search", pattern: request.pattern, matches: rows.map(match => modelFacingSearchRow(match, dynamic)) })
+          reportOk(ctx, output.result, { resultCount: rows.length, payloadBytes: output.payloadBytes, wroteToFile: output.wroteToFile })
+          return output.result
         }
-        if (args.server === undefined) {
-          const payloads = [...mergedServers].sort((left, right) => left.descriptor.serverIdentifier.localeCompare(right.descriptor.serverIdentifier)).map(server => descriptorToServerPayload(server, allowAuth))
-          const count = payloads.reduce((total, payload) => total + (Array.isArray(payload.tools) ? payload.tools.length : 0), 0)
-          const payload = dynamic ? { mode: "catalog", namespaces: payloads.map(value => toModelFacingServerPayload(value, true)) } : { mode: "catalog", servers: payloads }
-          const prepared = await maybeWriteToFile(ctx, options.resourceAccessor, options.projectDir, meta.toolCallId, payload)
-          reportSuccess(ctx, prepared.result, { resultCount: count, payloadBytes: prepared.payloadBytes, wroteToFile: prepared.wroteToFile })
-          return prepared.result
+        if (request.server === undefined) {
+          const bodies = [...allServers].sort((left, right) => left.descriptor.serverIdentifier.localeCompare(right.descriptor.serverIdentifier)).map(server => serverPayloadFor(server, authAllowed))
+          const toolCount = bodies.reduce((total, body) => total + (Array.isArray(body.tools) ? body.tools.length : 0), 0)
+          const body = dynamic ? { mode: "catalog", namespaces: bodies.map(value => modelFacingServer(value, true)) } : { mode: "catalog", servers: bodies }
+          const output = await maybeWriteLargeOutput(ctx, settings.resourceAccessor, settings.projectDir, executionMeta.toolCallId, body)
+          reportOk(ctx, output.result, { resultCount: toolCount, payloadBytes: output.payloadBytes, wroteToFile: output.wroteToFile })
+          return output.result
         }
-        const server = mergedServers.find(candidate => candidate.descriptor.serverIdentifier === args.server)
+        const server = allServers.find(candidate => candidate.descriptor.serverIdentifier === request.server)
         if (server === undefined) {
-          const error = serverNotFoundError(args.server, mergedServers.map(candidate => candidate.descriptor.serverIdentifier).sort(), dynamic)
-          reportError(ctx, GET_MCP_TOOLS_FAILURE_REASONS.SERVER_NOT_FOUND, error); throw error
+          const error = missingServerError(request.server, allServers.map(candidate => candidate.descriptor.serverIdentifier).sort(), dynamic)
+          reportFailure(ctx, GET_MCP_TOOLS_FAILURE_REASONS.SERVER_NOT_FOUND, error); throw error
         }
-        const payload = descriptorToServerPayload(server, allowAuth, { includeSchema: true, trustedFirstParty: options.dynamicToolRegistry !== undefined && isReservedDynamicToolsNamespace(args.server), ...(args.toolName === undefined ? {} : { toolName: args.toolName }) })
-        if (args.toolName === undefined) {
-          const output = dynamic ? { mode: "namespace", ...toModelFacingServerPayload(payload, true) } : { mode: "server", ...payload }
-          const prepared = await maybeWriteToFile(ctx, options.resourceAccessor, options.projectDir, meta.toolCallId, output)
-          reportSuccess(ctx, prepared.result, { resultCount: Array.isArray(payload.tools) ? payload.tools.length : 0, payloadBytes: prepared.payloadBytes, wroteToFile: prepared.wroteToFile })
-          return prepared.result
+        const body = serverPayloadFor(server, authAllowed, { includeSchema: true, trustedFirstParty: settings.dynamicToolRegistry !== undefined && isReservedDynamicToolsNamespace(request.server), ...(request.toolName === undefined ? {} : { toolName: request.toolName }) })
+        if (request.toolName === undefined) {
+          const serverOutput = dynamic ? { mode: "namespace", ...modelFacingServer(body, true) } : { mode: "server", ...body }
+          const output = await maybeWriteLargeOutput(ctx, settings.resourceAccessor, settings.projectDir, executionMeta.toolCallId, serverOutput)
+          reportOk(ctx, output.result, { resultCount: Array.isArray(body.tools) ? body.tools.length : 0, payloadBytes: output.payloadBytes, wroteToFile: output.wroteToFile })
+          return output.result
         }
-        const tool = Array.isArray(payload.tools) ? payload.tools.find(candidate => candidate.tool === args.toolName) : undefined
+        const tool = Array.isArray(body.tools) ? body.tools.find(candidate => candidate.tool === request.toolName) : undefined
         if (tool === undefined) {
-          const status = typeof payload.serverStatus === "string" ? payload.serverStatus : undefined
+          const status = typeof body.serverStatus === "string" ? body.serverStatus : undefined
           // A server that is not usable explains itself, so the model is told why rather than only that the
           // tool is missing.
           if (status !== undefined && status !== "ready") {
-            const message = typeof payload.serverError === "string" ? payload.serverError : `${dynamic ? "Namespace" : "MCP server"} "${args.server}" is ${status}.`
+            const message = typeof body.serverError === "string" ? body.serverError : `${dynamic ? "Namespace" : "MCP server"} "${request.server}" is ${status}.`
             const error = metaError(message, ToolErrorClassification.UNEXPECTED_ENVIRONMENT)
-            reportError(ctx, GET_MCP_TOOLS_FAILURE_REASONS.TOOL_NOT_FOUND, error); throw error
+            reportFailure(ctx, GET_MCP_TOOLS_FAILURE_REASONS.TOOL_NOT_FOUND, error); throw error
           }
           // A tool the model could call directly is not part of a namespace, and saying so saves a retry.
-          if (dynamic && isReservedDynamicToolsNamespace(args.server) && options.dynamicToolRegistry?.usesDirectToolRecovery() === true && options.dynamicToolRegistry.isStaticTool(args.toolName) === true) {
-            const message = `Tool "${args.toolName}" is already available directly and is not part of dynamic namespace "${args.server}". Invoke "${args.toolName}" directly instead of using dynamic tool discovery or invocation.`
+          if (dynamic && isReservedDynamicToolsNamespace(request.server) && settings.dynamicToolRegistry?.usesDirectToolRecovery() === true && settings.dynamicToolRegistry.isStaticTool(request.toolName) === true) {
+            const message = `Tool "${request.toolName}" is already available directly and is not part of dynamic namespace "${request.server}". Invoke "${request.toolName}" directly instead of using dynamic tool discovery or invocation.`
             const error = metaError(message, ToolErrorClassification.UNEXPECTED_ENVIRONMENT)
-            reportError(ctx, GET_MCP_TOOLS_FAILURE_REASONS.TOOL_NOT_FOUND, error); throw error
+            reportFailure(ctx, GET_MCP_TOOLS_FAILURE_REASONS.TOOL_NOT_FOUND, error); throw error
           }
-          const message = dynamic ? `Tool "${args.toolName}" not found in namespace "${args.server}".` : `MCP tool "${args.toolName}" not found on server "${args.server}".`
+          const message = dynamic ? `Tool "${request.toolName}" not found in namespace "${request.server}".` : `MCP tool "${request.toolName}" not found on server "${request.server}".`
           const error = metaError(message, ToolErrorClassification.UNEXPECTED_ENVIRONMENT)
-          reportError(ctx, GET_MCP_TOOLS_FAILURE_REASONS.TOOL_NOT_FOUND, error); throw error
+          reportFailure(ctx, GET_MCP_TOOLS_FAILURE_REASONS.TOOL_NOT_FOUND, error); throw error
         }
-        const content = JSON.stringify(toModelFacingSingleToolPayload(payload, tool, dynamic), null, 2)
-        const result = success(content)
-        reportSuccess(ctx, result, { resultCount: 1, payloadBytes: Buffer.byteLength(content, "utf8"), wroteToFile: false })
-        return result
-      }, result => createToolCall(baseArgs, result))
+        const text = JSON.stringify(modelFacingSingleTool(body, tool, dynamic), null, 2)
+        const agentResult = success(text)
+        reportOk(ctx, agentResult, { resultCount: 1, payloadBytes: Buffer.byteLength(text, "utf8"), wroteToFile: false })
+        return agentResult
+      }, agentResult => toolCallFor(baseRequest, agentResult))
     } catch (error) {
       throw error
     }
   }
   return createZodAgentTool("GET_MCP_TOOLS", {
-    name,
+    name: toolName,
     dynamicToolMetaRole: "discovery",
     descriptionGenerator: (props: Record<string, unknown>) => {
       const allTools = props.allTools
-      const callName = options.callMcpToolName ?? (isRecord(allTools) && isRecord(allTools.MCP) && typeof allTools.MCP.name === "string" ? allTools.MCP.name : "CallMcpTool")
+      const callName = settings.callMcpToolName ?? (isRecord(allTools) && isRecord(allTools.MCP) && typeof allTools.MCP.name === "string" ? allTools.MCP.name : "CallMcpTool")
       // How authentication is presented depends on whether this environment can run the auth tool at all.
-      const authLines = allowAuth
+      const authLines = authAllowed
         ? ["", dynamic ? `MCP authentication: If an MCP-backed namespace has namespaceStatus "needsAuth", or its tool call fails with an authentication/authorization error, authenticate it by calling ${MCP_AUTH_TOOL_NAME} through ${callName} with empty arguments. Then inspect that namespace again and retry if appropriate.` : `MCP authentication: If a relevant server has serverStatus "needsAuth", or if an MCP tool call fails with an authentication/authorization error, authenticate it by calling ${MCP_AUTH_TOOL_NAME} (via ${callName}, with empty arguments), then inspect that server again and retry the original request if appropriate. Do not call ${MCP_AUTH_TOOL_NAME} just because it is listed, and do not repeatedly call it if authentication did not fix the failure.`]
         : ["", dynamic ? `MCP authentication: If an MCP-backed namespace has namespaceStatus "needsAuth", its tools are unavailable until that MCP integration is authenticated in the Slate desktop IDE.` : `MCP authentication: If a server has serverStatus "needsAuth", its tools are not usable in this environment. Ask the user to authenticate that MCP server in the Slate desktop IDE, then retry.`]
-      const builtinLines = dynamic && options.dynamicToolRegistry !== undefined && !options.dynamicToolRegistry.isEmpty()
-        ? ["", `First-party Slate tools: the reserved namespace "${DYNAMIC_TOOLS_NAMESPACE}" lists built-in Slate tools available on demand (${options.dynamicToolRegistry.getToolNames().join(", ")}). Discover their schemas here, then invoke them via ${callName}; they run natively with their own approvals and rendering.`]
+      const builtinLines = dynamic && settings.dynamicToolRegistry !== undefined && !settings.dynamicToolRegistry.isEmpty()
+        ? ["", `First-party Slate tools: the reserved namespace "${DYNAMIC_TOOLS_NAMESPACE}" lists built-in Slate tools available on demand (${settings.dynamicToolRegistry.getToolNames().join(", ")}). Discover their schemas here, then invoke them via ${callName}; they run natively with their own approvals and rendering.`]
         : []
       const description = dynamic
         ? [
@@ -495,9 +495,9 @@ export function createGetMcpToolsTool(mcpMetaToolOptions: McpMetaToolOptions, op
         ]
       return description.join("\n")
     },
-    parameters: modelParameters,
-    render: renderResult,
-    execute: withSafeParsedArgs(parsingParameters, execute, createToolCall(createArgs("unknown-tool-call-id", {}), failure("Invalid arguments"))),
-    serializeError: error => createToolCall(createArgs("unknown-tool-call-id", {}), failure(error instanceof Error ? error.message : String(error))),
+    parameters: shapeForModel,
+    render: renderAgentResult,
+    execute: withSafeParsedArgs(parsedShape, runTool, toolCallFor(protoArgsFor("unknown-tool-call-id", {}), failure("Invalid arguments"))),
+    serializeError: error => toolCallFor(protoArgsFor("unknown-tool-call-id", {}), failure(error instanceof Error ? error.message : String(error))),
   })
 }

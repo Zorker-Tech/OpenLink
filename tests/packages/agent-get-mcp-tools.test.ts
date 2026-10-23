@@ -155,6 +155,21 @@ const errorOf = async (promise: Promise<GetMcpToolsAgentResult>): Promise<Custom
 
 const jsonSchemaOf = (tool: Tool) => tool.parameters as Record<string, unknown>
 
+test("control characters and line breaks are flattened in what the model reads", async () => {
+  const noisy = descriptor("mcp-noisy", [toolDescriptor("search", "line one\n\tline two\u0000end")])
+  const payload = await harness({ descriptors: [noisy], live: [noisy] }).payloadOf({})
+  const servers = payload.servers as Array<{ tools: Array<{ description: string }> }>
+  assert.equal(servers[0]?.tools[0]?.description, "line one line two end")
+})
+
+test("the catalog is listed by server name", async () => {
+  const first = descriptor("mcp-zeta", [toolDescriptor("late")])
+  const second = descriptor("mcp-alpha", [toolDescriptor("early")])
+  const payload = await harness({ descriptors: [first, second], live: [first, second] }).payloadOf({})
+  const servers = payload.servers as Array<{ server: string }>
+  assert.deepEqual(servers.map(server => server.server), ["mcp-alpha", "mcp-zeta"])
+})
+
 // ---------------------------------------------------------------------------------------------
 // the catalog
 // ---------------------------------------------------------------------------------------------
