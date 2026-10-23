@@ -43,7 +43,7 @@ import { resolveWorkerLocation } from "../worker-script-location.ts"
 import { generateSeededUuid } from "../../tool-support.ts"
 import { todoStatusToString } from "../todo/common.ts"
 
-const logger = createLogger("@slate/agent:backend-plan-utils");
+const planLog = createLogger("@slate/agent:backend-plan-utils");
 
 export const planTodoFrontmatterSchema = z.object({
   id: z.string(),
@@ -59,7 +59,7 @@ export const planFrontmatterSchema = z.object({
   phases: z.array(z.unknown()).optional(),
 }).passthrough();
 
-const planFrontmatterStringifyOptions: Parameters<typeof yaml.dump>[1] = {
+const frontmatterDumpOptions: Parameters<typeof yaml.dump>[1] = {
   indent: 2,
   lineWidth: -1,
 };
@@ -68,7 +68,7 @@ export function stringifyPlanFrontmatter(
   content: string,
   data: Record<string, unknown>,
 ): string {
-  const frontmatter = yaml.dump(data, planFrontmatterStringifyOptions).trim();
+  const frontmatter = yaml.dump(data, frontmatterDumpOptions).trim();
   const normalizedContent = content.endsWith("\n") ? content : `${content}\n`;
   if (frontmatter === "{}") return normalizedContent;
   return `---\n${frontmatter}\n---\n${normalizedContent}`;
@@ -81,11 +81,11 @@ export interface PlanRegistryState {
 export function getLatestPlanRegistryEntry(
   stateHandler: PlanRegistryState,
 ): PlanRegistryEntry | undefined {
-  let latestPlanEntry: PlanRegistryEntry | undefined;
-  for (const planEntry of stateHandler.plans.values()) {
-    latestPlanEntry = planEntry;
+  let latestEntry: PlanRegistryEntry | undefined;
+  for (const entry of stateHandler.plans.values()) {
+    latestEntry = entry;
   }
-  return latestPlanEntry;
+  return latestEntry;
 }
 
 export interface TodoStateReference {
@@ -100,139 +100,139 @@ export async function buildTodoStatusMap(
   ctx: Context,
   stateHandler: TodoStateForPlanSync,
 ): Promise<ReadonlyMap<string, string>> {
-  const todoStatuses = new Map<string, string>();
-  for (const todoRef of stateHandler.todos) {
+  const statusMap = new Map<string, string>();
+  for (const todoReference of stateHandler.todos) {
     const todo = fromRedactedTodoItem(
-      await todoRef.get(ctx),
+      await todoReference.get(ctx),
       PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
       undefined,
     );
-    todoStatuses.set(todo.id, todoStatusToString(todo.status));
+    statusMap.set(todo.id, todoStatusToString(todo.status));
   }
-  return todoStatuses;
+  return statusMap;
 }
 
 export function updateTodoStatusArray(
   todos: readonly unknown[],
-  todoStatuses: ReadonlyMap<string, string>,
+  statusMap: ReadonlyMap<string, string>,
 ): { readonly didUpdate: boolean; readonly updatedTodos: unknown[] } {
-  let didUpdate = false;
-  const updatedTodos = todos.map(todo => {
+  let changed = false;
+  const nextTodos = todos.map(todo => {
     const parsedTodo = planTodoFrontmatterSchema.safeParse(todo);
     if (!parsedTodo.success) return todo;
-    const nextStatus = todoStatuses.get(parsedTodo.data.id);
+    const nextStatus = statusMap.get(parsedTodo.data.id);
     if (nextStatus === undefined || parsedTodo.data.status === nextStatus) return todo;
-    didUpdate = true;
+    changed = true;
     return { ...parsedTodo.data, status: nextStatus };
   });
-  return { didUpdate, updatedTodos };
+  return { didUpdate: changed, updatedTodos: nextTodos };
 }
 
 export interface PlanSyncStateHandler extends TodoStateForPlanSync, PlanRegistryState {
-  readonly mode: Parameters<typeof import("../edit/plan-mode-file-policy.js").assertPlanModeAllowsFileEdit>[1]["mode"];
+  readonly mode: Parameters<typeof import("../edit/plan-mode-file-policy.ts").assertPlanModeAllowsFileEdit>[1]["mode"];
   setTodos(todos: readonly unknown[]): void;
   recordFileState(path: string, content: string | undefined, previousContent: string | undefined): void;
 }
 
-const DIFF_SIZE_THRESHOLD = 256 * 1024;
-const workerModuleUrl = typeof __filename === "string"
+const DIFF_BYTES_THRESHOLD = 256 * 1024;
+const workerModuleAddress = typeof __filename === "string"
   ? pathToFileURL(__filename).href
   : import.meta.url;
-const { dir: workerDir, extension: workerExtension } = resolveWorkerLocation(workerModuleUrl, "diff-worker");
-const sanitizedEnvForWorkers = Object.fromEntries(Object.entries(process.env).filter(([key, value]) => key !== "NSOLID_STATSD" && value !== undefined));
-let piscinaWorkerPool: Piscina | undefined;
+const { dir: workerDir, extension: workerExtension } = resolveWorkerLocation(workerModuleAddress, "diff-worker");
+const workerEnvironment = Object.fromEntries(Object.entries(process.env).filter(([key, value]) => key !== "NSOLID_STATSD" && value !== undefined));
+let diffPool: Piscina | undefined;
 
-function getPiscinaWorkerPool(): Piscina {
-  if (piscinaWorkerPool === undefined) {
+function diffWorkerPool(): Piscina {
+  if (diffPool === undefined) {
     const threads = Math.max(1, Math.floor(os.availableParallelism() / 2));
-    piscinaWorkerPool = new Piscina({
+    diffPool = new Piscina({
       minThreads: threads,
       maxThreads: threads,
       ...(workerExtension === "ts" ? { execArgv: ["--experimental-strip-types"] } : {}),
-      env: sanitizedEnvForWorkers,
+      env: workerEnvironment,
     });
   }
-  return piscinaWorkerPool;
+  return diffPool;
 }
 
-async function getDiffString(input: DiffWorkerInput): Promise<DiffWorkerResult> {
+async function diffStringFor(input: DiffWorkerInput): Promise<DiffWorkerResult> {
   const totalSize = input.original.length + input.new.length;
-  if (totalSize > DIFF_SIZE_THRESHOLD) {
-    return await getPiscinaWorkerPool().run(input, {
+  if (totalSize > DIFF_BYTES_THRESHOLD) {
+    return await diffWorkerPool().run(input, {
       filename: path.join(workerDir, `./diff-worker.${workerExtension}`),
     }) as DiffWorkerResult;
   }
   return calculateDiff(input);
 }
 
-function stringifyPlanFrontmatterWithArtifactOptions(content: string, data: Record<string, unknown>): string {
+function stringifyWithArtifacts(content: string, data: Record<string, unknown>): string {
   return grayMatter.stringify(content, data);
 }
 
-export async function syncLatestPlanTodosToFile(options: {
+export async function syncLatestPlanTodosToFile(request: {
   readonly ctx: Context;
   readonly resourceAccessor: ResourceAccessor<RemoteExecManager>;
   readonly stateHandler: PlanSyncStateHandler;
   readonly toolCallId: string;
 }): Promise<void> {
-  const { ctx, resourceAccessor, stateHandler, toolCallId } = options;
-  const latestPlanEntry = getLatestPlanRegistryEntry(stateHandler);
-  if (latestPlanEntry?.path === undefined || latestPlanEntry.path.length === 0) return;
-  const todoStatuses = await buildTodoStatusMap(ctx, stateHandler);
-  if (todoStatuses.size === 0) return;
+  const { ctx, resourceAccessor, stateHandler, toolCallId } = request;
+  const latestEntry = getLatestPlanRegistryEntry(stateHandler);
+  if (latestEntry?.path === undefined || latestEntry.path.length === 0) return;
+  const statusMap = await buildTodoStatusMap(ctx, stateHandler);
+  if (statusMap.size === 0) return;
   try {
     const readExecutor = resourceAccessor.get(readExecutorResource);
-    const readResult = await readExecutor.execute(ctx, new ReadArgs({ path: latestPlanEntry.path, toolCallId }), {
+    const readResult = await readExecutor.execute(ctx, new ReadArgs({ path: latestEntry.path, toolCallId }), {
       execId: generateSeededUuid(`${toolCallId}-sync-plan-read`),
     });
     if (readResult.result.case !== "success") {
-      logger.warn(ctx, "Failed to read latest plan file while syncing todos", { planPath: latestPlanEntry.path, resultCase: readResult.result.case });
+      planLog.warn(ctx, "Failed to read latest plan file while syncing todos", { planPath: latestEntry.path, resultCase: readResult.result.case });
       return;
     }
     if (readResult.result.value.output.case !== "content") {
-      logger.warn(ctx, "Latest plan file is not readable as text", { planPath: latestPlanEntry.path, outputCase: readResult.result.value.output.case });
+      planLog.warn(ctx, "Latest plan file is not readable as text", { planPath: latestEntry.path, outputCase: readResult.result.value.output.case });
       return;
     }
-    const originalContent = readResult.result.value.output.value;
-    const parsedPlan = grayMatter(originalContent);
-    const parsedFrontmatter = planFrontmatterSchema.safeParse(parsedPlan.data);
-    if (!parsedFrontmatter.success) return;
-    let updatedFrontmatter = parsedFrontmatter.data;
-    let didUpdate = false;
-    if (updatedFrontmatter.todos !== undefined) {
-      const updatedTodos = updateTodoStatusArray(updatedFrontmatter.todos, todoStatuses);
-      if (updatedTodos.didUpdate) {
-        updatedFrontmatter = { ...updatedFrontmatter, todos: updatedTodos.updatedTodos };
-        didUpdate = true;
+    const sourceText = readResult.result.value.output.value;
+    const document = grayMatter(sourceText);
+    const frontmatter = planFrontmatterSchema.safeParse(document.data);
+    if (!frontmatter.success) return;
+    let nextFrontmatter = frontmatter.data;
+    let changed = false;
+    if (nextFrontmatter.todos !== undefined) {
+      const nextTodos = updateTodoStatusArray(nextFrontmatter.todos, statusMap);
+      if (nextTodos.didUpdate) {
+        nextFrontmatter = { ...nextFrontmatter, todos: nextTodos.updatedTodos };
+        changed = true;
       }
     }
-    if (updatedFrontmatter.phases !== undefined) {
-      let didUpdatePhases = false;
-      const updatedPhases = updatedFrontmatter.phases.map(phase => {
-        const parsedPhase = planPhaseFrontmatterSchema.safeParse(phase);
-        if (!parsedPhase.success || parsedPhase.data.todos === undefined) return phase;
-        const updatedTodos = updateTodoStatusArray(parsedPhase.data.todos, todoStatuses);
-        if (!updatedTodos.didUpdate) return phase;
-        didUpdatePhases = true;
-        return { ...parsedPhase.data, todos: updatedTodos.updatedTodos };
+    if (nextFrontmatter.phases !== undefined) {
+      let phasesChanged = false;
+      const nextPhases = nextFrontmatter.phases.map(phase => {
+        const phaseData = planPhaseFrontmatterSchema.safeParse(phase);
+        if (!phaseData.success || phaseData.data.todos === undefined) return phase;
+        const nextTodos = updateTodoStatusArray(phaseData.data.todos, statusMap);
+        if (!nextTodos.didUpdate) return phase;
+        phasesChanged = true;
+        return { ...phaseData.data, todos: nextTodos.updatedTodos };
       });
-      if (didUpdatePhases) {
-        updatedFrontmatter = { ...updatedFrontmatter, phases: updatedPhases };
-        didUpdate = true;
+      if (phasesChanged) {
+        nextFrontmatter = { ...nextFrontmatter, phases: nextPhases };
+        changed = true;
       }
     }
-    if (!didUpdate) return;
-    const updatedContent = stringifyPlanFrontmatterWithArtifactOptions(parsedPlan.content, updatedFrontmatter);
-    if (updatedContent === originalContent) return;
-    const { diffString, linesAdded, linesRemoved } = await getDiffString({ original: originalContent, new: updatedContent });
-    await performWrite(ctx, resourceAccessor, latestPlanEntry.path, updatedContent, {
-      resultForModel: `Synced TODO states to ${latestPlanEntry.path}`,
-      linesAdded,
-      linesRemoved,
-      diffString,
-      originalContent,
+    if (!changed) return;
+    const nextText = stringifyWithArtifacts(document.content, nextFrontmatter);
+    if (nextText === sourceText) return;
+    const { diffString: patchText, linesAdded: addedLines, linesRemoved: removedLines } = await diffStringFor({ original: sourceText, new: nextText });
+    await performWrite(ctx, resourceAccessor, latestEntry.path, nextText, {
+      resultForModel: `Synced TODO states to ${latestEntry.path}`,
+      linesAdded: addedLines,
+      linesRemoved: removedLines,
+      diffString: patchText,
+      originalContent: sourceText,
     }, { toolCallId }, stateHandler);
   } catch (error) {
-    logger.error(ctx, "Failed to sync latest plan file todos", error, { planPath: latestPlanEntry.path });
+    planLog.error(ctx, "Failed to sync latest plan file todos", error, { planPath: latestEntry.path });
   }
 }
