@@ -1,19 +1,17 @@
 /**
  * The tool that hands work to a subagent.
  *
- * A subagent is another agent with its own conversation, its own prompt and its own tools, started for one
- * job and reported back to the parent: the call is resolved into a subagent type and a model, the subagent
- * gets a configuration of its own derived from the parent's (the same prompt session, the same resources,
- * its own conversation state and its own action handlers), and its run is streamed back into the parent's
- * interaction as the calls and results the parent can read. A subagent that runs on the server reports
- * through the parent's interaction listener, so what it does is visible while it runs rather than only at
- * the end.
+ * A subagent is another agent: its own conversation, its own prompt and its own tools, started for one job and reported
+ * back to the parent. The call is resolved into a subagent type and a model; the subagent gets a configuration derived
+ * from the parent's (the prompt session and resources are shared, the conversation state and action handlers are its
+ * own); and its run is streamed back into the parent's interaction as the calls and results the parent can read. A
+ * subagent that runs on the server reports through the parent's interaction listener, so what it does is visible while
+ * it runs rather than only at the end.
  *
- * The choice of subagent and model is where most of the policy lives: a model the caller blocks is not
- * chosen, a model the caller requires is forced, a model that needs a mode the parent does not have is not
- * chosen, and the cheapest of the candidates is preferred when the caller asks for a comparison. What the
- * subagent inherits from its parent is decided the same way — the guidance, the model, the environment, and
- * whether it may resume the parent's own fork.
+ * The choice of subagent and model is where most of the policy lives: a model the caller blocks is not chosen, a model
+ * the caller requires is forced, a model needing a mode the parent does not have is not chosen, and the cheapest
+ * candidate is preferred when the caller asks for a comparison. Inheritance is decided the same way — guidance, model,
+ * environment, and whether the subagent may resume the parent's own fork.
  */
 import {
   TaskError,
@@ -76,51 +74,73 @@ import { SubagentModelForcePolicy } from "./subagent-model-policy.ts";
 
 type Any = any;
 
+/** A predicate over model ids, and the async need a model may have for the parent's max mode. */
+type ModelFilter = (modelId: string) => boolean;
+type ModelMaxModeRequirement = (modelId: string) => Promise<boolean>;
+
+/** How a comparison between a candidate model and the parent's is answered: lower is cheaper. */
+type ModelCostComparison = (candidateModelId: string, parentModelId: string) => number;
+
 interface ToolExecutionMetaLike {
   readonly toolCallId: string;
   readonly [key: string]: unknown;
 }
 
-interface TaskToolOptions {
-  readonly readonlyShellEnabled?: boolean;
-  readonly allowCustomModelId?: boolean;
-  readonly includeExploreSubagent?: boolean;
-  readonly enableExecuteHookExec?: boolean;
+/** How a subagent is started: off this machine from the client, by the server, or as a cloud task. */
+interface SubagentLaunchOptions {
+  readonly enableCloudAsyncSubagents?: boolean;
+  readonly useClientSideSubagent?: boolean;
+  readonly requireServerSideSubagent?: boolean;
+  readonly allowResumeSelfFork?: boolean;
+  readonly enableSubagentInterrupt?: boolean;
+  readonly defaultSubagentsRunInBackground?: boolean;
+}
+
+/** The models a subagent call may choose from, and the policy for choosing one. */
+interface SubagentModelOptions {
   readonly subagentModels: Any;
+  readonly forceModelId?: string;
+  readonly isModelBlocked?: ModelFilter;
+  readonly isModelValid?: ModelFilter;
+  readonly requiresMaxMode?: ModelMaxModeRequirement;
+  readonly parentMaxMode?: boolean;
+  readonly compareModelCosts?: ModelCostComparison;
+  readonly subagentModelForcePolicy?: Any;
   readonly subagentModelsInUserInfo?: boolean;
   readonly subagentInheritGuidance?: boolean;
-  readonly isModelBlocked?: (modelId: string) => boolean;
-  readonly isModelValid?: (modelId: string) => boolean;
-  readonly parentMaxMode?: boolean;
-  readonly forceModelId?: string;
-  readonly subagentModelForcePolicy?: Any;
-  readonly compareModelCosts?: (candidateModelId: string, parentModelId: string) => number;
-  readonly requiresMaxMode?: (modelId: string) => Promise<boolean>;
-  readonly requireServerSideSubagent?: boolean;
+  readonly enableExploreParentModelInheritance?: boolean;
+  readonly parentRequestedModelName?: string;
+  readonly parentModelParameters?: readonly unknown[];
+}
+
+/** What the tool tells the model about itself, and what its run is allowed to do. */
+interface TaskPresentationOptions {
+  readonly enableExecuteHookExec?: boolean;
+  readonly readonlyShellEnabled?: boolean;
   readonly configuredSteps?: readonly string[];
-  readonly useClientSideSubagent?: boolean;
-  readonly enableCloudAsyncSubagents?: boolean;
-  readonly defaultSubagentsRunInBackground?: boolean;
+  readonly allowCustomModelId?: boolean;
+  readonly includeExploreSubagent?: boolean;
   readonly enableMultitaskMode?: boolean;
   readonly enableJobCompletionNotifications?: boolean;
   readonly hideAsyncSubagentTaskNotifications?: boolean;
   readonly enableAgentChatLinks?: boolean;
-  readonly enableExploreParentModelInheritance?: boolean;
-  readonly subagentExperimentGroup?: string;
-  readonly subagentCredentials?: SubagentArgs["credentials"];
-  readonly attachedMediaUrlProvider?: Any;
-  readonly geminiVideoAttachedMediaUrlProvider?: Any;
-  readonly inlineVideoMaxBytes?: number;
-  readonly signedUrlVideoMaxBytes?: number;
-  readonly trustedVideoAttachmentRoots?: readonly string[];
-  readonly allowResumeSelfFork?: boolean;
-  readonly enableSubagentInterrupt?: boolean;
   readonly environmentParamForSubagent?: boolean;
   readonly requestedEnvironmentBuildParamForSubagent?: boolean;
   readonly cloudSubagentTargeting?: boolean;
-  readonly parentRequestedModelName?: string;
-  readonly parentModelParameters?: readonly unknown[];
+  readonly subagentExperimentGroup?: string;
 }
+
+/** The credentials and attached media a subagent call may carry. */
+interface SubagentMediaOptions {
+  readonly subagentCredentials?: SubagentArgs["credentials"];
+  readonly attachedMediaUrlProvider?: Any;
+  readonly geminiVideoAttachedMediaUrlProvider?: Any;
+  readonly trustedVideoAttachmentRoots?: readonly string[];
+  readonly inlineVideoMaxBytes?: number;
+  readonly signedUrlVideoMaxBytes?: number;
+}
+
+interface TaskToolOptions extends SubagentLaunchOptions, SubagentModelOptions, TaskPresentationOptions, SubagentMediaOptions {}
 
 interface TaskToolConfig {
   readonly agentConfig: Any;
@@ -137,18 +157,46 @@ interface ParentStateHandler extends TaskResolutionParentState {
   computeNewStructure(ctx: Context): Promise<Any>;
 }
 
+/** The approvals a streaming subagent's interaction queries are answered with, by the query it asks. */
+const INTERACTION_QUERY_APPROVALS: ReadonlyMap<string, (id: Any) => Any> = new Map<string, (id: Any) => Any>([
+  ["webSearchRequestQuery", (id) => Responses.webSearchApproved(id)],
+  ["webFetchRequestQuery", (id) => Responses.webFetchApproved(id)],
+  ["generateImageRequestQuery", (id) => Responses.generateImageApproved(id)],
+]);
+
 function createTaskToolCall(taskTool: TaskToolCall): ToolCall {
   return new ToolCall({ tool: { case: "taskToolCall", value: taskTool } });
 }
 
-function serializeTaskError(error: unknown): ToolCall {
-  return createTaskToolCall(new TaskToolCall({
-    result: new TaskResult({
-      result: { case: "error", value: new TaskError({ error: error instanceof Error ? error.message : String(error) }) },
-    }),
-  }));
+/** What a failed task run says: the error's message, or whatever was thrown as its string. */
+function taskErrorValue(error: unknown): TaskError {
+  return new TaskError({ error: error instanceof Error ? error.message : String(error) });
 }
 
+/** A result whose only content is the error a task run failed with. */
+function taskErrorResult(error: unknown): TaskResult {
+  return new TaskResult({ result: { case: "error", value: taskErrorValue(error) } });
+}
+
+/** The result a subagent run that stopped without one is given. */
+function missingSubagentResult(): TaskResult {
+  return new TaskResult({ result: { case: "error", value: new TaskError({ error: "Subagent completed without a result" }) } });
+}
+
+function serializeTaskError(error: unknown): ToolCall {
+  return createTaskToolCall(new TaskToolCall({ result: taskErrorResult(error) }));
+}
+
+/** The fields that are set among a group of optional values: an absent option stays absent rather than becoming undefined. */
+function presentFields(fields: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> {
+  const present: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(fields)) {
+    if (value !== undefined) present[key] = value;
+  }
+  return present;
+}
+
+/** What a subagent's streamed interaction reports to: a tool-call delta on the parent's interaction, and approvals. */
 class StreamingTaskInteractionListener {
   constructor(private readonly interactionHandler: Any, private readonly toolCallId: string) {}
 
@@ -162,15 +210,30 @@ class StreamingTaskInteractionListener {
   }
 
   async query(_ctx: Context, query: Any): Promise<Any> {
-    switch (query.query.case) {
-      case "webSearchRequestQuery": return Responses.webSearchApproved(query.id);
-      case "webFetchRequestQuery": return Responses.webFetchApproved(query.id);
-      case "generateImageRequestQuery": return Responses.generateImageApproved(query.id);
-      default: throw new Error(`Unhandled interaction query type: ${query.query.case}`);
-    }
+    const approve = INTERACTION_QUERY_APPROVALS.get(query.query.case);
+    if (approve == null) throw new Error(`Unhandled interaction query type: ${query.query.case}`);
+    return approve(query.id);
   }
 }
 
+/** The parent's feature flags, with the subagent's own parent marker turned off. */
+function subagentFeatureFlags(featureFlags: Any): Any {
+  return featureFlags === undefined ? undefined : { ...featureFlags, glassMetaParentAgent: false };
+}
+
+/** How a computerUse subagent's user info is shown: no skills or rules, its own surface, no agent transcripts. */
+function subagentUserInfoDisplayOptions(baseOptions: Any, isComputerUse: boolean): Any {
+  return isComputerUse
+    ? { ...baseOptions, displaySkills: false, displayCursorRules: false, computerUseSubagentSurface: true, excludeAgentTranscripts: true }
+    : baseOptions;
+}
+
+/** A subagent's base prompt, with whatever reminder its configuration adds placed above it. */
+function withSubagentReminder(basePrompt: string, reminder: string | undefined): string {
+  return reminder ? `<system_reminder>\n${reminder}\n</system_reminder>\n\n${basePrompt}` : basePrompt;
+}
+
+/** The agent configuration a subagent runs with: the parent's, changed where a subagent differs. */
 function createSubagentAgentConfig(args: {
   readonly baseAgentConfig: Any;
   readonly subagentConfig: TaskSubagentModelConfig;
@@ -178,48 +241,81 @@ function createSubagentAgentConfig(args: {
   readonly subagentInstanceId: string;
 }): Any {
   const { baseAgentConfig, subagentConfig, overriddenModelId, subagentInstanceId } = args;
-  const featureFlags = baseAgentConfig.featureFlags === undefined
-    ? undefined
-    : { ...baseAgentConfig.featureFlags, glassMetaParentAgent: false };
+  const runtimeSubagentConfig = subagentConfig as Any;
   return {
     ...baseAgentConfig,
     modelId: overriddenModelId,
-    featureFlags,
+    featureFlags: subagentFeatureFlags(baseAgentConfig.featureFlags),
     isCloudMetaAgentParent: false,
     preTurnAssistantNotice: undefined,
     getNamedAgentSelfDocument: undefined,
-    userInfoDisplayOptions: subagentConfig.subagent_type.type.case === "computerUse"
-      ? { ...baseAgentConfig.userInfoDisplayOptions, displaySkills: false, displayCursorRules: false, computerUseSubagentSurface: true, excludeAgentTranscripts: true }
-      : baseAgentConfig.userInfoDisplayOptions,
-    toolsGenerator: (props: Any) => {
-      const nextProps = { ...props, isCloudMetaAgentParent: false, subagentInstanceId, subagentConfig };
-      const tools = baseAgentConfig.toolsGenerator(nextProps);
-      return tools;
-    },
+    userInfoDisplayOptions: subagentUserInfoDisplayOptions(baseAgentConfig.userInfoDisplayOptions, subagentConfig.subagent_type.type.case === "computerUse"),
+    toolsGenerator: (props: Any) => baseAgentConfig.toolsGenerator({
+      ...props,
+      isCloudMetaAgentParent: false,
+      subagentInstanceId,
+      subagentConfig,
+    }),
     systemPromptGenerator: (props: Any, toolSet: Any) => {
-      const nextProps = { ...props, isCloudMetaAgentParent: false, subagentType: subagentConfig.subagent_type };
-      const runtimeSubagentConfig = subagentConfig as Any;
+      const subagentPromptProps = { ...props, isCloudMetaAgentParent: false, subagentType: subagentConfig.subagent_type };
       const basePrompt = runtimeSubagentConfig.systemPromptOverride
-        ? runtimeSubagentConfig.systemPromptOverride(nextProps, toolSet, { subagentInstanceId, baseSystemPromptGenerator: baseAgentConfig.systemPromptGenerator })
-        : baseAgentConfig.systemPromptGenerator(nextProps, toolSet);
-      const reminder = runtimeSubagentConfig.systemReminder?.(toolSet)?.trim();
-      return reminder ? `<system_reminder>\n${reminder}\n</system_reminder>\n\n${basePrompt}` : basePrompt;
+        ? runtimeSubagentConfig.systemPromptOverride(subagentPromptProps, toolSet, { subagentInstanceId, baseSystemPromptGenerator: baseAgentConfig.systemPromptGenerator })
+        : baseAgentConfig.systemPromptGenerator(subagentPromptProps, toolSet);
+      return withSubagentReminder(basePrompt, runtimeSubagentConfig.systemReminder?.(toolSet)?.trim());
     },
-    messageHistoryModifier: (subagentConfig as Any).messageHistoryModifier ?? undefined,
+    messageHistoryModifier: runtimeSubagentConfig.messageHistoryModifier ?? undefined,
   };
 }
 
+/** The parent state a subagent is resolved against, read through the parent's handler. */
 function createParentStateAccessor(stateHandler: ParentStateHandler): TaskResolutionParentState {
   return {
     restoreSubagentState: (ctx, subagentId) => stateHandler.restoreSubagentState(ctx, subagentId),
-    resolveSubagentId: subagentId => stateHandler.resolveSubagentId?.(subagentId),
+    resolveSubagentId: (subagentId) => stateHandler.resolveSubagentId?.(subagentId),
     getSubagentIdToResume: (typeName, mode) => stateHandler.getSubagentIdToResume?.(typeName, mode),
-    getConversationState: async ctx => fromRedactedConversationStateStructure(
+    getConversationState: async (ctx) => fromRedactedConversationStateStructure(
       await stateHandler.computeNewStructure(ctx),
       PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
       undefined,
     ),
   };
+}
+
+/** The completion context a server-side subagent reports its iterations with. */
+function createCompletionContext(args: {
+  readonly resolved: TaskSubagentResolution;
+  readonly prepared: Any;
+  readonly rawArgs: TaskRawArguments;
+  readonly meta: ToolExecutionMetaLike;
+  readonly parentModelInfo: Any;
+  readonly registrySize: number;
+  readonly executionStartTime: number;
+}): TaskSubagentCompletionContext {
+  const { resolved, prepared, rawArgs, meta, parentModelInfo, registrySize, executionStartTime } = args;
+  return {
+    toolCallId: meta.toolCallId,
+    subagentId: resolved.subagentId,
+    subagentRequestId: prepared.subagentRequestId,
+    typeName: resolved.typeName,
+    analyticsSubagentType: resolved.analyticsSubagentType,
+    parentModelName: parentModelInfo.modelName,
+    isParallel: registrySize > 1,
+    executionStartTime,
+    initialTurnsCount: prepared.initialTurnsCount,
+    overriddenModelId: resolved.resolvedModelId,
+    effectiveReadonly: resolved.effectiveReadonly,
+    useAskModeForSubagent: resolved.useAskModeForSubagent,
+    ...presentFields({
+      resultSuffix: resolved.subagentConfig.resultSuffix,
+      selectedContext: prepared.selectedContext,
+      plugin: resolved.subagentConfig.plugin,
+      marketplace: resolved.subagentConfig.marketplace,
+      pluginId: resolved.subagentConfig.pluginId,
+      marketplaceId: resolved.subagentConfig.marketplaceId,
+    }),
+    rawArgsPrompt: rawArgs.prompt,
+    rawArgsDescription: rawArgs.description ?? "",
+  } as TaskSubagentCompletionContext;
 }
 
 async function runServerTaskSubagent(args: {
@@ -235,43 +331,35 @@ async function runServerTaskSubagent(args: {
   readonly parentModelInfo: Any;
   readonly options: TaskToolOptions;
 }): Promise<TaskResult> {
-  const { ctx, interactionHandler, meta, rawArgs, resolved, parentState, stateHandler, resourceAccessor, getTaskToolConfig, parentModelInfo, options } = args;
-  const prepared = await (async () => {
-    const preparedValue = await prepareTaskSubagent({
-      resolved,
-      ctx,
-      rawArgs,
-      meta,
-      parentState,
-      resourceAccessor,
-      parentModelInfo,
-      ...(options.subagentCredentials !== undefined ? { subagentCredentials: options.subagentCredentials } : {}),
-      enableExecuteHookExec: options.enableExecuteHookExec,
-      configuredSteps: options.configuredSteps,
-      readonlyShellEnabled: options.readonlyShellEnabled,
-      toolName: getTaskToolName(parentModelInfo),
-      privacyMode: stateHandler.getPrivacyMode(),
-      attachedMediaUrlProvider: options.attachedMediaUrlProvider,
-      geminiVideoAttachedMediaUrlProvider: options.geminiVideoAttachedMediaUrlProvider,
-      ...(options.inlineVideoMaxBytes !== undefined ? { inlineVideoMaxBytes: options.inlineVideoMaxBytes } : {}),
-      ...(options.signedUrlVideoMaxBytes !== undefined ? { signedUrlVideoMaxBytes: options.signedUrlVideoMaxBytes } : {}),
-    });
-    const latestConfig = await getTaskToolConfig(preparedValue.resolvedModelId, preparedValue.subagentType);
-    return {
-      prepared: preparedValue,
-      taskToolConfig: latestConfig,
-    };
-  })();
-  const preparedValue = prepared.prepared;
-  const taskToolConfig = prepared.taskToolConfig;
-  const subagentId = resolved.subagentId;
-  const subagentRequestId = preparedValue.subagentRequestId;
+  const { options, parentModelInfo, getTaskToolConfig, resourceAccessor, stateHandler, parentState, resolved, rawArgs, meta, interactionHandler, ctx } = args;
+  const prepared = await prepareTaskSubagent({
+    ctx,
+    rawArgs,
+    resolved,
+    meta,
+    parentState,
+    parentModelInfo,
+    resourceAccessor,
+    toolName: getTaskToolName(parentModelInfo),
+    privacyMode: stateHandler.getPrivacyMode(),
+    enableExecuteHookExec: options.enableExecuteHookExec,
+    configuredSteps: options.configuredSteps,
+    readonlyShellEnabled: options.readonlyShellEnabled,
+    attachedMediaUrlProvider: options.attachedMediaUrlProvider,
+    geminiVideoAttachedMediaUrlProvider: options.geminiVideoAttachedMediaUrlProvider,
+    ...(options.subagentCredentials !== undefined ? { subagentCredentials: options.subagentCredentials } : {}),
+    ...(options.signedUrlVideoMaxBytes !== undefined ? { signedUrlVideoMaxBytes: options.signedUrlVideoMaxBytes } : {}),
+    ...(options.inlineVideoMaxBytes !== undefined ? { inlineVideoMaxBytes: options.inlineVideoMaxBytes } : {}),
+  });
+  // The model a subagent starts on is the one it resolved to, but its config is fetched after that resolution.
+  const taskToolConfig = await getTaskToolConfig(prepared.resolvedModelId, prepared.subagentType);
+  const subagentRequestId = prepared.subagentRequestId;
   const [subagentCtx, cancelSubagent] = ctx.withDetached().withCancel();
   const registry = resourceAccessor.get(subagentRegistryResource);
-  registry.register(subagentId, { cancel: cancelSubagent }, meta.toolCallId);
+  registry.register(resolved.subagentId, { cancel: cancelSubagent }, meta.toolCallId);
   const timeoutMs = (resolved.subagentConfig as Any).executionTimeoutMs as number | undefined;
   const timeout = timeoutMs !== undefined && timeoutMs > 0
-    ? setTimeout(() => registry.cancel(subagentId, { intentional: true, reason: `Subagent exceeded execution timeout of ${timeoutMs}ms` }), timeoutMs)
+    ? setTimeout(() => registry.cancel(resolved.subagentId, { intentional: true, reason: `Subagent exceeded execution timeout of ${timeoutMs}ms` }), timeoutMs)
     : undefined;
   const interactionListener = toRedactedInteractionListener(
     new StreamingTaskInteractionListener(interactionHandler, meta.toolCallId),
@@ -295,46 +383,43 @@ async function runServerTaskSubagent(args: {
     taskToolConfig.summarizationHandler,
     new NoopConversationActionReceiver(),
   );
-  const completionCtx: TaskSubagentCompletionContext = {
-    subagentId,
-    subagentRequestId,
-    toolCallId: meta.toolCallId,
-    typeName: resolved.typeName,
-    analyticsSubagentType: resolved.analyticsSubagentType,
-    overriddenModelId: resolved.resolvedModelId,
-    effectiveReadonly: resolved.effectiveReadonly,
-    useAskModeForSubagent: resolved.useAskModeForSubagent,
-    initialTurnsCount: preparedValue.initialTurnsCount,
+  const completionCtx = createCompletionContext({
+    meta,
+    rawArgs,
+    prepared,
+    resolved,
+    parentModelInfo,
     executionStartTime: Date.now(),
-    isParallel: registry.size > 1,
-    parentModelName: parentModelInfo.modelName,
-    ...(resolved.subagentConfig.resultSuffix !== undefined ? { resultSuffix: resolved.subagentConfig.resultSuffix } : {}),
-    ...(preparedValue.selectedContext !== undefined ? { selectedContext: preparedValue.selectedContext } : {}),
-    ...(resolved.subagentConfig.plugin !== undefined ? { plugin: resolved.subagentConfig.plugin } : {}),
-    ...(resolved.subagentConfig.marketplace !== undefined ? { marketplace: resolved.subagentConfig.marketplace } : {}),
-    ...(resolved.subagentConfig.pluginId !== undefined ? { pluginId: resolved.subagentConfig.pluginId } : {}),
-    ...(resolved.subagentConfig.marketplaceId !== undefined ? { marketplaceId: resolved.subagentConfig.marketplaceId } : {}),
-    rawArgsPrompt: rawArgs.prompt,
-    rawArgsDescription: rawArgs.description ?? "",
-  };
+    registrySize: registry.size,
+  });
   const iterState: TaskSubagentIterationState = { loopCount: 0, runStreamCompleted: false, subagentStopCalled: false };
-  const completionDeps = {
-    ctx,
-    blobStore: stateHandler.getBlobStore(),
-    registry,
-    hookContext: { resourceAccessor, toolCallId: meta.toolCallId, subagentId, subagentType: resolved.typeName, overriddenModelId: resolved.resolvedModelId, parentCtx: ctx },
-    enableTaskToolHooksExec: options.enableExecuteHookExec === true,
-    configuredSteps: options.configuredSteps ?? [],
-    toolName: getTaskToolName(parentModelInfo),
-    postToolUseHookInput: buildPreparedTaskToolHookInput(preparedValue),
+  const completionHookContext = {
+    resourceAccessor,
+    toolCallId: meta.toolCallId,
+    subagentId: resolved.subagentId,
+    subagentType: resolved.typeName,
+    overriddenModelId: resolved.resolvedModelId,
+    parentCtx: ctx,
   };
-  let state = preparedValue.conversationState;
-  let action = preparedValue.initialAction;
+  const completionDeps = {
+    blobStore: stateHandler.getBlobStore(),
+    ctx,
+    registry,
+    hookContext: completionHookContext,
+    postToolUseHookInput: buildPreparedTaskToolHookInput(prepared),
+    toolName: getTaskToolName(parentModelInfo),
+    configuredSteps: options.configuredSteps ?? [],
+    enableTaskToolHooksExec: options.enableExecuteHookExec === true,
+  };
+  let state = prepared.conversationState;
+  let action = prepared.initialAction;
   if (state === undefined || action === undefined) throw new Error("Prepared subagent launch is missing state or action");
+  const persist = (persistCtx: Context, persistId: string, _type: Any, persistedState: Any) =>
+    stateHandler.persistSubagentState(persistCtx, persistId, resolved.subagentConfig.subagent_type, persistedState);
   try {
-    while (true) {
+    for (;;) {
       iterState.runStreamCompleted = false;
-      const turnsAtStart = iterState.loopCount === 0 ? preparedValue.initialTurnsCount : state!.turns.length;
+      const turnsAtStart = iterState.loopCount === 0 ? prepared.initialTurnsCount : state!.turns.length;
       try {
         state = await agent.runStream(
           subagentCtx.with(requestModelNameKey, resolved.resolvedModelId).with(parentRequestIdKey, resolved.parentRequestId),
@@ -353,10 +438,10 @@ async function runServerTaskSubagent(args: {
         iterState,
         completionCtx,
         completionDeps,
-        (persistCtx, persistId, _type, persistedState) => stateHandler.persistSubagentState(persistCtx, persistId, resolved.subagentConfig.subagent_type, persistedState),
+        persist,
         resolved.subagentConfig.subagent_type,
       );
-      if (!iteration.shouldContinue) return iteration.finalResult ?? new TaskResult({ result: { case: "error", value: new TaskError({ error: "Subagent completed without a result" }) } });
+      if (!iteration.shouldContinue) return iteration.finalResult ?? missingSubagentResult();
       action = iteration.nextAction!;
     }
   } catch (error) {
@@ -375,30 +460,57 @@ export function createTaskTool(
   options: TaskToolOptions,
 ): Record<string, unknown> {
   const canUseClientSideSubagent = options.useClientSideSubagent === true && options.requireServerSideSubagent !== true;
+  const includeRunInBackground = canUseClientSideSubagent || options.enableCloudAsyncSubagents === true;
   const allowResumeSelfFork = (canUseClientSideSubagent || options.enableCloudAsyncSubagents === true) && options.allowResumeSelfFork === true;
   const enableSubagentInterrupt = canUseClientSideSubagent && options.enableSubagentInterrupt === true;
-  const includeRunInBackground = canUseClientSideSubagent || options.enableCloudAsyncSubagents === true;
   const defaultRunInBackground = includeRunInBackground && options.defaultSubagentsRunInBackground === true;
   const notificationHints = options.enableJobCompletionNotifications === true && includeRunInBackground;
+  const toolName = getTaskToolName(parentModelInfo);
   const { schemaTowardsModel, schemaForParsing } = buildTaskParameterSchemas(subagentConfigs, {
-    allowCustomModelId: options.allowCustomModelId === true,
     subagentModels: options.subagentModels,
+    allowCustomModelId: options.allowCustomModelId === true,
+    useClientSideSubagent: canUseClientSideSubagent,
     subagentModelsInUserInfo: options.subagentModelsInUserInfo === true,
     subagentInheritGuidance: options.subagentInheritGuidance === true,
-    useClientSideSubagent: canUseClientSideSubagent,
     includeRunInBackgroundInTaskSchema: includeRunInBackground,
     defaultSubagentsRunInBackground: defaultRunInBackground,
     enableSubagentInterrupt,
+    allowResumeSelfFork,
+    cloudSubagentTargeting: options.cloudSubagentTargeting === true,
     environmentParamForSubagent: options.environmentParamForSubagent === true,
     requestedEnvironmentBuildParamForSubagent: options.requestedEnvironmentBuildParamForSubagent === true,
-    cloudSubagentTargeting: options.cloudSubagentTargeting === true,
-    allowResumeSelfFork,
     enableMultitaskMode: options.enableMultitaskMode === true,
     taskToolNotificationHintsEnabled: notificationHints,
     hideAsyncSubagentTaskNotifications: options.hideAsyncSubagentTaskNotifications === true,
     enableAgentChatLinks: options.enableAgentChatLinks === true,
   });
-  const toolName = getTaskToolName(parentModelInfo);
+
+  /** The resolution options the tool's execute path resolves a subagent with. */
+  const executeResolutionOptions = () => ({
+    subagentModels: options.subagentModels,
+    parentMaxMode: options.parentMaxMode === true,
+    isModelBlocked: options.isModelBlocked ?? (() => false),
+    isModelValid: options.isModelValid ?? (() => true),
+    compareModelCosts: options.compareModelCosts ?? (() => 0),
+    subagentModelForcePolicy: options.subagentModelForcePolicy ?? SubagentModelForcePolicy.None,
+    ...(options.forceModelId !== undefined ? { forceModelId: options.forceModelId } : {}),
+    ...(options.requiresMaxMode !== undefined ? { requiresMaxMode: options.requiresMaxMode } : {}),
+    ...(options.parentRequestedModelName !== undefined ? { parentRequestedModelName: options.parentRequestedModelName } : {}),
+    ...(options.parentModelParameters !== undefined ? { parentModelParameters: options.parentModelParameters } : {}),
+    ...(options.enableExploreParentModelInheritance !== undefined ? { enableExploreParentModelInheritance: options.enableExploreParentModelInheritance } : {}),
+  });
+
+  /** The resolution options the prepare path resolves a subagent with: it has no model to request or cap yet. */
+  const prepareResolutionOptions = () => ({
+    isModelBlocked: options.isModelBlocked ?? (() => false),
+    isModelValid: options.isModelValid ?? (() => true),
+    compareModelCosts: options.compareModelCosts ?? (() => 0),
+    subagentModels: options.subagentModels,
+    parentMaxMode: options.parentMaxMode === true,
+    subagentModelForcePolicy: options.subagentModelForcePolicy ?? SubagentModelForcePolicy.None,
+    ...(options.forceModelId !== undefined ? { forceModelId: options.forceModelId } : {}),
+  });
+
   const descriptionCache = new WeakMap<object, Map<boolean, string>>();
   const description = (props: Any, descriptionOptions: Any): string => {
     const catalogsInUserInfo = options.subagentModelsInUserInfo === true || !isPromptVisibleDescription(descriptionOptions);
@@ -407,60 +519,106 @@ export function createTaskTool(
     const parts = buildTaskToolDescriptionParts({
       configs: subagentConfigs,
       defaultResumeMode: "DEFAULT",
-      includeExploreSubagent: options.includeExploreSubagent === true,
+      toolLabel: toolName,
       useClientSideSubagent: canUseClientSideSubagent,
+      catalogsInUserInfo,
+      includeExploreSubagent: options.includeExploreSubagent === true,
       enableSubagentInterrupt,
-      taskToolNotificationHintsEnabled: notificationHints,
-      hideAsyncSubagentTaskNotifications: options.hideAsyncSubagentTaskNotifications === true,
       allowResumeSelfFork,
-      enableAgentChatLinks: options.enableAgentChatLinks === true,
       subagentModels: options.subagentModels,
       subagentModelsInUserInfo: options.subagentModelsInUserInfo === true,
       subagentInheritGuidance: options.subagentInheritGuidance === true,
-      catalogsInUserInfo,
-      toolLabel: toolName,
+      taskToolNotificationHintsEnabled: notificationHints,
+      hideAsyncSubagentTaskNotifications: options.hideAsyncSubagentTaskNotifications === true,
+      enableAgentChatLinks: options.enableAgentChatLinks === true,
       readToolName: props.allTools?.READ?.name,
       globToolName: props.allTools?.GLOB?.name,
       ...(options.subagentExperimentGroup !== undefined ? { subagentExperimentGroup: options.subagentExperimentGroup } : {}),
     });
-    let full = parts.fullDescription;
+    const full = parts.fullDescription;
     if (byPlacement === undefined) { byPlacement = new Map(); descriptionCache.set(props, byPlacement); }
     byPlacement.set(catalogsInUserInfo, full);
     return full;
   };
+
+  /** The parse failure for a set of invalid arguments, one line per argument. */
+  const invalidArguments = (errors: readonly { readonly path: readonly (string | number)[]; readonly message: string }[]): Error => {
+    const lines: string[] = [];
+    for (const error of errors) lines.push((error.path.length > 0 ? error.path.join(".") : "argument") + ": " + error.message);
+    return new Error("Invalid arguments:\n" + lines.join("\n"));
+  };
+
   const parse = (raw: Any): TaskRawArguments => {
     let parsedJson: Any;
     try { parsedJson = typeof raw === "string" ? JSON.parse(raw) : raw; }
     catch (error) { throw new Error(`Invalid arguments:\nargument: ${error instanceof Error ? error.message : "Failed to parse arguments"}`); }
     const result = schemaForParsing.safeParse(parsedJson);
-    if (!result.success) throw new Error(`Invalid arguments:\n${result.error.errors.map((error: Any) => `${error.path.length > 0 ? error.path.join(".") : "argument"}: ${error.message}`).join("\n")}`);
+    if (!result.success) throw invalidArguments(result.error.errors);
     assertMachineAndLegacyArgsNotBothSet(result.data);
     assertCloudOnlyTaskArgsAllowed(result.data);
     if (result.data.resume?.trim().toLowerCase() === "self" && !allowResumeSelfFork) throw new Error('Invalid arguments:\nresume="self" is not available for this Task tool.');
     return result.data as TaskRawArguments;
   };
+
+  /** What the client-side launch carries besides the resolved call: credentials, media and interrupt wiring. */
+  const clientLaunchOptions = () => ({
+    enableSubagentInterrupt,
+    attachedMediaUrlProvider: options.attachedMediaUrlProvider,
+    geminiVideoAttachedMediaUrlProvider: options.geminiVideoAttachedMediaUrlProvider,
+    ...(options.subagentCredentials !== undefined ? { subagentCredentials: options.subagentCredentials } : {}),
+    ...(options.trustedVideoAttachmentRoots !== undefined ? { trustedVideoAttachmentRoots: options.trustedVideoAttachmentRoots } : {}),
+    ...(options.inlineVideoMaxBytes !== undefined ? { inlineVideoMaxBytes: options.inlineVideoMaxBytes } : {}),
+    ...(options.signedUrlVideoMaxBytes !== undefined ? { signedUrlVideoMaxBytes: options.signedUrlVideoMaxBytes } : {}),
+  });
+
+  /** Resolves and prepares a subagent launch, before a model is fetched for it. */
+  const prepareLaunch = async (ctx: Context, rawArgs: Any, meta: ToolExecutionMetaLike) => {
+    const parsed = parse(rawArgs);
+    const parentState = createParentStateAccessor(stateHandler);
+    const resolved = await resolveTaskSubagentConfig({
+      parentModelInfo,
+      subagentConfigs,
+      parentState,
+      meta,
+      rawArgs: parsed,
+      ctx,
+      options: prepareResolutionOptions(),
+    });
+    const prepareOptions = {
+      resolved,
+      ctx,
+      rawArgs: parsed,
+      meta,
+      parentState,
+      resourceAccessor,
+      parentModelInfo,
+      toolName,
+      privacyMode: stateHandler.getPrivacyMode(),
+      ...(options.readonlyShellEnabled !== undefined ? { readonlyShellEnabled: options.readonlyShellEnabled } : {}),
+    };
+    return await prepareTaskSubagent(prepareOptions);
+  };
+
+  /** What the rendered result of a task run says, and whether it is an error. */
+  const renderResult = (result: TaskResult) => createStringResult(
+    renderTaskResultToString(result, {
+      enableJobCompletionNotifications: notificationHints,
+      ...(options.hideAsyncSubagentTaskNotifications !== undefined ? { hideAsyncSubagentTaskNotifications: options.hideAsyncSubagentTaskNotifications } : {}),
+      ...(options.enableAgentChatLinks !== undefined ? { enableAgentChatLinks: options.enableAgentChatLinks } : {}),
+    }),
+    result.result.case === "error",
+  );
+
   const execute = async (ctx: Context, interactionHandler: Any, rawArgs: TaskRawArguments, meta: ToolExecutionMetaLike): Promise<TaskResult> => {
     const parentState = createParentStateAccessor(stateHandler);
     const resolved = await resolveTaskSubagentConfig({
-      ctx,
-      rawArgs,
-      meta,
+      parentModelInfo,
       subagentConfigs,
       parentState,
-      parentModelInfo,
-      options: {
-        ...(options.forceModelId !== undefined ? { forceModelId: options.forceModelId } : {}),
-        subagentModelForcePolicy: options.subagentModelForcePolicy ?? SubagentModelForcePolicy.None,
-        ...(options.parentRequestedModelName !== undefined ? { parentRequestedModelName: options.parentRequestedModelName } : {}),
-        ...(options.parentModelParameters !== undefined ? { parentModelParameters: options.parentModelParameters } : {}),
-        parentMaxMode: options.parentMaxMode === true,
-        subagentModels: options.subagentModels,
-        isModelBlocked: options.isModelBlocked ?? (() => false),
-        isModelValid: options.isModelValid ?? (() => true),
-        ...(options.requiresMaxMode !== undefined ? { requiresMaxMode: options.requiresMaxMode } : {}),
-        compareModelCosts: options.compareModelCosts ?? (() => 0),
-        ...(options.enableExploreParentModelInheritance !== undefined ? { enableExploreParentModelInheritance: options.enableExploreParentModelInheritance } : {}),
-      },
+      meta,
+      rawArgs,
+      ctx,
+      options: executeResolutionOptions(),
     });
     if (canUseClientSideSubagent) {
       return executeClientSideTaskSubagent({
@@ -471,52 +629,28 @@ export function createTaskTool(
         resourceAccessor,
         stateHandler,
         parentModelName: parentModelInfo.modelName,
-        ...(options.subagentCredentials !== undefined ? { subagentCredentials: options.subagentCredentials } : {}),
-        attachedMediaUrlProvider: options.attachedMediaUrlProvider,
-        geminiVideoAttachedMediaUrlProvider: options.geminiVideoAttachedMediaUrlProvider,
-        ...(options.inlineVideoMaxBytes !== undefined ? { inlineVideoMaxBytes: options.inlineVideoMaxBytes } : {}),
-        ...(options.signedUrlVideoMaxBytes !== undefined ? { signedUrlVideoMaxBytes: options.signedUrlVideoMaxBytes } : {}),
-        ...(options.trustedVideoAttachmentRoots !== undefined ? { trustedVideoAttachmentRoots: options.trustedVideoAttachmentRoots } : {}),
-        enableSubagentInterrupt,
+        ...clientLaunchOptions(),
         interrupt: (rawArgs as Any).interrupt,
         contextInjectionSignal: (meta as Any).contextInjectionSignal,
       });
     }
+    const serverLaunch = { options, parentModelInfo, getTaskToolConfig, resourceAccessor, stateHandler, parentState, resolved, rawArgs, meta, interactionHandler, ctx };
     try {
-      return await runServerTaskSubagent({ ctx, interactionHandler, meta, rawArgs, resolved, parentState, stateHandler, resourceAccessor, getTaskToolConfig, parentModelInfo, options });
+      return await runServerTaskSubagent(serverLaunch);
     } catch (error) {
-      return new TaskResult({ result: { case: "error", value: new TaskError({ error: error instanceof Error ? error.message : String(error) }) } });
+      return taskErrorResult(error);
     }
   };
+
   return createZodAgentTool("TASK", {
     name: toolName,
     descriptionGenerator: description,
     parameters: schemaTowardsModel,
-    prepareSubagent: async (ctx: Context, rawArgs: Any, meta: ToolExecutionMetaLike) => {
-      const parsed = parse(rawArgs);
-      const resolved = await resolveTaskSubagentConfig({
-        ctx,
-        rawArgs: parsed,
-        meta,
-        subagentConfigs,
-        parentState: createParentStateAccessor(stateHandler),
-        parentModelInfo,
-        options: {
-          ...(options.forceModelId !== undefined ? { forceModelId: options.forceModelId } : {}),
-          subagentModelForcePolicy: options.subagentModelForcePolicy ?? SubagentModelForcePolicy.None,
-          parentMaxMode: options.parentMaxMode === true,
-          subagentModels: options.subagentModels,
-          isModelBlocked: options.isModelBlocked ?? (() => false),
-          isModelValid: options.isModelValid ?? (() => true),
-          compareModelCosts: options.compareModelCosts ?? (() => 0),
-        },
-      });
-      return await prepareTaskSubagent({ resolved, ctx, rawArgs: parsed, meta, parentState: createParentStateAccessor(stateHandler), resourceAccessor, parentModelInfo, ...(options.readonlyShellEnabled !== undefined ? { readonlyShellEnabled: options.readonlyShellEnabled } : {}), toolName, privacyMode: stateHandler.getPrivacyMode() });
-    },
-    // The wrapper hands the tool's arguments and the orchestrator over untyped, since a tool does not hold
-    // the orchestrator's types; the callback's own signature is what it is written against.
+    prepareSubagent: prepareLaunch,
+    // The wrapper hands the tool's arguments and the orchestrator over untyped, since a tool does not hold the
+    // orchestrator's types; the callback's own signature is what it is written against.
     execute: withSafeParsedArgs(schemaForParsing, execute as unknown as Parameters<typeof withSafeParsedArgs>[1], createTaskToolCall(new TaskToolCall())),
-    render: async (_ctx: Context, result: TaskResult) => createStringResult(renderTaskResultToString(result, { enableJobCompletionNotifications: notificationHints, ...(options.hideAsyncSubagentTaskNotifications !== undefined ? { hideAsyncSubagentTaskNotifications: options.hideAsyncSubagentTaskNotifications } : {}), ...(options.enableAgentChatLinks !== undefined ? { enableAgentChatLinks: options.enableAgentChatLinks } : {}) }), result.result.case === "error"),
+    render: async (_ctx: Context, result: TaskResult) => renderResult(result),
     serializeError: serializeTaskError,
   });
 }
