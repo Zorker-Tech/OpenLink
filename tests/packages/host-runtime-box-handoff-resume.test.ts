@@ -4,6 +4,7 @@
  */
 
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
 
 import { BoxHandoffResume } from "../../source/host/transcript/box-handoff-resume.ts";
@@ -254,5 +255,49 @@ describe("what a resume says", () => {
     await group.resume.resumeWithHiddenPrompt("agent-1", "x", "t");
     assert.equal(group.named("getRunner").length, 0);
     assert.equal(group.named("run").length, 0);
+  });
+});
+
+const hashOf = (text: string | null) => createHash("sha256").update(text ?? "").digest("hex");
+
+describe("the whole resume prompts are stable", () => {
+  it("says the same thing for every box hand-back trigger", async () => {
+    for (const [trigger, expected] of [
+      ["button", "19997a8b9432f381cac83c6cb9d1d9f2efb11f4be36745b6e2451670225c05ad"],
+      ["dismissed", "2103a00354f46cd76c5aa0e859468084516b1fcc71afca9f10a693c9922eff73"],
+      ["viewer-closed", "f3891ceb72e6d731bb571a22801d8f747833e0d5514ad191f400d0037d84a2fa"],
+    ]) {
+      const world1 = world();
+      await world1.resume.resumeAfterBoxHandoff("agent-1", trigger as string);
+      assert.equal(hashOf(world1.lastPrompt()), expected);
+    }
+  });
+  it("says the same thing after MCP authorization and listener connection", async () => {
+    const mcp = world();
+    await mcp.resume.resumeAfterMcpAuth("agent-1", "github", "work");
+    assert.equal(hashOf(mcp.lastPrompt()), "f6d46189a561332dd0f7813a2d34b8a332fd8f4c7bc68310341cda3e0357034f");
+    for (const [platform, expected] of [
+      ["slack", "c761889544e837ba8db8e24703967d0d81ee8ae0e395f79e38bd5c867dc3f943"],
+      ["github", "88ccbed58d21c79551c62964db39ff9422a6c5ff131d0223b173712118fbb4ca"],
+      ["teams", "88ccbed58d21c79551c62964db39ff9422a6c5ff131d0223b173712118fbb4ca"],
+    ]) {
+      const listener = world();
+      await listener.resume.resumeAfterListenerConnect("agent-1", platform as string);
+      assert.equal(hashOf(listener.lastPrompt()), expected);
+    }
+  });
+});
+
+describe("a resume that fails is titled for the moment it resumed", () => {
+  it("uses the moment's own title in the tray error", async () => {
+    const handoff = world({ runError: new Error("boom") });
+    await handoff.resume.resumeAfterBoxHandoff("agent-1", "button");
+    assert.equal((handoff.named("pushError")[0]?.args[0] as { title?: string }).title, "Agent failed to resume after box handoff");
+    const mcp = world({ runError: new Error("boom") });
+    await mcp.resume.resumeAfterMcpAuth("agent-1", "github", "work");
+    assert.equal((mcp.named("pushError")[0]?.args[0] as { title?: string }).title, "Agent failed to resume after MCP authentication");
+    const listener = world({ runError: new Error("boom") });
+    await listener.resume.resumeAfterListenerConnect("agent-1", "slack");
+    assert.equal((listener.named("pushError")[0]?.args[0] as { title?: string }).title, "Agent failed to resume after listener connect");
   });
 });

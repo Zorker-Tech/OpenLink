@@ -1,7 +1,7 @@
 /** Picking a conversation back up after the user was handed the box.
 
- * A box that comes back, an MCP server that finished authorizing, a listener that connected — each is a moment the
- * agent was paused for, so it is resumed with the prompt its situation calls for, and the badge that said the user was
+ * A box that comes back, an MCP server that finished authorizing, a subscriber that connected — each is a moment the
+ * agent was paused for, so it is resumed with the hiddenPrompt its situation calls for, and the badge that said the user was
  * being waited on is cleared or set to say something else. */
 import {
   decideBoxHandBack,
@@ -23,7 +23,7 @@ export interface AwaitingStateSink {
   clearForTab(
     agentId: string,
     tabId: string,
-    options?: { ifSinceBefore?: number },
+    tabOptions?: { ifSinceBefore?: number },
   ): void;
 }
 
@@ -34,15 +34,15 @@ export class BoxHandoffResume {
 
   constructor(readonly tm: TranscriptManagerLike) {}
 
-  subscribeForeverBox(listener: (value: unknown) => void): () => void {
-    this.foreverBoxListeners.add(listener);
-    return () => this.foreverBoxListeners.delete(listener);
+  subscribeForeverBox(subscriber: (value: unknown) => void): () => void {
+    this.foreverBoxListeners.add(subscriber);
+    return () => this.foreverBoxListeners.delete(subscriber);
   }
 
   withBoxHandoff<T extends { agentId: string }>(
-    status: T,
+    boxStatus: T,
   ): T & { handoff: BoxHandoff | null } {
-    return { ...status, handoff: this.boxHandoffs.get(status.agentId) ?? null };
+    return { ...boxStatus, handoff: this.boxHandoffs.get(boxStatus.agentId) ?? null };
   }
 
   createAwaitingStateSink(): AwaitingStateSink {
@@ -56,8 +56,8 @@ export class BoxHandoffResume {
       trySetForTab: (agentId, state) => {
         void this.applyAwaitingStateForTab(agentId, state.tabId, state);
       },
-      clearForTab: (agentId, tabId, options) => {
-        void this.applyAwaitingStateForTab(agentId, tabId, null, options);
+      clearForTab: (agentId, tabId, tabOptions) => {
+        void this.applyAwaitingStateForTab(agentId, tabId, null, tabOptions);
       },
     };
   }
@@ -76,7 +76,7 @@ export class BoxHandoffResume {
     agentId: string,
     tabId: string,
     state: unknown,
-    options?: { ifSinceBefore?: number },
+    tabOptions?: { ifSinceBefore?: number },
   ): Promise<void> {
     if (this.tm.sessions.isAgentGone(agentId)) return;
     try {
@@ -84,7 +84,7 @@ export class BoxHandoffResume {
         agentId,
         tabId,
         state,
-        options,
+        tabOptions,
       );
       if (applied) await this.tm.roster.emitAgentUpdate(agentId);
     } catch {
@@ -93,25 +93,25 @@ export class BoxHandoffResume {
   }
 
   async handBackForeverBox(agentId: string, trigger: string): Promise<void> {
-    const decision = decideBoxHandBack(this.boxHandoffs.get(agentId), trigger);
-    if (decision.kind === "none") return;
+    const handoffDecision = decideBoxHandBack(this.boxHandoffs.get(agentId), trigger);
+    if (handoffDecision.kind === "none") return;
     this.boxHandoffs.delete(agentId);
     this.awaitingSink.clear(agentId);
     await this.tm.resolveBoxRequestEntry(
       agentId,
-      decision.requestId,
-      decision.resolution,
+      handoffDecision.requestId,
+      handoffDecision.resolution,
     );
     await this.tm.emitForeverBoxStatus(agentId);
-    await this.tm.resumeAfterBoxHandoff(agentId, decision.trigger);
+    await this.tm.resumeAfterBoxHandoff(agentId, handoffDecision.trigger);
   }
 
   async emitForeverBoxStatus(agentId: string): Promise<void> {
     try {
-      const status = this.withBoxHandoff(
+      const boxStatus = this.withBoxHandoff(
         await this.tm.foreverBox.getStatus({ id: agentId }),
       );
-      for (const listener of this.foreverBoxListeners) listener(status);
+      for (const subscriber of this.foreverBoxListeners) subscriber(boxStatus);
     } catch {
       // Status listeners are best effort while boxes are being recreated.
     }
@@ -121,18 +121,18 @@ export class BoxHandoffResume {
     agentId: string,
     trigger = "button",
   ): Promise<void> {
-    let prompt =
+    let hiddenPrompt =
       "[The user handed the box back to you. Please continue your task — start with the read-only Screenshot tool to see the current state of the box desktop.]";
     if (trigger === "dismissed") {
-      prompt =
+      hiddenPrompt =
         "[The user dismissed your box help request without doing the step you asked for. Treat it as declined: do not assume the step happened, and do not immediately request the box again for the same step. Continue the task without it if you can — skip the step or find another way. If the task cannot proceed without it, send the user a brief message saying what is blocked, then stop and wait for their reply.]";
     } else if (trigger === "viewer-closed") {
-      prompt =
+      hiddenPrompt =
         "[The user closed the box desktop viewer without explicitly handing control back, so they may or may not have finished the step you asked for. Start with the read-only Screenshot tool to check the current state of the box desktop. If the step is clearly done, continue the task. If you can't tell, send the user a brief message asking whether they finished so you can keep going.]";
     }
     await this.resumeWithHiddenPrompt(
       agentId,
-      prompt,
+      hiddenPrompt,
       "Agent failed to resume after box handoff",
     );
   }
@@ -142,82 +142,82 @@ export class BoxHandoffResume {
     serverName: string,
     accountLabel: string,
   ): Promise<void> {
-    const displayName = formatMcpAccountDisplayName(serverName, accountLabel);
+    const accountName = formatMcpAccountDisplayName(serverName, accountLabel);
     await this.resumeWithHiddenPrompt(
       agentId,
-      `[The "${displayName}" MCP server finished authorizing — it's connected and its tools are available now. Your first action is a SendMessage telling the user it's connected, then pick up whatever you paused to authorize it. If there was nothing else to do, just confirm it's ready and ask what they'd like to do with it. Remember: nothing reaches the user unless it's inside a SendMessage.]`,
+      `[The "${accountName}" MCP server finished authorizing — it's connected and its tools are available now. Your first action is a SendMessage telling the user it's connected, then pick up whatever you paused to authorize it. If there was nothing else to do, just confirm it's ready and ask what they'd like to do with it. Remember: nothing reaches the user unless it's inside a SendMessage.]`,
       "Agent failed to resume after MCP authentication",
     );
   }
 
   async resumeAfterListenerConnect(
     agentId: string,
-    platform: string,
+    messagingPlatform: string,
   ): Promise<void> {
-    const displayName = platform === "slack" ? "Slack" : "GitHub";
-    const reminder =
-      platform === "slack"
-        ? " For a channel listener, also remind them the Cursor bot must be in the channel (/invite @Cursor) or messages there can't reach it."
+    const accountName = messagingPlatform === "slack" ? "Slack" : "GitHub";
+    const channelNote =
+      messagingPlatform === "slack"
+        ? " For a channel subscriber, also remind them the Cursor bot must be in the channel (/invite @Cursor) or messages there can't reach it."
         : "";
     await this.resumeWithHiddenPrompt(
       agentId,
-      `[${displayName} is now connected to the user's Cursor account — ${displayName} listener routines can fire. Your first action is a SendMessage telling the user it's connected, then pick up whatever you paused (e.g. finish or re-check the listener routine you were setting up).${reminder} Remember: nothing reaches the user unless it's inside a SendMessage.]`,
+      `[${accountName} is now connected to the user's Cursor account — ${accountName} subscriber routines can fire. Your first action is a SendMessage telling the user it's connected, then pick up whatever you paused (e.g. finish or re-check the subscriber routine you were setting up).${channelNote} Remember: nothing reaches the user unless it's inside a SendMessage.]`,
       "Agent failed to resume after listener connect",
     );
   }
 
   async resumeWithHiddenPrompt(
     agentId: string,
-    prompt: string,
-    errorTitle: string,
+    hiddenPrompt: string,
+    failureTitle: string,
   ): Promise<void> {
     if (!this.tm.execution.canExecute) return;
-    let session: any;
+    let resumedSession: any;
     try {
-      session = await this.tm.sessions.resolveBackgroundSession(agentId);
+      resumedSession = await this.tm.sessions.resolveBackgroundSession(agentId);
     } catch {
       return;
     }
-    if (this.tm.groupChat.isGroupSession(session)) return;
-    const runner = this.tm.runnerRegistry.getRunner(session);
-    this.tm.runLifecycle.beginSessionRun(session);
-    const ackToken = this.tm.ackObligations.mintAckRunToken(session.id);
+    if (this.tm.groupChat.isGroupSession(resumedSession)) return;
+    const activeRunner = this.tm.runnerRegistry.getRunner(resumedSession);
+    this.tm.runLifecycle.beginSessionRun(resumedSession);
+    const acknowledgementToken = this.tm.ackObligations.mintAckRunToken(resumedSession.id);
     await this.tm.runLifecycle.enqueueExclusiveRun(
-      session.id,
+      resumedSession.id,
       async () => {
-        this.tm.turnRuntime.activeRequestPrompts.delete(session.id);
+        this.tm.turnRuntime.activeRequestPrompts.delete(resumedSession.id);
         this.tm.turnRuntime.activeRequestSources.set(
-          session.id,
+          resumedSession.id,
           "handoff-resume",
         );
         try {
-          await runner.run(prompt, {
+          await activeRunner.run(hiddenPrompt, {
             hidden: true,
-            ackToken,
+            ackToken: acknowledgementToken,
             requestSource: "handoff-resume",
           });
-          await this.tm.roster.emitAgentUpdate(session.id);
-        } catch (error) {
+          await this.tm.roster.emitAgentUpdate(resumedSession.id);
+        } catch (failure) {
           this.tm.telemetry.reportAgentError({
             source: "resume",
-            conversationId: session.id,
+            conversationId: resumedSession.id,
             requestId: this.tm.runLifecycle.lastRequestIdBySession.get(
-              session.id,
+              resumedSession.id,
             ),
-            error: classifyAgentError(error),
-            detail: slateErrorDetail(error),
+            error: classifyAgentError(failure),
+            detail: slateErrorDetail(failure),
           });
           this.tm.trayErrors.pushError({
-            agentId: session.id,
-            title: errorTitle,
-            ...describeAgentRunError(error),
+            agentId: resumedSession.id,
+            title: failureTitle,
+            ...describeAgentRunError(failure),
           });
         } finally {
-          this.tm.ackObligations.retireAckRunToken(session.id, ackToken);
-          this.tm.runLifecycle.endSessionRun(session);
+          this.tm.ackObligations.retireAckRunToken(resumedSession.id, acknowledgementToken);
+          this.tm.runLifecycle.endSessionRun(resumedSession);
         }
       },
-      { lane: "background", source: "handoff-resume", ackToken },
+      { lane: "background", source: "handoff-resume", ackToken: acknowledgementToken },
     );
   }
 }
