@@ -1,8 +1,11 @@
 /**
  * The local-exec daemon's executor, as it is assembled for a real machine.
  *
- * It brings the machine's own execution together with the approvals and the policy the platform applies, so what the
- * daemon runs is decided in one place rather than by whoever happens to call it.
+ * The daemon runs commands, reads and listings on this computer, and every one of them is decided the same way: a
+ * shell's working directory is settled against the machine's root, a file larger than the daemon's limit is refused
+ * before it is read, and the codec that turns generated classes into the gateway's JSON is the generated one rather
+ * than something that merely looks like it. This module is that assembly, so what the daemon runs is decided in one
+ * place instead of by whoever happens to call it.
  */
 import { DEFAULT_MAX_LOCAL_EXEC_FILE_BYTES, localExecFileTooLargeMessage } from "../shared/local-exec-gateway.ts";
 import type { JsonValue } from "@bufbuild/protobuf";
@@ -44,8 +47,10 @@ import { ShellStream, ShellStreamStderr } from "../packages/proto/generated/agen
 import type { SandboxPolicy as ProtoSandboxPolicy } from "../packages/proto/generated/agent/v1/sandbox_pb.ts";
 import { createDefaultTerminalExecutor } from "../packages/shell-exec/index.ts";
 
+/** Builds the executor the shipped local-exec daemon gives its gateway provider. */
 export type ProductionLocalExecExecutorFactory = () => LocalExecExecutor;
 
+/** What one shell operation carries to the executor: the command and where it runs. */
 interface ShellResourceArgs {
   command: string;
   workingDirectory?: string;
@@ -55,6 +60,7 @@ interface ShellResourceArgs {
   closeStdin?: boolean;
 }
 
+/** What one path operation carries: the path, and the read or list options that may come with it. */
 interface PathResourceArgs {
   path: string;
   toolCallId?: string;
@@ -66,25 +72,13 @@ interface PathResourceArgs {
   sandboxPolicy?: unknown;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function requireShellResourceArgs(value: unknown): asserts value is ShellResourceArgs {
-  if (!isRecord(value) || typeof value.command !== "string") {
-    throw new TypeError("local-exec shell resource arguments require a string command");
-  }
-  if (value.workingDirectory !== undefined && typeof value.workingDirectory !== "string") {
-    throw new TypeError("local-exec shell workingDirectory must be a string");
-  }
-}
-
-function requirePathResourceArgs(value: unknown): asserts value is PathResourceArgs {
-  if (!isRecord(value) || typeof value.path !== "string") {
-    throw new TypeError("local-exec path resource arguments require a string path");
-  }
-}
-
+/**
+ * The bindings a production runtime must supply.
+ *
+ * The shipped daemon binds the generated ExecServerMessage, ExecClientMessage and ExecClientControlMessage classes at
+ * this boundary, so every codec operation is mandatory: a JSON-shaped substitute must not be presented as the
+ * production protobuf transport.
+ */
 export const PRODUCTION_LOCAL_EXEC_RUNTIME_BINDINGS = Object.freeze([
   "managerRuntime.build",
   "codec.decodeServerMessage",
@@ -97,6 +91,7 @@ export const PRODUCTION_LOCAL_EXEC_RUNTIME_BINDINGS = Object.freeze([
   "createContext",
 ] as const);
 
+/** Raised at construction time when a runtime does not carry every binding production needs. */
 export class ProductionLocalExecCompositionError extends Error {
   constructor(readonly missingBindings: readonly string[]) {
     super(`local-exec production runtime is missing mandatory bindings: ${missingBindings.join(", ")}`);
@@ -104,267 +99,334 @@ export class ProductionLocalExecCompositionError extends Error {
   }
 }
 
-/**
- * The shipped daemon binds the generated ExecServerMessage, ExecClientMessage,
- * and ExecClientControlMessage classes at this boundary. Keeping every codec
- * operation mandatory prevents JSON-shaped substitutes from being presented as
- * the production protobuf transport.
- */
-export interface ProductionExecCodec<
-  ServerMessage,
-  ClientMessage,
-  ClientControlMessage,
-  ServerControlMessage,
-> {
+/** The generated classes as the daemon's codec: one decoded form in, one encoded form out. */
+export interface ProductionExecCodec<Server, Client, ClientControl, ServerControl> {
   decodeServerMessage(json: JsonValue): LocalExecDecodedMessage;
-  toManagerMessage(message: LocalExecDecodedMessage): ServerMessage;
-  isClientMessage(message: ClientMessage | ClientControlMessage): message is ClientMessage;
-  clientMessageToJson(message: ClientMessage): JsonValue;
-  controlMessageToJson(message: ClientControlMessage): JsonValue;
-  createAbortControl(execId: number): ServerControlMessage;
-  createThrowControl(execId: number, error: string): ClientControlMessage;
+  toManagerMessage(message: LocalExecDecodedMessage): Server;
+  isClientMessage(message: Client | ClientControl): message is Client;
+  clientMessageToJson(message: Client): JsonValue;
+  controlMessageToJson(message: ClientControl): JsonValue;
+  createAbortControl(execId: number): ServerControl;
+  createThrowControl(execId: number, error: string): ClientControl;
 }
 
-/** The exact surface used from the shipped SimpleControlledExecManager. */
-export interface ProductionControlledExecManager<Context, ServerMessage, ClientMessage, ClientControlMessage, ServerControlMessage> {
-  handle(context: Context, message: ServerMessage): AsyncIterable<ClientMessage | ClientControlMessage>;
-  handleControlMessage(message: ServerControlMessage): void;
+/** The part of the controlled manager the daemon executor drives. */
+export interface ProductionControlledExecManager<Ctx, Server, Client, ClientControl, ServerControl> {
+  handle(context: Ctx, message: Server): AsyncIterable<Client | ClientControl>;
+  handleControlMessage(message: ServerControl): void;
 }
 
+/** Everything a production executor needs from its runtime: the manager builder, the codec and the context factory. */
 export interface ProductionLocalExecRuntime<
-  Context,
-  ServerMessage,
-  ClientMessage,
-  ClientControlMessage,
-  ServerControlMessage,
-  Manager extends ProductionControlledExecManager<Context, ServerMessage, ClientMessage, ClientControlMessage, ServerControlMessage>,
+  Ctx,
+  Server,
+  Client,
+  ClientControl,
+  ServerControl,
+  Managed extends ProductionControlledExecManager<Ctx, Server, Client, ClientControl, ServerControl>,
 > {
+  /** Builds the controlled manager over the machine's own resources. */
+  readonly managerRuntime: LocalExecManagerRuntime<Managed>;
+  readonly codec: ProductionExecCodec<Server, Client, ClientControl, ServerControl>;
   /**
-   * This builder must register the shipped shell-stream, background-shell,
-   * read, and list resources and return SimpleControlledExecManager.
+   * Supplies the cancellable context the controlled manager runs under.
+   *
+   * The shipped no-op logger key has no recovered public export; the controlled manager built here owns its own
+   * logging, so the context factory is the only context binding production needs.
    */
-  readonly managerRuntime: LocalExecManagerRuntime<Manager>;
-  readonly codec: ProductionExecCodec<ServerMessage, ClientMessage, ClientControlMessage, ServerControlMessage>;
-  /**
-   * Supplies the cancellable package Context used by the controlled manager.
-   * The shipped no-op loggerKey binding has no recovered public key export;
-   * the clean controlled manager owns its evidenced logger directly.
-   */
-  readonly createContext: (signal: AbortSignal) => Context;
+  readonly createContext: (signal: AbortSignal) => Ctx;
 }
 
+/** How the default executor is built: where the machine's root is and how large a file it will read. */
 export interface ProductionLocalExecExecutorOptions<
-  Context,
-  ServerMessage,
-  ClientMessage,
-  ClientControlMessage,
-  ServerControlMessage,
-  Manager extends ProductionControlledExecManager<Context, ServerMessage, ClientMessage, ClientControlMessage, ServerControlMessage>,
+  Ctx,
+  Server,
+  Client,
+  ClientControl,
+  ServerControl,
+  Managed extends ProductionControlledExecManager<Ctx, Server, Client, ClientControl, ServerControl>,
 > {
-  readonly runtime: ProductionLocalExecRuntime<Context, ServerMessage, ClientMessage, ClientControlMessage, ServerControlMessage, Manager>;
+  readonly runtime: ProductionLocalExecRuntime<Ctx, Server, Client, ClientControl, ServerControl, Managed>;
   readonly root?: string;
   readonly maxFileBytes?: number;
 }
 
-function requiredFunction(value: unknown): value is (...args: never[]) => unknown {
-  return typeof value === "function";
+/** A JSON object, which is what an operation's arguments have to be. */
+function isRecordObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export function assertProductionLocalExecRuntime(runtime: unknown): void {
+/** A shell operation's arguments: the command must be a string, and a working directory must be one when named. */
+function assertShellArguments(value: unknown): asserts value is ShellResourceArgs {
+  if (!isRecordObject(value) || typeof value.command !== "string") {
+    throw new TypeError("local-exec shell resource arguments require a string command");
+  }
+  const { workingDirectory } = value;
+  if (workingDirectory !== undefined && typeof workingDirectory !== "string") {
+    throw new TypeError("local-exec shell workingDirectory must be a string");
+  }
+}
+
+/** A path operation's arguments: it names a path as a string, and nothing else is looked at here. */
+function assertPathArguments(value: unknown): asserts value is PathResourceArgs {
+  if (!isRecordObject(value) || typeof value.path !== "string") {
+    throw new TypeError("local-exec path resource arguments require a string path");
+  }
+}
+
+const MANAGER_BUILD_BINDING = "managerRuntime.build";
+const CONTEXT_BINDING = "createContext";
+const CODEC_BINDING_PREFIX = "codec.";
+
+/** The bindings a runtime does not carry, named in the order a missing one is reported. */
+function missingRuntimeBindings(runtime: unknown): string[] {
   const value = runtime as {
     managerRuntime?: { build?: unknown };
     codec?: Record<string, unknown>;
     createContext?: unknown;
   } | null;
   const missing: string[] = [];
-  if (!requiredFunction(value?.managerRuntime?.build)) missing.push("managerRuntime.build");
-  for (const binding of PRODUCTION_LOCAL_EXEC_RUNTIME_BINDINGS.slice(1, -1)) {
-    const method = binding.slice("codec.".length);
-    if (!requiredFunction(value?.codec?.[method])) missing.push(binding);
+  if (typeof value?.managerRuntime?.build !== "function") missing.push(MANAGER_BUILD_BINDING);
+  for (const binding of PRODUCTION_LOCAL_EXEC_RUNTIME_BINDINGS) {
+    if (!binding.startsWith(CODEC_BINDING_PREFIX)) continue;
+    const method = binding.slice(CODEC_BINDING_PREFIX.length);
+    if (typeof value?.codec?.[method] !== "function") missing.push(binding);
   }
-  if (!requiredFunction(value?.createContext)) missing.push("createContext");
+  if (typeof value?.createContext !== "function") missing.push(CONTEXT_BINDING);
+  return missing;
+}
+
+/** Refuses a runtime that cannot carry production, naming every binding that is missing. */
+export function assertProductionLocalExecRuntime(runtime: unknown): void {
+  const missing = missingRuntimeBindings(runtime);
   if (missing.length > 0) throw new ProductionLocalExecCompositionError(missing);
 }
 
 /**
- * Adapts the shipped generated codec and controlled-manager graph to the
- * recovered gateway provider. There are deliberately no codec or executor
- * fallbacks: production construction is impossible until both mandatory ports
- * are supplied by recovered package source.
+ * Adapts the generated codec and controlled-manager graph to the gateway provider's executor.
+ *
+ * There are deliberately no codec or executor fallbacks: production construction is impossible until both mandatory
+ * ports are supplied by our own source.
  */
 export function createProductionLocalExecExecutor<
-  Context,
-  ServerMessage,
-  ClientMessage,
-  ClientControlMessage,
-  ServerControlMessage,
-  Manager extends ProductionControlledExecManager<Context, ServerMessage, ClientMessage, ClientControlMessage, ServerControlMessage>,
->(options: ProductionLocalExecExecutorOptions<Context, ServerMessage, ClientMessage, ClientControlMessage, ServerControlMessage, Manager>): LocalExecExecutor {
+  Ctx,
+  Server,
+  Client,
+  ClientControl,
+  ServerControl,
+  Managed extends ProductionControlledExecManager<Ctx, Server, Client, ClientControl, ServerControl>,
+>(options: ProductionLocalExecExecutorOptions<Ctx, Server, Client, ClientControl, ServerControl, Managed>): LocalExecExecutor {
   assertProductionLocalExecRuntime(options.runtime);
   const root = options.root ?? resolveLocalExecRoot();
   const maxFileBytes = options.maxFileBytes ?? DEFAULT_MAX_LOCAL_EXEC_FILE_BYTES;
-  const manager = buildLocalExecManager(root, maxFileBytes, options.runtime.managerRuntime);
+  const controlledManager = buildLocalExecManager(root, maxFileBytes, options.runtime.managerRuntime);
   const { codec } = options.runtime;
 
   return {
-    decodeServerMessage: (json): LocalExecDecodedMessage => codec.decodeServerMessage(json),
-    execute: async function* (message: LocalExecDecodedMessage, signal: AbortSignal): AsyncIterable<LocalExecExecutorOutput> {
+    decodeServerMessage: (json) => codec.decodeServerMessage(json),
+    async *execute(message, signal) {
       const context = options.runtime.createContext(signal);
-      for await (const output of manager.handle(context, codec.toManagerMessage(message))) {
-        if (codec.isClientMessage(output)) {
-          yield { kind: "client", message: codec.clientMessageToJson(output) };
-        } else {
-          yield { kind: "control", message: codec.controlMessageToJson(output) };
-        }
+      for await (const output of controlledManager.handle(context, codec.toManagerMessage(message))) {
+        yield codec.isClientMessage(output)
+          ? { kind: "client", message: codec.clientMessageToJson(output) }
+          : { kind: "control", message: codec.controlMessageToJson(output) };
       }
     },
-    cancel: (execId): void => manager.handleControlMessage(codec.createAbortControl(execId)),
-    throwControl: (error): JsonValue => codec.controlMessageToJson(codec.createThrowControl(0, error)),
+    cancel(execId) {
+      controlledManager.handleControlMessage(codec.createAbortControl(execId));
+    },
+    throwControl(error) {
+      return codec.controlMessageToJson(codec.createThrowControl(0, error));
+    },
   };
 }
 
-function contextFromSignal(signal: AbortSignal): Context {
+/** A package context that is cancelled as soon as the caller's signal is. */
+function contextCancelledBy(signal: AbortSignal): Context {
   const [context, cancel] = createContext().withCancel();
-  if (signal.aborted) cancel(signal.reason);
-  else signal.addEventListener("abort", () => cancel(signal.reason), { once: true });
+  const cancelWithSignalReason = () => cancel(signal.reason);
+  if (signal.aborted) cancelWithSignalReason();
+  else signal.addEventListener("abort", cancelWithSignalReason, { once: true });
   return context;
 }
 
-class GatewayExecServerMessage implements LocalExecDecodedMessage {
+/**
+ * The manager-facing view of one generated server message.
+ *
+ * The id is assigned by the daemon before the manager sees the message, so this is a live view of the generated class
+ * rather than a copy: the message case is reported as the generated class reports it, and the value only when the
+ * generated class carries a record for it.
+ */
+class CodecServerMessage implements LocalExecDecodedMessage {
   constructor(readonly generated: ExecServerMessage) {}
 
-  get id(): number { return this.generated.id; }
-  set id(value: number) { this.generated.id = value; }
+  get id(): number {
+    return this.generated.id;
+  }
+  set id(value: number) {
+    this.generated.id = value;
+  }
 
   get message(): { readonly case?: string; readonly value?: Record<string, unknown> } {
     const { case: messageCase, value } = this.generated.message;
     if (messageCase === undefined) return {};
-    if (!isRecord(value)) return { case: messageCase };
+    if (!isRecordObject(value)) return { case: messageCase };
     return { case: messageCase, value };
   }
 }
 
+/** The generated codec: the classes the wire itself was generated from, bound to the executor's view. */
+function generatedWireCodec(): ProductionExecCodec<ExecServerMessage, ExecClientMessage, ExecClientControlMessage, ExecServerControlMessage> {
+  return {
+    decodeServerMessage: (json) => new CodecServerMessage(ExecServerMessage.fromJson(json, { ignoreUnknownFields: true })),
+    toManagerMessage: (message) => {
+      if (!(message instanceof CodecServerMessage)) {
+        throw new TypeError("local-exec decoded message did not originate from the generated production codec");
+      }
+      return message.generated;
+    },
+    isClientMessage: (message): message is ExecClientMessage => message instanceof ExecClientMessage,
+    clientMessageToJson: (message) => message.toJson(),
+    controlMessageToJson: (message) => message.toJson(),
+    createAbortControl: (execId) => new ExecServerControlMessage({
+      message: { case: "abort", value: new ExecServerAbort({ id: execId }) },
+    }),
+    createThrowControl: (execId, error) => new ExecClientControlMessage({
+      message: { case: "throw", value: new ExecClientThrow({ id: execId, error }) },
+    }),
+  };
+}
+
+/** The guards the controlled manager's runtime hands to its builder. */
+type LocalExecGuards = Parameters<LocalExecManagerRuntime<unknown>["build"]>[2];
+
+/** Where a shell operation's working directory ended up. */
+interface ShellDirectoryResolution {
+  readonly workingDirectory: string;
+  readonly fellBackToRoot: boolean;
+}
+
+/** A shell operation's arguments after its working directory has been settled. */
+interface SettledShellOperation {
+  readonly args: ShellResourceArgs;
+  readonly requestedDirectory: string;
+  readonly resolution: ShellDirectoryResolution;
+}
+
 /**
- * Exact first-party resource graph emitted by local-exec-machine.ts. Stateful
- * terminal creation remains lazy inside createDefaultTerminalExecutor, so
- * construction and non-shell resources do not pretend that a missing native
- * shell binding exists.
+ * Validates a shell operation's arguments and settles the directory it runs in.
+ *
+ * A directory outside the machine's root falls back to the root, and the directory that was asked for is kept so the
+ * caller can be told about the fall back.
+ */
+async function settleShellOperation(guards: LocalExecGuards, root: string, value: unknown): Promise<SettledShellOperation> {
+  assertShellArguments(value);
+  const requestedDirectory = value.workingDirectory ?? "";
+  const resolution = await guards.resolveShellWorkingDirectory({ root, requested: requestedDirectory });
+  value.workingDirectory = resolution.workingDirectory;
+  return { args: value, requestedDirectory, resolution };
+}
+
+/** The refusal a read gets when the file behind the path is larger than the daemon will read. */
+function oversizedReadRefusal(path: string, sizeBytes: number | undefined, maxFileBytes: number): ReadResult | undefined {
+  if (sizeBytes === undefined || sizeBytes <= maxFileBytes) return undefined;
+  return new ReadResult({
+    result: {
+      case: "error",
+      value: new ReadError({ path, error: localExecFileTooLargeMessage(sizeBytes, maxFileBytes) }),
+    },
+  });
+}
+
+/** Every operation the daemon serves, registered against the machine's own executors. */
+function localExecResourceRegistry(root: string, maxFileBytes: number, guards: LocalExecGuards): RegistryResourceAccessor {
+  const permissionsService = new MockPermissionsService();
+  const ignoreService = new MockIgnoreService();
+  const terminalExecutor = createDefaultTerminalExecutor({
+    env: { CURSOR_AGENT: "1", SLATE_AGENT: "1" },
+  }).clone(root);
+  const shellCoreExecutor = new BaseShellCoreExecutor(terminalExecutor, root, root);
+  const backgroundShellExecutor = new LocalBackgroundShellExecutor(
+    permissionsService,
+    shellCoreExecutor,
+    ignoreService,
+    root,
+    undefined,
+    undefined,
+  );
+  const shellStreamExecutor = new LocalShellStreamExecutor(
+    permissionsService,
+    shellCoreExecutor,
+    ignoreService,
+    backgroundShellExecutor.getManager(),
+  );
+  const readExecutor = new LocalReadExecutor(permissionsService, root);
+  const lsExecutor = new LocalLsExecutor(permissionsService, ignoreService, root);
+  const registry = new RegistryResourceAccessor();
+
+  registry.register(shellStreamExecutorResource, {
+    execute: (ctx: Context, argsValue: unknown) => (async function* () {
+      const operation = await settleShellOperation(guards, root, argsValue);
+      if (operation.resolution.fellBackToRoot) {
+        yield new ShellStream({
+          event: {
+            case: "stderr",
+            value: new ShellStreamStderr({ data: guards.missingWorkingDirectoryNotice({ requested: operation.requestedDirectory, root }) }),
+          },
+        });
+      }
+      yield* shellStreamExecutor.execute(ctx, operation.args);
+    })(),
+  });
+  registry.register(backgroundShellExecutorResource, {
+    execute: async (ctx: Context, argsValue: unknown) => {
+      const operation = await settleShellOperation(guards, root, argsValue);
+      return backgroundShellExecutor.execute(ctx, operation.args);
+    },
+  });
+  registry.register(readExecutorResource, {
+    execute: async (ctx: Context, argsValue: unknown) => {
+      assertPathArguments(argsValue);
+      const resolvedPath = await guards.containPath({ root, path: argsValue.path });
+      const refusal = oversizedReadRefusal(resolvedPath, await guards.regularFileSizeBytes(resolvedPath), maxFileBytes);
+      return refusal ?? readExecutor.execute(ctx, argsValue);
+    },
+  });
+  registry.register(lsExecutorResource, {
+    execute: async (ctx: Context, argsValue: unknown) => {
+      assertPathArguments(argsValue);
+      await guards.containPath({ root, path: argsValue.path });
+      return lsExecutor.execute(ctx, argsValue);
+    },
+  });
+  return registry;
+}
+
+/** The runtime the default executor builds its manager from: the machine's own resources. */
+function defaultManagerRuntime(): LocalExecManagerRuntime<SimpleControlledExecManager> {
+  return {
+    build(root, maxFileBytes, guards) {
+      return SimpleControlledExecManager.fromResources(localExecResourceRegistry(root, maxFileBytes, guards));
+    },
+  };
+}
+
+/**
+ * The executor the shipped daemon builds for this machine.
+ *
+ * The resources are the first-party ones wired over the machine's own terminal support; stateful terminal creation
+ * stays lazy inside createDefaultTerminalExecutor, so building the executor does not pretend that a native shell
+ * binding already exists.
  */
 export function createDefaultProductionLocalExecExecutor(options: {
   readonly root?: string;
   readonly maxFileBytes?: number;
 } = {}): LocalExecExecutor {
-  const managerRuntime: LocalExecManagerRuntime<SimpleControlledExecManager> = {
-    build(root, maxFileBytes, guards) {
-      const permissionsService = new MockPermissionsService();
-      const ignoreService = new MockIgnoreService();
-      const terminalExecutor = createDefaultTerminalExecutor({
-        env: { CURSOR_AGENT: "1", SLATE_AGENT: "1" },
-      }).clone(root);
-      const shellCoreExecutor = new BaseShellCoreExecutor(terminalExecutor, root, root);
-      const backgroundShellExecutor = new LocalBackgroundShellExecutor(
-        permissionsService,
-        shellCoreExecutor,
-        ignoreService,
-        root,
-        undefined,
-        undefined,
-      );
-      const shellStreamExecutor = new LocalShellStreamExecutor(
-        permissionsService,
-        shellCoreExecutor,
-        ignoreService,
-        backgroundShellExecutor.getManager(),
-      );
-      const readExecutor = new LocalReadExecutor(permissionsService, root);
-      const lsExecutor = new LocalLsExecutor(permissionsService, ignoreService, root);
-      const registry = new RegistryResourceAccessor();
-
-      registry.register(shellStreamExecutorResource, {
-        execute: (ctx: Context, argsValue: unknown) => (async function* () {
-          requireShellResourceArgs(argsValue);
-          const args = argsValue;
-          const requested = args.workingDirectory ?? "";
-          const resolution = await guards.resolveShellWorkingDirectory({ root, requested });
-          args.workingDirectory = resolution.workingDirectory;
-          if (resolution.fellBackToRoot) {
-            yield new ShellStream({
-              event: {
-                case: "stderr",
-                value: new ShellStreamStderr({ data: guards.missingWorkingDirectoryNotice({ requested, root }) }),
-              },
-            });
-          }
-          yield* shellStreamExecutor.execute(ctx, args);
-        })(),
-      });
-      registry.register(backgroundShellExecutorResource, {
-        execute: async (ctx: Context, argsValue: unknown) => {
-          requireShellResourceArgs(argsValue);
-          const args = argsValue;
-          const resolution = await guards.resolveShellWorkingDirectory({ root, requested: args.workingDirectory ?? "" });
-          args.workingDirectory = resolution.workingDirectory;
-          return backgroundShellExecutor.execute(ctx, args);
-        },
-      });
-      registry.register(readExecutorResource, {
-        execute: async (ctx: Context, argsValue: unknown) => {
-          requirePathResourceArgs(argsValue);
-          const args = argsValue;
-          const resolved = await guards.containPath({ root, path: args.path });
-          const sizeBytes = await guards.regularFileSizeBytes(resolved);
-          if (sizeBytes !== undefined && sizeBytes > maxFileBytes) {
-            return new ReadResult({
-              result: {
-                case: "error",
-                value: new ReadError({ path: resolved, error: localExecFileTooLargeMessage(sizeBytes, maxFileBytes) }),
-              },
-            });
-          }
-          return readExecutor.execute(ctx, args);
-        },
-      });
-      registry.register(lsExecutorResource, {
-        execute: async (ctx: Context, argsValue: unknown) => {
-          requirePathResourceArgs(argsValue);
-          const args = argsValue;
-          await guards.containPath({ root, path: args.path });
-          return lsExecutor.execute(ctx, args);
-        },
-      });
-      return SimpleControlledExecManager.fromResources(registry);
-    },
-  };
-
-  return createProductionLocalExecExecutor<
-    Context,
-    ExecServerMessage,
-    ExecClientMessage,
-    ExecClientControlMessage,
-    ExecServerControlMessage,
-    SimpleControlledExecManager
-  >({
+  return createProductionLocalExecExecutor({
     runtime: {
-      managerRuntime,
-      codec: {
-        decodeServerMessage: (json) => new GatewayExecServerMessage(ExecServerMessage.fromJson(json, { ignoreUnknownFields: true })),
-        toManagerMessage: (message) => {
-          if (!(message instanceof GatewayExecServerMessage)) {
-            throw new TypeError("local-exec decoded message did not originate from the generated production codec");
-          }
-          return message.generated;
-        },
-        isClientMessage: (message): message is ExecClientMessage => message instanceof ExecClientMessage,
-        clientMessageToJson: (message) => message.toJson(),
-        controlMessageToJson: (message) => message.toJson(),
-        createAbortControl: (execId) => new ExecServerControlMessage({
-          message: { case: "abort", value: new ExecServerAbort({ id: execId }) },
-        }),
-        createThrowControl: (execId, error) => new ExecClientControlMessage({
-          message: { case: "throw", value: new ExecClientThrow({ id: execId, error }) },
-        }),
-      },
-      createContext: contextFromSignal,
+      managerRuntime: defaultManagerRuntime(),
+      codec: generatedWireCodec(),
+      createContext: contextCancelledBy,
     },
     ...(options.root === undefined ? {} : { root: options.root }),
     ...(options.maxFileBytes === undefined ? {} : { maxFileBytes: options.maxFileBytes }),
