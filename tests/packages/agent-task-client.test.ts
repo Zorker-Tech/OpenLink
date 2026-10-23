@@ -165,6 +165,12 @@ function executionHarness(options: {
   return { run, executed, handoffs, persisted, signal, injections, stateHandler }
 }
 
+test("a background run sends the background flag to the executor", async () => {
+  const harnessed = executionHarness()
+  await harnessed.run({ raw: { run_in_background: true } })
+  assert.equal(harnessed.executed[0]?.args.runInBackground, true)
+})
+
 // ---------------------------------------------------------------------------------------------
 // what a finished run reads as
 // ---------------------------------------------------------------------------------------------
