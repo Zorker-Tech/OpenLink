@@ -53,7 +53,7 @@ function sanitizeTemplateId(value: unknown): string | undefined {
     : undefined;
 }
 
-function method(api: DynamicGatewayApi, name: string): DynamicMethod {
+function call(api: DynamicGatewayApi, name: string): DynamicMethod {
   const candidate = api[name];
   if (typeof candidate !== "function") {
     throw new Error(`host extension method is unavailable: ${name}`);
@@ -62,31 +62,31 @@ function method(api: DynamicGatewayApi, name: string): DynamicMethod {
 }
 
 /**
- * Restores the shipped gateway method table. Each method delegates to the
+ * Restores the shipped gateway call table. Each call delegates to the
  * extension that owned the behavior in the artifact; the host layer retains
- * cross-cutting nonce dedupe, telemetry, cleanup, feature gates, and status
+ * cross-cutting nonce dedupe, observability, cleanup, feature gates, and status
  * decoration.
  */
 export function createHostGatewayApi(
-  deps: HostGatewayDependencies
+  ports: HostGatewayDependencies
 ): Record<string, DynamicMethod> {
-  const manager = deps.extensions.api("transcript");
-  const attachments = deps.extensions.api("attachments");
-  const automations = deps.extensions.api("automations");
-  const managedSetup = deps.extensions.api("managed-setup");
-  const settings = deps.extensions.api("settings");
-  const localToolPermission = deps.extensions.api("local-tool-permission");
-  const telemetry = deps.extensions.api("telemetry");
-  const sharing = deps.extensions.api("cross-user-sharing");
-  const now = deps.now ?? Date.now;
-  const createAgentMintsByNonce = new Map<string, Promise<any>>();
+  const transcript = ports.extensions.api("transcript");
+  const uploads = ports.extensions.api("attachments");
+  const schedules = ports.extensions.api("automations");
+  const setup = ports.extensions.api("managed-setup");
+  const hostSettings = ports.extensions.api("settings");
+  const toolPermission = ports.extensions.api("local-tool-permission");
+  const observability = ports.extensions.api("telemetry");
+  const crossUser = ports.extensions.api("cross-user-sharing");
+  const clock = ports.now ?? Date.now;
+  const mintsByNonce = new Map<string, Promise<any>>();
 
-  const markActive = (reason: "user_action" | "app_open") => {
-    method(telemetry.analytics, "markActive")(reason);
+  const noteActivity = (reason: "user_action" | "app_open") => {
+    call(observability.analytics, "markActive")(reason);
   };
 
-  const mintAgent = async (args: any) => {
-    const result = await method(manager, "createAgent")(
+  const mint = async (args: any) => {
+    const result = await call(transcript, "createAgent")(
       {
         name: args.name,
         description: args.description,
@@ -107,9 +107,9 @@ export function createHostGatewayApi(
           : {})
       }
     );
-    markActive("user_action");
+    noteActivity("user_action");
     const templateId = sanitizeTemplateId(args.templateId);
-    method(telemetry.analytics, "trackEvent")("slate.agent.created", {
+    call(observability.analytics, "trackEvent")("slate.agent.created", {
       agent_id: result.agent.id,
       origin: args.origin ?? "user",
       ...(templateId === undefined ? {} : { template_id: templateId })
@@ -117,37 +117,37 @@ export function createHostGatewayApi(
     return result;
   };
 
-  const openAgent = async (
+  const open = async (
     args: any,
     operation: "switchAgent" | "openAgentWindowed" | "openAgentTail"
   ) => {
-    markActive("app_open");
-    method(telemetry, "noteSlateModelExperimentActive")();
-    const wasActive = method(manager, "getActiveAgentId")() === args.id;
-    const startedAt = now();
+    noteActivity("app_open");
+    call(observability, "noteSlateModelExperimentActive")();
+    const wasActive = call(transcript, "getActiveAgentId")() === args.id;
+    const startedAt = clock();
     const result = operation === "switchAgent"
-      ? await method(manager, operation)(args.id)
-      : await method(manager, operation)(args.id, args.limit);
+      ? await call(transcript, operation)(args.id)
+      : await call(transcript, operation)(args.id, args.limit);
     const entries = operation === "switchAgent" ? result : result.entries;
-    method(telemetry.logs, "reportAgentOpen")({
+    call(observability.logs, "reportAgentOpen")({
       conversationId: args.id,
-      durationMs: now() - startedAt,
+      durationMs: clock() - startedAt,
       entryCount: entries.length,
       wasActive
     });
-    void deps.kickstartIfPending(args.id);
+    void ports.kickstartIfPending(args.id);
     return result;
   };
 
-  const markSharingAction = async (name: string, args: any) => {
-    markActive("user_action");
-    return await method(sharing, name)(args);
+  const share = async (name: string, args: any) => {
+    noteActivity("user_action");
+    return await call(crossUser, name)(args);
   };
 
-  const listRoutedMcpTools = async () => {
-    const extension = deps.extensions.api("mcp");
+  const routedTools = async () => {
+    const extension = ports.extensions.api("mcp");
     const mcp = extension.mcp;
-    const tools = await method(mcp, "listTools")({});
+    const tools = await call(mcp, "listTools")({});
     return tools.map((tool: any) => ({
       name: tool.name,
       providerIdentifier: tool.providerIdentifier,
@@ -156,10 +156,10 @@ export function createHostGatewayApi(
       ...(tool.inputSchema == null ? {} : { inputSchema: typeof tool.inputSchema.toJson === "function" ? tool.inputSchema.toJson() : tool.inputSchema }),
     }));
   };
-  const executeRoutedMcpTool = async (args: any) => {
-    const mcp = deps.extensions.api("mcp").mcp;
-    const executor = method(mcp, "createExecutor")(undefined, undefined, { agentId: args.agentId });
-    return await method(executor, "execute")({}, {
+  const routedExecute = async (args: any) => {
+    const mcp = ports.extensions.api("mcp").mcp;
+    const executor = call(mcp, "createExecutor")(undefined, undefined, { agentId: args.agentId });
+    return await call(executor, "execute")({}, {
       name: args.toolName,
       toolName: args.name,
       providerIdentifier: args.providerIdentifier,
@@ -169,22 +169,22 @@ export function createHostGatewayApi(
   };
 
   return {
-    getTranscript: () => method(manager, "ensureLoaded")(),
+    getTranscript: () => call(transcript, "ensureLoaded")(),
     getAgentTranscript: (args: any) =>
-      method(manager, "getAgentTranscript")(args.id),
+      call(transcript, "getAgentTranscript")(args.id),
     getAgentTranscriptPage: (args: any) =>
-      method(manager, "getAgentTranscriptPage")(args.id, args),
+      call(transcript, "getAgentTranscriptPage")(args.id, args),
     getAgentTranscriptWindow: (args: unknown) => {
       const request = parseCoordinatorTranscriptWindowRequest(args);
       if (request == null) throw new Error("Malformed getAgentTranscriptWindow request");
-      return method(manager, "getAgentTranscriptWindow")(request.id, args);
+      return call(transcript, "getAgentTranscriptWindow")(request.id, args);
     },
     getAgentTranscriptTail: (args: any) =>
-      method(manager, "getAgentTranscriptTail")(args.id, args),
+      call(transcript, "getAgentTranscriptTail")(args.id, args),
     getAgentThread: (args: unknown) => {
       const request = parseCoordinatorAgentThreadRequest(args);
       if (request == null) throw new Error("Malformed getAgentThread request");
-      return method(manager, "getAgentThread")(request.id, request.rootId);
+      return call(transcript, "getAgentThread")(request.id, request.rootId);
     },
 
     sendPrompt: async (args: any) => {
@@ -192,16 +192,16 @@ export function createHostGatewayApi(
         (typeof args.agentId === "string" && args.agentId.length > 0
           ? args.agentId
           : undefined) ??
-        method(manager, "getActiveAgentId")() ??
-        deps.rosterBookkeeping?.latestActiveAgentId ??
+        call(transcript, "getActiveAgentId")() ??
+        ports.rosterBookkeeping?.latestActiveAgentId ??
         "unknown";
-      method(telemetry, "reportMessageSent")({
+      call(observability, "reportMessageSent")({
         ...args,
         agentId,
-        isGroupRoom: method(manager, "listAgentsSync")()
+        isGroupRoom: call(transcript, "listAgentsSync")()
           .find((agent: any) => agent.id === agentId)?.isGroup === true
       });
-      await method(manager, "sendPrompt")(args.prompt, {
+      await call(transcript, "sendPrompt")(args.prompt, {
         agentId: args.agentId,
         directAddressedAcceptance: args.directAddressedAcceptance,
         attachmentPaths: args.attachmentPaths ?? [],
@@ -218,195 +218,195 @@ export function createHostGatewayApi(
       return { accepted: true };
     },
     promptAcceptanceStatus: (args: any) =>
-      method(manager, "promptAcceptanceStatus")(args),
+      call(transcript, "promptAcceptanceStatus")(args),
     respondToWidget: (args: any) => {
-      markActive("user_action");
-      method(telemetry.analytics, "trackEvent")("slate.widget.responded", {
+      noteActivity("user_action");
+      call(observability.analytics, "trackEvent")("slate.widget.responded", {
         agent_id: args.agentId
       });
-      return method(manager, "respondToWidget")(
+      return call(transcript, "respondToWidget")(
         args.entryId,
         args.value,
         args.agentId
       );
     },
     resolveAutoReviewApproval: (args: any) => {
-      markActive("user_action");
-      return method(
-        deps.extensions.api("auto-review"),
+      noteActivity("user_action");
+      return call(
+        ports.extensions.api("auto-review"),
         "resolveApproval"
       )(args);
     },
     resolveLocalToolPermission: async (args: any) => {
-      markActive("user_action");
-      await method(localToolPermission, "resolveAsk")(args);
+      noteActivity("user_action");
+      await call(toolPermission, "resolveAsk")(args);
     },
     dismissWidget: (args: any) => {
-      markActive("user_action");
-      method(telemetry.analytics, "trackEvent")("slate.widget.dismissed", {
+      noteActivity("user_action");
+      call(observability.analytics, "trackEvent")("slate.widget.dismissed", {
         agent_id: args.agentId
       });
-      return method(manager, "dismissWidget")(args);
+      return call(transcript, "dismissWidget")(args);
     },
     submitSecret: (args: any) =>
-      method(manager, "submitSecret")(
+      call(transcript, "submitSecret")(
         args.entryId,
         args.value,
         args.agentId
       ),
     reactToMessage: (args: any) => {
-      markActive("user_action");
-      method(telemetry.analytics, "trackEvent")("slate.reaction.added", {
+      noteActivity("user_action");
+      call(observability.analytics, "trackEvent")("slate.reaction.added", {
         agent_id: args.agentId
       });
-      return method(manager, "reactToMessage")(
+      return call(transcript, "reactToMessage")(
         args.entryId,
         args.emoji,
         args.agentId
       );
     },
     appendConnectorCard: (args: any) =>
-      method(manager, "appendConnectorCard")(args),
+      call(transcript, "appendConnectorCard")(args),
 
-    listAgents: () => method(manager, "listAgents")(),
-    countAgents: () => method(manager, "countAgentsOnDisk")(),
+    listAgents: () => call(transcript, "listAgents")(),
+    countAgents: () => call(transcript, "countAgentsOnDisk")(),
     searchAgents: async (args: any) =>
-      await method(deps.extensions.api("content-search"), "isEnabled")()
-        ? method(manager, "searchAgents")(args.query, args.limit)
+      await call(ports.extensions.api("content-search"), "isEnabled")()
+        ? call(transcript, "searchAgents")(args.query, args.limit)
         : [],
     searchMedia: async (args: any) =>
-      await method(deps.extensions.api("content-search"), "isEnabled")()
-        ? method(manager, "searchMedia")(args.query, args.limit)
+      await call(ports.extensions.api("content-search"), "isEnabled")()
+        ? call(transcript, "searchMedia")(args.query, args.limit)
         : [],
     createAgent: (args: any) => {
       const nonce = args.clientNonce;
-      if (nonce == null || nonce.length === 0) return mintAgent(args);
-      const pending = createAgentMintsByNonce.get(nonce);
+      if (nonce == null || nonce.length === 0) return mint(args);
+      const pending = mintsByNonce.get(nonce);
       if (pending != null) return pending;
 
-      const minted = mintAgent(args);
-      createAgentMintsByNonce.set(nonce, minted);
-      void minted.catch(() => createAgentMintsByNonce.delete(nonce));
-      for (const oldest of createAgentMintsByNonce.keys()) {
-        if (createAgentMintsByNonce.size <= CREATE_AGENT_NONCE_LEDGER_CAP) break;
-        createAgentMintsByNonce.delete(oldest);
+      const minted = mint(args);
+      mintsByNonce.set(nonce, minted);
+      void minted.catch(() => mintsByNonce.delete(nonce));
+      for (const oldest of mintsByNonce.keys()) {
+        if (mintsByNonce.size <= CREATE_AGENT_NONCE_LEDGER_CAP) break;
+        mintsByNonce.delete(oldest);
       }
       return minted;
     },
     kickstartAgent: async (args: any) => ({
-      isIntroductionInFlight: await deps.kickstartIfPending(args.id)
+      isIntroductionInFlight: await ports.kickstartIfPending(args.id)
     }),
     requestDiskSaverAudit: async (args: any) => ({
-      isAuditInFlight: await deps.requestDiskSaverAudit(args.id)
+      isAuditInFlight: await ports.requestDiskSaverAudit(args.id)
     }),
-    createGroup: (args: any) => method(manager, "createGroup")({
+    createGroup: (args: any) => call(transcript, "createGroup")({
       name: args.name,
       description: args.description,
       memberIds: args.memberAgentIds
     }),
     setGroupMembers: (args: any) =>
-      method(manager, "setGroupMembers")(args.id, args.memberAgentIds),
+      call(transcript, "setGroupMembers")(args.id, args.memberAgentIds),
     updateAgent: (args: any) =>
-      method(manager, "updateAgent")(args.id, args.profile),
+      call(transcript, "updateAgent")(args.id, args.profile),
     deleteAgent: async (args: any) => {
-      await method(sharing, "noteAgentDeleted")(args.id);
-      const result = await method(manager, "deleteAgent")(args.id);
-      method(deps.extensions.api("session"), "forgetHandoff")(args.id);
-      await method(automations, "deleteAgentSchedules")(args.id).catch(
+      await call(crossUser, "noteAgentDeleted")(args.id);
+      const result = await call(transcript, "deleteAgent")(args.id);
+      call(ports.extensions.api("session"), "forgetHandoff")(args.id);
+      await call(schedules, "deleteAgentSchedules")(args.id).catch(
         () => undefined
       );
-      await deps.releaseAgentBox(args.id);
-      deps.hostEvents.emit({
+      await ports.releaseAgentBox(args.id);
+      ports.hostEvents.emit({
         kind: "notification-agent-forgotten",
         agentId: args.id
       });
-      deps.forgetLocalToolPermission(args.id);
+      ports.forgetLocalToolPermission(args.id);
       return result;
     },
     deleteAgents: async (args: any) => {
       for (const id of args.ids) {
-        await method(sharing, "noteAgentDeleted")(id);
+        await call(crossUser, "noteAgentDeleted")(id);
       }
-      const result = await method(manager, "deleteAgents")(args.ids);
+      const result = await call(transcript, "deleteAgents")(args.ids);
       for (const id of args.ids) {
-        method(deps.extensions.api("session"), "forgetHandoff")(id);
-        await method(automations, "deleteAgentSchedules")(id).catch(
+        call(ports.extensions.api("session"), "forgetHandoff")(id);
+        await call(schedules, "deleteAgentSchedules")(id).catch(
           () => undefined
         );
-        await deps.releaseAgentBox(id);
-        deps.hostEvents.emit({
+        await ports.releaseAgentBox(id);
+        ports.hostEvents.emit({
           kind: "notification-agent-forgotten",
           agentId: id
         });
-        deps.forgetLocalToolPermission(id);
+        ports.forgetLocalToolPermission(id);
       }
       return result;
     },
-    duplicateAgent: (args: any) => method(manager, "cloneAgent")(args.id),
+    duplicateAgent: (args: any) => call(transcript, "cloneAgent")(args.id),
     setAgentUnread: (args: any) =>
-      method(manager, "setAgentUnread")(args.id, args.isUnread, args.atMs),
+      call(transcript, "setAgentUnread")(args.id, args.isUnread, args.atMs),
     setAgentNotificationsEnabled: async () => undefined,
     setAgentNotifyOnUpdates: (args: any) =>
-      method(manager, "setAgentNotifyOnUpdates")(args.id, args.isEnabled),
+      call(transcript, "setAgentNotifyOnUpdates")(args.id, args.isEnabled),
     setAgentHiddenFromSidebar: (args: any) =>
-      method(manager, "setAgentHiddenFromSidebar")(args.id, args.isHidden),
-    openAgent: (args: any) => openAgent(args, "switchAgent"),
-    openAgentWindowed: (args: any) => openAgent(args, "openAgentWindowed"),
-    openAgentTail: (args: any) => openAgent(args, "openAgentTail"),
+      call(transcript, "setAgentHiddenFromSidebar")(args.id, args.isHidden),
+    openAgent: (args: any) => open(args, "switchAgent"),
+    openAgentWindowed: (args: any) => open(args, "openAgentWindowed"),
+    openAgentTail: (args: any) => open(args, "openAgentTail"),
     setWindowFocused: (args: any) =>
-      method(manager, "setWindowFocused")(args.isFocused),
+      call(transcript, "setWindowFocused")(args.isFocused),
 
     getAgentMemories: (args: any) =>
-      method(manager, "getAgentMemories")(args.id),
+      call(transcript, "getAgentMemories")(args.id),
     deleteAgentMemory: (args: any) =>
-      method(manager, "deleteAgentMemory")(args.id, args.memoryId),
+      call(transcript, "deleteAgentMemory")(args.id, args.memoryId),
     clearAgentMemories: (args: any) =>
-      method(manager, "clearAgentMemories")(args.id),
+      call(transcript, "clearAgentMemories")(args.id),
     getAgentAutomations: (args: any) =>
-      method(manager, "getAgentAutomations")(args.id),
-    listAllAutomations: () => method(manager, "listAllAutomations")(),
+      call(transcript, "getAgentAutomations")(args.id),
+    listAllAutomations: () => call(transcript, "listAllAutomations")(),
     isAgentNetworkEnabled: () =>
-      method(deps.extensions.api("experiments"), "isAgentNetworkEnabled")(),
+      call(ports.extensions.api("experiments"), "isAgentNetworkEnabled")(),
     isGlobalSearchEnabled: () =>
-      method(deps.extensions.api("content-search"), "isEnabled")(),
+      call(ports.extensions.api("content-search"), "isEnabled")(),
     isEgressTunnelAvailable: async () =>
       process.env.SLATE_EGRESS_TUNNEL_ENABLED === "1",
 
-    getSharingState: () => method(sharing, "getSharingState")(),
+    getSharingState: () => call(crossUser, "getSharingState")(),
     createRoomFromAgent: (args: any) =>
-      markSharingAction("createRoomFromAgent", args),
+      share("createRoomFromAgent", args),
     createRoomInvite: (args: any) =>
-      markSharingAction("createRoomInvite", args),
-    joinSharedRoom: (args: any) => markSharingAction("joinSharedRoom", args),
+      share("createRoomInvite", args),
+    joinSharedRoom: (args: any) => share("joinSharedRoom", args),
     respondToRoomJoinRequest: (args: any) =>
-      markSharingAction("respondToRoomJoinRequest", args),
+      share("respondToRoomJoinRequest", args),
     createSharedRoom: (args: any) =>
-      markSharingAction("createSharedRoom", args),
+      share("createSharedRoom", args),
     addOwnAgentToSharedRoom: (args: any) =>
-      markSharingAction("addOwnAgentToSharedRoom", args),
+      share("addOwnAgentToSharedRoom", args),
     removeOwnAgentFromSharedRoom: (args: any) =>
-      markSharingAction("removeOwnAgentFromSharedRoom", args),
+      share("removeOwnAgentFromSharedRoom", args),
     setSharedRoomTyping: (args: any) =>
-      method(sharing, "setSharedRoomTyping")(args),
-    leaveSharedRoom: (args: any) => markSharingAction("leaveSharedRoom", args),
+      call(crossUser, "setSharedRoomTyping")(args),
+    leaveSharedRoom: (args: any) => share("leaveSharedRoom", args),
 
     setAgentAutomationEnabled: (args: any) =>
-      method(manager, "setAgentAutomationEnabled")(
+      call(transcript, "setAgentAutomationEnabled")(
         args.id,
         args.automationId,
         args.isEnabled
       ),
     createAgentAutomation: async (args: any) => {
-      markActive("user_action");
-      const countBefore = (await method(manager, "getAgentAutomations")(
+      noteActivity("user_action");
+      const countBefore = (await call(transcript, "getAgentAutomations")(
         args.id
       )).length;
-      const created = await method(manager, "createAgentAutomation")(
+      const created = await call(transcript, "createAgentAutomation")(
         args.id,
         args.spec
       );
       if (created.length > countBefore) {
-        method(telemetry.analytics, "trackEvent")("slate.automation.created", {
+        call(observability.analytics, "trackEvent")("slate.automation.created", {
           agent_id: args.id,
           trigger_type: args.spec.trigger.type,
           source: "automations_ui"
@@ -415,27 +415,27 @@ export function createHostGatewayApi(
       return created;
     },
     updateAgentAutomation: (args: any) =>
-      method(manager, "updateAgentAutomation")(
+      call(transcript, "updateAgentAutomation")(
         args.id,
         args.automationId,
         args.spec
       ),
     deleteAgentAutomation: (args: any) =>
-      method(manager, "deleteAgentAutomation")(args.id, args.automationId),
+      call(transcript, "deleteAgentAutomation")(args.id, args.automationId),
     runAgentAutomationNow: (args: any) => {
-      markActive("user_action");
-      return method(manager, "runAgentAutomationNow")(
+      noteActivity("user_action");
+      return call(transcript, "runAgentAutomationNow")(
         args.id,
         args.automationId
       );
     },
     broadcastToAgents: async (args: any) => {
-      markActive("user_action");
-      const result = await method(manager, "broadcastToAgents")(
+      noteActivity("user_action");
+      const result = await call(transcript, "broadcastToAgents")(
         args.targets,
         args.message
       );
-      method(telemetry.analytics, "trackEvent")("slate.broadcast.sent", {
+      call(observability.analytics, "trackEvent")("slate.broadcast.sent", {
         total: result.total,
         scheduled: result.scheduled,
         targets: args.targets === "all" ? "all" : "subset"
@@ -444,23 +444,23 @@ export function createHostGatewayApi(
     },
 
     getAgentWorkflows: (args: any) =>
-      method(manager, "getAgentWorkflows")(args.id),
+      call(transcript, "getAgentWorkflows")(args.id),
     createAgentWorkflow: async (args: any) => {
       const isAutomation = args.spec.trigger != null;
-      if (isAutomation) markActive("user_action");
+      if (isAutomation) noteActivity("user_action");
       const countBefore = isAutomation
-        ? (await method(manager, "getAgentAutomations")(args.id)).length
+        ? (await call(transcript, "getAgentAutomations")(args.id)).length
         : 0;
-      const workflows = await method(manager, "createAgentWorkflow")(
+      const workflows = await call(transcript, "createAgentWorkflow")(
         args.id,
         args.spec
       );
       if (isAutomation) {
-        const countAfter = (await method(manager, "getAgentAutomations")(
+        const countAfter = (await call(transcript, "getAgentAutomations")(
           args.id
         )).length;
         if (countAfter > countBefore) {
-          method(telemetry.analytics, "trackEvent")(
+          call(observability.analytics, "trackEvent")(
             "slate.automation.created",
             {
               agent_id: args.id,
@@ -473,161 +473,161 @@ export function createHostGatewayApi(
       return workflows;
     },
     updateAgentWorkflow: (args: any) =>
-      method(manager, "updateAgentWorkflow")(
+      call(transcript, "updateAgentWorkflow")(
         args.id,
         args.workflowId,
         args.spec
       ),
     setAgentWorkflowEnabled: (args: any) =>
-      method(manager, "setAgentWorkflowEnabled")(
+      call(transcript, "setAgentWorkflowEnabled")(
         args.id,
         args.workflowId,
         args.isEnabled
       ),
     deleteAgentWorkflow: (args: any) =>
-      method(manager, "deleteAgentWorkflow")(args.id, args.workflowId),
+      call(transcript, "deleteAgentWorkflow")(args.id, args.workflowId),
     runAgentWorkflowNow: (args: any) =>
-      method(manager, "runAgentWorkflowNow")(args.id, args.workflowId),
+      call(transcript, "runAgentWorkflowNow")(args.id, args.workflowId),
     importAgentWorkflowText: (args: any) =>
-      method(manager, "importAgentWorkflowMarkdown")(
+      call(transcript, "importAgentWorkflowMarkdown")(
         args.id,
         args.markdown,
         args.name
       ),
     importAgentWorkflowUrl: (args: any) =>
-      method(manager, "importAgentWorkflowUrl")(args.id, args.url, args.name),
+      call(transcript, "importAgentWorkflowUrl")(args.id, args.url, args.name),
     portAgentLocalSkills: (args: any) =>
-      method(manager, "portAgentLocalSkills")(args.id),
+      call(transcript, "portAgentLocalSkills")(args.id),
     getConversationOutline: (args: any) =>
-      method(manager, "getConversationOutline")(args.id),
+      call(transcript, "getConversationOutline")(args.id),
 
-    skillsCatalog: () => method(managedSetup, "skillsCatalog")(),
+    skillsCatalog: () => call(setup, "skillsCatalog")(),
     syncPluginSkills: () =>
-      method(deps.extensions.api("mcp"), "syncPluginSkills")(),
+      call(ports.extensions.api("mcp"), "syncPluginSkills")(),
     getPluginSyncStatus: () =>
-      method(deps.extensions.api("mcp"), "pluginSyncStatus")(),
+      call(ports.extensions.api("mcp"), "pluginSyncStatus")(),
     getSkillPublishTargets: () =>
-      method(deps.extensions.api("mcp").skillPublish, "listTargets")(),
+      call(ports.extensions.api("mcp").skillPublish, "listTargets")(),
     publishSkill: (args: any) =>
-      method(deps.extensions.api("mcp").skillPublish, "publish")(args),
+      call(ports.extensions.api("mcp").skillPublish, "publish")(args),
     resyncPublishedSkill: (args: any) =>
-      method(deps.extensions.api("mcp").skillPublish, "resync")(args),
+      call(ports.extensions.api("mcp").skillPublish, "resync")(args),
     unpublishSkill: (args: any) =>
-      method(deps.extensions.api("mcp").skillPublish, "unpublish")(args),
+      call(ports.extensions.api("mcp").skillPublish, "unpublish")(args),
 
     getAgentChannels: (args: any) =>
-      method(automations, "getAgentChannels")(args.id),
+      call(schedules, "getAgentChannels")(args.id),
     connectChannel: async (args: any) => {
-      method(manager, "connectChannel")(args.id, args.platform, args.token);
-      return method(automations, "getAgentChannels")(args.id);
+      call(transcript, "connectChannel")(args.id, args.platform, args.token);
+      return call(schedules, "getAgentChannels")(args.id);
     },
     disconnectChannel: async (args: any) => {
-      method(manager, "disconnectChannel")(args.id, args.platform);
-      return method(automations, "getAgentChannels")(args.id);
+      call(transcript, "disconnectChannel")(args.id, args.platform);
+      return call(schedules, "getAgentChannels")(args.id);
     },
     refreshChannel: (args: any) =>
-      method(automations, "getAgentChannels")(args.id),
+      call(schedules, "getAgentChannels")(args.id),
     getListenerIntegrations: () =>
-      method(automations, "getListenerIntegrations")(),
+      call(schedules, "getListenerIntegrations")(),
     getListenerConnectUrl: async (args: any) => ({
-      url: await method(automations, "getListenerConnectUrl")(args.platform)
+      url: await call(schedules, "getListenerConnectUrl")(args.platform)
     }),
-    getSubagents: (args: any) => method(manager, "getSubagents")(args.id),
-    getAsyncTasks: (args: any) => method(manager, "getAsyncTasks")(args.id),
+    getSubagents: (args: any) => call(transcript, "getSubagents")(args.id),
+    getAsyncTasks: (args: any) => call(transcript, "getAsyncTasks")(args.id),
     setAgentAvatarBytes: (args: any) =>
-      method(manager, "setAgentAvatarBytes")(
+      call(transcript, "setAgentAvatarBytes")(
         args.id,
         args.pngBase64 == null
           ? null
           : Uint8Array.from(Buffer.from(args.pngBase64, "base64"))
       ),
-    getAgentAvatar: (args: any) => method(manager, "getAgentAvatar")(args.id),
+    getAgentAvatar: (args: any) => call(transcript, "getAgentAvatar")(args.id),
 
     getForeverBoxStatus: async (args: any) =>
-      deps.decorateForeverBoxStatus(
-        await method(deps.extensions.api("forever-box"), "getStatus")(args)
+      ports.decorateForeverBoxStatus(
+        await call(ports.extensions.api("forever-box"), "getStatus")(args)
       ),
     getCloudAgentInfo: (args: any) =>
-      method(deps.extensions.api("cloud-agents"), "getInfo")(
+      call(ports.extensions.api("cloud-agents"), "getInfo")(
         args.bcId,
         args.includeFiles
       ),
     ensureForeverBox: async (args: any) =>
-      deps.decorateForeverBoxStatus(
-        await method(deps.extensions.api("forever-box"), "ensure")(args)
+      ports.decorateForeverBoxStatus(
+        await call(ports.extensions.api("forever-box"), "ensure")(args)
       ),
     resetForeverBox: async (args: any) =>
-      deps.decorateForeverBoxStatus(
-        await method(deps.extensions.api("forever-box"), "reset")(args)
+      ports.decorateForeverBoxStatus(
+        await call(ports.extensions.api("forever-box"), "reset")(args)
       ),
     updateForeverBox: async (args: any) =>
-      deps.decorateForeverBoxStatus(
-        await method(deps.extensions.api("forever-box"), "update")(args)
+      ports.decorateForeverBoxStatus(
+        await call(ports.extensions.api("forever-box"), "update")(args)
       ),
     autoUpdateBoxNow: () =>
-      method(deps.extensions.api("forever-box"), "autoUpdateNow")(),
+      call(ports.extensions.api("forever-box"), "autoUpdateNow")(),
     snapshotBoxStoreNow: (args: any) =>
-      method(deps.extensions.api("box-store-sync"), "snapshotBoxStoreNow")(
+      call(ports.extensions.api("box-store-sync"), "snapshotBoxStoreNow")(
         args
       ),
     getBoxStoreStatus: () =>
-      method(deps.extensions.api("box-store-sync"), "getBoxStoreStatus")(),
+      call(ports.extensions.api("box-store-sync"), "getBoxStoreStatus")(),
     clearBoxStoreNow: () =>
-      method(deps.extensions.api("box-store-sync"), "clearBoxStoreNow")(),
+      call(ports.extensions.api("box-store-sync"), "clearBoxStoreNow")(),
     updateHostNow: (args: any) =>
-      method(deps.extensions.api("host-upgrade"), "updateHostNow")(args),
+      call(ports.extensions.api("host-upgrade"), "updateHostNow")(args),
     getHostStatus: async () => ({
-      ...method(deps.extensions.api("host-upgrade"), "getVersionState")(),
-      isBusy: deps.getHealth().isBusy,
+      ...call(ports.extensions.api("host-upgrade"), "getVersionState")(),
+      isBusy: ports.getHealth().isBusy,
       capabilities: HOST_CAPABILITIES
     }),
     setBoxMigrating: async (args: any) => {
-      method(deps.extensions.api("forever-box"), "setMigrating")({
+      call(ports.extensions.api("forever-box"), "setMigrating")({
         migrating: args.migrating === true
       });
       return { ok: true };
     },
     prepareBoxForRecreate: async () => {
-      await method(automations, "suspendWakes")();
-      return await method(manager, "quiesceForRecreate")();
+      await call(schedules, "suspendWakes")();
+      return await call(transcript, "quiesceForRecreate")();
     },
     resumeBoxAfterRecreate: async (args: any) => {
-      method(automations, "resumeWakes")();
-      await method(sharing, "resumeAfterRecreate")();
-      return await method(manager, "resumeAfterRecreate")(
+      call(schedules, "resumeWakes")();
+      await call(crossUser, "resumeAfterRecreate")();
+      return await call(transcript, "resumeAfterRecreate")(
         args.agentIds ?? [],
         args.pendingWakes
       );
     },
     handBackForeverBox: (args: any) =>
-      method(deps.extensions.api("session"), "endHandoff")(
+      call(ports.extensions.api("session"), "endHandoff")(
         args.id,
         args.trigger ?? "button"
       ),
 
     startTeachRecording: (args: any) =>
-      method(deps.extensions.api("teach-recording"), "start")(args),
+      call(ports.extensions.api("teach-recording"), "start")(args),
     stopTeachRecording: (args: any) =>
-      method(deps.extensions.api("teach-recording"), "stop")(args),
+      call(ports.extensions.api("teach-recording"), "stop")(args),
     getTeachRecordingStatus: () =>
-      method(deps.extensions.api("teach-recording"), "getStatus")(),
-    getTrays: () => method(deps.extensions.api("trays"), "list")(),
+      call(ports.extensions.api("teach-recording"), "getStatus")(),
+    getTrays: () => call(ports.extensions.api("trays"), "list")(),
     dismissTray: (args: any) =>
-      method(deps.extensions.api("trays"), "dismiss")(args),
-    clearTrays: () => method(deps.extensions.api("trays"), "clearAll")(),
+      call(ports.extensions.api("trays"), "dismiss")(args),
+    clearTrays: () => call(ports.extensions.api("trays"), "clearAll")(),
 
-    uploadAttachment: (args: any) => method(attachments, "upload")(args),
-    readAttachmentImage: (args: any) => method(attachments, "readImage")(args),
-    readAttachmentText: (args: any) => method(attachments, "readText")(args),
-    readAttachmentChunk: (args: any) => method(attachments, "readChunk")(args),
-    getHostSettings: () => method(settings, "getHostSettings")(),
+    uploadAttachment: (args: any) => call(uploads, "upload")(args),
+    readAttachmentImage: (args: any) => call(uploads, "readImage")(args),
+    readAttachmentText: (args: any) => call(uploads, "readText")(args),
+    readAttachmentChunk: (args: any) => call(uploads, "readChunk")(args),
+    getHostSettings: () => call(hostSettings, "getHostSettings")(),
     setHostSettings: (args: any) => {
-      const result = method(settings, "setHostSettings")(args);
+      const result = call(hostSettings, "setHostSettings")(args);
       if (args.localToolPermission !== undefined) {
-        method(localToolPermission, "notePermissionChanged")();
+        call(toolPermission, "notePermissionChanged")();
       }
       if (args.webauthnProxyEnabled !== undefined) {
-        method(deps.extensions.api("webauthn-proxy"), "applyEnablement")(
+        call(ports.extensions.api("webauthn-proxy"), "applyEnablement")(
           args.webauthnProxyEnabled
         );
       }
@@ -635,19 +635,19 @@ export function createHostGatewayApi(
     },
 
     refreshMcp: async ({ completion, routedAction, routedArgs }: any) => {
-      if (routedAction === "list-tools") return await listRoutedMcpTools();
-      if (routedAction === "execute-tool") return await executeRoutedMcpTool(routedArgs);
+      if (routedAction === "list-tools") return await routedTools();
+      if (routedAction === "execute-tool") return await routedExecute(routedArgs);
       if (completion != null) {
-        await deps.handleDesktopMcpAuthCompletion(completion);
+        await ports.handleDesktopMcpAuthCompletion(completion);
         return;
       }
-      await method(deps.extensions.api("mcp").management, "restart")();
+      await call(ports.extensions.api("mcp").management, "restart")();
     },
-    listRoutedMcpTools,
-    executeRoutedMcpTool,
+    listRoutedMcpTools: routedTools,
+    executeRoutedMcpTool: routedExecute,
     listBoxMcpServers: async ({ serverIdentifiers }: any) => {
-      const servers = await method(
-        deps.extensions.api("mcp"),
+      const servers = await call(
+        ports.extensions.api("mcp"),
         "listBoxServers"
       )(serverIdentifiers);
       return {
@@ -663,10 +663,10 @@ export function createHostGatewayApi(
     },
     completeMcpOAuth: async () => undefined,
     requestWebAuthnCeremony: (args: any) =>
-      method(deps.extensions.api("webauthn-proxy"), "requestCeremony")(args),
+      call(ports.extensions.api("webauthn-proxy"), "requestCeremony")(args),
     setBoxSecrets: ({ secrets }: any) =>
-      method(deps.extensions.api("secrets"), "set")({ secrets }),
+      call(ports.extensions.api("secrets"), "set")({ secrets }),
     getBoxSecretsStatus: () =>
-      method(deps.extensions.api("secrets"), "getStatus")()
+      call(ports.extensions.api("secrets"), "getStatus")()
   };
 }
