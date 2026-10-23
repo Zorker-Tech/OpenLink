@@ -6,11 +6,11 @@
  */
 import { BasePromptBuilder, BasePromptExecutor } from "./base.ts";
 
-type Loose = Record<string, any>;
+type LooseRecord = Record<string, any>;
 
 export interface MockPromptExecutorOptions {
   response?: string;
-  toolCalls?: readonly Loose[];
+  toolCalls?: readonly LooseRecord[];
   streamDelay?: number;
   chunkSize?: number;
   usage?: {
@@ -23,9 +23,9 @@ export interface MockPromptExecutorOptions {
   simulateError?: unknown;
 }
 
-interface NormalizedMockPromptExecutorOptions {
+interface ResolvedMockOptions {
   response: string;
-  toolCalls: readonly Loose[];
+  toolCalls: readonly LooseRecord[];
   streamDelay: number;
   chunkSize: number;
   usage: {
@@ -42,93 +42,93 @@ export function createMockPromptExecutor(options: () => MockPromptExecutorOption
   return new MockPromptExecutor(() => options(), undefined);
 }
 
-export class MockPromptBuilder extends BasePromptBuilder<Loose> {}
+export class MockPromptBuilder extends BasePromptBuilder<LooseRecord> {}
 
-export class MockPromptExecutor extends BasePromptExecutor<Loose> {
-  readonly options: () => NormalizedMockPromptExecutorOptions;
+export class MockPromptExecutor extends BasePromptExecutor<LooseRecord> {
+  readonly options: () => ResolvedMockOptions;
 
-  constructor(options?: () => MockPromptExecutorOptions | undefined, initialMessages?: Loose | readonly Loose[]) {
+  constructor(options?: () => MockPromptExecutorOptions | undefined, initialMessages?: LooseRecord | readonly LooseRecord[]) {
     super(new MockPromptBuilder(initialMessages));
     this.options = () => {
-      const opts = options?.();
+      const rawOptions = options?.();
       return {
-        response: opts?.response ?? "This is a mock response.",
-        toolCalls: opts?.toolCalls ?? [],
-        streamDelay: opts?.streamDelay ?? 0,
-        chunkSize: opts?.chunkSize ?? 1,
+        response: rawOptions?.response ?? "This is a mock response.",
+        toolCalls: rawOptions?.toolCalls ?? [],
+        streamDelay: rawOptions?.streamDelay ?? 0,
+        chunkSize: rawOptions?.chunkSize ?? 1,
         usage: {
-          inputTokens: opts?.usage?.inputTokens ?? 10,
-          outputTokens: opts?.usage?.outputTokens ?? 20,
-          cacheReadTokens: opts?.usage?.cacheReadTokens ?? 0,
-          cacheWriteTokens: opts?.usage?.cacheWriteTokens ?? 0,
-          maxTokens: opts?.usage?.maxTokens ?? 1_000,
+          inputTokens: rawOptions?.usage?.inputTokens ?? 10,
+          outputTokens: rawOptions?.usage?.outputTokens ?? 20,
+          cacheReadTokens: rawOptions?.usage?.cacheReadTokens ?? 0,
+          cacheWriteTokens: rawOptions?.usage?.cacheWriteTokens ?? 0,
+          maxTokens: rawOptions?.usage?.maxTokens ?? 1_000,
         },
-        simulateError: opts?.simulateError,
+        simulateError: rawOptions?.simulateError,
       };
     };
   }
 
-  stream(_ctx: unknown, invocationId?: string, _tools?: readonly Loose[], _options?: Loose) {
+  stream(_ctx: unknown, invocationId?: string, _tools?: readonly LooseRecord[], _options?: LooseRecord) {
     const options = this.options();
-    const responseText = options.response;
-    const toolCalls = options.toolCalls;
-    const chunkSize = options.chunkSize;
-    const streamDelay = options.streamDelay;
-    const simulateError = options.simulateError;
-    const usage = options.usage;
-    const fullStream = (async function*(): AsyncGenerator<Loose> {
-      if (responseText) {
-        for (let i = 0; i < responseText.length; i += chunkSize) {
-          const chunk = responseText.slice(i, i + chunkSize);
-          if (streamDelay > 0) {
-            await new Promise(resolve => setTimeout(resolve, streamDelay));
+    const answerText = options.response;
+    const calls = options.toolCalls;
+    const chunkLength = options.chunkSize;
+    const delayMs = options.streamDelay;
+    const failure = options.simulateError;
+    const tokenUsage = options.usage;
+    const streamParts = (async function*(): AsyncGenerator<LooseRecord> {
+      if (answerText) {
+        for (let i = 0; i < answerText.length; i += chunkLength) {
+          const piece = answerText.slice(i, i + chunkLength);
+          if (delayMs > 0) {
+            await new Promise(resolve => setTimeout(resolve, delayMs));
           }
-          yield { type: "text-delta", textDelta: chunk };
+          yield { type: "text-delta", textDelta: piece };
         }
       }
-      for (const toolCall of toolCalls) {
-        if (streamDelay > 0) {
-          await new Promise(resolve => setTimeout(resolve, streamDelay));
+      for (const call of calls) {
+        if (delayMs > 0) {
+          await new Promise(resolve => setTimeout(resolve, delayMs));
         }
         yield {
           type: "tool-call-streaming-start",
-          toolCallId: toolCall.toolCallId,
-          toolName: toolCall.toolName,
+          toolCallId: call.toolCallId,
+          toolName: call.toolName,
         };
-        const argsJson = JSON.stringify(toolCall.args);
-        for (let i = 0; i < argsJson.length; i += chunkSize) {
-          const chunk = argsJson.slice(i, i + chunkSize);
-          if (streamDelay > 0) {
-            await new Promise(resolve => setTimeout(resolve, streamDelay));
+        const argumentsJson = JSON.stringify(call.args);
+        for (let i = 0; i < argumentsJson.length; i += chunkLength) {
+          const piece = argumentsJson.slice(i, i + chunkLength);
+          if (delayMs > 0) {
+            await new Promise(resolve => setTimeout(resolve, delayMs));
           }
           yield {
             type: "tool-call-delta",
-            toolCallId: toolCall.toolCallId,
-            toolName: toolCall.toolName,
-            argsTextDelta: chunk,
+            toolCallId: call.toolCallId,
+            toolName: call.toolName,
+            argsTextDelta: piece,
           };
         }
-        if (streamDelay > 0) {
-          await new Promise(resolve => setTimeout(resolve, streamDelay));
+        if (delayMs > 0) {
+          await new Promise(resolve => setTimeout(resolve, delayMs));
         }
         yield {
           type: "tool-call",
-          toolCallId: toolCall.toolCallId,
-          toolName: toolCall.toolName,
-          args: toolCall.args,
+          toolCallId: call.toolCallId,
+          toolName: call.toolName,
+          args: call.args,
         };
       }
-      if (simulateError) {
-        yield { type: "error", error: simulateError };
-        throw simulateError;
+      if (failure) {
+        yield { type: "error", error: failure };
+        throw failure;
       }
       yield {
         type: "finish",
         finishReason: "stop",
         usage: {
-          promptTokens: usage.inputTokens,
-          completionTokens: usage.outputTokens,
-          totalTokens: usage.inputTokens + usage.outputTokens,
+          promptTokens: tokenUsage.inputTokens,
+          completionTokens: tokenUsage.outputTokens,
+          totalTokens: tokenUsage.inputTokens + tokenUsage.outputTokens,
         },
         logprobs: undefined,
         response: {
@@ -140,56 +140,56 @@ export class MockPromptExecutor extends BasePromptExecutor<Loose> {
     })();
 
     const response = (async () => {
-      const content: Loose[] = [];
-      if (responseText) {
-        content.push({
+      const parts: LooseRecord[] = [];
+      if (answerText) {
+        parts.push({
           type: "text",
-          text: simulateError ? responseText.slice(0, chunkSize) : responseText,
+          text: failure ? answerText.slice(0, chunkLength) : answerText,
         });
       }
-      for (const toolCall of toolCalls) {
-        content.push({
+      for (const call of calls) {
+        parts.push({
           type: "tool-call",
-          toolCallId: toolCall.toolCallId,
-          toolName: toolCall.toolName,
-          args: toolCall.args,
+          toolCallId: call.toolCallId,
+          toolName: call.toolName,
+          args: call.args,
         });
       }
-      const messages = [{
+      const messageList = [{
         role: "assistant",
-        content: content.length > 0 ? content : "",
+        content: parts.length > 0 ? parts : "",
         id: "mock-message-id",
       }];
-      const result: Loose = {
+      const answer: LooseRecord = {
         id: "mock-response-id",
         timestamp: new Date(),
         modelId: "mock-model",
-        messages,
+        messages: messageList,
       };
-      if (simulateError) {
-        result.error = simulateError;
+      if (failure) {
+        answer.error = failure;
       }
-      return result;
+      return answer;
     })();
-    const usagePromise = Promise.resolve({
-      promptTokens: usage.inputTokens,
-      completionTokens: usage.outputTokens,
-      totalTokens: usage.inputTokens + usage.outputTokens,
+    const usageSummary = Promise.resolve({
+      promptTokens: tokenUsage.inputTokens,
+      completionTokens: tokenUsage.outputTokens,
+      totalTokens: tokenUsage.inputTokens + tokenUsage.outputTokens,
     });
-    const extendedUsage = Promise.resolve({
-      inputTokens: usage.inputTokens,
-      outputTokens: usage.outputTokens,
-      cacheReadTokens: usage.cacheReadTokens,
-      cacheWriteTokens: usage.cacheWriteTokens,
-      maxTokens: usage.maxTokens,
+    const detailedUsage = Promise.resolve({
+      inputTokens: tokenUsage.inputTokens,
+      outputTokens: tokenUsage.outputTokens,
+      cacheReadTokens: tokenUsage.cacheReadTokens,
+      cacheWriteTokens: tokenUsage.cacheWriteTokens,
+      maxTokens: tokenUsage.maxTokens,
     });
-    const providerMetadata = Promise.resolve(undefined);
+    const metadata = Promise.resolve(undefined);
     return {
-      fullStream,
+      fullStream: streamParts,
       response,
-      usage: usagePromise,
-      extendedUsage,
-      providerMetadata,
+      usage: usageSummary,
+      extendedUsage: detailedUsage,
+      providerMetadata: metadata,
       invocationId: Promise.resolve(invocationId ?? crypto.randomUUID()),
     };
   }
