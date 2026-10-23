@@ -53,59 +53,59 @@ export function sqliteVacuumInto(
   destPath: string,
   busyTimeoutMs = DB_BUSY_TIMEOUT_MS,
 ): void {
-  const db = new DatabaseSync(srcPath, { readOnly: true });
+  const database = new DatabaseSync(srcPath, { readOnly: true });
   try {
-    db.exec(`PRAGMA busy_timeout = ${busyTimeoutMs}`);
-    db.exec(`VACUUM INTO '${destPath.replace(/'/g, "''")}'`);
+    database.exec(`PRAGMA busy_timeout = ${busyTimeoutMs}`);
+    database.exec(`VACUUM INTO '${destPath.replace(/'/g, "''")}'`);
   } finally {
-    db.close();
+    database.close();
   }
 }
 
-function numericErrcode(error: unknown): number | undefined {
-  if (typeof error !== "object" || error == null || !("errcode" in error)) return undefined;
-  const candidate = error.errcode;
-  return typeof candidate === "number" && Number.isSafeInteger(candidate) && candidate >= 0
-    ? candidate
+function readErrcode(failure: unknown): number | undefined {
+  if (typeof failure !== "object" || failure == null || !("errcode" in failure)) return undefined;
+  const rawCandidate = failure.errcode;
+  return typeof rawCandidate === "number" && Number.isSafeInteger(rawCandidate) && rawCandidate >= 0
+    ? rawCandidate
     : undefined;
 }
 
 export function classifySqliteSnapshotFailure(
-  error: unknown,
+  failure: unknown,
   operation: SqliteSnapshotOperation,
   pathStage: SqliteSnapshotPathStage,
 ): SqliteSnapshotFailure {
-  const sqliteCode = numericErrcode(error);
-  const systemErrno = sqliteCode === undefined ? findSystemErrno(error) : undefined;
-  const errno = brandedErrno(systemErrno);
-  const primarySqliteCode = sqliteCode === undefined ? undefined : sqliteCode & 0xff;
-  const isCapacityFailure = systemErrno === "ENOSPC"
-    || systemErrno === "EDQUOT"
-    || primarySqliteCode === 13;
-  let resolvedPathStage = pathStage;
-  if (operation === "vacuum_into" && isCapacityFailure) resolvedPathStage = "staged_main";
-  else if (operation === "copy_source_sidecars" && isCapacityFailure) resolvedPathStage = "staged_sidecars";
-  else if (operation === "vacuum_into" && (isSqliteBusyError(error) || isSqliteCorruptError(error))) {
-    resolvedPathStage = "source_main";
+  const sqliteCode = readErrcode(failure);
+  const errnoName = sqliteCode === undefined ? findSystemErrno(failure) : undefined;
+  const errno = brandedErrno(errnoName);
+  const primaryCode = sqliteCode === undefined ? undefined : sqliteCode & 0xff;
+  const capacityFailure = errnoName === "ENOSPC"
+    || errnoName === "EDQUOT"
+    || primaryCode === 13;
+  let finalPathStage = pathStage;
+  if (operation === "vacuum_into" && capacityFailure) finalPathStage = "staged_main";
+  else if (operation === "copy_source_sidecars" && capacityFailure) finalPathStage = "staged_sidecars";
+  else if (operation === "vacuum_into" && (isSqliteBusyError(failure) || isSqliteCorruptError(failure))) {
+    finalPathStage = "source_main";
   }
 
   let errorClass = "unknown";
-  if (error instanceof TypeError) errorClass = "TypeError";
-  else if (error instanceof RangeError) errorClass = "RangeError";
-  else if (error instanceof Error) errorClass = "Error";
+  if (failure instanceof TypeError) errorClass = "TypeError";
+  else if (failure instanceof RangeError) errorClass = "RangeError";
+  else if (failure instanceof Error) errorClass = "Error";
 
   let cause = "unknown";
-  if (isSqliteBusyError(error)) cause = "busy";
-  else if (isSqliteIoError(error)) cause = "io";
-  else if (isSqliteCorruptError(error)) cause = "corrupt";
-  else if (isSqliteCantOpenError(error)) cause = "cant_open";
+  if (isSqliteBusyError(failure)) cause = "busy";
+  else if (isSqliteIoError(failure)) cause = "io";
+  else if (isSqliteCorruptError(failure)) cause = "corrupt";
+  else if (isSqliteCantOpenError(failure)) cause = "cant_open";
   else if (sqliteCode !== undefined) cause = "sqlite";
   else if (errno !== undefined) cause = "system";
-  else if (error instanceof Error) cause = "error";
+  else if (failure instanceof Error) cause = "error";
 
   return {
     operation,
-    pathStage: resolvedPathStage,
+    pathStage: finalPathStage,
     cause,
     errorClass,
     ...(errno === undefined ? {} : { errno }),
@@ -113,29 +113,29 @@ export function classifySqliteSnapshotFailure(
   };
 }
 
-function quickCheckOk(row: unknown): boolean {
-  return typeof row === "object" && row != null && "quick_check" in row && row.quick_check === "ok";
+function isQuickCheckOk(checkRow: unknown): boolean {
+  return typeof checkRow === "object" && checkRow != null && "quick_check" in checkRow && checkRow.quick_check === "ok";
 }
 
-export function copyLockedSqliteDb(args: {
+export function copyLockedSqliteDb(request: {
   srcPath: string;
   destPath: string;
   readFile?(path: string): Buffer;
   onFailure?(failure: SqliteSnapshotFailure): void;
 }): boolean {
-  const { srcPath, destPath } = args;
-  const readFile = args.readFile ?? readFileSync;
-  let lastFailure: SqliteSnapshotFailure = {
+  const { srcPath, destPath } = request;
+  const readFile = request.readFile ?? readFileSync;
+  let previousFailure: SqliteSnapshotFailure = {
     operation: "prepare_staged",
     pathStage: "staged_main",
     cause: "unknown",
     errorClass: "unknown",
   };
 
-  for (let attempt = 1; attempt <= LOCKED_DB_COPY_ATTEMPTS; attempt += 1) {
-    let verified = false;
-    let attemptFailure: SqliteSnapshotFailure | undefined;
-    let db: DatabaseSync | undefined;
+  for (let tryNumber = 1; tryNumber <= LOCKED_DB_COPY_ATTEMPTS; tryNumber += 1) {
+    let isVerified = false;
+    let tryFailure: SqliteSnapshotFailure | undefined;
+    let database: DatabaseSync | undefined;
     let operation: SqliteSnapshotOperation = "prepare_staged";
     let pathStage: SqliteSnapshotPathStage = "staged_main";
     try {
@@ -144,20 +144,20 @@ export function copyLockedSqliteDb(args: {
       for (const suffix of SQLITE_DB_SIDECAR_SUFFIXES) rmSync(`${destPath}${suffix}`, { force: true });
       operation = "read_source_main";
       pathStage = "source_main";
-      const mainBytes = readFile(srcPath);
+      const sourceBytes = readFile(srcPath);
       operation = "write_staged_main";
       pathStage = "staged_main";
-      writeFileSync(destPath, mainBytes);
+      writeFileSync(destPath, sourceBytes);
       operation = "copy_source_sidecars";
       pathStage = "source_and_staged_sidecars";
       for (const suffix of SQLITE_DB_SIDECAR_SUFFIXES) {
-        const sidecar = `${srcPath}${suffix}`;
-        if (existsSync(sidecar)) copyFileSync(sidecar, `${destPath}${suffix}`);
+        const sidecarPath = `${srcPath}${suffix}`;
+        if (existsSync(sidecarPath)) copyFileSync(sidecarPath, `${destPath}${suffix}`);
       }
       operation = "verify_source_stability";
       pathStage = "source_main";
-      if (!readFile(srcPath).equals(mainBytes)) {
-        attemptFailure = {
+      if (!readFile(srcPath).equals(sourceBytes)) {
+        tryFailure = {
           operation,
           pathStage,
           cause: "source_changed",
@@ -166,15 +166,15 @@ export function copyLockedSqliteDb(args: {
       } else {
         operation = "open_staged";
         pathStage = "staged_main";
-        db = new DatabaseSync(destPath);
+        database = new DatabaseSync(destPath);
         operation = "checkpoint_staged";
-        db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+        database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
         operation = "set_staged_journal_mode";
-        db.exec("PRAGMA journal_mode=DELETE");
+        database.exec("PRAGMA journal_mode=DELETE");
         operation = "quick_check_staged";
-        verified = quickCheckOk(db.prepare("PRAGMA quick_check").get());
-        if (!verified) {
-          attemptFailure = {
+        isVerified = isQuickCheckOk(database.prepare("PRAGMA quick_check").get());
+        if (!isVerified) {
+          tryFailure = {
             operation,
             pathStage,
             cause: "quick_check_failed",
@@ -182,35 +182,35 @@ export function copyLockedSqliteDb(args: {
           };
         }
       }
-    } catch (error) {
-      attemptFailure = classifySqliteSnapshotFailure(error, operation, pathStage);
-      verified = false;
+    } catch (failure) {
+      tryFailure = classifySqliteSnapshotFailure(failure, operation, pathStage);
+      isVerified = false;
     } finally {
       try {
-        db?.close();
-      } catch (error) {
-        verified = false;
-        attemptFailure ??= classifySqliteSnapshotFailure(error, "close_staged", "staged_main");
+        database?.close();
+      } catch (failure) {
+        isVerified = false;
+        tryFailure ??= classifySqliteSnapshotFailure(failure, "close_staged", "staged_main");
       }
       for (const suffix of SQLITE_DB_SIDECAR_SUFFIXES) {
         try {
           rmSync(`${destPath}${suffix}`, { force: true });
-        } catch (error) {
-          verified = false;
-          attemptFailure ??= classifySqliteSnapshotFailure(error, "cleanup_staged", "staged_sidecars");
+        } catch (failure) {
+          isVerified = false;
+          tryFailure ??= classifySqliteSnapshotFailure(failure, "cleanup_staged", "staged_sidecars");
         }
       }
-      if (!verified) {
+      if (!isVerified) {
         try {
           rmSync(destPath, { force: true });
-        } catch (error) {
-          attemptFailure ??= classifySqliteSnapshotFailure(error, "cleanup_staged", "staged_main");
+        } catch (failure) {
+          tryFailure ??= classifySqliteSnapshotFailure(failure, "cleanup_staged", "staged_main");
         }
       }
     }
-    if (verified && attemptFailure === undefined) return true;
-    if (attemptFailure !== undefined) lastFailure = attemptFailure;
+    if (isVerified && tryFailure === undefined) return true;
+    if (tryFailure !== undefined) previousFailure = tryFailure;
   }
-  args.onFailure?.(lastFailure);
+  request.onFailure?.(previousFailure);
   return false;
 }
