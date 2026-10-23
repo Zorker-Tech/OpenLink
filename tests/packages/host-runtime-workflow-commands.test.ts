@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { WorkflowCommands } from "../../source/host/transcript/workflow-commands.ts";
+import { WORKFLOW_INJECTED_BODY_LIMIT } from "../../source/shared/workflow-model.ts";
 import { WORKFLOW_REFERENCE_NODE_TYPE } from "../../source/shared/workflows.ts";
 
 const richTextReferencing = (references: Array<{ id: string; teachQueueScope?: string }>) => JSON.stringify({
@@ -24,7 +25,22 @@ function harness(options: { activeId?: string | null; workflows?: Array<Record<s
   const sessionWorkflows = new Map<string, unknown>();
   let changeHandler: (() => void) | undefined;
   let all = options.workflows ?? [workflow()];
-  const emitter = { emit: (topic: string, payload: unknown) => { events.push([topic, payload]); }, on: (topic: string, listener: (value: unknown) => void) => { listener as never; }, off: () => {} };
+  const listeners = new Map<string, Set<(value: unknown) => void>>();
+  const emitter = {
+    emit: (topic: string, payload: unknown) => {
+      events.push([topic, payload]);
+      for (const listener of listeners.get(topic) ?? []) listener(payload);
+    },
+    on: (topic: string, listener: (value: unknown) => void) => {
+      calls.push(["on", topic]);
+      if (!listeners.has(topic)) listeners.set(topic, new Set());
+      listeners.get(topic)!.add(listener);
+    },
+    off: (topic: string, listener: (value: unknown) => void) => {
+      calls.push(["off", topic, listener]);
+      listeners.get(topic)?.delete(listener);
+    },
+  };
   const store = {
     listAgentAutomations: (agentId: string) => { calls.push(["list-automations", agentId]); return [{ id: "automation-1" }]; },
     createAgentWorkflow: (agentId: string, spec: unknown) => { calls.push(["store-create", agentId, spec]); return options.storeWorkflows ?? [workflow()]; },
@@ -40,7 +56,7 @@ function harness(options: { activeId?: string | null; workflows?: Array<Record<s
   };
   const workflows = {
     setOnChange: (handler?: () => void) => { calls.push(["set-on-change", handler !== undefined]); changeHandler = handler; },
-    listAll: () => all,
+    listAll: () => { calls.push(["list-all"]); return all; },
     get: (id: string) => all.find((candidate) => candidate.id === id) ?? null,
     create: (spec: unknown) => { calls.push(["create", spec]); },
     update: (id: string, spec: unknown) => { calls.push(["update", id, spec]); },
@@ -58,12 +74,15 @@ function harness(options: { activeId?: string | null; workflows?: Array<Record<s
     automationRuntime: {
       enqueueAutomationLifecycleMutation: async (args: { agentId: string; mutation: () => unknown }) => { calls.push(["mutation", args.agentId]); return args.mutation(); },
       recordAutomationChangeEvents: (_session: unknown, source: string) => { calls.push(["change-events", source]); },
-      recordInactiveAutomationChanges: (args: { source: string }) => { calls.push(["inactive-changes", args.source]); },
+      recordInactiveAutomationChanges: (args: { source: string; agentId: string; before: unknown; after: unknown }) => {
+        calls.push(["inactive-changes", args.source]);
+        calls.push(["inactive-args", args]);
+      },
       fireAutomation: async (args: unknown) => { calls.push(["fire", args]); },
     },
     roster: { emitter },
     shouldEmitAutomations: () => options.emitAutomations ?? true,
-    groupChat: { isGroupSession: () => options.isGroup ?? false },
+    groupChat: { isGroupSession: () => { calls.push(["is-group-session"]); return options.isGroup ?? false; } },
     listAgentsSync: () => options.roster ?? [],
     sendPrompt: async (prompt: string, sendOptions: { richText: string }) => { calls.push(["send-prompt", prompt, sendOptions.richText]); },
   };
@@ -132,6 +151,9 @@ describe("the workflows a conversation can name", () => {
     assert.deepEqual([active.kinds("update").length, active.kinds("remove").length], [1, 1]);
     await active.commands.setAgentWorkflowEnabled("agent-1", "nightly", false);
     assert.deepEqual(active.kinds("set-enabled").map((call) => [call[1], call[2]]), [["nightly", false]]);
+    // A change answers with the list a caller is shown, which puts the managed workflows first.
+    const ordered = harness({ activeId: "agent-1", workflows: [workflow({ id: "own" }), workflow({ id: "given", source: "managed" })] });
+    assert.deepEqual((await ordered.commands.createAgentWorkflow("agent-1", { name: "New" } as never)).map((entry) => entry.id), ["given", "own"]);
     // Off screen it goes through the store, and what changed while the conversation was inactive is recorded as such.
     const offScreen = harness({ activeId: "agent-9" });
     await offScreen.commands.createAgentWorkflow("agent-1", { name: "Nightly" } as never);
@@ -168,8 +190,9 @@ describe("the workflows a conversation can name", () => {
     quiet.change();
     assert.deepEqual(quiet.events, []);
     const elsewhere = harness({ activeId: "agent-2" });
-    elsewhere.commands.watchSessionWorkflows({ id: "agent-1", workflows: { setOnChange: () => {}, listAll: () => [] } });
-    elsewhere.change();
+    let foreignChange: (() => void) | undefined;
+    elsewhere.commands.watchSessionWorkflows({ id: "agent-1", workflows: { setOnChange: (handler?: () => void) => { foreignChange = handler; }, listAll: () => [] } });
+    foreignChange?.();
     assert.deepEqual(elsewhere.events, []);
     // A listener hears what is emitted and stops when it stops listening.
     let heard = 0;
@@ -202,6 +225,136 @@ describe("the workflows a conversation can name", () => {
     assert.deepEqual(await offScreen.commands.portAgentLocalSkills("agent-1"), { imported: [], skipped: [] });
   });
 
+  it("lays a workflow block out in the order a run reads it", () => {
+    const helpers = harness({ workflows: [workflow({ id: "helpers", name: "Helpers", description: "uses files", body: "  follow the recipe  \n", helperScripts: ["run.sh", "notes.md"] })] });
+    const expanded = helpers.commands.expandWorkflowReferences(helpers.session as never, "now", richTextReferencing([{ id: "helpers" }]));
+    assert.equal(expanded, [
+      'The user invoked the "Helpers" workflow (folder helpers). Run it now.',
+      "What it does: uses files",
+      "Recipe to follow:",
+      "follow the recipe",
+      "Helper files live beside this workflow in /workflows: run.sh, notes.md. Use them with Shell as the recipe directs.",
+      "Carry out the recipe now, adapting it to anything else the user said in this message.",
+      "",
+      "now",
+    ].join("\n"));
+
+    // A workflow with nothing to say about itself and no helper files is its recipe and the instruction, nothing else.
+    const plain = harness({ workflows: [workflow({ id: "plain", name: "Plain", description: "", body: "do it" })] });
+    const plainExpanded = plain.commands.expandWorkflowReferences(plain.session as never, "", richTextReferencing([{ id: "plain" }]));
+    assert.deepEqual(plainExpanded.split("\n"), [
+      'The user invoked the "Plain" workflow (folder plain). Run it now.',
+      "Recipe to follow:",
+      "do it",
+      "Carry out the recipe now, adapting it to anything else the user said in this message.",
+    ]);
+
+    // A long recipe is cut to the injected body limit, and the space around the recipe is not part of it.
+    const long = harness({ workflows: [workflow({ id: "long", name: "Long", description: "d", body: "  " + "x".repeat(WORKFLOW_INJECTED_BODY_LIMIT + 50) + "  " })] });
+    const longExpanded = long.commands.expandWorkflowReferences(long.session as never, "", richTextReferencing([{ id: "long" }]));
+    assert.equal(longExpanded.includes("x".repeat(WORKFLOW_INJECTED_BODY_LIMIT)), true);
+    assert.equal(longExpanded.includes("x".repeat(WORKFLOW_INJECTED_BODY_LIMIT + 1)), false);
+  });
+
+  it("says where each workflow came from and puts several blocks in front of the message", () => {
+    const world = harness({ workflows: [
+      workflow({ id: "m", name: "M", source: "managed" }),
+      workflow({ id: "p", name: "P", source: "plugin", filePath: "/plugins/p/SKILL.md" }),
+      workflow({ id: "u", name: "U", source: "user" }),
+    ] });
+    const expanded = world.commands.expandWorkflowReferences(world.session as never, "go", richTextReferencing([{ id: "m" }, { id: "p" }, { id: "u" }]));
+    assert.equal(expanded.includes('The user invoked the "M" workflow (managed skill id m). Run it now.'), true);
+    assert.equal(expanded.includes('The user invoked the "P" workflow (plugin skill id p, file /plugins/p/SKILL.md). Run it now.'), true);
+    assert.equal(expanded.includes('The user invoked the "U" workflow (folder u). Run it now.'), true);
+    const blocks = expanded.split("\n\n");
+    assert.equal(blocks.at(-1), "go");
+    assert.equal(blocks.length, 4);
+  });
+
+  it("gives the mention context a place only when there is a run prompt to put it in front of", () => {
+    const roster = [{ id: "session-1", name: "Me", description: "this conversation", isGroup: false }, { id: "agent-2", name: "Notes", description: "keeps notes", isGroup: false }];
+    const { commands, session, calls } = harness({ roster, activeId: "session-1" });
+    const withPrompt = commands.withMentionedAgentsContext(session as never, "ask @Notes", "run this");
+    const withoutPrompt = commands.withMentionedAgentsContext(session as never, "ask @Notes", "");
+    assert.equal(withPrompt, withoutPrompt + "\n\nrun this");
+    // An empty message never asks the group chat whether the conversation is a group.
+    calls.length = 0;
+    commands.withMentionedAgentsContext(session as never, "", "run this");
+    assert.deepEqual(calls.filter((call) => call[0] === "is-group-session"), []);
+  });
+
+  it("records an off-screen change against the automations read before it and after it", async () => {
+    const offScreen = harness({ activeId: "agent-9" });
+    await offScreen.commands.createAgentWorkflow("agent-1", { name: "Nightly" } as never);
+    // The automations are read once before the change and once after it; the first record is before against before.
+    assert.equal(offScreen.kinds("list-automations").length, 2);
+    assert.deepEqual(offScreen.kinds("inactive-args").map((call) => call[1]), [
+      { agentId: "agent-1", before: [{ id: "automation-1" }], after: [{ id: "automation-1" }], source: "agent" },
+      { agentId: "agent-1", before: [{ id: "automation-1" }], after: [{ id: "automation-1" }], source: "workflow_ui" },
+    ]);
+  });
+
+  it("surfaces the managed workflows first and the agent's own after them", async () => {
+    const world = harness({ activeId: "agent-1", workflows: [workflow({ id: "u1" }), workflow({ id: "m1", source: "managed" }), workflow({ id: "p1", source: "plugin" }), workflow({ id: "u2" })] });
+    assert.deepEqual((await world.commands.getAgentWorkflows("agent-1")).map((entry) => entry.id), ["m1", "p1", "u1", "u2"]);
+    // The store's answer off screen is passed through as it came.
+    const stored = harness({ activeId: "agent-9", storeWorkflows: [workflow({ id: "stored" })] });
+    assert.deepEqual((await stored.commands.getAgentWorkflows("agent-1")).map((entry) => entry.id), ["stored"]);
+  });
+
+  it("finds a workflow on the conversation on screen and in the store otherwise", async () => {
+    const world = harness({ activeId: "agent-1", workflows: [workflow({ id: "active-one" })], storeWorkflows: [workflow({ id: "stored-one" })] });
+    assert.equal((await world.commands.getWorkflowForAgent("agent-1", "active-one"))?.id, "active-one");
+    assert.equal((await world.commands.getWorkflowForAgent("agent-2", "anything"))?.id, "stored-one");
+  });
+
+  it("answers an import with the workflows the agent now has, and takes a name from the link when none is given", async () => {
+    const active = harness({ activeId: "agent-1" });
+    const pasted = await active.commands.importAgentWorkflowMarkdown("agent-1", "body") as { workflows: Array<{ id: string }> };
+    assert.deepEqual(pasted.workflows.map((entry) => entry.id), ["nightly"]);
+    await active.commands.importAgentWorkflowUrl("agent-1", "https://example.invalid/skills/nightly-notes.md");
+    assert.deepEqual(active.kinds("import-source").map((call) => call[2]), ["nightly notes"]);
+    await active.commands.importAgentWorkflowUrl("agent-1", "https://example.invalid/x", "Chosen");
+    assert.deepEqual(active.kinds("import-source").map((call) => call[2]), ["nightly notes", "Chosen"]);
+  });
+
+  it("ports local skills before it answers with the surfaced list", async () => {
+    const active = harness({ activeId: "agent-1" });
+    await active.commands.portAgentLocalSkills("agent-1");
+    const portIndex = active.calls.findIndex((call) => call[0] === "port-skills");
+    const listIndex = active.calls.findIndex((call) => call[0] === "list-all");
+    assert.equal(portIndex >= 0 && listIndex > portIndex, true);
+  });
+
+  it("detaches from the workflows it watched before, and announces what a change left", () => {
+    const world = harness({ activeId: "agent-1" });
+    const sessionA = world.session;
+    const foreign = { setOnChange: () => {}, listAll: () => [], get: () => null };
+    world.commands.watchSessionWorkflows(sessionA);
+    world.commands.watchSessionWorkflows({ id: "agent-1", workflows: foreign });
+    assert.deepEqual(world.kinds("set-on-change").map((call) => call[1]), [true, false]);
+
+    const active = harness({ activeId: "agent-1" });
+    active.commands.watchSessionWorkflows(active.session);
+    active.change();
+    const payload = active.events[0]?.[1] as { agentId: string; workflows: Array<{ id: string }> };
+    assert.deepEqual([active.events[0]?.[0], payload.agentId, payload.workflows.map((entry) => entry.id)], ["workflows", "agent-1", ["nightly"]]);
+  });
+
+  it("stops announcing to a listener that unsubscribed", () => {
+    const active = harness({ activeId: "agent-1" });
+    active.commands.watchSessionWorkflows(active.session);
+    let heard = 0;
+    const unsubscribe = active.commands.subscribeWorkflows(() => { heard += 1; });
+    active.change();
+    assert.equal(heard, 1);
+    unsubscribe();
+    active.change();
+    assert.equal(heard, 1);
+    assert.deepEqual(active.kinds("on").map((call) => call[1]), ["workflows"]);
+    assert.deepEqual(active.kinds("off").map((call) => call[1]), ["workflows"]);
+  });
+
   it("runs a workflow now, as a routine where it has a trigger and as a message where it does not", async () => {
     // A workflow with a trigger of its own is run as the routine it is — whoever it came from.
     const triggered = harness({ activeId: "agent-1", workflows: [workflow({ trigger: { schedule: "0 3 * * *", isEnabled: true } })] });
@@ -216,6 +369,21 @@ describe("the workflows a conversation can name", () => {
     const sent = asMessage.kinds("send-prompt")[0];
     assert.equal(sent?.[1], "@Nightly");
     assert.equal(String(sent?.[2]).includes(WORKFLOW_REFERENCE_NODE_TYPE), true);
+    // The message names the workflow as one paragraph holding exactly one reference to it.
+    assert.deepEqual(JSON.parse(String(sent?.[2])), {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            {
+              type: WORKFLOW_REFERENCE_NODE_TYPE,
+              attrs: { id: "nightly", label: "Nightly" },
+            },
+          ],
+        },
+      ],
+    });
     // A workflow that is not there runs nothing at all.
     const missing = harness({ activeId: "agent-1", workflows: [] });
     await missing.commands.runAgentWorkflowNow("agent-1", "nightly");
