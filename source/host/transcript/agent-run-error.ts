@@ -2,7 +2,7 @@
  * A run that failed, as the reader sees it.
  *
  * The platform's own failures — an overloaded provider, a refused request, a run that was cancelled — each have their
- * own title and detail, so a reader is told what happened rather than shown a stack.
+ * own title and detail, so a reader is told what happened rather than displayDetail a stack.
  */
 export const PROVIDER_OVERLOAD_ERROR_TITLE = "Model provider is overloaded";
 export const PROVIDER_OVERLOAD_ERROR_DETAIL =
@@ -25,7 +25,7 @@ export interface BackendConnectError extends Error {
   findDetails(type?: unknown): Array<{ details?: BackendDetail }>;
   code?: number;
 }
-function isConnectError(value: unknown): value is BackendConnectError {
+function isBackendConnectError(value: unknown): value is BackendConnectError {
   return (
     value instanceof Error &&
     typeof (value as Partial<BackendConnectError>).findDetails === "function"
@@ -33,34 +33,34 @@ function isConnectError(value: unknown): value is BackendConnectError {
 }
 export function walkForBackendConnectError(
   error: unknown,
-  seen: Set<object>,
-  first: { value: BackendConnectError | null },
+  visited: Set<object>,
+  fallback: { value: BackendConnectError | null },
 ): BackendConnectError | null {
-  if (error == null || typeof error !== "object" || seen.has(error))
+  if (error == null || typeof error !== "object" || visited.has(error))
     return null;
-  seen.add(error);
-  if (isConnectError(error)) {
+  visited.add(error);
+  if (isBackendConnectError(error)) {
     if (error.findDetails().length > 0) return error;
-    first.value ??= error;
+    fallback.value ??= error;
   }
   const cause = (error as { cause?: unknown }).cause,
-    fromCause = walkForBackendConnectError(cause, seen, first);
-  if (fromCause != null) return fromCause;
+    foundInCause = walkForBackendConnectError(cause, visited, fallback);
+  if (foundInCause != null) return foundInCause;
   const errors = (error as { errors?: unknown }).errors;
   if (Array.isArray(errors))
-    for (const inner of errors) {
-      const found = walkForBackendConnectError(inner, seen, first);
-      if (found != null) return found;
+    for (const nested of errors) {
+      const foundError = walkForBackendConnectError(nested, visited, fallback);
+      if (foundError != null) return foundError;
     }
   return null;
 }
 export function findBackendConnectError(
   error: unknown,
-  requireDetails = true,
+  needsDetails = true,
 ): BackendConnectError | null {
-  const first = { value: null as BackendConnectError | null },
-    detailed = walkForBackendConnectError(error, new Set(), first);
-  return detailed ?? (requireDetails ? null : first.value);
+  const fallback = { value: null as BackendConnectError | null },
+    withDetails = walkForBackendConnectError(error, new Set(), fallback);
+  return withDetails ?? (needsDetails ? null : fallback.value);
 }
 export function getBackendErrorDetailMessage(error: unknown): string | null {
   const detail = findBackendConnectError(error)?.findDetails()[0]?.details,
@@ -75,40 +75,44 @@ export function getBackendErrorDetailMessage(error: unknown): string | null {
 export function formatAgentRunError(error: Error): string {
   return getBackendErrorDetailMessage(error) ?? error.message;
 }
+function pluralUnit(count: number): string {
+  return count === 1 ? "" : "s";
+}
+
 export function formatSlateUsageResetIn(
   nextResetAt: string | Date,
-  nowMs = Date.now(),
+  atMs = Date.now(),
 ): string | null {
-  const resetMs =
+  const resetTime =
     typeof nextResetAt === "string"
       ? Date.parse(nextResetAt)
       : nextResetAt.getTime();
-  if (!Number.isFinite(resetMs)) return null;
-  const ms = resetMs - nowMs;
+  if (!Number.isFinite(resetTime)) return null;
+  const ms = resetTime - atMs;
   if (ms <= 0) return "less than a minute";
   if (ms >= 86_400_000) {
     const days = Math.ceil(ms / 86_400_000);
-    return `${days} day${days === 1 ? "" : "s"}`;
+    return `${days} day${pluralUnit(days)}`;
   }
   if (ms >= 3_600_000) {
     const hours = Math.ceil(ms / 3_600_000);
-    return `${hours} hour${hours === 1 ? "" : "s"}`;
+    return `${hours} hour${pluralUnit(hours)}`;
   }
   const minutes = Math.max(1, Math.ceil(ms / 60_000));
-  return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+  return `${minutes} minute${pluralUnit(minutes)}`;
 }
 export function withRelativeSlateIncludedLimitReset(
   detail: string,
   nextResetAt: string | null | undefined,
-  nowMs = Date.now(),
+  atMs = Date.now(),
 ): string {
   if (!nextResetAt) return detail;
-  const relative = formatSlateUsageResetIn(nextResetAt, nowMs);
-  return relative == null
+  const relativeText = formatSlateUsageResetIn(nextResetAt, atMs);
+  return relativeText == null
     ? detail
     : detail
-        .replace(RESETS_AT_ABS_OR_ISO, `It resets in ${relative}.`)
-        .replace(RESETS_IN_CLAUSE, `It resets in ${relative}`);
+        .replace(RESETS_AT_ABS_OR_ISO, `It resets in ${relativeText}.`)
+        .replace(RESETS_IN_CLAUSE, `It resets in ${relativeText}`);
 }
 export type ErrorButton = {
   label: string;
@@ -118,32 +122,36 @@ export function checkoutDeepControlUrl(action: {
   membershipToUpgradeTo?: string;
   allowTrial?: boolean;
 }): string {
-  const tier = ["pro", "pro_plus", "ultra"].includes(
+  const selectedTier = ["pro", "pro_plus", "ultra"].includes(
     action.membershipToUpgradeTo ?? "",
   )
     ? action.membershipToUpgradeTo
     : "pro";
-  let url = `${SLATE_WEBSITE_ORIGIN}/api/auth/checkoutDeepControl?tier=${tier}`;
+  let url = `${SLATE_WEBSITE_ORIGIN}/api/auth/checkoutDeepControl?tier=${selectedTier}`;
   if (action.allowTrial === true) url += "&allowTrial=true";
   else if (action.allowTrial === false) url += "&allowTrial=false";
   return url;
 }
+function isWebProtocol(protocol: string): boolean {
+  return protocol === "http:" || protocol === "https:";
+}
+
 export function mapErrorDetailButtons(
   buttons: readonly ErrorButton[] | null | undefined,
 ): Array<Record<string, unknown>> {
   const actions: Array<Record<string, unknown>> = [];
-  let hasSwitch = false;
-  for (const button of buttons ?? []) {
+  let switchSeen = false;
+  for (const entry of buttons ?? []) {
     if (actions.length >= MAX_TRAY_ACTIONS) break;
-    const value = button.action.value ?? {};
-    switch (button.action.case) {
+    const value = entry.action.value ?? {};
+    switch (entry.action.case) {
       case "url":
         try {
           const url = new URL(value.url);
-          if (["http:", "https:"].includes(url.protocol) && button.label)
+          if (isWebProtocol(url.protocol) && entry.label)
             actions.push({
               kind: "open-url",
-              label: button.label,
+              label: entry.label,
               url: value.url,
             });
         } catch {}
@@ -151,28 +159,28 @@ export function mapErrorDetailButtons(
       case "upgrade":
         actions.push({
           kind: "open-url",
-          label: button.label || "Upgrade",
+          label: entry.label || "Upgrade",
           url: checkoutDeepControlUrl(value),
         });
         break;
       case "upgradeChoice":
         actions.push({
           kind: "open-url",
-          label: button.label || "Upgrade",
+          label: entry.label || "Upgrade",
           url: `${SLATE_WEBSITE_ORIGIN}/pricing`,
         });
         break;
       case "switchModel":
-        if (!hasSwitch) {
-          hasSwitch = true;
+        if (!switchSeen) {
+          switchSeen = true;
           actions.push({ kind: "switch-model" });
         }
         break;
       case "dashboardAction":
-        if (SUPPORTED_DASHBOARD_ACTION_VERBS.has(value.action) && button.label)
+        if (SUPPORTED_DASHBOARD_ACTION_VERBS.has(value.action) && entry.label)
           actions.push({
             kind: "dashboard-action",
-            label: button.label,
+            label: entry.label,
             action: value.action,
             args: { ...value.args },
             successMessage: value.successMessage || null,
@@ -182,21 +190,21 @@ export function mapErrorDetailButtons(
   return actions;
 }
 export function describeAgentRunError(error: unknown): Record<string, unknown> {
-  const formatted =
+  const messageText =
       error instanceof Error ? formatAgentRunError(error) : String(error),
     detail = findBackendConnectError(error)?.findDetails()[0]?.details,
     title = detail?.title?.trim() ?? "",
     actions = mapErrorDetailButtons(detail?.buttons);
-  let shown = title ? (detail?.detail?.trim() ?? "") : formatted;
+  let displayDetail = title ? (detail?.detail?.trim() ?? "") : messageText;
   if (detail?.additionalInfo?.rateLimitReason === SLATE_INCLUDED_LIMIT_REASON)
-    shown = withRelativeSlateIncludedLimitReset(
-      shown || formatted,
+    displayDetail = withRelativeSlateIncludedLimitReset(
+      displayDetail || messageText,
       detail.additionalInfo.nextResetAt,
     );
-  else if (!shown) shown = formatted;
+  else if (!displayDetail) displayDetail = messageText;
   return {
     ...(title ? { title } : {}),
-    detail: shown,
+    detail: displayDetail,
     ...(actions.length ? { actions } : {}),
   };
 }
