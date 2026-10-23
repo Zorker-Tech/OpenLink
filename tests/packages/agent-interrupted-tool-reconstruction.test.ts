@@ -242,3 +242,19 @@ test("every appended message is redacted for storage", () => {
     assert.equal(typeof (message as { _privacyMode?: unknown })._privacyMode, "number")
   }
 })
+
+test("an interrupted call reports how long it had been running", () => {
+  const messages = harness([assistantMessage([toolCall("call-elapsed", "Await")], { startedAtMs: 42 })])
+  const tool = toolMessageOf(messages) as unknown as { content: Array<{ result: string }> }
+  const result = tool.content[0]!.result
+  assert.equal(/after [0-9]+ms/.test(result), true)
+  assert.equal(result.includes("after 0ms"), false)
+})
+
+test("an unknown tool is reported by its own name", () => {
+  const messages = harness([assistantMessage([toolCall("call-unknown", "Mystery")])])
+  const tool = toolMessageOf(messages) as unknown as { content: Array<{ result: string }> }
+  const result = tool.content[0]!.result
+  assert.equal(result.includes("Mystery was interrupted"), true)
+  assert.equal(result.includes("Await was interrupted"), false)
+})
