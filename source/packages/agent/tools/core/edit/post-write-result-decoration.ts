@@ -31,10 +31,26 @@ import { CANVAS_POST_EDIT_DIAGNOSTICS_TIMEOUT_MS } from "../../../utils/config-o
 import { delay } from "../../../../utils/promise-tools.ts"
 import { isManagedCanvasPath } from "../../../../utils/canvas-paths.ts"
 
+
 const logger = createLogger("@slate/agent");
+
 const eagerStoreConflictBarrier = createCounter("agent.store.eager_barrier", {
   description: "Eager same-result agent-store conflict barrier outcomes.",
 });
+
+/** The outcomes a barrier reports when it is switched off, and when it falls back to the journal. */
+const OUTCOME_SKIPPED = "skipped";
+const OUTCOME_ABSENT = "absent";
+const OUTCOME_PASSIVE = "passive";
+const OUTCOME_ERROR = "error";
+const OUTCOME_TIMEOUT = "timeout";
+const OUTCOME_SYNCED = "synced";
+const OUTCOME_DEGRADED = "degraded";
+const OUTCOME_TIMED_OUT = "timed_out";
+const OUTCOME_CLEAN = "clean";
+const OUTCOME_ATTRIBUTED = "attributed";
+const OUTCOME_ATTRIBUTED_TIMED_OUT = "attributed_timed_out";
+const OUTCOME_JOURNAL_FALLBACK = "journal_fallback";
 
 function recordEagerBarrierOutcome(ctx: Context, outcome: string): void {
   try {
@@ -53,6 +69,7 @@ export interface PostWriteDecorationOptions {
 
 interface CanvasDiagnosticExecutor extends Executor<CanvasDiagnosticsArgs, CanvasDiagnosticsResult> {}
 
+/** One conflict the journal still holds, by the id the store gave it. */
 interface ConflictEvent {
   readonly eventId: string;
 }
@@ -60,47 +77,69 @@ interface ConflictEvent {
 type ConflictKind = "not-applicable" | "mount-passive" | "timed-out" | "failed" | "completed";
 type ConflictExecutor = Parameters<typeof conflictNoticeSyncAndPeek>[0];
 
+/** One read of the conflict journal, reduced to what the barrier works with. */
 interface ConflictPeekResult {
   readonly kind: ConflictKind;
   readonly reminder?: string | undefined;
   readonly events: readonly ConflictEvent[];
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+const CONFLICT_KINDS: ReadonlySet<string> = new Set(["not-applicable", "mount-passive", "timed-out", "failed", "completed"]);
+
+/** The kind of answer a conflict lookup gave, when it is one this module knows. */
+function parseConflictKind(value: unknown): ConflictKind | undefined {
+  return typeof value === "string" && CONFLICT_KINDS.has(value) ? (value as ConflictKind) : undefined;
+}
+
+/** A JSON object, which is what every conflict answer is. */
+function isObjectLike(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function parseConflictKind(value: unknown): ConflictKind | undefined {
-  switch (value) {
-    case "not-applicable":
-    case "mount-passive":
-    case "timed-out":
-    case "failed":
-    case "completed":
-      return value;
-    default:
-      return undefined;
-  }
-}
-
-function parseConflictPeekResult(value: unknown): ConflictPeekResult | undefined {
-  if (!isRecord(value) || typeof value.kind !== "string") return undefined;
-  const kind = parseConflictKind(value.kind);
-  if (kind === undefined) return undefined;
-  const rawEvents = value.events;
-  if (!Array.isArray(rawEvents)) return undefined;
+/** The events a conflict answer carried, or nothing when one of them is not an event. */
+function parseConflictEvents(value: unknown): ConflictEvent[] | undefined {
+  if (!Array.isArray(value)) return undefined;
   const events: ConflictEvent[] = [];
-  for (const rawEvent of rawEvents) {
-    if (!isRecord(rawEvent) || typeof rawEvent.eventId !== "string") return undefined;
+  for (const rawEvent of value) {
+    if (!isObjectLike(rawEvent) || typeof rawEvent.eventId !== "string") return undefined;
     events.push({ eventId: rawEvent.eventId });
   }
-  return {
-    kind,
-    events,
-    ...(typeof value.reminder === "string" ? { reminder: value.reminder } : {}),
-  };
+  return events;
 }
 
+/** One conflict answer, read into the shape the barrier works with. */
+function parseConflictPeekResult(value: unknown): ConflictPeekResult | undefined {
+  if (!isObjectLike(value) || typeof value.kind !== "string") return undefined;
+  const kind = parseConflictKind(value.kind);
+  if (kind === undefined) return undefined;
+  const events = parseConflictEvents(value.events);
+  if (events === undefined) return undefined;
+  return typeof value.reminder === "string" ? { kind, events, reminder: value.reminder } : { kind, events };
+}
+
+const CANVAS_DIAGNOSTICS_TIMEOUT = Symbol("canvasPostEditDiagnosticsTimeout");
+const NO_CANVAS_ISSUES = "Canvas TypeScript check: no errors.";
+
+/** One diagnostic as the model reads it: its severity, position, message and source. */
+function formatCanvasDiagnostic(diagnostic: Diagnostic): string {
+  const severity = diagnostic.severity === DiagnosticSeverity.WARNING ? "WARNING" : "ERROR";
+  const line = diagnostic.range?.start?.line ?? 0;
+  const column = diagnostic.range?.start?.column ?? 0;
+  const source = diagnostic.source ? ` (${diagnostic.source})` : "";
+  return `  [${severity}] L${line}:${column} - ${diagnostic.message}${source}`;
+}
+
+/** What a canvas check found, or nothing when there was nothing worth appending. */
+function formatCanvasIssues(path: string, diagnostics: readonly Diagnostic[]): string | undefined {
+  const filtered = diagnostics.filter(
+    (diagnostic: Diagnostic) => diagnostic.severity === DiagnosticSeverity.ERROR || diagnostic.severity === DiagnosticSeverity.WARNING,
+  );
+  if (filtered.length === 0) return NO_CANVAS_ISSUES;
+  const heading = `Canvas TypeScript check: ${filtered.length} issue${filtered.length > 1 ? "s" : ""} in ${path}:`;
+  return [heading, ...filtered.map(formatCanvasDiagnostic)].join("\n");
+}
+
+/** Runs the canvas check for a file that was just written, bounded by its own timeout. */
 async function runCanvasPostEditDiagnostics(
   ctx: Context,
   executor: CanvasDiagnosticExecutor,
@@ -109,27 +148,17 @@ async function runCanvasPostEditDiagnostics(
   toolCallId: string,
 ): Promise<string | undefined> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  const timeoutPromise = new Promise<typeof CANVAS_DIAGNOSTICS_TIMEOUT>((resolve) => {
+  const timedOut = new Promise<typeof CANVAS_DIAGNOSTICS_TIMEOUT>((resolve) => {
     timeoutId = setTimeout(() => resolve(CANVAS_DIAGNOSTICS_TIMEOUT), timeoutMs);
   });
   try {
     const raced = await Promise.race([
       executor.execute(ctx, new CanvasDiagnosticsArgs({ path: filePath, toolCallId })),
-      timeoutPromise,
+      timedOut,
     ]);
     if (raced === CANVAS_DIAGNOSTICS_TIMEOUT || raced.result.case !== "success") return undefined;
-    const { path, diagnostics } = raced.result.value;
-    const filtered = diagnostics.filter((diagnostic: Diagnostic) => diagnostic.severity === DiagnosticSeverity.ERROR || diagnostic.severity === DiagnosticSeverity.WARNING);
-    if (filtered.length === 0) return "Canvas TypeScript check: no errors.";
-    const lines = [`Canvas TypeScript check: ${filtered.length} issue${filtered.length > 1 ? "s" : ""} in ${path}:`];
-    for (const diagnostic of filtered) {
-      const severity = diagnostic.severity === DiagnosticSeverity.WARNING ? "WARNING" : "ERROR";
-      const line = diagnostic.range?.start?.line ?? 0;
-      const column = diagnostic.range?.start?.column ?? 0;
-      const source = diagnostic.source ? ` (${diagnostic.source})` : "";
-      lines.push(`  [${severity}] L${line}:${column} - ${diagnostic.message}${source}`);
-    }
-    return lines.join("\n");
+    const canvas = raced.result.value;
+    return formatCanvasIssues(canvas.path, canvas.diagnostics);
   } catch {
     return undefined;
   } finally {
@@ -137,8 +166,16 @@ async function runCanvasPostEditDiagnostics(
   }
 }
 
-const CANVAS_DIAGNOSTICS_TIMEOUT = Symbol("canvasPostEditDiagnosticsTimeout");
+/** The canvas diagnostics executor, or nothing when this session does not have one. */
+function canvasDiagnosticsExecutor(resourceAccessor: ResourceAccessor<RemoteExecManager>): CanvasDiagnosticExecutor | undefined {
+  try {
+    return resourceAccessor.get(canvasDiagnosticsExecutorResource);
+  } catch {
+    return undefined;
+  }
+}
 
+/** Appends what the canvas check found for the file that was just written. */
 async function decorateWithCanvasDiagnostics(
   ctx: Context,
   resourceAccessor: ResourceAccessor<RemoteExecManager>,
@@ -147,20 +184,36 @@ async function decorateWithCanvasDiagnostics(
   toolCallId: string,
 ): Promise<string> {
   if (!isManagedCanvasPath(path)) return resultForModel;
-  let executor: CanvasDiagnosticExecutor;
-  try {
-    executor = resourceAccessor.get(canvasDiagnosticsExecutorResource);
-  } catch {
-    return resultForModel;
-  }
+  const executor = canvasDiagnosticsExecutor(resourceAccessor);
   if (executor === undefined) return resultForModel;
   const diagnostics = await runCanvasPostEditDiagnostics(ctx, executor, path, CANVAS_POST_EDIT_DIAGNOSTICS_TIMEOUT_MS(ctx), toolCallId);
   return diagnostics === undefined ? resultForModel : `${resultForModel}\n\n${diagnostics}`;
 }
 
+/** The write's own result with what the barrier found appended. */
+function withReminder(resultForModel: string, reminder: string): string {
+  return `${resultForModel}\n\n${reminder}`;
+}
+
+/** The conflict notice executor, or nothing when this session does not have one. */
+function conflictNoticeExecutor(resourceAccessor: ResourceAccessor<RemoteExecManager>): ConflictExecutor | undefined {
+  try {
+    return resourceAccessor.get(agentStoreConflictNoticeExecutorResource);
+  } catch {
+    return undefined;
+  }
+}
+
+/** The conversation the notice operations are scoped to, when the context names one. */
+function conflictNoticeTarget(ctx: Context): { readonly conversationId: string } | undefined {
+  const conversationId = getConversationId(ctx);
+  return conversationId !== undefined ? { conversationId } : undefined;
+}
+
 const DEFAULT_WRITE_BARRIER_TIMEOUT_MS = 2_000;
 
-async function decorateWithEagerStoreConflict(args: {
+/** One eager same-result store conflict barrier, from the write to its answer. */
+interface EagerStoreConflictArgs {
   readonly ctx: Context;
   readonly resourceAccessor: ResourceAccessor<RemoteExecManager>;
   readonly path: string;
@@ -168,204 +221,243 @@ async function decorateWithEagerStoreConflict(args: {
   readonly writeBarrierTimeoutMs?: number | undefined;
   readonly forceGraceTimeoutMs?: number | undefined;
   readonly onWriteBarrier?: ((event: { readonly durationMs: number; readonly outcome: string }) => void) | undefined;
-}): Promise<string> {
-  const { ctx, resourceAccessor, path, resultForModel } = args;
-  const deadlineMs = args.writeBarrierTimeoutMs ?? DEFAULT_WRITE_BARRIER_TIMEOUT_MS;
-  const graceMs = Math.max(0, args.forceGraceTimeoutMs ?? deadlineMs);
-  const outerDeadlineMs = deadlineMs > 0 ? deadlineMs + graceMs : 0;
+}
+
+/** A barrier's answer: the write as it was, plus a reminder when the store had one. */
+async function decorateWithEagerStoreConflict(args: EagerStoreConflictArgs): Promise<string> {
+  const { ctx, path, resultForModel } = args;
+  const writeBarrierTimeoutMs = args.writeBarrierTimeoutMs ?? DEFAULT_WRITE_BARRIER_TIMEOUT_MS;
+  const graceTimeoutMs = Math.max(0, args.forceGraceTimeoutMs ?? writeBarrierTimeoutMs);
+  const outerDeadlineMs = writeBarrierTimeoutMs > 0 ? writeBarrierTimeoutMs + graceTimeoutMs : 0;
   const barrierStartedAt = Date.now();
-  let barrierOutcomeReported = false;
-  const reportWriteBarrier = (outcome: string): void => {
-    if (barrierOutcomeReported) return;
-    barrierOutcomeReported = true;
+  let barrierReported = false;
+  const reportBarrier = (outcome: string): void => {
+    if (barrierReported) return;
+    barrierReported = true;
     try {
       args.onWriteBarrier?.({ durationMs: Date.now() - barrierStartedAt, outcome });
     } catch {
     }
   };
-  let executor: ConflictExecutor | undefined;
-  try {
-    executor = resourceAccessor.get(agentStoreConflictNoticeExecutorResource);
-  } catch {
-    return resultForModel;
-  }
-  if (executor === undefined) return resultForModel;
+
+  const conflictExecutor = conflictNoticeExecutor(args.resourceAccessor);
+  if (conflictExecutor === undefined) return resultForModel;
+
   const deadline = { expired: false };
-  let raceOutcome: "eager" | "timeout" | undefined;
+  let raceWinner: "eager" | "timeout" | undefined;
   const claimRace = (winner: "eager" | "timeout"): boolean => {
-    if (raceOutcome !== undefined) return false;
-    raceOutcome = winner;
+    if (raceWinner !== undefined) return false;
+    raceWinner = winner;
     return true;
   };
-  const isAbortSignalAborted = (): boolean => ctx.signal.aborted || deadline.expired;
-  const conversationId = getConversationId(ctx);
-  const conflictNoticeArgs = conversationId !== undefined ? { conversationId } : undefined;
-  const noteDeferredForAbortRescue = async (): Promise<void> => {
+  const isBarrierAborted = (): boolean => ctx.signal.aborted || deadline.expired;
+  const noticeTarget = conflictNoticeTarget(ctx);
+  const eventIdsOf = (events: readonly ConflictEvent[]): string[] => events.map((event) => event.eventId);
+
+  const noteDeferredPaths = async (): Promise<void> => {
     try {
-      await conflictNoticeNoteDeferredEagerWrittenPaths(executor, ctx, [path], conflictNoticeArgs);
+      await conflictNoticeNoteDeferredEagerWrittenPaths(conflictExecutor, ctx, [path], noticeTarget);
     } catch (error) {
       logger.warn(ctx, "Eager store conflict deferred-path note failed", { error });
     }
   };
-  if (isAbortSignalAborted()) {
-    await noteDeferredForAbortRescue();
+  if (isBarrierAborted()) {
+    await noteDeferredPaths();
     return resultForModel;
   }
-  const releaseEagerEvents = async (eventIds: readonly string[]): Promise<void> => {
+  const releaseEvents = async (eventIds: readonly string[]): Promise<void> => {
     if (eventIds.length === 0) return;
     try {
-      await conflictNoticeRelease(executor, ctx, eventIds, conflictNoticeArgs);
+      await conflictNoticeRelease(conflictExecutor, ctx, eventIds, noticeTarget);
     } catch (error) {
       logger.warn(ctx, "Eager store conflict release failed", { error });
     }
   };
-  const ackIfStillLive = async (eventIds: readonly string[]): Promise<"aborted" | "acked" | "ack-failed"> => {
-    if (isAbortSignalAborted() || !claimRace("eager")) {
-      await releaseEagerEvents(eventIds);
-      await noteDeferredForAbortRescue();
+  const releaseAndNote = async (eventIds: readonly string[]): Promise<void> => {
+    await releaseEvents(eventIds);
+    await noteDeferredPaths();
+  };
+  const acknowledgeEvents = async (eventIds: readonly string[]): Promise<"aborted" | "acked" | "ack-failed"> => {
+    if (isBarrierAborted() || !claimRace("eager")) {
+      await releaseAndNote(eventIds);
       return "aborted";
     }
     try {
-      await conflictNoticeAck(executor, ctx, eventIds, conflictNoticeArgs);
+      await conflictNoticeAck(conflictExecutor, ctx, eventIds, noticeTarget);
       return "acked";
     } catch (error) {
       logger.warn(ctx, "Eager store conflict ack failed", { error });
-      await releaseEagerEvents(eventIds);
+      await releaseEvents(eventIds);
       return "ack-failed";
     }
   };
-  const fallbackJournalDrain = async (priorOutcome: string): Promise<string> => {
-    const recordPrior = (): void => recordEagerBarrierOutcome(ctx, priorOutcome);
-    if (isAbortSignalAborted()) {
-      await noteDeferredForAbortRescue();
-      recordPrior();
+
+  /** Reads the journal once, for a barrier that was skipped, degraded or had nothing to attribute. */
+  const drainJournal = async (outcomeBeforeFallback: string): Promise<string> => {
+    const recordEarlierOutcome = (): void => recordEagerBarrierOutcome(ctx, outcomeBeforeFallback);
+    if (isBarrierAborted()) {
+      await noteDeferredPaths();
+      recordEarlierOutcome();
       return resultForModel;
     }
-    let peeked: ConflictPeekResult | undefined;
+    let journal: ConflictPeekResult | undefined;
     try {
-      peeked = parseConflictPeekResult(await conflictNoticePeek(executor, ctx, conflictNoticeArgs));
+      journal = parseConflictPeekResult(await conflictNoticePeek(conflictExecutor, ctx, noticeTarget));
     } catch (error) {
       logger.warn(ctx, "Eager store conflict journal-drain fallback failed", { error });
-      recordPrior();
+      recordEarlierOutcome();
       return resultForModel;
     }
-    if (peeked === undefined || (peeked.kind !== "completed" && peeked.kind !== "timed-out")) {
-      recordPrior();
+    if (journal === undefined || (journal.kind !== "completed" && journal.kind !== "timed-out")) {
+      recordEarlierOutcome();
       return resultForModel;
     }
-    const fallbackReminder = peeked.reminder;
-    const fallbackEventIds = peeked.events.map(event => event.eventId);
-    if (fallbackReminder === undefined || fallbackReminder.length === 0) {
-      await releaseEagerEvents(fallbackEventIds);
-      recordPrior();
+    const journalReminder = journal.reminder;
+    const journalEventIds = eventIdsOf(journal.events);
+    if (journalReminder === undefined || journalReminder.length === 0) {
+      await releaseEvents(journalEventIds);
+      recordEarlierOutcome();
       return resultForModel;
     }
-    if (fallbackEventIds.length === 0) {
-      recordPrior();
+    if (journalEventIds.length === 0) {
+      recordEarlierOutcome();
       return resultForModel;
     }
-    if (isAbortSignalAborted()) {
-      await releaseEagerEvents(fallbackEventIds);
-      await noteDeferredForAbortRescue();
-      recordPrior();
+    if (isBarrierAborted()) {
+      await releaseAndNote(journalEventIds);
+      recordEarlierOutcome();
       return resultForModel;
     }
-    const decorated = `${resultForModel}\n\n${fallbackReminder}`;
-    if (await ackIfStillLive(fallbackEventIds) === "aborted") {
-      recordPrior();
+    if (await acknowledgeEvents(journalEventIds) === "aborted") {
+      recordEarlierOutcome();
       return resultForModel;
     }
-    recordEagerBarrierOutcome(ctx, "journal_fallback");
-    return decorated;
+    recordEagerBarrierOutcome(ctx, OUTCOME_JOURNAL_FALLBACK);
+    return withReminder(resultForModel, journalReminder);
   };
-  if (!(deadlineMs > 0)) {
-    reportWriteBarrier("skipped");
-    return fallbackJournalDrain("degraded");
-  }
-  const runEager = async (): Promise<string> => {
-    try {
-      const result = parseConflictPeekResult(await conflictNoticeSyncAndPeek(executor, ctx, {
-        writtenPaths: [path],
-        eager: true,
-        timeoutMs: deadlineMs,
-        ...(conversationId !== undefined ? { conversationId } : {}),
-      }));
-      if (result === undefined) {
-        reportWriteBarrier("error");
-        return fallbackJournalDrain("error");
-      }
-      switch (result.kind) {
-        case "not-applicable": reportWriteBarrier("absent"); return fallbackJournalDrain("degraded");
-        case "mount-passive": reportWriteBarrier("passive"); return fallbackJournalDrain("degraded");
-        case "timed-out": {
-          const reminder = result.reminder;
-          if (reminder === undefined || reminder.length === 0 || result.events.length === 0) {
-            reportWriteBarrier("timeout");
-            return fallbackJournalDrain("timed_out");
-          }
-          const eventIds = result.events.map(event => event.eventId);
-          if (isAbortSignalAborted()) {
-            await releaseEagerEvents(eventIds);
-            await noteDeferredForAbortRescue();
-            reportWriteBarrier("timeout");
-            return resultForModel;
-          }
-          const decorated = `${resultForModel}\n\n${reminder}`;
-          if (await ackIfStillLive(eventIds) === "aborted") {
-            reportWriteBarrier("timeout");
-            return resultForModel;
-          }
-          recordEagerBarrierOutcome(ctx, "attributed_timed_out");
-          reportWriteBarrier("timeout");
-          return decorated;
-        }
-        case "failed": reportWriteBarrier("error"); return fallbackJournalDrain("error");
-        case "completed": break;
-      }
-      const reminder = result.reminder;
-      const eventIds = result.events.map(event => event.eventId);
-      if (isAbortSignalAborted()) {
-        await releaseEagerEvents(eventIds);
-        await noteDeferredForAbortRescue();
-        reportWriteBarrier(deadline.expired ? "timeout" : "synced");
-        return resultForModel;
-      }
-      if (reminder === undefined || reminder.length === 0) {
-        reportWriteBarrier("synced");
-        return fallbackJournalDrain("clean");
-      }
-      const decorated = `${resultForModel}\n\n${reminder}`;
-      if (await ackIfStillLive(eventIds) === "aborted") {
-        reportWriteBarrier(deadline.expired ? "timeout" : "synced");
-        return resultForModel;
-      }
-      recordEagerBarrierOutcome(ctx, "attributed");
+
+  /** The answer when a reminder exists but the turn can no longer attribute it. */
+  const syncedOrExpired = (): string => (deadline.expired ? OUTCOME_TIMEOUT : OUTCOME_SYNCED);
+
+  /** Attributes an event set and answers with the reminder, or leaves the result alone when the turn is gone. */
+  const attributeReminder = async (
+    reminder: string,
+    eventIds: readonly string[],
+    telemetryOutcome: string,
+    report: () => void,
+    logAttribution = false,
+  ): Promise<string> => {
+    if (await acknowledgeEvents(eventIds) === "aborted") {
+      report();
+      return resultForModel;
+    }
+    recordEagerBarrierOutcome(ctx, telemetryOutcome);
+    if (logAttribution) {
       try {
         logger.info(ctx, "Local-sync eager conflict barrier attributed", { eventCount: eventIds.length });
       } catch {
       }
-      reportWriteBarrier("synced");
-      return decorated;
+    }
+    report();
+    return withReminder(resultForModel, reminder);
+  };
+
+  /** A wait that ran out of time: show what it knows when it can be attributed, otherwise read the journal. */
+  const settleTimedOut = async (result: ConflictPeekResult): Promise<string> => {
+    const reminder = result.reminder;
+    if (reminder === undefined || reminder.length === 0 || result.events.length === 0) {
+      reportBarrier(OUTCOME_TIMEOUT);
+      return drainJournal(OUTCOME_TIMED_OUT);
+    }
+    const eventIds = eventIdsOf(result.events);
+    if (isBarrierAborted()) {
+      await releaseAndNote(eventIds);
+      reportBarrier(OUTCOME_TIMEOUT);
+      return resultForModel;
+    }
+    return attributeReminder(reminder, eventIds, OUTCOME_ATTRIBUTED_TIMED_OUT, () => reportBarrier(OUTCOME_TIMEOUT));
+  };
+
+  /** The store caught up: show the reminder when there is one and it can still be attributed. */
+  const settleCompleted = async (result: ConflictPeekResult): Promise<string> => {
+    const reminder = result.reminder;
+    const eventIds = eventIdsOf(result.events);
+    if (isBarrierAborted()) {
+      await releaseAndNote(eventIds);
+      reportBarrier(syncedOrExpired());
+      return resultForModel;
+    }
+    if (reminder === undefined || reminder.length === 0) {
+      reportBarrier(OUTCOME_SYNCED);
+      return drainJournal(OUTCOME_CLEAN);
+    }
+    return attributeReminder(reminder, eventIds, OUTCOME_ATTRIBUTED, () => reportBarrier(OUTCOME_SYNCED), true);
+  };
+
+  /** What each kind of eager answer leaves behind. */
+  const settleByKind: Record<ConflictKind, (result: ConflictPeekResult) => Promise<string>> = {
+    "not-applicable": async () => {
+      reportBarrier(OUTCOME_ABSENT);
+      return drainJournal(OUTCOME_DEGRADED);
+    },
+    "mount-passive": async () => {
+      reportBarrier(OUTCOME_PASSIVE);
+      return drainJournal(OUTCOME_DEGRADED);
+    },
+    "timed-out": settleTimedOut,
+    "failed": async () => {
+      reportBarrier(OUTCOME_ERROR);
+      return drainJournal(OUTCOME_ERROR);
+    },
+    "completed": settleCompleted,
+  };
+
+  /** One eager pass: ask the store to wait for a same-result conflict, then let its kind decide the answer. */
+  const runEagerPass = async (): Promise<string> => {
+    try {
+      const answer = await conflictNoticeSyncAndPeek(conflictExecutor, ctx, {
+        writtenPaths: [path],
+        eager: true,
+        timeoutMs: writeBarrierTimeoutMs,
+        ...(noticeTarget !== undefined ? { conversationId: noticeTarget.conversationId } : {}),
+      });
+      const result = parseConflictPeekResult(answer);
+      if (result === undefined) {
+        reportBarrier(OUTCOME_ERROR);
+        return drainJournal(OUTCOME_ERROR);
+      }
+      return await settleByKind[result.kind](result);
     } catch (error) {
       logger.warn(ctx, "Eager store conflict barrier failed", { error });
-      reportWriteBarrier("error");
-      return fallbackJournalDrain("error");
+      reportBarrier(OUTCOME_ERROR);
+      return drainJournal(OUTCOME_ERROR);
     }
   };
-  return Promise.race([
-    runEager().finally(() => {
-      if (raceOutcome === undefined) raceOutcome = "eager";
-    }),
+
+  if (!(writeBarrierTimeoutMs > 0)) {
+    reportBarrier(OUTCOME_SKIPPED);
+    return drainJournal(OUTCOME_DEGRADED);
+  }
+
+  /** The deadline side of the race: expire the barrier, note the write, and answer as written. */
+  const waitForDeadline = (): Promise<string> =>
     delay(outerDeadlineMs).then(async () => {
       if (!claimRace("timeout")) return new Promise<string>(() => {});
       deadline.expired = true;
-      await noteDeferredForAbortRescue();
-      reportWriteBarrier("timeout");
+      await noteDeferredPaths();
+      reportBarrier(OUTCOME_TIMEOUT);
       return resultForModel;
+    });
+
+  return Promise.race([
+    runEagerPass().finally(() => {
+      if (raceWinner === undefined) raceWinner = "eager";
     }),
+    waitForDeadline(),
   ]);
 }
 
+/** Runs both after-write steps for the file that was just written, when the session asked for the barrier. */
 export async function decoratePostWriteResultForModel(
   ctx: Context,
   resourceAccessor: ResourceAccessor<RemoteExecManager>,
