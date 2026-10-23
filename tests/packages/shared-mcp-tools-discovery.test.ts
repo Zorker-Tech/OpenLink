@@ -500,3 +500,102 @@ describe("the executor in front of the discovery", () => {
     assert.deepEqual(persisted.length, 1);
   });
 });
+
+describe("the discovery cache and the box's server list", () => {
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 10));
+
+  it("tells two different server sets apart even when their names share a separator", async () => {
+    const options: DiscoveryOptions = {
+      httpNames: ["alpha", "beta"],
+      userServers: { alpha: { url: "https://a.example" }, beta: { url: "https://b.example" } },
+      backendServers: [{ serverIdentifier: "alpha", tools: [tool("alpha", "read")] }],
+    };
+    const world = discoveryWorld(options);
+    try {
+      await world.discovery.getToolsRaw();
+      await tick();
+      options.httpNames = ["alpha,beta"];
+      options.userServers = { "alpha,beta": { url: "https://a.example" } };
+      await world.discovery.getToolsRaw();
+      // The two sets are different sets, so the second look is a real look.
+      assert.equal(world.named("backend.listTools").length, 2);
+    } finally {
+      world.restoreDiagnostics();
+    }
+  });
+
+  it("pushes an empty server config once the box has been told about servers before", async () => {
+    const options: DiscoveryOptions = { httpNames: [], stdioNames: ["local"], stdioConfigs: { local: { command: "run" } }, boxMcpExec: {} };
+    const world = discoveryWorld(options);
+    try {
+      await world.discovery.getTools();
+      assert.equal(world.named("loadServers").length, 1);
+      // With no stdio servers left, the box is told to forget the ones it had.
+      options.stdioNames = [];
+      options.stdioConfigs = {};
+      await world.discovery.getTools();
+      assert.equal(world.named("loadServers").length, 2);
+      assert.deepEqual(world.named("loadServers")[1]?.args, [JSON.stringify({ mcpServers: {} })]);
+    } finally {
+      world.restoreDiagnostics();
+    }
+  });
+
+  it("forgets the settled cache when the server set becomes empty", async () => {
+    const options: DiscoveryOptions = {
+      httpNames: ["web"],
+      userServers: { web: { url: "https://web.example" } },
+      backendServers: [{ serverIdentifier: "web", tools: [tool("web", "search")] }],
+    };
+    const world = discoveryWorld(options);
+    try {
+      await world.discovery.getToolsRaw();
+      await tick();
+      options.httpNames = [];
+      assert.deepEqual(await world.discovery.getToolsForTurnStart({}), []);
+      options.httpNames = ["web"];
+      await world.discovery.getToolsRaw();
+      assert.equal(world.named("backend.listTools").length, 2);
+    } finally {
+      world.restoreDiagnostics();
+    }
+  });
+
+  it("a warm started for an older cache epoch stops before it looks", async () => {
+    const world = discoveryWorld({
+      httpNames: ["web"],
+      userServers: { web: { url: "https://web.example" } },
+      backendServers: [{ serverIdentifier: "web", tools: [tool("web", "search")] }],
+      boxMcpExec: {},
+    });
+    try {
+      world.discovery.setBoxMcpExec({ loadServers: async () => {}, listTools: async () => [], executeTool: async () => ({}) });
+      world.discovery.invalidateToolsCache();
+      await tick();
+      await tick();
+      assert.equal(world.named("backend.listTools").length, 1);
+    } finally {
+      world.restoreDiagnostics();
+    }
+  });
+
+  it("counts the enabled tools of a listed box server", async () => {
+    const world = discoveryWorld({
+      displayConfig: { servers: [{ serverIdentifier: "local", id: "srv-1", name: "Local", accounts: [{ serverIdentifier: "local" }] }] },
+      stdioNames: ["local"],
+      stdioConfigs: { local: { command: "run" } },
+      disabled: { "srv-1": ["read"] },
+      boxServers: [{ serverIdentifier: "local", tools: [tool("local", "read"), tool("local", "write")] }, { serverIdentifier: "unknown", tools: [tool("unknown", "read")] }],
+      boxMcpExec: {},
+    });
+    try {
+      const servers = await world.discovery.listBoxServers(["local", "unknown"]) as Array<{ toolCount?: number }>;
+      assert.equal(servers[0]?.toolCount, 1);
+      // A server with no display row is listed as it came, with no count invented for it.
+      assert.equal("toolCount" in (servers[1] ?? {}), false);
+    } finally {
+      world.restoreDiagnostics();
+    }
+  });
+});
+
