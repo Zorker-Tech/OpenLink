@@ -1,9 +1,9 @@
 /**
  * Asking the user to touch their security key.
  *
- * A WebAuthn ceremony needs a connection to the browser — a channel the desktop answers on — and that connection can be
- * lost: the provider keeps one open, watches it with a heartbeat, reconnects with backoff, and asks the user for consent
- * before it starts, so a ceremony is either served by a live connection or reported as unavailable rather than left to
+ * A WebAuthn ceremony needs a gatewayConnection to the browser — a channel the desktop answers on — and that gatewayConnection can be
+ * lost: the provider keeps one open, watches it with a heartbeatHandle, reconnects with backoff, and asks the user for consent
+ * before it starts, so a ceremony is either served by a live gatewayConnection or reported as unavailable rather than left to
  * time out.
  */
 import { SseBlockDecoder } from "../gateway/sse-block-decoder.ts";
@@ -27,7 +27,7 @@ export interface WebAuthnConnection {
 }
 
 export interface RetryPolicy {
-  runWithRetry<T>(work: (attempt: number, signal: AbortSignal) => Promise<T>, signal?: AbortSignal): Promise<T>;
+  runWithRetry<T>(work: (ceremonyAbort: number, signal: AbortSignal) => Promise<T>, signal?: AbortSignal): Promise<T>;
 }
 
 export interface HeartbeatPolicy {
@@ -51,52 +51,52 @@ export interface WebAuthnProviderOptions {
   readonly log?: (message: string) => void;
 }
 
-export function createWebAuthnProvider(options: WebAuthnProviderOptions): { start(): void; stop(): void } {
-  const log = options.log ?? (() => {});
-  let lifetime: AbortController | undefined;
+export function createWebAuthnProvider(settings: WebAuthnProviderOptions): { start(): void; stop(): void } {
+  const log = settings.log ?? (() => {});
+  let lifetimeController: AbortController | undefined;
   let providerId: string | undefined;
-  const inFlight = new Map<string, AbortController>();
+  const pendingCeremonies = new Map<string, AbortController>();
 
-  function headersFor(connection: WebAuthnConnection): Record<string, string> {
-    return { ...(connection.headers ?? {}), ...(connection.token === undefined ? {} : { authorization: `Bearer ${connection.token}` }) };
+  function buildHeaders(gatewayConnection: WebAuthnConnection): Record<string, string> {
+    return { ...(gatewayConnection.headers ?? {}), ...(gatewayConnection.token === undefined ? {} : { authorization: `Bearer ${gatewayConnection.token}` }) };
   }
 
-  async function postFrames(connection: WebAuthnConnection, frames: readonly WebAuthnResponseFrame[], signal?: AbortSignal): Promise<void> {
-    const batch = providerId === undefined ? { frames } : { providerId, frames };
-    const response = await fetch(`${connection.baseUrl}${GATEWAY_WEBAUTHN_RESPONSES_PATH}`, {
+  async function sendResponseFrames(gatewayConnection: WebAuthnConnection, outgoingFrames: readonly WebAuthnResponseFrame[], signal?: AbortSignal): Promise<void> {
+    const batch = providerId === undefined ? { frames: outgoingFrames } : { providerId, frames: outgoingFrames };
+    const httpResponse = await fetch(`${gatewayConnection.baseUrl}${GATEWAY_WEBAUTHN_RESPONSES_PATH}`, {
       method: "POST",
-      headers: { ...headersFor(connection), "content-type": "application/json" },
+      headers: { ...buildHeaders(gatewayConnection), "content-type": "application/json" },
       body: JSON.stringify(batch),
       ...(signal === undefined ? {} : { signal })
     });
-    if (!response.ok) throw new WebAuthnChannelError(`webauthn response POST rejected: HTTP ${response.status}`);
+    if (!httpResponse.ok) throw new WebAuthnChannelError(`webauthn response POST rejected: HTTP ${httpResponse.status}`);
   }
 
-  async function runCeremony(connection: WebAuthnConnection, requestId: string, ceremony: WebAuthnCeremony): Promise<void> {
-    const attempt = new AbortController();
-    inFlight.set(requestId, attempt);
+  async function serveCeremony(gatewayConnection: WebAuthnConnection, requestId: string, ceremony: WebAuthnCeremony): Promise<void> {
+    const ceremonyAbort = new AbortController();
+    pendingCeremonies.set(requestId, ceremonyAbort);
     log(`ceremony ${requestId}: ${ceremony.kind} for ${ceremony.origin}`);
-    let failedStageIfThrown: Pick<Extract<WebAuthnResponseFrame, { kind: "stage" }>, "stage" | "outcome"> =
-      options.consent === undefined ? { stage: "sign", outcome: "failed" } : { stage: "grant", outcome: "failed" };
-    let frames: WebAuthnResponseFrame[];
+    let failureStage: Pick<Extract<WebAuthnResponseFrame, { kind: "stage" }>, "stage" | "outcome"> =
+      settings.consent === undefined ? { stage: "sign", outcome: "failed" } : { stage: "grant", outcome: "failed" };
+    let outgoingFrames: WebAuthnResponseFrame[];
     try {
-      const consent = await options.consent?.requestConsent(ceremony, attempt.signal);
+      const consent = await settings.consent?.requestConsent(ceremony, ceremonyAbort.signal);
       if (consent !== undefined && !consent.approved) {
-        await postFrames(connection, [
+        await sendResponseFrames(gatewayConnection, [
           { kind: "stage", requestId, stage: "grant", outcome: "declined" },
           { kind: "error", requestId, name: "NotAllowedError", message: "The security key request was declined on your computer." }
         ]);
-        inFlight.delete(requestId);
+        pendingCeremonies.delete(requestId);
         return;
       }
       if (consent !== undefined) {
-        failedStageIfThrown = { stage: "sign", outcome: "failed" };
-        await postFrames(connection, [{ kind: "stage", requestId, stage: "grant", outcome: "ok" }], attempt.signal)
+        failureStage = { stage: "sign", outcome: "failed" };
+        await sendResponseFrames(gatewayConnection, [{ kind: "stage", requestId, stage: "grant", outcome: "ok" }], ceremonyAbort.signal)
           .catch((error: unknown) => log(`grant stage frame failed: ${String(error)}`));
       }
-      if (attempt.signal.aborted) return;
-      const result = await options.signer.sign(ceremony, attempt.signal, consent);
-      frames = result.ok
+      if (ceremonyAbort.signal.aborted) return;
+      const result = await settings.signer.sign(ceremony, ceremonyAbort.signal, consent);
+      outgoingFrames = result.ok
         ? [
             { kind: "stage", requestId, stage: "sign", outcome: "ok" },
             { kind: "result", requestId, credentialJson: result.credentialJson }
@@ -106,82 +106,82 @@ export function createWebAuthnProvider(options: WebAuthnProviderOptions): { star
             { kind: "error", requestId, name: result.error.name, message: result.error.message, ...(result.error.code === undefined ? {} : { code: result.error.code }) }
           ];
     } catch (error) {
-      frames = [
-        { kind: "stage", requestId, ...failedStageIfThrown },
+      outgoingFrames = [
+        { kind: "stage", requestId, ...failureStage },
         { kind: "error", requestId, name: "NotAllowedError", message: `the security key could not complete the request: ${error instanceof Error ? error.message : String(error)}` }
       ];
     } finally {
-      options.consent?.finish();
-      inFlight.delete(requestId);
+      settings.consent?.finish();
+      pendingCeremonies.delete(requestId);
     }
-    if (attempt.signal.aborted) return;
+    if (ceremonyAbort.signal.aborted) return;
     try {
-      if (options.deliveryPolicy === undefined) await postFrames(connection, frames);
-      else await options.deliveryPolicy.runWithRetry(() => postFrames(connection, frames), attempt.signal);
+      if (settings.deliveryPolicy === undefined) await sendResponseFrames(gatewayConnection, outgoingFrames);
+      else await settings.deliveryPolicy.runWithRetry(() => sendResponseFrames(gatewayConnection, outgoingFrames), ceremonyAbort.signal);
     } catch (error) {
       log(`ceremony ${requestId} result could not be delivered: ${String(error)}`);
     }
   }
 
-  function handleFrame(connection: WebAuthnConnection, frame: WebAuthnRequestFrame): void {
-    switch (frame.kind) {
+  function handleRequestFrame(gatewayConnection: WebAuthnConnection, incomingMessage: WebAuthnRequestFrame): void {
+    switch (incomingMessage.kind) {
       case "welcome":
-        providerId = frame.providerId;
-        void postFrames(connection, [{ kind: "hello", ...(options.computerId === undefined ? {} : { computerId: options.computerId }), ...(options.label === undefined ? {} : { label: options.label }) }])
+        providerId = incomingMessage.providerId;
+        void sendResponseFrames(gatewayConnection, [{ kind: "hello", ...(settings.computerId === undefined ? {} : { computerId: settings.computerId }), ...(settings.label === undefined ? {} : { label: settings.label }) }])
           .catch((error: unknown) => log(`hello frame failed: ${String(error)}`));
         break;
       case "ceremony":
-        void runCeremony(connection, frame.requestId, frame.ceremony);
+        void serveCeremony(gatewayConnection, incomingMessage.requestId, incomingMessage.ceremony);
         break;
       case "cancel":
-        inFlight.get(frame.requestId)?.abort();
-        inFlight.delete(frame.requestId);
+        pendingCeremonies.get(incomingMessage.requestId)?.abort();
+        pendingCeremonies.delete(incomingMessage.requestId);
         break;
     }
   }
 
-  async function connectOnce(signal: AbortSignal): Promise<never> {
-    const connection = await options.resolveConnection();
-    const response = await fetch(`${connection.baseUrl}${GATEWAY_WEBAUTHN_REQUESTS_PATH}`, { headers: headersFor(connection), signal });
-    if (!response.ok || response.body == null) throw new WebAuthnChannelError(`webauthn request stream refused: HTTP ${response.status}`);
+  async function openRequestStream(signal: AbortSignal): Promise<never> {
+    const gatewayConnection = await settings.resolveConnection();
+    const httpResponse = await fetch(`${gatewayConnection.baseUrl}${GATEWAY_WEBAUTHN_REQUESTS_PATH}`, { headers: buildHeaders(gatewayConnection), signal });
+    if (!httpResponse.ok || httpResponse.body == null) throw new WebAuthnChannelError(`webauthn request stream refused: HTTP ${httpResponse.status}`);
     log("webauthn request stream open");
     providerId = undefined;
-    const decoder = new SseBlockDecoder((block) => {
+    const blockDecoder = new SseBlockDecoder((block) => {
       for (const line of block.split("\n")) {
         if (!line.startsWith("data:")) continue;
         try {
-          handleFrame(connection, JSON.parse(line.slice("data:".length).trim()) as WebAuthnRequestFrame);
+          handleRequestFrame(gatewayConnection, JSON.parse(line.slice("data:".length).trim()) as WebAuthnRequestFrame);
         } catch (error) {
           log(`dropped an unparseable request frame: ${String(error)}`);
         }
       }
     });
-    const heartbeat = options.heartbeatPolicy.start(async () => {
-      try { await postFrames(connection, [{ kind: "ping" }]); }
-      catch (error) { log(`heartbeat failed: ${String(error)}`); }
+    const heartbeatHandle = settings.heartbeatPolicy.start(async () => {
+      try { await sendResponseFrames(gatewayConnection, [{ kind: "ping" }]); }
+      catch (error) { log(`heartbeatHandle failed: ${String(error)}`); }
     }, signal);
     try {
-      for await (const chunk of response.body) decoder.push(chunk);
+      for await (const chunkPiece of httpResponse.body) blockDecoder.push(chunkPiece);
     } finally {
-      heartbeat.dispose();
-      for (const attempt of inFlight.values()) attempt.abort();
-      inFlight.clear();
+      heartbeatHandle.dispose();
+      for (const ceremonyAbort of pendingCeremonies.values()) ceremonyAbort.abort();
+      pendingCeremonies.clear();
     }
     throw new WebAuthnChannelError("webauthn request stream closed");
   }
 
   return {
     start() {
-      if (lifetime !== undefined) return;
+      if (lifetimeController !== undefined) return;
       const controller = new AbortController();
-      lifetime = controller;
-      void options.reconnectPolicy.runWithRetry(async (_attempt, signal) => connectOnce(signal), controller.signal).catch((error: unknown) => {
+      lifetimeController = controller;
+      void settings.reconnectPolicy.runWithRetry(async (_attempt, signal) => openRequestStream(signal), controller.signal).catch((error: unknown) => {
         if (!controller.signal.aborted) log(`webauthn provider gave up: ${String(error)}`);
       });
     },
     stop() {
-      lifetime?.abort();
-      lifetime = undefined;
+      lifetimeController?.abort();
+      lifetimeController = undefined;
     }
   };
 }
