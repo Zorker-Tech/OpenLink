@@ -369,3 +369,14 @@ describe("what a wired runner's handlers do", () => {
     );
   });
 });
+
+describe("the remote room refusal", () => {
+  it("tells the caller why there is no local agent", () => {
+    const room = world({ remoteRoom: true });
+    assert.throws(
+      () => room.registry.getRunner(room.session),
+      (error: unknown) => error instanceof SlateRemoteRoomError
+        && error.message === "This is a shared chat hosted by another user; it has no local agent to run.",
+    );
+  });
+});
