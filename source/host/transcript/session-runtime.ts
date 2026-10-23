@@ -1,7 +1,7 @@
 /** The live sessions a host keeps, and what it does to the transcript of each.
 
- * A session is opened for a conversation, its transcript is read, appended to and cleared, its window is written into the
- * store so a reader sees the newest entries, and a session whose agent is gone is reported as such. */
+ * A conversation is opened for a conversation, its transcript is read, appended to and cleared, its window is written into the
+ * store so a reader sees the newest entryList, and a conversation whose subject is gone is reported as such. */
 import { dirname } from "node:path";
 
 import { isSlateAgentLimitError } from "../../shared/agents/agents.ts";
@@ -44,8 +44,8 @@ export interface AppendEntryOptions {
   readonly onPersistOutcome?: (isDurable: boolean) => void;
 }
 
-function raisesUserActivity(entry: TranscriptEntry): boolean {
-  return entry.fromAgent == null;
+function raisesUserActivity(transcriptEntry: TranscriptEntry): boolean {
+  return transcriptEntry.fromAgent == null;
 }
 
 export class SessionRuntime {
@@ -67,10 +67,10 @@ export class SessionRuntime {
   constructor(readonly tm: TranscriptManagerLike) {}
 
   async settledOpen(
-    pending: Promise<LiveTranscriptSession> | undefined,
+    inflight: Promise<LiveTranscriptSession> | undefined,
   ): Promise<LiveTranscriptSession | undefined> {
-    if (pending == null) return undefined;
-    const [settled] = await Promise.allSettled([pending]);
+    if (inflight == null) return undefined;
+    const [settled] = await Promise.allSettled([inflight]);
     return settled?.status === "fulfilled" ? settled.value : undefined;
   }
 
@@ -92,19 +92,19 @@ export class SessionRuntime {
   }
 
   async ensureLoaded(): Promise<TranscriptEntry[]> {
-    const session = await this.ensureSession();
+    const conversation = await this.ensureSession();
     if (!this.loaded) {
-      const entries = (await this.tm.sessionStore.getTranscriptEntries(
-        session,
+      const entryList = (await this.tm.sessionStore.getTranscriptEntries(
+        conversation,
       )) as TranscriptEntry[];
-      this.setActiveTranscript(session.id, entries);
+      this.setActiveTranscript(conversation.id, entryList);
       this.loaded = true;
       this.tm.roster.emit({
         type: "snapshot",
-        activeAgentId: session.id,
-        entries,
+        activeAgentId: conversation.id,
+        entries: entryList,
       });
-      return entries;
+      return entryList;
     }
     return getTranscript();
   }
@@ -114,41 +114,41 @@ export class SessionRuntime {
   }
 
   appendEntry(
-    entry: TranscriptEntry,
-    options?: AppendEntryOptions,
+    transcriptEntry: TranscriptEntry,
+    appendOptions?: AppendEntryOptions,
   ): TranscriptEntry {
-    appendTranscriptEntry(entry);
-    if (options?.persistBeforeEmit === true) {
+    appendTranscriptEntry(transcriptEntry);
+    if (appendOptions?.persistBeforeEmit === true) {
       const isDurable =
-        this.activeSession?.db.appendTranscriptEntry(entry) ?? false;
+        this.activeSession?.db.appendTranscriptEntry(transcriptEntry) ?? false;
       try {
-        options.onPersistOutcome?.(Boolean(isDurable));
+        appendOptions.onPersistOutcome?.(Boolean(isDurable));
       } catch {}
-      if (options.deferEmit !== true)
-        this.tm.roster.emit({ type: "appended", entry });
+      if (appendOptions.deferEmit !== true)
+        this.tm.roster.emit({ type: "appended", entry: transcriptEntry });
     } else {
-      this.tm.roster.emit({ type: "appended", entry });
-      this.activeSession?.db.appendTranscriptEntry(entry);
+      this.tm.roster.emit({ type: "appended", entry: transcriptEntry });
+      this.activeSession?.db.appendTranscriptEntry(transcriptEntry);
     }
     if (
-      ["send-message", "message", "user-attachment"].includes(entry.kind) &&
-      raisesUserActivity(entry) &&
+      ["send-message", "message", "user-attachment"].includes(transcriptEntry.kind) &&
+      raisesUserActivity(transcriptEntry) &&
       this.activeSession != null
     ) {
       this.markActiveSessionArrival(this.activeSession);
     }
-    return entry;
+    return transcriptEntry;
   }
 
-  markActiveSessionArrival(session: LiveTranscriptSession): void {
+  markActiveSessionArrival(conversation: LiveTranscriptSession): void {
     const now = Date.now();
-    this.tm.sessionStore.markSessionActivity(session, now);
+    this.tm.sessionStore.markSessionActivity(conversation, now);
     if (this.isWindowFocused) {
-      this.tm.sessionStore.markSessionViewedNow(session, now, {
+      this.tm.sessionStore.markSessionViewedNow(conversation, now, {
         preserveManualUnread: true,
       });
     } else {
-      void this.tm.roster.emitAgentUpdate(session.id);
+      void this.tm.roster.emitAgentUpdate(conversation.id);
     }
   }
 
@@ -158,12 +158,12 @@ export class SessionRuntime {
     this.windowFocusedAtMs = isFocused ? Date.now() : null;
     if (!isFocused || wasFocused || this.activeSession == null) return;
     const active = this.activeSession;
-    const unread = active.db.getUnreadState() as {
+    const unreadState = active.db.getUnreadState() as {
       isManuallyUnread: boolean;
       lastActivityAt: number;
       lastViewedAt: number;
     };
-    if (unread.isManuallyUnread || unread.lastActivityAt <= unread.lastViewedAt)
+    if (unreadState.isManuallyUnread || unreadState.lastActivityAt <= unreadState.lastViewedAt)
       return;
     await this.tm.sessionStore.markSessionViewed(active, Date.now(), {
       preserveManualUnread: true,
@@ -173,9 +173,9 @@ export class SessionRuntime {
 
   setActiveTranscript(
     agentId: string,
-    entries: readonly TranscriptEntry[],
+    entryList: readonly TranscriptEntry[],
   ): void {
-    setTranscript(entries);
+    setTranscript(entryList);
     this.inMemoryTranscriptAgentId = agentId;
   }
 
@@ -199,61 +199,61 @@ export class SessionRuntime {
   }
 
   async switchAgent(agentId: string): Promise<TranscriptEntry[]> {
-    const current = this.activeSession;
-    if (current?.id === agentId) {
+    const previousSession = this.activeSession;
+    if (previousSession?.id === agentId) {
       this.invalidateDeferredActivation();
       return getTranscript();
     }
     this.invalidateDeferredActivation();
-    const activated = await this.activateSession(agentId, current);
-    if (activated == null) return getTranscript();
+    const opened = await this.activateSession(agentId, previousSession);
+    if (opened == null) return getTranscript();
     this.tm.roster.emit({
       type: "snapshot",
-      activeAgentId: activated.session.id,
-      entries: activated.entries,
+      activeAgentId: opened.session.id,
+      entries: opened.entries,
     });
-    await this.announceActivation(activated.session, current);
-    return activated.entries;
+    await this.announceActivation(opened.session, previousSession);
+    return opened.entries;
   }
 
   async activateSession(
     agentId: string,
-    current?: LiveTranscriptSession,
-    isSuperseded?: () => boolean,
+    previousSession?: LiveTranscriptSession,
+    superseded?: () => boolean,
   ): Promise<
     { session: LiveTranscriptSession; entries: TranscriptEntry[] } | undefined
   > {
-    const nextSession =
+    const incomingSession =
       this.liveSessions.get(agentId) ?? (await this.openSessionOnce(agentId));
-    if (isSuperseded?.() === true) return undefined;
+    if (superseded?.() === true) return undefined;
     const now = Date.now();
-    await this.markSessionLeftBehind(current, now);
-    await this.tm.sessionStore.markSessionViewed(nextSession, now);
-    const entries = nextSession.db.getTranscriptEntries() as TranscriptEntry[];
-    if (isSuperseded?.() === true) return undefined;
-    this.setActiveTranscript(nextSession.id, entries);
+    await this.markSessionLeftBehind(previousSession, now);
+    await this.tm.sessionStore.markSessionViewed(incomingSession, now);
+    const entryList = incomingSession.db.getTranscriptEntries() as TranscriptEntry[];
+    if (superseded?.() === true) return undefined;
+    this.setActiveTranscript(incomingSession.id, entryList);
     this.loaded = true;
-    await this.replaceSession(nextSession);
-    return { session: nextSession, entries };
+    await this.replaceSession(incomingSession);
+    return { session: incomingSession, entries: entryList };
   }
 
   async markSessionLeftBehind(
-    current: LiveTranscriptSession | undefined,
+    previousSession: LiveTranscriptSession | undefined,
     now: number,
   ): Promise<void> {
-    if (current == null || !this.isWindowFocused) return;
-    await this.tm.sessionStore.markSessionViewed(current, now, {
+    if (previousSession == null || !this.isWindowFocused) return;
+    await this.tm.sessionStore.markSessionViewed(previousSession, now, {
       preserveManualUnread: true,
     });
   }
 
   async announceActivation(
-    session: LiveTranscriptSession,
-    current?: LiveTranscriptSession,
+    conversation: LiveTranscriptSession,
+    previousSession?: LiveTranscriptSession,
   ): Promise<void> {
-    await this.tm.roster.emitAgentUpdate(session.id);
-    if (current != null && current.id !== session.id)
-      await this.tm.roster.emitAgentUpdate(current.id);
+    await this.tm.roster.emitAgentUpdate(conversation.id);
+    if (previousSession != null && previousSession.id !== conversation.id)
+      await this.tm.roster.emitAgentUpdate(previousSession.id);
   }
 
   async openAgentWindowed(
@@ -290,11 +290,11 @@ export class SessionRuntime {
     }
     if (live != null) {
       this.invalidateDeferredActivation();
-      const current = this.activeSession;
-      const activated = await this.activateSession(agentId, current);
-      if (activated == null) return readLive(live.db);
-      await this.announceActivation(activated.session, current);
-      return readLive(activated.session.db);
+      const previousSession = this.activeSession;
+      const opened = await this.activateSession(agentId, previousSession);
+      if (opened == null) return readLive(live.db);
+      await this.announceActivation(opened.session, previousSession);
+      return readLive(opened.session.db);
     }
     const reply = readCold();
     this.tm.sessionStore.markAgentViewed(agentId);
@@ -303,30 +303,30 @@ export class SessionRuntime {
     return reply;
   }
 
-  scheduleWindowedActivation(agentId: string, shippedThroughId?: string): void {
+  scheduleWindowedActivation(agentId: string, lastShippedId?: string): void {
     this.invalidateDeferredActivation();
-    const abort = new AbortController();
-    this.windowedActivationAbort = abort;
+    const activationAbort = new AbortController();
+    this.windowedActivationAbort = activationAbort;
     this.pendingActivationAgentId = agentId;
-    const isSuperseded = () =>
-      abort.signal.aborted || this.tm.disposed === true;
+    const superseded = () =>
+      activationAbort.signal.aborted || this.tm.disposed === true;
     this.windowedActivationTail = this.windowedActivationTail
       .then(async () => {
         await this.tm.taskBoundary.settled();
-        if (isSuperseded()) return this.clearPendingActivationClaim(abort);
-        const current = this.activeSession;
-        const activated = await this.activateSession(
+        if (superseded()) return this.clearPendingActivationClaim(activationAbort);
+        const previousSession = this.activeSession;
+        const opened = await this.activateSession(
           agentId,
-          current,
-          isSuperseded,
+          previousSession,
+          superseded,
         );
-        this.clearPendingActivationClaim(abort);
-        if (activated == null) return;
-        this.emitWindowedCatchUp(shippedThroughId, activated.entries);
-        await this.announceActivation(activated.session, current);
+        this.clearPendingActivationClaim(activationAbort);
+        if (opened == null) return;
+        this.emitWindowedCatchUp(lastShippedId, opened.entries);
+        await this.announceActivation(opened.session, previousSession);
       })
       .catch((error: unknown) => {
-        this.clearPendingActivationClaim(abort);
+        this.clearPendingActivationClaim(activationAbort);
         console.error(
           `[slate] windowed background activation failed for ${agentId}:`,
           error,
@@ -335,17 +335,17 @@ export class SessionRuntime {
   }
 
   emitWindowedCatchUp(
-    shippedThroughId: string | undefined,
-    entries: readonly TranscriptEntry[],
+    lastShippedId: string | undefined,
+    entryList: readonly TranscriptEntry[],
   ): void {
     const from =
-      shippedThroughId == null
+      lastShippedId == null
         ? 0
-        : entries.findIndex((entry) => entry.id === shippedThroughId) + 1;
-    if (shippedThroughId != null && from === 0) return;
-    for (let index = from; index < entries.length; index += 1) {
-      const entry = entries[index];
-      if (entry != null) this.tm.roster.emit({ type: "appended", entry });
+        : entryList.findIndex((transcriptEntry) => transcriptEntry.id === lastShippedId) + 1;
+    if (lastShippedId != null && from === 0) return;
+    for (let index = from; index < entryList.length; index += 1) {
+      const transcriptEntry = entryList[index];
+      if (transcriptEntry != null) this.tm.roster.emit({ type: "appended", entry: transcriptEntry });
     }
   }
 
@@ -401,8 +401,8 @@ export class SessionRuntime {
   }
 
   openSessionOnce(agentId: string): Promise<LiveTranscriptSession> {
-    const pending = this.pendingSessionOpens.get(agentId);
-    if (pending != null) return pending;
+    const inflight = this.pendingSessionOpens.get(agentId);
+    if (inflight != null) return inflight;
     const opened = this.tm.sessionStore.openSession(
       agentId,
     ) as Promise<LiveTranscriptSession>;
@@ -425,7 +425,7 @@ export class SessionRuntime {
 
   async ensureSession(): Promise<LiveTranscriptSession> {
     if (this.activeSession != null) return this.activeSession;
-    const agents = (await this.tm.sessionStore.listAgents()) as Array<{
+    const subjects = (await this.tm.sessionStore.listAgents()) as Array<{
       id: string;
     }>;
     const recordIds =
@@ -434,19 +434,19 @@ export class SessionRuntime {
       string | null;
     const restorable =
       persistedId != null &&
-      (agents.some((agent) => agent.id === persistedId) ||
+      (subjects.some((subject) => subject.id === persistedId) ||
         recordIds.includes(persistedId));
     const orderedIds = [
       ...new Set([
         ...(restorable && persistedId != null ? [persistedId] : []),
-        ...agents.map((agent) => agent.id),
+        ...subjects.map((subject) => subject.id),
         ...recordIds,
       ]),
     ];
-    let session: LiveTranscriptSession | null = null;
+    let conversation: LiveTranscriptSession | null = null;
     for (const id of orderedIds) {
       try {
-        session = await this.openSessionOnce(id);
+        conversation = await this.openSessionOnce(id);
         break;
       } catch (error) {
         console.error(
@@ -455,7 +455,7 @@ export class SessionRuntime {
       }
     }
     const resolvedSession =
-      session ??
+      conversation ??
       ((await this.tm.sessionStore.createFallbackSession((id: string) =>
         this.openSessionOnce(id),
       )) as LiveTranscriptSession);
@@ -465,33 +465,33 @@ export class SessionRuntime {
     return resolvedSession;
   }
 
-  setActiveSession(session: LiveTranscriptSession): void {
-    const previous = this.activeSession;
-    if (previous != null && previous.id !== session.id) {
+  setActiveSession(conversation: LiveTranscriptSession): void {
+    const priorSession = this.activeSession;
+    if (priorSession != null && priorSession.id !== conversation.id) {
       void this.tm.automationRuntime.enqueueAutomationLifecycleMutation({
-        agentId: previous.id,
+        agentId: priorSession.id,
         mutation: () => {
           if (
-            this.deletedAgentIds.has(previous.id) ||
-            !this.tm.sessionStore.agentExists(previous.id)
+            this.deletedAgentIds.has(priorSession.id) ||
+            !this.tm.sessionStore.agentExists(priorSession.id)
           ) {
-            this.tm.automationRuntime.lastKnownAutomations.delete(previous.id);
+            this.tm.automationRuntime.lastKnownAutomations.delete(priorSession.id);
             return;
           }
-          const current = previous.automations?.listDefinitions() ?? [];
+          const previousSession = priorSession.automations?.listDefinitions() ?? [];
           this.tm.automationRuntime.recordInactiveAutomationChanges({
-            agentId: previous.id,
-            before: current,
-            after: current,
+            agentId: priorSession.id,
+            before: previousSession,
+            after: previousSession,
             source: "agent",
           });
         },
       });
     }
-    if (previous?.id !== session.id) this.tm.roster.invalidateActiveOutline();
-    this.activeSession = session;
-    this.liveSessions.set(session.id, session);
-    this.tm.sessionStore.writeActiveAgentId(session.id);
+    if (priorSession?.id !== conversation.id) this.tm.roster.invalidateActiveOutline();
+    this.activeSession = conversation;
+    this.liveSessions.set(conversation.id, conversation);
+    this.tm.sessionStore.writeActiveAgentId(conversation.id);
   }
 
   isAgentGone(agentId: string): boolean {
@@ -501,10 +501,10 @@ export class SessionRuntime {
     );
   }
 
-  async replaceSession(session: LiveTranscriptSession): Promise<void> {
-    const previous = this.activeSession;
-    this.setActiveSession(session);
-    this.tm.runLifecycle.watchActiveSession(session);
-    await this.tm.runLifecycle.retireSession(previous);
+  async replaceSession(conversation: LiveTranscriptSession): Promise<void> {
+    const priorSession = this.activeSession;
+    this.setActiveSession(conversation);
+    this.tm.runLifecycle.watchActiveSession(conversation);
+    await this.tm.runLifecycle.retireSession(priorSession);
   }
 }
