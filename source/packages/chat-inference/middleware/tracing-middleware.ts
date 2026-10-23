@@ -8,26 +8,26 @@ import { createCounter, createHistogram } from "../../metrics/index.ts";
 import { BaseMiddleware, type PromptExecutor } from "../base.ts";
 import type { Context } from "../../context/context.ts";
 
-type Loose = Record<string, any>;
+type LooseRecord = Record<string, any>;
 
-interface PromptStreamResult {
-  readonly fullStream: AsyncIterable<Loose>;
-  readonly response: Promise<Loose>;
+interface TracedPromptStream {
+  readonly fullStream: AsyncIterable<LooseRecord>;
+  readonly response: Promise<LooseRecord>;
   readonly usage: Promise<unknown>;
   readonly providerMetadata: Promise<unknown>;
   readonly extendedUsage: Promise<unknown>;
   readonly invocationId: Promise<unknown>;
 }
 
-function getMessageTextContent(message: Loose): string {
+function messageTextOf(message: LooseRecord): string {
   if (message.role === "user" || message.role === "assistant") {
     if (typeof message.content === "string") {
       return message.content;
     }
     if (Array.isArray(message.content)) {
-      return message.content.map((part: Loose) => {
-        if (part.type === "text" && "text" in part) {
-          return part.text;
+      return message.content.map((event: LooseRecord) => {
+        if (event.type === "text" && "text" in event) {
+          return event.text;
         }
         return "";
       }).join("");
@@ -38,9 +38,9 @@ function getMessageTextContent(message: Loose): string {
       return message.content;
     }
     if (Array.isArray(message.content)) {
-      return message.content.map((part: Loose) => {
-        if (part.type === "tool-result" && "result" in part) {
-          return typeof part.result === "string" ? part.result : JSON.stringify(part.result);
+      return message.content.map((event: LooseRecord) => {
+        if (event.type === "tool-result" && "result" in event) {
+          return typeof event.result === "string" ? event.result : JSON.stringify(event.result);
         }
         return "";
       }).join("");
@@ -49,138 +49,138 @@ function getMessageTextContent(message: Loose): string {
   return "";
 }
 
-function analyzeMessages(messages: readonly Loose[]) {
+function summarizeMessages(messages: readonly LooseRecord[]) {
   const stats = {
-    userCount: 0,
-    assistantCount: 0,
-    toolCount: 0,
-    userChars: 0,
-    assistantChars: 0,
-    toolChars: 0,
+    userMessages: 0,
+    assistantMessages: 0,
+    toolMessages: 0,
+    userCharacters: 0,
+    assistantCharacters: 0,
+    toolCharacters: 0,
   };
   for (const message of messages) {
-    const textContent = getMessageTextContent(message);
-    const charCount = textContent.length;
+    const messageText = messageTextOf(message);
+    const characterCount = messageText.length;
     switch (message.role) {
       case "user":
-        stats.userCount++;
-        stats.userChars += charCount;
+        stats.userMessages++;
+        stats.userCharacters += characterCount;
         break;
       case "assistant":
-        stats.assistantCount++;
-        stats.assistantChars += charCount;
+        stats.assistantMessages++;
+        stats.assistantCharacters += characterCount;
         break;
       case "tool":
-        stats.toolCount++;
-        stats.toolChars += charCount;
+        stats.toolMessages++;
+        stats.toolCharacters += characterCount;
         break;
     }
   }
   return stats;
 }
 
-const middlewareChainDuration = createHistogram("agent.ttft.middlewareChainMs", {
+const chainDurationHistogram = createHistogram("agent.ttft.middlewareChainMs", {
   description: "Total synchronous time inside the middleware chain from tracing middleware entry to inner stream() returning (may exclude async preprocessing done by middleware wrappers)",
 });
-const ttftHistogram = createHistogram("chat_inference.ttft_ms", {
+const firstTokenHistogram = createHistogram("chat_inference.ttft_ms", {
   description: "Time to first token in milliseconds",
   labelNames: ["outcome"],
 });
-const ttfToolCallHistogram = createHistogram("chat_inference.ttf_toolcall_ms", {
+const firstToolCallHistogram = createHistogram("chat_inference.ttf_toolcall_ms", {
   description: "Time to first tool call in milliseconds",
   labelNames: ["outcome"],
 });
-const e2eLatencyHistogram = createHistogram("chat_inference.e2e_latency_ms", {
+const endToEndHistogram = createHistogram("chat_inference.e2e_latency_ms", {
   description: "End-to-end latency in milliseconds",
   labelNames: ["outcome"],
 });
-const inputMessagesHistogram = createHistogram("chat_inference.input_messages", {
+const messageCountHistogram = createHistogram("chat_inference.input_messages", {
   description: "Distribution of input message counts per request",
   labelNames: ["message_type"],
 });
-const inputCharactersHistogram = createHistogram("chat_inference.input_characters", {
+const characterCountHistogram = createHistogram("chat_inference.input_characters", {
   description: "Distribution of input character counts per request",
   labelNames: ["message_type"],
 });
-const requestOutcomeCounter = createCounter("chat_inference.request_outcome", {
+const outcomeCounter = createCounter("chat_inference.request_outcome", {
   description: "Count of request outcomes",
   labelNames: ["outcome"],
 });
 
-export class TracingMiddleware extends BaseMiddleware<Loose> {
-  override stream(ctx: Context, invocationId?: string, tools?: readonly Loose[], options?: Loose): PromptStreamResult {
-    const startTime = performance.now();
-    let firstTokenTime: number | null = null;
-    let seenFirstToken = false;
-    let firstToolCallTime: number | null = null;
-    let seenFirstToolCall = false;
-    const inputMessages = this.innerExecutor.getMessages();
-    const messageStats = analyzeMessages(inputMessages);
-    inputMessagesHistogram.histogram(ctx, messageStats.userCount, { message_type: "user" });
-    inputMessagesHistogram.histogram(ctx, messageStats.assistantCount, { message_type: "assistant" });
-    inputMessagesHistogram.histogram(ctx, messageStats.toolCount, { message_type: "tool" });
-    inputCharactersHistogram.histogram(ctx, messageStats.userChars, { message_type: "user" });
-    inputCharactersHistogram.histogram(ctx, messageStats.assistantChars, { message_type: "assistant" });
-    inputCharactersHistogram.histogram(ctx, messageStats.toolChars, { message_type: "tool" });
-    const streamResult = this.innerExecutor.stream(ctx, invocationId, tools, options) as PromptStreamResult;
-    middlewareChainDuration.histogram(ctx, performance.now() - startTime);
+export class TracingMiddleware extends BaseMiddleware<LooseRecord> {
+  override stream(ctx: Context, invocationId?: string, tools?: readonly LooseRecord[], options?: LooseRecord): TracedPromptStream {
+    const chainStart = performance.now();
+    let firstTokenAt: number | null = null;
+    let tokenSeen = false;
+    let firstToolCallAt: number | null = null;
+    let toolCallSeen = false;
+    const messages = this.innerExecutor.getMessages();
+    const stats = summarizeMessages(messages);
+    messageCountHistogram.histogram(ctx, stats.userMessages, { message_type: "user" });
+    messageCountHistogram.histogram(ctx, stats.assistantMessages, { message_type: "assistant" });
+    messageCountHistogram.histogram(ctx, stats.toolMessages, { message_type: "tool" });
+    characterCountHistogram.histogram(ctx, stats.userCharacters, { message_type: "user" });
+    characterCountHistogram.histogram(ctx, stats.assistantCharacters, { message_type: "assistant" });
+    characterCountHistogram.histogram(ctx, stats.toolCharacters, { message_type: "tool" });
+    const innerResult = this.innerExecutor.stream(ctx, invocationId, tools, options) as TracedPromptStream;
+    chainDurationHistogram.histogram(ctx, performance.now() - chainStart);
 
-    const tracedFullStream = async function*(): AsyncGenerator<Loose> {
+    const tracedFullStream = async function*(): AsyncGenerator<LooseRecord> {
       try {
-        for await (const part of streamResult.fullStream) {
-          if (!seenFirstToken) {
-            firstTokenTime = performance.now();
-            seenFirstToken = true;
-            const ttft = firstTokenTime - startTime;
-            ttftHistogram.histogram(ctx, ttft, { outcome: "success" });
+        for await (const event of innerResult.fullStream) {
+          if (!tokenSeen) {
+            firstTokenAt = performance.now();
+            tokenSeen = true;
+            const timeToFirstToken = firstTokenAt - chainStart;
+            firstTokenHistogram.histogram(ctx, timeToFirstToken, { outcome: "success" });
           }
-          if (!seenFirstToolCall && (part.type === "tool-call" || part.type === "tool-call-delta")) {
-            firstToolCallTime = performance.now();
-            seenFirstToolCall = true;
-            const ttfToolCall = firstToolCallTime - startTime;
-            ttfToolCallHistogram.histogram(ctx, ttfToolCall, { outcome: "success" });
+          if (!toolCallSeen && (event.type === "tool-call" || event.type === "tool-call-delta")) {
+            firstToolCallAt = performance.now();
+            toolCallSeen = true;
+            const timeToFirstToolCall = firstToolCallAt - chainStart;
+            firstToolCallHistogram.histogram(ctx, timeToFirstToolCall, { outcome: "success" });
           }
-          yield part;
+          yield event;
         }
-      } catch (error) {
-        if (!seenFirstToken) {
-          ttftHistogram.histogram(ctx, performance.now() - startTime, { outcome: "failure" });
+      } catch (cause) {
+        if (!tokenSeen) {
+          firstTokenHistogram.histogram(ctx, performance.now() - chainStart, { outcome: "failure" });
         }
-        throw error;
+        throw cause;
       }
     };
 
-    const tracedResponse = streamResult.response.then((response) => {
-      const endTime = performance.now();
-      const e2eLatency = endTime - startTime;
-      e2eLatencyHistogram.histogram(ctx, e2eLatency, { outcome: "success" });
-      if (response.error) {
-        requestOutcomeCounter.increment(ctx, 1, { outcome: "failure" });
+    const tracedResponse = innerResult.response.then((answer) => {
+      const finishedAt = performance.now();
+      const elapsed = finishedAt - chainStart;
+      endToEndHistogram.histogram(ctx, elapsed, { outcome: "success" });
+      if (answer.error) {
+        outcomeCounter.increment(ctx, 1, { outcome: "failure" });
       } else {
-        requestOutcomeCounter.increment(ctx, 1, { outcome: "success" });
+        outcomeCounter.increment(ctx, 1, { outcome: "success" });
       }
-      return response;
-    }).catch((error: unknown) => {
-      const endTime = performance.now();
-      const e2eLatency = endTime - startTime;
-      e2eLatencyHistogram.histogram(ctx, e2eLatency, { outcome: "failure" });
-      requestOutcomeCounter.increment(ctx, 1, { outcome: "failure" });
-      throw error;
+      return answer;
+    }).catch((cause: unknown) => {
+      const finishedAt = performance.now();
+      const elapsed = finishedAt - chainStart;
+      endToEndHistogram.histogram(ctx, elapsed, { outcome: "failure" });
+      outcomeCounter.increment(ctx, 1, { outcome: "failure" });
+      throw cause;
     });
 
     return {
       fullStream: tracedFullStream(),
       response: tracedResponse,
-      usage: streamResult.usage,
-      providerMetadata: streamResult.providerMetadata,
-      extendedUsage: streamResult.extendedUsage,
-      invocationId: streamResult.invocationId,
+      usage: innerResult.usage,
+      providerMetadata: innerResult.providerMetadata,
+      extendedUsage: innerResult.extendedUsage,
+      invocationId: innerResult.invocationId,
     };
   }
 }
 
 export const createTracingMiddleware = () => {
-  return (executor: PromptExecutor<Loose>): TracingMiddleware => new TracingMiddleware(executor);
+  return (executor: PromptExecutor<LooseRecord>): TracingMiddleware => new TracingMiddleware(executor);
 };
 
 export const tracingMiddleware = createTracingMiddleware();
