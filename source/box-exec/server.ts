@@ -1,8 +1,8 @@
 /** The box's own exec daemon: what runs commands inside the box and answers the host's calls.
 
- * It serves the box's control and exec operations over the daemon's own connection, behind the token it was started
- * with: capabilities and environment, the MCP servers it may load, a command that streams as it runs, a shell that
- * keeps running after the call, and the terminal file a background shell writes into. Every path a caller names is
+ * It serves the box's controlElement and exec operations over the daemon's own connection, behind the token it was started
+ * with: capabilities and environment, the MCP servers it may load, a command that streams as it runs, a runCommand that
+ * keeps running after the call, and the terminal file a background runCommand writes into. Every path a caller names is
  * mapped into the workspace the daemon was given and checked against it, so a call can act on the box and on nothing
  * else. */
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
@@ -110,7 +110,7 @@ export interface BoxExecDaemonHandle {
 }
 
 interface BackgroundProcess {
-  readonly child: ChildProcessWithoutNullStreams;
+  readonly shellProcess: ChildProcessWithoutNullStreams;
   readonly terminalPath: string;
   readonly startedAt: number;
   writeQueue: Promise<void>;
@@ -128,23 +128,23 @@ interface ProcessOutcome {
 
 class PathRejectedError extends Error {}
 
-function errorText(error: unknown): string {
+function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function yamlString(value: string): string {
+function jsonString(value: string): string {
   return JSON.stringify(value);
 }
 
-function terminalFrontmatter(args: BackgroundShellSpawnArgs, pid: number | undefined, startedAt: number): string {
-  return `---\n${pid == null ? "" : `pid: ${pid}\n`}cwd: ${yamlString(args.workingDirectory)}\ncommand: ${yamlString(args.command)}\nstatus: running\nstarted_at: ${new Date(startedAt).toISOString()}\nrunning_for_ms: 0\n---\n`;
+function terminalHeader(args: BackgroundShellSpawnArgs, pid: number | undefined, startedAt: number): string {
+  return `---\n${pid == null ? "" : `pid: ${pid}\n`}cwd: ${jsonString(args.workingDirectory)}\ncommand: ${jsonString(args.command)}\nstatus: running\nstarted_at: ${new Date(startedAt).toISOString()}\nrunning_for_ms: 0\n---\n`;
 }
 
-function terminalFooter(exitCode: number, startedAt: number): string {
+function terminalTrailer(exitCode: number, startedAt: number): string {
   return `\n---\nexit_code: ${exitCode}\nelapsed_ms: ${Date.now() - startedAt}\nended_at: ${new Date().toISOString()}\n---\n`;
 }
 
-function client(id: number, execId: string, message: ExecClientMessage["message"], elapsedMs?: number): ExecStreamElement {
+function clientElement(id: number, execId: string, message: ExecClientMessage["message"], elapsedMs?: number): ExecStreamElement {
   return new ExecStreamElement({
     element: {
       case: "execClientMessage",
@@ -153,19 +153,19 @@ function client(id: number, execId: string, message: ExecClientMessage["message"
   });
 }
 
-function control(id: number, message: ExecClientControlMessage["message"]): ExecStreamElement {
+function controlElement(id: number, message: ExecClientControlMessage["message"]): ExecStreamElement {
   return new ExecStreamElement({
     element: { case: "execClientControlMessage", value: new ExecClientControlMessage({ message }) },
   });
 }
 
-function close(id: number): ExecStreamElement {
-  return control(id, { case: "streamClose", value: new ExecClientStreamClose({ id }) });
+function closeElement(id: number): ExecStreamElement {
+  return controlElement(id, { case: "streamClose", value: new ExecClientStreamClose({ id }) });
 }
 
-function thrown(id: number, error: unknown, errorCode = "BOX_EXEC_DAEMON_ERROR"): ExecStreamElement {
+function throwElement(id: number, error: unknown, errorCode = "BOX_EXEC_DAEMON_ERROR"): ExecStreamElement {
   const normalized = error instanceof Error ? error : new Error(String(error));
-  return control(id, {
+  return controlElement(id, {
     case: "throw",
     value: new ExecClientThrow({ id, error: normalized.message, ...(normalized.stack == null ? {} : { stackTrace: normalized.stack }), errorCode }),
   });
@@ -181,21 +181,21 @@ class BoxExecRuntime {
     this.#environment = { ...environment };
   }
 
-  applyEnvironment(request: UpdateEnvironmentVariablesRequest): { applied: number; removed: number } {
+  applyEnvPatch(call: UpdateEnvironmentVariablesRequest): { applied: number; removed: number } {
     let removed = 0;
-    if (request.replace) {
+    if (call.replace) {
       for (const key of Object.keys(this.#environment)) {
-        if (!(key in request.env)) {
+        if (!(key in call.env)) {
           delete this.#environment[key];
           removed += 1;
         }
       }
     }
-    for (const [key, value] of Object.entries(request.env)) this.#environment[key] = value;
-    return { applied: Object.keys(request.env).length, removed };
+    for (const [key, value] of Object.entries(call.env)) this.#environment[key] = value;
+    return { applied: Object.keys(call.env).length, removed };
   }
 
-  resolvePath(requested: string): string {
+  mapPath(requested: string): string {
     const logical = requested.length === 0 ? "/workspace" : requested;
     if (logical.startsWith(BOX_TERMINAL_VIRTUAL_PREFIX)) {
       const terminalName = logical.slice(BOX_TERMINAL_VIRTUAL_PREFIX.length);
@@ -215,7 +215,7 @@ class BoxExecRuntime {
     throw new PathRejectedError(`Path escapes configured workspace root: ${requested}`);
   }
 
-  assertRealPathAllowed(target: string, requested: string): void {
+  assertInsideRoots(target: string, requested: string): void {
     for (const allowedRoot of [this.workspaceRoot, this.terminalsDirectory]) {
       const relative = path.relative(allowedRoot, target);
       if (relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative))) return;
@@ -223,49 +223,49 @@ class BoxExecRuntime {
     throw new PathRejectedError(`Resolved path escapes configured roots: ${requested}`);
   }
 
-  async *execute(request: ExecServerMessage, signal: AbortSignal): AsyncGenerator<ExecStreamElement> {
+  async *dispatchCall(call: ExecServerMessage, abortSignal: AbortSignal): AsyncGenerator<ExecStreamElement> {
     try {
-      switch (request.message.case) {
+      switch (call.message.case) {
         case "readArgs":
         case "redactedReadArgs": {
-          const result = await this.read(request.message.value);
-          const resultCase = request.message.case === "readArgs" ? "readResult" : "redactedReadResult";
-          yield client(request.id, request.execId, { case: resultCase, value: result } as ExecClientMessage["message"]);
+          const result = await this.readFileAttrs(call.message.value);
+          const resultCase = call.message.case === "readArgs" ? "readResult" : "redactedReadResult";
+          yield clientElement(call.id, call.execId, { case: resultCase, value: result } as ExecClientMessage["message"]);
           break;
         }
         case "shellArgs":
         case "miniSweAgentBashArgs": {
-          const result = await this.shell(request.message.value, signal);
-          const resultCase = request.message.case === "shellArgs" ? "shellResult" : "miniSweAgentBashResult";
-          yield client(request.id, request.execId, { case: resultCase, value: result } as ExecClientMessage["message"]);
+          const result = await this.runCommand(call.message.value, abortSignal);
+          const resultCase = call.message.case === "shellArgs" ? "shellResult" : "miniSweAgentBashResult";
+          yield clientElement(call.id, call.execId, { case: resultCase, value: result } as ExecClientMessage["message"]);
           break;
         }
         case "shellStreamArgs":
-          yield* this.shellStream(request, request.message.value, signal);
+          yield* this.streamCommand(call, call.message.value, abortSignal);
           break;
         case "backgroundShellSpawnArgs":
-          yield client(request.id, request.execId, { case: "backgroundShellSpawnResult", value: await this.spawnBackground(request.message.value) });
+          yield clientElement(call.id, call.execId, { case: "backgroundShellSpawnResult", value: await this.startBackgroundShell(call.message.value) });
           break;
         case "writeShellStdinArgs":
-          yield client(request.id, request.execId, { case: "writeShellStdinResult", value: await this.writeStdin(request.message.value) });
+          yield clientElement(call.id, call.execId, { case: "writeShellStdinResult", value: await this.writeShellInput(call.message.value) });
           break;
         default:
-          yield thrown(request.id, `Unsupported ExecServerMessage case: ${request.message.case ?? "unset"}`, "BOX_EXEC_UNSUPPORTED");
+          yield throwElement(call.id, `Unsupported ExecServerMessage case: ${call.message.case ?? "unset"}`, "BOX_EXEC_UNSUPPORTED");
       }
     } catch (error) {
-      yield thrown(request.id, error);
+      yield throwElement(call.id, error);
     } finally {
-      yield close(request.id);
+      yield closeElement(call.id);
     }
   }
 
-  async read(args: ReadArgs): Promise<ReadResult> {
+  async readFileAttrs(args: ReadArgs): Promise<ReadResult> {
     try {
-      const target = this.resolvePath(args.path);
+      const target = this.mapPath(args.path);
       const directInfo = await lstat(target);
       if (directInfo.isSymbolicLink()) throw new PathRejectedError(`Symbolic-link reads are not permitted: ${args.path}`);
       const canonical = await realpath(target);
-      this.assertRealPathAllowed(canonical, args.path);
+      this.assertInsideRoots(canonical, args.path);
       const info = await stat(canonical);
       if (!info.isFile()) return new ReadResult({ result: { case: "invalidFile", value: new ReadInvalidFile({ path: args.path, reason: "Path is not a regular file" }) } });
       if (args.encodingHint != null && args.encodingHint !== "utf8" && args.encodingHint !== "utf-8" && args.encodingHint !== "latin1") {
@@ -273,16 +273,16 @@ class BoxExecRuntime {
       }
       const data = await readFile(canonical);
       const text = data.toString(args.encodingHint === "latin1" ? "latin1" : "utf8");
-      const lines = text.split("\n");
+      const lineList = text.split("\n");
       const offset = Math.max(0, args.offset ?? 0);
-      const limit = args.limit == null ? lines.length : Math.max(0, args.limit);
-      const content = lines.slice(offset, offset + limit).join("\n");
+      const limit = args.limit == null ? lineList.length : Math.max(0, args.limit);
+      const content = lineList.slice(offset, offset + limit).join("\n");
       return new ReadResult({ result: { case: "success", value: new ReadSuccess({
         path: args.path,
         output: { case: "content", value: content },
-        totalLines: lines.length,
+        totalLines: lineList.length,
         fileSize: BigInt(data.byteLength),
-        truncated: offset > 0 || offset + limit < lines.length,
+        truncated: offset > 0 || offset + limit < lineList.length,
         rangeApplied: args.offset != null || args.limit != null,
       }) } });
     } catch (error) {
@@ -290,60 +290,60 @@ class BoxExecRuntime {
       const code = typeof error === "object" && error != null && "code" in error ? String(error.code) : undefined;
       if (code === "ENOENT" || code === "ENOTDIR") return new ReadResult({ result: { case: "fileNotFound", value: new ReadFileNotFound({ path: args.path }) } });
       if (code === "EACCES" || code === "EPERM") return new ReadResult({ result: { case: "permissionDenied", value: new ReadPermissionDenied({ path: args.path }) } });
-      if (code === "EISDIR" || code === "EINVAL" || code === "ENAMETOOLONG") return new ReadResult({ result: { case: "invalidFile", value: new ReadInvalidFile({ path: args.path, reason: errorText(error) }) } });
-      return new ReadResult({ result: { case: "error", value: new ReadError({ path: args.path, error: errorText(error) }) } });
+      if (code === "EISDIR" || code === "EINVAL" || code === "ENAMETOOLONG") return new ReadResult({ result: { case: "invalidFile", value: new ReadInvalidFile({ path: args.path, reason: messageOf(error) }) } });
+      return new ReadResult({ result: { case: "error", value: new ReadError({ path: args.path, error: messageOf(error) }) } });
     }
   }
 
-  async shell(args: ShellArgs, signal: AbortSignal): Promise<ShellResult> {
+  async runCommand(args: ShellArgs, abortSignal: AbortSignal): Promise<ShellResult> {
     let cwd: string;
     try {
-      cwd = this.resolvePath(args.workingDirectory);
+      cwd = this.mapPath(args.workingDirectory);
     } catch (error) {
-      return new ShellResult({ result: { case: "spawnError", value: new ShellSpawnError({ command: args.command, workingDirectory: args.workingDirectory, error: errorText(error) }) } });
+      return new ShellResult({ result: { case: "spawnError", value: new ShellSpawnError({ command: args.command, workingDirectory: args.workingDirectory, error: messageOf(error) }) } });
     }
-    const outcome = await this.run(args.command, cwd, args.timeout > 0 ? args.timeout : undefined, signal);
-    if (outcome.timedOut) return new ShellResult({ result: { case: "timeout", value: new ShellTimeout({ command: args.command, workingDirectory: args.workingDirectory, timeoutMs: args.timeout }) } });
-    const common = {
+    const runOutcome = await this.runCommandCollect(args.command, cwd, args.timeout > 0 ? args.timeout : undefined, abortSignal);
+    if (runOutcome.timedOut) return new ShellResult({ result: { case: "timeout", value: new ShellTimeout({ command: args.command, workingDirectory: args.workingDirectory, timeoutMs: args.timeout }) } });
+    const sharedOutcome = {
       command: args.command,
       workingDirectory: args.workingDirectory,
-      exitCode: outcome.code,
-      signal: outcome.signal,
-      stdout: outcome.stdout,
-      stderr: outcome.stderr,
-      executionTime: outcome.elapsedMs,
-      interleavedOutput: `${outcome.stdout}${outcome.stderr}`,
-      localExecutionTimeMs: outcome.elapsedMs,
+      exitCode: runOutcome.code,
+      signal: runOutcome.signal,
+      stdout: runOutcome.stdout,
+      stderr: runOutcome.stderr,
+      executionTime: runOutcome.elapsedMs,
+      interleavedOutput: `${runOutcome.stdout}${runOutcome.stderr}`,
+      localExecutionTimeMs: runOutcome.elapsedMs,
     };
-    return outcome.code === 0 && !outcome.aborted
-      ? new ShellResult({ result: { case: "success", value: new ShellSuccess(common) } })
-      : new ShellResult({ result: { case: "failure", value: new ShellFailure({ ...common, aborted: outcome.aborted }) } });
+    return runOutcome.code === 0 && !runOutcome.aborted
+      ? new ShellResult({ result: { case: "success", value: new ShellSuccess(sharedOutcome) } })
+      : new ShellResult({ result: { case: "failure", value: new ShellFailure({ ...sharedOutcome, aborted: runOutcome.aborted }) } });
   }
 
-  async *shellStream(request: ExecServerMessage, args: ShellArgs, signal: AbortSignal): AsyncGenerator<ExecStreamElement> {
-    const cwd = this.resolvePath(args.workingDirectory);
-    yield client(request.id, request.execId, { case: "shellStream", value: new ShellStream({ event: { case: "start", value: new ShellStreamStart() } }) });
-    const child = this.spawnShell(args.command, cwd);
-    this.#foreground.add(child);
+  async *streamCommand(call: ExecServerMessage, args: ShellArgs, abortSignal: AbortSignal): AsyncGenerator<ExecStreamElement> {
+    const cwd = this.mapPath(args.workingDirectory);
+    yield clientElement(call.id, call.execId, { case: "shellStream", value: new ShellStream({ event: { case: "start", value: new ShellStreamStart() } }) });
+    const shellProcess = this.launchShell(args.command, cwd);
+    this.#foreground.add(shellProcess);
     const startedAt = Date.now();
-    const events: Array<{ case: "stdout" | "stderr"; data: string }> = [];
+    const streamEvents: Array<{ case: "stdout" | "stderr"; data: string }> = [];
     let wake: (() => void) | undefined;
     let done = false;
     let exitCode = 1;
     let exitSignal = "";
     const notify = () => { wake?.(); wake = undefined; };
-    child.stdout.on("data", data => { events.push({ case: "stdout", data: String(data) }); notify(); });
-    child.stderr.on("data", data => { events.push({ case: "stderr", data: String(data) }); notify(); });
-    child.once("close", (code, childSignal) => { exitCode = code ?? 1; exitSignal = childSignal ?? ""; done = true; notify(); });
-    const abort = () => this.kill(child);
-    signal.addEventListener("abort", abort, { once: true });
+    shellProcess.stdout.on("data", data => { streamEvents.push({ case: "stdout", data: String(data) }); notify(); });
+    shellProcess.stderr.on("data", data => { streamEvents.push({ case: "stderr", data: String(data) }); notify(); });
+    shellProcess.once("close", (code, childSignal) => { exitCode = code ?? 1; exitSignal = childSignal ?? ""; done = true; notify(); });
+    const abort = () => this.terminate(shellProcess);
+    abortSignal.addEventListener("abort", abort, { once: true });
     let timer: NodeJS.Timeout | undefined;
-    if (args.timeout > 0) timer = setTimeout(() => this.kill(child), args.timeout);
+    if (args.timeout > 0) timer = setTimeout(() => this.terminate(shellProcess), args.timeout);
     try {
-      while (!done || events.length > 0) {
-        while (events.length > 0) {
-          const event = events.shift()!;
-          yield client(request.id, request.execId, {
+      while (!done || streamEvents.length > 0) {
+        while (streamEvents.length > 0) {
+          const event = streamEvents.shift()!;
+          yield clientElement(call.id, call.execId, {
             case: "shellStream",
             value: new ShellStream({ event: event.case === "stdout"
               ? { case: "stdout", value: new ShellStreamStdout({ data: event.data }) }
@@ -352,166 +352,166 @@ class BoxExecRuntime {
         }
         if (!done) await new Promise<void>(resolve => { wake = resolve; });
       }
-      yield client(request.id, request.execId, { case: "shellStream", value: new ShellStream({ event: { case: "exit", value: new ShellStreamExit({
+      yield clientElement(call.id, call.execId, { case: "shellStream", value: new ShellStream({ event: { case: "exit", value: new ShellStreamExit({
         code: exitCode,
         cwd: args.workingDirectory,
-        aborted: signal.aborted,
+        aborted: abortSignal.aborted,
         localExecutionTimeMs: Date.now() - startedAt,
       }) } }) });
       void exitSignal;
     } finally {
       if (timer != null) clearTimeout(timer);
-      signal.removeEventListener("abort", abort);
-      this.#foreground.delete(child);
-      if (!done) this.kill(child);
+      abortSignal.removeEventListener("abort", abort);
+      this.#foreground.delete(shellProcess);
+      if (!done) this.terminate(shellProcess);
     }
   }
 
-  async spawnBackground(args: BackgroundShellSpawnArgs): Promise<BackgroundShellSpawnResult> {
+  async startBackgroundShell(args: BackgroundShellSpawnArgs): Promise<BackgroundShellSpawnResult> {
     try {
-      const cwd = this.resolvePath(args.workingDirectory);
+      const cwd = this.mapPath(args.workingDirectory);
       await mkdir(this.terminalsDirectory, { recursive: true });
       const shellId = this.#nextShellId++;
       const terminalPath = path.join(this.terminalsDirectory, `${shellId}.txt`);
       const startedAt = Date.now();
-      const child = this.spawnShell(args.command, cwd);
+      const shellProcess = this.launchShell(args.command, cwd);
       const process: BackgroundProcess = {
-        child,
+        shellProcess,
         terminalPath,
         startedAt,
-        writeQueue: writeFile(terminalPath, terminalFrontmatter(args, child.pid, startedAt)),
+        writeQueue: writeFile(terminalPath, terminalHeader(args, shellProcess.pid, startedAt)),
       };
       this.#background.set(shellId, process);
       const queueWrite = (data: string | Uint8Array) => {
         process.writeQueue = process.writeQueue.then(() => appendFile(terminalPath, data));
       };
-      child.stdout.on("data", data => { queueWrite(data); });
-      child.stderr.on("data", data => { queueWrite(data); });
-      child.once("close", code => {
+      shellProcess.stdout.on("data", data => { queueWrite(data); });
+      shellProcess.stderr.on("data", data => { queueWrite(data); });
+      shellProcess.once("close", code => {
         this.#background.delete(shellId);
-        queueWrite(terminalFooter(code ?? 1, startedAt));
+        queueWrite(terminalTrailer(code ?? 1, startedAt));
       });
-      return new BackgroundShellSpawnResult({ result: { case: "success", value: new BackgroundShellSpawnSuccess({ shellId, command: args.command, workingDirectory: args.workingDirectory, ...(child.pid == null ? {} : { pid: child.pid }) }) } });
+      return new BackgroundShellSpawnResult({ result: { case: "success", value: new BackgroundShellSpawnSuccess({ shellId, command: args.command, workingDirectory: args.workingDirectory, ...(shellProcess.pid == null ? {} : { pid: shellProcess.pid }) }) } });
     } catch (error) {
-      return new BackgroundShellSpawnResult({ result: { case: "error", value: new BackgroundShellSpawnError({ command: args.command, workingDirectory: args.workingDirectory, error: errorText(error) }) } });
+      return new BackgroundShellSpawnResult({ result: { case: "error", value: new BackgroundShellSpawnError({ command: args.command, workingDirectory: args.workingDirectory, error: messageOf(error) }) } });
     }
   }
 
-  async writeStdin(args: WriteShellStdinArgs): Promise<WriteShellStdinResult> {
+  async writeShellInput(args: WriteShellStdinArgs): Promise<WriteShellStdinResult> {
     const running = this.#background.get(args.shellId);
     if (running == null) return new WriteShellStdinResult({ result: { case: "error", value: new WriteShellStdinError({ error: `Shell ${args.shellId} is not running` }) } });
     const before = Number((await stat(running.terminalPath)).size);
-    await new Promise<void>((resolve, reject) => running.child.stdin.write(args.chars, error => error == null ? resolve() : reject(error)));
+    await new Promise<void>((resolve, reject) => running.shellProcess.stdin.write(args.chars, error => error == null ? resolve() : reject(error)));
     return new WriteShellStdinResult({ result: { case: "success", value: new WriteShellStdinSuccess({ shellId: args.shellId, terminalFileLengthBeforeInputWritten: before }) } });
   }
 
   async stop(): Promise<void> {
-    for (const child of this.#foreground) this.kill(child);
-    for (const process of this.#background.values()) this.kill(process.child);
+    for (const shellProcess of this.#foreground) this.terminate(shellProcess);
+    for (const process of this.#background.values()) this.terminate(process.shellProcess);
     this.#foreground.clear();
     this.#background.clear();
   }
 
-  private spawnShell(command: string, cwd: string): ChildProcessWithoutNullStreams {
+  private launchShell(command: string, cwd: string): ChildProcessWithoutNullStreams {
     return spawn("/bin/sh", ["-lc", command], { cwd, env: this.#environment, detached: process.platform !== "win32", stdio: "pipe" });
   }
 
-  private kill(child: ChildProcessWithoutNullStreams): void {
-    if (child.exitCode != null || child.signalCode != null) return;
+  private terminate(shellProcess: ChildProcessWithoutNullStreams): void {
+    if (shellProcess.exitCode != null || shellProcess.signalCode != null) return;
     try {
-      if (process.platform !== "win32" && child.pid != null) process.kill(-child.pid, "SIGTERM");
-      else child.kill("SIGTERM");
+      if (process.platform !== "win32" && shellProcess.pid != null) process.kill(-shellProcess.pid, "SIGTERM");
+      else shellProcess.kill("SIGTERM");
     } catch {}
   }
 
-  private async run(command: string, cwd: string, timeoutMs: number | undefined, signal: AbortSignal): Promise<ProcessOutcome> {
-    const child = this.spawnShell(command, cwd);
-    this.#foreground.add(child);
+  private async runCommandCollect(command: string, cwd: string, timeoutMs: number | undefined, abortSignal: AbortSignal): Promise<ProcessOutcome> {
+    const shellProcess = this.launchShell(command, cwd);
+    this.#foreground.add(shellProcess);
     const startedAt = Date.now();
     let stdout = "";
     let stderr = "";
     let timedOut = false;
-    child.stdout.on("data", data => { stdout += String(data); });
-    child.stderr.on("data", data => { stderr += String(data); });
-    const abort = () => this.kill(child);
-    signal.addEventListener("abort", abort, { once: true });
-    const timer = timeoutMs == null ? undefined : setTimeout(() => { timedOut = true; this.kill(child); }, timeoutMs);
+    shellProcess.stdout.on("data", data => { stdout += String(data); });
+    shellProcess.stderr.on("data", data => { stderr += String(data); });
+    const abort = () => this.terminate(shellProcess);
+    abortSignal.addEventListener("abort", abort, { once: true });
+    const timer = timeoutMs == null ? undefined : setTimeout(() => { timedOut = true; this.terminate(shellProcess); }, timeoutMs);
     try {
-      const outcome = await new Promise<{ code: number; signal: string }>((resolve, reject) => {
-        child.once("error", reject);
-        child.once("close", (code, childSignal) => resolve({ code: code ?? 1, signal: childSignal ?? "" }));
+      const runOutcome = await new Promise<{ code: number; signal: string }>((resolve, reject) => {
+        shellProcess.once("error", reject);
+        shellProcess.once("close", (code, childSignal) => resolve({ code: code ?? 1, signal: childSignal ?? "" }));
       });
-      return { ...outcome, stdout, stderr, elapsedMs: Date.now() - startedAt, timedOut, aborted: signal.aborted };
+      return { ...runOutcome, stdout, stderr, elapsedMs: Date.now() - startedAt, timedOut, aborted: abortSignal.aborted };
     } finally {
       if (timer != null) clearTimeout(timer);
-      signal.removeEventListener("abort", abort);
-      this.#foreground.delete(child);
+      abortSignal.removeEventListener("abort", abort);
+      this.#foreground.delete(shellProcess);
     }
   }
 }
 
-function closeServer(server: Server): Promise<void> {
-  return new Promise((resolve, reject) => server.close(error => error == null ? resolve() : reject(error)));
+function closeServer(daemonServer: Server): Promise<void> {
+  return new Promise((resolve, reject) => daemonServer.close(error => error == null ? resolve() : reject(error)));
 }
 
-export async function startBoxExecDaemon(options: BoxExecDaemonOptions): Promise<BoxExecDaemonHandle> {
-  const host = options.host ?? BOX_EXEC_DAEMON_HOST;
-  const port = options.port ?? BOX_EXEC_DAEMON_PORT;
-  const authToken = options.authToken ?? BOX_EXEC_DAEMON_AUTH_TOKEN;
-  const requestedWorkspaceRoot = path.resolve(options.workspaceRoot);
-  const requestedTerminalsDirectory = path.resolve(options.terminalsDirectory ?? path.join(tmpdir(), "slate-box-terminals"));
-  await mkdir(requestedWorkspaceRoot, { recursive: true });
-  await mkdir(requestedTerminalsDirectory, { recursive: true });
+export async function startBoxExecDaemon(settings: BoxExecDaemonOptions): Promise<BoxExecDaemonHandle> {
+  const bindHost = settings.host ?? BOX_EXEC_DAEMON_HOST;
+  const bindPort = settings.port ?? BOX_EXEC_DAEMON_PORT;
+  const expectedToken = settings.authToken ?? BOX_EXEC_DAEMON_AUTH_TOKEN;
+  const workspaceRootInput = path.resolve(settings.workspaceRoot);
+  const terminalsDirectoryInput = path.resolve(settings.terminalsDirectory ?? path.join(tmpdir(), "slate-box-terminals"));
+  await mkdir(workspaceRootInput, { recursive: true });
+  await mkdir(terminalsDirectoryInput, { recursive: true });
   const [workspaceRoot, terminalsDirectory] = await Promise.all([
-    realpath(requestedWorkspaceRoot),
-    realpath(requestedTerminalsDirectory),
+    realpath(workspaceRootInput),
+    realpath(terminalsDirectoryInput),
   ]);
   await stat(workspaceRoot).then(info => {
     if (!info.isDirectory()) throw new Error(`workspaceRoot is not a directory: ${workspaceRoot}`);
   });
-  const runtime = new BoxExecRuntime(workspaceRoot, terminalsDirectory, options.environment ?? process.env);
-  const adapter = connectNodeAdapter({
+  const execRuntime = new BoxExecRuntime(workspaceRoot, terminalsDirectory, settings.environment ?? process.env);
+  const connectHandler = connectNodeAdapter({
     routes(router) {
       router.service(BoxControlService, {
         ping: async () => new PingResponse(),
         getCapabilities: async () => new GetCapabilitiesResponse({ computerUseSupported: false, installPluginArtifactSupported: false }),
-        updateEnvironmentVariables: async request => new UpdateEnvironmentVariablesResponse(runtime.applyEnvironment(request)),
+        updateEnvironmentVariables: async call => new UpdateEnvironmentVariablesResponse(execRuntime.applyEnvPatch(call)),
         loadMcpServers: async () => new LoadMcpServersResponse(),
       });
-      router.service(BoxExecService, { exec: (request, context) => runtime.execute(request, context.signal) });
+      router.service(BoxExecService, { exec: (call, context) => execRuntime.dispatchCall(call, context.signal) });
     },
   });
-  let readyState = false;
-  const server = createServer((request, response) => {
-    if (request.headers.authorization !== `Bearer ${authToken}`) {
-      response.writeHead(401, { "content-type": "text/plain; charset=utf-8" });
-      response.end("Unauthorized");
+  let daemonReady = false;
+  const daemonServer = createServer((call, reply) => {
+    if (call.headers.authorization !== `Bearer ${expectedToken}`) {
+      reply.writeHead(401, { "content-type": "text/plain; charset=utf-8" });
+      reply.end("Unauthorized");
       return;
     }
-    adapter(request, response);
+    connectHandler(call, reply);
   });
   const ready = new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(port, host, () => { server.off("error", reject); readyState = true; resolve(); });
+    daemonServer.once("error", reject);
+    daemonServer.listen(bindPort, bindHost, () => { daemonServer.off("error", reject); daemonReady = true; resolve(); });
   });
   await ready;
-  const address = server.address();
-  if (address == null || typeof address === "string") throw new Error("Box exec daemon did not expose a TCP address");
-  let stopped = false;
+  const bindAddress = daemonServer.address();
+  if (bindAddress == null || typeof bindAddress === "string") throw new Error("Box exec daemon did not expose a TCP address");
+  let isStopped = false;
   return {
-    host,
-    port: address.port,
-    url: `http://${host}:${address.port}`,
+    host: bindHost,
+    port: bindAddress.port,
+    url: `http://${bindHost}:${bindAddress.port}`,
     workspaceRoot,
     terminalsDirectory,
     ready,
-    isReady: () => readyState && !stopped,
+    isReady: () => daemonReady && !isStopped,
     async stop() {
-      if (stopped) return;
-      stopped = true;
-      readyState = false;
-      await runtime.stop();
-      await closeServer(server);
+      if (isStopped) return;
+      isStopped = true;
+      daemonReady = false;
+      await execRuntime.stop();
+      await closeServer(daemonServer);
     },
   };
 }
