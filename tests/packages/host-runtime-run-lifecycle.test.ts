@@ -309,6 +309,17 @@ describe("a conversation's run", () => {
     assert.deepEqual(other, { id: "agent-9", isRunning: false, isRunningTurn: false, isComposingMessage: false, isRetrying: false, currentActivity: undefined, activeRemoteMemberId: undefined });
   });
 
+  it("shows nothing composing for a run that is not running", () => {
+    const { manager } = transcriptManager();
+    const lifecycle = new RunLifecycle(manager as never);
+    lifecycle.setSessionComposing("agent-2", true);
+    lifecycle.setSessionRetrying("agent-2", true);
+    const [shown] = lifecycle.withRunStates([{ id: "agent-2" }]);
+    assert.equal((shown as Record<string, unknown>).isRunning, false);
+    assert.equal((shown as Record<string, unknown>).isComposingMessage, false);
+    assert.equal((shown as Record<string, unknown>).isRetrying, false);
+  });
+
   it("says only once what changed, and follows what the agent is doing", () => {
     const { manager, calls } = transcriptManager();
     const lifecycle = new RunLifecycle(manager as never);
