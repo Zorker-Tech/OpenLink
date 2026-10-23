@@ -2,7 +2,7 @@
 
  * A file the host touches as it starts and removes as it stops; finding one at startup means the host before it died
  * without saying so, which is worth telling the user and the platform rather than passing over. */
-import { readFile, rm } from "node:fs/promises";
+import { readFile as readTextFile, rm as removeFile } from "node:fs/promises";
 import { getHostCrashMarkerPath } from "../host-paths.ts";
 
 export const HOST_CRASH_EXIT_SIGNALS = [
@@ -47,62 +47,62 @@ export interface HostCrashMarkerStore {
   read(): Promise<HostCrashMarkerRead>;
   delete(): Promise<"deleted" | "unavailable">;
 }
-export function isNonNegativeFinite(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+export function isNonNegativeFinite(body: unknown): body is number {
+  return typeof body === "number" && Number.isFinite(body) && body >= 0;
 }
-export function isFatalExitSignal(value: unknown): value is string {
+export function isFatalExitSignal(body: unknown): body is string {
   return (
-    typeof value === "string" &&
-    value !== "none" &&
-    value !== "unknown" &&
-    HOST_CRASH_EXIT_SIGNALS.some((signal) => signal === value)
+    typeof body === "string" &&
+    body !== "none" &&
+    body !== "unknown" &&
+    HOST_CRASH_EXIT_SIGNALS.some((candidateSignal) => candidateSignal === body)
   );
 }
 export function readCommonTimes(
-  value: Record<string, unknown>,
+  body: Record<string, unknown>,
 ): { startedAtMs: number; crashedAtMs: number; uptimeMs: number } | null {
   if (
-    !("startedAtMs" in value) ||
-    !("crashedAtMs" in value) ||
-    !("uptimeMs" in value) ||
-    !isNonNegativeFinite(value.startedAtMs) ||
-    !isNonNegativeFinite(value.crashedAtMs) ||
-    !isNonNegativeFinite(value.uptimeMs)
+    !("startedAtMs" in body) ||
+    !("crashedAtMs" in body) ||
+    !("uptimeMs" in body) ||
+    !isNonNegativeFinite(body.startedAtMs) ||
+    !isNonNegativeFinite(body.crashedAtMs) ||
+    !isNonNegativeFinite(body.uptimeMs)
   )
     return null;
   return {
-    startedAtMs: value.startedAtMs,
-    crashedAtMs: value.crashedAtMs,
-    uptimeMs: value.uptimeMs,
+    startedAtMs: body.startedAtMs,
+    crashedAtMs: body.crashedAtMs,
+    uptimeMs: body.uptimeMs,
   };
 }
 export function parseJson(
-  raw: string,
+  markerText: string,
 ): { kind: "parsed"; value: unknown } | { kind: "invalid" } {
   try {
-    return { kind: "parsed", value: JSON.parse(raw) };
+    return { kind: "parsed", value: JSON.parse(markerText) };
   } catch {
     return { kind: "invalid" };
   }
 }
-export function parseHostCrashMarker(raw: string): HostCrashMarker | null {
-  const parsed = parseJson(raw);
-  if (parsed.kind === "invalid") return null;
-  const { value } = parsed;
-  if (typeof value !== "object" || value === null || Array.isArray(value))
+export function parseHostCrashMarker(markerText: string): HostCrashMarker | null {
+  const parsedJson = parseJson(markerText);
+  if (parsedJson.kind === "invalid") return null;
+  const { value: body } = parsedJson;
+  if (typeof body !== "object" || body === null || Array.isArray(body))
     return null;
-  const v = value as Record<string, unknown>;
+  const v = body as Record<string, unknown>;
   if (v.schemaVersion !== 1 || !("errorClass" in v) || !("exitSignal" in v))
     return null;
   if (v.errorClass === "signal_exit" && isFatalExitSignal(v.exitSignal)) {
-    const times = readCommonTimes(v);
-    return times === null
+    const commonTimes = readCommonTimes(v);
+    return commonTimes === null
       ? null
       : {
           schemaVersion: 1,
           errorClass: v.errorClass,
           exitSignal: v.exitSignal,
-          ...times,
+          ...commonTimes,
         };
   }
   if (
@@ -110,14 +110,14 @@ export function parseHostCrashMarker(raw: string): HostCrashMarker | null {
       v.errorClass === "unexpected_clean_exit") &&
     v.exitSignal === "none"
   ) {
-    const times = readCommonTimes(v);
-    return times === null
+    const commonTimes = readCommonTimes(v);
+    return commonTimes === null
       ? null
       : {
           schemaVersion: 1,
           errorClass: v.errorClass,
           exitSignal: v.exitSignal,
-          ...times,
+          ...commonTimes,
         };
   }
   if (
@@ -144,32 +144,32 @@ export function parseHostCrashMarker(raw: string): HostCrashMarker | null {
     ...(uptimeMs === undefined ? {} : { uptimeMs: uptimeMs as number }),
   };
 }
-export function hostCrashMarkerMetadata(marker: HostCrashMarker) {
+export function hostCrashMarkerMetadata(parsedMarker: HostCrashMarker) {
   return {
     kind: "process_exit",
-    error_class: marker.errorClass,
-    exit_signal: marker.exitSignal,
-    ...(marker.startedAtMs === undefined
+    error_class: parsedMarker.errorClass,
+    exit_signal: parsedMarker.exitSignal,
+    ...(parsedMarker.startedAtMs === undefined
       ? {}
-      : { started_at_ms: String(Math.round(marker.startedAtMs)) }),
-    crashed_at_ms: String(Math.round(marker.crashedAtMs)),
-    ...(marker.uptimeMs === undefined
+      : { started_at_ms: String(Math.round(parsedMarker.startedAtMs)) }),
+    crashed_at_ms: String(Math.round(parsedMarker.crashedAtMs)),
+    ...(parsedMarker.uptimeMs === undefined
       ? {}
-      : { uptime_ms: String(Math.round(marker.uptimeMs)) }),
+      : { uptime_ms: String(Math.round(parsedMarker.uptimeMs)) }),
   };
 }
 export function createHostCrashMarkerStore(
-  path = getHostCrashMarkerPath(),
+  markerPath = getHostCrashMarkerPath(),
 ): HostCrashMarkerStore {
   return {
     read: async () => {
       try {
-        return { kind: "present", raw: await readFile(path, "utf8") };
-      } catch (error) {
+        return { kind: "present", raw: await readTextFile(markerPath, "utf8") };
+      } catch (cause) {
         if (
-          error instanceof Error &&
-          "code" in error &&
-          error.code === "ENOENT"
+          cause instanceof Error &&
+          "code" in cause &&
+          cause.code === "ENOENT"
         )
           return { kind: "absent" };
         return { kind: "unavailable" };
@@ -177,7 +177,7 @@ export function createHostCrashMarkerStore(
     },
     delete: async () => {
       try {
-        await rm(path, { force: true });
+        await removeFile(markerPath, { force: true });
         return "deleted";
       } catch {
         return "unavailable";
@@ -186,20 +186,20 @@ export function createHostCrashMarkerStore(
   };
 }
 export async function deleteIfUnchanged(
-  store: HostCrashMarkerStore,
-  raw: string,
+  markerStore: HostCrashMarkerStore,
+  markerText: string,
 ): Promise<"failed" | "deleted" | "changed"> {
-  const current = await store.read();
+  const current = await markerStore.read();
   if (current.kind === "unavailable") return "failed";
   if (current.kind === "absent") return "deleted";
-  if (current.raw !== raw) return "changed";
-  return (await store.delete()) === "deleted" ? "deleted" : "failed";
+  if (current.raw !== markerText) return "changed";
+  return (await markerStore.delete()) === "deleted" ? "deleted" : "failed";
 }
-export async function forwardHostCrashMarkerWith(forwarder: {
+export async function forwardHostCrashMarkerWith(forwarding: {
   store: HostCrashMarkerStore;
-  wasForwarded(raw: string): boolean;
-  markForwarded(raw: string): void;
-  emit(marker: HostCrashMarker): Promise<boolean>;
+  wasForwarded(markerText: string): boolean;
+  markForwarded(markerText: string): void;
+  emit(parsedMarker: HostCrashMarker): Promise<boolean>;
 }): Promise<
   | "deferred"
   | "absent"
@@ -208,25 +208,25 @@ export async function forwardHostCrashMarkerWith(forwarder: {
   | "delivered"
   | "parse_error"
 > {
-  const read = await forwarder.store.read();
-  if (read.kind === "unavailable") return "deferred";
-  if (read.kind === "absent") return "absent";
-  const { raw } = read;
-  if (forwarder.wasForwarded(raw)) {
-    const deletion = await deleteIfUnchanged(forwarder.store, raw);
-    if (deletion === "failed") return "delete_deferred";
-    return deletion === "changed" ? "pending" : "delivered";
+  const currentRead = await forwarding.store.read();
+  if (currentRead.kind === "unavailable") return "deferred";
+  if (currentRead.kind === "absent") return "absent";
+  const { raw: markerText } = currentRead;
+  if (forwarding.wasForwarded(markerText)) {
+    const removal = await deleteIfUnchanged(forwarding.store, markerText);
+    if (removal === "failed") return "delete_deferred";
+    return removal === "changed" ? "pending" : "delivered";
   }
-  const marker = parseHostCrashMarker(raw);
-  if (marker === null) {
-    forwarder.markForwarded(raw);
-    const deletion = await deleteIfUnchanged(forwarder.store, raw);
-    if (deletion === "failed") return "delete_deferred";
-    return deletion === "changed" ? "pending" : "parse_error";
+  const parsedMarker = parseHostCrashMarker(markerText);
+  if (parsedMarker === null) {
+    forwarding.markForwarded(markerText);
+    const removal = await deleteIfUnchanged(forwarding.store, markerText);
+    if (removal === "failed") return "delete_deferred";
+    return removal === "changed" ? "pending" : "parse_error";
   }
-  if (!(await forwarder.emit(marker))) return "deferred";
-  forwarder.markForwarded(raw);
-  const deletion = await deleteIfUnchanged(forwarder.store, raw);
-  if (deletion === "failed") return "delete_deferred";
-  return deletion === "changed" ? "pending" : "delivered";
+  if (!(await forwarding.emit(parsedMarker))) return "deferred";
+  forwarding.markForwarded(markerText);
+  const removal = await deleteIfUnchanged(forwarding.store, markerText);
+  if (removal === "failed") return "delete_deferred";
+  return removal === "changed" ? "pending" : "delivered";
 }
