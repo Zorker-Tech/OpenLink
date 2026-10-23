@@ -20,6 +20,7 @@ import {
   readConversationBlobMigrationState,
   removeSqliteSidecars,
   runQuickCheck,
+  ConversationBlobRecoveryError,
 } from "../../source/host/agents/isolation/conversation-blob-db.ts";
 
 /** A directory of its own for one case, and the interesting names left in it. */
@@ -269,5 +270,68 @@ describe("finishing a rebuild that was interrupted", () => {
     // The damaged conversation is kept aside under the name the interrupted rebuild had already chosen for it.
     assert.deepEqual(recoveries.map((info) => [info.outcome, info.quarantinePath?.endsWith(".corrupt-2026-01-01T00-00-00-000Z")]), [["reset", true]]);
     assert.deepEqual(world.interesting(), ["conversation-blobs.db", "conversation-blobs.db.corrupt-2026-01-01T00-00-00-000Z"]);
+  });
+});
+
+describe("the rest of a rebuild that was interrupted", () => {
+  it("adopts a replacement staged for a conversation that is gone, and keeps it aside", () => {
+    const world = workspace();
+    writeFileSync(`${world.dbPath}.pending`, "");
+    writeBlobs(`${world.dbPath}.replacement`, [["carried", 8]], CONVERSATION_BLOB_MIGRATION_UNSTARTED);
+    const { db, recoveries } = open({ dbPath: world.dbPath });
+    assert.deepEqual([readIds(db), readVersion(db)], [["carried"], CONVERSATION_BLOB_RECOVERY_REBUILT]);
+    db.close();
+    assert.deepEqual(recoveries.map((info) => info.outcome), ["recovered"]);
+    assert.deepEqual(world.interesting(), ["conversation-blobs.db", "conversation-blobs.db.replacement"]);
+    // Nothing staging a rebuild is left; the file it salvaged from is the quarantine it keeps.
+  });
+
+  it("uses the newest pending marker and forgets the older ones", () => {
+    const world = workspace();
+    const older = `${world.dbPath}.corrupt-2026-01-01T00-00-00-000Z`;
+    const newer = `${world.dbPath}.corrupt-2026-01-02T00-00-00-000Z`;
+    writeFileSync(`${older}.intent`, "");
+    writeFileSync(`${newer}.pending`, "");
+    writeBlobs(older, [["older", 8]], CONVERSATION_BLOB_ADOPTION_COMPLETE);
+    writeBlobs(newer, [["newer", 8]], CONVERSATION_BLOB_ADOPTION_COMPLETE);
+    writeFileSync(`${older}.replacement`, "stale");
+    const { db } = open({ dbPath: world.dbPath });
+    assert.deepEqual(readIds(db), ["newer"]);
+    db.close();
+    // The older marker and the replacement nobody is waiting for are gone; the newest quarantine is kept.
+    assert.deepEqual(world.leftovers(), []);
+    assert.deepEqual(world.interesting(), ["conversation-blobs.db", "conversation-blobs.db.corrupt-2026-01-01T00-00-00-000Z", "conversation-blobs.db.corrupt-2026-01-02T00-00-00-000Z"]);
+  });
+
+  it("salvages nothing from a quarantine that is not a database", () => {
+    const world = workspace();
+    const quarantine = `${world.dbPath}.corrupt-2026-01-01T00-00-00-000Z`;
+    writeFileSync(`${quarantine}.pending`, "");
+    writeFileSync(quarantine, Buffer.from("not a database at all", "utf8"));
+    const { db, recoveries } = open({ dbPath: world.dbPath });
+    assert.deepEqual(readIds(db), []);
+    db.close();
+    assert.deepEqual(recoveries.map((info) => [info.outcome, info.salvagedBlobs]), [["reset", 0]]);
+  });
+
+  it("moves a pending marker onto the quarantine the rebuild chose", () => {
+    const world = workspace();
+    writeFileSync(`${world.dbPath}.corrupt-2026-01-01T00-00-00-000Z.pending`, "");
+    const { db } = open({ dbPath: world.dbPath });
+    assert.deepEqual(readIds(db), []);
+    db.close();
+    assert.deepEqual(world.leftovers(), []);
+  });
+
+  it("clears a replacement staged beside a quarantine it is about to use", () => {
+    const world = workspace();
+    const quarantine = `${world.dbPath}.corrupt-2026-01-01T00-00-00-000Z`;
+    writeFileSync(`${quarantine}.pending`, "");
+    writeBlobs(quarantine, [["before-crash", 8]], CONVERSATION_BLOB_ADOPTION_COMPLETE);
+    writeFileSync(`${quarantine}.replacement`, Buffer.from("stale replacement", "utf8"));
+    const { db } = open({ dbPath: world.dbPath });
+    assert.deepEqual(readIds(db), ["before-crash"]);
+    db.close();
+    assert.deepEqual(world.leftovers(), []);
   });
 });
