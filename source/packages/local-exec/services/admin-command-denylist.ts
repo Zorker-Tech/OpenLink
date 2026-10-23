@@ -14,13 +14,13 @@ import {
 } from "../../utils/command-denylist.ts";
 import { matchesCommandGlob } from "../../utils/command-glob.ts";
 
-interface ParsedCommand {
+interface CommandLine {
   readonly fullText: string;
 }
 
 export interface AdminCommandParsingResult {
   readonly parsingFailed: boolean;
-  readonly executableCommands: readonly ParsedCommand[];
+  readonly executableCommands: readonly CommandLine[];
 }
 
 export interface AdminCommandDenylistMatchInput {
@@ -29,10 +29,10 @@ export interface AdminCommandDenylistMatchInput {
   readonly blockedCommands: readonly string[];
 }
 
-const ADMIN_COMMAND_DENYLIST_UNANALYZABLE_REASON =
+const UNANALYZABLE_REASON =
   "Denied: this command could not be conclusively analyzed against your team's administrator command denylist, so it was blocked (fail-closed) and was not executed. It cannot be approved from this conversation; only a user can run it manually outside the agent. You may continue working on the task.";
 
-function deriveAdminCommandDenylistMatchForms({
+function matchFormsOf({
   command,
   parsingResult,
 }: Pick<AdminCommandDenylistMatchInput, "command" | "parsingResult">): string[] {
@@ -44,7 +44,7 @@ function deriveAdminCommandDenylistMatchForms({
   ];
 }
 
-const ANSI_C_ESCAPES: Record<string, string> = {
+const ANSI_ESCAPES: Record<string, string> = {
   a: "\x07",
   b: "\b",
   e: "\x1b",
@@ -60,124 +60,124 @@ const ANSI_C_ESCAPES: Record<string, string> = {
   "?": "?",
 };
 
-function canonicalizeCommandForDenylistMatching(command: string): string {
-  let result = "";
-  let mode: "plain" | "single" | "double" | "ansi" = "plain";
-  let index = 0;
-  while (index < command.length) {
-    const character = command[index]!;
-    if (mode === "plain") {
-      if (character === "$" && command[index + 1] === "'") {
-        mode = "ansi";
-        index += 2;
-      } else if (character === "$" && command[index + 1] === '"') {
-        mode = "double";
-        index += 2;
-      } else if (character === "'") {
-        mode = "single";
-        index += 1;
-      } else if (character === '"') {
-        mode = "double";
-        index += 1;
-      } else if (character === "\\" && index + 1 < command.length) {
-        if (command[index + 1] !== "\n") {
-          result += command[index + 1];
+function canonicalCommandText(command: string): string {
+  let canonicalText = "";
+  let quoteMode: "plain" | "single" | "double" | "ansi" = "plain";
+  let cursor = 0;
+  while (cursor < command.length) {
+    const currentCharacter = command[cursor]!;
+    if (quoteMode === "plain") {
+      if (currentCharacter === "$" && command[cursor + 1] === "'") {
+        quoteMode = "ansi";
+        cursor += 2;
+      } else if (currentCharacter === "$" && command[cursor + 1] === '"') {
+        quoteMode = "double";
+        cursor += 2;
+      } else if (currentCharacter === "'") {
+        quoteMode = "single";
+        cursor += 1;
+      } else if (currentCharacter === '"') {
+        quoteMode = "double";
+        cursor += 1;
+      } else if (currentCharacter === "\\" && cursor + 1 < command.length) {
+        if (command[cursor + 1] !== "\n") {
+          canonicalText += command[cursor + 1];
         }
-        index += 2;
+        cursor += 2;
       } else {
-        result += character;
-        index += 1;
+        canonicalText += currentCharacter;
+        cursor += 1;
       }
       continue;
     }
-    if (mode === "single") {
-      if (character === "'") mode = "plain";
-      else result += character;
-      index += 1;
+    if (quoteMode === "single") {
+      if (currentCharacter === "'") quoteMode = "plain";
+      else canonicalText += currentCharacter;
+      cursor += 1;
       continue;
     }
-    if (mode === "double") {
-      if (character === '"') {
-        mode = "plain";
-        index += 1;
+    if (quoteMode === "double") {
+      if (currentCharacter === '"') {
+        quoteMode = "plain";
+        cursor += 1;
         continue;
       }
-      if (character === "\\" && index + 1 < command.length) {
-        const escaped = command[index + 1]!;
-        if (["$", "`", '"', "\\", "\n"].includes(escaped)) {
-          if (escaped !== "\n") result += escaped;
-          index += 2;
+      if (currentCharacter === "\\" && cursor + 1 < command.length) {
+        const nextCharacter = command[cursor + 1]!;
+        if (["$", "`", '"', "\\", "\n"].includes(nextCharacter)) {
+          if (nextCharacter !== "\n") canonicalText += nextCharacter;
+          cursor += 2;
           continue;
         }
       }
-      result += character;
-      index += 1;
+      canonicalText += currentCharacter;
+      cursor += 1;
       continue;
     }
-    if (character === "'") {
-      mode = "plain";
-      index += 1;
+    if (currentCharacter === "'") {
+      quoteMode = "plain";
+      cursor += 1;
       continue;
     }
-    if (character !== "\\" || index + 1 >= command.length) {
-      result += character;
-      index += 1;
+    if (currentCharacter !== "\\" || cursor + 1 >= command.length) {
+      canonicalText += currentCharacter;
+      cursor += 1;
       continue;
     }
-    const escaped = command[index + 1]!;
-    const namedEscape = ANSI_C_ESCAPES[escaped];
-    if (namedEscape !== undefined) {
-      result += namedEscape;
-      index += 2;
+    const nextCharacter = command[cursor + 1]!;
+    const mappedEscape = ANSI_ESCAPES[nextCharacter];
+    if (mappedEscape !== undefined) {
+      canonicalText += mappedEscape;
+      cursor += 2;
       continue;
     }
-    const encoded = escaped === "x"
-      ? command.slice(index + 2).match(/^[0-9a-fA-F]{1,2}/)?.[0]
-      : escaped === "u"
-        ? command.slice(index + 2).match(/^[0-9a-fA-F]{1,4}/)?.[0]
-        : escaped === "U"
-          ? command.slice(index + 2).match(/^[0-9a-fA-F]{1,8}/)?.[0]
-          : command.slice(index + 1).match(/^[0-7]{1,3}/)?.[0];
-    const isUnicodeEscape = escaped === "u" || escaped === "U";
-    const radix = escaped === "x" || isUnicodeEscape ? 16 : 8;
-    if (encoded !== undefined) {
-      const value = Number.parseInt(encoded, radix);
-      if (!isUnicodeEscape || value <= 0x10ffff) {
-        result += isUnicodeEscape ? String.fromCodePoint(value) : String.fromCharCode(value);
-        index += encoded.length + (radix === 16 ? 2 : 1);
+    const digits = nextCharacter === "x"
+      ? command.slice(cursor + 2).match(/^[0-9a-fA-F]{1,2}/)?.[0]
+      : nextCharacter === "u"
+        ? command.slice(cursor + 2).match(/^[0-9a-fA-F]{1,4}/)?.[0]
+        : nextCharacter === "U"
+          ? command.slice(cursor + 2).match(/^[0-9a-fA-F]{1,8}/)?.[0]
+          : command.slice(cursor + 1).match(/^[0-7]{1,3}/)?.[0];
+    const isUnicode = nextCharacter === "u" || nextCharacter === "U";
+    const numberBase = nextCharacter === "x" || isUnicode ? 16 : 8;
+    if (digits !== undefined) {
+      const codePoint = Number.parseInt(digits, numberBase);
+      if (!isUnicode || codePoint <= 0x10ffff) {
+        canonicalText += isUnicode ? String.fromCodePoint(codePoint) : String.fromCharCode(codePoint);
+        cursor += digits.length + (numberBase === 16 ? 2 : 1);
         continue;
       }
     }
-    result += escaped;
-    index += 2;
+    canonicalText += nextCharacter;
+    cursor += 2;
   }
-  return normalizeAdminCommandDenylistText(result);
+  return normalizeAdminCommandDenylistText(canonicalText);
 }
 
-function matchAdminCommandDenylistRule(rule: string, command: string): boolean {
-  const trimmedRule = normalizeAdminCommandDenylistText(rule).trim();
-  if (trimmedRule.length === 0) return false;
-  if (getAdminCommandDenylistRuleError(trimmedRule) !== null) return true;
+function ruleMatchesCommand(rule: string, command: string): boolean {
+  const ruleText = normalizeAdminCommandDenylistText(rule).trim();
+  if (ruleText.length === 0) return false;
+  if (getAdminCommandDenylistRuleError(ruleText) !== null) return true;
   return [
     command.trim(),
     normalizeAdminCommandDenylistText(command).trim(),
-    canonicalizeCommandForDenylistMatching(command).trim(),
-  ].some((commandForm) => matchRuleAgainstCommand(trimmedRule, commandForm));
+    canonicalCommandText(command).trim(),
+  ].some((commandForm) => singleRuleMatches(ruleText, commandForm));
 }
 
-function matchRuleAgainstCommand(trimmedRule: string, trimmedCommand: string): boolean {
-  const colonRule = parseAdminCommandDenylistColonRule(trimmedRule);
-  if (colonRule !== undefined) {
-    const spaceIndex = trimmedCommand.indexOf(" ");
-    const executable = spaceIndex === -1 ? trimmedCommand : trimmedCommand.slice(0, spaceIndex);
-    const argsText = spaceIndex === -1 ? "" : trimmedCommand.slice(spaceIndex + 1).trim();
-    if (matchesCommandGlob(colonRule.executablePattern, executable) && matchesCommandGlob(colonRule.argsPattern, argsText)) return true;
+function singleRuleMatches(ruleText: string, commandText: string): boolean {
+  const colonSpec = parseAdminCommandDenylistColonRule(ruleText);
+  if (colonSpec !== undefined) {
+    const firstSpace = commandText.indexOf(" ");
+    const program = firstSpace === -1 ? commandText : commandText.slice(0, firstSpace);
+    const argumentsText = firstSpace === -1 ? "" : commandText.slice(firstSpace + 1).trim();
+    if (matchesCommandGlob(colonSpec.executablePattern, program) && matchesCommandGlob(colonSpec.argsPattern, argumentsText)) return true;
   }
-  if (trimmedRule.includes("*")) return matchesCommandGlob(trimmedRule, trimmedCommand);
-  return trimmedCommand === trimmedRule || trimmedCommand.startsWith(`${trimmedRule} `);
+  if (ruleText.includes("*")) return matchesCommandGlob(ruleText, commandText);
+  return commandText === ruleText || commandText.startsWith(`${ruleText} `);
 }
 
-function findMatchingAdminCommandDenylistPattern({
+function firstMatchingRule({
   matchForms,
   blockedCommands,
 }: { readonly matchForms: readonly string[]; readonly blockedCommands: readonly string[] }): string | undefined {
@@ -186,7 +186,7 @@ function findMatchingAdminCommandDenylistPattern({
   const forms = matchForms.map((form) => form.trim()).filter((form) => form.length > 0);
   const effectiveForms = forms.length > 0 ? forms : [""];
   for (const rule of rules) {
-    if (effectiveForms.some((command) => matchAdminCommandDenylistRule(rule, command))) return rule;
+    if (effectiveForms.some((commandForm) => ruleMatchesCommand(rule, commandForm))) return rule;
   }
   return undefined;
 }
@@ -201,9 +201,9 @@ export function getModelShellAdminCommandDenylistBlockReason({
   blockedCommands,
 }: AdminCommandDenylistMatchInput): string | undefined {
   if (blockedCommands.length === 0) return undefined;
-  if (parsingResult.parsingFailed || parsingResult.executableCommands.length === 0) return ADMIN_COMMAND_DENYLIST_UNANALYZABLE_REASON;
-  const matchedPattern = findMatchingAdminCommandDenylistPattern({
-    matchForms: deriveAdminCommandDenylistMatchForms({ command, parsingResult }),
+  if (parsingResult.parsingFailed || parsingResult.executableCommands.length === 0) return UNANALYZABLE_REASON;
+  const matchedPattern = firstMatchingRule({
+    matchForms: matchFormsOf({ command, parsingResult }),
     blockedCommands,
   });
   return matchedPattern === undefined ? undefined : formatAdminCommandDenylistBlockReason(matchedPattern);
