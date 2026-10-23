@@ -76,9 +76,9 @@ function sanitizeConflictJournalWarnError(error: unknown): unknown {
   return redacted;
 }
 
-function wrapConflictJournalWarn(warn: (message: string, error: unknown) => void): (message: string, error: unknown) => void {
+function wrapConflictJournalWarn(warner: (message: string, error: unknown) => void): (message: string, error: unknown) => void {
   return (message, error) => {
-    warn(message, sanitizeConflictJournalWarnError(error));
+    warner(message, sanitizeConflictJournalWarnError(error));
   };
 }
 
@@ -114,22 +114,22 @@ function parseConflictEvent(raw: unknown): ConflictJournalEvent | undefined {
   if (!isRecord(raw)) {
     return undefined;
   }
-  const eventId = asString(raw.event_id);
+  const eventKey = asString(raw.event_id);
   const journalEpoch = asString(raw.journal_epoch);
-  const kindRaw = asString(raw.kind);
+  const kindText = asString(raw.kind);
   const seq = asNumber(raw.seq);
   const tsMs = asNumber(raw.ts_ms);
   const version = asNumber(raw.v);
-  if (eventId === undefined || journalEpoch === undefined || kindRaw === undefined || seq === undefined || tsMs === undefined || version === undefined || !KNOWN_KINDS.has(kindRaw as ConflictEventKind)) {
+  if (eventKey === undefined || journalEpoch === undefined || kindText === undefined || seq === undefined || tsMs === undefined || version === undefined || !KNOWN_KINDS.has(kindText as ConflictEventKind)) {
     return undefined;
   }
-  const kind = kindRaw as ConflictEventKind;
-  const sourceRaw = asString(raw.source);
-  const source = sourceRaw === "local_sync" ? "local_sync" : undefined;
+  const kind = kindText as ConflictEventKind;
+  const sourceText = asString(raw.source);
+  const source = sourceText === "local_sync" ? "local_sync" : undefined;
   const remoteOnly = asBoolean(raw.remote_only);
   return {
     v: version,
-    event_id: eventId,
+    event_id: eventKey,
     journal_epoch: journalEpoch,
     seq,
     ts_ms: tsMs,
@@ -145,65 +145,65 @@ function parseConflictEvent(raw: unknown): ConflictJournalEvent | undefined {
   };
 }
 
-function parseConflictJournalLines(body: string): ConflictJournalEvent[] {
-  const out: ConflictJournalEvent[] = [];
-  for (const line of body.split("\n")) {
-    const trimmed = line.trim();
-    if (trimmed.length === 0) {
+function parseConflictJournalLines(contents: string): ConflictJournalEvent[] {
+  const events: ConflictJournalEvent[] = [];
+  for (const rawLine of contents.split("\n")) {
+    const stripped = rawLine.trim();
+    if (stripped.length === 0) {
       continue;
     }
-    let parsed: unknown;
+    let decoded: unknown;
     try {
-      parsed = JSON.parse(trimmed) as unknown;
+      decoded = JSON.parse(stripped) as unknown;
     } catch {
       continue;
     }
-    const event = parseConflictEvent(parsed);
-    if (event !== undefined) {
-      out.push(event);
+    const journalEvent = parseConflictEvent(decoded);
+    if (journalEvent !== undefined) {
+      events.push(journalEvent);
     }
   }
-  return out;
+  return events;
 }
 
-function eventToJsonLine(event: ConflictJournalEvent): string {
-  const row: Record<string, unknown> = {
-    v: event.v,
-    event_id: event.event_id,
-    journal_epoch: event.journal_epoch,
-    seq: event.seq,
-    ts_ms: event.ts_ms,
-    kind: event.kind,
+function eventToJsonLine(journalEvent: ConflictJournalEvent): string {
+  const payloadRow: Record<string, unknown> = {
+    v: journalEvent.v,
+    event_id: journalEvent.event_id,
+    journal_epoch: journalEvent.journal_epoch,
+    seq: journalEvent.seq,
+    ts_ms: journalEvent.ts_ms,
+    kind: journalEvent.kind,
   };
-  if (event.store_id !== undefined) row.store_id = event.store_id;
-  if (event.original_rel_path !== undefined) row.original_rel_path = event.original_rel_path;
-  if (event.conflict_rel_path !== undefined) row.conflict_rel_path = event.conflict_rel_path;
-  if (event.original_abs_path !== undefined) row.original_abs_path = event.original_abs_path;
-  if (event.conflict_abs_path !== undefined) row.conflict_abs_path = event.conflict_abs_path;
-  if (event.preserved_bytes !== undefined) row.preserved_bytes = event.preserved_bytes;
-  if (event.source !== undefined) row.source = event.source;
-  if (event.remote_only === true) row.remote_only = true;
-  return `${JSON.stringify(row)}\n`;
+  if (journalEvent.store_id !== undefined) payloadRow.store_id = journalEvent.store_id;
+  if (journalEvent.original_rel_path !== undefined) payloadRow.original_rel_path = journalEvent.original_rel_path;
+  if (journalEvent.conflict_rel_path !== undefined) payloadRow.conflict_rel_path = journalEvent.conflict_rel_path;
+  if (journalEvent.original_abs_path !== undefined) payloadRow.original_abs_path = journalEvent.original_abs_path;
+  if (journalEvent.conflict_abs_path !== undefined) payloadRow.conflict_abs_path = journalEvent.conflict_abs_path;
+  if (journalEvent.preserved_bytes !== undefined) payloadRow.preserved_bytes = journalEvent.preserved_bytes;
+  if (journalEvent.source !== undefined) payloadRow.source = journalEvent.source;
+  if (journalEvent.remote_only === true) payloadRow.remote_only = true;
+  return `${JSON.stringify(payloadRow)}\n`;
 }
 
-function dedupKeyFor(emit: ConflictJournalEmit): string | undefined {
-  if (emit.conflictRelPath !== undefined) return `${emit.storeId}\0${emit.conflictRelPath}`;
-  if (emit.kind === "truncate_conflict_failed") return `${emit.storeId}\0\0truncate:${emit.originalRelPath}`;
-  if (emit.kind === "conflict_fallback_failed") return `${emit.storeId}\0\0fallback:${emit.originalRelPath}`;
+function dedupKeyFor(entry: ConflictJournalEmit): string | undefined {
+  if (entry.conflictRelPath !== undefined) return `${entry.storeId}\0${entry.conflictRelPath}`;
+  if (entry.kind === "truncate_conflict_failed") return `${entry.storeId}\0\0truncate:${entry.originalRelPath}`;
+  if (entry.kind === "conflict_fallback_failed") return `${entry.storeId}\0\0fallback:${entry.originalRelPath}`;
   return undefined;
 }
 
-function dedupKeyForEvent(event: ConflictJournalEvent): string | undefined {
-  if (event.store_id === undefined) return undefined;
-  if (event.conflict_rel_path !== undefined) return `${event.store_id}\0${event.conflict_rel_path}`;
-  if (event.original_rel_path === undefined) return undefined;
-  if (event.kind === "truncate_conflict_failed") return `${event.store_id}\0\0truncate:${event.original_rel_path}`;
-  if (event.kind === "conflict_fallback_failed") return `${event.store_id}\0\0fallback:${event.original_rel_path}`;
+function dedupKeyForEvent(journalEvent: ConflictJournalEvent): string | undefined {
+  if (journalEvent.store_id === undefined) return undefined;
+  if (journalEvent.conflict_rel_path !== undefined) return `${journalEvent.store_id}\0${journalEvent.conflict_rel_path}`;
+  if (journalEvent.original_rel_path === undefined) return undefined;
+  if (journalEvent.kind === "truncate_conflict_failed") return `${journalEvent.store_id}\0\0truncate:${journalEvent.original_rel_path}`;
+  if (journalEvent.kind === "conflict_fallback_failed") return `${journalEvent.store_id}\0\0fallback:${journalEvent.original_rel_path}`;
   return undefined;
 }
 
-function pendingConflictEmitKey(emit: ConflictJournalEmit): string {
-  return [emit.storeId, emit.kind, emit.originalRelPath, emit.conflictRelPath ?? ""].join("\0");
+function pendingConflictEmitKey(entry: ConflictJournalEmit): string {
+  return [entry.storeId, entry.kind, entry.originalRelPath, entry.conflictRelPath ?? ""].join("\0");
 }
 
 const PENDING_EMIT_KINDS = new Set<PendingConflictEventKind>([
@@ -222,7 +222,7 @@ function parsePendingConflictEmit(raw: unknown): ConflictJournalEmit | undefined
   if (kind === undefined || storeId === undefined || originalRelPath === undefined || originalAbsPath === undefined || !PENDING_EMIT_KINDS.has(kind as PendingConflictEventKind)) {
     return undefined;
   }
-  const sourceRaw = asString(raw.source);
+  const sourceText = asString(raw.source);
   const remoteOnly = asBoolean(raw.remoteOnly);
   return {
     kind: kind as PendingConflictEventKind,
@@ -232,24 +232,24 @@ function parsePendingConflictEmit(raw: unknown): ConflictJournalEmit | undefined
     originalAbsPath,
     conflictAbsPath: asString(raw.conflictAbsPath),
     preservedBytes: asNumber(raw.preservedBytes),
-    ...(sourceRaw === "local_sync" ? { source: "local_sync" } : {}),
+    ...(sourceText === "local_sync" ? { source: "local_sync" } : {}),
     ...(remoteOnly === true ? { remoteOnly: true } : {}),
   };
 }
 
-function pendingEmitToJsonLine(emit: ConflictJournalEmit): string {
-  const row: Record<string, unknown> = {
-    kind: emit.kind,
-    storeId: emit.storeId,
-    originalRelPath: emit.originalRelPath,
-    originalAbsPath: emit.originalAbsPath,
+function pendingEmitToJsonLine(entry: ConflictJournalEmit): string {
+  const payloadRow: Record<string, unknown> = {
+    kind: entry.kind,
+    storeId: entry.storeId,
+    originalRelPath: entry.originalRelPath,
+    originalAbsPath: entry.originalAbsPath,
   };
-  if (emit.conflictRelPath !== undefined) row.conflictRelPath = emit.conflictRelPath;
-  if (emit.conflictAbsPath !== undefined) row.conflictAbsPath = emit.conflictAbsPath;
-  if (emit.preservedBytes !== undefined) row.preservedBytes = emit.preservedBytes;
-  if (emit.source !== undefined) row.source = emit.source;
-  if (emit.remoteOnly === true) row.remoteOnly = true;
-  return `${JSON.stringify(row)}\n`;
+  if (entry.conflictRelPath !== undefined) payloadRow.conflictRelPath = entry.conflictRelPath;
+  if (entry.conflictAbsPath !== undefined) payloadRow.conflictAbsPath = entry.conflictAbsPath;
+  if (entry.preservedBytes !== undefined) payloadRow.preservedBytes = entry.preservedBytes;
+  if (entry.source !== undefined) payloadRow.source = entry.source;
+  if (entry.remoteOnly === true) payloadRow.remoteOnly = true;
+  return `${JSON.stringify(payloadRow)}\n`;
 }
 
 interface OpenOptions {
@@ -258,195 +258,195 @@ interface OpenOptions {
   readonly nofollowFlag?: number | undefined;
 }
 
-function openNoFollowSync(targetPath: string, options: OpenOptions): number {
-  const { baseFlags, mode, nofollowFlag } = options;
-  if (typeof nofollowFlag === "number") return fs.openSync(targetPath, baseFlags | nofollowFlag, mode);
-  let existing: fs.Stats | undefined;
+function openNoFollowSync(pathName: string, settings: OpenOptions): number {
+  const { baseFlags, mode, nofollowFlag } = settings;
+  if (typeof nofollowFlag === "number") return fs.openSync(pathName, baseFlags | nofollowFlag, mode);
+  let statEntry: fs.Stats | undefined;
   try {
-    existing = fs.lstatSync(targetPath);
+    statEntry = fs.lstatSync(pathName);
   } catch (error) {
     if (!isEnoent(error)) throw error;
   }
-  if (existing?.isSymbolicLink() === true) {
-    const refusal = new Error(`refusing to open symlinked journal path: ${targetPath}`);
-    Object.defineProperty(refusal, "code", { value: "ELOOP", enumerable: true, configurable: true, writable: true });
-    throw refusal;
+  if (statEntry?.isSymbolicLink() === true) {
+    const loopError = new Error(`refusing to open symlinked journal path: ${pathName}`);
+    Object.defineProperty(loopError, "code", { value: "ELOOP", enumerable: true, configurable: true, writable: true });
+    throw loopError;
   }
-  return fs.openSync(targetPath, baseFlags, mode);
+  return fs.openSync(pathName, baseFlags, mode);
 }
 
-function readFileNoFollowSync(targetPath: string): string {
-  const fd = openNoFollowSync(targetPath, { baseFlags: fs.constants.O_RDONLY, mode: PRIVATE_FILE_MODE, nofollowFlag: O_NOFOLLOW_FLAG });
+function readFileNoFollowSync(pathName: string): string {
+  const handle = openNoFollowSync(pathName, { baseFlags: fs.constants.O_RDONLY, mode: PRIVATE_FILE_MODE, nofollowFlag: O_NOFOLLOW_FLAG });
   try {
-    return fs.readFileSync(fd, "utf8");
+    return fs.readFileSync(handle, "utf8");
   } finally {
-    fs.closeSync(fd);
+    fs.closeSync(handle);
   }
 }
 
 export class ConflictJournal {
   readonly path: string;
-  private readonly epoch: string;
-  private readonly warn: (message: string, error: unknown) => void;
-  private nextSeq = 1;
-  private appendFailures = 0;
-  private rotations = 0;
-  private readonly emittedConflicts = new Set<string>();
+  private readonly journalEpoch: string;
+  private readonly warner: (message: string, error: unknown) => void;
+  private nextSequence = 1;
+  private failedAppends = 0;
+  private rotationTotal = 0;
+  private readonly dedupeKeys = new Set<string>();
 
-  constructor(journalPath: string, options?: ConflictJournalWarningOptions) {
+  constructor(journalPath: string, settings?: ConflictJournalWarningOptions) {
     this.path = journalPath;
-    this.epoch = randomUUID();
-    this.warn = wrapConflictJournalWarn(options?.warn ?? (() => {}));
+    this.journalEpoch = randomUUID();
+    this.warner = wrapConflictJournalWarn(settings?.warn ?? (() => {}));
     this.hydrateDedupFromDisk();
   }
 
   private hydrateDedupFromDisk(): void {
-    const keys = this.readDedupKeysFromDisk();
-    if (keys === undefined) return;
-    this.replaceDedupKeys(keys);
+    const keySet = this.readDedupKeysFromDisk();
+    if (keySet === undefined) return;
+    this.replaceDedupKeys(keySet);
   }
 
   private readDedupKeysFromDisk(): string[] | undefined {
-    let body: string;
+    let contents: string;
     try {
-      body = readFileNoFollowSync(this.path);
+      contents = readFileNoFollowSync(this.path);
     } catch (error) {
       if (!isEnoent(error)) {
-        this.warn("conflict journal dedup hydrate failed", error);
+        this.warner("conflict journal dedup hydrate failed", error);
         return undefined;
       }
       return [];
     }
-    const keys: string[] = [];
-    for (const event of parseConflictJournalLines(body)) {
-      const key = dedupKeyForEvent(event);
-      if (key !== undefined) keys.push(key);
+    const keySet: string[] = [];
+    for (const journalEvent of parseConflictJournalLines(contents)) {
+      const dedupeKey = dedupKeyForEvent(journalEvent);
+      if (dedupeKey !== undefined) keySet.push(dedupeKey);
     }
-    return keys;
+    return keySet;
   }
 
-  private replaceDedupKeys(keys: readonly string[]): void {
-    this.emittedConflicts.clear();
-    for (const key of keys) {
-      if (this.emittedConflicts.size >= MAX_DEDUP_ENTRIES) this.emittedConflicts.clear();
-      this.emittedConflicts.add(key);
+  private replaceDedupKeys(keySet: readonly string[]): void {
+    this.dedupeKeys.clear();
+    for (const dedupeKey of keySet) {
+      if (this.dedupeKeys.size >= MAX_DEDUP_ENTRIES) this.dedupeKeys.clear();
+      this.dedupeKeys.add(dedupeKey);
     }
   }
 
   refreshDedupFromDisk(): boolean {
-    const keys = this.readDedupKeysFromDisk();
-    if (keys === undefined) return false;
-    this.replaceDedupKeys(keys);
+    const keySet = this.readDedupKeysFromDisk();
+    if (keySet === undefined) return false;
+    this.replaceDedupKeys(keySet);
     return true;
   }
 
-  appendFailureCount(): number { return this.appendFailures; }
-  rotationCount(): number { return this.rotations; }
+  appendFailureCount(): number { return this.failedAppends; }
+  rotationCount(): number { return this.rotationTotal; }
 
-  wouldDedup(emit: ConflictJournalEmit): boolean {
-    const key = dedupKeyFor(emit);
-    return key !== undefined && this.emittedConflicts.has(key);
+  wouldDedup(entry: ConflictJournalEmit): boolean {
+    const dedupeKey = dedupKeyFor(entry);
+    return dedupeKey !== undefined && this.dedupeKeys.has(dedupeKey);
   }
 
-  emit(emit: ConflictJournalEmit): boolean {
-    const key = dedupKeyFor(emit);
-    if (key !== undefined && this.emittedConflicts.has(key)) return true;
+  emit(entry: ConflictJournalEmit): boolean {
+    const dedupeKey = dedupKeyFor(entry);
+    if (dedupeKey !== undefined && this.dedupeKeys.has(dedupeKey)) return true;
     try {
-      this.appendEmit(emit, key);
+      this.appendEmit(entry, dedupeKey);
       return true;
     } catch (error) {
-      this.appendFailures += 1;
-      this.warn(`conflict journal append failed; sync round still succeeded (failures=${this.appendFailures})`, error);
+      this.failedAppends += 1;
+      this.warner(`conflict journal append failed; sync round still succeeded (failures=${this.failedAppends})`, error);
       return false;
     }
   }
 
-  private appendEmit(emit: ConflictJournalEmit, key: string | undefined): void {
-    if (key !== undefined && this.emittedConflicts.has(key)) return;
+  private appendEmit(entry: ConflictJournalEmit, dedupeKey: string | undefined): void {
+    if (dedupeKey !== undefined && this.dedupeKeys.has(dedupeKey)) return;
     const parent = path.dirname(this.path);
     if (parent.length > 0) ensureSecureDirectoryChain(parent);
     this.maybeRotateLocked();
-    const seq = this.nextSeq;
-    const event: ConflictJournalEvent = {
+    const seq = this.nextSequence;
+    const journalEvent: ConflictJournalEvent = {
       v: EVENT_SCHEMA_VERSION,
       event_id: randomUUID(),
-      journal_epoch: this.epoch,
+      journal_epoch: this.journalEpoch,
       seq,
       ts_ms: nowMs(),
-      kind: emit.kind,
-      store_id: emit.storeId,
-      original_rel_path: emit.originalRelPath,
-      conflict_rel_path: emit.conflictRelPath,
-      original_abs_path: emit.originalAbsPath,
-      conflict_abs_path: emit.conflictAbsPath,
-      preserved_bytes: emit.preservedBytes,
-      ...(emit.source === undefined ? {} : { source: emit.source }),
-      ...(emit.remoteOnly === true ? { remote_only: true } : {}),
+      kind: entry.kind,
+      store_id: entry.storeId,
+      original_rel_path: entry.originalRelPath,
+      conflict_rel_path: entry.conflictRelPath,
+      original_abs_path: entry.originalAbsPath,
+      conflict_abs_path: entry.conflictAbsPath,
+      preserved_bytes: entry.preservedBytes,
+      ...(entry.source === undefined ? {} : { source: entry.source }),
+      ...(entry.remoteOnly === true ? { remote_only: true } : {}),
     };
-    this.writeJsonlLine(event);
-    this.nextSeq = seq + 1;
-    if (key !== undefined) {
-      if (this.emittedConflicts.size >= MAX_DEDUP_ENTRIES) this.emittedConflicts.clear();
-      this.emittedConflicts.add(key);
+    this.writeJsonlLine(journalEvent);
+    this.nextSequence = seq + 1;
+    if (dedupeKey !== undefined) {
+      if (this.dedupeKeys.size >= MAX_DEDUP_ENTRIES) this.dedupeKeys.clear();
+      this.dedupeKeys.add(dedupeKey);
     }
   }
 
-  private writeJsonlLine(event: ConflictJournalEvent): void {
-    const fd = openNoFollowSync(this.path, { baseFlags: fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_APPEND, mode: PRIVATE_FILE_MODE, nofollowFlag: O_NOFOLLOW_FLAG });
+  private writeJsonlLine(journalEvent: ConflictJournalEvent): void {
+    const handle = openNoFollowSync(this.path, { baseFlags: fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_APPEND, mode: PRIVATE_FILE_MODE, nofollowFlag: O_NOFOLLOW_FLAG });
     try {
-      try { fs.fchmodSync(fd, PRIVATE_FILE_MODE); } catch {}
-      fs.writeSync(fd, eventToJsonLine(event));
-      try { fs.fsyncSync(fd); } catch {}
+      try { fs.fchmodSync(handle, PRIVATE_FILE_MODE); } catch {}
+      fs.writeSync(handle, eventToJsonLine(journalEvent));
+      try { fs.fsyncSync(handle); } catch {}
     } finally {
-      fs.closeSync(fd);
+      fs.closeSync(handle);
     }
   }
 
   private maybeRotateLocked(): void {
-    let size: number;
+    let journalBytes: number;
     try {
-      size = fs.statSync(this.path).size;
+      journalBytes = fs.statSync(this.path).size;
     } catch (error) {
       if (isEnoent(error)) return;
-      this.warn("conflict journal metadata failed; skipping rotate", error);
+      this.warner("conflict journal metadata failed; skipping rotate", error);
       return;
     }
-    if (size < CONFLICT_JOURNAL_ROTATE_BYTES) return;
+    if (journalBytes < CONFLICT_JOURNAL_ROTATE_BYTES) return;
     try {
       this.forceGapRewriteLocked();
     } catch (error) {
-      this.warn("conflict journal rotate rewrite failed; appending onto oversized journal", error);
+      this.warner("conflict journal rotate rewrite failed; appending onto oversized journal", error);
     }
   }
 
   private forceGapRewriteLocked(): void {
-    const seq = this.nextSeq;
+    const seq = this.nextSequence;
     const gap: ConflictJournalEvent = {
       v: EVENT_SCHEMA_VERSION,
       event_id: randomUUID(),
-      journal_epoch: this.epoch,
+      journal_epoch: this.journalEpoch,
       seq,
       ts_ms: nowMs(),
       kind: "gap",
     };
-    const tmp = `${this.path}.rotate-tmp`;
+    const tempFile = `${this.path}.rotate-tempFile`;
     try {
-      fs.unlinkSync(tmp);
+      fs.unlinkSync(tempFile);
     } catch (error) {
       if (!isEnoent(error)) throw error;
     }
-    const fd = openNoFollowSync(tmp, { baseFlags: fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL, mode: PRIVATE_FILE_MODE, nofollowFlag: O_NOFOLLOW_FLAG });
+    const handle = openNoFollowSync(tempFile, { baseFlags: fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL, mode: PRIVATE_FILE_MODE, nofollowFlag: O_NOFOLLOW_FLAG });
     try {
-      try { fs.fchmodSync(fd, PRIVATE_FILE_MODE); } catch {}
-      fs.writeSync(fd, eventToJsonLine(gap));
-      try { fs.fsyncSync(fd); } catch {}
+      try { fs.fchmodSync(handle, PRIVATE_FILE_MODE); } catch {}
+      fs.writeSync(handle, eventToJsonLine(gap));
+      try { fs.fsyncSync(handle); } catch {}
     } finally {
-      fs.closeSync(fd);
+      fs.closeSync(handle);
     }
-    fs.renameSync(tmp, this.path);
-    this.nextSeq = seq + 1;
-    this.emittedConflicts.clear();
-    this.rotations += 1;
+    fs.renameSync(tempFile, this.path);
+    this.nextSequence = seq + 1;
+    this.dedupeKeys.clear();
+    this.rotationTotal += 1;
   }
 }
 
@@ -459,159 +459,159 @@ export function conflictPendingJournalPathForFilesDir(filesDir: string): string 
 }
 
 interface PendingDiskState {
-  readonly pending: ConflictJournalEmit[];
-  readonly keys: Set<string>;
+  readonly queued: ConflictJournalEmit[];
+  readonly keySet: Set<string>;
 }
 
 export class PendingConflictJournal {
   readonly path: string;
-  private readonly warn: (message: string, error: unknown) => void;
-  private pending: ConflictJournalEmit[] = [];
-  private keys = new Set<string>();
-  private persistFailures = 0;
-  private dirty = false;
-  private loadFailed = false;
+  private readonly warner: (message: string, error: unknown) => void;
+  private queued: ConflictJournalEmit[] = [];
+  private keySet = new Set<string>();
+  private failedPersists = 0;
+  private needsPersist = false;
+  private loadBroken = false;
 
-  constructor(pendingPath: string, options?: ConflictJournalWarningOptions) {
+  constructor(pendingPath: string, settings?: ConflictJournalWarningOptions) {
     this.path = pendingPath;
-    this.warn = wrapConflictJournalWarn(options?.warn ?? (() => {}));
-    const loaded = this.tryReadDisk();
-    if (loaded !== undefined) {
-      this.pending = loaded.pending;
-      this.keys = loaded.keys;
+    this.warner = wrapConflictJournalWarn(settings?.warn ?? (() => {}));
+    const diskState = this.tryReadDisk();
+    if (diskState !== undefined) {
+      this.queued = diskState.queued;
+      this.keySet = diskState.keySet;
     } else {
-      this.loadFailed = true;
+      this.loadBroken = true;
     }
   }
 
-  size(): number { return this.pending.length; }
-  isEmpty(): boolean { return this.pending.length === 0; }
-  list(): ConflictJournalEmit[] { return [...this.pending]; }
-  persistFailureCount(): number { return this.persistFailures; }
+  size(): number { return this.queued.length; }
+  isEmpty(): boolean { return this.queued.length === 0; }
+  list(): ConflictJournalEmit[] { return [...this.queued]; }
+  persistFailureCount(): number { return this.failedPersists; }
 
   reload(): void {
-    const loaded = this.tryReadDisk();
-    if (loaded === undefined) return;
-    this.loadFailed = false;
-    if (!this.dirty) {
-      this.pending = loaded.pending;
-      this.keys = loaded.keys;
+    const diskState = this.tryReadDisk();
+    if (diskState === undefined) return;
+    this.loadBroken = false;
+    if (!this.needsPersist) {
+      this.queued = diskState.queued;
+      this.keySet = diskState.keySet;
       return;
     }
     const mergedByKey = new Map<string, ConflictJournalEmit>();
-    for (const emit of loaded.pending) mergedByKey.set(pendingConflictEmitKey(emit), emit);
-    for (const emit of this.pending) mergedByKey.set(pendingConflictEmitKey(emit), emit);
-    const merged = [...mergedByKey.values()];
-    this.pending = merged;
-    this.keys = new Set(mergedByKey.keys());
-    this.dirty = !this.persistPending(merged);
+    for (const entry of diskState.queued) mergedByKey.set(pendingConflictEmitKey(entry), entry);
+    for (const entry of this.queued) mergedByKey.set(pendingConflictEmitKey(entry), entry);
+    const mergedEntries = [...mergedByKey.values()];
+    this.queued = mergedEntries;
+    this.keySet = new Set(mergedByKey.keys());
+    this.needsPersist = !this.persistPending(mergedEntries);
   }
 
-  enqueue(emit: ConflictJournalEmit): void {
-    const key = pendingConflictEmitKey(emit);
-    if (this.keys.has(key)) {
-      if (this.dirty || this.loadFailed) this.dirty = !this.persistPending(this.pending);
+  enqueue(entry: ConflictJournalEmit): void {
+    const dedupeKey = pendingConflictEmitKey(entry);
+    if (this.keySet.has(dedupeKey)) {
+      if (this.needsPersist || this.loadBroken) this.needsPersist = !this.persistPending(this.queued);
       return;
     }
-    this.keys.add(key);
-    this.pending.push(emit);
-    this.dirty = !this.persistPending(this.pending);
+    this.keySet.add(dedupeKey);
+    this.queued.push(entry);
+    this.needsPersist = !this.persistPending(this.queued);
   }
 
   replaceAll(emits: readonly ConflictJournalEmit[]): void {
     const next: ConflictJournalEmit[] = [];
     const nextKeys = new Set<string>();
-    for (const emit of emits) {
-      const key = pendingConflictEmitKey(emit);
-      if (nextKeys.has(key)) continue;
-      nextKeys.add(key);
-      next.push(emit);
+    for (const entry of emits) {
+      const dedupeKey = pendingConflictEmitKey(entry);
+      if (nextKeys.has(dedupeKey)) continue;
+      nextKeys.add(dedupeKey);
+      next.push(entry);
     }
-    const recoveringLoad = this.loadFailed;
+    const recoveringLoad = this.loadBroken;
     if (this.persistPending(next)) {
       if (!recoveringLoad) {
-        this.pending = next;
-        this.keys = nextKeys;
+        this.queued = next;
+        this.keySet = nextKeys;
       }
-      this.dirty = false;
+      this.needsPersist = false;
     }
   }
 
   private tryReadDisk(): PendingDiskState | undefined {
-    let body: string;
+    let contents: string;
     try {
-      body = readFileNoFollowSync(this.path);
+      contents = readFileNoFollowSync(this.path);
     } catch (error) {
-      if (isEnoent(error)) return { pending: [], keys: new Set() };
-      this.warn("conflict pending journal load failed", error);
+      if (isEnoent(error)) return { queued: [], keySet: new Set() };
+      this.warner("conflict pending journal load failed", error);
       return undefined;
     }
-    const pending: ConflictJournalEmit[] = [];
-    const keys = new Set<string>();
-    for (const line of body.split("\n")) {
-      const trimmed = line.trim();
-      if (trimmed.length === 0) continue;
-      let parsed: unknown;
-      try { parsed = JSON.parse(trimmed) as unknown; } catch { continue; }
-      const emit = parsePendingConflictEmit(parsed);
-      if (emit === undefined) continue;
-      const key = pendingConflictEmitKey(emit);
-      if (keys.has(key)) continue;
-      keys.add(key);
-      pending.push(emit);
+    const queued: ConflictJournalEmit[] = [];
+    const keySet = new Set<string>();
+    for (const rawLine of contents.split("\n")) {
+      const stripped = rawLine.trim();
+      if (stripped.length === 0) continue;
+      let decoded: unknown;
+      try { decoded = JSON.parse(stripped) as unknown; } catch { continue; }
+      const entry = parsePendingConflictEmit(decoded);
+      if (entry === undefined) continue;
+      const dedupeKey = pendingConflictEmitKey(entry);
+      if (keySet.has(dedupeKey)) continue;
+      keySet.add(dedupeKey);
+      queued.push(entry);
     }
-    return { pending, keys };
+    return { queued, keySet };
   }
 
-  private persistPending(pending: readonly ConflictJournalEmit[]): boolean {
-    if (this.loadFailed) {
-      const loaded = this.tryReadDisk();
-      if (loaded === undefined) {
-        this.persistFailures += 1;
-        this.warn(`conflict pending journal persist skipped; sidecar still unreadable (failures=${this.persistFailures})`, undefined);
+  private persistPending(queued: readonly ConflictJournalEmit[]): boolean {
+    if (this.loadBroken) {
+      const diskState = this.tryReadDisk();
+      if (diskState === undefined) {
+        this.failedPersists += 1;
+        this.warner(`conflict pending journal persist skipped; sidecar still unreadable (failures=${this.failedPersists})`, undefined);
         return false;
       }
-      this.loadFailed = false;
+      this.loadBroken = false;
       const mergedByKey = new Map<string, ConflictJournalEmit>();
-      for (const emit of loaded.pending) mergedByKey.set(pendingConflictEmitKey(emit), emit);
-      for (const emit of pending) mergedByKey.set(pendingConflictEmitKey(emit), emit);
-      const merged = [...mergedByKey.values()];
-      this.pending = merged;
-      this.keys = new Set(mergedByKey.keys());
-      return this.persistPending(merged);
+      for (const entry of diskState.queued) mergedByKey.set(pendingConflictEmitKey(entry), entry);
+      for (const entry of queued) mergedByKey.set(pendingConflictEmitKey(entry), entry);
+      const mergedEntries = [...mergedByKey.values()];
+      this.queued = mergedEntries;
+      this.keySet = new Set(mergedByKey.keys());
+      return this.persistPending(mergedEntries);
     }
     try {
-      if (pending.length === 0) {
+      if (queued.length === 0) {
         this.removeFile();
         return true;
       }
       const parent = path.dirname(this.path);
       if (parent.length > 0) ensureSecureDirectoryChain(parent);
-      this.atomicRewrite(pending.map(pendingEmitToJsonLine).join(""));
+      this.atomicRewrite(queued.map(pendingEmitToJsonLine).join(""));
       return true;
     } catch (error) {
-      this.persistFailures += 1;
-      this.warn(`conflict pending journal persist failed (failures=${this.persistFailures})`, error);
+      this.failedPersists += 1;
+      this.warner(`conflict pending journal persist failed (failures=${this.failedPersists})`, error);
       return false;
     }
   }
 
-  private atomicRewrite(body: string): void {
-    const tmp = `${this.path}.pending-tmp`;
+  private atomicRewrite(contents: string): void {
+    const tempFile = `${this.path}.queued-tempFile`;
     try {
-      fs.unlinkSync(tmp);
+      fs.unlinkSync(tempFile);
     } catch (error) {
       if (!isEnoent(error)) throw error;
     }
-    const fd = openNoFollowSync(tmp, { baseFlags: fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL, mode: PENDING_FILE_MODE, nofollowFlag: O_NOFOLLOW_FLAG });
+    const handle = openNoFollowSync(tempFile, { baseFlags: fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL, mode: PENDING_FILE_MODE, nofollowFlag: O_NOFOLLOW_FLAG });
     try {
-      try { fs.fchmodSync(fd, PENDING_FILE_MODE); } catch {}
-      fs.writeSync(fd, body);
-      try { fs.fsyncSync(fd); } catch {}
+      try { fs.fchmodSync(handle, PENDING_FILE_MODE); } catch {}
+      fs.writeSync(handle, contents);
+      try { fs.fsyncSync(handle); } catch {}
     } finally {
-      fs.closeSync(fd);
+      fs.closeSync(handle);
     }
-    fs.renameSync(tmp, this.path);
+    fs.renameSync(tempFile, this.path);
   }
 
   private removeFile(): void {
