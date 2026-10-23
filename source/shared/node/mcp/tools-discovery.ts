@@ -45,12 +45,12 @@ type ToolServer = {
   tools: Tool[];
   toolCount?: number;
 };
-type CacheResolution = { tools: Tool[]; resolvedKey: string };
+type CacheResolution = { tools: Tool[]; resolved: string };
 type CacheEntry = {
-  requestedKey: string;
+  requested: string;
   promise: Promise<CacheResolution>;
-  fulfilled?: { tools: Tool[]; resolvedKey: string; atMs: number };
-  staleTools?: Tool[];
+  ready?: { tools: Tool[]; resolved: string; atMs: number };
+  stale?: Tool[];
 };
 
 export function applyCustomInstructionsToMcpResult<T extends McpResultLike>(
@@ -70,8 +70,8 @@ export function applyCustomInstructionsToMcpResult<T extends McpResultLike>(
 }
 
 export function createMcpToolsDiscovery(
-  core: any,
-  deps: {
+  host: any,
+  options: {
     boxMcpExec?: any;
     deadline?: DeadlinePolicy;
     resultFactory?: McpDiscoveryResultFactory;
@@ -79,24 +79,24 @@ export function createMcpToolsDiscovery(
     onDiscoveryFailed?(event: Record<string, unknown>): void;
   } = {},
 ) {
-  let boxMcpExecSlot = deps.boxMcpExec;
-  let lastPushedBoxConfigJson: string | null = null;
-  let hasEverPushedBoxConfig = false;
-  let boxPushChain = Promise.resolve();
-  let toolsCacheEntry: CacheEntry | null = null;
-  let toolsCacheEpoch = 0;
-  let toolsColdWarmScheduled = false;
-  const firstCallReported = new Map<string, { ok: boolean; failed: boolean }>();
-  const resultFactory = deps.resultFactory ?? generatedMcpResultFactory;
-  const discoveryDeadline =
-    deps.deadline ??
+  let boxExec = options.boxMcpExec;
+  let lastPushedConfig: string | null = null;
+  let everPushed = false;
+  let pushChain = Promise.resolve();
+  let cacheEntry: CacheEntry | null = null;
+  let cacheEpoch = 0;
+  let coldWarmScheduled = false;
+  const reportedCalls = new Map<string, { ok: boolean; failed: boolean }>();
+  const factory = options.resultFactory ?? generatedMcpResultFactory;
+  const deadline =
+    options.deadline ??
     createDeadlinePolicy(realClock, {
       name: "mcp-tools-discovery",
       timeoutMs: TOOLS_DISCOVERY_DEADLINE_MS,
     });
 
-  function displayRowForIdentifier(identifier: string): any {
-    return core
+  function displayRow(identifier: string): any {
+    return host
       .lastAccountDisplayConfig()
       ?.servers.find(
         (server: any) =>
@@ -109,18 +109,18 @@ export function createMcpToolsDiscovery(
       );
   }
 
-  function reportFirstCall(providerIdentifier: string, ok: boolean): void {
-    if (deps.onConnectorAuth == null) return;
-    const entry = firstCallReported.get(providerIdentifier) ?? {
+  function reportCall(providerIdentifier: string, ok: boolean): void {
+    if (options.onConnectorAuth == null) return;
+    const entry = reportedCalls.get(providerIdentifier) ?? {
       ok: false,
       failed: false,
     };
     if (ok ? entry.ok : entry.failed) return;
     if (ok) entry.ok = true;
     else entry.failed = true;
-    firstCallReported.set(providerIdentifier, entry);
-    const row = displayRowForIdentifier(providerIdentifier);
-    deps.onConnectorAuth({
+    reportedCalls.set(providerIdentifier, entry);
+    const row = displayRow(providerIdentifier);
+    options.onConnectorAuth({
       phase: "first_call_ok",
       outcome: ok ? "ok" : "failed",
       serverName: row?.name,
@@ -128,13 +128,13 @@ export function createMcpToolsDiscovery(
     });
   }
 
-  function filterDisabledTools(tools: Tool[]): Tool[] {
-    const disabledByServerId = core
+  function enabledTools(tools: Tool[]): Tool[] {
+    const disabledByServerId = host
       .settingsStore()
       .getMcpDisabledToolsByServerId();
     if (Object.keys(disabledByServerId).length === 0) return tools;
     return tools.filter((tool) => {
-      const row = displayRowForIdentifier(tool.providerIdentifier);
+      const row = displayRow(tool.providerIdentifier);
       return (
         row == null ||
         !(disabledByServerId[row.id]?.includes(tool.toolName) ?? false)
@@ -142,8 +142,8 @@ export function createMcpToolsDiscovery(
     });
   }
 
-  function countEnabledTools(serverId: string, tools: Tool[]): number {
-    const disabled = core.settingsStore().getMcpDisabledToolsByServerId()[
+  function enabledCount(serverId: string, tools: Tool[]): number {
+    const disabled = host.settingsStore().getMcpDisabledToolsByServerId()[
       serverId
     ];
     return disabled == null || disabled.length === 0
@@ -151,79 +151,79 @@ export function createMcpToolsDiscovery(
       : tools.filter((tool) => !disabled.includes(tool.toolName)).length;
   }
 
-  const toolServerSetKey = (serverNames: string[]): string =>
+  const serverSetKey = (serverNames: string[]): string =>
     [...serverNames].sort().join("\0");
 
-  function peekDiscoveryServerNames(): string[] | undefined {
-    const httpServerNames = core.definitionSource.peekHttpServerNames();
+  function peekServerNames(): string[] | undefined {
+    const httpServerNames = host.definitionSource.peekHttpServerNames();
     if (httpServerNames === undefined) return undefined;
-    if (boxMcpExecSlot == null) return httpServerNames;
+    if (boxExec == null) return httpServerNames;
     return [
       ...httpServerNames,
-      ...(core.definitionSource.peekStdioServerNames() ?? []),
+      ...(host.definitionSource.peekStdioServerNames() ?? []),
     ];
   }
 
-  async function ensureBoxServersPushed(): Promise<void> {
-    const boxMcpExec = boxMcpExecSlot;
+  async function pushBoxServers(): Promise<void> {
+    const boxMcpExec = boxExec;
     if (boxMcpExec == null) return;
-    const stdioConfigs = await core.definitionSource.getStdioServerConfigs();
+    const stdioConfigs = await host.definitionSource.getStdioServerConfigs();
     const configJson = JSON.stringify({ mcpServers: stdioConfigs });
-    if (configJson === lastPushedBoxConfigJson) return;
-    if (Object.keys(stdioConfigs).length === 0 && !hasEverPushedBoxConfig)
+    if (configJson === lastPushedConfig) return;
+    if (Object.keys(stdioConfigs).length === 0 && !everPushed)
       return;
-    const push = boxPushChain.then(async () => {
-      if (configJson === lastPushedBoxConfigJson) return;
+    const push = pushChain.then(async () => {
+      if (configJson === lastPushedConfig) return;
       await boxMcpExec.loadServers(configJson);
-      lastPushedBoxConfigJson = configJson;
-      hasEverPushedBoxConfig = true;
+      lastPushedConfig = configJson;
+      everPushed = true;
     });
-    boxPushChain = push.catch((error) =>
+    pushChain = push.catch((error) =>
       reportMcpHostEdgeFailure("box-config-push", error),
     );
     await push;
   }
 
-  function currentToolsForKey(key: string): Tool[] | undefined {
-    const entry = toolsCacheEntry;
+  function toolsForKey(key: string): Tool[] | undefined {
+    const entry = cacheEntry;
     if (entry == null) return undefined;
-    if (entry.fulfilled?.resolvedKey === key) return entry.fulfilled.tools;
-    if (entry.requestedKey === key) return entry.staleTools;
+    if (entry.ready?.resolved === key) return entry.ready.tools;
+    if (entry.requested === key) return entry.stale;
     return undefined;
   }
 
-  function toolsEntryUsable(key: string): boolean {
-    const entry = toolsCacheEntry;
+  function entryUsable(key: string): boolean {
+    const entry = cacheEntry;
     if (entry == null) return false;
-    if (entry.fulfilled === undefined) return entry.requestedKey === key;
+    if (entry.ready === undefined) return entry.requested === key;
     return (
-      entry.fulfilled.resolvedKey === key &&
-      Date.now() - entry.fulfilled.atMs < MCP_TOOLS_CACHE_TTL_MS
+      entry.ready.resolved === key &&
+      Date.now() - entry.ready.atMs < MCP_TOOLS_CACHE_TTL_MS
     );
   }
 
-  function dropSettledCacheForEmptyServerSet(): void {
-    if (toolsCacheEntry?.fulfilled !== undefined) toolsCacheEntry = null;
+  function dropEmptyCache(): void {
+    if (cacheEntry?.ready !== undefined) cacheEntry = null;
   }
 
-  async function httpServerNamesForBackend(): Promise<string[]> {
-    const userServers = await core.definitionSource.getUserServerConfigs();
+  async function backendServerNames(): Promise<string[]> {
+    const userServers = await host.definitionSource.getUserServerConfigs();
     return Object.entries(userServers)
       .filter(([, config]: [string, any]) => "url" in config)
       .map(([name]) => name);
   }
 
-  async function stdioServerNamesForBox(): Promise<string[]> {
-    return boxMcpExecSlot == null
+  async function boxServerNames(): Promise<string[]> {
+    return boxExec == null
       ? []
-      : Object.keys(await core.definitionSource.getStdioServerConfigs());
+      : Object.keys(await host.definitionSource.getStdioServerConfigs());
   }
 
-  async function discoverHttpTools(
+  async function httpTools(
     serverIdentifiers: string[],
   ): Promise<Tool[]> {
     if (serverIdentifiers.length === 0) return [];
-    const servers = await core.backendMcpExec.listTools(serverIdentifiers);
+    const servers = await host.backendMcpExec.listTools(serverIdentifiers);
     if (servers.length === 0) {
       reportMcpHostEdgeDegraded("backend-list-tools", "none_resolved");
       return [];
@@ -231,79 +231,79 @@ export function createMcpToolsDiscovery(
     return servers.flatMap((server: ToolServer) => server.tools);
   }
 
-  async function discoverBoxTools(stdioServerNames: string[]): Promise<Tool[]> {
-    const boxMcpExec = boxMcpExecSlot;
+  async function boxTools(stdioServerNames: string[]): Promise<Tool[]> {
+    const boxMcpExec = boxExec;
     if (boxMcpExec == null) return [];
     if (stdioServerNames.length === 0) {
       try {
-        await ensureBoxServersPushed();
+        await pushBoxServers();
       } catch (error) {
         reportMcpHostEdgeFailure("box-config-reconcile", error);
       }
       return [];
     }
-    await ensureBoxServersPushed();
+    await pushBoxServers();
     return (await boxMcpExec.listTools(stdioServerNames)).flatMap(
       (server: ToolServer) => server.tools,
     );
   }
 
-  async function fetchToolsViaBackend(): Promise<CacheResolution> {
+  async function fetchTools(): Promise<CacheResolution> {
     const [httpServerNames, stdioServerNames] = await Promise.all([
-      httpServerNamesForBackend(),
-      stdioServerNamesForBox(),
+      backendServerNames(),
+      boxServerNames(),
     ]);
-    const resolvedKey = toolServerSetKey([
+    const resolved = serverSetKey([
       ...httpServerNames,
       ...stdioServerNames,
     ]);
     const [httpResult, boxResult] = await Promise.allSettled([
-      discoverHttpTools(httpServerNames),
-      discoverBoxTools(stdioServerNames),
+      httpTools(httpServerNames),
+      boxTools(stdioServerNames),
     ]);
     if (httpResult.status === "rejected") throw httpResult.reason;
     if (boxResult.status === "rejected") {
       if (httpServerNames.length === 0) throw boxResult.reason;
       reportMcpHostEdgeFailure("box-list-tools", boxResult.reason);
-      return { tools: httpResult.value, resolvedKey };
+      return { tools: httpResult.value, resolved };
     }
-    return { tools: [...httpResult.value, ...boxResult.value], resolvedKey };
+    return { tools: [...httpResult.value, ...boxResult.value], resolved };
   }
 
-  function getToolsViaBackend(): Promise<CacheResolution> {
-    return discoveryDeadline.run(() => fetchToolsViaBackend());
+  function resolveTools(): Promise<CacheResolution> {
+    return deadline.run(() => fetchTools());
   }
 
-  function startToolsResolution(
-    requestedKey: string,
+  function beginResolution(
+    requested: string,
     carryStale: boolean,
   ): CacheEntry {
-    const staleTools = carryStale
-      ? currentToolsForKey(requestedKey)
+    const stale = carryStale
+      ? toolsForKey(requested)
       : undefined;
     const startedAtMs = Date.now();
     const entry: CacheEntry = {
-      requestedKey,
-      promise: getToolsViaBackend(),
-      ...(staleTools === undefined ? {} : { staleTools }),
+      requested,
+      promise: resolveTools(),
+      ...(stale === undefined ? {} : { stale }),
     };
-    toolsCacheEntry = entry;
+    cacheEntry = entry;
     void entry.promise.then(
-      ({ tools, resolvedKey }) => {
-        if (toolsCacheEntry === entry)
-          entry.fulfilled = { tools, resolvedKey, atMs: Date.now() };
+      ({ tools, resolved }) => {
+        if (cacheEntry === entry)
+          entry.ready = { tools, resolved, atMs: Date.now() };
       },
       (error) => {
-        if (toolsCacheEntry === entry) {
-          if (entry.staleTools === undefined) toolsCacheEntry = null;
+        if (cacheEntry === entry) {
+          if (entry.stale === undefined) cacheEntry = null;
           else
-            entry.fulfilled = {
-              tools: entry.staleTools,
-              resolvedKey: entry.requestedKey,
+            entry.ready = {
+              tools: entry.stale,
+              resolved: entry.requested,
               atMs: 0,
             };
         }
-        deps.onDiscoveryFailed?.({
+        options.onDiscoveryFailed?.({
           errorClass:
             error instanceof Error
               ? error.name.length > 0
@@ -311,7 +311,7 @@ export function createMcpToolsDiscovery(
                 : "Error"
               : typeof error,
           elapsedMs: Date.now() - startedAtMs,
-          servedStale: staleTools !== undefined,
+          servedStale: stale !== undefined,
         });
       },
     );
@@ -319,59 +319,59 @@ export function createMcpToolsDiscovery(
   }
 
   async function getToolsRaw(): Promise<Tool[]> {
-    const entry = toolsCacheEntry;
-    const serverNames = peekDiscoveryServerNames();
-    if (entry != null && entry.fulfilled === undefined) {
+    const entry = cacheEntry;
+    const serverNames = peekServerNames();
+    if (entry != null && entry.ready === undefined) {
       if (
         serverNames !== undefined &&
-        entry.staleTools !== undefined &&
-        entry.requestedKey === toolServerSetKey(serverNames)
+        entry.stale !== undefined &&
+        entry.requested === serverSetKey(serverNames)
       ) {
-        return entry.staleTools;
+        return entry.stale;
       }
       return (await entry.promise).tools;
     }
-    if (entry?.fulfilled !== undefined && serverNames !== undefined) {
-      const key = toolServerSetKey(serverNames);
-      if (entry.fulfilled.resolvedKey === key) {
-        if (Date.now() - entry.fulfilled.atMs >= MCP_TOOLS_CACHE_TTL_MS)
-          startToolsResolution(key, true);
-        return entry.fulfilled.tools;
+    if (entry?.ready !== undefined && serverNames !== undefined) {
+      const key = serverSetKey(serverNames);
+      if (entry.ready.resolved === key) {
+        if (Date.now() - entry.ready.atMs >= MCP_TOOLS_CACHE_TTL_MS)
+          beginResolution(key, true);
+        return entry.ready.tools;
       }
     }
     if (serverNames !== undefined) {
-      const key = toolServerSetKey(serverNames);
-      return (await startToolsResolution(key, false).promise).tools;
+      const key = serverSetKey(serverNames);
+      return (await beginResolution(key, false).promise).tools;
     }
-    return (await getToolsViaBackend()).tools;
+    return (await resolveTools()).tools;
   }
 
-  async function warmToolsCache(epoch: number): Promise<void> {
+  async function warmCache(epoch: number): Promise<void> {
     const [httpServerNames, stdioServerNames] = await Promise.all([
-      httpServerNamesForBackend(),
-      stdioServerNamesForBox(),
+      backendServerNames(),
+      boxServerNames(),
     ]);
-    if (epoch !== toolsCacheEpoch) return;
-    const key = toolServerSetKey([...httpServerNames, ...stdioServerNames]);
+    if (epoch !== cacheEpoch) return;
+    const key = serverSetKey([...httpServerNames, ...stdioServerNames]);
     if (key === "") {
-      dropSettledCacheForEmptyServerSet();
+      dropEmptyCache();
       return;
     }
-    if (!toolsEntryUsable(key)) startToolsResolution(key, false);
+    if (!entryUsable(key)) beginResolution(key, false);
   }
 
-  function scheduleColdStartWarm(): void {
-    if (toolsColdWarmScheduled) return;
-    toolsColdWarmScheduled = true;
-    const epoch = toolsCacheEpoch;
-    void warmToolsCache(epoch).finally(() => {
-      toolsColdWarmScheduled = false;
+  function coldWarm(): void {
+    if (coldWarmScheduled) return;
+    coldWarmScheduled = true;
+    const epoch = cacheEpoch;
+    void warmCache(epoch).finally(() => {
+      coldWarmScheduled = false;
     });
   }
 
-  async function isHttpProvider(providerIdentifier: string): Promise<boolean> {
+  async function isHttp(providerIdentifier: string): Promise<boolean> {
     try {
-      const echoedRow = core
+      const echoedRow = host
         .lastAccountDisplayConfig()
         ?.servers.find((server: any) =>
           server.accounts?.some(
@@ -380,7 +380,7 @@ export function createMcpToolsDiscovery(
         );
       if (echoedRow != null) return "url" in echoedRow.config;
       return (
-        (await core.definitionSource.getServerUrlForIdentifier(
+        (await host.definitionSource.getServerUrlForIdentifier(
           providerIdentifier,
         )) !== undefined
       );
@@ -389,98 +389,98 @@ export function createMcpToolsDiscovery(
     }
   }
 
-  async function isBoxStdioProvider(
+  async function isStdio(
     providerIdentifier: string,
   ): Promise<boolean> {
     try {
       return (
         providerIdentifier in
-        (await core.definitionSource.getStdioServerConfigs())
+        (await host.definitionSource.getStdioServerConfigs())
       );
     } catch {
       return false;
     }
   }
 
-  async function executeToolRaw(
+  async function runTool(
     args: any,
     auditIdentity: any,
   ): Promise<McpResultLike> {
-    if (await isHttpProvider(args.providerIdentifier)) {
-      const result = await core.backendMcpExec.executeTool({
+    if (await isHttp(args.providerIdentifier)) {
+      const result = await host.backendMcpExec.executeTool({
         serverIdentifier: args.providerIdentifier,
         toolName: args.name,
         args: toJsonArgs(args.args),
         toolCallId: args.toolCallId,
         agentId: auditIdentity?.agentId,
       });
-      reportFirstCall(args.providerIdentifier, result.result.case !== "error");
+      reportCall(args.providerIdentifier, result.result.case !== "error");
       return result;
     }
-    const boxMcpExec = boxMcpExecSlot;
+    const boxMcpExec = boxExec;
     if (
       boxMcpExec != null &&
-      (await isBoxStdioProvider(args.providerIdentifier))
+      (await isStdio(args.providerIdentifier))
     ) {
       try {
-        await ensureBoxServersPushed();
+        await pushBoxServers();
       } catch (error) {
-        return resultFactory.error(
+        return factory.error(
           `Could not load MCP servers onto Slate's computer: ${errorMessage(error)}`,
         );
       }
       return boxMcpExec.executeTool(args);
     }
-    return resultFactory.error(
+    return factory.error(
       `MCP server "${args.providerIdentifier}" is not available here. HTTP/SSE servers execute on the backend and stdio servers run on Slate's computer; this server is neither reachable nor supported in this context.`,
     );
   }
 
   return {
     getTools: async (_ctx?: unknown) =>
-      filterDisabledTools(await getToolsRaw()),
+      enabledTools(await getToolsRaw()),
     getToolsRaw,
     getToolsForTurnStart: async (_ctx?: unknown) => {
-      const serverNames = peekDiscoveryServerNames();
+      const serverNames = peekServerNames();
       if (serverNames === undefined) {
-        scheduleColdStartWarm();
+        coldWarm();
         return [];
       }
-      const key = toolServerSetKey(serverNames);
+      const key = serverSetKey(serverNames);
       if (key === "") {
-        dropSettledCacheForEmptyServerSet();
+        dropEmptyCache();
         return [];
       }
-      if (!toolsEntryUsable(key)) startToolsResolution(key, true);
-      return filterDisabledTools(currentToolsForKey(key) ?? []);
+      if (!entryUsable(key)) beginResolution(key, true);
+      return enabledTools(toolsForKey(key) ?? []);
     },
     async listBoxServers(
       serverIdentifiers: string[],
       options?: unknown,
     ): Promise<Array<ToolServer & { status: string; statusDetail?: string; toolCount: number }>> {
-      const boxMcpExec = boxMcpExecSlot;
+      const boxMcpExec = boxExec;
       if (boxMcpExec == null)
         throw new SlateMcpConfigError(
           "This surface has no box MCP execution port.",
         );
-      await core.definitionSource.ensureConfigLoaded();
-      await ensureBoxServersPushed();
+      await host.definitionSource.ensureConfigLoaded();
+      await pushBoxServers();
       const servers: Array<ToolServer & { status: string; statusDetail?: string; toolCount: number }> = await boxMcpExec.listTools(
         serverIdentifiers,
         options,
       );
       return servers.map((server) => {
-        const row = displayRowForIdentifier(server.serverIdentifier);
+        const row = displayRow(server.serverIdentifier);
         return row == null || server.tools.length === 0
           ? server
-          : { ...server, toolCount: countEnabledTools(row.id, server.tools) };
+          : { ...server, toolCount: enabledCount(row.id, server.tools) };
       });
     },
     async resolveProviderTransport(
       providerIdentifier: string,
     ): Promise<"http" | "stdio" | "unknown"> {
-      if (await isHttpProvider(providerIdentifier)) return "http";
-      if (await isBoxStdioProvider(providerIdentifier)) return "stdio";
+      if (await isHttp(providerIdentifier)) return "http";
+      if (await isStdio(providerIdentifier)) return "stdio";
       return "unknown";
     },
     async executeTool(
@@ -488,52 +488,52 @@ export function createMcpToolsDiscovery(
       args: any,
       auditIdentity: any,
     ): Promise<McpResultLike> {
-      const displayServer = displayRowForIdentifier(args.providerIdentifier);
+      const displayServer = displayRow(args.providerIdentifier);
       const displayName = displayServer?.name ?? args.providerIdentifier;
       if (
         displayServer != null &&
-        (core
+        (host
           .settingsStore()
           .getMcpDisabledToolsByServerId()
           [displayServer.id]?.includes(args.toolName) ??
           false)
       ) {
-        return resultFactory.error(
+        return factory.error(
           `Tool "${args.toolName}" is disabled for "${displayName}".`,
         );
       }
-      const raw = await executeToolRaw(args, auditIdentity);
+      const raw = await runTool(args, auditIdentity);
       return applyCustomInstructionsToMcpResult(
         raw,
         displayName,
         resolveMcpCustomInstruction(
           displayName,
-          core
+          host
             .settingsStore()
             .getRawMcpCustomInstructionByServerId(displayServer?.id ?? "") ??
-            core.settingsStore().getRawMcpCustomInstruction(displayName),
+            host.settingsStore().getRawMcpCustomInstruction(displayName),
         ),
-        resultFactory,
+        factory,
       );
     },
     setBoxMcpExec(next: any): void {
-      boxMcpExecSlot = next;
-      lastPushedBoxConfigJson = null;
-      toolsCacheEntry = null;
-      firstCallReported.clear();
-      toolsCacheEpoch += 1;
-      void warmToolsCache(toolsCacheEpoch).catch(() => {});
+      boxExec = next;
+      lastPushedConfig = null;
+      cacheEntry = null;
+      reportedCalls.clear();
+      cacheEpoch += 1;
+      void warmCache(cacheEpoch).catch(() => {});
     },
     invalidateToolsCache(): void {
-      const epoch = ++toolsCacheEpoch;
-      toolsCacheEntry = null;
-      firstCallReported.clear();
-      void warmToolsCache(epoch).catch(() => {});
+      const epoch = ++cacheEpoch;
+      cacheEntry = null;
+      reportedCalls.clear();
+      void warmCache(epoch).catch(() => {});
     },
     resetPushState(): void {
-      lastPushedBoxConfigJson = null;
+      lastPushedConfig = null;
     },
-    isBoxExecWired: (): boolean => boxMcpExecSlot != null,
+    isBoxExecWired: (): boolean => boxExec != null,
   };
 }
 
@@ -543,7 +543,7 @@ export class SlateMcpExecutor {
     private readonly persistImage?: any,
     private readonly spillLargeText?: any,
     private readonly auditIdentity?: any,
-    private readonly resultFactory?: McpResultFactory,
+    private readonly factory?: McpResultFactory,
   ) {}
 
   async execute(ctx: unknown, args: unknown): Promise<unknown> {
@@ -560,7 +560,7 @@ export class SlateMcpExecutor {
     return augmentMcpResultWithSavedImages(
       spilled,
       this.persistImage,
-      this.resultFactory,
+      this.factory,
     );
   }
 }
