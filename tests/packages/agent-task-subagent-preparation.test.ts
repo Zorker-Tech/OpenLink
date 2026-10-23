@@ -724,3 +724,22 @@ test("a hook input built from a subagent with no raw arguments says only what it
   assert.equal(input.environment, undefined)
   assert.equal(input.file_attachments, undefined)
 })
+
+// ---------------------------------------------------------------------------------------------
+// The edges preparation keeps
+// ---------------------------------------------------------------------------------------------
+
+test("a sibling of a trusted prefix is not inside it", () => {
+  assert.equal(isPathWithinAllowedPrefix({ targetPath: "/root/a", prefix: "/root" }), true);
+  assert.equal(isPathWithinAllowedPrefix({ targetPath: "/root", prefix: "/root" }), true);
+  assert.equal(isPathWithinAllowedPrefix({ targetPath: "/rootish/a", prefix: "/root" }), false);
+  assert.equal(isPathWithinAllowedPrefix({ targetPath: "/other", prefix: "/root" }), false);
+});
+
+test("a requested cloud build is trimmed", async () => {
+  const resolved = await resolveTaskSubagentConfig(resolutionArgs({
+    rawArgs: { environment: "cloud", cloud_requested_environment_build_id: " build-1 " },
+  }) as never);
+  assert.equal((resolved.effectiveTargetMachine as { environment_build_id?: string }).environment_build_id, "build-1");
+});
+
