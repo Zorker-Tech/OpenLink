@@ -615,3 +615,100 @@ describe("what a member's talk does to the room", () => {
     void GROUP_MAX_MEMBERS;
   });
 });
+
+// ---------------------------------------------------------------------------------------------
+// The edges a group turn is told about
+
+describe("the edges a group turn is told about", () => {
+  it("brings forward the group whose members match exactly, not any other group", async () => {
+    const world1 = world({ agents: [
+      { id: "g-other", isGroup: true, memberIds: ["m2"] },
+      { id: "m1" },
+      { id: "match", isGroup: true, memberIds: ["m1"] },
+    ] });
+    const result = await world1.glue.createGroup({ name: "Same members", memberIds: ["m1"] });
+    assert.deepEqual(world1.named("switchAgent").map((call) => call.args[0]), ["match"]);
+    assert.equal(result.transcript != null, true);
+    const reordered = await world1.glue.createGroup({ name: "Same again", memberIds: ["m1"] });
+    assert.deepEqual(reordered.agent.id, "match");
+  });
+
+  it("says whether the room behind a turn is a shared room", () => {
+    const dirs = agentsDir();
+    const groupDir = dirs.group("group", []);
+    writeSlateGroupConfig(groupDir, { version: GROUP_CONFIG_VERSION, memberIds: [], sharedRoomId: "room-1" });
+    const world1 = world({ directories: { group: groupDir } });
+    const session = { id: "group", dbPath: join(groupDir, "store.db") };
+    assert.equal(world1.glue.groupOrchestratorDeps(session, 1).isSharedRoom, true);
+    writeSlateGroupConfig(groupDir, { version: GROUP_CONFIG_VERSION, memberIds: [] });
+    assert.equal(world1.glue.groupOrchestratorDeps(session, 1).isSharedRoom, false);
+  });
+
+  it("sends a remote member's turn to the far side instead of running it locally", async () => {
+    const dirs = agentsDir();
+    const groupDir = dirs.group("group", ["m1"]);
+    const world1 = world({ directories: { group: groupDir } });
+    const remoteId = formatRemoteAgentId({ ownerAuthId: "owner", agentId: "agent" });
+    const session = { id: "group", dbPath: join(groupDir, "store.db") };
+    const remote = await world1.glue.runGroupMemberTurn(session, { member: { id: remoteId, name: "Remote", description: "" }, systemPrompt: "s", prompt: "p" }, { currentId: undefined, currentText: "", sealed: [] }, () => true);
+    assert.deepEqual(remote, []);
+    assert.equal(world1.named("createGroupMemberRunner").length, 0);
+  });
+
+  it("applies a member's reaction while its turn runs", async () => {
+    const dirs = agentsDir();
+    const groupDir = dirs.group("group", ["m1"]);
+    const world1 = world({ directories: { group: groupDir }, entries: [{ id: "t0u", kind: "message", role: "user", content: "hi" }] });
+    const session = fakeSession("group", groupDir);
+    (world1.tm.sessions as { activeSession: unknown }).activeSession = session;
+    (world1.tm.execution as { createGroupMemberRunner: unknown }).createGroupMemberRunner = (_session: unknown, hooks: { transport: { onUpdate(update: unknown): void } }) => ({
+      run: async () => {
+        hooks.transport.onUpdate({ type: "react-to-message", emoji: "x", messageAddress: "t0u" });
+        return { sentMessageCount: 1, reacted: true, aborted: false };
+      },
+    });
+    await world1.glue.runGroupMemberTurn(session, { member: { id: "m1", name: "Member", description: "" }, systemPrompt: "s", prompt: "p" }, { currentId: undefined, currentText: "", sealed: [] }, () => true);
+    assert.deepEqual((world1.named("applyReaction")[0]?.args[0] as { emoji: string }).emoji, "x");
+  });
+
+  it("stops asking a preempted member after the third try", async () => {
+    const dirs = agentsDir();
+    const groupDir = dirs.group("group", ["m1"]);
+    const world1 = world({ directories: { group: groupDir } });
+    const session = { id: "group", dbPath: join(groupDir, "store.db") };
+    let runs = 0;
+    (world1.tm.execution as { createGroupMemberRunner: unknown }).createGroupMemberRunner = () => ({
+      run: async () => {
+        runs += 1;
+        world1.glue.dmPreemptedGroupMemberIds.add("m1");
+        return { sentMessageCount: 0, reacted: false, aborted: false };
+      },
+    });
+    await world1.glue.runGroupMemberTurn(session, { member: { id: "m1", name: "Member", description: "" }, systemPrompt: "s", prompt: "p" }, { currentId: undefined, currentText: "", sealed: [] }, () => true);
+    assert.equal(runs, 3);
+  });
+
+  it("leaves the member itself out of the peers it tells the far side about", async () => {
+    const dirs = agentsDir();
+    const groupDir = dirs.group("group", ["m1", "m2"]);
+    writeSlateGroupConfig(groupDir, { version: GROUP_CONFIG_VERSION, memberIds: ["m1", "m2"], sharedRoomId: "room-1", remoteMembers: [{ ownerAuthId: "o", agentId: "a", name: "Remote" }] });
+    const world1 = world({ directories: { group: groupDir } });
+    const remoteId = formatRemoteAgentId({ ownerAuthId: "o", agentId: "a" });
+    (world1.tm.sharedRooms as { sharedRoomConfigOf: () => unknown }).sharedRoomConfigOf = () => ({ sharedRoomId: "room-1", memberIds: [remoteId, "m1"], remoteMembers: [{ ownerAuthId: "o", agentId: "a", name: "Remote" }] });
+    const requests: Array<{ peers: Array<{ id: string }> }> = [];
+    (world1.tm as { xuserDelegate: unknown }).xuserDelegate = { isEnabled: () => true, runRemoteMemberTurn: async (request2: { peers: Array<{ id: string }> }) => { requests.push(request2); return ["ok"]; } };
+    const session = fakeSession("group", groupDir);
+    await world1.glue.runRemoteGroupMemberTurn(session, { id: remoteId, name: "Remote", description: "" });
+    assert.equal(requests.length, 1);
+    assert.deepEqual(requests[0]?.peers.map((peer) => peer.id).includes(remoteId), false);
+  });
+
+  it("does not open a preview for an empty streamed delta", () => {
+    const world1 = world();
+    (world1.tm.sessions as { activeSession: unknown }).activeSession = { id: "group" };
+    const stream = createGroupMemberStream();
+    world1.glue.streamGroupMemberUpdate({ id: "group" }, { id: "m1", name: "Member", description: "" }, { type: "text-delta" }, stream);
+    assert.equal(stream.currentId, undefined);
+    assert.equal(world1.named("appendEntry").length, 0);
+  });
+});
