@@ -2,7 +2,7 @@
  * The storage a client keeps its own state in.
  *
  * A client persists slices of its own state — drafts, layout, what it last selected — and the store is where those
- * slices live: read by key, written by key, removed by key, and listed so a caller can see what is there. What is
+ * slices live: read by storageKey, written by storageKey, removed by storageKey, and listed so a caller can see what is there. What is
  * stored is bounded and versioned, so a slice written by an older client is recognized rather than read as if it were
  * current.
  */
@@ -10,63 +10,63 @@ export const ALLOWED_CLIENT_PERSISTENCE_KEY_PREFIX = "slate.";
 export const CLIENT_PERSISTENCE_MAX_VALUE_BYTES = 8 * 1024 * 1024;
 export const CLIENT_PERSISTENCE_MAX_TOTAL_BYTES = 256 * 1024 * 1024;
 export const CLIENT_PERSISTENCE_MIGRATION_MARKER_FILENAME = ".migrated-from-local-storage";
-const FILE_NAME_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
-const FILE_NAME_SUFFIX = ".blob";
-const MAX_FILE_NAME_LENGTH = 240;
-const TEMP_FILE_SUFFIX = ".tmp";
-const textEncoder = new TextEncoder();
+const NAME_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
+const BLOB_SUFFIX = ".blob";
+const MAX_NAME_LENGTH = 240;
+const TEMP_SUFFIX = ".tmp";
+const utf8Encoder = new TextEncoder();
 
-export function encodeClientPersistenceFileName(key: string): string {
-  const bytes = textEncoder.encode(key);
-  let name = "";
-  let buffer = 0;
-  let bits = 0;
-  for (const byte of bytes) {
-    buffer = buffer << 8 | byte;
-    bits += 8;
-    while (bits >= 5) {
-      name += FILE_NAME_ALPHABET[buffer >>> bits - 5 & 31];
-      bits -= 5;
+export function encodeClientPersistenceFileName(storageKey: string): string {
+  const keyBytes = utf8Encoder.encode(storageKey);
+  let fileName = "";
+  let carry = 0;
+  let bitCount = 0;
+  for (const nextByte of keyBytes) {
+    carry = carry << 8 | nextByte;
+    bitCount += 8;
+    while (bitCount >= 5) {
+      fileName += NAME_ALPHABET[carry >>> bitCount - 5 & 31];
+      bitCount -= 5;
     }
   }
-  if (bits > 0) name += FILE_NAME_ALPHABET[buffer << 5 - bits & 31];
-  return `${name}${FILE_NAME_SUFFIX}`;
+  if (bitCount > 0) fileName += NAME_ALPHABET[carry << 5 - bitCount & 31];
+  return `${fileName}${BLOB_SUFFIX}`;
 }
 
-export function decodeClientPersistenceFileName(name: string): string | null {
-  if (!name.endsWith(FILE_NAME_SUFFIX)) return null;
-  const body = name.slice(0, -FILE_NAME_SUFFIX.length);
-  if (body.length === 0) return null;
-  const bytes: number[] = [];
-  let buffer = 0;
-  let bits = 0;
-  for (const character of body) {
-    const index = FILE_NAME_ALPHABET.indexOf(character);
-    if (index < 0) return null;
-    buffer = buffer << 5 | index;
-    bits += 5;
-    if (bits >= 8) {
-      bytes.push(buffer >>> bits - 8 & 255);
-      bits -= 8;
+export function decodeClientPersistenceFileName(fileName: string): string | null {
+  if (!fileName.endsWith(BLOB_SUFFIX)) return null;
+  const payload = fileName.slice(0, -BLOB_SUFFIX.length);
+  if (payload.length === 0) return null;
+  const keyBytes: number[] = [];
+  let carry = 0;
+  let bitCount = 0;
+  for (const symbol of payload) {
+    const digit = NAME_ALPHABET.indexOf(symbol);
+    if (digit < 0) return null;
+    carry = carry << 5 | digit;
+    bitCount += 5;
+    if (bitCount >= 8) {
+      keyBytes.push(carry >>> bitCount - 8 & 255);
+      bitCount -= 8;
     }
   }
-  if ((buffer & (1 << bits) - 1) !== 0) return null;
-  let key: string;
-  try { key = new TextDecoder("utf-8", { fatal: true }).decode(new Uint8Array(bytes)); }
+  if ((carry & (1 << bitCount) - 1) !== 0) return null;
+  let storageKey: string;
+  try { storageKey = new TextDecoder("utf-8", { fatal: true }).decode(new Uint8Array(keyBytes)); }
   catch { return null; }
-  return key.startsWith(ALLOWED_CLIENT_PERSISTENCE_KEY_PREFIX) ? key : null;
+  return storageKey.startsWith(ALLOWED_CLIENT_PERSISTENCE_KEY_PREFIX) ? storageKey : null;
 }
 
-export function clientPersistenceFileNameFor(key: string): string | null {
-  if (!key.startsWith(ALLOWED_CLIENT_PERSISTENCE_KEY_PREFIX)) return null;
-  const name = encodeClientPersistenceFileName(key);
-  return name.length > MAX_FILE_NAME_LENGTH ? null : name;
+export function clientPersistenceFileNameFor(storageKey: string): string | null {
+  if (!storageKey.startsWith(ALLOWED_CLIENT_PERSISTENCE_KEY_PREFIX)) return null;
+  const fileName = encodeClientPersistenceFileName(storageKey);
+  return fileName.length > MAX_NAME_LENGTH ? null : fileName;
 }
 
-function encodedFileName(key: string): string {
-  const name = clientPersistenceFileNameFor(key);
-  if (name == null) throw new Error(`client persistence: key "${key}" is outside the "${ALLOWED_CLIENT_PERSISTENCE_KEY_PREFIX}" namespace or too long to store`);
-  return name;
+function fileNameOrThrow(storageKey: string): string {
+  const fileName = clientPersistenceFileNameFor(storageKey);
+  if (fileName == null) throw new Error(`client persistence: key "${storageKey}" is outside the "${ALLOWED_CLIENT_PERSISTENCE_KEY_PREFIX}" namespace or too long to store`);
+  return fileName;
 }
 
 export class ClientPersistenceCapError extends Error {
@@ -74,9 +74,9 @@ export class ClientPersistenceCapError extends Error {
 }
 
 export interface ClientPersistenceFiles {
-  joinPath(dir: string, name: string): string;
-  ensureDir(dir: string): Promise<void>;
-  listFiles(dir: string): Promise<string[]>;
+  joinPath(directory: string, fileName: string): string;
+  ensureDir(directory: string): Promise<void>;
+  listFiles(directory: string): Promise<string[]>;
   readTextFile(path: string): Promise<string>;
   writeTextFile(path: string, data: string): Promise<void>;
   rename(from: string, to: string): Promise<void>;
@@ -84,120 +84,120 @@ export interface ClientPersistenceFiles {
   fileSize(path: string): Promise<number | null>;
 }
 
-interface BlobFact { readonly key: string; readonly size: number }
+interface StoredBlob { readonly storageKey: string; readonly byteSize: number }
 
 export class SlateClientPersistenceStore {
-  private blobs: Map<string, BlobFact> | undefined;
-  private chain = Promise.resolve();
-  private readonly maxValueBytes: number;
-  private readonly maxTotalBytes: number;
+  private knownBlobs: Map<string, StoredBlob> | undefined;
+  private queue = Promise.resolve();
+  private readonly valueCap: number;
+  private readonly totalCap: number;
 
   constructor(
-    private readonly dir: string,
-    private readonly files: ClientPersistenceFiles,
-    caps: { readonly maxValueBytes?: number; readonly maxTotalBytes?: number } = {},
+    private readonly directory: string,
+    private readonly fileSystem: ClientPersistenceFiles,
+    limits: { readonly maxValueBytes?: number; readonly maxTotalBytes?: number } = {},
   ) {
-    this.maxValueBytes = caps.maxValueBytes ?? CLIENT_PERSISTENCE_MAX_VALUE_BYTES;
-    this.maxTotalBytes = caps.maxTotalBytes ?? CLIENT_PERSISTENCE_MAX_TOTAL_BYTES;
+    this.valueCap = limits.maxValueBytes ?? CLIENT_PERSISTENCE_MAX_VALUE_BYTES;
+    this.totalCap = limits.maxTotalBytes ?? CLIENT_PERSISTENCE_MAX_TOTAL_BYTES;
   }
 
-  read(key: string): Promise<string | null> {
-    const name = encodedFileName(key);
+  read(storageKey: string): Promise<string | null> {
+    const fileName = fileNameOrThrow(storageKey);
     return this.run(async () => {
-      const blobs = await this.ledger();
-      if (!blobs.has(name)) return null;
-      try { return await this.files.readTextFile(this.files.joinPath(this.dir, name)); }
+      const knownBlobs = await this.ledger();
+      if (!knownBlobs.has(fileName)) return null;
+      try { return await this.fileSystem.readTextFile(this.fileSystem.joinPath(this.directory, fileName)); }
       catch { return null; }
     });
   }
 
-  write(key: string, value: string): Promise<void> {
-    const name = encodedFileName(key);
-    return this.run(async () => this.writeBlob({ blobs: await this.ledger(), name, key, value }));
+  write(storageKey: string, payload: string): Promise<void> {
+    const fileName = fileNameOrThrow(storageKey);
+    return this.run(async () => this.writeBlob({ knownBlobs: await this.ledger(), fileName, storageKey, payload }));
   }
 
-  remove(key: string): Promise<void> {
-    const name = encodedFileName(key);
+  remove(storageKey: string): Promise<void> {
+    const fileName = fileNameOrThrow(storageKey);
     return this.run(async () => {
-      const blobs = await this.ledger();
-      if (!blobs.has(name)) return;
-      blobs.delete(name);
-      await this.files.removeFile(this.files.joinPath(this.dir, name));
+      const knownBlobs = await this.ledger();
+      if (!knownBlobs.has(fileName)) return;
+      knownBlobs.delete(fileName);
+      await this.fileSystem.removeFile(this.fileSystem.joinPath(this.directory, fileName));
     });
   }
 
   listKeys(prefix: string): Promise<string[]> {
     return this.run(async () => {
       const keys: string[] = [];
-      for (const fact of (await this.ledger()).values()) if (fact.key.startsWith(prefix)) keys.push(fact.key);
+      for (const fact of (await this.ledger()).values()) if (fact.storageKey.startsWith(prefix)) keys.push(fact.storageKey);
       return keys;
     });
   }
 
   async hasCompletedOneShotMigration(): Promise<boolean> {
-    return this.files.fileSize(this.files.joinPath(this.dir, CLIENT_PERSISTENCE_MIGRATION_MARKER_FILENAME)).then(
-      (size) => size != null,
+    return this.fileSystem.fileSize(this.fileSystem.joinPath(this.directory, CLIENT_PERSISTENCE_MIGRATION_MARKER_FILENAME)).then(
+      (byteSize) => byteSize != null,
       () => false,
     );
   }
 
-  migrateFromLocalStorage(entries: readonly { readonly key: string; readonly value: string }[]): Promise<boolean> {
+  migrateFromLocalStorage(records: readonly { readonly key: string; readonly value: string }[]): Promise<boolean> {
     return this.run(async () => {
       if (await this.hasCompletedOneShotMigration()) return true;
-      const blobs = await this.ledger();
-      for (const entry of entries) {
-        const name = clientPersistenceFileNameFor(entry.key);
-        if (name == null || blobs.has(name)) continue;
-        try { await this.writeBlob({ blobs, name, key: entry.key, value: entry.value }); }
-        catch (error) {
-          if (error instanceof ClientPersistenceCapError) continue;
+      const knownBlobs = await this.ledger();
+      for (const record of records) {
+        const fileName = clientPersistenceFileNameFor(record.key);
+        if (fileName == null || knownBlobs.has(fileName)) continue;
+        try { await this.writeBlob({ knownBlobs, fileName, storageKey: record.key, payload: record.value }); }
+        catch (cause) {
+          if (cause instanceof ClientPersistenceCapError) continue;
           return false;
         }
       }
-      await this.files.ensureDir(this.dir);
-      await this.files.writeTextFile(this.files.joinPath(this.dir, CLIENT_PERSISTENCE_MIGRATION_MARKER_FILENAME), new Date().toISOString());
+      await this.fileSystem.ensureDir(this.directory);
+      await this.fileSystem.writeTextFile(this.fileSystem.joinPath(this.directory, CLIENT_PERSISTENCE_MIGRATION_MARKER_FILENAME), new Date().toISOString());
       return true;
     });
   }
 
   private run<T>(operation: () => Promise<T>): Promise<T> {
-    const result = this.chain.then(operation, operation);
-    this.chain = result.then(() => undefined, () => undefined);
-    return result;
+    const queued = this.queue.then(operation, operation);
+    this.queue = queued.then(() => undefined, () => undefined);
+    return queued;
   }
 
-  private async ledger(): Promise<Map<string, BlobFact>> {
-    if (this.blobs !== undefined) return this.blobs;
-    const blobs = new Map<string, BlobFact>();
-    let names: string[];
-    try { names = await this.files.listFiles(this.dir); }
-    catch { this.blobs = blobs; return blobs; }
-    for (const name of names) {
-      if (name.endsWith(TEMP_FILE_SUFFIX)) {
-        await this.files.removeFile(this.files.joinPath(this.dir, name));
+  private async ledger(): Promise<Map<string, StoredBlob>> {
+    if (this.knownBlobs !== undefined) return this.knownBlobs;
+    const knownBlobs = new Map<string, StoredBlob>();
+    let fileNames: string[];
+    try { fileNames = await this.fileSystem.listFiles(this.directory); }
+    catch { this.knownBlobs = knownBlobs; return knownBlobs; }
+    for (const fileName of fileNames) {
+      if (fileName.endsWith(TEMP_SUFFIX)) {
+        await this.fileSystem.removeFile(this.fileSystem.joinPath(this.directory, fileName));
         continue;
       }
-      const key = decodeClientPersistenceFileName(name);
-      if (key == null) continue;
-      let size: number | null;
-      try { size = await this.files.fileSize(this.files.joinPath(this.dir, name)); }
-      catch { size = null; }
-      if (size != null) blobs.set(name, { key, size });
+      const storageKey = decodeClientPersistenceFileName(fileName);
+      if (storageKey == null) continue;
+      let byteSize: number | null;
+      try { byteSize = await this.fileSystem.fileSize(this.fileSystem.joinPath(this.directory, fileName)); }
+      catch { byteSize = null; }
+      if (byteSize != null) knownBlobs.set(fileName, { storageKey, byteSize });
     }
-    this.blobs = blobs;
-    return blobs;
+    this.knownBlobs = knownBlobs;
+    return knownBlobs;
   }
 
-  private async writeBlob(args: { readonly blobs: Map<string, BlobFact>; readonly name: string; readonly key: string; readonly value: string }): Promise<void> {
-    const size = textEncoder.encode(args.value).length;
-    if (size > this.maxValueBytes) throw new ClientPersistenceCapError("client persistence: value exceeds the per-key size cap");
-    let total = size;
-    for (const [existing, fact] of args.blobs) if (existing !== args.name) total += fact.size;
-    if (total > this.maxTotalBytes) throw new ClientPersistenceCapError("client persistence: store exceeds its total size cap");
-    await this.files.ensureDir(this.dir);
-    const temporary = this.files.joinPath(this.dir, `${args.name}${TEMP_FILE_SUFFIX}`);
-    await this.files.writeTextFile(temporary, args.value);
-    await this.files.rename(temporary, this.files.joinPath(this.dir, args.name));
-    args.blobs.set(args.name, { key: args.key, size });
+  private async writeBlob(args: { readonly knownBlobs: Map<string, StoredBlob>; readonly fileName: string; readonly storageKey: string; readonly payload: string }): Promise<void> {
+    const byteSize = utf8Encoder.encode(args.payload).length;
+    if (byteSize > this.valueCap) throw new ClientPersistenceCapError("client persistence: value exceeds the per-key size cap");
+    let total = byteSize;
+    for (const [existing, fact] of args.knownBlobs) if (existing !== args.fileName) total += fact.byteSize;
+    if (total > this.totalCap) throw new ClientPersistenceCapError("client persistence: store exceeds its total size cap");
+    await this.fileSystem.ensureDir(this.directory);
+    const temporaryPath = this.fileSystem.joinPath(this.directory, `${args.fileName}${TEMP_SUFFIX}`);
+    await this.fileSystem.writeTextFile(temporaryPath, args.payload);
+    await this.fileSystem.rename(temporaryPath, this.fileSystem.joinPath(this.directory, args.fileName));
+    args.knownBlobs.set(args.fileName, { storageKey: args.storageKey, byteSize });
   }
 }
