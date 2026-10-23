@@ -1,7 +1,7 @@
 /** What the platform is told a conversation looks like.
 
  * The roster a host keeps — which agents exist, how they are named, what they are doing and how far the user has read —
- * is projected into the shape the platform reads, with the ordering stamp that lets a reader put a later update back in
+ * is projected into the shape the platform reads, with the ordering stamp that lets a reader put a later nextUpdate back in
  * its place and with anything stale left out rather than sent. */
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
@@ -44,13 +44,13 @@ export class RosterProjection {
   streamingAssistantOutlineId: string | undefined;
   streamingThinkingOutlineId: string | undefined;
   activeOutlineLoad: Promise<any[]> | null = null;
-  activeOutlineGeneration = 0;
+  outlineEpoch = 0;
 
-  private pendingStreamOutlineUpdate: OutlineUpdate | null = null;
+  private queuedStreamFrame: OutlineUpdate | null = null;
   private streamOutlineFlush:
-    (((...args: any[]) => void) & { dispose(): void }) | null = null;
-  private streamOutlineClock: Clock = realClock;
-  private lastStreamOutlineFlushAtMs = 0;
+    (((...input: any[]) => void) & { dispose(): void }) | null = null;
+  private streamClock: Clock = realClock;
+  private lastFlushMonoMs = 0;
 
   constructor(readonly tm: TranscriptManagerLike) {
     this.rosterEmit = new RosterEmit(tm, this.emitter);
@@ -76,32 +76,32 @@ export class RosterProjection {
     this.streamOutlineFlush = policy.wrap(() =>
       this.flushStreamOutlineUpdate(),
     );
-    this.streamOutlineClock = clock;
-    this.lastStreamOutlineFlushAtMs = clock.monotonicNow();
+    this.streamClock = clock;
+    this.lastFlushMonoMs = clock.monotonicNow();
   }
 
   stopOutlineStreamCoalescing(): void {
     this.streamOutlineFlush?.dispose();
     this.streamOutlineFlush = null;
-    this.pendingStreamOutlineUpdate = null;
+    this.queuedStreamFrame = null;
   }
 
   flushStreamOutlineUpdate(): void {
-    const pending = this.pendingStreamOutlineUpdate;
-    if (pending == null) return;
-    this.pendingStreamOutlineUpdate = null;
-    this.lastStreamOutlineFlushAtMs = this.streamOutlineClock.monotonicNow();
+    const queued = this.queuedStreamFrame;
+    if (queued == null) return;
+    this.queuedStreamFrame = null;
+    this.lastFlushMonoMs = this.streamClock.monotonicNow();
     this.emitter.emit("outline", {
       type: "updated",
-      agentId: pending.agentId,
-      item: pending.item,
+      agentId: queued.agentId,
+      item: queued.item,
     });
   }
 
   async listAgents(): Promise<any[]> {
-    const session = await this.tm.sessions.tryEnsureSession();
+    const conversation = await this.tm.sessions.tryEnsureSession();
     const announcedId =
-      this.tm.sessions.getAnnouncedActiveAgentId() ?? session?.id;
+      this.tm.sessions.getAnnouncedActiveAgentId() ?? conversation?.id;
     const stamp = this.rosterEmit.reserveSnapshotStamp();
     const agents = this.rosterEmit.applySnapshotStamp(
       this.tm.runLifecycle.withRunStates(
@@ -126,12 +126,12 @@ export class RosterProjection {
     return this.tm.sessionStore.isAgentCapReached();
   }
 
-  searchAgents(...args: Parameters<RosterSearch["searchAgents"]>) {
-    return this.search.searchAgents(...args);
+  searchAgents(...input: Parameters<RosterSearch["searchAgents"]>) {
+    return this.search.searchAgents(...input);
   }
 
-  searchMedia(...args: Parameters<RosterSearch["searchMedia"]>) {
-    return this.search.searchMedia(...args);
+  searchMedia(...input: Parameters<RosterSearch["searchMedia"]>) {
+    return this.search.searchMedia(...input);
   }
 
   listAgentsSync(): any[] {
@@ -149,21 +149,21 @@ export class RosterProjection {
   }
 
   emitProfileChanged(
-    ...args: Parameters<ProfileWatch["emitProfileChanged"]>
+    ...input: Parameters<ProfileWatch["emitProfileChanged"]>
   ): void {
-    this.profileWatch.emitProfileChanged(...args);
+    this.profileWatch.emitProfileChanged(...input);
   }
 
   subscribeProfileChanged(
-    ...args: Parameters<ProfileWatch["subscribeProfileChanged"]>
+    ...input: Parameters<ProfileWatch["subscribeProfileChanged"]>
   ) {
-    return this.profileWatch.subscribeProfileChanged(...args);
+    return this.profileWatch.subscribeProfileChanged(...input);
   }
 
   watchSessionProfile(
-    ...args: Parameters<ProfileWatch["watchSessionProfile"]>
+    ...input: Parameters<ProfileWatch["watchSessionProfile"]>
   ): void {
-    this.profileWatch.watchSessionProfile(...args);
+    this.profileWatch.watchSessionProfile(...input);
   }
 
   stopWatchingProfile(): void {
@@ -171,15 +171,15 @@ export class RosterProjection {
   }
 
   getAgentDisplayProfile(
-    ...args: Parameters<ProfileWatch["getAgentDisplayProfile"]>
+    ...input: Parameters<ProfileWatch["getAgentDisplayProfile"]>
   ) {
-    return this.profileWatch.getAgentDisplayProfile(...args);
+    return this.profileWatch.getAgentDisplayProfile(...input);
   }
 
   resolveAgentProfile(
-    ...args: Parameters<ProfileWatch["resolveAgentProfile"]>
+    ...input: Parameters<ProfileWatch["resolveAgentProfile"]>
   ) {
-    return this.profileWatch.resolveAgentProfile(...args);
+    return this.profileWatch.resolveAgentProfile(...input);
   }
 
   emitAgents(): Promise<void> {
@@ -242,36 +242,36 @@ export class RosterProjection {
 
   mergedAsyncTasks(parentAgentId: string): any[] {
     if (this.tm.sessions.deletedAgentIds.has(parentAgentId)) return [];
-    const cachedRunner = this.tm.runnerRegistry.runners.get(parentAgentId);
-    const liveUnion = [...(cachedRunner?.listAsyncTasks() ?? [])];
+    const liveRunner = this.tm.runnerRegistry.runners.get(parentAgentId);
+    const liveUnion = [...(liveRunner?.listAsyncTasks() ?? [])];
     const seen = new Set(
       liveUnion.map((task: any) => `${task.kind}\0${task.id}`),
     );
-    for (const [runner, tasks] of this.lastRunnerAsyncTasks.get(
+    for (const [taskSource, tasks] of this.lastRunnerAsyncTasks.get(
       parentAgentId,
     ) ?? []) {
-      if (runner === cachedRunner) continue;
+      if (taskSource === liveRunner) continue;
       for (const task of tasks) {
-        const key = `${task.kind}\0${task.id}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
+        const identity = `${task.kind}\0${task.id}`;
+        if (seen.has(identity)) continue;
+        seen.add(identity);
         liveUnion.push(task);
       }
     }
-    const markers =
+    const wakeMarkers =
       this.tm.pendingWakeStore
         ?.listPending()
         .filter((marker: any) => marker.agentId === parentAgentId) ?? [];
-    return mergeAsyncTasks(liveUnion, markers);
+    return mergeAsyncTasks(liveUnion, wakeMarkers);
   }
 
   async getConversationOutline(agentId: string): Promise<any[]> {
     if (isSlateSubagentId(agentId)) {
       let items: any[] = [];
-      for (const runner of this.tm.runnerRegistry.runners.values()) {
-        if (!runner.hasSubagent(agentId)) continue;
+      for (const taskSource of this.tm.runnerRegistry.runners.values()) {
+        if (!taskSource.hasSubagent(agentId)) continue;
         try {
-          items = await runner.getSubagentOutline(agentId);
+          items = await taskSource.getSubagentOutline(agentId);
         } catch {
           items = [];
         }
@@ -280,11 +280,11 @@ export class RosterProjection {
       this.emitOutline({ type: "snapshot", agentId, items });
       return items;
     }
-    const session = await this.tm.sessions.ensureSession();
-    if (session.id === agentId) {
-      const generation = this.activeOutlineGeneration;
-      const items = await this.loadActiveOutline(session);
-      if (this.activeOutlineGeneration === generation) {
+    const conversation = await this.tm.sessions.ensureSession();
+    if (conversation.id === agentId) {
+      const epoch = this.outlineEpoch;
+      const items = await this.loadActiveOutline(conversation);
+      if (this.outlineEpoch === epoch) {
         this.emitOutline({ type: "snapshot", agentId, items });
       }
       return items;
@@ -299,40 +299,40 @@ export class RosterProjection {
     return items;
   }
 
-  async loadActiveOutline(session: any): Promise<any[]> {
-    if (this.outlineAgentId === session.id) {
+  async loadActiveOutline(conversation: any): Promise<any[]> {
+    if (this.outlineAgentId === conversation.id) {
       return this.activeOutlineLoad == null
         ? this.outline
         : this.activeOutlineLoad;
     }
     this.outline = [];
-    this.outlineAgentId = session.id;
+    this.outlineAgentId = conversation.id;
     this.streamingAssistantOutlineId = undefined;
     this.streamingThinkingOutlineId = undefined;
-    const generation = this.activeOutlineGeneration;
-    const promise = (async () => {
+    const epoch = this.outlineEpoch;
+    const loadPromise = (async () => {
       const persisted = await this.tm.sessionStore
-        .getSessionOutline(session)
+        .getSessionOutline(conversation)
         .catch(() => []);
       if (
-        this.activeOutlineGeneration === generation &&
-        this.tm.sessions.activeSession?.id === session.id &&
-        this.outlineAgentId === session.id
+        this.outlineEpoch === epoch &&
+        this.tm.sessions.activeSession?.id === conversation.id &&
+        this.outlineAgentId === conversation.id
       ) {
         this.outline = [...persisted, ...this.outline];
         return this.outline;
       }
       return persisted;
     })();
-    this.activeOutlineLoad = promise;
-    const items = await promise;
-    if (this.activeOutlineLoad === promise) this.activeOutlineLoad = null;
+    this.activeOutlineLoad = loadPromise;
+    const items = await loadPromise;
+    if (this.activeOutlineLoad === loadPromise) this.activeOutlineLoad = null;
     return items;
   }
 
   invalidateActiveOutline(): void {
     this.flushStreamOutlineUpdate();
-    this.activeOutlineGeneration += 1;
+    this.outlineEpoch += 1;
     this.activeOutlineLoad = null;
     this.outline = [];
     this.outlineAgentId = null;
@@ -353,135 +353,135 @@ export class RosterProjection {
 
   updateOutlineItem(
     id: string,
-    update: (item: any) => any,
+    nextUpdate: (item: any) => any,
     options?: { coalesce?: boolean },
   ): any | null {
-    let updated: any | null = null;
+    let refreshed: any | null = null;
     this.outline = this.outline.map((item) => {
       if (item.id !== id) return item;
-      updated = update(item);
-      return updated;
+      refreshed = nextUpdate(item);
+      return refreshed;
     });
-    if (updated == null || this.outlineAgentId == null) return updated;
+    if (refreshed == null || this.outlineAgentId == null) return refreshed;
     if (options?.coalesce === true && this.streamOutlineFlush != null) {
       if (
-        this.pendingStreamOutlineUpdate != null &&
-        this.pendingStreamOutlineUpdate.item.id !== id
+        this.queuedStreamFrame != null &&
+        this.queuedStreamFrame.item.id !== id
       )
         this.flushStreamOutlineUpdate();
-      this.pendingStreamOutlineUpdate = {
+      this.queuedStreamFrame = {
         agentId: this.outlineAgentId,
-        item: updated,
+        item: refreshed,
       };
       if (
-        this.streamOutlineClock.monotonicNow() -
-          this.lastStreamOutlineFlushAtMs >=
+        this.streamClock.monotonicNow() -
+          this.lastFlushMonoMs >=
         OUTLINE_STREAM_COALESCE_MS
       )
         this.flushStreamOutlineUpdate();
       else this.streamOutlineFlush();
-      return updated;
+      return refreshed;
     }
     this.emitOutline({
       type: "updated",
       agentId: this.outlineAgentId,
-      item: updated,
+      item: refreshed,
     });
-    return updated;
+    return refreshed;
   }
 
-  applyAgentUpdateToOutline(update: any): void {
+  applyAgentUpdateToOutline(nextUpdate: any): void {
     if (this.outlineAgentId == null) return;
-    if (update.type === "text-delta" || update.type === "thinking-delta") {
-      if (update.text.length === 0) return;
-      const isThinking = update.type === "thinking-delta";
+    if (nextUpdate.type === "text-delta" || nextUpdate.type === "thinking-delta") {
+      if (nextUpdate.text.length === 0) return;
+      const isThinking = nextUpdate.type === "thinking-delta";
       if (isThinking) this.streamingAssistantOutlineId = undefined;
       else this.streamingThinkingOutlineId = undefined;
       const id = isThinking
         ? this.streamingThinkingOutlineId
         : this.streamingAssistantOutlineId;
       if (id != null) {
-        const updated = this.updateOutlineItem(
+        const refreshed = this.updateOutlineItem(
           id,
           (item) =>
             item.kind === (isThinking ? "thinking" : "assistant-text")
-              ? { ...item, text: `${item.text}${update.text}` }
+              ? { ...item, text: `${item.text}${nextUpdate.text}` }
               : item,
           { coalesce: true },
         );
-        if (updated != null) return;
+        if (refreshed != null) return;
       }
       const item = {
         kind: isThinking ? "thinking" : "assistant-text",
         id: randomUUID(),
-        text: update.text,
+        text: nextUpdate.text,
       };
       if (isThinking) this.streamingThinkingOutlineId = item.id;
       else this.streamingAssistantOutlineId = item.id;
       this.appendOutlineItem(item);
       return;
     }
-    if (update.type === "tool-call") {
-      if (update.name === SEND_MESSAGE_TOOL_CALL_OUTLINE_NAME) return;
+    if (nextUpdate.type === "tool-call") {
+      if (nextUpdate.name === SEND_MESSAGE_TOOL_CALL_OUTLINE_NAME) return;
       this.streamingAssistantOutlineId = undefined;
       this.streamingThinkingOutlineId = undefined;
-      const updated = this.updateOutlineItem(update.id, (item) =>
+      const refreshed = this.updateOutlineItem(nextUpdate.id, (item) =>
         item.kind === "tool-call"
           ? {
               ...item,
-              name: update.name,
-              status: update.status,
-              ...(update.summary == null ? {} : { summary: update.summary }),
+              name: nextUpdate.name,
+              status: nextUpdate.status,
+              ...(nextUpdate.summary == null ? {} : { summary: nextUpdate.summary }),
             }
           : item,
       );
-      if (updated == null) {
+      if (refreshed == null) {
         this.appendOutlineItem({
           kind: "tool-call",
-          id: update.id,
-          name: update.name,
-          status: update.status,
-          ...(update.summary == null ? {} : { summary: update.summary }),
+          id: nextUpdate.id,
+          name: nextUpdate.name,
+          status: nextUpdate.status,
+          ...(nextUpdate.summary == null ? {} : { summary: nextUpdate.summary }),
         });
       }
       return;
     }
-    if (update.type === "send-message") {
+    if (nextUpdate.type === "send-message") {
       this.streamingAssistantOutlineId = undefined;
       this.streamingThinkingOutlineId = undefined;
       this.appendOutlineItem({
         kind: "send-message",
         id: randomUUID(),
-        message: update.message,
-        timestampMs: update.timestampMs,
+        message: nextUpdate.message,
+        timestampMs: nextUpdate.timestampMs,
       });
       return;
     }
-    if (update.type === "turn-ended") {
+    if (nextUpdate.type === "turn-ended") {
       this.streamingAssistantOutlineId = undefined;
       this.streamingThinkingOutlineId = undefined;
     }
   }
 
-  emit(event: any, owningAgentId?: string): void {
-    const owned = this.withOwningAgentId(event, owningAgentId);
-    this.emitter.emit("event", this.withOrderedStamp(owned));
-    if (event.type === "cleared" && typeof owned.agentId === "string") {
-      const reset = this.tm.clientSideToolV2.reset(owned.agentId);
+  emit(frame: any, owningAgentId?: string): void {
+    const stamped = this.withOwningAgentId(frame, owningAgentId);
+    this.emitter.emit("event", this.withOrderedStamp(stamped));
+    if (frame.type === "cleared" && typeof stamped.agentId === "string") {
+      const reset = this.tm.clientSideToolV2.reset(stamped.agentId);
       if (reset != null) this.emitClientSideToolV2(reset);
     }
   }
 
-  withOrderedStamp(event: any): any {
+  withOrderedStamp(frame: any): any {
     const agentId =
-      event.type === "snapshot" ? event.activeAgentId : event.agentId;
-    if (agentId == null || agentId.length === 0) return event;
+      frame.type === "snapshot" ? frame.activeAgentId : frame.agentId;
+    if (agentId == null || agentId.length === 0) return frame;
     const ordered = this.rosterEmit.replicaWriter.nextStamp(
       transcriptReplicaKey(agentId),
     );
-    if (event.type !== "snapshot") return { ...event, ordered };
+    if (frame.type !== "snapshot") return { ...frame, ordered };
     return {
-      ...event,
+      ...frame,
       ordered,
       coverage: {
         kind: "transcript-live-range",
@@ -491,31 +491,31 @@ export class RosterProjection {
     };
   }
 
-  withOwningAgentId(event: any, owningAgentId?: string): any {
-    if (event.type === "snapshot") return event;
+  withOwningAgentId(frame: any, owningAgentId?: string): any {
+    if (frame.type === "snapshot") return frame;
     const agentId = owningAgentId ?? this.tm.sessions.inMemoryTranscriptAgentId;
     return agentId == null || agentId.length === 0
-      ? event
-      : { ...event, agentId };
+      ? frame
+      : { ...frame, agentId };
   }
 
-  emitOutline(event: any): void {
+  emitOutline(frame: any): void {
     this.flushStreamOutlineUpdate();
-    this.emitter.emit("outline", event);
+    this.emitter.emit("outline", frame);
   }
 
-  emitAsyncTasks(runner: any, event: any): void {
-    if (this.tm.sessions.deletedAgentIds.has(event.parentAgentId)) return;
-    const perRunner =
-      this.lastRunnerAsyncTasks.get(event.parentAgentId) ?? new Map();
-    if (event.tasks.length === 0) perRunner.delete(runner);
-    else perRunner.set(runner, event.tasks);
-    if (perRunner.size === 0)
-      this.lastRunnerAsyncTasks.delete(event.parentAgentId);
-    else this.lastRunnerAsyncTasks.set(event.parentAgentId, perRunner);
+  emitAsyncTasks(taskSource: any, frame: any): void {
+    if (this.tm.sessions.deletedAgentIds.has(frame.parentAgentId)) return;
+    const perRunnerMap =
+      this.lastRunnerAsyncTasks.get(frame.parentAgentId) ?? new Map();
+    if (frame.tasks.length === 0) perRunnerMap.delete(taskSource);
+    else perRunnerMap.set(taskSource, frame.tasks);
+    if (perRunnerMap.size === 0)
+      this.lastRunnerAsyncTasks.delete(frame.parentAgentId);
+    else this.lastRunnerAsyncTasks.set(frame.parentAgentId, perRunnerMap);
     this.emitter.emit("async-tasks", {
-      parentAgentId: event.parentAgentId,
-      tasks: this.mergedAsyncTasks(event.parentAgentId),
+      parentAgentId: frame.parentAgentId,
+      tasks: this.mergedAsyncTasks(frame.parentAgentId),
     });
   }
 
@@ -526,36 +526,36 @@ export class RosterProjection {
     });
   }
 
-  emitSubagents(source: any, event: any): void {
-    const parentAgentId = event.parentAgentId;
-    const sources = this.subagentWorkSources.get(parentAgentId) ?? new Set();
-    sources.add(source);
-    this.subagentWorkSources.set(parentAgentId, sources);
-    const hasRunning = this.liveSubagentParentIds().has(parentAgentId);
-    const hadRunning = this.reportedSubagentParents.has(parentAgentId);
-    if (hasRunning) this.reportedSubagentParents.add(parentAgentId);
+  emitSubagents(workSource: any, frame: any): void {
+    const parentAgentId = frame.parentAgentId;
+    const sourceSet = this.subagentWorkSources.get(parentAgentId) ?? new Set();
+    sourceSet.add(workSource);
+    this.subagentWorkSources.set(parentAgentId, sourceSet);
+    const isRunningNow = this.liveSubagentParentIds().has(parentAgentId);
+    const wasRunning = this.reportedSubagentParents.has(parentAgentId);
+    if (isRunningNow) this.reportedSubagentParents.add(parentAgentId);
     else this.reportedSubagentParents.delete(parentAgentId);
     try {
-      this.emitter.emit("subagents", event);
+      this.emitter.emit("subagents", frame);
     } catch (error) {
       this.tm.productAnalytics.trackEvent("slate.subagent.fanout_failed", {
         agent_id: parentAgentId,
         error_type: error instanceof Error ? error.name : "unknown",
       });
     }
-    if (hasRunning !== hadRunning) void this.emitAgentUpdate(parentAgentId);
+    if (isRunningNow !== wasRunning) void this.emitAgentUpdate(parentAgentId);
   }
 
   liveSubagentParentIds(): Set<string> {
-    const parents = new Set<string>();
-    for (const [agentId, sources] of this.subagentWorkSources) {
-      for (const source of sources) {
-        if (source.hasRunningSubagents()) parents.add(agentId);
-        else sources.delete(source);
+    const parentIds = new Set<string>();
+    for (const [agentId, sourceSet] of this.subagentWorkSources) {
+      for (const workSource of sourceSet) {
+        if (workSource.hasRunningSubagents()) parentIds.add(agentId);
+        else sourceSet.delete(workSource);
       }
-      if (sources.size === 0) this.subagentWorkSources.delete(agentId);
+      if (sourceSet.size === 0) this.subagentWorkSources.delete(agentId);
     }
-    return parents;
+    return parentIds;
   }
 
   forgetAgentSubagentWork(agentId: string): void {
