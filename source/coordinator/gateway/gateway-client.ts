@@ -1,8 +1,8 @@
 /**
  * The client the coordinator uses to speak to the host's gateway.
  *
- * A command is sent with its own deadline and answered with either the result or the error the gateway reported; a
- * connection that idles is watched, a transport that broke is retried with the policy the platform resolved, and a
+ * A command is sent with its own deadline and answered with either the outcome or the error the gateway reported; a
+ * link that idles is watched, a transport that broke is retried with the policy the platform resolved, and a
  * request that never lands is reported as a deadline rather than left hanging.
  */
 import { randomUUID } from "node:crypto";
@@ -99,9 +99,9 @@ export interface GatewayConnection {
   readonly vncProxy?: VncProxyDescriptor | null;
 }
 
-export function withAuth(headers: Record<string, string>, connection: GatewayConnection): Record<string, string> {
-  const merged = { ...headers, ...(connection.headers ?? {}) };
-  if (connection.token != null && connection.token.length > 0) merged.authorization = `${GATEWAY_AUTH_SCHEME} ${connection.token}`;
+export function withAuth(headers: Record<string, string>, link: GatewayConnection): Record<string, string> {
+  const merged = { ...headers, ...(link.headers ?? {}) };
+  if (link.token != null && link.token.length > 0) merged.authorization = `${GATEWAY_AUTH_SCHEME} ${link.token}`;
   return merged;
 }
 
@@ -120,357 +120,357 @@ export interface CoordinatorGatewayClientOptions {
 type RequestInit = { readonly signal?: AbortSignal; readonly requiredBaseUrl?: string };
 
 export class CoordinatorGatewayClient {
-  private isClosed = false;
-  private devInducedOffline = false;
-  private clientPaused = false;
-  private transportState: "initial" | "connected" | "disconnected" = "initial";
-  private eventLoopPromise: Promise<void> | undefined;
-  private activeEventLoopController: AbortController | undefined;
-  private reconnectGeneration = 0;
-  private pendingForcedReconnect: (ReturnType<typeof Promise.withResolvers<void>> & { generation: number }) | undefined;
-  private connectionCount = 0;
-  private readonly sendAcceptReturnDisabled: boolean;
-  private readonly slimAvatarsDisabled: boolean;
-  private cachedTraceWindowRoot: { expiresAtMonotonicMs: number; root?: string } | undefined;
-  private inflightTraceWindowRoot: Promise<void> | undefined;
-  private spanSinkBroken = false;
-  private readonly options: Omit<CoordinatorGatewayClientOptions, "resolveConnection">;
-  private readonly upstreamResolveConnection: CoordinatorGatewayClientOptions["resolveConnection"];
-  private readonly mintDedupeProvenBaseUrls = new Set<string>();
-  private readonly sendDedupeProvenBaseUrls = new Set<string>();
+  private closedFlag = false;
+  private forcedOffline = false;
+  private pausedClient = false;
+  private linkState: "initial" | "connected" | "disconnected" = "initial";
+  private loopHandle: Promise<void> | undefined;
+  private loopAbort: AbortController | undefined;
+  private reconnectEpoch = 0;
+  private forcedReconnectWait: (ReturnType<typeof Promise.withResolvers<void>> & { generation: number }) | undefined;
+  private connectCount = 0;
+  private readonly sendAcceptSkipped: boolean;
+  private readonly slimAvatarsOff: boolean;
+  private traceRootCache: { expiresAtMonotonicMs: number; root?: string } | undefined;
+  private traceRootInflight: Promise<void> | undefined;
+  private spanSinkDead = false;
+  private readonly settings: Omit<CoordinatorGatewayClientOptions, "resolveConnection">;
+  private readonly resolveUpstream: CoordinatorGatewayClientOptions["resolveConnection"];
+  private readonly mintProvenBaseUrls = new Set<string>();
+  private readonly sendProvenBaseUrls = new Set<string>();
 
-  constructor(options: CoordinatorGatewayClientOptions) {
-    const { resolveConnection, ...rest } = options;
-    this.options = rest;
-    this.upstreamResolveConnection = resolveConnection;
-    this.sendAcceptReturnDisabled = process.env[DISABLE_SEND_ACCEPT_RETURN_ENV] === "1";
-    this.slimAvatarsDisabled = process.env[DISABLE_SLIM_AVATARS_ENV] === "1";
+  constructor(settings: CoordinatorGatewayClientOptions) {
+    const { resolveConnection, ...rest } = settings;
+    this.settings = rest;
+    this.resolveUpstream = resolveConnection;
+    this.sendAcceptSkipped = process.env[DISABLE_SEND_ACCEPT_RETURN_ENV] === "1";
+    this.slimAvatarsOff = process.env[DISABLE_SLIM_AVATARS_ENV] === "1";
   }
 
-  requestHeaders(base: Record<string, string>, connection: GatewayConnection): Record<string, string> {
-    const headers = withAuth(base, connection);
-    if (!this.slimAvatarsDisabled) headers[GATEWAY_SLIM_AVATARS_HEADER] = "1";
+  requestHeaders(base: Record<string, string>, link: GatewayConnection): Record<string, string> {
+    const headers = withAuth(base, link);
+    if (!this.slimAvatarsOff) headers[GATEWAY_SLIM_AVATARS_HEADER] = "1";
     return headers;
   }
 
-  private traceWindowRoot(): string | undefined {
-    const resolve = this.options.resolveTraceWindowTraceparent;
+  private cachedTraceRoot(): string | undefined {
+    const resolve = this.settings.resolveTraceWindowTraceparent;
     if (resolve === undefined) return undefined;
-    const now = this.options.timing.clock.monotonicNow();
-    const cached = this.cachedTraceWindowRoot;
+    const now = this.settings.timing.clock.monotonicNow();
+    const cached = this.traceRootCache;
     const isFresh = cached !== undefined && now < cached.expiresAtMonotonicMs;
-    if (!isFresh && this.inflightTraceWindowRoot === undefined) {
-      const inflight = this.pullTraceWindowRoot(resolve).finally(() => {
-        if (this.inflightTraceWindowRoot === inflight) this.inflightTraceWindowRoot = undefined;
+    if (!isFresh && this.traceRootInflight === undefined) {
+      const inflight = this.fetchTraceRoot(resolve).finally(() => {
+        if (this.traceRootInflight === inflight) this.traceRootInflight = undefined;
       });
-      this.inflightTraceWindowRoot = inflight;
+      this.traceRootInflight = inflight;
     }
     return cached?.root;
   }
 
-  private async pullTraceWindowRoot(resolve: () => Promise<string | null | undefined>): Promise<void> {
+  private async fetchTraceRoot(resolve: () => Promise<string | null | undefined>): Promise<void> {
     try {
       const root = await resolve() ?? undefined;
-      this.cachedTraceWindowRoot = { expiresAtMonotonicMs: this.options.timing.clock.monotonicNow() + TRACE_WINDOW_ROOT_CACHE_MS, ...(root === undefined ? {} : { root }) };
-    } catch { this.cachedTraceWindowRoot = undefined; }
+      this.traceRootCache = { expiresAtMonotonicMs: this.settings.timing.clock.monotonicNow() + TRACE_WINDOW_ROOT_CACHE_MS, ...(root === undefined ? {} : { root }) };
+    } catch { this.traceRootCache = undefined; }
   }
 
   start(): void {
-    if (this.isClosed || this.eventLoopPromise != null) return;
-    this.eventLoopPromise = this.runEventLoop().finally(() => { this.eventLoopPromise = undefined; });
+    if (this.closedFlag || this.loopHandle != null) return;
+    this.loopHandle = this.runLoop().finally(() => { this.loopHandle = undefined; });
   }
 
   forceReconnect(): Promise<void> {
-    if (this.isClosed) return Promise.reject(new Error("gateway client is closed"));
-    if (this.pendingForcedReconnect != null) {
-      this.reconnectGeneration += 1;
-      this.interruptEventLoopAttempt();
-      return this.pendingForcedReconnect.promise;
+    if (this.closedFlag) return Promise.reject(new Error("gateway client is closed"));
+    if (this.forcedReconnectWait != null) {
+      this.reconnectEpoch += 1;
+      this.abortLoopAttempt();
+      return this.forcedReconnectWait.promise;
     }
     const deferred = Promise.withResolvers<void>();
-    this.reconnectGeneration += 1;
-    this.pendingForcedReconnect = { ...deferred, generation: this.reconnectGeneration };
-    this.interruptEventLoopAttempt();
+    this.reconnectEpoch += 1;
+    this.forcedReconnectWait = { ...deferred, generation: this.reconnectEpoch };
+    this.abortLoopAttempt();
     return deferred.promise;
   }
 
-  private interruptEventLoopAttempt(): void {
-    if (this.transportState !== "connected") this.notifyDisconnected("forced-reconnect", null);
-    this.activeEventLoopController?.abort();
+  private abortLoopAttempt(): void {
+    if (this.linkState !== "connected") this.markDisconnected("forcedNow-reconnect", null);
+    this.loopAbort?.abort();
     this.start();
   }
 
-  private emitTransportEvent(event: unknown): void { this.options.onTransportEvent?.(event); }
+  private emitTransport(event: unknown): void { this.settings.onTransportEvent?.(event); }
 
   setDevInducedOffline(induced: boolean): { induced: boolean } {
-    if (this.devInducedOffline !== induced) { this.devInducedOffline = induced; this.activeEventLoopController?.abort(); }
-    return { induced: this.devInducedOffline };
+    if (this.forcedOffline !== induced) { this.forcedOffline = induced; this.loopAbort?.abort(); }
+    return { induced: this.forcedOffline };
   }
 
   setClientPaused(paused: boolean): { paused: boolean } {
-    if (this.clientPaused !== paused) { this.clientPaused = paused; this.activeEventLoopController?.abort(); }
-    return { paused: this.clientPaused };
+    if (this.pausedClient !== paused) { this.pausedClient = paused; this.loopAbort?.abort(); }
+    return { paused: this.pausedClient };
   }
 
   async resolveConnection(signal?: AbortSignal): Promise<GatewayConnection> {
-    if (this.clientPaused) throw new SlateGatewayUnreachableError("box_blocked", SLATE_CLIENT_PAUSE_BLOCKED_MESSAGE, { causeSummary: "client-paused" });
-    if (this.devInducedOffline) throw new SlateGatewayUnreachableError("network", "gateway offline: induced by dev controls", { causeSummary: "dev-induced-offline" });
-    return await this.upstreamResolveConnection(signal);
+    if (this.pausedClient) throw new SlateGatewayUnreachableError("box_blocked", SLATE_CLIENT_PAUSE_BLOCKED_MESSAGE, { causeSummary: "client-paused" });
+    if (this.forcedOffline) throw new SlateGatewayUnreachableError("network", "gateway offline: induced by dev controls", { causeSummary: "dev-induced-offline" });
+    return await this.resolveUpstream(signal);
   }
 
-  private notifyDisconnected(reason: string, cause: string | null): void {
-    if (this.isClosed || this.transportState === "disconnected") return;
-    this.transportState = "disconnected";
-    this.emitTransportEvent({ family: "transport-down", payload: { generation: this.connectionCount, reason, cause } });
+  private markDisconnected(reason: string, cause: string | null): void {
+    if (this.closedFlag || this.linkState === "disconnected") return;
+    this.linkState = "disconnected";
+    this.emitTransport({ family: "transport-disconnect", payload: { generation: this.connectCount, reason, cause } });
   }
 
   close(): void {
-    this.isClosed = true;
-    this.activeEventLoopController?.abort();
-    this.pendingForcedReconnect?.reject(new Error("gateway client closed"));
-    this.pendingForcedReconnect = undefined;
+    this.closedFlag = true;
+    this.loopAbort?.abort();
+    this.forcedReconnectWait?.reject(new Error("gateway client closed"));
+    this.forcedReconnectWait = undefined;
   }
 
-  private reportReachability(report: unknown, baseUrl?: string): void {
-    if (this.clientPaused) return;
-    try { this.options.onReachability?.(report, baseUrl); } catch {}
+  private reportReachable(report: unknown, baseUrl?: string): void {
+    if (this.pausedClient) return;
+    try { this.settings.onReachability?.(report, baseUrl); } catch {}
   }
 
-  private recordSendStage(stage: Record<string, unknown>): void {
-    const recorder = this.options.recordTransportStage;
+  private recordSendPhase(stage: Record<string, unknown>): void {
+    const recorder = this.settings.recordTransportStage;
     const clientNonce = stage.clientNonce;
     if (recorder == null || typeof clientNonce !== "string" || clientNonce.length === 0) return;
     try { recorder({ accountSlot: HOST_ACCOUNT_SLOT, ...stage, clientNonce, traceparent: stage.traceparent ?? null, isError: stage.isError === true }); } catch {}
   }
 
-  private reportCommandSpan(method: string, commandTrace: { root: string; child: { spanId: string } } | undefined, settle: Record<string, unknown>): void {
-    const sink = this.options.recordGatewayCommandSpan;
-    if (commandTrace === undefined || sink == null || this.spanSinkBroken) return;
-    try { sink({ method, rootTraceparent: commandTrace.root, spanId: commandTrace.child.spanId, ...settle }); }
-    catch { this.spanSinkBroken = true; }
+  private reportSpan(method: string, spanTrace: { root: string; child: { spanId: string } } | undefined, settle: Record<string, unknown>): void {
+    const sink = this.settings.recordGatewayCommandSpan;
+    if (spanTrace === undefined || sink == null || this.spanSinkDead) return;
+    try { sink({ method, rootTraceparent: spanTrace.root, spanId: spanTrace.child.spanId, ...settle }); }
+    catch { this.spanSinkDead = true; }
   }
 
-  async request(method: string, args: unknown, init?: RequestInit): Promise<{ result: unknown; connection: GatewayConnection }> {
-    const startMonotonicMs = this.options.timing.clock.monotonicNow();
-    let connection: GatewayConnection | undefined;
-    let commandTrace: { root: string; child: { traceparent: string; spanId: string } } | undefined;
-    let fetchStartMonotonicMs = startMonotonicMs;
-    let fetchStartEpochMs = 0;
+  async request(method: string, payload: unknown, requestInit?: RequestInit): Promise<{ result: unknown; connection: GatewayConnection }> {
+    const startMono = this.settings.timing.clock.monotonicNow();
+    let link: GatewayConnection | undefined;
+    let spanTrace: { root: string; child: { traceparent: string; spanId: string } } | undefined;
+    let fetchStartMono = startMono;
+    let fetchStartEpoch = 0;
     try {
-      connection = await this.resolveConnection(init?.signal);
-      if (init?.requiredBaseUrl != null && connection.baseUrl !== init.requiredBaseUrl) throw new GatewayEndpointChangedError();
-      const root = this.traceWindowRoot();
-      const child = root !== undefined && this.options.recordGatewayCommandSpan != null ? deriveChildTraceparent(root) : undefined;
-      if (root !== undefined && child !== undefined) commandTrace = { root, child };
+      link = await this.resolveConnection(requestInit?.signal);
+      if (requestInit?.requiredBaseUrl != null && link.baseUrl !== requestInit.requiredBaseUrl) throw new GatewayEndpointChangedError();
+      const root = this.cachedTraceRoot();
+      const child = root !== undefined && this.settings.recordGatewayCommandSpan != null ? deriveChildTraceparent(root) : undefined;
+      if (root !== undefined && child !== undefined) spanTrace = { root, child };
       const traceparent = child?.traceparent ?? root;
-      fetchStartMonotonicMs = this.options.timing.clock.monotonicNow();
-      fetchStartEpochMs = this.options.timing.clock.now();
-      const response = await fetch(`${connection.baseUrl}${GATEWAY_API_PREFIX}/${method}`, {
+      fetchStartMono = this.settings.timing.clock.monotonicNow();
+      fetchStartEpoch = this.settings.timing.clock.now();
+      const reply = await fetch(`${link.baseUrl}${GATEWAY_API_PREFIX}/${method}`, {
         method: "POST",
-        headers: this.requestHeaders({ "content-type": "application/json", ...(traceparent === undefined ? {} : { [GATEWAY_TRACEPARENT_HEADER]: traceparent }) }, connection),
-        body: JSON.stringify(args ?? {}),
-        ...(init?.signal == null ? {} : { signal: init.signal })
+        headers: this.requestHeaders({ "content-type": "application/json", ...(traceparent === undefined ? {} : { [GATEWAY_TRACEPARENT_HEADER]: traceparent }) }, link),
+        body: JSON.stringify(payload ?? {}),
+        ...(requestInit?.signal == null ? {} : { signal: requestInit.signal })
       });
-      if (!response.ok) {
-        const detail = await response.text().catch(() => response.statusText);
+      if (!reply.ok) {
+        const detail = await reply.text().catch(() => reply.statusText);
         const message = extractGatewayErrorMessage(detail) ?? `gateway ${method} failed: ${detail}`;
-        if (response.status < 500) throw new SlateGatewayCommandError(message);
-        throw new SlateGatewayUnreachableError("http_5xx", message, { httpStatus: response.status, attemptedBaseUrl: connection.baseUrl });
+        if (reply.status < 500) throw new SlateGatewayCommandError(message);
+        throw new SlateGatewayUnreachableError("http_5xx", message, { httpStatus: reply.status, attemptedBaseUrl: link.baseUrl });
       }
-      const result = await response.json() as unknown;
-      if (response.headers.get(GATEWAY_MINT_DEDUPE_HEADER) === "1") this.mintDedupeProvenBaseUrls.add(connection.baseUrl);
-      this.reportCommandSpan(method, commandTrace, { startEpochMs: fetchStartEpochMs, durationMs: this.options.timing.clock.monotonicNow() - fetchStartMonotonicMs, isError: false });
-      return { result, connection };
+      const outcome = await reply.json() as unknown;
+      if (reply.headers.get(GATEWAY_MINT_DEDUPE_HEADER) === "1") this.mintProvenBaseUrls.add(link.baseUrl);
+      this.reportSpan(method, spanTrace, { startEpochMs: fetchStartEpoch, durationMs: this.settings.timing.clock.monotonicNow() - fetchStartMono, isError: false });
+      return { result: outcome, connection: link };
     } catch (error) {
-      this.reportCommandSpan(method, commandTrace, { startEpochMs: fetchStartEpochMs, durationMs: this.options.timing.clock.monotonicNow() - fetchStartMonotonicMs, isError: true });
+      this.reportSpan(method, spanTrace, { startEpochMs: fetchStartEpoch, durationMs: this.settings.timing.clock.monotonicNow() - fetchStartMono, isError: true });
       if (error instanceof SlateGatewayCommandError || error instanceof GatewayEndpointChangedError) throw error;
-      const classified = classifyGatewayError(error);
-      this.reportReachability({ outcome: classified.outcome, method, latencyMs: this.options.timing.clock.monotonicNow() - startMonotonicMs, baseUrlKind: classifyBaseUrlKind(connection?.baseUrl), ...(classified.httpStatus === undefined ? {} : { httpStatus: classified.httpStatus }), ...(classified.causeSummary === undefined ? {} : { causeSummary: classified.causeSummary }) }, connection?.baseUrl);
+      const verdict = classifyGatewayError(error);
+      this.reportReachable({ outcome: verdict.outcome, method, latencyMs: this.settings.timing.clock.monotonicNow() - startMono, baseUrlKind: classifyBaseUrlKind(link?.baseUrl), ...(verdict.httpStatus === undefined ? {} : { httpStatus: verdict.httpStatus }), ...(verdict.causeSummary === undefined ? {} : { causeSummary: verdict.causeSummary }) }, link?.baseUrl);
       if (error instanceof SlateGatewayUnreachableError) throw error;
-      const blocked = findBoxBlockedMessage(error);
-      throw new SlateGatewayUnreachableError(classified.outcome, blocked == null ? `gateway ${method} unreachable (${classified.outcome})` : `gateway ${method} unreachable (${classified.outcome}): ${blocked}`, { cause: error, ...(classified.causeSummary === undefined ? {} : { causeSummary: classified.causeSummary }), ...(connection === undefined ? {} : { attemptedBaseUrl: connection.baseUrl }), isPreDispatch: connection === undefined });
+      const blockedText = findBoxBlockedMessage(error);
+      throw new SlateGatewayUnreachableError(verdict.outcome, blockedText == null ? `gateway ${method} unreachable (${verdict.outcome})` : `gateway ${method} unreachable (${verdict.outcome}): ${blockedText}`, { cause: error, ...(verdict.causeSummary === undefined ? {} : { causeSummary: verdict.causeSummary }), ...(link === undefined ? {} : { attemptedBaseUrl: link.baseUrl }), isPreDispatch: link === undefined });
     }
   }
 
-  async command(method: string, args: unknown, init?: RequestInit): Promise<unknown> { return (await this.request(method, args, init)).result; }
+  async command(method: string, payload: unknown, requestInit?: RequestInit): Promise<unknown> { return (await this.request(method, payload, requestInit)).result; }
 
-  dispatchCommand(method: string, args: unknown, init?: RequestInit): Promise<unknown> {
-    const record = typeof args === "object" && args != null ? args as Record<string, unknown> : {};
-    if (method === "sendPrompt") return this.sendPrompt(record);
-    if (method === "getForeverBoxStatus" || method === "ensureForeverBox") return this.foreverBoxStatusCommand(method, args, init);
-    if (method === "listAgents" || method === "countAgents") return this.boundedRosterRead(method, init);
-    if (method === "createAgent") return this.createAgentWithRetry(record, init);
+  dispatchCommand(method: string, payload: unknown, requestInit?: RequestInit): Promise<unknown> {
+    const record = typeof payload === "object" && payload != null ? payload as Record<string, unknown> : {};
+    if (method === "sendWithDedupe") return this.sendWithDedupe(record);
+    if (method === "getForeverBoxStatus" || method === "ensureForeverBox") return this.foreverBoxStatus(method, payload, requestInit);
+    if (method === "listAgents" || method === "countAgents") return this.boundedRoster(method, requestInit);
+    if (method === "createAgent") return this.retryCreateAgent(record, requestInit);
     if (method === "setDevGatewayOffline") return Promise.resolve(this.setDevInducedOffline(record.induced === true));
     if (method === "setGatewayPaused") return Promise.resolve(this.setClientPaused(record.paused === true));
-    return this.command(method, args, init);
+    return this.command(method, payload, requestInit);
   }
 
-  async dispatchLegacyCommand(method: string, args: unknown): Promise<void> { await this.command(method, args); }
+  async dispatchLegacyCommand(method: string, payload: unknown): Promise<void> { await this.command(method, payload); }
 
-  private async createAgentWithRetry(args: Record<string, unknown>, init?: RequestInit): Promise<unknown> {
-    const stamped = { ...args, clientNonce: args.clientNonce ?? randomUUID() };
-    let pinnedBaseUrl: string | undefined;
-    let lastError: unknown;
+  private async retryCreateAgent(payload: Record<string, unknown>, requestInit?: RequestInit): Promise<unknown> {
+    const tagged = { ...payload, clientNonce: payload.clientNonce ?? randomUUID() };
+    let pinnedUrl: string | undefined;
+    let previousFailure: unknown;
     for (let attempt = 1; ; attempt += 1) {
       try {
-        return (await this.request("createAgent", stamped, { ...(init?.signal == null ? {} : { signal: init.signal }), ...(pinnedBaseUrl == null ? {} : { requiredBaseUrl: pinnedBaseUrl }) })).result;
+        return (await this.request("createAgent", tagged, { ...(requestInit?.signal == null ? {} : { signal: requestInit.signal }), ...(pinnedUrl == null ? {} : { requiredBaseUrl: pinnedUrl }) })).result;
       } catch (error) {
-        if (error instanceof GatewayEndpointChangedError) throw lastError;
-        lastError = error;
-        const retryable = attempt < CREATE_AGENT_RETRY_POLICY.maxAttempts && init?.signal?.aborted !== true && !(error instanceof SlateGatewayCommandError) && !(error instanceof SlateGatewayUnreachableError && PERMANENT_REFUSAL_KINDS.has(error.kind));
-        if (!retryable) throw error;
-        const preDispatch = error instanceof SlateGatewayUnreachableError && (error.isPreDispatch === true || PRE_DISPATCH_KINDS.has(error.kind));
-        if (!preDispatch) {
-          const attempted = error instanceof SlateGatewayUnreachableError ? error.attemptedBaseUrl : undefined;
-          if (attempted == null || !this.mintDedupeProvenBaseUrls.has(attempted)) throw error;
-          pinnedBaseUrl = attempted;
+        if (error instanceof GatewayEndpointChangedError) throw previousFailure;
+        previousFailure = error;
+        const canRetry = attempt < CREATE_AGENT_RETRY_POLICY.maxAttempts && requestInit?.signal?.aborted !== true && !(error instanceof SlateGatewayCommandError) && !(error instanceof SlateGatewayUnreachableError && PERMANENT_REFUSAL_KINDS.has(error.kind));
+        if (!canRetry) throw error;
+        const beforeDispatch = error instanceof SlateGatewayUnreachableError && (error.isPreDispatch === true || PRE_DISPATCH_KINDS.has(error.kind));
+        if (!beforeDispatch) {
+          const triedUrl = error instanceof SlateGatewayUnreachableError ? error.attemptedBaseUrl : undefined;
+          if (triedUrl == null || !this.mintProvenBaseUrls.has(triedUrl)) throw error;
+          pinnedUrl = triedUrl;
         }
       }
-      const wait = this.options.timing.createAgentRetry.schedule(attempt, init?.signal);
-      try { await wait.elapsed; } finally { wait.dispose(); }
-      this.noteTransportRetry();
+      const backoffWait = this.settings.timing.createAgentRetry.schedule(attempt, requestInit?.signal);
+      try { await backoffWait.elapsed; } finally { backoffWait.dispose(); }
+      this.noteRetry();
     }
   }
 
-  private noteTransportRetry(): void { try { this.options.onTransportRetry?.(); } catch {} }
+  private noteRetry(): void { try { this.settings.onTransportRetry?.(); } catch {} }
 
-  private async boundedRosterRead(method: string, init?: RequestInit): Promise<unknown> {
-    try { return await this.boundedRosterReadAttempt(method, init); }
+  private async boundedRoster(method: string, requestInit?: RequestInit): Promise<unknown> {
+    try { return await this.rosterAttempt(method, requestInit); }
     catch (error) {
-      const retryable = !this.isClosed && init?.signal?.aborted !== true && !(error instanceof SlateGatewayCommandError) && !(error instanceof SlateGatewayUnreachableError && PERMANENT_REFUSAL_KINDS.has(error.kind));
-      if (!retryable) throw error;
-      this.noteTransportRetry();
-      return await this.boundedRosterReadAttempt(method, init);
+      const canRetry = !this.closedFlag && requestInit?.signal?.aborted !== true && !(error instanceof SlateGatewayCommandError) && !(error instanceof SlateGatewayUnreachableError && PERMANENT_REFUSAL_KINDS.has(error.kind));
+      if (!canRetry) throw error;
+      this.noteRetry();
+      return await this.rosterAttempt(method, requestInit);
     }
   }
 
-  private async boundedRosterReadAttempt(method: string, init?: RequestInit): Promise<unknown> {
-    try { return await this.options.timing.rosterReadDeadline.run((signal) => this.command(method, {}, { signal }), init?.signal); }
+  private async rosterAttempt(method: string, requestInit?: RequestInit): Promise<unknown> {
+    try { return await this.settings.timing.rosterReadDeadline.run((signal) => this.command(method, {}, { signal }), requestInit?.signal); }
     catch (error) {
       if (error instanceof DeadlineExceededError) throw new SlateGatewayUnreachableError("timeout", `gateway ${method} unreachable (timeout)`, { cause: error });
       throw error;
     }
   }
 
-  private async sendPrompt(args: Record<string, unknown>): Promise<unknown> {
-    if (this.sendAcceptReturnDisabled) return await this.command("sendPrompt", args);
+  private async sendWithDedupe(payload: Record<string, unknown>): Promise<unknown> {
+    if (this.sendAcceptSkipped) return await this.command("sendWithDedupe", payload);
     const first = { baseUrl: undefined as string | undefined, postStarted: false };
-    try { return await this.sendPromptAttempt(args, 0, first); }
+    try { return await this.sendAttempt(payload, 0, first); }
     catch (error) {
       const postNeverDispatched = !first.postStarted;
-      const clientNonce = args.clientNonce;
-      const dedupeProven = first.baseUrl != null && this.sendDedupeProvenBaseUrls.has(first.baseUrl);
-      const retryable = !this.isClosed && typeof clientNonce === "string" && clientNonce.length > 0 && !(error instanceof SlateGatewayCommandError) && (postNeverDispatched || dedupeProven);
-      if (!retryable) throw error;
-      this.noteTransportRetry();
-      return await this.sendPromptAttempt(args, 1, { baseUrl: undefined, postStarted: false }, postNeverDispatched ? undefined : first.baseUrl);
+      const clientNonce = payload.clientNonce;
+      const dedupeProven = first.baseUrl != null && this.sendProvenBaseUrls.has(first.baseUrl);
+      const canRetry = !this.closedFlag && typeof clientNonce === "string" && clientNonce.length > 0 && !(error instanceof SlateGatewayCommandError) && (postNeverDispatched || dedupeProven);
+      if (!canRetry) throw error;
+      this.noteRetry();
+      return await this.sendAttempt(payload, 1, { baseUrl: undefined, postStarted: false }, postNeverDispatched ? undefined : first.baseUrl);
     }
   }
 
-  private async sendPromptAttempt(args: Record<string, unknown>, attempt: number, state: { baseUrl: string | undefined; postStarted: boolean }, requiredBaseUrl?: string): Promise<unknown> {
-    const clock = this.options.timing.clock;
+  private async sendAttempt(payload: Record<string, unknown>, attempt: number, state: { baseUrl: string | undefined; postStarted: boolean }, requiredBaseUrl?: string): Promise<unknown> {
+    const clock = this.settings.timing.clock;
     const connectStartEpochMs = clock.now();
-    const connectStartMonotonicMs = clock.monotonicNow();
-    const connection = await this.resolveConnection();
-    state.baseUrl = connection.baseUrl;
-    if (requiredBaseUrl != null && connection.baseUrl !== requiredBaseUrl) throw new Error("send retry aborted: the gateway endpoint changed mid-send");
-    this.recordSendStage({ stage: "gateway-connect", attempt, clientNonce: args.clientNonce, traceparent: args.traceparent, startEpochMs: connectStartEpochMs, durationMs: clock.monotonicNow() - connectStartMonotonicMs });
+    const connectStartMono = clock.monotonicNow();
+    const link = await this.resolveConnection();
+    state.baseUrl = link.baseUrl;
+    if (requiredBaseUrl != null && link.baseUrl !== requiredBaseUrl) throw new Error("send retry aborted: the gateway endpoint changed mid-send");
+    this.recordSendPhase({ stage: "gateway-connect", attempt, clientNonce: payload.clientNonce, traceparent: payload.traceparent, startEpochMs: connectStartEpochMs, durationMs: clock.monotonicNow() - connectStartMono });
     const postStartEpochMs = clock.now();
     const postStartMonotonicMs = clock.monotonicNow();
     try {
       state.postStarted = true;
-      const result = await this.options.timing.sendPostDeadline.run(async (signal) => {
-        const response = await fetch(`${connection.baseUrl}${GATEWAY_API_PREFIX}/sendPrompt`, { method: "POST", headers: this.requestHeaders({ "content-type": "application/json" }, connection), body: JSON.stringify(args), signal });
-        if (!response.ok) {
-          const detail = await response.text().catch(() => response.statusText);
-          throw new SlateGatewayCommandError(extractGatewayErrorMessage(detail) ?? `gateway sendPrompt failed: ${detail}`);
+      const outcome = await this.settings.timing.sendPostDeadline.run(async (signal) => {
+        const reply = await fetch(`${link.baseUrl}${GATEWAY_API_PREFIX}/sendWithDedupe`, { method: "POST", headers: this.requestHeaders({ "content-type": "application/json" }, link), body: JSON.stringify(payload), signal });
+        if (!reply.ok) {
+          const detail = await reply.text().catch(() => reply.statusText);
+          throw new SlateGatewayCommandError(extractGatewayErrorMessage(detail) ?? `gateway sendWithDedupe failed: ${detail}`);
         }
-        return await response.json() as unknown;
+        return await reply.json() as unknown;
       });
-      if (typeof result === "object" && result != null && "accepted" in result && result.accepted === true) this.sendDedupeProvenBaseUrls.add(connection.baseUrl);
-      this.recordSendStage({ stage: "gateway-post", attempt, clientNonce: args.clientNonce, traceparent: args.traceparent, startEpochMs: postStartEpochMs, durationMs: clock.monotonicNow() - postStartMonotonicMs });
-      return result ?? undefined;
+      if (typeof outcome === "object" && outcome != null && "accepted" in outcome && outcome.accepted === true) this.sendProvenBaseUrls.add(link.baseUrl);
+      this.recordSendPhase({ stage: "gateway-post", attempt, clientNonce: payload.clientNonce, traceparent: payload.traceparent, startEpochMs: postStartEpochMs, durationMs: clock.monotonicNow() - postStartMonotonicMs });
+      return outcome ?? undefined;
     } catch (error) {
-      this.recordSendStage({ stage: "gateway-post", attempt, clientNonce: args.clientNonce, traceparent: args.traceparent, startEpochMs: postStartEpochMs, durationMs: clock.monotonicNow() - postStartMonotonicMs, isError: true });
+      this.recordSendPhase({ stage: "gateway-post", attempt, clientNonce: payload.clientNonce, traceparent: payload.traceparent, startEpochMs: postStartEpochMs, durationMs: clock.monotonicNow() - postStartMonotonicMs, isError: true });
       throw error;
     }
   }
 
-  private async foreverBoxStatusCommand(method: string, args: unknown, init?: RequestInit): Promise<unknown> {
-    const { result, connection } = await this.request(method, args, init);
-    return result == null ? null : proxifyForeverBoxStatus(result as ForeverBoxStatus, connection.vncProxy ?? null);
+  private async foreverBoxStatus(method: string, payload: unknown, requestInit?: RequestInit): Promise<unknown> {
+    const { result: outcome, connection: link } = await this.request(method, payload, requestInit);
+    return outcome == null ? null : proxifyForeverBoxStatus(outcome as ForeverBoxStatus, link.vncProxy ?? null);
   }
 
-  private async runEventLoop(): Promise<void> {
+  private async runLoop(): Promise<void> {
     let failedAttempts = 0;
-    while (!this.isClosed) {
-      const generation = this.reconnectGeneration;
-      try { await this.streamEvents(() => { failedAttempts = 0; }, generation); } catch {}
-      if (this.isClosed) break;
-      if (generation !== this.reconnectGeneration) { failedAttempts = 0; continue; }
-      const backoffController = new AbortController();
-      this.activeEventLoopController = backoffController;
-      if (generation !== this.reconnectGeneration) { this.activeEventLoopController = undefined; failedAttempts = 0; continue; }
+    while (!this.closedFlag) {
+      const generation = this.reconnectEpoch;
+      try { await this.streamEventLoop(() => { failedAttempts = 0; }, generation); } catch {}
+      if (this.closedFlag) break;
+      if (generation !== this.reconnectEpoch) { failedAttempts = 0; continue; }
+      const backoffAbort = new AbortController();
+      this.loopAbort = backoffAbort;
+      if (generation !== this.reconnectEpoch) { this.loopAbort = undefined; failedAttempts = 0; continue; }
       failedAttempts += 1;
-      const wait = this.options.timing.reconnectBackoff.schedule(failedAttempts, backoffController.signal);
-      try { await wait.elapsed; } catch {} finally { wait.dispose(); }
-      if (this.activeEventLoopController === backoffController) this.activeEventLoopController = undefined;
-      if (generation !== this.reconnectGeneration) failedAttempts = 0;
+      const backoffWait = this.settings.timing.reconnectBackoff.schedule(failedAttempts, backoffAbort.signal);
+      try { await backoffWait.elapsed; } catch {} finally { backoffWait.dispose(); }
+      if (this.loopAbort === backoffAbort) this.loopAbort = undefined;
+      if (generation !== this.reconnectEpoch) failedAttempts = 0;
     }
   }
 
-  private async streamEvents(resetBackoff: () => void, attemptGeneration: number): Promise<void> {
+  private async streamEventLoop(resetBackoff: () => void, attemptEpoch: number): Promise<void> {
     const controller = new AbortController();
-    this.activeEventLoopController = controller;
-    const connectStartMonotonicMs = this.options.timing.clock.monotonicNow();
-    let connection: GatewayConnection | undefined;
-    let didConnect = false;
+    this.loopAbort = controller;
+    const connectStartMono = this.settings.timing.clock.monotonicNow();
+    let link: GatewayConnection | undefined;
+    let connectedOnce = false;
     try {
-      let handshake: { connection: GatewayConnection; reader: ReadableStreamDefaultReader<Uint8Array> };
+      let linkHandshake: { link: GatewayConnection; streamReader: ReadableStreamDefaultReader<Uint8Array> };
       try {
-        handshake = await this.options.timing.connectDeadline.run(async (deadlineSignal) => {
+        linkHandshake = await this.settings.timing.connectDeadline.run(async (deadlineSignal) => {
           const resolved = await this.resolveConnection(deadlineSignal);
-          connection = resolved;
-          const response = await fetch(`${resolved.baseUrl}${GATEWAY_EVENTS_PATH}`, { headers: this.requestHeaders({ accept: "text/event-stream" }, resolved), signal: controller.signal });
-          if (controller.signal.aborted || attemptGeneration !== this.reconnectGeneration) {
-            void response.body?.cancel().catch(() => {});
+          link = resolved;
+          const reply = await fetch(`${resolved.baseUrl}${GATEWAY_EVENTS_PATH}`, { headers: this.requestHeaders({ accept: "text/event-stream" }, resolved), signal: controller.signal });
+          if (controller.signal.aborted || attemptEpoch !== this.reconnectEpoch) {
+            void reply.body?.cancel().catch(() => {});
             throw new Error("gateway connect superseded");
           }
-          if (!response.ok || response.body == null) throw new SlateGatewayUnreachableError(outcomeForHttpStatus(response.status) ?? "network", `gateway events failed: ${response.status}`, { httpStatus: response.status });
-          return { connection: resolved, reader: response.body.getReader() };
+          if (!reply.ok || reply.body == null) throw new SlateGatewayUnreachableError(outcomeForHttpStatus(reply.status) ?? "network", `gateway events failed: ${reply.status}`, { httpStatus: reply.status });
+          return { link: resolved, streamReader: reply.body.getReader() };
         }, controller.signal);
       } catch (error) { if (error instanceof DeadlineExceededError) controller.abort(); throw error; }
-      const { reader } = handshake;
+      const { streamReader } = linkHandshake;
       resetBackoff();
-      this.connectionCount += 1;
-      didConnect = true;
-      this.transportState = "connected";
-      const blocks = new SseBlockDecoder((block) => this.dispatchEventBlock(block, handshake.connection.vncProxy ?? null));
-      let stalled = false;
-      const watchdog = this.options.timing.stallWatchdog.arm(() => { stalled = true; controller.abort(); });
-      let down = { reason: "stream-ended", cause: null as string | null };
+      this.connectCount += 1;
+      connectedOnce = true;
+      this.linkState = "connected";
+      const eventDecoder = new SseBlockDecoder((block) => this.dispatchEventBlock(block, linkHandshake.link.vncProxy ?? null));
+      let stallTripped = false;
+      const stallTimer = this.settings.timing.stallWatchdog.arm(() => { stallTripped = true; controller.abort(); });
+      let disconnect = { reason: "stream-ended", cause: null as string | null };
       try {
-        this.reportReachability({ outcome: "ok", method: "events", latencyMs: this.options.timing.clock.monotonicNow() - connectStartMonotonicMs, baseUrlKind: classifyBaseUrlKind(handshake.connection.baseUrl) }, handshake.connection.baseUrl);
-        const forced = this.pendingForcedReconnect != null && this.pendingForcedReconnect.generation <= attemptGeneration;
-        this.emitTransportEvent({ family: "transport-connected", payload: { generation: this.connectionCount } });
-        if (forced) { this.pendingForcedReconnect?.resolve(); this.pendingForcedReconnect = undefined; }
+        this.reportReachable({ outcome: "ok", method: "events", latencyMs: this.settings.timing.clock.monotonicNow() - connectStartMono, baseUrlKind: classifyBaseUrlKind(linkHandshake.link.baseUrl) }, linkHandshake.link.baseUrl);
+        const forcedNow = this.forcedReconnectWait != null && this.forcedReconnectWait.generation <= attemptEpoch;
+        this.emitTransport({ family: "transport-connected", payload: { generation: this.connectCount } });
+        if (forcedNow) { this.forcedReconnectWait?.resolve(); this.forcedReconnectWait = undefined; }
         for (;;) {
-          const result = await reader.read();
-          if (result.done) break;
-          watchdog.kick();
-          blocks.push(result.value);
+          const outcome = await streamReader.read();
+          if (outcome.done) break;
+          stallTimer.kick();
+          eventDecoder.push(outcome.value);
         }
       } catch (error) {
-        down = classifyStreamDown({ stalled, forced: attemptGeneration !== this.reconnectGeneration, devInducedOffline: this.devInducedOffline, clientPaused: this.clientPaused, error });
+        disconnect = classifyStreamDown({ stalled: stallTripped, forced: attemptEpoch !== this.reconnectEpoch, devInducedOffline: this.forcedOffline, clientPaused: this.pausedClient, error });
         throw error;
-      } finally { watchdog.dispose(); controller.abort(); this.notifyDisconnected(down.reason, down.cause); }
+      } finally { stallTimer.dispose(); controller.abort(); this.markDisconnected(disconnect.reason, disconnect.cause); }
     } catch (error) {
-      if (!didConnect && !this.isClosed && attemptGeneration === this.reconnectGeneration) {
-        const classified = classifyGatewayError(error);
-        this.reportReachability({ outcome: classified.outcome, method: "events", latencyMs: this.options.timing.clock.monotonicNow() - connectStartMonotonicMs, baseUrlKind: classifyBaseUrlKind(connection?.baseUrl), ...(classified.httpStatus === undefined ? {} : { httpStatus: classified.httpStatus }), ...(classified.causeSummary === undefined ? {} : { causeSummary: classified.causeSummary }) }, connection?.baseUrl);
+      if (!connectedOnce && !this.closedFlag && attemptEpoch === this.reconnectEpoch) {
+        const verdict = classifyGatewayError(error);
+        this.reportReachable({ outcome: verdict.outcome, method: "events", latencyMs: this.settings.timing.clock.monotonicNow() - connectStartMono, baseUrlKind: classifyBaseUrlKind(link?.baseUrl), ...(verdict.httpStatus === undefined ? {} : { httpStatus: verdict.httpStatus }), ...(verdict.causeSummary === undefined ? {} : { causeSummary: verdict.causeSummary }) }, link?.baseUrl);
       }
       throw error;
-    } finally { if (this.activeEventLoopController === controller) this.activeEventLoopController = undefined; }
+    } finally { if (this.loopAbort === controller) this.loopAbort = undefined; }
   }
 
   dispatchEventBlock(block: string, vncProxy: VncProxyDescriptor | null): void {
@@ -479,8 +479,8 @@ export class CoordinatorGatewayClient {
     try {
       const event = JSON.parse(dataLines.join("\n")) as { readonly channel?: unknown; readonly payload?: unknown };
       if (typeof event.channel !== "string" || event.channel.length === 0) return;
-      if (event.channel === "forever-box") this.options.onEvent({ channel: "forever-box", payload: proxifyForeverBoxStatus(event.payload as ForeverBoxStatus, vncProxy) });
-      else this.options.onEvent({ channel: event.channel, payload: event.payload });
+      if (event.channel === "forever-box") this.settings.onEvent({ channel: "forever-box", payload: proxifyForeverBoxStatus(event.payload as ForeverBoxStatus, vncProxy) });
+      else this.settings.onEvent({ channel: event.channel, payload: event.payload });
     } catch {}
   }
 }
