@@ -41,6 +41,8 @@ const baselineDir = path.join(root, "reference", "derived");
 const EXEMPT = [
   ["packages/proto/", "generated from the wire schema by buf; reviewed, never hand-rewritten"],
   ["packages/redacted-protos/", "generated from the redaction annotations; reviewed, never hand-rewritten"],
+  ["shared/observability/sentry-scrub.gen.ts", "generated: mechanically recovered from the counterpart bundle (scripts/recover-sentry-scrub.mjs); the scrubbing rules are data with no hand decisions, and no in-repo generator exists yet"],
+  ["shared/node/experiments/experiment-config.gen.ts", "generated data table: the registry of platform settings (parsers, defaults, gates) is machine-owned data; no in-repo generator exists yet"],
   ["packages/mcp-core/", "constant tables whose values are the counterpart's wire names"],
   ["packages/agent-store-sync/bcs-transport.ts", "adapter: speaks the counterpart's agent-store wire frame for frame"],
   ["packages/agent-store-sync/bcs-list-adapter.ts", "adapter: the wire's listing shape, mapped one entry at a time"],
