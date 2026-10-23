@@ -112,161 +112,161 @@ export class AutomationRuntime {
     this.tm.automationConfigChanged?.();
   }
 
-  watchSessionAutomations(session: any): void {
-    if (this.watchedAutomations === session.automations) return;
+  watchSessionAutomations(conversation: any): void {
+    if (this.watchedAutomations === conversation.automations) return;
     this.watchedAutomations?.setOnChange(undefined);
-    this.watchedAutomations = session.automations;
-    this.seedKnownAutomations(session);
-    session.automations.setOnChange(() => {
+    this.watchedAutomations = conversation.automations;
+    this.seedKnownAutomations(conversation);
+    conversation.automations.setOnChange(() => {
       void this.enqueueAutomationLifecycleMutation({
-        agentId: session.id,
+        agentId: conversation.id,
         mutation: () => {
-          this.recordAutomationChangeEvents(session, "agent");
-          this.emitAutomations(session);
+          this.recordAutomationChangeEvents(conversation, "agent");
+          this.emitAutomations(conversation);
           this.notifyAutomationConfigChanged();
         },
       });
     });
   }
 
-  seedKnownAutomations(session: any): void {
-    if (!this.lastKnownAutomations.has(session.id)) {
+  seedKnownAutomations(conversation: any): void {
+    if (!this.lastKnownAutomations.has(conversation.id)) {
       this.lastKnownAutomations.set(
-        session.id,
-        snapshotAutomations(session.automations.listDefinitions()),
+        conversation.id,
+        snapshotAutomations(conversation.automations.listDefinitions()),
       );
     }
   }
 
   recordAutomationChangeEvents(
-    session: any,
+    conversation: any,
     source: AutomationLifecycleSource,
   ): void {
-    if (this.tm.sessions.activeSession?.id !== session.id) return;
-    const current = snapshotAutomations(session.automations.listDefinitions());
-    const previous = this.lastKnownAutomations.get(session.id);
-    this.lastKnownAutomations.set(session.id, current);
-    if (previous == null) return;
-    for (const [id, after] of current) {
-      const before = previous.get(id);
+    if (this.tm.sessions.activeSession?.id !== conversation.id) return;
+    const liveSnapshot = snapshotAutomations(conversation.automations.listDefinitions());
+    const priorSnapshot = this.lastKnownAutomations.get(conversation.id);
+    this.lastKnownAutomations.set(conversation.id, liveSnapshot);
+    if (priorSnapshot == null) return;
+    for (const [id, nextSnapshot] of liveSnapshot) {
+      const oldSnapshot = priorSnapshot.get(id);
       const action: AutomationAction | null =
-        before == null ? "created" : diffAutomationAction(before, after);
+        oldSnapshot == null ? "created" : diffAutomationAction(oldSnapshot, nextSnapshot);
       if (action != null)
         this.emitAutomationChange({
-          agentId: session.id,
+          agentId: conversation.id,
           action,
           automationId: id,
-          automationName: after.name,
-          automation: after,
+          automationName: nextSnapshot.name,
+          automation: nextSnapshot,
           source,
         });
     }
-    for (const [id, before] of previous) {
-      if (!current.has(id))
+    for (const [id, oldSnapshot] of priorSnapshot) {
+      if (!liveSnapshot.has(id))
         this.emitAutomationChange({
-          agentId: session.id,
+          agentId: conversation.id,
           action: "deleted",
           automationId: id,
-          automationName: before.name,
-          automation: before,
+          automationName: oldSnapshot.name,
+          automation: oldSnapshot,
           source,
         });
     }
   }
 
-  enqueueAutomationLifecycleMutation<T>(args: {
+  enqueueAutomationLifecycleMutation<T>(input: {
     agentId: string;
     mutation(): T | Promise<T>;
   }): Promise<T> {
-    const previous =
-      this.automationLifecycleMutationChains.get(args.agentId) ??
+    const priorSnapshot =
+      this.automationLifecycleMutationChains.get(input.agentId) ??
       Promise.resolve();
-    const result = previous.then(args.mutation, args.mutation);
-    const settled = result.then(
+    const mutationResult = priorSnapshot.then(input.mutation, input.mutation);
+    const chainTail = mutationResult.then(
       () => undefined,
       () => undefined,
     );
-    this.automationLifecycleMutationChains.set(args.agentId, settled);
-    void settled.then(() => {
-      if (this.automationLifecycleMutationChains.get(args.agentId) === settled)
-        this.automationLifecycleMutationChains.delete(args.agentId);
+    this.automationLifecycleMutationChains.set(input.agentId, chainTail);
+    void chainTail.then(() => {
+      if (this.automationLifecycleMutationChains.get(input.agentId) === chainTail)
+        this.automationLifecycleMutationChains.delete(input.agentId);
     });
-    return result;
+    return mutationResult;
   }
 
-  enqueueAutomationMutation<T>(args: {
+  enqueueAutomationMutation<T>(input: {
     agentId: string;
-    activeMutation(session: any): T;
+    activeMutation(conversation: any): T;
     inactiveMutation(): T;
   }): Promise<T> {
     return this.enqueueAutomationLifecycleMutation({
-      agentId: args.agentId,
+      agentId: input.agentId,
       mutation: () => {
-        const active = this.tm.sessions.activeSession;
-        let after: T;
-        if (active?.id === args.agentId) {
-          this.recordAutomationChangeEvents(active, "agent");
-          after = args.activeMutation(active);
-          this.recordAutomationChangeEvents(active, "automations_ui");
+        const currentSession = this.tm.sessions.activeSession;
+        let nextSnapshot: T;
+        if (currentSession?.id === input.agentId) {
+          this.recordAutomationChangeEvents(currentSession, "agent");
+          nextSnapshot = input.activeMutation(currentSession);
+          this.recordAutomationChangeEvents(currentSession, "automations_ui");
         } else {
-          const before = this.tm.sessionStore.listAgentAutomations(
-            args.agentId,
+          const oldSnapshot = this.tm.sessionStore.listAgentAutomations(
+            input.agentId,
           ) as AutomationRecord[];
           this.recordInactiveAutomationChanges({
-            agentId: args.agentId,
-            before,
-            after: before,
+            agentId: input.agentId,
+            before: oldSnapshot,
+            after: oldSnapshot,
             source: "agent",
           });
-          after = args.inactiveMutation();
+          nextSnapshot = input.inactiveMutation();
           this.recordInactiveAutomationChanges({
-            agentId: args.agentId,
-            before,
-            after: after as AutomationRecord[],
+            agentId: input.agentId,
+            before: oldSnapshot,
+            after: nextSnapshot as AutomationRecord[],
             source: "automations_ui",
           });
         }
-        this.publishAutomations(args.agentId, after);
-        return after;
+        this.publishAutomations(input.agentId, nextSnapshot);
+        return nextSnapshot;
       },
     });
   }
 
-  recordInactiveAutomationChanges(args: {
+  recordInactiveAutomationChanges(input: {
     agentId: string;
     before: AutomationRecord[];
     after: AutomationRecord[];
     source: AutomationLifecycleSource;
   }): void {
-    const previous =
-      this.lastKnownAutomations.get(args.agentId) ??
-      snapshotAutomations(args.before);
-    const current = snapshotAutomations(args.after);
-    this.lastKnownAutomations.set(args.agentId, current);
-    for (const [id, automation] of current) {
-      const prior = previous.get(id);
+    const priorSnapshot =
+      this.lastKnownAutomations.get(input.agentId) ??
+      snapshotAutomations(input.before);
+    const liveSnapshot = snapshotAutomations(input.after);
+    this.lastKnownAutomations.set(input.agentId, liveSnapshot);
+    for (const [id, automation] of liveSnapshot) {
+      const previousEntry = priorSnapshot.get(id);
       const action: AutomationAction | null =
-        prior == null ? "created" : diffAutomationAction(prior, automation);
+        previousEntry == null ? "created" : diffAutomationAction(previousEntry, automation);
       if (action != null)
         this.emitAutomationLifecycle({
-          agentId: args.agentId,
+          agentId: input.agentId,
           action,
           automation,
-          source: args.source,
+          source: input.source,
         });
     }
-    for (const [id, automation] of previous) {
-      if (!current.has(id))
+    for (const [id, automation] of priorSnapshot) {
+      if (!liveSnapshot.has(id))
         this.emitAutomationLifecycle({
-          agentId: args.agentId,
+          agentId: input.agentId,
           action: "deleted",
           automation,
-          source: args.source,
+          source: input.source,
         });
     }
   }
 
-  emitAutomationChange(args: {
+  emitAutomationChange(input: {
     agentId: string;
     action: AutomationAction;
     automationId: string;
@@ -274,16 +274,16 @@ export class AutomationRuntime {
     automation: AutomationSnapshot;
     source: AutomationLifecycleSource;
   }): void {
-    this.tm.emitTimelineEvent(args.agentId, {
+    this.tm.emitTimelineEvent(input.agentId, {
       type: "automation-changed",
-      action: args.action,
-      automationId: args.automationId,
-      automationName: args.automationName,
+      action: input.action,
+      automationId: input.automationId,
+      automationName: input.automationName,
     });
-    this.emitAutomationLifecycle(args);
+    this.emitAutomationLifecycle(input);
   }
 
-  emitAutomationLifecycle(args: {
+  emitAutomationLifecycle(input: {
     agentId: string;
     action: AutomationAction;
     automation: AutomationSnapshot;
@@ -291,34 +291,34 @@ export class AutomationRuntime {
   }): void {
     const now = Date.now();
     const schedule =
-      args.automation.triggerType === "cron"
+      input.automation.triggerType === "cron"
         ? summarizeSchedule(
-            args.automation.schedule,
+            input.automation.schedule,
             this.tm.sessionStore.getUserTimeZone(),
             now,
           )
         : undefined;
-    const ageMs = Math.max(0, now - args.automation.createdAt);
+    const ageMs = Math.max(0, now - input.automation.createdAt);
     const automationId = stableAutomationId({
-      agentId: args.agentId,
-      localId: args.automation.id,
+      agentId: input.agentId,
+      localId: input.automation.id,
     });
     this.tm.telemetry.reportAutomationLifecycle({
-      conversationId: args.agentId,
+      conversationId: input.agentId,
       automationId,
-      action: args.action,
-      source: args.source,
-      triggerType: args.automation.triggerType,
+      action: input.action,
+      source: input.source,
+      triggerType: input.automation.triggerType,
       ...(schedule == null ? {} : schedule),
       ageMs,
-      recordedRunCount: args.automation.recordedRunCount,
+      recordedRunCount: input.automation.recordedRunCount,
     });
     this.tm.productAnalytics.trackEvent("slate.automation.lifecycle", {
-      agent_id: args.agentId,
+      agent_id: input.agentId,
       automation_id: automationId,
-      action: args.action,
-      source: args.source,
-      trigger_type: args.automation.triggerType,
+      action: input.action,
+      source: input.source,
+      trigger_type: input.automation.triggerType,
       ...(schedule == null
         ? {}
         : {
@@ -327,19 +327,19 @@ export class AutomationRuntime {
             fires_overnight: schedule.firesOvernight,
           }),
       age_ms: ageMs,
-      recorded_run_count: args.automation.recordedRunCount,
+      recorded_run_count: input.automation.recordedRunCount,
       guidance_version: AUTOMATION_PROMPT_GUIDANCE_VERSION,
     });
   }
 
-  emitAutomations(session: any): void {
+  emitAutomations(conversation: any): void {
     if (
-      this.tm.sessions.activeSession?.id === session.id &&
+      this.tm.sessions.activeSession?.id === conversation.id &&
       this.tm.shouldEmitAutomations()
     ) {
       this.publishAutomations(
-        session.id,
-        session.automations.list().slice(0, AUTOMATION_UI_LIMIT),
+        conversation.id,
+        conversation.automations.list().slice(0, AUTOMATION_UI_LIMIT),
       );
     }
   }
@@ -353,9 +353,9 @@ export class AutomationRuntime {
   }
 
   async getAgentAutomations(agentId: string): Promise<AutomationRecord[]> {
-    const active = this.tm.sessions.activeSession;
-    return active?.id === agentId
-      ? active.automations.list().slice(0, AUTOMATION_UI_LIMIT)
+    const currentSession = this.tm.sessions.activeSession;
+    return currentSession?.id === agentId
+      ? currentSession.automations.list().slice(0, AUTOMATION_UI_LIMIT)
       : this.tm.sessionStore.listAgentAutomations(agentId);
   }
   async listAllAutomations(): Promise<AutomationRecord[]> {
@@ -373,9 +373,9 @@ export class AutomationRuntime {
     try {
       return await this.enqueueAutomationMutation({
         agentId,
-        activeMutation: (active) => {
-          active.automations.setEnabled(automationId, isEnabled);
-          return active.automations.list().slice(0, AUTOMATION_UI_LIMIT);
+        activeMutation: (currentSession) => {
+          currentSession.automations.setEnabled(automationId, isEnabled);
+          return currentSession.automations.list().slice(0, AUTOMATION_UI_LIMIT);
         },
         inactiveMutation: () =>
           this.tm.sessionStore.setAgentAutomationEnabled(
@@ -395,9 +395,9 @@ export class AutomationRuntime {
     try {
       return await this.enqueueAutomationMutation({
         agentId,
-        activeMutation: (active) => {
-          active.automations.upsert(spec);
-          return active.automations.list().slice(0, AUTOMATION_UI_LIMIT);
+        activeMutation: (currentSession) => {
+          currentSession.automations.upsert(spec);
+          return currentSession.automations.list().slice(0, AUTOMATION_UI_LIMIT);
         },
         inactiveMutation: () =>
           this.tm.sessionStore.createAgentAutomation(agentId, spec),
@@ -414,9 +414,9 @@ export class AutomationRuntime {
     try {
       return await this.enqueueAutomationMutation({
         agentId,
-        activeMutation: (active) => {
-          active.automations.update(automationId, spec);
-          return active.automations.list().slice(0, AUTOMATION_UI_LIMIT);
+        activeMutation: (currentSession) => {
+          currentSession.automations.update(automationId, spec);
+          return currentSession.automations.list().slice(0, AUTOMATION_UI_LIMIT);
         },
         inactiveMutation: () =>
           this.tm.sessionStore.updateAgentAutomation(
@@ -436,9 +436,9 @@ export class AutomationRuntime {
     try {
       return await this.enqueueAutomationMutation({
         agentId,
-        activeMutation: (active) => {
-          active.automations.remove(automationId);
-          return active.automations.list().slice(0, AUTOMATION_UI_LIMIT);
+        activeMutation: (currentSession) => {
+          currentSession.automations.remove(automationId);
+          return currentSession.automations.list().slice(0, AUTOMATION_UI_LIMIT);
         },
         inactiveMutation: () =>
           this.tm.sessionStore.removeAgentAutomation(agentId, automationId),
@@ -452,30 +452,30 @@ export class AutomationRuntime {
     agentId: string,
     automationId: string,
   ): Promise<void> {
-    const active = this.tm.sessions.activeSession;
+    const currentSession = this.tm.sessions.activeSession;
     const automation =
-      active?.id === agentId
-        ? active.automations.get(automationId)
+      currentSession?.id === agentId
+        ? currentSession.automations.get(automationId)
         : ((await this.tm.sessionStore.listAgentAutomations(agentId)).find(
             (entry: AutomationRecord) => entry.id === automationId,
           ) ?? null);
     if (automation != null)
       await this.fireAutomation({ agentId, automation, trigger: "manual" });
   }
-  runServerScheduledAutomation(args: {
+  runServerScheduledAutomation(input: {
     agentId: string;
     automation: AutomationRecord;
     runUuid: string;
     scheduledForMs?: number;
   }): Promise<FireAutomationOutcome> {
     return this.fireAutomation({
-      agentId: args.agentId,
-      automation: args.automation,
+      agentId: input.agentId,
+      automation: input.automation,
       trigger: "schedule",
-      runUuid: args.runUuid,
-      ...(args.scheduledForMs === undefined
+      runUuid: input.runUuid,
+      ...(input.scheduledForMs === undefined
         ? {}
-        : { scheduledForMs: args.scheduledForMs }),
+        : { scheduledForMs: input.scheduledForMs }),
     });
   }
   runAutomationForEvent(
@@ -489,19 +489,19 @@ export class AutomationRuntime {
       event,
     });
   }
-  runServerAutomationForEvent(args: {
+  runServerAutomationForEvent(input: {
     agentId: string;
     automation: AutomationRecord;
     event: Record<string, unknown>;
     runUuid: string;
   }) {
-    return this.eventFires.enqueueEventAutomationFire(args);
+    return this.eventFires.enqueueEventAutomationFire(input);
   }
-  fireAutomation(args: FireAutomationArgs): Promise<FireAutomationOutcome> {
-    return this.runPath.fireAutomation(args);
+  fireAutomation(input: FireAutomationArgs): Promise<FireAutomationOutcome> {
+    return this.runPath.fireAutomation(input);
   }
-  handleSpendGuardWidgetAnswer(args: any): Promise<string | null> {
-    return this.spendGuard.handleWidgetAnswer(args);
+  handleSpendGuardWidgetAnswer(input: any): Promise<string | null> {
+    return this.spendGuard.handleWidgetAnswer(input);
   }
   async ensureHiddenTurnReply(runner: any): Promise<boolean> {
     const retry = await runner.run(REPLY_NUDGE_PROMPT, { hidden: true });
