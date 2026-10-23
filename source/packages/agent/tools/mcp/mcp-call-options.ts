@@ -33,7 +33,7 @@ export function indexMcpDescriptors({
   mcpMetaToolEnabled,
   mcpMetaToolOptions,
   mcpFileSystemOptions,
-  allowInteractiveMcpAuth = false,
+  allowInteractiveMcpAuth: allowInteractiveAuth = false,
 }: {
   readonly mcpMetaToolEnabled: boolean
   readonly mcpMetaToolOptions?: McpMetaToolOptions | undefined
@@ -43,18 +43,18 @@ export function indexMcpDescriptors({
   const serverDescriptors = new Map<string, McpDescriptor>()
   const toolDefinitionPaths = new Map<string, string>()
   // The meta tool carries its own descriptor list; without it the session's filesystem options do.
-  const descriptorSource = mcpMetaToolEnabled
+  const descriptorList = mcpMetaToolEnabled
     ? mcpMetaToolOptions?.mcpDescriptors ?? []
     : mcpFileSystemOptions?.mcpDescriptors ?? []
 
-  for (const descriptor of descriptorSource) {
-    const rawTools = descriptor.tools
-    const descriptorTools = allowInteractiveMcpAuth
-      ? rawTools
-      : rawTools.filter(tool => tool.toolName !== MCP_AUTH_VIRTUAL_TOOL_NAME)
+  for (const descriptor of descriptorList) {
+    const originalTools = descriptor.tools
+    const keptTools = allowInteractiveAuth
+      ? originalTools
+      : originalTools.filter(tool => tool.toolName !== MCP_AUTH_VIRTUAL_TOOL_NAME)
     // A descriptor whose tools all survive is registered as it came; one that lost a tool is rebuilt
     // from the fields a descriptor is allowed to carry, so the removed tool cannot leak back in.
-    const descriptorForRegistration = allowInteractiveMcpAuth || descriptorTools.length === rawTools.length
+    const descriptorToRegister = allowInteractiveAuth || keptTools.length === originalTools.length
       ? descriptor
       : new McpDescriptor({
         serverIdentifier: descriptor.serverIdentifier,
@@ -65,10 +65,10 @@ export function indexMcpDescriptors({
         ...(descriptor.folderPath !== undefined ? { folderPath: descriptor.folderPath } : {}),
         ...(descriptor.pluginDbId !== undefined ? { pluginDbId: descriptor.pluginDbId } : {}),
         ...(descriptor.marketplaceId !== undefined ? { marketplaceId: descriptor.marketplaceId } : {}),
-        tools: descriptorTools,
+        tools: keptTools,
       })
-    serverDescriptors.set(descriptor.serverIdentifier, descriptorForRegistration)
-    for (const tool of descriptorTools) {
+    serverDescriptors.set(descriptor.serverIdentifier, descriptorToRegister)
+    for (const tool of keptTools) {
       if (tool.definitionPath !== undefined) {
         toolDefinitionPaths.set(`${descriptor.serverIdentifier}:${tool.toolName}`, tool.definitionPath)
       }
@@ -81,7 +81,7 @@ export function indexMcpDescriptors({
 export interface McpCallSchemas {
   readonly parametersSchema: z.ZodType<unknown>
   readonly parsingParametersSchema: z.ZodType<unknown>
-  readonly normalizeInput: (raw: unknown) => unknown
+  readonly normalizeInput: (rawInput: unknown) => unknown
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -90,16 +90,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 /** Tool arguments are whatever the server's descriptor says, so any JSON value may appear. */
 function buildJsonValueSchema(): z.ZodType<unknown> {
-  let jsonValueSchema: z.ZodType<unknown>
-  jsonValueSchema = z.lazy(() => z.union([
+  let jsonValue: z.ZodType<unknown>
+  jsonValue = z.lazy(() => z.union([
     z.null(),
     z.boolean(),
     z.number(),
     z.string(),
-    z.record(jsonValueSchema),
-    z.array(jsonValueSchema),
+    z.record(jsonValue),
+    z.array(jsonValue),
   ]))
-  return jsonValueSchema
+  return jsonValue
 }
 
 export function buildMcpCallSchemas({
@@ -109,135 +109,135 @@ export function buildMcpCallSchemas({
   readonly useDynamicToolNamespaces: boolean
   readonly smartModeClassifierMode: boolean
 }): McpCallSchemas {
-  const jsonValueSchema = buildJsonValueSchema()
-  const argumentsRecordSchema = z.record(jsonValueSchema)
-  const argumentsParameterSchema = argumentsRecordSchema
+  const jsonValue = buildJsonValueSchema()
+  const argumentsRecord = z.record(jsonValue)
+  const argumentsParameter = argumentsRecord
     .optional()
     .describe(useDynamicToolNamespaces
       ? "Arguments to pass to the tool, as described by the tool descriptor."
       : "Arguments to pass to the MCP tool, as described in the tool descriptor.")
-  const baseParametersSchema = z.object({
+  const baseParameters = z.object({
     server: z.string().describe("Identifier of the MCP server hosting the tool."),
     toolName: z.string().describe("Name of the MCP tool to invoke."),
-    arguments: argumentsParameterSchema,
+    arguments: argumentsParameter,
   })
-  const modelIdentityParametersSchema = useDynamicToolNamespaces
+  const identityParameters = useDynamicToolNamespaces
     ? z.object({
       namespace: z.string().describe("Dynamic namespace hosting the tool, e.g. an MCP server."),
       toolName: z.string().describe("Name of the tool to invoke."),
     })
-    : baseParametersSchema.omit({ arguments: true })
-  const callDescriptionSchema = z.string().describe("Short plain-language description of what this call will do. One sentence naming the outcome and where it applies (channel, page, file, or service) when known. Do not include tool names, argument keys, or JSON.")
-  const descriptionParametersSchema = z.object({ description: callDescriptionSchema.optional() })
-  const smartModeApprovalParametersSchema = z.object({
+    : baseParameters.omit({ arguments: true })
+  const callDescription = z.string().describe("Short plain-language description of what this call will do. One sentence naming the outcome and where it applies (channel, page, file, or service) when known. Do not include tool names, argument keys, or JSON.")
+  const descriptionParameters = z.object({ description: callDescription.optional() })
+  const approvalParameters = z.object({
     requestSmartModeApproval: z.boolean().optional().describe("Set to true when immediately retrying the exact same MCP call after Auto-review blocks it and you decide the user should approve it through the native approval card."),
     smartModeBlockReason: z.string().optional().describe("Provide the exact block reason returned by Auto-review in the prior rejection. Required when requestSmartModeApproval is true so the approval card shows the original classifier reason without re-running the classifier."),
   })
-  const mcpDetailsParametersSchema = z.object({
-    description: callDescriptionSchema,
+  const detailsParameters = z.object({
+    description: callDescription,
     ...(smartModeClassifierMode
       ? {
-        requestSmartModeApproval: smartModeApprovalParametersSchema.shape.requestSmartModeApproval.default(false),
-        smartModeBlockReason: smartModeApprovalParametersSchema.shape.smartModeBlockReason,
+        requestSmartModeApproval: approvalParameters.shape.requestSmartModeApproval.default(false),
+        smartModeBlockReason: approvalParameters.shape.smartModeBlockReason,
       }
       : {}),
   })
-  const mcpDetailsInputSchema = z.object({
-    description: callDescriptionSchema.optional(),
-    ...smartModeApprovalParametersSchema.shape,
+  const detailsInput = z.object({
+    description: callDescription.optional(),
+    ...approvalParameters.shape,
   })
   // A dynamic namespace carries the call's metadata in a side object; a first-party call carries it flat.
   const parametersSchema = useDynamicToolNamespaces
-    ? modelIdentityParametersSchema.extend({
-      mcpDetails: mcpDetailsParametersSchema.optional().describe("MCP-specific call metadata. Set this only when invoking a tool from an external MCP namespace; omit it for first-party tools in the slate namespace."),
-      arguments: argumentsParameterSchema,
+    ? identityParameters.extend({
+      mcpDetails: detailsParameters.optional().describe("MCP-specific call metadata. Set this only when invoking a tool from an external MCP namespace; omit it for first-party tools in the slate namespace."),
+      arguments: argumentsParameter,
     })
-    : modelIdentityParametersSchema.extend({
-      ...descriptionParametersSchema.shape,
-      ...(smartModeClassifierMode ? smartModeApprovalParametersSchema.shape : {}),
-      arguments: argumentsParameterSchema,
+    : identityParameters.extend({
+      ...descriptionParameters.shape,
+      ...(smartModeClassifierMode ? approvalParameters.shape : {}),
+      arguments: argumentsParameter,
     })
 
-  const normalizeInput = (raw: unknown): unknown => {
-    if (!isRecord(raw)) return raw
-    const normalized = { ...raw }
+  const normalizeInput = (rawInput: unknown): unknown => {
+    if (!isRecord(rawInput)) return rawInput
+    const normalizedCall = { ...rawInput }
     if (useDynamicToolNamespaces) {
-      if (normalized.namespace !== undefined) {
-        normalized.server = normalized.namespace
-        delete normalized.namespace
+      if (normalizedCall.namespace !== undefined) {
+        normalizedCall.server = normalizedCall.namespace
+        delete normalizedCall.namespace
       }
       // A call that names no tool is refused rather than guessed at from its arguments.
       const missingIdentity = [
-        normalized.server === undefined ? "namespace" : undefined,
-        normalized.toolName === undefined ? "toolName" : undefined,
+        normalizedCall.server === undefined ? "namespace" : undefined,
+        normalizedCall.toolName === undefined ? "toolName" : undefined,
       ].filter((field): field is string => field !== undefined)
       if (missingIdentity.length > 0) {
         throw new Error(`Missing required ${missingIdentity.length === 1 ? "field" : "fields"}: ${missingIdentity.join(", ")}. Re-issue the call with the tool's identity set; \`arguments\` alone does not identify the tool.`)
       }
     }
-    if (normalized.descriptionForMcp !== undefined) {
-      normalized.description ??= normalized.descriptionForMcp
-      delete normalized.descriptionForMcp
+    if (normalizedCall.descriptionForMcp !== undefined) {
+      normalizedCall.description ??= normalizedCall.descriptionForMcp
+      delete normalizedCall.descriptionForMcp
     }
-    if (typeof normalized.arguments === "string") {
-      const recovered = parseArgumentsLeniently(normalized.arguments)
-      if (recovered === undefined) {
+    if (typeof normalizedCall.arguments === "string") {
+      const recoveredArguments = parseArgumentsLeniently(normalizedCall.arguments)
+      if (recoveredArguments === undefined) {
         throw new Error("Failed to parse arguments string as JSON object. Re-issue the call with `arguments` as a JSON object literal rather than a quoted string.")
       }
-      const args = recovered.args
+      const argumentObject = recoveredArguments.args
       // When the string had to be repaired, the call's own metadata may have been folded into it.
-      if (recovered.repaired) {
-        const foldedDetails = args.mcpDetails
-        if (foldedDetails !== undefined) {
-          delete args.mcpDetails
-          normalized.mcpDetails ??= foldedDetails
+      if (recoveredArguments.repaired) {
+        const foldedMeta = argumentObject.mcpDetails
+        if (foldedMeta !== undefined) {
+          delete argumentObject.mcpDetails
+          normalizedCall.mcpDetails ??= foldedMeta
         }
-        const foldedDescription = args.descriptionForMcp
-        if (foldedDescription !== undefined) {
-          delete args.descriptionForMcp
-          normalized.description ??= foldedDescription
+        const foldedDescriptionText = argumentObject.descriptionForMcp
+        if (foldedDescriptionText !== undefined) {
+          delete argumentObject.descriptionForMcp
+          normalizedCall.description ??= foldedDescriptionText
         }
       }
-      const leakedDescription = recovered.envelopeFields?.description
-      if (leakedDescription !== undefined && normalized.description === undefined) {
-        normalized.description = leakedDescription
+      const leakedDescriptionText = recoveredArguments.envelopeFields?.description
+      if (leakedDescriptionText !== undefined && normalizedCall.description === undefined) {
+        normalizedCall.description = leakedDescriptionText
       }
-      normalized.arguments = args
+      normalizedCall.arguments = argumentObject
     }
     // The approval fields describe the call, not the tool: they are lifted out of the arguments so the
     // server never receives them and the approval path can read them.
-    if (smartModeClassifierMode && isRecord(normalized.arguments)) {
-      if ("requestSmartModeApproval" in normalized.arguments || "smartModeBlockReason" in normalized.arguments) {
-        const stripped = { ...normalized.arguments }
-        normalized.requestSmartModeApproval ??= stripped.requestSmartModeApproval
-        normalized.smartModeBlockReason ??= stripped.smartModeBlockReason
-        delete stripped.requestSmartModeApproval
-        delete stripped.smartModeBlockReason
-        normalized.arguments = stripped
+    if (smartModeClassifierMode && isRecord(normalizedCall.arguments)) {
+      if ("requestSmartModeApproval" in normalizedCall.arguments || "smartModeBlockReason" in normalizedCall.arguments) {
+        const argumentsWithoutApproval = { ...normalizedCall.arguments }
+        normalizedCall.requestSmartModeApproval ??= argumentsWithoutApproval.requestSmartModeApproval
+        normalizedCall.smartModeBlockReason ??= argumentsWithoutApproval.smartModeBlockReason
+        delete argumentsWithoutApproval.requestSmartModeApproval
+        delete argumentsWithoutApproval.smartModeBlockReason
+        normalizedCall.arguments = argumentsWithoutApproval
       }
     }
-    return normalized
+    return normalizedCall
   }
 
-  const internalParametersSchema = useDynamicToolNamespaces
-    ? baseParametersSchema.extend({
-      ...descriptionParametersSchema.shape,
-      ...smartModeApprovalParametersSchema.shape,
-      mcpDetails: mcpDetailsInputSchema.optional(),
-    }).transform(({ mcpDetails, ...args }) => ({
-      ...args,
-      description: mcpDetails?.description ?? args.description,
-      requestSmartModeApproval: mcpDetails?.requestSmartModeApproval ?? args.requestSmartModeApproval,
-      smartModeBlockReason: mcpDetails?.smartModeBlockReason ?? args.smartModeBlockReason,
+  const parsedParameters = useDynamicToolNamespaces
+    ? baseParameters.extend({
+      ...descriptionParameters.shape,
+      ...approvalParameters.shape,
+      mcpDetails: detailsInput.optional(),
+    }).transform(({ mcpDetails, ...argumentObject }) => ({
+      ...argumentObject,
+      description: mcpDetails?.description ?? argumentObject.description,
+      requestSmartModeApproval: mcpDetails?.requestSmartModeApproval ?? argumentObject.requestSmartModeApproval,
+      smartModeBlockReason: mcpDetails?.smartModeBlockReason ?? argumentObject.smartModeBlockReason,
     }))
-    : baseParametersSchema.extend({
-      ...descriptionParametersSchema.shape,
-      ...(smartModeClassifierMode ? smartModeApprovalParametersSchema.shape : {}),
+    : baseParameters.extend({
+      ...descriptionParameters.shape,
+      ...(smartModeClassifierMode ? approvalParameters.shape : {}),
     })
 
   return {
     parametersSchema,
-    parsingParametersSchema: z.preprocess(normalizeInput, internalParametersSchema),
+    parsingParametersSchema: z.preprocess(normalizeInput, parsedParameters),
     normalizeInput,
   }
 }
