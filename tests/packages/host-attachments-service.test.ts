@@ -391,3 +391,67 @@ describe("whose attachment a path is, and what the service does with it", () => 
     assert.deepEqual([typeof service.readImage, typeof service.readVideoBytes, typeof service.resolveOwnerDir, typeof service.stageIntoBox, typeof service.createGenerateImageService], ["function", "function", "function", "function", "function"]);
   });
 });
+// ---------------------------------------------------------------------------------------------
+// the edges a preview keeps
+// ---------------------------------------------------------------------------------------------
+
+describe("a link preview's edges", () => {
+  it("an image the page points at is only used when it was served as an image successfully", async () => {
+    const agentDir = setUp("image-edges")
+    const failing: LinkPreviewFetcher = (async (url: string) => {
+      if (url === "https://example.test/page") {
+        return { statusCode: 200, body: Buffer.from('<html><head><meta property="og:title" content="Page"><meta property="og:image" content="/social.png"></head></html>'), headers: { "content-type": "text/html" }, finalUrl: "https://example.test/page", redirectUrls: [] }
+      }
+      return { statusCode: 500, body: Buffer.from("not an image"), headers: { "content-type": "image/png" }, finalUrl: "https://example.test/social.png", redirectUrls: [] }
+    }) as unknown as LinkPreviewFetcher
+    const metadata = await fetchLinkMetadata(agentDir, "https://example.test/page", failing)
+    assert.equal(metadata?.imageDataUrl, null)
+
+    const emptyAgentDir = setUp("image-empty")
+    const empty: LinkPreviewFetcher = (async (url: string) => {
+      if (url === "https://example.test/page") {
+        return { statusCode: 200, body: Buffer.from('<html><head><meta property="og:title" content="Page"><meta property="og:image" content="/social.png"></head></html>'), headers: { "content-type": "text/html" }, finalUrl: "https://example.test/page", redirectUrls: [] }
+      }
+      return imageFetch(Buffer.alloc(0), "image/png")
+    }) as unknown as LinkPreviewFetcher
+    const emptyMetadata = await fetchLinkMetadata(emptyAgentDir, "https://example.test/page", empty)
+    assert.equal(emptyMetadata?.imageDataUrl, null)
+  })
+
+  it("control characters in a page's words are cleaned out of the preview", async () => {
+    const agentDir = setUp("control")
+    const control = String.fromCharCode(1)
+    const { fetcher } = linkFetcher({ html: "<html><head><title>a" + control + "b</title></head></html>" })
+    const metadata = await fetchLinkMetadata(agentDir, "https://example.test/page", fetcher)
+    assert.equal(metadata?.title.includes(control), false)
+    assert.equal(metadata?.title, "a b")
+  })
+
+  it("a rel with several tokens is matched by any of them", async () => {
+    const agentDir = setUp("rel-tokens")
+    const { fetcher, asked } = linkFetcher({
+      html: '<html><head><title>Page</title><link rel="alternate icon" href="/favicon.png"><meta property="og:title" content="Page"></head></html>',
+      image: Buffer.from("icon-bytes"),
+    })
+    const metadata = await fetchLinkMetadata(agentDir, "https://example.test/page", fetcher)
+    // The multi-token rel is where the favicon is, so the service is not asked.
+    assert.equal(metadata?.faviconDataUrl, "data:image/png;base64," + Buffer.from("icon-bytes").toString("base64"))
+    assert.equal(asked.some((request) => request.url.startsWith("https://www.google.com/s2/favicons")), false)
+  })
+
+  it("a redirect through a sign-in page path is not previewed", async () => {
+    const agentDir = setUp("auth-path")
+    for (const path of ["login", "signin", "sso", "authorize"]) {
+      const fetcher = (async () => ({
+        statusCode: 200,
+        body: Buffer.from("<html><head><title>Sign in</title></head></html>"),
+        headers: { "content-type": "text/html" },
+        finalUrl: "https://example.test/page",
+        redirectUrls: ["https://app.example.test/" + path],
+      })) as unknown as LinkPreviewFetcher
+      const metadata = await fetchLinkMetadata(agentDir, "https://example.test/page", fetcher)
+      assert.equal(metadata, null)
+    }
+  })
+})
+
