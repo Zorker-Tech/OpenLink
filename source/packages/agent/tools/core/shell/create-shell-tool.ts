@@ -5,24 +5,24 @@
  * the machine the user is sitting at, or inside a box that was made for it; it may be asked for by a prompt
  * version that knows about a background shell and one that does not; it may be read-only, in which case the
  * platform will not run anything that changes the machine. All of that is decided here, once, from the
- * options the caller supplied, and the tool that comes out is the one the session uses.
+ * settings the caller supplied, and the tool that comes out is the one the session uses.
  *
- * Before anything runs, the command is read: the parser reports what it is made of, and a plan says whether
+ * Before anything runs, the command is read: the parser reports what it is made of, and a executionPlan says whether
  * it starts in the background, how long it may take and what happens when it runs out of time. Then the
  * command may be reviewed — a caller may install a check of its own, the platform's own guard refuses the
  * commands that would take a screenshot of the user's screen, and the auto-review classifier decides whether
  * this particular command, on this particular surface, under this project's permissions, may run at all. A
- * block from the classifier becomes an approval request when the model asked for one, and a refusal
+ * block from the classifier becomes an approvalOutcome request when the model asked for one, and a refusal
  * otherwise.
  *
- * What makes an approval worth anything is that it is for the command that actually runs. So the approval
- * carries a fingerprint of what was reviewed — the command, the working directory, the policy, the plan and
+ * What makes an approvalOutcome worth anything is that it is for the command that actually runs. So the approvalOutcome
+ * carries a fingerprint of what was reviewed — the command, the working directory, the policy, the executionPlan and
  * whatever the caller's own enrichment produced — and before the command starts, the identity and the
  * enrichment are asked for again and compared. A command whose target changed between the review and the
- * run is refused rather than run under an approval it no longer has, because an approval that can be moved
- * to another command is not an approval of anything.
+ * run is refused rather than run under an approvalOutcome it no longer has, because an approvalOutcome that can be moved
+ * to another command is not an approvalOutcome of anything.
  *
- * The result is the command's own: its output, its exit code, how long it took, and — for a command that
+ * The result is the command's own: its streamOutput, its exit code, how long it took, and — for a command that
  * was moved to the background — the shell it can be watched under. A refusal, a denial, a timeout and a
  * failure to start are all reported as the same kind of result the renderer knows how to write.
  */
@@ -85,7 +85,7 @@ import { withToolExecutionTimeoutSuspended } from "../../tool-timeout-suspension
 import type { ConversationStateHandle } from "../../../state.ts"
 import { checkModelFacingShellUiAutomation } from "./ui-automation-guard.ts"
 
-/** The resource boundary the shell executor lane owns. */
+/** The resource boundary the shell shellStreamExecutor lane owns. */
 export type ShellToolResourceAccessor = ResourceAccessor<RemoteExecManager>
 export type ShellStreamExecutor = StreamExecutor<ShellArgs, ShellStream>
 
@@ -115,15 +115,15 @@ export type ShellPreflightDecision =
 
 export interface ShellToolInteractionHandler {
   executeToolCall(
-    ctx: Context,
+    toolCtx: Context,
     toolCall: ToolCall,
     toolCallId: string,
-    execute: (ctx: Context) => Promise<ShellResult>,
+    execute: (toolCtx: Context) => Promise<ShellResult>,
     merge: (result: ShellResult) => ToolCall,
     hookContextCollector?: unknown,
   ): Promise<ShellResult>
-  getAbortSignal(ctx: Context): AbortSignal
-  emitPartialToolCall?(ctx: Context, toolCallId: string, toolCall: ToolCall): Promise<void>
+  getAbortSignal(toolCtx: Context): AbortSignal
+  emitPartialToolCall?(toolCtx: Context, toolCallId: string, toolCall: ToolCall): Promise<void>
 }
 
 export interface ShellToolExecutionMeta {
@@ -138,7 +138,7 @@ export interface ShellToolExecutionMeta {
 }
 
 /** The state handler as the classifier wants it: a conversation that can be read, not just a version flag. */
-function isConversationStateHandle(value: { readonly isDsv3?: () => boolean }): value is ConversationStateHandle {
+function looksLikeConversationState(value: { readonly isDsv3?: () => boolean }): value is ConversationStateHandle {
   return "conversationStateStructure" in value && "readPaths" in value
 }
 
@@ -173,7 +173,7 @@ export interface ShellSmartModeApprovalProvider {
   }): Promise<{ readonly approved: boolean; readonly reason?: string | undefined }>
 }
 
-/** What an approval is bound to besides the command: the state the shell is in, and the caller's own view. */
+/** What an approvalOutcome is bound to besides the command: the state the shell is in, and the caller's own view. */
 export interface ShellSmartModeApprovalState {
   getIdentity(): string | undefined
   markSideEffectStart(): void
@@ -199,12 +199,12 @@ export interface ShellToolOptions {
   readonly parametersSchema?: ReturnType<typeof getShellToolParametersSchema>
   readonly adminCommandDenylist?: readonly string[]
   readonly fileOperationLockManager?: {
-    waitForExclusiveLock(ctx: Context): Promise<{ [Symbol.dispose](): void }>
+    waitForExclusiveLock(toolCtx: Context): Promise<{ [Symbol.dispose](): void }>
   }
-  readonly preflight?: (ctx: Context, request: ShellPreflightRequest) => Promise<ShellPreflightDecision>
-  readonly onAudit?: (ctx: Context, request: ShellPreflightRequest, decision: ShellPreflightDecision) => void
-  readonly onStreamEvent?: (ctx: Context, event: ShellStream) => Promise<void>
-  readonly onTelemetry?: (ctx: Context, event: { readonly type: "started" | "finished" | "backgrounded"; readonly toolCallId: string }) => void
+  readonly preflight?: (toolCtx: Context, request: ShellPreflightRequest) => Promise<ShellPreflightDecision>
+  readonly onAudit?: (toolCtx: Context, request: ShellPreflightRequest, decision: ShellPreflightDecision) => void
+  readonly onStreamEvent?: (toolCtx: Context, event: ShellStream) => Promise<void>
+  readonly onTelemetry?: (toolCtx: Context, event: { readonly type: "started" | "finished" | "backgrounded"; readonly toolCallId: string }) => void
   readonly isPlatformEnabled?: (platform: NodeJS.Platform) => boolean
   readonly requestContext?: Pick<RequestContext, "env">
   readonly smartModeClassifierMode?: boolean
@@ -212,11 +212,11 @@ export interface ShellToolOptions {
   readonly smartModeApprovalSurface?: string
   readonly smartModeApprovalProvider?: ShellSmartModeApprovalProvider
   readonly smartModeShellTargetEnrichmentProvider?: (
-    ctx: Context,
+    toolCtx: Context,
     args: { readonly resourceAccessor: ShellToolResourceAccessor; readonly command: string; readonly workingDirectory?: string; readonly toolCallId: string },
   ) => Promise<unknown>
   readonly smartModeShellApprovalState?: ShellSmartModeApprovalState
-  readonly extractSmartModeClassifierConversationContext?: (ctx: Context, state: ConversationStateHandle) => Promise<readonly SmartModeClassifierConversationMessage[]>
+  readonly extractSmartModeClassifierConversationContext?: (toolCtx: Context, state: ConversationStateHandle) => Promise<readonly SmartModeClassifierConversationMessage[]>
   readonly userAutoRunInstructions?: ShellAutoRunInstructions
   readonly projectAutoRunInstructions?: ShellAutoRunInstructions
   readonly smartModeClassifierMaxAttempts?: number
@@ -253,73 +253,73 @@ export class ShellToolTimeoutError extends ToolTimeoutError {
   }
 }
 
-const DEFAULT_TIMEOUT_MS = 30_000
-const DEFAULT_HARD_TIMEOUT_MS = 24 * 60 * 60 * 1_000
+const WAIT_TIMEOUT_MS = 30_000
+const HARD_TIMEOUT_MS = 24 * 60 * 60 * 1_000
 
-function createShellToolCall(value: ShellToolCall): ToolCall {
+function shellCallOf(value: ShellToolCall): ToolCall {
   return new ToolCall({ tool: { case: "shellToolCall", value } })
 }
 
-const REQUEST_SMART_MODE_APPROVAL_DESCRIPTION = "Set to true when immediately retrying the exact same command after Auto-review blocks it and you decide the user should approve it through the native approval card."
-const SMART_MODE_BLOCK_REASON_DESCRIPTION = "Provide the exact block reason returned by Auto-review in the prior rejection. Required when request_smart_mode_approval is true so the approval card shows the original classifier reason without re-running the classifier."
+const APPROVAL_RETRY_DESCRIPTION = "Set to true when immediately retrying the exact same command after Auto-review blocks it and you decide the user should approve it through the native approvalOutcome card."
+const APPROVAL_REASON_DESCRIPTION = "Provide the exact block reason returned by Auto-review in the prior rejection. Required when request_smart_mode_approval is true so the approvalOutcome card shows the original classifier reason without re-running the classifier."
 
-/** The two arguments that only exist where an approval can be asked for. */
-function addSmartModeApprovalParameters(
+/** The two arguments that only exist where an approvalOutcome can be asked for. */
+function withApprovalParameters(
   parameters: ReturnType<typeof getShellToolParametersSchema>,
   enabled: boolean,
 ): ReturnType<typeof getShellToolParametersSchema> {
   if (!enabled) return parameters
   return parameters.extend({
-    request_smart_mode_approval: z.boolean().optional().describe(REQUEST_SMART_MODE_APPROVAL_DESCRIPTION),
-    smart_mode_block_reason: z.string().optional().describe(SMART_MODE_BLOCK_REASON_DESCRIPTION),
+    request_smart_mode_approval: z.boolean().optional().describe(APPROVAL_RETRY_DESCRIPTION),
+    smart_mode_block_reason: z.string().optional().describe(APPROVAL_REASON_DESCRIPTION),
   })
 }
 
 /** When a command starts in the background, how long it may take, and what running out of time means. */
-function resolvePlan(rawArgs: Record<string, unknown>, options: ShellToolOptions): ShellExecutionPlan {
-  const defaultTimeoutMs = options.defaultTimeoutMs ?? DEFAULT_TIMEOUT_MS
-  const defaultBlockUntilMs = options.defaultBlockUntilMs ?? (options.agentType === "background" ? BACKGROUND_SHELL_DEFAULT_BLOCK_UNTIL_MS : defaultTimeoutMs)
-  if (options.enableBlockUntilMs === true) {
-    const requested = typeof rawArgs.block_until_ms === "number" ? rawArgs.block_until_ms : defaultBlockUntilMs
+function executionPlanOf(callArgs: Record<string, unknown>, settings: ShellToolOptions): ShellExecutionPlan {
+  const defaultTimeoutMs = settings.defaultTimeoutMs ?? WAIT_TIMEOUT_MS
+  const defaultBlockUntilMs = settings.defaultBlockUntilMs ?? (settings.agentType === "background" ? BACKGROUND_SHELL_DEFAULT_BLOCK_UNTIL_MS : defaultTimeoutMs)
+  if (settings.enableBlockUntilMs === true) {
+    const requestedValue = typeof callArgs.block_until_ms === "number" ? callArgs.block_until_ms : defaultBlockUntilMs
     // A wait of zero is a status check, which is the same as asking for the background.
     return {
-      shouldStartInBackground: rawArgs.is_background === true || requested === 0,
-      backgroundAfterMs: Math.min(requested, options.defaultTimeoutMs ?? requested),
-      hardTimeoutMs: options.hardTimeoutMs ?? DEFAULT_HARD_TIMEOUT_MS,
+      shouldStartInBackground: callArgs.is_background === true || requestedValue === 0,
+      backgroundAfterMs: Math.min(requestedValue, settings.defaultTimeoutMs ?? requestedValue),
+      hardTimeoutMs: settings.hardTimeoutMs ?? HARD_TIMEOUT_MS,
       timeoutBehavior: TimeoutBehavior.BACKGROUND,
     }
   }
-  const requestedTimeout = typeof rawArgs.timeout === "number" ? rawArgs.timeout : defaultTimeoutMs
+  const requestedTimeout = typeof callArgs.timeout === "number" ? callArgs.timeout : defaultTimeoutMs
   return {
-    shouldStartInBackground: rawArgs.is_background === true,
+    shouldStartInBackground: callArgs.is_background === true,
     backgroundAfterMs: requestedTimeout,
-    ...(options.hardTimeoutMs === undefined ? {} : { hardTimeoutMs: options.hardTimeoutMs }),
+    ...(settings.hardTimeoutMs === undefined ? {} : { hardTimeoutMs: settings.hardTimeoutMs }),
     timeoutBehavior: TimeoutBehavior.BACKGROUND,
   }
 }
 
 /** What the command asked to be allowed to do, which is only a policy where a sandbox is in use. */
-function requestedPolicy(rawArgs: Record<string, unknown>, options: ShellToolOptions, workspacePaths: readonly string[] = []): SandboxPolicy | undefined {
-  if (options.sandboxEnabled !== true) return undefined
-  const permissions = Array.isArray(rawArgs.required_permissions) ? rawArgs.required_permissions : []
+function policyRequestedBy(callArgs: Record<string, unknown>, settings: ShellToolOptions, workspacePaths: readonly string[] = []): SandboxPolicy | undefined {
+  if (settings.sandboxEnabled !== true) return undefined
+  const permissions = Array.isArray(callArgs.required_permissions) ? callArgs.required_permissions : []
   const all = permissions.includes("all")
   const network = permissions.includes("network") || permissions.includes("full_network")
   // A read-only session is confined to reading its workspace however much it asks for.
-  if (options.isReadonly === true) return new SandboxPolicy({ type: SandboxPolicy_Type.WORKSPACE_READONLY, networkAccess: network })
+  if (settings.isReadonly === true) return new SandboxPolicy({ type: SandboxPolicy_Type.WORKSPACE_READONLY, networkAccess: network })
   if (all) return new SandboxPolicy({ type: SandboxPolicy_Type.INSECURE_NONE })
   return new SandboxPolicy({ type: SandboxPolicy_Type.WORKSPACE_READWRITE, networkAccess: network, additionalReadwritePaths: [...workspacePaths] })
 }
 
-function toJsonValue(value: unknown): JsonValue | undefined {
+function jsonValueFrom(value: unknown): JsonValue | undefined {
   if (value === null || typeof value === "string" || typeof value === "boolean" || typeof value === "number") return value
   if (Array.isArray(value)) {
-    const values = value.map(toJsonValue)
+    const values = value.map(jsonValueFrom)
     return values.some(entry => entry === undefined) ? undefined : values as JsonValue[]
   }
   if (typeof value === "object") {
     const result: Record<string, JsonValue> = {}
     for (const [key, entry] of Object.entries(value)) {
-      const jsonValue = toJsonValue(entry)
+      const jsonValue = jsonValueFrom(entry)
       if (jsonValue !== undefined) result[key] = jsonValue
     }
     return result
@@ -327,23 +327,23 @@ function toJsonValue(value: unknown): JsonValue | undefined {
   return undefined
 }
 
-function toJsonRecord(value: Record<string, unknown>): Record<string, JsonValue> {
-  const json = toJsonValue(value)
+function jsonRecordFrom(value: Record<string, unknown>): Record<string, JsonValue> {
+  const json = jsonValueFrom(value)
   if (json == null || Array.isArray(json) || typeof json !== "object") return {}
   return json
 }
 
 /** A policy as JSON with its defaults, so that two policies that differ only by an unset field compare equal. */
-function shellPolicyFingerprint(policy: SandboxPolicy | undefined): JsonValue | null {
+function policyFingerprintOf(policy: SandboxPolicy | undefined): JsonValue | null {
   return policy === undefined ? null : policy.toJson({ emitDefaultValues: true }) as JsonValue
 }
 
-function computeShellApprovalFingerprint(target: ShellSmartModeApprovalTarget): string {
+function approvalFingerprintOf(target: ShellSmartModeApprovalTarget): string {
   return createHash("sha256").update(JSON.stringify({
     surface: target.surface,
     command: target.command,
     workingDirectory: target.workingDirectory ?? null,
-    requestedSandboxPolicy: shellPolicyFingerprint(target.requestedSandboxPolicy),
+    requestedSandboxPolicy: policyFingerprintOf(target.requestedSandboxPolicy),
     isBackground: target.isBackground,
     isReadonly: target.isReadonly,
     executionPlan: target.executionPlan,
@@ -353,10 +353,10 @@ function computeShellApprovalFingerprint(target: ShellSmartModeApprovalTarget): 
 }
 
 /**
- * A blocked command that the user approves is run without a sandbox, since the approval is the user taking
+ * A blocked command that the user approves is run without a sandbox, since the approvalOutcome is the user taking
  * responsibility for it — except in a read-only session, where the policy stands.
  */
-function buildClassifierEscalatedSandboxPolicy(
+function escalatedPolicyFor(
   requestedSandboxPolicy: SandboxPolicy | undefined,
 ): SandboxPolicy {
   return new SandboxPolicy({
@@ -366,13 +366,13 @@ function buildClassifierEscalatedSandboxPolicy(
 }
 
 /** The caller's own enrichment can say that what will run could not be bound to the review. */
-function hasUnavailableApprovalBinding(value: unknown): boolean {
+function missingApprovalBinding(value: unknown): boolean {
   if (value === null || typeof value !== "object") return false
   if (!("approval_binding_unavailable" in value)) return false
   return value.approval_binding_unavailable === true
 }
 
-function hashTargetEnrichment(value: unknown): string | undefined {
+function enrichmentHashOf(value: unknown): string | undefined {
   if (value === undefined) return undefined
   const serialized = JSON.stringify(value)
   return serialized === undefined ? undefined : createHash("sha256").update(serialized).digest("hex")
@@ -383,24 +383,24 @@ type ShellSmartModeDecision =
   | { readonly kind: "block"; readonly reason: string; readonly proposedAllowRule?: string; readonly targetEnrichmentHash?: string }
   | { readonly kind: "reject"; readonly reason: string }
 
-const SMART_MODE_SHELL_BLOCK_REASON = "Blocked by Auto-review"
-const SMART_MODE_SHELL_CLASSIFIER_ERROR_REASON = "An error occured while classifying this action. Please review manually."
+const AUTO_REVIEW_BLOCK_REASON = "Blocked by Auto-review"
+const AUTO_REVIEW_FAILURE_REASON = "An error occured while classifying this action. Please review manually."
 
 /**
  * The review of one command.
  *
  * The classifier is only asked where the session asked for it and the user's settings allow it; a background
- * agent is never reviewed, since nobody is there to answer an approval. A shadow run asks without acting on
+ * agent is never reviewed, since nobody is there to answer an approvalOutcome. A shadow run asks without acting on
  * the answer, which is how the classifier is measured before it is trusted — and it is not waited for, since
  * nothing depends on it. Anything that is neither an allow nor a block is a refusal the user has to clear
  * rather than permission.
  */
-async function runShellSmartModeClassifier(
-  ctx: Context,
+async function classifyShellCall(
+  toolCtx: Context,
   resourceAccessor: ShellToolResourceAccessor,
-  options: ShellToolOptions,
-  rawArgs: Record<string, unknown>,
-  meta: ShellToolExecutionMeta,
+  settings: ShellToolOptions,
+  callArgs: Record<string, unknown>,
+  executionMeta: ShellToolExecutionMeta,
   command: string,
   workingDirectory: string | undefined,
   description: string | undefined,
@@ -409,45 +409,45 @@ async function runShellSmartModeClassifier(
   surface: ShellToolSurface,
   signal: AbortSignal,
 ): Promise<ShellSmartModeDecision> {
-  const isBackgroundAgent = options.agentType === AgentType.BACKGROUND || options.agentType === "background"
-  const autoModeSelected = options.smartModeClassifierMode === true && options.requestContext?.env?.smartModeClassifierAutoModeEnabled === true
+  const isBackgroundAgent = settings.agentType === AgentType.BACKGROUND || settings.agentType === "background"
+  const autoModeSelected = settings.smartModeClassifierMode === true && settings.requestContext?.env?.smartModeClassifierAutoModeEnabled === true
   const enabled = !isBackgroundAgent && autoModeSelected
-  const shadowEnabled = !isBackgroundAgent && !enabled && options.smartModeClassifierShadowMode === true
+  const shadowEnabled = !isBackgroundAgent && !enabled && settings.smartModeClassifierShadowMode === true
   if (!enabled && !shadowEnabled) return { kind: "allow", enabled: false }
 
   // A developer can force the next command to be blocked, which is how the refusal path is exercised.
-  const consumedDevBlock = enabled && options.devSmartModeClassifierBlockState?.consume() === true
+  const consumedDevBlock = enabled && settings.devSmartModeClassifierBlockState?.consume() === true
   if (consumedDevBlock) {
-    await delayDevSmartModeClassifierIfRequested(options.devSmartModeClassifierDelayState)
+    await delayDevSmartModeClassifierIfRequested(settings.devSmartModeClassifierDelayState)
     return { kind: "block", reason: "This is a dev block whatever just retry it" }
   }
 
-  const targetEnrichment = await options.smartModeShellTargetEnrichmentProvider?.(ctx, {
+  const targetEnrichment = await settings.smartModeShellTargetEnrichmentProvider?.(toolCtx, {
     resourceAccessor,
     command,
     ...(workingDirectory === undefined ? {} : { workingDirectory }),
-    toolCallId: meta.toolCallId,
+    toolCallId: executionMeta.toolCallId,
   })
-  // An approval cannot be for a command whose content could not be resolved, so it is refused instead.
-  if (options.smartModeApprovalProvider !== undefined && hasUnavailableApprovalBinding(targetEnrichment)) {
+  // An approvalOutcome cannot be for a command whose content could not be resolved, so it is refused instead.
+  if (settings.smartModeApprovalProvider !== undefined && missingApprovalBinding(targetEnrichment)) {
     throw new ShellToolRejectedError(command, workingDirectory, "The executable content could not be bound to this review. Run the resolved script directly or provide an explicit working directory.")
   }
-  const targetEnrichmentHash = hashTargetEnrichment(targetEnrichment)
-  const conversationContext: SmartModeClassifierConversationMessage[] = meta.stateHandler === undefined || !isConversationStateHandle(meta.stateHandler)
+  const targetEnrichmentHash = enrichmentHashOf(targetEnrichment)
+  const conversationContext: SmartModeClassifierConversationMessage[] = executionMeta.stateHandler === undefined || !looksLikeConversationState(executionMeta.stateHandler)
     ? []
-    : options.extractSmartModeClassifierConversationContext === undefined
-      ? await tryExtractSmartModeClassifierConversationContext(ctx, meta.stateHandler)
-      : [...await options.extractSmartModeClassifierConversationContext(ctx, meta.stateHandler)]
-  const workspacePaths = options.loadSmartModeWorkspacePermissionFiles === false ? undefined : meta.workspacePaths
+    : settings.extractSmartModeClassifierConversationContext === undefined
+      ? await tryExtractSmartModeClassifierConversationContext(toolCtx, executionMeta.stateHandler)
+      : [...await settings.extractSmartModeClassifierConversationContext(toolCtx, executionMeta.stateHandler)]
+  const workspacePaths = settings.loadSmartModeWorkspacePermissionFiles === false ? undefined : executionMeta.workspacePaths
   const projectPermissions = await loadSmartModeProjectPermissionsContext(
-    ctx,
+    toolCtx,
     workspacePaths,
-    meta.userAutoRunInstructions ?? options.userAutoRunInstructions,
-    meta.projectAutoRunInstructions ?? options.projectAutoRunInstructions,
+    executionMeta.userAutoRunInstructions ?? settings.userAutoRunInstructions,
+    executionMeta.projectAutoRunInstructions ?? settings.projectAutoRunInstructions,
   )
   const target = new SmartModeRiskTarget({
     action: "shell",
-    arguments: Struct.fromJson(toJsonRecord({
+    arguments: Struct.fromJson(jsonRecordFrom({
       command,
       ...(workingDirectory === undefined ? {} : { working_directory: workingDirectory }),
       surface,
@@ -458,23 +458,23 @@ async function runShellSmartModeClassifier(
         hard_timeout_ms: executionPlan.hardTimeoutMs,
         timeout_behavior: executionPlan.timeoutBehavior,
       },
-      sandbox_enabled: options.sandboxEnabled === true,
-      is_readonly: options.isReadonly === true,
-      requested_sandbox_policy: shellPolicyFingerprint(requestedSandboxPolicy),
+      sandbox_enabled: settings.sandboxEnabled === true,
+      is_readonly: settings.isReadonly === true,
+      requested_sandbox_policy: policyFingerprintOf(requestedSandboxPolicy),
       project_permissions: projectPermissions,
       target_enrichment: targetEnrichment,
     })),
   })
 
   const run = async (mode: "enforce" | "shadow"): Promise<ShellSmartModeDecision> => {
-    const executor = resourceAccessor.get(smartModeClassifierExecutorResource)
-    await delayDevSmartModeClassifierIfRequested(options.devSmartModeClassifierDelayState)
-    const parentConversationId = getConversationId(ctx)
+    const shellStreamExecutor = resourceAccessor.get(smartModeClassifierExecutorResource)
+    await delayDevSmartModeClassifierIfRequested(settings.devSmartModeClassifierDelayState)
+    const parentConversationId = getConversationId(toolCtx)
     const result = await executeSmartModeClassifierWithMeasurement(
-      ctx,
-      executor,
+      toolCtx,
+      shellStreamExecutor,
       new SmartModeClassifierArgs({
-        toolCallId: meta.toolCallId,
+        toolCallId: executionMeta.toolCallId,
         ...(parentConversationId === undefined ? {} : { parentConversationId }),
         target,
         conversationContext,
@@ -482,14 +482,14 @@ async function runShellSmartModeClassifier(
       mode,
       workspacePaths,
       {
-        suppressToolCallIdLogging: options.suppressSmartModeClassifierTelemetryIds === true,
-        maxAttempts: options.smartModeClassifierMaxAttempts,
+        suppressToolCallIdLogging: settings.suppressSmartModeClassifierTelemetryIds === true,
+        maxAttempts: settings.smartModeClassifierMaxAttempts,
       },
     )
     if (result.result.case === "success" && result.result.value.decision === SmartModeClassifierDecision.BLOCK) {
       return {
         kind: "block",
-        reason: result.result.value.blockReason ?? SMART_MODE_SHELL_BLOCK_REASON,
+        reason: result.result.value.blockReason ?? AUTO_REVIEW_BLOCK_REASON,
         ...(result.result.value.proposedAllowRule === undefined ? {} : { proposedAllowRule: result.result.value.proposedAllowRule }),
         ...(targetEnrichmentHash === undefined ? {} : { targetEnrichmentHash }),
       }
@@ -497,7 +497,7 @@ async function runShellSmartModeClassifier(
     if (result.result.case === "success" && result.result.value.decision === SmartModeClassifierDecision.ALLOW) {
       return { kind: "allow", enabled: mode === "enforce", ...(targetEnrichmentHash === undefined ? {} : { targetEnrichmentHash }) }
     }
-    return { kind: "reject", reason: SMART_MODE_SHELL_CLASSIFIER_ERROR_REASON }
+    return { kind: "reject", reason: AUTO_REVIEW_FAILURE_REASON }
   }
 
   if (!enabled) {
@@ -511,34 +511,34 @@ async function runShellSmartModeClassifier(
     if (error instanceof Error && error.name === "AbortError") throw error
     if (error instanceof ShellToolRejectedError) throw error
     if (signal.aborted) throw new ToolCallAbortedError()
-    return { kind: "reject", reason: SMART_MODE_SHELL_CLASSIFIER_ERROR_REASON }
+    return { kind: "reject", reason: AUTO_REVIEW_FAILURE_REASON }
   }
 }
 
-/** The command as the executor is asked to run it, including everything the parser found in it. */
-function shellArgs(rawArgs: Record<string, unknown>, analysis: ShellCommandAnalysis, plan: ShellExecutionPlan, options: ShellToolOptions, meta: ShellToolExecutionMeta, policy: SandboxPolicy | undefined, skipApproval = false): ShellArgs {
-  const command = String(rawArgs.command)
-  const workingDirectory = typeof rawArgs.working_directory === "string" ? rawArgs.working_directory : ""
-  const description = typeof rawArgs.description === "string" ? rawArgs.description : typeof rawArgs.explanation === "string" ? rawArgs.explanation : undefined
+/** The command as the shellStreamExecutor is asked to run it, including everything the parser found in it. */
+function shellArgumentsOf(callArgs: Record<string, unknown>, parsedCommand: ShellCommandAnalysis, executionPlan: ShellExecutionPlan, settings: ShellToolOptions, executionMeta: ShellToolExecutionMeta, policy: SandboxPolicy | undefined, skipApproval = false): ShellArgs {
+  const command = String(callArgs.command)
+  const workingDirectory = typeof callArgs.working_directory === "string" ? callArgs.working_directory : ""
+  const description = typeof callArgs.description === "string" ? callArgs.description : typeof callArgs.explanation === "string" ? callArgs.explanation : undefined
   return new ShellArgs({
     command,
     workingDirectory,
-    timeout: plan.backgroundAfterMs,
-    toolCallId: meta.toolCallId,
-    simpleCommands: [...analysis.legacy.simpleCommands],
-    hasInputRedirect: analysis.legacy.hasInputRedirect,
-    hasOutputRedirect: analysis.legacy.hasOutputRedirect,
+    timeout: executionPlan.backgroundAfterMs,
+    toolCallId: executionMeta.toolCallId,
+    simpleCommands: [...parsedCommand.legacy.simpleCommands],
+    hasInputRedirect: parsedCommand.legacy.hasInputRedirect,
+    hasOutputRedirect: parsedCommand.legacy.hasOutputRedirect,
     parsingResult: new ShellCommandParsingResult({
-      parsingFailed: analysis.structured.parsingFailed,
-      hasRedirects: analysis.structured.hasRedirects,
-      hasCommandSubstitution: analysis.structured.hasCommandSubstitution,
-      ...(analysis.structured.allRedirectsAreDevNull === undefined ? {} : { allRedirectsAreDevNull: analysis.structured.allRedirectsAreDevNull }),
-      executableCommands: analysis.structured.executableCommands.map(commandValue => new ShellCommandParsingResult_ExecutableCommand({
+      parsingFailed: parsedCommand.structured.parsingFailed,
+      hasRedirects: parsedCommand.structured.hasRedirects,
+      hasCommandSubstitution: parsedCommand.structured.hasCommandSubstitution,
+      ...(parsedCommand.structured.allRedirectsAreDevNull === undefined ? {} : { allRedirectsAreDevNull: parsedCommand.structured.allRedirectsAreDevNull }),
+      executableCommands: parsedCommand.structured.executableCommands.map(commandValue => new ShellCommandParsingResult_ExecutableCommand({
         name: commandValue.name,
         fullText: commandValue.fullText,
         args: commandValue.args.map(argument => new ShellCommandParsingResult_ExecutableCommandArg({ type: argument.type, value: argument.value })),
       })),
-      redirects: analysis.structured.redirects.map(redirect => new ShellCommandParsingResult_Redirect({
+      redirects: parsedCommand.structured.redirects.map(redirect => new ShellCommandParsingResult_Redirect({
         operator: redirect.operator,
         destinationFds: [...redirect.destinationFds],
         targetNodeType: redirect.targetNodeType,
@@ -546,37 +546,37 @@ function shellArgs(rawArgs: Record<string, unknown>, analysis: ShellCommandAnaly
       })),
     }),
     ...(policy === undefined ? {} : { requestedSandboxPolicy: policy }),
-    isBackground: plan.shouldStartInBackground,
+    isBackground: executionPlan.shouldStartInBackground,
     skipApproval,
-    timeoutBehavior: plan.timeoutBehavior,
-    ...(plan.hardTimeoutMs === undefined ? {} : { hardTimeout: plan.hardTimeoutMs }),
+    timeoutBehavior: executionPlan.timeoutBehavior,
+    ...(executionPlan.hardTimeoutMs === undefined ? {} : { hardTimeout: executionPlan.hardTimeoutMs }),
     ...(description === undefined ? {} : { description }),
     closeStdin: false,
-    adminCommandDenylist: [...(options.adminCommandDenylist ?? [])],
+    adminCommandDenylist: [...(settings.adminCommandDenylist ?? [])],
   })
 }
 
 /** The result of a command that ran to its end, which is a success only when it exited cleanly and was not stopped. */
-function makeResultFromStream(command: string, workingDirectory: string, stdout: string, stderr: string, interleavedOutput: string, exit: Extract<ShellStream["event"], { case: "exit" }> | undefined, policy: SandboxPolicy | undefined): ShellResult {
-  if (exit === undefined) throw new Error("Shell exec stream closed without an exit event; result is unknown")
+function streamResultOf(command: string, workingDirectory: string, stdout: string, stderr: string, interleavedOutput: string, exit: Extract<ShellStream["event"], { case: "exit" }> | undefined, policy: SandboxPolicy | undefined): ShellResult {
+  if (exit === undefined) throw new Error("Shell exec outputStream closed without an exit event; result is unknown")
   const value = exit.value
   const success = value.code === 0 && !value.aborted
   const base = { command, workingDirectory, exitCode: value.code, signal: value.aborted ? "SIGTERM" : "", stdout, stderr, executionTime: value.localExecutionTimeMs ?? 0, interleavedOutput, ...(value.outputLocation === undefined ? {} : { outputLocation: value.outputLocation }), ...(value.abortReason === undefined ? {} : { abortReason: value.abortReason }), ...(value.aborted ? { aborted: true } : {}) }
   return new ShellResult({ result: success ? { case: "success", value: new ShellSuccess(base) } : { case: "failure", value: new ShellFailure(base) }, ...(policy === undefined ? {} : { sandboxPolicy: policy }) })
 }
 
-/** Reads the executor's stream to its end, where a command that was moved to the background ends early. */
-async function executeStream(ctx: Context, executor: ShellStreamExecutor, args: ShellArgs, interaction: ShellToolInteractionHandler, meta: ShellToolExecutionMeta, options: ShellToolOptions, policy: SandboxPolicy | undefined): Promise<ShellResult> {
+/** Reads the shellStreamExecutor's outputStream to its end, where a command that was moved to the background ends early. */
+async function runStream(toolCtx: Context, shellStreamExecutor: ShellStreamExecutor, args: ShellArgs, interactionBridge: ShellToolInteractionHandler, executionMeta: ShellToolExecutionMeta, settings: ShellToolOptions, policy: SandboxPolicy | undefined): Promise<ShellResult> {
   let stdout = ""
   let stderr = ""
   let interleavedOutput = ""
   let exit: Extract<ShellStream["event"], { case: "exit" }> | undefined
   const executorOptions = {
-    ...(meta.execId === undefined ? {} : { execId: meta.execId }),
-    ...(meta.hookContextCollector === undefined ? {} : { hookContextCollector: meta.hookContextCollector }),
+    ...(executionMeta.execId === undefined ? {} : { execId: executionMeta.execId }),
+    ...(executionMeta.hookContextCollector === undefined ? {} : { hookContextCollector: executionMeta.hookContextCollector }),
   }
-  for await (const event of executor.execute(ctx, args, executorOptions)) {
-    await options.onStreamEvent?.(ctx, event)
+  for await (const event of shellStreamExecutor.execute(toolCtx, args, executorOptions)) {
+    await settings.onStreamEvent?.(toolCtx, event)
     switch (event.event.case) {
       case "stdout": stdout += event.event.value.data; interleavedOutput += event.event.value.data; break
       case "stderr": stderr += event.event.value.data; interleavedOutput += event.event.value.data; break
@@ -586,7 +586,7 @@ async function executeStream(ctx: Context, executor: ShellStreamExecutor, args: 
       case "sandboxUnsupported": throw new ToolCallUnexpectedEnvironmentError(event.event.value.reason)
       case "backgrounded": {
         // The command has not finished; what it has produced so far is what the result carries.
-        options.onTelemetry?.(ctx, { type: "backgrounded", toolCallId: meta.toolCallId })
+        settings.onTelemetry?.(toolCtx, { type: "backgrounded", toolCallId: executionMeta.toolCallId })
         return new ShellResult({ result: { case: "success", value: new ShellSuccess({ command: event.event.value.command, workingDirectory: event.event.value.workingDirectory, shellId: event.event.value.shellId, ...(event.event.value.pid === undefined ? {} : { pid: event.event.value.pid }), ...(event.event.value.msToWait === undefined ? {} : { msToWait: event.event.value.msToWait }), ...(event.event.value.reason === undefined ? {} : { backgroundReason: event.event.value.reason }), stdout, stderr, interleavedOutput, executionTime: 0 }) }, isBackground: true, ...(policy === undefined ? {} : { sandboxPolicy: policy }) })
       }
       case "start": break
@@ -594,11 +594,11 @@ async function executeStream(ctx: Context, executor: ShellStreamExecutor, args: 
       case undefined: break
     }
   }
-  return makeResultFromStream(args.command, args.workingDirectory, stdout, stderr, interleavedOutput, exit, policy)
+  return streamResultOf(args.command, args.workingDirectory, stdout, stderr, interleavedOutput, exit, policy)
 }
 
 /** Every way a command can fail has its own shape in the result the model and the user read. */
-function serializeShellError(error: unknown): ToolCall {
+function shellFailureCall(error: unknown): ToolCall {
   const result = error instanceof ShellToolRejectedError
     ? { case: "rejected" as const, value: new ShellRejected({ command: error.command, workingDirectory: error.workingDirectory ?? "", reason: error.reason }) }
     : error instanceof ShellToolPermissionDeniedError
@@ -606,167 +606,167 @@ function serializeShellError(error: unknown): ToolCall {
       : error instanceof ShellToolTimeoutError
         ? { case: "timeout" as const, value: new ShellTimeout({ command: error.command, workingDirectory: error.workingDirectory ?? "", timeoutMs: error.timeoutMs }) }
         : { case: "spawnError" as const, value: new ShellSpawnError({ error: error instanceof Error ? error.message : String(error) }) }
-  return createShellToolCall(new ShellToolCall({ result: new ShellResult({ result }) }))
+  return shellCallOf(new ShellToolCall({ result: new ShellResult({ result }) }))
 }
 
-function renderShellOutput(result: ShellResult, options: ShellToolOptions): string {
+function renderShellResult(result: ShellResult, settings: ShellToolOptions): string {
   const common = {
     ...(result.sandboxPolicy === undefined ? {} : { sandboxPolicy: result.sandboxPolicy }),
     ...(result.isBackground === undefined ? {} : { isBackground: result.isBackground }),
-    ...(options.terminalsFolder === undefined ? {} : { terminalsFolder: options.terminalsFolder }),
+    ...(settings.terminalsFolder === undefined ? {} : { terminalsFolder: settings.terminalsFolder }),
   }
   switch (result.result.case) {
-    case "success": return renderShellResultToString({ ...common, result: { case: "success", value: result.result.value } }, { promptVersion: options.promptVersion, sandboxPromptEnabled: options.sandboxPromptEnabled ?? options.sandboxEnabled, useMinimalHarness: options.useMinimalHarness })
-    case "failure": return renderShellResultToString({ ...common, result: { case: "failure", value: result.result.value } }, { promptVersion: options.promptVersion, sandboxPromptEnabled: options.sandboxPromptEnabled ?? options.sandboxEnabled, useMinimalHarness: options.useMinimalHarness })
-    case "timeout": return renderShellResultToString({ ...common, result: { case: "timeout", value: result.result.value } }, { promptVersion: options.promptVersion, sandboxPromptEnabled: options.sandboxPromptEnabled ?? options.sandboxEnabled, useMinimalHarness: options.useMinimalHarness })
-    case "rejected": return renderShellResultToString({ ...common, result: { case: "rejected", value: result.result.value } }, { promptVersion: options.promptVersion, sandboxPromptEnabled: options.sandboxPromptEnabled ?? options.sandboxEnabled, useMinimalHarness: options.useMinimalHarness })
-    case "spawnError": return renderShellResultToString({ ...common, result: { case: "spawnError", value: result.result.value } }, { promptVersion: options.promptVersion, sandboxPromptEnabled: options.sandboxPromptEnabled ?? options.sandboxEnabled, useMinimalHarness: options.useMinimalHarness })
-    case "permissionDenied": return renderShellResultToString({ ...common, result: { case: "permissionDenied", value: result.result.value } }, { promptVersion: options.promptVersion, sandboxPromptEnabled: options.sandboxPromptEnabled ?? options.sandboxEnabled, useMinimalHarness: options.useMinimalHarness })
+    case "success": return renderShellResultToString({ ...common, result: { case: "success", value: result.result.value } }, { promptVersion: settings.promptVersion, sandboxPromptEnabled: settings.sandboxPromptEnabled ?? settings.sandboxEnabled, useMinimalHarness: settings.useMinimalHarness })
+    case "failure": return renderShellResultToString({ ...common, result: { case: "failure", value: result.result.value } }, { promptVersion: settings.promptVersion, sandboxPromptEnabled: settings.sandboxPromptEnabled ?? settings.sandboxEnabled, useMinimalHarness: settings.useMinimalHarness })
+    case "timeout": return renderShellResultToString({ ...common, result: { case: "timeout", value: result.result.value } }, { promptVersion: settings.promptVersion, sandboxPromptEnabled: settings.sandboxPromptEnabled ?? settings.sandboxEnabled, useMinimalHarness: settings.useMinimalHarness })
+    case "rejected": return renderShellResultToString({ ...common, result: { case: "rejected", value: result.result.value } }, { promptVersion: settings.promptVersion, sandboxPromptEnabled: settings.sandboxPromptEnabled ?? settings.sandboxEnabled, useMinimalHarness: settings.useMinimalHarness })
+    case "spawnError": return renderShellResultToString({ ...common, result: { case: "spawnError", value: result.result.value } }, { promptVersion: settings.promptVersion, sandboxPromptEnabled: settings.sandboxPromptEnabled ?? settings.sandboxEnabled, useMinimalHarness: settings.useMinimalHarness })
+    case "permissionDenied": return renderShellResultToString({ ...common, result: { case: "permissionDenied", value: result.result.value } }, { promptVersion: settings.promptVersion, sandboxPromptEnabled: settings.sandboxPromptEnabled ?? settings.sandboxEnabled, useMinimalHarness: settings.useMinimalHarness })
     case undefined: return "Unknown error"
   }
 }
 
 /**
- * The shell tool, uncomposed: the caller supplies the executor through the resource key, and this module
+ * The shell tool, uncomposed: the caller supplies the shellStreamExecutor through the resource key, and this module
  * deliberately does not register anything. The same contract serves the host machine and the isolated box.
  */
-export function createShellTool(resourceAccessor: ShellToolResourceAccessor, options: ShellToolOptions = {}): ReturnType<typeof createZodAgentTool> | undefined {
-  if (options.isPlatformEnabled?.(process.platform) === false) return undefined
-  const surface = options.surface ?? "host_machine"
-  const promptVersion = options.promptVersion ?? "dsv3-1205"
-  const sandboxEnabled = options.sandboxEnabled ?? false
-  const defaultBlockUntilMs = options.defaultBlockUntilMs ?? (options.agentType === "background" ? BACKGROUND_SHELL_DEFAULT_BLOCK_UNTIL_MS : DEFAULT_TIMEOUT_MS)
-  // A background agent has nobody to approve anything, so it is not offered the approval arguments.
-  const smartModeApprovalParametersEnabled = options.agentType !== AgentType.BACKGROUND && options.smartModeClassifierMode === true
-  const parameters = addSmartModeApprovalParameters(options.parametersSchema ?? getShellToolParametersSchema(sandboxEnabled, promptVersion, { isReadonly: options.isReadonly, enableBlockUntilMs: options.enableBlockUntilMs, requireBlockUntilMs: options.requireBlockUntilMs, defaultBlockUntilMs }), smartModeApprovalParametersEnabled)
-  const executor = resourceAccessor.get(shellStreamExecutorResource)
-  const execute = async (ctx: Context, interaction: ShellToolInteractionHandler, rawArgs: Record<string, unknown>, meta: ShellToolExecutionMeta): Promise<ShellResult> => {
-    const command = String(rawArgs.command)
-    const workingDirectory = typeof rawArgs.working_directory === "string" ? rawArgs.working_directory : undefined
-    const analysis = analyzeShellCommand(command)
-    const plan = resolvePlan(rawArgs, options)
-    const policy = requestedPolicy(rawArgs, options, meta.workspacePaths)
-    const request = { command, ...(workingDirectory === undefined ? {} : { workingDirectory }), isBackground: plan.shouldStartInBackground, analysis, executionPlan: plan, ...(policy === undefined ? {} : { requestedSandboxPolicy: policy }), surface }
-    const decision = await options.preflight?.(ctx, request) ?? { allow: true as const }
-    options.onAudit?.(ctx, request, decision)
+export function createShellTool(resourceAccessor: ShellToolResourceAccessor, settings: ShellToolOptions = {}): ReturnType<typeof createZodAgentTool> | undefined {
+  if (settings.isPlatformEnabled?.(process.platform) === false) return undefined
+  const surface = settings.surface ?? "host_machine"
+  const promptVersion = settings.promptVersion ?? "dsv3-1205"
+  const sandboxEnabled = settings.sandboxEnabled ?? false
+  const defaultBlockUntilMs = settings.defaultBlockUntilMs ?? (settings.agentType === "background" ? BACKGROUND_SHELL_DEFAULT_BLOCK_UNTIL_MS : WAIT_TIMEOUT_MS)
+  // A background agent has nobody to approve anything, so it is not offered the approvalOutcome arguments.
+  const smartModeApprovalParametersEnabled = settings.agentType !== AgentType.BACKGROUND && settings.smartModeClassifierMode === true
+  const parameters = withApprovalParameters(settings.parametersSchema ?? getShellToolParametersSchema(sandboxEnabled, promptVersion, { isReadonly: settings.isReadonly, enableBlockUntilMs: settings.enableBlockUntilMs, requireBlockUntilMs: settings.requireBlockUntilMs, defaultBlockUntilMs }), smartModeApprovalParametersEnabled)
+  const shellStreamExecutor = resourceAccessor.get(shellStreamExecutorResource)
+  const execute = async (toolCtx: Context, interactionBridge: ShellToolInteractionHandler, callArgs: Record<string, unknown>, executionMeta: ShellToolExecutionMeta): Promise<ShellResult> => {
+    const command = String(callArgs.command)
+    const workingDirectory = typeof callArgs.working_directory === "string" ? callArgs.working_directory : undefined
+    const parsedCommand = analyzeShellCommand(command)
+    const executionPlan = executionPlanOf(callArgs, settings)
+    const policy = policyRequestedBy(callArgs, settings, executionMeta.workspacePaths)
+    const request = { command, ...(workingDirectory === undefined ? {} : { workingDirectory }), isBackground: executionPlan.shouldStartInBackground, analysis: parsedCommand, executionPlan: executionPlan, ...(policy === undefined ? {} : { requestedSandboxPolicy: policy }), surface }
+    const decision = await settings.preflight?.(toolCtx, request) ?? { allow: true as const }
+    settings.onAudit?.(toolCtx, request, decision)
     if (!decision.allow) throw new ShellToolRejectedError(command, workingDirectory, decision.reason)
     // The platform's own guard refuses the commands that would look at the user's screen.
-    if (options.enforceModelFacingShellUiAutomationGuard === true) {
+    if (settings.enforceModelFacingShellUiAutomationGuard === true) {
       const uiAutomationDecision = checkModelFacingShellUiAutomation(command)
       if (!uiAutomationDecision.allow) throw new ShellToolRejectedError(command, workingDirectory, uiAutomationDecision.reason)
     }
-    const smartModeDecision = await runShellSmartModeClassifier(
-      ctx,
+    const smartModeDecision = await classifyShellCall(
+      toolCtx,
       resourceAccessor,
-      options,
-      rawArgs,
-      meta,
+      settings,
+      callArgs,
+      executionMeta,
       command,
       workingDirectory,
-      typeof rawArgs.description === "string" ? rawArgs.description : typeof rawArgs.explanation === "string" ? rawArgs.explanation : undefined,
-      plan,
+      typeof callArgs.description === "string" ? callArgs.description : typeof callArgs.explanation === "string" ? callArgs.explanation : undefined,
+      executionPlan,
       policy,
       surface,
-      interaction.getAbortSignal(ctx),
+      interactionBridge.getAbortSignal(toolCtx),
     )
     if (smartModeDecision.kind === "reject") throw new ShellToolRejectedError(command, workingDirectory, smartModeDecision.reason)
     let approvedShellBinding: { readonly executionStateIdentity?: string; readonly targetEnrichmentHash?: string } | undefined
     let smartModeApprovalProviderApproved = false
     if (smartModeDecision.kind === "block") {
-      // A blocked command is refused unless the model asked for the user's approval and there is a way to ask.
-      const approvalRequested = rawArgs.request_smart_mode_approval === true
-      const approvalProvider = options.smartModeApprovalProvider
+      // A blocked command is refused unless the model asked for the user's approvalOutcome and there is a way to ask.
+      const approvalRequested = callArgs.request_smart_mode_approval === true
+      const approvalProvider = settings.smartModeApprovalProvider
       if (!approvalRequested || approvalProvider === undefined) {
         throw new ShellToolRejectedError(command, workingDirectory, smartModeDecision.reason)
       }
-      const approvalStateIdentity = options.smartModeShellApprovalState?.getIdentity()
+      const approvalStateIdentity = settings.smartModeShellApprovalState?.getIdentity()
       const target: ShellSmartModeApprovalTarget = {
-        surface: options.smartModeApprovalSurface ?? (options.awaitToolIdentifier === "BOX_AWAIT" ? "isolated_box" : "host_machine"),
+        surface: settings.smartModeApprovalSurface ?? (settings.awaitToolIdentifier === "BOX_AWAIT" ? "isolated_box" : "host_machine"),
         command,
         ...(workingDirectory === undefined ? {} : { workingDirectory }),
-        ...(policy === undefined ? {} : { requestedSandboxPolicy: options.isReadonly === true ? policy : buildClassifierEscalatedSandboxPolicy(policy) }),
-        isBackground: plan.shouldStartInBackground,
-        isReadonly: options.isReadonly === true,
-        executionPlan: plan,
+        ...(policy === undefined ? {} : { requestedSandboxPolicy: settings.isReadonly === true ? policy : escalatedPolicyFor(policy) }),
+        isBackground: executionPlan.shouldStartInBackground,
+        isReadonly: settings.isReadonly === true,
+        executionPlan: executionPlan,
         ...(approvalStateIdentity === undefined ? {} : { executionStateIdentity: approvalStateIdentity }),
         ...(smartModeDecision.targetEnrichmentHash === undefined ? {} : { targetEnrichmentHash: smartModeDecision.targetEnrichmentHash }),
         blockReason: smartModeDecision.reason,
-        ...(typeof rawArgs.description === "string" && rawArgs.description.trim().length > 0 ? { description: rawArgs.description.trim() } : typeof rawArgs.explanation === "string" && rawArgs.explanation.trim().length > 0 ? { description: rawArgs.explanation.trim() } : {}),
+        ...(typeof callArgs.description === "string" && callArgs.description.trim().length > 0 ? { description: callArgs.description.trim() } : typeof callArgs.explanation === "string" && callArgs.explanation.trim().length > 0 ? { description: callArgs.explanation.trim() } : {}),
         ...(smartModeDecision.proposedAllowRule === undefined ? {} : { proposedAllowRule: smartModeDecision.proposedAllowRule }),
       }
       // Waiting for a user to approve something is not the command timing out, so the timeout is suspended.
-      const approval = await withToolExecutionTimeoutSuspended(ctx, () => approvalProvider.requestApproval({
+      const approvalOutcome = await withToolExecutionTimeoutSuspended(toolCtx, () => approvalProvider.requestApproval({
         kind: "shell",
         target,
-        fingerprint: computeShellApprovalFingerprint(target),
-        toolCallId: meta.toolCallId,
-        conversationId: getConversationId(ctx),
-        signal: interaction.getAbortSignal(ctx),
+        fingerprint: approvalFingerprintOf(target),
+        toolCallId: executionMeta.toolCallId,
+        conversationId: getConversationId(toolCtx),
+        signal: interactionBridge.getAbortSignal(toolCtx),
       }))
-      if (interaction.getAbortSignal(ctx).aborted) throw new ToolCallAbortedError()
-      if (!approval.approved) throw new ShellToolRejectedError(command, workingDirectory, approval.reason ?? smartModeDecision.reason)
+      if (interactionBridge.getAbortSignal(toolCtx).aborted) throw new ToolCallAbortedError()
+      if (!approvalOutcome.approved) throw new ShellToolRejectedError(command, workingDirectory, approvalOutcome.reason ?? smartModeDecision.reason)
       smartModeApprovalProviderApproved = true
       approvedShellBinding = {
         ...(target.executionStateIdentity === undefined ? {} : { executionStateIdentity: target.executionStateIdentity }),
         ...(target.targetEnrichmentHash === undefined ? {} : { targetEnrichmentHash: target.targetEnrichmentHash }),
       }
-    } else if (smartModeDecision.kind === "allow" && smartModeDecision.enabled && (options.smartModeShellTargetEnrichmentProvider !== undefined || options.smartModeShellApprovalState !== undefined)) {
-      const approvalStateIdentity = options.smartModeShellApprovalState?.getIdentity()
+    } else if (smartModeDecision.kind === "allow" && smartModeDecision.enabled && (settings.smartModeShellTargetEnrichmentProvider !== undefined || settings.smartModeShellApprovalState !== undefined)) {
+      const approvalStateIdentity = settings.smartModeShellApprovalState?.getIdentity()
       approvedShellBinding = {
         ...(approvalStateIdentity === undefined ? {} : { executionStateIdentity: approvalStateIdentity }),
         ...(smartModeDecision.targetEnrichmentHash === undefined ? {} : { targetEnrichmentHash: smartModeDecision.targetEnrichmentHash }),
       }
     }
-    options.onTelemetry?.(ctx, { type: "started", toolCallId: meta.toolCallId })
-    const args = shellArgs(rawArgs, analysis, plan, options, meta, policy, smartModeApprovalProviderApproved || (smartModeDecision.kind === "allow" && smartModeDecision.enabled))
-    const call = createShellToolCall(new ShellToolCall({ args }))
-    if (plan.shouldStartInBackground) await interaction.emitPartialToolCall?.(ctx, meta.toolCallId, call)
-    const result = await interaction.executeToolCall(ctx, call, meta.toolCallId, async executionCtx => {
-      if (interaction.getAbortSignal(executionCtx).aborted) throw new ToolCallAbortedError()
-      // What was approved is checked against what is about to run, and an approval is used once.
+    settings.onTelemetry?.(toolCtx, { type: "started", toolCallId: executionMeta.toolCallId })
+    const args = shellArgumentsOf(callArgs, parsedCommand, executionPlan, settings, executionMeta, policy, smartModeApprovalProviderApproved || (smartModeDecision.kind === "allow" && smartModeDecision.enabled))
+    const toolCall = shellCallOf(new ShellToolCall({ args }))
+    if (executionPlan.shouldStartInBackground) await interactionBridge.emitPartialToolCall?.(toolCtx, executionMeta.toolCallId, toolCall)
+    const result = await interactionBridge.executeToolCall(toolCtx, toolCall, executionMeta.toolCallId, async runCtx => {
+      if (interactionBridge.getAbortSignal(runCtx).aborted) throw new ToolCallAbortedError()
+      // What was approved is checked against what is about to run, and an approvalOutcome is used once.
       if (approvedShellBinding !== undefined) {
-        const currentIdentity = options.smartModeShellApprovalState?.getIdentity()
-        const currentEnrichment = await options.smartModeShellTargetEnrichmentProvider?.(executionCtx, {
+        const currentIdentity = settings.smartModeShellApprovalState?.getIdentity()
+        const currentEnrichment = await settings.smartModeShellTargetEnrichmentProvider?.(runCtx, {
           resourceAccessor,
           command,
           ...(workingDirectory === undefined ? {} : { workingDirectory }),
-          toolCallId: meta.toolCallId,
+          toolCallId: executionMeta.toolCallId,
         })
-        const currentHash = hashTargetEnrichment(currentEnrichment)
+        const currentHash = enrichmentHashOf(currentEnrichment)
         if (currentIdentity !== approvedShellBinding.executionStateIdentity || currentHash !== approvedShellBinding.targetEnrichmentHash) {
           throw new ShellToolRejectedError(command, workingDirectory, "The reviewed shell target changed before execution; retry the command for a new review.")
         }
         approvedShellBinding = undefined
       }
-      options.smartModeShellApprovalState?.markSideEffectStart()
+      settings.smartModeShellApprovalState?.markSideEffectStart()
       // A command that changes files waits for whatever else is changing them, since two writers at once is
       // how a workspace ends up inconsistent.
-      const lock = options.fileOperationLockManager === undefined ? undefined : await options.fileOperationLockManager.waitForExclusiveLock(executionCtx)
-      try { return await executeStream(executionCtx, executor, args, interaction, meta, options, policy) }
+      const lock = settings.fileOperationLockManager === undefined ? undefined : await settings.fileOperationLockManager.waitForExclusiveLock(runCtx)
+      try { return await runStream(runCtx, shellStreamExecutor, args, interactionBridge, executionMeta, settings, policy) }
       finally { lock?.[Symbol.dispose]() }
-    }, merged => createShellToolCall(new ShellToolCall({ args, result: merged })), meta.hookContextCollector)
-    options.onTelemetry?.(ctx, { type: "finished", toolCallId: meta.toolCallId })
+    }, mergedResult => shellCallOf(new ShellToolCall({ args, result: mergedResult })), executionMeta.hookContextCollector)
+    settings.onTelemetry?.(toolCtx, { type: "finished", toolCallId: executionMeta.toolCallId })
     return result
   }
-  const toolName = options.toolName ?? (surface === "isolated_box" ? "run-command" : "run_terminal_cmd")
-  return createZodAgentTool(options.toolIdentifier ?? "SHELL", {
+  const toolName = settings.toolName ?? (surface === "isolated_box" ? "run-command" : "run_terminal_cmd")
+  return createZodAgentTool(settings.toolIdentifier ?? "SHELL", {
     name: toolName,
     descriptionGenerator: (descriptionProps: { readonly allTools?: Record<string, { readonly name?: string }> } = {}) => getShellToolDescription(sandboxEnabled, promptVersion, {
-      isReadonly: options.isReadonly,
-      enableBlockUntilMs: options.enableBlockUntilMs,
-      requireBlockUntilMs: options.requireBlockUntilMs,
+      isReadonly: settings.isReadonly,
+      enableBlockUntilMs: settings.enableBlockUntilMs,
+      requireBlockUntilMs: settings.requireBlockUntilMs,
       defaultBlockUntilMs,
-      useMinimalHarness: options.useMinimalHarness,
-      enableJobCompletionNotifications: options.enableJobCompletionNotifications,
-      enableTerminalFiles: options.enableTerminalFiles,
+      useMinimalHarness: settings.useMinimalHarness,
+      enableJobCompletionNotifications: settings.enableJobCompletionNotifications,
+      enableTerminalFiles: settings.enableTerminalFiles,
       // The other tools are named by the session's own names for them, not by their identifiers.
-      awaitToolName: options.awaitToolIdentifier === undefined ? undefined : descriptionProps.allTools?.[options.awaitToolIdentifier]?.name ?? options.awaitToolIdentifier,
-      readToolName: options.readToolIdentifier === undefined ? undefined : descriptionProps.allTools?.[options.readToolIdentifier]?.name ?? options.readToolIdentifier,
+      awaitToolName: settings.awaitToolIdentifier === undefined ? undefined : descriptionProps.allTools?.[settings.awaitToolIdentifier]?.name ?? settings.awaitToolIdentifier,
+      readToolName: settings.readToolIdentifier === undefined ? undefined : descriptionProps.allTools?.[settings.readToolIdentifier]?.name ?? settings.readToolIdentifier,
     }),
     parameters,
-    execute: withSafeParsedArgs(parameters, execute as unknown as (ctx: Context, interactionHandler: unknown, args: unknown, meta: unknown) => Promise<unknown>, createShellToolCall(new ShellToolCall({ args: new ShellArgs() }))),
-    render: async (_ctx: Context, result: ShellResult) => createStringResult(renderShellOutput(result, { ...options, promptVersion })),
-    serializeError: serializeShellError,
+    execute: withSafeParsedArgs(parameters, execute as unknown as (toolCtx: Context, interactionHandler: unknown, args: unknown, executionMeta: unknown) => Promise<unknown>, shellCallOf(new ShellToolCall({ args: new ShellArgs() }))),
+    render: async (_ctx: Context, result: ShellResult) => createStringResult(renderShellResult(result, { ...settings, promptVersion })),
+    serializeError: shellFailureCall,
   })
 }
 
