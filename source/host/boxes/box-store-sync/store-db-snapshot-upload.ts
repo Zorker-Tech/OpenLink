@@ -32,13 +32,13 @@ export type SnapshotUploadResult = {
 };
 
 export class StoreDbSnapshotUpload {
-  private readonly objectStoreProvider: BoxObjectStoreProvider;
+  private readonly storeProvider: BoxObjectStoreProvider;
   private readonly now: () => number;
   private readonly log: (message: string) => void;
-  private readonly manifestStore: BoxStoreManifestStore;
-  private readonly maxObjectBytes: number;
-  private readonly largeObjectThreshold: number;
-  private vacuumWorkerAvailable: boolean | undefined;
+  private readonly manifestEntries: BoxStoreManifestStore;
+  private readonly objectSizeLimit: number;
+  private readonly largeObjectLimit: number;
+  private workerBundled: boolean | undefined;
 
   constructor(args: {
     objectStoreProvider: BoxObjectStoreProvider;
@@ -48,16 +48,16 @@ export class StoreDbSnapshotUpload {
     maxObjectBytes: number;
     largeObjectThreshold: number;
   }) {
-    this.objectStoreProvider = args.objectStoreProvider;
+    this.storeProvider = args.objectStoreProvider;
     this.now = args.now;
     this.log = args.log;
-    this.manifestStore = args.manifestStore;
-    this.maxObjectBytes = args.maxObjectBytes;
-    this.largeObjectThreshold = args.largeObjectThreshold;
+    this.manifestEntries = args.manifestStore;
+    this.objectSizeLimit = args.maxObjectBytes;
+    this.largeObjectLimit = args.largeObjectThreshold;
   }
 
   objectStore(storeId: string): BoxObjectStore {
-    return this.objectStoreProvider.forStore(storeId);
+    return this.storeProvider.forStore(storeId);
   }
 
   elapsedDurationMs(startedAt: number): number {
@@ -66,53 +66,73 @@ export class StoreDbSnapshotUpload {
 
   /** One snapshot file, from its size to its blob. The failure phase says whether it was reading or uploading. */
   async uploadAgentDbSnapshot(storeId: string, manifest: BoxManifestMap, relPath: string, snapshotPath: string, mode: number): Promise<SnapshotUploadResult> {
-    let size: number;
-    try {
-      size = (await stat(snapshotPath)).size;
-    } catch (error) {
-      this.log(`store.db ${relPath} snapshot stat failed: ${errorMessage(error)}`);
-      return { outcome: "error", bytesUploaded: 0, blobUploadDurationMs: 0, failurePhase: "capture" };
-    }
-    if (size > this.maxObjectBytes) {
-      this.log(`oversize ${relPath}: ${size}B over ${this.maxObjectBytes}B`);
+    const statSize = await this.snapshotSize(snapshotPath, relPath);
+    if (statSize === null) return this.failure("capture", 0);
+    if (statSize > this.objectSizeLimit) {
+      this.log("oversize " + relPath + ": " + statSize + "B over " + this.objectSizeLimit + "B");
       return { outcome: "oversize", bytesUploaded: 0, blobUploadDurationMs: 0, failurePhase: "capture" };
     }
-
-    let sha: string;
-    let bytes: Buffer | undefined;
-    try {
-      if (size >= this.largeObjectThreshold) {
-        sha = await sha256File(snapshotPath);
-      } else {
-        bytes = await readFile(snapshotPath);
-        sha = sha256Hex(bytes);
-      }
-    } catch (error) {
-      this.log(`read failed ${relPath}: ${errorMessage(error)}`);
-      return { outcome: "error", bytesUploaded: 0, blobUploadDurationMs: 0, failurePhase: "capture" };
-    }
-
-    const entry: BoxStoreManifestEntry = { kind: "file", sha, size, mode: mode & 0o777 };
-    const existing = manifest.get(relPath);
-    if (existing != null && isBoxStoreManifestFileEntry(existing) && existing.sha === sha && existing.size === size) {
-      this.manifestStore.setManifestEntry(manifest, relPath, entry);
+    const snapshot = await this.readSnapshot(snapshotPath, relPath, statSize);
+    if (snapshot === null) return this.failure("capture", 0);
+    const nextEntry = this.entryFor(snapshot.sha, statSize, mode);
+    const previousEntry = manifest.get(relPath);
+    if (previousEntry != null && isBoxStoreManifestFileEntry(previousEntry) && previousEntry.sha === snapshot.sha && previousEntry.size === statSize) {
+      this.manifestEntries.setManifestEntry(manifest, relPath, nextEntry);
       return { outcome: "unchanged", bytesUploaded: 0, blobUploadDurationMs: 0 };
     }
-
     const uploadStartedAt = this.now();
+    const uploaded = await this.putSnapshot(storeId, snapshot.sha, statSize, snapshot.bytes, snapshotPath, relPath);
+    if (!uploaded) return this.failure("blob_upload", this.elapsedDurationMs(uploadStartedAt));
+    this.manifestEntries.setManifestEntry(manifest, relPath, nextEntry);
+    return { outcome: "uploaded", bytesUploaded: statSize, blobUploadDurationMs: this.elapsedDurationMs(uploadStartedAt) };
+  }
+
+  private failure(phase: "capture" | "blob_upload", durationMs: number): SnapshotUploadResult {
+    return { outcome: "error", bytesUploaded: 0, blobUploadDurationMs: durationMs, failurePhase: phase };
+  }
+
+  /** The file's size, or null when it could not be asked (the reason is logged rather than thrown). */
+  private async snapshotSize(snapshotPath: string, relPath: string): Promise<number | null> {
+    try {
+      return (await stat(snapshotPath)).size;
+    } catch (error) {
+      this.log("store.db " + relPath + " snapshot stat failed: " + errorMessage(error));
+      return null;
+    }
+  }
+
+  /** The digest, from disk when the file is large enough to be streamed and from memory otherwise. */
+  private async readSnapshot(snapshotPath: string, relPath: string, size: number): Promise<{ sha: string; bytes: Buffer | undefined } | null> {
+    try {
+      if (size >= this.largeObjectLimit) {
+        return { sha: await sha256File(snapshotPath), bytes: undefined };
+      }
+      const bytes = await readFile(snapshotPath);
+      return { sha: sha256Hex(bytes), bytes };
+    } catch (error) {
+      this.log("read failed " + relPath + ": " + errorMessage(error));
+      return null;
+    }
+  }
+
+  private entryFor(sha: string, size: number, mode: number): BoxStoreManifestEntry {
+    return { kind: "file", sha, size, mode: mode & 0o777 };
+  }
+
+  /** Streams from disk when the snapshot was too large to be read, otherwise sends the bytes already in hand. */
+  private async putSnapshot(storeId: string, sha: string, size: number, bytes: Buffer | undefined, snapshotPath: string, relPath: string): Promise<boolean> {
     try {
       if (bytes === undefined) {
         // A large snapshot is streamed from disk: it never has to fit in memory.
-        await this.objectStore(storeId).putFromFile!(`${BOX_STORE_BLOBS_PREFIX}/${sha}`, snapshotPath, sha, size);
+        await this.objectStore(storeId).putFromFile!(BOX_STORE_BLOBS_PREFIX + "/" + sha, snapshotPath, sha, size);
       } else {
-        await this.objectStore(storeId).put(`${BOX_STORE_BLOBS_PREFIX}/${sha}`, bytes, { contentAddressed: true });
+        await this.objectStore(storeId).put(BOX_STORE_BLOBS_PREFIX + "/" + sha, bytes, { contentAddressed: true });
       }
+      return true;
     } catch (error) {
-      this.log(`upload failed ${relPath}: ${errorMessage(error)}`);
-      return { outcome: "error", bytesUploaded: 0, blobUploadDurationMs: this.elapsedDurationMs(uploadStartedAt), failurePhase: "blob_upload" };
+      this.log("upload failed " + relPath + ": " + errorMessage(error));
+      return false;
     }
-    this.manifestStore.setManifestEntry(manifest, relPath, entry);
-    return { outcome: "uploaded", bytesUploaded: size, blobUploadDurationMs: this.elapsedDurationMs(uploadStartedAt) };
   }
 
   /**
@@ -121,18 +141,14 @@ export class StoreDbSnapshotUpload {
    */
   async runVacuumOffThread(args: { srcPath: string; destPath: string }): Promise<void> {
     const entry = defaultVacuumWorkerEntryPath();
-    if (this.vacuumWorkerAvailable === undefined) {
-      this.vacuumWorkerAvailable = existsSync(entry);
-      if (!this.vacuumWorkerAvailable) this.log(`vacuum worker bundle absent (${entry}); using in-process VACUUM`);
-    }
-    if (this.vacuumWorkerAvailable) {
+    if (this.workerAvailable(entry)) {
       try {
         await runVacuumInWorker({ entryPath: entry, srcPath: args.srcPath, destPath: args.destPath, busyTimeoutMs: DB_BUSY_TIMEOUT_MS });
         return;
       } catch (error) {
         if (!(error instanceof VacuumWorkerUnavailableError)) throw error;
-        this.vacuumWorkerAvailable = false;
-        this.log(`vacuum worker unavailable; using in-process VACUUM: ${errorMessage(error)}`);
+        this.workerBundled = false;
+        this.log("vacuum worker unavailable; using in-process VACUUM: " + errorMessage(error));
       }
     }
     // The in-process path starts from an empty destination: a half-written file from a failed worker would be appended to.
@@ -140,12 +156,21 @@ export class StoreDbSnapshotUpload {
     sqliteVacuumInto(args.srcPath, args.destPath);
   }
 
+  /** Whether the packaged worker bundle exists, asked once and remembered. */
+  private workerAvailable(entry: string): boolean {
+    if (this.workerBundled === undefined) {
+      this.workerBundled = existsSync(entry);
+      if (!this.workerBundled) this.log("vacuum worker bundle absent (" + entry + "); using in-process VACUUM");
+    }
+    return this.workerBundled;
+  }
+
   async discardSnapshotTemp(args: { tmpPath: string; label: string }): Promise<void> {
     try {
       await unlink(args.tmpPath);
-    } catch (error) {
-      if (findSystemErrno(error) === "ENOENT") return;
-      this.log(`temp cleanup failed ${args.label}: ${errorMessage(error)}`);
+    } catch (failure) {
+      if (findSystemErrno(failure) === "ENOENT") return;
+      this.log(`temp cleanup failed ${args.label}: ${errorMessage(failure)}`);
     }
   }
 }
@@ -159,8 +184,8 @@ function defaultVacuumWorkerEntryPath(): string {
 class VacuumWorkerUnavailableError extends Error {}
 
 /**
- * One vacuum in a worker. The worker answers once; anything else it does — an error, an exit before an answer — means the
- * worker was not usable, and the caller falls back rather than retrying a broken thread.
+ * One vacuum in a worker. The worker answers once; anything else it does — an failure, an exit before an answer — means the
+ * worker was not usable, and the caller falls back rather than retrying a broken worker.
  */
 function runVacuumInWorker(args: { entryPath: string; srcPath: string; destPath: string; busyTimeoutMs: number }): Promise<void> {
   const { entryPath, srcPath, destPath, busyTimeoutMs } = args;
@@ -168,8 +193,8 @@ function runVacuumInWorker(args: { entryPath: string; srcPath: string; destPath:
     let worker: Worker;
     try {
       worker = new Worker(entryPath);
-    } catch (error) {
-      reject(new VacuumWorkerUnavailableError(errorMessage(error)));
+    } catch (failure) {
+      reject(new VacuumWorkerUnavailableError(errorMessage(failure)));
       return;
     }
     let settled = false;
@@ -183,8 +208,8 @@ function runVacuumInWorker(args: { entryPath: string; srcPath: string; destPath:
       if (message?.ok === true) finish(resolve);
       else finish(() => reject(new Error(message?.message ?? "the vacuum worker reported a failure")));
     });
-    worker.on("error", (error) => {
-      finish(() => reject(new VacuumWorkerUnavailableError(errorMessage(error))));
+    worker.on("error", (failure) => {
+      finish(() => reject(new VacuumWorkerUnavailableError(errorMessage(failure))));
     });
     worker.on("exit", (code) => {
       finish(() => reject(new VacuumWorkerUnavailableError(`the vacuum worker exited (${code}) before completing`)));
