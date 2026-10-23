@@ -4,13 +4,13 @@
  */
 
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, lstatSync, rmSync, symlinkSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
 
-import { copyFileHashing, makeInFlightByteBudget, resolveRestoreDestination, sha256File, symlinkTargetStaysWithinRoot } from "../../source/host/boxes/box-store-sync/box-store-download.ts";
+import { BoxStoreDownload, copyFileHashing, makeInFlightByteBudget, resolveRestoreDestination, sha256File, symlinkTargetStaysWithinRoot } from "../../source/host/boxes/box-store-sync/box-store-download.ts";
 import { dedupeNestedRoots, globToRegExp, walkNodes } from "../../source/host/boxes/box-store-sync/box-store-transfer.ts";
 import { hasManifestPathConflict, parseManifest, BoxStoreUnsupportedManifestVersionError, BoxStoreManifestPathConflictError, BoxStoreManifestRevisionState, countStoreDbManifestEntries, getStoreDbManifestAgentIds, countAgentDirManifestEntries } from "../../source/host/boxes/box-store-sync/box-store-manifest.ts";
 import { evaluateBoxStoreFlush, boxStoreSyncCycleTelemetry, type BoxStoreCycleSummary } from "../../source/host/boxes/box-store-sync/box-store-sync.ts";
@@ -572,3 +572,392 @@ describe("what a copy-in says", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------------------------
+// Restoring a box's store
+// ---------------------------------------------------------------------------------------------
+
+/** A restore over a real target directory and a scripted object store, manifest store and pack pipeline. */
+function restoreWorld(options: { threshold?: number; corruptStream?: boolean; getThrows?: boolean; getToFileThrows?: boolean; diskSpace?: boolean; prefetchThrows?: boolean; packRestored?: boolean; chownThrows?: boolean } = {}) {
+  const root = mkdtempSync(join(tmpdir(), "slate-restore-"));
+  const target = join(root, "target");
+  mkdirSync(target, { recursive: true });
+  const blobs = new Map<string, Uint8Array>();
+  const manifest = new Map<string, Record<string, unknown>>();
+  const calls: unknown[][] = [];
+  const traces: Array<Record<string, unknown>> = [];
+  const progress: Array<Record<string, number>> = [];
+  const logs: string[] = [];
+  const add = (relPath: string, text: string, mode?: number) => {
+    const bytes = new TextEncoder().encode(text);
+    const sha = createHash("sha256").update(bytes).digest("hex");
+    blobs.set(sha, bytes);
+    manifest.set(relPath, { kind: "file", sha, size: bytes.length, ...(mode === undefined ? {} : { mode }) });
+  };
+  const addLink = (relPath: string, linkTarget: string) => manifest.set(relPath, { kind: "symlink", target: linkTarget });
+  const store = {
+    async get(key: string) {
+      calls.push(["get", key.split("/").pop()]);
+      if (options.getThrows === true) throw new Error("download failed");
+      return blobs.get(key.split("/").pop()!) ?? null;
+    },
+    async getToFile(key: string, tmpPath: string, request: unknown) {
+      calls.push(["getToFile", key.split("/").pop(), request]);
+      if (options.getToFileThrows === true) throw new Error("stream failed");
+      const bytes = blobs.get(key.split("/").pop()!);
+      if (bytes === undefined) return null;
+      writeFileSync(tmpPath, options.corruptStream === true ? new Uint8Array([1, 2, 3]) : bytes);
+      return bytes.length;
+    },
+    async prefetchReads(keys: string[]) {
+      calls.push(["prefetch", keys.length]);
+      if (options.prefetchThrows === true) throw new Error("prefetch failed");
+    },
+  };
+  const port = {
+    resolveStoreId: async () => "store-1",
+    objectStore: () => store,
+    manifestStore: { manifest: "cached" as unknown, async loadManifest() { calls.push(["loadManifest"]); return manifest; } },
+    log: (message: string) => logs.push(message.replaceAll(root, "<root>")),
+    downloadConcurrency: 2,
+    largeObjectThreshold: options.threshold ?? 16,
+    downloadByteBudget: 1024,
+    hasDiskSpaceForLargeObject: async () => options.diskSpace ?? true,
+    discardTemp: async ({ tmpPath, label }: { tmpPath: string; label: string }) => {
+      calls.push(["discardTemp", label]);
+      if (existsSync(tmpPath)) rmSync(tmpPath, { force: true });
+    },
+    packPipeline: {
+      restoreBulkSmallFromPacks: async (restoreOptions: { groups: Map<string, { relPaths: string[]; size: number }>; recordRestoredPath(size: number): void }) => {
+        calls.push(["packRestore", restoreOptions.groups.size]);
+        if (options.packRestored !== true) return new Set<string>();
+        const restored = new Set<string>();
+        for (const group of restoreOptions.groups.values()) for (const relPath of group.relPaths) { restored.add(relPath); restoreOptions.recordRestoredPath(group.size); }
+        return restored;
+      },
+    },
+  };
+  const downloader = new BoxStoreDownload(port as never);
+  return { root, target, manifest, blobs, calls, traces, progress, logs, downloader, manifestStore: port.manifestStore, add, addLink,
+    download: async (extra: Record<string, unknown> = {}) => {
+      const summary = await downloader.download(target, { onTrace: (trace) => traces.push(trace as unknown as Record<string, unknown>), onProgress: (entry) => progress.push(entry), ...extra });
+      const tree: string[] = [];
+      const walk = (dir: string, prefix: string) => {
+        for (const name of (() => { try { return readdirSync(dir).sort(); } catch { return []; } })()) {
+          const full = join(dir, name);
+          const stats = lstatSync(full);
+          const rel = prefix === "" ? name : prefix + "/" + name;
+          if (stats.isSymbolicLink()) tree.push(rel + " -> " + readlinkSync(full));
+          else if (stats.isDirectory()) { tree.push(rel + "/"); walk(full, rel); }
+          else tree.push(rel + " = " + readFileSync(full, "utf8") + " @ " + (stats.mode & 0o777));
+        }
+      };
+      walk(target, "");
+      return { summary, tree };
+    } };
+}
+
+describe("restoring a box's store", () => {
+  it("writes verified files into their places and reports them", async () => {
+    const world = restoreWorld();
+    try {
+      world.add("dir/a.txt", "alpha");
+      world.add("dir/b.txt", "beta", 0o640);
+      const { summary, tree } = await world.download();
+      assert.deepEqual(summary, { manifestEntries: 2, files: 2, bytes: 9, verified: 2, failures: [] });
+      assert.equal(tree.includes("dir/a.txt = alpha @ 420") || tree.includes("dir/a.txt = alpha @ 438"), true);
+      assert.equal(tree.includes("dir/b.txt = beta @ 416"), true);
+      assert.equal(tree.some((entry) => entry.includes(".box-store-part-")), false);
+      assert.deepEqual(world.progress.at(-1), { files: 2, bytes: 9, verified: 2, total: 2 });
+      assert.deepEqual(world.calls.slice(0, 1).map((call) => call[0]), ["loadManifest"]);
+      assert.equal(world.calls.filter((call) => call[0] === "get").length, 2);
+    } finally {
+      rmSync(world.root, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses paths outside the root and paths the manifest cannot name", async () => {
+    const world = restoreWorld();
+    try {
+      world.manifest.set("../escape", { kind: "file", sha: "x", size: 1 });
+      world.manifest.set("", { kind: "file", sha: "y", size: 1 });
+      world.add("safe.txt", "safe");
+      const { summary } = await world.download();
+      assert.deepEqual(summary.failures, ["../escape: unsafe manifest path", ": unsafe manifest path"]);
+      assert.equal(summary.files, 1);
+    } finally {
+      rmSync(world.root, { recursive: true, force: true });
+    }
+  });
+
+  it("drops a cached manifest before a restore, and keeps one it is given", async () => {
+    const world = restoreWorld();
+    try {
+      world.add("a.txt", "a");
+      const { summary } = await world.download();
+      assert.equal(world.calls.filter((call) => call[0] === "loadManifest").length, 1);
+      assert.equal(world.manifestStore.manifest, undefined);
+      assert.equal(summary.manifestEntries, 1);
+      const given = restoreWorld();
+      try {
+        given.add("b.txt", "bb");
+        const provided = await given.download({ manifest: new Map([["b.txt", { kind: "file", sha: createHash("sha256").update(new TextEncoder().encode("bb")).digest("hex"), size: 2 }]]) });
+        assert.equal(given.calls.filter((call) => call[0] === "loadManifest").length, 0);
+        assert.equal(provided.summary.files, 1);
+      } finally {
+        rmSync(given.root, { recursive: true, force: true });
+      }
+    } finally {
+      rmSync(world.root, { recursive: true, force: true });
+    }
+  });
+
+  it("counts a failed blob as a failure for each of its paths", async () => {
+    const failing = restoreWorld({ getThrows: true });
+    try {
+      failing.add("a.txt", "alpha");
+      failing.add("b.txt", "beta");
+      const { summary } = await failing.download();
+      assert.deepEqual(summary.failures.sort(), ["a.txt: download failed", "b.txt: download failed"]);
+      assert.equal(summary.files, 0);
+    } finally {
+      rmSync(failing.root, { recursive: true, force: true });
+    }
+    const missing = restoreWorld();
+    try {
+      missing.manifest.set("gone.txt", { kind: "file", sha: "gone", size: 3 });
+      const bytes = new TextEncoder().encode("good");
+      const sha = createHash("sha256").update(bytes).digest("hex");
+      missing.manifest.set("bad-size.txt", { kind: "file", sha, size: 3 });
+      missing.blobs.set(sha, bytes);
+      const { summary } = await missing.download();
+      assert.deepEqual(summary.failures.sort(), ["bad-size.txt: sha/size mismatch", "gone.txt: blob gone missing"]);
+    } finally {
+      rmSync(missing.root, { recursive: true, force: true });
+    }
+  });
+
+  it("streams a large blob once and copies it to its other paths", async () => {
+    const world = restoreWorld({ threshold: 8 });
+    try {
+      const text = "a".repeat(32);
+      world.add("one.bin", text);
+      world.add("two.bin", text);
+      const { summary, tree } = await world.download();
+      assert.equal(summary.files, 2);
+      assert.equal(summary.verified, 2);
+      assert.equal(world.calls.filter((call) => call[0] === "getToFile").length, 1);
+      assert.equal(world.calls.filter((call) => call[0] === "get").length, 0);
+      assert.equal(tree.filter((entry) => entry.startsWith("one.bin =") || entry.startsWith("two.bin =")).length, 2);
+    } finally {
+      rmSync(world.root, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses a large blob it cannot fit or cannot read", async () => {
+    const noSpace = restoreWorld({ threshold: 8, diskSpace: false });
+    try {
+      noSpace.add("big.bin", "a".repeat(32));
+      const { summary } = await noSpace.download();
+      assert.deepEqual(summary.failures, ["big.bin: insufficient disk space for a 32B restore (x2 required)"]);
+      assert.equal(noSpace.calls.some((call) => call[0] === "getToFile"), false);
+    } finally {
+      rmSync(noSpace.root, { recursive: true, force: true });
+    }
+    const corrupt = restoreWorld({ threshold: 8, corruptStream: true });
+    try {
+      corrupt.add("big.bin", "a".repeat(32));
+      const { summary } = await corrupt.download();
+      assert.deepEqual(summary.failures, ["big.bin: sha/size mismatch"]);
+    } finally {
+      rmSync(corrupt.root, { recursive: true, force: true });
+    }
+    const missing = restoreWorld({ threshold: 8 });
+    try {
+      missing.manifest.set("gone.bin", { kind: "file", sha: "gone", size: 32 });
+      const { summary } = await missing.download();
+      assert.deepEqual(summary.failures, ["gone.bin: blob gone missing"]);
+    } finally {
+      rmSync(missing.root, { recursive: true, force: true });
+    }
+    const throwing = restoreWorld({ threshold: 8, getToFileThrows: true });
+    try {
+      throwing.add("big.bin", "a".repeat(32));
+      const { summary } = await throwing.download();
+      assert.deepEqual(summary.failures, ["big.bin: stream failed"]);
+    } finally {
+      rmSync(throwing.root, { recursive: true, force: true });
+    }
+  });
+
+  it("verifies a file that is already in place and refreshes its mode", async () => {
+    const world = restoreWorld();
+    try {
+      world.add("same.txt", "same", 0o644);
+      writeFileSync(join(world.target, "same.txt"), "same", { mode: 0o600 });
+      const { summary, tree } = await world.download();
+      assert.equal(summary.verified, 1);
+      assert.equal(world.calls.filter((call) => call[0] === "get").length, 0);
+      assert.equal(tree.includes("same.txt = same @ 420"), true);
+    } finally {
+      rmSync(world.root, { recursive: true, force: true });
+    }
+  });
+
+  it("lets a pack carry the bulk and restores what it left", async () => {
+    const world = restoreWorld({ packRestored: true });
+    try {
+      world.add("bulk/a.txt", "bulk-a");
+      world.add("bulk/b.txt", "bulk-b");
+      const { summary } = await world.download();
+      assert.equal(world.calls.some((call) => call[0] === "packRestore"), true);
+      assert.equal(summary.files, 2);
+      assert.equal(summary.verified, 2);
+    } finally {
+      rmSync(world.root, { recursive: true, force: true });
+    }
+  });
+
+  it("falls back when a read prefetch fails", async () => {
+    const world = restoreWorld({ prefetchThrows: true });
+    try {
+      world.add("bulk/a.txt", "bulk-a");
+      const { summary } = await world.download();
+      assert.equal(summary.files, 1);
+      assert.equal(world.logs.some((line) => line.includes("read prefetch failed")), true);
+    } finally {
+      rmSync(world.root, { recursive: true, force: true });
+    }
+  });
+
+  it("matches, recreates and refuses symlinks, tracing each step", async () => {
+    const world = restoreWorld();
+    try {
+      world.add("dir/file.txt", "target");
+      world.addLink("dir/good-link", "file.txt");
+      world.addLink("dir/wrong-link", "other.txt");
+      world.addLink("dir/escape-link", "../../outside");
+      mkdirSync(join(world.target, "dir"), { recursive: true });
+      writeFileSync(join(world.target, "dir", "file.txt"), "target");
+      symlinkSync("file.txt", join(world.target, "dir", "good-link"));
+      const { summary, tree } = await world.download();
+      assert.deepEqual(summary.failures, ["dir/escape-link: unsafe symlink target"]);
+      assert.equal(tree.includes("dir/good-link -> file.txt"), true);
+      assert.equal(tree.includes("dir/wrong-link -> other.txt"), true);
+      const steps = world.traces.filter((trace) => trace.event === "symlink-step-started").map((trace) => trace.symlinkStep);
+      for (const step of ["prepare-parent", "match-existing", "apply-owner", "verify-target", "create-temp", "rename-temp", "cleanup-temp"]) {
+        assert.equal(steps.includes(step), true);
+      }
+      assert.equal(world.traces.at(-1)?.event, "symlink-phase-finished");
+      const firstLinkSteps = world.traces.filter((trace) => trace.symlinkOrdinal === 1 && trace.event === "symlink-step-started").map((trace) => trace.symlinkStep);
+      assert.equal(firstLinkSteps.includes("match-existing"), true);
+      assert.equal(firstLinkSteps.includes("create-temp"), false);
+    } finally {
+      rmSync(world.root, { recursive: true, force: true });
+    }
+  });
+
+  it("applies the owner the restore was given", async () => {
+    const world = restoreWorld();
+    try {
+      world.add("owner.txt", "owner");
+      const chowns: unknown[][] = [];
+      const { summary } = await world.download({ uid: 7, gid: 9, chown: async (path: string, uid: number, gid: number) => { chowns.push([path.replaceAll(world.root, "<root>"), uid, gid]); } });
+      assert.equal(summary.files, 1);
+      assert.equal(chowns.length >= 1, true);
+      assert.deepEqual(chowns.at(-1)?.slice(1), [7, 9]);
+    } finally {
+      rmSync(world.root, { recursive: true, force: true });
+    }
+  });
+
+  it("replaces what is in the way and refuses a root that is not a directory", async () => {
+    const world = restoreWorld();
+    try {
+      world.add("blocked.txt", "blocked");
+      mkdirSync(join(world.target, "blocked.txt"), { recursive: true });
+      writeFileSync(join(world.target, "blocked.txt", "inside"), "x");
+      const { tree } = await world.download();
+      assert.equal(tree.includes("blocked.txt = blocked @ 420"), true);
+    } finally {
+      rmSync(world.root, { recursive: true, force: true });
+    }
+    const bad = restoreWorld();
+    try {
+      bad.add("a.txt", "a");
+      rmSync(bad.target, { recursive: true, force: true });
+      writeFileSync(bad.target, "not a directory");
+      const { summary } = await bad.download();
+      assert.equal(summary.failures.length, 1);
+      assert.match(String(summary.failures[0]), /restore target root is not a directory/);
+    } finally {
+      rmSync(bad.root, { recursive: true, force: true });
+    }
+  });
+
+  it("records a file whose metadata could not be applied, and cleans its temporary", async () => {
+    const world = restoreWorld({ chownThrows: true });
+    try {
+      world.add("a.txt", "a");
+      const throwing = restoreWorld();
+      try {
+        throwing.add("a.txt", "a");
+        const { summary } = await throwing.download({ uid: 1, gid: 1, chown: async () => { throw new Error("chown failed"); } });
+        assert.equal(summary.files, 0);
+        assert.equal(summary.failures.length, 1);
+        assert.match(String(summary.failures[0]), /chown failed/);
+        assert.equal(throwing.calls.filter((call) => call[0] === "discardTemp").length >= 1, true);
+      } finally {
+        rmSync(throwing.root, { recursive: true, force: true });
+      }
+    } finally {
+      rmSync(world.root, { recursive: true, force: true });
+    }
+  });
+});
+
+
+describe("restoring a box's store, at its edges", () => {
+  it("refuses to hash a directory or to overwrite a copy destination", async () => {
+    const root = mkdtempSync(join(tmpdir(), "slate-hash-edges-"));
+    try {
+      mkdirSync(join(root, "dir"));
+      await assert.rejects(() => sha256File(join(root, "dir")), /hash source is not a regular file/);
+      writeFileSync(join(root, "source"), "bytes");
+      const destination = join(root, "destination");
+      await copyFileHashing(join(root, "source"), destination);
+      await assert.rejects(() => copyFileHashing(join(root, "source"), destination), /EEXIST/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("makes a directory where a file was in the way", async () => {
+    const world = restoreWorld();
+    try {
+      world.add("dir/a.txt", "inside");
+      writeFileSync(join(world.target, "dir"), "a file where a directory is needed");
+      const { summary, tree } = await world.download();
+      assert.deepEqual(summary.failures, []);
+      assert.equal(tree.includes("dir/a.txt = inside @ 420"), true);
+    } finally {
+      rmSync(world.root, { recursive: true, force: true });
+    }
+  });
+
+  it("restores the critical files before the bulk a pack carries", async () => {
+    const world = restoreWorld();
+    try {
+      world.add("store.db", "database");
+      world.add("other.txt", "other");
+      const { summary } = await world.download();
+      assert.equal(summary.files, 2);
+      const firstGet = world.calls.findIndex((call) => call[0] === "get");
+      const packRestore = world.calls.findIndex((call) => call[0] === "packRestore");
+      assert.equal(firstGet !== -1 && packRestore !== -1 && firstGet < packRestore, true);
+    } finally {
+      rmSync(world.root, { recursive: true, force: true });
+    }
+  });
+});
+
