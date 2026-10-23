@@ -1,354 +1,309 @@
 /**
  * What background work a session is running, and what it owes the conversation when that work finishes.
  *
- * Two things are kept here, and they are kept together because they are two views of the same work. One is
- * the work itself: what is running, what it belongs to, and how to stop it. The other is the queue of
- * wakeups — completions waiting to be handed to a conversation — because a completion that is pulled but
- * not yet acknowledged must not be pulled again, and one that is acknowledged must not come back.
+ * Two views of the same work live here. One is the work itself: what is running, what it belongs to and how to stop
+ * it. The other is the queue of wakeups — completions waiting to be handed to a conversation — because a completion
+ * that was pulled but not yet acknowledged must not be pulled again, and one that was acknowledged must not come back.
  *
- * The queue is careful about identity, because a wakeup that is delivered twice wakes a conversation twice.
- * A wakeup is accepted once per conversation and id; pulling moves it in flight; acknowledging forgets it;
- * negative-acknowledging either forgets it or puts it back, merged with whatever else is waiting for that
- * conversation. Suppression is the third state: work the session has decided not to be told about — it was
- * observed directly, or the user backgrounded it — is dropped on arrival, dropped if it is already waiting,
- * and dropped if it is in flight, while the suppression itself is remembered so a later arrival is dropped
- * too. Clearing a conversation forgets everything belonging to it.
+ * The queue is careful about identity, because a wakeup delivered twice wakes a conversation twice. A wakeup is
+ * accepted once per conversation and id; pulling moves it in flight; acknowledging forgets it; a refusal either
+ * forgets it or puts it back, merged with whatever else waits for that conversation. Suppression is the third state:
+ * work a conversation has decided not to be told about — it was observed directly, or the user backgrounded it — is
+ * dropped on arrival, dropped while it waits and dropped from flight, and the suppression itself is remembered so a
+ * later arrival is dropped too. Clearing a conversation forgets everything belonging to it.
  *
- * The registry on top exposes that queue in the shape the rest of the platform asks for: a completion is
- * enqueued under the legacy local conversation, drained as payloads, and marked awaited by suppressing it.
- * A revision counter increments whenever the queue changes, which is how a caller that polls can tell
- * whether anything happened without reading the queue itself.
+ * The registry on top exposes the queue in the shape the rest of the platform asks for: a completion is enqueued under
+ * the legacy local conversation, drained as payloads, and marked awaited by suppressing it. A revision counter moves
+ * whenever the queue changes, so a polling caller can tell whether anything happened without reading the queue.
  */
 
 import { mergeWakeup, type Wakeup } from "./wakeup/index.ts"
 
-interface BackgroundWorkRecord {
-  id: string
+/** One piece of background work: what it is, what it belongs to, and how to stop it. */
+interface WorkRecord {
   kind: string
+  id: string
   state: string
   ownerId?: string | undefined
   abort?: (() => void) | undefined
   metadata?: unknown
 }
 
-interface BackgroundWorkFilter {
+/** What a caller wants to select: a field left out means every value of it. */
+interface WorkSelection {
   kind?: string | undefined
-  state?: string | undefined
   ownerId?: string | undefined
+  state?: string | undefined
 }
 
-interface BackgroundWorkSnapshot {
+/** What a caller is told about one piece of work: enough to decide, without the way to stop it. */
+interface WorkListing {
   id: string
   kind: string
   state: string
   ownerId?: string | undefined
-  hasAbort: boolean
   metadata?: unknown
+  hasAbort: boolean
 }
 
-interface BackgroundCompletion {
+/** One completion, answered to the conversation that ran the work. */
+interface CompletionItem {
   taskId: string
   kind: string
   [key: string]: unknown
 }
 
-interface LocalWakeup extends Wakeup {
+/** A wakeup as the queue keeps it: the wakeup identity plus what the conversation is woken with. */
+interface QueuedWakeup extends Wakeup {
   payload: unknown
   source?: string | undefined
 }
 
-/** A filter names what to select; leaving a field out means every value of it. */
-function matchesFilter(record: BackgroundWorkRecord, filter: BackgroundWorkFilter | undefined): boolean {
-  if (!filter) {
-    return true
-  }
-  if (filter.kind && record.kind !== filter.kind) {
-    return false
-  }
-  if (filter.state && record.state !== filter.state) {
-    return false
-  }
-  if (filter.ownerId && record.ownerId !== filter.ownerId) {
-    return false
-  }
+/** Whether a record is what the caller selected; an empty selection matches every record. */
+function workMatches(record: WorkRecord, selection: WorkSelection | undefined): boolean {
+  if (selection === undefined) return true
+  if (selection.kind && record.kind !== selection.kind) return false
+  if (selection.state && record.state !== selection.state) return false
+  if (selection.ownerId && record.ownerId !== selection.ownerId) return false
   return true
 }
 
-class InMemoryLocalWakeupQueue {
-  private pending: LocalWakeup[] = []
-  private readonly inFlightById = new Map<string, LocalWakeup>()
-  private readonly acceptedKeys = new Set<string>()
-  private readonly suppressedIdsByConversation = new Map<string, Set<string>>()
-  private revision = 0
+/** The wakeup queue: what waits, what is in flight, what was already accepted and what a conversation suppressed. */
+class LocalWakeupQueue {
+  private waiting: QueuedWakeup[] = []
+  private readonly inFlight = new Map<string, QueuedWakeup>()
+  private readonly claimed = new Set<string>()
+  private readonly suppressed = new Map<string, Set<string>>()
+  private changes = 0
 
-  private acceptedKey(conversationId: string, id: string): string {
+  /** The key a conversation-and-id pair is claimed under, distinct even when ids contain separators. */
+  private keyFor(conversationId: string, id: string): string {
     return `${conversationId}\0${id}`
   }
 
-  enqueue(wakeup: LocalWakeup): void {
+  /** Whether this wakeup may be queued: it needs an id, an unclaimed id and no suppression on the conversation. */
+  private accepts(conversationId: string, id: string): boolean {
+    if (id.length === 0 || this.claimed.has(this.keyFor(conversationId, id))) return false
+    return this.suppressed.get(conversationId)?.has(id) !== true
+  }
+
+  /** Put a wakeup into waiting, releasing the claim of whatever it replaced. */
+  private put(wakeup: QueuedWakeup): void {
+    const { queue, replaced } = mergeWakeup(this.waiting, wakeup)
+    this.waiting = queue
+    if (replaced) this.claimed.delete(this.keyFor(replaced.conversationId, replaced.id))
+  }
+
+  enqueue(wakeup: QueuedWakeup): void {
     const id = wakeup.id.trim()
-    const key = this.acceptedKey(wakeup.conversationId, id)
-    // A wakeup with no id, one already accepted, or one the conversation has suppressed is not queued.
-    if (id.length === 0 || this.acceptedKeys.has(key)) {
-      return
-    }
-    if (this.suppressedIdsByConversation.get(wakeup.conversationId)?.has(id)) {
-      return
-    }
-    this.acceptedKeys.add(key)
-    const { queue, replaced } = mergeWakeup(this.pending, { ...wakeup, id })
-    this.pending = queue
-    // What was replaced is no longer waiting, so its own claim on the id is released with it.
-    if (replaced) {
-      this.acceptedKeys.delete(this.acceptedKey(replaced.conversationId, replaced.id))
-    }
-    this.revision++
+    if (!this.accepts(wakeup.conversationId, id)) return
+    this.claimed.add(this.keyFor(wakeup.conversationId, id))
+    this.put({ ...wakeup, id })
+    this.changes++
   }
 
-  pull(conversationId: string): LocalWakeup[] {
-    const suppressed = this.suppressedIdsByConversation.get(conversationId)
-    const pulled: LocalWakeup[] = []
-    const rest: LocalWakeup[] = []
-    let dropped = 0
-    for (const wakeup of this.pending) {
+  /** Hand over this conversation's waiting wakeups, dropping the suppressed ones on the way. */
+  pull(conversationId: string): QueuedWakeup[] {
+    const suppressedHere = this.suppressed.get(conversationId)
+    const taken: QueuedWakeup[] = []
+    const remaining: QueuedWakeup[] = []
+    for (const wakeup of this.waiting) {
       if (wakeup.conversationId !== conversationId) {
-        rest.push(wakeup)
+        remaining.push(wakeup)
         continue
       }
-      // A suppressed wakeup is dropped where it waits rather than handed over.
-      if (suppressed?.has(wakeup.id)) {
-        this.acceptedKeys.delete(this.acceptedKey(conversationId, wakeup.id))
-        dropped++
+      if (suppressedHere?.has(wakeup.id)) {
+        this.claimed.delete(this.keyFor(conversationId, wakeup.id))
         continue
       }
-      pulled.push(wakeup)
-      this.inFlightById.set(wakeup.id, wakeup)
+      taken.push(wakeup)
+      this.inFlight.set(wakeup.id, wakeup)
     }
-    if (pulled.length > 0 || dropped > 0) {
-      this.pending = rest
-      this.revision++
+    const waitingChanged = taken.length > 0 || remaining.length !== this.waiting.length
+    if (waitingChanged) {
+      this.waiting = remaining
+      this.changes++
     }
-    return pulled.map((wakeup) => ({ ...wakeup }))
+    return taken.map(wakeup => ({ ...wakeup }))
   }
 
-  /** Every conversation's waiting wakeups, which is how the completion drain works. */
-  pullAll(): LocalWakeup[] {
-    const conversationIds = [
-      ...new Set(this.pending.map((wakeup) => wakeup.conversationId)),
-    ]
-    return conversationIds.flatMap((conversationId) => this.pull(conversationId))
+  /** Every conversation's waiting wakeups, in the order the conversations first appear. */
+  pullAll(): QueuedWakeup[] {
+    const conversationIds = [...new Set(this.waiting.map(wakeup => wakeup.conversationId))]
+    const taken: QueuedWakeup[] = []
+    for (const conversationId of conversationIds) taken.push(...this.pull(conversationId))
+    return taken
   }
 
-  ack(ids: readonly string[]): LocalWakeup[] {
-    const acked: LocalWakeup[] = []
-    for (const id of ids) {
-      const normalizedId = id.trim()
-      const wakeup = this.inFlightById.get(normalizedId)
+  /** Acknowledge the ids that are in flight, answering the wakeups that were actually there. */
+  ack(ids: readonly string[]): QueuedWakeup[] {
+    const acknowledged: QueuedWakeup[] = []
+    for (const rawId of ids) {
+      const id = rawId.trim()
+      const wakeup = this.inFlight.get(id)
       if (wakeup) {
-        this.acceptedKeys.delete(this.acceptedKey(wakeup.conversationId, normalizedId))
-        acked.push(wakeup)
+        this.claimed.delete(this.keyFor(wakeup.conversationId, id))
+        acknowledged.push(wakeup)
       }
-      this.inFlightById.delete(normalizedId)
+      this.inFlight.delete(id)
     }
-    return acked
+    return acknowledged
   }
 
-  /** A requeued wakeup goes back where it came from, and an id that is not in flight is left alone. */
+  /** Refuse ids in flight: forget them outright, or put them back merged with what is still waiting. */
   nack(ids: readonly string[], opts: { requeue: boolean }): void {
-    const requestedIds = new Set(ids.map((id) => id.trim()))
-    const selected: LocalWakeup[] = []
-    for (const [id, wakeup] of this.inFlightById) {
-      if (!requestedIds.has(id)) {
-        continue
-      }
-      selected.push(wakeup)
-      this.inFlightById.delete(id)
+    const wanted = new Set(ids.map(id => id.trim()))
+    const refused: QueuedWakeup[] = []
+    for (const [id, wakeup] of this.inFlight) {
+      if (!wanted.has(id)) continue
+      refused.push(wakeup)
+      this.inFlight.delete(id)
     }
     if (!opts.requeue) {
-      for (const wakeup of selected) {
-        this.acceptedKeys.delete(this.acceptedKey(wakeup.conversationId, wakeup.id))
-      }
+      for (const wakeup of refused) this.claimed.delete(this.keyFor(wakeup.conversationId, wakeup.id))
       return
     }
-    if (selected.length === 0) {
-      return
-    }
-    let requeued = selected
-    for (const pendingWakeup of this.pending) {
-      const { queue, replaced } = mergeWakeup(requeued, pendingWakeup)
+    if (refused.length === 0) return
+    let requeued = refused
+    for (const waiting of this.waiting) {
+      const { queue, replaced } = mergeWakeup(requeued, waiting)
       requeued = queue
-      if (replaced) {
-        this.acceptedKeys.delete(this.acceptedKey(replaced.conversationId, replaced.id))
-      }
+      if (replaced) this.claimed.delete(this.keyFor(replaced.conversationId, replaced.id))
     }
-    this.pending = requeued
-    this.revision++
+    this.waiting = requeued
+    this.changes++
   }
 
+  /** Remember a suppression, and drop the wakeup it names from waiting and from flight. */
   suppress(conversationId: string, id: string): void {
     const normalizedId = id.trim()
-    if (normalizedId.length === 0) {
-      return
-    }
-    const suppressed = this.suppressedIdsByConversation.get(conversationId) ?? new Set<string>()
-    suppressed.add(normalizedId)
-    this.suppressedIdsByConversation.set(conversationId, suppressed)
+    if (normalizedId.length === 0) return
+    const suppressedHere = this.suppressed.get(conversationId) ?? new Set<string>()
+    suppressedHere.add(normalizedId)
+    this.suppressed.set(conversationId, suppressedHere)
     let changed = false
-    const previousLength = this.pending.length
-    this.pending = this.pending.filter(
-      (wakeup) => wakeup.conversationId !== conversationId || wakeup.id !== normalizedId,
-    )
-    if (this.pending.length !== previousLength) {
-      this.acceptedKeys.delete(this.acceptedKey(conversationId, normalizedId))
+    const beforeFiltering = this.waiting.length
+    this.waiting = this.waiting.filter(wakeup => wakeup.conversationId !== conversationId || wakeup.id !== normalizedId)
+    if (this.waiting.length !== beforeFiltering) {
+      this.claimed.delete(this.keyFor(conversationId, normalizedId))
       changed = true
     }
-    // A suppressed wakeup that is already in flight is dropped from there too, since the caller that holds
-    // it will not be told about it.
-    const inFlight = this.inFlightById.get(normalizedId)
+    const inFlight = this.inFlight.get(normalizedId)
     if (inFlight && inFlight.conversationId === conversationId) {
-      this.inFlightById.delete(normalizedId)
-      this.acceptedKeys.delete(this.acceptedKey(conversationId, normalizedId))
+      this.inFlight.delete(normalizedId)
+      this.claimed.delete(this.keyFor(conversationId, normalizedId))
       changed = true
     }
-    if (changed) {
-      this.revision++
-    }
+    if (changed) this.changes++
   }
 
   unsuppress(conversationId: string, id: string): void {
-    const suppressed = this.suppressedIdsByConversation.get(conversationId)
-    if (!suppressed?.delete(id.trim())) {
-      return
-    }
-    if (suppressed.size === 0) {
-      this.suppressedIdsByConversation.delete(conversationId)
-    }
+    const suppressedHere = this.suppressed.get(conversationId)
+    if (!suppressedHere?.delete(id.trim())) return
+    if (suppressedHere.size === 0) this.suppressed.delete(conversationId)
   }
 
-  /** Work that ended everywhere is unsuppressed everywhere, since its id is no longer meaningful. */
+  /** Work that ended everywhere is unsuppressed everywhere: its id no longer means anything. */
   unsuppressId(id: string): void {
     const normalizedId = id.trim()
-    for (const conversationId of this.suppressedIdsByConversation.keys()) {
-      this.unsuppress(conversationId, normalizedId)
-    }
+    for (const conversationId of this.suppressed.keys()) this.unsuppress(conversationId, normalizedId)
   }
 
+  /** Forget everything a conversation was waiting for, was holding, had claimed or had suppressed. */
   clear(conversationId: string): void {
     let changed = false
-    const previousPendingLength = this.pending.length
-    this.pending = this.pending.filter((wakeup) => wakeup.conversationId !== conversationId)
-    if (this.pending.length !== previousPendingLength) {
-      changed = true
-    }
-    for (const [id, wakeup] of this.inFlightById) {
+    const beforeFiltering = this.waiting.length
+    this.waiting = this.waiting.filter(wakeup => wakeup.conversationId !== conversationId)
+    if (this.waiting.length !== beforeFiltering) changed = true
+    for (const [id, wakeup] of this.inFlight) {
       if (wakeup.conversationId === conversationId) {
-        this.inFlightById.delete(id)
+        this.inFlight.delete(id)
         changed = true
       }
     }
-    // The accepted keys are prefixed by the conversation, so they are found without walking the queue.
-    const keyPrefix = this.acceptedKey(conversationId, "")
-    for (const key of this.acceptedKeys) {
+    const keyPrefix = this.keyFor(conversationId, "")
+    for (const key of this.claimed) {
       if (key.startsWith(keyPrefix)) {
-        this.acceptedKeys.delete(key)
+        this.claimed.delete(key)
         changed = true
       }
     }
-    const hadSuppressed = this.suppressedIdsByConversation.delete(conversationId)
-    if (changed || hadSuppressed) {
-      this.revision++
-    }
+    const hadSuppression = this.suppressed.delete(conversationId)
+    if (changed || hadSuppression) this.changes++
   }
 
   hasPending(conversationId?: string): boolean {
-    return conversationId === undefined
-      ? this.pending.length > 0
-      : this.pending.some((wakeup) => wakeup.conversationId === conversationId)
+    if (conversationId === undefined) return this.waiting.length > 0
+    return this.waiting.some(wakeup => wakeup.conversationId === conversationId)
   }
 
   hasPendingMatching(conversationId: string, predicate: (payload: unknown) => boolean): boolean {
-    return this.pending.some(
-      (wakeup) => wakeup.conversationId === conversationId && predicate(wakeup.payload),
-    )
+    return this.waiting.some(wakeup => wakeup.conversationId === conversationId && predicate(wakeup.payload))
   }
 
   getPendingCount(): number {
-    return this.pending.length
+    return this.waiting.length
   }
 
   getRevision(): number {
-    return this.revision
+    return this.changes
   }
 }
 
 /** Completions that predate per-conversation wakeups all belong to this conversation. */
 export const LEGACY_LOCAL_WAKEUP_CONVERSATION_ID = "local"
 
+/** What background work a session is running: the work, and the wakeups it owes the conversation. */
 export class InMemoryBackgroundWorkRegistry {
-  private readonly records = new Map<string, BackgroundWorkRecord>()
-  private readonly wakeups = new InMemoryLocalWakeupQueue()
+  private readonly work = new Map<string, WorkRecord>()
+  private readonly wakeups = new LocalWakeupQueue()
 
-  upsertWork(record: BackgroundWorkRecord): void {
-    this.records.set(record.id, record)
+  upsertWork(record: WorkRecord): void {
+    this.work.set(record.id, record)
   }
 
   clearWork(id: string): boolean {
-    const deleted = this.records.delete(id)
-    // Work that is over is no longer suppressed: its id means nothing once it is gone.
+    const deleted = this.work.delete(id)
     this.wakeups.unsuppressId(id)
     return deleted
   }
 
   abortWork(id: string): boolean {
-    const record = this.records.get(id)
-    if (!record) {
-      return false
-    }
-    if (record.abort) {
-      record.abort()
-    }
-    this.records.delete(id)
+    const record = this.work.get(id)
+    if (!record) return false
+    if (record.abort) record.abort()
+    this.work.delete(id)
     this.wakeups.unsuppressId(id)
     return true
   }
 
-  hasRunningWork(filter?: BackgroundWorkFilter): boolean {
-    for (const record of this.records.values()) {
-      if (record.state !== "running") {
-        continue
-      }
-      if (matchesFilter(record, filter)) {
-        return true
-      }
+  hasRunningWork(selection?: WorkSelection): boolean {
+    for (const record of this.work.values()) {
+      if (record.state !== "running") continue
+      if (workMatches(record, selection)) return true
     }
     return false
   }
 
-  /** Every matching record is aborted, and the count is what was stopped. */
-  abortAllWork(filter?: BackgroundWorkFilter): number {
-    let aborted = 0
-    for (const record of [...this.records.values()]) {
-      if (!matchesFilter(record, filter)) {
-        continue
-      }
-      if (record.abort) {
-        record.abort()
-      }
-      aborted++
-      this.records.delete(record.id)
+  /** Every matching record is stopped, and the answer is how many were. */
+  abortAllWork(selection?: WorkSelection): number {
+    let stopped = 0
+    for (const record of [...this.work.values()]) {
+      if (!workMatches(record, selection)) continue
+      if (record.abort) record.abort()
+      stopped++
+      this.work.delete(record.id)
       this.wakeups.unsuppressId(record.id)
     }
-    return aborted
+    return stopped
   }
 
-  /** A snapshot says whether work can be stopped, without handing over the way to stop it. */
-  listWork(filter?: BackgroundWorkFilter): BackgroundWorkSnapshot[] {
-    const snapshots: BackgroundWorkSnapshot[] = []
-    for (const record of this.records.values()) {
-      if (!matchesFilter(record, filter)) {
-        continue
-      }
-      snapshots.push({
+  /** What a caller is told about one record: enough to decide, without the way to stop it. */
+  listWork(selection?: WorkSelection): WorkListing[] {
+    const listings: WorkListing[] = []
+    for (const record of this.work.values()) {
+      if (!workMatches(record, selection)) continue
+      listings.push({
         id: record.id,
         kind: record.kind,
         state: record.state,
@@ -357,18 +312,18 @@ export class InMemoryBackgroundWorkRegistry {
         metadata: record.metadata,
       })
     }
-    return snapshots
+    return listings
   }
 
-  enqueue(wakeup: LocalWakeup): void {
+  enqueue(wakeup: QueuedWakeup): void {
     this.wakeups.enqueue(wakeup)
   }
 
-  pull(conversationId: string): LocalWakeup[] {
+  pull(conversationId: string): QueuedWakeup[] {
     return this.wakeups.pull(conversationId)
   }
 
-  ack(ids: readonly string[]): LocalWakeup[] {
+  ack(ids: readonly string[]): QueuedWakeup[] {
     return this.wakeups.ack(ids)
   }
 
@@ -380,7 +335,7 @@ export class InMemoryBackgroundWorkRegistry {
     this.wakeups.suppress(conversationId, id)
   }
 
-  enqueueCompletion(item: BackgroundCompletion): void {
+  enqueueCompletion(item: CompletionItem): void {
     this.enqueue({
       conversationId: LEGACY_LOCAL_WAKEUP_CONVERSATION_ID,
       id: item.taskId,
@@ -389,18 +344,18 @@ export class InMemoryBackgroundWorkRegistry {
     })
   }
 
-  /** Everything waiting, handed over as payloads: what is drained is acknowledged in the same breath. */
+  /** Hand over everything waiting as payloads; what is drained is acknowledged in the same breath. */
   drainCompletions(): unknown[] {
-    const wakeups = this.wakeups.pullAll()
-    this.ack(wakeups.map((wakeup) => wakeup.id))
-    return wakeups.map((wakeup) => wakeup.payload)
+    const drained = this.wakeups.pullAll()
+    this.ack(drained.map(wakeup => wakeup.id))
+    return drained.map(wakeup => wakeup.payload)
   }
 
   hasPendingCompletions(conversationId?: string): boolean {
     return this.wakeups.hasPending(conversationId)
   }
 
-  /** Marking a completion awaited is suppressing it: the model saw it directly, so it must not be woken. */
+  /** Marking a completion awaited is suppressing it: the model saw it, so it must not wake the conversation. */
   markAwaitedCompletion(taskId: string): void {
     this.suppress(LEGACY_LOCAL_WAKEUP_CONVERSATION_ID, taskId)
   }

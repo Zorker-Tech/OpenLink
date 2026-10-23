@@ -163,6 +163,14 @@ test("a completion that is awaited after being queued is dropped", () => {
   assert.deepEqual(registry.drainCompletions(), [{ taskId: "task-2", kind: "shell" }])
 })
 
+test("awaiting a queued completion takes it out of pending", () => {
+  const registry = new InMemoryBackgroundWorkRegistry()
+  registry.enqueueCompletion({ taskId: "task-1", kind: "shell" })
+  registry.markAwaitedCompletion("task-1")
+  assert.equal(registry.hasPendingCompletions(LEGACY_LOCAL_WAKEUP_CONVERSATION_ID), false)
+  assert.deepEqual(registry.drainCompletions(), [])
+})
+
 test("work that is over is no longer suppressed", () => {
   const registry = new InMemoryBackgroundWorkRegistry()
   registry.markAwaitedCompletion("task-1")
@@ -272,6 +280,65 @@ test("the revision moves when the queue does and not when it does not", () => {
   // Pulling again changes nothing, since there is nothing left to pull.
   registry.pull("conversation-1")
   assert.equal(registry.getWakeupRevision(), start + 2)
+})
+
+test("a wakeup replaced by its group releases its claim, so the old id can queue again", () => {
+  const registry = new InMemoryBackgroundWorkRegistry()
+  registry.enqueue({ conversationId: "conversation-1", id: "task-1", groupKey: "progress", payload: {} })
+  registry.enqueue({ conversationId: "conversation-1", id: "task-2", groupKey: "progress", payload: {} })
+  registry.enqueue({ conversationId: "conversation-1", id: "task-1", payload: {} })
+  assert.deepEqual(registry.pull("conversation-1").map(wakeup => wakeup.id), ["task-2", "task-1"])
+})
+
+test("a refused wakeup is merged back with what is waiting for its group", () => {
+  const registry = new InMemoryBackgroundWorkRegistry()
+  registry.enqueue({ conversationId: "conversation-1", id: "task-1", groupKey: "progress", payload: {} })
+  registry.pull("conversation-1")
+  registry.enqueue({ conversationId: "conversation-1", id: "task-2", groupKey: "progress", payload: {} })
+  registry.nack(["task-1"], { requeue: true })
+  assert.deepEqual(registry.pull("conversation-1").map(wakeup => wakeup.id), ["task-2"])
+  // The replaced wakeup released its claim too, so a later report of it is queued again.
+  registry.enqueue({ conversationId: "conversation-1", id: "task-1", payload: {} })
+  assert.deepEqual(registry.pull("conversation-1").map(wakeup => wakeup.id), ["task-1"])
+})
+
+test("a drain hands conversations over in the order they first appear", () => {
+  const registry = new InMemoryBackgroundWorkRegistry()
+  registry.enqueue({ conversationId: "conversation-2", id: "b-1", payload: "b-1" })
+  registry.enqueue({ conversationId: "conversation-1", id: "a-1", payload: "a-1" })
+  registry.enqueue({ conversationId: "conversation-2", id: "b-2", payload: "b-2" })
+  assert.deepEqual(registry.drainCompletions(), ["b-1", "b-2", "a-1"])
+})
+
+test("ids are trimmed for claiming, acknowledging and suppressing", () => {
+  const registry = new InMemoryBackgroundWorkRegistry()
+  registry.enqueue({ conversationId: "conversation-1", id: "  task-1  ", payload: { attempt: 1 } })
+  registry.enqueue({ conversationId: "conversation-1", id: "task-1", payload: { attempt: 2 } })
+  assert.deepEqual(registry.pull("conversation-1").map(wakeup => wakeup.id), ["task-1"])
+  assert.deepEqual(registry.ack([" task-1 "]).map(wakeup => wakeup.id), ["task-1"])
+  registry.enqueue({ conversationId: "conversation-1", id: "task-1", payload: { attempt: 3 } })
+  assert.equal(registry.pull("conversation-1").length, 1, "an acknowledged id can be queued again")
+})
+
+test("an in-flight wakeup's id cannot be queued again until it is acknowledged", () => {
+  const registry = new InMemoryBackgroundWorkRegistry()
+  registry.enqueue({ conversationId: "conversation-1", id: "task-1", payload: { attempt: 1 } })
+  registry.pull("conversation-1")
+  registry.enqueue({ conversationId: "conversation-1", id: "task-1", payload: { attempt: 2 } })
+  assert.deepEqual(registry.pull("conversation-1"), [], "the id is still claimed by the wakeup in flight")
+  registry.ack(["task-1"])
+  registry.enqueue({ conversationId: "conversation-1", id: "task-1", payload: { attempt: 3 } })
+  assert.equal(registry.pull("conversation-1").length, 1, "acknowledging releases the id for a later report")
+})
+
+test("a suppressed wakeup leaves flight too, so it is never acknowledged", () => {
+  const registry = new InMemoryBackgroundWorkRegistry()
+  registry.enqueue({ conversationId: "conversation-1", id: "task-1", payload: {} })
+  registry.pull("conversation-1")
+  registry.suppress("conversation-1", "task-1")
+  assert.deepEqual(registry.ack(["task-1"]), [])
+  registry.nack(["task-1"], { requeue: true })
+  assert.deepEqual(registry.pull("conversation-1"), [])
 })
 
 test("the legacy conversation is the one completions belong to", () => {
