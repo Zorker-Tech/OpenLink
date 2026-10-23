@@ -24,154 +24,154 @@ interface AgentStoreWorkerRequest {
   readonly legacyBlobDbPath?: string;
 }
 
-function post(message: object, transfer: ArrayBuffer[] = []): void {
-  parentPort?.postMessage(message, transfer);
+function emit(payload: object, transfers: ArrayBuffer[] = []): void {
+  parentPort?.postMessage(payload, transfers);
 }
 
 export function runAgentStoreWorker(): void {
-  const port = parentPort;
-  if (port == null) {
+  const workerPort = parentPort;
+  if (workerPort == null) {
     throw new Error("agent-store-worker must run as a worker_thread");
   }
 
-  const boot = workerData as AgentStoreWorkerBoot;
-  let store: ConversationBlobStoreDb;
+  const workerConfig = workerData as AgentStoreWorkerBoot;
+  let blobStore: ConversationBlobStoreDb;
   try {
-    store = new ConversationBlobStoreDb({
-      agentId: boot.agentId,
-      blobDbPath: boot.blobDbPath,
-      busyTimeoutMs: boot.busyTimeoutMs ?? 5_000,
-      ...(boot.legacyBlobDbPath == null
+    blobStore = new ConversationBlobStoreDb({
+      agentId: workerConfig.agentId,
+      blobDbPath: workerConfig.blobDbPath,
+      busyTimeoutMs: workerConfig.busyTimeoutMs ?? 5_000,
+      ...(workerConfig.legacyBlobDbPath == null
         ? {}
-        : { legacyBlobDbPath: boot.legacyBlobDbPath })
+        : { legacyBlobDbPath: workerConfig.legacyBlobDbPath })
     });
-  } catch (error) {
-    const code = error instanceof ConversationBlobRecoveryError
-      ? error.code
-      : typeof error === "object" &&
-          error !== null &&
-          "code" in error &&
-          typeof error.code === "string"
-        ? error.code
+  } catch (cause) {
+    const failureCode = cause instanceof ConversationBlobRecoveryError
+      ? cause.code
+      : typeof cause === "object" &&
+          cause !== null &&
+          "code" in cause &&
+          typeof cause.code === "string"
+        ? cause.code
         : "error";
-    const detail = error instanceof ConversationBlobRecoveryError
-      ? ` detail=${error.message}`
+    const failureDetail = cause instanceof ConversationBlobRecoveryError
+      ? ` detail=${cause.message}`
       : "";
     console.error(
-      `[agent-store-worker] failed to open blob db: agent=${boot.agentId} code=${code}${detail}`
+      `[agent-store-worker] failed to open blob db: agent=${workerConfig.agentId} code=${failureCode}${failureDetail}`
     );
     process.exit(1);
     return;
   }
 
-  port.on("message", (request: AgentStoreWorkerRequest) => {
+  workerPort.on("message", (incomingRequest: AgentStoreWorkerRequest) => {
     try {
-      switch (request.kind) {
+      switch (incomingRequest.kind) {
         case "init": {
-          post({
+          emit({
             kind: "init-ok",
-            requestId: request.requestId,
+            requestId: incomingRequest.requestId,
             threadId,
             pid: process.pid
           });
           return;
         }
         case "set-blob": {
-          store.setBlob(request.blobId as Uint8Array, request.blobData as Uint8Array);
-          post({ kind: "set-blob-ok", requestId: request.requestId });
+          blobStore.setBlob(incomingRequest.blobId as Uint8Array, incomingRequest.blobData as Uint8Array);
+          emit({ kind: "set-blob-ok", requestId: incomingRequest.requestId });
           return;
         }
         case "get-blob": {
-          const blobData = store.getBlob(request.blobId as Uint8Array);
+          const blobData = blobStore.getBlob(incomingRequest.blobId as Uint8Array);
           if (blobData == null) {
-            post({
+            emit({
               kind: "get-blob-ok",
-              requestId: request.requestId,
+              requestId: incomingRequest.requestId,
               blobData: undefined
             });
             return;
           }
-          const copy = new Uint8Array(blobData.byteLength);
-          copy.set(blobData);
-          post(
+          const snapshot = new Uint8Array(blobData.byteLength);
+          snapshot.set(blobData);
+          emit(
             {
               kind: "get-blob-ok",
-              requestId: request.requestId,
-              blobData: copy
+              requestId: incomingRequest.requestId,
+              blobData: snapshot
             },
-            [copy.buffer]
+            [snapshot.buffer]
           );
           return;
         }
         case "find-latest-root": {
-          post({
+          emit({
             kind: "find-latest-root-ok",
-            requestId: request.requestId,
-            rootId: store.findLatestRootBlobId()
+            requestId: incomingRequest.requestId,
+            rootId: blobStore.findLatestRootBlobId()
           });
           return;
         }
         case "clear-blobs": {
-          store.clearBlobs();
-          post({ kind: "clear-blobs-ok", requestId: request.requestId });
+          blobStore.clearBlobs();
+          emit({ kind: "clear-blobs-ok", requestId: incomingRequest.requestId });
           return;
         }
         case "clear-stale-roots": {
-          post({
+          emit({
             kind: "clear-stale-roots-ok",
-            requestId: request.requestId,
-            deleted: store.clearStaleCheckpointRoots(
-              request.retainedRootIdHex as string
+            requestId: incomingRequest.requestId,
+            deleted: blobStore.clearStaleCheckpointRoots(
+              incomingRequest.retainedRootIdHex as string
             )
           });
           return;
         }
         case "collect-garbage": {
-          post({
+          emit({
             kind: "collect-garbage-ok",
-            requestId: request.requestId,
-            result: store.collectGarbage({
-              retainedRootIdHex: request.retainedRootIdHex as string,
-              pendingWriteRetentionMs: request.pendingWriteRetentionMs as number
+            requestId: incomingRequest.requestId,
+            result: blobStore.collectGarbage({
+              retainedRootIdHex: incomingRequest.retainedRootIdHex as string,
+              pendingWriteRetentionMs: incomingRequest.pendingWriteRetentionMs as number
             })
           });
           return;
         }
         case "verify-legacy-blob-retirement": {
-          post({
+          emit({
             kind: "verify-legacy-blob-retirement-ok",
-            requestId: request.requestId,
-            verdict: store.verifyLegacyBlobRetirement(
-              request.retainedRootIdHex as string,
-              request.legacyBlobDbPath as string
+            requestId: incomingRequest.requestId,
+            verdict: blobStore.verifyLegacyBlobRetirement(
+              incomingRequest.retainedRootIdHex as string,
+              incomingRequest.legacyBlobDbPath as string
             )
           });
           return;
         }
         case "flush": {
-          post({ kind: "flush-ok", requestId: request.requestId });
+          emit({ kind: "flush-ok", requestId: incomingRequest.requestId });
           return;
         }
         case "close": {
-          store.close();
-          post({ kind: "close-ok", requestId: request.requestId });
-          port.close();
+          blobStore.close();
+          emit({ kind: "close-ok", requestId: incomingRequest.requestId });
+          workerPort.close();
           return;
         }
       }
-    } catch (error) {
-      const code = typeof error === "object" &&
-          error !== null &&
-          "code" in error &&
-          typeof error.code === "string"
-        ? error.code
+    } catch (cause) {
+      const failureCode = typeof cause === "object" &&
+          cause !== null &&
+          "code" in cause &&
+          typeof cause.code === "string"
+        ? cause.code
         : undefined;
-      post({
+      emit({
         kind: "error",
-        requestId: request.requestId,
-        message: error instanceof Error ? error.message : String(error),
-        ...(error instanceof Error ? { name: error.name } : {}),
-        ...(code == null ? {} : { code })
+        requestId: incomingRequest.requestId,
+        message: cause instanceof Error ? cause.message : String(cause),
+        ...(cause instanceof Error ? { name: cause.name } : {}),
+        ...(failureCode == null ? {} : { code: failureCode })
       });
     }
   });
