@@ -13,14 +13,17 @@ import {
 } from "./turn-memory.ts";
 import type { AgentProfilePromptSnapshot } from "./slate-agent-profile-prompt.ts";
 
+/** The message a failure to append after a checkpoint is reported with. */
+function appendFailureMessage(cause: unknown): string {
+  const detail = cause instanceof Error ? cause.message : String(cause);
+  return `conversation checkpoint persisted but transcript append failed: ${detail}`;
+}
+
 export class TranscriptAppendAfterCheckpointError extends Error {
   readonly isTranscriptAppendAfterCheckpointError = true;
 
   constructor(cause: unknown) {
-    super(
-      `conversation checkpoint persisted but transcript append failed: ${cause instanceof Error ? cause.message : String(cause)}`,
-      { cause },
-    );
+    super(appendFailureMessage(cause), { cause });
     this.name = "TranscriptAppendAfterCheckpointError";
   }
 }
@@ -43,44 +46,47 @@ export interface ProfileIdentity {
 
 export type ProfilePromptSnapshot = AgentProfilePromptSnapshot;
 
+/** The mirror that keeps a transcript durable: prepare, abort, commit or skip one checkpoint at a time. */
+interface TranscriptCheckpointMirror {
+  prepareCheckpoint(
+    runContext: unknown,
+    transcript: string,
+    state: TurnCheckpoint,
+    blobs: unknown,
+    isFinal: boolean,
+    isForced: boolean,
+  ): Promise<void>;
+  abortCheckpoint(runContext: unknown, transcript: string): Promise<void>;
+  commitCheckpoint(
+    runContext: unknown,
+    transcript: string,
+    rootBlob?: string,
+  ): Promise<void>;
+  skipCheckpoint(
+    runContext: unknown,
+    transcript: string,
+    state: TurnCheckpoint,
+    blobs: unknown,
+  ): Promise<void>;
+}
+
 export interface TurnSettleHost {
   readonly isSubagentRunner: boolean;
-  readonly transcriptMirror?: {
-    prepareCheckpoint(
-      context: unknown,
-      transcriptId: string,
-      checkpoint: TurnCheckpoint,
-      blobStore: unknown,
-      finalize: boolean,
-      force: boolean,
-    ): Promise<void>;
-    abortCheckpoint(context: unknown, transcriptId: string): Promise<void>;
-    commitCheckpoint(
-      context: unknown,
-      transcriptId: string,
-      latestRootBlobId?: string,
-    ): Promise<void>;
-    skipCheckpoint(
-      context: unknown,
-      transcriptId: string,
-      checkpoint: TurnCheckpoint,
-      blobStore: unknown,
-    ): Promise<void>;
-  };
+  readonly transcriptMirror?: TranscriptCheckpointMirror;
   getTranscriptId(): string;
   getBlobStore(): unknown;
   agentStore(): {
-    handleCheckpoint(context: unknown, checkpoint: TurnCheckpoint): Promise<void>;
-    getMetadata(key: string): string | undefined;
+    handleCheckpoint(runContext: unknown, state: TurnCheckpoint): Promise<void>;
+    getMetadata(metadataName: string): string | undefined;
   } | null;
-  setLocalState(checkpoint: TurnCheckpoint): void;
+  setLocalState(state: TurnCheckpoint): void;
   ownsRunner(): boolean;
   isRunSuperseded(): boolean;
   latestPromptMessages(): readonly unknown[];
   persistAnnouncedAgentProfile(
-    snapshots: unknown,
-    snapshot: ProfilePromptSnapshot,
-    identity: ProfileIdentity,
+    allSnapshots: unknown,
+    announced: ProfilePromptSnapshot,
+    profile: ProfileIdentity,
   ): void;
   recordPostTurnLabeling?(input: {
     conversationId: string;
@@ -132,19 +138,55 @@ export interface TurnSettleResult extends TurnResultFlags {
   readonly endedOnSilentToolCalls?: boolean;
 }
 
+// ---------------------------------------------------------------------------------------------
+// what a checkpoint still has to remember
+
+/** The token counts a checkpoint may carry, once it has been written with them. */
+interface TokenDetailStateFresh {
+  readonly kind: "fresh";
+}
+
+interface TokenDetailStateStale {
+  readonly kind: "stale";
+  readonly usedTokens?: number;
+  readonly maxTokens?: number;
+}
+
+type TokenDetailState = TokenDetailStateFresh | TokenDetailStateStale;
+
+/** The token counts a checkpoint arrived with, kept only when they were actually reported. */
+function staleTokenDetails(tokenDetails: TokenDetails | undefined): TokenDetailStateStale {
+  return {
+    kind: "stale",
+    ...(tokenDetails?.usedTokens == null ? {} : { usedTokens: tokenDetails.usedTokens }),
+    ...(tokenDetails?.maxTokens == null ? {} : { maxTokens: tokenDetails.maxTokens }),
+  };
+}
+
+/** Whether a checkpoint carries token counts that no longer match what was already written. */
+function tokenDetailsDiffer(tokenDetails: TokenDetails | undefined, written: TokenDetailStateStale): boolean {
+  return tokenDetails?.usedTokens !== written.usedTokens || tokenDetails?.maxTokens !== written.maxTokens;
+}
+
+// ---------------------------------------------------------------------------------------------
+// the settler
+
 export function createTurnSettle(
-  host: TurnSettleHost,
-  scope: TurnSettleScope,
+  runner: TurnSettleHost,
+  settleScope: TurnSettleScope,
 ) {
-  let text = "";
+  const textParts: string[] = [];
   let sentMessageCount = 0;
   let reacted = false;
   let endedOnSilentToolCalls = false;
   const agentMessages: string[] = [];
 
+  /** Everything the turn said, in the order it was said. */
+  const text = (): string => textParts.join("");
+
   const collectors = {
-    collectText(delta: string): void {
-      text += delta;
+    collectText(piece: string): void {
+      textParts.push(piece);
     },
     collectSendMessage(): void {
       sentMessageCount += 1;
@@ -168,243 +210,204 @@ export function createTurnSettle(
     pendingProfileAnnouncement = identity;
   }
 
+  /** Announces the profile of a turn that updated it, once that turn is actually durable. */
   function persistPendingProfileAnnouncement(): void {
-    if (
-      profilePromptSnapshot == null
-      || pendingProfileAnnouncement == null
-    ) return;
-
-    host.persistAnnouncedAgentProfile(
-      scope.profilePromptSnapshots,
+    if (profilePromptSnapshot == null || pendingProfileAnnouncement == null) return;
+    runner.persistAnnouncedAgentProfile(
+      settleScope.profilePromptSnapshots,
       profilePromptSnapshot,
       pendingProfileAnnouncement,
     );
     pendingProfileAnnouncement = undefined;
   }
 
-  let observedSummaryArchiveCount = 0;
-  let transcriptPersistenceEnabled = true;
-  let tokenDetailsPersistenceState:
-    | { readonly kind: "fresh" }
-    | {
-      readonly kind: "stale";
-      readonly usedTokens?: number;
-      readonly maxTokens?: number;
-    } = { kind: "fresh" };
+  let knownArchiveCount = 0;
+  let persistenceEnabled = true;
+  let writtenTokenDetails: TokenDetailState = { kind: "fresh" };
 
   function noteBaseState(
     baseState: TurnCheckpoint,
     enableTranscriptPersistence = true,
   ): void {
-    observedSummaryArchiveCount = baseState.summaryArchives.length;
-    transcriptPersistenceEnabled = enableTranscriptPersistence;
+    knownArchiveCount = baseState.summaryArchives.length;
+    persistenceEnabled = enableTranscriptPersistence;
   }
 
-  function prepareCheckpointForPersistence(
-    checkpoint: TurnCheckpoint,
-  ): void {
-    const summaryArchiveCount = checkpoint.summaryArchives.length;
-    const tokenDetails = checkpoint.tokenDetails;
-
-    if (summaryArchiveCount > observedSummaryArchiveCount) {
-      observedSummaryArchiveCount = summaryArchiveCount;
-      tokenDetailsPersistenceState = {
-        kind: "stale",
-        ...(tokenDetails?.usedTokens == null
-          ? {}
-          : { usedTokens: tokenDetails.usedTokens }),
-        ...(tokenDetails?.maxTokens == null
-          ? {}
-          : { maxTokens: tokenDetails.maxTokens }),
-      };
-    } else if (
-      tokenDetailsPersistenceState.kind === "stale"
-      && (
-        tokenDetails?.usedTokens
-          !== tokenDetailsPersistenceState.usedTokens
-        || tokenDetails?.maxTokens
-          !== tokenDetailsPersistenceState.maxTokens
-      )
-    ) {
-      tokenDetailsPersistenceState = { kind: "fresh" };
+  /** Takes the token counts off a checkpoint that arrived with more archives than were already written. */
+  function prepareCheckpointForPersistence(state: TurnCheckpoint): void {
+    const tokenDetails = state.tokenDetails;
+    if (state.summaryArchives.length > knownArchiveCount) {
+      knownArchiveCount = state.summaryArchives.length;
+      writtenTokenDetails = staleTokenDetails(tokenDetails);
+    } else if (writtenTokenDetails.kind === "stale" && tokenDetailsDiffer(tokenDetails, writtenTokenDetails)) {
+      writtenTokenDetails = { kind: "fresh" };
     }
-
-    if (tokenDetailsPersistenceState.kind === "stale") {
-      checkpoint.tokenDetails = undefined;
+    if (writtenTokenDetails.kind === "stale") {
+      state.tokenDetails = undefined;
     }
   }
 
+  /** Writes one checkpoint to wherever it is kept, with the mirror in step when it is enabled. */
   async function persistCheckpoint(
-    context: unknown,
-    checkpoint: TurnCheckpoint,
+    runContext: unknown,
+    state: TurnCheckpoint,
     finalizeCheckpoint: boolean,
   ): Promise<void> {
-    const transcriptMirror = host.transcriptMirror;
-    const preparedTranscriptMirror = transcriptPersistenceEnabled
-      ? transcriptMirror
-      : undefined;
+    const mirror = runner.transcriptMirror;
+    const preparedMirror = persistenceEnabled ? mirror : undefined;
 
-    if (preparedTranscriptMirror != null) {
-      await preparedTranscriptMirror.prepareCheckpoint(
-        context,
-        host.getTranscriptId(),
-        checkpoint,
-        host.getBlobStore(),
+    if (preparedMirror != null) {
+      await preparedMirror.prepareCheckpoint(
+        runContext,
+        runner.getTranscriptId(),
+        state,
+        runner.getBlobStore(),
         finalizeCheckpoint,
-        finalizeCheckpoint || host.isSubagentRunner,
+        finalizeCheckpoint || runner.isSubagentRunner,
       );
     }
 
-    const store = host.agentStore();
+    const store = runner.agentStore();
     try {
       if (store != null) {
-        await store.handleCheckpoint(context, checkpoint);
+        await store.handleCheckpoint(runContext, state);
       } else {
-        host.setLocalState(checkpoint);
+        runner.setLocalState(state);
       }
     } catch (error) {
-      if (preparedTranscriptMirror != null) {
+      if (preparedMirror != null) {
         await Promise.allSettled([
-          preparedTranscriptMirror.abortCheckpoint(
-            context,
-            host.getTranscriptId(),
-          ),
+          preparedMirror.abortCheckpoint(runContext, runner.getTranscriptId()),
         ]);
       }
       throw error;
     }
 
-    if (preparedTranscriptMirror != null) {
+    if (preparedMirror != null) {
       try {
         const rootBlobId = store?.getMetadata("latestRootBlobId");
-        await preparedTranscriptMirror.commitCheckpoint(
-          context,
-          host.getTranscriptId(),
+        await preparedMirror.commitCheckpoint(
+          runContext,
+          runner.getTranscriptId(),
           ...(rootBlobId == null ? [] : [rootBlobId]),
         );
       } catch (error) {
         throw new TranscriptAppendAfterCheckpointError(error);
       }
     } else {
-      await transcriptMirror?.skipCheckpoint(
-        context,
-        host.getTranscriptId(),
-        checkpoint,
-        host.getBlobStore(),
+      await mirror?.skipCheckpoint(
+        runContext,
+        runner.getTranscriptId(),
+        state,
+        runner.getBlobStore(),
       );
     }
   }
 
   async function persistStepCheckpoint(
-    context: unknown,
-    checkpoint: TurnCheckpoint,
+    runContext: unknown,
+    state: TurnCheckpoint,
   ): Promise<void> {
-    await persistCheckpoint(context, checkpoint, false);
-    if (host.ownsRunner()) persistPendingProfileAnnouncement();
+    await persistCheckpoint(runContext, state, false);
+    if (runner.ownsRunner()) persistPendingProfileAnnouncement();
   }
 
-  async function settleCompletedTurn(
-    args: CompletedTurnArgs,
-  ): Promise<void> {
-    const turnEndedAtMs = Date.now();
-    args.finalState.turnTimings.push(new StepTiming({
+  /** Records when the turn ended, in its own timing list. */
+  function appendTurnTiming(state: TurnCheckpoint, turnStartedAtMs: number, turnEndedAtMs: number): void {
+    state.turnTimings.push(new StepTiming({
       timestampMs: BigInt(turnEndedAtMs),
-      durationMs: BigInt(
-        Math.max(0, turnEndedAtMs - args.turnStartedAtMs),
-      ),
+      durationMs: BigInt(Math.max(0, turnEndedAtMs - turnStartedAtMs)),
     }));
+  }
 
-    if (!host.isSubagentRunner && !args.hidden) {
-      endedOnSilentToolCalls = turnEndedOnSilentToolCalls(
-        host.latestPromptMessages(),
-      );
+  /** Notes whether the turn ended because its last tool calls had nothing to say. */
+  function noteSilentToolCallEnding(turnArgs: CompletedTurnArgs): void {
+    if (runner.isSubagentRunner || turnArgs.hidden) return;
+    endedOnSilentToolCalls = turnEndedOnSilentToolCalls(runner.latestPromptMessages());
+  }
+
+  /** Tells the post-turn labeler about a visible turn that has a request to name it. */
+  function recordPostTurnLabeling(turnArgs: CompletedTurnArgs): void {
+    if (runner.isSubagentRunner || turnArgs.hidden || runner.recordPostTurnLabeling == null) return;
+    const visibleMessages = runner.latestPromptMessages();
+    if (visibleMessages.length === 0 || turnArgs.requestId == null || turnArgs.requestId === "") return;
+    try {
+      runner.recordPostTurnLabeling({
+        conversationId: settleScope.conversationId,
+        requestId: turnArgs.requestId,
+        modelName: turnArgs.session.getModelId(),
+        messages: visibleMessages,
+      });
+    } catch (error) {
+      runner.reportDiagnostic?.({
+        kind: "labeling_failed",
+        stage: "post_turn_record",
+        errorClass: error instanceof Error ? error.name : typeof error,
+      });
     }
+  }
 
-    if (
-      !host.isSubagentRunner
-      && !args.hidden
-      && host.recordPostTurnLabeling != null
-    ) {
-      const messages = host.latestPromptMessages();
-      if (
-        messages.length > 0
-        && args.requestId != null
-        && args.requestId !== ""
-      ) {
-        try {
-          host.recordPostTurnLabeling({
-            conversationId: scope.conversationId,
-            requestId: args.requestId,
-            modelName: args.session.getModelId(),
-            messages,
-          });
-        } catch (error) {
-          host.reportDiagnostic?.({
-            kind: "labeling_failed",
-            stage: "post_turn_record",
-            errorClass: error instanceof Error
-              ? error.name
-              : typeof error,
-          });
-        }
-      }
-    }
-
-    const shouldRemember =
-      !host.isRunSuperseded()
-      && scope.memoryStore != null
-      && !args.hidden
-      && args.trimmedPrompt.length > 0
+  /** Whether this turn is one the memory store should be told about. */
+  function worthRemembering(turnArgs: CompletedTurnArgs): boolean {
+    return !runner.isRunSuperseded()
+      && settleScope.memoryStore != null
+      && !turnArgs.hidden
+      && turnArgs.trimmedPrompt.length > 0
       && (
-        scope.memoryStore.recordMemoryEvidence != null
-        || scope.isMemorableExchange?.(args.trimmedPrompt) === true
+        settleScope.memoryStore.recordMemoryEvidence != null
+        || settleScope.isMemorableExchange?.(turnArgs.trimmedPrompt) === true
       );
+  }
 
-    if (shouldRemember && scope.memoryStore != null) {
-      const exchange = {
-        user: args.trimmedPrompt,
-        agent: [...agentMessages, text]
-          .filter((part) => part.trim().length > 0)
-          .join("\n"),
-      };
+  /** What the turn said back, as memory records it: every agent message and the answer, with blanks dropped. */
+  function agentSideOfExchange(): string {
+    return [...agentMessages, text()]
+      .filter((part) => part.trim().length > 0)
+      .join("\n");
+  }
+
+  async function settleCompletedTurn(turnArgs: CompletedTurnArgs): Promise<void> {
+    const turnEndedAtMs = Date.now();
+    appendTurnTiming(turnArgs.finalState, turnArgs.turnStartedAtMs, turnEndedAtMs);
+    noteSilentToolCallEnding(turnArgs);
+    recordPostTurnLabeling(turnArgs);
+
+    if (worthRemembering(turnArgs) && settleScope.memoryStore != null) {
       await runTurnMemory(
-        scope.memoryStore,
-        scope.episodeProgress,
-        args.session,
-        args.baseContext,
-        args.turnStartedAtMs,
-        exchange,
+        settleScope.memoryStore,
+        settleScope.episodeProgress,
+        turnArgs.session,
+        turnArgs.baseContext,
+        turnArgs.turnStartedAtMs,
+        { user: turnArgs.trimmedPrompt, agent: agentSideOfExchange() },
       );
     }
   }
 
   async function persistFinalState(
-    context: unknown,
+    runContext: unknown,
     finalState: TurnCheckpoint,
   ): Promise<void> {
     prepareCheckpointForPersistence(finalState);
-    await persistCheckpoint(context, finalState, true);
+    await persistCheckpoint(runContext, finalState, true);
     persistPendingProfileAnnouncement();
+  }
+
+  /** A flag a result carries only when it is true, so a false flag is absent rather than false. */
+  function presentFlag<Key extends string>(key: Key, present: boolean): Partial<Record<Key, true>> {
+    return present ? { [key]: true } as Partial<Record<Key, true>> : {};
   }
 
   function buildResult(flags: TurnResultFlags): TurnSettleResult {
     return {
-      text,
+      text: text(),
       sentMessageCount,
       reacted,
       aborted: flags.aborted,
-      ...(flags.quiescedForUpgrade === true
-        ? { quiescedForUpgrade: true }
-        : {}),
-      ...(flags.awaitingUserSelection === true
-        ? { awaitingUserSelection: true }
-        : {}),
-      ...(endedOnSilentToolCalls
-        ? { endedOnSilentToolCalls: true }
-        : {}),
-      ...(flags.streamOutputProduced === true
-        ? { streamOutputProduced: true }
-        : {}),
+      ...presentFlag("quiescedForUpgrade", flags.quiescedForUpgrade === true),
+      ...presentFlag("awaitingUserSelection", flags.awaitingUserSelection === true),
+      ...presentFlag("endedOnSilentToolCalls", endedOnSilentToolCalls),
+      ...presentFlag("streamOutputProduced", flags.streamOutputProduced === true),
     };
   }
 
