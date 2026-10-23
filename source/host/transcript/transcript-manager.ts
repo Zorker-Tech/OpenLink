@@ -143,7 +143,7 @@ export const NO_CONTENT_SEARCH = {
   findTranscriptMatches: () => [],
 };
 
-function invoke(target: unknown, method: string, args: any[]): any {
+function callOn(target: unknown, method: string, args: any[]): any {
   const callable = (target as Record<string, unknown>)[method];
   if (typeof callable !== "function") return undefined;
   return callable.apply(target, args);
@@ -335,7 +335,7 @@ export class TranscriptManager {
     }
     this.automationRuntime.pendingEventFireBatches.clear();
     this.unwatchActiveSession();
-    invoke(this.roster, "stopOutlineStreamCoalescing", []);
+    callOn(this.roster, "stopOutlineStreamCoalescing", []);
     for (const runner of this.runnerRegistry.runners.values())
       runner.cancelBackgroundShellRewatches?.();
     this.runnerRegistry.runners.clear();
@@ -407,96 +407,54 @@ export class TranscriptManager {
     return this.sessionStore.disconnectChannel(agentId, platform);
   }
 
-  promptAcceptanceStatus(...args: any[]) {
-    return invoke(this.sendPipeline, "promptAcceptanceStatus", args);
-  }
   sendPrompt(...args: any[]) {
-    return invoke(this.sendPipeline, "sendPrompt", args);
-  }
-  resolveBoxRequestEntry(...args: any[]) {
-    return invoke(this.sendPipeline, "resolveBoxRequestEntry", args);
+    return callOn(this.sendPipeline, "sendPrompt", args);
   }
   devAppendSendMessage(...args: any[]) {
-    return invoke(this.sendPipeline, "devAppendSendMessage", args);
-  }
-  appendConnectorCard(...args: any[]) {
-    return invoke(this.sendPipeline, "appendConnectorCard", args);
+    return callOn(this.sendPipeline, "devAppendSendMessage", args);
   }
   handleAgentUpdate(...args: any[]) {
-    return invoke(this.turnRuntime, "handleAgentUpdate", args);
-  }
-  attachRunner(...args: any[]) {
-    return invoke(this.runnerRegistry, "attachRunner", args);
+    return callOn(this.turnRuntime, "handleAgentUpdate", args);
   }
   attachRunnerFactory(...args: any[]) {
-    return invoke(this.runnerRegistry, "attachRunnerFactory", args);
-  }
-  attachGroupMemberRunnerFactory(...args: any[]) {
-    return invoke(this.runnerRegistry, "attachGroupMemberRunnerFactory", args);
+    return callOn(this.runnerRegistry, "attachRunnerFactory", args);
   }
   attachRunReadinessProbe(...args: any[]) {
-    return invoke(this.runnerRegistry, "attachRunReadinessProbe", args);
+    return callOn(this.runnerRegistry, "attachRunReadinessProbe", args);
   }
 
-  getActiveAgentDir(...args: any[]) {
-    return invoke(this.sessions, "getActiveAgentDir", args);
-  }
   ensureLoaded(...args: any[]) {
-    return invoke(this.sessions, "ensureLoaded", args);
-  }
-  getEntries(...args: any[]) {
-    return invoke(this.sessions, "getEntries", args);
+    return callOn(this.sessions, "ensureLoaded", args);
   }
   appendEntry(...args: any[]) {
-    return invoke(this.sessions, "appendEntry", args);
-  }
-  setWindowFocused(...args: any[]) {
-    return invoke(this.sessions, "setWindowFocused", args);
+    return callOn(this.sessions, "appendEntry", args);
   }
   getActiveAgentId(...args: any[]) {
-    return invoke(this.sessions, "getActiveAgentId", args);
-  }
-  getWindowFocusedAtMs(...args: any[]) {
-    return invoke(this.sessions, "getWindowFocusedAtMs", args);
+    return callOn(this.sessions, "getActiveAgentId", args);
   }
   noteDesktopContact(...args: any[]) {
-    return invoke(this.sessions, "noteDesktopContact", args);
-  }
-  switchAgent(...args: any[]) {
-    return invoke(this.sessions, "switchAgent", args);
+    return callOn(this.sessions, "noteDesktopContact", args);
   }
   openAgentWindowed(...args: any[]) {
-    return invoke(this.sessions, "openAgentWindowed", args);
-  }
-  openAgentTail(...args: any[]) {
-    return invoke(this.sessions, "openAgentTail", args);
+    return callOn(this.sessions, "openAgentWindowed", args);
   }
   getAgentTranscriptWindow(...args: any[]) {
-    return invoke(this.sessions, "getAgentTranscriptWindow", args);
-  }
-  getAgentTranscriptTail(...args: any[]) {
-    return invoke(this.sessions, "getAgentTranscriptTail", args);
+    return callOn(this.sessions, "getAgentTranscriptWindow", args);
   }
   getAgentThread(...args: any[]) {
-    return invoke(this.sessions, "getAgentThread", args);
-  }
-  getAgentTranscript(...args: any[]) {
-    return invoke(this.sessions, "getAgentTranscript", args);
+    return callOn(this.sessions, "getAgentThread", args);
   }
   getAgentTranscriptPage(...args: any[]) {
-    return invoke(this.sessions, "getAgentTranscriptPage", args);
+    return callOn(this.sessions, "getAgentTranscriptPage", args);
   }
 
-  getRunQueueDiagnostics(...args: any[]) {
-    return invoke(this.runLifecycle, "getRunQueueDiagnostics", args);
-  }
   liveRunningAgentIds(...args: any[]) {
-    return invoke(this.runLifecycle, "liveRunningAgentIds", args);
+    return callOn(this.runLifecycle, "liveRunningAgentIds", args);
   }
   hasAgentsWithRunningSubagents(): boolean {
     return (
       (
-        invoke(this.roster, "liveSubagentParentIds", []) as
+        callOn(this.roster, "liveSubagentParentIds", []) as
           Set<string> | undefined
       )?.size! > 0
     );
@@ -510,117 +468,38 @@ export class TranscriptManager {
     const workflows = this.workflowCommands as any;
     workflows.watchedWorkflows?.setOnChange(undefined);
     workflows.watchedWorkflows = undefined;
-    invoke(this.roster, "stopWatchingProfile", []);
+    callOn(this.roster, "stopWatchingProfile", []);
   }
 }
 
-const delegations: ReadonlyArray<[string, keyof TranscriptManager]> = [
-  ["listAgents", "roster"],
-  ["countAgentsOnDisk", "roster"],
-  ["isAgentCapReached", "roster"],
-  ["searchAgents", "roster"],
-  ["searchMedia", "roster"],
-  ["listAgentsSync", "roster"],
-  ["subscribeAgents", "roster"],
-  ["subscribeAgentUpserted", "roster"],
-  ["subscribeProfileChanged", "roster"],
-  ["getAgentDisplayProfile", "roster"],
-  ["subscribe", "roster"],
-  ["subscribeOutline", "roster"],
-  ["subscribeSubagents", "roster"],
-  ["subscribeAsyncTasks", "roster"],
-  ["subscribeClientSideToolV2", "roster"],
-  ["getSubagents", "roster"],
-  ["getAsyncTasks", "roster"],
-  ["getConversationOutline", "roster"],
-  ["createAgent", "agentLifecycle"],
-  ["createBackgroundAgent", "agentLifecycle"],
-  ["kickstartAgent", "agentLifecycle"],
-  ["requestDiskSaverAudit", "agentLifecycle"],
-  ["cloneAgent", "agentLifecycle"],
-  ["deleteAgent", "agentLifecycle"],
-  ["deleteAgents", "agentLifecycle"],
-  ["updateAgent", "agentLifecycle"],
-  ["setAgentUnread", "agentLifecycle"],
-  ["setAgentNotifyOnUpdates", "agentLifecycle"],
-  ["setAgentHiddenFromSidebar", "agentLifecycle"],
-  ["setAgentAvatarBytes", "agentLifecycle"],
-  ["getAgentAvatar", "agentLifecycle"],
-  ["createGroup", "groupChat"],
-  ["setGroupMembers", "groupChat"],
-  ["postToGroup", "sharedRooms"],
-  ["findRoomAgentId", "sharedRooms"],
-  ["listRoomAgentIds", "sharedRooms"],
-  ["getSharedRoomIdForAgent", "sharedRooms"],
-  ["ensureHostedSharedRoom", "sharedRooms"],
-  ["ensureMirrorRoom", "sharedRooms"],
-  ["markMirrorRoomRevoked", "sharedRooms"],
-  ["appendSharedRoomActivityNotice", "sharedRooms"],
-  ["appendMirrorRoomEntry", "sharedRooms"],
-  ["restampRoomEntry", "sharedRooms"],
-  ["postSharedRoomGuestMessage", "sharedRooms"],
-  ["runRemoteRequestedMemberTurn", "sharedRooms"],
-  ["wakeForInbound", "backgroundWakes"],
-  ["sendToAgent", "backgroundWakes"],
-  ["broadcastToAgents", "backgroundWakes"],
-  ["emitTimelineEvent", "backgroundWakes"],
-  ["hasRunningBackgroundShellWork", "backgroundWakes"],
-  ["rearmPendingWakes", "pendingWakes"],
-  ["redriveUnfulfilledAckObligations", "ackObligations"],
-  ["quiesceForUpgrade", "upgradeResume"],
-  ["isQuiescingForUpgrade", "upgradeResume"],
-  ["markAllRunningAgentsForUpgradeResume", "upgradeResume"],
-  ["resumeInterruptedUpgradeTurns", "upgradeResume"],
-  ["quiesceForRecreate", "upgradeResume"],
-  ["hasCarryablePendingWake", "upgradeResume"],
-  ["hasMidDrainRevival", "upgradeResume"],
-  ["resumeAfterRecreate", "upgradeResume"],
-  ["subscribeForeverBox", "boxHandoff"],
-  ["withBoxHandoff", "boxHandoff"],
-  ["createAwaitingStateSink", "boxHandoff"],
-  ["handBackForeverBox", "boxHandoff"],
-  ["emitForeverBoxStatus", "boxHandoff"],
-  ["resumeAfterBoxHandoff", "boxHandoff"],
-  ["resumeAfterMcpAuth", "boxHandoff"],
-  ["resumeAfterListenerConnect", "boxHandoff"],
-  ["subscribeAutomations", "automationRuntime"],
-  ["getAgentAutomations", "automationRuntime"],
-  ["listAllAutomations", "automationRuntime"],
-  ["listAllAutomationDefinitions", "automationRuntime"],
-  ["setAgentAutomationEnabled", "automationRuntime"],
-  ["createAgentAutomation", "automationRuntime"],
-  ["updateAgentAutomation", "automationRuntime"],
-  ["deleteAgentAutomation", "automationRuntime"],
-  ["runAgentAutomationNow", "automationRuntime"],
-  ["runServerScheduledAutomation", "automationRuntime"],
-  ["runAutomationForEvent", "automationRuntime"],
-  ["runServerAutomationForEvent", "automationRuntime"],
-  ["subscribeWorkflows", "workflowCommands"],
-  ["getAgentWorkflows", "workflowCommands"],
-  ["createAgentWorkflow", "workflowCommands"],
-  ["updateAgentWorkflow", "workflowCommands"],
-  ["setAgentWorkflowEnabled", "workflowCommands"],
-  ["deleteAgentWorkflow", "workflowCommands"],
-  ["importAgentWorkflowMarkdown", "workflowCommands"],
-  ["importAgentWorkflowSource", "workflowCommands"],
-  ["importAgentWorkflowUrl", "workflowCommands"],
-  ["portAgentLocalSkills", "workflowCommands"],
-  ["runAgentWorkflowNow", "workflowCommands"],
-  ["respondToWidget", "widgetResponses"],
-  ["settleStaleAutoReviewCard", "widgetResponses"],
-  ["expireAllPendingAutoReviewApprovalCards", "widgetResponses"],
-  ["dismissWidget", "widgetResponses"],
-  ["submitSecret", "widgetResponses"],
-  ["reactToMessage", "widgetResponses"],
-];
+const domainDelegations: Readonly<Record<string, readonly string[]>> = {
+  roster: ["listAgents", "countAgentsOnDisk", "isAgentCapReached", "searchAgents", "searchMedia", "listAgentsSync", "subscribeAgents", "subscribeAgentUpserted", "subscribeProfileChanged", "getAgentDisplayProfile", "subscribe", "subscribeOutline", "subscribeSubagents", "subscribeAsyncTasks", "subscribeClientSideToolV2", "getSubagents", "getAsyncTasks", "getConversationOutline"],
+  agentLifecycle: ["createAgent", "createBackgroundAgent", "kickstartAgent", "requestDiskSaverAudit", "cloneAgent", "deleteAgent", "deleteAgents", "updateAgent", "setAgentUnread", "setAgentNotifyOnUpdates", "setAgentHiddenFromSidebar", "setAgentAvatarBytes", "getAgentAvatar"],
+  groupChat: ["createGroup", "setGroupMembers"],
+  sharedRooms: ["postToGroup", "findRoomAgentId", "listRoomAgentIds", "getSharedRoomIdForAgent", "ensureHostedSharedRoom", "ensureMirrorRoom", "markMirrorRoomRevoked", "appendSharedRoomActivityNotice", "appendMirrorRoomEntry", "restampRoomEntry", "postSharedRoomGuestMessage", "runRemoteRequestedMemberTurn"],
+  backgroundWakes: ["wakeForInbound", "sendToAgent", "broadcastToAgents", "emitTimelineEvent", "hasRunningBackgroundShellWork"],
+  pendingWakes: ["rearmPendingWakes"],
+  ackObligations: ["redriveUnfulfilledAckObligations"],
+  upgradeResume: ["quiesceForUpgrade", "isQuiescingForUpgrade", "markAllRunningAgentsForUpgradeResume", "resumeInterruptedUpgradeTurns", "quiesceForRecreate", "hasCarryablePendingWake", "hasMidDrainRevival", "resumeAfterRecreate"],
+  boxHandoff: ["subscribeForeverBox", "withBoxHandoff", "createAwaitingStateSink", "handBackForeverBox", "emitForeverBoxStatus", "resumeAfterBoxHandoff", "resumeAfterMcpAuth", "resumeAfterListenerConnect"],
+  automationRuntime: ["subscribeAutomations", "getAgentAutomations", "listAllAutomations", "listAllAutomationDefinitions", "setAgentAutomationEnabled", "createAgentAutomation", "updateAgentAutomation", "deleteAgentAutomation", "runAgentAutomationNow", "runServerScheduledAutomation", "runAutomationForEvent", "runServerAutomationForEvent"],
+  workflowCommands: ["subscribeWorkflows", "getAgentWorkflows", "createAgentWorkflow", "updateAgentWorkflow", "setAgentWorkflowEnabled", "deleteAgentWorkflow", "importAgentWorkflowMarkdown", "importAgentWorkflowSource", "importAgentWorkflowUrl", "portAgentLocalSkills", "runAgentWorkflowNow"],
+  widgetResponses: ["respondToWidget", "settleStaleAutoReviewCard", "expireAllPendingAutoReviewApprovalCards", "dismissWidget", "submitSecret", "reactToMessage"],
+  sendPipeline: ["promptAcceptanceStatus", "resolveBoxRequestEntry", "appendConnectorCard"],
+  runnerRegistry: ["attachRunner", "attachGroupMemberRunnerFactory"],
+  sessions: ["getActiveAgentDir", "getEntries", "setWindowFocused", "getWindowFocusedAtMs", "switchAgent", "openAgentTail", "getAgentTranscriptTail", "getAgentTranscript"],
+  runLifecycle: ["getRunQueueDiagnostics"],
+};
 
-for (const [method, domain] of delegations) {
-  Object.defineProperty(TranscriptManager.prototype, method, {
-    value(this: TranscriptManager, ...args: any[]) {
-      return invoke(this[domain], method, args);
-    },
-    configurable: true,
-  });
+for (const [owner, names] of Object.entries(domainDelegations)) {
+  for (const name of names) {
+    Object.defineProperty(TranscriptManager.prototype, name, {
+      value(this: TranscriptManager, ...args: any[]) {
+        return callOn(this[owner as keyof TranscriptManager], name, args);
+      },
+      configurable: true,
+    });
+  }
 }
 
 export interface TranscriptManager extends Record<string, any> {}
