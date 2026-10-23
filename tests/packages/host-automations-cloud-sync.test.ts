@@ -4,6 +4,7 @@
  */
 
 import assert from "node:assert/strict";
+import { ConnectError, Code } from "@connectrpc/connect";
 import { describe, it } from "node:test";
 
 import {
@@ -17,7 +18,9 @@ import {
 } from "../../source/host/automations/slate-automation-cloud-sync.ts";
 import { stableAutomationId } from "../../source/host/automations/automation-id.ts";
 import type { AutomationTrigger, AutomationTriggerMember, GithubTrigger, SlackTrigger } from "../../source/shared/automations.ts";
+import { Prompt, Trigger, Workflow } from "../../source/packages/proto/generated/aiserver/v1/automations_pb.ts";
 import type { CreateAutomationRequest, DeleteAutomationRequest, UpdateAutomationRequest } from "../../source/packages/proto/generated/aiserver/v1/automations_pb.ts";
+import { sha256Hex } from "../../source/host/sha256.ts";
 
 type Call = { name: string; args: unknown[] };
 
@@ -51,6 +54,7 @@ function syncWorld(
     failOperations?: string[];
     listFailures?: number;
     listError?: Error;
+    listFailAfter?: number;
     timeZone?: string;
     inspect?: (agentId: string) => { state?: string; validDefinitionCount?: number } | undefined;
     callbacksThrow?: boolean;
@@ -65,10 +69,13 @@ function syncWorld(
     Object.entries(options.remote ?? {}).map(([agentId, entries]) => [agentId, [...entries]]),
   );
   let listFailures = options.listFailures ?? 0;
+  let listCalls = 0;
   const client: CloudSyncClient & { remote: typeof remote } = {
     remote,
     listSlateAutomations: async (request: { slateAgentId: string }) => {
       record("listRemote", request.slateAgentId);
+      listCalls += 1;
+      if (options.listFailAfter !== undefined && listCalls > options.listFailAfter) throw options.listError ?? new Error("list failed");
       if (listFailures > 0) {
         listFailures -= 1;
         throw options.listError ?? new Error("list failed");
@@ -182,6 +189,7 @@ describe("which automations can be scheduled elsewhere", () => {
     assert.deepEqual(valuesOf<{ messageContains: string; topLevelOnly: boolean }>(keyword).map((value) => [value.messageContains, value.topLevelOnly]), [["deploy", false]]);
     const message = cloudTriggers(slack("C1", { kind: "message" }));
     assert.deepEqual(valuesOf<{ messageContains: string }>(message).map((value) => value.messageContains), [""]);
+    assert.deepEqual(valuesOf<{ topLevelOnly: boolean }>(message).map((value) => value.topLevelOnly), [false]);
     // Any reaction is one trigger; named ones are one trigger per emoji, keeping who reacted.
     const anyReaction = cloudTriggers(slack("C1", { kind: "reaction", bySelf: true }));
     assert.deepEqual(casesOf(anyReaction), ["slackAnyReactionAdded"]);
@@ -516,5 +524,299 @@ describe("a conversation that is going away", () => {
     (forgiven.sync as unknown as { failedAgentIds: Set<string> }).failedAgentIds.add("agent-1");
     assert.equal(await forgiven.sync.deleteAgent("agent-1"), true);
     assert.deepEqual(forgiven.recoveries, ["agent-1"]);
+  });
+});
+
+describe("the definition a workflow becomes", () => {
+  it("hashes a github watch with the subscription version and marks it", () => {
+    const automation = automationOf({ trigger: github("o/r", ["pr-opened"]) });
+    const definition = slateCloudDefinition({ agentId: "agent-1", automation });
+    assert.ok(definition !== null);
+    const triggers = cloudTriggers(automation.trigger);
+    assert.ok(triggers !== null);
+    const workflow = new Workflow({ triggers: [...triggers] as Trigger[], prompts: [new Prompt({ prompt: automation.prompt })] });
+    const prefix = Buffer.from(`github-subscriptions-v1\0${automation.id}\0${automation.name}\0${String(automation.isEnabled)}\0`);
+    const hash = sha256Hex(Buffer.concat([prefix, Buffer.from(workflow.toBinary())]));
+    assert.equal(definition.hash, hash);
+    assert.equal(definition.marker, SLATE_SHADOW_MARKER_PREFIX + hash);
+  });
+
+  it("keeps a definition enabled only when it is both on and schedulable elsewhere", () => {
+    assert.equal(slateCloudDefinition({ agentId: "agent-1", automation: automationOf() })?.enabled, true);
+    assert.equal(slateCloudDefinition({ agentId: "agent-1", automation: automationOf({ isEnabled: false }) })?.enabled, false);
+    const directMessage = slack("@someone", { kind: "mention" });
+    assert.equal(slateCloudDefinition({ agentId: "agent-1", automation: automationOf({ trigger: directMessage }) }), null);
+  });
+});
+
+describe("what the sync does with several conversations", () => {
+  it("creates each conversation's own automations under its own id", async () => {
+    const world1 = syncWorld({
+      agentIds: ["agent-1", "agent-2"],
+      automations: [
+        { agentId: "agent-1", automation: automationOf() },
+        { agentId: "agent-2", automation: automationOf({ id: "auto-2" }) },
+      ],
+    });
+    await world1.sync.reconcileNow();
+    assert.deepEqual(world1.named("create").map((call) => (call.args[0] as { slateAgentId?: string }).slateAgentId).sort(), ["agent-1", "agent-2"]);
+    assert.equal(world1.remote.get("agent-1")?.length, 1);
+    assert.equal(world1.remote.get("agent-2")?.length, 1);
+  });
+
+  it("uses the time zone its settings name when it creates the workflow", async () => {
+    const world1 = syncWorld({ automations: [{ agentId: "agent-1", automation: automationOf() }] });
+    world1.sync.setSettings({ getUserTimeZone: () => "Asia/Tokyo" });
+    await world1.sync.reconcileNow();
+    const request = world1.named("create")[0]?.args[0] as { workflow?: { toJson(): { triggers?: Array<{ cron?: { cron?: string } }> } } };
+    assert.equal(request.workflow?.toJson().triggers?.[0]?.cron?.cron, "CRON_TZ=Asia/Tokyo 0 9 * * *");
+  });
+
+  it("does not call a first success a recovery", async () => {
+    const world1 = syncWorld({ automations: [{ agentId: "agent-1", automation: automationOf() }] });
+    await world1.sync.reconcileNow();
+    assert.deepEqual(world1.recoveries, []);
+    assert.deepEqual(world1.failures, []);
+  });
+
+  it("reports a failure without a credential as a diagnostic only", async () => {
+    const world1 = syncWorld({ hasCredential: false, listFailures: 1 });
+    assert.equal(await world1.sync.deleteAgent("agent-1"), false);
+    assert.deepEqual(world1.failures, []);
+    assert.equal(world1.diagnostics.length, 1);
+    assert.equal((world1.diagnostics[0] as { operation?: string }).operation, "list-remote");
+  });
+
+  it("names a callback that threw in the diagnostics", async () => {
+    const world1 = syncWorld({ callbacksThrow: true, automations: [{ agentId: "agent-1", automation: automationOf() }] });
+    await world1.sync.reconcileNow();
+    const operations = world1.diagnostics.map((diagnostic) => (diagnostic as { operation?: string }).operation);
+    assert.equal(operations.includes("onSchedulingAuthorityChanged"), true);
+  });
+});
+
+describe("the rest of the trigger translations", () => {
+  it("keeps the review-thread flags and the merged allowlist honest", () => {
+    const threads = cloudTriggers(github("o/r", ["review-thread-resolved", "review-thread-unresolved"]));
+    assert.deepEqual(valuesOf<{ event: { value?: { onResolved?: boolean; onUnresolved?: boolean } } }>(threads).map((value) => [value.event.value?.onResolved === true, value.event.value?.onUnresolved === true]), [[true, false], [false, true]]);
+    const merged = cloudTriggers({ type: "group", listeners: [github("o/r", ["pr-opened"], { userAllowlist: ["a"] }), github("o/r", ["pr-opened"])] });
+    assert.deepEqual(valuesOf<{ userAllowlist: string[] }>(merged).map((value) => value.userAllowlist), [[]]);
+    const events = cloudTriggers({ type: "group", listeners: [github("o/r", ["pr-opened"]), github("o/r", ["pr-opened", "pr-merged"])] });
+    // The merged watch carries the first listener's events; the second only adds to the allowlist.
+    assert.deepEqual(valuesOf<{ event: { value?: { prAction?: number } } }>(events).map((value) => value.event.value?.prAction), [1]);
+  });
+
+  it("translates the other platforms a listener can wait on", () => {
+    const worlds = [
+      { type: "microsoftTeams", tenantId: "t", teamId: "team", teamIds: ["team"], channelIds: ["channel"], messageContains: "", messageContainsIsRegex: false, blockUnauthenticatedTeamsUsers: false },
+      { type: "linear", projectIds: [], teamIds: [], event: { case: "issueCreated" } },
+      { type: "sentry", projectIds: [], event: { case: "issueCreated" } },
+      { type: "pagerduty", serviceIds: [], event: { case: "incidentAny" } },
+    ];
+    for (const trigger of worlds) assert.equal(cloudTriggers(trigger as never)?.length, 1);
+  });
+});
+
+describe("the sync's bookkeeping", () => {
+  it("publishes and remembers when a conversation is taken down", async () => {
+    const world1 = syncWorld({});
+    assert.equal(await world1.sync.deleteAgent("agent-1"), true);
+    assert.deepEqual(world1.authorities, ["agent-1"]);
+    assert.equal((world1.sync as unknown as { deletionsToRetry: Set<string> }).deletionsToRetry.size, 0);
+    // A second taking down publishes again, because the first one forgot its authority.
+    assert.equal(await world1.sync.deleteAgent("agent-1"), true);
+    assert.deepEqual(world1.authorities, ["agent-1", "agent-1"]);
+  });
+
+  it("keeps a deletion whose readback failed, and retries it on the next pass", async () => {
+    const world1 = syncWorld({ remote: { "agent-1": [{ automationId: "one", enabled: true }] }, listFailAfter: 1 });
+    assert.equal(await world1.sync.deleteAgent("agent-1"), false);
+    assert.equal((world1.sync as unknown as { deletionsToRetry: Set<string> }).deletionsToRetry.has("agent-1"), true);
+  });
+
+  it("forgets the stamp of a conversation it took down, so it can be built again", async () => {
+    const automations = [{ agentId: "agent-1", automation: automationOf() }];
+    const world1 = syncWorld({ automations });
+    await world1.sync.reconcileNow();
+    assert.equal(world1.remote.get("agent-1")?.length, 1);
+    assert.equal(await world1.sync.deleteAgent("agent-1"), true);
+    assert.equal(world1.remote.get("agent-1")?.length, 0);
+    await world1.sync.reconcileNow();
+    assert.equal(world1.remote.get("agent-1")?.length, 1);
+    assert.equal(world1.authorities.length, 3);
+  });
+
+  it("does not rerun a conversation whose stamp did not change", async () => {
+    const world1 = syncWorld({ automations: [{ agentId: "agent-1", automation: automationOf() }] });
+    await world1.sync.reconcileNow();
+    const callsAfterFirst = world1.named("listRemote").length;
+    await world1.sync.reconcileNow();
+    assert.equal(world1.named("listRemote").length, callsAfterFirst);
+  });
+
+  it("keeps the stamp stable when the same automations are listed in another order", async () => {
+    const automations = [{ agentId: "agent-1", automation: automationOf() }, { agentId: "agent-1", automation: automationOf({ id: "auto-2" }) }];
+    const world1 = syncWorld({ automations });
+    await world1.sync.reconcileNow();
+    const callsAfterFirst = world1.named("listRemote").length;
+    automations.reverse();
+    await world1.sync.reconcileNow();
+    assert.equal(world1.named("listRemote").length, callsAfterFirst);
+  });
+
+  it("calls a conversation that converges after failing a recovery", async () => {
+    const definition = slateCloudDefinition({ agentId: "agent-1", automation: automationOf() });
+    assert.ok(definition !== null);
+    const world1 = syncWorld({ remote: { "agent-1": [{ automationId: definition.automationId, description: definition.marker, enabled: definition.enabled }] }, automations: [{ agentId: "agent-1", automation: automationOf() }] });
+    (world1.sync as unknown as { failedAgentIds: Set<string> }).failedAgentIds.add("agent-1");
+    await world1.sync.reconcileNow();
+    assert.deepEqual(world1.recoveries, ["agent-1"]);
+  });
+
+  it("creates a disabled definition disabled", async () => {
+    const world1 = syncWorld({ automations: [{ agentId: "agent-1", automation: automationOf({ isEnabled: false }) }] });
+    await world1.sync.reconcileNow();
+    assert.equal((world1.named("create")[0]?.args[0] as { enabled?: boolean }).enabled, false);
+  });
+
+  it("updates a definition whose enabled flag drifted", async () => {
+    const definition = slateCloudDefinition({ agentId: "agent-1", automation: automationOf() });
+    assert.ok(definition !== null);
+    const world1 = syncWorld({ remote: { "agent-1": [{ automationId: definition.automationId, description: definition.marker, enabled: false }] }, automations: [{ agentId: "agent-1", automation: automationOf() }] });
+    await world1.sync.reconcileNow();
+    assert.equal(world1.named("update").length, 1);
+  });
+
+  it("stops a pass at the first list it cannot read", async () => {
+    const world1 = syncWorld({ automations: [{ agentId: "agent-1", automation: automationOf() }] });
+    (world1.sync as unknown as { deps: { listAutomations: () => Promise<unknown[]> } }).deps.listAutomations = async () => { throw new Error("local failed"); };
+    await world1.sync.reconcileNow();
+    assert.deepEqual(world1.failures.map((failure) => (failure as { operation: string }).operation), ["list-local"]);
+    const agents = syncWorld({ automations: [{ agentId: "agent-1", automation: automationOf() }] });
+    (agents.sync as unknown as { deps: { listAgentIds: () => Promise<string[]> } }).deps.listAgentIds = async () => { throw new Error("agents failed"); };
+    await agents.sync.reconcileNow();
+    assert.deepEqual(agents.failures.map((failure) => (failure as { operation: string }).operation), ["list-agents"]);
+    assert.equal(agents.named("create").length, 0);
+  });
+
+  it("does not stop at a definition it cannot translate", async () => {
+    const world1 = syncWorld({ automations: [
+      { agentId: "agent-1", automation: automationOf({ trigger: slack("@someone", { kind: "mention" }) }) },
+      { agentId: "agent-2", automation: automationOf() },
+    ] });
+    await world1.sync.reconcileNow();
+    assert.equal(world1.named("create").length, 1);
+    assert.equal((world1.named("create")[0]?.args[0] as { slateAgentId?: string }).slateAgentId, "agent-2");
+  });
+
+  it("fails the pass when the readback after a create cannot be read", async () => {
+    const world1 = syncWorld({ automations: [{ agentId: "agent-1", automation: automationOf() }], listFailAfter: 1 });
+    await world1.sync.reconcileNow();
+    assert.equal(world1.named("create").length, 1);
+    assert.deepEqual(world1.failures.map((failure) => (failure as { operation: string }).operation), ["list-remote"]);
+    // The failed pass did not record a stamp, so the next one tries again.
+    const callsAfterFailure = world1.named("listRemote").length;
+    await world1.sync.reconcileNow();
+    assert.equal(world1.named("listRemote").length > callsAfterFailure, true);
+  });
+
+  it("leaves the evidence unknown when a pass failed before it could re-read", async () => {
+    const automations = [{ agentId: "agent-1", automation: automationOf() }];
+    const world1 = syncWorld({ automations });
+    await world1.sync.reconcileNow();
+    automations.push({ agentId: "agent-1", automation: automationOf({ id: "auto-2" }) });
+    (world1.client as unknown as { listSlateAutomations: unknown }).listSlateAutomations = async (request: { slateAgentId: string }) => {
+      world1.calls.push({ name: "listRemote", args: [request.slateAgentId] });
+      if (world1.named("listRemote").length >= 4) throw new Error("readback failed");
+      return { workflows: (world1.remote.get(request.slateAgentId) ?? []).map((workflow) => ({ workflow })) };
+    };
+    await world1.sync.reconcileNow();
+    assert.equal(world1.sync.shouldScheduleLocally({ agentId: "agent-1", automation: automationOf({ id: "auto-9", trigger: slack("C1", { kind: "mention" }) }) }), false);
+  });
+
+  it("knows the remote ids after a pass, so a new one still schedules locally", async () => {
+    const world1 = syncWorld({ automations: [{ agentId: "agent-1", automation: automationOf() }] });
+    await world1.sync.reconcileNow();
+    const slackAutomation = automationOf({ trigger: slack("C1", { kind: "mention" }) });
+    assert.equal(world1.sync.shouldScheduleLocally({ agentId: "agent-1", automation: { ...slackAutomation, id: "brand-new" } }), true);
+    assert.equal(world1.sync.shouldScheduleLocally({ agentId: "agent-1", automation: slackAutomation }), false);
+  });
+
+  it("publishes the authority again when only the remote enabled set changed", async () => {
+    const automation = automationOf();
+    const automations = [{ agentId: "agent-1", automation }];
+    const world1 = syncWorld({ automations });
+    (world1.client as unknown as { updateSlateAutomation: (request: Record<string, unknown>) => Promise<void> }).updateSlateAutomation = async (request) => {
+      world1.calls.push({ name: "update", args: [request] });
+      for (const entries of world1.remote.values()) {
+        const entry = entries.find((candidate) => candidate.automationId === request.automationId);
+        if (entry != null) entry.enabled = request.enabled === true;
+      }
+    };
+    await world1.sync.reconcileNow();
+    assert.deepEqual(world1.authorities, ["agent-1"]);
+    (automation as { isEnabled: boolean }).isEnabled = false;
+    await world1.sync.reconcileNow();
+    assert.deepEqual(world1.authorities, ["agent-1", "agent-1"]);
+  });
+
+  it("keeps a definition that is not convolved from being called a success", async () => {
+    const definition = slateCloudDefinition({ agentId: "agent-1", automation: automationOf() });
+    assert.ok(definition !== null);
+    const world1 = syncWorld({ remote: { "agent-1": [{ automationId: definition.automationId, description: definition.marker, enabled: definition.enabled }] }, automations: [{ agentId: "agent-1", automation: automationOf() }] });
+    (world1.client as unknown as { listSlateAutomations: unknown }).listSlateAutomations = async (request: { slateAgentId: string }) => ({ workflows: (world1.remote.get(request.slateAgentId) ?? []).map((workflow) => ({ workflow: { ...workflow, description: "stale" } })) });
+    await world1.sync.reconcileNow();
+    assert.deepEqual(world1.failures.map((failure) => (failure as { operation: string }).operation), ["verify"]);
+  });
+});
+
+describe("the rest of the sync's edges", () => {
+  it("reports a ConnectError's code and leaves a plain error without one", async () => {
+    const connectWorld = syncWorld({ automations: [{ agentId: "agent-1", automation: automationOf() }] });
+    (connectWorld.sync as unknown as { deps: { listAutomations: () => Promise<unknown[]> } }).deps.listAutomations = async () => { throw new ConnectError("unavailable", Code.Unavailable); };
+    await connectWorld.sync.reconcileNow();
+    assert.equal((connectWorld.diagnostics[0] as { errorCode?: string }).errorCode, "Unavailable");
+    assert.equal((connectWorld.diagnostics[0] as { errorType?: string }).errorType, "ConnectError");
+    const plain = syncWorld({ automations: [{ agentId: "agent-1", automation: automationOf() }] });
+    (plain.sync as unknown as { deps: { listAutomations: () => Promise<unknown[]> } }).deps.listAutomations = async () => { throw new Error("plain"); };
+    await plain.sync.reconcileNow();
+    assert.equal((plain.diagnostics[0] as { errorCode?: string }).errorCode, undefined);
+  });
+
+  it("copies the allowlist it was given", () => {
+    const allowlist = ["octocat"];
+    const listener = github("o/r", ["pr-opened"], { userAllowlist: allowlist });
+    const triggers = cloudTriggers(listener);
+    allowlist.push("latecomer");
+    assert.deepEqual(valuesOf<{ userAllowlist: string[] }>(triggers).map((value) => value.userAllowlist), [["octocat"]]);
+  });
+
+  it("keeps an automation with no listeners here, even when it knows the remote ids", async () => {
+    const world1 = syncWorld({ automations: [{ agentId: "agent-1", automation: automationOf({ isEnabled: false }) }] });
+    await world1.sync.reconcileNow();
+    assert.equal(world1.sync.shouldScheduleLocally({ agentId: "agent-1", automation: automationOf({ isEnabled: false }) }), false);
+  });
+
+  it("publishes a changed requested set even when the remote enabled set stayed empty", async () => {
+    const automations = [{ agentId: "agent-1", automation: automationOf({ isEnabled: false }) }];
+    const world1 = syncWorld({ automations });
+    await world1.sync.reconcileNow();
+    assert.deepEqual(world1.authorities, ["agent-1"]);
+    // Same enabled set (empty), but another requested id replaces the old one.
+    automations[0] = { agentId: "agent-1", automation: automationOf({ id: "auto-2", isEnabled: false }) };
+    await world1.sync.reconcileNow();
+    assert.deepEqual(world1.authorities, ["agent-1", "agent-1"]);
+    // And a requested set that only grew is also a change.
+    automations.push({ agentId: "agent-1", automation: automationOf({ id: "auto-3", isEnabled: false }) });
+    await world1.sync.reconcileNow();
+    assert.deepEqual(world1.authorities, ["agent-1", "agent-1", "agent-1"]);
+  });
+
+  it("forgets the deletion bookkeeping when a taking down really finished", async () => {
+    const world1 = syncWorld({ remote: { "agent-1": [{ automationId: "one", enabled: true }] } });
+    assert.equal(await world1.sync.deleteAgent("agent-1"), true);
+    assert.equal((world1.sync as unknown as { deletionsToRetry: Set<string> }).deletionsToRetry.size, 0);
+    // The evidence is gone too, so a new decision must not come from it.
+    assert.equal(world1.sync.shouldScheduleLocally({ agentId: "agent-1", automation: automationOf({ id: "auto-1", trigger: slack("C1", { kind: "mention" }) }) }), false);
   });
 });

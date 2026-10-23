@@ -1,8 +1,8 @@
-/** Keeping the platform's automations in step with where they may be scheduled.
+/** Keeping the platform's automations in step with where they may be listedAutomations.
 
- * An automation that can be scheduled elsewhere is translated into the shape that side takes, hashed so its version is
+ * An automation that can be listedAutomations elsewhere is translated into the shape that side takes, hashed so its version is
  * visible from outside, and reconciled against what is already there: what is no longer wanted is pruned, who holds the
- * scheduling authority is published, and a failure is reported without stopping the rest. */
+ * scheduling published is published, and a problem is reported without stopping the rest. */
 import { ConnectError, Code } from "@connectrpc/connect";
 import {
   CreateAutomationRequest,
@@ -61,10 +61,10 @@ export function isServerSchedulable(automation: { readonly trigger: AutomationTr
   );
 }
 
-function remoteShadowAutomationsById(response: RemoteList): Map<string, RemoteAutomation> {
+function shadowAutomationsOf(listing: RemoteList): Map<string, RemoteAutomation> {
   return new Map(
-    response.workflows.flatMap((entry) => {
-      const automation = entry.workflow;
+    listing.workflows.flatMap((row) => {
+      const automation = row.workflow;
       return !automation?.description?.startsWith(SLATE_SHADOW_MARKER_PREFIX)
         ? []
         : [[automation.automationId, automation] as const];
@@ -72,49 +72,49 @@ function remoteShadowAutomationsById(response: RemoteList): Map<string, RemoteAu
   );
 }
 
-function enabledRemoteAutomationIds(response: RemoteList): Set<string> {
+function enabledRemoteAutomationIds(listing: RemoteList): Set<string> {
   return new Set(
-    response.workflows.flatMap((entry) => {
-      const automation = entry.workflow;
+    listing.workflows.flatMap((row) => {
+      const automation = row.workflow;
       return automation?.enabled ? [automation.automationId] : [];
     }),
   );
 }
 
-function sameIds(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
+function idsMatch(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
   if (left.size !== right.size) return false;
   for (const id of left) if (!right.has(id)) return false;
   return true;
 }
 
-function sameSchedulingAuthority(
+function authorityMatches(
   left: SchedulingAuthority | undefined,
   right: SchedulingAuthority,
 ): boolean {
   return left !== undefined
-    && sameIds(left.desiredCloudAutomationIds, right.desiredCloudAutomationIds)
-    && sameIds(left.enabledRemoteAutomationIds, right.enabledRemoteAutomationIds);
+    && idsMatch(left.wantedAutomationIds, right.wantedAutomationIds)
+    && idsMatch(left.enabledRemoteAutomationIds, right.enabledRemoteAutomationIds);
 }
 
-function isConverged(
-  remoteByAutomationId: ReadonlyMap<string, RemoteAutomation>,
+function convergedWith(
+  upstreamById: ReadonlyMap<string, RemoteAutomation>,
   desiredByAutomationId: ReadonlyMap<string, CloudDefinition>,
 ): boolean {
-  if (remoteByAutomationId.size !== desiredByAutomationId.size) return false;
-  for (const [automationId, desired] of desiredByAutomationId) {
-    const remote = remoteByAutomationId.get(automationId);
-    if (remote === undefined || remote.description !== desired.marker || remote.enabled !== desired.enabled) return false;
+  if (upstreamById.size !== desiredByAutomationId.size) return false;
+  for (const [automationId, wanted] of desiredByAutomationId) {
+    const upstream = upstreamById.get(automationId);
+    if (upstream === undefined || upstream.description !== wanted.marker || upstream.enabled !== wanted.enabled) return false;
   }
   return true;
 }
 
-function errorIdentity(error: unknown): { errorType: string; errorCode?: string } {
+function errorShape(error: unknown): { errorType: string; errorCode?: string } {
   const errorType = error instanceof Error ? error.constructor.name : typeof error;
   const errorCode = error instanceof ConnectError ? Code[error.code] : findSystemErrno(error);
   return errorCode === undefined ? { errorType } : { errorType, errorCode };
 }
 
-function slackTrigger(
+function buildSlackTrigger(
   listener: Extract<EventTrigger, { type: "slack" }>,
   emojiName?: string,
 ): BackendCloudTrigger {
@@ -140,29 +140,34 @@ function slackTrigger(
   }
 }
 
-function githubTrigger(listener: GithubTrigger, event: string): BackendCloudTrigger {
+/** The event a github trigger carries, built from the repository it watches. */
+type GithubEventValue = ProtoGitTrigger["event"];
+
+/** One github listener event, as the upstream side names it. */
+const GITHUB_EVENT_BUILDERS: Readonly<Record<string, (repos: string[]) => GithubEventValue>> = {
+  "pr-opened": (repos) => ({ case: "pullRequest", value: new GitPullRequestEvent({ repos, prAction: GitPullRequestAction.OPENED }) }),
+  "pr-pushed": (repos) => ({ case: "pullRequest", value: new GitPullRequestEvent({ repos, prAction: GitPullRequestAction.PUSHED }) }),
+  "pr-merged": (repos) => ({ case: "pullRequest", value: new GitPullRequestEvent({ repos, prAction: GitPullRequestAction.MERGED }) }),
+  "pr-comment": (repos) => ({ case: "pullRequest", value: new GitPullRequestEvent({ repos, prAction: GitPullRequestAction.COMMENTED }) }),
+  "review-requested": (repos) => ({ case: "pullRequestReviewRequested", value: new GitPullRequestReviewRequestedEvent({ repos }) }),
+  "review-approved": (repos) => ({ case: "pullRequestReview", value: new GitPullRequestReviewEvent({ repos, onApproved: true }) }),
+  "review-changes-requested": (repos) => ({ case: "pullRequestReview", value: new GitPullRequestReviewEvent({ repos, onChangesRequested: true }) }),
+  "review-commented": (repos) => ({ case: "pullRequestReview", value: new GitPullRequestReviewEvent({ repos, onCommented: true }) }),
+  "inline-review-comment": (repos) => ({ case: "pullRequestReviewComment", value: new GitPullRequestReviewCommentEvent({ repos }) }),
+  "review-thread-resolved": (repos) => ({ case: "reviewThread", value: new GitReviewThreadEvent({ repos, onResolved: true }) }),
+  "review-thread-unresolved": (repos) => ({ case: "reviewThread", value: new GitReviewThreadEvent({ repos, onUnresolved: true }) }),
+  "issue-assigned": (repos) => ({ case: "issueAssigned", value: new GitIssueAssignedEvent({ repos }) }),
+};
+
+function buildGithubTrigger(listener: GithubTrigger, event: string): BackendCloudTrigger {
   const repos = [`https://github.com/${listener.repo}`];
   const userAllowlist = [...listener.userAllowlist ?? []];
-  let value: ProtoGitTrigger["event"];
-  switch (event) {
-    case "pr-opened": value = { case: "pullRequest", value: new GitPullRequestEvent({ repos, prAction: GitPullRequestAction.OPENED }) }; break;
-    case "pr-pushed": value = { case: "pullRequest", value: new GitPullRequestEvent({ repos, prAction: GitPullRequestAction.PUSHED }) }; break;
-    case "pr-merged": value = { case: "pullRequest", value: new GitPullRequestEvent({ repos, prAction: GitPullRequestAction.MERGED }) }; break;
-    case "pr-comment": value = { case: "pullRequest", value: new GitPullRequestEvent({ repos, prAction: GitPullRequestAction.COMMENTED }) }; break;
-    case "review-requested": value = { case: "pullRequestReviewRequested", value: new GitPullRequestReviewRequestedEvent({ repos }) }; break;
-    case "review-approved": value = { case: "pullRequestReview", value: new GitPullRequestReviewEvent({ repos, onApproved: true }) }; break;
-    case "review-changes-requested": value = { case: "pullRequestReview", value: new GitPullRequestReviewEvent({ repos, onChangesRequested: true }) }; break;
-    case "review-commented": value = { case: "pullRequestReview", value: new GitPullRequestReviewEvent({ repos, onCommented: true }) }; break;
-    case "inline-review-comment": value = { case: "pullRequestReviewComment", value: new GitPullRequestReviewCommentEvent({ repos }) }; break;
-    case "review-thread-resolved": value = { case: "reviewThread", value: new GitReviewThreadEvent({ repos, onResolved: true }) }; break;
-    case "review-thread-unresolved": value = { case: "reviewThread", value: new GitReviewThreadEvent({ repos, onUnresolved: true }) }; break;
-    case "issue-assigned": value = { case: "issueAssigned", value: new GitIssueAssignedEvent({ repos }) }; break;
-    default: value = { case: undefined };
-  }
+  const buildEvent = GITHUB_EVENT_BUILDERS[event];
+  const value: GithubEventValue = buildEvent === undefined ? { case: undefined } : buildEvent(repos);
   return new Trigger({ trigger: { case: "git", value: new GitTrigger({ event: value, userAllowlist }) } }) as unknown as BackendCloudTrigger;
 }
 
-function githubCiTrigger(args: { repo: string; branch: string; condition: GitCICompletionCondition }): BackendCloudTrigger {
+function buildCiTrigger(args: { repo: string; branch: string; condition: GitCICompletionCondition }): BackendCloudTrigger {
   return new Trigger({
     trigger: {
       case: "git",
@@ -173,7 +178,7 @@ function githubCiTrigger(args: { repo: string; branch: string; condition: GitCIC
   }) as unknown as BackendCloudTrigger;
 }
 
-function ciCompletionCondition(events: readonly string[]): GitCICompletionCondition | null {
+function ciConditionOf(events: readonly string[]): GitCICompletionCondition | null {
   const passed = events.includes("ci-passed");
   const failed = events.includes("ci-failed");
   if (passed && failed) return GitCICompletionCondition.GIT_CI_COMPLETION_CONDITION_ANY;
@@ -182,21 +187,21 @@ function ciCompletionCondition(events: readonly string[]): GitCICompletionCondit
   return null;
 }
 
-function nonCiEvents(listener: GithubTrigger): string[] {
+function plainEventsOf(listener: GithubTrigger): string[] {
   return listener.events.filter((event) => !isGithubCiEventKind(event));
 }
 
-function githubCiTriggers(listener: GithubTrigger): BackendCloudTrigger[] {
-  const condition = ciCompletionCondition(listener.events);
+function ciTriggersFor(listener: GithubTrigger): BackendCloudTrigger[] {
+  const condition = ciConditionOf(listener.events);
   if (listener.ciBranch === undefined || listener.ciBranch === "" || condition === null) return [];
-  return [githubCiTrigger({ repo: listener.repo, branch: listener.ciBranch, condition })];
+  return [buildCiTrigger({ repo: listener.repo, branch: listener.ciBranch, condition })];
 }
 
-function githubNonCiTriggers(
+function plainTriggersFor(
   listener: GithubTrigger,
   allowlistForEvent?: (event: string) => readonly string[],
 ): BackendCloudTrigger[] {
-  return nonCiEvents(listener).map((event) => githubTrigger(
+  return plainEventsOf(listener).map((event) => buildGithubTrigger(
     allowlistForEvent === undefined
       ? listener
       : { ...listener, userAllowlist: [...allowlistForEvent(event)] },
@@ -204,13 +209,13 @@ function githubNonCiTriggers(
   ));
 }
 
-function listenerTriggers(listener: EventTrigger): BackendCloudTrigger[] {
+function triggersForListener(listener: EventTrigger): BackendCloudTrigger[] {
   switch (listener.type) {
     case "slack": {
-      const emojis = listener.match.kind === "reaction" ? listener.match.emoji ?? [] : [];
-      return emojis.length === 0 ? [slackTrigger(listener)] : emojis.map((emoji) => slackTrigger(listener, emoji));
+      const reactionEmojis = listener.match.kind === "reaction" ? listener.match.emoji ?? [] : [];
+      return reactionEmojis.length === 0 ? [buildSlackTrigger(listener)] : reactionEmojis.map((emoji) => buildSlackTrigger(listener, emoji));
     }
-    case "github": return [...githubNonCiTriggers(listener), ...githubCiTriggers(listener)];
+    case "github": return [...plainTriggersFor(listener), ...ciTriggersFor(listener)];
     case "microsoftTeams":
     case "linear":
     case "sentry":
@@ -219,83 +224,83 @@ function listenerTriggers(listener: EventTrigger): BackendCloudTrigger[] {
   }
 }
 
-function unionAllowlists(existing: string[] | null, addition: string[] | null): string[] | null {
+function mergeAllowlists(existing: string[] | null, addition: string[] | null): string[] | null {
   if (existing === null || addition === null) return null;
-  const merged = [...existing];
-  for (const login of addition) {
-    if (!merged.some((entry) => entry.toLowerCase() === login.toLowerCase())) merged.push(login);
+  const combined = [...existing];
+  for (const user of addition) {
+    if (!combined.some((row) => row.toLowerCase() === user.toLowerCase())) combined.push(user);
   }
-  return merged;
+  return combined;
 }
 
-function groupListenerTriggers(listeners: readonly EventTrigger[]): BackendCloudTrigger[] {
-  const mergedListeners: EventTrigger[] = [];
+function groupedListenerTriggers(listenerList: readonly EventTrigger[]): BackendCloudTrigger[] {
+  const plainMerged: EventTrigger[] = [];
   const githubEventsByRepo = new Map<string, string[]>();
   const githubAllowlistsByRepo = new Map<string, Map<string, string[] | null>>();
   const ciEventsByRepoBranch = new Map<string, { repo: string; branch: string; events: string[] }>();
-  for (const listener of listeners) {
+  for (const listener of listenerList) {
     if (listener.type !== "github") {
-      mergedListeners.push(listener);
+      plainMerged.push(listener);
       continue;
     }
-    const repoKey = listener.repo.toLowerCase();
-    const ciEvents = listener.events.filter(isGithubCiEventKind);
-    if (listener.ciBranch !== undefined && listener.ciBranch !== "" && ciEvents.length > 0) {
-      const branchKey = `${repoKey}\0${listener.ciBranch}`;
-      const entry = ciEventsByRepoBranch.get(branchKey) ?? { repo: listener.repo, branch: listener.ciBranch, events: [] };
-      for (const event of ciEvents) if (!entry.events.includes(event)) entry.events.push(event);
-      ciEventsByRepoBranch.set(branchKey, entry);
+    const repositoryKey = listener.repo.toLowerCase();
+    const ciKinds = listener.events.filter(isGithubCiEventKind);
+    if (listener.ciBranch !== undefined && listener.ciBranch !== "" && ciKinds.length > 0) {
+      const repositoryBranchKey = `${repositoryKey}\0${listener.ciBranch}`;
+      const row = ciEventsByRepoBranch.get(repositoryBranchKey) ?? { repo: listener.repo, branch: listener.ciBranch, events: [] };
+      for (const event of ciKinds) if (!row.events.includes(event)) row.events.push(event);
+      ciEventsByRepoBranch.set(repositoryBranchKey, row);
     }
-    const restriction = listener.userAllowlist !== undefined && listener.userAllowlist.length > 0 ? [...listener.userAllowlist] : null;
-    const allowlistByEvent = githubAllowlistsByRepo.get(repoKey) ?? new Map<string, string[] | null>();
-    githubAllowlistsByRepo.set(repoKey, allowlistByEvent);
-    const listenerEvents = nonCiEvents(listener);
+    const allowlist = listener.userAllowlist !== undefined && listener.userAllowlist.length > 0 ? [...listener.userAllowlist] : null;
+    const allowlistsByEvent = githubAllowlistsByRepo.get(repositoryKey) ?? new Map<string, string[] | null>();
+    githubAllowlistsByRepo.set(repositoryKey, allowlistsByEvent);
+    const listenerEvents = plainEventsOf(listener);
     for (const event of listenerEvents) {
-      allowlistByEvent.set(event, allowlistByEvent.has(event) ? unionAllowlists(allowlistByEvent.get(event) ?? null, restriction) : restriction);
+      allowlistsByEvent.set(event, allowlistsByEvent.has(event) ? mergeAllowlists(allowlistsByEvent.get(event) ?? null, allowlist) : allowlist);
     }
-    const existingEvents = githubEventsByRepo.get(repoKey);
-    if (existingEvents !== undefined) {
-      for (const event of listenerEvents) if (!existingEvents.includes(event)) existingEvents.push(event);
+    const knownEvents = githubEventsByRepo.get(repositoryKey);
+    if (knownEvents !== undefined) {
+      for (const event of listenerEvents) if (!knownEvents.includes(event)) knownEvents.push(event);
       continue;
     }
-    githubEventsByRepo.set(repoKey, [...listenerEvents]);
-    mergedListeners.push({ ...listener, events: [...listenerEvents] });
+    githubEventsByRepo.set(repositoryKey, [...listenerEvents]);
+    plainMerged.push({ ...listener, events: [...listenerEvents] });
   }
   const ciTriggers: BackendCloudTrigger[] = [];
   for (const { repo, branch, events } of ciEventsByRepoBranch.values()) {
-    const condition = ciCompletionCondition(events);
-    if (condition !== null) ciTriggers.push(githubCiTrigger({ repo, branch, condition }));
+    const condition = ciConditionOf(events);
+    if (condition !== null) ciTriggers.push(buildCiTrigger({ repo, branch, condition }));
   }
   return [
-    ...mergedListeners.flatMap((listener) => {
-      if (listener.type !== "github") return listenerTriggers(listener);
-      const allowlistByEvent = githubAllowlistsByRepo.get(listener.repo.toLowerCase());
-      return githubNonCiTriggers(listener, (event) => allowlistByEvent?.get(event) ?? []);
+    ...plainMerged.flatMap((listener) => {
+      if (listener.type !== "github") return triggersForListener(listener);
+      const allowlistsByEvent = githubAllowlistsByRepo.get(listener.repo.toLowerCase());
+      return plainTriggersFor(listener, (event) => allowlistsByEvent?.get(event) ?? []);
     }),
     ...ciTriggers,
   ];
 }
 
-function cronCloudTrigger(args: { schedule: string; timeZone?: string | undefined }): BackendCloudTrigger {
-  const { schedule: expression, timeZone: pinnedZone } = splitScheduleTimeZone(args.schedule);
-  const expanded = expandCronAlias(expression).replace(/^@every\b/i, "@every");
-  const zone = pinnedZone ?? args.timeZone;
-  const cron = zone !== undefined && !expanded.startsWith("@every") ? `CRON_TZ=${zone} ${expanded}` : expanded;
+function buildCronTrigger(args: { schedule: string; timeZone?: string | undefined }): BackendCloudTrigger {
+  const { schedule: cronExpression, timeZone: scheduleZone } = splitScheduleTimeZone(args.schedule);
+  const normalizedSchedule = expandCronAlias(cronExpression).replace(/^@every\b/i, "@every");
+  const zone = scheduleZone ?? args.timeZone;
+  const cron = zone !== undefined && !normalizedSchedule.startsWith("@every") ? `CRON_TZ=${zone} ${normalizedSchedule}` : normalizedSchedule;
   return new Trigger({ trigger: { case: "cron", value: new CronTrigger({ cron }) } }) as unknown as BackendCloudTrigger;
 }
 
-function listenerCloudTriggers(listeners: readonly EventTrigger[]): BackendCloudTrigger[] {
-  const [onlyListener] = listeners;
-  if (onlyListener === undefined) return [];
-  if (listeners.length === 1) return listenerTriggers(onlyListener);
-  return groupListenerTriggers(listeners);
+function triggersForListeners(listenerList: readonly EventTrigger[]): BackendCloudTrigger[] {
+  const [singleListener] = listenerList;
+  if (singleListener === undefined) return [];
+  if (listenerList.length === 1) return triggersForListener(singleListener);
+  return groupedListenerTriggers(listenerList);
 }
 
 export function cloudTriggers(trigger: AutomationTrigger, timeZone?: string | undefined): BackendCloudTrigger[] | null {
   if (triggerListeners(trigger).some((listener) => listener.type === "slack" && listener.channel.startsWith("@"))) return null;
   return [
-    ...triggerCronSchedules(trigger).map((schedule) => cronCloudTrigger({ schedule, timeZone })),
-    ...listenerCloudTriggers(triggerEventTriggers(trigger)),
+    ...triggerCronSchedules(trigger).map((schedule) => buildCronTrigger({ schedule, timeZone })),
+    ...triggersForListeners(triggerEventTriggers(trigger)),
   ];
 }
 
@@ -310,12 +315,12 @@ export interface CloudDefinition {
 }
 
 export function slateCloudDefinition(args: { agentId: string; automation: ScheduledCloudAutomation; timeZone?: string | undefined }): CloudDefinition | null {
-  const triggers = cloudTriggers(args.automation.trigger, args.timeZone);
-  if (triggers === null) return null;
-  const workflow = new Workflow({ triggers: [...triggers] as Trigger[], prompts: [new Prompt({ prompt: args.automation.prompt })] });
+  const triggerList = cloudTriggers(args.automation.trigger, args.timeZone);
+  if (triggerList === null) return null;
+  const workflow = new Workflow({ triggers: [...triggerList] as Trigger[], prompts: [new Prompt({ prompt: args.automation.prompt })] });
   const githubSubscriptionVersion = workflow.triggers.some((trigger) => trigger.trigger?.case === "git") ? "github-subscriptions-v1\0" : "";
-  const prefix = Buffer.from(`${githubSubscriptionVersion}${args.automation.id}\0${args.automation.name}\0${String(args.automation.isEnabled)}\0`);
-  const hash = sha256Hex(Buffer.concat([prefix, Buffer.from(workflow.toBinary())]));
+  const hashPrefix = Buffer.from(`${githubSubscriptionVersion}${args.automation.id}\0${args.automation.name}\0${String(args.automation.isEnabled)}\0`);
+  const hash = sha256Hex(Buffer.concat([hashPrefix, Buffer.from(workflow.toBinary())]));
   return {
     automationId: stableAutomationId({ agentId: args.agentId, localId: args.automation.id }),
     enabled: args.automation.isEnabled && isServerSchedulable(args.automation),
@@ -342,17 +347,17 @@ export interface CloudSyncClient {
 interface SchedulingEvidence { readonly kind: "known"; readonly enabledRemoteAutomationIds: Set<string> }
 interface UnknownSchedulingEvidence { readonly kind: "unknown" }
 type AnySchedulingEvidence = SchedulingEvidence | UnknownSchedulingEvidence;
-interface SchedulingAuthority { readonly desiredCloudAutomationIds: Set<string>; readonly enabledRemoteAutomationIds: Set<string> }
+interface SchedulingAuthority { readonly wantedAutomationIds: Set<string>; readonly enabledRemoteAutomationIds: Set<string> }
 
 export class SlateAutomationCloudSync {
-  private inFlight: Promise<void> | undefined;
-  private rerun = false;
-  private readonly lastSuccessfulFingerprintByAgent = new Map<string, string>();
-  private readonly schedulingEvidenceByAgent = new Map<string, AnySchedulingEvidence>();
-  private readonly lastNotifiedSchedulingAuthorityByAgent = new Map<string, SchedulingAuthority>();
+  private running: Promise<void> | undefined;
+  private rerunRequested = false;
+  private readonly fingerprints = new Map<string, string>();
+  private readonly evidenceByAgent = new Map<string, AnySchedulingEvidence>();
+  private readonly publishedAuthority = new Map<string, SchedulingAuthority>();
   private readonly failedAgentIds = new Set<string>();
-  private readonly pendingAgentDeletions = new Set<string>();
-  private settings: { getUserTimeZone: () => string | undefined };
+  private readonly deletionsToRetry = new Set<string>();
+  private timeSettings: { getUserTimeZone: () => string | undefined };
 
   constructor(private readonly deps: {
     readonly client: CloudSyncClient;
@@ -362,187 +367,187 @@ export class SlateAutomationCloudSync {
     readonly getTimeZone?: () => string | undefined;
     readonly inspectLocalDefinitions?: (agentId: string) => { state?: string; validDefinitionCount?: number } | undefined;
     readonly reportShadowPrune?: (report: Record<string, unknown>) => void;
-    readonly onFailure: (failure: { agentId?: string; operation: string; error: unknown }) => void;
+    readonly onFailure: (problem: { agentId?: string; operation: string; error: unknown }) => void;
     readonly onRecovery: (agentId: string) => void;
     readonly onSchedulingAuthorityChanged: (agentId: string) => void;
     readonly reportDiagnostic?: (diagnostic: Record<string, unknown>) => void;
   }) {
-    this.settings = { getUserTimeZone: deps.getTimeZone ?? (() => undefined) };
+    this.timeSettings = { getUserTimeZone: deps.getTimeZone ?? (() => undefined) };
   }
 
-  setSettings(settings: { getUserTimeZone: () => string | undefined }): void { this.settings = settings; }
+  setSettings(timeSettings: { getUserTimeZone: () => string | undefined }): void { this.timeSettings = timeSettings; }
 
   shouldScheduleLocally({ agentId, automation }: { agentId: string; automation: { readonly id?: string; readonly trigger: AutomationTrigger } }): boolean {
     if (!isServerSchedulable(automation)) return true;
     if (triggerListeners(automation.trigger).length === 0) return false;
     if (automation.id === undefined) return true;
-    const evidence = this.schedulingEvidenceByAgent.get(agentId);
+    const evidence = this.evidenceByAgent.get(agentId);
     if (evidence?.kind !== "known") return false;
     return !evidence.enabledRemoteAutomationIds.has(stableAutomationId({ agentId, localId: automation.id }));
   }
 
   reconcileNow(): Promise<void> {
-    if (this.inFlight !== undefined) {
-      this.rerun = true;
-      return this.inFlight;
+    if (this.running !== undefined) {
+      this.rerunRequested = true;
+      return this.running;
     }
-    this.inFlight = this.reconcile().catch((error) => { this.recordFailure({ operation: "reconcile", error }); }).finally(() => {
-      this.inFlight = undefined;
-      if (this.rerun) {
-        this.rerun = false;
+    this.running = this.reconcile().catch((error) => { this.reportFailure({ operation: "reconcile", error }); }).finally(() => {
+      this.running = undefined;
+      if (this.rerunRequested) {
+        this.rerunRequested = false;
         void this.reconcileNow();
       }
     });
-    return this.inFlight;
+    return this.running;
   }
 
   async deleteAgent(agentId: string): Promise<boolean> {
-    this.pendingAgentDeletions.add(agentId);
-    const initial = await this.listRemote(agentId);
-    if (initial === undefined) return false;
-    const remoteAutomations = initial.workflows.flatMap((entry) => entry.workflow === undefined ? [] : [entry.workflow]);
+    this.deletionsToRetry.add(agentId);
+    const before = await this.fetchRemote(agentId);
+    if (before === undefined) return false;
+    const remoteAutomations = before.workflows.flatMap((row) => row.workflow === undefined ? [] : [row.workflow]);
     if (remoteAutomations.length === 0) {
-      this.publishKnownSchedulingEvidence(agentId, initial, NO_DESIRED_CLOUD_AUTOMATION_IDS);
-      this.finishAgentDeletion(agentId);
+      this.publishEvidence(agentId, before, NO_DESIRED_CLOUD_AUTOMATION_IDS);
+      this.completeDeletion(agentId);
       return true;
     }
-    let mutationFailed = false;
+    let someMutationFailed = false;
     for (const automation of remoteAutomations) {
-      const succeeded = await this.runMutation(agentId, "delete", () => this.deps.client.deleteSlateAutomation(new DeleteAutomationRequest({ automationId: automation.automationId })));
-      mutationFailed ||= !succeeded;
+      const worked = await this.attemptMutation(agentId, "delete", () => this.deps.client.deleteSlateAutomation(new DeleteAutomationRequest({ automationId: automation.automationId })));
+      someMutationFailed ||= !worked;
     }
-    const readback = await this.listRemote(agentId);
-    if (readback === undefined) return false;
-    this.publishKnownSchedulingEvidence(agentId, readback, NO_DESIRED_CLOUD_AUTOMATION_IDS);
-    if (readback.workflows.some((entry) => entry.workflow !== undefined)) {
-      if (!mutationFailed) this.recordFailure({ agentId, operation: "verify", error: new Error("Remote automation deletion did not converge") });
+    const after = await this.fetchRemote(agentId);
+    if (after === undefined) return false;
+    this.publishEvidence(agentId, after, NO_DESIRED_CLOUD_AUTOMATION_IDS);
+    if (after.workflows.some((row) => row.workflow !== undefined)) {
+      if (!someMutationFailed) this.reportFailure({ agentId, operation: "verify", error: new Error("Remote automation deletion did not converge") });
       return false;
     }
-    this.finishAgentDeletion(agentId);
+    this.completeDeletion(agentId);
     return true;
   }
 
-  private async retryPendingAgentDeletions(): Promise<void> {
-    for (const agentId of [...this.pendingAgentDeletions]) await this.deleteAgent(agentId);
+  private async retryDeletions(): Promise<void> {
+    for (const agentId of [...this.deletionsToRetry]) await this.deleteAgent(agentId);
   }
 
   private async reconcile(): Promise<void> {
     if (!this.deps.hasCredential()) return;
-    await this.retryPendingAgentDeletions();
-    let scheduled: readonly { agentId: string; automation: ScheduledCloudAutomation }[];
-    try { scheduled = await this.deps.listAutomations(); } catch (error) { this.recordFailure({ operation: "list-local", error }); return; }
-    let listedAgentIds: readonly string[];
-    try { listedAgentIds = await this.deps.listAgentIds(); } catch (error) { this.recordFailure({ operation: "list-agents", error }); return; }
-    const agentIds = new Set(listedAgentIds);
+    await this.retryDeletions();
+    let listedAutomations: readonly { agentId: string; automation: ScheduledCloudAutomation }[];
+    try { listedAutomations = await this.deps.listAutomations(); } catch (error) { this.reportFailure({ operation: "list-local", error }); return; }
+    let listedAgents: readonly string[];
+    try { listedAgents = await this.deps.listAgentIds(); } catch (error) { this.reportFailure({ operation: "list-agents", error }); return; }
+    const agentIds = new Set(listedAgents);
     const desiredByAgent = new Map<string, Map<string, CloudDefinition>>();
-    const timeZone = this.settings.getUserTimeZone();
-    for (const { agentId, automation } of scheduled) {
+    const timeZone = this.timeSettings.getUserTimeZone();
+    for (const { agentId, automation } of listedAutomations) {
       agentIds.add(agentId);
-      const desired = slateCloudDefinition({ agentId, automation, timeZone });
-      if (desired === null) continue;
-      const byAutomationId = desiredByAgent.get(agentId) ?? new Map<string, CloudDefinition>();
-      byAutomationId.set(desired.automationId, desired);
-      desiredByAgent.set(agentId, byAutomationId);
+      const wanted = slateCloudDefinition({ agentId, automation, timeZone });
+      if (wanted === null) continue;
+      const wantedById = desiredByAgent.get(agentId) ?? new Map<string, CloudDefinition>();
+      wantedById.set(wanted.automationId, wanted);
+      desiredByAgent.set(agentId, wantedById);
     }
     for (const agentId of agentIds) {
-      const desired = desiredByAgent.get(agentId) ?? new Map<string, CloudDefinition>();
-      const fingerprint = [...desired.values()].sort((a, b) => a.automationId.localeCompare(b.automationId)).map((definition) => `${definition.automationId}:${definition.marker}`).join("\0");
-      if (this.lastSuccessfulFingerprintByAgent.get(agentId) === fingerprint) continue;
+      const wanted = desiredByAgent.get(agentId) ?? new Map<string, CloudDefinition>();
+      const stamp = [...wanted.values()].sort((a, b) => a.automationId.localeCompare(b.automationId)).map((definition) => `${definition.automationId}:${definition.marker}`).join("\0");
+      if (this.fingerprints.get(agentId) === stamp) continue;
       try {
-        if (await this.reconcileAgent(agentId, desired)) this.lastSuccessfulFingerprintByAgent.set(agentId, fingerprint);
-      } catch (error) { this.recordFailure({ agentId, operation: "reconcile", error }); }
+        if (await this.reconcileOne(agentId, wanted)) this.fingerprints.set(agentId, stamp);
+      } catch (error) { this.reportFailure({ agentId, operation: "reconcile", error }); }
     }
   }
 
-  private async reconcileAgent(agentId: string, desiredByAutomationId: Map<string, CloudDefinition>): Promise<boolean> {
-    const desiredCloudAutomationIds = new Set(desiredByAutomationId.keys());
-    const initial = await this.listRemote(agentId);
-    if (initial === undefined) return false;
-    const remoteByAutomationId = remoteShadowAutomationsById(initial);
-    if (isConverged(remoteByAutomationId, desiredByAutomationId)) {
-      this.publishKnownSchedulingEvidence(agentId, initial, desiredCloudAutomationIds);
-      this.recordRecovery(agentId);
+  private async reconcileOne(agentId: string, desiredByAutomationId: Map<string, CloudDefinition>): Promise<boolean> {
+    const wantedAutomationIds = new Set(desiredByAutomationId.keys());
+    const before = await this.fetchRemote(agentId);
+    if (before === undefined) return false;
+    const upstreamById = shadowAutomationsOf(before);
+    if (convergedWith(upstreamById, desiredByAutomationId)) {
+      this.publishEvidence(agentId, before, wantedAutomationIds);
+      this.reportRecovery(agentId);
       return true;
     }
-    let mutationFailed = false;
-    const localInspection = this.deps.inspectLocalDefinitions?.(agentId);
-    for (const [automationId, remote] of remoteByAutomationId) {
+    let someMutationFailed = false;
+    const localState = this.deps.inspectLocalDefinitions?.(agentId);
+    for (const [automationId, upstream] of upstreamById) {
       if (desiredByAutomationId.has(automationId)) continue;
-      const succeeded = await this.runMutation(agentId, "delete", () => this.deps.client.deleteSlateAutomation(new DeleteAutomationRequest({ automationId: remote.automationId })));
-      mutationFailed ||= !succeeded;
-      this.deps.reportShadowPrune?.({ conversationId: agentId, automationId, outcome: succeeded ? "deleted" : "failed", localDefinitionState: localInspection?.state ?? "unknown", localDefinitionCount: localInspection?.validDefinitionCount ?? desiredByAutomationId.size, desiredCount: desiredByAutomationId.size, remoteShadowCount: remoteByAutomationId.size });
+      const worked = await this.attemptMutation(agentId, "delete", () => this.deps.client.deleteSlateAutomation(new DeleteAutomationRequest({ automationId: upstream.automationId })));
+      someMutationFailed ||= !worked;
+      this.deps.reportShadowPrune?.({ conversationId: agentId, automationId, outcome: worked ? "deleted" : "failed", localDefinitionState: localState?.state ?? "unknown", localDefinitionCount: localState?.validDefinitionCount ?? desiredByAutomationId.size, desiredCount: desiredByAutomationId.size, remoteShadowCount: upstreamById.size });
     }
-    for (const [automationId, desired] of desiredByAutomationId) {
-      const remote = remoteByAutomationId.get(automationId);
-      if (remote === undefined) {
-        const succeeded = await this.runMutation(agentId, "create", () => this.deps.client.createSlateAutomation(new CreateAutomationRequest({ description: desired.marker, name: desired.name, workflow: desired.workflow, enabled: desired.enabled, slateAgentId: agentId, slateAutomationId: automationId })));
-        mutationFailed ||= !succeeded;
-      } else if (remote.description !== desired.marker || remote.enabled !== desired.enabled) {
-        const succeeded = await this.runMutation(agentId, "update", () => this.update(remote.automationId, desired));
-        mutationFailed ||= !succeeded;
+    for (const [automationId, wanted] of desiredByAutomationId) {
+      const upstream = upstreamById.get(automationId);
+      if (upstream === undefined) {
+        const worked = await this.attemptMutation(agentId, "create", () => this.deps.client.createSlateAutomation(new CreateAutomationRequest({ description: wanted.marker, name: wanted.name, workflow: wanted.workflow, enabled: wanted.enabled, slateAgentId: agentId, slateAutomationId: automationId })));
+        someMutationFailed ||= !worked;
+      } else if (upstream.description !== wanted.marker || upstream.enabled !== wanted.enabled) {
+        const worked = await this.attemptMutation(agentId, "update", () => this.update(upstream.automationId, wanted));
+        someMutationFailed ||= !worked;
       }
     }
-    const readback = await this.listRemote(agentId);
-    if (readback === undefined) return false;
-    this.publishKnownSchedulingEvidence(agentId, readback, desiredCloudAutomationIds);
-    const converged = isConverged(remoteShadowAutomationsById(readback), desiredByAutomationId);
-    if (!converged) {
-      if (!mutationFailed) this.recordFailure({ agentId, operation: "verify", error: new Error("Remote automation reconciliation did not converge") });
+    const after = await this.fetchRemote(agentId);
+    if (after === undefined) return false;
+    this.publishEvidence(agentId, after, wantedAutomationIds);
+    const matches = convergedWith(shadowAutomationsOf(after), desiredByAutomationId);
+    if (!matches) {
+      if (!someMutationFailed) this.reportFailure({ agentId, operation: "verify", error: new Error("Remote automation reconciliation did not converge") });
       return false;
     }
-    this.recordRecovery(agentId);
+    this.reportRecovery(agentId);
     return true;
   }
 
-  private async update(automationId: string, desired: CloudDefinition): Promise<void> {
-    await this.deps.client.updateSlateAutomation(new UpdateAutomationRequest({ automationId, description: desired.marker, name: desired.name, workflow: desired.workflow, enabled: desired.enabled }));
+  private async update(automationId: string, wanted: CloudDefinition): Promise<void> {
+    await this.deps.client.updateSlateAutomation(new UpdateAutomationRequest({ automationId, description: wanted.marker, name: wanted.name, workflow: wanted.workflow, enabled: wanted.enabled }));
   }
 
-  private async listRemote(agentId: string): Promise<RemoteList | undefined> {
+  private async fetchRemote(agentId: string): Promise<RemoteList | undefined> {
     try { return await this.deps.client.listSlateAutomations(new ListSlateAutomationsRequest({ slateAgentId: agentId })); }
-    catch (error) { this.recordFailure({ agentId, operation: "list-remote", error }); return undefined; }
+    catch (error) { this.reportFailure({ agentId, operation: "list-remote", error }); return undefined; }
   }
 
-  private async runMutation(agentId: string, operation: string, mutation: () => Promise<unknown>): Promise<boolean> {
-    this.schedulingEvidenceByAgent.set(agentId, { kind: "unknown" });
-    try { await mutation(); return true; }
-    catch (error) { this.recordFailure({ agentId, operation, error }); return false; }
+  private async attemptMutation(agentId: string, operation: string, work: () => Promise<unknown>): Promise<boolean> {
+    this.evidenceByAgent.set(agentId, { kind: "unknown" });
+    try { await work(); return true; }
+    catch (error) { this.reportFailure({ agentId, operation, error }); return false; }
   }
 
-  private publishKnownSchedulingEvidence(agentId: string, response: RemoteList, desiredCloudAutomationIds: Set<string>): void {
-    const enabledIds = enabledRemoteAutomationIds(response);
-    this.schedulingEvidenceByAgent.set(agentId, { kind: "known", enabledRemoteAutomationIds: enabledIds });
-    const schedulingAuthority = { desiredCloudAutomationIds, enabledRemoteAutomationIds: enabledIds };
-    const previous = this.lastNotifiedSchedulingAuthorityByAgent.get(agentId);
-    if (sameSchedulingAuthority(previous, schedulingAuthority)) return;
-    this.lastNotifiedSchedulingAuthorityByAgent.set(agentId, schedulingAuthority);
+  private publishEvidence(agentId: string, listing: RemoteList, wantedAutomationIds: Set<string>): void {
+    const enabledRemoteIds = enabledRemoteAutomationIds(listing);
+    this.evidenceByAgent.set(agentId, { kind: "known", enabledRemoteAutomationIds: enabledRemoteIds });
+    const schedulingAuthority = { wantedAutomationIds, enabledRemoteAutomationIds: enabledRemoteIds };
+    const lastPublished = this.publishedAuthority.get(agentId);
+    if (authorityMatches(lastPublished, schedulingAuthority)) return;
+    this.publishedAuthority.set(agentId, schedulingAuthority);
     try { this.deps.onSchedulingAuthorityChanged(agentId); }
-    catch (error) { this.logCallbackFailure("onSchedulingAuthorityChanged", agentId, error); }
+    catch (error) { this.reportCallbackError("onSchedulingAuthorityChanged", agentId, error); }
   }
 
-  private recordFailure(failure: { agentId?: string; operation: string; error: unknown }): void {
-    if (failure.agentId !== undefined) this.failedAgentIds.add(failure.agentId);
-    this.deps.reportDiagnostic?.({ extension: "automation_cloud_sync", operation: failure.operation, agentId: failure.agentId, ...errorIdentity(failure.error) });
+  private reportFailure(problem: { agentId?: string; operation: string; error: unknown }): void {
+    if (problem.agentId !== undefined) this.failedAgentIds.add(problem.agentId);
+    this.deps.reportDiagnostic?.({ extension: "automation_cloud_sync", operation: problem.operation, agentId: problem.agentId, ...errorShape(problem.error) });
     if (!this.deps.hasCredential()) return;
-    try { this.deps.onFailure(failure); }
-    catch (error) { this.logCallbackFailure("onFailure", failure.agentId, error); }
+    try { this.deps.onFailure(problem); }
+    catch (error) { this.reportCallbackError("onFailure", problem.agentId, error); }
   }
 
-  private recordRecovery(agentId: string): void {
+  private reportRecovery(agentId: string): void {
     if (!this.failedAgentIds.delete(agentId)) return;
     try { this.deps.onRecovery(agentId); }
-    catch (error) { this.logCallbackFailure("onRecovery", agentId, error); }
+    catch (error) { this.reportCallbackError("onRecovery", agentId, error); }
   }
 
-  private finishAgentDeletion(agentId: string): void {
-    this.pendingAgentDeletions.delete(agentId);
-    this.lastSuccessfulFingerprintByAgent.delete(agentId);
-    this.recordRecovery(agentId);
-    this.schedulingEvidenceByAgent.delete(agentId);
-    this.lastNotifiedSchedulingAuthorityByAgent.delete(agentId);
+  private completeDeletion(agentId: string): void {
+    this.deletionsToRetry.delete(agentId);
+    this.fingerprints.delete(agentId);
+    this.reportRecovery(agentId);
+    this.evidenceByAgent.delete(agentId);
+    this.publishedAuthority.delete(agentId);
   }
 
-  private logCallbackFailure(callback: string, agentId: string | undefined, error: unknown): void {
-    this.deps.reportDiagnostic?.({ extension: "automation_cloud_sync", operation: callback, agentId, ...errorIdentity(error) });
+  private reportCallbackError(callback: string, agentId: string | undefined, error: unknown): void {
+    this.deps.reportDiagnostic?.({ extension: "automation_cloud_sync", operation: callback, agentId, ...errorShape(error) });
   }
 }
