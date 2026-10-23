@@ -28,31 +28,31 @@ export interface SalvageCounts { kv: number; blobs: number; transcript: number }
 export class SlateAgentDbIntegrityError extends Error {}
 
 export function initConfiguredDb(dbPath: string, agentDirName: string, options: DbRecoveryOptions): DatabaseSync {
-  const db = new DatabaseSync(dbPath);
+  const store = new DatabaseSync(dbPath);
   try {
-    db.exec(`PRAGMA busy_timeout = ${options.busyTimeoutMs ?? DB_BUSY_TIMEOUT_MS}`);
+    store.exec(`PRAGMA busy_timeout = ${options.busyTimeoutMs ?? DB_BUSY_TIMEOUT_MS}`);
     try {
-      db.exec("PRAGMA journal_mode = WAL");
-      db.exec("PRAGMA synchronous = NORMAL");
-    } catch (error) {
+      store.exec("PRAGMA journal_mode = WAL");
+      store.exec("PRAGMA synchronous = NORMAL");
+    } catch (failure) {
       reportSessionDiagnostic({
         family: "store_db",
         kind: "wal_unavailable",
         agentId: agentDirName,
-        errorClass: errorLogTag(error),
+        errorClass: errorLogTag(failure),
       });
     }
-    db.exec(SCHEMA);
-    return db;
-  } catch (error) {
-    try { db.close(); } catch {}
-    throw error;
+    store.exec(SCHEMA);
+    return store;
+  } catch (failure) {
+    try { store.close(); } catch {}
+    throw failure;
   }
 }
-export function isStoreDbHealthy(db: Pick<DatabaseSync, "prepare">): boolean {
+export function isStoreDbHealthy(store: Pick<DatabaseSync, "prepare">): boolean {
   try {
-    const row = db.prepare("PRAGMA quick_check").get();
-    return row?.quick_check === "ok";
+    const checkRow = store.prepare("PRAGMA quick_check").get();
+    return checkRow?.quick_check === "ok";
   } catch {
     return false;
   }
@@ -62,36 +62,36 @@ export function openConfiguredDb(
   agentDirName: string,
   options: DbRecoveryOptions,
   hasOtherLiveHandles?: boolean,
-  initDb: typeof initConfiguredDb = initConfiguredDb,
+  openDatabase: typeof initConfiguredDb = initConfiguredDb,
 ): DatabaseSync {
-  const recover = (options.recoverOnCorruption ?? true) && !hasOtherLiveHandles;
-  const rejectIfCorrupt = options.rejectIfCorrupt ?? false;
-  let db: DatabaseSync | undefined;
-  let openError: unknown;
-  for (let attempt = 0; attempt < 2 && db === undefined; attempt += 1) {
+  const mayRecover = (options.recoverOnCorruption ?? true) && !hasOtherLiveHandles;
+  const refuseIfCorrupt = options.rejectIfCorrupt ?? false;
+  let store: DatabaseSync | undefined;
+  let openFailure: unknown;
+  for (let tryIndex = 0; tryIndex < 2 && store === undefined; tryIndex += 1) {
     try {
-      db = initDb(dbPath, agentDirName, options);
-    } catch (error) {
-      openError = error;
-      if (!isSqliteIoError(error) || attempt > 0) break;
+      store = openDatabase(dbPath, agentDirName, options);
+    } catch (failure) {
+      openFailure = failure;
+      if (!isSqliteIoError(failure) || tryIndex > 0) break;
       reportSessionDiagnostic({
         family: "store_db",
         kind: "open_io_retry",
         agentId: agentDirName,
-        errorClass: errorLogTag(error),
+        errorClass: errorLogTag(failure),
       });
     }
   }
-  if (db === undefined) {
-    if (recover && isSqliteCorruptError(openError)) {
-      return recoverCorruptStoreDb(dbPath, agentDirName, options, openError);
+  if (store === undefined) {
+    if (mayRecover && isSqliteCorruptError(openFailure)) {
+      return recoverCorruptStoreDb(dbPath, agentDirName, options, openFailure);
     }
-    throw openError;
+    throw openFailure;
   }
-  const verify = (recover || rejectIfCorrupt) && (options.verifyIntegrityOnOpen ?? true);
-  if (verify && !isStoreDbHealthy(db)) {
-    try { db.close(); } catch {}
-    if (recover) {
+  const shouldVerify = (mayRecover || refuseIfCorrupt) && (options.verifyIntegrityOnOpen ?? true);
+  if (shouldVerify && !isStoreDbHealthy(store)) {
+    try { store.close(); } catch {}
+    if (mayRecover) {
       reportSessionDiagnostic({ family: "store_db", kind: "quick_check_failed", agentId: agentDirName });
       return recoverCorruptStoreDb(
         dbPath,
@@ -102,17 +102,17 @@ export function openConfiguredDb(
     }
     throw new SlateAgentDbIntegrityError(`store.db failed integrity check for ${agentDirName}`);
   }
-  return db;
+  return store;
 }
 export function quarantineCorruptDb(dbPath: string, agentDirName: string): string | null {
-  const result = quarantineCorruptSqliteDb({ dbPath });
-  if (result.renameErrorCode == null) return result.quarantinePath;
-  if (result.quarantinePath == null) {
+  const quarantineResult = quarantineCorruptSqliteDb({ dbPath });
+  if (quarantineResult.renameErrorCode == null) return quarantineResult.quarantinePath;
+  if (quarantineResult.quarantinePath == null) {
     reportSessionDiagnostic({
       family: "store_db",
       kind: "quarantine_rename_failed",
       agentId: agentDirName,
-      errorClass: result.renameErrorCode,
+      errorClass: quarantineResult.renameErrorCode,
     });
     return null;
   }
@@ -120,57 +120,57 @@ export function quarantineCorruptDb(dbPath: string, agentDirName: string): strin
     family: "store_db",
     kind: "quarantine_copied",
     agentId: agentDirName,
-    errorClass: result.renameErrorCode,
+    errorClass: quarantineResult.renameErrorCode,
   });
-  return result.quarantinePath;
+  return quarantineResult.quarantinePath;
 }
-function rowValue(row: unknown, key: string): unknown {
-  return typeof row === "object" && row != null ? Reflect.get(row, key) : undefined;
+function columnValue(checkRow: unknown, columnName: string): unknown {
+  return typeof checkRow === "object" && checkRow != null ? Reflect.get(checkRow, columnName) : undefined;
 }
-export function salvageStoreDb(sourcePath: string, freshDb: DatabaseSync): SalvageCounts {
-  const counts = { kv: 0, blobs: 0, transcript: 0 };
-  const source = openSqliteForSalvage({ dbPath: sourcePath });
-  if (source == null) return counts;
+export function salvageStoreDb(sourcePath: string, rebuiltDb: DatabaseSync): SalvageCounts {
+  const salvageCounts = { kv: 0, blobs: 0, transcript: 0 };
+  const salvagedDb = openSqliteForSalvage({ dbPath: sourcePath });
+  if (salvagedDb == null) return salvageCounts;
   try {
-    counts.kv = copySalvageableSqliteRows(
-      source,
+    salvageCounts.kv = copySalvageableSqliteRows(
+      salvagedDb,
       "SELECT key, value FROM kv",
-      freshDb.prepare("INSERT OR IGNORE INTO kv (key, value) VALUES (?, ?)"),
-      (row) => [rowValue(row, "key"), rowValue(row, "value")],
+      rebuiltDb.prepare("INSERT OR IGNORE INTO kv (key, value) VALUES (?, ?)"),
+      (checkRow) => [columnValue(checkRow, "key"), columnValue(checkRow, "value")],
     );
-    counts.blobs = copySalvageableSqliteRows(
-      source,
+    salvageCounts.blobs = copySalvageableSqliteRows(
+      salvagedDb,
       "SELECT id, data FROM blobs",
-      freshDb.prepare("INSERT OR IGNORE INTO blobs (id, data) VALUES (?, ?)"),
-      (row) => [rowValue(row, "id"), rowValue(row, "data")],
+      rebuiltDb.prepare("INSERT OR IGNORE INTO blobs (id, data) VALUES (?, ?)"),
+      (checkRow) => [columnValue(checkRow, "id"), columnValue(checkRow, "data")],
     );
-    counts.transcript = copySalvageableSqliteRows(
-      source,
+    salvageCounts.transcript = copySalvageableSqliteRows(
+      salvagedDb,
       "SELECT seq, id, entry FROM transcript_entries",
-      freshDb.prepare("INSERT OR IGNORE INTO transcript_entries (seq, id, entry) VALUES (?, ?, ?)"),
-      (row) => [rowValue(row, "seq"), rowValue(row, "id"), rowValue(row, "entry")],
+      rebuiltDb.prepare("INSERT OR IGNORE INTO transcript_entries (seq, id, entry) VALUES (?, ?, ?)"),
+      (checkRow) => [columnValue(checkRow, "seq"), columnValue(checkRow, "id"), columnValue(checkRow, "entry")],
     );
   } finally {
-    try { source.close(); } catch {}
+    try { salvagedDb.close(); } catch {}
   }
-  return counts;
+  return salvageCounts;
 }
 export function recoverCorruptStoreDb(
   dbPath: string,
   agentDirName: string,
   options: DbRecoveryOptions,
-  cause: unknown,
+  reason: unknown,
 ): DatabaseSync {
   reportSessionDiagnostic({
     family: "store_db",
     kind: "corrupt_recovering",
     agentId: agentDirName,
-    errorClass: errorLogTag(cause),
+    errorClass: errorLogTag(reason),
   });
   const quarantinePath = quarantineCorruptDb(dbPath, agentDirName);
-  const freshDb = initConfiguredDb(dbPath, agentDirName, options);
+  const rebuiltDb = initConfiguredDb(dbPath, agentDirName, options);
   const salvaged = quarantinePath != null
-    ? salvageStoreDb(quarantinePath, freshDb)
+    ? salvageStoreDb(quarantinePath, rebuiltDb)
     : { kv: 0, blobs: 0, transcript: 0 };
   const outcome = salvaged.kv + salvaged.blobs + salvaged.transcript > 0 ? "recovered" : "reset";
   reportSessionDiagnostic({
@@ -185,5 +185,5 @@ export function recoverCorruptStoreDb(
   });
   try { options.onCorruptionRecovered?.({ outcome, quarantinePath, salvaged }); } catch {}
   publishTranscriptMutation({ kind: "agent-needs-reindex", agentId: agentDirName });
-  return freshDb;
+  return rebuiltDb;
 }
