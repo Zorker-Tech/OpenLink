@@ -24,7 +24,7 @@ export class NoSummaryResponseError extends Error {
   }
 }
 
-const CONNECT_ERROR_CODES = {
+const CONNECT_CODES = {
   InvalidArgument: 3,
   NotFound: 5,
   ResourceExhausted: 8,
@@ -33,56 +33,56 @@ const CONNECT_ERROR_CODES = {
   Unauthenticated: 16,
 };
 
-function* iterateErrorChain(error: unknown): Generator<unknown> {
-  let current = error;
-  const seen = new Set<unknown>();
-  while (current !== undefined && current !== null && !seen.has(current)) {
-    seen.add(current);
-    yield current;
-    if (current instanceof Error) current = current.cause;
+function* walkErrorChain(error: unknown): Generator<unknown> {
+  let cursor = error;
+  const visited = new Set<unknown>();
+  while (cursor !== undefined && cursor !== null && !visited.has(cursor)) {
+    visited.add(cursor);
+    yield cursor;
+    if (cursor instanceof Error) cursor = cursor.cause;
     else break;
   }
 }
 
-function hasErrorName(error: unknown, targetName: string): boolean {
-  for (const current of iterateErrorChain(error)) {
-    if (current instanceof Error && current.name === targetName) return true;
+function chainHasName(error: unknown, wantedName: string): boolean {
+  for (const cursor of walkErrorChain(error)) {
+    if (cursor instanceof Error && cursor.name === wantedName) return true;
   }
   return false;
 }
 
-function errorMessageIncludes(error: unknown, needle: string): boolean {
-  const normalizedNeedle = needle.toLowerCase();
-  for (const current of iterateErrorChain(error)) {
-    if (current instanceof Error && current.message.toLowerCase().includes(normalizedNeedle)) return true;
+function chainMessageHas(error: unknown, wantedText: string): boolean {
+  const loweredWantedText = wantedText.toLowerCase();
+  for (const cursor of walkErrorChain(error)) {
+    if (cursor instanceof Error && cursor.message.toLowerCase().includes(loweredWantedText)) return true;
   }
   return false;
 }
 
-function hasConnectCode(error: unknown, targetCode: number): boolean {
-  for (const current of iterateErrorChain(error)) {
-    if (typeof current === "object" && current !== null && "code" in current && current.code === targetCode) return true;
+function chainHasConnectCode(error: unknown, wantedCode: number): boolean {
+  for (const cursor of walkErrorChain(error)) {
+    if (typeof cursor === "object" && cursor !== null && "code" in cursor && cursor.code === wantedCode) return true;
   }
   return false;
 }
 
-function isTextFieldsTooLargeError(error: unknown): boolean {
-  return errorMessageIncludes(error, "request contains text fields that are too large");
+function isOversizedTextFieldsError(error: unknown): boolean {
+  return chainMessageHas(error, "request contains text fields that are too large");
 }
 
-function isInvalidJsonError(error: unknown): boolean {
-  return errorMessageIncludes(error, "not valid json") || errorMessageIncludes(error, "invalid json");
+function isInvalidJsonFailure(error: unknown): boolean {
+  return chainMessageHas(error, "not valid json") || chainMessageHas(error, "invalid json");
 }
 
-function isInvalidArgumentError(error: unknown): boolean {
-  return errorMessageIncludes(error, "invalid argument");
+function isInvalidArgumentFailure(error: unknown): boolean {
+  return chainMessageHas(error, "invalid argument");
 }
 
-function isUserApiKeyRateLimitExceededError(error: unknown): boolean {
-  return errorMessageIncludes(error, "User API Key Rate limit exceeded");
+function isUserKeyRateLimitFailure(error: unknown): boolean {
+  return chainMessageHas(error, "User API Key Rate limit exceeded");
 }
 
-const TOO_MANY_IMAGES_OR_DOCUMENTS_MESSAGE_MARKERS = [
+const TOO_MANY_MEDIA_MARKERS = [
   "request contained too many images or documents",
   "too many images or documents error",
   "too many images and documents",
@@ -90,7 +90,7 @@ const TOO_MANY_IMAGES_OR_DOCUMENTS_MESSAGE_MARKERS = [
 ];
 
 export function isTooManyImagesOrDocumentsError(error: unknown): boolean {
-  return TOO_MANY_IMAGES_OR_DOCUMENTS_MESSAGE_MARKERS.some(marker => errorMessageIncludes(error, marker));
+  return TOO_MANY_MEDIA_MARKERS.some(textMarker => chainMessageHas(error, textMarker));
 }
 
 export class CannotTruncatePromptError extends Error {
@@ -124,67 +124,67 @@ export interface SummarizationRetryDirective {
   readonly reduceInputs: boolean;
 }
 
-export function getRetryDirective(error: unknown, options: SummarizationRetryOptions): SummarizationRetryDirective {
-  if (error instanceof OutputTokensLimitExceededError || hasErrorName(error, "OutputTokensLimitExceededError")) {
-    const enableRetryOutputTokenLimit = options.enableRetryOutputTokenLimit ?? true;
+export function getRetryDirective(error: unknown, settings: SummarizationRetryOptions): SummarizationRetryDirective {
+  if (error instanceof OutputTokensLimitExceededError || chainHasName(error, "OutputTokensLimitExceededError")) {
+    const enableRetryOutputTokenLimit = settings.enableRetryOutputTokenLimit ?? true;
     return {
       errorType: "OutputTokensLimitExceededError",
       shouldRetry: enableRetryOutputTokenLimit,
-      retryDelayMs: enableRetryOutputTokenLimit ? options.transientRetryDelayMs : 0,
+      retryDelayMs: enableRetryOutputTokenLimit ? settings.transientRetryDelayMs : 0,
       requestShorterOutput: enableRetryOutputTokenLimit,
       reduceInputs: false,
     };
   }
-  if (error instanceof InputTokenLimitError || hasErrorName(error, "InputTokenLimitError")) {
-    const reduceInputs = options.enableReduceInputsRetry ?? false;
+  if (error instanceof InputTokenLimitError || chainHasName(error, "InputTokenLimitError")) {
+    const reduceInputs = settings.enableReduceInputsRetry ?? false;
     return { errorType: "InputTokenLimitError", shouldRetry: reduceInputs, retryDelayMs: 0, requestShorterOutput: false, reduceInputs };
   }
-  if (hasConnectCode(error, CONNECT_ERROR_CODES.ResourceExhausted) || hasErrorName(error, "ResourceExhausted")) {
-    if (isTextFieldsTooLargeError(error)) {
-      const reduceInputs = options.enableReduceInputsRetry ?? false;
+  if (chainHasConnectCode(error, CONNECT_CODES.ResourceExhausted) || chainHasName(error, "ResourceExhausted")) {
+    if (isOversizedTextFieldsError(error)) {
+      const reduceInputs = settings.enableReduceInputsRetry ?? false;
       return { errorType: "InputTooLargeError", shouldRetry: reduceInputs, retryDelayMs: 0, requestShorterOutput: false, reduceInputs };
     }
-    if (isInvalidJsonError(error)) {
+    if (isInvalidJsonFailure(error)) {
       return { errorType: "InvalidJson", shouldRetry: false, retryDelayMs: 0, requestShorterOutput: false, reduceInputs: false };
     }
-    if (isInvalidArgumentError(error)) {
+    if (isInvalidArgumentFailure(error)) {
       return { errorType: "InvalidArgument", shouldRetry: false, retryDelayMs: 0, requestShorterOutput: false, reduceInputs: false };
     }
-    return { errorType: "ResourceExhausted", shouldRetry: true, retryDelayMs: options.transientRetryDelayMs, requestShorterOutput: false, reduceInputs: false };
+    return { errorType: "ResourceExhausted", shouldRetry: true, retryDelayMs: settings.transientRetryDelayMs, requestShorterOutput: false, reduceInputs: false };
   }
-  if (hasConnectCode(error, CONNECT_ERROR_CODES.Unavailable) || hasErrorName(error, "Unavailable")) {
-    return { errorType: "Unavailable", shouldRetry: true, retryDelayMs: options.transientRetryDelayMs, requestShorterOutput: false, reduceInputs: false };
+  if (chainHasConnectCode(error, CONNECT_CODES.Unavailable) || chainHasName(error, "Unavailable")) {
+    return { errorType: "Unavailable", shouldRetry: true, retryDelayMs: settings.transientRetryDelayMs, requestShorterOutput: false, reduceInputs: false };
   }
-  if (hasConnectCode(error, CONNECT_ERROR_CODES.Aborted) || hasErrorName(error, "UserAbortedError") || hasErrorName(error, "AbortError")) {
+  if (chainHasConnectCode(error, CONNECT_CODES.Aborted) || chainHasName(error, "UserAbortedError") || chainHasName(error, "AbortError")) {
     return { errorType: "AbortError", shouldRetry: false, retryDelayMs: 0, requestShorterOutput: false, reduceInputs: false };
   }
-  if (hasErrorName(error, "InteractionListenerStreamClosedError")) {
+  if (chainHasName(error, "InteractionListenerStreamClosedError")) {
     return { errorType: "InteractionListenerStreamClosedError", shouldRetry: false, retryDelayMs: 0, requestShorterOutput: false, reduceInputs: false };
   }
-  if (hasConnectCode(error, CONNECT_ERROR_CODES.Unauthenticated) || hasErrorName(error, "Unauthenticated")) {
+  if (chainHasConnectCode(error, CONNECT_CODES.Unauthenticated) || chainHasName(error, "Unauthenticated")) {
     return { errorType: "Unauthenticated", shouldRetry: false, retryDelayMs: 0, requestShorterOutput: false, reduceInputs: false };
   }
-  if (hasConnectCode(error, CONNECT_ERROR_CODES.InvalidArgument) || hasErrorName(error, "InvalidArgument")) {
-    if (isUserApiKeyRateLimitExceededError(error)) {
-      return { errorType: "InvalidArgument", shouldRetry: true, retryDelayMs: options.transientRetryDelayMs, requestShorterOutput: false, reduceInputs: false };
+  if (chainHasConnectCode(error, CONNECT_CODES.InvalidArgument) || chainHasName(error, "InvalidArgument")) {
+    if (isUserKeyRateLimitFailure(error)) {
+      return { errorType: "InvalidArgument", shouldRetry: true, retryDelayMs: settings.transientRetryDelayMs, requestShorterOutput: false, reduceInputs: false };
     }
     return { errorType: "InvalidArgument", shouldRetry: false, retryDelayMs: 0, requestShorterOutput: false, reduceInputs: false };
   }
-  if (hasConnectCode(error, CONNECT_ERROR_CODES.NotFound) || hasErrorName(error, "NotFound") || hasErrorName(error, "StringNotFoundError")) {
+  if (chainHasConnectCode(error, CONNECT_CODES.NotFound) || chainHasName(error, "NotFound") || chainHasName(error, "StringNotFoundError")) {
     return { errorType: "NotFound", shouldRetry: false, retryDelayMs: 0, requestShorterOutput: false, reduceInputs: false };
   }
-  if (error instanceof NoSummaryResponseError || hasErrorName(error, "NoSummaryResponseError")) {
-    return { errorType: "NoSummaryResponseError", shouldRetry: options.enableRetryNoSummaryResponse ?? false, retryDelayMs: 0, requestShorterOutput: false, reduceInputs: false };
+  if (error instanceof NoSummaryResponseError || chainHasName(error, "NoSummaryResponseError")) {
+    return { errorType: "NoSummaryResponseError", shouldRetry: settings.enableRetryNoSummaryResponse ?? false, retryDelayMs: 0, requestShorterOutput: false, reduceInputs: false };
   }
-  if (error instanceof CannotTruncatePromptError || hasErrorName(error, "CannotTruncatePromptError")) {
+  if (error instanceof CannotTruncatePromptError || chainHasName(error, "CannotTruncatePromptError")) {
     return { errorType: "CannotTruncatePromptError", shouldRetry: false, retryDelayMs: 0, requestShorterOutput: false, reduceInputs: false };
   }
   if (error instanceof Error) {
-    const shouldRetry = options.enableRetryUncategorizedErrors ?? true;
+    const shouldRetry = settings.enableRetryUncategorizedErrors ?? true;
     return {
       errorType: error.name || "UncategorizedError",
       shouldRetry,
-      retryDelayMs: shouldRetry ? options.transientRetryDelayMs : 0,
+      retryDelayMs: shouldRetry ? settings.transientRetryDelayMs : 0,
       requestShorterOutput: false,
       reduceInputs: false,
     };
